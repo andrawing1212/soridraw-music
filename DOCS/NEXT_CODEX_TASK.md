@@ -1,3 +1,13 @@
+## NEXT — app450 PREVIEW deployed, obtain user functional acceptance (2026-10-22 KST)
+
+- **PREVIEW release SUCCESS:** product source `fc64b6a1747902a8645207d81cdf55d36662e81e`, release trigger commit `910861e79d67264c49e056d331da8846f518618a`, GitHub Actions run **#39690606880 SUCCESS**. Exactly new `masterSetSplitFrameMode` callable + PREVIEW Hosting, app version 450, no shared RTDB Rules PUT, data migration, Cloudflare, or TEST/PRODUCTION changes.
+- **Immediate acceptance task:** Master visits `preview.soridraw.com/admin/app-settings`, sees three split performance modes and clicks Apply; separate Guest browser Studio and authenticated Studio should receive update through *existing* realtime Remote Config listener. Confirm dragging does not switch the frame mid-pointer; check layout PC/tablet/mobile and speed. Code/CI/Hosting verified, **actual user session yet unverified**.
+- **Security follow-up:** old PR #383/#386 shared RTDB Rules plan MUST STAY unmerged. App450's new mechanism is Remote Config Admin `getTemplate→publishTemplate` with ETag CAS, no force, versioned per-env params, Master-only callable, trusted Origin and PREVIEW default env list. Actual runtime IAM for remoteConfig publish is not yet verified by a live Master Apply. If permission error, inspect Cloud Function identity and minimal role; never silently substitute RTDB Rules.
+- Costs: reuses app's existing realtime RC listener; no additional RTDB connection or per-drag writes, but actual 100k cost/RC fetch load unmeasured, do not claim measured PASS.
+- On PREVIEW user PASS, future TEST needs explicit approval, functions exact artifact inventory and env allowlist; PRODUCTION separately approved. Stage416 remains OFF. Preserve app448 Generate/side panels, Music Note/Library, canonical shared user data. No further Codex usage.
+
+---
+
 ## NEXT — app450 fast existing-Remote-Config release (2026-10-22 KST)
 
 - User requests immediate Master split setting application. Preferred source is new PR #391 `fix/app450-existing-remote-config-fast` from PREVIEW `1332254e140ef5c8dc3e60d06ef4cc9719367729`. Do not use old P1-blocked RTDB Rules PR #386/#383 source or update shared Rules.

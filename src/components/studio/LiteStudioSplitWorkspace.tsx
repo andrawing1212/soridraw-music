@@ -1356,37 +1356,6 @@ export default function LiteStudioSplitWorkspace({
       };
       syncPaneModes(builderWidth, resultWidth, responsiveOptions);
       broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, false, responsiveOptions);
-
-      // app449 — Local Responsive already updates each pane's UI while moving,
-      // but rootSync:false defers the floating Generate bar's three root mode
-      // signals until pointer-up. Borrow ONLY Hybrid's Builder/action handoff
-      // at real 660/820/1080 boundaries; do not publish the Result mode or
-      // re-enable Hybrid tablet containment / per-frame global synchronization.
-      // Use modes already resolved above: no layout read, new event, React
-      // state change, observer, or extra pane responsiveness pass.
-      if (traceLocalResponsiveLive) {
-        const builderContentMode = contentResponsiveModeRef.current.builder;
-        const actionCompact = modeRef.current.builder === 'mobile'
-          || builder.dataset.soridrawPaneCompact === 'true';
-        const actionSignature = `${modeRef.current.builder}:${builderContentMode}:${actionCompact}`;
-        if (dragBoundarySignatureRef.current !== actionSignature) {
-          dragBoundarySignatureRef.current = actionSignature;
-          const root = document.documentElement;
-          if (builderContentMode && root.dataset.soridrawBuilderContentMode !== builderContentMode) {
-            root.dataset.soridrawBuilderContentMode = builderContentMode;
-          }
-          if (root.dataset.soridrawBuilderMode !== modeRef.current.builder) {
-            root.dataset.soridrawBuilderMode = modeRef.current.builder;
-          }
-          if (actionCompact) {
-            if (root.dataset.soridrawBuilderActionCompact !== 'true') {
-              root.dataset.soridrawBuilderActionCompact = 'true';
-            }
-          } else if (root.dataset.soridrawBuilderActionCompact) {
-            delete root.dataset.soridrawBuilderActionCompact;
-          }
-        }
-      }
     }
     const perfAfterResponsive = perfEnabled ? performance.now() : 0;
     if (live && !deferAuxLive) syncExternalGeometry(builderWidth, splitterLeft);

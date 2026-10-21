@@ -25,8 +25,8 @@ const normalizePayload = (raw: unknown): NavigationVisibilitySyncPayload | null 
 };
 
 
-// Reuse the app's EXISTING navigationVisibility RTDB onValue listener:
-// no second per-user listener, Firestore read, poll or per-drag network request.
+// Extend the existing signed-in navigation sync lifecycle with ONE small
+// environment-scoped RTDB scalar listener. No Firestore, polling or drag calls.
 const splitFrameListeners = new Set<(mode: SplitFrameMode) => void>();
 let currentSplitFrameMode: SplitFrameMode = DEFAULT_SPLIT_FRAME_MODE;
 let splitFrameServerReady = false;
@@ -38,9 +38,8 @@ export const subscribeSplitFrameMode = (listener: (mode: SplitFrameMode) => void
   return () => { splitFrameListeners.delete(listener); };
 };
 const publishSplitFrameMode = (raw: unknown) => {
-  const env = getSplitFrameEnvironment();
-  const data = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
-  const mode = env ? parseSplitFrameMode(data[env]) : DEFAULT_SPLIT_FRAME_MODE;
+  // Read only the current environment's small scalar, not all three modes.
+  const mode = parseSplitFrameMode(raw);
   const firstConfirmedSnapshot = !splitFrameServerReady;
   splitFrameServerReady = true;
   if (mode === currentSplitFrameMode && !firstConfirmedSnapshot) return;
@@ -63,8 +62,12 @@ export const subscribeNavigationVisibilitySync = (
     (snapshot) => onPayload(normalizePayload(snapshot.val())),
     (error) => onError?.(error),
   );
+  const env = getSplitFrameEnvironment();
+  // Unknown hosts are never entitled to an environment policy. Keep the
+  // frozen Hybrid fallback and do not create an unnecessary database listen.
+  if (!env) return unsubscribeMenu;
   const unsubscribeFrame = onValue(
-    ref(realtimeDb, 'publicSync/splitFrameModes'),
+    ref(realtimeDb, 'publicSync/splitFrameModes/' + env),
     (snapshot) => publishSplitFrameMode(snapshot.val()),
     (error) => onError?.(error),
   );

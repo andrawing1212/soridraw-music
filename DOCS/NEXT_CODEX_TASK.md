@@ -1,3 +1,13 @@
+## NEXT — app449 Local Responsive Generate-only PREVIEW live; user A/B BEFORE any default change (2026-10-21 KST)
+
+- app448 mouseup Generate bar issue accepted as improved by user 2026-10-21 08:34 UTC ("좋아졌어. 이제 이건 마무리"). Protect current app448 bar geometry and Compact/PC 4px width rebase + app447 max480 Note/Library tabs + app445 live Builder mode + app442 gutters. No change authorized to those fixes.
+- app449 user scope: Local Responsive's already-correct pane/card UI and faster-feeling drag are preserved; fix ONLY the Generate bar's delayed responsive mode switch by borrowing existing Hybrid Builder signals at actual 660/820/1080 mode boundaries. Source #357 merged `f5a005a0385a42f99ad2aa4318921ef0744068ec`; dedicated split QA #39574974111 PASS, product #39574360628 PASS, release-prep #39575256089 PASS. Firebase PREVIEW Hosting-only #39576104206 SUCCESS, exact live version 449 and TEST/PROD unchanged at pinned release source `8ab514476eccc4afbfd694a2f0a051731f1d6ee9`.
+- The **runtime default is still Pure Pane Hybrid**. User needs to manually choose Local Responsive in admin diagnostics to physically A/B test. Do not claim new mode is default, user-accepted, or faster based only on prior app448 A/B. Work independent audit + device matrix still pending.
+- Next only: on https://preview.soridraw.com select Local Responsive, drag through Builder 660/820/1080 and mouseup, confirm Generate bar composes live and no subsequent resize, speed >= old Local Responsive and ideally better than Hybrid; test Create/Recent/Music Note/Library, PC 1100~1599, tablet touch, small-screen <=1099 mobile routing. If PASS and user asks, separately promote tested mode to runtime default under full release gates. Avoid broad CSS/style/root rewrites or modifying Hybrid/Pure Pane benchmarks.
+- No Worker/Functions/Rules/D1/Firestore/cache/schema/user data changes, no database reads from this UI-only change, no TEST/main or PRODUCTION promotion until explicit approval. Stage416 1/4·25% OFF; historical app-speed 5/5·100% historical; app449 A/B 3/4·75% physical acceptance PENDING.
+
+---
+
 ## NEXT — app448 PC Generate pointer-up correction PREVIEW released; user hand-check FIRST (2026-10-21 KST)
 
 - User video 20261021-0759-32.7126939.mp4 and 08:03 UTC report identified an app447 **PC/full** Generate button width snap at mouseup despite the earlier tablet/Compact improvement. The scope is PC/full Builder >820px, not a regression authorization for accepted <=820px compact behavior or unrelated tabs.

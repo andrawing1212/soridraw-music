@@ -1,3 +1,13 @@
+## NEXT — app448 exact behavior restored PREVIEW; freeze accepted split baseline (2026-10-21 KST)
+
+- User 2026-10-21 09:36 UTC physically rejected app449 Local Responsive Generate-only Hybrid mode signal addition because drag became nearly as slow as Hybrid; requested revert to app448. This is **FAIL for app449** and authorization for exact PREVIEW app448 restoration, NOT for more speculative optimization.
+- **Current LIVE PREVIEW: app448** pinned restored-release source `b57c8f61eef364e03b1fa8f3fe07dd7d29e5fb31`, Firebase action #39579346778 SUCCESS (exact live HTML, app-version448 and TEST+PROD unchanged verified). Rollback code PR #362 merged `2b59b7644439a01a2c2026f2cbdaefce4bb0fcc2`; four restored blobs identical to original accepted app448 `37fca3801975faeadc3bdaf6294d95e189e5aadc`. No other frontend product files changed in rollback, Git history remains linear.
+- **Do not repeat app449** root dataset Builder/Generate signal copy into Local Responsive without independent evidence, performance profiling and new user approval. App448 previously accepted compact+PC Generate 4px cap/pointer-up correction; keep Local Responsive's earlier fast diagnostic behavior, Hybrid production default, Pure Pane diagnostic, Note/Library 480px tabs and local-first data batching untouched.
+- **Next only**: optional user hand reconfirmation that preview.soridraw.com now runs restored app448 and Local Responsive behaves as prior. Reconfirm PC release geometry and drag, tablet and 660/820/1080 if requested. Source/CI/Hosting 3/4 done; site subjective A/B acceptance postrollback pending. Independent Work audit, full device matrix and billed Firestore/D1 metrics unverified. No TEST or PRODUCTION promotion.
+- Progress: Stage416 1/4·25% OFF; historical app-speed 5/5·100% historical only; app448 restoration 3/4·75%, real-hand recheck outstanding. Further changes require a new directive, not just old app449 proposal.
+
+---
+
 ## NEXT — app449 Local Responsive Generate-only PREVIEW live; user A/B BEFORE any default change (2026-10-21 KST)
 
 - app448 mouseup Generate bar issue accepted as improved by user 2026-10-21 08:34 UTC ("좋아졌어. 이제 이건 마무리"). Protect current app448 bar geometry and Compact/PC 4px width rebase + app447 max480 Note/Library tabs + app445 live Builder mode + app442 gutters. No change authorized to those fixes.

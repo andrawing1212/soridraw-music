@@ -203,8 +203,15 @@ const endDragStart = liteWorkspace.indexOf('const finishDrag = useCallback(');
 const endDragEnd = liteWorkspace.indexOf('const handlePointerMove = ', endDragStart);
 assert.ok(endDragStart > 0 && endDragEnd > endDragStart, 'missing finishDrag block');
 const endDrag = liteWorkspace.slice(endDragStart, endDragEnd);
-assert.match(endDrag, /commitRootMeasurements\(builderWidth,[^\n]*\);\s*\/\/[^\n]*\n\s*commitRestingGenerationBarGeometry\(\);\s*clearLiveExternalGeometry\(\);/,
-  'release must seed resting bar coordinates before clearing live transforms');
+const lastBuilderCommitOffset = endDrag.indexOf('commitRootMeasurements(builderWidth,');
+const restingBarCommitOffset = endDrag.indexOf('commitRestingGenerationBarGeometry();', lastBuilderCommitOffset);
+const liveClearOffset = endDrag.indexOf('clearLiveExternalGeometry();', restingBarCommitOffset);
+const dragEndEventOffset = endDrag.indexOf("window.dispatchEvent(new CustomEvent('soridraw-split-drag-end'))", liveClearOffset);
+assert.ok(lastBuilderCommitOffset >= 0
+  && restingBarCommitOffset > lastBuilderCommitOffset
+  && liveClearOffset > restingBarCommitOffset
+  && dragEndEventOffset > liveClearOffset,
+  'release must seed accurate resting geometry before removing live transforms and announcing drag end');
 const hotPathStart = liteWorkspace.indexOf('const syncGenerationBarGeometry = useCallback(');
 const hotPathEnd = liteWorkspace.indexOf('const syncExternalGeometry = useCallback(', hotPathStart);
 assert.ok(hotPathStart > 0 && hotPathEnd > hotPathStart, 'missing existing live bar writer');

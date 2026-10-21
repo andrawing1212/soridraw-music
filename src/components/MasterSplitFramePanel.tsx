@@ -62,9 +62,9 @@ export default function MasterSplitFramePanel() {
     setSaving(true);
     setMessage(null);
     try {
-      const callable = httpsCallable<{ environment: string; mode: SplitFrameMode },
+      const callable = httpsCallable<{ environment: string; mode: SplitFrameMode; expectedMode: SplitFrameMode },
         { ok: boolean; environment: string; mode: SplitFrameMode }>(functions, 'masterSetSplitFrameMode');
-      const result = await callable({ environment, mode: draft });
+      const result = await callable({ environment, mode: draft, expectedMode: applied });
       if (!result.data?.ok || result.data.environment !== environment || result.data.mode !== draft) {
         throw new Error('서버의 적용 확인을 받지 못했습니다.');
       }

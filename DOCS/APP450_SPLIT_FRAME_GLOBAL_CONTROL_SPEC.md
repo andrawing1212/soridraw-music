@@ -1,7 +1,14 @@
-# app450 — 마스터 권한: 분할바 프레임 (설계/구현 명령)
+# app450 — 관리자 앱 설정(마스터 전용): 분할바 프레임 (설계/구현 명령)
+
+## 최종 위치 재지시 — 2026-10-21 23:06 KST
+- **사용자 최신 지시: 관리자 페이지 → 앱 설정** 위치로 복귀. 마스터 권한 페이지에는 새 탭이나 설정을 추가하지 않는다.
+- **이전의 Master-only '적용' 권한은 계속 유지한다.** 관리자 앱 설정을 볼 수 있는 일반 Admin에게는 이 카드가 나타나지 않으며, 서버 callable은 반드시 Master 신분을 강제 확인한다. 사용자가 위치만 변경했지 전체 사용자 모드를 바꾸는 권한을 일반 Admin으로 완화하라고 지시하지 않았다.
+- UI 화면: `AdminAppSettingsPage.tsx`에 `<MasterSplitFramePanel />` 추가, `MasterPermissionsPage.tsx`는 app448 파일과 byte-exact 동일. Master 권한은 사용자 프로필 캐시 갱신을 따라 표시 여부를 판단하고, 서버 `requireMasterCaller`가 최종 권한이다.
+- 정확한 이름: **분할바 프레임**, **성능우선 / 보통 / 품질우선**.
+- 이번 위치 변경은 UI/source PR #366에만 반영. 보안 Rules PR #367과 공유 데이터에는 손대지 않는다.
 
 ## 사용자 최종 수정과 안전한 전달 경로 — 2026-10-21 22:31 KST
-- **위치는 관리자 앱 설정이 아닌 `마스터 권한` 페이지**의 `분할바 프레임` 탭. 설정 변경은 `requireMasterCaller`로 Master만 허용한다. 일반 Admin의 `appSettings` 권한으로 적용할 수 없다.
+- **화면 위치는 관리자 페이지 → 앱 설정**이며 마스터 권한 페이지는 변경하지 않는다. 설정 변경은 `requireMasterCaller`로 Master만 허용한다. 일반 Admin의 `appSettings` 권한으로 적용할 수 없다.
 - **최종 이름** `성능우선` = Pure Pane, `보통` = Local Responsive, `품질우선` = Pure Pane Hybrid.
 - 기존 TEST/PRODUCTION의 구버전 `adminSetNavigationVisibility` callable이 `publicSync/navigationVisibility`를 통째로 `.set`하므로 같은 노드의 신규 모드를 지우게 된다. 따라서 실제 구현에서는 **별도 작은 `publicSync/splitFrameModes` 경로**를 사용한다. 로그인 앱이 이미 가지는 동일 Firebase RTDB 연결에 1개의 tiny subscription이 추가된다. 새 Firestore 데이터 조회/D1 호출/페이지별 폴링 없음. 사용자 10만 명의 초기 실시간 subscription 전달량은 0이 아니므로 별도 비용 검증 필수. 기존 nav writer/QA 유지.
 - PREVIEW/TEST/PRODUCTION은 형제 필드 하나씩 관리. 기존 사용자의 공유 원본 데이터 수정/복사 없음.

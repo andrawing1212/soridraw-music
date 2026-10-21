@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { Loader2, Save, SlidersHorizontal } from 'lucide-react';
 import { functions } from '../firebase';
 import {
-  DEFAULT_SPLIT_FRAME_MODE,
   getSplitFrameEnvironment,
   SPLIT_FRAME_CHOICES,
   type SplitFrameMode,

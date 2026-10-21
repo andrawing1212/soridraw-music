@@ -1,4 +1,4 @@
-product_sha=f9a9ff10701056d70d1c8a5820dc8f7812ddfe96
+product_sha=2b510ec77b2dd197bcec3935489a2720072cb867
 function_name=masterSetSplitFrameMode
 shared_rtdb_rules_change=false
 shared_user_data_change=false

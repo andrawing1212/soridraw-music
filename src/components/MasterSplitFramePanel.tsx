@@ -9,7 +9,7 @@ import {
   SPLIT_FRAME_CHOICES,
   type SplitFrameMode,
 } from '../constants/splitFrameGlobal';
-import { readCurrentSplitFrameMode, subscribeSplitFrameMode } from '../services/navigationVisibilitySyncService';
+import { isSplitFrameServerReady, readCurrentSplitFrameMode, subscribeSplitFrameMode } from '../services/navigationVisibilitySyncService';
 import { cn } from '../lib/utils';
 
 const labelFor = (mode: SplitFrameMode) =>
@@ -41,10 +41,12 @@ export default function MasterSplitFramePanel() {
   const environment = getSplitFrameEnvironment();
   const [applied, setApplied] = useState<SplitFrameMode>(readCurrentSplitFrameMode);
   const [draft, setDraft] = useState<SplitFrameMode>(readCurrentSplitFrameMode);
+  const [serverReady, setServerReady] = useState(isSplitFrameServerReady);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => subscribeSplitFrameMode((mode) => {
+    setServerReady(isSplitFrameServerReady());
     setApplied(mode);
     // Initial and remote changes track server truth until the Master makes
     // a different unsaved selection. Never persist a mere radio selection.
@@ -52,7 +54,7 @@ export default function MasterSplitFramePanel() {
   }), [applied]);
 
   const apply = async () => {
-    if (!environment || saving || draft === applied) return;
+    if (!environment || !serverReady || saving || draft === applied) return;
     const confirmed = window.confirm(
       `분할바 프레임을 '${labelFor(draft)}'으로 적용할까요?\n현재 ${environment.toUpperCase()}에 연결된 사용자에게 전달됩니다.`,
     );
@@ -90,7 +92,7 @@ export default function MasterSplitFramePanel() {
             드래그 중인 사용자는 마우스를 놓은 후 반영됩니다.
           </p>
           <p className="mt-2 text-xs font-black text-[var(--text-primary)]">
-            현재 적용: {labelFor(applied)} {environment ? `· ${environment.toUpperCase()}` : '· 환경 확인 불가'}
+            현재 적용: {serverReady ? labelFor(applied) : '설정 확인 중'} {environment ? `· ${environment.toUpperCase()}` : '· 환경 확인 불가'}
           </p>
         </div>
       </div>
@@ -99,7 +101,7 @@ export default function MasterSplitFramePanel() {
         {SPLIT_FRAME_CHOICES.map((choice) => (
           <button key={choice.value} type="button" role="radio"
             aria-checked={draft === choice.value}
-            disabled={saving || !environment}
+            disabled={saving || !environment || !serverReady}
             onClick={() => { setDraft(choice.value); setMessage(null); }}
             className={cn(
               'rounded-2xl px-4 py-3 text-sm font-black transition disabled:opacity-50',
@@ -116,7 +118,7 @@ export default function MasterSplitFramePanel() {
         <p className="text-xs text-[var(--text-secondary)]">
           {draft === applied ? '적용된 설정입니다.' : `변경 예정: ${labelFor(draft)}`}
         </p>
-        <button type="button" disabled={!environment || saving || draft === applied}
+        <button type="button" disabled={!environment || !serverReady || saving || draft === applied}
           onClick={() => void apply()}
           className="inline-flex min-w-[112px] items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-5 py-3 text-sm font-black text-zinc-950 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}

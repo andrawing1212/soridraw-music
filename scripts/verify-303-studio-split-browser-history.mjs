@@ -299,3 +299,9 @@ for (const builderWidth of [660, 700, 820, 821, 1050, 1080, 1200]) {
     `builder ${builderWidth} pointer-up must not drop a large residual scale`);
 }
 console.log('VERIFY_448_GENERATE_COMPACT_AND_PC_BUTTON_DRIFT_BOUNDED=PASS');
+
+// app450: the Master global split mode is carried by the navigation sync
+// lifecycle. Run its existing source guard together with this split guard;
+// no app448 geometry, CSS or pointer math is modified by this test.
+await import('./verify-214-navigation-visibility-sync.mjs');
+

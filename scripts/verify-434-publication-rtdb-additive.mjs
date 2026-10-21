@@ -50,9 +50,33 @@ const withoutPublic = (rules) => {
   delete x.rules.publicSync.explorePublicationProfiles;
   return x;
 };
+// app450: the new Master-control sibling has its OWN audited rollout.
+// Existing app434 publication releases must remain fully functional while
+// app450 is in source but not yet installed in shared RTDB. Never introduce
+// splitFrameModes as a side effect of an unrelated 434 or 435 release.
+const split450 = source.rules.publicSync.splitFrameModes;
+const split450Validation = "newData.isString() && (newData.val() === 'pure-pane' || newData.val() === 'local-responsive' || newData.val() === 'pure-pane-hybrid')";
+const approved450 = {
+  '.read': 'auth != null', '.write': false,
+  preview: { '.validate': split450Validation },
+  test: { '.validate': split450Validation },
+  production: { '.validate': split450Validation },
+  '$other': { '.validate': false },
+};
+if (split450) assert.ok(same(split450, approved450),
+  'app450 RTDB ACL must match only exact approved authenticated read-only node');
+const withoutSplit450 = (rules) => {
+  const x = structuredClone(rules);
+  delete x.rules.publicSync.splitFrameModes;
+  return x;
+};
 const variants = [
   ['STAGE416_DORMANT', source],
   ['STAGE416_ALREADY_LIVE', sourceWithStage416],
+  ...(split450 ? [
+    ['STAGE416_DORMANT_BEFORE_450', withoutSplit450(source)],
+    ['STAGE416_ALREADY_LIVE_BEFORE_450', withoutSplit450(sourceWithStage416)],
+  ] : []),
 ];
 
 function classify(live) {
@@ -113,6 +137,24 @@ if (process.argv.includes('--self-test')) {
     const partialPublic = structuredClone(live);
     partialPublic.rules.publicSync.explorePublication = publicRules.explorePublication;
     assert.throws(() => classify(partialPublic), /UNEXPECTED_DRIFT/);
+  }
+  if (split450) {
+    const before450 = withoutSplit450(source);
+    const mode = classify(before450);
+    assert.equal(mode.mode, 'ALREADY_EXACT');
+    assert.equal(mode.stage, 'STAGE416_DORMANT_BEFORE_450');
+    assert.ok(same(mode.candidate, before450),
+      'an unrelated 434 release must NOT add the app450 Master setting node');
+    const badRead = structuredClone(before450);
+    badRead.rules.publicSync.splitFrameModes = { ...approved450, '.read': true };
+    assert.throws(() => classify(badRead), /UNEXPECTED_DRIFT/);
+    const badWrite = structuredClone(before450);
+    badWrite.rules.publicSync.splitFrameModes = { ...approved450, '.write': 'auth != null' };
+    assert.throws(() => classify(badWrite), /UNEXPECTED_DRIFT/);
+    const badExtra = structuredClone(before450);
+    badExtra.rules.publicSync.splitFrameModes = { ...approved450, unknown: { '.validate': true } };
+    assert.throws(() => classify(badExtra), /UNEXPECTED_DRIFT/);
+    console.log('450_LEGACY_434_SHARED_RULES_BEFORE_AFTER_EXACT_COMPAT=PASS');
   }
   const halfStage416 = structuredClone(withoutPublic(sourceWithStage416));
   delete halfStage416.rules.privateLikeFinal416;

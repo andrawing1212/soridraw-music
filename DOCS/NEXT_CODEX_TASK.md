@@ -1,3 +1,13 @@
+## NEXT — app450 Work independent review and safe backend release gate (2026-10-22 KST)
+
+- Final user-approved location: Admin → App Settings, Master-only frame control. Code PR #366, QA #370, risk fix #372 merged. PR #372 de97309c889d03e1d066ab2f363f912f8e3a84fb CI #39650847101 SUCCESS. Apply now single authoritative RTDB write; per-environment scalar listener. Frozen app448 split untouched.
+- Strict pre/post RTDB read-only ACL gate PR #373 abff554f2af981b2dd9b0c75aed58551d62ce190 CI #39651918094 PASS; legacy #434 compatibility PR #374 f55bbee6aa2e2812a426d70d027d3bf266ca125b CI #39652598594 PASS.
+- Final Rules candidate is DRAFT PR #375, exact head 5101437eeaf2e18045b52173faebfe5d5b9218db, source/live Rules read-only CI #39653108137 SUCCESS. Original #367 superseded and closed WITHOUT merge. PR #375 has one new auth-only read/client-write-denied path. Independent Work audit NOT YET invoked: fix target SHA before review, apply WORK_AUDIT_CHECKLIST, no mutation/deploy while reviewing.
+- Independent audit MUST check Master server authorization, PREVIEW-only origin guard, exact 3 allowed values, concurrency, old TEST/PRODUCTION clients, RTDB unauth denied/read/write, current live Rules and no private ACL widening, 100k subscription broadcast costs, guest/offline behavior, PC/tablet/mobile app448 drag/generation bar and no canonical user-data changes.
+- Functions targeted release path not yet built or audited; existing Hosting-only workflow CANNOT complete this feature. Work must audit release path before new shared Rules PUT or Functions deployment. Exact live GET/prePUT reGET/postPUT equality required. After backend PASS, deploy app450 PREVIEW Hosting, verify two signed-in users and TEST/PRODUCTION unchanged. PREVIEW still live app448.
+
+---
+
 ## NEXT — app450 security/Function release prerequisite, source already merged and QA PASS (2026-10-22 KST)
 
 - **Fixed source**: PREVIEW product PR #366 merged `93e95f3fefde5ba1bed6108455fe7142039ce3f3`, product CI #39647560757 PASS; dedicated split+admin #370 merged `8a9b3e5f8d0a9420586c50cfcb967ce21112d37f`, action **#39648490129 PASS**. Source location is **관리자 → 앱 설정**, Master-only, exact labels 성능우선/보통/품질우선. Existing app448 Lite split hot-path untouched. No more speculative frontend work until real PREVIEW results.

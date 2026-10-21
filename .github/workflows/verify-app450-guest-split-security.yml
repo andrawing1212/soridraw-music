@@ -1,0 +1,67 @@
+name: Verify app450 Guest Split Security and Source
+
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'src/services/navigationVisibilitySyncService.ts'
+      - 'src/components/studio/StudioSplitEngineWorkspace.tsx'
+      - 'src/components/MasterSplitFramePanel.tsx'
+      - 'src/constants/splitFrameGlobal.ts'
+      - 'database.rules.json'
+      - 'scripts/verify-214-navigation-visibility-sync.mjs'
+      - 'scripts/verify-418-rtdb-rules-delta.mjs'
+      - 'scripts/verify-434-publication-rtdb-additive.mjs'
+      - 'scripts/verify-450-shared-rtdb-additive.mjs'
+      - 'scripts/verify-303-studio-split-browser-history.mjs'
+      - '.github/workflows/verify-app450-guest-split-security.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app450-guest-audit-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  guest-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Checkout exact pull-request merge candidate
+        uses: actions/checkout@v4
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          npm --prefix functions ci --no-audit --no-fund
+
+      - name: Check app450 guest listener and legacy navigation protection
+        run: node scripts/verify-214-navigation-visibility-sync.mjs
+
+      - name: Exact legacy and app450 Rules negative tests without live writes
+        run: |
+          node scripts/verify-418-rtdb-rules-delta.mjs --self-test
+          node scripts/verify-434-publication-rtdb-additive.mjs --self-test
+          node scripts/verify-450-shared-rtdb-additive.mjs --self-test
+
+      - name: Protect frozen app448 split and app450 Master policy
+        run: node scripts/verify-303-studio-split-browser-history.mjs
+
+      - name: React TypeScript
+        run: npx tsc --noEmit
+
+      - name: React Build
+        run: npm run build
+
+      - name: Functions TypeScript
+        run: npm --prefix functions run build
+
+      - name: Non-deployment verification
+        run: echo 'APP450_SOURCE_AND_RULES_STATIC_CHECK_ONLY_NO_FIREBASE_PUT_OR_DEPLOY'

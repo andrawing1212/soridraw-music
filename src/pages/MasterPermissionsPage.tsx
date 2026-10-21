@@ -3,6 +3,7 @@ import { collection, getDocs, query, where } from '../lib/firestoreMeasured';
 import { httpsCallable } from 'firebase/functions';
 import { CheckCircle2, Compass, Crown, FlaskConical, Loader2, RefreshCw, Save, Search, ShieldCheck } from 'lucide-react';
 import AdminPageLayout from '../components/AdminPageLayout';
+import MasterSplitFramePanel from '../components/MasterSplitFramePanel';
 import { readSplitPerfToolVisibility, writeSplitPerfToolVisibility } from '../components/studio/splitPerfDiagnostics';
 import { ADMIN_PERMISSION_DEFINITIONS, FULL_ADMIN_PERMISSIONS, normalizeAdminPermissions, normalizeStaffRole } from '../constants/adminPermissions';
 import { cn } from '../lib/utils';
@@ -33,7 +34,7 @@ const parseUser = (uid: string, data: Record<string, any>): AppUserInfo => ({
 const samePermissions = (a: AdminPermissions, b: AdminPermissions) =>
   ADMIN_PERMISSION_DEFINITIONS.every(({ key }) => a[key] === b[key]);
 
-type MasterSettingsTab = 'app-test' | 'admin-permissions';
+type MasterSettingsTab = 'app-test' | 'split-frame' | 'admin-permissions';
 
 export default function MasterPermissionsPage() {
   const [activeTab, setActiveTab] = useState<MasterSettingsTab>('app-test');
@@ -235,6 +236,16 @@ useEffect(() => {
             <ShieldCheck className="h-4 w-4" />
             관리자권한관리
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('split-frame')}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-xs font-black transition',
+              activeTab === 'split-frame' ? 'bg-zinc-100 text-zinc-950' : 'bg-white/[0.045] text-zinc-400 hover:bg-white/[0.075] hover:text-zinc-100',
+            )}
+          >
+            분할바 프레임
+          </button>
         </div>
 
         {activeTab === 'app-test' ? (
@@ -268,6 +279,8 @@ useEffect(() => {
               </button>
             </div>
           </div>
+        ) : activeTab === 'split-frame' ? (
+          <MasterSplitFramePanel />
         ) : (
           <div className="space-y-4">
             <div className="rounded-3xl bg-white/[0.035] p-5">

@@ -54,11 +54,11 @@ export default function MasterSplitFramePanel() {
   }), [applied]);
 
   const apply = async () => {
-    if (!environment || !serverReady || saving || draft === applied) return;
+    if (!environment || !serverReady || !isSplitFrameServerReady() || saving || draft === applied) return;
     const confirmed = window.confirm(
       `분할바 프레임을 '${labelFor(draft)}'으로 적용할까요?\n현재 ${environment.toUpperCase()}에 연결된 사용자에게 전달됩니다.`,
     );
-    if (!confirmed) return;
+    if (!confirmed || !isSplitFrameServerReady()) return;
     setSaving(true);
     setMessage(null);
     try {

@@ -58,7 +58,8 @@ export const masterSetSplitFrameMode = onCall({ region: 'us-central1' }, async (
   const remote = admin.remoteConfig();
   const template = await remote.getTemplate();
   const key = PARAMS[environment];
-  const previous = normalizeRecord(template.parameters?.[key]?.defaultValue?.value);
+  const defaultValue = template.parameters?.[key]?.defaultValue;
+  const previous = normalizeRecord(defaultValue && 'value' in defaultValue ? defaultValue.value : undefined);
   if (previous.revision !== expectedRevision) {
     throw new HttpsError('aborted', '다른 마스터의 변경이 먼저 적용됐습니다. 최신 상태에서 다시 선택해주세요.');
   }

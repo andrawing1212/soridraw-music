@@ -1,6 +1,11 @@
 name: Verify app450 Guest Split Security and Source
 
 on:
+  push:
+    branches: [integration/app450-independent-audit-candidate]
+    paths:
+      - 'DOCS/APP450_UNIFIED_AUDIT_HANDOFF.md'
+      - '.github/workflows/verify-app450-guest-split-security.yml'
   pull_request:
     branches: [preview, feature/app450-guest-policy-medium]
     paths:
@@ -23,7 +28,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: app450-guest-audit-${{ github.event.pull_request.number }}
+  group: app450-guest-audit-${{ github.event.pull_request.number || github.ref_name }}
   cancel-in-progress: true
 
 jobs:

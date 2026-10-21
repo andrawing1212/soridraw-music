@@ -32,3 +32,6 @@ Do not merge code or Rules on `preview`, deploy Firebase/Cloudflare, modify cano
 
 ## CI execution
 Unified candidate reuses the existing app450 guest/Rules and one-Function PR verification workflows as **push-triggered static tests on the dedicated unmerged audit branch only**. No Firebase auth, PUT, deploy, workflow_dispatch or release triggers are involved; source tests must PASS on this candidate's final pinned SHA before any independent Work review. These candidate-only push triggers must be removed/normalized before any future code promotion.
+
+## Final audit stabilization
+The two current/next release state docs were synchronized to the latest docs-only PREVIEW baseline. This does not alter product or Rules source. Both existing nondeployment app450 CI workflows must run at the final commit. Independent Work and live deployment safety remain BLOCKED.

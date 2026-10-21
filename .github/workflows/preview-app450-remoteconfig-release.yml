@@ -80,6 +80,7 @@ jobs:
           node scripts/verify-214-navigation-visibility-sync.mjs
           node scripts/verify-303-studio-split-browser-history.mjs
           node scripts/verify-450-remote-config-master.mjs
+          node scripts/verify-451-split-mode-client-reentry.mjs
           npx tsc --noEmit
           npm run build
           npm --prefix functions run build

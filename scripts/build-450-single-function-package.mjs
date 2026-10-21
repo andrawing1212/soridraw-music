@@ -11,8 +11,9 @@ const code = readFileSync(compiled,'utf8');
 assert.match(code,/exports\.masterSetSplitFrameMode\s*=/);
 assert.doesNotMatch(code,/require\(["']\.\.?\//,
   '450_ISOLATED_ENTRY_MUST_NOT_IMPORT_ANY_UNRELATED_PROJECT_MODULE');
-assert.doesNotMatch(code,/Stage416|Stage420|exploreLike|publicationRelease/,
-  '450_ISOLATED_FUNCTION_MUST_NOT_SCAN_OTHER_SERVICES');
+const imports = [...code.matchAll(/require\(["']([^"']+)["']\)/g)].map(x=>x[1]).sort();
+assert.deepStrictEqual(imports, ['firebase-admin','firebase-functions/v2/https'],
+  '450_ISOLATED_FUNCTION_DEPENDENCY_ALLOWLIST_DRIFT');
 
 const mod = require(join(process.cwd(),compiled));
 assert.deepEqual(Object.keys(mod).filter(k=>!k.startsWith('__')), [target],

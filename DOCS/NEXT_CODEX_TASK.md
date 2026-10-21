@@ -1,3 +1,14 @@
+## NEXT — app447 PREVIEW released; user PC/mobile physical A/B is the only next acceptance step (2026-10-21 KST)
+
+Current app447 Firebase PREVIEW source pinned `d12e6b39ac040a052f824a1f95cc11ab6549bdfa`, release run #39532616846 SUCCESS, exact remote Hosting HTML/version 447 and unchanged TEST/PRODUCTION confirmed by release workflow. Source PRs #342/#345, QA #343/#346, version PR #348, release PR #349.
+
+**No new coding authorized by this entry.** Wait for user real-hand PREVIEW test of (1) <=820px compact Generate bar internal buttons not changing again at mouseup, 660/820/1080 transitions, full/compact intentional layout and app445 smoothness, (2) Music Note and Library top three tabs cap 480px, (3) rapid/sustained drag, scroll/collapse, PC/tablet/mobile page roundtrips. Source automated QA and release identity PASS are not physical feel/zero-snap PASS. Extra compact rebase writes may reduce drag speed. Work independent audit not performed.
+
+On specific FAIL, localize to affected surface and preserve frozen split hot path and canonical data. If compact rebase worsens snap/drag, revert ONLY its app447 4px path; keep top-tab 480px CSS, app442 gutter, app445 responsive, app446 pointer-up handoff. Do not merge pending unrelated PR #285, alter Workflows/Worker/Functions/Rules, reset caches, migrate shared user data or promote TEST/PRODUCTION unless separately approved.
+
+Progress: Stage416 1/4·25% OFF; historic speed work 5/5·100% (historical, not fresh speed PASS); app447 3/4·75% (source+QA+Hosting done, physical A/B pending). Deployed source SHA stays fixed when docs-only commits are merged.
+
+---
 ## NEXT — app447 source-ready, NO Hosting deploy; user A/B approval needed for new compact Generate bar (2026-10-21 KST)
 
 Current preview HEAD will be docs-only ahead of `1b2deedf500b8e1bc061336b560b0dcda94b23cd`. Two separate, minimal source candidates are in preview:

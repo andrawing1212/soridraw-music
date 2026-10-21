@@ -786,14 +786,6 @@ export const adminSetNavigationVisibility = onCall(
 
 // app450: Master-only global split frame mode. The three app environments
 // share canonical user data, but NOT operational frame preferences.
-const SPLIT_FRAME_ALLOWED_450 = ["pure-pane", "local-responsive", "pure-pane-hybrid"] as const;
-const SPLIT_FRAME_ORIGINS_450: Record<string, "preview" | "test" | "production"> = {
-  "https://preview.soridraw.com": "preview",
-  "https://test.soridraw.com": "test",
-  "https://soridraw.com": "production",
-  "https://www.soridraw.com": "production",
-};
-
 // app450: isolated release module preserves this function export by name.
 // All unrelated Admin/Stage416 functions remain completely unchanged.
 export { masterSetSplitFrameMode } from './masterSplitFrameMode450';

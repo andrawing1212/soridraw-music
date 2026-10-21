@@ -241,3 +241,49 @@ for (const source of ['src/pages/FavoritesPage.tsx', 'src/pages/SunoLibraryPage.
     'preserve the existing three-button base 480px design: '+source);
 }
 console.log('VERIFY_447_NOTE_LIBRARY_TAB_STRETCH_CAP=PASS');
+
+
+// app447: compact Generate bar is the only scope where compositor scaling
+// of child buttons was visibly retained on pointer-up. Keep wide Builder's
+// verified 8% layout batching and cap compact button width distortion to 4px.
+// Verify the live rAF writer remains geometry math only, without DOM reads.
+const generationBarWriterStart = liteWorkspace.indexOf('const syncGenerationBarGeometry = useCallback(');
+const generationBarWriterEnd = liteWorkspace.indexOf('const syncExternalGeometry = useCallback(', generationBarWriterStart);
+assert.ok(generationBarWriterStart > 0 && generationBarWriterEnd > generationBarWriterStart,
+  'app447 missing floating Generate bar drag geometry writer');
+const generationBarWriter = liteWorkspace.slice(generationBarWriterStart, generationBarWriterEnd);
+assert.match(generationBarWriter,
+  /roundedBuilderWidth <= BUILDER_COMPACT_MAX[\s\S]*?Math\.abs\(actionGeometry\.width - base\.width\) >= 4/,
+  'compact Builder must cap Generate button compositor distortion at 4px');
+assert.match(generationBarWriter,
+  /\|\| compactButtonDriftTooLarge[\s\S]*?\|\| widthRatio < 0\.92[\s\S]*?\|\| widthRatio > 1\.08/,
+  'outside compact Builder the existing 8% width rebasing must be preserved');
+assert.match(generationBarWriter, /bar\.style\.setProperty\('--soridraw-action-live-scale-x', scaleValue\)/,
+  'fast compositor following must remain active while dragging');
+assert.doesNotMatch(generationBarWriter, /getBoundingClientRect|ResizeObserver|dispatchEvent|setState\(/,
+  'no per-pointer-frame reads, new observers, broadcasts or React renders');
+
+const makeMockBarRebase = (builderWidth, visualWidths) => {
+  let baseWidth = 0;
+  let writes = 0;
+  let maximumDrift = 0;
+  for (const targetWidth of visualWidths) {
+    const widthRatio = baseWidth > 0 ? targetWidth / baseWidth : 1;
+    const compactButtonDriftTooLarge = builderWidth <= 820
+      && baseWidth > 0 && Math.abs(targetWidth - baseWidth) >= 4;
+    if (baseWidth <= 0 || compactButtonDriftTooLarge || widthRatio < 0.92 || widthRatio > 1.08) {
+      baseWidth = targetWidth;
+      writes++;
+    }
+    maximumDrift = Math.max(maximumDrift, Math.abs(targetWidth - baseWidth));
+  }
+  return { writes, maximumDrift };
+};
+const visualWidths = Array.from({ length: 301 }, (_, i) => 480 + i);
+const compactResult = makeMockBarRebase(700, visualWidths);
+const wideResult = makeMockBarRebase(1050, visualWidths);
+assert.ok(compactResult.maximumDrift < 4,
+  'compact Build Generate buttons must never distort more than the 4px rebase cap');
+assert.ok(wideResult.writes < compactResult.writes,
+  'the unchanged wide Builder fast path must remain more aggressively batched');
+console.log('VERIFY_447_GENERATE_COMPACT_BUTTON_DRIFT_BOUNDED=PASS');

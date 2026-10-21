@@ -108,6 +108,11 @@ assert.doesNotMatch(splitCallable, /\.collection\(|splitFrameModes: \{|splitFram
 assert.ok(functions.includes('admin.database().ref("publicSync/navigationVisibility").set('),
   'legacy nav callable must remain compatible with older deployments');
 assert.match(service, /publicSync\/splitFrameModes/);
+assert.match(service, /ref\(realtimeDb, 'publicSync\/splitFrameModes\/' \+ env\)/,
+  'each signed-in client must read only its own environment scalar');
+assert.match(service, /if \(!env\) return unsubscribeMenu/,
+  'unknown hosts must not start a shared-RTDB policy listener');
+
 assert.match(service, /subscribeSplitFrameMode/);
 assert.match(service, /unsubscribeMenu\(\); unsubscribeFrame\(\);/);
 assert.doesNotMatch(service, /getDoc\(|onSnapshot\(|setInterval\(/);

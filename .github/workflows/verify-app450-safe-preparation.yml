@@ -1,0 +1,106 @@
+name: Verify app450 Backend Safe Preparation (No Deploy)
+
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/prepare-450-backend-release.mjs'
+      - 'scripts/verify-450-backend-release.mjs'
+      - 'scripts/verify-450-runtime-boundaries.mjs'
+      - 'scripts/verify-450-settings-cas-emulator.mjs'
+      - 'DOCS/APP450_BACKEND_RELEASE_SAFETY.md'
+      - '.github/workflows/verify-app450-safe-preparation.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app450-safe-prep-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 13
+    steps:
+      - name: Checkout candidate exact GitHub PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: source
+          persist-credentials: false
+
+      - name: Checkout frozen guest/source base PR379
+        uses: actions/checkout@v4
+        with:
+          ref: f156ea7a382ffbe992fbeeb331405af49ba3542f
+          path: guest
+          persist-credentials: false
+
+      - name: Checkout frozen guest Rules change PR380
+        uses: actions/checkout@v4
+        with:
+          ref: 2651575eb452b55d703a8504a67bb3ca2f5b1aaa
+          path: rules
+          persist-credentials: false
+
+      - name: Checkout frozen isolated Function candidate only
+        uses: actions/checkout@v4
+        with:
+          ref: a83e8bef059eac29060e90223ccb01e651b5777a
+          path: function
+          persist-credentials: false
+
+      - name: Require exact dependency commits
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C guest rev-parse HEAD)" = f156ea7a382ffbe992fbeeb331405af49ba3542f
+          test "$(git -C rules rev-parse HEAD)" = 2651575eb452b55d703a8504a67bb3ca2f5b1aaa
+          test "$(git -C function rev-parse HEAD)" = a83e8bef059eac29060e90223ccb01e651b5777a
+          # PR380 was branched before later PR379 source/test files existed.
+          # Reconstruct the exact already-tested PR380 merge *file content*,
+          # not its incomplete standalone branch tree. Source pin validator
+          # rejects anything other than these immutable blob identities.
+          cp rules/database.rules.json guest/database.rules.json
+          test "$(git -C guest hash-object database.rules.json)" = 67ff753bb118d3a2ad5763b1f521b66c5d302466
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+
+      - name: Install existing locked root dependencies
+        working-directory: source
+        run: npm ci --no-audit --no-fund
+
+      - name: Independently rerun 8 fail-closed release preparation test groups
+        working-directory: source
+        run: node scripts/verify-450-backend-release.mjs ../guest ../function
+
+      - name: Independently rerun live source Master and listener mocks
+        working-directory: source
+        run: node scripts/verify-450-runtime-boundaries.mjs ../guest ../function
+
+      - name: Assert preparation has no PUT or Firebase deploy execution path
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const source = readFileSync('scripts/prepare-450-backend-release.mjs','utf8');
+          assert.match(source,/process\.exitCode = 2/);
+          assert.match(source,/functionDeployEnabled: false/);
+          assert.match(source,/rulesMutationEnabled: false/);
+          assert.match(source,/method: 'GET'/);
+          assert.doesNotMatch(source,/method: ['"]PUT['"]/);
+          assert.doesNotMatch(source,/spawnSync\([^\n]*firebase|execSync\([^\n]*firebase/);
+          console.log('450_REVIEW_PREPARATION_ONLY_NEVER_DEPLOY=PASS');
+          NODE
+
+      - name: Preserve explicit BLOCKED release outcome
+        run: echo '450_SOURCE_TESTS_PASS_DOES_NOT_AUTHORIZE_SHARED_RTDB_RULES_PUT_OR_FIREBASE_DEPLOY'

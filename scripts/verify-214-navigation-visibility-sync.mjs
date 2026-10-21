@@ -62,6 +62,7 @@ console.log('EXPLORE_DIRECT_ROUTE_GATE=PASS');
 // Functions still replace publicSync/navigationVisibility with .set().
 const framePolicy = fs.readFileSync('src/constants/splitFrameGlobal.ts', 'utf8');
 const masterPage = fs.readFileSync('src/pages/MasterPermissionsPage.tsx', 'utf8');
+const appSettingsPage450 = fs.readFileSync('src/pages/AdminAppSettingsPage.tsx', 'utf8');
 const masterFramePanel = fs.readFileSync('src/components/MasterSplitFramePanel.tsx', 'utf8');
 const splitEngine = fs.readFileSync('src/components/studio/StudioSplitEngineWorkspace.tsx', 'utf8');
 const liteSplit = fs.readFileSync('src/components/studio/LiteStudioSplitWorkspace.tsx', 'utf8');
@@ -71,8 +72,12 @@ assert.match(framePolicy, /보통/);
 assert.match(framePolicy, /품질우선/);
 assert.ok(!framePolicy.includes('최적우선'), 'old label must never return');
 assert.match(framePolicy, /DEFAULT_SPLIT_FRAME_MODE: SplitFrameMode = 'pure-pane-hybrid'/);
-assert.match(masterPage, /<MasterSplitFramePanel \/>/);
-assert.match(masterPage, /'app-test' \| 'split-frame' \| 'admin-permissions'/);
+assert.match(appSettingsPage450, /<MasterSplitFramePanel \/>/,
+  'split frame settings must be in Admin App Settings');
+assert.doesNotMatch(masterPage, /<MasterSplitFramePanel \/>|'split-frame'/,
+  'Master permissions page layout must remain unchanged');
+assert.match(masterFramePanel, /normalizeStaffRole\(readUserProfileCache\(uid\)\) === 'master'/,
+  'the App Settings card must be hidden from non-Master viewers');
 assert.match(masterFramePanel, /분할바 프레임/);
 assert.match(masterFramePanel, /role="radiogroup"/);
 assert.match(masterFramePanel, /masterSetSplitFrameMode/);

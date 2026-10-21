@@ -817,7 +817,7 @@ export const masterSetSplitFrameMode = onCall(
     }, { merge: true });
     // The authenticated app uses one small extra RTDB listener. The mode is
     // isolated from legacy TEST/PRODUCTION navigation .set() functions.
-    // No new listeners, Firestore reads, D1 access or per-pointer requests.
+    // No added Firestore/D1 user data reads, polling or pointer-time requests.
     await admin.database().ref("publicSync/splitFrameModes/" + environment).set(mode);
     return { ok: true, environment, mode, updatedAt: now };
   }

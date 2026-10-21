@@ -1,3 +1,16 @@
+## CURRENT — app450 independent Work audit FAIL, P1 guest + backend release blockers (2026-10-22 KST)
+
+- **Latest event:** The user supplied the independent audit's final **FAIL** for pinned PREVIEW `ae5f8b3d9db9b3526b4fa98c44e81bfd985ce32e` and shared Rules DRAFT PR #375 head `5101437eeaf2e18045b52173faebfe5d5b9218db`. Source Master-only authorization/legacy ACL comparisons PASS; **release NOT approved**. Earlier "Work not performed yet" entries are historical.
+- **P1 Guest:** Guest access to `/studio` is supported but the app450 RTDB scalar is currently subscribed in the signed-in menu lifecycle and the isolated Rules node only permits authenticated read. Thus "all users" misses online guests. Correct scope is compatible signed-in AND guest Studio sessions; preserve privacy by authorizing at most the exact environment scalar node, never opening the shared `publicSync` parent/root/private collection; subject to separate independent Rules security audit.
+- **P1 backend release:** Currently only source CI and read-only Rules tests passed. No approved reusable workflow to GET/reGET/add-only exact one shared node, PUT with conflict protection/after-GET parity and fail-closed recovery, plus deploy only `masterSetSplitFrameMode`. Existing PREVIEW Hosting workflow is insufficient. Shared RTDB Rules cannot be blindly overwritten; do not merge PR #375 unchanged or deploy Function/Rules/Hosting before further review.
+- **P2:** Two Masters, stale UI, realtime errors/reconnect, Guest/auth transitions and actual Firebase Rules Emulator denied/access tests unproven. 100k listener/startup/broadcast total cost **unmeasured**, not automatically zero. The one RTDB setting write on Master Apply and app448 split visual engine baseline remain protected.
+- **Deployment/data:** Last confirmed PREVIEW Hosting **app448**, release source `b57c8f61eef364e03b1fa8f3fe07dd7d29e5fb31`; app450 Function/RTDB Rules/Hosting NOT DEPLOYED. TEST main `b13360df1bab52e2d3b746ea47dc4e3718eef85c` and PRODUCTION `fa81b02b695a8e935cdbbf8cab1efe1b2c9387f4` remained unchanged at last read. No user canonical data migrations/copies/backfills/deletes; Stage416 OFF.
+- **This development turn:** code/Rules/backend left untouched. A docs-only corrective task handoff is being prepared for Codex at `DOCS/NEXT_CODEX_TASK.md`; it is **NOT** implementation, CI PASS, deployed or independent re-audit. Do not report correction PASS.
+- **Next:** isolated guest-safe signal/RULES candidate + tests on preview task branch, then separate fail-closed exact backend release workflow; pin both SHAs, independent Work re-audit PASS, controlled PREVIEW backend deployment and physical PC/tablet/mobile guest+Master/2-session validation. No TEST/PRODUCTION without explicit later approval.
+- **Progress (three required scopes):** Stage416 **1/4·25%** inactive; previously accepted app-speed effort **5/5·100%** historical only; app450 5-phase path **2/5·40%** (design and source automated QA done; independent audit FAILED and correction not started).
+
+---
+
 ## CURRENT — app450 backend audit candidate ready; Firebase deploy not approved by independent Work (2026-10-22 KST)
 
 - User approved continued PREVIEW work. Final UI: 관리자 → 앱 설정, Master-only 분할바 프레임, 성능우선 / 보통 / 품질우선. Existing app448 splitter stays frozen.

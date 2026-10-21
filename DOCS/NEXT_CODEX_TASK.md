@@ -1,3 +1,13 @@
+## NEXT — app450 Master permissions control: audit source PR #366 + separate shared Rules PR #367 before PREVIEW deploy (2026-10-21 KST)
+
+- User explicitly requested "적용해서 배포해봐" and clarified UI position **마스터 권한**. Final control: 분할바 프레임, 성능우선=Pure Pane, **보통**=Local Responsive, 품질우선=Pure Pane Hybrid, Apply for current environment to all compatible online clients; initial fallback quality=existing Hybrid.
+- Source implementation PR **#366 OPEN** `feature/app450-master-split-frame-control`. Master-only UI + callable, separate auth-only tiny RTDB path `publicSync/splitFrameModes`, source-of-truth Firestore env fields, Studio policy state deferred until pointer-up and diagnostic URL A/B preserved. No code changed in app448 split hot path.
+- Shared RTDB Rules isolated PR **#367 DRAFT**, currently unmerged and NOT deployed. First source+Rules combined PR CI #39610645147 FAIL as strict shared Rules guard rejects unapproved new node. Source-only prior QA #39611519367 SUCCESS incl Functions TS + React TS/Build. **Do not bypass/relax guard blindly.**
+- **REQUIRED NEXT:** complete latest source CI and targeted verifier 214/450 + 303, independent GPT-6 Work audit of exact commit SHAs for #366 + #367 under WORK_AUDIT_CHECKLIST.md, especially global env isolation, previous TEST/PRODUCTION callable writer, Master permission, guest access, no data loss, 100k listener bandwidth, offline/old client, concurrent Masters. Then design & approve exact additive RTDB Rule extension preserving 418/434 guards and deploy Functions/Rules before app450 Hosting. The shared live Rules and Functions change must not be applied without audit. Verify true live PREVIEW version, two active clients, pointer-up mode changes, app448 smoothness and mobile, and TEST/PROD unchanged.
+- Current Firebase PREVIEW app448 unchanged. Never claim deployed or all-user realtime PASS from GitHub changes only; no TEST/PROD promotion. Stage416 OFF; historical speed metrics unchanged.
+
+---
+
 ## NEXT — app450 administrator "분할바 프레임": 성능우선 / 보통 / 품질우선 global mode (2026-10-21 KST)
 
 - **New user request 22:09 KST:** administrator App Settings has title `분할바 프레임`, selection of `성능우선`→`pure-pane`, `보통`→`local-responsive`, `품질우선`→`pure-pane-hybrid` and `적용` to propagate globally as close to instantly as possible. User correction 22:10 KST: **`최적우선` is wrong; use `보통`**.

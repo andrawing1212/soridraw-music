@@ -1,3 +1,13 @@
+## CURRENT — app450 최종 위치: 관리자 → 앱 설정, 적용 권한 Master 유지 (2026-10-21 KST)
+
+- **Latest user correction 2026-10-21 23:06 KST:** “위치를 그냥 관리자페이지 앱 설정으로 다시 옮겨줘”. Placement is now **Admin page → App Settings**, NOT Master permissions. This modifies placement only; Master-only Apply permission remains server-enforced. Options/title unchanged: **분할바 프레임**, **성능우선**=pure-pane / **보통**=local-responsive / **품질우선**=pure-pane-hybrid.
+- **Open source PR #366** `feature/app450-master-split-frame-control`: restored `MasterPermissionsPage.tsx` byte-identically to preview baseline, inserted `MasterSplitFramePanel` under `AdminAppSettingsPage.tsx`, hides panel unless cached authoritative profile indicates `staffRole=master`; `masterSetSplitFrameMode` still requires server `requireMasterCaller`. The panel matches existing App Settings theme; selected draft requires Apply with confirmation. Master-only policy does NOT grant regular Admin write permission.
+- **Backend safety gate unchanged:** shared RTDB rules PR #367 is DRAFT/unmerged, strict #418 live rules gate blocks uncontrolled additions; no new Functions/Rules/Hosting deployed. App450 source PR #366 must pass pinned final TS/Build/tests and undergo independent security/cost audit of BOTH PRs before release. Do NOT claim app450 available/live to users.
+- **Live PREVIEW remains app448** at previous verified release source `b57c8f61eef364e03b1fa8f3fe07dd7d29e5fb31`. No TEST/PROD promotion or shared user data change; Stage416 OFF. App449 failed performance experiment remains rejected.
+- **Next:** verify final location+Master-only UI, dedicated verifier 214/450, Studio split verifier 303, shared RTDB rule exact-additive audit and release plan; only then Functions+Rules+PREVIEW Hosting release. Unverified physical PC/mobile mode fanout and cost at 100k signed-in sessions.
+
+---
+
 ## CURRENT — app450 Master-only 분할바 프레임 implementation PRs OPEN, shared Rules audit blocks deployment (2026-10-21 KST)
 
 - **Final user instruction:** 2026-10-21 22:30 KST implement and PREVIEW deploy app450 Master-wide control. User clarified at 22:31 KST: place it inside **마스터 권한** (NOT Admin App Settings); only Master may apply. Three exact labels: 성능우선=Pure Pane; **보통**=Local Responsive; 품질우선=Pure Pane Hybrid. Global initial fallback quality/Hybrid.

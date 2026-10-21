@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { Loader2, Save, SlidersHorizontal } from 'lucide-react';
-import { functions } from '../firebase';
+import { auth, functions } from '../firebase';
+import { normalizeStaffRole } from '../constants/adminPermissions';
+import { USER_PROFILE_CACHE_EVENT, isUserProfileCacheStorageKey, readUserProfileCache } from '../lib/userProfileCache';
 import {
   getSplitFrameEnvironment,
   SPLIT_FRAME_CHOICES,
@@ -14,6 +16,28 @@ const labelFor = (mode: SplitFrameMode) =>
   SPLIT_FRAME_CHOICES.find((choice) => choice.value === mode)?.label || '품질우선';
 
 export default function MasterSplitFramePanel() {
+  // Located in Admin > App Settings; visible only to a verified Master.
+  // The callable separately enforces Master on the server.
+  const [isMaster, setIsMaster] = useState(() =>
+    normalizeStaffRole(readUserProfileCache(auth.currentUser?.uid)) === 'master');
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const syncRole = () => setIsMaster(normalizeStaffRole(readUserProfileCache(uid)) === 'master');
+    syncRole();
+    const onProfileChange = (event: Event) => {
+      if ((event as CustomEvent<{ uid?: string }>).detail?.uid === uid) syncRole();
+    };
+    const onStorageChange = (event: StorageEvent) => {
+      if (isUserProfileCacheStorageKey(event.key, uid)) syncRole();
+    };
+    window.addEventListener(USER_PROFILE_CACHE_EVENT, onProfileChange);
+    window.addEventListener('storage', onStorageChange);
+    return () => {
+      window.removeEventListener(USER_PROFILE_CACHE_EVENT, onProfileChange);
+      window.removeEventListener('storage', onStorageChange);
+    };
+  }, []);
   const environment = getSplitFrameEnvironment();
   const [applied, setApplied] = useState<SplitFrameMode>(readCurrentSplitFrameMode);
   const [draft, setDraft] = useState<SplitFrameMode>(readCurrentSplitFrameMode);
@@ -50,6 +74,8 @@ export default function MasterSplitFramePanel() {
       setSaving(false);
     }
   };
+
+  if (!isMaster) return null;
 
   return (
     <div className="rounded-3xl bg-white/[0.035] p-5 md:p-6">

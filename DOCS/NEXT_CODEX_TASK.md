@@ -1,3 +1,14 @@
+## NEXT — app450 PR #379 guest-mode source and PR #380 draft Rules audit, safe release remains blocked (2026-10-22 KST)
+
+- Current latest work is **Medium-scope direct GitHub implementation**, not a Codex High invocation: source PR #379 and isolated draft Rules PR #380. Preserve both fixed SHAs after final CI. Previous auth-only DRAFT #375 does not support Guest Studio; leave unmerged.
+- **First review:** PR #379 reference-counted singleton RTDB listener, Guest Studio without Auth, signed-in shared subscription, terminal listener cancellation sets `serverReady=false`, no per-drag call/new Firestore/D1 read, compact/mobile behavior, app448 hot path unchanged. Static React/Functions TS+Build and app303/214/418/434/450 tests are CI targets, not browser evidence.
+- **Rules review:** PR #380 parent read/write false, only known env leaf read true (public operational string), exact validator and unknown descendants denied; emulator guest/read/write and unrelated existing ACL tests required. This is the only candidate for guest requirement; current live shared Rules are not changed.
+- **Release task still incomplete:** A pure read-only `verify-450-rtdb-release-prepost.mjs` checker exists, but there is NO approved authenticated live PUT or single-Function deploy. RTDB Rules full-tree REST PUT has a race after double GET unless validated conditional write/exclusive writer is available. Do not bypass with a naive second GET; no blind backup overwrite or new stage416 deployment. Continue Medium-only design/negative tests; reserve High maximum one optional consolidated run for remaining complex release integrity issues.
+- **Do not perform** any Rules merge to preview, Firebase/Cloudflare deploy, user data changes, Stage416 activation, TEST/PRODUCTION change or claim app450 success until pinned independent Work PASS and explicit safe release.
+- **Next exact action:** Finish final CI, ask independent Work to review PR #379 and #380; if FAIL, patch smallest problem in Medium; only after separate release-gate audit prepare actual PREVIEW backend deployment.
+
+---
+
 ## NEXT — app450 independent Work FAIL → scoped implementation, NO PREVIEW deploy (2026-10-22 KST)
 
 - **Independent audit result reported by user 2026-10-22 KST: FAIL / PREVIEW release BLOCKED.** Fixed baseline preview `ae5f8b3d9db9b3526b4fa98c44e81bfd985ce32e`; existing separate draft Rules PR #375 fixed `5101437eeaf2e18045b52173faebfe5d5b9218db` remains **DRAFT / UNMERGED**. This section supersedes earlier "Work not yet invoked" statements. The Work report found (P1) guest `/studio` receives no mode, (P1) no safely implemented targeted Function + shared Rules release, (P2) two Masters/reconnect/error/100k cost not proven. Master Auth and old shared ACL were source-PASS, NOT deployment approval.

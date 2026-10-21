@@ -34,3 +34,8 @@ source_ci_run=39567328608_PASS
 app449_local_responsive_generate_only_hybrid_signal_qa=2026-10-21
 product_merge_sha=f5a005a0385a42f99ad2aa4318921ef0744068ec
 product_quality_run=39574360628_PASS
+
+app450-split-global-predeploy=2026-10-22
+source_sha=93e95f3fefde5ba1bed6108455fe7142039ce3f3
+source_product_ci=39647560757_PASS
+checks=verify303_app448_split_plus_verify214_master_global_policy

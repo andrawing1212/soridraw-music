@@ -1,3 +1,13 @@
+## CURRENT — app450 분할바 프레임 관리자 전체 설정: 설계/명칭 확정, 구현 전 (2026-10-21 KST)
+
+- **요청:** 관리자 > 앱 설정에서 제목 `분할바 프레임` 아래 세 모드 `성능우선` (`pure-pane`) / **`보통`** (`local-responsive`) / `품질우선` (`pure-pane-hybrid`)을 선택하고 `적용`하면 모든 호환 앱 사용자에게 실시간으로 전파. 22:10 KST에 사용자가 `최적우선`→`보통`으로 수정 지시. 최초 기본값 품질우선=기존 Hybrid를 유지.
+- **GitHub 검토:** `AdminAppSettingsPage.tsx`, `navigationVisibilitySyncService.ts`, `functions/src/index.ts`의 `adminSetNavigationVisibility`, `database.rules.json`, `firestore.rules`, `StudioSplitEngineWorkspace.tsx` 확인. 이미 공용 메뉴 설정 RTDB `publicSync/navigationVisibility` 구독이 있어 비용을 통제하며 작은 모드 신호를 재사용할 수 있는 후보. 단 구버전 앱/오프라인/미로그인 사용자와 환경별 PREVIEW·TEST·PRODUCTION 분리를 반드시 검증할 것.
+- **설계 인계:** `DOCS/APP450_SPLIT_FRAME_GLOBAL_CONTROL_SPEC.md`, `DOCS/NEXT_CODEX_TASK.md`에 실행 범위/권한/비용/합격선 기재. **설계 문서만 변경.** 앱 UI, Functions, DB Rules, 배포, 실제 전역 모드 또는 사용자 데이터는 변경되지 않았으며 실제 기능은 미구현. Code/CI/실사용 PASS 아님.
+- **기존 앱 상태 보호:** Firebase PREVIEW app448, 배포 source `b57c8f61eef364e03b1fa8f3fe07dd7d29e5fb31` (Actions #39579346778 PASS) 그대로. app449 속도 악화 실사용 FAIL 이력이 있으므로 해당 생성바 루트 신호 복사 금지. Stage416 OFF. TEST/PRODUCTION 변경 없음.
+- **다음:** Codex High 구현 → 독립 Work 비용/모바일/이전 배포 코드 검증 → 승인된 PREVIEW 순서. 현재 설계 완료, 구현 미착수.
+
+---
+
 ## CURRENT — app448 user-accepted exact source RESTORED to PREVIEW after app449 Local Responsive speed regression (2026-10-21 KST)
 
 - **Current decision and user A/B FAIL:** user 2026-10-21 09:36 UTC: "방금 수정으로 하이브리드와 속도가 오히려 비슷해졌어. 생성바에 문제가 있는거 같은 느낌이야. 448로 다시 되돌려야될거 같아." app449 Local Responsive added three Generate/Builder <html> signal updates at 660/820/1080; user perceives drag degraded to Hybrid-like responsiveness. The signals and global CSS invalidation are a plausible explanation, **not measured/proven causality**. Do not reuse app449 experiment or declare it PASS.

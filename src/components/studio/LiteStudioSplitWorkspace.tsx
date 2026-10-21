@@ -825,6 +825,25 @@ export default function LiteStudioSplitWorkspace({
     syncGenerationBarGeometry(roundedBuilderWidth);
   }, [syncGenerationBarGeometry]);
 
+  // app446 — one release-only geometry handoff for the floating Generate bar.
+  // During Pure Pane Hybrid the portal follows cached, compositor-scaled
+  // geometry. Its temporary width/X are removed at pointer-up; commit the
+  // *actual current* action anchor's resting geometry first so the CSS owner
+  // never falls back to a stale pre-drag --soridraw-action-fixed-* value.
+  // This read is at pointer-up ONLY, never in the pointermove/rAF hot path.
+  const commitRestingGenerationBarGeometry = useCallback(() => {
+    if (generationBarPerfMode !== 'normal') return;
+    const { floatingActionBar, actionAnchor } = externalRef.current;
+    if (!floatingActionBar || !actionAnchor || floatingActionBar.dataset.soridrawPlacement !== 'floating') return;
+    const rect = actionAnchor.getBoundingClientRect();
+    if (!Number.isFinite(rect.width) || rect.width <= 0) return;
+    const gutter = getStudioActionFloatingGutter(window.innerWidth, modeRef.current.builder);
+    const geometry = resolveStudioActionFloatingGeometry(rect.left, rect.width, gutter);
+    const rootStyle = document.documentElement.style;
+    rootStyle.setProperty('--soridraw-action-fixed-left', `${geometry.left}px`);
+    rootStyle.setProperty('--soridraw-action-fixed-width', `${geometry.width}px`);
+  }, [generationBarPerfMode]);
+
   const clearLiveExternalGeometry = useCallback(() => {
     const controls = externalRef.current;
     // 781: live split-edge controls use direct inline coordinates only while
@@ -1580,6 +1599,9 @@ export default function LiteStudioSplitWorkspace({
     const safeWidth = Math.max(1, metricsRef.current.width);
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? safeWidth : Math.round(safeWidth * (percentRef.current / 100));
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
+    // Handoff before clearing compositor X/scale/width so the resting portal
+    // resolves to the same final command-anchor geometry immediately.
+    commitRestingGenerationBarGeometry();
     clearLiveExternalGeometry();
     readExternalControls();
     window.dispatchEvent(new CustomEvent('soridraw-split-drag-end'));
@@ -1592,7 +1614,7 @@ export default function LiteStudioSplitWorkspace({
     }
     window.requestAnimationFrame(connectTopCardObserver);
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(percentRef.current)); } catch { /* optional */ }
-  }, [applyPercent, clearLiveExternalGeometry, clearV2DragContentFreeze, commitRootMeasurements, connectTopCardObserver, finishDragScrollLocks, flushPointer, readExternalControls, v2DragPerfMode]);
+  }, [applyPercent, clearLiveExternalGeometry, clearV2DragContentFreeze, commitRestingGenerationBarGeometry, commitRootMeasurements, connectTopCardObserver, finishDragScrollLocks, flushPointer, readExternalControls, v2DragPerfMode]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (builderCollapsedRef.current || resultCollapsedRef.current || window.innerWidth < 1100) return;

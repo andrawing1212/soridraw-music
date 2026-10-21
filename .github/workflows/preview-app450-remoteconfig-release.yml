@@ -1,0 +1,174 @@
+name: SORIDRAW app450 PREVIEW Existing Remote Config Release
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/preview-app450-remoteconfig.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-preview-app-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      FUNCTION_PROJECT: soridraw-app-866a5
+      HOSTING_PROJECT: soridraw
+      FUNCTION_NAME: masterSetSplitFrameMode
+
+    steps:
+      - name: Lock one exact preapproved PREVIEW product commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Reject any unrelated deployment, branch, or incomplete code
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = preview
+          trigger=.deploy/preview-app450-remoteconfig.trigger
+          grep -Fxq 'function_name=masterSetSplitFrameMode' "$trigger"
+          grep -Fxq 'shared_rtdb_rules_change=false' "$trigger"
+          grep -Fxq 'shared_user_data_change=false' "$trigger"
+          grep -Fxq 'cloudflare_change=false' "$trigger"
+          grep -Fxq 'stage416_activation=false' "$trigger"
+          grep -Fxq 'test_production_change=false' "$trigger"
+          test "$(grep -c '^product_sha=' "$trigger")" = 1
+          product_sha="$(sed -n 's/^product_sha=//p' "$trigger")"
+          printf '%s' "$product_sha" | grep -Eq '^[0-9a-f]{40}$'
+          test "$product_sha" = "$(git rev-parse HEAD^)"
+          git fetch origin preview main production --no-tags
+          git merge-base --is-ancestor "$product_sha" origin/preview
+          git rev-parse origin/main > "$RUNNER_TEMP/main-before"
+          git rev-parse origin/production > "$RUNNER_TEMP/prod-before"
+          curl -fsS --max-time 15 https://test.soridraw.com -o "$RUNNER_TEMP/test-before"
+          curl -fsS --max-time 15 https://soridraw.com -o "$RUNNER_TEMP/prod-before-html"
+          sha256sum "$RUNNER_TEMP/test-before" | awk '{print $1}' > "$RUNNER_TEMP/test-before-sha"
+          sha256sum "$RUNNER_TEMP/prod-before-html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before-sha"
+          git checkout --detach "$product_sha"
+          node - <<'NODE'
+          const fs=require('fs');
+          const rules=fs.readFileSync('database.rules.json','utf8');
+          if(JSON.parse(rules).rules.publicSync.splitFrameModes) throw Error('450_SHARED_RTD_RULES_MUST_REMAIN_UNMODIFIED');
+          const source=fs.readFileSync('functions/src/masterSplitFrameMode450.ts','utf8');
+          if(!source.includes('remote.publishTemplate(template)')||
+            source.includes('force: true')||source.includes('admin.database()'))
+            throw Error('450_REMOTE_CONFIG_SINGLE_OPERATION_DRIFT');
+          NODE
+          echo "LOCKED_APP450_PREVIEW_SOURCE=$product_sha"
+
+      - name: Node 22 and frozen source QA
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: TypeScript, Build, and no-Rules-change checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm --prefix functions ci --no-audit --no-fund
+          node scripts/verify-214-navigation-visibility-sync.mjs
+          node scripts/verify-303-studio-split-browser-history.mjs
+          node scripts/verify-450-remote-config-master.mjs
+          npx tsc --noEmit
+          npm run build
+          npm --prefix functions run build
+          node scripts/build-450-single-function-package.mjs
+          npm install --prefix .app450-only-functions --omit=dev --ignore-scripts --no-audit --no-fund
+          node - <<'NODE'
+          const mod=require('./.app450-only-functions/lib/index.js');
+          if(Object.keys(mod).join(',')!=='masterSetSplitFrameMode') throw Error('450_UNRELATED_FUNCTION_EXPORT');
+          console.log('450_EXACT_ONE_CALLABLE=PASS');
+          NODE
+
+      - name: Authenticate existing SORIDRAW release principal
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Verify original Functions inventory before release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud functions list --project "$FUNCTION_PROJECT" --format=json > "$RUNNER_TEMP/fns-before.json"
+          node - "$RUNNER_TEMP/fns-before.json" <<'NODE'
+          const fs=require('fs');
+          const before=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(before.some(v=>String(v.name||'').endsWith('/masterSetSplitFrameMode')))
+            throw Error('450_EXISTING_UNAUDITED_FUNCTION_REFUSED');
+          console.log('450_NEW_FUNCTION_ONLY_PREFLIGHT=PASS');
+          NODE
+
+      - name: Deploy exactly one Master Remote Config callable
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@15.30.1 deploy \
+            --project "$FUNCTION_PROJECT" \
+            --config preview.app450.single-function.firebase.json \
+            --only functions:masterSetSplitFrameMode \
+            --non-interactive
+
+      - name: Verify existing Functions unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud functions list --project "$FUNCTION_PROJECT" --format=json > "$RUNNER_TEMP/fns-after.json"
+          node - "$RUNNER_TEMP/fns-before.json" "$RUNNER_TEMP/fns-after.json" <<'NODE'
+          const fs=require('fs');
+          const before=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          const after=JSON.parse(fs.readFileSync(process.argv[3],'utf8'));
+          const map=new Map(after.map(v=>[v.name,v]));
+          for(const prev of before){
+            const later=map.get(prev.name);
+            if(!later||later.updateTime!==prev.updateTime)throw Error('450_UNRELATED_FUNCTION_CHANGED '+prev.name);
+          }
+          const added=after.filter(x=>!before.some(b=>b.name===x.name));
+          if(added.length!==1||!String(added[0].name).endsWith('/masterSetSplitFrameMode')
+             ||added[0].state!=='ACTIVE')throw Error('450_FUNCTION_DELTA_INVALID');
+          console.log('450_ONLY_MASTER_FUNCTION_NEW=PASS');
+          NODE
+
+      - name: Deploy PREVIEW Hosting only, no shared Rules or Workers
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@15.30.1 deploy \
+            --project "$HOSTING_PROJECT" \
+            --config firebase.hosting-preview.json \
+            --only hosting \
+            --non-interactive
+
+      - name: Verify preview and protected environments
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(sha256sum dist/index.html | awk '{print $1}')"
+          passed=false
+          for attempt in 1 2 3 4 5; do
+            if curl -fsS --max-time 15 -H 'Cache-Control: no-cache' https://preview.soridraw.com/ -o "$RUNNER_TEMP/preview.html"; then
+              actual="$(sha256sum "$RUNNER_TEMP/preview.html" | awk '{print $1}')"
+              if [ "$expected" = "$actual" ]; then passed=true; break; fi
+            fi
+            sleep 2
+          done
+          test "$passed" = true
+          git fetch origin main production --no-tags
+          test "$(git rev-parse origin/main)" = "$(cat "$RUNNER_TEMP/main-before")"
+          test "$(git rev-parse origin/production)" = "$(cat "$RUNNER_TEMP/prod-before")"
+          curl -fsS --max-time 15 https://test.soridraw.com -o "$RUNNER_TEMP/test-after"
+          curl -fsS --max-time 15 https://soridraw.com -o "$RUNNER_TEMP/prod-after-html"
+          test "$(sha256sum "$RUNNER_TEMP/test-after" | awk '{print $1}')" = "$(cat "$RUNNER_TEMP/test-before-sha")"
+          test "$(sha256sum "$RUNNER_TEMP/prod-after-html" | awk '{print $1}')" = "$(cat "$RUNNER_TEMP/prod-before-sha")"
+          echo '450_PREVIEW_HOSTING_EXACT_BUILD=PASS'
+          echo '450_TEST_PRODUCTION_AND_SHARED_RULES_UNTOUCHED=PASS'

@@ -23,11 +23,11 @@ const publicationProfiles432 = local?.rules?.publicSync?.explorePublicationProfi
 const split450 = local?.rules?.publicSync?.splitFrameModes;
 const split450Validate = "newData.isString() && (newData.val() === 'pure-pane' || newData.val() === 'local-responsive' || newData.val() === 'pure-pane-hybrid')";
 const approved450 = {
-  '.read': 'auth != null', '.write': false,
-  preview: { '.validate': split450Validate },
-  test: { '.validate': split450Validate },
-  production: { '.validate': split450Validate },
-  '$other': { '.validate': false },
+  '.read': false, '.write': false,
+  preview: { '.read': true, '.validate': split450Validate },
+  test: { '.read': true, '.validate': split450Validate },
+  production: { '.read': true, '.validate': split450Validate },
+  '$other': { '.read': false, '.validate': false },
 };
 // The feature Rules are merged only AFTER a separate audit. The existing
 // base remains valid in the meantime. Once the exact sibling exists in

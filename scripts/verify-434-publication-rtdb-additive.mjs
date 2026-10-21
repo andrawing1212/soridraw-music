@@ -57,11 +57,11 @@ const withoutPublic = (rules) => {
 const split450 = source.rules.publicSync.splitFrameModes;
 const split450Validation = "newData.isString() && (newData.val() === 'pure-pane' || newData.val() === 'local-responsive' || newData.val() === 'pure-pane-hybrid')";
 const approved450 = {
-  '.read': 'auth != null', '.write': false,
-  preview: { '.validate': split450Validation },
-  test: { '.validate': split450Validation },
-  production: { '.validate': split450Validation },
-  '$other': { '.validate': false },
+  '.read': false, '.write': false,
+  preview: { '.read': true, '.validate': split450Validation },
+  test: { '.read': true, '.validate': split450Validation },
+  production: { '.read': true, '.validate': split450Validation },
+  '$other': { '.read': false, '.validate': false },
 };
 if (split450) assert.ok(same(split450, approved450),
   'app450 RTDB ACL must match only exact approved authenticated read-only node');

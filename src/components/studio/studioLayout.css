@@ -6796,15 +6796,18 @@ h1.text-3xl.md\:text-5xl {
 }
 
 
-/* 370: Compact Music Note / Suno Library navigation labels using the actual
- * result-pane mode. This avoids browser-width md styles keeping oversized
- * text inside a narrow split pane. Folder data and labels remain complete. */
+/* 370/447: Compact Music Note / Suno Library navigation labels using
+ * the real result-pane mode. Keep the approved three-tab width capped at 480px
+ * EVEN while the pane is flagged mobile: the previous max-width:100% override
+ * stretched all three buttons as a narrow Result grew during a divider drag,
+ * then snapped to the base 480px cap when its mode became desktop.
+ * Below 480px the row still fits its actual pane; external mobile is unchanged. */
 @media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-result-pane[data-pane-mode="mobile"]
   :is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs) {
     width: 100% !important;
-    max-width: 100% !important;
+    max-width: 480px !important;
   }
 
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root

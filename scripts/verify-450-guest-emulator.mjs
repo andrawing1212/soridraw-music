@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 // Firebase RTDB EMULATOR ONLY. No real project/host is accepted.
 // The exact guest-readable leaf is public; parent, navigation and all user
@@ -8,13 +9,38 @@ const project = process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT || ''
 assert.ok(host && /^(127\.0\.0\.1|localhost):\d+$/.test(host),
   '450_EMULATOR_HOST_REQUIRED_NO_REAL_DATABASE');
 assert.equal(project,'demo-soridraw-app450','450_DEMO_PROJECT_ONLY');
-const ns = 'demo-soridraw-app450-default-rtdb';
-const url = (path, admin = false) =>
-  `http://${host}/${path}.json?ns=${ns}${admin ? '&auth=owner' : ''}`;
+// Emulator versions may load the CLI rules into either the project or
+// the named default namespace. Never trust an automatically opened database.
+// Verify the exact full Rules tree before testing access or seeding data.
+const projectRules = JSON.parse(readFileSync('database.rules.json','utf8'));
+let ns = '';
+for (const candidate of [
+  'demo-soridraw-app450-default-rtdb',
+  'demo-soridraw-app450',
+]) {
+  const response = await fetch(
+    `http://${host}/.settings/rules.json?ns=${candidate}`,
+    { headers: { Authorization: 'Bearer owner' } },
+  );
+  if (!response.ok) continue;
+  const liveRules = await response.json();
+  try {
+    assert.deepStrictEqual(liveRules,projectRules);
+    ns = candidate;
+    break;
+  } catch {
+    // A different/auto-open rules tree is NOT an eligible test instance.
+  }
+}
+assert.ok(ns,'450_EMULATOR_EXACT_RULES_NOT_LOADED_STOP');
+const url = (path) => `http://${host}/${path}.json?ns=${ns}`;
 const request = async (path, method = 'GET', body = undefined, admin = false) => {
-  const response = await fetch(url(path,admin), {
+  const response = await fetch(url(path), {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(admin ? { Authorization: 'Bearer owner' } : {}),
+    },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   return { status: response.status, body: await response.text() };

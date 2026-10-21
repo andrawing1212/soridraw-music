@@ -18,3 +18,5 @@ product_sha=dafbe902edf579feb880b36d369d5ba9da99ef14
 
 app446_generate_bar_pointerup_geometry_qa=2026-10-21
 product_sha=b52c2392ded552788f3f2132825ab03155a814fb
+
+app446_release_handoff_order_test_fix=2026-10-21

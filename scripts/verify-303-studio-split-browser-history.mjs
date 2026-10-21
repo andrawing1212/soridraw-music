@@ -218,3 +218,26 @@ assert.ok(hotPathStart > 0 && hotPathEnd > hotPathStart, 'missing existing live 
 assert.doesNotMatch(liteWorkspace.slice(hotPathStart, hotPathEnd), /getBoundingClientRect|commitRestingGenerationBarGeometry/,
   'no extra measurements or release-only geometry in the per-frame drag writer');
 console.log('VERIFY_446_GENERATE_BAR_RELEASE_GEOMETRY_HANDOFF=PASS');
+
+
+// app447: when the Result is labelled mobile during a live split gesture,
+// Music Note/Library three-tab strips must NEVER expand beyond their approved
+// 480px track. A stale mobile mode previously overrode the Tailwind max cap to
+// 100%, stretching every tab across the growing Result width and snapping back.
+const tabsRuleStart = studioLayout.indexOf('/* 370/447:');
+assert.ok(tabsRuleStart > 0, 'missing Music Note/Library split tab cap scope');
+const tabsRuleEnd = studioLayout.indexOf('@media (max-width: 660px)', tabsRuleStart);
+assert.ok(tabsRuleEnd > tabsRuleStart, 'missing safe end of split tab cap scope');
+const tabsRule = studioLayout.slice(tabsRuleStart, tabsRuleEnd);
+assert.match(tabsRule, /@media \(min-width: 1100px\)/,
+  'split tab cap must not change phone/small-viewport layout');
+assert.match(tabsRule, /\.soridraw-studio-result-pane\[data-pane-mode="mobile"\][\s\S]*?:is\(\.soridraw-musicnote-mode-tabs, \.soridraw-library-mode-tabs\) \{\s*width: 100% !important;\s*max-width: 480px !important;/,
+  'mobile Result pane must cap BOTH mode-tab strips to 480px instead of full pane');
+assert.doesNotMatch(tabsRule, /max-width: 100% !important/,
+  'split mode tab cap must not be reset to the entire Result pane width');
+for (const source of ['src/pages/FavoritesPage.tsx', 'src/pages/SunoLibraryPage.tsx']) {
+  const page = readFileSync(source, 'utf8');
+  assert.match(page, /mode-tabs grid grid-cols-3[^"\n]*w-full max-w-\[480px\]/,
+    'preserve the existing three-button base 480px design: '+source);
+}
+console.log('VERIFY_447_NOTE_LIBRARY_TAB_STRETCH_CAP=PASS');

@@ -1,0 +1,81 @@
+import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import * as admin from 'firebase-admin';
+
+// Reuse Firebase Remote Config's EXISTING realtime channel. The Admin SDK
+// preserves the template ETag: publishTemplate without force rejects races.
+// No shared RTDB Rules write, new RTDB instance, or extra browser socket.
+const PARAMS = {
+  preview: 'soridraw_split_frame_preview_v1',
+  test: 'soridraw_split_frame_test_v1',
+  production: 'soridraw_split_frame_production_v1',
+} as const;
+const ORIGINS: Record<string, keyof typeof PARAMS> = {
+  'https://preview.soridraw.com': 'preview',
+  'https://test.soridraw.com': 'test',
+  'https://soridraw.com': 'production',
+  'https://www.soridraw.com': 'production',
+};
+const MODES = ['pure-pane', 'local-responsive', 'pure-pane-hybrid'] as const;
+const validMode = (value: unknown): value is typeof MODES[number] =>
+  value === 'pure-pane' || value === 'local-responsive' || value === 'pure-pane-hybrid';
+const normalizeRecord = (raw: unknown): { mode: typeof MODES[number]; revision: number } => {
+  try {
+    const value = JSON.parse(String(raw || '{}'));
+    if (validMode(value?.mode) && Number.isSafeInteger(value.revision) && value.revision >= 0) {
+      return { mode: value.mode, revision: value.revision };
+    }
+  } catch { /* Parameter not provisioned: app448 safe Hybrid default. */ }
+  return { mode: 'pure-pane-hybrid', revision: 0 };
+};
+
+export const masterSetSplitFrameMode = onCall({ region: 'us-central1' }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', '관리자 로그인이 필요합니다.');
+  const snap = await admin.firestore().collection('users').doc(uid).get();
+  if (snap.data()?.staffRole !== 'master') {
+    throw new HttpsError('permission-denied', '마스터 권한이 필요합니다.');
+  }
+  const origin = String(request.rawRequest.headers.origin || '').replace(/\/$/, '');
+  const environment = ORIGINS[origin];
+  if (!environment || request.data?.environment !== environment) {
+    throw new HttpsError('permission-denied', '현재 서비스와 설정 대상이 다릅니다.');
+  }
+  // Same built artifact for PREVIEW → TEST → PRODUCTION. Default permits
+  // ONLY preview, and each later environment needs explicit trusted release
+  // configuration. The browser cannot expand this server allowlist.
+  const approved = String(process.env.SORIDRAW_SPLIT_FRAME_ENABLED_ENVIRONMENTS || 'preview')
+    .split(',').map((item) => item.trim());
+  if (!approved.includes(environment)) {
+    throw new HttpsError('failed-precondition', '이 환경의 설정 적용은 아직 승인되지 않았습니다.');
+  }
+  const mode: unknown = request.data?.mode;
+  const expectedRevision: unknown = request.data?.expectedRevision;
+  if (!validMode(mode) || !Number.isSafeInteger(expectedRevision) ||
+      (expectedRevision as number) < 0) {
+    throw new HttpsError('invalid-argument', '설정값 또는 확인 번호가 잘못됐습니다.');
+  }
+
+  const remote = admin.remoteConfig();
+  const template = await remote.getTemplate();
+  const key = PARAMS[environment];
+  const previous = normalizeRecord(template.parameters?.[key]?.defaultValue?.value);
+  if (previous.revision !== expectedRevision) {
+    throw new HttpsError('aborted', '다른 마스터의 변경이 먼저 적용됐습니다. 최신 상태에서 다시 선택해주세요.');
+  }
+  const revision = previous.revision + 1;
+  const value = JSON.stringify({ mode, revision });
+  template.parameters[key] = {
+    ...(template.parameters[key] || {}),
+    defaultValue: { value },
+    description: 'SORIDRAW app450 split-frame mode; environment-scoped operational signal',
+  };
+  try {
+    // NEVER force publish; exact ETag from getTemplate is required.
+    await remote.publishTemplate(template);
+  } catch (error) {
+    // Concurrent Remote Config template writers yield an ETag conflict.
+    // Never retry from a stale Master selection or overwrite other params.
+    throw new HttpsError('aborted', '설정이 동시에 변경됐거나 전송에 실패했습니다. 다시 확인해주세요.');
+  }
+  return { ok: true, environment, mode, revision };
+});

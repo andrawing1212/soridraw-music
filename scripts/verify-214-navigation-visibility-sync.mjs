@@ -91,6 +91,19 @@ assert.ok(!masterApplyBlock.includes('setApplied(draft)'),
   'the last server response must not overwrite the authoritative mode received from another Master');
 assert.match(masterApplyBlock, /실시간 동기화 신호를 확인합니다/,
   'Apply confirmation must distinguish callable acknowledgment from globally received policy');
+assert.match(service, /export const subscribeSplitFrameRealtime/, 'Guest Studio needs a small public scalar subscription');
+assert.match(service, /frameSubscriberCount \+= 1/,
+  'signed-in menu and Guest Studio must share a reference-counted RTDB listener');
+assert.match(service, /frameSubscriberCount !== 0/,
+  'shared RTDB subscription must survive until last subscriber leaves');
+assert.match(service, /splitFrameServerReady = false;/,
+  'denied/failed listeners must clear serverReady and disable Master Apply');
+assert.match(service, /window\.addEventListener\('online', retryFrameTransport\)/,
+  'terminal RTDB listener failure must support network reconnection');
+assert.match(splitEngine, /return subscribeSplitFrameRealtime\(\)/,
+  'Guest Studio must listen even without authenticated navigation effect');
+assert.match(splitEngine, /compactMobileMode && props\.viewMode === 'split'/,
+  'compact mobile with no splitter must avoid needless policy subscription');
 assert.match(service, /firstConfirmedSnapshot = !splitFrameServerReady/,
   'initial fallback Hybrid must not be treated as server-confirmed mode');
 assert.match(functions, /export const masterSetSplitFrameMode = onCall/);
@@ -135,12 +148,15 @@ assert.ok(liteSplit.includes('const compactButtonDriftTooLarge'),
 // pass safely before the shared RTDB Rules change is approved or deployed.
 const frameRules = rules.rules.publicSync.splitFrameModes;
 if (frameRules) {
-  assert.equal(frameRules['.read'], 'auth != null');
-  assert.equal(frameRules['.write'], false);
+  assert.equal(frameRules['.read'], false, 'guest policy cannot make parent public');
+  assert.equal(frameRules['.write'], false, 'client writes to Master setting are forbidden');
   for (const environment of ['preview', 'test', 'production']) {
+    assert.equal(frameRules[environment]?.['.read'], true,
+      'authenticated and Guest Studio users may read only the public environment scalar');
     assert.ok(frameRules[environment]?.['.validate']?.includes('pure-pane-hybrid'),
       'missing strict RTDB mode validator for ' + environment);
   }
+  assert.equal(frameRules.$other?.['.read'], false);
   assert.equal(frameRules.$other?.['.validate'], false);
 }
 console.log('VERIFY_450_MASTER_SPLIT_FRAME_GLOBAL_CONTROL_CONTRACT=PASS');

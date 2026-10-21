@@ -2,7 +2,7 @@ name: Verify app450 Guest Split Security and Source
 
 on:
   pull_request:
-    branches: [preview]
+    branches: [preview, feature/app450-guest-policy-medium]
     paths:
       - 'src/services/navigationVisibilitySyncService.ts'
       - 'src/components/studio/StudioSplitEngineWorkspace.tsx'

@@ -1,3 +1,12 @@
+## NEXT — app447 PREVIEW user-accepted; no pending correction or release (2026-10-21 KST)
+
+- User 2026-10-21 02:35 UTC: "괜찮아. 좋아졌어." Treat app447 PREVIEW as **user-accepted for the reported split/Generate bar and Note/Library UI improvement**. Do not re-ask for previously confirmed improvement or change the accepted split engine just to pursue synthetic performance numbers. A general positive physical report is not proof of every breakpoint/mobile device, exact zero-snap, measured FPS, or an independent Work audit.
+- LIVE PREVIEW app447 is still the previously verified release `d12e6b39ac040a052f824a1f95cc11ab6549bdfa` (Firebase Action #39532616846 SUCCESS). Keep current correction: Compact Builder <=820px Generate 4px rebase, Music Note / Library max 480px tab row; preserve app442 gutter, app445 content-mode transitions, app446 release geometry and data/cache/batched writes. No new feature modification, Worker, Functions, Rules, shared-user-data mutation or Hosting release authorized.
+- Progress: Stage416 1/4·25% OFF; historical speed task 5/5·100% historic; **app447 scoped source + CI + PREVIEW Hosting + user acceptance 4/4·100%**. Remaining beyond this scoped task: independent Work audit, full cross-device browser matrix and actual backend billing are unverified and must not be labeled PASS.
+- **Only next action:** wait for a new issue or explicit TEST deployment request. TEST/main and PRODUCTION stay unchanged; TEST promotion requires independent release gates, not merely this user review. Do not merge unrelated pending PR #285.
+
+---
+
 ## NEXT — app447 PREVIEW released; user PC/mobile physical A/B is the only next acceptance step (2026-10-21 KST)
 
 Current app447 Firebase PREVIEW source pinned `d12e6b39ac040a052f824a1f95cc11ab6549bdfa`, release run #39532616846 SUCCESS, exact remote Hosting HTML/version 447 and unchanged TEST/PRODUCTION confirmed by release workflow. Source PRs #342/#345, QA #343/#346, version PR #348, release PR #349.

@@ -1,3 +1,13 @@
+## CURRENT — app447 PREVIEW user real-hand improvement ACCEPTED; freeze accepted behavior (2026-10-21 KST)
+
+- **User real-hand response:** 2026-10-21 02:35 UTC, immediately after app447 PREVIEW release report and requested split/Generate bar/Music Note/Library verification: "괜찮아. 좋아졌어." Record **USER-ACCEPTED / real-hand perceived improvement PASS** for the app447 fixes in the user's tested context. This replaces the prior "user physical feedback pending" for the reported issue; do not infer a quantified speed gain, mathematically perfect no-snap, or that every PC/tablet/mobile breakpoint and data-flow matrix was individually tested.
+- **Freeze currently accepted app447 behavior:** the compact Generate bar <=820px bounded 4px rebase and Music Note / Library top-tabs 480px cap, existing app442 gutter, app445 live 660/820/1080 responsive switching, app446 pointer-up handoff, splitter speed, all existing working buttons and UI. No new tuning/rollback without a new concrete reported defect. The user's positive confirmation is not approval to merge pending unrelated code.
+- **Actual PREVIEW Hosting remains app447**, release source/trigger merge `d12e6b39ac040a052f824a1f95cc11ab6549bdfa`, Firebase release #39532616846 SUCCESS with exact remote HTML/version 447 and unchanged TEST/PRODUCTION. Previous state-document update PR #350 merged preview `eaa4488ad449e0de7f8400f571351179f005b911`. This entry changes documentation only; it is not a new app release.
+- **Scope and remaining gates:** targeted PREVIEW user acceptance PASS. Independent Work audit NOT PERFORMED; complete physical PC/tablet/mobile matrix and measured FPS/Firestore/D1 billed cost NOT independently verified; TEST_VERIFIED not claimed. Stage416 1/4·25% OFF. Historical speed project 5/5·100% is historical-only. app447 scoped source correction, QA, PREVIEW Hosting, user acceptance **4/4·100%**. TEST and PRODUCTION remain unmodified; no promotion unless explicitly requested and required release gates pass.
+- **Next:** no immediate app447 fix or deployment. Await a new concrete request or user approval for a future TEST rollout; do not treat this positive review as deployment authorization. Preserve shared canonical data, current batching, and low read/write costs.
+
+---
+
 ## CURRENT — app447 Firebase PREVIEW Hosting RELEASED, exact app447 verified; physical PC/mobile QA PENDING (2026-10-21 KST)
 
 - **User approval:** 2026-10-21 02:13 UTC "진행해" in direct response to explicit question to deploy app447 PREVIEW only. No TEST or PRODUCTION promotion authorization.

@@ -58,8 +58,20 @@ export const masterSetSplitFrameMode = onCall({ region: 'us-central1' }, async (
   const remote = admin.remoteConfig();
   const template = await remote.getTemplate();
   const key = PARAMS[environment];
-  const defaultValue = template.parameters?.[key]?.defaultValue;
+  const currentParam = template.parameters?.[key];
+  // A global Master setting must never silently overwrite a personalized
+  // or conditionally targeted parameter that may have been added elsewhere.
+  if (currentParam?.conditionalValues && Object.keys(currentParam.conditionalValues).length > 0) {
+    throw new HttpsError('failed-precondition', '조건별 원격 설정이 존재해 전체 적용을 중단했습니다.');
+  }
+  const defaultValue = currentParam?.defaultValue;
+  if (currentParam && (!defaultValue || !('value' in defaultValue))) {
+    throw new HttpsError('failed-precondition', '설정 상태를 확인할 수 없어 전체 적용을 중단했습니다.');
+  }
   const previous = normalizeRecord(defaultValue && 'value' in defaultValue ? defaultValue.value : undefined);
+  if (currentParam && JSON.stringify(previous) !== String(defaultValue && 'value' in defaultValue ? defaultValue.value : '')) {
+    throw new HttpsError('failed-precondition', '기존 분할바 설정이 올바르지 않아 덮어쓰지 않았습니다.');
+  }
   if (previous.revision !== expectedRevision) {
     throw new HttpsError('aborted', '다른 마스터의 변경이 먼저 적용됐습니다. 최신 상태에서 다시 선택해주세요.');
   }

@@ -38,9 +38,7 @@ export const subscribeSplitFrameMode = (listener: (mode: SplitFrameMode) => void
 const publishSplitFrameMode = (raw: unknown) => {
   const env = getSplitFrameEnvironment();
   const data = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
-  const modes = data.splitFrameModes && typeof data.splitFrameModes === 'object'
-    ? data.splitFrameModes as Record<string, unknown> : {};
-  const mode = env ? parseSplitFrameMode(modes[env]) : DEFAULT_SPLIT_FRAME_MODE;
+  const mode = env ? parseSplitFrameMode(data[env]) : DEFAULT_SPLIT_FRAME_MODE;
   if (mode === currentSplitFrameMode) return;
   currentSplitFrameMode = mode;
   splitFrameListeners.forEach((listener) => listener(mode));
@@ -52,12 +50,19 @@ const publishSplitFrameMode = (raw: unknown) => {
 export const subscribeNavigationVisibilitySync = (
   onPayload: (payload: NavigationVisibilitySyncPayload | null) => void,
   onError?: (error: unknown) => void,
-): Unsubscribe => onValue(
-  ref(realtimeDb, 'publicSync/navigationVisibility'),
-  (snapshot) => {
-    const raw = snapshot.val();
-    publishSplitFrameMode(raw);
-    onPayload(normalizePayload(raw));
-  },
-  (error) => onError?.(error),
-);
+): Unsubscribe => {
+  // The menu node is also written by older TEST/PRODUCTION Functions.
+  // Keep the frame signal on an isolated tiny sibling so legacy .set() menu
+  // writers CANNOT erase the Master-selected mode.
+  const unsubscribeMenu = onValue(
+    ref(realtimeDb, 'publicSync/navigationVisibility'),
+    (snapshot) => onPayload(normalizePayload(snapshot.val())),
+    (error) => onError?.(error),
+  );
+  const unsubscribeFrame = onValue(
+    ref(realtimeDb, 'publicSync/splitFrameModes'),
+    (snapshot) => publishSplitFrameMode(snapshot.val()),
+    (error) => onError?.(error),
+  );
+  return () => { unsubscribeMenu(); unsubscribeFrame(); };
+};

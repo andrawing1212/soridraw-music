@@ -1,5 +1,5 @@
 import React, { useEffect, useState, type ReactNode } from 'react';
-import { readCurrentSplitFrameMode, subscribeSplitFrameMode } from '../../services/navigationVisibilitySyncService';
+import { readCurrentSplitFrameMode, subscribeSplitFrameMode, subscribeSplitFrameRealtime } from '../../services/navigationVisibilitySyncService';
 import StudioSplitWorkspace from './StudioSplitWorkspace';
 import LiteStudioSplitWorkspace from './LiteStudioSplitWorkspace';
 import StudioCompactMobileWorkspace from './StudioCompactMobileWorkspace';
@@ -31,6 +31,13 @@ export default function StudioSplitEngineWorkspace({
   ...props
 }: Props) {
   const [globalSplitFrameMode, setGlobalSplitFrameMode] = useState(readCurrentSplitFrameMode);
+  useEffect(() => {
+    // Guest /studio does not mount the authenticated navigation RTDB effect.
+    // Share its singleton tiny scalar transport, not a second connection.
+    // Compact mobile has no draggable split engine, so no needless listener.
+    if (compactMobileMode && props.viewMode === 'split') return;
+    return subscribeSplitFrameRealtime();
+  }, [compactMobileMode, props.viewMode]);
   useEffect(() => {
     // The realtime mode is a control plane value, NOT a per-drag signal.
     // Never switch the live split handler mid-pointer gesture.

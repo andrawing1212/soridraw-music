@@ -85,6 +85,12 @@ assert.match(masterFramePanel, /window\.confirm/);
 assert.match(masterFramePanel, /disabled=\{!environment \|\| !serverReady \|\| saving \|\| draft === applied\}/);
 assert.match(masterFramePanel, /isSplitFrameServerReady/,
   'Master must wait for first confirmed backend signal before applying global state');
+const masterApplyBlock = masterFramePanel.slice(masterFramePanel.indexOf('const apply = async () => {'),
+  masterFramePanel.indexOf('if (!isMaster) return null;'));
+assert.ok(!masterApplyBlock.includes('setApplied(draft)'),
+  'the last server response must not overwrite the authoritative mode received from another Master');
+assert.match(masterApplyBlock, /실시간 동기화 신호를 확인합니다/,
+  'Apply confirmation must distinguish callable acknowledgment from globally received policy');
 assert.match(service, /firstConfirmedSnapshot = !splitFrameServerReady/,
   'initial fallback Hybrid must not be treated as server-confirmed mode');
 assert.match(functions, /export const masterSetSplitFrameMode = onCall/);

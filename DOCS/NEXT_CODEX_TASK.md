@@ -1,3 +1,13 @@
+## NEXT — fix real app450 Master setting persistence via existing RC, version451 (2026-10-22 KST)
+
+- User's VIDEO confirms app450 PREVIEW bug, red stale Master conflict after Apply followed by mode default/reset on navigation. The released app450 bootstrapped Remote Config only once under a prior feature's storage marker; new splitFrame param never fetched on existing clients, leaving revision0.
+- Fix in PR #394 `fix/app450-master-server-reload`. Preserve all app448 splitter/generation UI. Add Master-only `action:'read'` to existing single Function for exact server mode/revision on Admin settings mount; no save until read succeeded, no UI claim of success until existing ETag-publish returns revision. On success publish local Studio signal; on failed Apply reload canonical server truth.
+- Guest/auth Studio only runs one-time bootstrap when split UI actually mounted and old RC cache lacks new param; reuses existing RT listener, no extra RTDB websocket or Rules. Reject older cached rev after newer confirmed server rev. Existing version signal continues unchanged; browser app version 451.
+- New isolated Master read and client reentry mock tests, full TS/React/Functions builds and app448 303/214/418/434/435 mandatory PASS. Existing Function UPDATE only; Stage416 OFF, Rules unchanged, main and production unchanged.
+- After CI success merge source PR and trigger guarded PREVIEW-only release with exact code SHA and postflight. User then re-tests app settings with Master: performance → Apply → page away/back same mode → Studio shows performance → switch quality and repeat. **Do not claim live app451 before release run success.** No Codex consumed; preserve scarce budget.
+
+---
+
 ## NEXT — app450 PREVIEW deployed, obtain user functional acceptance (2026-10-22 KST)
 
 - **PREVIEW release SUCCESS:** product source `fc64b6a1747902a8645207d81cdf55d36662e81e`, release trigger commit `910861e79d67264c49e056d331da8846f518618a`, GitHub Actions run **#39690606880 SUCCESS**. Exactly new `masterSetSplitFrameMode` callable + PREVIEW Hosting, app version 450, no shared RTDB Rules PUT, data migration, Cloudflare, or TEST/PRODUCTION changes.

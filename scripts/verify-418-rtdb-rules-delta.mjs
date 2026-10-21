@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { buildStage416ServerRulesCandidate } from './build-416-private-server-rules.mjs';
 
 // Read-only shared RTDB gate. The local release candidate may add:
@@ -234,6 +235,14 @@ if (process.argv.includes('--self-test')) {
   console.log('402_PRIVATE_OPTIMISTIC_COUNT_RULE_ADDITIVE_SELF_TEST=PASS');
   console.log('416_SERVER_ONLY_RTDB_TWO_NODE_ADDITIVE_SELF_TEST=PASS');
 } else {
+  // Always run exact new-sibling negative permission tests on a read-only
+  // live preflight. A passing older 418 snapshot comparison alone is not
+  // sufficient to authorize app450.
+  const extra = spawnSync(process.execPath,
+    ['scripts/verify-450-shared-rtdb-additive.mjs', '--self-test'],
+    { encoding: 'utf8' });
+  assert.equal(extra.status, 0, extra.stderr || extra.stdout);
+  process.stdout.write(extra.stdout || '');
   const path = process.argv[2];
   if (!path) throw new Error('Live read-only RTDB rules JSON path required');
   const remote = JSON.parse(readFileSync(path,'utf8'));

@@ -753,9 +753,21 @@ export default function LiteStudioSplitWorkspace({
     const nodeChanged = base.node !== bar;
     const modeChanged = base.mode !== liveMode;
     const widthRatio = base.width > 0 ? actionGeometry.width / base.width : 1;
+    // app447: below the 820px Builder Compact boundary, portal scaleX also
+    // scales the real Generate buttons and labels. At pointer-up that scale
+    // disappears and their widths visibly jump, even when the bar itself has
+    // been handed to the exact resting geometry (app446). Keep the existing
+    // compositor fast path, but cap the *compact-only* unlaid-out width drift
+    // to 4px rather than ±8%. This bounds internal button deformation without
+    // adding reads, observers or continuous root/React updates. Do not change
+    // the 8% batching contract for wider Builder/Pure Pane Hybrid drag.
+    const compactButtonDriftTooLarge = roundedBuilderWidth <= BUILDER_COMPACT_MAX
+      && base.width > 0
+      && Math.abs(actionGeometry.width - base.width) >= 4;
     const needsRebase = nodeChanged
       || base.width <= 0
       || modeChanged
+      || compactButtonDriftTooLarge
       || widthRatio < 0.92
       || widthRatio > 1.08;
 

@@ -1,0 +1,76 @@
+name: Verify app450 Isolated Master Function (No Deploy)
+
+on:
+  push:
+    branches: [integration/app450-independent-audit-candidate]
+    paths:
+      - 'DOCS/APP450_UNIFIED_AUDIT_HANDOFF.md'
+      - '.github/workflows/verify-app450-single-function-source.yml'
+  pull_request:
+    branches: [preview, feature/app450-isolated-master-function]
+    paths:
+      - 'functions/src/masterSplitFrameMode450.ts'
+      - 'functions/src/index.ts'
+      - 'scripts/build-450-single-function-package.mjs'
+      - 'scripts/verify-214-navigation-visibility-sync.mjs'
+      - 'scripts/verify-450-master-stale-apply.mjs'
+      - '.github/workflows/verify-app450-single-function-source.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app450-one-function-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    steps:
+      - name: Checkout exact proposed source
+        uses: actions/checkout@v4
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked root and Functions deps
+        run: |
+          npm ci --no-audit --no-fund
+          npm --prefix functions ci --no-audit --no-fund
+
+      - name: TypeScript and app448 split regression
+        run: |
+          npx tsc --noEmit
+          node scripts/verify-303-studio-split-browser-history.mjs
+
+      - name: Reject simultaneous stale Master changes with atomic scalar transaction
+        run: node scripts/verify-450-master-stale-apply.mjs
+
+      - name: Compile Firebase Functions
+        run: npm --prefix functions run build
+
+      - name: Build ONE function package in CI workspace only
+        run: node scripts/build-450-single-function-package.mjs
+
+      - name: Verify staged package exports and identity
+        run: |
+          npm install --prefix .app450-only-functions --omit=dev --ignore-scripts --no-audit --no-fund
+          node - <<'NODE'
+          const fns=require('./.app450-only-functions/lib/index.js');
+          if(Object.keys(fns).join(',')!=='masterSetSplitFrameMode'
+            ||typeof fns.masterSetSplitFrameMode!=='function')
+            throw Error('450_STAGED_FUNCTION_EXPORT_UNEXPECTED');
+          console.log('450_STAGED_EXACT_SINGLE_FUNCTION_EXPORT=PASS');
+          NODE
+
+      - name: React Build (no deployment)
+        run: npm run build
+
+      - name: Assert no deployment side effects
+        run: |
+          test ! -e .deploy/preview-app-release.trigger || echo 'EXISTING_PREVIEW_RELEASE_TRIGGER_UNCHANGED'
+          echo '450_SINGLE_FUNCTION_SOURCE_ONLY_DEPLOYMENT_NOT_CALLED'

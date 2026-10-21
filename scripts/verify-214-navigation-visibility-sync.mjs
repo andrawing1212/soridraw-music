@@ -91,19 +91,44 @@ assert.ok(!masterApplyBlock.includes('setApplied(draft)'),
   'the last server response must not overwrite the authoritative mode received from another Master');
 assert.match(masterApplyBlock, /실시간 동기화 신호를 확인합니다/,
   'Apply confirmation must distinguish callable acknowledgment from globally received policy');
+assert.match(service, /export const subscribeSplitFrameRealtime/, 'Guest Studio needs a small public scalar subscription');
+assert.match(service, /frameSubscriberCount \+= 1/,
+  'signed-in menu and Guest Studio must share a reference-counted RTDB listener');
+assert.match(service, /frameSubscriberCount !== 0/,
+  'shared RTDB subscription must survive until last subscriber leaves');
+assert.match(service, /splitFrameServerReady = false;/,
+  'denied/failed listeners must clear serverReady and disable Master Apply');
+assert.match(service, /window\.addEventListener\('online', retryFrameTransport\)/,
+  'terminal RTDB listener failure must support network reconnection');
+assert.match(splitEngine, /return subscribeSplitFrameRealtime\(\)/,
+  'Guest Studio must listen even without authenticated navigation effect');
+assert.match(splitEngine, /compactMobileMode && props\.viewMode === 'split'/,
+  'compact mobile with no splitter must avoid needless policy subscription');
 assert.match(service, /firstConfirmedSnapshot = !splitFrameServerReady/,
   'initial fallback Hybrid must not be treated as server-confirmed mode');
-assert.match(functions, /export const masterSetSplitFrameMode = onCall/);
-assert.match(functions, /await requireMasterCaller\(request\)/);
-assert.match(functions, /SPLIT_FRAME_ORIGINS_450\[origin\]/);
-assert.match(functions, /request\.data\?\.environment !== environment/);
-assert.match(functions, /publicSync\/splitFrameModes\//);
-const splitCallable = functions.slice(functions.indexOf('export const masterSetSplitFrameMode = onCall'),
-  functions.indexOf('export const adminSignalUserControlRevision = onCall'));
-assert.match(splitCallable, /await requireMasterCaller\(request\)/);
-assert.match(splitCallable, /ref\("publicSync\/splitFrameModes\/" \+ environment\)\.set\(mode\)/);
-assert.doesNotMatch(splitCallable, /\.collection\(|splitFrameModes: \{|splitFrameUpdatedAt/,
-  'app450 mode must have only ONE authoritative small RTDB write; no dual-write partial success');
+// app450 isolated Functions entry must retain the exact public callable name
+// but must not pull unrelated exported Cloud Functions into its release package.
+const isolated450 = fs.readFileSync('functions/src/masterSplitFrameMode450.ts', 'utf8');
+assert.match(functions, /export \{ masterSetSplitFrameMode \} from "\.\/masterSplitFrameMode450"/);
+assert.match(isolated450, /export const masterSetSplitFrameMode = onCall/);
+assert.match(isolated450, /const requesterUid = request\.auth\?\.uid/);
+assert.match(isolated450, /if \(!requesterUid\)/);
+assert.match(isolated450, /collection\("users"\)\.doc\(requesterUid\)\.get\(\)/);
+assert.match(isolated450, /requesterSnap\.data\(\)\?\.staffRole !== "master"/);
+assert.match(isolated450, /SPLIT_FRAME_ORIGINS_450\[origin\]/);
+assert.match(isolated450, /request\.data\?\.environment !== environment/);
+assert.match(isolated450, /SORIDRAW_SPLIT_FRAME_ENABLED_ENVIRONMENTS \|\| "preview"/);
+assert.match(isolated450, /ref\("publicSync\/splitFrameModes\/" \+ environment\)/);
+assert.match(isolated450, /\.transaction\(\(stored\) => \{/);
+assert.match(isolated450, /if \(current !== expectedMode\) return;/);
+assert.match(isolated450, /if \(!outcome\.committed\)/);
+assert.doesNotMatch(isolated450,
+  /await admin\.firestore\(\)\.collection\([^\n]*\.set\(|splitFrameUpdatedAt|splitFrameModes: \{/,
+  'app450 isolated callable must have ONE authoritative RTDB write, no dual-write');
+assert.equal((isolated450.match(/\.set\(/g) || []).length, 0,
+  'app450 must never bypass the atomic scalar transaction');
+assert.equal((isolated450.match(/\.transaction\(/g) || []).length, 1,
+  'app450 must perform only one atomic scalar transaction');
 
 assert.ok(functions.includes('admin.database().ref("publicSync/navigationVisibility").set('),
   'legacy nav callable must remain compatible with older deployments');
@@ -135,12 +160,15 @@ assert.ok(liteSplit.includes('const compactButtonDriftTooLarge'),
 // pass safely before the shared RTDB Rules change is approved or deployed.
 const frameRules = rules.rules.publicSync.splitFrameModes;
 if (frameRules) {
-  assert.equal(frameRules['.read'], 'auth != null');
-  assert.equal(frameRules['.write'], false);
+  assert.equal(frameRules['.read'], false, 'guest policy cannot make parent public');
+  assert.equal(frameRules['.write'], false, 'client writes to Master setting are forbidden');
   for (const environment of ['preview', 'test', 'production']) {
+    assert.equal(frameRules[environment]?.['.read'], true,
+      'authenticated and Guest Studio users may read only the public environment scalar');
     assert.ok(frameRules[environment]?.['.validate']?.includes('pure-pane-hybrid'),
       'missing strict RTDB mode validator for ' + environment);
   }
+  assert.equal(frameRules.$other?.['.read'], false);
   assert.equal(frameRules.$other?.['.validate'], false);
 }
 console.log('VERIFY_450_MASTER_SPLIT_FRAME_GLOBAL_CONTROL_CONTRACT=PASS');

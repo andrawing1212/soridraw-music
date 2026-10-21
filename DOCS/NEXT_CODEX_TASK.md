@@ -1,3 +1,15 @@
+## NEXT — app447 source-ready, NO Hosting deploy; user A/B approval needed for new compact Generate bar (2026-10-21 KST)
+
+Current preview HEAD will be docs-only ahead of `1b2deedf500b8e1bc061336b560b0dcda94b23cd`. Two separate, minimal source candidates are in preview:
+1. Music Note+Library 3-tab row cap 480px in mobile Result split mode: PR #342, QA #343. Stops 3 top buttons stretching beyond design while Result pane grows across mobile→desktop split transition.
+2. Floating Generate bar COMPACT Builder (<=820px) narrows tolerated compositor child distortion to **<4px bar-width difference** by rebase `Math.abs(actionGeometry.width - base.width) >= 4`, preserving all wider Builder 8% compositor batching: PR #345, QA #346. This is an explicit smoothness-vs-reflow tradeoff, NOT a proof of zero inner-button snap or measured performance improvement. app446 final anchor geometry pointer-up handoff intact.
+
+Product-quality #39530032281 PASS, Follow-only #39530260074 PASS, split/browser/TS/Build #39530323518 PASS. Existing app442 gutters, app445 Builder live 660/820/1080, app446 Generate release geometry, Music Note/Library save batching and cache/read budget protections pass static guards. **LIVE PREVIEW remains app446**, Hosting SHA `2c58878bd8eb39d0d84d842334d697c7a9379be3`. Not deployed: no version bump, no release trigger, no TEST/PRODUCTION changes, no data movement.
+
+Next action ONLY if user explicitly requests PREVIEW Hosting deploy: bump app to 447, extend Hosting version in frozen Worker verifier (do not deploy Worker), release one pinned PREVIEW commit after full CI; user hand A/B must test center→left at Compact<=820 and near 660, the intended Compact↔full Generate design, release-frame inner button size/position parity, fast/sustained drag vs app446, Note/Library tabs no longer grow beyond 480px, and PC/mobile navigation. A release-frame mismatch or worse drag => revert only the compact rebase and redeploy after authorization; do not remove the validated tab cap. Independent Work audit pending.
+
+---
+
 ## NEXT — app447 tab stretch source fix PASS, NOT DEPLOYED; Generate bar inner-scale snap FAIL (2026-10-21 KST)
 
 After user's 2026-10-21 01:09 UTC videos, confirmed Music Note/Library three-mode-tab Result mobile CSS section 370 overrides `max-w-[480px]` to `max-width:100%`, expanding all three labels to growing Result width and at mode change collapsing back. Minimal CSS fix (cap 480px in mobile Result, width100% below cap) merged in PR #342 and split guard PR #343, preview source HEAD `ecb0cec206be502263826b220772b6d95e86d24c`. Product TS/Build #39526977340 PASS, split+TS/Build #39527252521 PASS. **Not deployed**: PREVIEW user-facing site remains app446 at SHA `2c58878bd8eb39d0d84d842334d697c7a9379be3`, `public/app-version.json` still 446. No Firebase Hosting work unless user explicitly requests release; then assign next version, run full release gate, verify TEST/PROD untouched.

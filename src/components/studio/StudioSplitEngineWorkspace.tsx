@@ -1,5 +1,6 @@
 import React, { useEffect, useState, type ReactNode } from 'react';
 import { readCurrentSplitFrameMode, subscribeSplitFrameMode } from '../../services/navigationVisibilitySyncService';
+import { ensureSplitFrameRemoteBootstrap } from '../../services/versionSignalService';
 import StudioSplitWorkspace from './StudioSplitWorkspace';
 import LiteStudioSplitWorkspace from './LiteStudioSplitWorkspace';
 import StudioCompactMobileWorkspace from './StudioCompactMobileWorkspace';
@@ -31,6 +32,14 @@ export default function StudioSplitEngineWorkspace({
   ...props
 }: Props) {
   const [globalSplitFrameMode, setGlobalSplitFrameMode] = useState(readCurrentSplitFrameMode);
+  useEffect(() => {
+    // The guest/signed-in Studio shares the already-running Remote Config
+    // listener. Bootstrap the *new* parameter only when its split UI mounts.
+    if (engine === 'lite' && !(compactMobileMode && props.viewMode === 'split')) {
+      void ensureSplitFrameRemoteBootstrap();
+    }
+  }, [engine, compactMobileMode, props.viewMode]);
+
   useEffect(() => {
     // The realtime mode is a control plane value, NOT a per-drag signal.
     // Never switch the live split handler mid-pointer gesture.

@@ -1,3 +1,12 @@
+## NEXT — app450 administrator "분할바 프레임": 성능우선 / 보통 / 품질우선 global mode (2026-10-21 KST)
+
+- **New user request 22:09 KST:** administrator App Settings has title `분할바 프레임`, selection of `성능우선`→`pure-pane`, `보통`→`local-responsive`, `품질우선`→`pure-pane-hybrid` and `적용` to propagate globally as close to instantly as possible. User correction 22:10 KST: **`최적우선` is wrong; use `보통`**.
+- **Detailed Codex High implementation/audit gates:** `DOCS/APP450_SPLIT_FRAME_GLOBAL_CONTROL_SPEC.md` (read in full). Existing `AdminAppSettingsPage.tsx` and Functions `adminSetNavigationVisibility` + `publicSync/navigationVisibility` RTDB onValue can be reused *only* with additive compatibility and env-isolated `splitFrameModes`. Do not add per-page DB reads, listeners, polling, data copies, or Cloudflare D1 reads. Admin apply only server-authorized appSettings callable. PRODUCTION/TEST not changed or promoted without release approval. Existing Hybrid remains default while feature is introduced.
+- **Freeze user-accepted app448:** `preview` HEAD for this design `2dc2cd30dc4f0d9d54c88ac2002fa60915995b4a`, deployed Hosting app448 `b57c8f61eef364e03b1fa8f3fe07dd7d29e5fb31`. No code change, RTDB Rule change, Functions or Firebase deploy in this design-only PR. Stage416 OFF.
+- **State: DESIGN ONLY.** Codex code, TypeScript, build, real-time propagation, cost test, independent Work audit, PREVIEW deploy, user acceptance pending. Stop if safe immediate propagation to all compatible clients cannot be guaranteed by the existing authenticated channel or shared TEST/PROD may be impacted.
+
+---
+
 ## NEXT — app448 exact behavior restored PREVIEW; freeze accepted split baseline (2026-10-21 KST)
 
 - User 2026-10-21 09:36 UTC physically rejected app449 Local Responsive Generate-only Hybrid mode signal addition because drag became nearly as slow as Hybrid; requested revert to app448. This is **FAIL for app449** and authorization for exact PREVIEW app448 restoration, NOT for more speculative optimization.

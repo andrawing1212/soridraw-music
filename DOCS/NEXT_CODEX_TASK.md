@@ -1,3 +1,15 @@
+## NEXT — app450 independent FAIL: solve shared Rules release P1 without unsafe PUT (2026-10-22 KST)
+
+- Read `DOCS/APP450_AUDIT_FAIL_RELEASE_ALTERNATIVES.md` FIRST. User's separate independent audit of #386 `7516a826e562a2c18eb9f6614dbf0f99ddd9773c` + #383 `e365b0512d419ce7b4cda13d897b84c74853e273` **FAIL**. CI PASS is not release PASS.
+- **Current P1 gate:** no validated compare-and-swap/exclusive writer for shared RTDB `/.settings/rules.json` full replacement. No default shared Rules PUT/CLI deploy, no full-tree rollback. Older #383 release pins `9081be5a...` differ from #386 Function blob `5e005297...`; do not update pins and deploy until architecture itself is safe.
+- Candidate preferred security escape hatch: **separate single-purpose RTDB database instance** under same Firebase project. It has independent Rules; keep default shared RTDB and all user canonical data unchanged. New tiny `{mode,revision}` record permits atomic version check and ABA rejection, server-only writes and guest reads. New instance is NOT created: must check Blaze eligibility, URL, setup permissions and owner approval first, since a second live socket for Studio raises 100k billing concerns.
+- Cost guard: new listener ONLY when actual Studio splitter/Master panel mounted; avoid subscription on all signed-in app navigation. Measure extra per-client active connections, downloads including protocol/TLS, reconnect storm and 100k monthly total cost; no claims of 0 extra cost or live 100k PASS. Compare with formally exclusive shared Rules writer route before selecting.
+- Release compatibility: server-approved env list defaults PREVIEW and separately authorizes TEST/PRODUCTION on same artifact after explicit release permission; never trust browser-supplied environment and never hardcode permanent PREVIEW-only denial.
+- Independent safety tests: Guest ACL vs private parent, Admin denied vs Master version transaction, app448 UI/split/Generate freeze, real SDK reconnect response, offline stale Apply, TEST/PRODUCTION data compatibility, one-function artifact identity, full matching final source pins. Deployment only after independent audit PASS and owner-approved infrastructure; PROD only explicit approval.
+- Do NOT use more Codex Medium/High while usage is scarce; no GitHub product code merge, shared data mutation, Stage416 activation or default/shared Rules deployment. Default state remains RELEASE BLOCKED.
+
+---
+
 ## NEXT — Work-only app450 independent audit #388, no implementation/deployment (2026-10-22 KST)
 
 - GitHub audit issue **#388** https://github.com/andrawing1212/soridraw-music/issues/388 is an exact-SHA read-only checklist, **not** an automatic Work invocation.

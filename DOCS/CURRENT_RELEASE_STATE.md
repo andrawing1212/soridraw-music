@@ -1,3 +1,15 @@
+## CURRENT — app450 separate audit FAIL; shared Rules release prohibited (2026-10-22 KST)
+
+- **Independent audit result received from the user:** overall app450 release **FAIL**, even though source, Emulator and CI checks mostly PASS. Fixed candidates DRAFT PR #386 `7516a826e562a2c18eb9f6614dbf0f99ddd9773c` and read-only backend-prep PR #383 `e365b0512d419ce7b4cda13d897b84c74853e273` remain UNMERGED and UNDEPLOYED. The 7 areas audited: guest/auth subscribe PASS source/mock; Admin/Master standard CAS PASS source/mock; exact additive candidate Rules + app448 unchanged PASS; **100k cost FAIL unmeasured, promotion FAIL, shared Rules safe deploy P1 FAIL**.
+- **P1** shared RTDB Settings Rules `PUT` is a whole-Rules overwrite with **no proven atomic conditional update**; the Emulator showed stale `If-Match` is unsafe there. Double GET and GitHub concurrency cannot prevent concurrent Console/CLI/service-account rules edits. **DO NOT deploy default RTDB Rules**. PR #383 also pins the old Function source blob; cannot release final #386 code through it.
+- **P2** mode-only Master compare admits ABA A→B→A; SDK's first reconnect snapshot may be local cache; hard `environment !== preview` blocks same-artifact TEST/PRODUCTION promotion; 100k additional connections/billing and physical devices unverified.
+- **New safely documented investigation:** `DOCS/APP450_AUDIT_FAIL_RELEASE_ALTERNATIVES.md` compares exclusive shared-Rules writer proof (unavailable) against one **new dedicated RTDB signal-only instance** with independent Rules, no canonical data copying, atomic `{mode,revision}` record, and explicit 100k extra-socket cost gates. This is **design only**; no dedicated instance was created and no new billing authorization was given.
+- **Protected:** PREVIEW last-live Hosting app448, Stage416 OFF, shared user original data untouched, main/PRODUCTION unchanged. This work has DOCS-only GitHub commits, no Firebase/Cloudflare deploy and no further Codex usage.
+- **Next:** verify concrete isolated-signal RTDB cost/limits, practical admin bootstrap and explicit owner approval for any additional billable resource. If not approved, remain release BLOCKED until enforceable exclusive shared Rules writer proof. Independently review a new fixed-SHA source candidate only after safe architecture selection.
+- **Progress:** Stage416 1/4·25% OFF; historical app speed 5/5·100%; app450 2/5·40% release milestones, FAIL and not deployed.
+
+---
+
 ## CURRENT — app450 exact-SHA independent audit handoff #388, no deployment approval (2026-10-22 KST)
 
 - **Actual preview HEAD before this docs-only checkpoint:** `1a7aea39b3b4ebcee7adb627f4335d2ef27bbac5` (latest release-state docs, NO new product code/RTDB Rules live deployment); last confirmed Firebase PREVIEW Hosting is still app448. main/PRODUCTION untouched.

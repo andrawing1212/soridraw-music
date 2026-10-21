@@ -1,3 +1,12 @@
+## NEXT — app450 final placement Admin App Settings with Master-only Apply; backend audit pending (2026-10-21 KST)
+
+- User final: **관리자 → 앱 설정** hosts **분할바 프레임** choices **성능우선 / 보통 / 품질우선** and **적용**; restore Master permissions page to its untouched app448 state. Do not confuse UI location with authorization: existing Master-only apply policy remains, regular Admin sees no card and cannot invoke callable.
+- Code candidate PR #366 OPEN, source branch `feature/app450-master-split-frame-control`, includes UI relocation, existing application global mode signal, strict `requireMasterCaller` callable, isolated small RTDB sibling, and unchanged app448 split engine hot path. Exact pinned commit and latest CI must be checked before audit.
+- Shared RTDB Rules PR #367 DRAFT, unmerged, needs **independent Work audit**, fail-closed existing #418/#434 gate, exact additive safety and 100k delivery-cost review before any shared rule deployment. Functions/Rules+Hosting PREVIEW not yet deployed; no TEST/PROD.
+- Start from actual preview HEAD and source PR SHA. Run final TypeScript, Build, Functions TypeScript, `verify-214-navigation-visibility-sync` app450 tests, 303 split history, security/permission checks and real two-client PREVIEW A/B after approved release. Do not loosen backend security to make CI green. Current PREVIEW app448, Stage416 OFF.
+
+---
+
 ## NEXT — app450 Master permissions control: audit source PR #366 + separate shared Rules PR #367 before PREVIEW deploy (2026-10-21 KST)
 
 - User explicitly requested "적용해서 배포해봐" and clarified UI position **마스터 권한**. Final control: 분할바 프레임, 성능우선=Pure Pane, **보통**=Local Responsive, 품질우선=Pure Pane Hybrid, Apply for current environment to all compatible online clients; initial fallback quality=existing Hybrid.

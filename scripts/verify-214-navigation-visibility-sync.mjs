@@ -98,10 +98,21 @@ assert.match(functions, /await requireMasterCaller\(request\)/);
 assert.match(functions, /SPLIT_FRAME_ORIGINS_450\[origin\]/);
 assert.match(functions, /request\.data\?\.environment !== environment/);
 assert.match(functions, /publicSync\/splitFrameModes\//);
-assert.match(functions, /collection\("app_settings"\)\.doc\("navigation_visibility"\)\.set/);
+const splitCallable = functions.slice(functions.indexOf('export const masterSetSplitFrameMode = onCall'),
+  functions.indexOf('export const adminSignalUserControlRevision = onCall'));
+assert.match(splitCallable, /await requireMasterCaller\(request\)/);
+assert.match(splitCallable, /ref\("publicSync\/splitFrameModes\/" \+ environment\)\.set\(mode\)/);
+assert.doesNotMatch(splitCallable, /\.collection\(|splitFrameModes: \{|splitFrameUpdatedAt/,
+  'app450 mode must have only ONE authoritative small RTDB write; no dual-write partial success');
+
 assert.ok(functions.includes('admin.database().ref("publicSync/navigationVisibility").set('),
   'legacy nav callable must remain compatible with older deployments');
 assert.match(service, /publicSync\/splitFrameModes/);
+assert.match(service, /ref\(realtimeDb, 'publicSync\/splitFrameModes\/' \+ env\)/,
+  'each signed-in client must read only its own environment scalar');
+assert.match(service, /if \(!env\) return unsubscribeMenu/,
+  'unknown hosts must not start a shared-RTDB policy listener');
+
 assert.match(service, /subscribeSplitFrameMode/);
 assert.match(service, /unsubscribeMenu\(\); unsubscribeFrame\(\);/);
 assert.doesNotMatch(service, /getDoc\(|onSnapshot\(|setInterval\(/);

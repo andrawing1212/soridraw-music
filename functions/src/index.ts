@@ -797,7 +797,9 @@ const SPLIT_FRAME_ORIGINS_450: Record<string, "preview" | "test" | "production">
 export const masterSetSplitFrameMode = onCall(
   { region: "us-central1" },
   async (request) => {
-    const { db, requesterUid } = await requireMasterCaller(request);
+    // Auth+Master enforcement itself reads one admin profile; this applies
+    // only after an explicit Master click, never on app start/page/drag.
+    await requireMasterCaller(request);
     const origin = String(request.rawRequest.headers.origin || "").replace(/\/$/, "");
     const environment = SPLIT_FRAME_ORIGINS_450[origin];
     if (!environment || request.data?.environment !== environment) {
@@ -817,16 +819,10 @@ export const masterSetSplitFrameMode = onCall(
       throw new HttpsError("invalid-argument", "분할바 프레임 선택이 올바르지 않습니다.");
     }
     const now = Date.now();
-    // One Firestore source-of-truth write; the merge does not erase menu
-    // settings or split modes belonging to other environments.
-    await db.collection("app_settings").doc("navigation_visibility").set({
-      splitFrameModes: { [environment]: mode },
-      splitFrameUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      splitFrameUpdatedBy: requesterUid,
-    }, { merge: true });
-    // The authenticated app uses one small extra RTDB listener. The mode is
-    // isolated from legacy TEST/PRODUCTION navigation .set() functions.
-    // No added Firestore/D1 user data reads, polling or pointer-time requests.
+    // app450: ONE atomic setting write and ONE source of truth. Two writes to
+    // Firestore + RTDB could partially succeed, report an error and still
+    // change every client's split mode; RTDB is already what they read.
+    // The tiny sibling is isolated from legacy navigation .set() callers.
     await admin.database().ref("publicSync/splitFrameModes/" + environment).set(mode);
     return { ok: true, environment, mode, updatedAt: now };
   }

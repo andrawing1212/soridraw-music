@@ -1,3 +1,13 @@
+## NEXT — app448 PC Generate pointer-up correction PREVIEW released; user hand-check FIRST (2026-10-21 KST)
+
+- User video 20261021-0759-32.7126939.mp4 and 08:03 UTC report identified an app447 **PC/full** Generate button width snap at mouseup despite the earlier tablet/Compact improvement. The scope is PC/full Builder >820px, not a regression authorization for accepted <=820px compact behavior or unrelated tabs.
+- PREVIEW app448 deployed pinned `37fca3801975faeadc3bdaf6294d95e189e5aadc`, Firebase #39568931418 SUCCESS with exact live HTML/version 448 and unchanged TEST/PRODUCTION. Source PR #352, scoped existing split test PR #353, version guard PR #354, Hosting trigger PR #355. Product #39567328608, split #39568016338, version #39568288775 and Hosting #39568931418 all PASS. Initial failed product run #39567110136 was a test-only escaping parse mistake subsequently repaired. Worker/Functions/Rules/database/shared user data untouched.
+- **Next ONLY:** user actual PC hand A/B on https://preview.soridraw.com with Builder >820, repeated releases >820 and around 820/1080; check inner full Generate button proportions do not snap and divider speed is not worse; check accepted Compact <=820 and Note/Library top tabs + PC/tablet/mobile navigation unchanged. Automated math contracts do not prove actual visual zero-snap or drag speed. Work independent audit, cross-device matrix, billed backend metrics remain unverified.
+- Current guard: NO further speculative split/performance/CSS/DOM rewrites without concrete new physical failure. The only new app448 change is a full-mode 4px rebase in existing compositor writer (may increase layout writes); preserve app447 compact guard, app442 gutter, app445 live responsive, app446 resting handoff, app447 tabs, data/cache and save batching. TEST/main and PRODUCTION untouched. No TEST promotion without explicit user request and required release checks.
+- Progress: Stage416 1/4·25% OFF; historical app-speed work 5/5·100% historical only; app448 targeted source+CI+Hosting+user acceptance **3/4·75%**, USER PC hand result pending.
+
+---
+
 ## NEXT — app447 PREVIEW user-accepted; no pending correction or release (2026-10-21 KST)
 
 - User 2026-10-21 02:35 UTC: "괜찮아. 좋아졌어." Treat app447 PREVIEW as **user-accepted for the reported split/Generate bar and Note/Library UI improvement**. Do not re-ask for previously confirmed improvement or change the accepted split engine just to pursue synthetic performance numbers. A general positive physical report is not proof of every breakpoint/mobile device, exact zero-snap, measured FPS, or an independent Work audit.

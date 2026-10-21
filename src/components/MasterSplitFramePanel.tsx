@@ -68,8 +68,10 @@ export default function MasterSplitFramePanel() {
       if (!result.data?.ok || result.data.environment !== environment || result.data.mode !== draft) {
         throw new Error('서버의 적용 확인을 받지 못했습니다.');
       }
-      setApplied(draft);
-      setMessage({ ok: true, text: `${labelFor(draft)} 적용 요청이 확인됐습니다. 연결된 앱에는 실시간 전달됩니다.` });
+      // The callable response is not proof that the listener has already
+      // received the latest authoritative policy (or another Master did not
+      // change it concurrently). Applied always follows the RTDB snapshot.
+      setMessage({ ok: true, text: `${labelFor(draft)} 서버 적용 요청이 완료됐습니다. 실시간 동기화 신호를 확인합니다.` });
     } catch (error) {
       setMessage({ ok: false, text: error instanceof Error ? error.message : '분할바 프레임 적용에 실패했습니다.' });
     } finally {
@@ -88,7 +90,7 @@ export default function MasterSplitFramePanel() {
         <div>
           <h2 className="text-base font-black text-[var(--text-primary)]">분할바 프레임</h2>
           <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">
-            마스터 전용 · 선택 후 적용해야 변경됩니다. 현재 접속 중인 호환 앱은 실시간 반영되고,
+            마스터 전용 · 선택 후 적용해야 변경됩니다. 현재 로그인한 호환 앱은 실시간 반영되고,
             드래그 중인 사용자는 마우스를 놓은 후 반영됩니다.
           </p>
           <p className="mt-2 text-xs font-black text-[var(--text-primary)]">

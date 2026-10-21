@@ -110,6 +110,9 @@ const observeFrameConnectivity = () => {
       startFrameTransport();
     },
     (error) => {
+      const old = frameConnectivityTransport;
+      frameConnectivityTransport = null;
+      old?.();
       frameConnected = false;
       clearFrameReady();
       splitFrameErrors.forEach((listener) => listener(error));
@@ -124,7 +127,9 @@ const retryFrameTransport = () => {
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
   // Reconnect only after an interrupted stream, never poll healthy sessions,
   // revisit pages, or fetch during split pointer movement.
-  if (frameConnected && !frameTransport && frameSubscriberCount > 0) startFrameTransport();
+  if (frameSubscriberCount === 0) return;
+  observeFrameConnectivity();
+  if (frameConnected && !frameTransport) startFrameTransport();
 };
 
 export const subscribeSplitFrameRealtime = (onError?: (error: unknown) => void): Unsubscribe => {

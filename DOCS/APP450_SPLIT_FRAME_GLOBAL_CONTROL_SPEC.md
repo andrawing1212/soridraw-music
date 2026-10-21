@@ -1,4 +1,14 @@
-# app450 — 관리자 앱 설정: 분할바 프레임 (설계/구현 명령)
+# app450 — 마스터 권한: 분할바 프레임 (설계/구현 명령)
+
+## 사용자 최종 수정과 안전한 전달 경로 — 2026-10-21 22:31 KST
+- **위치는 관리자 앱 설정이 아닌 `마스터 권한` 페이지**의 `분할바 프레임` 탭. 설정 변경은 `requireMasterCaller`로 Master만 허용한다. 일반 Admin의 `appSettings` 권한으로 적용할 수 없다.
+- **최종 이름** `성능우선` = Pure Pane, `보통` = Local Responsive, `품질우선` = Pure Pane Hybrid.
+- 기존 TEST/PRODUCTION의 구버전 `adminSetNavigationVisibility` callable이 `publicSync/navigationVisibility`를 통째로 `.set`하므로 같은 노드의 신규 모드를 지우게 된다. 따라서 실제 구현에서는 **별도 작은 `publicSync/splitFrameModes` 경로**를 사용한다. 로그인 앱이 이미 가지는 동일 Firebase RTDB 연결에 1개의 tiny subscription이 추가된다. 새 Firestore 데이터 조회/D1 호출/페이지별 폴링 없음. 사용자 10만 명의 초기 실시간 subscription 전달량은 0이 아니므로 별도 비용 검증 필수. 기존 nav writer/QA 유지.
+- PREVIEW/TEST/PRODUCTION은 형제 필드 하나씩 관리. 기존 사용자의 공유 원본 데이터 수정/복사 없음.
+- 공유 RTDB Rules에는 `publicSync/splitFrameModes` 로그인 read + client write false + 세 허용값 validation **추가만** 필요. 실제 Rules 및 Functions 배포는 공유 영향 검증과 독립 감사 PASS 전 금지.
+- 코드 구현과 PREVIEW 배포 성공은 구별한다. Master 서버 Callable과 공유 Rules가 검증되기 전에는 UI가 실제 전 사용자에게 전달된다고 보고하지 않는다.
+
+
 
 ## 사용자 최종 요구 (2026-10-21 22:10 KST)
 관리자 페이지 > 앱 설정에 제목 **분할바 프레임**을 표시하고, 세 개 중 하나를 선택한 뒤 **적용**을 누르면 전체 사용자에게 가능한 한 즉시 반영한다.

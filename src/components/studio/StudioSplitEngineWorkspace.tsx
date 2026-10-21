@@ -36,16 +36,28 @@ export default function StudioSplitEngineWorkspace({
     // Never switch the live split handler mid-pointer gesture.
     let pointerHeld = false;
     let pendingMode: ReturnType<typeof readCurrentSplitFrameMode> | null = null;
+    let commitFrame: number | null = null;
     const releasePointer = () => {
       pointerHeld = false;
-      if (pendingMode) {
-        setGlobalSplitFrameMode(pendingMode);
-        pendingMode = null;
+      // Window capture listeners run BEFORE the split pane's pointer-up
+      // handler. Commit on the next frame only, after app448's final
+      // geometry/capture cleanup has completed for this event.
+      if (pendingMode && commitFrame === null) {
+        commitFrame = window.requestAnimationFrame(() => {
+          commitFrame = null;
+          if (pointerHeld) return;
+          const mode = pendingMode;
+          pendingMode = null;
+          if (mode) setGlobalSplitFrameMode(mode);
+        });
       }
     };
     const unsubscribe = subscribeSplitFrameMode((next) => {
-      if (pointerHeld) pendingMode = next;
-      else setGlobalSplitFrameMode(next);
+      if (pointerHeld || commitFrame !== null) {
+        pendingMode = next;
+      } else {
+        setGlobalSplitFrameMode(next);
+      }
     });
     const holdPointer = () => { pointerHeld = true; };
     window.addEventListener('pointerdown', holdPointer, true);
@@ -54,6 +66,7 @@ export default function StudioSplitEngineWorkspace({
     window.addEventListener('blur', releasePointer);
     return () => {
       unsubscribe();
+      if (commitFrame !== null) window.cancelAnimationFrame(commitFrame);
       window.removeEventListener('pointerdown', holdPointer, true);
       window.removeEventListener('pointerup', releasePointer, true);
       window.removeEventListener('pointercancel', releasePointer, true);

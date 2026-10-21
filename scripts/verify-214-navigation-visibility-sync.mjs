@@ -55,3 +55,57 @@ console.log('NORMAL_APP_START_FIRESTORE_NAV_READ=0_WITH_EXISTING_CACHE');
 console.log('ADMIN_CHANGE=FIRESTORE_W1_PLUS_TINY_RTDB_MIRROR_W1');
 console.log('OTHER_SIGNED_IN_DEVICES=RTDB_TINY_PAYLOAD_ONLY');
 console.log('EXPLORE_DIRECT_ROUTE_GATE=PASS');
+
+
+// app450 global split frame: keep menu writes backward compatible and use a
+// separate tiny realtime signal, because deployed older TEST/PRODUCTION menu
+// Functions still replace publicSync/navigationVisibility with .set().
+const framePolicy = fs.readFileSync('src/constants/splitFrameGlobal.ts', 'utf8');
+const masterPage = fs.readFileSync('src/pages/MasterPermissionsPage.tsx', 'utf8');
+const masterFramePanel = fs.readFileSync('src/components/MasterSplitFramePanel.tsx', 'utf8');
+const splitEngine = fs.readFileSync('src/components/studio/StudioSplitEngineWorkspace.tsx', 'utf8');
+const liteSplit = fs.readFileSync('src/components/studio/LiteStudioSplitWorkspace.tsx', 'utf8');
+assert.match(framePolicy, /'pure-pane', 'local-responsive', 'pure-pane-hybrid'/);
+assert.match(framePolicy, /성능우선/);
+assert.match(framePolicy, /보통/);
+assert.match(framePolicy, /품질우선/);
+assert.ok(!framePolicy.includes('최적우선'), 'old label must never return');
+assert.match(framePolicy, /DEFAULT_SPLIT_FRAME_MODE: SplitFrameMode = 'pure-pane-hybrid'/);
+assert.match(masterPage, /<MasterSplitFramePanel \/>/);
+assert.match(masterPage, /'app-test' \| 'split-frame' \| 'admin-permissions'/);
+assert.match(masterFramePanel, /분할바 프레임/);
+assert.match(masterFramePanel, /role="radiogroup"/);
+assert.match(masterFramePanel, /masterSetSplitFrameMode/);
+assert.match(masterFramePanel, /window\.confirm/);
+assert.match(masterFramePanel, /disabled=\{!environment \|\| saving \|\| draft === applied\}/);
+assert.match(functions, /export const masterSetSplitFrameMode = onCall/);
+assert.match(functions, /await requireMasterCaller\(request\)/);
+assert.match(functions, /SPLIT_FRAME_ORIGINS_450\[origin\]/);
+assert.match(functions, /request\.data\?\.environment !== environment/);
+assert.match(functions, /publicSync\/splitFrameModes\//);
+assert.match(functions, /collection\("app_settings"\)\.doc\("navigation_visibility"\)\.set/);
+assert.ok(functions.includes('admin.database().ref("publicSync/navigationVisibility").set('),
+  'legacy nav callable must remain compatible with older deployments');
+assert.match(service, /publicSync\/splitFrameModes/);
+assert.match(service, /subscribeSplitFrameMode/);
+assert.match(service, /unsubscribeMenu\(\); unsubscribeFrame\(\);/);
+assert.doesNotMatch(service, /getDoc\(|onSnapshot\(|setInterval\(/);
+assert.match(splitEngine, /readCurrentSplitFrameMode/);
+assert.match(splitEngine, /subscribeSplitFrameMode/);
+assert.match(splitEngine, /pointerup/);
+assert.match(splitEngine, /effectiveSplitFrameMode/);
+assert.ok(liteSplit.includes('const fullButtonDriftTooLarge'),
+  'app448 PC full Generate 4px rebase must be preserved');
+assert.ok(liteSplit.includes('const compactButtonDriftTooLarge'),
+  'app448 compact Generate 4px rebase must be preserved');
+const frameRules = rules.rules.publicSync.splitFrameModes;
+assert.equal(frameRules?.['.read'], 'auth != null');
+assert.equal(frameRules?.['.write'], false);
+for (const environment of ['preview', 'test', 'production']) {
+  assert.ok(frameRules?.[environment]?.['.validate']?.includes('pure-pane-hybrid'),
+    'missing strict RTDB mode value validator for ' + environment);
+}
+assert.equal(frameRules?.$other?.['.validate'], false);
+console.log('VERIFY_450_MASTER_SPLIT_FRAME_GLOBAL_CONTROL_CONTRACT=PASS');
+console.log('MASTER_ONLY_APPLY=PASS; PREVIEW_TEST_PRODUCTION_ISOLATED=PASS');
+console.log('ONE_EXTRA_TINY_AUTH_RTD_B_SIGNAL; NO_FIRESTORE_OR_D1_READS_PER_PAGE');

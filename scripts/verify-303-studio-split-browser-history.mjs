@@ -254,17 +254,17 @@ assert.ok(generationBarWriterStart > 0 && generationBarWriterEnd > generationBar
   'missing floating Generate bar drag geometry writer');
 const generationBarWriter = liteWorkspace.slice(generationBarWriterStart, generationBarWriterEnd);
 assert.match(generationBarWriter,
-  /roundedBuilderWidth <= BUILDER_COMPACT_MAX[\\s\\S]*?Math\\.abs\\(actionGeometry\\.width - base\\.width\\) >= 4/,
+  /roundedBuilderWidth <= BUILDER_COMPACT_MAX[\s\S]*?Math\.abs\(actionGeometry\.width - base\.width\) >= 4/,
   'compact Builder must preserve the accepted 4px Generate button cap');
 assert.match(generationBarWriter,
-  /roundedBuilderWidth > BUILDER_COMPACT_MAX[\\s\\S]*?Math\\.abs\\(actionGeometry\\.width - base\\.width\\) >= 4/,
+  /roundedBuilderWidth > BUILDER_COMPACT_MAX[\s\S]*?Math\.abs\(actionGeometry\.width - base\.width\) >= 4/,
   'app448 PC/full Builder must now cap internal Generate button drift too');
 assert.match(generationBarWriter,
-  /\\|\\| compactButtonDriftTooLarge[\\s\\S]*?\\|\\| fullButtonDriftTooLarge[\\s\\S]*?\\|\\| widthRatio < 0\\.92[\\s\\S]*?\\|\\| widthRatio > 1\\.08/,
+  /\|\| compactButtonDriftTooLarge[\s\S]*?\|\| fullButtonDriftTooLarge[\s\S]*?\|\| widthRatio < 0\.92[\s\S]*?\|\| widthRatio > 1\.08/,
   'both designs must use a 4px rebase, retaining the safety ratio fallback');
-assert.match(generationBarWriter, /bar\\.style\\.setProperty\\('--soridraw-action-live-scale-x', scaleValue\\)/,
+assert.match(generationBarWriter, /bar\.style\.setProperty\('--soridraw-action-live-scale-x', scaleValue\)/,
   'compositor-following for Generate bar remains active during drag');
-assert.doesNotMatch(generationBarWriter, /getBoundingClientRect|ResizeObserver|dispatchEvent|setState\\(/,
+assert.doesNotMatch(generationBarWriter, /getBoundingClientRect|ResizeObserver|dispatchEvent|setState\(/,
   'no per-pointer-frame reads, new observers, broadcasts or React renders');
 
 const makeMockBarRebase = (builderWidth, visualWidths) => {

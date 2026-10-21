@@ -109,6 +109,13 @@ assert.match(splitEngine, /readCurrentSplitFrameMode/);
 assert.match(splitEngine, /subscribeSplitFrameMode/);
 assert.match(splitEngine, /pointerup/);
 assert.match(splitEngine, /effectiveSplitFrameMode/);
+assert.match(splitEngine, /commitFrame = window\.requestAnimationFrame\(/,
+  'global split mode must apply after final app448 pointer-up geometry cleanup');
+assert.match(splitEngine, /window\.cancelAnimationFrame\(commitFrame\)/,
+  'unmount must cancel pending global mode changes');
+assert.doesNotMatch(splitEngine,
+  /const releasePointer = \(\) => \{[\s\S]{0,130}setGlobalSplitFrameMode\(pendingMode\)/,
+  'pointer-up capture must never directly replace app448 live split mode');
 assert.ok(liteSplit.includes('const fullButtonDriftTooLarge'),
   'app448 PC full Generate 4px rebase must be preserved');
 assert.ok(liteSplit.includes('const compactButtonDriftTooLarge'),

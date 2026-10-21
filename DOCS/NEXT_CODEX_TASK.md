@@ -1,3 +1,15 @@
+## NEXT — Work-only app450 independent audit #388, no implementation/deployment (2026-10-22 KST)
+
+- GitHub audit issue **#388** https://github.com/andrawing1212/soridraw-music/issues/388 is an exact-SHA read-only checklist, **not** an automatic Work invocation.
+- Fixed combined code: DRAFT PR #386 `7516a826e562a2c18eb9f6614dbf0f99ddd9773c`; React/Functions TS & Build, frozen app448, guest Rules Emulator, offline mocked runtime, Master atomic transaction mocked runtime and one-Function package passed #39675950774 and #39675950941.
+- Fixed Codex prep: DRAFT PR #383 `e365b0512d419ce7b4cda13d897b84c74853e273` with no PUT/deploy adapter, old file pins; #39670790334 PASS; do not reuse unchanged with #386.
+- P1 actual shared RTDB Settings Rules REST PUT has no proven atomic conflict guard, emulator stale If-Match lost an unrelated rule. Official `app-management` docs call PUT a whole-rules replacement, generic data ETag is not adequate evidence. **No real PUT, Functions deploy, Hosting deploy, merges or TEST/PRODUCTION changes** until a separately audited exact endpoint safe route is proven.
+- Independent Work reviewer should check canonical Master role + PREVIEW only, public 3 scalar leaves and old protected siblings, Guest/signed-in subscribe and reconnect freshness/cleanup, ABA stale intent, 100k download/socket cost (unmeasured), app448 drag/Generate/UI preservation, old app compatibility, and issue #388 documented exact sources. Work needs to be started separately and must be read-only.
+- Codex budget: user last reported 22%; do not request another Medium/High task for this read-only audit.
+- After Work FAIL, report isolated exact blocker and repair without risky shared user data operations. Work PASS on code alone cannot lift Rules release blocker.
+
+---
+
 ## NEXT — independent Work audit on integrated app450 commit, no Codex or deploy yet (2026-10-22 KST)
 
 - Pin DRAFT PR #386 `515bc8b3e36f37d886bbe42def9846048e125216`; base PREVIEW `53ca74357e344b4648f5d8a93db0e3cbcd6c7e58`. Verify exact combined guest/source/Rules/Function code, not separate historical PRs in isolation. Full `DOCS/APP450_UNIFIED_AUDIT_HANDOFF.md` lives on PR #386, not preview until approval.

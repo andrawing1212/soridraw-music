@@ -1,3 +1,13 @@
+## NEXT — app450 fast existing-Remote-Config release (2026-10-22 KST)
+
+- User requests immediate Master split setting application. Preferred source is new PR #391 `fix/app450-existing-remote-config-fast` from PREVIEW `1332254e140ef5c8dc3e60d06ef4cc9719367729`. Do not use old P1-blocked RTDB Rules PR #386/#383 source or update shared Rules.
+- Reuse existing app-wide Firebase Remote Config `onConfigUpdate` signal: one environment-specific parameter `soridraw_split_frame_{preview|test|production}_v1` with `{mode,revision}`. Guest/auth use existing websocket/HTTP listener; no second connection. Master-only one Function uses ETag (Admin SDK getTemplate→publishTemplate without force) and revision CAS; default server env approval `preview`, promote later using separately authorized env config on identical artifact.
+- Stage precisely `masterSetSplitFrameMode` Function in an isolated package, never deploy unrelated Functions/Stage416; PREVIEW Hosting only. No shared RTDB Rules PUT, no Firestore user data mutation, no Worker.
+- Run new app450 QA, TypeScript, React/Functions Build, frozen app448 303/214, existing Rules 418/434, Master mock race/ABA and one-function stage. After PASS, guarded `preview-app450-remoteconfig-release.yml` can run via an exact-SHA trigger. Verify before/after Functions inventory and `preview.soridraw.com` exact deployed HTML, TEST/PRODUCTION unchanged. Stop and disclose partial deployment if anything fails.
+- If not yet deployed: mark DRAFT/CI only; do not claim live Master settings. After PREVIEW, user should physically check Guest, signed-in, two Masters and mid-drag mode switch; 100k Remote Config price baseline is **not measured**, though it reuses the existing listener. Preserve Codex 19% remaining and High.
+
+---
+
 ## NEXT — app450 independent FAIL: solve shared Rules release P1 without unsafe PUT (2026-10-22 KST)
 
 - Read `DOCS/APP450_AUDIT_FAIL_RELEASE_ALTERNATIVES.md` FIRST. User's separate independent audit of #386 `7516a826e562a2c18eb9f6614dbf0f99ddd9773c` + #383 `e365b0512d419ce7b4cda13d897b84c74853e273` **FAIL**. CI PASS is not release PASS.

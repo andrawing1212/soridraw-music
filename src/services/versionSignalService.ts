@@ -14,6 +14,45 @@ import {
 export const VERSION_SIGNAL_DIAGNOSTICS_EVENT = 'soridraw:version-signal-diagnostics';
 export const VERSION_SIGNAL_DATA_EVENT = 'soridraw:version-signal';
 export const PREVIEW_VERSION_SIGNAL_PARAM = 'soridraw_preview_version_signal_v1';
+export const SPLIT_FRAME_REMOTE_EVENT = 'soridraw:split-frame-remote-config-v1';
+export const SPLIT_FRAME_REMOTE_PARAMS = {
+  preview: 'soridraw_split_frame_preview_v1',
+  test: 'soridraw_split_frame_test_v1',
+  production: 'soridraw_split_frame_production_v1',
+} as const;
+export type SplitFrameRemoteState = { mode: 'pure-pane' | 'local-responsive' | 'pure-pane-hybrid'; revision: number; ready: boolean };
+let splitFrameRemoteState: SplitFrameRemoteState = { mode: 'pure-pane-hybrid', revision: 0, ready: false };
+export const readSplitFrameRemoteState = (): SplitFrameRemoteState => ({ ...splitFrameRemoteState });
+const splitFrameEnvironment = () => {
+  if (typeof window === 'undefined') return null;
+  const host = window.location.hostname.toLowerCase();
+  if (host === 'preview.soridraw.com') return 'preview';
+  if (host === 'test.soridraw.com') return 'test';
+  if (host === 'soridraw.com' || host === 'www.soridraw.com') return 'production';
+  return null;
+};
+const publishSplitFrameRemote = (raw: string, ready: boolean) => {
+  let mode: SplitFrameRemoteState['mode'] = 'pure-pane-hybrid';
+  let revision = 0;
+  try {
+    const parsed = JSON.parse(raw || '{}');
+    if (parsed && (parsed.mode === 'pure-pane' || parsed.mode === 'local-responsive' || parsed.mode === 'pure-pane-hybrid') &&
+      Number.isSafeInteger(parsed.revision) && parsed.revision >= 0) {
+      mode = parsed.mode;
+      revision = parsed.revision;
+    }
+  } catch { /* Unconfigured parameter keeps the safe app448 Hybrid fallback. */ }
+  splitFrameRemoteState = { mode, revision, ready };
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(SPLIT_FRAME_REMOTE_EVENT, { detail: { ...splitFrameRemoteState } }));
+  }
+};
+const notifySplitFrameRemote = (remoteConfig: ReturnType<typeof getRemoteConfig>, ready: boolean) => {
+  const env = splitFrameEnvironment();
+  if (!env) return;
+  publishSplitFrameRemote(getString(remoteConfig, SPLIT_FRAME_REMOTE_PARAMS[env]), ready);
+};
+
 
 export type VersionSignalDiagnostics = {
   enabled: boolean;
@@ -99,6 +138,10 @@ export const stopPreviewVersionSignal = () => {
   try { unsubscribe?.(); } catch {}
   unsubscribe = null;
   startPromise = null;
+  splitFrameRemoteState = { ...splitFrameRemoteState, ready: false };
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(SPLIT_FRAME_REMOTE_EVENT, { detail: { ...splitFrameRemoteState } }));
+  }
   publishDiagnostics({ status: diagnostics.enabled ? 'disabled' : diagnostics.status });
 };
 
@@ -122,6 +165,9 @@ export const startPreviewVersionSignal = (): Promise<void> => {
     remoteConfig.settings.minimumFetchIntervalMillis = 12 * 60 * 60 * 1000;
     remoteConfig.defaultConfig = {
       [PREVIEW_VERSION_SIGNAL_PARAM]: JSON.stringify({ genres: 0 }),
+      [SPLIT_FRAME_REMOTE_PARAMS.preview]: '{"mode":"pure-pane-hybrid","revision":0}',
+      [SPLIT_FRAME_REMOTE_PARAMS.test]: '{"mode":"pure-pane-hybrid","revision":0}',
+      [SPLIT_FRAME_REMOTE_PARAMS.production]: '{"mode":"pure-pane-hybrid","revision":0}',
     };
 
     await ensureInitialized(remoteConfig);
@@ -147,34 +193,41 @@ export const startPreviewVersionSignal = (): Promise<void> => {
       persistVersions(versions);
     }
 
+    // The app already owns a Remote Config realtime connection for version signals.
+    // Reuse it for one operational setting; no new RTDB rules or second socket.
+    notifySplitFrameRemote(remoteConfig, true);
     unsubscribe = onConfigUpdate(remoteConfig, {
       next: (configUpdate) => {
         void (async () => {
           const updatedKeys = Array.from(configUpdate.getUpdatedKeys());
-          if (!updatedKeys.includes(PREVIEW_VERSION_SIGNAL_PARAM)) {
+          const env = splitFrameEnvironment();
+          const frameChanged = !!env && updatedKeys.includes(SPLIT_FRAME_REMOTE_PARAMS[env]);
+          const versionChanged = updatedKeys.includes(PREVIEW_VERSION_SIGNAL_PARAM);
+          if (!frameChanged && !versionChanged) {
             publishDiagnostics({ updatedKeys });
             return;
           }
           await activate(remoteConfig);
-          const nextVersions = parseVersions(getString(remoteConfig, PREVIEW_VERSION_SIGNAL_PARAM));
-          const lastEventAt = Date.now();
-          persistVersions(nextVersions);
-          publishDiagnostics({
-            status: 'connected',
-            versions: nextVersions,
-            updatedKeys,
-            realtimeEvents: diagnostics.realtimeEvents + 1,
-            lastEventAt,
-            error: '',
-          });
-          window.dispatchEvent(new CustomEvent(VERSION_SIGNAL_DATA_EVENT, {
-            detail: { versions: nextVersions, updatedKeys, at: lastEventAt },
-          }));
+          if (frameChanged) notifySplitFrameRemote(remoteConfig, true);
+          if (versionChanged) {
+            const nextVersions = parseVersions(getString(remoteConfig, PREVIEW_VERSION_SIGNAL_PARAM));
+            const lastEventAt = Date.now();
+            persistVersions(nextVersions);
+            publishDiagnostics({
+              status: 'connected', versions: nextVersions, updatedKeys,
+              realtimeEvents: diagnostics.realtimeEvents + 1, lastEventAt, error: '',
+            });
+            window.dispatchEvent(new CustomEvent(VERSION_SIGNAL_DATA_EVENT, {
+              detail: { versions: nextVersions, updatedKeys, at: lastEventAt },
+            }));
+          }
         })().catch((error) => {
           publishDiagnostics({ status: 'error', error: String((error as any)?.message || error || 'activate failed') });
         });
       },
       error: (error) => {
+        splitFrameRemoteState = { ...splitFrameRemoteState, ready: false };
+        window.dispatchEvent(new CustomEvent(SPLIT_FRAME_REMOTE_EVENT, { detail: { ...splitFrameRemoteState } }));
         publishDiagnostics({ status: 'error', error: String((error as any)?.message || error || 'realtime listener failed') });
       },
       complete: () => {},

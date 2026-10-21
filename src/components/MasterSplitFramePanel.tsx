@@ -9,7 +9,7 @@ import {
   SPLIT_FRAME_CHOICES,
   type SplitFrameMode,
 } from '../constants/splitFrameGlobal';
-import { isSplitFrameServerReady, readCurrentSplitFrameMode, subscribeSplitFrameMode } from '../services/navigationVisibilitySyncService';
+import { isSplitFrameServerReady, readCurrentSplitFrameMode, readCurrentSplitFrameRevision, subscribeSplitFrameMode } from '../services/navigationVisibilitySyncService';
 import { cn } from '../lib/utils';
 
 const labelFor = (mode: SplitFrameMode) =>
@@ -41,6 +41,7 @@ export default function MasterSplitFramePanel() {
   const environment = getSplitFrameEnvironment();
   const [applied, setApplied] = useState<SplitFrameMode>(readCurrentSplitFrameMode);
   const [draft, setDraft] = useState<SplitFrameMode>(readCurrentSplitFrameMode);
+  const [confirmedRevision, setConfirmedRevision] = useState(readCurrentSplitFrameRevision);
   const [serverReady, setServerReady] = useState(isSplitFrameServerReady);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -48,23 +49,24 @@ export default function MasterSplitFramePanel() {
   useEffect(() => subscribeSplitFrameMode((mode) => {
     setServerReady(isSplitFrameServerReady());
     setApplied(mode);
+    setConfirmedRevision(readCurrentSplitFrameRevision());
     // Initial and remote changes track server truth until the Master makes
     // a different unsaved selection. Never persist a mere radio selection.
     setDraft((previous) => previous === applied ? mode : previous);
   }), [applied]);
 
   const apply = async () => {
-    if (!environment || !serverReady || saving || draft === applied) return;
+    if (!environment || !serverReady || !isSplitFrameServerReady() || saving || draft === applied) return;
     const confirmed = window.confirm(
       `분할바 프레임을 '${labelFor(draft)}'으로 적용할까요?\n현재 ${environment.toUpperCase()}에 연결된 사용자에게 전달됩니다.`,
     );
-    if (!confirmed) return;
+    if (!confirmed || !isSplitFrameServerReady()) return;
     setSaving(true);
     setMessage(null);
     try {
-      const callable = httpsCallable<{ environment: string; mode: SplitFrameMode },
+      const callable = httpsCallable<{ environment: string; mode: SplitFrameMode; expectedRevision: number },
         { ok: boolean; environment: string; mode: SplitFrameMode }>(functions, 'masterSetSplitFrameMode');
-      const result = await callable({ environment, mode: draft });
+      const result = await callable({ environment, mode: draft, expectedRevision: confirmedRevision });
       if (!result.data?.ok || result.data.environment !== environment || result.data.mode !== draft) {
         throw new Error('서버의 적용 확인을 받지 못했습니다.');
       }
@@ -90,7 +92,7 @@ export default function MasterSplitFramePanel() {
         <div>
           <h2 className="text-base font-black text-[var(--text-primary)]">분할바 프레임</h2>
           <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">
-            마스터 전용 · 선택 후 적용해야 변경됩니다. 현재 로그인한 호환 앱은 실시간 반영되고,
+            마스터 전용 · 선택 후 적용해야 변경됩니다. 현재 연결된 호환 앱은 로그인 여부와 관계없이 반영되고,
             드래그 중인 사용자는 마우스를 놓은 후 반영됩니다.
           </p>
           <p className="mt-2 text-xs font-black text-[var(--text-primary)]">

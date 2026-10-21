@@ -78,18 +78,18 @@ export default function MasterSplitFramePanel() {
   if (!isMaster) return null;
 
   return (
-    <div className="rounded-3xl bg-white/[0.035] p-5 md:p-6">
+    <div className="rounded-3xl bg-[var(--bg-secondary)] p-5 shadow-sm md:p-6">
       <div className="flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/[0.07] text-zinc-200">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/[0.05] text-[#BBA8CA]">
           <SlidersHorizontal className="h-5 w-5" />
         </div>
         <div>
-          <h2 className="text-sm font-black text-zinc-100">분할바 프레임</h2>
-          <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+          <h2 className="text-base font-black text-[var(--text-primary)]">분할바 프레임</h2>
+          <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">
             마스터 전용 · 선택 후 적용해야 변경됩니다. 현재 접속 중인 호환 앱은 실시간 반영되고,
             드래그 중인 사용자는 마우스를 놓은 후 반영됩니다.
           </p>
-          <p className="mt-2 text-xs font-black text-zinc-300">
+          <p className="mt-2 text-xs font-black text-[var(--text-primary)]">
             현재 적용: {labelFor(applied)} {environment ? `· ${environment.toUpperCase()}` : '· 환경 확인 불가'}
           </p>
         </div>
@@ -104,8 +104,8 @@ export default function MasterSplitFramePanel() {
             className={cn(
               'rounded-2xl px-4 py-3 text-sm font-black transition disabled:opacity-50',
               draft === choice.value
-                ? 'bg-zinc-100 text-zinc-950'
-                : 'bg-white/[0.06] text-zinc-300 hover:bg-white/[0.1]',
+                ? 'bg-[#BBA8CA] text-[#1b161d]'
+                : 'bg-black/15 text-[var(--text-secondary)] hover:bg-white/[0.06]',
             )}
           >
             {choice.label}
@@ -113,12 +113,12 @@ export default function MasterSplitFramePanel() {
         ))}
       </div>
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-[var(--text-secondary)]">
           {draft === applied ? '적용된 설정입니다.' : `변경 예정: ${labelFor(draft)}`}
         </p>
         <button type="button" disabled={!environment || saving || draft === applied}
           onClick={() => void apply()}
-          className="inline-flex min-w-[112px] items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-5 py-3 text-sm font-black text-zinc-950 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600">
+          className="inline-flex min-w-[112px] items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-5 py-3 text-sm font-black text-zinc-950 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           적용
         </button>

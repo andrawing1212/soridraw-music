@@ -1,3 +1,14 @@
+## CURRENT — app460 Classic Dark/mobile resting search fully rounded — Firebase PREVIEW DEPLOYED (2026-10-22 KST)
+
+- **User latest screenshots:** `image(20261022-123720).png` and `image(20261022-123759).png` show Classic Dark standalone mobile Music Note search pill flattened/clipped on the right next to colors. `image(20261022-123807).png` is the correct rounded split reference.
+- **Fix:** only inactive standalone/mobile Music Note + Library search surface now uses exact parent slot width with 0 intrinsic minimum and its own 46px/16px rounded clipping. Preserve focused 260px input/X, color palette, filter, tabs and original app457 split UI. Previous app459 row-width compression and existing full-center-workspace 430px minimum split bounds **unchanged**.
+- **Source:** PR [#425](https://github.com/andrawing1212/soridraw-music/pull/425) merged as `a6e1d4642fd6e2ae2598b486c73a73bf81637e8c`, tested SHA `40542f7679c6bd9549cc4453d5dfa8b288d7e8a3`. Frozen split verifier adjusted for later versions to require **exact getSplitBounds identity** relative to app459 baseline, not to anticipate pre-app459 tablet-only code; all unrelated splitter functionality remains protected. Exact source CI UI/split+TypeScript/Build #39781442420 SUCCESS and product quality #39781442314 SUCCESS.
+- **PREVIEW release:** PR [#426](https://github.com/andrawing1212/soridraw-music/pull/426) merged `d3e9ead7d03c2356c3875c9670b2a9d1e6f3f440`. Canonical Firebase [#39781912125](https://github.com/andrawing1212/soridraw-music/actions/runs/39781912125) SUCCESS: TypeScript/Build PASS, Firebase PREVIEW Hosting PASS, remote `app-version.json=460` PASS, exact index/build identity PASS, TEST and PRODUCTION refs/HTML unchanged PASS, shared RTDB Rules deploy SKIPPED. No Functions, Cloudflare, Worker, Firestore/D1 writes, data migration or user original change. Stage416 OFF.
+- **Still pending:** physical mobile/external Classic Dark visual of idle search pill rounded edge and focused X and no palette overlap. CI/source/Hosting verification do not claim real UI visual PASS. User approved split compact visual remains common reference across modes; no TEST/PRODUCTION promotion.
+- **Next:** user visually checks app460 PREVIEW screenshot-level result, including Library. If needed, alter only the scoped standalone compact row without degrading split app457 behavior or app459 bounds.
+
+---
+
 ## CURRENT — app460 mobile standalone idle search rounded edge SOURCE CANDIDATE (2026-10-22 KST)
 
 - User supplied 12:37 screenshots: Classic Dark narrow standalone Music Note search button shows straight/clipped right edge near color bar, whereas accepted split result search has both rounded corners. app459 PREVIEW fixes the overall row budget and workspace splitter bounds; preserve these.

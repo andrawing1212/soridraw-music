@@ -1,3 +1,24 @@
+## NEXT — P0 Music Note + 추천곡 PREVIEW/TEST/PRODUCTION parity diagnosis before any release (2026-10-23 KST)
+
+**User report / priority:** PREVIEW code/feature behavior is baseline, but Music Note saved membership differs among all three apps including yesterday's individually saved songs. PREVIEW displays recent `SORIDRAW 추천` curator promotions, TEST/PRODUCTION old promotions. The user welcomes matching versions *if needed*, **not an instruction to promote main or PRODUCTION now**. No forced cache clearing, preview-local data copying, canonical writes or migrations.
+
+**Source pointers:**
+- Same Firestore project `soridraw-app-866a5` in all client branches; private media R2 `CATALOG=soridraw-user-catalog` shared according to versioned config, confirm live env bindings.
+- Music Note retained `userSync/{uid}/musicNote` holds last signal only; app426 known-mutator Catalog recovery exists in PREVIEW but not main/PRODUCTION app377; historical P0 [#237](https://github.com/andrawing1212/soridraw-music/issues/237).
+- Curation [#203](https://github.com/andrawing1212/soridraw-music/issues/203): `env.DB curated_picks` shared, but `curatedBucket307=EXPLORE_CACHE||PROFILE_MEDIA` environment-local derived cache; mutation only refreshes invoking env. Other env R2 revision stays old indefinitely, and unconditional R2 put can lose concurrent promoted-item visibility.
+- `src/services/exploreCurationService.ts` local first revision check only against current origin's Worker. `.deploy/release-worker-runtime.mjs` already includes a release-only curated projection parity gate; this does not guarantee day-to-day cross-env updates.
+
+**Work in this order (read-only first):**
+1. Lock PREVIEW HEAD and compare 3 live app identity/version/canonical resources. For specific discrepant saved songs, compare exact UID, `favorites/{id}` canonical, Music Note shared Catalog revision/deltas, device-local IndexedDB/favoritesStore/pending heart and media/draft revisions. Separate client display lag vs failed canonical write vs duplicate aliases vs explicit unsave.
+2. Compare all three public `/v1/curated?collection=soridraw&limit=20` response track IDs/revision/sources, `/v1/curated-revision`, shared D1 `curated_picks` authoritative IDs/updatedAt and env-specific derived R2. Do not silently assume PREVIEW screenshot equals shared D1.
+3. Prepare minimal fix and deterministic tests: dormant offline 2+ Music Note saves/unsaves and app377 warm-cache upgrade; same song +30s settlement; edits/drafts/canonical merging; simultaneous 2 curated promotions, opposite actions, publication/private toggles and R2 CAS conflicts; cross-env stale derived snapshots recover by a bounded shared revision/delta signal without repeated D1 scan (unchanged re-entry R0/W0 goal).
+4. Code only in PREVIEW with backward-compatible changes; no user original writes, mass backfill, cache reset, full favorites/Feed read, unexpected Worker/Rules changes or UI/CSS. Existing app461–465 accepted UI, app349 hearts, Music Note 60s, Recent 150s, app410 likes, Stage416 OFF protected.
+5. Pin source SHA, TypeScript+Build+focused tests, Work independent PASS, PREVIEW Hosting/Worker deployment only with guardrails, PC/tablet/mobile current/warm/clean device parity. TEST and PRODUCTION only if user expressly requests release after all parity and exact artifact/Worker environment gate PASS.
+
+**Immediate result standard:** If read-only live canonical access unavailable, report **source-level diagnosis only**, protect originals, and do not claim parity fixed. Current Stage416=1/4·25% OFF, speed=5/5·100% historical, P0=1/4·25% diagnosis only.
+
+---
+
 ## NEXT — app465 user tablet visual PASS; freeze expanded gutters and scrollbar (2026-10-23 KST)
 
 - User confirmed "통과야" after app465 for three tablet expanded one-pane views: Recent Songs, Music Note, Library. Consider reported left/right Builder gutters and result-only native right scrollbar **accepted**. app464 Create tablet gutters also separately user-confirmed good. Do not ask user to re-explain or reopen these without a new observed defect.

@@ -196,7 +196,10 @@ console.log('APP456_SEARCH_CENTER_TO_LEFT_AND_RESET_SMOOTH_GROWTH=PASS');
 
 // APP457: no geometry/placeholder/filter ownership switch when responsive
 // content mode moves from mobile to tablet; keep old 456 source assertions.
-const app457Css = css.slice(css.indexOf('APP457_NO_MOBILE_TABLET_CONTROL_HANDOFF'));
+const app457Css = css.slice(
+  css.indexOf('APP457_NO_MOBILE_TABLET_CONTROL_HANDOFF'),
+  css.indexOf('APP458_CANONICAL_COMPACT_TOP_CONTROLS_ALL_SHELLS'),
+);
 assert(app457Css.startsWith('APP457_NO_MOBILE_TABLET_CONTROL_HANDOFF'), 'app457 CSS missing');
 for (const token of [
   '.soridraw-stable-top-controls',

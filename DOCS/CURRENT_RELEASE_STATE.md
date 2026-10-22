@@ -1,3 +1,12 @@
+## CURRENT — app456 Firebase PREVIEW Hosting deployed and verified (2026-10-22 KST)
+
+- **Release:** User explicitly requested standard deployment of already-finished app456. Source PR #412 merged as `51116dcd6b4fd4afd4fc1c3279307b41b247b7ef`, status PR #413 merged as `2fc9bedd531b45152d6f7c3d17007f96cbeec013`, PREVIEW release trigger PR #414 merged at exact deployed `preview` SHA `b8135cae02749e1130dc045febd0d09dc909f1a0`. App version **456**.
+- **UI scope:** For Studio Black split-result Music Note/Library: search magnifier centered while search/filter grow initially, then smoothly shifts toward left input inset once filter reaches 104px; reset/refresh pill interpolates 34→52px while icon/colored dots remain fixed. Existing app455 fluid row, app454 focused search overlay/X, split pointer/rAF/Generate preserved.
+- **Verification:** source UI/split CI #39764253765 SUCCESS; product quality #39764253909 SUCCESS. Firebase canonical PREVIEW workflow [#39765270132](https://github.com/andrawing1212/soridraw-music/actions/runs/39765270132) SUCCESS: exact locked SHA `b8135cae...`, TypeScript/Build PASS, Hosting PASS, live `https://preview.soridraw.com/` exact index/build hash PASS, live `app-version.json=456` PASS, TEST/PRODUCTION refs and live HTML unchanged PASS, shared RTDB Rules deploy SKIPPED; no Functions/Worker/Cloudflare/D1 or user original data write/migration. Stage416 remains OFF.
+- **Still pending:** User actual physical split drag/browser verification of icon center→left smoothness, reset pill width transitions, focused overlay/X, filter completion and reverse movement. CI/synthetic checks are not user-validated UI PASS. No TEST or PRODUCTION promotion. Next task: collect real PREVIEW app456 result.
+
+---
+
 ## CURRENT — app456 source PASS and merged into preview; Hosting NOT deployed (2026-10-22 KST)
 
 - **Actual source branch:** `preview` merge `51116dcd6b4fd4afd4fc1c3279307b41b247b7ef` from PR [#412](https://github.com/andrawing1212/soridraw-music/pull/412), fixed code SHA `439c4b0b7f655ff566e30e34e16eb89d5e652014`. Source app-version.json **456**. **Actual live Firebase PREVIEW continues app455** because user said to fix code quickly, not to deploy. TEST/main and PRODUCTION unchanged.

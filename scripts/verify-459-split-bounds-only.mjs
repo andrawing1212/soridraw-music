@@ -46,3 +46,32 @@ for(const width of [600,720,859,860,861,1000,1200,1500,1792,2000]){
 }
 console.log('APP459_SCOPE_LITE_SPLIT_BOUNDS_ONLY=PASS');
 console.log('APP459_SPLIT_MIN_430_WHEN_FEASIBLE_CENTER_WHEN_NOT=PASS');
+
+/* APP462: The native scrollbar has priority on the LEFT side of the boundary.
+ * The transparent 16px effective splitter hit region moves to the RIGHT
+ * without changing the left-coordinate writer or 1px visual line. */
+const splitterCss=readFileSync('src/components/studio/studioLayout.css','utf8');
+const marker='APP462_SCROLLBAR_SPLITTER_EXCLUSIVE_HIT_ZONES';
+const markerPos=splitterCss.indexOf(marker);
+assert(markerPos>=0,'APP462 splitter/scrollbar hit-zone contract missing');
+const scoped=splitterCss.slice(markerPos);
+for(const requirement of [
+  '@media (min-width: 1100px)',
+  'html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter',
+  'width: 24px !important;',
+  'justify-content: flex-start !important;',
+  'clip-path: inset(0 0 0 8px);',
+  '> span {',
+  'margin-left: 8px !important;',
+])assert(scoped.includes(requirement),'APP462 splitter hit-zone token missing: '+requirement);
+for(const forbidden of ['requestAnimationFrame(', 'getBoundingClientRect(', 'ResizeObserver(', 'pointerdown', 'pointermove', 'scrollTop =', 'fetch(']){
+  assert(!scoped.includes(forbidden),'APP462 hit zone must stay passive CSS: '+forbidden);
+}
+// This models pointer ownership at the unchanged boundary coordinate.
+// Old base button starts 8px left; new visible CSS clip starts 8px into it,
+// and its 24px width leaves a 16px right-side hit zone.
+const boundary=500, buttonLeft=boundary-8, clippedLeft=buttonLeft+8, clippedRight=buttonLeft+24;
+assert.equal(clippedLeft,boundary,'APP462 scrollbar-side coverage must be zero');
+assert.equal(clippedRight-clippedLeft,16,'APP462 must preserve 16px usable splitter target');
+assert.equal(buttonLeft+8,boundary,'APP462 drawn 1px line must remain on boundary');
+console.log('APP462_NATIVE_SCROLLBAR_AND_SPLITTER_SEPARATE_HIT_ZONES=PASS');

@@ -1,3 +1,11 @@
+## CURRENT — app451 PREVIEW Master mode Apply USER CONFIRMED (2026-10-22 KST)
+
+- After the app451 PREVIEW recovery release (#39695878693 SUCCESS), the user reported **`적용됐어.`** following the request to check the Master split-frame mode setting. Record **user-confirmed Apply success on PREVIEW**, resolving the previously reported blocking failure to apply at all. This report does **not explicitly establish** separate Guest/second-device real-time propagation, every-mode round trip, persistence across a subsequent reload, or tablet/mobile behavior; these remain scoped validation items rather than automatic PASS.
+- Protect unchanged shared canonical user data, default RTDB Rules, Stage416 OFF, TEST/PRODUCTION and frozen app448 splitter and Generate layout. No new product code or deployment in this documentation checkpoint. No Codex usage.
+- Next: leave app451 PREVIEW in place, optionally validate cross-page persistence and Guest/other-device propagation before requesting any TEST promotion. Do not deploy TEST or PRODUCTION without their required user approval.
+
+---
+
 ## CURRENT — app451 Master saved mode / Studio cache repair deployed to PREVIEW (2026-10-22 KST)
 
 - **User real-device video FAIL of app450**: Admin split performance Apply displayed red `다른 마스터의 변경이 먼저 적용됐습니다`; navigating away/back reverted to `품질우선`, Studio drag mode unchanged. Confirmed cause: old version-signal Remote Config bootstrap localStorage marker falsely treated newly added split parameter default revision0 as current server revision.

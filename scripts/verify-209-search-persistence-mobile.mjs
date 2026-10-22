@@ -114,7 +114,10 @@ console.log('APP453_MOBILE_PALETTE_TABS_SEARCH_X=PASS');
 
 // APP454: actual pane-mobile-only overlay with a fixed search layout footprint.
 // Only the inner input surface may grow; palette and filter stay untouched.
-const app454Css = css.slice(css.indexOf('APP454_SPLIT_MOBILE_SEARCH_OVERLAY'));
+const app454Css = css.slice(
+  css.indexOf('APP454_SPLIT_MOBILE_SEARCH_OVERLAY'),
+  css.indexOf('APP455_SPLIT_SEARCH_FILTER_CONTINUOUS_FLEX'),
+);
 assert(app454Css.startsWith('APP454_SPLIT_MOBILE_SEARCH_OVERLAY'), 'app454 overlay contract missing');
 for (const token of [
   '@media (min-width: 1100px)',
@@ -135,3 +138,25 @@ for (const forbidden of ['.soridraw-responsive-color-filter {', '.soridraw-respo
   assert(!app454Css.includes(forbidden), 'app454 unexpected non-search change: ' + forbidden);
 }
 console.log('APP454_MOBILE_SPLIT_SEARCH_OVERLAY_PALETTE_FIXED=PASS');
+
+
+// APP455 video regression: mobile result row must fill 100% without a trailing
+// gap. Search and filter share growth until the filter caps at full width.
+const app455Css = css.slice(css.indexOf('APP455_SPLIT_SEARCH_FILTER_CONTINUOUS_FLEX'));
+assert(app455Css.startsWith('APP455_SPLIT_SEARCH_FILTER_CONTINUOUS_FLEX'), 'app455 CSS missing');
+for (const token of [
+  '[data-soridraw-responsive-mode="mobile"]',
+  '.soridraw-stable-top-controls',
+  'width: 100% !important;',
+  'flex: 1 1 42px !important;',
+  'max-width: 104px !important;',
+  'container-type: inline-size;',
+  '@container (min-width: 103px)',
+  '.soridraw-filter-label, .soridraw-filter-chevron',
+  'width: max(260px, 100%) !important;',
+  'overflow: visible !important;',
+]) assert(app455Css.includes(token), 'app455 missing contract: ' + token);
+for (const forbidden of ['.soridraw-responsive-color-filter {', 'requestAnimationFrame(', 'getBoundingClientRect(', 'ResizeObserver(', 'fetch(']) {
+  assert(!app455Css.includes(forbidden), 'app455 must not change colors or drag/server work: ' + forbidden);
+}
+console.log('APP455_CONTINUOUS_FILTER_CAP_SEARCH_FILLS_NO_GAP=PASS');

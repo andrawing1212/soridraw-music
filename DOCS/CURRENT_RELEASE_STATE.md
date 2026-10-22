@@ -1,3 +1,14 @@
+## CURRENT — app455 split search+filter fluid-width correction SOURCE CANDIDATE (2026-10-22 KST)
+
+- **User real-video verdict on live app454:** top-row controls are visibly left packed with blank space on the right at narrow split widths (e.g. 24s); dragging the divider has a visible snap/reposition when the filter changes to text, rather than one uninterrupted search growth. Need 3-control row filled from the first narrow pane frame.
+- **Precise request:** at narrow pane, make search and filter BOTH share the row's spare width, preserving the exact mobile color tray, until the filter has enlarged enough to show icon+text+chevron. Thereafter cap color/filter widths, keep filter right aligned, and give all added/shrinking width to search continuously; reverse on narrowing. Preserve app454 clicked 260px search overlay over color dots. This is a Studio Black result-pane Music Note/Library layout change only.
+- **Candidate:** passive CSS `APP455_SPLIT_SEARCH_FILTER_CONTINUOUS_FLEX` on page-mobile result width (<=660), search `flex:1 1 42px`, filter wrapper `flex:1 1 42px; max-width:104px`, mobile palette unchanged; wrapper-only CSS inline-size query shows filter text only once the button itself reaches >=103px, avoiding mode breakpoint snaps. Search field inactive fills its slot; active uses `max(260px, 100%)` overlay. Tabs, list, desktop/standalone layout and split engine untouched.
+- **Preliminary local Chromium isolated-layout check:** 400/410/420/430/460/490/520/530/560/600/660px row: right gap **0px**, palette fixed 292px in isolated fixture, filter grows 48→104px and caps; search grows continuously 48→252px, active 260px overlay. This is **NOT live app visual acceptance**.
+- **Protect:** app448 rAF/pointer/Generate, app453 UI outside narrow row, app454 overlay/X, backend/Rules/Cloudflare/Functions, shared data Local First, Stage416 OFF, main/production. No read/write/migration. Candidate branch only, PREVIEW live still 454 until CI/Hosting release.
+- **Next:** CI TS+Build+app209/split+product safety, then Hosting-only PREVIEW after checks; user physical video acceptance. No TEST/PROD approval.
+
+---
+
 ## CURRENT — app454 mobile result search overlay Firebase PREVIEW DEPLOYED (2026-10-22 KST)
 
 - **PREVIEW source:** app454 source PR #406 merged as `943cd47417895dc27b5f7adceb0d0c573f862616` from original source SHA `587a08b91a87805485e16889c02f9849d3ac9d17`. Release PR #407 merged `8f93f680aaa3e8a378b1ec11677d5af775b17a90`. Current public version **454**; no TEST/PRODUCTION promotion.

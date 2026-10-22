@@ -6224,7 +6224,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     return (
       <>
-        <div className="soridraw-responsive-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
+        <div className="soridraw-responsive-top-controls soridraw-stable-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
           <div className={`soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2${isLibrarySearchFocused || activeSearchTerm ? ' is-search-active' : ''}${activeSearchTerm ? ' has-search-value' : ''}`}>
             <div className="soridraw-responsive-search relative flex-1 min-w-0 group overflow-hidden">
               <div className="soridraw-responsive-search-icon absolute inset-y-0 left-4 z-10 flex items-center pointer-events-none">
@@ -6240,13 +6240,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 }}
                 onFocus={() => setIsLibrarySearchFocused(true)}
                 onBlur={() => setIsLibrarySearchFocused(false)}
-                className={`soridraw-responsive-search-input w-full h-[46px] pl-12 ${activeSearchTerm ? 'pr-11' : 'pr-4'} rounded-2xl bg-white/[0.145] border border-white/[0.14] outline-none focus:bg-white/[0.17] focus:border-[#A98BFF]/45 transition-all text-sm text-[var(--text-primary)]`}
+                className={`soridraw-responsive-search-input w-full h-[46px] pl-12 ${isLibrarySearchFocused || activeSearchTerm ? 'pr-11' : 'pr-4'} rounded-2xl bg-white/[0.145] border border-white/[0.14] outline-none focus:bg-white/[0.17] focus:border-[#A98BFF]/45 transition-all text-sm text-[var(--text-primary)]`}
               />
-              {activeSearchTerm && (
+              {(isLibrarySearchFocused || Boolean(activeSearchTerm)) && (
                 <button
                   type="button"
                   className="soridraw-responsive-search-clear absolute right-2 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-white/45 transition hover:bg-white/[0.07] hover:text-[#C9BAFF]"
-                  aria-label="검색어 지우기"
+                  aria-label="검색 취소"
                   onPointerDown={(event) => event.preventDefault()}
                   onClick={(event) => {
                     clearActiveLibrarySearch();
@@ -6420,7 +6420,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const renderLibraryModeTabs = () => {
     if (isSharedView) return null;
     return (
-      <div className="flex items-center gap-2 max-w-full whitespace-nowrap">
+      <div className="soridraw-stable-mode-viewport flex items-center gap-2 max-w-full whitespace-nowrap">
         <div className="soridraw-library-mode-tabs grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[480px]">
           <button
             onClick={() => setLibraryViewMode('workspace')}

@@ -13,10 +13,13 @@ for (const token of [
   "window.sessionStorage.getItem(MUSIC_NOTE_SEARCH_SESSION_KEY)",
   "window.sessionStorage.setItem(MUSIC_NOTE_SEARCH_SESSION_KEY, value)",
   'className="soridraw-responsive-search-clear',
-  'aria-label="검색어 지우기"',
+  'aria-label="검색 취소"',
   'musicNoteSearchInputRef.current?.blur()',
   '"is-search-active"',
   '"has-search-value"',
+  'soridraw-stable-mode-viewport',
+  'soridraw-stable-top-controls',
+  '{(isSearchFocused || Boolean(searchQuery)) && (',
 ]) {
   assert(musicNote.includes(token), `Music Note search token missing: ${token}`);
 }
@@ -28,6 +31,9 @@ for (const token of [
   "readLibrarySearchSession(LIBRARY_PLAYLIST_SEARCH_SESSION_KEY)",
   'activeSearchTerm',
   'clearActiveLibrarySearch',
+  'soridraw-stable-mode-viewport',
+  'soridraw-stable-top-controls',
+  '{(isLibrarySearchFocused || Boolean(activeSearchTerm)) && (',
   'soridraw-responsive-search-clear',
   'is-search-active',
   'has-search-value',
@@ -67,4 +73,25 @@ console.log('APP209_MUSIC_NOTE_SEARCH_CLEAR=PASS');
 console.log('APP209_LIBRARY_SEARCH_CLEAR=PASS');
 console.log('APP209_SEARCH_SESSION_PERSISTENCE=PASS');
 console.log('APP209_MOBILE_ACTIVE_WIDTH_PERSISTENCE=PASS');
+
+for (const token of [
+  'APP457_FIXED_TABS_COLOR_SEARCH_CONTRACT',
+  '.soridraw-stable-mode-viewport',
+  'flex: 0 0 480px !important;',
+  'width: 480px !important;',
+  'flex: 0 1 auto !important;',
+  'width: max-content !important;',
+  '.soridraw-responsive-search-slot:not(.is-search-active)',
+  'flex: 1 1 42px !important;',
+  '.soridraw-responsive-search-slot.is-search-active',
+  'padding-right: 40px !important;',
+]) {
+  assert(css.includes(token), `app457 passive split control contract missing: ${token}`);
+}
+assert(musicNote.includes("setSearchQuery('');"), 'Music Note X clears term');
+assert(musicNote.includes('musicNoteSearchInputRef.current?.blur()'), 'Music Note X blurs input');
+assert(library.includes('clearActiveLibrarySearch();'), 'Library X clears term');
+assert(library.includes('librarySearchInputRef.current?.blur()'), 'Library X blurs input');
+
 console.log('APP209_SEARCH_NO_SERVER_IO=PASS');
+console.log('APP457_MUSIC_NOTE_LIBRARY_FIXED_MENU_COLOR_SEARCH_X=PASS');

@@ -1,0 +1,50 @@
+name: Verify Music Note Library Stable Split Controls (No Deploy)
+
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'src/pages/FavoritesPage.tsx'
+      - 'src/pages/SunoLibraryPage.tsx'
+      - 'src/components/studio/studioLayout.css'
+      - 'scripts/verify-209-search-persistence-mobile.mjs'
+      - '.github/workflows/verify-app457-note-library-controls.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  source-and-split:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked UI dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify Music Note and Library cancel/resize parity
+        run: node scripts/verify-209-search-persistence-mobile.mjs
+      - name: Protect app448 split geometry and Generate interactions
+        run: node scripts/verify-303-studio-split-browser-history.mjs
+      - name: Guard unchanged splitter and no extra backend read/write
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin preview
+          git diff --exit-code FETCH_HEAD -- \
+            src/components/studio/LiteStudioSplitWorkspace.tsx \
+            src/components/studio/StudioSplitEngineWorkspace.tsx \
+            src/components/studio/liteSplitWorkspace.css \
+            src/services/navigationVisibilitySyncService.ts \
+            src/lib/pageSyncCoordinator.ts \
+            database.rules.json
+          echo 'APP457_SPLIT_ENGINE_GENERATE_AND_RULES_UNCHANGED=PASS'
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: React build
+        run: npm run build
+      - name: Explicitly no deployment
+        run: echo 'APP457_SOURCE_QA_ONLY_NO_DEPLOY=PASS'

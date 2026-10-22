@@ -1,3 +1,13 @@
+## NEXT — app463 Music Note saved-song keyword text readability (2026-10-23 KST)
+
+- User requests keyword text size enlargement in the Music Note song list after screenshots show unreadably small genre/style/other applied keyword text in each row. Restrict to `.soridraw-musicnote-song-keywords > .soridraw-musicnote-keyword-chip` and keep every keyword text visible by existing horizontal scrolling.
+- Proposed `font-size:12px; line-height:1.1` across PC/narrow/mobile, regardless of prior 9px default/8px compact override; change only font, no row or chip height/color/padding, state controls, title or data.
+- Source `src/components/studio/studioLayout.css` scoped `APP463_MUSIC_NOTE_SONG_KEYWORD_12PX`, existing source verifier `scripts/verify-209-search-persistence-mobile.mjs`, Hosting version463 and Worker-version allowlist only. Base `preview` `13e996f53ae97e3154d1e4a3f2d122970c1491b4` on branch `fix/app463-musicnote-keyword-font-12px`.
+- PASS gates: TypeScript, React Build, existing split UI tests, new 12px font-only contract, no data/network additions. Visual in PREVIEW at mobile and split widths: readable text, no vertical clipping, keyword strip can pan/wheel horizontally, no controls pushed out or card height jump.
+- On source PASS follow canonical Firebase PREVIEW Hosting-only release, skipping RTDB Rules; Worker/Functions/Cloudflare unchanged, Stage416 OFF; TEST/PRODUCTION promotion forbidden without user approval. Record real deployment result and user visual PASS/FAIL separately.
+
+---
+
 ## NEXT — app462 user visual PASS, wait for next directed change (2026-10-23 KST)
 
 - User confirmed “잘 적용됐어” for the released PREVIEW center scrollbar vs split divider mouse hit-zone correction; preserve this behavior.

@@ -298,3 +298,22 @@ for(const prohibited of ['.soridraw-responsive-color-filter {','.soridraw-respon
   assert(!app460Css.includes(prohibited),'app460 touched unrelated UI/logic: '+prohibited);
 }
 console.log('APP460_CLASSIC_DARK_MOBILE_IDLE_SEARCH_ROUNDING=PASS');
+
+// APP463_MUSIC_NOTE_KEYWORDS_READABLE_12PX: font-only override for the Music Note saved-song keyword strip.
+// Keep the old narrow-pane size rules as historical CSS; the scoped later
+// override wins without widening cards or changing native scroll behavior.
+const app463Css=css.slice(css.indexOf('APP463_MUSIC_NOTE_SONG_KEYWORD_12PX'));
+assert(app463Css.startsWith('APP463_MUSIC_NOTE_SONG_KEYWORD_12PX'), 'app463 keyword font CSS missing');
+for (const token of [
+  '.soridraw-musicnote-theme .soridraw-musicnote-song-keywords > .soridraw-musicnote-keyword-chip',
+  '.soridraw-musicnote-theme.soridraw-responsive-content-page .soridraw-musicnote-song-keywords > .soridraw-musicnote-keyword-chip',
+  'font-size: 12px !important;',
+  'line-height: 1.1 !important;',
+]) assert(app463Css.includes(token), 'app463 keyword readability token missing: '+token);
+// Match whole CSS declaration names, not suffixes such as line-height.
+assert(!/(?:^|\n)\s*(?:height|overflow|padding|color|background|pointer-events)\s*:/.test(app463Css),
+  'app463 must not modify strip size, scrolling, colors or pointer behavior');
+for (const forbidden of ['fetch(', 'getBoundingClientRect(', 'requestAnimationFrame(']) {
+  assert(!app463Css.includes(forbidden), 'app463 must remain passive font CSS: '+forbidden);
+}
+console.log('APP463_MUSIC_NOTE_KEYWORD_12PX_ONLY=PASS');

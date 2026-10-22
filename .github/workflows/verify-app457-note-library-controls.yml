@@ -33,7 +33,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git diff --exit-code origin/preview -- \
+          git fetch --no-tags --depth=1 origin preview
+          git diff --exit-code FETCH_HEAD -- \
             src/components/studio/LiteStudioSplitWorkspace.tsx \
             src/components/studio/StudioSplitEngineWorkspace.tsx \
             src/components/studio/liteSplitWorkspace.css \

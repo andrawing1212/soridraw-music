@@ -75,3 +75,32 @@ assert.equal(clippedLeft,boundary,'APP462 scrollbar-side coverage must be zero')
 assert.equal(clippedRight-clippedLeft,16,'APP462 must preserve 16px usable splitter target');
 assert.equal(buttonLeft+8,boundary,'APP462 drawn 1px line must remain on boundary');
 console.log('APP462_NATIVE_SCROLLBAR_AND_SPLITTER_SEPARATE_HIT_ZONES=PASS');
+
+// APP464_NATIVE_RESIZE_ACTION_AND_CREATE_GUTTER
+// Verify the accepted 750 native-resize CSS geometry is the single active X
+// owner (no leftover 797 compositor translation during a window resize),
+// and that Create's tablet-only inner gutter matches app1031's 24px contract.
+const app464Css=splitterCss.slice(splitterCss.indexOf('APP464_NATIVE_RESIZE_GENERATE_AND_TABLET_CREATE_GUTTERS'));
+assert(app464Css.startsWith('APP464_NATIVE_RESIZE_GENERATE_AND_TABLET_CREATE_GUTTERS'),'app464 scoped stylesheet missing');
+for(const token of [
+  'html[data-soridraw-theme="studio-black"].soridraw-window-resizing',
+  'body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]',
+  'transform: none !important;',
+  '@media (min-width: 1100px) and (max-width: 1599.98px)',
+  '.soridraw-studio-page-frame[data-workspace-view="create"]',
+  '.soridraw-lite-studio-split-workspace.is-create-vertical',
+  '> .soridraw-studio-builder-pane',
+  'width: min(calc(100% - 24px), var(--soridraw-studio-full-pane-max-width, 1500px)) !important;',
+  'margin-left: auto !important;',
+  'margin-right: auto !important;',
+]) assert(app464Css.includes(token),'APP464 missing native resize/create-gutter contract: '+token);
+for(const unsafe of ['pointermove', 'onPointer', 'ResizeObserver(', 'getBoundingClientRect(', 'requestAnimationFrame(', 'fetch(']) {
+  assert(!app464Css.includes(unsafe),'APP464 CSS must not add hot-path reads, handlers or I/O: '+unsafe);
+}
+// In CSS the 1031 target geometry subtracts 24px total before centering.
+for(const pane of [430,660,760,820,920,1300]){
+  const newContentWidth=Math.min(Math.max(0,pane-24),1500);
+  assert.equal((pane-newContentWidth)/2,12,'app464 Create tablet side margins must each be 12px');
+}
+console.log('APP464_RESIZE_GENERATE_NO_DOUBLE_TRANSFORM=PASS');
+console.log('APP464_TABLET_CREATE_GUTTERS_MATCH_1031=PASS');

@@ -1,3 +1,12 @@
+## NEXT — app460 PREVIEW live Classic Dark search rounded right-edge acceptance (2026-10-22 KST)
+
+- PREVIEW app460 deployed through exact SHA `d3e9ead7d03c2356c3875c9670b2a9d1e6f3f440`, Firebase release #39781912125 SUCCESS. Source PR #425 tests #39781442420 and #39781442314 PASS; exact live version460 and HTML build PASS, TEST/PRODUCTION unchanged, shared RTDB Rules skipped.
+- User's screenshots show inactive standalone Classic Dark mobile search button's right corner clipped next to colors. New resting pill exact slot width, 16px rounded clip and zero intrinsic min should now match the approved split compact pill. Test physical narrow external browser + phone Music Note and Library, folded and focused query/X, all seven dots and filter fully visible.
+- app459 row budget + real center workspace split min430 and Stage416 OFF protected. No backend/user data changes. Do not promote TEST/PRODUCTION without user approval.
+- Next: obtain actual user visual PASS/FAIL from preview.soridraw.com.
+
+---
+
 ## NEXT — app460 dark mobile idle search right corner (2026-10-22 KST)
 
 - User's three screenshots show standalone dark Music Note search truncated at right but accepted split view rounded. Existing app459 phone row width model and real workspace split bounds protected.

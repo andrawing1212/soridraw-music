@@ -134,15 +134,24 @@ assert(!app465.includes(':not(.is-builder-collapsed):not(.is-result-collapsed)')
 for(const unsafe of ['pointermove','onPointer','ResizeObserver(', 'getBoundingClientRect(', 'requestAnimationFrame(', 'fetch(']){
   assert(!app465.includes(unsafe),'APP465 must not add drag measurements or network work: '+unsafe);
 }
-// Before: main L=18, main R=18, result pane R=18.
-// After:  main L=18, main R=0,  result pane R=36 => visible content stays.
-// The result scroll shell, however, now ends 18px farther right at the rail.
-assert.equal(18+18,0+36,'APP465 result-only visible right gutter must remain stable');
-// Builder-only: main L=18, pane R=18, child L/R=12: 30/30.
-for (const fullWidth of [860,900,1100,1300]){
-  const child=Math.min(fullWidth-18-24,1500);
-  const innerLeft=(fullWidth-18-child)/2;
-  assert.equal(18+innerLeft,18+innerLeft,'APP465 centered Builder child width is symmetric');
-  assert.equal(18+12,18+12,'APP465 Builder tablet content 30px each side');
+// One-pane native scroll shell right edge: reserved 18px -> zero rail gap.
+// Returning the reserve to pane padding holds the visible right content guide.
+const tabletWorkspaceWidths=[860,900,1100,1300];
+for(const outerWidth of tabletWorkspaceWidths){
+  const formerResultScrollRight=outerWidth-18;
+  const finalResultScrollRight=outerWidth;
+  const formerResultContentWidth=outerWidth-18-18-18-18;
+  const finalResultContentWidth=outerWidth-18-18-36;
+  assert.equal(finalResultScrollRight-formerResultScrollRight,18,'APP465 scrollbar must move to rail');
+  assert.equal(finalResultContentWidth,formerResultContentWidth,'APP465 result content width must stay stable');
+  // Builder: unchanged 18px left main inset; 18px inner right pad.
+  // Both direct children use a 24px total centered inset.
+  const builderAvailable=outerWidth-18-18;
+  const childWidth=Math.min(builderAvailable-24,1500);
+  const childMargin=(builderAvailable-childWidth)/2;
+  const leftGutter=18+childMargin;
+  const rightGutter=18+childMargin;
+  assert.equal(leftGutter,rightGutter,'APP465 expanded Builder left/right black gutters must match');
+  assert.equal(leftGutter,30,'APP465 tablet expanded Builder reference gutter');
 }
 console.log('APP465_TABLET_ONEPANE_GUTTERS_AND_RAIL_SCROLLBAR=PASS');

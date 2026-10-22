@@ -1,3 +1,13 @@
+## NEXT — app461 verify normal/compact keyword summary growth before any split change (2026-10-22 KST)
+
+- User asks for selected keywords/custom entries in Genre, Style, Sound, Mood, Theme summaries to stay readable rather than shrink as counts rise, with dashed summary extending DOWN by required line count. FIRST implement normal/compact mode only; split mode remains untouched until user accepts the visual outcome.
+- Source candidate branch `fix/app461-compact-summary-grow`, based on `preview` `6492fcd5a12f9feef8b0d1ab6de159bf78dbf452`: append scoped CSS `APP461_COMPACT_SUMMARY_GROW_WITH_CONTENT` in `src/components/studio/studioLayout.css`; version461 Hosting candidate + frozen Worker allowlist only. No App.tsx logic, splitter, data, Worker, Functions or Rules changes.
+- Verify 0/2/6/12+ selected keywords and long direct-input entries in five menus at 320/390/500/820/1099px, both expanded/collapsed, editable pencil reachable, no clipping or overlap, following cards push down naturally. Ensure desktop/tablet split >=1100px unchanged, including 660/820/1080 pane thresholds and pointer-up.
+- Confirm TypeScript, Build, existing UI/split/source verifiers and clean review; only commit/PR/merge code under approved workflow, NO deploy without user explicit request. PREVIEW still app460 until release. Stage416 OFF, shared originals and TEST/PROD protected.
+- Next one action: source-only / CI regression verification of app461 candidate and merge only if PASS.
+
+---
+
 ## NEXT — app460 PREVIEW live Classic Dark search rounded right-edge acceptance (2026-10-22 KST)
 
 - PREVIEW app460 deployed through exact SHA `d3e9ead7d03c2356c3875c9670b2a9d1e6f3f440`, Firebase release #39781912125 SUCCESS. Source PR #425 tests #39781442420 and #39781442314 PASS; exact live version460 and HTML build PASS, TEST/PRODUCTION unchanged, shared RTDB Rules skipped.

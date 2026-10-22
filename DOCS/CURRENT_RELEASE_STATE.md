@@ -1,3 +1,14 @@
+## CURRENT — app454 mobile result search overlay Firebase PREVIEW DEPLOYED (2026-10-22 KST)
+
+- **PREVIEW source:** app454 source PR #406 merged as `943cd47417895dc27b5f7adceb0d0c573f862616` from original source SHA `587a08b91a87805485e16889c02f9849d3ac9d17`. Release PR #407 merged `8f93f680aaa3e8a378b1ec11677d5af775b17a90`. Current public version **454**; no TEST/PRODUCTION promotion.
+- **User real video app453 feedback:** PREVIEW app453 generally improved; narrow right result pane search remains awkward intermediate width, clicked search too narrow for typing. User requested 42px search same as filter and right-expanding input overlay above unchanged mobile color bar only at mobile-size result width.
+- **Completed:** appended passive `APP454_SPLIT_MOBILE_SEARCH_OVERLAY` CSS, matching *only* Studio Black Music Note/Library result pane page-mobile <=660px mode. Search slot row footprint stays **42x46px** with or without focus; search inner field opens **260px** rightward over existing color dots with active z-index; icon normal left inset on expansion, 32x32 full X click area from app453 retained. All seven dots, reset and filter never resize; >660px split and standalone mobile untouched. No splitter engine/drag tracking/Generate modification, no added server I/O.
+- **CI:** targeted split/search/TypeScript/Build #39707889881 SUCCESS and product quality #39707889865 SUCCESS; frozen Worker verifier version 454 *allowlist only*, no Worker change.
+- **Firebase PREVIEW release:** exact workflow [#39708218886](https://github.com/andrawing1212/soridraw-music/actions/runs/39708218886) **SUCCESS** for locked trigger SHA `8f93f680aaa3e8a378b1ec11677d5af775b17a90`, React TS/Build PASS, Firebase Hosting deploy PASS, live `preview.soridraw.com` exact index hash PASS, remote `app-version.json=454` PASS; TEST/PRODUCTION branch refs and live HTML unchanged PASS; shared RTDB Rules `SKIPPED`, no Worker/Functions/Cloudflare or shared user data changes; Stage416 OFF.
+- **Still pending:** actual logged-in PC Studio Black Music Note/Library drag + click, 42px collapsed vs 260px focus, text and X interaction, color tray not shrinking, fast/slow split speed/pointer-up, user visual acceptance; do not call physical UI PASS from CI. Next one action: collect user's app454 PREVIEW observation; revise only scoped CSS if needed before TEST approval.
+
+---
+
 ## CURRENT — app454 mobile-width split search overlay source candidate (2026-10-22 KST)
 
 - **User real video report:** app453 PREVIEW overall better, but at minimum result-pane width search remains mid-sized; on click it cannot show typed query because too narrow. User explicitly requests exact same collapsed search width as 42px filter and a right-expanding search popup **on top of** the unchanged seven-dot color bar **only for mobile-size result pane**.

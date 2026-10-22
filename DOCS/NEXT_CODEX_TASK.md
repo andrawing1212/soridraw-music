@@ -1,3 +1,13 @@
+## NEXT — app459 Firebase PREVIEW live external/phone no-overflow acceptance (2026-10-22 KST)
+
+- app459 PREVIEW deployed via source PR #422 and release PR #423, exact deployed commit `7cf2ce75551d3b90f9b6ebf6df375c252d9cccae`, GitHub Actions #39776944798 SUCCESS. Firebase Hosting only, version459/exact bundle parity PASS, TEST/PRODUCTION unchanged, shared RTDB Rules skipped.
+- Check user-real 320/360/390/414px phones and desktop detached Music Note + Library (workspace/playlist): after app459 the **resting** search/color/filter controls must not overrun the row, search/button must not cover any color dot, seven dot *painted sizes* unchanged. Search click must preserve responsive 260px overlay with visible query and full X without spilling outside phone viewport. The accepted app457 narrow split row remains canonical.
+- Test PC external window resizing and splitter to extremes: actual center workspace>=860px keeps >=430px each; below860px divider is fixed centered because mathematically infeasible. If user wants truly readable two 430px panes below860, a separate explicit one-column/compact routing decision is needed; don't invent dangerous CSS clipping or auto-collapse.
+- Source protection: ONLY Lite split `getSplitBounds` changed; exact unchanged remainder verified with new scoped gate; drag/rAF/generation and Music Note/Library local-first data unmodified. Stage416 OFF. No TEST or PRODUCTION without approval.
+- Next action: user's PREVIEW app459 physical result.
+
+---
+
 ## NEXT — app459 verify overflow protection and split bounds (2026-10-22 KST)
 
 - User request: FIRST prevent search/color/filter row from running outside real mobile/externally resized Music Note/Library width and search resting button overlapping color tray. SECOND prevent shrunken PC window splitter from crushing left/right panes; preserve full PC user-approved app457 split visuals.

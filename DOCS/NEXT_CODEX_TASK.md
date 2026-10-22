@@ -1,3 +1,11 @@
+## NEXT — app452 PREVIEW real-use acceptance, no new work until user reports a defect (2026-10-22 KST)
+
+- Product/Hosting **DEPLOYED PREVIEW**: PR #400 source commit `7f05dda23cbb0333ac2e572f7c5529738e315667`; guarded release trigger PR #401 commit `176815fcb92b8d6b1791974472929f6abb8d1492`; exact release run `39701418484` SUCCESS with PREVIEW HTML and app-version.json version 452 parity.
+- Changes are strictly passive CSS/layout for Music Note and Library in Studio Black split result pane: 480px fixed mode-tabs shell scrolls within narrow viewport, color tray does not flex-grow, search slot alone receives free width; empty focus displays X; X clears search, blurs and returns inactive state. Shared mobile and standalone search behavior retained. No hot-path splitter pointer/Generate change, no backend read/write, no Rules/Worker/Functions change. Stage416 OFF.
+- CI #39701085092 targeted PASS, #39701085089 full quality PASS, TypeScript/Build + app303/209 PASS. User physical splitter fast drag, mouse release snap and responsive PC/tablet/mobile remain unverified. Test first; don't claim "no performance regression" based only on static source.
+- If user validates PREVIEW, preserve and await TEST approval. If visible regression, fix only scoped CSS/clear behavior, avoid splitter rewrite. No Codex used.
+---
+
 ## NEXT — app451 PREVIEW Master Apply success acknowledged (2026-10-22 KST)
 
 - The user confirmed `적용됐어.` after app451 PREVIEW release #39695878693: the Master performance mode Apply no longer exhibits the reported blocking behavior. This is USER CONFIRMED for Apply, not blanket multi-device or TEST verification.

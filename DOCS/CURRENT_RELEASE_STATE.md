@@ -1,3 +1,13 @@
+## CURRENT — app456 source PASS and merged into preview; Hosting NOT deployed (2026-10-22 KST)
+
+- **Actual source branch:** `preview` merge `51116dcd6b4fd4afd4fc1c3279307b41b247b7ef` from PR [#412](https://github.com/andrawing1212/soridraw-music/pull/412), fixed code SHA `439c4b0b7f655ff566e30e34e16eb89d5e652014`. Source app-version.json **456**. **Actual live Firebase PREVIEW continues app455** because user said to fix code quickly, not to deploy. TEST/main and PRODUCTION unchanged.
+- **What changed:** under Studio Black split-result Music Note/Library, narrow search magnifier follows the centered button as search+filter grow together until the filter reaches its 104px cap, then smoothly shifts to a 16px left inset as search alone expands. The refresh/reset button slowly grows 34→52px using a row-relative width while its glyph/dots remain same size; no abrupt mobile/tablet reset width jump. Focused search still overlays 260px and X stays clickable.
+- **Verified:** exact source PR CI [#39764253765](https://github.com/andrawing1212/soridraw-music/actions/runs/39764253765) UI/split TypeScript/Build **SUCCESS**, [#39764253909](https://github.com/andrawing1212/soridraw-music/actions/runs/39764253909) product quality TypeScript/Build **SUCCESS**. Isolated Chromium geometry 400–660px: right gap 0, reset smoothly grows 38→52px, search icon remains centered until 104px, then moves continuously to 16px, filter stops 104px. Not actual logged-in PREVIEW browser acceptance.
+- **No change:** splitter rAF/pointer/Generate engine, React search data flow, Music Note local-first saves, Firestore/RTDB Rules, Cloudflare D1/Worker/Functions, shared user originals, Stage416 OFF; no user-data migration or backend deployment.
+- **Next:** on explicit `프리뷰배포`, release full exact source app456 using the approved Firebase PREVIEW workflow after release checks; then test actual drag transitions both directions, focus/X and appVersion456. Never promote TEST or PROD without permission.
+
+---
+
 ## CURRENT — app456 centered narrow search + smooth reset width SOURCE CANDIDATE (2026-10-22 KST)
 
 - **User app455 real-video/photos:** layout is almost correct; magnifier remains left while filter has only a funnel icon, though magnifier should stay centered like the funnel until filter reaches its complete 104px label+chevron width. Color palette reset/refresh button also abruptly jumps in horizontal width during narrow→wide responsive change, while its glyph stays 16px.

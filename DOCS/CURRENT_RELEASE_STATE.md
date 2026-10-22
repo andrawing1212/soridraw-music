@@ -1,3 +1,15 @@
+## CURRENT — app457 Firebase PREVIEW deployed, breakpoint control shake repair (2026-10-22 KST)
+
+- **User sources:** two real screen recordings `20261022-1049-53.4192618.mp4` and `20261022-1052-35.6191262.mp4`: search hint `제목이나 키워드로 검색해보세요...` appears as pane expands and the search/color/filter control group visibly shifts or shakes momentarily. app456 otherwise approved as good.
+- **Correction:** one layout contract for split-result Studio Black Music Note and Suno Library across **both** mobile and tablet result widths, replacing the discontinuous mode-specific search/search-hint/filter layout during divider drag. Search + filter still grow together initially; filter caps at104px and shows label only once >=103px; refresh+7 colored dots and app456 centered search→left, fluid reset button preserved. Placeholder is always absolute with fade once search's own slot reaches >=200px, so it does not change layout width; focused search retains the 260px overlay and full X target. Pure scoped CSS; no React drag work/observer.
+- **Source:** fixed SHA `45da1bafccd800604f5d39e2c632bd1e35825ab7`; source PR #416 merged `3160a660d731a21c4699c0fbce51841c6f48b5e1`; release trigger PR #417 merged and deployed as `efd56032e77f7915a192b1151578e746094af69e`, app-version **457**.
+- **Quality verification:** targeted Music Note/Library UI+split TypeScript/Build [#39767537536](https://github.com/andrawing1212/soridraw-music/actions/runs/39767537536) SUCCESS; full product quality including TS/Build [#39767537285](https://github.com/andrawing1212/soridraw-music/actions/runs/39767537285) SUCCESS.
+- **PREVIEW release verification:** canonical Firebase workflow [#39767924833](https://github.com/andrawing1212/soridraw-music/actions/runs/39767924833) SUCCESS: locked SHA `efd56032e77f7915a192b1151578e746094af69e`, Hosting PASS, exact index/build-hash PASS, live `https://preview.soridraw.com/app-version.json` reports 457, TEST/PRODUCTION refs and live index unchanged PASS, RTDB Rules deploy SKIPPED. No Functions/Workers/Cloudflare/D1, shared user-data writes or migrations; Stage416 OFF.
+- **Remaining:** actual user physical pointer drag (slow/fast across mobile/tablet transition both ways) and placeholder fade/X test is pending; automated checks do not claim real UI acceptance. No TEST/PRODUCTION approval or promotion.
+- **Next action:** user verifies app457 PREVIEW and reports whether the single mid-expansion shake has disappeared. If new failure, amend only split-result CSS.
+
+---
+
 ## CURRENT — app457 eliminate responsive-mode search row shake SOURCE CANDIDATE (2026-10-22 KST)
 
 - **Actual user videos:** 20261022-1049 and 20261022-1052 show Music Note result-pane buttons briefly shift when the search hint `제목이나 키워드로 검색해보세요...` appears mid-divider drag. The hint itself is absolutely positioned; root cause is the mobile-to-tablet content-mode boundary switching search surface between absolute and relative width and filter between app455 capped flex and older tablet sizing, while placeholder display also switches. This can look like old UI layered with new UI.

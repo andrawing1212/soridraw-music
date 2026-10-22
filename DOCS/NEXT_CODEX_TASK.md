@@ -1,3 +1,11 @@
+## NEXT — app457 deployed; user real-device divider acceptance (2026-10-22 KST)
+
+- Current PREVIEW Hosting app457 at `https://preview.soridraw.com`, deployed exact SHA `efd56032e77f7915a192b1151578e746094af69e`, GitHub Actions #39767924833 PASS (TypeScript/Build/Hosting/index-hash/version457, TEST/PRODUCTION unchanged, Rules SKIPPED).
+- Verify Music Note + Library split right pane slowly and rapidly across mobile→tablet boundary: all search/color/filter buttons retain continuous aligned positions and sizes while the search hint fades in; no old UI snap at breakpoint; reverse shrinking is continuous, focused query overlay and X retain their clicks. User reported app456 otherwise satisfactory.
+- No backend, data, deployment of Functions/Cloudflare, Stage416 ON or TEST/PROD changes. User actual video feedback is the last gate. If FAIL, change only CSS and rerun PREVIEW workflow.
+
+---
+
 ## NEXT — app457 cross-mobile/tablet search-bar seam (2026-10-22 KST)
 
 - User videos app456 show noticeable Music Note search/color/filter row shake exactly as hint text appears. Apply one geometry layout for all Studio Black split-result Music Note/Library modes rather than old mode-specific mobile/tablet rules switching at 660px; no changes to React, split engine or data.

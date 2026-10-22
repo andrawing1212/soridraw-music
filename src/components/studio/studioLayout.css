@@ -16102,3 +16102,92 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
     pointer-events: auto !important;
   }
 }
+
+
+/* APP454_SPLIT_MOBILE_SEARCH_OVERLAY
+ * USER VIDEO (2026-10-22): only at the Music Note / Library RESULT PANE's
+ * actual <=660px mobile content mode, keep search collapsed at the same
+ * 42x46 button size as filter. The search field is an absolutely positioned
+ * 260px overlay on focus / retained query, growing RIGHT over the unchanged
+ * color dots. Its 42px flex footprint, color tray and filter never move.
+ * This is passive CSS: no new measurement/observer/React drag-frame work.
+ * Standalone mobile and non-mobile result widths stay exactly as app453. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-stable-top-controls .soridraw-responsive-search-slot,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-stable-top-controls .soridraw-responsive-search-slot:is(:focus-within, .is-search-active) {
+    position: relative !important;
+    flex: 0 0 42px !important;
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+    height: 46px !important;
+    overflow: visible !important;
+    transition: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-stable-top-controls .soridraw-responsive-search-slot:is(:focus-within, .is-search-active) {
+    z-index: 80 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-stable-top-controls .soridraw-responsive-search {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: auto !important;
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: none !important;
+    height: 46px !important;
+    transition: width 140ms ease !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-stable-top-controls .soridraw-responsive-search-slot:is(:focus-within, .is-search-active)
+  .soridraw-responsive-search {
+    width: 260px !important;
+  }
+
+  /* The inactive 42px icon is centered; opened 260px field has a normal
+   * left inset. No centering transform follows the splitter. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-stable-top-controls .soridraw-responsive-search-icon {
+    left: 13px !important;
+    right: auto !important;
+    transform: none !important;
+  }
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-stable-top-controls .soridraw-responsive-search-slot:is(:focus-within, .is-search-active)
+  .soridraw-responsive-search-icon {
+    left: 16px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-stable-top-controls .soridraw-responsive-search-slot:is(:focus-within, .is-search-active)
+  .soridraw-responsive-search-input {
+    padding-left: 44px !important;
+    padding-right: 44px !important;
+    color: var(--text-primary) !important;
+    -webkit-text-fill-color: currentColor !important;
+    caret-color: currentColor !important;
+  }
+}

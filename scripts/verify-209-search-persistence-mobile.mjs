@@ -114,7 +114,10 @@ console.log('APP453_MOBILE_PALETTE_TABS_SEARCH_X=PASS');
 
 // APP454: actual pane-mobile-only overlay with a fixed search layout footprint.
 // Only the inner input surface may grow; palette and filter stay untouched.
-const app454Css = css.slice(css.indexOf('APP454_SPLIT_MOBILE_SEARCH_OVERLAY'));
+const app454Css = css.slice(
+  css.indexOf('APP454_SPLIT_MOBILE_SEARCH_OVERLAY'),
+  css.indexOf('APP455_SPLIT_SEARCH_FILTER_CONTINUOUS_FLEX'),
+);
 assert(app454Css.startsWith('APP454_SPLIT_MOBILE_SEARCH_OVERLAY'), 'app454 overlay contract missing');
 for (const token of [
   '@media (min-width: 1100px)',

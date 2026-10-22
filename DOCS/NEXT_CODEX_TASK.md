@@ -1,3 +1,11 @@
+## NEXT — app456 search-center / palette reset fluid resizing (2026-10-22 KST)
+
+- Apply only app456 Studio Black Music Note/Library result-pane CSS: (a) narrow search magnifier stays horizontally centered as search/filter flex widths grow; after filter complete (104px), icon slides continuously into left 16px input alignment while search alone stretches; clicked 260px overlay and X preserved. (b) palette reset/refresh pill width smoothly grows 34→52px with image fixed 16px, no sudden text/width swap, remaining dots unchanged. Reverse resizing symmetric. All done without per-drag React/browser measurement.
+- Candidate `fix/app456-centered-search-smooth-reset`: app version456, source-contract test, Worker version whitelist +456 only, docs. Protect existing app455 no-right-gap row, filter label query, UI tabs, split rAF pointer path, Generate, shared user data, server costs, Stage416 OFF.
+- Gate: TypeScript/Build/UI-and-frozen-general suite; browser computed widths ~400..700, centered icon before 104px, interpolated up to 160px, no reset width snap at 660, focus/X and popup not occluded. No deploy on current request. Next: review PR CI and report source candidate; user can request `프리뷰배포` when ready.
+
+---
+
 ## NEXT — app455 PREVIEW real-use validation after successful release (2026-10-22 KST)
 
 - PREVIEW app455 released via fixed SHA `02965d29a9184b1bf3f55f34af23a00d58052b96`; GitHub Actions #39726868723 SUCCESS (Hosting exact build+version455, TEST/PRODUCTION unchanged, shared Rules skipped). Source PR #409 TypeScript/Build/search/split #39726623865 and product quality #39726623864 PASS.

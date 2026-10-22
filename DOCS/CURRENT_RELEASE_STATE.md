@@ -1,3 +1,13 @@
+## CURRENT — app456 centered narrow search + smooth reset width SOURCE CANDIDATE (2026-10-22 KST)
+
+- **User app455 real-video/photos:** layout is almost correct; magnifier remains left while filter has only a funnel icon, though magnifier should stay centered like the funnel until filter reaches its complete 104px label+chevron width. Color palette reset/refresh button also abruptly jumps in horizontal width during narrow→wide responsive change, while its glyph stays 16px.
+- **Source patch:** CSS only in `studioLayout.css`: result-pane Music Note/Library controls (Studio Black split only) declare stable 100%-sized row inline-size query context. Reset button width grows continuously from 34px to 52px based on row width, glyph remains centered at 16px and `전체` text remains hidden, no color dots resized. Narrow result search slot inline-size context computes icon center until ~104px search width then fluidly interpolates to a 16px left inset by 160px, while focus/query keeps the existing left-anchored 260px overlay. Filter cap104 + app455 flex sharing preserved, no hard breakpoint-triggered icon swap. Non-split mobile/Classic, splitter/Generate, backend data unchanged.
+- **Version:** app456 proposed; only app-version.json and frozen Worker **version allowlist** increment. Existing 455 verification scope fenced to its own CSS; new verifier asserts 456 styles. **No PREVIEW deployment requested or executed; current live PREVIEW remains app455.** Need PR CI PASS and user PREVIEW release instruction before Hosting. TEST/PROD unmodified.
+- **Protected:** Stage416 OFF, Firestore/D1 RTDB rules, Cloudflare/Worker/Functions, shared canonical data, no new backend I/O, 60-sec Music Note batch save, app448 split pointer/rAF/Generate.
+- **Next:** CI TypeScript, Build, app209 and split/quality; browser fixture narrow search center→left/reset smooth growth; user physical acceptance only after separately approved PREVIEW deployment.
+
+---
+
 ## CURRENT — app455 mobile result search/filter continuous layout Firebase PREVIEW DEPLOYED (2026-10-22 KST)
 
 - **Verified PREVIEW baseline:** source PR #409 merged `fa04c0bd12c5aacd8a7a148103377d31679c477c`; final source fixed commit `afd111bc69b8e0c17b9477d915e5b4b8d0291ff6`; release trigger PR #410 merged `02965d29a9184b1bf3f55f34af23a00d58052b96`, app version **455**.

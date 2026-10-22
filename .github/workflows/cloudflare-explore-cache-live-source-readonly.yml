@@ -35,6 +35,8 @@ jobs:
           node --check scripts/diagnose-p0-curated-three-env-readonly.mjs
           node scripts/diagnose-p0-curated-three-env-readonly.mjs --self-test
       - name: Compare shared D1 curated membership and three real public environments
+        id: curated_parity
+        continue-on-error: true
         run: node scripts/diagnose-p0-curated-three-env-readonly.mjs
       - name: Capture exact active PREVIEW Worker
         shell: bash
@@ -86,3 +88,10 @@ jobs:
             cloudflare/explore-worker/.remote-worker/worker.js
             cloudflare/explore-worker/.remote-worker/version.txt
           retention-days: 1
+
+      - name: Enforce curated parity result after original source archive
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.curated_parity.outcome }}" = success
+          echo 'P0_CURATED_PARITY_FINAL=PASS'

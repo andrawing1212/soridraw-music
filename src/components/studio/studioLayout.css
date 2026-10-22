@@ -16954,21 +16954,15 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
 }
 
 /* APP461_COMPACT_SUMMARY_GROW_WITH_CONTENT
- * Normal Studio across PC/phone widths: Classic normal + Compact standalone.
+ * Classic normal Studio at all PC/phone widths, never Studio Black split.
  * Keep the selected keyword font constant
  * while its dashed summary grows downward with the real content height.
  * Studio Black split panes and drag-time responsive/card contracts remain untouched. */
-:is(
-  html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main,
-  html body #root .soridraw-app-root .soridraw-studio-compact-mobile-workspace.is-studio-page
-) {
+html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main {
   --soridraw-compact-summary-font-size: 13px;
 }
 
-:is(
-  html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main,
-  html body #root .soridraw-app-root .soridraw-studio-compact-mobile-workspace.is-studio-page
-)
+html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main
 :is([data-studio-menu="genre"], [data-studio-menu="style"], [data-studio-menu="sound"], [data-studio-menu="mood"], [data-studio-menu="theme"])
 > .soridraw-expand-summary.soridraw-menu-summary-box {
   box-sizing: border-box !important;
@@ -16978,10 +16972,7 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
   overflow: hidden !important;
 }
 
-:is(
-  html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main,
-  html body #root .soridraw-app-root .soridraw-studio-compact-mobile-workspace.is-studio-page
-)
+html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main
 :is([data-studio-menu="genre"], [data-studio-menu="style"], [data-studio-menu="sound"], [data-studio-menu="mood"], [data-studio-menu="theme"])
 > .soridraw-menu-summary-box
 :is(.soridraw-menu-summary-text--selected, .soridraw-cycle-summary-text[data-selected-count], .soridraw-category-summary-text[data-summary-density], .soridraw-genre-summary-items[data-item-count]) {
@@ -16996,10 +16987,7 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
   -webkit-line-clamp: unset !important;
 }
 
-:is(
-  html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main,
-  html body #root .soridraw-app-root .soridraw-studio-compact-mobile-workspace.is-studio-page
-)
+html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main
 .soridraw-menu-summary-box .soridraw-cycle-summary-text {
   display: flex !important;
   flex-wrap: wrap !important;
@@ -17007,10 +16995,7 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
   gap: 2px 6px !important;
 }
 
-:is(
-  html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main,
-  html body #root .soridraw-app-root .soridraw-studio-compact-mobile-workspace.is-studio-page
-)
+html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main
 .soridraw-menu-summary-box .soridraw-menu-summary-token {
   min-width: 0 !important;
   max-width: 100% !important;
@@ -17018,39 +17003,27 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
   white-space: normal !important;
 }
 
-:is(
-  html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main,
-  html body #root .soridraw-app-root .soridraw-studio-compact-mobile-workspace.is-studio-page
-)
+html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main
 .soridraw-menu-summary-box .soridraw-category-summary-text {
   display: block !important;
   -webkit-box-orient: initial !important;
   -webkit-line-clamp: unset !important;
 }
 
-:is(
-  html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main,
-  html body #root .soridraw-app-root .soridraw-studio-compact-mobile-workspace.is-studio-page
-)
+html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main
 .soridraw-menu-summary-box .soridraw-genre-summary-items {
   flex-wrap: wrap !important;
   gap: 4px 6px !important;
 }
 
-:is(
-  html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main,
-  html body #root .soridraw-app-root .soridraw-studio-compact-mobile-workspace.is-studio-page
-)
+html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main
 .soridraw-menu-summary-box .soridraw-genre-summary-item {
   min-width: 0 !important;
   max-width: 100% !important;
   overflow: visible !important;
 }
 
-:is(
-  html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main,
-  html body #root .soridraw-app-root .soridraw-studio-compact-mobile-workspace.is-studio-page
-)
+html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main
 .soridraw-menu-summary-box .soridraw-genre-summary-item-label {
   min-width: 0 !important;
   max-width: none !important;
@@ -17060,10 +17033,7 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
   overflow-wrap: anywhere !important;
 }
 
-:is(
-  html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main,
-  html body #root .soridraw-app-root .soridraw-studio-compact-mobile-workspace.is-studio-page
-)
+html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main
 .soridraw-menu-summary-box .soridraw-genre-summary-role {
   font-size: 10px !important;
 }

@@ -15929,3 +15929,65 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
   }
 }
 
+
+
+/* APP457_FIXED_TABS_COLOR_SEARCH_CONTRACT
+ * Music Note and Library share one passive top-row layout during the Studio
+ * result-pane split drag. No resize observer, animation frame, React updates,
+ * pointer handler or change to the divider engine is introduced here.
+ * The three menu buttons retain their 480px design width as the result pane
+ * grows/shrinks; their viewport may scroll when the pane is narrower.
+ * The color filter never consumes extra flex space; only search gets it.
+ * Standalone page / external mobile menu sizing is not changed. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane .soridraw-stable-mode-viewport {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane .soridraw-stable-mode-viewport::-webkit-scrollbar {
+    display: none;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane .soridraw-stable-mode-viewport
+  > :is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs) {
+    flex: 0 0 480px !important;
+    width: 480px !important;
+    min-width: 480px !important;
+    max-width: 480px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane .soridraw-stable-top-controls
+  .soridraw-responsive-color-filter {
+    flex: 0 1 auto !important;
+    width: max-content !important;
+    min-width: 0 !important;
+    max-width: calc(100% - 96px) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane .soridraw-stable-top-controls
+  .soridraw-responsive-search-slot:not(.is-search-active) {
+    flex: 1 1 42px !important;
+    width: auto !important;
+    min-width: 42px !important;
+    max-width: none !important;
+  }
+}
+
+/* An empty but focused search is just as cancellable as a typed search.
+ * Keep the X hit target clear of input text/caret in both screen profiles. */
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search-slot.is-search-active
+.soridraw-responsive-search-input {
+  padding-right: 40px !important;
+}

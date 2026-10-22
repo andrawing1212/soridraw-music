@@ -1,3 +1,13 @@
+## NEXT — app462 verify Firebase PREVIEW Hosting and physical scrollbar/drag separation (2026-10-23 KST)
+
+- PR #430 app462 CSS hit-zone source merged `47a23f54ef7ed3bc2a6911a6d3936ad8574a9e07`, source CI #39814055281 and product #39814055158 both SUCCESS. PR #431 merged `fda493c2c91a3efd2593bb85b359b52b60408060` with Hosting-only app462 release trigger.
+- **Next:** retrieve canonical Firebase PREVIEW App Release push workflow result and verify live `https://preview.soridraw.com/app-version.json=462`, exact built index SHA and TEST/PRODUCTION unchanged. GitHub PR-run lookup does NOT include push-triggered release, so the absence of returned release run is not evidence of either success or failure.
+- Source change only in `studioLayout.css`: effective 16px RIGHT-side splitter hit zone, LEFT Builder native scrollbar released, drawn divider remains 1px and exact original position. No changes to TSX pointer move, pane scroll/left geometry, Generate bar or data. DO NOT redeploy Worker/Functions/Rules or touch user data.
+- After confirmed PREVIEW live, user visually/physically tests vertical scrollbar grip and horizontal splitter separation; include fast/slow drag, pointer-up snap, Music Note/Library long lists and 1100/1600 responsive. Physical proof not yet available; TEST/PRODUCTION promotion prohibited without separate user approval. Stage416 OFF.
+- User app461 normal-mode summary visual PASS remains frozen. No additional CSS or engine modification without observed issue.
+
+---
+
 ## NEXT — app462 isolate split Builder native scrollbar from splitter hit target (2026-10-23 KST)
 
 - User confirmed app461 PREVIEW visual PASS; next video `20261022-1610-50.2531472.mp4` demonstrates the Builder's native vertical scrollbar cannot reliably be grabbed because its thumb is overlapped by body-level 16px splitter pointer surface. Do not confuse scrolling gesture with horizontal pane resize.

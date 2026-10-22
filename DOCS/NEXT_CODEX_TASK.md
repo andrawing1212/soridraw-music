@@ -1,3 +1,12 @@
+## NEXT — app458 adopt split-result compact top UI everywhere at mobile page width (2026-10-22 KST)
+
+- User-approved visual reference: app457 Studio Black split RESULT's narrow Music Note + Library controls. Ensure external/detached browser window shrunk to phone width, standalone dark and real mobile display the same search/color/filter geometry/actions. Full page at >660px retains normal desktop/tablet layout.
+- Candidate CSS app458: search/filter share 42px flex basis, filter cap104 with label at filter wrapper>=103, 7 dots + refresh at constant visual sizes, refresh width34..52 fluid; search center→left as it grows, query overlay min260 and full X, hint only when slot>=200. Three top tabs fill content width, <=480px. For 320..399 px keep all dots by narrowing *button spacing only*, not dot size.
+- Check user video screenshot: external narrow `필터` no longer breaks into stacked letters, external search button no longer stays fixed42 while right has spare room, no oversized/changed reset state in dark mobile. Also Library workspace+playlist. No split changes, data writes, backend changes.
+- CI TS/Build, app209/split, protected product quality; PREVIEW Hosting-only after pass, validate exact appVersion458 and TEST/PRODUCTION unchanged. Actual physical mobile/external user PASS still pending.
+
+---
+
 ## NEXT — app457 deployed; user real-device divider acceptance (2026-10-22 KST)
 
 - Current PREVIEW Hosting app457 at `https://preview.soridraw.com`, deployed exact SHA `efd56032e77f7915a192b1151578e746094af69e`, GitHub Actions #39767924833 PASS (TypeScript/Build/Hosting/index-hash/version457, TEST/PRODUCTION unchanged, Rules SKIPPED).

@@ -217,3 +217,32 @@ for(const forbidden of ['requestAnimationFrame(', 'getBoundingClientRect(', 'Res
   assert(!app457Css.includes(forbidden), 'app457 must be passive CSS: '+forbidden);
 }
 console.log('APP457_CROSS_MODE_ROW_PLACEHOLDER_PARITY=PASS');
+
+
+// APP458: the accepted split-result compact top-row contract is reused by
+// both external mobile-window and real phone standalone modes, regardless
+// of dark/Studio theme. It adds NO new render loop, API, or split handler.
+const app458Css=css.slice(css.indexOf('APP458_CANONICAL_COMPACT_TOP_CONTROLS_ALL_SHELLS'));
+assert(app458Css.startsWith('APP458_CANONICAL_COMPACT_TOP_CONTROLS_ALL_SHELLS'),'app458 compact UI missing');
+for(const token of [
+  '@media (max-width: 1099px)',
+  '[data-soridraw-responsive-mode="mobile"]',
+  '.soridraw-stable-top-controls',
+  'flex: 1 1 42px !important;',
+  'width: max(260px, 100%) !important;',
+  'min-width: max-content !important;',
+  '.soridraw-responsive-color-filter > button:not(.soridraw-color-reset-button)',
+  'grid-template-columns: repeat(3, minmax(0, 1fr)) !important;',
+  '.soridraw-filter-label, .soridraw-filter-chevron',
+  'max-width: 104px !important;',
+  '@container (min-width: 103px)',
+  '@container (min-width: 200px)',
+  'width: clamp(34px, calc(33.333cqi - 95.333px), 52px) !important;',
+  'calc(50cqi - 8px - max(0px, 100cqi - 104px))',
+  'pointer-events: auto !important;',
+  '@media (max-width: 399px)',
+]) assert(app458Css.includes(token),'app458 required compact parity missing: '+token);
+for(const forbidden of ['.soridraw-studio-result-pane','requestAnimationFrame(', 'ResizeObserver(', 'getBoundingClientRect(', 'fetch(']){
+  assert(!app458Css.includes(forbidden),'app458 standalone CSS must not edit split engine or server: '+forbidden);
+}
+console.log('APP458_MUSIC_NOTE_LIBRARY_EXTERNAL_MOBILE_COMPACT_PARITY=PASS');

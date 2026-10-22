@@ -16952,3 +16952,98 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
     border-radius: 16px !important;
   }
 }
+
+/* APP461_COMPACT_SUMMARY_GROW_WITH_CONTENT
+ * Classic normal Studio at all PC/phone widths, never Studio Black split.
+ * Keep the selected keyword font constant
+ * while its dashed summary grows downward with the real content height.
+ * Studio Black split panes and drag-time responsive/card contracts remain untouched. */
+html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main {
+  --soridraw-compact-summary-font-size: 13px;
+}
+
+html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main
+:is([data-studio-menu="genre"], [data-studio-menu="style"], [data-studio-menu="sound"], [data-studio-menu="mood"], [data-studio-menu="theme"])
+> .soridraw-expand-summary.soridraw-menu-summary-box {
+  box-sizing: border-box !important;
+  height: auto !important;
+  min-height: 64px !important;
+  max-height: none !important;
+  overflow: hidden !important;
+}
+
+html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main
+:is([data-studio-menu="genre"], [data-studio-menu="style"], [data-studio-menu="sound"], [data-studio-menu="mood"], [data-studio-menu="theme"])
+> .soridraw-menu-summary-box
+:is(.soridraw-menu-summary-text--selected, .soridraw-cycle-summary-text[data-selected-count], .soridraw-category-summary-text[data-summary-density], .soridraw-genre-summary-items[data-item-count]) {
+  font-size: var(--soridraw-compact-summary-font-size) !important;
+  line-height: 1.35 !important;
+  letter-spacing: -0.015em !important;
+  max-height: none !important;
+  overflow: visible !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  word-break: keep-all !important;
+  -webkit-line-clamp: unset !important;
+}
+
+html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main
+.soridraw-menu-summary-box .soridraw-cycle-summary-text {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-content: center !important;
+  gap: 2px 6px !important;
+}
+
+html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main
+.soridraw-menu-summary-box .soridraw-menu-summary-token {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow-wrap: anywhere !important;
+  white-space: normal !important;
+}
+
+html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main
+.soridraw-menu-summary-box .soridraw-category-summary-text {
+  display: block !important;
+  -webkit-box-orient: initial !important;
+  -webkit-line-clamp: unset !important;
+}
+
+html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main
+.soridraw-menu-summary-box .soridraw-genre-summary-items {
+  flex-wrap: wrap !important;
+  gap: 4px 6px !important;
+}
+
+html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main
+.soridraw-menu-summary-box .soridraw-genre-summary-item {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: visible !important;
+}
+
+html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main
+.soridraw-menu-summary-box .soridraw-genre-summary-item-label {
+  min-width: 0 !important;
+  max-width: none !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  overflow-wrap: anywhere !important;
+}
+
+html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main
+.soridraw-menu-summary-box .soridraw-genre-summary-role {
+  font-size: 10px !important;
+}
+
+/* Preserve Classic FHD's existing 52px resting summary height.
+ * Above that baseline, extra selected lines may still extend downward. */
+@media (min-width: 1024px) {
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main
+  :is([data-studio-menu="genre"], [data-studio-menu="style"], [data-studio-menu="sound"], [data-studio-menu="mood"], [data-studio-menu="theme"])
+  > .soridraw-expand-summary.soridraw-menu-summary-box {
+    min-height: 52px !important;
+  }
+}

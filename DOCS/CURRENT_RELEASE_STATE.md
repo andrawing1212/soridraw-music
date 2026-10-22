@@ -1,3 +1,12 @@
+## CURRENT — app460 mobile standalone idle search rounded edge SOURCE CANDIDATE (2026-10-22 KST)
+
+- User supplied 12:37 screenshots: Classic Dark narrow standalone Music Note search button shows straight/clipped right edge near color bar, whereas accepted split result search has both rounded corners. app459 PREVIEW fixes the overall row budget and workspace splitter bounds; preserve these.
+- Code: passive CSS APP460_STANDALONE_IDLE_SEARCH_PILL_EXACT_FIT scoped to <=1099px actual mobile page Music Note/Library. When unfocused, the search surface is exactly 100% of its relative flex slot, min-width0, height46 and rounded/clip-path16. No changes to the active search overlay, X, palette/filter, split result >=1100px or splitter geometry.
+- app-version460, frozen Worker Hosting version allowlist +460 only, app209 frozen app459 assertions remain isolated. Source branch candidate, NOT YET deployed; live PREVIEW remains app459 until CI and Hosting-only release. No backend/user-data writes, Stage416 OFF, TEST/PRODUCTION unchanged.
+- Next: source CI TypeScript/Build/split and product-quality, deploy to Firebase PREVIEW only on PASS and verify exact live build/version; real mobile image remains acceptance gate.
+
+---
+
 ## CURRENT — app459 narrow phone/external top controls + real workspace split bounds Firebase PREVIEW DEPLOYED (2026-10-22 KST)
 
 - **User input:** `image(20261022-115228).png` and `20261022-1152-37.8648214.mp4`. app458 compact Music Note/Library mobile/external row overflow: search/color/filter bar protrudes and resting search can intrude into colors; narrow PC app window split panes can compress disproportionately. User requested priority (1) row no-overflow, then (2) dynamic splitter left/right min bounds, preserving accepted wide-PC and app457 UI.

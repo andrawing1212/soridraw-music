@@ -256,7 +256,10 @@ console.log('APP458_MUSIC_NOTE_LIBRARY_EXTERNAL_MOBILE_COMPACT_PARITY=PASS');
 
 // APP459: physical mobile and detached-window min-content fit without
 // shrinking painted seven dots; same row-container rule in narrow split.
-const app459Css=css.slice(css.indexOf('APP459_COMPACT_ROW_FIT_WITHOUT_COLLISION'));
+const app459Css=css.slice(
+  css.indexOf('APP459_COMPACT_ROW_FIT_WITHOUT_COLLISION'),
+  css.indexOf('APP460_STANDALONE_IDLE_SEARCH_PILL_EXACT_FIT'),
+);
 assert(app459Css.startsWith('APP459_COMPACT_ROW_FIT_WITHOUT_COLLISION'),'app459 CSS missing');
 for(const token of [
   '@container (max-width: 420px)',
@@ -274,3 +277,24 @@ for(const w of [256,280,296,320,336,360,376,396,420]){
   assert(used <= w+0.02,'app459 row overflow at '+w+'px: '+used.toFixed(2));
 }
 console.log('APP459_PHONE_ROW_256_TO_420_NO_RESTING_OVERFLOW=PASS');
+
+
+// APP460: source-only guard, independent of existing app459 overflow rules.
+const app460Css=css.slice(css.indexOf('APP460_STANDALONE_IDLE_SEARCH_PILL_EXACT_FIT'));
+assert(app460Css.startsWith('APP460_STANDALONE_IDLE_SEARCH_PILL_EXACT_FIT'),'app460 idle search missing');
+for(const token of [
+  '@media (max-width: 1099px)',
+  '[data-soridraw-responsive-mode="mobile"]',
+  '.soridraw-responsive-search-slot:not(:focus-within):not(.is-search-active)',
+  'position: absolute !important;',
+  'width: 100% !important;',
+  'min-width: 0 !important;',
+  'max-width: 100% !important;',
+  'height: 46px !important;',
+  'border-radius: 16px !important;',
+  'clip-path: inset(0 round 16px);',
+]) assert(app460Css.includes(token),'app460 missing: '+token);
+for(const prohibited of ['.soridraw-responsive-color-filter {','.soridraw-responsive-filter-button {','requestAnimationFrame(','ResizeObserver(','getBoundingClientRect(','fetch(']) {
+  assert(!app460Css.includes(prohibited),'app460 touched unrelated UI/logic: '+prohibited);
+}
+console.log('APP460_CLASSIC_DARK_MOBILE_IDLE_SEARCH_ROUNDING=PASS');

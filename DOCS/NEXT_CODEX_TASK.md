@@ -1,3 +1,11 @@
+## NEXT — app460 dark mobile idle search right corner (2026-10-22 KST)
+
+- User's three screenshots show standalone dark Music Note search truncated at right but accepted split view rounded. Existing app459 phone row width model and real workspace split bounds protected.
+- Change only inactive mobile/standalone Music Note+Library search surface: absolute exact parent width, min-width0, rounded 16px clipping, maintain 46px button; active/focused 260px overlay, X and seven dots unchanged.
+- Gate: exact source CI TypeScript/Build, UI/split, product quality, then Firebase PREVIEW Hosting version460 exact build and TEST/PROD unchanged. Physical mobile acceptance afterwards; Stage416 OFF, no shared data change.
+
+---
+
 ## NEXT — app459 Firebase PREVIEW live external/phone no-overflow acceptance (2026-10-22 KST)
 
 - app459 PREVIEW deployed via source PR #422 and release PR #423, exact deployed commit `7cf2ce75551d3b90f9b6ebf6df375c252d9cccae`, GitHub Actions #39776944798 SUCCESS. Firebase Hosting only, version459/exact bundle parity PASS, TEST/PRODUCTION unchanged, shared RTDB Rules skipped.

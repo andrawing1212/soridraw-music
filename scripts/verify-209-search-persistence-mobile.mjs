@@ -311,7 +311,7 @@ for (const token of [
   'line-height: 1.1 !important;',
 ]) assert(app463Css.includes(token), 'app463 keyword readability token missing: '+token);
 // Match whole CSS declaration names, not suffixes such as line-height.
-assert(!/(?:^|\\n)\\s*(?:height|overflow|padding|color|background|pointer-events)\\s*:/.test(app463Css),
+assert(!/(?:^|\n)\s*(?:height|overflow|padding|color|background|pointer-events)\s*:/.test(app463Css),
   'app463 must not modify strip size, scrolling, colors or pointer behavior');
 for (const forbidden of ['fetch(', 'getBoundingClientRect(', 'requestAnimationFrame(']) {
   assert(!app463Css.includes(forbidden), 'app463 must remain passive font CSS: '+forbidden);

@@ -1,3 +1,12 @@
+## CURRENT — app454 mobile-width split search overlay source candidate (2026-10-22 KST)
+
+- **User real video report:** app453 PREVIEW overall better, but at minimum result-pane width search remains mid-sized; on click it cannot show typed query because too narrow. User explicitly requests exact same collapsed search width as 42px filter and a right-expanding search popup **on top of** the unchanged seven-dot color bar **only for mobile-size result pane**.
+- **Source edit in PR candidate:** passive CSS in `studioLayout.css` scoped to Studio Black Music Note/Library result pane when page declares `data-soridraw-responsive-mode="mobile"` (<=660px content). Search slot remains 42x46 in the row whether inactive/active; inner search surface width 42 inactive, 260px on focus/nonempty query and layers above color bar, with proper left icon and full right X hit; palette and filter sizes untouched. Standalone mobile and >660px result pane remain app453. App version 454 plus Worker freeze verifier **allowlist only**.
+- **Protect:** Lite split rAF/pointer/Generate, stored data, searches/backends, Stage416 OFF, Firebase/Functions/Worker/RTDB, main/production. No migration/read/write.
+- **Status:** code candidate only; not deployed; targeted CI, browser real UI, user speed/pointer-up pending. Current live PREVIEW app453 until separately verified Hosting-only release. Next action: TS/Build/search/split quality, then PREVIEW-only real-use release; TEST/PRODUCTION unchanged.
+
+---
+
 ## CURRENT — app453 Firebase PREVIEW Hosting DEPLOYED, UI real-use check next (2026-10-22 KST)
 
 - **User direction:** for a strictly visual split UI defect, prefer a quick PREVIEW real-device test over a prolonged independent code-only audit. Source fix PR #403 merged `57ee51ef18bed307247c13f937f299a647bb3d24`; final source verifier SHA `0e9bf4e239d60a7f04d2841d229b691ef35ca6a6`. Hosting-only release trigger PR #404 merged `1aceae54d0ebb93affcf26fcb815e100b8243793`.

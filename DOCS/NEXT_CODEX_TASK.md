@@ -1,3 +1,12 @@
+## NEXT — app454 narrow result-pane search button + overlay (2026-10-22 KST)
+
+- User video after app453 PREVIEW: search does not fully collapse at minimum pane, and focused 42px search does not provide enough visible text. Preserve everything already improved.
+- In Studio Black Music Note/Library result page's <=660px **pane-mobile mode only**, give search same 42x46 footprint as filter; focus/nonempty value opens a 260px inner overlay rightward **over** fixed mobile refresh+seven-dot tray. No palette contraction, tab change, filter reposition, new event handlers, drag work or standalone mobile modification. X remains actual 32x32 click target.
+- Verify read-only source assertions, TypeScript, Build, frozen split/Generate checks, then PREVIEW-only deployment and user physical split 430-660px + >660px crossover, X/palette clicks, fast/slow split movement. CI alone is not physical browser acceptance.
+- TEST/PRODUCTION and shared user original data unchanged; Stage416 OFF. Next one action: get app454 source CI PASS before preview release.
+
+---
+
 ## NEXT — app453 PREVIEW live UI user acceptance (2026-10-22 KST)
 
 - PREVIEW app453 **deployed** via exact release workflow #39706071655 SUCCESS, release trigger merge `1aceae54d0ebb93affcf26fcb815e100b8243793`. PR #403 source, TypeScript, Build, #39705760899 and #39705760920 PASS. Hosting `https://preview.soridraw.com/` app-version.json=453 and built-index parity checked; RTDB Rules SKIPPED, no Functions/Worker/user data write, TEST/PRODUCTION unchanged.

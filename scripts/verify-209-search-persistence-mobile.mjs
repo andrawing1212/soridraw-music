@@ -110,3 +110,28 @@ for (const token of [
 ]) assert(app453Css.includes(token), 'app453 missing control token: ' + token);
 assert(!app453Css.includes('requestAnimationFrame('), 'app453 must not add drag work');
 console.log('APP453_MOBILE_PALETTE_TABS_SEARCH_X=PASS');
+
+
+// APP454: actual pane-mobile-only overlay with a fixed search layout footprint.
+// Only the inner input surface may grow; palette and filter stay untouched.
+const app454Css = css.slice(css.indexOf('APP454_SPLIT_MOBILE_SEARCH_OVERLAY'));
+assert(app454Css.startsWith('APP454_SPLIT_MOBILE_SEARCH_OVERLAY'), 'app454 overlay contract missing');
+for (const token of [
+  '@media (min-width: 1100px)',
+  '.soridraw-studio-result-pane',
+  '[data-soridraw-responsive-mode="mobile"]',
+  'flex: 0 0 42px !important;',
+  'width: 42px !important;',
+  'height: 46px !important;',
+  'position: absolute !important;',
+  'width: 260px !important;',
+  'z-index: 80 !important;',
+  'left: 13px !important;',
+  'left: 16px !important;',
+  'padding-right: 44px !important;',
+  'overflow: visible !important;',
+]) assert(app454Css.includes(token), 'app454 missing token: ' + token);
+for (const forbidden of ['.soridraw-responsive-color-filter {', '.soridraw-responsive-filter-button {', 'requestAnimationFrame(', 'getBoundingClientRect(', 'ResizeObserver(']) {
+  assert(!app454Css.includes(forbidden), 'app454 unexpected non-search change: ' + forbidden);
+}
+console.log('APP454_MOBILE_SPLIT_SEARCH_OVERLAY_PALETTE_FIXED=PASS');

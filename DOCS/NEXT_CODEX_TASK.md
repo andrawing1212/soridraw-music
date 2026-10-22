@@ -1,3 +1,12 @@
+## NEXT — app462 user visual PASS, wait for next directed change (2026-10-23 KST)
+
+- User confirmed “잘 적용됐어” for the released PREVIEW center scrollbar vs split divider mouse hit-zone correction; preserve this behavior.
+- Frozen source PR #430 merge `47a23f54ef7ed3bc2a6911a6d3936ad8574a9e07`; product/split CI PASS. Hosting-only request PR #431 merge `fda493c2c91a3efd2593bb85b359b52b60408060`. User visual PASS is NOT proof of official Firebase Actions build-hash postflight; that independent verification remains optional release audit work.
+- No additional UI modifications or TEST/PRODUCTION release approval. Do not touch divider 1px line, scroll thumb accessibility, 16px right-side hit target, pointer/rAF engine, scroll preservation, Generate bar, accepted app461 Classic menus, Stage416 OFF or shared data.
+- Next work should follow user's new issue/request; update CURRENT_RELEASE_STATE on any major change.
+
+---
+
 ## NEXT — app462 verify Firebase PREVIEW Hosting and physical scrollbar/drag separation (2026-10-23 KST)
 
 - PR #430 app462 CSS hit-zone source merged `47a23f54ef7ed3bc2a6911a6d3936ad8574a9e07`, source CI #39814055281 and product #39814055158 both SUCCESS. PR #431 merged `fda493c2c91a3efd2593bb85b359b52b60408060` with Hosting-only app462 release trigger.

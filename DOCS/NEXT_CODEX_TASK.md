@@ -1,3 +1,13 @@
+## NEXT — curated live FAIL confirmed; repair only by safe PREVIEW source plan (2026-10-23 KST)
+
+- [Run 39860820744](https://github.com/andrawing1212/soridraw-music/actions/runs/39860820744) read shared canonical D1 active curated 13 public track IDs and compared top20 live APIs: **PREVIEW=13 exact PASS**, **TEST=12 FAIL missing1**, **PRODUCTION=12 FAIL missing1**; test/prod same visible fingerprint but distinct R2 revision fingerprints. No D1/Firestore/user original write, no deploy. Record result in #203. Do not claim Music Note parity fixed.
+- Immediate audit-flow follow-up: existing `cloudflare-explore-cache-live-source-readonly.yml` should keep its original active Worker source artifact capture on an expected curated FAIL and then still fail the overall run; failure must not silently look PASS. A small workflow-only patch prepared on `audit/p0-curated-fail-keep-existing-source-audit`.
+- Next full implementation **not yet approved to execute on shared data**: protect canonical `curated_picks` as actual authority; PREVIEW code design for shared revision/changed-ID check across all three environment-local R2 caches; no D1 reads for warm unchanged entry; concurrency-safe R2 CAS/retries for simultaneous curator promotion/removal and public/private events; deterministic tests and Work audit before deployment; release to TEST and PRODUCTION require separate approval.
+- Music Note read-only live sampled favorite audit requires known authenticated owner UID and exact sample song IDs. Never scan all favorites or choose PREVIEW cache as winner. No user data mutation, cache wipe, backfill.
+- Stage416 OFF; PREVIEW app465; TEST/PRODUCTION app377; no advancement.
+
+---
+
 ## NEXT — run P0 read-only Cloudflare recommendation parity audit (2026-10-23 KST)
 
 - PREVIEW app465 is feature reference; TEST/PRODUCTION app377 are currently inconsistent for Music Note and SORIDRAW 추천 (user report). Do not merge caches or promote releases.

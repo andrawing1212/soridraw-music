@@ -64,8 +64,8 @@ try{
   assert.match(wrangler,/publicationRelease431Candidate/);
 
   const appVersion=JSON.parse(readFileSync('public/app-version.json','utf8'));
-  assert.ok([434, 435, 436, 437, 438, 439, 440, 441, 442, 443, 444, 445, 446, 447, 448, 449, 450, 451, 452, 453, 454, 455, 456, 457, 458, 459, 460, 461, 462, 463].includes(Number(appVersion.version)),
-    'frozen app434 Worker contract remains exact while Hosting advances through app463');
+  assert.ok([434, 435, 436, 437, 438, 439, 440, 441, 442, 443, 444, 445, 446, 447, 448, 449, 450, 451, 452, 453, 454, 455, 456, 457, 458, 459, 460, 461, 462, 463, 464].includes(Number(appVersion.version)),
+    'frozen app434 Worker contract remains exact while Hosting advances through app464');
 } finally {
   rmSync(temp,{recursive:true,force:true});
 }

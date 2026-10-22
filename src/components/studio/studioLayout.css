@@ -17083,3 +17083,35 @@ html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-stud
   font-size: 12px !important;
   line-height: 1.1 !important;
 }
+
+/* APP464_NATIVE_RESIZE_GENERATE_AND_TABLET_CREATE_GUTTERS
+ * A native OS-window resize already has exact fresh X/width from 750's CSS
+ * resize-anchor geometry, but the floating portal also inherits a separate
+ * compositor translate/scale (797) that belongs to divider drags. Applying
+ * both transforms can push the Generate row past the Builder's right edge
+ * while the outer window is moving. Suspend only that drag transform during
+ * native resize, then hand back to the untouched resting/split-drag owner.
+ * No new JS resize observer, layout reads or pointer hot-path changes. */
+html[data-soridraw-theme="studio-black"].soridraw-window-resizing
+body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
+  transform: none !important;
+}
+
+/* The tablet (1100..1599px) Create-only composition used the original full
+ * Builder child width while Music Note/Library use the approved 1031 inset:
+ * min(100% - 24px, max content). Give Create the same 12px per side content
+ * gutter WITHOUT moving the Builder's native scrollbar, pane shell, or
+ * changing its card grid/gaps. Wide PC and external Compact remain unchanged. */
+@media (min-width: 1100px) and (max-width: 1599.98px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-workspace-view="create"]
+  .soridraw-lite-studio-split-workspace.is-create-vertical
+  > .soridraw-studio-builder-pane
+  > :is(.soridraw-studio-builder-pane-masthead-host, :not(.soridraw-studio-pane-masthead-host)) {
+    width: min(calc(100% - 24px), var(--soridraw-studio-full-pane-max-width, 1500px)) !important;
+    max-width: var(--soridraw-studio-full-pane-max-width, 1500px) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+  }
+}

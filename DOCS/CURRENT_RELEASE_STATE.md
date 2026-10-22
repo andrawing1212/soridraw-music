@@ -1,3 +1,16 @@
+## CURRENT — app464 native outer-window Generate overshoot + Create tablet gutters SOURCE CANDIDATE (2026-10-23 KST)
+
+- **User acceptance:** app463 Music Note selected keyword 12px PREVIEW UI verified good by user. Preserve app461 normal summary, app462 vertical scrollbar/splitter exclusive pointer zones and app463 Music Note 12px.
+- **Video:** `20261022-1953-13.9195741.mp4` shows native desktop external-window width changes; Generate row can overshoot the right edge while resizing, with normal resting layout recovering. User also reports Create's left/right black gutter is tighter than Music Note/Library when entering tablet.
+- **Root cause/approved constraints:** existing app750 resize CSS recomputes floating Generate portal left and width from the live Builder root geometry while app797 portal still has an independent translate3d/scaleX transform for divider dragging. Source can double-apply X on native resize. app1031 Music Note/Library split Builder direct children use `min(100% - 24px, max)` content width; Create tablet child inset lacked this equivalent. No splitter rAF/pointer/Generate bar redesign and no scrollbar-shell change allowed.
+- **Candidate app464:** append scoped CSS `APP464_NATIVE_RESIZE_GENERATE_AND_TABLET_CREATE_GUTTERS` in `src/components/studio/studioLayout.css`: suppress only floating Generate portal `transform` during `html.soridraw-window-resizing` (existing app750 left/width controls), restore automatically afterward; at viewport 1100..1599.98px and Create vertical workspace only, match app1031 child's `width:min(100%-24px,1500px)` and centered 12px per-side inner gutter. Leave app750 formulas, native scroll shell, split rAF, Generated buttons/layout, Music Note/Library/Recent, wide PC and compact untouched.
+- **Protected source:** `LiteStudioSplitWorkspace.tsx`, `App.tsx`, splitter CSS and all services/backends unchanged. Extend `verify-459-split-bounds-only.mjs` with app464 CSS-only assertions. Hosting-only version464, frozen Worker hosting allowlist only.
+- **Working branch:** `fix/app464-resize-generate-tablet-gutters` from `preview` `9045bb995a487aa49fe5e58a782c92676079e591`. CI/PR/PREVIEW Hosting and physical dynamic resizing acceptance PENDING. Do not count static CSS as physical behavior proof.
+- **Data/safety:** Firebase/Cloudflare Worker/Functions/Rules/schema/Firestore/D1/user originals unchanged, Stage416 OFF. TEST/main and PRODUCTION require separate approval.
+- **Next:** exact source CI TypeScript/Build/app448/app459 splitter and app464 source contract. Only on PASS merge into preview, release Hosting-only and verify canonical run/live app-version + TEST/PROD no-change; user then checks window fast/slow resize from wide to tablet and Create gutter parity.
+
+---
+
 ## CURRENT — app463 Music Note keyword 12px source PASS, PREVIEW Hosting trigger merged; remote postflight unverified (2026-10-23 KST)
 
 - **User UI request:** two screenshots from 2026-10-22 19:26/19:28 show Music Note saved-song applied keywords unreadably small (9px default; 8px at narrow/mobile). app463 changes only keyword chip `font-size:12px; line-height:1.1` in `studioLayout.css`, with an extra responsive-content-page selector to beat the mobile 8px rule. Existing horizontal keyword scroll strip height, rows, buttons, layout, color/opacity, click/wheel/drag behavior all protected.

@@ -17115,3 +17115,74 @@ body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]
     box-sizing: border-box !important;
   }
 }
+
+/* APP465_TABLET_ONEPANE_GUTTERS_AND_RAIL_SCROLLBAR
+ * Recent / Music Note / Library: normal split and Create have accepted gutters.
+ * 1031 excluded the builder-only one-pane state, leaving 779's old 36px
+ * right-only pane padding. On tablet, match Create's centered child inset:
+ * main has 18px left, pane keeps 18px right; 12px on each child => 30/30.
+ * Keep the full-width scroll shell and the native scrollbar at the rail.
+ *
+ * In result-only, the 18px reserved Studio main right gutter can persist
+ * despite 777's right:-18px (one-pane geometry has a different owner).
+ * Release that gutter only here and return it to the result pane's padding:
+ * the content stays on its existing 36px visual guide, while the scrollbar
+ * reaches the right rail. No pointer, rAF, or general split path changes. */
+@media (min-width: 1100px) and (max-width: 1599.98px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="recent"],
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  )
+  .soridraw-lite-studio-split-workspace.is-result-collapsed
+  > .soridraw-studio-builder-pane {
+    padding-right: 18px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="recent"],
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  )
+  .soridraw-lite-studio-split-workspace.is-result-collapsed
+  > .soridraw-studio-builder-pane
+  > :is(
+    .soridraw-studio-builder-pane-masthead-host,
+    :not(.soridraw-studio-pane-masthead-host)
+  ) {
+    width: min(calc(100% - 24px), var(--soridraw-studio-full-pane-max-width, 1500px)) !important;
+    max-width: var(--soridraw-studio-full-pane-max-width, 1500px) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="recent"],
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  )
+  .soridraw-studio-main {
+    padding-right: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="recent"],
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  )
+  .soridraw-lite-studio-split-workspace.is-builder-collapsed
+  > .soridraw-studio-result-pane {
+    right: 0 !important;
+    padding-right: 36px !important;
+    box-sizing: border-box !important;
+  }
+}

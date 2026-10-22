@@ -15991,3 +15991,114 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
 .soridraw-responsive-search-input {
   padding-right: 40px !important;
 }
+
+
+/* APP453_STABLE_MOBILE_COLOR_SPLIT_TOP_CONTROLS
+ * Real-device app452 fix: Studio Black result-pane Music Note / Library only.
+ * Reuse the mobile refresh+seven-dot palette for every split width. The filter
+ * retains its current icon/label behavior; only the search takes spare width.
+ * No drag handler, React per-frame update or standalone/mobile override. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane .soridraw-stable-mode-viewport {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+  }
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane .soridraw-stable-mode-viewport
+  > :is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs) {
+    box-sizing: border-box !important;
+    flex: 0 1 480px !important;
+    width: min(100%, 480px) !important;
+    min-width: 0 !important;
+    max-width: 480px !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane .soridraw-responsive-content-page
+  .soridraw-stable-top-controls {
+    width: 100% !important;
+    min-width: 0 !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 6px !important;
+  }
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane .soridraw-responsive-content-page
+  .soridraw-stable-top-controls .soridraw-responsive-color-filter {
+    box-sizing: border-box !important;
+    flex: 0 0 auto !important;
+    width: max-content !important;
+    min-width: max-content !important;
+    max-width: none !important;
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+    overflow: hidden !important;
+  }
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane .soridraw-stable-top-controls
+  .soridraw-responsive-color-filter > button:not(.soridraw-color-reset-button) {
+    flex: 0 0 28px !important;
+    width: 28px !important;
+    min-width: 28px !important;
+  }
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane .soridraw-stable-top-controls
+  .soridraw-color-reset-button {
+    box-sizing: border-box !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 34px !important;
+    width: 34px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    padding: 0 !important;
+  }
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane .soridraw-stable-top-controls
+  .soridraw-color-reset-text { display: none !important; }
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane .soridraw-stable-top-controls
+  .soridraw-color-reset-icon { display: block !important; }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane .soridraw-responsive-content-page
+  .soridraw-stable-top-controls .soridraw-responsive-search-slot,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane .soridraw-responsive-content-page
+  .soridraw-stable-top-controls .soridraw-responsive-search-slot:is(:focus-within, .is-search-active) {
+    flex: 1 1 42px !important;
+    width: auto !important;
+    min-width: 42px !important;
+    max-width: none !important;
+  }
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane .soridraw-stable-top-controls
+  .soridraw-responsive-search-icon {
+    left: 16px !important;
+    right: auto !important;
+    transform: none !important;
+    translate: none !important;
+  }
+  /* Match the visible X to its full 32px square click target. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane .soridraw-stable-top-controls
+  .soridraw-responsive-search-clear {
+    position: absolute !important;
+    top: 7px !important;
+    bottom: auto !important;
+    right: 8px !important;
+    transform: none !important;
+    translate: none !important;
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    z-index: 40 !important;
+    pointer-events: auto !important;
+  }
+}

@@ -1,3 +1,12 @@
+## CURRENT — app453 result top controls real-device repair (PREVIEW source candidate, 2026-10-22 KST)
+
+- **Why:** user-provided app452 video shows cropped top tabs, magnifier centered after split drag, X click area working only partially, color tray changing from mobile refresh+dots to desktop `전체`.
+- **Fix proposal:** one end-of-file CSS override inside Studio Black result-pane Music Note/Library only. Tabs shrink as a 3-column grid rather than remain 480px wide behind scrolling. Mobile refresh + colored dots remain fixed width at all pane widths, filter stays fixed with existing responsive behavior, search uses the remaining width with left-anchored magnifier, X uses an explicit 32×32 clickable target.
+- **Protected:** Lite V2 splitter/drag/rAF and Generate bar, mobile standalone layout, all React data/state, shared user data, Firebase, Functions, Worker/Cloudflare, Rules, Stage416 OFF. Added source assertions in verify-209 only.
+- **STATUS:** feature branch/PR candidate only; not deployed; TypeScript/Build/CI/browser geometry/real PC+mobile acceptance pending. Live PREVIEW remains app452. TEST/PRODUCTION unchanged. Exact PR source SHA must be audited before PREVIEW release.
+
+---
+
 ## CURRENT — app452 PREVIEW Music Note / Library top controls and empty-search Cancel X deployed (2026-10-22 KST)
 
 - **Current baseline:** `preview` source+release-trigger merge `176815fcb92b8d6b1791974472929f6abb8d1492`; product PR #400 merged source `7f05dda23cbb0333ac2e572f7c5529738e315667`, release trigger PR #401; public app version **452**.

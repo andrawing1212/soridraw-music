@@ -95,3 +95,18 @@ assert(library.includes('librarySearchInputRef.current?.blur()'), 'Library X blu
 
 console.log('APP209_SEARCH_NO_SERVER_IO=PASS');
 console.log('APP457_MUSIC_NOTE_LIBRARY_FIXED_MENU_COLOR_SEARCH_X=PASS');
+
+
+// APP453 real-device correction: all new rules must remain result-pane scoped.
+const app453Css = css.slice(css.indexOf('APP453_STABLE_MOBILE_COLOR_SPLIT_TOP_CONTROLS'));
+assert(app453Css.startsWith('APP453_STABLE_MOBILE_COLOR_SPLIT_TOP_CONTROLS'), 'app453 CSS missing');
+for (const token of [
+  '@media (min-width: 1100px)', 'width: min(100%, 480px) !important;',
+  'grid-template-columns: repeat(3, minmax(0, 1fr)) !important;',
+  'min-width: max-content !important;', '.soridraw-color-reset-text',
+  '.soridraw-color-reset-icon', 'flex: 1 1 42px !important;',
+  'left: 16px !important;', 'top: 7px !important;',
+  'pointer-events: auto !important;',
+]) assert(app453Css.includes(token), 'app453 missing control token: ' + token);
+assert(!app453Css.includes('requestAnimationFrame('), 'app453 must not add drag work');
+console.log('APP453_MOBILE_PALETTE_TABS_SEARCH_X=PASS');

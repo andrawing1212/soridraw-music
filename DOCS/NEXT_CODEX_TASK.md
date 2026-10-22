@@ -1,3 +1,12 @@
+## NEXT — app453 Music Note / Library split top controls PR QA (2026-10-22 KST)
+
+- Review the user-reported app452 regressions: cropped 3 top menu buttons, magnifier relocates to search center, X only partly clickable, mobile seven-color bar morphs to desktop `전체` state.
+- Review candidate `studioLayout.css` APP453_STABLE_MOBILE_COLOR_SPLIT_TOP_CONTROLS only. Keep three-tab layout inside result width capped 480px; keep mobile refresh plus 7 color dots at all pane widths; filter fixed, search only elastic and magnifier left. X must accept input across all 32×32 pixels.
+- Run `node scripts/verify-209-search-persistence-mobile.mjs`, split browser verifier app303, TS and Build, then actual browser split drag (430/660/820/1080 thresholds and pointer-up). Static assertions are not browser QA.
+- Branch candidate only: **no PREVIEW Hosting deployed**, no TEST/PRODUCTION promotion, no data or backend change. Next action: validate PR and audit before merge/release.
+
+---
+
 ## NEXT — app452 PREVIEW real-use acceptance, no new work until user reports a defect (2026-10-22 KST)
 
 - Product/Hosting **DEPLOYED PREVIEW**: PR #400 source commit `7f05dda23cbb0333ac2e572f7c5529738e315667`; guarded release trigger PR #401 commit `176815fcb92b8d6b1791974472929f6abb8d1492`; exact release run `39701418484` SUCCESS with PREVIEW HTML and app-version.json version 452 parity.

@@ -1,3 +1,12 @@
+## NEXT — app454 PREVIEW user UI acceptance (2026-10-22 KST)
+
+- Already deployed via Firebase PREVIEW Hosting workflow #39708218886 SUCCESS, app version 454; exact source PR #406, trigger PR #407 merge `8f93f680aaa3e8a378b1ec11677d5af775b17a90`; TS/Build/search/split quality PASS.
+- Ask user to physically check Studio Black split Music Note and Library as right pane reaches page-mobile <=660px: collapsed search equals filter width **42px**, clicking search overlays **260px** to the right **above** the unchanged seven-color palette (dots/refresh/filter do not resize or shift), text is visible and 32x32 X fully clickable. Cross back to >660px ensuring previous search behavior returns; fast/slow divider, pointer-up no jump. Standalone mobile unchanged.
+- User real-device UI PASS/FAIL remains PENDING. Protect existing app448 splitter/Generate, Music Note/Library data/local-first, Stage416 OFF, no backend. TEST/PRODUCTION remain unchanged and require explicit approval.
+- Next one action: user PREVIEW app454 visible result.
+
+---
+
 ## NEXT — app454 narrow result-pane search button + overlay (2026-10-22 KST)
 
 - User video after app453 PREVIEW: search does not fully collapse at minimum pane, and focused 42px search does not provide enough visible text. Preserve everything already improved.

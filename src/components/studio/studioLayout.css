@@ -16295,3 +16295,88 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
     display: inline !important;
   }
 }
+
+
+/* APP456_CENTERED_SEARCH_CONTINUOUS_RESET
+ * Real-device app455 final polish. Only the Studio Black RESULT-paned
+ * Music Note/Library controls are affected (desktop browser split).
+ *
+ * Give the ROW an inline-size query owner: the refresh/reset button widens
+ * continuously with the result pane, from a 34px mobile pill to a 52px
+ * wide pill. The 16px refresh glyph stays centered; no text/icon swap and
+ * no palette dots resized. This avoids the previously abrupt reset-only
+ * width change at the mobile/tablet handoff.
+ *
+ * The search icon stays centered while search and filter are sharing growth.
+ * After the filter is fully expanded, the search icon travels smoothly to
+ * a 16px left inset while only search keeps growing. The 260px focused
+ * input overlay from app454 is left anchored and stays above the colors.
+ * All calculations are CSS-only; no pointer/resize hot-path hooks. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+  .soridraw-stable-top-controls {
+    container-type: inline-size;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+  .soridraw-stable-top-controls .soridraw-color-reset-button {
+    box-sizing: border-box !important;
+    display: inline-flex !important;
+    flex: 0 0 auto !important;
+    width: clamp(34px, calc(33.333cqi - 95.333px), 52px) !important;
+    min-width: 34px !important;
+    max-width: 52px !important;
+    height: 36px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+  .soridraw-stable-top-controls .soridraw-color-reset-text {
+    display: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+  .soridraw-stable-top-controls .soridraw-color-reset-icon {
+    display: block !important;
+    flex: 0 0 16px !important;
+    width: 16px !important;
+    height: 16px !important;
+  }
+
+  /* Source row retains app455 flex sharing and filter's 104px cap. A
+   * 42px search icon starts at 13px, exactly centered. Search widths up
+   * to 104px remain centered; widths 104..160px move smoothly toward
+   * left:16px, after which it stays at 16px as search alone stretches.
+   * No switch tied to the 660px responsive breakpoint. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-stable-top-controls .soridraw-responsive-search-slot {
+    container-type: inline-size;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-stable-top-controls .soridraw-responsive-search-slot:not(:focus-within):not(.is-search-active)
+  .soridraw-responsive-search-icon {
+    left: max(
+      min(16px, calc(50cqi - 8px)),
+      calc(50cqi - 8px - max(0px, 100cqi - 104px))
+    ) !important;
+    right: auto !important;
+    transform: none !important;
+    translate: none !important;
+  }
+}

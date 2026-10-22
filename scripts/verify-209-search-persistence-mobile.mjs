@@ -142,7 +142,10 @@ console.log('APP454_MOBILE_SPLIT_SEARCH_OVERLAY_PALETTE_FIXED=PASS');
 
 // APP455 video regression: mobile result row must fill 100% without a trailing
 // gap. Search and filter share growth until the filter caps at full width.
-const app455Css = css.slice(css.indexOf('APP455_SPLIT_SEARCH_FILTER_CONTINUOUS_FLEX'));
+const app455Css = css.slice(
+  css.indexOf('APP455_SPLIT_SEARCH_FILTER_CONTINUOUS_FLEX'),
+  css.indexOf('APP456_CENTERED_SEARCH_CONTINUOUS_RESET'),
+);
 assert(app455Css.startsWith('APP455_SPLIT_SEARCH_FILTER_CONTINUOUS_FLEX'), 'app455 CSS missing');
 for (const token of [
   '[data-soridraw-responsive-mode="mobile"]',
@@ -160,3 +163,29 @@ for (const forbidden of ['.soridraw-responsive-color-filter {', 'requestAnimatio
   assert(!app455Css.includes(forbidden), 'app455 must not change colors or drag/server work: ' + forbidden);
 }
 console.log('APP455_CONTINUOUS_FILTER_CAP_SEARCH_FILLS_NO_GAP=PASS');
+
+
+// APP456: exact split-only layout contract, with the old app455 rules frozen
+// independently. Runtime/browser geometry is verified separately.
+const app456Css = css.slice(css.indexOf('APP456_CENTERED_SEARCH_CONTINUOUS_RESET'));
+assert(app456Css.startsWith('APP456_CENTERED_SEARCH_CONTINUOUS_RESET'), 'app456 CSS missing');
+for (const token of [
+  '@media (min-width: 1100px)',
+  '.soridraw-studio-result-pane',
+  'container-type: inline-size;',
+  'width: clamp(34px, calc(33.333cqi - 95.333px), 52px) !important;',
+  'max-width: 52px !important;',
+  '.soridraw-color-reset-text',
+  'display: none !important;',
+  '.soridraw-color-reset-icon',
+  '[data-soridraw-responsive-mode="mobile"]',
+  '.soridraw-responsive-search-slot:not(:focus-within):not(.is-search-active)',
+  'min(16px, calc(50cqi - 8px))',
+  'max(0px, 100cqi - 104px)',
+]) assert(app456Css.includes(token), 'app456 required rule missing: ' + token);
+for (const forbidden of [
+  '.soridraw-responsive-color-filter {',
+  '.soridraw-responsive-filter-button {',
+  'requestAnimationFrame(', 'getBoundingClientRect(', 'ResizeObserver(', 'fetch('
+]) assert(!app456Css.includes(forbidden), 'app456 must not change palette/filter/drag/backend: ' + forbidden);
+console.log('APP456_SEARCH_CENTER_TO_LEFT_AND_RESET_SMOOTH_GROWTH=PASS');

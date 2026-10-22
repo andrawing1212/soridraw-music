@@ -1,3 +1,12 @@
+## NEXT — app455 PREVIEW real-use validation after successful release (2026-10-22 KST)
+
+- PREVIEW app455 released via fixed SHA `02965d29a9184b1bf3f55f34af23a00d58052b96`; GitHub Actions #39726868723 SUCCESS (Hosting exact build+version455, TEST/PRODUCTION unchanged, shared Rules skipped). Source PR #409 TypeScript/Build/search/split #39726623865 and product quality #39726623864 PASS.
+- User video request: as RESULT pane grows from mobile width, no initial right gap; search and filter share free width until filter reaches 104px with icon, text and chevron; palette remains unchanged 7 dots and filter caps; thereafter all extra/reduced width belongs to search smoothly without group moving or snapping. Narrow reverse naturally. Focused search retains app454 260px right-overlay over color dots, X hits.
+- Follow-up is **actual user physical drag/click verdict**; isolated Chromium fixture proved CSS flex geometry, not live authenticated UI. If FAIL, adjust only Music Note/Library split top-row scoped CSS. Keep app448 Lite splitter/rAF/Generate and standalone/mobile behavior unchanged.
+- No backend, Rules, Worker, Functions, Cloudflare, user canonical data or Stage416 activation. No TEST/PROD promotion without user approval. Next action: user tests preview.soridraw.com app455 and reports result.
+
+---
+
 ## NEXT — app455 mobile result top-row flex from first pixel (2026-10-22 KST)
 
 - On app454 real video, narrow Music Note/Library split top row search+color+filter does not fill to right edge. During drag, responsive mode switch causes an apparent group slide/snap. User: fix start state first. Search and filter should BOTH grow on pane widening, filter stops at full icon+text+chevron size, color remains fixed; after that search alone continues seamlessly; narrowing reverses naturally. Focused search remains app454 260px overlay over fixed dots.

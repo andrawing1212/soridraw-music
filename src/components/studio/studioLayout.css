@@ -17077,7 +17077,9 @@ html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-stud
  * overflow-x scrolling, metadata colors, card geometry and hit targets.
  * The scroll strip still contains each keyword on a single line. */
 :root body #root .soridraw-app-root
-.soridraw-musicnote-theme .soridraw-musicnote-song-keywords > .soridraw-musicnote-keyword-chip {
+.soridraw-musicnote-theme .soridraw-musicnote-song-keywords > .soridraw-musicnote-keyword-chip,
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page .soridraw-musicnote-song-keywords > .soridraw-musicnote-keyword-chip {
   font-size: 12px !important;
   line-height: 1.1 !important;
 }

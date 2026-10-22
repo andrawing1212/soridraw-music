@@ -1,3 +1,13 @@
+## CURRENT — app462 PREVIEW scrollbar/divider separation USER VISUAL PASS (2026-10-23 KST)
+
+- **User acceptance:** user explicitly confirmed “잘 적용됐어” after the app462 PREVIEW release request. Treat the reported scrollbar/divider input-zone improvement as accepted in real use; do not require the user to repeat the same visual check. Scope of this acceptance is the reported center scrollbar grip improvement, not an independent complete device/resolution performance matrix.
+- **Source:** app462 PR #430 merged `47a23f54ef7ed3bc2a6911a6d3936ad8574a9e07`, CI split/TypeScript/Build `39814055281` PASS and product quality `39814055158` PASS. Firebase Hosting-only trigger PR #431 merged `fda493c2c91a3efd2593bb85b359b52b60408060`. The user reports the change working on PREVIEW; official GitHub Hosting push-run identity and remote exact-build hash remain unverified in this chat (do not claim technical deployment audit PASS).
+- **Frozen user-approved behavior:** native Builder vertical scrollbar remains draggable; adjacent right-side 16px hit region controls horizontal split with the original 1px line. Preserve existing split/pane drag speed, scroll state, Generate bar, card layout and accepted app461 Classic summary behavior. No code or release changes in this documentation update.
+- **Environments:** `preview` only; TEST/main and PRODUCTION not promoted. No worker/Functions/Rules/Cloudflare/shared user-data migration or cache invalidation; Stage416 remains OFF.
+- **Next:** leave app462 UI unchanged unless the user reports a new issue; continue with user's next instruction. Independent technical Hosting artifact verification can be done in release audit without asking user to redo the completed visual test.
+
+---
+
 ## CURRENT — app462 scrollbar/divider hit-zone source PASS, PREVIEW release requested — live verification pending (2026-10-23 KST)
 
 - **User goal:** the native vertical scrollbar immediately LEFT of the Studio Black center divider must be grabbable across the thumb, while the horizontal splitter remains draggable to its RIGHT. Source video `20261022-1610-50.2531472.mp4`; app461 Classic keyword auto-growing UI already user-accepted.

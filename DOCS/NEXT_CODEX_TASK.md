@@ -1,3 +1,13 @@
+## NEXT — app458 deployed; verify compact UI parity on external window and real mobile (2026-10-22 KST)
+
+- Firebase PREVIEW app458 live at `https://preview.soridraw.com` (release SHA `d339bd6b438cae33a5b675d8eabcc8ea3be17530`; GitHub Actions #39771447456 SUCCESS; TypeScript/Build, exact build/live version458, TEST/PRODUCTION unchanged, RTDB Rules skipped).
+- PERMANENT canonical UI: user-approved app457 **Studio Black split RESULT compact** Music Note/Library upper controls apply identically in narrow standalone/external windows, ordinary dark mode and actual mobile devices. All future Music Note/Library common top changes must be evaluated across these modes together. Do not fork their CSS by theme.
+- Validate on actual device/desktop: tabs width fits three evenly, search icon centers in short button then moves smoothly left, search/filter share width then filter caps104, mobile refresh+seven dots intact, `필터` never vertical-wrap, search focus opens min260 overlay and 32px X, placeholder fades when enough width without jitter; check Library Workspace + Playlist and dark theme on mobile. Below 399px dot visuals remain full size while invisible click spacing condenses.
+- If physical UI fails, minimally adjust these shared controls, not app457 split pointer engine/Generate, list data or caching. Stage416 OFF, shared originals unchanged, no TEST/PROD approval.
+- Next one action: user's PREVIEW app458 observed result.
+
+---
+
 ## NEXT — app458 adopt split-result compact top UI everywhere at mobile page width (2026-10-22 KST)
 
 - User-approved visual reference: app457 Studio Black split RESULT's narrow Music Note + Library controls. Ensure external/detached browser window shrunk to phone width, standalone dark and real mobile display the same search/color/filter geometry/actions. Full page at >660px retains normal desktop/tablet layout.

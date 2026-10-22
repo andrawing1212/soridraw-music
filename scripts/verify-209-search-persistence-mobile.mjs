@@ -306,6 +306,7 @@ const app463Css=css.slice(css.indexOf('APP463_MUSIC_NOTE_SONG_KEYWORD_12PX'));
 assert(app463Css.startsWith('APP463_MUSIC_NOTE_SONG_KEYWORD_12PX'), 'app463 keyword font CSS missing');
 for (const token of [
   '.soridraw-musicnote-theme .soridraw-musicnote-song-keywords > .soridraw-musicnote-keyword-chip',
+  '.soridraw-musicnote-theme.soridraw-responsive-content-page .soridraw-musicnote-song-keywords > .soridraw-musicnote-keyword-chip',
   'font-size: 12px !important;',
   'line-height: 1.1 !important;',
 ]) assert(app463Css.includes(token), 'app463 keyword readability token missing: '+token);

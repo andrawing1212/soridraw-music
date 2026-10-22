@@ -16843,3 +16843,59 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
     min-width: 20px !important;
   }
 }
+
+
+/* APP459_COMPACT_ROW_FIT_WITHOUT_COLLISION
+ * App458 physical screen recording: at narrow external/phone widths the
+ * color tray's intrinsic button hit boxes + two 42px sibling controls exceed
+ * the real content width. The search background can then bleed into colors
+ * and the filter clips offscreen. The accepted seven color dots and reset
+ * glyph DO NOT change size; only the transparent button hit spacing adapts.
+ *
+ * This is measured with CSS row cqi, NOT window width. Thus detached,
+ * standalone/dark, and a narrow Studio Black split RESULT all use the same
+ * width-to-spacing rule without resizing JS or extra drag-time reads.
+ *
+ * Row min budget: 42 search + 42 filter + 12 gaps, leaving width - 96 for
+ * reset + 7 invisible dot buttons + 7 gaps + tray inner 10px. */
+@container (max-width: 420px) {
+  :root body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-stable-top-controls .soridraw-responsive-color-filter {
+    gap: clamp(2px, calc((100cqi - 290px) / 20), 6px) !important;
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+  }
+  :root body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-stable-top-controls .soridraw-responsive-color-filter > button:not(.soridraw-color-reset-button) {
+    box-sizing: border-box !important;
+    flex: 0 0 clamp(14px, calc((100cqi - 150px) / 8), 28px) !important;
+    width: clamp(14px, calc((100cqi - 150px) / 8), 28px) !important;
+    min-width: clamp(14px, calc((100cqi - 150px) / 8), 28px) !important;
+    max-width: clamp(14px, calc((100cqi - 150px) / 8), 28px) !important;
+    padding: 0 !important;
+    justify-content: center !important;
+  }
+}
+
+/* The RESTING search button must never paint over palette dots.
+ * Focus/query intentionally raises the search field above the palette as
+ * the user-approved 260px popup; its size is capped to the actual small
+ * viewport so the X and typed characters remain accessible on a phone. */
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-stable-top-controls
+.soridraw-responsive-search-slot:not(:focus-within):not(.is-search-active)
+.soridraw-responsive-search {
+  overflow: hidden !important;
+  max-width: 100% !important;
+}
+@media (max-width: 1099px) {
+  :root body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-stable-top-controls .soridraw-responsive-search-slot:is(:focus-within, .is-search-active)
+  .soridraw-responsive-search {
+    width: max(100%, min(260px, calc(100vw - 24px))) !important;
+  }
+}

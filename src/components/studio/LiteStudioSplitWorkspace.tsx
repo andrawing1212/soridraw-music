@@ -106,10 +106,16 @@ const getStorageKey = (profile: SplitProfile) => profile === 'tablet' ? TABLET_S
 const getLegacyStorageKey = (profile: SplitProfile) => profile === 'tablet' ? LEGACY_TABLET_STORAGE_KEY : LEGACY_WIDE_STORAGE_KEY;
 
 const getSplitBounds = (layoutWidth: number): SplitBounds => {
-  if (getSplitProfile() !== 'tablet' || !Number.isFinite(layoutWidth) || layoutWidth <= 1) {
+  if (!Number.isFinite(layoutWidth) || layoutWidth <= 1) {
     return { min: MIN_PERCENT, max: MAX_PERCENT };
   }
   const safeWidth = Math.max(layoutWidth, 1);
+  // app459: preserve the existing tablet 430px protection, but compute it
+  // from the REAL center workspace width for wide-PC and shrunken windows
+  // too. A wide desktop can still reach the original 24% bound once 24%
+  // itself is >=430px. No divider hot-path reads or new mode boundaries.
+  // If <860px is available, two 430px panes are geometrically impossible:
+  // keep the divider centered rather than crush one pane any further.
   const minimumPaneWidth = Math.min(TABLET_MIN_PANE_PX, safeWidth / 2);
   const minimumPercent = (minimumPaneWidth / safeWidth) * 100;
   const min = Math.max(MIN_PERCENT, minimumPercent);

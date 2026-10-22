@@ -7,6 +7,8 @@ on:
       - 'src/pages/FavoritesPage.tsx'
       - 'src/pages/SunoLibraryPage.tsx'
       - 'src/components/studio/studioLayout.css'
+      - 'src/components/studio/LiteStudioSplitWorkspace.tsx'
+      - 'scripts/verify-459-split-bounds-only.mjs'
       - 'scripts/verify-209-search-persistence-mobile.mjs'
       - '.github/workflows/verify-app457-note-library-controls.yml'
 
@@ -29,19 +31,19 @@ jobs:
         run: node scripts/verify-209-search-persistence-mobile.mjs
       - name: Protect app448 split geometry and Generate interactions
         run: node scripts/verify-303-studio-split-browser-history.mjs
-      - name: Guard unchanged splitter and no extra backend read/write
+      - name: Guard scoped app459 split bounds and unchanged backends
         shell: bash
         run: |
           set -euo pipefail
           git fetch --no-tags --depth=1 origin preview
           git diff --exit-code FETCH_HEAD -- \
-            src/components/studio/LiteStudioSplitWorkspace.tsx \
             src/components/studio/StudioSplitEngineWorkspace.tsx \
             src/components/studio/liteSplitWorkspace.css \
             src/services/navigationVisibilitySyncService.ts \
             src/lib/pageSyncCoordinator.ts \
             database.rules.json
-          echo 'APP457_SPLIT_ENGINE_GENERATE_AND_RULES_UNCHANGED=PASS'
+          node scripts/verify-459-split-bounds-only.mjs
+          echo 'APP459_SPLIT_ENGINE_BOUND_ONLY_GENERATE_AND_RULES_UNCHANGED=PASS'
       - name: TypeScript
         run: npx tsc --noEmit
       - name: React build

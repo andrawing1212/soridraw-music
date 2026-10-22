@@ -1,3 +1,15 @@
+## CURRENT — app463 Music Note saved-song selected-keyword text 12px SOURCE CANDIDATE (2026-10-23 KST)
+
+- **User screenshots:** `image(20261022-192633).png` and `image(20261022-192854).png` show selected keyword metadata in each Music Note song row unreadably small on a narrow Studio Black Result pane; request is to enlarge only the selected keyword text. No user request to change card height, colors, filters, state icons, tag contents, or scrolling.
+- **Root cause:** `src/pages/FavoritesPage.tsx` renders `.soridraw-musicnote-keyword-chip` at base 9px; `src/components/studio/studioLayout.css` applies 8px on narrow/mobile panes. Keyword strip is horizontal scroll, one line, with 18px/20px height and overflow clipping.
+- **Candidate fix:** `APP463_MUSIC_NOTE_SONG_KEYWORD_12PX` appended to `studioLayout.css`; Music Note list only, same size 12px at wide/narrow split/compact. It changes only `font-size` and `line-height` on keyword label spans, preserving current strip height and horizontal mouse/pointer/wheel scroll plus button/card geometry. Contrast/color remains unchanged. `verify-209-search-persistence-mobile.mjs` extends source-only guard, app-version=463 and frozen Worker release allowlist +463.
+- **Branch:** `fix/app463-musicnote-keyword-font-12px`, base `preview` `13e996f53ae97e3154d1e4a3f2d122970c1491b4`. CI/PR and PREVIEW deployment pending. User accepted app461 Classic summaries and app462 native scrollbar/splitter separation; both are frozen.
+- **Data/cost:** no service, query, data representation, Firestore/RTDB/D1/Worker, Functions, cache or user data change. No backend reads/writes added; shared original user data untouched. Stage416 OFF.
+- **Release:** PREVIEW Hosting only once source QA PASS, using existing canonical Hosting-only trigger; main/TEST/PRODUCTION unchanged. Physical review is still needed for narrow & wide keyword readability and horizontal scrolling; don't label real UI PASS before user inspection.
+- **Next:** exact SHA source CI with TypeScript/Build/frozen split checks, then PREVIEW Hosting-only release and exact remote build check; await user visual acceptance.
+
+---
+
 ## CURRENT — app462 PREVIEW scrollbar/divider separation USER VISUAL PASS (2026-10-23 KST)
 
 - **User acceptance:** user explicitly confirmed “잘 적용됐어” after the app462 PREVIEW release request. Treat the reported scrollbar/divider input-zone improvement as accepted in real use; do not require the user to repeat the same visual check. Scope of this acceptance is the reported center scrollbar grip improvement, not an independent complete device/resolution performance matrix.

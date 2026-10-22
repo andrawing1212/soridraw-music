@@ -16380,3 +16380,170 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
     translate: none !important;
   }
 }
+
+
+/* APP457_NO_MOBILE_TABLET_CONTROL_HANDOFF
+ * Two app456 real-device videos show the search placeholder and old controls
+ * briefly moving at the pane-mobile -> tablet switch. The result row must
+ * have ONE geometry contract for both modes, rather than switching from
+ * app455's mobile flex layout to the older tablet flex/placeholder rules.
+ * Applies only to Studio Black split Music Note/Library result surfaces.
+ * Passive CSS only; splitter pointer/rAF and backends are untouched. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+  .soridraw-stable-top-controls {
+    box-sizing: border-box !important;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    gap: 6px !important;
+    overflow: visible !important;
+    container-type: inline-size;
+  }
+
+  /* Search and filter share initial growth. The filter stops at 104px;
+   * all subsequent width flows continuously into search. Same in both
+   * mobile and tablet pane modes, including the 660px handoff. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+  .soridraw-stable-top-controls .soridraw-responsive-search-slot,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+  .soridraw-stable-top-controls .soridraw-responsive-search-slot:is(:focus-within, .is-search-active) {
+    position: relative !important;
+    container-type: inline-size;
+    flex: 1 1 42px !important;
+    width: auto !important;
+    min-width: 42px !important;
+    max-width: none !important;
+    height: 46px !important;
+    overflow: visible !important;
+    transition: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+  .soridraw-stable-top-controls .soridraw-responsive-search {
+    position: relative !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: auto !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: none !important;
+    height: 46px !important;
+    transition: none !important;
+  }
+
+  /* Preserve the usable overlay when a narrow field is focused or has
+   * a query, without letting its larger surface resize the control row. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+  .soridraw-stable-top-controls .soridraw-responsive-search-slot:is(:focus-within, .is-search-active) {
+    z-index: 80 !important;
+  }
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+  .soridraw-stable-top-controls .soridraw-responsive-search-slot:is(:focus-within, .is-search-active)
+  .soridraw-responsive-search {
+    position: absolute !important;
+    width: max(260px, 100%) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+  .soridraw-stable-top-controls > div:has(> .soridraw-responsive-filter-button) {
+    box-sizing: border-box !important;
+    container-type: inline-size;
+    flex: 1 1 42px !important;
+    width: auto !important;
+    min-width: 42px !important;
+    max-width: 104px !important;
+    height: 46px !important;
+  }
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+  .soridraw-stable-top-controls > div:has(> .soridraw-responsive-filter-button)
+  > .soridraw-responsive-filter-button {
+    box-sizing: border-box !important;
+    display: flex !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: 46px !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    padding: 0 4px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+  .soridraw-stable-top-controls > div:has(> .soridraw-responsive-filter-button)
+  > .soridraw-responsive-filter-button :is(.soridraw-filter-label, .soridraw-filter-chevron) {
+    display: none !important;
+  }
+
+  /* Search glyph follows the SAME position function on either side of
+   * the responsive breakpoint. Small button: centered. After filter
+   * completion: glide to the left 16px inset. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+  .soridraw-stable-top-controls .soridraw-responsive-search-slot:not(:focus-within):not(.is-search-active)
+  .soridraw-responsive-search-icon {
+    left: max(
+      min(16px, calc(50cqi - 8px)),
+      calc(50cqi - 8px - max(0px, 100cqi - 104px))
+    ) !important;
+    right: auto !important;
+    transform: none !important;
+    translate: none !important;
+  }
+
+  /* The text is rendered off-canvas/hidden when small and fades into an
+   * already-sized search box; it never owns the row's layout width. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+  .soridraw-stable-top-controls .soridraw-responsive-search-placeholder {
+    display: flex !important;
+    opacity: 0 !important;
+    transition: opacity 120ms ease !important;
+    pointer-events: none !important;
+  }
+}
+
+/* Both of these @container queries depend on the immediately enclosing
+ * search-slot or filter-wrapper, NOT the pane-responsive mode attribute.
+ * Existing DOM markup and user actions are unchanged. */
+@container (min-width: 200px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+  .soridraw-stable-top-controls .soridraw-responsive-search-placeholder {
+    opacity: 1 !important;
+  }
+}
+@container (min-width: 103px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+  .soridraw-stable-top-controls > div:has(> .soridraw-responsive-filter-button)
+  > .soridraw-responsive-filter-button :is(.soridraw-filter-label, .soridraw-filter-chevron) {
+    display: inline !important;
+  }
+}

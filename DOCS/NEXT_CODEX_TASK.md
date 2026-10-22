@@ -1,3 +1,12 @@
+## NEXT — app457 cross-mobile/tablet search-bar seam (2026-10-22 KST)
+
+- User videos app456 show noticeable Music Note search/color/filter row shake exactly as hint text appears. Apply one geometry layout for all Studio Black split-result Music Note/Library modes rather than old mode-specific mobile/tablet rules switching at 660px; no changes to React, split engine or data.
+- Search+filter grow continuously; filter capped104; mobile refresh+7 colors and app456 fluid 34→52 reset preserved. Show filter label only when its actual button wrapper >=103. Keep focused search overlay max(260px,100%) + 32px X. Unfocused placeholder only fades into an unchanged-size search box once the search slot width >=200px.
+- Tests: TS+Build, app209 split/source contract, product quality and browser responsive 600–740 around handoff both directions with no 1-frame geometry jumps, focus X, color/filter click. Source assertions alone not sufficient for real-user UI PASS.
+- User explicitly requested PREVIEW redeploy after correction, never TEST/PRODUCTION. No Worker/Rules/Functions deployment and no user data write. Next one action: verify app457 PR CI, then Hosting-only PREVIEW release and log final state.
+
+---
+
 ## NEXT — app456 search-center / palette reset fluid resizing (2026-10-22 KST)
 
 - Apply only app456 Studio Black Music Note/Library result-pane CSS: (a) narrow search magnifier stays horizontally centered as search/filter flex widths grow; after filter complete (104px), icon slides continuously into left 16px input alignment while search alone stretches; clicked 260px overlay and X preserved. (b) palette reset/refresh pill width smoothly grows 34→52px with image fixed 16px, no sudden text/width swap, remaining dots unchanged. Reverse resizing symmetric. All done without per-drag React/browser measurement.

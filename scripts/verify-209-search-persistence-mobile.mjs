@@ -167,7 +167,10 @@ console.log('APP455_CONTINUOUS_FILTER_CAP_SEARCH_FILLS_NO_GAP=PASS');
 
 // APP456: exact split-only layout contract, with the old app455 rules frozen
 // independently. Runtime/browser geometry is verified separately.
-const app456Css = css.slice(css.indexOf('APP456_CENTERED_SEARCH_CONTINUOUS_RESET'));
+const app456Css = css.slice(
+  css.indexOf('APP456_CENTERED_SEARCH_CONTINUOUS_RESET'),
+  css.indexOf('APP457_NO_MOBILE_TABLET_CONTROL_HANDOFF'),
+);
 assert(app456Css.startsWith('APP456_CENTERED_SEARCH_CONTINUOUS_RESET'), 'app456 CSS missing');
 for (const token of [
   '@media (min-width: 1100px)',
@@ -189,3 +192,28 @@ for (const forbidden of [
   'requestAnimationFrame(', 'getBoundingClientRect(', 'ResizeObserver(', 'fetch('
 ]) assert(!app456Css.includes(forbidden), 'app456 must not change palette/filter/drag/backend: ' + forbidden);
 console.log('APP456_SEARCH_CENTER_TO_LEFT_AND_RESET_SMOOTH_GROWTH=PASS');
+
+
+// APP457: no geometry/placeholder/filter ownership switch when responsive
+// content mode moves from mobile to tablet; keep old 456 source assertions.
+const app457Css = css.slice(css.indexOf('APP457_NO_MOBILE_TABLET_CONTROL_HANDOFF'));
+assert(app457Css.startsWith('APP457_NO_MOBILE_TABLET_CONTROL_HANDOFF'), 'app457 CSS missing');
+for (const token of [
+  '.soridraw-stable-top-controls',
+  '.soridraw-responsive-search-slot:is(:focus-within, .is-search-active)',
+  'container-type: inline-size;',
+  'flex: 1 1 42px !important;',
+  'max-width: 104px !important;',
+  'width: max(260px, 100%) !important;',
+  '.soridraw-responsive-search-placeholder',
+  'opacity: 0 !important;',
+  '@container (min-width: 200px)',
+  'opacity: 1 !important;',
+  '@container (min-width: 103px)',
+  'calc(50cqi - 8px - max(0px, 100cqi - 104px))',
+]) assert(app457Css.includes(token), 'app457 missing stable property: '+token);
+assert(!app457Css.includes('[data-soridraw-responsive-mode="mobile"]'), 'app457 cannot re-add mobile/tablet rule split');
+for(const forbidden of ['requestAnimationFrame(', 'getBoundingClientRect(', 'ResizeObserver(', 'fetch(']){
+  assert(!app457Css.includes(forbidden), 'app457 must be passive CSS: '+forbidden);
+}
+console.log('APP457_CROSS_MODE_ROW_PLACEHOLDER_PARITY=PASS');

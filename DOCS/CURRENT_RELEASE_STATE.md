@@ -1,3 +1,12 @@
+## CURRENT — app457 eliminate responsive-mode search row shake SOURCE CANDIDATE (2026-10-22 KST)
+
+- **Actual user videos:** 20261022-1049 and 20261022-1052 show Music Note result-pane buttons briefly shift when the search hint `제목이나 키워드로 검색해보세요...` appears mid-divider drag. The hint itself is absolutely positioned; root cause is the mobile-to-tablet content-mode boundary switching search surface between absolute and relative width and filter between app455 capped flex and older tablet sizing, while placeholder display also switches. This can look like old UI layered with new UI.
+- **Fix in PR candidate:** add a single Studio Black split-result Music Note/Library top-controls geometry contract without `data-soridraw-responsive-mode` branch. Search + filter keep continuous `flex:1 1 42px`; filter max104px with threshold 103px label; refresh+color tray remains app456 unchanged. Inactive search stays relative width100, active search alone overlays max(260px,100%) with full X. Search glyph uses same 456 center-to-left function in mobile AND tablet. Placeholder is absolute display:flex throughout but opacity0 until search slot's own inline width >=200px, then fades in; never claims layout width. No extra observers or drag-time JS.
+- **Version 457.** Frozen Worker Hosting version allowlist only, app209 source verifier and docs. **PREVIEW live remains app456 until gated deployment.** TEST/PRODUCTION unchanged. Protect split rAF/Generate, color dots/reset, Library playlist, local-first Music Note and shared user data, Stage416 OFF.
+- **Next:** verify exact source TypeScript/Build/app209 split and product-quality workflows, plus browser seam 640–680 both directions, then user-approved Firebase PREVIEW Hosting-only release and exact remote app-version/hash checks. Actual logged-in user drag remains final acceptance.
+
+---
+
 ## CURRENT — app456 Firebase PREVIEW Hosting deployed and verified (2026-10-22 KST)
 
 - **Release:** User explicitly requested standard deployment of already-finished app456. Source PR #412 merged as `51116dcd6b4fd4afd4fc1c3279307b41b247b7ef`, status PR #413 merged as `2fc9bedd531b45152d6f7c3d17007f96cbeec013`, PREVIEW release trigger PR #414 merged at exact deployed `preview` SHA `b8135cae02749e1130dc045febd0d09dc909f1a0`. App version **456**.

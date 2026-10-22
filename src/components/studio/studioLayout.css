@@ -17037,3 +17037,13 @@ html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-stud
 .soridraw-menu-summary-box .soridraw-genre-summary-role {
   font-size: 10px !important;
 }
+
+/* Preserve Classic FHD's existing 52px resting summary height.
+ * Above that baseline, extra selected lines may still extend downward. */
+@media (min-width: 1024px) {
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-studio-main
+  :is([data-studio-menu="genre"], [data-studio-menu="style"], [data-studio-menu="sound"], [data-studio-menu="mood"], [data-studio-menu="theme"])
+  > .soridraw-expand-summary.soridraw-menu-summary-box {
+    min-height: 52px !important;
+  }
+}

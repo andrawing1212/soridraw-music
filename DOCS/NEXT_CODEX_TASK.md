@@ -1,3 +1,10 @@
+## NEXT — app451 PREVIEW Master Apply success acknowledged (2026-10-22 KST)
+
+- The user confirmed `적용됐어.` after app451 PREVIEW release #39695878693: the Master performance mode Apply no longer exhibits the reported blocking behavior. This is USER CONFIRMED for Apply, not blanket multi-device or TEST verification.
+- Only remaining optional PREVIEW acceptance checks: navigate away/back, Guest or second-device Studio propagation, mouse pointer-up behavior, and mobile/tablet appearance. Do not spend Codex or make new changes without a specific failing result. Shared RTDB Rules, user originals and Stage416 remain protected; TEST/PRODUCTION require explicit approval.
+
+---
+
 ## NEXT — app451 PREVIEW deployed; user acceptance test for saved Master performance mode (2026-10-22 KST)
 
 - User video exposed app450 stale Remote Config parameter/revision0; fixed in PR #394 source `f9a9ff10701056d70d1c8a5820dc8f7812ddfe96` with existing Master callable read of server truth on App Settings entry, one-time Studio parameter bootstrap, no new socket/RTDB Rules, no data changes and app451 browser version bump.

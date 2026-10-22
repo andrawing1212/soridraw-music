@@ -310,7 +310,10 @@ for (const token of [
   'font-size: 12px !important;',
   'line-height: 1.1 !important;',
 ]) assert(app463Css.includes(token), 'app463 keyword readability token missing: '+token);
-for (const forbidden of ['height:', 'overflow:', 'padding:', 'color:', 'background:', 'pointer-events:', 'fetch(', 'getBoundingClientRect(', 'requestAnimationFrame(']) {
-  assert(!app463Css.includes(forbidden), 'app463 must be font-only with no layout/behavior changes: '+forbidden);
+// Match whole CSS declaration names, not suffixes such as line-height.
+assert(!/(?:^|\\n)\\s*(?:height|overflow|padding|color|background|pointer-events)\\s*:/.test(app463Css),
+  'app463 must not modify strip size, scrolling, colors or pointer behavior');
+for (const forbidden of ['fetch(', 'getBoundingClientRect(', 'requestAnimationFrame(']) {
+  assert(!app463Css.includes(forbidden), 'app463 must remain passive font CSS: '+forbidden);
 }
 console.log('APP463_MUSIC_NOTE_KEYWORD_12PX_ONLY=PASS');

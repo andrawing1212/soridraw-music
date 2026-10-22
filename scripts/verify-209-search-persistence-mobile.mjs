@@ -225,7 +225,10 @@ console.log('APP457_CROSS_MODE_ROW_PLACEHOLDER_PARITY=PASS');
 // APP458: the accepted split-result compact top-row contract is reused by
 // both external mobile-window and real phone standalone modes, regardless
 // of dark/Studio theme. It adds NO new render loop, API, or split handler.
-const app458Css=css.slice(css.indexOf('APP458_CANONICAL_COMPACT_TOP_CONTROLS_ALL_SHELLS'));
+const app458Css=css.slice(
+  css.indexOf('APP458_CANONICAL_COMPACT_TOP_CONTROLS_ALL_SHELLS'),
+  css.indexOf('APP459_COMPACT_ROW_FIT_WITHOUT_COLLISION'),
+);
 assert(app458Css.startsWith('APP458_CANONICAL_COMPACT_TOP_CONTROLS_ALL_SHELLS'),'app458 compact UI missing');
 for(const token of [
   '@media (max-width: 1099px)',
@@ -249,3 +252,25 @@ for(const forbidden of ['.soridraw-studio-result-pane','requestAnimationFrame(',
   assert(!app458Css.includes(forbidden),'app458 standalone CSS must not edit split engine or server: '+forbidden);
 }
 console.log('APP458_MUSIC_NOTE_LIBRARY_EXTERNAL_MOBILE_COMPACT_PARITY=PASS');
+
+
+// APP459: physical mobile and detached-window min-content fit without
+// shrinking painted seven dots; same row-container rule in narrow split.
+const app459Css=css.slice(css.indexOf('APP459_COMPACT_ROW_FIT_WITHOUT_COLLISION'));
+assert(app459Css.startsWith('APP459_COMPACT_ROW_FIT_WITHOUT_COLLISION'),'app459 CSS missing');
+for(const token of [
+  '@container (max-width: 420px)',
+  'clamp(2px, calc((100cqi - 290px) / 20), 6px)',
+  'clamp(14px, calc((100cqi - 150px) / 8), 28px)',
+  'max-width: 100% !important;',
+  'max(100%, min(260px, calc(100vw - 24px)))',
+  '.soridraw-responsive-search-slot:not(:focus-within):not(.is-search-active)',
+]) assert(app459Css.includes(token),'app459 fit rule missing: '+token);
+for(const w of [256,280,296,320,336,360,376,396,420]){
+  const dotHit=Math.max(14,Math.min(28,(w-150)/8));
+  const gap=Math.max(2,Math.min(6,(w-290)/20));
+  const reset=Math.max(34,Math.min(52,w/3-95.333));
+  const used=42+42+12+reset+7*dotHit+7*gap+10;
+  assert(used <= w+0.02,'app459 row overflow at '+w+'px: '+used.toFixed(2));
+}
+console.log('APP459_PHONE_ROW_256_TO_420_NO_RESTING_OVERFLOW=PASS');

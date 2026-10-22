@@ -1,3 +1,12 @@
+## NEXT — app459 verify overflow protection and split bounds (2026-10-22 KST)
+
+- User request: FIRST prevent search/color/filter row from running outside real mobile/externally resized Music Note/Library width and search resting button overlapping color tray. SECOND prevent shrunken PC window splitter from crushing left/right panes; preserve full PC user-approved app457 split visuals.
+- CSS app459: seven dots same painted size; fluid hit widths/gaps by parent row width under420px, search/filter min42 and 6px row gap, popup min260 capped to viewport on phones. Verify real page content widths>=256 and selected colors/refresh/filter text/X unaffected. Narrowest physical devices <320 need separate check.
+- Split app459: use real center-workspace width for 430px minimum pane bounds in wide + tablet, clamp 50/50 when total<860px; retain 24/76 when 24% width already>=430. Do not change split pointer rAF, page data or routing.
+- Gate TS/Build/app209/split/frozen product CI. If PASS, only Firebase PREVIEW Hosting per user's normal UI test workflow; exact remote appVersion459/build hash and TEST/PRODUCTION unchanged. User visual test required for narrow window/actual mobile and pointer-up.
+
+---
+
 ## NEXT — app458 deployed; verify compact UI parity on external window and real mobile (2026-10-22 KST)
 
 - Firebase PREVIEW app458 live at `https://preview.soridraw.com` (release SHA `d339bd6b438cae33a5b675d8eabcc8ea3be17530`; GitHub Actions #39771447456 SUCCESS; TypeScript/Build, exact build/live version458, TEST/PRODUCTION unchanged, RTDB Rules skipped).

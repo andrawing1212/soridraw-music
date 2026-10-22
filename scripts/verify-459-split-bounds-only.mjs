@@ -104,3 +104,54 @@ for(const pane of [430,660,760,820,920,1300]){
 }
 console.log('APP464_RESIZE_GENERATE_NO_DOUBLE_TRANSFORM=PASS');
 console.log('APP464_TABLET_CREATE_GUTTERS_MATCH_1031=PASS');
+
+ 
+// APP465_TABLET_ONEPANE_GUTTERS_AND_RAIL_SCROLLBAR
+// One-pane must not inherit 1031's split-only scope or 779's asymmetric padding.
+// The unchanged 1031 and 779 rules are intentional protected baselines.
+const app465=splitterCss.slice(splitterCss.indexOf('APP465_TABLET_ONEPANE_GUTTERS_AND_RAIL_SCROLLBAR'));
+assert(app465.startsWith('APP465_TABLET_ONEPANE_GUTTERS_AND_RAIL_SCROLLBAR'),'APP465 tablet one-pane correction missing');
+assert.match(app465,/@media \(min-width: 1100px\) and \(max-width: 1599\.98px\)/);
+for (const token of [
+  '[data-workspace-view="recent"]',
+  '[data-workspace-view="music-note"]',
+  '[data-workspace-view="library"]',
+  '[data-soridraw-result-collapsed="true"]',
+  '[data-soridraw-builder-collapsed="true"]',
+  '.soridraw-lite-studio-split-workspace.is-result-collapsed',
+  '.soridraw-lite-studio-split-workspace.is-builder-collapsed',
+  'padding-right: 18px !important;',
+  'width: min(calc(100% - 24px)',
+  '.soridraw-studio-builder-pane-masthead-host',
+  '.soridraw-studio-main {',
+  'padding-right: 0 !important;',
+  '> .soridraw-studio-result-pane {',
+  'right: 0 !important;',
+  'padding-right: 36px !important;',
+]) assert(app465.includes(token),'APP465 one-pane contract missing: '+token);
+assert(!app465.includes('is-create-vertical'),'APP465 may not modify the accepted Create page');
+assert(!app465.includes(':not(.is-builder-collapsed):not(.is-result-collapsed)'),'APP465 must not change normal split view');
+for(const unsafe of ['pointermove','onPointer','ResizeObserver(', 'getBoundingClientRect(', 'requestAnimationFrame(', 'fetch(']){
+  assert(!app465.includes(unsafe),'APP465 must not add drag measurements or network work: '+unsafe);
+}
+// One-pane native scroll shell right edge: reserved 18px -> zero rail gap.
+// Returning the reserve to pane padding holds the visible right content guide.
+const tabletWorkspaceWidths=[860,900,1100,1300];
+for(const outerWidth of tabletWorkspaceWidths){
+  const formerResultScrollRight=outerWidth-18;
+  const finalResultScrollRight=outerWidth;
+  const formerResultContentWidth=outerWidth-18-18-18-18;
+  const finalResultContentWidth=outerWidth-18-18-36;
+  assert.equal(finalResultScrollRight-formerResultScrollRight,18,'APP465 scrollbar must move to rail');
+  assert.equal(finalResultContentWidth,formerResultContentWidth,'APP465 result content width must stay stable');
+  // Builder: unchanged 18px left main inset; 18px inner right pad.
+  // Both direct children use a 24px total centered inset.
+  const builderAvailable=outerWidth-18-18;
+  const childWidth=Math.min(builderAvailable-24,1500);
+  const childMargin=(builderAvailable-childWidth)/2;
+  const leftGutter=18+childMargin;
+  const rightGutter=18+childMargin;
+  assert.equal(leftGutter,rightGutter,'APP465 expanded Builder left/right black gutters must match');
+  assert.equal(leftGutter,30,'APP465 tablet expanded Builder reference gutter');
+}
+console.log('APP465_TABLET_ONEPANE_GUTTERS_AND_RAIL_SCROLLBAR=PASS');

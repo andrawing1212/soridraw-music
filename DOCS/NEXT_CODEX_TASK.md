@@ -1,3 +1,14 @@
+## NEXT — app465 tablet expanded Recent/Music Note/Library gutters + scrollbar QA (2026-10-23 KST)
+
+- User accepted app464 Create tablet margins. Their 5 screenshots + 79.9s video demonstrate remaining tablet-only issues when using top one-pane expand toggles on Recent, Music Note, Library.
+- Fix only collapsed-state styles in 1100..1599.98px Studio Black Lite V2. Result collapsed => Builder direct masthead/content `width:min(100%-24px,1500px)` centered and Builder inner right pad18; left Studio main18+child12, right pane18+child12, both 30px. Builder collapsed => remove Studio main right18 reserve, result pane right0 and inner right pad36 so cards/list retain their old width/position but native vertical scrollbar reaches right rail.
+- Do not change Create, normal split, desktop >=1600, compact <1100, pointer/rAF/scroll storage/Generate, Music Note/Library Local First, protected card/list/title controls, RTDB Rules/Worker/Functions/Firestore/D1, Stage416 OFF.
+- Candidate `fix/app465-tablet-onepane-gutters-scrollbar`, from preview `644f77996a54c2fd52acf5e937f67c5cad2bb2d5`, changes `studioLayout.css`, existing split contract verifier, version465, Hosting version allowlist, CURRENT/NEXT only.
+- Gate: source TypeScript, Build, split frozen, Music Note/Library UI, product quality; confirm all 3 × both collapse directions, 1100 and 1600 boundaries, app464 Create, scrollbar edge+vertical dragging, split return speed/scroll and page switching. CI cannot replace physical mouse/tablet PASS.
+- On CI PASS and independent focused review, merge preview then request Hosting-only Firebase PREVIEW; verify live version/hash and TEST/PRODUCTION unchanged. No approval for main/TEST/PRODUCTION promotion.
+
+---
+
 ## NEXT — app464 PREVIEW postflight + native resize and tablet Create user test (2026-10-23 KST)
 
 - PR #437 app464 source merged `d9332d7752b1bc5a4b6098a75f44b232387d106c`, split CI #39845944666 PASS and product quality CI #39845944658 PASS. Hosting-only trigger PR #438 merged `8e8a96d2fbfcd58ac10f19cbc59ead9b8998ac0c` with source version464.

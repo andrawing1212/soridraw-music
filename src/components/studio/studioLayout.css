@@ -16899,3 +16899,56 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
     width: max(100%, min(260px, calc(100vw - 24px))) !important;
   }
 }
+
+
+/* APP460_STANDALONE_IDLE_SEARCH_PILL_EXACT_FIT
+ * User Classic Dark mobile screenshot: collapsed search has a squared-off
+ * right edge next to the palette, unlike the approved split inner search.
+ * Give only the INACTIVE outer-mobile search an exactly slot-sized 46px
+ * rounded surface with zero intrinsic min width. Its own rounded clipping
+ * prevents the child flex/input surface bleeding into the color bar.
+ * No active/focused search modification, so 260px overlay and X stay valid.
+ * No split >=1100 or backend changes. */
+@media (max-width: 1099px) {
+  :root body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-stable-top-controls
+  .soridraw-responsive-search-slot:not(:focus-within):not(.is-search-active) {
+    position: relative !important;
+    overflow: visible !important;
+    min-width: 42px !important;
+  }
+  :root body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-stable-top-controls
+  .soridraw-responsive-search-slot:not(:focus-within):not(.is-search-active)
+  .soridraw-responsive-search {
+    box-sizing: border-box !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    flex: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: 46px !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+    clip-path: inset(0 round 16px);
+  }
+  :root body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-stable-top-controls
+  .soridraw-responsive-search-slot:not(:focus-within):not(.is-search-active)
+  .soridraw-responsive-search-input {
+    box-sizing: border-box !important;
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: 46px !important;
+    border-radius: 16px !important;
+  }
+}

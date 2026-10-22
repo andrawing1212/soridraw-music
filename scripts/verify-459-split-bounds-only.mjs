@@ -17,8 +17,14 @@ assert.equal(after?.length,1,'expected one updated getSplitBounds function');
 assert.equal(baseline.replace(before[0],'<SPLIT_BOUNDS>'),
   current.replace(after[0],'<SPLIT_BOUNDS>'),
   'APP459 changed protected Lite splitter code outside getSplitBounds');
-assert.match(before[0],/getSplitProfile\(\) !== 'tablet'/,'original 430px tablet guard missing');
-assert.doesNotMatch(after[0],/getSplitProfile\(\) !== 'tablet'/,'app459 still excludes wide split');
+// The initial app459 PR compared the legacy tablet-only guard to the new
+// real-center-workspace guard. Later PRs use app459 as their baseline: in
+// that case the full function must remain EXACT, not merely equivalent.
+if (before[0].includes("getSplitProfile() !== 'tablet'")) {
+  assert.doesNotMatch(after[0],/getSplitProfile\(\) !== 'tablet'/,'app459 still excludes wide split');
+} else {
+  assert.equal(after[0],before[0],'post-app459 PR altered frozen split bounds');
+}
 for(const line of [
   'Math.min(TABLET_MIN_PANE_PX, safeWidth / 2)',
   'Math.max(MIN_PERCENT, minimumPercent)',

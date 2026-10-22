@@ -1,3 +1,14 @@
+## NEXT — app464 native window Generate-bar boundary and tablet Create gutters (2026-10-23 KST)
+
+- User's `20261022-1953-13.9195741.mp4` shows lower Generate row momentarily poking right while external browser window width is changing. User also requests tablet Create left/right margins match Music Note and Library. app463 keyword label 12px accepted.
+- Native resize issue: app750 already computes the correct floating left/width from split engine root variables, but CSS 797's independent compositor translate/scale can still apply. Suppress transform ONLY under `html.soridraw-window-resizing`; never add per-resize forced DOM measurement or modify splitter hot path.
+- Tablet-only Create 1100..1599.98px: apply existing 1031 24px total content gutter to the Create vertical Builder's direct children; pane scroll shell, scrollbar placement, button/card grid, other workspaces and wide/compact layouts unchanged.
+- Branch `fix/app464-resize-generate-tablet-gutters` starts preview `9045bb995a487aa49fe5e58a782c92676079e591`; only studioLayout.css, existing split source verifier, app-version464, Worker-Hosting allowlist, CURRENT/NEXT docs.
+- Verify exact source TypeScript, Build, Music Note/Library parity, app448 split Generate and app459 bounds frozen, no backend or data changes. Physical PC video at 1100->1599, around 1100 transition to compact, 1600 transition to wide, fast and slow native resize, also Create/Recent/Music Note/Library no misplaced bar, no release snap. CI static result != physical PASS.
+- Preview Hosting-only release on full CI PASS (no RTDB Rules, Worker, Functions or shared data), verify exact live version464 and protected environments. No main/TEST/PRODUCTION promotion, Stage416 OFF.
+
+---
+
 ## NEXT — app463 PREVIEW Hosting postflight and user 12px keyword visual acceptance (2026-10-23 KST)
 
 - app463 Music Note keyword font-only source PR #434 merged `2aed69fcfbd7b3bf0623c2092d939f4238f6f5b5`, CI #39842159919 + #39842159994 both SUCCESS. App-version463/Hosting-only trigger PR #435 merged `16d18b6b0b487b5e139f7c2c1e2b70c3289bac23`.

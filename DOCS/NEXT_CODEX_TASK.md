@@ -1,3 +1,12 @@
+## NEXT — app455 mobile result top-row flex from first pixel (2026-10-22 KST)
+
+- On app454 real video, narrow Music Note/Library split top row search+color+filter does not fill to right edge. During drag, responsive mode switch causes an apparent group slide/snap. User: fix start state first. Search and filter should BOTH grow on pane widening, filter stops at full icon+text+chevron size, color remains fixed; after that search alone continues seamlessly; narrowing reverses naturally. Focused search remains app454 260px overlay over fixed dots.
+- Patch only `studioLayout.css` and search source verifier; app version 455, Worker frozen Hosting version allowlist only, current docs. No split engine/pointer/React resize changes.
+- Validate Browser responsive widths 400..660 (no right gap, color invariant, filter cap104, search continuous), 660→661 handoff, no unwanted fullwidth/standalone mobile changes, Library playlist variant, empty/typed X, no pointer-up snap. Local isolated layout model PASS is not user real app PASS.
+- If CI TS/Build/app209/app303 and product suite PASS, release only PREVIEW Hosting and exact built/version/TEST-PROD unchanged verification. Next action: audit app455 PR CI before merge/release.
+
+---
+
 ## NEXT — app454 PREVIEW user UI acceptance (2026-10-22 KST)
 
 - Already deployed via Firebase PREVIEW Hosting workflow #39708218886 SUCCESS, app version 454; exact source PR #406, trigger PR #407 merge `8f93f680aaa3e8a378b1ec11677d5af775b17a90`; TS/Build/search/split quality PASS.

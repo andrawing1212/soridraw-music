@@ -7368,7 +7368,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         : musicNotePageHeader}
 
       {!isMusicNoteSharedView && (
-      <div className="soridraw-musicnote-region-top flex items-center gap-2 max-w-full whitespace-nowrap" data-selection-keep="true">
+      <div className="soridraw-musicnote-region-top soridraw-stable-mode-viewport flex items-center gap-2 max-w-full whitespace-nowrap" data-selection-keep="true">
         <div className="soridraw-musicnote-mode-tabs grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[480px] shadow-[var(--shadow-md)]">
           {musicNoteTabs.map((tab) => (
             <button
@@ -7402,7 +7402,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
       {!isMusicNoteSharedView && (
       <div className="soridraw-musicnote-region-top mt-2 md:mt-3 space-y-4 md:space-y-5">
-        <div className="soridraw-responsive-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
+        <div className="soridraw-responsive-top-controls soridraw-stable-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
           <div className={cn(
             "soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2",
             (isSearchFocused || Boolean(searchQuery)) && "is-search-active",
@@ -7427,14 +7427,14 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               onBlur={() => setIsSearchFocused(false)}
               className={cn(
                 "soridraw-responsive-search-input w-full h-[46px] bg-white/[0.145] border border-white/[0.14] rounded-2xl pl-12 text-sm text-[var(--text-primary)] focus:outline-none focus:bg-white/[0.17] focus:border-[#FF7A72]/50 transition-all",
-                searchQuery ? "pr-11" : "pr-4",
+                (isSearchFocused || searchQuery) ? "pr-11" : "pr-4",
               )}
             />
-            {searchQuery && (
+            {(isSearchFocused || Boolean(searchQuery)) && (
               <button
                 type="button"
                 className="soridraw-responsive-search-clear absolute right-2 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-white/45 transition hover:bg-white/[0.07] hover:text-[#FF9A94]"
-                aria-label="검색어 지우기"
+                aria-label="검색 취소"
                 onPointerDown={(event) => event.preventDefault()}
                 onClick={(event) => {
                   setSearchQuery('');

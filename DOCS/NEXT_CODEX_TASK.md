@@ -1,3 +1,12 @@
+## NEXT — app463 PREVIEW Hosting postflight and user 12px keyword visual acceptance (2026-10-23 KST)
+
+- app463 Music Note keyword font-only source PR #434 merged `2aed69fcfbd7b3bf0623c2092d939f4238f6f5b5`, CI #39842159919 + #39842159994 both SUCCESS. App-version463/Hosting-only trigger PR #435 merged `16d18b6b0b487b5e139f7c2c1e2b70c3289bac23`.
+- Technical next: retrieve push-triggered canonical Firebase PREVIEW Hosting release conclusion, exact remote app-version=463 and built HTML SHA; verify TEST/PRODUCTION unmodified. PR-only workflow lookup cannot prove push release, and web/container access to preview origin unavailable in the current chat; do not infer success.
+- User next: physically confirm Music Note saved-song applied keyword text is readable at 12px on narrow split/phone/PC, stays within 18px/20px strip, and horizontal pointer/wheel scrolling still works. User accepted app461/app462 previously; don't retest/rewrite normal features without new evidence.
+- This was Hosting UI-only: no RTDB Rules, Worker, Functions, D1/cache/schema, shared originals or local-first changed. Stage416 OFF, TEST/PRODUCTION promotion not authorized.
+
+---
+
 ## NEXT — app463 Music Note saved-song keyword text readability (2026-10-23 KST)
 
 - User requests keyword text size enlargement in the Music Note song list after screenshots show unreadably small genre/style/other applied keyword text in each row. Restrict to `.soridraw-musicnote-song-keywords > .soridraw-musicnote-keyword-chip` and keep every keyword text visible by existing horizontal scrolling.

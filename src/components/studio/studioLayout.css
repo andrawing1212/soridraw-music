@@ -17047,3 +17047,26 @@ html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-stud
     min-height: 52px !important;
   }
 }
+
+/* APP462_SCROLLBAR_SPLITTER_EXCLUSIVE_HIT_ZONES
+ * The native Builder scrollbar sits immediately LEFT of the visible split
+ * boundary. The old centered 16px splitter button overlays that scrollbar.
+ * Keep the exact same fixed left coordinate, 1px painted line, and 16px
+ * effective horizontal-resize hit width, but use the RIGHT half-plane only.
+ * No splitter rAF/pointer changes and no scroll pane geometry changes.
+ *
+ * Existing button left = boundary - 8px. Expanding its transparent box to
+ * 24px then clipping its leftmost 8px leaves the full [boundary, boundary+16)
+ * for horizontal resizing, and releases [boundary-8, boundary) to the native
+ * vertical scrollbar. The 1px painted line stays at boundary. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter {
+    width: 24px !important;
+    justify-content: flex-start !important;
+    clip-path: inset(0 0 0 8px);
+  }
+
+  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter > span {
+    margin-left: 8px !important;
+  }
+}

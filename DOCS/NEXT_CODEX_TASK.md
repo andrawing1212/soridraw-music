@@ -1,3 +1,14 @@
+## NEXT — app462 isolate split Builder native scrollbar from splitter hit target (2026-10-23 KST)
+
+- User confirmed app461 PREVIEW visual PASS; next video `20261022-1610-50.2531472.mp4` demonstrates the Builder's native vertical scrollbar cannot reliably be grabbed because its thumb is overlapped by body-level 16px splitter pointer surface. Do not confuse scrolling gesture with horizontal pane resize.
+- Current source: splitter fixed left = real boundary-8px, width16px, body portal z130. Desired ownership: **Builder native scrollbar gets everything LEFT of boundary**, **horizontal divider drag keeps a real 16px target RIGHT of boundary**; 1px visible line stays exactly at original boundary.
+- Minimal CSS-only fix for Studio Black Lite split >=1100: width24px transparent hit box + clip-path remove left8px + justify-content:flex-start/span margin-left8px. No change to left coordinate writer, React pointer handlers, drag rAF/scroll capture, pane width/gutter or generation bar.
+- Existing app459 frozen code guard remains exact; append app462 hit-zone assertions. Run TS, Build, split/Generate verifier and product quality. Manually inspect 1100/1600 profile CSS specificity, no font/color/position redesign; keyboard/screen readers unaffected.
+- Physical PC check after PREVIEW release: (a) click scrollbar thumb anywhere, drag vertically up/down without pane resizing (b) immediately right of line drag horizontally, fast and slow, without scrolling (c) release causes no snap, scroll-top/bottom stable (d) mouse wheel, pointer hover, touch and tablet if available. Static CI is not physical pointer verification.
+- No new Firebase/Cloudflare backend, no shared data change, main/TEST/PROD untouched; app461 accepted Classic UI protected. New Stage416 activation prohibited. Next: obtain exact source-commit CI PASS and independent split audit before PREVIEW release.
+
+---
+
 ## NEXT — app461 verify Classic normal keyword summary on PC and mobile growth before any split change (2026-10-22 KST)
 
 - User asks for selected keywords/custom entries in Genre, Style, Sound, Mood, Theme summaries to stay readable rather than shrink as counts rise, with dashed summary extending DOWN by required line count. FIRST implement Classic normal mode only; split mode remains untouched until user accepts the visual outcome.

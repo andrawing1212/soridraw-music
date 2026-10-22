@@ -20,6 +20,22 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
       PREVIEW_WORKER: soridraw-explore-preview
     steps:
+      # P0 cross-environment curation read audit. No deploy, no mutation,
+      # no user-private Firebase reads, and no cache bootstrap on missing R2.
+      - name: Checkout exact approved read-only audit source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate bounded read-only curated probe
+        run: |
+          node --check scripts/diagnose-p0-curated-three-env-readonly.mjs
+          node scripts/diagnose-p0-curated-three-env-readonly.mjs --self-test
+      - name: Compare shared D1 curated membership and three real public environments
+        run: node scripts/diagnose-p0-curated-three-env-readonly.mjs
       - name: Capture exact active PREVIEW Worker
         shell: bash
         run: |

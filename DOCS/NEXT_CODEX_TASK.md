@@ -1,3 +1,13 @@
+## NEXT — production-first P0 curated revision + concurrency safety, then Music Note sampled canonical (2026-10-23 KST)
+
+- Real same-time-window live evidence twice: run #39860820744 and #39861568822 both say shared D1=13, PREVIEW=13 exact PASS, TEST=12 missing1 FAIL, PRODUCTION=12 missing1 FAIL. Last audit succeeded in PREVIEW Worker source archive and still correctly exited FAIL for product data parity. Source HEAD after audit PR #445 `d0fe1c02bdde9fbf356bb6bf838d129fed2d087d`. No data write/deploy.
+- **Codex High implementation target, NOT authorized to deploy:** design PREVIEW fix for curation #203. Shared `curated_picks` D1 remains immutable authority. Implement environment-independent tiny revision/version proof or bounded shared curated snapshot with safe write coordination; ensure same 20 promoted IDs/order across PREVIEW/TEST/PRODUCTION after compatible release. Guard two simultaneous promotions, promotion/removal, publish/private events and R2 conditional-write conflicts; no missed or resurrected tracks. No D1 data scan on warm unchanged Explore entry; no active periodic polling; no full Feed recompute. Derivative R2/Edge is not shared canonical.
+- Preserve app465 UI, app410 likes, private user data, same-account current heart +30s and Music Note Detail +60s, Stage416 OFF, app377 backward compatibility. TypeScript/Build, existing `verify-307-explore-curation.mjs` and independent new concurrency tests PASS; Work audit exact SHA; PREVIEW deployment only after review, real PC/mobile and cross-env API assessment. TEST/PRODUCTION no promotion without explicit approval.
+- Parallel **read-only first**: for Music Note #237 the target authenticated user and exact divergent favorite IDs still need verified runtime identifiers. Compare bounded per-song canonical favorites, shared R2 Catalog revision and origin-local pending/drafts, never all favorites collection or arbitrary account. No repair claimed.
+- Separate app version matching is last step after canonical/derived parity PASS.
+
+---
+
 ## NEXT — curated live FAIL confirmed; repair only by safe PREVIEW source plan (2026-10-23 KST)
 
 - [Run 39860820744](https://github.com/andrawing1212/soridraw-music/actions/runs/39860820744) read shared canonical D1 active curated 13 public track IDs and compared top20 live APIs: **PREVIEW=13 exact PASS**, **TEST=12 FAIL missing1**, **PRODUCTION=12 FAIL missing1**; test/prod same visible fingerprint but distinct R2 revision fingerprints. No D1/Firestore/user original write, no deploy. Record result in #203. Do not claim Music Note parity fixed.

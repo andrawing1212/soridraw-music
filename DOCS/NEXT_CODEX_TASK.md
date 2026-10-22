@@ -1,3 +1,12 @@
+## NEXT — app464 PREVIEW postflight + native resize and tablet Create user test (2026-10-23 KST)
+
+- PR #437 app464 source merged `d9332d7752b1bc5a4b6098a75f44b232387d106c`, split CI #39845944666 PASS and product quality CI #39845944658 PASS. Hosting-only trigger PR #438 merged `8e8a96d2fbfcd58ac10f19cbc59ead9b8998ac0c` with source version464.
+- Remote postflight still unverified: retrieve canonical push-triggered Firebase PREVIEW Hosting workflow run and check `https://preview.soridraw.com/app-version.json=464` and exact index build, TEST and PRODUCTION unchanged. GitHub PR commit workflow search is not the push release log; do not infer PASS.
+- User test: resizing native browser between wide, tablet (1100–1599px) and compact (<1100) with the Create/Recent/Music Note/Library tabs; lower Generate row stays within Builder, no pointer-up/window-release snap. Tablet Create direct content inset now copies approved Music Note/Library app1031 centered 24px total gutter; confirm matching actual screenshot. Physical PC/phone tests were not run by CI, so still pending.
+- No Source TSX changes or new JS geometry observers; preserve app461/app462/app463 user visual PASS, split/Generate rAF speed/scroll, backend/cost/data, Stage416 OFF. No TEST/PRODUCTION promotion without user approval.
+
+---
+
 ## NEXT — app464 native window Generate-bar boundary and tablet Create gutters (2026-10-23 KST)
 
 - User's `20261022-1953-13.9195741.mp4` shows lower Generate row momentarily poking right while external browser window width is changing. User also requests tablet Create left/right margins match Music Note and Library. app463 keyword label 12px accepted.

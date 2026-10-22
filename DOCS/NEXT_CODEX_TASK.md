@@ -1,3 +1,12 @@
+## NEXT — run P0 read-only Cloudflare recommendation parity audit (2026-10-23 KST)
+
+- PREVIEW app465 is feature reference; TEST/PRODUCTION app377 are currently inconsistent for Music Note and SORIDRAW 추천 (user report). Do not merge caches or promote releases.
+- `audit/p0-curated-three-environment-readonly` adds `scripts/diagnose-p0-curated-three-env-readonly.mjs` and extends existing Cloudflare live source read-only workflow. The exact workflow only executes on **its own edited workflow-file push to preview** or explicit dispatch; NO Worker/Hosting/Rules or user data writes. Cloudflare D1 SELECT (40 rows) vs PREVIEW/TEST/PRODUCTION public curated (20 per env), compare IDs/order, sanitized counts/hash; skip body on absent R2 revision to avoid lazy bootstrap. Run self-test and source CI then merge when safe; inspect audit live result.
+- Do NOT claim Music Note canonical checked. No identified Firebase UID and per-song IDs, and no direct Firebase live connector. Next safe step is bounded per-song Firestore read + shared R2 Catalog identity/revisions for *confirmed* same-user sample, with no all-user/all-favorites scans or cache reset.
+- If curated environments differ, freeze evidence, fix cross-env revision authority and concurrency in PREVIEW via High Codex + independent audit; solve missed dormant Music Note deltas separately; verify real warm/cold cache; TEST and production only on separate explicit approvals.
+
+---
+
 ## NEXT — P0 Music Note + 추천곡 PREVIEW/TEST/PRODUCTION parity diagnosis before any release (2026-10-23 KST)
 
 **User report / priority:** PREVIEW code/feature behavior is baseline, but Music Note saved membership differs among all three apps including yesterday's individually saved songs. PREVIEW displays recent `SORIDRAW 추천` curator promotions, TEST/PRODUCTION old promotions. The user welcomes matching versions *if needed*, **not an instruction to promote main or PRODUCTION now**. No forced cache clearing, preview-local data copying, canonical writes or migrations.

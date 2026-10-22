@@ -1,3 +1,13 @@
+## CURRENT — app453 Firebase PREVIEW Hosting DEPLOYED, UI real-use check next (2026-10-22 KST)
+
+- **User direction:** for a strictly visual split UI defect, prefer a quick PREVIEW real-device test over a prolonged independent code-only audit. Source fix PR #403 merged `57ee51ef18bed307247c13f937f299a647bb3d24`; final source verifier SHA `0e9bf4e239d60a7f04d2841d229b691ef35ca6a6`. Hosting-only release trigger PR #404 merged `1aceae54d0ebb93affcf26fcb815e100b8243793`.
+- **Verified release:** GitHub Actions #39706071655 **SUCCESS**. React TypeScript/Build PASS; PREVIEW Hosting deployed, actual `https://preview.soridraw.com/` index built artifact hash PASS, `app-version.json=453` PASS, TEST and PRODUCTION branch/live HTML unchanged PASS. Shared RTDB Rules deploy SKIPPED, no Functions/Worker/Cloudflare changes, no user data migration/write and Stage416 OFF.
+- **User-visible fix:** Music Note + Library result-pane tabs fit available width rather than clipping behind forced 480px; mobile refresh+seven colored dots stay fixed in PC split widths with no `전체` text morph; filter keeps own geometry; only search stretches, magnifier anchored left; empty-focused/typed search X gets 32x32 hit box. Standalone mobile CSS and splitter drag rAF/Generate bar not changed.
+- **Tests:** source/split CI #39705760899 PASS; product quality #39705760920 PASS after version allowlist extension only (`verify-435-preview-worker-release-artifact.mjs`). **Actual user visual and click behavior after app453 remains UNVERIFIED** — screenshots/video/fast+slow drag and X full-hit area need user physical check. This is not a claim of browser UI PASS.
+- **Next one action:** user opens app453 PREVIEW in Studio Black Music Note and Library, tests narrow↔wide splitter, three tabs, all mobile dots, filter, left search magnifier, full X click; report any visible failing state. No TEST or PRODUCTION promotion without separate approval.
+
+---
+
 ## CURRENT — app453 result top controls real-device repair (PREVIEW source candidate, 2026-10-22 KST)
 
 - **Why:** user-provided app452 video shows cropped top tabs, magnifier centered after split drag, X click area working only partially, color tray changing from mobile refresh+dots to desktop `전체`.

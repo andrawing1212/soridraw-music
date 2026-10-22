@@ -1,3 +1,12 @@
+## NEXT — app453 PREVIEW live UI user acceptance (2026-10-22 KST)
+
+- PREVIEW app453 **deployed** via exact release workflow #39706071655 SUCCESS, release trigger merge `1aceae54d0ebb93affcf26fcb815e100b8243793`. PR #403 source, TypeScript, Build, #39705760899 and #39705760920 PASS. Hosting `https://preview.soridraw.com/` app-version.json=453 and built-index parity checked; RTDB Rules SKIPPED, no Functions/Worker/user data write, TEST/PRODUCTION unchanged.
+- The user wants fast real-world visual acceptance rather than extra static audits for this UI-only fix. User checks Studio Black Music Note and Library divider min↔max, all 3 top tabs, mobile refresh/seven dots unchanged, filter fixed, search magnifier on the left, X clickable over its full 32x32 footprint, focus with empty and typed values. Existing app448 split speed and pointer-up snap unchanged in perception.
+- No claim of real browser PASS until user confirms. If visual failure, fix only narrow CSS contract before next PREVIEW; never retroactively claim a CI token check validated clicks. Stage416 OFF, TEST/PRODUCTION remain untouched.
+- Next one action: collect user's actual PREVIEW app453 UI result, then decide minimal follow-up.
+
+---
+
 ## NEXT — app453 Music Note / Library split top controls PR QA (2026-10-22 KST)
 
 - Review the user-reported app452 regressions: cropped 3 top menu buttons, magnifier relocates to search center, X only partly clickable, mobile seven-color bar morphs to desktop `전체` state.

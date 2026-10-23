@@ -1821,6 +1821,12 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
         });
       }
       if(publicWindowEnabled448)await this.ensurePublicAlarm416();
+      // Process the separately persisted curated dirty record only when an
+      // actual curated change enqueued it; normal healthy pages never run this.
+      if (sharedCuratedEnabled466(this.env) &&
+          await this.ctx.storage.get(CURATED_REPAIR_KEY_468)) {
+        await this.runCuratedRepair468();
+      }
     } catch (error) {
       console.warn('[SORIDRAW 448] alarm retry failed:', String(error?.message || error || 'unknown'));
       throw error;

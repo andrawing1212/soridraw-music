@@ -3314,6 +3314,16 @@ export default {
               snapshotItem: mutationPayload307?.data?.snapshotItem || null,
             }];
         await syncCuratedPublicationResults307(request, env, results307, ctx);
+        if (curatedRepairTicket468) {
+          // Acknowledge only AFTER the shared R2 has been verified. A stale
+          // generation ack cannot erase a newer reserved change.
+          const ack468 = await curatedRepairTicket468.stub.fetch(
+            'https://soridraw.internal/curated-repair-468/ack', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ generation: curatedRepairTicket468.generation }),
+            });
+          if (!ack468.ok) throw Error('CURATED_REPAIR_ACK_DEFERRED_468');
+        }
       } catch (error) {
         console.warn('[app307] curated publication sync skipped:', String(error?.message || error || 'unknown'));
       }

@@ -9,6 +9,7 @@ on:
       - 'cloudflare/explore-worker/canonical/preview-entry.js'
       - 'cloudflare/explore-worker/runtime/curated-projection-repair-468.mjs'
       - 'scripts/verify-468-curated-durable-repair.mjs'
+      - 'scripts/verify-469-direct-curated-repair.mjs'
       - 'cloudflare/explore-worker/runtime/private-window-gate-416.mjs'
       - 'cloudflare/explore-worker/runtime/private-like-d1-writer-416.mjs'
       - 'cloudflare/explore-worker/runtime/like-private-batch-handoff-416.mjs'
@@ -231,6 +232,8 @@ jobs:
           node --check cloudflare/explore-worker/runtime/curated-projection-repair-468.mjs
           node --check scripts/verify-468-curated-durable-repair.mjs
           node scripts/verify-468-curated-durable-repair.mjs
+          node --check scripts/verify-469-direct-curated-repair.mjs
+          node scripts/verify-469-direct-curated-repair.mjs
       - name: Check exact entry syntax
         run: |
           node --check cloudflare/explore-worker/canonical/preview-entry.js

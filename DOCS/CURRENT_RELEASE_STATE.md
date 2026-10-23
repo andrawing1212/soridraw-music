@@ -1,3 +1,12 @@
+## CURRENT — 1k/10k cost sensitivity run / read-only live metering pending (2026-10-23 KST)
+
+- Added `DOCS/COST_ACCEPTANCE_1K_10K_2026_10_23.md` plus pure no-network `scripts/verify-1k-10k-cost-scenarios.mjs` on audit branch. This is **scenario arithmetic, not real monthly billing**; PREVIEW admin-only, TEST invited beta, PRODUCTION general users + beta concurrent TEST origin correctly separated.
+- Assumed 20% DAU / 2 daily production visits: 1k => 12,000 prod sessions/month; 10k => 120,000; 10 beta users add just 600 TEST sessions/month, 2 admins add 120 PREVIEW sessions/month. Example Worker/R2/RTDB fanout operations are hypothetical, not measured. Exact model and formulas in cost guide.
+- Historical private RTDB monitoring baseline exists but does not provide per-feature/public-like fanout or current user denominator; actual all-account D1/Workers/R2/DO/Firestore/RTDB/Functions/Hosting usage and current invoice **UNMEASURED**. Next safe action is read-only usage collection with existing D1 and private RTDB scripts, no escalation/writes.
+- Critical P0 release gates unchanged: app466 PR #447 DRAFT flag OFF and independent audit pending; curated D1 13/PREVIEW 13/TEST 12/PRODUCTION 12; Music Note #237 sampled canonical parity unverified. This audit includes no user-data or deployment changes.
+
+---
+
 ## CURRENT — 1k–10k cost standard / PREVIEW admin-only / beta TEST+PRODUCTION (director, 2026-10-23 KST)
 
 - **Current operating distribution (supersedes older history below):** PREVIEW (preview.soridraw.com) is exclusively for **administrators**, with **no beta testers**. TEST (test.soridraw.com) is used by administrators plus a **small invited beta user group**. PRODUCTION (soridraw.com) serves the majority of users; the **same beta tester may actively use TEST and PRODUCTION simultaneously**. Do not assume that all users or all three origins are active after each edit.

@@ -1619,6 +1619,35 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
 
   async fetch(request) {
     const url = new URL(request.url);
+    if (request.method === 'POST' && url.pathname.startsWith('/curated-repair-468/')) {
+      if (!sharedCuratedEnabled466(this.env)) {
+        return Response.json({ ok: false, error: 'CURATED_REPAIR_DISABLED_468' }, { status: 503 });
+      }
+      const body = await request.json().catch(() => null);
+      try {
+        if (url.pathname === '/curated-repair-468/reserve') {
+          const result = await reserveCuratedRepair468(this.ctx.storage, body?.trackIds);
+          return Response.json({ ok: result.reserved === true, data: result },
+            { status: result.reserved ? 200 : 400 });
+        }
+        if (url.pathname === '/curated-repair-468/confirm') {
+          const result = await confirmCuratedRepair468(
+            this.ctx.storage, Number(body?.generation || 0));
+          return Response.json({ ok: true, data: result });
+        }
+        if (url.pathname === '/curated-repair-468/ack') {
+          const result = await acknowledgeCuratedRepair468(
+            this.ctx.storage, Number(body?.generation || 0));
+          return Response.json({ ok: true, data: result });
+        }
+      } catch (error) {
+        return Response.json({
+          ok: false, error: String(error?.message || 'CURATED_REPAIR_JOURNAL_FAILED_468'),
+        }, { status: 503 });
+      }
+      return Response.json({ ok: false, error: 'CURATED_REPAIR_UNKNOWN_ROUTE_468' },
+        { status: 404 });
+    }
     if(request.method==='POST'&&url.pathname==='/public-release'){
       const body=await request.json().catch(()=>null);
       try{

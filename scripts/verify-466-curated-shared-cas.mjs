@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {
   CURATED_SHARED_KEY_466,
   sharedCuratedEnabled466,
@@ -8,6 +9,27 @@ import {
   reconcileCuratedShared466,
   getCuratedShared466,
 } from '../cloudflare/explore-worker/runtime/curated-shared-canonical-466.mjs';
+
+// Protect the mixed-version rollout: the new shared source must remain dormant
+// until the existing PR is independently audited and runtime flag is authorized.
+const entry466=fs.readFileSync(new URL('../cloudflare/explore-worker/canonical/preview-entry.js', import.meta.url),'utf8');
+const config466=JSON.parse(fs.readFileSync(new URL('../cloudflare/explore-worker/canonical/wrangler.preview.jsonc', import.meta.url),'utf8'));
+assert(!Object.hasOwn(config466.vars||{},'SORIDRAW_CURATED_SHARED_V466'),
+  'Shared curated runtime mode must be OFF in checked-in PREVIEW config');
+assert(entry466.includes('SORIDRAW_CURATED_CROSS_ENV_SHARED_V466'), 'Missing gated source marker');
+assert(entry466.includes('const curatedBucket307 = (env) => env?.EXPLORE_CACHE || env?.PROFILE_MEDIA || null;'),
+  'Existing v307 derived cache fallback must remain unchanged');
+for(const required of [
+  'handleCuratedSharedRevision466(request, env)',
+  'handleCuratedSharedPublic466(request, env, ctx)',
+  'readCuratedShared466(request, env, ctx)',
+  'refreshCuratedShared466(request, env, ctx, [id])',
+  'syncCuratedPublicationResults307(request, env, results307, ctx)',
+  "CURATED_SHARED_CONCURRENT_CHANGE_466",
+  'EDGE-SHARED-CURATED-BODY-466',
+]) assert(entry466.includes(required),'Missing shared v466 guarded integration: '+required);
+assert(!entry466.includes("env?.SORIDRAW_CURATED_SHARED_V466 = '1'"),'Activation must not be implicit');
+console.log('CURATED_SHARED_466_RUNTIME_FEATURE_OFF_AND_LEGACY_SAFE=PASS');
 
 const row = (id, published=true, updatedAt=100) => ({
   track_id:id,curator_role:'master',curator_uid:'',sort_order:0,updated_at:updatedAt,

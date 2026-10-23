@@ -130,6 +130,38 @@ assert.deepEqual(visibleCuratedIds466([row('a'),row('b',false)]),['a']);
 }
 
 {
+  // Interleaved canonical update without a competing R2 writer: for example,
+  // an app377 Worker commits D1 after our first read but has not updated
+  // the new v466 shared key. CAS alone succeeds with a stale D1 view.
+  // The post-CAS canonical proof must detect and repair this precise race.
+  const bucket=memoryR2(),env=envFor(bucket);
+  const oldRows=[row('a',true,100)];
+  const newerRows=[row('b',true,200),row('a',true,100)];
+  let canonicalReads=0;
+  const res=await reconcileCuratedShared466(env,track,{
+    readRows:async()=>++canonicalReads===1 ? oldRows : newerRows,
+  });
+  assert(res.ok,'a fresh canonical write interleaved with CAS must be repaired');
+  assert(canonicalReads>=3,'must do a post-CAS canonical read and retry the drift');
+  assert.deepEqual((await getCuratedShared466(env)).snapshot.memberIds,['b','a']);
+}
+
+{
+  // The checked-in mixed release remains blocked: an old app377 Worker may
+  // mutate D1 and only its local v307 R2 after the new shared v466 write.
+  // Without another new-code mutation, v466 cannot learn that change from
+  // local R2 HEAD alone. This must NOT be reported as end-to-end parity PASS.
+  const bucket=memoryR2(),env=envFor(bucket);
+  const original=[row('a',true,100)];
+  assert((await write(env,async()=>original)).ok);
+  const afterOldWorkerOnly=[row('b',true,200),row('a',true,100)];
+  const warm=await getCuratedShared466(env);
+  assert.equal(matchesCanonicalCurated466(afterOldWorkerOnly,warm.snapshot),false,
+    'old Writer drift must be explicit release blocker, not a source PASS');
+  console.log('CURATED_SHARED_466_MIXED_VERSION_ACTIVATION_BLOCKED=PASS');
+}
+
+{
   // Publication/private cycle must preserve promoted membership but hide card.
   const bucket=memoryR2(),env=envFor(bucket);
   let canonical=[row('a')];

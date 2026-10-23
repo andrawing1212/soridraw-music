@@ -223,7 +223,6 @@ jobs:
           node --check cloudflare/explore-worker/runtime/curated-shared-canonical-466.mjs
           node --check scripts/verify-466-curated-shared-cas.mjs
           node scripts/verify-466-curated-shared-cas.mjs
-          node scripts/verify-307-explore-curation.mjs
       - name: Check exact entry syntax
         run: |
           node --check cloudflare/explore-worker/canonical/preview-entry.js

@@ -83,7 +83,7 @@ assert.equal((await acknowledgeCuratedRepair468(store,ticket.generation)).acknow
   const write = new Function(
     'curatedBucket307','readCuratedObject307','baseWorker',
     'SORIDRAW_CURATED_R2_KEY_307','SORIDRAW_CURATED_COLLECTION_307',
-    'clearCuratedEdge307',
+    'clearCuratedEdge307','curatedWriterShadowEnabled471',
     'return async function writeCuratedSnapshot307(' + fnSource
   )(
     () => bucket,
@@ -92,7 +92,7 @@ assert.equal((await acknowledgeCuratedRepair468(store,ticket.generation)).acknow
       memberIds: ['curated-1'],
     }),
     { fetch: async()=>{throw Error('unexpected detail request on DELETE');} },
-    'curated-v307', 'soridraw', async()=>{},
+    'curated-v307', 'soridraw', async()=>{}, () => false,
   );
   const request = new Request('https://preview.soridraw.com/v1/curation/soridraw/curated-1');
   await assert.rejects(write(request, {}, {}, 'curated-1', false, 'master'),
@@ -136,8 +136,8 @@ console.log('APP473_DIRECT_CURATOR_V307_FAILURE_RETAINS_DURABLE_TICKET=PASS');
     {default:edge},
     url => new Request(new URL('/__soridraw/curated-body-v307/soridraw-20',url.origin)),
     env => env.shadow === true,
-    async () => Response.json({ok:true,data:{revision}}),
-    () => new Headers(),
+    async () => Response.json({ok:true,data:{revision}}, {headers:{'X-SORIDRAW-R2-B':'1'}}),
+    (_,meta={}) => new Headers({'X-SORIDRAW-R2-B':String(meta.r2B||0)}),
     async () => {bodyReads++;return {
       object:{etag:'new-revision'},
       payload:{ok:true,data:{items:newItems}},
@@ -148,16 +148,24 @@ console.log('APP473_DIRECT_CURATOR_V307_FAILURE_RETAINS_DURABLE_TICKET=PASS');
     'soridraw',300,
   );
   const req = new Request('https://soridraw-explore-preview.andrawing1212.workers.dev/v1/curated?collection=soridraw&limit=20');
-  const previous = await (await read(req,{shadow:false},{})).json();
+  const previousResponse = await read(req,{shadow:false},{});
+  const previous = await previousResponse.json();
   assert.equal(previous.data.items[0].track.id,'now-private');
+  assert.equal(previousResponse.headers.get('X-SORIDRAW-R2-B'),'0');
   assert.equal(bodyReads,0,'legacy OFF must retain the existing cached fast path');
 
-  const corrected = await (await read(req,{shadow:true},{})).json();
+  const correctedResponse = await read(req,{shadow:true},{});
+  const corrected = await correctedResponse.json();
   assert.equal(corrected.data.items[0].track.id,'still-public');
+  assert.equal(correctedResponse.headers.get('X-SORIDRAW-R2-B'),'2',
+    'shadow stale revision HEAD 1 + body GET 1 must both be billed');
   assert.equal(bodyReads,1,'changed revision reads R2 body instead of stale Edge');
   revision = 'old-revision';
-  const unchanged = await (await read(req,{shadow:true},{})).json();
+  const unchangedResponse = await read(req,{shadow:true},{});
+  const unchanged = await unchangedResponse.json();
   assert.equal(unchanged.data.items[0].track.id,'now-private');
+  assert.equal(unchangedResponse.headers.get('X-SORIDRAW-R2-B'),'1',
+    'even when body stays cached, a revision HEAD must count');
   assert.equal(bodyReads,1,'matched Edge revision must avoid any origin R2 GET');
 }
 console.log('APP474_SHADOW_STABLE_EDGE_REVISION_MISMATCH_BYPASS=PASS');

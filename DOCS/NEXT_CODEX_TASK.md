@@ -1,3 +1,13 @@
+## NEXT — app470 exact-SHA source audit, then safe mixed-writer compatibility staging (2026-10-24 KST)
+
+- User priority #203, one issue at a time; no #237 or costs. PR #454 branch `fix/app468-curated-repair-preview-candidate` based on preview `7a6a9d5f3064fff2cf68292def6e49c29862a7b3`, flags OFF, no deployed environment touched.
+- app470 found/treated **real DO transaction/alarm API mismatch**: `tx` is KV-only, `getAlarm/setAlarm` on `ctx.storage` after commit; app470 also re-arms pending curated work when `finalizeAggregate195` deletes the sole DO alarm on empty like queue. Invalid direct curator promotion no longer creates journal. Regression fixture simulates a transaction exposing ONLY KV functions plus failure→retry on real storage mock. Run node checks, TS/Build, Wrangler --dry-run and frozen app410 like/Stage416 OFF, 466-470 CAS/journal/visibility tests.
+- **Release P0 unchanged:** old app377 `main b13360df1bab52e2d3b746ea47dc4e3718eef85c` and PRODUCTION Worker can update same D1, not v466 shared key; both shared-reader feature flag and all-writers-attestation flag OFF. Feature-flag attestation alone does not make old writers compatible; sequentially turning on readers while other writers remain on old code can cause indefinite stale cache.
+- **Safe next design to implement/audit BEFORE activation:** complete writer-side compatibility in all environments while readers use existing v307 path, via changed-ID-only shared shadow projection with failure repair + initial bounded canonical reconciliation after all writers are ready. Alternative temporary write freeze requires separate explicit approval and must protect beta concurrent TEST↔PRODUCTION publication. Confirm all real writer paths (PUT/DELETE curated, PATCH visibility, POST batch publication) plus remote Worker vars (`keep_vars:true`); no background per-user D1 polling/full scans.
+- Independent Work source audit must confirm Cloudflare DO single-alarm life cycle including like pending/orphan work, remote Worker route assumptions, actual 13 IDs/visibility, cost/event-only behavior and PC/mobile warm caches. Then PREVIEW feature enable only after safe rollout; TEST/PRODUCTION only with explicit director authorization. No data copies, migrations, bulk repairs, global cache purge.
+
+---
+
 ## NEXT — finish #203 app469 direct-curator recovery source validation (2026-10-24 KST)
 
 - **Do not start cost work or Music Note #237.** Only #203 shared curated recommendation parity (D1 canonical 13; PREVIEW13, TEST12, PRODUCTION12 last verified).

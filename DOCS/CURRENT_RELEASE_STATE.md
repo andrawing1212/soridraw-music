@@ -1,3 +1,12 @@
+## CURRENT — #203 PREVIEW live curation flags OFF confirmed; 13/13/12/12 remains FAIL (2026-10-24 KST)
+
+- **Read-only Cloudflare result:** [run #40035848324](https://github.com/andrawing1212/soridraw-music/actions/runs/40035848324), GitHub preview diagnostic PR #455 merged to `0c7e18de014e83ab9085bb0c5f31e1d7a5b6ffb6`. Actual PREVIEW live `SORIDRAW_CURATED_WRITER_SHADOW471=ABSENT_OFF`, `SORIDRAW_CURATED_SHARED_V466=ABSENT_OFF`, `SORIDRAW_CURATED_ALL_WRITERS_READY466=ABSENT_OFF` all **PASS**; real shared DB, isolated rate DB, two scoped R2 buckets and existing Durable Object binding **PASS**. PREVIEW active Worker version `86470d9a-0051-47e7-8ced-f319913f5b58` unchanged. No Worker/Hosting/Functions deploy or original shared data write.
+- **Same live audit intentionally overall FAIL for real display drift:** canonical **13** / PREVIEW **13** correct / TEST **12** missing one / PRODUCTION **12** missing one. Existing parity is not repaired by flags-off confirmation.
+- **Product candidate separate:** PR #454 DRAFT `ef3a5abe272d7a5e81c6743ec0c6d8f8846ae82d` unmerged/unreleased; CI #40019525140 PASS; user-supplied Work Medium PASS **only prior P1×2/P2×1 injected source cases**, not live cross-origin/browser. Current PREVIEW branch changed only for read-only audit workflow, not product app475. TEST/PRODUCTION old writer source and bindings read-only #38198040888 PASS but no v466 writer; **never enable new shared reader until all writers replaced and actual mixed-mode/cross-origin parity verified.** Flags stay OFF.
+- **Next one task:** source-level old TEST/PRODUCTION writer retirement/activation barrier design and full compatibility gate for #203. No merge/deploy/reader activation without complete audit. Only after #203 proceed to Music Note #237, then deferred cost work.
+
+---
+
 ## CURRENT — user priority restored: finish cross-environment synchronization before cost work (2026-10-23 KST)
 
 - **Director instruction:** STOP additional 1k/10k cost work until existing synchronization problems are solved sequentially. First complete curated SORIDRAW recommendation parity #203/app466; only then Music Note saved-membership mismatch #237. Do not begin both fixes simultaneously. PREVIEW admin-only, TEST small beta cohort, PRODUCTION regular users + dual-active beta remain the operating model.

@@ -1,5 +1,8 @@
 ## CURRENT — #203 app477 active Writer gate source candidate (2026-10-24 KST)
 
+- app478 follow-up to 감사방 FAIL PR #459 SHA c1f0cc9e03a3624c1d6ebae7363f95539414cad9: enforce explicit isolated EXPLORE_CACHE on all three Workers, verify Firebase real origin deployed bundle and Cloudflare zone routes/custom domain ownership, add deterministic late old D1 writer/member/visibility/CAS/ACK/rollback fixtures. Existing PR #454 app475 exact SHA unchanged. Prior app477 audit FAIL remains until new fixed SHA independent re-audit. Current active runtime and 13/13/12/12 parity are still unverified/FAIL, all v466 reader/ready flags must stay OFF. No deployment, migration or user data writes.
+
+
 - Candidate branch: audit/app477-curated-active-writer-gate from preview bb2a784b827f668725b55acbb5a5bdb54b13ac9b. Scope: read-only verification script and existing CI/workflow; no app runtime modification.
 - Product app475 PR #454 audited SHA ef3a5abe272d7a5e81c6743ec0c6d8f8846ae82d untouched, still DRAFT/unmerged/unreleased.
 - app477 fail-closed checks all three live deployments 100% single version, active module route cues, bindings/flags, Workers.dev routes and public revision. Cloudflare GET only; no D1 query, R2 write, data migration or deployment.

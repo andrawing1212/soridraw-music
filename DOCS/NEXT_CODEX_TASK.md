@@ -1,3 +1,13 @@
+## NEXT — complete app468 guarded curated recovery CI and independent QA before any release (2026-10-24 KST)
+
+- **One task only:** recommendation cross-origin synchronization #203; Music Note #237 and 1k/10k cost work remain paused. PREVIEW admin-only, TEST admin + beta, PRODUCTION regular users + the same dual-active beta.
+- Candidate on `fix/app468-curated-repair-preview-candidate` from exact preview baseline `7a6a9d5f3064fff2cf68292def6e49c29862a7b3`, source-only **OFF**. Current code: original app466 bounded shared R2 CAS; app467 requires **both** runtime feature and `ALL_WRITERS_READY466` operator readiness; app468 reserves one DO repair ticket before a verified authenticated affected publication/visibility action and retries a failed R2 projection from D1 on bounded event-driven alarms.
+- **Immediate source gate:** GitHub PR to `preview` runs TypeScript, Build, Worker dry-run, frozen app410 like/Music Note/Library and 466/467/468 tests. Review DO alarms: old like batch must remain scheduled; corrupted R2 returns truthful 503; stale generation ack cannot erase later change; existing canonical user mutation must not be rolled back or repeated; extra DO cost only on actually affected curated publish/visibility mutations. Verify current source path; this source candidate has no release authorization.
+- **Hard mixed-version STOP:** TEST/PRODUCTION app377 writers do not write v466 shared R2 and can change D1 later. Both flags remain OFF while any old writer or old client can issue a canonical curation/visibility change without changed-ID projection update. No unconditional cache wipe/data clone, no warm-entry full D1 check, no all-user reads. Need verified compatibility staged release plan, exact SHA Work audit, PREVIEW actual data+browser validation, then explicit TEST and separately explicit PRODUCTION approval.
+- **Live mismatch uncorrected:** canonical13 / PREVIEW13 / TEST12 / PRODUCTION12; the one missing track remains unrefreshed in TEST/PRODUCTION. #237 per-UID saved-song diagnostic only after #203 is stable. Never report CI PASS as live synchronization PASS.
+
+---
+
 ## NEXT — FIRST AND ONLY CURRENT TASK: finish #203 curated cross-environment sync (director 2026-10-23 KST)
 
 - **Priority override:** stop cost simulation/usage collection now; do NOT begin Music Note #237 code edits until curated #203/app466 is source-fixed and audited. User wants existing synchronization completed **one issue at a time**. Current preview `d55ae8047492a902a44225aea78151571aca6d1a`; draft PR #447 head `d5f3d132c5d0ccbabb52d95a99de55404b4f33fd`, source CI PASS but unmerged OFF. Fixed-source reviewer note [#5630448326](https://github.com/andrawing1212/soridraw-music/pull/447).

@@ -17,11 +17,18 @@ const uniqueIds = (input) => {
   return ids;
 };
 
-const scheduleAtMost = async (storage, when, now) => {
+// A Durable Object transaction's `txn` exposes KV methods but NOT the
+// alarm methods. Always arm the real ctx.storage after transaction commit.
+// Pure in-memory test stores can implement both so legacy tests still work.
+export const armCuratedRepairAlarm468 = async (storage, when, now = Date.now()) => {
+  if (typeof storage?.getAlarm !== 'function' || typeof storage?.setAlarm !== 'function')
+    return false;
   const current = await storage.getAlarm();
   if (current == null || current <= now || current > when)
     await storage.setAlarm(when);
+  return true;
 };
+const scheduleAtMost = armCuratedRepairAlarm468;
 
 const ticketsOf = (state) => Array.isArray(state?.tickets) ? state.tickets : [];
 const unionTickets = (tickets) => uniqueIds(tickets.flatMap((t) => t.trackIds || []));
@@ -123,20 +130,26 @@ export async function drainCuratedRepair468(storage, reconcile, now = Date.now()
       await keepState(tx, {
         ...current, tickets: remaining, failures: 0, nextAttemptAt: 0,
       });
-      if (remaining.length)
-        await scheduleAtMost(tx,
-          Math.max(now + 1, Math.min(...remaining.map((t) => dueAt(t)))), now);
-      return { pending: remaining.length > 0, repaired: true };
+      return {
+        pending: remaining.length > 0, repaired: true,
+        nextWakeAt: remaining.length
+          ? Math.max(now + 1, Math.min(...remaining.map((t) => dueAt(t))))
+          : null,
+      };
     }
     const failures = Math.min(20, Number(current.failures || 0) + 1);
     const backoff = Math.min(CURATED_REPAIR_MAX_BACKOFF_MS_468,
       CURATED_REPAIR_WAKE_MS_468 * (2 ** Math.min(12, failures)));
     const nextAttemptAt = now + backoff;
     await keepState(tx, { ...current, failures, nextAttemptAt });
-    await scheduleAtMost(tx, nextAttemptAt, now);
-    return { pending: true, retrying: true, failures };
+    return { pending: true, retrying: true, failures, nextWakeAt: nextAttemptAt };
   };
-  return typeof storage.transaction === 'function'
-    ? storage.transaction(finish)
-    : finish(storage);
+  const outcome = typeof storage.transaction === 'function'
+    ? await storage.transaction(finish)
+    : await finish(storage);
+  // The post-reconcile ticket retirement is atomic; scheduling must be on
+  // full ctx.storage, never the limited transaction KV interface.
+  if (outcome.pending && Number.isFinite(outcome.nextWakeAt))
+    await armCuratedRepairAlarm468(storage, outcome.nextWakeAt, now);
+  return outcome;
 }

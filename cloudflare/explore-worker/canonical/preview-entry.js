@@ -191,6 +191,11 @@ async function readCuratedShared466(request, env, ctx) {
 }
 
 async function handleCuratedSharedRevision466(request, env) {
+  if (!env?.PROFILE_MEDIA || !env?.DB) {
+    return new Response(JSON.stringify({
+      ok: false, error: 'Shared curated binding missing',
+    }), { status: 503, headers: curationHeaders307(request, { source: 'SHARED-BINDING-MISSING-466' }) });
+  }
   const url = new URL(request.url);
   const edgeKey = curatedRevisionEdgeKey466(url);
   try {

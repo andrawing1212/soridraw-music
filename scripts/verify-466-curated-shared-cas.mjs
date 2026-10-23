@@ -121,6 +121,28 @@ assert.deepEqual(visibleCuratedIds466([row('a'),row('b',false)]),['a']);
   assert.deepEqual((await getCuratedShared466(env)).snapshot.payload.data.items.map(x=>x.track.id),['a']);
 }
 
+
+{
+  // A single re-promotion must refresh only the changed track. Unchanged
+  // card details are served from the derived R2 object, not 40 new track reads.
+  const bucket=memoryR2(),env=envFor(bucket);
+  let canonical=[row('a',true,100),row('b',true,200)];
+  let fetched=[];
+  const fetchTrack=async (id)=>{fetched.push(id);return track(id);};
+  assert((await write(env,async()=>canonical,fetchTrack)).ok);
+  assert.deepEqual(fetched,['a','b']);
+  fetched=[];
+  canonical=[row('a',true,300),row('b',true,200)];
+  assert((await write(env,async()=>canonical,fetchTrack)).ok);
+  assert.deepEqual(fetched,['a'],'only changed metadata should fetch its track');
+  fetched=[];
+  const forced=await reconcileCuratedShared466(env,fetchTrack,{
+    readRows:async()=>canonical,forceTrackIds:['b'],
+  });
+  assert(forced.ok);
+  assert.deepEqual(fetched,['b'],'publication detail change must refresh only targeted track');
+}
+
 {
   // R2 cannot persist: do not return an optimistic success / 200.
   const bucket=memoryR2(),env=envFor(bucket);

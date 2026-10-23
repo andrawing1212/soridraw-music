@@ -198,8 +198,20 @@ async function browserRuntimeApi477(target) {
         waitUntil:'domcontentloaded',timeout:45000,
       });
       need(response?.status()===200,target.name,'BROWSER_APP_NAVIGATION_FAILED');
-      // Single bounded guest check; missing curated fetch is a HOLD, not PASS.
-      await page.waitForTimeout(8000);
+      // Fresh guest session with SW disabled. If the app uses tab navigation
+      // rather than an /explore route, try that real UI path once.
+      await page.waitForTimeout(3500);
+      if(!seen.length) {
+        const home=await page.goto(target.origin+'/',{
+          waitUntil:'domcontentloaded',timeout:45000,
+        });
+        need(home?.status()===200,target.name,'BROWSER_HOME_FAILED');
+        const explore=page.getByRole('button',{name:/Explore|탐색|익스플로어/i}).first();
+        const link=page.getByRole('link',{name:/Explore|탐색|익스플로어/i}).first();
+        if(await explore.count()) await explore.click({timeout:5000}).catch(()=>null);
+        else if(await link.count()) await link.click({timeout:5000}).catch(()=>null);
+        await page.waitForTimeout(4500);
+      }
       const selected=selectedRuntimeApi477(seen,target);
       return { ...selected, count:seen.length };
     } finally { await ctx.close(); }

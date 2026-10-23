@@ -3,6 +3,7 @@
 // canonical change, even when B completes first. D1 user originals never
 // change in this helper; reconciliation reads at most curated MAX40 rows.
 export const CURATED_REPAIR_KEY_468 = 'curated-projection-repair-468';
+const CURATED_REPAIR_COUNTER_KEY_468 = 'curated-repair-sequence-468';
 export const CURATED_REPAIR_MAX_IDS_468 = 40;
 export const CURATED_REPAIR_PREPARE_GRACE_MS_468 = 180_000;
 export const CURATED_REPAIR_WAKE_MS_468 = 5_000;
@@ -47,7 +48,14 @@ export async function reserveCuratedRepair468(storage, trackIds, now = Date.now(
   const existing = ticketsOf(prior);
   if (existing.length >= CURATED_REPAIR_MAX_IDS_468)
     throw Error('CURATED_REPAIR_QUEUE_FULL_468');
-  const generation = Number(prior.generation || 0) + 1;
+  // Persist across empty-queue cycles: delayed stale ACKs must never match
+  // a new ticket by reusing generation=1 (ABA/concurrent visibility race).
+  const lastGeneration = Number(await storage.get(CURATED_REPAIR_COUNTER_KEY_468) || 0);
+  if (!Number.isSafeInteger(lastGeneration) || lastGeneration < 0 ||
+      lastGeneration >= Number.MAX_SAFE_INTEGER)
+    throw Error('CURATED_REPAIR_SEQUENCE_INVALID_468');
+  const generation = lastGeneration + 1;
+  await storage.put(CURATED_REPAIR_COUNTER_KEY_468, generation);
   const tickets = [...existing, {
     generation, trackIds: requested, reservedAt: now, confirmedAt: 0,
   }];

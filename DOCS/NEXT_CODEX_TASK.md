@@ -1,3 +1,12 @@
+## NEXT — production-majority / beta-to-production continuity cost and QA gate (director-confirmed 2026-10-23 KST)
+
+- **Operating reality:** PRODUCTION has almost all users. PREVIEW/TEST are admin and a few beta testers; a beta tester must retain their **same UID’s canonical song/user data across all three apps**, even after later using production. Code releases are **not** data migration or data duplication.
+- Avoid 3× canonical writes/fan-out solely because three app environments exist. Shared Firestore/D1/R2 canonical and same Firebase UID is mandatory; per-environment Edge cache remains derived. Demand quantified budget for (i) 100k production users + handful of beta users, (ii) beta user genuinely using 2-3 active origins, (iii) app update/reentry unchanged original data R0/W0, (iv) a single save/like/publication changed-track mutation bounded read/write. No unsolicited other-origin polling or per-user background sync.
+- Read-only before repair: verify same UID + per-song favorite membership, recent/library list, canonical pending settlement, public curated IDs/revision, live old TEST/PRODUCTION app377 reader and warm cached browser; do not scan all users or overwrite pending/offline drafts.
+- app466 #447 remains a flag-OFF, DRAFT, source-CI-PASS-only candidate with unresolved old Worker writer fence, old origin browser cache and workers.dev cache cost. Preserve app465 public/private, app410 Explore likes, Studio save heart 30s, Music Note 60s, Recent 150s and Library/folders. Deliver Work-independent exact-SHA PASS and PREVIEW real parity before asking for TEST release; PRODUCTION only explicit separately confirmed approval.
+
+---
+
 ## NEXT — production-first P0 curated revision + concurrency safety, then Music Note sampled canonical (2026-10-23 KST)
 
 - Real same-time-window live evidence twice: run #39860820744 and #39861568822 both say shared D1=13, PREVIEW=13 exact PASS, TEST=12 missing1 FAIL, PRODUCTION=12 missing1 FAIL. Last audit succeeded in PREVIEW Worker source archive and still correctly exited FAIL for product data parity. Source HEAD after audit PR #445 `d0fe1c02bdde9fbf356bb6bf838d129fed2d087d`. No data write/deploy.

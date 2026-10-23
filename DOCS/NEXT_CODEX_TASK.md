@@ -1,3 +1,14 @@
+## NEXT — finish #203 app469 direct-curator recovery source validation (2026-10-24 KST)
+
+- **Do not start cost work or Music Note #237.** Only #203 shared curated recommendation parity (D1 canonical 13; PREVIEW13, TEST12, PRODUCTION12 last verified).
+- Latest source PR #454 on `fix/app468-curated-repair-preview-candidate` builds on app466 CAS, app467 two-factor rollout fence, app468 durable per-change DO reservation for publication. Source review at `0774a0d814d860465d560530080402cfa52764ff` identified missing direct curator PUT/DELETE journal and unrelated like aggregate on curation-only alarm; **FAIL** source until app469 corrections independently verified.
+- app469 updates only preview-entry source and `scripts/verify-469-direct-curated-repair.mjs`: direct curator events reserve one durable ticket **before** INSERT/DELETE, confirm after D1 success, ACK only after R2 CAS and requested visibility verified; failure leaves durable alarm retry. Curated-only wake skips like aggregate when no like marker, with existing public-like alarms protected. Verify Cloudflare DO one-alarm semantics and pending/orphan like work; if any regression, STOP and restore frozen behavior.
+- **Next exact gate:** GitHub CI TypeScript, Build, Wrangler dry-run, app466 CAS, 467 mixed-writer flag OFF, app468 journal concurrent/failure test, app469 direct-curator retry & alarm, and frozen app410 likes. Work independent exact SHA full audit must PASS before merging or deployment. Review old warm cache, after user publication/private toggles, shared D1 R0 on warm unchanged entry, no whole Feed rebuild. Never conflate PR CI with live PASS.
+- **Deploy STOP:** app377 TEST/PRODUCTION writer still not compatible with new shared key, flags absent in checked-in config and remote env must be inspected. No TEST/PRODUCTION approval, no copying canonical user data, R2 PUT/backfill, Worker/Functions/Firebase release.
+- Cost work remains paused until #203 and #237 are resolved sequentially.
+
+---
+
 ## NEXT — complete app468 guarded curated recovery CI and independent QA before any release (2026-10-24 KST)
 
 - **One task only:** recommendation cross-origin synchronization #203; Music Note #237 and 1k/10k cost work remain paused. PREVIEW admin-only, TEST admin + beta, PRODUCTION regular users + the same dual-active beta.

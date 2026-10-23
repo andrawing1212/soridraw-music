@@ -1,3 +1,14 @@
+## NEXT — exact source audit of app471 writer-first compatibility split (2026-10-24 KST)
+
+- Scope #203 only: PR #454 on `fix/app468-curated-repair-preview-candidate`; preview HEAD at branch point `7a6a9d5f3064fff2cf68292def6e49c29862a7b3`. Stop work on #237 and user-cost modeling.
+- **New minimal app471 code path**: `curatedWriterShadowEnabled471(env)` is independent of v466 reader gate, and requires opt-in `SORIDRAW_CURATED_WRITER_SHADOW471=1` (OFF in Git); `curatedSharedWriterEnabled471` guards durable direct curator/publication mutation journaling and DO repair/alarm. When shadow ON but reader OFF: admin PUT/DELETE still updates legacy v307 derived cache, **then** shared v466 R2 change+ack; publication/visibility still patches v307 and **then** shared v466 R2 change+ack. Both use the same existing bounded event-driven durable repair on R2 failure. Avoid all new D1 original writes and warm entry reads.
+- **CI MUST PASS**: existing app466–470 CAS/durable/like alarm synthetic tests plus `scripts/verify-467-curated-writer-fence.mjs`, `scripts/verify-469-direct-curated-repair.mjs` updated to reject shadow->reader acceleration; full TS/Build/Worker dry-run and frozen app410 like. Source-only tests are not Cloudflare runtime proof.
+- Independent Work **exact-SHA** auditor should reject if the legacy v307 route stops updating in shadow mode, shadow is activated by checked-in env, any canonical write is replayed by repair, any old TEST/PROD writer is assumed retired, DO alarm affects likes, or real PC/mobile/warm browser parity is falsely declared. Exact runner and branch commit must be recorded before merge.
+- **Release STOP** until old D1-only TEST/PRODUCTION app377 writer retirement is proved on actual active Worker versions, all published paths compatible, remote Worker bindings/vars checked read-only, bounded R2 initialization and 13/13/13/13 parity verified. Separate user approvals required for TEST and PRODUCTION writer promotion. Only then activate shared reader in PREVIEW; no automatic concurrent reader enable or legacy write-freeze. No data copy/migration/backfill.
+- Remaining environment operations are NOT part of this PR and should not be done without prior independent code audit and explicit appropriate release instruction.
+
+---
+
 ## NEXT — app470 exact-SHA source audit, then safe mixed-writer compatibility staging (2026-10-24 KST)
 
 - User priority #203, one issue at a time; no #237 or costs. PR #454 branch `fix/app468-curated-repair-preview-candidate` based on preview `7a6a9d5f3064fff2cf68292def6e49c29862a7b3`, flags OFF, no deployed environment touched.

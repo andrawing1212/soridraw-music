@@ -22,9 +22,9 @@ assert(refreshAt>confirmAt && ackAt>refreshAt,
   'do not retire ticket until the derived R2 CAS succeeds');
 assert.match(direct,/CURATED_DIRECT_REPAIR_PREFLIGHT_469/);
 assert.match(direct,/CURATED_SHARED_SETTLEMENT_PENDING_466/);
-assert.match(src,/const curatedOnlyAlarm469 = curatedSharedWriterEnabled471\(this\.env\)/);
+assert.match(src,/const curatedOnlyAlarm469 = canRunCuratedWriter471/);
 assert.match(src,/if \(!publicOnly448 && !curatedOnlyAlarm469\)\s*\{\s*await this\.runAggregate194\(\)/);
-assert.match(src,/if \(curatedSharedWriterEnabled471\(this\.env\) &&\s*await this\.ctx\.storage\.get\(CURATED_REPAIR_KEY_468\)\)/);
+assert.match(src,/if \(canRunCuratedWriter471 &&\s*await this\.ctx\.storage\.get\(CURATED_REPAIR_KEY_468\)\)/);
 
 // Pure deterministic failure-replay: the direct curation route's reserved
 // ticket must survive R2 CAS rejection and be healed later without a second

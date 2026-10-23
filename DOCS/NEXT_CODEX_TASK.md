@@ -1,3 +1,11 @@
+## NEXT — #203 one implementation: three-Worker live Writer retirement attestation (2026-10-24 KST)
+
+- Design and release STOPs: `DOCS/CURATED_203_MIXED_WRITER_ROLLOUT.md` (read first). No code deployment, migration, shared data writes or automatic flag enablement.
+- Implement **read-only active PREVIEW / TEST / PRODUCTION Worker version+module+binding+flag comparison**, fail-closed when any script lacks v466 curator AND visibility/publication writer paths, when a Worker has split traffic, when route owners mismatch or remote flags are not reliably OFF, or when old in-flight writer retirement cannot be attested. Reuse existing Cloudflare GET diagnostics and scripts; no new service, no secrets in logs, no expensive repeated D1 read. Stage source tests reproduce old Worker late D1-only mutation after new R2 reconciliation, forced reader OFF, missing member/visibility, stale CAS, rollback order and warm v307 route preservation. Keep app475 audited product SHA unchanged while designing guard.
+- A bounded one-time 40-row/3-environment **derived** cache reconciliation is only a future approved procedure after all Writers compatible. Do not run it now. Final read activation separately approved after real 13/13/13/13 track ID/order parity, PC/mobile cache, Work audit. TEST/PRODUCTION require director approval.
+
+---
+
 ## NEXT — #203 only, mixed-writer activation barrier (2026-10-24 KST)
 
 - Current `preview` diagnostic was merged from PR #455, runtime **unchanged**. Live Cloudflare read-only [#40035848324](https://github.com/andrawing1212/soridraw-music/actions/runs/40035848324): all 3 remote curated gates **ABSENT/OFF PASS**, canonical/preview/test/prod **13/13/12/12 FAIL**; bindings PASS. This workflow correctly reports overall FAIL because true runtime parity has not converged.

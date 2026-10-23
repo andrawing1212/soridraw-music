@@ -107,7 +107,26 @@ export function route477(subdomain,revision,target) {
 // ownership of the Firebase host is a release blocker, not an automatic remap.
 const matchRoute477 = (pattern,host,path) => {
   const p=String(pattern||'').replace(/^https?:\/\//,'');
-  const matcher='^'+p.split('*').map(x=>x.replace(/[-/\\^$+?.()|[\]{}]/g,'\\export function activation477(records,proof) {')).join('.*')+'
+  const matcher='^'+p.split('*').map(x=>x.replace(/[-/\\^$+?.()|[\]{}]/g,'\\// Model-only rollback sequence guard. Live flags must be checked independently;
+// this is NOT permission to deploy a legacy Worker.
+export function rollbackOrder477(events) {
+  need(Array.isArray(events), 'GLOBAL','ROLLBACK_TRACE_UNREADABLE');
+  const requested=new Set(), observed=new Set();
+  for(const e of events) {
+    need(TARGETS.some(t=>t.name===e?.stage),'GLOBAL','ROLLBACK_STAGE_UNKNOWN');
+    if(e.type==='reader_off_requested') requested.add(e.stage);
+    else if(e.type==='reader_off_observed') {
+      need(requested.has(e.stage),'GLOBAL','ROLLBACK_OFF_NOT_REQUESTED');
+      observed.add(e.stage);
+    } else if(e.type==='restore_legacy_writer') {
+      need(TARGETS.every(t=>observed.has(t.name)),
+        'GLOBAL','ROLLBACK_READER_STILL_ON_OR_UNVERIFIED');
+    } else fail('GLOBAL','ROLLBACK_STEP_UNRECOGNIZED');
+  }
+  return true;
+}
+
+export function activation477(records,proof) {')).join('.*')+'
   need(records.length===3&&records.every(r=>r.compatible), 'GLOBAL','ACTIVE_WRITERS_INCOMPATIBLE');
   need(new Set(records.map(r=>r.rateId)).size===3,'GLOBAL','RATE_DB_COLLISION');
   const caches=records.map(r=>r.cacheName);

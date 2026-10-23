@@ -1,3 +1,11 @@
+## NEXT — calibrate 1k/10k model with actual non-mutating cost metrics (2026-10-23 KST)
+
+- Follow `DOCS/COST_ACCEPTANCE_1K_10K_2026_10_23.md` and `scripts/verify-1k-10k-cost-scenarios.mjs`. 1k/10k example numbers are expressly *hypothetical*. PREVIEW is ADMIN ONLY; TEST minimal invited beta, who may concurrently use PRODUCTION, so only actual additional TEST sessions count, not duplicate accounts/canonical data writes.
+- **Immediate read-only task:** use existing `scripts/report-cloudflare-d1-usage-readonly.mjs` for shared+all-account D1 rows in 7/30d and private `scripts/audit-firebase-rtdb-metrics-readonly.py` for RTDB sent bytes/connection/response 24h+30d; obtain similarly read-only Workers request+CPU/R2 A+B+storage/DO and Firebase Firestore/Functions/Hosting totals. Keep private operational values in private ops report, not public source. If permissions absent report UNMEASURED rather than invent or escalate roles.
+- Verify actual unchanged cached entry read/write 0, no 2× canonical mutation for beta simultaneous TEST+PRODUCTION, source #203 curated + #237 Music Note parity separately. Protect 30s/60s/150s batching, Stage416 OFF, app465 accepted tablet UI, legacy app377. No deploy or shared user data touch.
+
+---
+
 ## NEXT — cost acceptance for 1k–10k users and beta TEST↔PRODUCTION (director, 2026-10-23 KST)
 
 - **Use the corrected environment model:** PREVIEW = **administrators only**, never beta testers. TEST = administrators + small invited beta cohort. PRODUCTION = general users, including beta testers who may **simultaneously use TEST and PRODUCTION**. Never assume a third active origin for a beta user.

@@ -22,9 +22,9 @@ assert(refreshAt>confirmAt && ackAt>refreshAt,
   'do not retire ticket until the derived R2 CAS succeeds');
 assert.match(direct,/CURATED_DIRECT_REPAIR_PREFLIGHT_469/);
 assert.match(direct,/CURATED_SHARED_SETTLEMENT_PENDING_466/);
-assert.match(src,/const curatedOnlyAlarm469 = sharedCuratedEnabled466\(this\.env\)/);
+assert.match(src,/const curatedOnlyAlarm469 = curatedSharedWriterEnabled471\(this\.env\)/);
 assert.match(src,/if \(!publicOnly448 && !curatedOnlyAlarm469\)\s*\{\s*await this\.runAggregate194\(\)/);
-assert.match(src,/if \(sharedCuratedEnabled466\(this\.env\) &&\s*await this\.ctx\.storage\.get\(CURATED_REPAIR_KEY_468\)\)/);
+assert.match(src,/if \(curatedSharedWriterEnabled471\(this\.env\) &&\s*await this\.ctx\.storage\.get\(CURATED_REPAIR_KEY_468\)\)/);
 
 // Pure deterministic failure-replay: the direct curation route's reserved
 // ticket must survive R2 CAS rejection and be healed later without a second
@@ -70,3 +70,5 @@ assert.equal((await acknowledgeCuratedRepair468(store,ticket.generation)).acknow
 console.log('APP469_DIRECT_CURATOR_BOTH_D1_ROUTES_DURABLY_RESERVED=PASS');
 console.log('APP469_CURATED_ONLY_ALARM_DOES_NOT_RUN_LIKE_AGGREGATE=PASS');
 console.log('APP469_CANONICAL_W1_ONLY_AFTER_DERIVED_R2_FAILURE_REPAIRED=PASS');
+
+console.log('APP471_SHADOW_ALARM_STILL_NO_LIKE_BATCH=PASS');

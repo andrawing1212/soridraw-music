@@ -838,6 +838,24 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
     try {
       const updated = await refreshCuratedShared466(request, env, ctx, [id]);
       if (!updated.ok) throw Error('CURATED_SHARED_CAS_INCOMPLETE_466');
+      // Opposite actions on one track may commit while our CAS is retrying.
+      // Never return a misleading promoted:true after another curator removed
+      // or hid it. The R2 outcome must match our requested visibility.
+      const visible = updated.snapshot?.payload?.data?.items?.some(
+        (item) => String(item?.track?.id || '').trim() === id,
+      ) === true;
+      if (visible !== promoted) {
+        return new Response(JSON.stringify({
+          ok: false, error: {
+            code: 'CURATED_SHARED_CONCURRENT_CHANGE_466',
+            message: '다른 변경이 먼저 적용되어 추천곡 상태가 달라졌습니다.',
+          },
+        }), {
+          status: 409, headers: curationHeaders307(request, {
+            d1Read, d1Write: 1, source: 'CURATED-SHARED-CONFLICT-466',
+          }),
+        });
+      }
     } catch {
       return new Response(JSON.stringify({
         ok: false, error: {

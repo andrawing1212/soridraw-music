@@ -3261,6 +3261,10 @@ export default {
           .filter((id) => membership468.has(String(id || '').trim())))]
           .slice(0, 40);
         if (affected468.length) {
+          // Public requests may reach the Worker before baseWorker validates
+          // them. Never allocate a durable alarm for an unauthenticated actor.
+          const actor468 = await validateExploreAuth307(request, env, ctx);
+          if (!actor468.ok) return actor468.response;
           const space468 = env?.EXPLORE_LIKE_BATCH_SCHEDULER;
           if (!space468) throw Error('CURATED_REPAIR_SCHEDULER_MISSING_468');
           const id468 = space468.idFromName(EXPLORE_LIKE_BATCH_SCHEDULER_NAME_103);

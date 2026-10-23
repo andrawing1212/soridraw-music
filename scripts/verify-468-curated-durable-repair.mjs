@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   CURATED_REPAIR_KEY_468, CURATED_REPAIR_PREPARE_GRACE_MS_468,
   reserveCuratedRepair468, confirmCuratedRepair468,
   acknowledgeCuratedRepair468, drainCuratedRepair468,
+  armCuratedRepairAlarm468,
 } from '../cloudflare/explore-worker/runtime/curated-projection-repair-468.mjs';
 
 function storageFake() {
@@ -142,6 +144,46 @@ function storageFake() {
   assert.equal((await acknowledgeCuratedRepair468(st,a.generation)).acknowledged,false);
   assert.deepEqual((await st.get(CURATED_REPAIR_KEY_468)).trackIds,['curated-b']);
 }
+
+// app470: Cloudflare transaction `txn` only has KV methods (no alarms).
+// Mimic the real API so reserve/confirm/repair cannot accidentally call
+// tx.getAlarm/tx.setAlarm. The route must arm the full storage AFTER commit.
+{
+  const st=storageFake(),start=1_100_000;
+  st.transaction=async(handler)=>handler({
+    get:st.get,put:st.put,delete:st.delete,
+  });
+  const reserved=await st.transaction((tx)=>
+    reserveCuratedRepair468(tx,['track-a'],start));
+  assert(reserved.reserved);
+  assert.equal(st.nextAlarm(),null,
+    'transaction KV must never attempt to arm an alarm');
+  assert(await armCuratedRepairAlarm468(st,start+5_000,start));
+  await st.transaction((tx)=>confirmCuratedRepair468(tx,reserved.generation,start+30));
+  st.fire();
+  const failed=await drainCuratedRepair468(st,async()=>({ok:false}),start+6_000);
+  assert(failed.retrying);
+  assert(st.nextAlarm()>start+6_000,'repair must rearm after atomic ticket update');
+  const retryAt=st.nextAlarm();
+  st.fire();
+  const fixed=await drainCuratedRepair468(st,async()=>({ok:true}),retryAt);
+  assert(fixed.repaired);
+  assert.equal(await st.get(CURATED_REPAIR_KEY_468),null);
+}
+
+const worker470=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
+const aggregate470=worker470.split('async finalizeAggregate195() {')[1]?.split('async fetch(request) {')[0];
+assert(aggregate470,'like aggregate finalizer must exist');
+const deleteAt470=aggregate470.indexOf('await this.ctx.storage.deleteAlarm()');
+const rearmAt470=aggregate470.indexOf('await this.ensurePendingCuratedAlarm470()');
+assert(deleteAt470>=0 && rearmAt470>deleteAt470,
+  'a like queue emptying must not leave a pending curated ticket without its alarm');
+assert.match(worker470,/const result = await this\.ctx\.storage\.transaction\(\(tx\) =>\s*reserveCuratedRepair468\(tx/);
+assert.match(worker470,/if \(result\.reserved\)\s*await armCuratedRepairAlarm468\(this\.ctx\.storage/);
+assert.match(worker470,/if \(result\.confirmed\)\s*await armCuratedRepairAlarm468\(this\.ctx\.storage/);
+
+console.log('APP470_DO_TRANSACTION_KV_ALARM_API_SEPARATION=PASS');
+console.log('APP470_LIKE_FINALIZER_CANNOT_STRAND_CURATED_ALARM=PASS');
 
 console.log('APP468_CANONICAL_SUCCESS_R2_FAIL_EVENTUAL_REPAIR=PASS');
 console.log('APP468_PRECOMMIT_CRASH_FALLBACK=PASS');

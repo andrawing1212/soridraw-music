@@ -109,8 +109,11 @@ jobs:
           ];
           const requireBinding = (byName, name, type, field, expected) => {
             const item = byName.get(name);
+            const actual = field === 'id'
+              ? item?.id || item?.database_id || item?.uuid
+              : field === 'bucket_name' ? item?.bucket_name || item?.bucket : item?.[field];
             if (!item || String(item.type || '') !== type
-              || String(item[field] || '') !== expected)
+              || String(actual || '') !== expected)
               throw Error('PREVIEW_CURATED_BINDING_MISMATCH_476:' + name);
           };
           (async () => {

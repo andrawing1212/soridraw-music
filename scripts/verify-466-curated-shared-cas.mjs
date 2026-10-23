@@ -52,6 +52,7 @@ const write = (env,readRows,resolveTrack=track)=>reconcileCuratedShared466(env,r
 
 assert.equal(sharedCuratedEnabled466({PROFILE_MEDIA:{},DB:{}}),false);
 assert.equal(sharedCuratedEnabled466({PROFILE_MEDIA:{},DB:{},SORIDRAW_CURATED_SHARED_V466:'1'}),true);
+assert.equal(sharedCuratedEnabled466({SORIDRAW_CURATED_SHARED_V466:'1'}),true,'ON with missing binding must fail closed, not silently fall back');
 assert.deepEqual(canonicalCuratedIds466([row('a'),row('b',false)]),['a','b']);
 assert.deepEqual(visibleCuratedIds466([row('a'),row('b',false)]),['a']);
 

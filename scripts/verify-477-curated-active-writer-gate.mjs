@@ -167,6 +167,8 @@ async function live477() {
   const token=process.env.CLOUDFLARE_API_TOKEN,acct=process.env.CLOUDFLARE_ACCOUNT_ID;
   need(typeof token==='string'&&token.length>5&&typeof acct==='string'&&acct.length>5,'GLOBAL','CLOUDFLARE_ACCESS_MISSING');
   const base='https://api.cloudflare.com/client/v4/accounts/'+encodeURIComponent(acct);
+  const config=readFileSync('src/config/exploreEnvironment.ts','utf8');
+  for(const t of TARGETS) expectedAppConfig477(config,t);
   const records=[];
   for(const t of TARGETS) {
     const path=base+'/workers/scripts/'+t.worker;

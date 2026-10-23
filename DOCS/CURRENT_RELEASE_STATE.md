@@ -1,3 +1,11 @@
+## CURRENT — #203 mixed-writer retirement design locked (2026-10-24 KST)
+
+- **New exact release gate:** `DOCS/CURATED_203_MIXED_WRITER_ROLLOUT.md`. Writer first on each environment, reader OFF; three active Writer versions/routes + old in-flight completion attestation; bounded canonical vs shared v466 and three legacy v307 R2 reconciliation; only then separate reader activation. No data original copy/delete/backfill. If old in-flight drain proof unavailable, STOP.
+- This documentation **does not deploy app475** or enable any Cloudflare flags. Product PR #454 exact audited SHA `ef3a5abe272d7a5e81c6743ec0c6d8f8846ae82d` remains DRAFT/unmerged. Last measured shared D1/PREVIEW/TEST/PRODUCTION **13/13/12/12**, three PREVIEW flags real ABSENT_OFF. TEST/PRODUCTION still old Writer. #237 and costs deferred.
+- **Next one Codex High task** (source-only): read-only active Worker v466 compatibility attestation with fail-closed gates + deterministic legacy-last-writer/rollback regression. Do not deploy. Independent Work exact-SHA audit after implementation.
+
+---
+
 ## CURRENT — #203 PREVIEW live curation flags OFF confirmed; 13/13/12/12 remains FAIL (2026-10-24 KST)
 
 - **Read-only Cloudflare result:** [run #40035848324](https://github.com/andrawing1212/soridraw-music/actions/runs/40035848324), GitHub preview diagnostic PR #455 merged to `0c7e18de014e83ab9085bb0c5f31e1d7a5b6ffb6`. Actual PREVIEW live `SORIDRAW_CURATED_WRITER_SHADOW471=ABSENT_OFF`, `SORIDRAW_CURATED_SHARED_V466=ABSENT_OFF`, `SORIDRAW_CURATED_ALL_WRITERS_READY466=ABSENT_OFF` all **PASS**; real shared DB, isolated rate DB, two scoped R2 buckets and existing Durable Object binding **PASS**. PREVIEW active Worker version `86470d9a-0051-47e7-8ced-f319913f5b58` unchanged. No Worker/Hosting/Functions deploy or original shared data write.

@@ -6,8 +6,7 @@ export const CURATED_SHARED_MAX_466 = 40;
 const COLLECTION = 'soridraw';
 
 export const sharedCuratedEnabled466 = (env) =>
-  String(env?.SORIDRAW_CURATED_SHARED_V466 || '') === '1' &&
-  String(env?.SORIDRAW_CURATED_ALL_WRITERS_READY466 || '') === '1';
+  String(env?.SORIDRAW_CURATED_SHARED_V466 || '') === '1';
 
 export const canonicalCuratedIds466 = (rows) => rows
   .map((row) => String(row?.track_id || '').trim()).filter(Boolean);

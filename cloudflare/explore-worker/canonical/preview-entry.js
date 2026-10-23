@@ -904,7 +904,7 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
     }
   }
   let directCuratedTicket469 = null;
-  if (sharedCuratedEnabled466(env)) {
+  if (curatedSharedWriterEnabled471(env)) {
     // Must reserve before either INSERT/UPDATE or DELETE: a CAS failure after
     // a successful canonical D1 mutation otherwise has no durable repair.
     try {
@@ -979,6 +979,20 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
     console.warn('[app307] curated R2 patch failed; next public read repairs:', String(error?.message || error || 'unknown'));
     try { await curatedBucket307(env)?.delete(SORIDRAW_CURATED_R2_KEY_307); } catch {}
     await clearCuratedEdge307(new URL(request.url));
+  }
+
+  if (curatedWriterShadowEnabled471(env) && directCuratedTicket469) {
+    // Writer-first rollout: keep old v307 readers working and additionally
+    // publish the changed canonical IDs to shared v466 R2. A failed derived
+    // refresh is owned by the already-persisted ticket, not a second D1 write.
+    try {
+      const settled471 = await refreshCuratedShared466(request, env, ctx, [id]);
+      if (!settled471.ok) throw Error('CURATED_SHADOW_CAS_PENDING_471');
+      await finalizeDirectCuratedRepair469(directCuratedTicket469, 'ack');
+    } catch (error) {
+      console.warn('[app471] shared curation shadow pending event-driven repair:',
+        String(error?.message || error || 'unknown'));
+    }
   }
 
   return new Response(JSON.stringify({
@@ -3431,6 +3445,15 @@ export default {
               snapshotItem: mutationPayload307?.data?.snapshotItem || null,
             }];
         await syncCuratedPublicationResults307(request, env, results307, ctx);
+        if (curatedWriterShadowEnabled471(env) && curatedRepairTicket468) {
+          // Existing per-origin v307 snapshot remains the user-visible
+          // source until all active writers can maintain the shared R2.
+          const changed471 = results307
+            .filter((item) => item?.ok === true)
+            .map((item) => String(item?.trackId || '').trim()).filter(Boolean);
+          const projection471 = await refreshCuratedShared466(request, env, ctx, changed471);
+          if (!projection471.ok) throw Error('CURATED_SHADOW_PUBLICATION_PENDING_471');
+        }
         if (curatedRepairTicket468) {
           // Acknowledge only AFTER the shared R2 has been verified. A stale
           // generation ack cannot erase a newer reserved change.

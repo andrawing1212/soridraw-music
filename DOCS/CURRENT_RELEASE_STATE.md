@@ -1,3 +1,12 @@
+## CURRENT — app473 direct-curator v307 false-ACK guard, source-only (2026-10-24 KST)
+
+- Current #203 PR #454 source branch `fix/app468-curated-repair-preview-candidate` remains DRAFT/unmerged with all three reader/shadow flags OFF. Work exact-SHA **independent PASS still NOT received**; historical 13/13/12/12 is not a new parity measurement. TEST app377/PRODUCTION writer compatibility release still blocked.
+- Additional focused source check after app472 revealed a **sibling of prior P1** on direct curator PUT/DELETE: `writeCuratedSnapshot307` errors were caught and invalidated locally, but `curatedWriterShadowEnabled471` would still ACK the durable repair ticket after successful v466 CAS although v307 display cache was NOT saved. No need for another subsystem: app473 changes existing `writeCuratedSnapshot307` to return true only after a real R2 PUT (false for missing binding/snapshot), and the direct curator shadow ACK checks both `legacyCuratedSaved473===true` and v466 CAS success. Failed v307 keeps the same existing app468 ticket for bounded alarm repair; legacy nonshadow observable response behavior unchanged.
+- `scripts/verify-469-direct-curated-repair.mjs` now injects a rejected v307 R2 PUT into the extracted real writer before successful retry and asserts the direct-route ACK must remain behind both proven projection writes. Existing app472 executable fault tests (legacy projection failure and 7/7 like failure recoveries) preserved. No new workflow/infrastructure/test file, UI, existing likes, user canonical writes or environment deploy.
+- Next: one final exact-head GitHub TS/Build/Worker dry-run/frozen like+curation regression, followed by **one** targeted Work High independent re-audit of previous P1 x2 plus direct-curator false-ACK sibling. Do not enable shared reader or promote TEST/PRODUCTION without user approval and live all-writer parity. Remaining usage snapshot is not live.
+
+---
+
 ## CURRENT — app472 P1 independent audit recovery patch, SOURCE ONLY (2026-10-24 KST)
 
 - Source of truth: [PR #454](https://github.com/andrawing1212/soridraw-music/pull/454), branch `fix/app468-curated-repair-preview-candidate`. PREVIEW live baseline `7a6a9d5f3064fff2cf68292def6e49c29862a7b3` unchanged, TEST old app377 main unchanged. User-provided Work independent audit against `1b4c9326063bba719d6f96f133323bff5a3c67dc` gave **FAIL, P1 x2** despite GitHub CI PASS. No TEST promotion or shared v466 reader activation.

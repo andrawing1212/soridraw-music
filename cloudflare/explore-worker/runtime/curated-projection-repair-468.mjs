@@ -110,28 +110,33 @@ export async function drainCuratedRepair468(storage, reconcile, now = Date.now()
     settled = result?.ok === true;
   } catch { /* keep persisted tickets for bounded retry */ }
 
-  const current = await storage.get(CURATED_REPAIR_KEY_468);
-  if (!ticketsOf(current).length) return { pending: false };
-  const latest = ticketsOf(current);
-  if (settled) {
-    // Only retire tickets whose canonical action was due when this read began.
-    // A later ticket, especially an UNCOMMITTED writer, cannot be retired by
-    // an earlier writer's CAS success/ack or by an alarm in flight.
-    const processed = new Set(eligible.map((t) => t.generation));
-    const remaining = latest.filter((t) => !processed.has(t.generation));
-    await keepState(storage, {
-      ...current, tickets: remaining, failures: 0, nextAttemptAt: 0,
-    });
-    if (remaining.length)
-      await scheduleAtMost(storage,
-        Math.max(now + 1, Math.min(...remaining.map((t) => dueAt(t)))), now);
-    return { pending: remaining.length > 0, repaired: true };
-  }
-  const failures = Math.min(20, Number(current.failures || 0) + 1);
-  const backoff = Math.min(CURATED_REPAIR_MAX_BACKOFF_MS_468,
-    CURATED_REPAIR_WAKE_MS_468 * (2 ** Math.min(12, failures)));
-  const nextAttemptAt = now + backoff;
-  await keepState(storage, { ...current, failures, nextAttemptAt });
-  await scheduleAtMost(storage, nextAttemptAt, now);
-  return { pending: true, retrying: true, failures };
+  // A newer reserve/ACK can arrive while the external D1/R2 reconciliation
+  // awaits. Read + retire ONLY completed ticket generations atomically; never
+  // overwrite tickets created in the meantime.
+  const finish = async (tx) => {
+    const current = await tx.get(CURATED_REPAIR_KEY_468);
+    if (!ticketsOf(current).length) return { pending: false };
+    const latest = ticketsOf(current);
+    if (settled) {
+      const processed = new Set(eligible.map((t) => t.generation));
+      const remaining = latest.filter((t) => !processed.has(t.generation));
+      await keepState(tx, {
+        ...current, tickets: remaining, failures: 0, nextAttemptAt: 0,
+      });
+      if (remaining.length)
+        await scheduleAtMost(tx,
+          Math.max(now + 1, Math.min(...remaining.map((t) => dueAt(t)))), now);
+      return { pending: remaining.length > 0, repaired: true };
+    }
+    const failures = Math.min(20, Number(current.failures || 0) + 1);
+    const backoff = Math.min(CURATED_REPAIR_MAX_BACKOFF_MS_468,
+      CURATED_REPAIR_WAKE_MS_468 * (2 ** Math.min(12, failures)));
+    const nextAttemptAt = now + backoff;
+    await keepState(tx, { ...current, failures, nextAttemptAt });
+    await scheduleAtMost(tx, nextAttemptAt, now);
+    return { pending: true, retrying: true, failures };
+  };
+  return typeof storage.transaction === 'function'
+    ? storage.transaction(finish)
+    : finish(storage);
 }

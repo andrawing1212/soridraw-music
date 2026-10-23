@@ -1,5 +1,7 @@
 ## CURRENT — #203 app477 active Writer gate source candidate (2026-10-24 KST)
 
+- app479 after separate 감사방 app478 FAIL (one remaining frontend selection gap): deployed Firebase guest app is now launched in a real headless browser; actual /v1/curated-revision or /v1/curated request origin is intercepted (no Worker D1 call) and compared to the correct PREVIEW/TEST/PRODUCTION Worker. An embedded URL literal alone cannot PASS; missing requests, mismatched VITE_EXPLORE_API_BASE selection, or blocked browser are HOLD/FAIL. Offline override negative regression added. PR #459 stays DRAFT; independent exact-SHA audit, real Cloudflare/browser probe and old in-flight retirement are NOT yet PASS. No app475, server, user-data or flag changes.
+
 - app478 follow-up to 감사방 FAIL PR #459 SHA c1f0cc9e03a3624c1d6ebae7363f95539414cad9: enforce explicit isolated EXPLORE_CACHE on all three Workers, verify Firebase real origin deployed bundle and Cloudflare zone routes/custom domain ownership, add deterministic late old D1 writer/member/visibility/CAS/ACK/rollback fixtures. Existing PR #454 app475 exact SHA unchanged. Prior app477 audit FAIL remains until new fixed SHA independent re-audit. Current active runtime and 13/13/12/12 parity are still unverified/FAIL, all v466 reader/ready flags must stay OFF. No deployment, migration or user data writes.
 
 

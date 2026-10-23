@@ -182,6 +182,81 @@ assert.match(worker470,/const result = await this\.ctx\.storage\.transaction\(\(
 assert.match(worker470,/if \(result\.reserved\)\s*await armCuratedRepairAlarm468\(this\.ctx\.storage/);
 assert.match(worker470,/if \(result\.confirmed\)\s*await armCuratedRepairAlarm468\(this\.ctx\.storage/);
 
+// app472 independent-audit P1 #1: exercise the actual DO repair method.
+// Shadow mode may clear its ticket ONLY when v307 (user-visible) and v466
+// (shared derived) both succeed. Inject the failed legacy R2 write first.
+{
+  const source = worker470.split('  async runCuratedRepair468() {')[1]
+    ?.split('\n  async runAggregate194() {')[0];
+  assert(source && source.includes('materializeCuratedR2FromBase307'));
+  const clock = { now: 2_000_000 };
+  const store = storageFake();
+  const ticket = await reserveCuratedRepair468(store, ['curated-private'], clock.now - 6_000);
+  await confirmCuratedRepair468(store, ticket.generation, clock.now - 5_990);
+  store.fire();
+  let legacyAttempts = 0, sharedAttempts = 0;
+  const RepairDo = new Function(
+    'curatedSharedWriterEnabled471','curatedWriterShadowEnabled471',
+    'drainCuratedRepair468','materializeCuratedR2FromBase307',
+    'reconcileCuratedShared466','baseWorker',
+    'return class { constructor(storage){ this.ctx={storage}; this.env={}; } async runCuratedRepair468() {'
+      + source + '\n }'
+  )(
+    () => true,
+    () => true,
+    (storage, callback) => drainCuratedRepair468(storage, callback, clock.now),
+    async () => {
+      legacyAttempts++;
+      if (legacyAttempts === 1) throw Error('INJECTED_V307_R2_PUT_FAILURE');
+      return { object: { etag:'legacy-ok' }, payload: { data: { items: [] } } };
+    },
+    async () => { sharedAttempts++; return { ok: true }; },
+    { fetch: async () => { throw Error('unexpected detail resolver'); } },
+  );
+  const worker = new RepairDo(store);
+  await worker.runCuratedRepair468();
+  assert.equal(legacyAttempts, 1);
+  assert.equal(sharedAttempts, 0,
+    'cannot settle shared-only after a legacy display R2 failure');
+  assert((await store.get(CURATED_REPAIR_KEY_468))?.tickets?.length === 1,
+    'failed legacy display cache MUST leave the durable repair ticket');
+  clock.now = store.nextAlarm();
+  store.fire();
+  await worker.runCuratedRepair468();
+  assert.equal(legacyAttempts, 2);
+  assert.equal(sharedAttempts, 1);
+  assert.equal(await store.get(CURATED_REPAIR_KEY_468), null,
+    'ack only once both user-visible and shared projections converge');
+}
+
+// app472 independent-audit P1 #2: fail the actual like aggregate 7 times.
+// Each alarm must still invoke curated recovery, and then preserve the
+// original like failure so the platform's legacy retry signal is intact.
+{
+  const body = worker470.split('  async alarm() {')[1]
+    ?.split('\n  }\n}\n\n// SORIDRAW_BOUNDED_CANONICAL_PUBLIC_LIKE_CONVERGENCE')[0];
+  assert(body && body.includes('likeAlarmError472'));
+  const AlarmDo = new Function(
+    'STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE','COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448',
+    'EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194','CURATED_REPAIR_KEY_468',
+    'return class { constructor() { this.env={SORIDRAW_CURATED_WRITER_SHADOW471:"1"};'
+      + 'this.ctx={storage:{get:async (key)=>key==="like-marker" ? 1 : {tickets:[1]}}};'
+      + 'this.likeCalls=0; this.curatedCalls=0; }'
+      + 'async runAggregate194(){this.likeCalls++; throw Error("INJECTED_LIKE_FAILURE");}'
+      + 'async finalizeAggregate195(){throw Error("must not finalize failed like batch");}'
+      + 'async runCuratedRepair468(){this.curatedCalls++;}'
+      + 'async alarm(){' + body + '\n }\n}'
+  )(false,false,'like-marker','curated-journal');
+  const worker = new AlarmDo();
+  for (let i = 0; i < 7; i++)
+    await assert.rejects(() => worker.alarm(), /INJECTED_LIKE_FAILURE/);
+  assert.equal(worker.likeCalls, 7);
+  assert.equal(worker.curatedCalls, 7,
+    'like failure must never starve an independent curated recovery');
+}
+console.log('APP472_LEGACY_V307_AND_SHARED_V466_BOTH_SETTLE_BEFORE_ACK=PASS');
+console.log('APP472_LIKE_FAILURE_7_OF_7_CURATED_RECOVERY_INDEPENDENT=PASS');
+
 console.log('APP470_DO_TRANSACTION_KV_ALARM_API_SEPARATION=PASS');
 console.log('APP470_LIKE_FINALIZER_CANNOT_STRAND_CURATED_ALARM=PASS');
 

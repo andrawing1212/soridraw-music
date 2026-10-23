@@ -1,3 +1,14 @@
+## CURRENT — app469 source-level curated direct mutation repair + DO alarm isolation (2026-10-24 KST)
+
+- User's **one task at a time** instruction remains in effect: finish #203 recommendation synchronization first; Music Note #237 and 1k–10k cost work are paused.
+- Draft-free source PR [#454](https://github.com/andrawing1212/soridraw-music/pull/454) based on preview `7a6a9d5f3064fff2cf68292def6e49c29862a7b3`; **NO MERGE / NO DEPLOY** until independent Work PASS and compatibility proof.
+- Focused audit at source SHA `0774a0d814d860465d560530080402cfa52764ff` found **P0** direct curator PUT/DELETE D1 commit followed by failed R2 CAS without a durable app468 reservation; **P1** a curation-only Durable Object alarm also invoked frozen Explore like aggregate. Audit findings recorded in PR #454 [review #5631450592](https://github.com/andrawing1212/soridraw-music/pull/454).
+- Follow-up app469 source patch added `reserveDirectCuratedRepair469` (verified-curator route, before D1 write) and best-effort confirm/ack ONLY after shared R2 CAS settles. A rejected R2 PUT leaves a repair ticket for bounded app468 alarm processing; canonical D1 original must not be replayed. An alarm now skips unrelated like aggregate when curated repair is pending with no active like marker, otherwise original like paths are retained. New `scripts/verify-469-direct-curated-repair.mjs` synthetic/static regression wired to existing CI. This patch still requires real Cloudflare semantics/Work audit; synthetic PASS alone does not prove no stale events.
+- Persistent release block **unchanged:** app377 TEST/PRODUCTION Writer can still update shared D1 without v466 shared R2 update. Both opt-in vars must stay OFF; legacy retirement/compatibility evidence not yet produced. Last canonical curated comparison D1=13/PREVIEW=13/TEST=12/PRODUCTION=12 FAIL. No real user data or R2 mutations, no Functions/Worker/Hosting deployment, no TEST/PRODUCTION approval, unchanged app465 UI & Stage416 OFF.
+- Next: exact head TypeScript/Build/Worker dry-run + app466–469 tests, independent Work on frozen SHA including direct curator and like alarm, then safe PREVIEW verification; TEST and PRODUCTION promotion only with separate director approval.
+
+---
+
 ## CURRENT — app468 source-only curated durable projection retry candidate (2026-10-24 KST)
 
 - User priority unchanged: #203 추천곡 PREVIEW/TEST/PRODUCTION sync first, #237 Music Note after, cost activity paused. Working branch `fix/app468-curated-repair-preview-candidate` based on `preview 7a6a9d5f3064fff2cf68292def6e49c29862a7b3`, not deployed. Source PR to `preview` for CI only.

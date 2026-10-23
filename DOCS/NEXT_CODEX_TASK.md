@@ -1,3 +1,13 @@
+## NEXT — app466 gated shared recommendations candidate: CI, independent audit, mixed-release gate (2026-10-23 KST)
+
+- Candidate branch `fix/p0-curated-shared-v466-candidate` from `preview c57ebb2b09233c1c4178ab47ff0c326c64437d04`, app465. User asked to proceed, but no TEST/PRODUCTION approval or shared canonical data write/migration. No deploy triggers.
+- Core `curated-shared-canonical-466.mjs` uses shared `PROFILE_MEDIA` v466 key and bounded max40 canonical D1 SELECT for cold/new mutation only, R2 ETag conditional CAS and retry from fresh D1, verify after conditional put; preserves private curated membership, reuses unchanged cards, targeted changed ID refresh. `preview-entry.js` runtime hook gated by `SORIDRAW_CURATED_SHARED_V466=1`, OFF by default; old v307 local path intact. Source PR TypeScript/Build/Node test required before review.
+- **Must independently review before activation**: simultaneous A+B promotion from different Workers, A promote/B remove opposite, publication private↔public race, R2 PUT reject, correct R2 conditional headers, bounded errors and no false success, edge revision keys invalidated without a global Edge purge, D1 warm R0, exact old Worker reader when mixed v377, user privacy, possible stale shared state on old-version curator mutation. Reject release while old version can mutate canonical D1 without shared update unless explicit compatibility relay/rollout barrier designed.
+- After independent Work PASS fix any failures, then only **explicitly authorized PREVIEW Worker-only** activation test + read-only result check; TEST separate approval, PRODUCTION separate approval. Never mutate D1 original for repair, never mass rebuild or clear user cached songs. Music Note P0 #237 sample per-user canonical still separate.
+- Static schema, existing UI/like/Generate/Note and Stage416 OFF must remain unchanged.
+
+---
+
 ## NEXT — production-first P0 curated revision + concurrency safety, then Music Note sampled canonical (2026-10-23 KST)
 
 - Real same-time-window live evidence twice: run #39860820744 and #39861568822 both say shared D1=13, PREVIEW=13 exact PASS, TEST=12 missing1 FAIL, PRODUCTION=12 missing1 FAIL. Last audit succeeded in PREVIEW Worker source archive and still correctly exited FAIL for product data parity. Source HEAD after audit PR #445 `d0fe1c02bdde9fbf356bb6bf838d129fed2d087d`. No data write/deploy.

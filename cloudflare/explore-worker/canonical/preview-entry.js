@@ -164,9 +164,10 @@ async function resolveSharedCuratedTrack466(request, env, ctx, id) {
   return data?.data?.track || null;
 }
 
-async function refreshCuratedShared466(request, env, ctx) {
+async function refreshCuratedShared466(request, env, ctx, forceTrackIds = []) {
   const result = await reconcileCuratedShared466(
     env, (id) => resolveSharedCuratedTrack466(request, env, ctx, id),
+    { forceTrackIds },
   );
   if (result.ok) await clearCuratedSharedEdge466(new URL(request.url));
   return result;
@@ -697,13 +698,16 @@ async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, cur
 }
 
 // SORIDRAW_CURATED_PUBLICATION_TARGETED_SYNC_307_20261003
-async function syncCuratedPublicationResults307(request, env, results) {
+async function syncCuratedPublicationResults307(request, env, results, ctx) {
   if (sharedCuratedEnabled466(env)) {
     if (!Array.isArray(results) || !results.some((item) => item?.ok === true)) return;
     const current = await getCuratedShared466(env);
     const memberSet = new Set(current.snapshot?.memberIds || []);
     if (!results.some((item) => memberSet.has(String(item?.trackId || '').trim()))) return;
-    const next = await refreshCuratedShared466(request, env, null);
+    const changedIds = results.filter((item) => item?.ok === true)
+      .map((item) => String(item?.trackId || '').trim())
+      .filter((id) => memberSet.has(id));
+    const next = await refreshCuratedShared466(request, env, ctx, changedIds);
     if (!next.ok) throw Error('CURATED_SHARED_PUBLICATION_REPAIR_FAILED_466');
     return;
   }
@@ -832,7 +836,7 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
     // D1 mutation has committed. Do not lie about a successful public snapshot
     // when R2 conditional write cannot converge. No automatic D1 rollback.
     try {
-      const updated = await refreshCuratedShared466(request, env, ctx);
+      const updated = await refreshCuratedShared466(request, env, ctx, [id]);
       if (!updated.ok) throw Error('CURATED_SHARED_CAS_INCOMPLETE_466');
     } catch {
       return new Response(JSON.stringify({
@@ -3134,7 +3138,7 @@ export default {
               status: mutationPayload307?.data?.isPublic === true ? 'public' : 'private',
               snapshotItem: mutationPayload307?.data?.snapshotItem || null,
             }];
-        await syncCuratedPublicationResults307(request, env, results307);
+        await syncCuratedPublicationResults307(request, env, results307, ctx);
       } catch (error) {
         console.warn('[app307] curated publication sync skipped:', String(error?.message || error || 'unknown'));
       }

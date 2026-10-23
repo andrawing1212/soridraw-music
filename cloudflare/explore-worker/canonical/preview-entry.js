@@ -1452,6 +1452,29 @@ const EXPLORE_LIKE_ALARM_FALLBACK_MS_194 = 15 * 1000;
 const waitExploreLikeDelay194 = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 
 export class ExploreLikeBatchScheduler103 extends DurableObject {
+  // One global durable curated repair journal for this Worker environment.
+  // No periodic polling. The alarm is armed only by a real relevant mutation.
+  async runCuratedRepair468() {
+    if (!sharedCuratedEnabled466(this.env)) return;
+    const result = await drainCuratedRepair468(
+      this.ctx.storage,
+      async (trackIds) => reconcileCuratedShared466(
+        this.env,
+        async (id) => {
+          const url = 'https://soridraw.internal/v1/tracks/' + encodeURIComponent(id);
+          const res = await baseWorker.fetch(new Request(url), this.env, this.ctx);
+          if (!res.ok) return null;
+          const data = await res.json().catch(() => null);
+          return data?.data?.track || null;
+        },
+        { forceTrackIds: trackIds },
+      ),
+    );
+    if (result.retrying) {
+      console.warn('[app468] derived curated repair deferred', result.failures);
+    }
+  }
+
   async runAggregate194() {
     if (typeof baseWorker?.scheduled !== 'function') {
       throw new Error('Canonical Explore like aggregate handler unavailable');

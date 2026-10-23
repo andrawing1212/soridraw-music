@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import {
-  CURATED_SHARED_KEY_466, sharedCuratedEnabled466 as curatedFlagEnabled466, curatedSnapshotRevision466,
+  CURATED_SHARED_KEY_466, sharedCuratedEnabled466 as curatedFlagEnabled466, curatedAllWritersReady466, curatedSnapshotRevision466,
   getCuratedShared466, reconcileCuratedShared466,
 } from '../runtime/curated-shared-canonical-466.mjs';
 import baseWorker from './preview-worker.js';
@@ -145,7 +145,7 @@ async function clearCuratedEdge307(url) {
 // Keep this guard on ALL v466 read AND mutation routes.
 const sharedCuratedEnabled466 = (env) =>
   curatedFlagEnabled466(env)
-  && String(env?.SORIDRAW_CURATED_ALL_WRITERS_READY466 || '') === '1';
+  && curatedAllWritersReady466(env);
 
 // SORIDRAW_CURATED_CROSS_ENV_SHARED_V466 — OFF until reviewed release configuration.
 // v307 environment-local caches stay intact and untouched. When enabled, public

@@ -1,5 +1,7 @@
 ## NEXT — app477 read-only active Writer gate QA (2026-10-24 KST)
 
+- app479 minimal final source audit: verify the runtime browser actually observes the chosen curated GET origin from each live Firebase app, catches VITE_EXPLORE_API_BASE wrong-host override, and does not mistake bundled URL literals for an executed branch. The browser aborts Worker backend requests, blocks service workers, and only observes guest navigation; absence of a request must HOLD. Run source tests and CI, then separate 감사방 exact SHA; live Cloudflare remains a separate read-only verification. Keep v466 reader OFF and all deployment approvals unchanged.
+
 - app478: Address independent 감사방 FAIL on PR #459. Recheck three origin-to-Worker mapping via compiled Firebase frontend bundle plus Cloudflare worker domains/zone routes; require isolated EXPLORE_CACHE on PREVIEW/TEST/PRODUCTION. Deterministic old late D1-only write/member/visibility, CAS conflict, durable ACK generation and rollback-order tests must PASS. Reader activation always HOLD without independently verified old in-flight completion. Freeze final SHA only after CI PASS and hand to separate 감사방; then run Cloudflare GET-only live check. Do not touch app475, shared data, remote flags, or deployments.
 
 

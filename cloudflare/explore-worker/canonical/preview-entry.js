@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import {
   CURATED_SHARED_KEY_466, sharedCuratedEnabled466 as curatedFlagEnabled466, curatedAllWritersReady466, curatedSnapshotRevision466,
+  readCanonicalCurated466, canonicalCuratedIds466, visibleCuratedIds466,
   getCuratedShared466, reconcileCuratedShared466, readCanonicalCurated466,
 } from '../runtime/curated-shared-canonical-466.mjs';
 import {
@@ -470,16 +471,23 @@ async function materializeCuratedR2FromBase307(request, env, ctx) {
   if (!bucket) return { object: null, payload: null, memberIds: [], d1Read: 0, source: 'R2-BINDING-MISSING-307' };
   if (!env?.DB) return { object: null, payload: null, memberIds: [], d1Read: 0, source: 'D1-BINDING-MISSING-356' };
 
+  // app475: conditionally write the v307 shadow from the ETag observed BEFORE
+  // reading canonical D1. A delayed earlier repair cannot undo a later PUT.
+  const shadow475 = curatedWriterShadowEnabled471(env);
+  const before475 = shadow475 ? await bucket.get(SORIDRAW_CURATED_R2_KEY_307) : null;
+  if (shadow475 && before475 && !String(before475.etag || '').trim())
+    return { object: null, payload: null, memberIds: [], d1Read: 0, source: 'LEGACY_ETAG_UNAVAILABLE_475' };
   const now = Date.now();
   let rows = [];
   try {
     const result = await env.DB.prepare(`
-      SELECT track_id,curator_uid,curator_role,sort_order,starts_at,ends_at,created_at,updated_at
-      FROM curated_picks
-      WHERE collection_key=?
-        AND (starts_at IS NULL OR starts_at<=?)
-        AND (ends_at IS NULL OR ends_at>?)
-      ORDER BY sort_order ASC, updated_at DESC, track_id ASC
+      SELECT cp.track_id,cp.curator_uid,cp.curator_role,cp.sort_order,cp.starts_at,cp.ends_at,cp.created_at,cp.updated_at,
+             t.is_public,t.status
+      FROM curated_picks cp LEFT JOIN tracks t ON t.id=cp.track_id
+      WHERE cp.collection_key=?
+        AND (cp.starts_at IS NULL OR cp.starts_at<=?)
+        AND (cp.ends_at IS NULL OR cp.ends_at>?)
+      ORDER BY cp.sort_order ASC,cp.updated_at DESC,cp.track_id ASC
       LIMIT 40
     `).bind(SORIDRAW_CURATED_COLLECTION_307, now, now).all();
     rows = Array.isArray(result?.results) ? result.results : [];
@@ -497,22 +505,26 @@ async function materializeCuratedR2FromBase307(request, env, ctx) {
   for (const row of rows) {
     const trackId = String(row?.track_id || '').trim();
     if (!trackId) continue;
+    // Private/unpublished members remain in membership but not public cards.
+    // A published member missing its detail is a RETRY, never a partial success.
+    if (Number(row?.is_public) !== 1 || String(row?.status || '').toLowerCase() !== 'published') continue;
     const detailUrl = new URL(`/v1/tracks/${encodeURIComponent(trackId)}`, request.url);
-    let detailResponse = null;
+    let track = null;
     try {
-      detailResponse = await baseWorker.fetch(new Request(detailUrl.toString(), {
+      const detailResponse = await baseWorker.fetch(new Request(detailUrl.toString(), {
         method: 'GET',
         headers: { Origin: request.headers.get('Origin') || '' },
       }), env, ctx);
-    } catch {
-      continue;
+      const detailD1Read = Number(detailResponse.headers.get('X-SORIDRAW-D1-Read') || 0);
+      if (Number.isFinite(detailD1Read) && detailD1Read > 0) d1Read += detailD1Read;
+      if (!detailResponse.ok) throw Error('CURATED_475_DETAIL_HTTP_' + detailResponse.status);
+      const detail = await detailResponse.clone().json();
+      track = detail?.data?.track;
+      if (String(track?.id || '').trim() !== trackId) throw Error('CURATED_475_DETAIL_MISMATCH');
+    } catch (error) {
+      console.warn('[app475] published curated detail unavailable, repair retained:', String(error?.message || error));
+      return { object: null, payload: null, memberIds, d1Read, source: 'CURATED_DETAIL_PENDING_475' };
     }
-    const detailD1Read = Number(detailResponse.headers.get('X-SORIDRAW-D1-Read') || 0);
-    if (Number.isFinite(detailD1Read) && detailD1Read > 0) d1Read += detailD1Read;
-    if (!detailResponse.ok) continue;
-    const detail = await detailResponse.clone().json().catch(() => null);
-    const track = detail?.data?.track;
-    if (!track?.id) continue;
     items.push({
       track,
       curation: {
@@ -539,19 +551,29 @@ async function materializeCuratedR2FromBase307(request, env, ctx) {
     payload,
     updatedAt: Date.now(),
   };
-  await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(stored), {
+  const saved475 = await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(stored), {
+    ...(shadow475 ? { onlyIf: before475
+      ? { etagMatches: String(before475.etag).trim() }
+      : new Headers({ 'If-None-Match': '*' }) } : {}),
     httpMetadata: { contentType: 'application/json' },
     customMetadata: { updatedAt: String(stored.updatedAt) },
   });
-  await clearCuratedEdge307(new URL(request.url));
+  if (shadow475 && !String(saved475?.etag || saved475?.httpEtag || '').trim())
+    return { object: null, payload: null, memberIds, d1Read, source: 'CURATED_LEGACY_CAS_PENDING_475' };
   const object = await bucket.get(SORIDRAW_CURATED_R2_KEY_307);
-  return {
-    object,
-    payload,
-    memberIds,
-    d1Read,
-    source: 'D1-BOUNDED-BOOTSTRAP-356',
-  };
+  if (shadow475) {
+    // Verify the actually persisted v307 projection AND current D1 before ACK.
+    let actual475 = null;
+    try { actual475 = object && JSON.parse(await object.text()); } catch {}
+    const currentRows475 = await readCanonicalCurated466(env);
+    const actualIds475 = (actual475?.payload?.data?.items || []).map((x) => String(x?.track?.id || '').trim());
+    if (!object || String(object.etag || '').trim() !== String(saved475.etag || '').trim()
+      || JSON.stringify(actual475?.memberIds) !== JSON.stringify(canonicalCuratedIds466(currentRows475))
+      || JSON.stringify(actualIds475) !== JSON.stringify(visibleCuratedIds466(currentRows475)))
+      return { object: null, payload: null, memberIds, d1Read, source: 'CURATED_LEGACY_VERIFY_PENDING_475' };
+  }
+  await clearCuratedEdge307(new URL(request.url));
+  return { object, payload, memberIds, d1Read, source: 'D1-BOUNDED-BOOTSTRAP-356' };
 }
 
 async function readCuratedObject307(request, env, ctx) {

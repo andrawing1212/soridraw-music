@@ -3238,7 +3238,69 @@ export default {
       && /^\/v1\/tracks\/[^/]+\/visibility$/.test(url.pathname);
     const isPublicationBatch307 = request.method === 'POST'
       && url.pathname === '/v1/me/music-note-publications/batch';
+    // app468: reserve an event-only, persisted repair BEFORE the canonical
+    // publication call. If this guard cannot persist, do NOT write user
+    // originals: otherwise an R2 failure after commit has no replay owner.
+    // A healthy unrelated track does not enter the repair path.
+    let curatedRepairTicket468 = null;
+    if (sharedCuratedEnabled466(env) &&
+        (isTrackVisibilityMutation307 || isPublicationBatch307)) {
+      try {
+        const current468 = await getCuratedShared466(env);
+        if (current468.object && !current468.snapshot)
+          throw Error('CURATED_REPAIR_CORRUPT_SHARED_OBJECT_468');
+        const memberIds468 = current468.snapshot
+          ? current468.snapshot.memberIds
+          : (await readCanonicalCurated466(env)).map((row) => String(row.track_id || '').trim());
+        const membership468 = new Set(memberIds468);
+        const candidates468 = isTrackVisibilityMutation307
+          ? [decodeURIComponent(url.pathname.split('/')[3] || '')]
+          : (await request.clone().json().catch(() => null))?.mutations
+            ?.map((item) => String(item?.trackId || '').trim()) || [];
+        const affected468 = [...new Set(candidates468
+          .filter((id) => membership468.has(String(id || '').trim())))]
+          .slice(0, 40);
+        if (affected468.length) {
+          const space468 = env?.EXPLORE_LIKE_BATCH_SCHEDULER;
+          if (!space468) throw Error('CURATED_REPAIR_SCHEDULER_MISSING_468');
+          const id468 = space468.idFromName(EXPLORE_LIKE_BATCH_SCHEDULER_NAME_103);
+          const stub468 = space468.get(id468);
+          const journal468 = await stub468.fetch('https://soridraw.internal/curated-repair-468/reserve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ trackIds: affected468 }),
+          });
+          const payload468 = await journal468.json().catch(() => null);
+          if (!journal468.ok || payload468?.data?.reserved !== true)
+            throw Error('CURATED_REPAIR_RESERVATION_UNAVAILABLE_468');
+          curatedRepairTicket468 = {
+            stub: stub468,
+            generation: Number(payload468.data.generation || 0),
+          };
+        }
+      } catch (error) {
+        console.warn('[app468] curated repair preflight blocked canonical mutation:',
+          String(error?.message || error || 'unknown'));
+        return Response.json({
+          ok: false, error: {
+            code: 'CURATED_REPAIR_PREFLIGHT_REQUIRED_468',
+            message: '추천곡 동기화 준비에 실패했습니다. 원본 변경은 실행되지 않았습니다.',
+          },
+        }, { status: 503 });
+      }
+    }
     let response = await baseWorker.fetch(request, env, ctx);
+    if (response.ok && curatedRepairTicket468) {
+      try {
+        await curatedRepairTicket468.stub.fetch('https://soridraw.internal/curated-repair-468/confirm', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ generation: curatedRepairTicket468.generation }),
+        });
+      } catch {
+        // The pre-commit reservation survives; its 3-minute fallback can still
+        // read the latest canonical D1 even if this completion signal is lost.
+      }
+    }
 
     if ((isTrackVisibilityMutation307 || isPublicationBatch307) && response.ok) {
       try {

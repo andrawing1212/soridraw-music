@@ -36,6 +36,8 @@ jobs:
           node scripts/diagnose-p0-curated-three-env-readonly.mjs --self-test
           node --check scripts/verify-477-curated-active-writer-gate.mjs
           node scripts/verify-477-curated-active-writer-gate.mjs --self-test
+          node --check scripts/verify-478-curated-race-rollback.mjs
+          node scripts/verify-478-curated-race-rollback.mjs
       - name: Compare shared D1 curated membership and three real public environments
         id: curated_parity
         continue-on-error: true

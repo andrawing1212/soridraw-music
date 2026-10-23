@@ -8,6 +8,11 @@ const COLLECTION = 'soridraw';
 export const sharedCuratedEnabled466 = (env) =>
   String(env?.SORIDRAW_CURATED_SHARED_V466 || '') === '1';
 
+// Independent release fence: only switch this on after all TEST/PRODUCTION
+// legacy writers and visibility publishers are updated and verified.
+export const curatedAllWritersReady466 = (env) =>
+  String(env?.SORIDRAW_CURATED_ALL_WRITERS_READY466 || '') === '1';
+
 export const canonicalCuratedIds466 = (rows) => rows
   .map((row) => String(row?.track_id || '').trim()).filter(Boolean);
 

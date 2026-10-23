@@ -254,6 +254,85 @@ assert.match(worker470,/if \(result\.confirmed\)\s*await armCuratedRepairAlarm46
   assert.equal(worker.curatedCalls, 7,
     'like failure must never starve an independent curated recovery');
 }
+// app475: actual bounded legacy bootstrap, not a shape-only mock.
+// A published song detail failure must retain the ticket without a partial
+// R2 PUT. An earlier bootstrap waking after a newer removal must lose CAS.
+{
+  const source = worker470.split('async function materializeCuratedR2FromBase307(')[1]
+    ?.split('\nasync function readCuratedObject307(')[0];
+  assert(source && source.includes('CURATED_DETAIL_PENDING_475'));
+  const row = {track_id:'track-a',curator_uid:'master',curator_role:'master',
+    sort_order:0,starts_at:null,ends_at:null,created_at:1,updated_at:1,
+    is_public:1,status:'published'};
+  let rows=[row], state={schemaVersion:1,memberIds:[],
+    payload:{ok:true,data:{items:[]}}},etag='rev0',puts=0,phase='fail';
+  let enterWait,leaveWait;
+  const entered=new Promise(resolve=>{enterWait=resolve;});
+  const resume=new Promise(resolve=>{leaveWait=resolve;});
+  const bucket={
+    get:async()=>({etag,text:async()=>JSON.stringify(state)}),
+    put:async(_key,body,opts)=>{
+      puts++;
+      const condition=opts?.onlyIf;
+      assert(condition,'writer-shadow must use conditional R2 PUT');
+      const expected=condition instanceof Headers
+        ?condition.get('If-Match') :condition?.etagMatches;
+      if(expected!==etag)return null;
+      state=JSON.parse(body);etag='rev'+puts;
+      return {etag};
+    },
+  };
+  const worker={fetch:async()=>{
+    if(phase==='fail')return new Response('temporarily unavailable',{status:503});
+    if(phase==='throw')throw Error('INJECTED_DETAIL_EXCEPTION');
+    if(phase==='wait'){enterWait();await resume;}
+    return Response.json({ok:true,data:{track:{id:'track-a'}}});
+  }};
+  const rebuild=new Function('curatedBucket307','curatedWriterShadowEnabled471',
+    'SORIDRAW_CURATED_R2_KEY_307','SORIDRAW_CURATED_COLLECTION_307',
+    'baseWorker','clearCuratedEdge307','readCanonicalCurated466',
+    'canonicalCuratedIds466','visibleCuratedIds466',
+    'return async function materializeCuratedR2FromBase307(' + source
+  )(
+    ()=>bucket,()=>true,'curated-v307','soridraw',
+    worker,async()=>{},async()=>rows.slice(),
+    current=>current.map(r=>r.track_id),
+    current=>current.filter(r=>r.is_public===1&&r.status==='published')
+      .map(r=>r.track_id),
+  );
+  const env={DB:{prepare:()=>({bind:()=>({all:async()=>({results:rows.slice()})})})}};
+  const request=new Request('https://soridraw.internal/v1/curated');
+  const failure=await rebuild(request,env,{});
+  assert.equal(failure.source,'CURATED_DETAIL_PENDING_475');
+  assert.equal(failure.object,null);
+  assert.equal(puts,0,'HTTP 503 cannot write partial v307');
+  phase='throw';
+  const failureThrown=await rebuild(request,env,{});
+  assert.equal(failureThrown.source,'CURATED_DETAIL_PENDING_475');
+  assert.equal(puts,0,'thrown detail fetch cannot write partial v307');
+  phase='success';
+  const healed=await rebuild(request,env,{});
+  assert(healed.object&&healed.payload?.data?.items?.length===1);
+  assert.equal(puts,1);
+  phase='wait';
+  const stale=rebuild(request,env,{});
+  await entered;
+  // Simulate later direct removal committing canonical D1 AND updated R2.
+  rows=[];
+  const deletion=await bucket.put('curated-v307',JSON.stringify({
+    schemaVersion:1,memberIds:[],payload:{ok:true,data:{items:[]}},
+  }),{onlyIf:{etagMatches:etag}});
+  assert(deletion);
+  leaveWait();
+  const old=await stale;
+  assert.equal(old.source,'CURATED_LEGACY_CAS_PENDING_475',
+    'late old PUT must fail when newer removal already updated R2');
+  assert.deepEqual(state.memberIds,[]);
+  assert.deepEqual(state.payload.data.items,[]);
+}
+console.log('APP475_DETAIL_503_THROW_NO_PARTIAL_V307_PUT=PASS');
+console.log('APP475_LATE_OLD_CAS_CANNOT_RESURRECT_REMOVED_TRACK=PASS');
+
 console.log('APP472_LEGACY_V307_AND_SHARED_V466_BOTH_SETTLE_BEFORE_ACK=PASS');
 console.log('APP472_LIKE_FAILURE_7_OF_7_CURATED_RECOVERY_INDEPENDENT=PASS');
 

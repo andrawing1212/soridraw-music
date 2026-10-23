@@ -152,6 +152,16 @@ const sharedCuratedEnabled466 = (env) =>
   curatedFlagEnabled466(env)
   && curatedAllWritersReady466(env);
 
+// app471: writer-first compatibility staging. All readers remain on the
+// proven v307 cache while new Workers can *also* maintain the derived shared
+// v466 projection. Do not enable until the exact Writer release is audited.
+// Shadow mode never grants v466 read access and never disables legacy writes.
+const curatedWriterShadowEnabled471 = (env) =>
+  String(env?.SORIDRAW_CURATED_WRITER_SHADOW471 || '') === '1'
+  && !sharedCuratedEnabled466(env);
+const curatedSharedWriterEnabled471 = (env) =>
+  sharedCuratedEnabled466(env) || curatedWriterShadowEnabled471(env);
+
 // SORIDRAW_CURATED_CROSS_ENV_SHARED_V466 — OFF until reviewed release configuration.
 // v307 environment-local caches stay intact and untouched. When enabled, public
 // revision/list, manager list and mutation repair use the same versioned R2
@@ -1513,7 +1523,7 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
   // One global durable curated repair journal for this Worker environment.
   // No periodic polling. The alarm is armed only by a real relevant mutation.
   async runCuratedRepair468() {
-    if (!sharedCuratedEnabled466(this.env)) return;
+    if (!curatedSharedWriterEnabled471(this.env)) return;
     const result = await drainCuratedRepair468(
       this.ctx.storage,
       async (trackIds) => reconcileCuratedShared466(
@@ -1646,8 +1656,9 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
     // Stay fully inert in legacy app410/Stage416 and source-isolated DO
     // fixtures. Guard using primitive env vars before accessing any new
     // v466 helper symbol (the frozen fixture does not import that module).
-    if (String(this.env?.SORIDRAW_CURATED_SHARED_V466 || '') !== '1'
-      || String(this.env?.SORIDRAW_CURATED_ALL_WRITERS_READY466 || '') !== '1') return;
+    if (String(this.env?.SORIDRAW_CURATED_WRITER_SHADOW471 || '') !== '1'
+      && (String(this.env?.SORIDRAW_CURATED_SHARED_V466 || '') !== '1'
+        || String(this.env?.SORIDRAW_CURATED_ALL_WRITERS_READY466 || '') !== '1')) return;
     const row = await this.ctx.storage.get(CURATED_REPAIR_KEY_468);
     const tickets = Array.isArray(row?.tickets) ? row.tickets : [];
     if (!tickets.length) return;
@@ -1701,7 +1712,7 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
   async fetch(request) {
     const url = new URL(request.url);
     if (request.method === 'POST' && url.pathname.startsWith('/curated-repair-468/')) {
-      if (!sharedCuratedEnabled466(this.env)) {
+      if (!curatedSharedWriterEnabled471(this.env)) {
         return Response.json({ ok: false, error: 'CURATED_REPAIR_DISABLED_468' }, { status: 503 });
       }
       const body = await request.json().catch(() => null);
@@ -1887,7 +1898,7 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
         STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true||
         COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448===true;
       const activeLikeMarker469 = await this.ctx.storage.get(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194);
-      const curatedOnlyAlarm469 = sharedCuratedEnabled466(this.env) &&
+      const curatedOnlyAlarm469 = curatedSharedWriterEnabled471(this.env) &&
         Boolean(await this.ctx.storage.get(CURATED_REPAIR_KEY_468)) &&
         !activeLikeMarker469;
       const publicOnly448 = publicWindowEnabled448 && !activeLikeMarker469;
@@ -1916,7 +1927,7 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
       if(publicWindowEnabled448)await this.ensurePublicAlarm416();
       // Process the separately persisted curated dirty record only when an
       // actual curated change enqueued it; normal healthy pages never run this.
-      if (sharedCuratedEnabled466(this.env) &&
+      if (curatedSharedWriterEnabled471(this.env) &&
           await this.ctx.storage.get(CURATED_REPAIR_KEY_468)) {
         await this.runCuratedRepair468();
       }
@@ -3336,7 +3347,7 @@ export default {
     // originals: otherwise an R2 failure after commit has no replay owner.
     // A healthy unrelated track does not enter the repair path.
     let curatedRepairTicket468 = null;
-    if (sharedCuratedEnabled466(env) &&
+    if (curatedSharedWriterEnabled471(env) &&
         (isTrackVisibilityMutation307 || isPublicationBatch307)) {
       try {
         const current468 = await getCuratedShared466(env);

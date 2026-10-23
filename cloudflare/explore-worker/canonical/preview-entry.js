@@ -752,7 +752,8 @@ async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, cur
     }), env, ctx);
     const detail = await detailResponse.clone().json().catch(() => null);
     const track = detail?.data?.track;
-    if (detailResponse.ok && track?.id) {
+    if (!detailResponse.ok || String(track?.id || '').trim() !== trackId) return false;
+    {
       items.unshift({
         track,
         curation: {
@@ -776,10 +777,17 @@ async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, cur
     payload,
     updatedAt: Date.now(),
   };
-  await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(stored), {
+  // app475: conditional write keeps an old promote from resurrecting a later removal.
+  const shadow475 = curatedWriterShadowEnabled471(env);
+  if (shadow475 && selected.object && !String(selected.object.etag || '').trim()) return false;
+  const saved475 = await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(stored), {
+    ...(shadow475 ? { onlyIf: selected.object
+      ? { etagMatches: String(selected.object.etag).trim() }
+      : new Headers({ 'If-None-Match': '*' }) } : {}),
     httpMetadata: { contentType: 'application/json' },
     customMetadata: { updatedAt: String(stored.updatedAt) },
   });
+  if (shadow475 && !String(saved475?.etag || saved475?.httpEtag || '').trim()) return false;
   await clearCuratedEdge307(new URL(request.url));
   return true;
 }
@@ -864,10 +872,15 @@ async function syncCuratedPublicationResults307(request, env, results, ctx) {
     payload: nextPayload,
     updatedAt: Date.now(),
   };
-  await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(nextStored), {
+  const shadow475 = curatedWriterShadowEnabled471(env);
+  if (shadow475 && !String(object.etag || '').trim()) throw Error('CURATED_LEGACY_ETAG_MISSING_475');
+  const saved475 = await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(nextStored), {
+    ...(shadow475 ? { onlyIf: { etagMatches: String(object.etag).trim() } } : {}),
     httpMetadata: { contentType: 'application/json' },
     customMetadata: { updatedAt: String(nextStored.updatedAt) },
   });
+  if (shadow475 && !String(saved475?.etag || saved475?.httpEtag || '').trim())
+    throw Error('CURATED_LEGACY_CONFLICT_475');
   await clearCuratedEdge307(new URL(request.url));
 }
 

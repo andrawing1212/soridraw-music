@@ -1,3 +1,14 @@
+## CURRENT — user priority restored: finish cross-environment synchronization before cost work (2026-10-23 KST)
+
+- **Director instruction:** STOP additional 1k/10k cost work until existing synchronization problems are solved sequentially. First complete curated SORIDRAW recommendation parity #203/app466; only then Music Note saved-membership mismatch #237. Do not begin both fixes simultaneously. PREVIEW admin-only, TEST small beta cohort, PRODUCTION regular users + dual-active beta remain the operating model.
+- **Exact source review performed at draft PR #447** `d5f3d132c5d0ccbabb52d95a99de55404b4f33fd` and [PR review #5630448326](https://github.com/andrawing1212/soridraw-music/pull/447): **release FAIL** despite targeted GitHub CI PASS. The review is a source-level blocker assessment, **not independent Work full audit or production proof**.
+- **P0 compatibility defect:** app377 TEST/PRODUCTION old Worker writes shared D1 curation/publication but not new v466 shared R2 snapshot; current v466 revision/read path trusts the R2 revision and can remain stale indefinitely after an old-only mutation. One newer writer's post-CAS D1 read does not solve mutations occurring later. Need a safe mixed-runtime rollout/writer-fence without full warm-entry D1 scan.
+- **P1 current-writer repair defect:** after a successful canonical publication/visibility change, `syncCuratedPublicationResults307` may fail its derived R2 update; the outer `catch` only logs and returns canonical success without durable retry/proof. The shared snapshot may stay stale without a new mutation. Add deterministic failure→eventual-bounded-repair regression and change-only recovery; do not roll back confirmed originals or add idle polling.
+- **Actual runtime baseline remains FAIL:** canonical 13 / PREVIEW 13 / TEST 12 / PRODUCTION 12 (last live run). app466 flag OFF, PR #447 DRAFT/unmerged, app465 accepted UI frozen. Music Note #237 is the **next separate** source-of-truth task only after curation remediation. TEST/PRODUCTION not approved, no shared original writes or deployment in this read-only audit.
+- **Next one execution:** implement safe compatibility fence and publication repair in **PREVIEW source candidate** with exact reproducible tests and protected TypeScript/Build/Worker dry-run; fix any PR branch conflict against current preview. Then independent Work exact-SHA PASS and guarded PREVIEW verification. TEST/PRODUCTION promotions require explicit user approval.
+
+---
+
 ## CURRENT — 1k/10k cost sensitivity run / read-only live metering pending (2026-10-23 KST)
 
 - Added `DOCS/COST_ACCEPTANCE_1K_10K_2026_10_23.md` plus pure no-network `scripts/verify-1k-10k-cost-scenarios.mjs` on audit branch. This is **scenario arithmetic, not real monthly billing**; PREVIEW admin-only, TEST invited beta, PRODUCTION general users + beta concurrent TEST origin correctly separated.

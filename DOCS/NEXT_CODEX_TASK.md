@@ -1,3 +1,12 @@
+## NEXT — app477 read-only active Writer gate QA (2026-10-24 KST)
+
+- Source branch audit/app477-curated-active-writer-gate based on preview bb2a784b827f668725b55acbb5a5bdb54b13ac9b. Separate product PR #454 SHA ef3a5abe272d7a5e81c6743ec0c6d8f8846ae82d stays unchanged.
+- Validate verify-477-curated-active-writer-gate.mjs --self-test via existing PR CI, check TypeScript and Build, review three environments' active Worker GET route/membership read only after merge.
+- All active Workers must be compatible, live flags remain OFF, and old in-flight retirement evidence must be independently verifiable. Existing Cloudflare API only verifies current routing and cannot prove drain; app477 correctly HOLDs instead of claiming rollout readiness.
+- Dedicated separate 감사방 exact SHA audit required before merge. Never enable v466 reader or shadow flags, modify user originals or deploy Worker/Hosting/Functions as part of this audit.
+- Next one action after source CI: freeze SHA, independent audit, repair if FAIL. Later staged Writer rollout requires TEST/PRODUCTION director approvals.
+
+---
 ## NEXT — #203 one implementation: three-Worker live Writer retirement attestation (2026-10-24 KST)
 
 - Design and release STOPs: `DOCS/CURATED_203_MIXED_WRITER_ROLLOUT.md` (read first). No code deployment, migration, shared data writes or automatic flag enablement.

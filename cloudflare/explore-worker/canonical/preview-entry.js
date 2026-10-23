@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import {
-  CURATED_SHARED_KEY_466, sharedCuratedEnabled466, curatedSnapshotRevision466,
+  CURATED_SHARED_KEY_466, sharedCuratedEnabled466 as curatedFlagEnabled466, curatedSnapshotRevision466,
   getCuratedShared466, reconcileCuratedShared466,
 } from '../runtime/curated-shared-canonical-466.mjs';
 import baseWorker from './preview-worker.js';
@@ -135,6 +135,17 @@ async function clearCuratedEdge307(url) {
   try { await caches.default.delete(curatedRevisionEdgeKey307(url)); } catch {}
   try { await caches.default.delete(curatedStableBodyEdgeKey307(url)); } catch {}
 }
+
+// Source-only compatibility fence for a mixed-runtime three-origin release.
+// An app377 Worker can still mutate D1 without updating the new v466 shared
+// R2 key; v466 must not become readable on PREVIEW during that period.
+// This separate value is an operator ATTESTATION after all three actual
+// writers (including visibility/publication) are upgraded and verified.
+// It is never checked into wrangler config or auto-enabled by a code deploy.
+// Keep this guard on ALL v466 read AND mutation routes.
+const sharedCuratedEnabled466 = (env) =>
+  curatedFlagEnabled466(env)
+  && String(env?.SORIDRAW_CURATED_ALL_WRITERS_READY466 || '') === '1';
 
 // SORIDRAW_CURATED_CROSS_ENV_SHARED_V466 — OFF until reviewed release configuration.
 // v307 environment-local caches stay intact and untouched. When enabled, public

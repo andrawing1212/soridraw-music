@@ -1,6 +1,7 @@
 // #203 app477: read-only active Worker writer audit. No D1 query or mutation.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 const FLAGS = ['SORIDRAW_CURATED_WRITER_SHADOW471','SORIDRAW_CURATED_SHARED_V466','SORIDRAW_CURATED_ALL_WRITERS_READY466'];
 const DB_ID = '217ef5b1-5d80-4f7c-afc7-9e07eb05c06b';
@@ -49,13 +50,20 @@ export function bindings477(payload,target) {
   need(typeof rateId==='string'&&rateId!==DB_ID,name,'RATE_DB_NOT_ISOLATED');
   if(target.rateDb) need(rateId===target.rateDb,name,'RATE_DB_MISMATCH');
   const local=b.get('EXPLORE_CACHE');
+  // Future v307 writers must have truly separate derived caches, even on PROD.
+  // A legacy PROFILE_MEDIA fallback may be running now, but is not writer-ready.
+  need(local?.type==='r2_bucket',name,'EXPLORE_CACHE_REQUIRED');
+  need(typeof local.bucket_name==='string'
+    && /^soridraw-profile-media-[a-z0-9-]+$/.test(local.bucket_name)
+    && local.bucket_name!=='soridraw-profile-media',name,'CACHE_NOT_ISOLATED');
   if(name==='PREVIEW') match('EXPLORE_CACHE','r2_bucket','bucket_name','soridraw-profile-media-preview');
-  if(local) need(local.type==='r2_bucket'&&typeof local.bucket_name==='string'&&local.bucket_name!=='soridraw-profile-media',name,'CACHE_NOT_ISOLATED');
+  if(name==='TEST') need(local.bucket_name.includes('test'),name,'CACHE_WRONG_STAGE');
+  if(name==='PRODUCTION') need(local.bucket_name.includes('production')||local.bucket_name.includes('prod'),name,'CACHE_WRONG_STAGE');
   for(const flag of FLAGS) {
     const x=b.get(flag);
     need(!x||(x.type==='plain_text'&&String(x.text??x.value??'')==='0'),name,'FLAG_'+flag+'_UNSAFE');
   }
-  return {rateId,cacheName:local?.bucket_name||'PROFILE_MEDIA_FALLBACK'};
+  return {rateId,cacheName:local.bucket_name};
 }
 
 const ROUTES = [
@@ -97,7 +105,8 @@ export function route477(subdomain,revision,target) {
 export function activation477(records,proof) {
   need(records.length===3&&records.every(r=>r.compatible), 'GLOBAL','ACTIVE_WRITERS_INCOMPATIBLE');
   need(new Set(records.map(r=>r.rateId)).size===3,'GLOBAL','RATE_DB_COLLISION');
-  const caches=records.map(r=>r.cacheName).filter(x=>x!=='PROFILE_MEDIA_FALLBACK');
+  const caches=records.map(r=>r.cacheName);
+  need(caches.every(x=>typeof x==='string'&&x.startsWith('soridraw-profile-media-')),'GLOBAL','CACHE_NOT_ISOLATED');
   need(new Set(caches).size===caches.length,'GLOBAL','CACHE_COLLISION');
   need(proof?.verifiedByIndependentLiveDrain===true&&typeof proof?.evidenceId==='string'&&proof.evidenceId.length>12&&
     TARGETS.every(t=>proof.activeVersionIds?.[t.name]===records.find(r=>r.name===t.name)?.versionId),

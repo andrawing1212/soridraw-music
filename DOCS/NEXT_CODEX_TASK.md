@@ -1,3 +1,13 @@
+## NEXT — #203 app472 2x P1 exact-SHA re-audit only (2026-10-24 KST)
+
+- [PR #454](https://github.com/andrawing1212/soridraw-music/pull/454) current source branch `fix/app468-curated-repair-preview-candidate`. Director directs minimal changes and quota discipline: screenshot five-hour 54%/week 93% remaining at 2026-10-23 18:07 KST, not live telemetry.
+- Source-independent Work audit FAILED at `1b4c9326063bba719d6f96f133323bff5a3c67dc` for **P1 legacy v307 stale after failed PUT** and **P1 curated DO alarm starvation when likes repeatedly throw**. app472 source patch reuses existing bounded v307 bootstrap in shadow DO retry **before v466**, and executes curated journal after like error while rethrowing like error. No new queue, migration, scheduled task, UI or shared canonical write.
+- Run pinned TypeScript/Build/Worker dry-run, app466–472 injected regressions and frozen app410 like/personal/Music Note checks. The new tests must prove legacy cache failure keeps journal, later dual-cache convergence deletes it, and 7 injected like failures still run seven curated repairs. Old static-alarm-pattern test updated. CI PASS is necessary, not an independent runtime PASS.
+- Then run ONE **Work High source-only** exact-SHA independent re-audit targeted to the two P1 reproductions, any like regression, bounded D1/R2 cost and no false ACK; do not repeat broad unrelated 1k/10k cost simulations. Work must not modify files/commits/deploy.
+- All flags remain OFF. TEST main app377 and actual production old writers still cannot publish shared v466 R2. Shadow writer staged rollout and shared reader activation remain blocked until all active writers compatible + environment/user approval. Historical 13/13/12/12 not a new measurement. No PREVIEW release, TEST/PROD deployment, or user data writes without separate explicit instructions.
+
+---
+
 ## NEXT — exact source audit of app471 writer-first compatibility split (2026-10-24 KST)
 
 - Scope #203 only: PR #454 on `fix/app468-curated-repair-preview-candidate`; preview HEAD at branch point `7a6a9d5f3064fff2cf68292def6e49c29862a7b3`. Stop work on #237 and user-cost modeling.

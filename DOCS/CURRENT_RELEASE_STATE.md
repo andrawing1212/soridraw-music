@@ -1,3 +1,13 @@
+## CURRENT — #203 app477 active Writer gate source candidate (2026-10-24 KST)
+
+- Candidate branch: audit/app477-curated-active-writer-gate from preview bb2a784b827f668725b55acbb5a5bdb54b13ac9b. Scope: read-only verification script and existing CI/workflow; no app runtime modification.
+- Product app475 PR #454 audited SHA ef3a5abe272d7a5e81c6743ec0c6d8f8846ae82d untouched, still DRAFT/unmerged/unreleased.
+- app477 fail-closed checks all three live deployments 100% single version, active module route cues, bindings/flags, Workers.dev routes and public revision. Cloudflare GET only; no D1 query, R2 write, data migration or deployment.
+- CRITICAL HOLD: Cloudflare 100% active version alone cannot prove old in-flight Worker requests have finished. The release gate intentionally cannot mark ready without independently verifiable drain evidence; a self-declared proof is not sufficient.
+- Latest confirmed original/preview/test/prod = 13/13/12/12 FAIL (run 40035848324). Stage416 1/4 25%; historical speed 5/5 100%; #203 rollout A-D completed 0/4. Current app477 source PR/CI and live audit still pending.
+- Next: PR CI and independent audit at exact SHA. No TEST/PRODUCTION promotion, reader ON, shared data modification or Cloudflare deploy.
+
+---
 ## CURRENT — #203 mixed-writer retirement design locked (2026-10-24 KST)
 
 - **New exact release gate:** `DOCS/CURATED_203_MIXED_WRITER_ROLLOUT.md`. Writer first on each environment, reader OFF; three active Writer versions/routes + old in-flight completion attestation; bounded canonical vs shared v466 and three legacy v307 R2 reconciliation; only then separate reader activation. No data original copy/delete/backfill. If old in-flight drain proof unavailable, STOP.

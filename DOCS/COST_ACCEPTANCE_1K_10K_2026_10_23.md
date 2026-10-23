@@ -2,7 +2,7 @@
 
 Date: 2026-10-23 KST
 Status: **SCENARIO COMPUTED / LIVE SERVICE COST NOT YET VERIFIED / NO DEPLOY**
-Baseline: preview \`0bc889637e7cc0256be33cfe0fffbae975d6cab8\`; previous source-only app466 PR #447 has not been independently approved.
+Baseline: preview `0bc889637e7cc0256be33cfe0fffbae975d6cab8`; previous source-only app466 PR #447 has not been independently approved.
 
 ## 1. Real operating distribution (director confirmed)
 
@@ -17,18 +17,18 @@ Baseline: preview \`0bc889637e7cc0256be33cfe0fffbae975d6cab8\`; previous source-
 
 | Surface | Grounded in current source/history | Cost verification required |
 |---|---|---|
-| Explore public likes | Existing \`publicSync/exploreLike\` single RTDB \`onValue\` node retains recent changed-track signal entries (up to 50); listeners can receive irrelevant signals, regardless of whether they request R2 card updates; see \`DOCS/RTDB_PUBLIC_LIKE_FANOUT_AUDIT_2026-10-08.md\`. Stage416 still OFF | Actual simultaneous Explore subscribers × **full node payload** × real confirmed signals; Cloud Monitoring billable sent bytes and protocol overhead, not total registered users |
+| Explore public likes | Existing `publicSync/exploreLike` single RTDB `onValue` node retains recent changed-track signal entries (up to 50); listeners can receive irrelevant signals, regardless of whether they request R2 card updates; see `DOCS/RTDB_PUBLIC_LIKE_FANOUT_AUDIT_2026-10-08.md`. Stage416 still OFF | Actual simultaneous Explore subscribers × **full node payload** × real confirmed signals; Cloud Monitoring billable sent bytes and protocol overhead, not total registered users |
 | Personal Explore like | Cloudflare D1 canonical, 30s queue/final settlement protected; Worker/R2/DO usage also counts even if D1 R0. Historical isolated D1 R/W measurements are **not current live metering** | Live D1 GraphQL rowsRead/rowsWritten + Worker requests/CPU + R2 operations + DO; no per-action W1/W2 PASS from local fixtures |
 | Recent save-heart / Music Note | Actual user-visible Studio heart immediate local + RTDB; per-song +30s Firestore durable settlement, Music Note Detail +60s, Recent edits +150s. Separate from public like | Final canonical writes **after batching** and receiver read/write 0 goal; no duplicate mutation merely due dual origin; preserve outbox & offline drafts |
 | TEST↔PRODUCTION | Shared user originals, origin-specific IndexedDB/PWA and derived caches, legacy app377 TEST/PRODUCTION | Same UID settled IDs and status controls on warm/cold browser; missed signals, stale derived R2; dual-active traffic measured, not assumed to be triple |
 | Curated songs | Live D1=13 / PREVIEW=13 / TEST=12 / PRODUCTION=12 confirmed twice; app466 PR #447 flag OFF, Work/mixed-version rollout blocked | **Release FAIL**, never treat cost test as proof that data is in parity; never repair with blanket data copy/cache purge |
 | Authentication, Hosting, RTDB presence, functions | Shared firebase project and runtime, but no full recent invoice available through current source-only audit | Include Firebase Auth/Firestore/RTDB/Functions/Hosting and Cloudflare entire account, not only D1 or R2 |
 
-A previously captured **private operations RTDB Cloud Monitoring 24h/30d baseline** exists in \`andrawing1212/soridraw-ops-private/reports/2026-10-08-rtdb-baseline.md\`. It is historical aggregate usage, **not** per-like/per-user unit cost or evidence of current 10k load. Do not copy private figures into this public repository. Real RTDB security rules retrieval was NOT verified; a previous private GET ended HTTP 401 without granting broad write permissions.
+A previously captured **private operations RTDB Cloud Monitoring 24h/30d baseline** exists in `andrawing1212/soridraw-ops-private/reports/2026-10-08-rtdb-baseline.md`. It is historical aggregate usage, **not** per-like/per-user unit cost or evidence of current 10k load. Do not copy private figures into this public repository. Real RTDB security rules retrieval was NOT verified; a previous private GET ended HTTP 401 without granting broad write permissions.
 
 ## 3. Reproducible 30-day illustrative population model (NOT observed user behavior)
 
-Run: \`node scripts/verify-1k-10k-cost-scenarios.mjs --self-test\` and \`node scripts/verify-1k-10k-cost-scenarios.mjs\`.
+Run: `node scripts/verify-1k-10k-cost-scenarios.mjs --self-test` and `node scripts/verify-1k-10k-cost-scenarios.mjs`.
 
 To make scaling visible, assume:
 - 20% of registered users active daily; each active user opens PRODUCTION twice/day.
@@ -77,8 +77,8 @@ Sources reviewed Oct 2026: [Cloudflare Workers](https://developers.cloudflare.co
 
 ## 5. Required read-only measurements to complete the cost gate
 
-1. **D1 (7/30d):** existing \`scripts/report-cloudflare-d1-usage-readonly.mjs\` Cloudflare GraphQL Analytics on **all account databases** (shared D1 separately) with \`rowsRead/rowsWritten/readQueries/writeQueries\`. Do not query or mutate original user rows merely to estimate cost. Report metering periods and account-wide allowance.
-2. **RTDB (24h/30d):** existing private \`scripts/audit-firebase-rtdb-metrics-readonly.py\` via private ops workflow; \`network/sent_bytes_count\`, responses, active connections, broadcast/load; keep raw operational counts private. Need bounded per-signal emulator source measurements before attributing total download to Explore likes.
+1. **D1 (7/30d):** existing `scripts/report-cloudflare-d1-usage-readonly.mjs` Cloudflare GraphQL Analytics on **all account databases** (shared D1 separately) with `rowsRead/rowsWritten/readQueries/writeQueries`. Do not query or mutate original user rows merely to estimate cost. Report metering periods and account-wide allowance.
+2. **RTDB (24h/30d):** existing private `scripts/audit-firebase-rtdb-metrics-readonly.py` via private ops workflow; `network/sent_bytes_count`, responses, active connections, broadcast/load; keep raw operational counts private. Need bounded per-signal emulator source measurements before attributing total download to Explore likes.
 3. **Workers/R2/DO:** read-only Cloudflare analytics for each environment's request counts, CPU, R2 A/B/HEAD/GET/PUT, DO requests/storage/CPU, cached versus uncached revision. Existing access not verified for these metrics: mark **UNMEASURED**, do not assume they are 0.
 4. **Firestore/Functions/Hosting:** 24h/30d Firebase/Google Cloud Billing and usage metrics by product; normal vs real-edits. Preserve shared project accounting and no unapproved data access.
 5. **Same verified beta UID, TEST+PRODUCTION both active:** measure (a) no change app upgrade/revisit (original Firestore/D1 R0/W0 target), (b) one TEST song save with +30s and PRODUCTION warm-cache receiver, (c) Music Note +60s and Recent +150s, (d) public like+unlike and publish/private changed ID only, (e) inactive PREVIEW makes no per-user canonical traffic; check real membership/revision/active controls. No arbitrary UID inference, all-user scan, force cache clear, or canonical write tests on personal accounts.

@@ -227,7 +227,7 @@ export function selfTest477() {
   assert.throws(()=>route477({result:{enabled:true}},{...validRevision,headers:new Headers({'access-control-allow-origin':'https://invalid.test'})},t),/ORIGIN_MISMATCH/);
   const canonical=['a'],shared=['a']; canonical.push('b');
   assert.notDeepEqual(canonical,shared); // old late D1-only write remains invisible to R2 HEAD
-  const records=TARGETS.map((x,i)=>({name:x.name,compatible:true,rateId:'rate'+i,cacheName:'cache'+i,versionId:id}));
+  const records=TARGETS.map((x,i)=>({name:x.name,compatible:true,rateId:'rate'+i,cacheName:['soridraw-profile-media-preview','soridraw-profile-media-test','soridraw-profile-media-prod'][i],versionId:id}));
   assert.throws(()=>activation477(records,null),/OLD_INFLIGHT_RETIREMENT_UNPROVEN/);
   assert.throws(()=>activation477(records,{verifiedByIndependentLiveDrain:true,evidenceId:'mere-operator-assertion',activeVersionIds:Object.fromEntries(TARGETS.map(x=>[x.name,id]))}),/INDEPENDENT_DRAIN_PROOF_VERIFIER_NOT_IMPLEMENTED/);
   const oldEtag='etag-old',newEtag='etag-new';

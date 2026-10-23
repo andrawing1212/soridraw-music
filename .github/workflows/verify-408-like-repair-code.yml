@@ -224,6 +224,8 @@ jobs:
           node --check scripts/verify-466-curated-shared-cas.mjs
           node scripts/verify-466-curated-shared-cas.mjs
           node scripts/verify-466-publication-like-protection.mjs
+          node --check scripts/verify-467-curated-writer-fence.mjs
+          node scripts/verify-467-curated-writer-fence.mjs
       - name: Check exact entry syntax
         run: |
           node --check cloudflare/explore-worker/canonical/preview-entry.js

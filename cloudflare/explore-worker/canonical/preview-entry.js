@@ -698,9 +698,9 @@ async function handleCuratedPublic307(request, env, ctx) {
 
 async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, curatorRole) {
   const bucket = curatedBucket307(env);
-  if (!bucket) return;
+  if (!bucket) return false;
   const selected = await readCuratedObject307(request, env, ctx);
-  if (!selected.payload?.data?.items) return;
+  if (!selected.payload?.data?.items) return false;
   let memberIds = [...new Set((selected.memberIds || [])
     .map((value) => String(value || '').trim())
     .filter(Boolean))].filter((value) => value !== trackId);
@@ -743,6 +743,7 @@ async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, cur
     customMetadata: { updatedAt: String(stored.updatedAt) },
   });
   await clearCuratedEdge307(new URL(request.url));
+  return true;
 }
 
 // SORIDRAW_CURATED_PUBLICATION_TARGETED_SYNC_307_20261003
@@ -973,25 +974,28 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
         }),
       });
     }
-  } else try {
-    await writeCuratedSnapshot307(request, env, ctx, id, promoted, access.curatorRole);
-  } catch (error) {
-    console.warn('[app307] curated R2 patch failed; next public read repairs:', String(error?.message || error || 'unknown'));
-    try { await curatedBucket307(env)?.delete(SORIDRAW_CURATED_R2_KEY_307); } catch {}
-    await clearCuratedEdge307(new URL(request.url));
-  }
-
-  if (curatedWriterShadowEnabled471(env) && directCuratedTicket469) {
-    // Writer-first rollout: keep old v307 readers working and additionally
-    // publish the changed canonical IDs to shared v466 R2. A failed derived
-    // refresh is owned by the already-persisted ticket, not a second D1 write.
+  } else {
+    let legacyCuratedSaved473 = false;
     try {
-      const settled471 = await refreshCuratedShared466(request, env, ctx, [id]);
-      if (!settled471.ok) throw Error('CURATED_SHADOW_CAS_PENDING_471');
-      await finalizeDirectCuratedRepair469(directCuratedTicket469, 'ack');
+      legacyCuratedSaved473 =
+        await writeCuratedSnapshot307(request, env, ctx, id, promoted, access.curatorRole) === true;
     } catch (error) {
-      console.warn('[app471] shared curation shadow pending event-driven repair:',
-        String(error?.message || error || 'unknown'));
+      console.warn('[app307] curated R2 patch failed; next public read repairs:', String(error?.message || error || 'unknown'));
+      try { await curatedBucket307(env)?.delete(SORIDRAW_CURATED_R2_KEY_307); } catch {}
+      await clearCuratedEdge307(new URL(request.url));
+    }
+
+    if (curatedWriterShadowEnabled471(env) && directCuratedTicket469) {
+      // The user still reads v307 in shadow mode. A successful shared v466
+      // CAS alone is NOT enough to retire a ticket if v307 failed.
+      try {
+        const settled471 = await refreshCuratedShared466(request, env, ctx, [id]);
+        if (!settled471.ok) throw Error('CURATED_SHADOW_CAS_PENDING_471');
+        if (!legacyCuratedSaved473) throw Error('CURATED_LEGACY_DISPLAY_PENDING_473');
+        await finalizeDirectCuratedRepair469(directCuratedTicket469, 'ack');
+      } catch (error) {
+        console.warn('[app473] curated shadow repair ticket retained:', String(error?.message || error || 'unknown'));
+      }
     }
   }
 

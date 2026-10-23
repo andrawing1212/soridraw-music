@@ -1,5 +1,8 @@
 ## NEXT — app477 read-only active Writer gate QA (2026-10-24 KST)
 
+- app478: Address independent 감사방 FAIL on PR #459. Recheck three origin-to-Worker mapping via compiled Firebase frontend bundle plus Cloudflare worker domains/zone routes; require isolated EXPLORE_CACHE on PREVIEW/TEST/PRODUCTION. Deterministic old late D1-only write/member/visibility, CAS conflict, durable ACK generation and rollback-order tests must PASS. Reader activation always HOLD without independently verified old in-flight completion. Freeze final SHA only after CI PASS and hand to separate 감사방; then run Cloudflare GET-only live check. Do not touch app475, shared data, remote flags, or deployments.
+
+
 - Source branch audit/app477-curated-active-writer-gate based on preview bb2a784b827f668725b55acbb5a5bdb54b13ac9b. Separate product PR #454 SHA ef3a5abe272d7a5e81c6743ec0c6d8f8846ae82d stays unchanged.
 - Validate verify-477-curated-active-writer-gate.mjs --self-test via existing PR CI, check TypeScript and Build, review three environments' active Worker GET route/membership read only after merge.
 - All active Workers must be compatible, live flags remain OFF, and old in-flight retirement evidence must be independently verifiable. Existing Cloudflare API only verifies current routing and cannot prove drain; app477 correctly HOLDs instead of claiming rollout readiness.

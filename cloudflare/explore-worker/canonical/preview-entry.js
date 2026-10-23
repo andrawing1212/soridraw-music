@@ -821,6 +821,38 @@ async function syncCuratedPublicationResults307(request, env, results, ctx) {
   await clearCuratedEdge307(new URL(request.url));
 }
 
+// app469: protect the direct curator PUT/DELETE D1 mutation too, not only
+// publication/visibility routes. The ticket is durably reserved before D1,
+// and only retired after the changed R2 projection is verified.
+async function reserveDirectCuratedRepair469(env, trackId) {
+  const namespace = env?.EXPLORE_LIKE_BATCH_SCHEDULER;
+  if (!namespace) throw Error('CURATED_DIRECT_REPAIR_DO_MISSING_469');
+  const stub = namespace.get(namespace.idFromName(EXPLORE_LIKE_BATCH_SCHEDULER_NAME_103));
+  const response = await stub.fetch('https://soridraw.internal/curated-repair-468/reserve', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ trackIds: [trackId] }),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok || data?.data?.reserved !== true)
+    throw Error('CURATED_DIRECT_REPAIR_RESERVE_FAILED_469');
+  return { stub, generation: Number(data.data.generation || 0) };
+}
+
+async function finalizeDirectCuratedRepair469(ticket, route) {
+  if (!ticket) return;
+  try {
+    const result = await ticket.stub.fetch('https://soridraw.internal/curated-repair-468/' + route, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ generation: ticket.generation }),
+    });
+    if (!result.ok) throw Error('CURATED_DIRECT_REPAIR_' + route.toUpperCase() + '_FAILED_469');
+  } catch (error) {
+    // Never replay a committed D1 curator mutation because an auxiliary
+    // notification failed. The reserved ticket survives for alarm recovery.
+    console.warn('[app469] curator derived repair journal deferred:', String(error?.message || error));
+  }
+}
+
 async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
   const access = await resolveExploreManagementAccess307(request, env, ctx);
   if (!access.ok) return access.response;

@@ -180,6 +180,9 @@ async function live477() {
   need(Number(routeResponse.result_info?.total_pages||1)===1,'GLOBAL','ZONE_ROUTES_PAGINATION_UNPROVEN');
   const records=[];
   for(const t of TARGETS) {
+    originOwnership477(domainResponse,routeResponse,t);
+    const frontendHash=await liveFrontend477(t);
+    console.log(t.name+'_PUBLIC_FRONTEND_SOURCE=PASS bundleHash='+frontendHash);
     const path=base+'/workers/scripts/'+t.worker;
     const versionId=activeVersion477(await apiGet(path+'/deployments',token),t.name);
     const settings=bindings477(await apiGet(path+'/settings',token),t);

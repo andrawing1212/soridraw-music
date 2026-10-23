@@ -1643,7 +1643,11 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
   // its like queue became empty. Restore the earliest pending curated alarm
   // AFTER the like queue's own deleteAlarm, but never scan D1 here.
   async ensurePendingCuratedAlarm470() {
-    if (!sharedCuratedEnabled466(this.env)) return;
+    // Stay fully inert in legacy app410/Stage416 and source-isolated DO
+    // fixtures. Guard using primitive env vars before accessing any new
+    // v466 helper symbol (the frozen fixture does not import that module).
+    if (String(this.env?.SORIDRAW_CURATED_SHARED_V466 || '') !== '1'
+      || String(this.env?.SORIDRAW_CURATED_ALL_WRITERS_READY466 || '') !== '1') return;
     const row = await this.ctx.storage.get(CURATED_REPAIR_KEY_468);
     const tickets = Array.isArray(row?.tickets) ? row.tickets : [];
     if (!tickets.length) return;

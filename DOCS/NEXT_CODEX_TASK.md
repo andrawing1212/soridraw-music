@@ -1,3 +1,11 @@
+## NEXT — #203 app477 automated Writer gate review and independent audit (2026-10-24 KST)
+
+- Candidate: PR #458 `audit/app477-curated-writer-gate-preview`, pure read-only `scripts/audit-477-curated-active-writers-readonly.mjs` and two existing CI workflows. app475 product PR #454 SHA `ef3a5abe272d7a5e81c6743ec0c6d8f8846ae82d` frozen DRAFT; not to be merged with the gate before separate approval.
+- **One next execution:** examine run for actual three active Worker versions/source/bindings/flag states: it should report all three origins then `CURATED_477_NOT_ALL_WRITERS_COMPATIBLE` while old TEST/PROD active. Check TypeScript/Build/frozen like regressions and self-test (late old D1-only commit, stale R2 conditional CAS, split traffic, early reader flag, rollback). If expected fail-closed holds, request Work independent source-only review pinned to final PR SHA. If CI fails for unrelated reason, amend only isolated gate.
+- **Release MUST HOLD** even on source-level successful attestation: old in-flight drain cannot be proven by Worker version GET, so reader activation remains blocked. Need approved deployment/complete mixed-writer handoff and 13/13/13/13 IDs/order + PC/mobile warm/cold before separately changing flags. No TEST/PRODUCTION deployment or original D1 mutation, and #237/cost work remain queued.
+
+---
+
 ## NEXT — #203 one implementation: three-Worker live Writer retirement attestation (2026-10-24 KST)
 
 - Design and release STOPs: `DOCS/CURATED_203_MIXED_WRITER_ROLLOUT.md` (read first). No code deployment, migration, shared data writes or automatic flag enablement.

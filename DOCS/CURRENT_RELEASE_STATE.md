@@ -1,3 +1,13 @@
+## CURRENT — #203 app477 active three-Worker source safety gate implemented (2026-10-24 KST)
+
+- **New source-only audit PR #458 (DRAFT):** branch `audit/app477-curated-writer-gate-preview` based on `preview bb2a784b827f668725b55acbb5a5bdb54b13ac9b`; adds `scripts/audit-477-curated-active-writers-readonly.mjs` plus minimal edits to existing GitHub CI / PREVIEW read-only Cloudflare workflow. No application Worker code, Hosting, Functions, D1 query, cache mutation, user original write or deployment.
+- **Actual live audit contract:** authenticated **GET only** across PREVIEW/TEST/PRODUCTION active deployment 100% versions, version modules and settings bindings. Requires shared canonical D1/R2, intact per-environment cache/rate DB, existing scheduler, versioned 466/468/469/471/475 direct curator + publication/visibility guard markers, writer-shadow ON and shared reader/ready OFF. If any real source still old, mixed traffic, binding drift, early reader, inaccessible metadata -> FAIL-CLOSED. Logs only stage-safe state/version/source hash, never tokens/secrets.
+- **Critical separation:** this script proves only active **source compatibility**, **NOT completion of in-flight old Worker requests** or user-device/Edge parity. It always reports reader activation BLOCKED until later independent old-flight attestation, 13/13/13/13 exact track-ID/order R2 parity and approval. Existing actual 13/13/12/12 remains FAIL; old TEST/PRODUCTION app377 writers remain.
+- **Source-protection regression:** `--self-test` injects a post-R2 old D1-only change, old writer reactivation, split traffic, premature reader flag, bad bindings, missing Worker modules; verify keep v307 warm behavior and stale-CAS denial. Pre-existing app475 PR #454 audited SHA `ef3a5abe272d7a5e81c6743ec0c6d8f8846ae82d` untouched/unmerged. Work independent PR #458 exact final SHA required; **no PR merge/deploy** until full gate; runtime 3 flags OFF.
+- **Next:** review PR #458 CI/live read-only evidence; independent Work exact-SHA audit; fix only new gate defects. Separate PREVIEW deployment still requires approval; TEST/PRODUCTION writer release requires explicit user approvals.
+
+---
+
 ## CURRENT — #203 mixed-writer retirement design locked (2026-10-24 KST)
 
 - **New exact release gate:** `DOCS/CURATED_203_MIXED_WRITER_ROLLOUT.md`. Writer first on each environment, reader OFF; three active Writer versions/routes + old in-flight completion attestation; bounded canonical vs shared v466 and three legacy v307 R2 reconciliation; only then separate reader activation. No data original copy/delete/backfill. If old in-flight drain proof unavailable, STOP.

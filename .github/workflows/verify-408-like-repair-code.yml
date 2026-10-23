@@ -218,6 +218,11 @@ jobs:
           cache: npm
       - name: Install app
         run: npm ci --no-audit --no-fund
+      - name: Verify app466 dormant shared curated CAS and concurrent mutation contracts
+        run: |
+          node --check cloudflare/explore-worker/runtime/curated-shared-canonical-466.mjs
+          node --check scripts/verify-466-curated-shared-cas.mjs
+          node scripts/verify-466-curated-shared-cas.mjs
       - name: Check exact entry syntax
         run: |
           node --check cloudflare/explore-worker/canonical/preview-entry.js

@@ -32,7 +32,19 @@ assert.match(entry, /sharedCuratedEnabled466\(env\)\s*\?\s*handleCuratedSharedPu
 assert.match(entry, /if \(sharedCuratedEnabled466\(env\)\)/);
 assert.equal(config.vars?.SORIDRAW_CURATED_SHARED_V466, undefined);
 assert.equal(config.vars?.SORIDRAW_CURATED_ALL_WRITERS_READY466, undefined);
+assert.equal(config.vars?.SORIDRAW_CURATED_WRITER_SHADOW471, undefined,
+  'writer-first phase must be opt-in and OFF in all committed configs');
+assert.match(entry,/const curatedWriterShadowEnabled471 = \(env\) =>/);
+assert.match(entry,/const curatedSharedWriterEnabled471 = \(env\) =>/);
+assert.match(entry,/const curatedOnlyAlarm469 = curatedSharedWriterEnabled471\(this\.env\)/);
+assert.match(entry,/if \(curatedSharedWriterEnabled471\(env\) &&\s*\(isTrackVisibilityMutation307 \|\| isPublicationBatch307\)\)/);
+assert.match(entry,/if \(curatedWriterShadowEnabled471\(env\) && curatedRepairTicket468\)/);
+assert.match(entry,/if \(curatedWriterShadowEnabled471\(env\) && directCuratedTicket469\)/);
+assert.match(entry,/await writeCuratedSnapshot307\(request, env, ctx, id, promoted, access\.curatorRole\)/);
+assert.match(entry,/const sharedCuratedEnabled466 = \(env\) =>[\s\S]*?curatedAllWritersReady466\(env\);/);
 assert.equal(config.keep_vars, true, 'Release must separately audit deployed remote vars');
 console.log('APP467_LEGACY_WRITER_ONLY_LATE_CHANGE_DETECTED=PASS');
 console.log('APP467_SHARED_READ_AND_WRITE_FENCE_OFF=PASS');
 console.log('APP467_OPERATOR_ATTESTATION_NOT_YET_PROVEN=HOLD');
+
+console.log('APP471_WRITER_FIRST_READER_OFF_LEGACY_DUAL_PROJECTION=PASS');

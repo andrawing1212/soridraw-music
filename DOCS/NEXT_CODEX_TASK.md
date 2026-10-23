@@ -1,3 +1,12 @@
+## NEXT — #203 only, mixed-writer activation barrier (2026-10-24 KST)
+
+- Current `preview` diagnostic was merged from PR #455, runtime **unchanged**. Live Cloudflare read-only [#40035848324](https://github.com/andrawing1212/soridraw-music/actions/runs/40035848324): all 3 remote curated gates **ABSENT/OFF PASS**, canonical/preview/test/prod **13/13/12/12 FAIL**; bindings PASS. This workflow correctly reports overall FAIL because true runtime parity has not converged.
+- app475 product PR #454 DRAFT exact audited SHA `ef3a5abe272d7a5e81c6743ec0c6d8f8846ae82d`, source CI and targeted Work P1/P2 re-audit PASS; **not merged or deployed**. Preserve exact audited source; reconcile docs after later preview base drift only by audited code review, not accidental product rewrite.
+- **One next action:** design the **old TEST/PRODUCTION writer retirement and v466 activation barrier** for shared D1 and R2 while preserving app377 live users, preventing a late old writer from leaving shared v466 stale, and avoiding D1 polling on warm entry. Stage release versions across environments without copying/wiping canonical data. Require PREVIEW live safety, PC/mobile warm/cold and canonical 13/13/13/13 parity before marking #203 done; maintain all 3 flags OFF until writer-ready proof.
+- Keep app410 likes, Stage416 baseline, Music Note, no all-user scans, zero idle D1 scans. TEST/PRODUCTION changes need explicit director approval. After #203, address Music Note #237; cost work still postponed.
+
+---
+
 ## NEXT — FIRST AND ONLY CURRENT TASK: finish #203 curated cross-environment sync (director 2026-10-23 KST)
 
 - **Priority override:** stop cost simulation/usage collection now; do NOT begin Music Note #237 code edits until curated #203/app466 is source-fixed and audited. User wants existing synchronization completed **one issue at a time**. Current preview `d55ae8047492a902a44225aea78151571aca6d1a`; draft PR #447 head `d5f3d132c5d0ccbabb52d95a99de55404b4f33fd`, source CI PASS but unmerged OFF. Fixed-source reviewer note [#5630448326](https://github.com/andrawing1212/soridraw-music/pull/447).

@@ -1,3 +1,13 @@
+## NEXT — #203 app474 verify cache gap without pretending real-world parity (2026-10-24 KST)
+
+- Only latest DRAFT PR #454 and #203 synchronization in scope. app472 independent audit P1 repair, app473 direct curation false ACK, and app474 warm v307 Edge body mismatch must pass **one exact-SHA** CI and then Work High independent source re-audit. Avoid more speculative code patches and routine broad cost simulations.
+- Review `handleCuratedPublic307` shadow-only path: when stable 20-item Edge body revision differs from v307 revision, bypass that cached body and read the existing v307 R2 item; identical revision stays R0 for body, with revision served by 60s Edge cache. New executable assertion is appended to existing `scripts/verify-469-direct-curated-repair.mjs`, alongside direct-curator v307 R2 PUT fault. No UI/Firestore/Functions changes.
+- **Unresolved facts:** production PoP cache invalidation and active Cloudflare remote vars/bindings, client warm/cold parity, billable R2 HEAD rate and actual 13/13/12/12 (historical only). The public Workers HTTP read-only probe was inaccessible from the assistant runtime. No synthetic test can be reported as a real live cross-region PASS.
+- Keep `SORIDRAW_CURATED_WRITER_SHADOW471`, `SORIDRAW_CURATED_SHARED_V466`, `SORIDRAW_CURATED_ALL_WRITERS_READY466` unset. TEST/PROD app377 old writers lack v466 shared write, so do not activate v466 reader or merge/promote on source CI alone. Director must authorize TEST and separately PRODUCTION releases. No user data copy/backfill/migration or global cache flush.
+- After exact CI, run one Work independent exact-SHA audit of legacy failed write recovery, direct curator false ACK, seven like failures, shadow v307 cached read after changed R2 revision. If FAIL, return only reproducible finding; if PASS, still require real Cloudflare runtime verification before release.
+
+---
+
 ## NEXT — #203 app473 release HOLD; audit only actual failed projection cases (2026-10-24 KST)
 
 - Do not start Music Note #237 or cost work. Current source-only draft PR #454 adds one minimal app473 fix on top of previously independently failed P1 cases in `1b4c9326063bba719d6f96f133323bff5a3c67dc`.

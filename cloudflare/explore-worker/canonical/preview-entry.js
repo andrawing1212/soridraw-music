@@ -3250,6 +3250,13 @@ export default {
         const current468 = await getCuratedShared466(env);
         if (current468.object && !current468.snapshot)
           throw Error('CURATED_REPAIR_CORRUPT_SHARED_OBJECT_468');
+        let actor468 = null;
+        if (!current468.snapshot) {
+          // Never let an unauthenticated caller cause even a cold bounded D1
+          // lookup. Warm unrelated publication requests still use R2 only.
+          actor468 = await validateExploreAuth307(request, env, ctx);
+          if (!actor468.ok) return actor468.response;
+        }
         const memberIds468 = current468.snapshot
           ? current468.snapshot.memberIds
           : (await readCanonicalCurated466(env)).map((row) => String(row.track_id || '').trim());
@@ -3264,8 +3271,10 @@ export default {
         if (affected468.length) {
           // Public requests may reach the Worker before baseWorker validates
           // them. Never allocate a durable alarm for an unauthenticated actor.
-          const actor468 = await validateExploreAuth307(request, env, ctx);
-          if (!actor468.ok) return actor468.response;
+          if (!actor468) {
+            actor468 = await validateExploreAuth307(request, env, ctx);
+            if (!actor468.ok) return actor468.response;
+          }
           const space468 = env?.EXPLORE_LIKE_BATCH_SCHEDULER;
           if (!space468) throw Error('CURATED_REPAIR_SCHEDULER_MISSING_468');
           const id468 = space468.idFromName(EXPLORE_LIKE_BATCH_SCHEDULER_NAME_103);

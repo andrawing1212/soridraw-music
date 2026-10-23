@@ -7,6 +7,9 @@ on:
     paths:
       - 'vite.config.ts' # build/chunk changes require real TS+Build and like regressions
       - 'cloudflare/explore-worker/canonical/preview-entry.js'
+      - 'cloudflare/explore-worker/runtime/curated-projection-repair-468.mjs'
+      - 'scripts/verify-468-curated-durable-repair.mjs'
+      - 'scripts/verify-469-direct-curated-repair.mjs'
       - 'cloudflare/explore-worker/runtime/private-window-gate-416.mjs'
       - 'cloudflare/explore-worker/runtime/private-like-d1-writer-416.mjs'
       - 'cloudflare/explore-worker/runtime/like-private-batch-handoff-416.mjs'
@@ -218,6 +221,19 @@ jobs:
           cache: npm
       - name: Install app
         run: npm ci --no-audit --no-fund
+      - name: Verify app466 dormant shared curated CAS and concurrent mutation contracts
+        run: |
+          node --check cloudflare/explore-worker/runtime/curated-shared-canonical-466.mjs
+          node --check scripts/verify-466-curated-shared-cas.mjs
+          node scripts/verify-466-curated-shared-cas.mjs
+          node scripts/verify-466-publication-like-protection.mjs
+          node --check scripts/verify-467-curated-writer-fence.mjs
+          node scripts/verify-467-curated-writer-fence.mjs
+          node --check cloudflare/explore-worker/runtime/curated-projection-repair-468.mjs
+          node --check scripts/verify-468-curated-durable-repair.mjs
+          node scripts/verify-468-curated-durable-repair.mjs
+          node --check scripts/verify-469-direct-curated-repair.mjs
+          node scripts/verify-469-direct-curated-repair.mjs
       - name: Check exact entry syntax
         run: |
           node --check cloudflare/explore-worker/canonical/preview-entry.js
@@ -230,6 +246,13 @@ jobs:
           node scripts/verify-413-like-exit-flush.mjs
           node --check scripts/verify-414-pending-only-lifecycle.mjs
           node scripts/verify-414-pending-only-lifecycle.mjs
+      - name: Build candidate Explore Worker in dry-run only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          npm install --no-package-lock --ignore-scripts --no-audit --no-fund
+          node ./node_modules/wrangler/bin/wrangler.js deploy --config canonical/wrangler.preview.jsonc --dry-run
       - name: Stage419 isolated actual-171 SQL cutover regression
         run: |
           node --check cloudflare/explore-worker/runtime/like-d1only-batch-adapter-420.mjs

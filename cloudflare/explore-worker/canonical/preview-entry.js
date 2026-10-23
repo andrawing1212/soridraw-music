@@ -874,6 +874,22 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
   }
   const now = Date.now();
   let d1Read = access.d1Read;
+  let directCuratedTicket469 = null;
+  if (sharedCuratedEnabled466(env)) {
+    // Must reserve before either INSERT/UPDATE or DELETE: a CAS failure after
+    // a successful canonical D1 mutation otherwise has no durable repair.
+    try {
+      directCuratedTicket469 = await reserveDirectCuratedRepair469(env, id);
+    } catch (error) {
+      console.warn('[app469] curator repair reservation unavailable:', String(error?.message || error));
+      return Response.json({
+        ok: false, error: {
+          code: 'CURATED_DIRECT_REPAIR_PREFLIGHT_469',
+          message: '추천곡 동기화 준비가 완료되지 않아 변경을 저장하지 않았습니다.',
+        },
+      }, { status: 503 });
+    }
+  }
   if (promoted) {
     const track = await env.DB.prepare(
       `SELECT id FROM tracks WHERE id=? AND is_public=1 AND status='published' LIMIT 1`
@@ -901,6 +917,9 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
     ).bind(SORIDRAW_CURATED_COLLECTION_307, id).run();
   }
 
+  if (directCuratedTicket469) {
+    await finalizeDirectCuratedRepair469(directCuratedTicket469, 'confirm');
+  }
   if (sharedCuratedEnabled466(env)) {
     // D1 mutation has committed. Do not lie about a successful public snapshot
     // when R2 conditional write cannot converge. No automatic D1 rollback.
@@ -925,6 +944,7 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
           }),
         });
       }
+      await finalizeDirectCuratedRepair469(directCuratedTicket469, 'ack');
     } catch {
       return new Response(JSON.stringify({
         ok: false, error: {

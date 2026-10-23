@@ -79,8 +79,9 @@ function storageFake() {
   assert(second.generation>first.generation);
   assert.deepEqual((await st.get(CURATED_REPAIR_KEY_468)).trackIds,
     ['curated-a','curated-b']);
-  assert.equal((await acknowledgeCuratedRepair468(st,first.generation)).acknowledged,false);
+  assert.equal((await acknowledgeCuratedRepair468(st,first.generation)).acknowledged,true);
   assert((await st.get(CURATED_REPAIR_KEY_468))?.generation===second.generation);
+  assert.deepEqual((await st.get(CURATED_REPAIR_KEY_468)).trackIds,['curated-b']);
   assert.equal((await acknowledgeCuratedRepair468(st,second.generation)).acknowledged,true);
 }
 
@@ -104,7 +105,46 @@ function storageFake() {
   assert.equal(failed.retrying,true);
 }
 
+
+// Out-of-order writes: B's successful projection cannot erase A's reservation.
+// If A later commits while R2 PUT fails, A must still be repaired by its own
+// persisted ticket, even though B was already acknowledged.
+{
+  const st=storageFake(),t0=600_000;
+  const a=await reserveCuratedRepair468(st,['curated-a'],t0);
+  const b=await reserveCuratedRepair468(st,['curated-b'],t0+1);
+  await confirmCuratedRepair468(st,b.generation,t0+2);
+  assert.equal((await acknowledgeCuratedRepair468(st,b.generation)).acknowledged,true);
+  assert.deepEqual((await st.get(CURATED_REPAIR_KEY_468)).trackIds,['curated-a']);
+  await confirmCuratedRepair468(st,a.generation,t0+3);
+  st.fire();
+  const fail=await drainCuratedRepair468(st,async(ids)=>{
+    assert.deepEqual(ids,['curated-a']); return {ok:false};
+  },t0+6_000);
+  assert.equal(fail.retrying,true);
+  const at=st.nextAlarm();
+  st.fire();
+  const repaired=await drainCuratedRepair468(st,async(ids)=>{
+    assert.deepEqual(ids,['curated-a']); return {ok:true};
+  },at);
+  assert.equal(repaired.repaired,true);
+  assert.equal(await st.get(CURATED_REPAIR_KEY_468),null);
+}
+
+// A long-delayed acknowledgment from an old empty-queue cycle must never
+// match a new ticket generation.
+{
+  const st=storageFake(),t0=700_000;
+  const a=await reserveCuratedRepair468(st,['curated-a'],t0);
+  assert((await acknowledgeCuratedRepair468(st,a.generation)).acknowledged);
+  const b=await reserveCuratedRepair468(st,['curated-b'],t0+10);
+  assert.notEqual(a.generation,b.generation);
+  assert.equal((await acknowledgeCuratedRepair468(st,a.generation)).acknowledged,false);
+  assert.deepEqual((await st.get(CURATED_REPAIR_KEY_468)).trackIds,['curated-b']);
+}
+
 console.log('APP468_CANONICAL_SUCCESS_R2_FAIL_EVENTUAL_REPAIR=PASS');
 console.log('APP468_PRECOMMIT_CRASH_FALLBACK=PASS');
+console.log('APP468_OUT_OF_ORDER_ACK_AND_ABA_RACE_SAFE=PASS');
 console.log('APP468_GENERATION_RACE_AND_LIKE_ALARM_SAFE=PASS');
 console.log('APP468_BOUNDED_CHANGED_IDS_NO_IDLE_POLL=PASS');

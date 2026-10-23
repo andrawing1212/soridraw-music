@@ -163,6 +163,11 @@ jobs:
 
       # Audit-only GET verification, never activates writers/readers or writes D1/R2.
       # A failed or unprovable old in-flight drain MUST remain a release HOLD.
+      # Browser must execute the deployed Firebase guest app to prove the
+      # actually selected curated API. All curated requests are intercepted,
+      # and other Worker API requests are blocked (no extra D1 reads).
+      - name: Install browser probe dependency (CI only)
+        run: npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright-core@1.56.1
       - name: Compare three active Worker writers and retirement proof read-only
         id: active_writer_gate
         continue-on-error: true

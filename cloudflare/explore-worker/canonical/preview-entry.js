@@ -1912,7 +1912,13 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
         STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true||
         COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448===true;
       const activeLikeMarker469 = await this.ctx.storage.get(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194);
-      const curatedOnlyAlarm469 = curatedSharedWriterEnabled471(this.env) &&
+      // Primitive OFF guard keeps source-isolated app410 like fixtures and
+      // dormant old Workers independent of the new shared module symbols.
+      const canRunCuratedWriter471 =
+        String(this.env?.SORIDRAW_CURATED_WRITER_SHADOW471 || '') === '1' ||
+        (String(this.env?.SORIDRAW_CURATED_SHARED_V466 || '') === '1' &&
+         String(this.env?.SORIDRAW_CURATED_ALL_WRITERS_READY466 || '') === '1');
+      const curatedOnlyAlarm469 = canRunCuratedWriter471 &&
         Boolean(await this.ctx.storage.get(CURATED_REPAIR_KEY_468)) &&
         !activeLikeMarker469;
       const publicOnly448 = publicWindowEnabled448 && !activeLikeMarker469;
@@ -1941,7 +1947,7 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
       if(publicWindowEnabled448)await this.ensurePublicAlarm416();
       // Process the separately persisted curated dirty record only when an
       // actual curated change enqueued it; normal healthy pages never run this.
-      if (curatedSharedWriterEnabled471(this.env) &&
+      if (canRunCuratedWriter471 &&
           await this.ctx.storage.get(CURATED_REPAIR_KEY_468)) {
         await this.runCuratedRepair468();
       }

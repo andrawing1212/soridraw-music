@@ -636,10 +636,26 @@ async function handleCuratedPublic307(request, env, ctx) {
       const cached = await caches.default.match(curatedStableBodyEdgeKey307(url));
       if (cached) {
         const revision = String(cached.headers.get('X-SORIDRAW-Curated-Revision') || '').trim();
-        return new Response(await cached.text(), {
-          status: 200,
-          headers: curationHeaders307(request, { revision, source: 'EDGE-CURATED-BODY-307' }),
-        });
+        // app474: a shadow repair can rebuild R2 from a DO without purging
+        // this user's PoP-local stable body cache. During writer-shadow only,
+        // compare against the existing 60-second v307 revision cache before
+        // trusting a body retained for up to five minutes. On mismatch or
+        // revision error fall through to the existing R2 body read (no D1 scan).
+        let stableMatches474 = !curatedWriterShadowEnabled471(env);
+        if (!stableMatches474 && revision) {
+          try {
+            const latest474 = await handleCuratedRevision307(request, env);
+            const current474 = await latest474.json();
+            stableMatches474 = latest474.ok && current474?.ok === true
+              && String(current474?.data?.revision || '').trim() === revision;
+          } catch { /* fail closed to the existing R2 body source */ }
+        }
+        if (stableMatches474) {
+          return new Response(await cached.text(), {
+            status: 200,
+            headers: curationHeaders307(request, { revision, source: 'EDGE-CURATED-BODY-307' }),
+          });
+        }
       }
     } catch {}
   }

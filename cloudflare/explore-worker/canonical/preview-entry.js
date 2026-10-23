@@ -5,7 +5,8 @@ import {
 } from '../runtime/curated-shared-canonical-466.mjs';
 import {
   CURATED_REPAIR_KEY_468, reserveCuratedRepair468, confirmCuratedRepair468,
-  acknowledgeCuratedRepair468, drainCuratedRepair468,
+  acknowledgeCuratedRepair468, drainCuratedRepair468, armCuratedRepairAlarm468,
+  CURATED_REPAIR_WAKE_MS_468,
 } from '../runtime/curated-projection-repair-468.mjs';
 import baseWorker from './preview-worker.js';
 import {verifyPrivateHmac416,validatePrivateHandoff416,acceptPrivateHandoff416} from '../runtime/like-private-batch-handoff-416.mjs';
@@ -1680,12 +1681,16 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
         if (url.pathname === '/curated-repair-468/reserve') {
           const result = await this.ctx.storage.transaction((tx) =>
             reserveCuratedRepair468(tx, body?.trackIds));
+          if (result.reserved)
+            await armCuratedRepairAlarm468(this.ctx.storage, Date.now() + CURATED_REPAIR_WAKE_MS_468);
           return Response.json({ ok: result.reserved === true, data: result },
             { status: result.reserved ? 200 : 400 });
         }
         if (url.pathname === '/curated-repair-468/confirm') {
           const result = await this.ctx.storage.transaction((tx) =>
             confirmCuratedRepair468(tx, Number(body?.generation || 0)));
+          if (result.confirmed)
+            await armCuratedRepairAlarm468(this.ctx.storage, Date.now() + CURATED_REPAIR_WAKE_MS_468);
           return Response.json({ ok: true, data: result });
         }
         if (url.pathname === '/curated-repair-468/ack') {

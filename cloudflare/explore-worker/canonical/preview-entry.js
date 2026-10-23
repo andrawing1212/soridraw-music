@@ -228,6 +228,23 @@ async function handleCuratedSharedRevision466(request, env) {
 async function handleCuratedSharedPublic466(request, env, ctx) {
   const url = new URL(request.url);
   const limit = Math.min(20, Math.max(1, Number(url.searchParams.get('limit') || 20)));
+  // v466 reads the small Edge-cached shared revision before opening the R2
+  // body. Healthy unchanged repeat visits are Edge body hits, not R2 GETs.
+  const signal = await handleCuratedSharedRevision466(request, env);
+  if (!signal.ok) return signal;
+  const signalPayload = await signal.json().catch(() => null);
+  const signalRevision = String(signalPayload?.data?.revision || '').trim();
+  if (signalRevision) {
+    const cachedKey = curatedBodyEdgeKey466(url, signalRevision, limit);
+    try {
+      const cached = await caches.default.match(cachedKey);
+      if (cached) return new Response(await cached.text(), {
+        status: 200, headers: curationHeaders307(request, {
+          revision: signalRevision, source: 'EDGE-SHARED-CURATED-BODY-466',
+        }),
+      });
+    } catch {}
+  }
   const selected = await readCuratedShared466(request, env, ctx);
   if (!Array.isArray(selected.payload?.data?.items))
     return new Response(JSON.stringify({ ok: false, error: 'SORIDRAW 추천곡이 동기화되지 않았습니다.' }), {

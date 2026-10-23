@@ -875,6 +875,24 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
   }
   const now = Date.now();
   let d1Read = access.d1Read;
+  // app470: reject an invalid/non-public promotion BEFORE creating the
+  // durable repair ticket. Validation is read-only and uses the same bounded
+  // SELECT as the existing legacy path; DELETE still needs no preflight read.
+  if (promoted) {
+    const track = await env.DB.prepare(
+      `SELECT id FROM tracks WHERE id=? AND is_public=1 AND status='published' LIMIT 1`
+    ).bind(id).first();
+    d1Read += 1;
+    if (!track) {
+      return new Response(JSON.stringify({
+        ok: false,
+        error: { code: 'NOT_FOUND', message: '공개 곡을 찾을 수 없습니다.' },
+      }), {
+        status: 404,
+        headers: curationHeaders307(request, { d1Read, source: 'CURATION-TRACK-MISSING-307' }),
+      });
+    }
+  }
   let directCuratedTicket469 = null;
   if (sharedCuratedEnabled466(env)) {
     // Must reserve before either INSERT/UPDATE or DELETE: a CAS failure after
@@ -892,19 +910,6 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
     }
   }
   if (promoted) {
-    const track = await env.DB.prepare(
-      `SELECT id FROM tracks WHERE id=? AND is_public=1 AND status='published' LIMIT 1`
-    ).bind(id).first();
-    d1Read += 1;
-    if (!track) {
-      return new Response(JSON.stringify({
-        ok: false,
-        error: { code: 'NOT_FOUND', message: '공개 곡을 찾을 수 없습니다.' },
-      }), {
-        status: 404,
-        headers: curationHeaders307(request, { d1Read, source: 'CURATION-TRACK-MISSING-307' }),
-      });
-    }
     await env.DB.prepare(`
       INSERT INTO curated_picks(collection_key,track_id,curator_uid,curator_role,sort_order,starts_at,ends_at,created_at,updated_at)
       VALUES (?,?,?,?,0,NULL,NULL,?,?)

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   activation477, bindings477, expectedAppConfig477, frontendAssets477,
-  originOwnership477, rollbackOrder477,
+  originOwnership477, rollbackOrder477, selectedRuntimeApi477,
 } from './verify-477-curated-active-writer-gate.mjs';
 
 const stages=[
@@ -41,6 +41,21 @@ for(const stage of stages) {
   const html='<html><script type="module" src="/assets/index.js"></script></html>';
   const js='const host="'+new URL(stage.origin).hostname+'";let api="https://'+stage.worker+'.andrawing1212.workers.dev";';
   frontendAssets477(html,[js],stage);
+  const canonical='https://'+stage.worker+'.andrawing1212.workers.dev';
+  const curated='/v1/curated-revision?collection=soridraw';
+  assert.equal(selectedRuntimeApi477([canonical+curated],stage).endpoint,canonical);
+  assert.throws(()=>selectedRuntimeApi477([],stage),
+    /RUNTIME_CURATED_REQUEST_NOT_OBSERVED/);
+  // Existing bundle may contain all correct URL literals while build-time
+  // VITE_EXPLORE_API_BASE actually chooses a wrong host at runtime.
+  const override='https://foreign-worker.example.test';
+  frontendAssets477(html,[js+';const VITE_EXPLORE_API_BASE="'+override+'";'],stage);
+  assert.throws(()=>selectedRuntimeApi477([override+curated],stage),
+    /RUNTIME_SELECTED_API_MISMATCH/);
+  assert.throws(()=>selectedRuntimeApi477([canonical+curated,override+curated],stage),
+    /RUNTIME_SELECTED_API_MISMATCH/);
+  assert.throws(()=>selectedRuntimeApi477([canonical+'/v1/feed'],stage),
+    /RUNTIME_CURATED_REQUEST_NOT_OBSERVED/);
   assert.throws(()=>frontendAssets477(html,[js.replace(stage.worker,'foreign-worker')],stage),
     /LIVE_APP_API_BUNDLE_MISMATCH/);
 }
@@ -166,6 +181,7 @@ assert.throws(()=>activation477(healthy,{
 }),/INDEPENDENT_DRAIN_PROOF_VERIFIER_NOT_IMPLEMENTED/);
 
 console.log('APP478_LIVE_ORIGIN_OWNERSHIP_AND_ISOLATED_R2_FIXTURES=PASS');
+console.log('APP479_ACTUAL_RUNTIME_API_SELECTION_OVERRIDE_REGRESSION=PASS');
 console.log('APP478_DEFERRED_OLD_D1_WRITER_VISIBILITY_REMOVAL=PASS');
 console.log('APP478_CAS_RESERVATION_AND_ROLLBACK_ORDER=PASS');
 console.log('APP478_LIVE_DRAIN_ATTESTATION=HOLD');

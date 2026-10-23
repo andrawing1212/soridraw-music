@@ -11,6 +11,12 @@ export const sharedCuratedEnabled466 = (env) =>
 export const canonicalCuratedIds466 = (rows) => rows
   .map((row) => String(row?.track_id || '').trim()).filter(Boolean);
 
+export const canonicalCuratedRowVersions466 = (rows) => rows.map((row) => [
+  String(row?.track_id || '').trim(), Number(row?.updated_at || 0),
+  String(row?.curator_role || ''), Number(row?.sort_order || 0),
+  row?.starts_at ?? null, row?.ends_at ?? null,
+]);
+
 export const visibleCuratedIds466 = (rows) => rows
   .filter((row) => Number(row?.is_public) === 1 && String(row?.status || '').toLowerCase() === 'published')
   .map((row) => String(row?.track_id || '').trim()).filter(Boolean);
@@ -23,7 +29,8 @@ export function matchesCanonicalCurated466(rows, snapshot) {
   const payloadItems = snapshot.payload?.data?.items || [];
   const actualVisibleIds = payloadItems.map((x) => String(x?.track?.id || '').trim());
   return JSON.stringify(memberIds) === JSON.stringify(actualMemberIds)
-    && JSON.stringify(visibleIds) === JSON.stringify(actualVisibleIds);
+    && JSON.stringify(visibleIds) === JSON.stringify(actualVisibleIds)
+    && JSON.stringify(canonicalCuratedRowVersions466(rows)) === JSON.stringify(snapshot.rowVersions);
 }
 
 export async function readCanonicalCurated466(env, now = Date.now()) {
@@ -62,12 +69,19 @@ export async function getCuratedShared466(env) {
   return { object, snapshot: await parseExisting466(object) };
 }
 
-async function buildSnapshot466(rows, resolveTrack) {
+async function buildSnapshot466(rows, resolveTrack, previous = null, forceTrackIds = new Set()) {
   const items = [];
+  const previousById = new Map((previous?.payload?.data?.items || [])
+    .map((item) => [String(item?.track?.id || '').trim(),item]));
   for (const row of rows) {
     if (Number(row?.is_public) !== 1 || String(row?.status || '').toLowerCase() !== 'published') continue;
     const trackId = String(row.track_id || '').trim();
-    const track = await resolveTrack(trackId);
+    const previousItem = previousById.get(trackId);
+    const priorRow = (previous?.rowVersions || []).find((x) => x[0] === trackId);
+    const currentRow = canonicalCuratedRowVersions466([row])[0];
+    const reusable = previousItem && !forceTrackIds.has(trackId)
+      && JSON.stringify(priorRow) === JSON.stringify(currentRow);
+    const track = reusable ? previousItem.track : await resolveTrack(trackId);
     if (!track || String(track.id || '').trim() !== trackId) throw Error('CURATED_466_DETAIL_NOT_READY');
     items.push({
       track,
@@ -84,6 +98,7 @@ async function buildSnapshot466(rows, resolveTrack) {
     schemaVersion: 466,
     collection: COLLECTION,
     memberIds: canonicalCuratedIds466(rows),
+    rowVersions: canonicalCuratedRowVersions466(rows),
     payload: { ok: true, data: { collection: COLLECTION, items } },
     updatedAt: Date.now(),
   };
@@ -95,7 +110,9 @@ async function buildSnapshot466(rows, resolveTrack) {
 export async function reconcileCuratedShared466(env, resolveTrack, {
   attempts = 5,
   readRows = () => readCanonicalCurated466(env),
+  forceTrackIds = [],
 } = {}) {
+  const forced = new Set(forceTrackIds.map((x) => String(x || '').trim()).filter(Boolean));
   if (!env?.PROFILE_MEDIA || !env?.DB) return { ok: false, reason: 'BINDING_MISSING', reads: 0 };
   const bucket = env.PROFILE_MEDIA;
   for (let attempt = 0; attempt < attempts; attempt++) {
@@ -103,9 +120,9 @@ export async function reconcileCuratedShared466(env, resolveTrack, {
     if (before.object && !before.snapshot)
       return { ok: false, reason: 'INVALID_EXISTING_SHARED_OBJECT', reads: attempt + 1 };
     const rows = await readRows();
-    if (before.snapshot && matchesCanonicalCurated466(rows, before.snapshot))
+    if (before.snapshot && !forced.size && matchesCanonicalCurated466(rows, before.snapshot))
       return { ok: true, snapshot: before.snapshot, object: before.object, unchanged: true, reads: attempt + 1 };
-    const next = await buildSnapshot466(rows, resolveTrack);
+    const next = await buildSnapshot466(rows, resolveTrack, before.snapshot, forced);
     const onlyIf = before.object
       ? { etagMatches: String(before.object.etag || '').trim() }
       : new Headers({ 'If-None-Match': '*' });

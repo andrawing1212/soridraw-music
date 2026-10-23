@@ -330,6 +330,14 @@ jobs:
         run: node scripts/verify-studio-generation-modal-lazy.mjs
       - name: Verify lazy Master diagnostics original reset behavior
         run: node scripts/verify-217-cache-live-update-reset.mjs
+      - name: app477 three-origin Writer gate deterministic regressions (offline)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/audit-477-curated-active-writers-readonly.mjs
+          node scripts/audit-477-curated-active-writers-readonly.mjs --self-test
+          echo 'APP477_OFFLINE_NO_DEPLOY=PASS'
+
       - name: TypeScript
         run: npm run lint
       - name: Build

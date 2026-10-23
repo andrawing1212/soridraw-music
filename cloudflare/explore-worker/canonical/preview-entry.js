@@ -1918,6 +1918,7 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
   }
 
   async alarm() {
+    let likeAlarmError472 = null;
     try {
       const publicWindowEnabled448=
         STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true||
@@ -1956,16 +1957,29 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
         });
       }
       if(publicWindowEnabled448)await this.ensurePublicAlarm416();
-      // Process the separately persisted curated dirty record only when an
-      // actual curated change enqueued it; normal healthy pages never run this.
-      if (canRunCuratedWriter471 &&
-          await this.ctx.storage.get(CURATED_REPAIR_KEY_468)) {
-        await this.runCuratedRepair468();
-      }
     } catch (error) {
-      console.warn('[SORIDRAW 448] alarm retry failed:', String(error?.message || error || 'unknown'));
-      throw error;
+      // Preserve the original like failure/retry signal, but never let a
+      // failing like/public window prevent the independent curated journal
+      // from reaching its own bounded recovery attempt.
+      likeAlarmError472 = error;
+      console.warn('[SORIDRAW 448] like alarm retry failed:', String(error?.message || error || 'unknown'));
     }
+    try {
+      const curatedEnabled472 =
+        String(this.env?.SORIDRAW_CURATED_WRITER_SHADOW471 || '') === '1' ||
+        (String(this.env?.SORIDRAW_CURATED_SHARED_V466 || '') === '1' &&
+         String(this.env?.SORIDRAW_CURATED_ALL_WRITERS_READY466 || '') === '1');
+      if (curatedEnabled472 && await this.ctx.storage.get(CURATED_REPAIR_KEY_468))
+        await this.runCuratedRepair468();
+    } catch (curatedError472) {
+      console.warn('[app472] curated alarm retry failed:', String(curatedError472?.message || curatedError472 || 'unknown'));
+      // A transient DO failure must not strand the persisted ticket when the
+      // six platform retries expire. Use the existing pending-ticket wake,
+      // not a new queue or timer.
+      await this.ensurePendingCuratedAlarm470().catch(() => {});
+      if (!likeAlarmError472) throw curatedError472;
+    }
+    if (likeAlarmError472) throw likeAlarmError472;
   }
 }
 

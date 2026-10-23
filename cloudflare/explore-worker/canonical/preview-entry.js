@@ -653,6 +653,7 @@ async function handleCuratedRevision307(request, env) {
 async function handleCuratedPublic307(request, env, ctx) {
   const url = new URL(request.url);
   const limit = Math.min(20, Math.max(1, Number(url.searchParams.get('limit') || 20)));
+  let revisionR2Reads475 = 0;
   if (limit === 20) {
     try {
       const cached = await caches.default.match(curatedStableBodyEdgeKey307(url));
@@ -667,6 +668,7 @@ async function handleCuratedPublic307(request, env, ctx) {
         if (!stableMatches474 && revision) {
           try {
             const latest474 = await handleCuratedRevision307(request, env);
+            revisionR2Reads475 += Number(latest474.headers.get('X-SORIDRAW-R2-B') || 0);
             const current474 = await latest474.json();
             stableMatches474 = latest474.ok && current474?.ok === true
               && String(current474?.data?.revision || '').trim() === revision;
@@ -675,7 +677,7 @@ async function handleCuratedPublic307(request, env, ctx) {
         if (stableMatches474) {
           return new Response(await cached.text(), {
             status: 200,
-            headers: curationHeaders307(request, { revision, source: 'EDGE-CURATED-BODY-307' }),
+            headers: curationHeaders307(request, { revision, r2B: revisionR2Reads475, source: 'EDGE-CURATED-BODY-307' }),
           });
         }
       }
@@ -687,7 +689,7 @@ async function handleCuratedPublic307(request, env, ctx) {
       status: 503,
       headers: curationHeaders307(request, {
         d1Read: selected.d1Read,
-        r2B: selected.r2Reads,
+        r2B: revisionR2Reads475 + Number(selected.r2Reads || 0),
         source: selected.source,
       }),
     });
@@ -699,7 +701,7 @@ async function handleCuratedPublic307(request, env, ctx) {
     if (cached) {
       return new Response(await cached.text(), {
         status: 200,
-        headers: curationHeaders307(request, { revision, source: 'EDGE-CURATED-BODY-307' }),
+        headers: curationHeaders307(request, { revision, r2B: revisionR2Reads475 + Number(selected.r2Reads || 0), source: 'EDGE-CURATED-BODY-307' }),
       });
     }
   } catch {}
@@ -727,7 +729,7 @@ async function handleCuratedPublic307(request, env, ctx) {
     status: 200,
     headers: curationHeaders307(request, {
       d1Read: selected.d1Read,
-      r2B: selected.r2Reads,
+      r2B: revisionR2Reads475 + Number(selected.r2Reads || 0),
       revision,
       source: selected.source,
     }),

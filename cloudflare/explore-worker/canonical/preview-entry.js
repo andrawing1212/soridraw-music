@@ -1029,13 +1029,17 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
     }
   } else {
     let legacyCuratedSaved473 = false;
+    let shadowPending475 = false;
     try {
       legacyCuratedSaved473 =
         await writeCuratedSnapshot307(request, env, ctx, id, promoted, access.curatorRole) === true;
     } catch (error) {
       console.warn('[app307] curated R2 patch failed; next public read repairs:', String(error?.message || error || 'unknown'));
-      try { await curatedBucket307(env)?.delete(SORIDRAW_CURATED_R2_KEY_307); } catch {}
-      await clearCuratedEdge307(new URL(request.url));
+      // Never delete a newer winner on shadow CAS conflict.
+      if (!curatedWriterShadowEnabled471(env)) {
+        try { await curatedBucket307(env)?.delete(SORIDRAW_CURATED_R2_KEY_307); } catch {}
+        await clearCuratedEdge307(new URL(request.url));
+      }
     }
 
     if (curatedWriterShadowEnabled471(env) && directCuratedTicket469) {
@@ -1047,7 +1051,18 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
         if (!legacyCuratedSaved473) throw Error('CURATED_LEGACY_DISPLAY_PENDING_473');
         await finalizeDirectCuratedRepair469(directCuratedTicket469, 'ack');
       } catch (error) {
-        console.warn('[app473] curated shadow repair ticket retained:', String(error?.message || error || 'unknown'));
+        shadowPending475 = true;
+        console.warn('[app475] curated shadow repair ticket retained:', String(error?.message || error || 'unknown'));
+      }
+      if (shadowPending475) {
+        // Canonical D1 already committed; never replay it. This 503 describes
+        // incomplete derived display, not a failed original mutation.
+        return new Response(JSON.stringify({
+          ok: false, data: { trackId: id, canonicalCommitted: true, retryable: true },
+          error: { code: 'CURATED_DISPLAY_PENDING_475', message: '승격 기록은 저장됐으나 표시 복구가 진행 중입니다.' },
+        }), { status: 503, headers: curationHeaders307(request, {
+          d1Read, d1Write: 1, source: 'CURATED-DISPLAY-PENDING-475',
+        }) });
       }
     }
   }

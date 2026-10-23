@@ -15,9 +15,10 @@ const uniqueIds = (input) => {
   return ids;
 };
 
-const scheduleAtMost = async (storage, when) => {
+const scheduleAtMost = async (storage, when, now = Date.now()) => {
   const current = await storage.getAlarm();
-  if (current == null || current > when) await storage.setAlarm(when);
+  if (current == null || current <= now || current > when)
+    await storage.setAlarm(when);
 };
 
 // Reserve BEFORE the canonical publication request. If the reservation fails,
@@ -36,7 +37,7 @@ export async function reserveCuratedRepair468(storage, trackIds, now = Date.now(
     nextAttemptAt: now + CURATED_REPAIR_PREPARE_GRACE_MS_468,
   };
   await storage.put(CURATED_REPAIR_KEY_468, pending);
-  await scheduleAtMost(storage, now + CURATED_REPAIR_WAKE_MS_468);
+  await scheduleAtMost(storage, now + CURATED_REPAIR_WAKE_MS_468, now);
   return { reserved: true, generation, trackIds: ids };
 }
 
@@ -46,7 +47,7 @@ export async function confirmCuratedRepair468(storage, generation, now = Date.no
   row.confirmedAt = now;
   row.nextAttemptAt = now + CURATED_REPAIR_WAKE_MS_468;
   await storage.put(CURATED_REPAIR_KEY_468, row);
-  await scheduleAtMost(storage, row.nextAttemptAt);
+  await scheduleAtMost(storage, row.nextAttemptAt, now);
   return { confirmed: true, generation };
 }
 
@@ -66,7 +67,7 @@ export async function drainCuratedRepair468(storage, reconcile, now = Date.now()
     ? Math.max(state.nextAttemptAt, state.confirmedAt)
     : Math.max(state.nextAttemptAt, state.reservedAt + CURATED_REPAIR_PREPARE_GRACE_MS_468);
   if (now < eligibleAt) {
-    await scheduleAtMost(storage, eligibleAt);
+    await scheduleAtMost(storage, eligibleAt, now);
     return { pending: true, deferred: true };
   }
 
@@ -79,7 +80,7 @@ export async function drainCuratedRepair468(storage, reconcile, now = Date.now()
   const latest = await storage.get(CURATED_REPAIR_KEY_468);
   if (!latest) return { pending: false };
   if (latest.generation !== state.generation) {
-    await scheduleAtMost(storage, Math.max(now + CURATED_REPAIR_WAKE_MS_468, latest.nextAttemptAt));
+    await scheduleAtMost(storage, Math.max(now + CURATED_REPAIR_WAKE_MS_468, latest.nextAttemptAt), now);
     return { pending: true, superseded: true };
   }
   if (settled) {
@@ -91,6 +92,6 @@ export async function drainCuratedRepair468(storage, reconcile, now = Date.now()
     CURATED_REPAIR_WAKE_MS_468 * (2 ** Math.min(12, failures)));
   const next = { ...state, failures, nextAttemptAt: now + backoff };
   await storage.put(CURATED_REPAIR_KEY_468, next);
-  await scheduleAtMost(storage, next.nextAttemptAt);
+  await scheduleAtMost(storage, next.nextAttemptAt, now);
   return { pending: true, retrying: true, failures };
 }

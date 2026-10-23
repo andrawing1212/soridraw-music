@@ -109,6 +109,60 @@ assert.equal((await acknowledgeCuratedRepair468(store,ticket.generation)).acknow
 }
 console.log('APP473_DIRECT_CURATOR_V307_FAILURE_RETAINS_DURABLE_TICKET=PASS');
 
+// app474: invoke the actual v307 public list handler with an old stable Edge
+// body but a newer R2 revision. Under writer-shadow it must bypass the stale
+// five-minute body and use the changed R2 item; legacy OFF remains unchanged.
+{
+  const source = src.split('async function handleCuratedPublic307(')[1]
+    ?.split('async function writeCuratedSnapshot307(')[0];
+  assert(source, 'v307 public cached reader must exist');
+  const oldBody = JSON.stringify({ok:true,data:{items:[{track:{id:'now-private'}}]}});
+  const newItems = [{track:{id:'still-public'}}];
+  let bodyReads = 0, revision = 'new-revision';
+  const edge = {
+    match: async key =>
+      String(key.url || '').includes('/curated-body-v307/soridraw-20')
+        ? new Response(oldBody, {headers:{'X-SORIDRAW-Curated-Revision':'old-revision'}})
+        : null,
+    put: async () => {},
+  };
+  const read = new Function(
+    'caches','curatedStableBodyEdgeKey307','curatedWriterShadowEnabled471',
+    'handleCuratedRevision307','curationHeaders307','readCuratedObject307',
+    'curatedRevision307','curatedBodyEdgeKey307','SORIDRAW_CURATED_COLLECTION_307',
+    'SORIDRAW_CURATED_EDGE_SECONDS_307',
+    'return async function handleCuratedPublic307(' + source
+  )(
+    {default:edge},
+    url => new Request(new URL('/__soridraw/curated-body-v307/soridraw-20',url.origin)),
+    env => env.shadow === true,
+    async () => Response.json({ok:true,data:{revision}}),
+    () => new Headers(),
+    async () => {bodyReads++;return {
+      object:{etag:'new-revision'},
+      payload:{ok:true,data:{items:newItems}},
+      d1Read:0,r2Reads:1,source:'R2-CURATED-307',
+    }},
+    obj => obj.etag,
+    (url,rev) => new Request(new URL('/__soridraw/curated-body-v307/soridraw?revision='+rev,url.origin)),
+    'soridraw',300,
+  );
+  const req = new Request('https://soridraw-explore-preview.andrawing1212.workers.dev/v1/curated?collection=soridraw&limit=20');
+  const previous = await (await read(req,{shadow:false},{})).json();
+  assert.equal(previous.data.items[0].track.id,'now-private');
+  assert.equal(bodyReads,0,'legacy OFF must retain the existing cached fast path');
+
+  const corrected = await (await read(req,{shadow:true},{})).json();
+  assert.equal(corrected.data.items[0].track.id,'still-public');
+  assert.equal(bodyReads,1,'changed revision reads R2 body instead of stale Edge');
+  revision = 'old-revision';
+  const unchanged = await (await read(req,{shadow:true},{})).json();
+  assert.equal(unchanged.data.items[0].track.id,'now-private');
+  assert.equal(bodyReads,1,'matched Edge revision must avoid any origin R2 GET');
+}
+console.log('APP474_SHADOW_STABLE_EDGE_REVISION_MISMATCH_BYPASS=PASS');
+console.log('APP474_LEGACY_OFF_FAST_PATH_UNCHANGED=PASS');
+
 console.log('APP469_DIRECT_CURATOR_BOTH_D1_ROUTES_DURABLY_RESERVED=PASS');
 console.log('APP469_CURATED_ONLY_ALARM_DOES_NOT_RUN_LIKE_AGGREGATE=PASS');
 console.log('APP469_CANONICAL_W1_ONLY_AFTER_DERIVED_R2_FAILURE_REPAIRED=PASS');

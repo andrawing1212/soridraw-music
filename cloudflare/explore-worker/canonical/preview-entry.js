@@ -207,7 +207,7 @@ async function handleCuratedSharedRevision466(request, env) {
   if (revision) {
     try {
       await caches.default.put(edgeKey, new Response(revision, {
-        headers: { 'Cache-Control': 'public, max-age=60' },
+        headers: { 'Cache-Control': 'public, max-age=5' },
       }));
     } catch {}
   }

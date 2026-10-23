@@ -1540,17 +1540,28 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
     if (!curatedSharedWriterEnabled471(this.env)) return;
     const result = await drainCuratedRepair468(
       this.ctx.storage,
-      async (trackIds) => reconcileCuratedShared466(
-        this.env,
-        async (id) => {
-          const url = 'https://soridraw.internal/v1/tracks/' + encodeURIComponent(id);
-          const res = await baseWorker.fetch(new Request(url), this.env, this.ctx);
-          if (!res.ok) return null;
-          const data = await res.json().catch(() => null);
-          return data?.data?.track || null;
-        },
-        { forceTrackIds: trackIds },
-      ),
+      async (trackIds) => {
+        if (curatedWriterShadowEnabled471(this.env)) {
+          // The v307 list is still the real user-visible reader during a
+          // writer-first rollout. Recover it from only the 40 curated D1 rows
+          // before clearing the ticket; v466-only success is NOT settlement.
+          const request = new Request('https://soridraw.internal/v1/curated?collection=soridraw');
+          const legacy = await materializeCuratedR2FromBase307(request, this.env, this.ctx);
+          if (!legacy?.object || !Array.isArray(legacy?.payload?.data?.items))
+            return { ok: false, reason: 'LEGACY_CURATED_PROJECTION_PENDING_472' };
+        }
+        return reconcileCuratedShared466(
+          this.env,
+          async (id) => {
+            const url = 'https://soridraw.internal/v1/tracks/' + encodeURIComponent(id);
+            const res = await baseWorker.fetch(new Request(url), this.env, this.ctx);
+            if (!res.ok) return null;
+            const data = await res.json().catch(() => null);
+            return data?.data?.track || null;
+          },
+          { forceTrackIds: trackIds },
+        );
+      },
     );
     if (result.retrying) {
       console.warn('[app468] derived curated repair deferred', result.failures);

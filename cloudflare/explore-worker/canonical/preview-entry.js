@@ -1853,9 +1853,16 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
       const publicWindowEnabled448=
         STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true||
         COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448===true;
-      const publicOnly448=publicWindowEnabled448&&
-        !await this.ctx.storage.get(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194);
-      if(!publicOnly448){
+      const activeLikeMarker469 = await this.ctx.storage.get(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194);
+      const curatedOnlyAlarm469 = sharedCuratedEnabled466(this.env) &&
+        Boolean(await this.ctx.storage.get(CURATED_REPAIR_KEY_468)) &&
+        !activeLikeMarker469;
+      const publicOnly448 = publicWindowEnabled448 && !activeLikeMarker469;
+      // Cloudflare permits only ONE alarm per Durable Object. An app468
+      // curation-only wake must NOT drain/repair unrelated Explore likes when
+      // no like batch owns this alarm. Preserve existing like-owned and public
+      // 416/448 alarm behavior unchanged.
+      if (!publicOnly448 && !curatedOnlyAlarm469) {
         await this.runAggregate194();
         await this.finalizeAggregate195();
       }

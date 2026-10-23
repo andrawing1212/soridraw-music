@@ -809,15 +809,25 @@ async function syncCuratedPublicationResults307(request, env, results, ctx) {
     return;
   }
   const bucket = curatedBucket307(env);
-  if (!bucket || !Array.isArray(results) || !results.length) return;
+  if (!Array.isArray(results) || !results.length) return;
+  if (!bucket) {
+    if (curatedWriterShadowEnabled471(env)) throw Error('CURATED_LEGACY_BUCKET_PENDING_475');
+    return;
+  }
   let object = null;
   try { object = await bucket.get(SORIDRAW_CURATED_R2_KEY_307); } catch {}
-  if (!object) return;
+  if (!object) {
+    if (curatedWriterShadowEnabled471(env)) throw Error('CURATED_LEGACY_OBJECT_PENDING_475');
+    return;
+  }
 
   let stored = null;
   try { stored = JSON.parse(await object.text()); } catch {}
   const payload = stored?.payload;
-  if (stored?.schemaVersion !== 1 || payload?.ok !== true || !Array.isArray(payload?.data?.items)) return;
+  if (stored?.schemaVersion !== 1 || payload?.ok !== true || !Array.isArray(payload?.data?.items)) {
+    if (curatedWriterShadowEnabled471(env)) throw Error('CURATED_LEGACY_OBJECT_INVALID_475');
+    return;
+  }
 
   const memberIds = Array.isArray(stored?.memberIds)
     ? stored.memberIds.map((value) => String(value || '').trim()).filter(Boolean)
@@ -842,7 +852,10 @@ async function syncCuratedPublicationResults307(request, env, results, ctx) {
       continue;
     }
     const track = result?.snapshotItem;
-    if (!track?.id) continue;
+    if (String(track?.id || '').trim() !== trackId) {
+      if (curatedWriterShadowEnabled471(env)) throw Error('CURATED_PUBLIC_DETAIL_PENDING_475');
+      continue;
+    }
     const previous = itemByTrackId.get(trackId);
     itemByTrackId.set(trackId, {
       track,

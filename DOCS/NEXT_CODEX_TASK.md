@@ -1,3 +1,12 @@
+## NEXT — #203 app473 release HOLD; audit only actual failed projection cases (2026-10-24 KST)
+
+- Do not start Music Note #237 or cost work. Current source-only draft PR #454 adds one minimal app473 fix on top of previously independently failed P1 cases in `1b4c9326063bba719d6f96f133323bff5a3c67dc`.
+- Before direct curator shadow ACK, insist `writeCuratedSnapshot307` succeeded (not just `refreshCuratedShared466` CAS). On failed/missing v307 R2, leave the app468 reserved ticket; alarm will rebuild v307 from at most 40 canonical curated membership rows, then v466. No duplicate canonical D1 writing. Existing app472 like-failure isolated alarm still executes curation after 7 consecutive thrown like errors without losing legacy like exception propagation.
+- Inspect exact PR head after final CI and run ONE external independent Work High re-audit frozen on that SHA (without edits/deploy). Inject actual v307 failures for **both** publication/visibility and direct curator PUT/DELETE, observe ticket retention and later convergence; inject like failure 7x; check wake scheduling, shared R2 CAS, bounded server reads and old visible caches. Static assertions alone not independent proof.
+- PR DRAFT and flags OFF. PREVIEW `preview` unchanged; TEST and PRODUCTION old writers still lack compatible shared-v466 writes, so TEST promotion or v466 reader activation NOT authorized. No shared user data copy/backfill/bulk migration; no new service.
+
+---
+
 ## NEXT — #203 app472 2x P1 exact-SHA re-audit only (2026-10-24 KST)
 
 - [PR #454](https://github.com/andrawing1212/soridraw-music/pull/454) current source branch `fix/app468-curated-repair-preview-candidate`. Director directs minimal changes and quota discipline: screenshot five-hour 54%/week 93% remaining at 2026-10-23 18:07 KST, not live telemetry.

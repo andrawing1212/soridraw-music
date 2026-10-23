@@ -338,6 +338,29 @@ jobs:
           node scripts/audit-477-curated-active-writers-readonly.mjs --self-test
           echo 'APP477_OFFLINE_NO_DEPLOY=PASS'
 
+      - name: app477 actual three-Worker compatibility evidence (read-only; expected HOLD)
+        if: github.event_name == 'pull_request' && github.head_ref == 'audit/app477-curated-writer-gate-preview'
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/app477-writers-readonly.log"
+          set +e
+          node scripts/audit-477-curated-active-writers-readonly.mjs --live > "$report" 2>&1
+          outcome=$?
+          set -e
+          cat "$report"
+          test "$outcome" -ne 0
+          grep -Fxq 'CURATED_477_NOT_ALL_WRITERS_COMPATIBLE' "$report"
+          grep -Fxq 'APP477_REMOTE_MUTATIONS=0' "$report"
+          grep -Fxq 'APP477_READER_ACTIVATION=BLOCKED' "$report"
+          for stage in PREVIEW TEST PRODUCTION; do
+            grep -Eq "^${stage}_CURATED_ACTIVE_VERSION=" "$report"
+            grep -Eq "^${stage}_CURATED_WRITER_GATE=" "$report"
+          done
+          echo 'APP477_LIVE_READONLY_EXPECTED_HOLD=PASS'
+
       - name: TypeScript
         run: npm run lint
       - name: Build

@@ -6,7 +6,7 @@ import {
 import {
   CURATED_REPAIR_KEY_468, reserveCuratedRepair468, confirmCuratedRepair468,
   acknowledgeCuratedRepair468, drainCuratedRepair468, armCuratedRepairAlarm468,
-  CURATED_REPAIR_WAKE_MS_468,
+  CURATED_REPAIR_WAKE_MS_468, CURATED_REPAIR_PREPARE_GRACE_MS_468,
 } from '../runtime/curated-projection-repair-468.mjs';
 import baseWorker from './preview-worker.js';
 import {verifyPrivateHmac416,validatePrivateHandoff416,acceptPrivateHandoff416} from '../runtime/like-private-batch-handoff-416.mjs';
@@ -1633,6 +1633,24 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
     return {...settledAggregate418,changedTrackIds416};
   }
 
+  // app470: the like scheduler and curated repair share ONE Cloudflare DO
+  // alarm. finalizeAggregate195 previously erased a curation wake when
+  // its like queue became empty. Restore the earliest pending curated alarm
+  // AFTER the like queue's own deleteAlarm, but never scan D1 here.
+  async ensurePendingCuratedAlarm470() {
+    if (!sharedCuratedEnabled466(this.env)) return;
+    const row = await this.ctx.storage.get(CURATED_REPAIR_KEY_468);
+    const tickets = Array.isArray(row?.tickets) ? row.tickets : [];
+    if (!tickets.length) return;
+    const now = Date.now();
+    const earliest = Math.min(...tickets.map((ticket) =>
+      Number(ticket.confirmedAt || 0) > 0
+        ? Number(ticket.confirmedAt) + CURATED_REPAIR_WAKE_MS_468
+        : Number(ticket.reservedAt || now) + CURATED_REPAIR_PREPARE_GRACE_MS_468));
+    const when = Math.max(now + 1_000, earliest, Number(row.nextAttemptAt || 0));
+    await armCuratedRepairAlarm468(this.ctx.storage, when, now);
+  }
+
   // SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_JOIN_RACE_195_20260924
   async finalizeAggregate195() {
     // Remove this window's ownership BEFORE the final indexed queue check.
@@ -1650,6 +1668,7 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
     if (!pending) {
       await this.ctx.storage.deleteAlarm().catch(() => {});
       await this.ensurePublicAlarm416();
+      await this.ensurePendingCuratedAlarm470();
       return null;
     }
 

@@ -91,14 +91,20 @@ assert.equal((await acknowledgeCuratedRepair468(store,ticket.generation)).acknow
       payload: { ok:true, data:{items:[{track:{id:'curated-1'}}]} },
       memberIds: ['curated-1'],
     }),
-    { fetch: async()=>{throw Error('unexpected detail request on DELETE');} },
-    'curated-v307', 'soridraw', async()=>{}, () => false,
+    { fetch: async()=>new Response('injected detail unavailable',{status:503}) },
+    'curated-v307', 'soridraw', async()=>{}, env => env?.shadow === true,
   );
   const request = new Request('https://preview.soridraw.com/v1/curation/soridraw/curated-1');
   await assert.rejects(write(request, {}, {}, 'curated-1', false, 'master'),
     /INJECTED_V307_R2_PUT_FAILURE/);
   assert.equal(await write(request, {}, {}, 'curated-1', false, 'master'), true);
   assert.equal(puts, 2);
+  const beforeFail = puts;
+  assert.equal(await write(request,{shadow:true},{},'curated-1',true,'master'),false,
+    'published detail 503 must NOT claim successful direct promotion projection');
+  assert.equal(puts,beforeFail,'failed direct detail must not write partial v307');
+  assert.match(direct,/CURATED_DISPLAY_PENDING_475/,
+    'pending shadow display must not be returned as complete HTTP 200');
   const start=direct.indexOf('let legacyCuratedSaved473 = false;');
   const writeAt=direct.indexOf('legacyCuratedSaved473 =');
   const sharedAt=direct.indexOf('const settled471 = await refreshCuratedShared466(');

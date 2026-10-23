@@ -6,6 +6,7 @@ on:
     branches: [preview]
     paths:
       - '.github/workflows/cloudflare-explore-cache-live-source-readonly.yml'
+      - 'scripts/audit-477-curated-active-writers-readonly.mjs'
   workflow_dispatch:
 
 permissions:
@@ -30,6 +31,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Validate app477 three-active-Worker gate offline
+        run: |
+          node --check scripts/audit-477-curated-active-writers-readonly.mjs
+          node scripts/audit-477-curated-active-writers-readonly.mjs --self-test
       - name: Validate bounded read-only curated probe
         run: |
           node --check scripts/diagnose-p0-curated-three-env-readonly.mjs
@@ -157,9 +162,15 @@ jobs:
           })().catch(error => { console.error(String(error.message || error)); process.exit(1); });
           NODE
 
+      - name: Inspect all live curated Writer versions, source and bindings read-only
+        id: writer_gate
+        continue-on-error: true
+        run: node scripts/audit-477-curated-active-writers-readonly.mjs --live
+
       - name: Enforce curated parity result after original source archive
         if: always()
         shell: bash
         run: |
+          test "${{ steps.writer_gate.outcome }}" = success
           test "${{ steps.curated_parity.outcome }}" = success
           echo 'P0_CURATED_PARITY_FINAL=PASS'

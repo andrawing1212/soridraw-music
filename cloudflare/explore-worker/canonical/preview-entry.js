@@ -1626,18 +1626,19 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
       const body = await request.json().catch(() => null);
       try {
         if (url.pathname === '/curated-repair-468/reserve') {
-          const result = await reserveCuratedRepair468(this.ctx.storage, body?.trackIds);
+          const result = await this.ctx.storage.transaction((tx) =>
+            reserveCuratedRepair468(tx, body?.trackIds));
           return Response.json({ ok: result.reserved === true, data: result },
             { status: result.reserved ? 200 : 400 });
         }
         if (url.pathname === '/curated-repair-468/confirm') {
-          const result = await confirmCuratedRepair468(
-            this.ctx.storage, Number(body?.generation || 0));
+          const result = await this.ctx.storage.transaction((tx) =>
+            confirmCuratedRepair468(tx, Number(body?.generation || 0)));
           return Response.json({ ok: true, data: result });
         }
         if (url.pathname === '/curated-repair-468/ack') {
-          const result = await acknowledgeCuratedRepair468(
-            this.ctx.storage, Number(body?.generation || 0));
+          const result = await this.ctx.storage.transaction((tx) =>
+            acknowledgeCuratedRepair468(tx, Number(body?.generation || 0)));
           return Response.json({ ok: true, data: result });
         }
       } catch (error) {

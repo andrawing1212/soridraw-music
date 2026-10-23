@@ -141,6 +141,71 @@ export function frontendAssets477(html,assetBodies,target) {
   need(entire.includes(new URL(target.origin).hostname)||target.name==='PRODUCTION'&&
     entire.includes('soridraw.com'),target.name,'LIVE_APP_HOST_BRANCH_MISSING');
 }
+// Browser requests are stronger evidence than URLs merely present in the
+// production bundle: Vite may embed all three defaults and a build-time
+// VITE_EXPLORE_API_BASE override. Only the actually selected fetch target passes.
+const isCuratedProbe477 = value => {
+  try {
+    const u=new URL(value);
+    return (u.pathname==='/v1/curated-revision'||u.pathname==='/v1/curated')
+      && u.searchParams.get('collection')==='soridraw';
+  } catch { return false; }
+};
+export function selectedRuntimeApi477(observedRequests,target) {
+  need(Array.isArray(observedRequests),target.name,'RUNTIME_REQUESTS_UNREADABLE');
+  const candidates=observedRequests.filter(isCuratedProbe477);
+  need(candidates.length>0,target.name,'RUNTIME_CURATED_REQUEST_NOT_OBSERVED');
+  const expected='https://'+target.worker+'.andrawing1212.workers.dev';
+  for(const url of candidates) {
+    const origin=new URL(url).origin;
+    need(origin===expected,target.name,'RUNTIME_SELECTED_API_MISMATCH');
+  }
+  return {endpoint:expected,observed:candidates.length};
+}
+async function browserRuntimeApi477(target) {
+  const {existsSync}=await import('node:fs');
+  const {chromium}=await import('playwright-core');
+  const paths=[process.env.CHROME_BIN,'/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable','/usr/bin/chromium','/usr/bin/chromium-browser'];
+  const executablePath=paths.find(x=>x&&existsSync(x));
+  need(Boolean(executablePath),target.name,'BROWSER_NOT_AVAILABLE');
+  const browser=await chromium.launch({
+    headless:true,executablePath,args:['--no-sandbox','--disable-dev-shm-usage'],
+  });
+  try {
+    const ctx=await browser.newContext({
+      viewport:{width:1280,height:800},serviceWorkers:'block',locale:'ko-KR',
+    });
+    try {
+      const page=await ctx.newPage(),seen=[];
+      await page.route('**/*',async route=>{
+        const request=route.request(),u=new URL(request.url());
+        if(isCuratedProbe477(u.href)) {
+          seen.push(u.href);
+          // Interception prevents a real R2/D1 read; the observed target is
+          // chosen by the deployed running app, not by this test.
+          return route.fulfill({status:503,contentType:'application/json',
+            body:JSON.stringify({ok:false,error:'APP477_READONLY_ROUTE_PROBE'})});
+        }
+        // Do not spend user-data reads on background API requests.
+        if(u.hostname.endsWith('.workers.dev')||u.pathname.startsWith('/v1/')
+          ||u.hostname.includes('firestore.googleapis.com')
+          ||u.hostname.includes('firebasedatabase.app')
+          ||u.hostname.includes('firebaseio.com')) return route.abort();
+        return route.continue();
+      });
+      const response=await page.goto(target.origin+'/explore',{
+        waitUntil:'domcontentloaded',timeout:45000,
+      });
+      need(response?.status()===200,target.name,'BROWSER_APP_NAVIGATION_FAILED');
+      // Single bounded guest check; missing curated fetch is a HOLD, not PASS.
+      await page.waitForTimeout(8000);
+      const selected=selectedRuntimeApi477(seen,target);
+      return { ...selected, count:seen.length };
+    } finally { await ctx.close(); }
+  } finally { await browser.close(); }
+}
+
 const publishedAssetRefs477 = (html,origin) => {
   const out=new Set();
   for(const tag of String(html).match(/<(?:script|link)\b[^>]*>/gi)||[]) {
@@ -264,7 +329,9 @@ async function live477() {
   for(const t of TARGETS) {
     originOwnership477(domainResponse,routeResponse,t);
     const frontendHash=await liveFrontend477(t);
-    console.log(t.name+'_PUBLIC_FRONTEND_SOURCE=PASS bundleHash='+frontendHash);
+    console.log(t.name+'_PUBLIC_FRONTEND_BUNDLE_HINT=PASS bundleHash='+frontendHash);
+    const selected477=await browserRuntimeApi477(t);
+    console.log(t.name+'_RUNTIME_SELECTED_API=PASS observed='+selected477.observed);
     const path=base+'/workers/scripts/'+t.worker;
     const versionId=activeVersion477(await apiGet(path+'/deployments',token),t.name);
     const settings=bindings477(await apiGet(path+'/settings',token),t);

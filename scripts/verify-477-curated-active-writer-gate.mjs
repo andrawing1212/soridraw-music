@@ -169,6 +169,15 @@ async function live477() {
   const base='https://api.cloudflare.com/client/v4/accounts/'+encodeURIComponent(acct);
   const config=readFileSync('src/config/exploreEnvironment.ts','utf8');
   for(const t of TARGETS) expectedAppConfig477(config,t);
+  const domainResponse=await apiGet(base+'/workers/domains',token);
+  need(Number(domainResponse.result_info?.total_pages||1)===1,'GLOBAL','WORKER_DOMAINS_PAGINATION_UNPROVEN');
+  const zoneResponse=await apiGet('https://api.cloudflare.com/client/v4/zones?name=soridraw.com',token);
+  need(Number(zoneResponse.result_info?.total_pages||1)===1,'GLOBAL','ZONE_LIST_PAGINATION_UNPROVEN');
+  const zoneList=result(zoneResponse);
+  need(Array.isArray(zoneList)&&zoneList.length===1&&zoneList[0]?.status==='active'&&
+    typeof zoneList[0]?.id==='string','GLOBAL','ZONE_OWNERSHIP_UNVERIFIED');
+  const routeResponse=await apiGet('https://api.cloudflare.com/client/v4/zones/'+zoneList[0].id+'/workers/routes',token);
+  need(Number(routeResponse.result_info?.total_pages||1)===1,'GLOBAL','ZONE_ROUTES_PAGINATION_UNPROVEN');
   const records=[];
   for(const t of TARGETS) {
     const path=base+'/workers/scripts/'+t.worker;

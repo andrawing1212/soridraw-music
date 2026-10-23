@@ -136,8 +136,17 @@ export async function reconcileCuratedShared466(env, resolveTrack, {
     if (!stored?.etag && !stored?.httpEtag) throw Error('CURATED_466_PUT_UNCONFIRMED');
     const after = await getCuratedShared466(env);
     if (!after.object || !after.snapshot) continue;
-    if (matchesCanonicalCurated466(rows, after.snapshot))
-      return { ok: true, snapshot: after.snapshot, object: after.object, reads: attempt + 1 };
+    if (matchesCanonicalCurated466(rows, after.snapshot)) {
+      // A different environment can commit another curator mutation *after*
+      // our bounded SELECT but before this successful R2 CAS. In that case
+      // no R2 conflict is guaranteed yet: the other writer may still be
+      // running, may be on an older Worker, or may fail after its D1 commit.
+      // Confirm canonical again before claiming success; retry with fresh
+      // rows when membership/visibility/order has advanced in the meantime.
+      const confirmedRows = await readRows();
+      if (matchesCanonicalCurated466(confirmedRows, after.snapshot))
+        return { ok: true, snapshot: after.snapshot, object: after.object, reads: attempt + 1 };
+    }
   }
   return { ok: false, reason: 'CAS_RETRY_EXHAUSTED', reads: attempts };
 }

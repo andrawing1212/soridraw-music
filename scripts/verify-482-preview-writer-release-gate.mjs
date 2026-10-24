@@ -46,8 +46,6 @@ export function trigger482(content,selectedSha) {
     demand(uniqueLines(content,key)===value,'TRIGGER_'+key.toUpperCase()+'_UNSAFE');
   demand(/^[1-9]\d{0,7}$/.test(uniqueLines(content,'approval_pr')),
     'APPROVAL_PR_REQUIRED');
-  demand(/^[a-f0-9]{40}$/.test(uniqueLines(content,'approval_pr_head_sha')),
-    'APPROVAL_HEAD_REQUIRED');
   return selectedSha;
 }
 const bindingMap482=(payload,stage)=>{
@@ -172,14 +170,12 @@ export function approval484(meta,trigger,associated,comments,runs,branch,commit,
   demand(/^\d+$/.test(String(meta?.runId||'')),'RUN_ID_INVALID');
   demand(branch?.commit?.sha===meta.sha,'PUSH_HEAD_NO_LONGER_CURRENT');
   const requestedPr=uniqueLines(trigger,'approval_pr');
-  const requestedHead=uniqueLines(trigger,'approval_pr_head_sha');
   demand(/^[1-9]\d{0,7}$/.test(requestedPr),'APPROVAL_PR_INVALID');
-  demand(/^[a-f0-9]{40}$/.test(requestedHead),'APPROVAL_PR_HEAD_INVALID');
   demand(Array.isArray(associated)&&associated.length===1,'MERGED_PR_ASSOCIATION_UNPROVEN');
   const pr=associated[0];
   demand(String(pr?.number)===requestedPr&&pr?.merged_at
     &&pr?.merge_commit_sha===meta.sha&&pr?.base?.ref==='preview'
-    &&pr?.head?.sha===requestedHead,'MERGED_PR_NOT_EXACTLY_APPROVED');
+    &&/^[a-f0-9]{40}$/.test(pr?.head?.sha||''),'MERGED_PR_NOT_EXACTLY_APPROVED');
   // Both the merge and the PR must be trigger-only (no hidden product edits).
   const triggerPath='.deploy/preview-worker-release.trigger';
   demand(Array.isArray(commit?.files)&&commit.files.length===1
@@ -188,7 +184,7 @@ export function approval484(meta,trigger,associated,comments,runs,branch,commit,
     &&files[0]?.filename===triggerPath,'PR_CHANGED_OTHER_FILES');
   demand(Array.isArray(comments)&&comments.length>0&&comments.length<100,
     'OWNER_APPROVAL_COMMENTS_UNVERIFIED');
-  const expected='APPROVE_APP481_PREVIEW_WRITER_ONLY_HEAD='+requestedHead;
+  const expected='APPROVE_APP481_PREVIEW_WRITER_ONLY_HEAD='+pr.head.sha;
   const approvals=comments.filter(c=>c?.user?.login==='andrawing1212'
     &&c?.body?.trim()===expected
     &&typeof c.created_at==='string'
@@ -268,7 +264,7 @@ function selfTest482() {
     D1_migration:'false',D1_schema_write:'false',user_data_backfill:'false',
     hosting_deploy:'false',functions_deploy:'false',shared_rtdb_rules_deploy:'false',
     repair_shared_like_snapshot_156:'false',repair_shared_like_snapshot_191:'false',
-    approval_pr:'462',approval_pr_head_sha:'a'.repeat(40),
+    approval_pr:'462',
   }).map(([k,v])=>[k,v]));
   const trigger=Object.entries(mock).map(([k,v])=>k+'='+v).join('\n')+'\n';
   assert.equal(trigger482(trigger,AUDITED_APP481_SHA),AUDITED_APP481_SHA);
@@ -349,8 +345,6 @@ function selfTest482() {
   reject(0,{...meta,attempt:'2'});
   reject(0,{...meta,sha:'d'.repeat(40)});
   reject(1,trigger.replace('approval_pr=462','approval_pr=463'));
-  reject(1,trigger.replace('approval_pr_head_sha='+'a'.repeat(40),
-    'approval_pr_head_sha='+'b'.repeat(40)));
   reject(2,[]);
   reject(2,[{...approvedPr,merge_commit_sha:'e'.repeat(40)}]);
   reject(2,[{...approvedPr,head:{sha:'e'.repeat(40)}}]);
@@ -403,7 +397,8 @@ function selfTest482() {
   console.log('APP482_EXACT_APP481_RELEASE_TRIGGER_AND_NO_REPAIR=PASS');
   console.log('APP482_3_ENV_OFF_BINDINGS_AND_VERSION_FIXTURES=PASS');
   console.log('APP483_LIKE035_AND_069_ZERO_AND_EMPTY_CRON_FIXTURES=PASS');
-  console.log('APP484_PR_OWNER_ONE_SHOT_AND_PARTIAL_FAILURE_GATE=PASS');
+  assert.doesNotMatch(trigger,/approval_pr_head_sha/);
+  console.log('APP484_NON_SELF_REFERENTIAL_PR_OWNER_APPROVAL=PASS');
   console.log('APP482_REMOTE_AND_DEPLOYMENT=NOT_RUN');
 }
 const args=process.argv.slice(2);

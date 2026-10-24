@@ -1,4 +1,14 @@
 import { DurableObject } from 'cloudflare:workers';
+import {
+  CURATED_SHARED_KEY_466, sharedCuratedEnabled466 as curatedFlagEnabled466, curatedAllWritersReady466, curatedSnapshotRevision466,
+  readCanonicalCurated466, canonicalCuratedIds466, visibleCuratedIds466,
+  getCuratedShared466, reconcileCuratedShared466,
+} from '../runtime/curated-shared-canonical-466.mjs';
+import {
+  CURATED_REPAIR_KEY_468, reserveCuratedRepair468, confirmCuratedRepair468,
+  acknowledgeCuratedRepair468, drainCuratedRepair468, armCuratedRepairAlarm468,
+  CURATED_REPAIR_WAKE_MS_468, CURATED_REPAIR_PREPARE_GRACE_MS_468,
+} from '../runtime/curated-projection-repair-468.mjs';
 import baseWorker from './preview-worker.js';
 import {verifyPrivateHmac416,validatePrivateHandoff416,acceptPrivateHandoff416} from '../runtime/like-private-batch-handoff-416.mjs';
 import {finalizePrivateHandoff416} from '../runtime/like-private-finalize-416.mjs';
@@ -130,6 +140,172 @@ const curatedStableBodyEdgeKey307 = (url) =>
 async function clearCuratedEdge307(url) {
   try { await caches.default.delete(curatedRevisionEdgeKey307(url)); } catch {}
   try { await caches.default.delete(curatedStableBodyEdgeKey307(url)); } catch {}
+}
+
+// Source-only compatibility fence for a mixed-runtime three-origin release.
+// An app377 Worker can still mutate D1 without updating the new v466 shared
+// R2 key; v466 must not become readable on PREVIEW during that period.
+// This separate value is an operator ATTESTATION after all three actual
+// writers (including visibility/publication) are upgraded and verified.
+// It is never checked into wrangler config or auto-enabled by a code deploy.
+// Keep this guard on ALL v466 read AND mutation routes.
+const sharedCuratedEnabled466 = (env) =>
+  curatedFlagEnabled466(env)
+  && curatedAllWritersReady466(env);
+
+// app471: writer-first compatibility staging. All readers remain on the
+// proven v307 cache while new Workers can *also* maintain the derived shared
+// v466 projection. Do not enable until the exact Writer release is audited.
+// Shadow mode never grants v466 read access and never disables legacy writes.
+const curatedWriterShadowEnabled471 = (env) =>
+  String(env?.SORIDRAW_CURATED_WRITER_SHADOW471 || '') === '1'
+  && !sharedCuratedEnabled466(env);
+const curatedSharedWriterEnabled471 = (env) =>
+  sharedCuratedEnabled466(env) || curatedWriterShadowEnabled471(env);
+
+// SORIDRAW_CURATED_CROSS_ENV_SHARED_V466 — OFF until reviewed release configuration.
+// v307 environment-local caches stay intact and untouched. When enabled, public
+// revision/list, manager list and mutation repair use the same versioned R2
+// snapshot in PROFILE_MEDIA. Old TEST/PRODUCTION read their untouched v307 key.
+// Do NOT enable during a mixed-version release without a parity/rollback plan.
+const curatedRevisionEdgeKey466 = (url) =>
+  new Request(new URL('/__soridraw/curated-revision-v466/soridraw', url.origin), { method: 'GET' });
+const curatedBodyEdgeKey466 = (url, revision, limit) => {
+  const u = new URL('/__soridraw/curated-body-v466/soridraw', url.origin);
+  u.searchParams.set('revision', String(revision || 'none'));
+  u.searchParams.set('limit', String(limit));
+  return new Request(u, { method: 'GET' });
+};
+
+async function clearCuratedSharedEdge466(url) {
+  try { await caches.default.delete(curatedRevisionEdgeKey466(url)); } catch {}
+}
+
+async function resolveSharedCuratedTrack466(request, env, ctx, id) {
+  const detailUrl = new URL('/v1/tracks/' + encodeURIComponent(id), request.url);
+  const res = await baseWorker.fetch(new Request(detailUrl, {
+    method: 'GET', headers: { Origin: request.headers.get('Origin') || '' },
+  }), env, ctx);
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => null);
+  return data?.data?.track || null;
+}
+
+async function refreshCuratedShared466(request, env, ctx, forceTrackIds = []) {
+  const result = await reconcileCuratedShared466(
+    env, (id) => resolveSharedCuratedTrack466(request, env, ctx, id),
+    { forceTrackIds },
+  );
+  if (result.ok) await clearCuratedSharedEdge466(new URL(request.url));
+  return result;
+}
+
+async function readCuratedShared466(request, env, ctx) {
+  let selected = await getCuratedShared466(env);
+  if (!selected.object) {
+    const refreshed = await refreshCuratedShared466(request, env, ctx);
+    if (!refreshed.ok)
+      return { object: null, payload: null, memberIds: [], r2Reads: 1, d1Read: 0, source: 'CURATED-SHARED-UNAVAILABLE-466' };
+    selected = { object: refreshed.object, snapshot: refreshed.snapshot };
+  }
+  if (!selected.snapshot)
+    return { object: null, payload: null, memberIds: [], r2Reads: 1, d1Read: 0, source: 'CURATED-SHARED-CORRUPT-466' };
+  return {
+    object: selected.object, payload: selected.snapshot.payload,
+    memberIds: selected.snapshot.memberIds, r2Reads: 1, d1Read: 0,
+    source: 'SHARED-R2-CURATED-466',
+  };
+}
+
+async function handleCuratedSharedRevision466(request, env) {
+  if (!env?.PROFILE_MEDIA || !env?.DB) {
+    return new Response(JSON.stringify({
+      ok: false, error: 'Shared curated binding missing',
+    }), { status: 503, headers: curationHeaders307(request, { source: 'SHARED-BINDING-MISSING-466' }) });
+  }
+  const url = new URL(request.url);
+  const edgeKey = curatedRevisionEdgeKey466(url);
+  try {
+    const cached = await caches.default.match(edgeKey);
+    if (cached) {
+      const revision = String(await cached.text() || '').trim();
+      if (revision) return new Response(JSON.stringify({
+        ok: true, data: { collection: SORIDRAW_CURATED_COLLECTION_307, revision, exists: true },
+      }), { status: 200, headers: curationHeaders307(request, { revision, source: 'EDGE-SHARED-CURATED-466' }) });
+    }
+  } catch {}
+  const head = await env.PROFILE_MEDIA.head(CURATED_SHARED_KEY_466);
+  const revision = curatedSnapshotRevision466(head);
+  if (revision) {
+    try {
+      await caches.default.put(edgeKey, new Response(revision, {
+        headers: { 'Cache-Control': 'public, max-age=5' },
+      }));
+    } catch {}
+  }
+  return new Response(JSON.stringify({
+    ok: true, data: { collection: SORIDRAW_CURATED_COLLECTION_307, revision, exists: Boolean(revision) },
+  }), {
+    status: 200, headers: curationHeaders307(request, {
+      r2B: 1, revision, source: revision ? 'SHARED-R2-CURATED-HEAD-466' : 'SHARED-R2-CURATED-COLD-466',
+    }),
+  });
+}
+
+async function handleCuratedSharedPublic466(request, env, ctx) {
+  const url = new URL(request.url);
+  const limit = Math.min(20, Math.max(1, Number(url.searchParams.get('limit') || 20)));
+  // v466 reads the small Edge-cached shared revision before opening the R2
+  // body. Healthy unchanged repeat visits are Edge body hits, not R2 GETs.
+  const signal = await handleCuratedSharedRevision466(request, env);
+  if (!signal.ok) return signal;
+  const signalPayload = await signal.json().catch(() => null);
+  const signalRevision = String(signalPayload?.data?.revision || '').trim();
+  if (signalRevision) {
+    const cachedKey = curatedBodyEdgeKey466(url, signalRevision, limit);
+    try {
+      const cached = await caches.default.match(cachedKey);
+      if (cached) return new Response(await cached.text(), {
+        status: 200, headers: curationHeaders307(request, {
+          revision: signalRevision, source: 'EDGE-SHARED-CURATED-BODY-466',
+        }),
+      });
+    } catch {}
+  }
+  const selected = await readCuratedShared466(request, env, ctx);
+  if (!Array.isArray(selected.payload?.data?.items))
+    return new Response(JSON.stringify({ ok: false, error: 'SORIDRAW 추천곡이 동기화되지 않았습니다.' }), {
+      status: 503, headers: curationHeaders307(request, { source: selected.source }),
+    });
+  const revision = curatedSnapshotRevision466(selected.object);
+  const key = curatedBodyEdgeKey466(url, revision, limit);
+  try {
+    const cached = await caches.default.match(key);
+    if (cached) return new Response(await cached.text(), {
+      status: 200, headers: curationHeaders307(request, { revision, source: 'EDGE-SHARED-CURATED-466' }),
+    });
+  } catch {}
+  const body = JSON.stringify({
+    ...selected.payload,
+    data: {
+      ...selected.payload.data, revision, collection: SORIDRAW_CURATED_COLLECTION_307,
+      items: selected.payload.data.items.slice(0, limit),
+    },
+  });
+  try {
+    await caches.default.put(key, new Response(body, {
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'public, max-age=300',
+        'X-SORIDRAW-Curated-Revision': revision,
+      },
+    }));
+  } catch {}
+  return new Response(body, {
+    status: 200, headers: curationHeaders307(request, {
+      revision, source: selected.source, r2B: selected.r2Reads,
+    }),
+  });
 }
 
 async function validateExploreAuth307(request, env, ctx) {
@@ -295,16 +471,23 @@ async function materializeCuratedR2FromBase307(request, env, ctx) {
   if (!bucket) return { object: null, payload: null, memberIds: [], d1Read: 0, source: 'R2-BINDING-MISSING-307' };
   if (!env?.DB) return { object: null, payload: null, memberIds: [], d1Read: 0, source: 'D1-BINDING-MISSING-356' };
 
+  // app475: conditionally write the v307 shadow from the ETag observed BEFORE
+  // reading canonical D1. A delayed earlier repair cannot undo a later PUT.
+  const shadow475 = curatedWriterShadowEnabled471(env);
+  const before475 = shadow475 ? await bucket.get(SORIDRAW_CURATED_R2_KEY_307) : null;
+  if (shadow475 && before475 && !String(before475.etag || '').trim())
+    return { object: null, payload: null, memberIds: [], d1Read: 0, source: 'LEGACY_ETAG_UNAVAILABLE_475' };
   const now = Date.now();
   let rows = [];
   try {
     const result = await env.DB.prepare(`
-      SELECT track_id,curator_uid,curator_role,sort_order,starts_at,ends_at,created_at,updated_at
-      FROM curated_picks
-      WHERE collection_key=?
-        AND (starts_at IS NULL OR starts_at<=?)
-        AND (ends_at IS NULL OR ends_at>?)
-      ORDER BY sort_order ASC, updated_at DESC, track_id ASC
+      SELECT cp.track_id,cp.curator_uid,cp.curator_role,cp.sort_order,cp.starts_at,cp.ends_at,cp.created_at,cp.updated_at,
+             t.is_public,t.status
+      FROM curated_picks cp LEFT JOIN tracks t ON t.id=cp.track_id
+      WHERE cp.collection_key=?
+        AND (cp.starts_at IS NULL OR cp.starts_at<=?)
+        AND (cp.ends_at IS NULL OR cp.ends_at>?)
+      ORDER BY cp.sort_order ASC,cp.updated_at DESC,cp.track_id ASC
       LIMIT 40
     `).bind(SORIDRAW_CURATED_COLLECTION_307, now, now).all();
     rows = Array.isArray(result?.results) ? result.results : [];
@@ -322,22 +505,26 @@ async function materializeCuratedR2FromBase307(request, env, ctx) {
   for (const row of rows) {
     const trackId = String(row?.track_id || '').trim();
     if (!trackId) continue;
+    // Private/unpublished members remain in membership but not public cards.
+    // A published member missing its detail is a RETRY, never a partial success.
+    if (Number(row?.is_public) !== 1 || String(row?.status || '').toLowerCase() !== 'published') continue;
     const detailUrl = new URL(`/v1/tracks/${encodeURIComponent(trackId)}`, request.url);
-    let detailResponse = null;
+    let track = null;
     try {
-      detailResponse = await baseWorker.fetch(new Request(detailUrl.toString(), {
+      const detailResponse = await baseWorker.fetch(new Request(detailUrl.toString(), {
         method: 'GET',
         headers: { Origin: request.headers.get('Origin') || '' },
       }), env, ctx);
-    } catch {
-      continue;
+      const detailD1Read = Number(detailResponse.headers.get('X-SORIDRAW-D1-Read') || 0);
+      if (Number.isFinite(detailD1Read) && detailD1Read > 0) d1Read += detailD1Read;
+      if (!detailResponse.ok) throw Error('CURATED_475_DETAIL_HTTP_' + detailResponse.status);
+      const detail = await detailResponse.clone().json();
+      track = detail?.data?.track;
+      if (String(track?.id || '').trim() !== trackId) throw Error('CURATED_475_DETAIL_MISMATCH');
+    } catch (error) {
+      console.warn('[app475] published curated detail unavailable, repair retained:', String(error?.message || error));
+      return { object: null, payload: null, memberIds, d1Read, source: 'CURATED_DETAIL_PENDING_475' };
     }
-    const detailD1Read = Number(detailResponse.headers.get('X-SORIDRAW-D1-Read') || 0);
-    if (Number.isFinite(detailD1Read) && detailD1Read > 0) d1Read += detailD1Read;
-    if (!detailResponse.ok) continue;
-    const detail = await detailResponse.clone().json().catch(() => null);
-    const track = detail?.data?.track;
-    if (!track?.id) continue;
     items.push({
       track,
       curation: {
@@ -364,19 +551,29 @@ async function materializeCuratedR2FromBase307(request, env, ctx) {
     payload,
     updatedAt: Date.now(),
   };
-  await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(stored), {
+  const saved475 = await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(stored), {
+    ...(shadow475 ? { onlyIf: before475
+      ? { etagMatches: String(before475.etag).trim() }
+      : new Headers({ 'If-None-Match': '*' }) } : {}),
     httpMetadata: { contentType: 'application/json' },
     customMetadata: { updatedAt: String(stored.updatedAt) },
   });
-  await clearCuratedEdge307(new URL(request.url));
+  if (shadow475 && !String(saved475?.etag || saved475?.httpEtag || '').trim())
+    return { object: null, payload: null, memberIds, d1Read, source: 'CURATED_LEGACY_CAS_PENDING_475' };
   const object = await bucket.get(SORIDRAW_CURATED_R2_KEY_307);
-  return {
-    object,
-    payload,
-    memberIds,
-    d1Read,
-    source: 'D1-BOUNDED-BOOTSTRAP-356',
-  };
+  if (shadow475) {
+    // Verify the actually persisted v307 projection AND current D1 before ACK.
+    let actual475 = null;
+    try { actual475 = object && JSON.parse(await object.text()); } catch {}
+    const currentRows475 = await readCanonicalCurated466(env);
+    const actualIds475 = (actual475?.payload?.data?.items || []).map((x) => String(x?.track?.id || '').trim());
+    if (!object || String(object.etag || '').trim() !== String(saved475.etag || '').trim()
+      || JSON.stringify(actual475?.memberIds) !== JSON.stringify(canonicalCuratedIds466(currentRows475))
+      || JSON.stringify(actualIds475) !== JSON.stringify(visibleCuratedIds466(currentRows475)))
+      return { object: null, payload: null, memberIds, d1Read, source: 'CURATED_LEGACY_VERIFY_PENDING_475' };
+  }
+  await clearCuratedEdge307(new URL(request.url));
+  return { object, payload, memberIds, d1Read, source: 'D1-BOUNDED-BOOTSTRAP-356' };
 }
 
 async function readCuratedObject307(request, env, ctx) {
@@ -456,15 +653,33 @@ async function handleCuratedRevision307(request, env) {
 async function handleCuratedPublic307(request, env, ctx) {
   const url = new URL(request.url);
   const limit = Math.min(20, Math.max(1, Number(url.searchParams.get('limit') || 20)));
+  let revisionR2Reads475 = 0;
   if (limit === 20) {
     try {
       const cached = await caches.default.match(curatedStableBodyEdgeKey307(url));
       if (cached) {
         const revision = String(cached.headers.get('X-SORIDRAW-Curated-Revision') || '').trim();
-        return new Response(await cached.text(), {
-          status: 200,
-          headers: curationHeaders307(request, { revision, source: 'EDGE-CURATED-BODY-307' }),
-        });
+        // app474: a shadow repair can rebuild R2 from a DO without purging
+        // this user's PoP-local stable body cache. During writer-shadow only,
+        // compare against the existing 60-second v307 revision cache before
+        // trusting a body retained for up to five minutes. On mismatch or
+        // revision error fall through to the existing R2 body read (no D1 scan).
+        let stableMatches474 = !curatedWriterShadowEnabled471(env);
+        if (!stableMatches474 && revision) {
+          try {
+            const latest474 = await handleCuratedRevision307(request, env);
+            revisionR2Reads475 += Number(latest474.headers.get('X-SORIDRAW-R2-B') || 0);
+            const current474 = await latest474.json();
+            stableMatches474 = latest474.ok && current474?.ok === true
+              && String(current474?.data?.revision || '').trim() === revision;
+          } catch { /* fail closed to the existing R2 body source */ }
+        }
+        if (stableMatches474) {
+          return new Response(await cached.text(), {
+            status: 200,
+            headers: curationHeaders307(request, { revision, r2B: revisionR2Reads475, source: 'EDGE-CURATED-BODY-307' }),
+          });
+        }
       }
     } catch {}
   }
@@ -474,7 +689,7 @@ async function handleCuratedPublic307(request, env, ctx) {
       status: 503,
       headers: curationHeaders307(request, {
         d1Read: selected.d1Read,
-        r2B: selected.r2Reads,
+        r2B: revisionR2Reads475 + Number(selected.r2Reads || 0),
         source: selected.source,
       }),
     });
@@ -486,7 +701,7 @@ async function handleCuratedPublic307(request, env, ctx) {
     if (cached) {
       return new Response(await cached.text(), {
         status: 200,
-        headers: curationHeaders307(request, { revision, source: 'EDGE-CURATED-BODY-307' }),
+        headers: curationHeaders307(request, { revision, r2B: revisionR2Reads475 + Number(selected.r2Reads || 0), source: 'EDGE-CURATED-BODY-307' }),
       });
     }
   } catch {}
@@ -514,7 +729,7 @@ async function handleCuratedPublic307(request, env, ctx) {
     status: 200,
     headers: curationHeaders307(request, {
       d1Read: selected.d1Read,
-      r2B: selected.r2Reads,
+      r2B: revisionR2Reads475 + Number(selected.r2Reads || 0),
       revision,
       source: selected.source,
     }),
@@ -523,9 +738,9 @@ async function handleCuratedPublic307(request, env, ctx) {
 
 async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, curatorRole) {
   const bucket = curatedBucket307(env);
-  if (!bucket) return;
+  if (!bucket) return false;
   const selected = await readCuratedObject307(request, env, ctx);
-  if (!selected.payload?.data?.items) return;
+  if (!selected.payload?.data?.items) return false;
   let memberIds = [...new Set((selected.memberIds || [])
     .map((value) => String(value || '').trim())
     .filter(Boolean))].filter((value) => value !== trackId);
@@ -539,7 +754,8 @@ async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, cur
     }), env, ctx);
     const detail = await detailResponse.clone().json().catch(() => null);
     const track = detail?.data?.track;
-    if (detailResponse.ok && track?.id) {
+    if (!detailResponse.ok || String(track?.id || '').trim() !== trackId) return false;
+    {
       items.unshift({
         track,
         curation: {
@@ -563,25 +779,55 @@ async function writeCuratedSnapshot307(request, env, ctx, trackId, promoted, cur
     payload,
     updatedAt: Date.now(),
   };
-  await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(stored), {
+  // app475: conditional write keeps an old promote from resurrecting a later removal.
+  const shadow475 = curatedWriterShadowEnabled471(env);
+  if (shadow475 && selected.object && !String(selected.object.etag || '').trim()) return false;
+  const saved475 = await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(stored), {
+    ...(shadow475 ? { onlyIf: selected.object
+      ? { etagMatches: String(selected.object.etag).trim() }
+      : new Headers({ 'If-None-Match': '*' }) } : {}),
     httpMetadata: { contentType: 'application/json' },
     customMetadata: { updatedAt: String(stored.updatedAt) },
   });
+  if (shadow475 && !String(saved475?.etag || saved475?.httpEtag || '').trim()) return false;
   await clearCuratedEdge307(new URL(request.url));
+  return true;
 }
 
 // SORIDRAW_CURATED_PUBLICATION_TARGETED_SYNC_307_20261003
-async function syncCuratedPublicationResults307(request, env, results) {
+async function syncCuratedPublicationResults307(request, env, results, ctx) {
+  if (sharedCuratedEnabled466(env)) {
+    if (!Array.isArray(results) || !results.some((item) => item?.ok === true)) return;
+    const current = await getCuratedShared466(env);
+    const memberSet = new Set(current.snapshot?.memberIds || []);
+    if (!results.some((item) => memberSet.has(String(item?.trackId || '').trim()))) return;
+    const changedIds = results.filter((item) => item?.ok === true)
+      .map((item) => String(item?.trackId || '').trim())
+      .filter((id) => memberSet.has(id));
+    const next = await refreshCuratedShared466(request, env, ctx, changedIds);
+    if (!next.ok) throw Error('CURATED_SHARED_PUBLICATION_REPAIR_FAILED_466');
+    return;
+  }
   const bucket = curatedBucket307(env);
-  if (!bucket || !Array.isArray(results) || !results.length) return;
+  if (!Array.isArray(results) || !results.length) return;
+  if (!bucket) {
+    if (curatedWriterShadowEnabled471(env)) throw Error('CURATED_LEGACY_BUCKET_PENDING_475');
+    return;
+  }
   let object = null;
   try { object = await bucket.get(SORIDRAW_CURATED_R2_KEY_307); } catch {}
-  if (!object) return;
+  if (!object) {
+    if (curatedWriterShadowEnabled471(env)) throw Error('CURATED_LEGACY_OBJECT_PENDING_475');
+    return;
+  }
 
   let stored = null;
   try { stored = JSON.parse(await object.text()); } catch {}
   const payload = stored?.payload;
-  if (stored?.schemaVersion !== 1 || payload?.ok !== true || !Array.isArray(payload?.data?.items)) return;
+  if (stored?.schemaVersion !== 1 || payload?.ok !== true || !Array.isArray(payload?.data?.items)) {
+    if (curatedWriterShadowEnabled471(env)) throw Error('CURATED_LEGACY_OBJECT_INVALID_475');
+    return;
+  }
 
   const memberIds = Array.isArray(stored?.memberIds)
     ? stored.memberIds.map((value) => String(value || '').trim()).filter(Boolean)
@@ -606,7 +852,10 @@ async function syncCuratedPublicationResults307(request, env, results) {
       continue;
     }
     const track = result?.snapshotItem;
-    if (!track?.id) continue;
+    if (String(track?.id || '').trim() !== trackId) {
+      if (curatedWriterShadowEnabled471(env)) throw Error('CURATED_PUBLIC_DETAIL_PENDING_475');
+      continue;
+    }
     const previous = itemByTrackId.get(trackId);
     itemByTrackId.set(trackId, {
       track,
@@ -638,11 +887,48 @@ async function syncCuratedPublicationResults307(request, env, results) {
     payload: nextPayload,
     updatedAt: Date.now(),
   };
-  await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(nextStored), {
+  const shadow475 = curatedWriterShadowEnabled471(env);
+  if (shadow475 && !String(object.etag || '').trim()) throw Error('CURATED_LEGACY_ETAG_MISSING_475');
+  const saved475 = await bucket.put(SORIDRAW_CURATED_R2_KEY_307, JSON.stringify(nextStored), {
+    ...(shadow475 ? { onlyIf: { etagMatches: String(object.etag).trim() } } : {}),
     httpMetadata: { contentType: 'application/json' },
     customMetadata: { updatedAt: String(nextStored.updatedAt) },
   });
+  if (shadow475 && !String(saved475?.etag || saved475?.httpEtag || '').trim())
+    throw Error('CURATED_LEGACY_CONFLICT_475');
   await clearCuratedEdge307(new URL(request.url));
+}
+
+// app469: protect the direct curator PUT/DELETE D1 mutation too, not only
+// publication/visibility routes. The ticket is durably reserved before D1,
+// and only retired after the changed R2 projection is verified.
+async function reserveDirectCuratedRepair469(env, trackId) {
+  const namespace = env?.EXPLORE_LIKE_BATCH_SCHEDULER;
+  if (!namespace) throw Error('CURATED_DIRECT_REPAIR_DO_MISSING_469');
+  const stub = namespace.get(namespace.idFromName(EXPLORE_LIKE_BATCH_SCHEDULER_NAME_103));
+  const response = await stub.fetch('https://soridraw.internal/curated-repair-468/reserve', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ trackIds: [trackId] }),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok || data?.data?.reserved !== true)
+    throw Error('CURATED_DIRECT_REPAIR_RESERVE_FAILED_469');
+  return { stub, generation: Number(data.data.generation || 0) };
+}
+
+async function finalizeDirectCuratedRepair469(ticket, route) {
+  if (!ticket) return;
+  try {
+    const result = await ticket.stub.fetch('https://soridraw.internal/curated-repair-468/' + route, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ generation: ticket.generation }),
+    });
+    if (!result.ok) throw Error('CURATED_DIRECT_REPAIR_' + route.toUpperCase() + '_FAILED_469');
+  } catch (error) {
+    // Never replay a committed D1 curator mutation because an auxiliary
+    // notification failed. The reserved ticket survives for alarm recovery.
+    console.warn('[app469] curator derived repair journal deferred:', String(error?.message || error));
+  }
 }
 
 async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
@@ -666,6 +952,9 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
   }
   const now = Date.now();
   let d1Read = access.d1Read;
+  // app470: reject an invalid/non-public promotion BEFORE creating the
+  // durable repair ticket. Validation is read-only and uses the same bounded
+  // SELECT as the existing legacy path; DELETE still needs no preflight read.
   if (promoted) {
     const track = await env.DB.prepare(
       `SELECT id FROM tracks WHERE id=? AND is_public=1 AND status='published' LIMIT 1`
@@ -680,6 +969,24 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
         headers: curationHeaders307(request, { d1Read, source: 'CURATION-TRACK-MISSING-307' }),
       });
     }
+  }
+  let directCuratedTicket469 = null;
+  if (curatedSharedWriterEnabled471(env)) {
+    // Must reserve before either INSERT/UPDATE or DELETE: a CAS failure after
+    // a successful canonical D1 mutation otherwise has no durable repair.
+    try {
+      directCuratedTicket469 = await reserveDirectCuratedRepair469(env, id);
+    } catch (error) {
+      console.warn('[app469] curator repair reservation unavailable:', String(error?.message || error));
+      return Response.json({
+        ok: false, error: {
+          code: 'CURATED_DIRECT_REPAIR_PREFLIGHT_469',
+          message: '추천곡 동기화 준비가 완료되지 않아 변경을 저장하지 않았습니다.',
+        },
+      }, { status: 503 });
+    }
+  }
+  if (promoted) {
     await env.DB.prepare(`
       INSERT INTO curated_picks(collection_key,track_id,curator_uid,curator_role,sort_order,starts_at,ends_at,created_at,updated_at)
       VALUES (?,?,?,?,0,NULL,NULL,?,?)
@@ -693,12 +1000,84 @@ async function handleCurationMutation307(request, env, ctx, trackId, promoted) {
     ).bind(SORIDRAW_CURATED_COLLECTION_307, id).run();
   }
 
-  try {
-    await writeCuratedSnapshot307(request, env, ctx, id, promoted, access.curatorRole);
-  } catch (error) {
-    console.warn('[app307] curated R2 patch failed; next public read repairs:', String(error?.message || error || 'unknown'));
-    try { await curatedBucket307(env)?.delete(SORIDRAW_CURATED_R2_KEY_307); } catch {}
-    await clearCuratedEdge307(new URL(request.url));
+  if (directCuratedTicket469) {
+    await finalizeDirectCuratedRepair469(directCuratedTicket469, 'confirm');
+  }
+  if (sharedCuratedEnabled466(env)) {
+    // D1 mutation has committed. Do not lie about a successful public snapshot
+    // when R2 conditional write cannot converge. No automatic D1 rollback.
+    try {
+      const updated = await refreshCuratedShared466(request, env, ctx, [id]);
+      if (!updated.ok) throw Error('CURATED_SHARED_CAS_INCOMPLETE_466');
+      // Opposite actions on one track may commit while our CAS is retrying.
+      // Never return a misleading promoted:true after another curator removed
+      // or hid it. The R2 outcome must match our requested visibility.
+      const visible = updated.snapshot?.payload?.data?.items?.some(
+        (item) => String(item?.track?.id || '').trim() === id,
+      ) === true;
+      if (visible !== promoted) {
+        return new Response(JSON.stringify({
+          ok: false, error: {
+            code: 'CURATED_SHARED_CONCURRENT_CHANGE_466',
+            message: '다른 변경이 먼저 적용되어 추천곡 상태가 달라졌습니다.',
+          },
+        }), {
+          status: 409, headers: curationHeaders307(request, {
+            d1Read, d1Write: 1, source: 'CURATED-SHARED-CONFLICT-466',
+          }),
+        });
+      }
+      await finalizeDirectCuratedRepair469(directCuratedTicket469, 'ack');
+    } catch {
+      return new Response(JSON.stringify({
+        ok: false, error: {
+          code: 'CURATED_SHARED_SETTLEMENT_PENDING_466',
+          message: '승격 기록은 저장되었으나 추천곡 표시 갱신 확인이 필요합니다.',
+        },
+      }), {
+        status: 503, headers: curationHeaders307(request, {
+          d1Read: d1Read, d1Write: 1, source: 'CURATED-SHARED-REPAIR-FAILED-466',
+        }),
+      });
+    }
+  } else {
+    let legacyCuratedSaved473 = false;
+    let shadowPending475 = false;
+    try {
+      legacyCuratedSaved473 =
+        await writeCuratedSnapshot307(request, env, ctx, id, promoted, access.curatorRole) === true;
+    } catch (error) {
+      console.warn('[app307] curated R2 patch failed; next public read repairs:', String(error?.message || error || 'unknown'));
+      // Never delete a newer winner on shadow CAS conflict.
+      if (!curatedWriterShadowEnabled471(env)) {
+        try { await curatedBucket307(env)?.delete(SORIDRAW_CURATED_R2_KEY_307); } catch {}
+        await clearCuratedEdge307(new URL(request.url));
+      }
+    }
+
+    if (curatedWriterShadowEnabled471(env) && directCuratedTicket469) {
+      // The user still reads v307 in shadow mode. A successful shared v466
+      // CAS alone is NOT enough to retire a ticket if v307 failed.
+      try {
+        const settled471 = await refreshCuratedShared466(request, env, ctx, [id]);
+        if (!settled471.ok) throw Error('CURATED_SHADOW_CAS_PENDING_471');
+        if (!legacyCuratedSaved473) throw Error('CURATED_LEGACY_DISPLAY_PENDING_473');
+        await finalizeDirectCuratedRepair469(directCuratedTicket469, 'ack');
+      } catch (error) {
+        shadowPending475 = true;
+        console.warn('[app475] curated shadow repair ticket retained:', String(error?.message || error || 'unknown'));
+      }
+      if (shadowPending475) {
+        // Canonical D1 already committed; never replay it. This 503 describes
+        // incomplete derived display, not a failed original mutation.
+        return new Response(JSON.stringify({
+          ok: false, data: { trackId: id, canonicalCommitted: true, retryable: true },
+          error: { code: 'CURATED_DISPLAY_PENDING_475', message: '승격 기록은 저장됐으나 표시 복구가 진행 중입니다.' },
+        }), { status: 503, headers: curationHeaders307(request, {
+          d1Read, d1Write: 1, source: 'CURATED-DISPLAY-PENDING-475',
+        }) });
+      }
+    }
   }
 
   return new Response(JSON.stringify({
@@ -730,7 +1109,9 @@ async function handleManagedCurated307(request, env, ctx) {
     });
   }
 
-  const selected = await readCuratedObject307(request, env, ctx);
+  const selected = sharedCuratedEnabled466(env)
+    ? await readCuratedShared466(request, env, ctx)
+    : await readCuratedObject307(request, env, ctx);
   if (!selected.payload?.data?.items) {
     return new Response(JSON.stringify({
       ok: false,
@@ -1238,6 +1619,40 @@ const EXPLORE_LIKE_ALARM_FALLBACK_MS_194 = 15 * 1000;
 const waitExploreLikeDelay194 = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 
 export class ExploreLikeBatchScheduler103 extends DurableObject {
+  // One global durable curated repair journal for this Worker environment.
+  // No periodic polling. The alarm is armed only by a real relevant mutation.
+  async runCuratedRepair468() {
+    if (!curatedSharedWriterEnabled471(this.env)) return;
+    const result = await drainCuratedRepair468(
+      this.ctx.storage,
+      async (trackIds) => {
+        if (curatedWriterShadowEnabled471(this.env)) {
+          // The v307 list is still the real user-visible reader during a
+          // writer-first rollout. Recover it from only the 40 curated D1 rows
+          // before clearing the ticket; v466-only success is NOT settlement.
+          const request = new Request('https://soridraw.internal/v1/curated?collection=soridraw');
+          const legacy = await materializeCuratedR2FromBase307(request, this.env, this.ctx);
+          if (!legacy?.object || !Array.isArray(legacy?.payload?.data?.items))
+            return { ok: false, reason: 'LEGACY_CURATED_PROJECTION_PENDING_472' };
+        }
+        return reconcileCuratedShared466(
+          this.env,
+          async (id) => {
+            const url = 'https://soridraw.internal/v1/tracks/' + encodeURIComponent(id);
+            const res = await baseWorker.fetch(new Request(url), this.env, this.ctx);
+            if (!res.ok) return null;
+            const data = await res.json().catch(() => null);
+            return data?.data?.track || null;
+          },
+          { forceTrackIds: trackIds },
+        );
+      },
+    );
+    if (result.retrying) {
+      console.warn('[app468] derived curated repair deferred', result.failures);
+    }
+  }
+
   async runAggregate194() {
     if (typeof baseWorker?.scheduled !== 'function') {
       throw new Error('Canonical Explore like aggregate handler unavailable');
@@ -1343,6 +1758,29 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
     return {...settledAggregate418,changedTrackIds416};
   }
 
+  // app470: the like scheduler and curated repair share ONE Cloudflare DO
+  // alarm. finalizeAggregate195 previously erased a curation wake when
+  // its like queue became empty. Restore the earliest pending curated alarm
+  // AFTER the like queue's own deleteAlarm, but never scan D1 here.
+  async ensurePendingCuratedAlarm470() {
+    // Stay fully inert in legacy app410/Stage416 and source-isolated DO
+    // fixtures. Guard using primitive env vars before accessing any new
+    // v466 helper symbol (the frozen fixture does not import that module).
+    if (String(this.env?.SORIDRAW_CURATED_WRITER_SHADOW471 || '') !== '1'
+      && (String(this.env?.SORIDRAW_CURATED_SHARED_V466 || '') !== '1'
+        || String(this.env?.SORIDRAW_CURATED_ALL_WRITERS_READY466 || '') !== '1')) return;
+    const row = await this.ctx.storage.get(CURATED_REPAIR_KEY_468);
+    const tickets = Array.isArray(row?.tickets) ? row.tickets : [];
+    if (!tickets.length) return;
+    const now = Date.now();
+    const earliest = Math.min(...tickets.map((ticket) =>
+      Number(ticket.confirmedAt || 0) > 0
+        ? Number(ticket.confirmedAt) + CURATED_REPAIR_WAKE_MS_468
+        : Number(ticket.reservedAt || now) + CURATED_REPAIR_PREPARE_GRACE_MS_468));
+    const when = Math.max(now + 1_000, earliest, Number(row.nextAttemptAt || 0));
+    await armCuratedRepairAlarm468(this.ctx.storage, when, now);
+  }
+
   // SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_JOIN_RACE_195_20260924
   async finalizeAggregate195() {
     // Remove this window's ownership BEFORE the final indexed queue check.
@@ -1360,6 +1798,7 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
     if (!pending) {
       await this.ctx.storage.deleteAlarm().catch(() => {});
       await this.ensurePublicAlarm416();
+      await this.ensurePendingCuratedAlarm470();
       return null;
     }
 
@@ -1382,6 +1821,40 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
 
   async fetch(request) {
     const url = new URL(request.url);
+    if (request.method === 'POST' && url.pathname.startsWith('/curated-repair-468/')) {
+      if (!curatedSharedWriterEnabled471(this.env)) {
+        return Response.json({ ok: false, error: 'CURATED_REPAIR_DISABLED_468' }, { status: 503 });
+      }
+      const body = await request.json().catch(() => null);
+      try {
+        if (url.pathname === '/curated-repair-468/reserve') {
+          const result = await this.ctx.storage.transaction((tx) =>
+            reserveCuratedRepair468(tx, body?.trackIds));
+          if (result.reserved)
+            await armCuratedRepairAlarm468(this.ctx.storage, Date.now() + CURATED_REPAIR_WAKE_MS_468);
+          return Response.json({ ok: result.reserved === true, data: result },
+            { status: result.reserved ? 200 : 400 });
+        }
+        if (url.pathname === '/curated-repair-468/confirm') {
+          const result = await this.ctx.storage.transaction((tx) =>
+            confirmCuratedRepair468(tx, Number(body?.generation || 0)));
+          if (result.confirmed)
+            await armCuratedRepairAlarm468(this.ctx.storage, Date.now() + CURATED_REPAIR_WAKE_MS_468);
+          return Response.json({ ok: true, data: result });
+        }
+        if (url.pathname === '/curated-repair-468/ack') {
+          const result = await this.ctx.storage.transaction((tx) =>
+            acknowledgeCuratedRepair468(tx, Number(body?.generation || 0)));
+          return Response.json({ ok: true, data: result });
+        }
+      } catch (error) {
+        return Response.json({
+          ok: false, error: String(error?.message || 'CURATED_REPAIR_JOURNAL_FAILED_468'),
+        }, { status: 503 });
+      }
+      return Response.json({ ok: false, error: 'CURATED_REPAIR_UNKNOWN_ROUTE_468' },
+        { status: 404 });
+    }
     if(request.method==='POST'&&url.pathname==='/public-release'){
       const body=await request.json().catch(()=>null);
       try{
@@ -1530,13 +2003,27 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
   }
 
   async alarm() {
+    let likeAlarmError472 = null;
     try {
       const publicWindowEnabled448=
         STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE===true||
         COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448===true;
-      const publicOnly448=publicWindowEnabled448&&
-        !await this.ctx.storage.get(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194);
-      if(!publicOnly448){
+      const activeLikeMarker469 = await this.ctx.storage.get(EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194);
+      // Primitive OFF guard keeps source-isolated app410 like fixtures and
+      // dormant old Workers independent of the new shared module symbols.
+      const canRunCuratedWriter471 =
+        String(this.env?.SORIDRAW_CURATED_WRITER_SHADOW471 || '') === '1' ||
+        (String(this.env?.SORIDRAW_CURATED_SHARED_V466 || '') === '1' &&
+         String(this.env?.SORIDRAW_CURATED_ALL_WRITERS_READY466 || '') === '1');
+      const curatedOnlyAlarm469 = canRunCuratedWriter471 &&
+        Boolean(await this.ctx.storage.get(CURATED_REPAIR_KEY_468)) &&
+        !activeLikeMarker469;
+      const publicOnly448 = publicWindowEnabled448 && !activeLikeMarker469;
+      // Cloudflare permits only ONE alarm per Durable Object. An app468
+      // curation-only wake must NOT drain/repair unrelated Explore likes when
+      // no like batch owns this alarm. Preserve existing like-owned and public
+      // 416/448 alarm behavior unchanged.
+      if (!publicOnly448 && !curatedOnlyAlarm469) {
         await this.runAggregate194();
         await this.finalizeAggregate195();
       }
@@ -1556,9 +2043,28 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
       }
       if(publicWindowEnabled448)await this.ensurePublicAlarm416();
     } catch (error) {
-      console.warn('[SORIDRAW 448] alarm retry failed:', String(error?.message || error || 'unknown'));
-      throw error;
+      // Preserve the original like failure/retry signal, but never let a
+      // failing like/public window prevent the independent curated journal
+      // from reaching its own bounded recovery attempt.
+      likeAlarmError472 = error;
+      console.warn('[SORIDRAW 448] like alarm retry failed:', String(error?.message || error || 'unknown'));
     }
+    try {
+      const curatedEnabled472 =
+        String(this.env?.SORIDRAW_CURATED_WRITER_SHADOW471 || '') === '1' ||
+        (String(this.env?.SORIDRAW_CURATED_SHARED_V466 || '') === '1' &&
+         String(this.env?.SORIDRAW_CURATED_ALL_WRITERS_READY466 || '') === '1');
+      if (curatedEnabled472 && await this.ctx.storage.get(CURATED_REPAIR_KEY_468))
+        await this.runCuratedRepair468();
+    } catch (curatedError472) {
+      console.warn('[app472] curated alarm retry failed:', String(curatedError472?.message || curatedError472 || 'unknown'));
+      // A transient DO failure must not strand the persisted ticket when the
+      // six platform retries expire. Use the existing pending-ticket wake,
+      // not a new queue or timer.
+      await this.ensurePendingCuratedAlarm470().catch(() => {});
+      if (!likeAlarmError472) throw curatedError472;
+    }
+    if (likeAlarmError472) throw likeAlarmError472;
   }
 }
 
@@ -2916,10 +3422,14 @@ export default {
     const segments307 = url.pathname.split('/').filter(Boolean);
     const curatedCollection307 = String(url.searchParams.get('collection') || '').trim().toLowerCase();
     if (request.method === 'GET' && url.pathname === '/v1/curated-revision' && curatedCollection307 === SORIDRAW_CURATED_COLLECTION_307) {
-      return handleCuratedRevision307(request, env);
+      return sharedCuratedEnabled466(env)
+        ? handleCuratedSharedRevision466(request, env)
+        : handleCuratedRevision307(request, env);
     }
     if (request.method === 'GET' && url.pathname === '/v1/curated' && curatedCollection307 === SORIDRAW_CURATED_COLLECTION_307) {
-      return handleCuratedPublic307(request, env, ctx);
+      return sharedCuratedEnabled466(env)
+        ? handleCuratedSharedPublic466(request, env, ctx)
+        : handleCuratedPublic307(request, env, ctx);
     }
     if (request.method === 'GET' && url.pathname === '/v1/me/explore-management-access') {
       return handleExploreManagementAccess307(request, env, ctx);
@@ -2962,7 +3472,82 @@ export default {
       && /^\/v1\/tracks\/[^/]+\/visibility$/.test(url.pathname);
     const isPublicationBatch307 = request.method === 'POST'
       && url.pathname === '/v1/me/music-note-publications/batch';
+    // app468: reserve an event-only, persisted repair BEFORE the canonical
+    // publication call. If this guard cannot persist, do NOT write user
+    // originals: otherwise an R2 failure after commit has no replay owner.
+    // A healthy unrelated track does not enter the repair path.
+    let curatedRepairTicket468 = null;
+    if (curatedSharedWriterEnabled471(env) &&
+        (isTrackVisibilityMutation307 || isPublicationBatch307)) {
+      try {
+        const current468 = await getCuratedShared466(env);
+        if (current468.object && !current468.snapshot)
+          throw Error('CURATED_REPAIR_CORRUPT_SHARED_OBJECT_468');
+        let actor468 = null;
+        if (!current468.snapshot) {
+          // Never let an unauthenticated caller cause even a cold bounded D1
+          // lookup. Warm unrelated publication requests still use R2 only.
+          actor468 = await validateExploreAuth307(request, env, ctx);
+          if (!actor468.ok) return actor468.response;
+        }
+        const memberIds468 = current468.snapshot
+          ? current468.snapshot.memberIds
+          : (await readCanonicalCurated466(env)).map((row) => String(row.track_id || '').trim());
+        const membership468 = new Set(memberIds468);
+        const candidates468 = isTrackVisibilityMutation307
+          ? [decodeURIComponent(url.pathname.split('/')[3] || '')]
+          : (await request.clone().json().catch(() => null))?.mutations
+            ?.map((item) => String(item?.trackId || '').trim()) || [];
+        const affected468 = [...new Set(candidates468
+          .filter((id) => membership468.has(String(id || '').trim())))]
+          .slice(0, 40);
+        if (affected468.length) {
+          // Public requests may reach the Worker before baseWorker validates
+          // them. Never allocate a durable alarm for an unauthenticated actor.
+          if (!actor468) {
+            actor468 = await validateExploreAuth307(request, env, ctx);
+            if (!actor468.ok) return actor468.response;
+          }
+          const space468 = env?.EXPLORE_LIKE_BATCH_SCHEDULER;
+          if (!space468) throw Error('CURATED_REPAIR_SCHEDULER_MISSING_468');
+          const id468 = space468.idFromName(EXPLORE_LIKE_BATCH_SCHEDULER_NAME_103);
+          const stub468 = space468.get(id468);
+          const journal468 = await stub468.fetch('https://soridraw.internal/curated-repair-468/reserve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ trackIds: affected468 }),
+          });
+          const payload468 = await journal468.json().catch(() => null);
+          if (!journal468.ok || payload468?.data?.reserved !== true)
+            throw Error('CURATED_REPAIR_RESERVATION_UNAVAILABLE_468');
+          curatedRepairTicket468 = {
+            stub: stub468,
+            generation: Number(payload468.data.generation || 0),
+          };
+        }
+      } catch (error) {
+        console.warn('[app468] curated repair preflight blocked canonical mutation:',
+          String(error?.message || error || 'unknown'));
+        return Response.json({
+          ok: false, error: {
+            code: 'CURATED_REPAIR_PREFLIGHT_REQUIRED_468',
+            message: '추천곡 동기화 준비에 실패했습니다. 원본 변경은 실행되지 않았습니다.',
+          },
+        }, { status: 503 });
+      }
+    }
     let response = await baseWorker.fetch(request, env, ctx);
+    if (response.ok && curatedRepairTicket468) {
+      try {
+        await curatedRepairTicket468.stub.fetch('https://soridraw.internal/curated-repair-468/confirm', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ generation: curatedRepairTicket468.generation }),
+        });
+      } catch {
+        // The pre-commit reservation survives; its 3-minute fallback can still
+        // read the latest canonical D1 even if this completion signal is lost.
+      }
+    }
 
     if ((isTrackVisibilityMutation307 || isPublicationBatch307) && response.ok) {
       try {
@@ -2975,7 +3560,26 @@ export default {
               status: mutationPayload307?.data?.isPublic === true ? 'public' : 'private',
               snapshotItem: mutationPayload307?.data?.snapshotItem || null,
             }];
-        await syncCuratedPublicationResults307(request, env, results307);
+        await syncCuratedPublicationResults307(request, env, results307, ctx);
+        if (curatedWriterShadowEnabled471(env) && curatedRepairTicket468) {
+          // Existing per-origin v307 snapshot remains the user-visible
+          // source until all active writers can maintain the shared R2.
+          const changed471 = results307
+            .filter((item) => item?.ok === true)
+            .map((item) => String(item?.trackId || '').trim()).filter(Boolean);
+          const projection471 = await refreshCuratedShared466(request, env, ctx, changed471);
+          if (!projection471.ok) throw Error('CURATED_SHADOW_PUBLICATION_PENDING_471');
+        }
+        if (curatedRepairTicket468) {
+          // Acknowledge only AFTER the shared R2 has been verified. A stale
+          // generation ack cannot erase a newer reserved change.
+          const ack468 = await curatedRepairTicket468.stub.fetch(
+            'https://soridraw.internal/curated-repair-468/ack', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ generation: curatedRepairTicket468.generation }),
+            });
+          if (!ack468.ok) throw Error('CURATED_REPAIR_ACK_DEFERRED_468');
+        }
       } catch (error) {
         console.warn('[app307] curated publication sync skipped:', String(error?.message || error || 'unknown'));
       }

@@ -1,3 +1,10 @@
+## CURRENT — app481 PREVIEW Writer-only source candidate preflight (2026-10-24 KST)
+- Base PREVIEW commit: `fb99c777225aed60bea0d0fe1b6039401ab019ef`; candidate branch `prep/app481-curated-writer-preview-preflight`. Imports exactly eight source blobs from audited app475 PR #454 fixed SHA `ef3a5abe272d7a5e81c6743ec0c6d8f8846ae82d` (Worker canonical entry, two runtime modules, five source tests). The original PR #454 remains untouched. Existing app480 live Worker safety gate, Cloudflare read-only workflow and UI source from PREVIEW are preserved, not copied from old PR base.
+- Source-only preflight adds existing app475 466/467/468/469 fixtures and pinned Wrangler PREVIEW `--dry-run` to current PR quality CI, alongside app477/478/480 gate; **does not deploy**. Three live recommendation switches remain OFF. New shared v466 reader OFF, legacy v307 output must stay unchanged. No user data/R2 writes or migration, no source release trigger. No test/prod release.
+- Release status: app481 quality CI and independent separate 감사방 exact SHA review **PENDING**. Do not merge app481 into protected preview or deploy Worker until checks and audit PASS. Existing live canonical/PREVIEW/TEST/PROD 13/13/12/12 FAIL, old in-flight Writer retirement HOLD. Later PREVIEW Writer-only deployment requires explicit user approval, then live PC/mobile verification.
+
+---
+
 ## CURRENT — #203 app480 audit PASS / live Worker readiness HOLD (2026-10-24 KST)
 - Independent dedicated 감사방 source PASS on PR #459 fixed SHA `a586e4e940ed3cb91a25ecda054258b8e0807331`, quality CI #40064416623 PASS. Source-only PR #459 merged into preview as `8ad53be2e860bb0d1deec77f2d0dbdaf33872193`; follow-up preview push CI #40097597593 PASS. Product candidate app475 PR #454 remains DRAFT SHA `ef3a5abe272d7a5e81c6743ec0c6d8f8846ae82d`, unmerged/undeployed.
 - Read-only live workflow #40097597597 overall **FAIL/HOLD (correct release stop)**. Shared canonical D1=13 (fingerprint 2d75e6737537e5), PREVIEW v307=13 matching, TEST v307=12 and PRODUCTION v307=12, each missing one and order DRIFT. Nothing restored or migrated.

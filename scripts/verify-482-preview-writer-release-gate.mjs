@@ -44,6 +44,10 @@ export function trigger482(content,selectedSha) {
   };
   for(const [key,value] of Object.entries(required))
     demand(uniqueLines(content,key)===value,'TRIGGER_'+key.toUpperCase()+'_UNSAFE');
+  demand(/^[1-9]\d{0,7}$/.test(uniqueLines(content,'approval_pr')),
+    'APPROVAL_PR_REQUIRED');
+  demand(/^[a-f0-9]{40}$/.test(uniqueLines(content,'approval_pr_head_sha')),
+    'APPROVAL_HEAD_REQUIRED');
   return selectedSha;
 }
 const bindingMap482=(payload,stage)=>{
@@ -157,42 +161,76 @@ async function cloudflare482({flagsOnly=false}={}){
 }
 // Manual GitHub Actions dispatch is the actual one-use approval, never a
 // reusable line in the trigger. Any second run for the same HEAD is HOLD.
-export function approval483(meta,payload) {
-  demand(meta.actor==='andrawing1212','APPROVER_NOT_OWNER');
-  demand(meta.event==='workflow_dispatch'&&meta.ref==='refs/heads/preview','MANUAL_PREVIEW_ONLY');
-  demand(/^[a-f0-9]{40}$/.test(meta.sha)&&meta.approvedSha===meta.sha,'APPROVED_HEAD_MISMATCH');
-  demand(meta.phrase==='DEPLOY_APP481_PREVIEW_WRITER_ONLY','APPROVAL_PHRASE_MISMATCH');
-  demand(String(meta.attempt)==='1','RERUN_NOT_ALLOWED');
-  demand(/^\d+$/.test(String(meta.runId)),'RUN_ID_INVALID');
-  demand(payload?.total_count===1&&payload.workflow_runs?.length===1,
-    'PREVIOUS_OR_UNKNOWN_APPROVAL_RUN');
-  const found=payload.workflow_runs[0];
-  demand(String(found.id)===String(meta.runId)
-    &&found.head_sha===meta.sha&&found.event==='workflow_dispatch','CURRENT_APPROVAL_NOT_PROVEN');
+// app484: push/merge PR approval works from preview without default-main edits.
+// A trigger line alone is NEVER approval. A user-authored, PR-head-bound comment
+// from the owner on the exact merged trigger-only PR must exist before merge.
+export function approval484(meta,trigger,associated,comments,runs,branch,commit,files) {
+  demand(meta?.event==='push'&&meta?.ref==='refs/heads/preview','PUSH_PREVIEW_ONLY');
+  demand(meta?.repository==='andrawing1212/soridraw-music','REPOSITORY_UNEXPECTED');
+  demand(/^[a-f0-9]{40}$/.test(meta?.sha||''),'PUSH_HEAD_INVALID');
+  demand(String(meta?.attempt)==='1','RERUN_NOT_ALLOWED');
+  demand(/^\d+$/.test(String(meta?.runId||'')),'RUN_ID_INVALID');
+  demand(branch?.commit?.sha===meta.sha,'PUSH_HEAD_NO_LONGER_CURRENT');
+  const requestedPr=uniqueLines(trigger,'approval_pr');
+  const requestedHead=uniqueLines(trigger,'approval_pr_head_sha');
+  demand(/^[1-9]\d{0,7}$/.test(requestedPr),'APPROVAL_PR_INVALID');
+  demand(/^[a-f0-9]{40}$/.test(requestedHead),'APPROVAL_PR_HEAD_INVALID');
+  demand(Array.isArray(associated)&&associated.length===1,'MERGED_PR_ASSOCIATION_UNPROVEN');
+  const pr=associated[0];
+  demand(String(pr?.number)===requestedPr&&pr?.merged_at
+    &&pr?.merge_commit_sha===meta.sha&&pr?.base?.ref==='preview'
+    &&pr?.head?.sha===requestedHead,'MERGED_PR_NOT_EXACTLY_APPROVED');
+  // Both the merge and the PR must be trigger-only (no hidden product edits).
+  const triggerPath='.deploy/preview-worker-release.trigger';
+  demand(Array.isArray(commit?.files)&&commit.files.length===1
+    &&commit.files[0]?.filename===triggerPath,'PUSH_CHANGED_OTHER_FILES');
+  demand(Array.isArray(files)&&files.length===1
+    &&files[0]?.filename===triggerPath,'PR_CHANGED_OTHER_FILES');
+  demand(Array.isArray(comments)&&comments.length>0&&comments.length<100,
+    'OWNER_APPROVAL_COMMENTS_UNVERIFIED');
+  const expected='APPROVE_APP481_PREVIEW_WRITER_ONLY_HEAD='+requestedHead;
+  const approvals=comments.filter(c=>c?.user?.login==='andrawing1212'
+    &&c?.body?.trim()===expected
+    &&typeof c.created_at==='string'
+    &&c.created_at>=pr.created_at&&c.created_at<pr.merged_at);
+  demand(approvals.length===1,'OWNER_EXPLICIT_PR_APPROVAL_MISSING_OR_REUSED');
+  demand(runs?.total_count===1 && Array.isArray(runs?.workflow_runs)
+    &&runs.workflow_runs.length===1,'PREVIOUS_OR_UNKNOWN_APPROVAL_RUN');
+  const found=runs.workflow_runs[0];
+  demand(String(found?.id)===String(meta.runId)
+    &&found?.head_sha===meta.sha&&found?.event==='push',
+    'CURRENT_ONE_TIME_RUN_NOT_PROVEN');
   return true;
 }
-async function remoteApproval483() {
+async function remoteApproval484(triggerFile) {
   const token=process.env.GITHUB_TOKEN;
-  demand(token&&token.length>10,'GITHUB_ACTIONS_READ_TOKEN_MISSING');
-  demand(process.env.GITHUB_REPOSITORY==='andrawing1212/soridraw-music','WRONG_REPOSITORY');
-  const meta={
-    actor:process.env.GITHUB_ACTOR,event:process.env.GITHUB_EVENT_NAME,
-    ref:process.env.GITHUB_REF,sha:process.env.GITHUB_SHA,
-    approvedSha:process.env.APP482_APPROVED_COMMIT_SHA,
-    phrase:process.env.APP482_APPROVAL_PHRASE,
-    attempt:process.env.GITHUB_RUN_ATTEMPT,runId:process.env.GITHUB_RUN_ID,
+  demand(token&&token.length>10,'GITHUB_READ_TOKEN_MISSING');
+  const meta={event:process.env.GITHUB_EVENT_NAME,ref:process.env.GITHUB_REF,
+    repository:process.env.GITHUB_REPOSITORY,sha:process.env.GITHUB_SHA,
+    attempt:process.env.GITHUB_RUN_ATTEMPT,runId:process.env.GITHUB_RUN_ID};
+  const trigger=readFileSync(triggerFile,'utf8');
+  const prNumber=uniqueLines(trigger,'approval_pr');
+  demand(/^[1-9]\d{0,7}$/.test(prNumber),'APPROVAL_PR_INVALID');
+  const base='https://api.github.com/repos/andrawing1212/soridraw-music';
+  const get=async path=>{
+    const r=await fetch(base+path,{method:'GET',headers:{
+      Authorization:'Bearer '+token,Accept:'application/vnd.github+json',
+      'X-GitHub-Api-Version':'2022-11-28',
+    },signal:AbortSignal.timeout(15000)});
+    demand(r.ok,'GITHUB_APPROVAL_API_'+r.status);
+    return r.json();
   };
-  const url='https://api.github.com/repos/andrawing1212/soridraw-music/actions'
-    +'/workflows/cloudflare-explore-preview-release.yml/runs'
-    +'?event=workflow_dispatch&head_sha='+encodeURIComponent(String(meta.sha||''))
-    +'&per_page=100&page=1';
-  const response=await fetch(url,{method:'GET',headers:{
-    Authorization:'Bearer '+token,Accept:'application/vnd.github+json',
-    'X-GitHub-Api-Version':'2022-11-28',
-  },signal:AbortSignal.timeout(15000)});
-  demand(response.ok,'GITHUB_ACTIONS_RUNS_HTTP_'+response.status);
-  approval483(meta,await response.json());
-  console.log('APP483_EXPLICIT_ONE_TIME_MANUAL_APPROVAL=PASS');
+  const [associated,comments,runs,branch,commit,files]=await Promise.all([
+    get('/commits/'+meta.sha+'/pulls?per_page=100'),
+    get('/issues/'+prNumber+'/comments?per_page=100'),
+    get('/actions/workflows/cloudflare-explore-preview-release.yml/runs'
+      +'?event=push&head_sha='+meta.sha+'&per_page=100'),
+    get('/branches/preview'),
+    get('/commits/'+meta.sha),
+    get('/pulls/'+prNumber+'/files?per_page=100'),
+  ]);
+  approval484(meta,trigger,associated,comments,runs,branch,commit,files);
+  console.log('APP484_SINGLE_USE_OWNER_PR_COMMENT_MERGE_APPROVAL=PASS');
 }
 export function versionRestored483(payload,expected) {
   demand(typeof expected==='string' && expected.length>20,'ROLLBACK_EXPECTED_VERSION_INVALID');
@@ -343,7 +381,7 @@ else if(args.length===3&&args[0]==='--trigger'){
   const file=readFileSync(args[1],'utf8');
   trigger482(file,args[2]);
   console.log('APP482_EXACT_AUDITED_TRIGGER_WITHOUT_REPAIR=PASS');
-}else if(args.length===1&&args[0]==='--approval')await remoteApproval483();
+}else if(args.length===2&&args[0]==='--approval-pr')await remoteApproval484(args[1]);
 else if(args.length===2&&args[0]==='--verify-rollback')await remoteRollback483(args[1]);
 else if(args.length===1&&args[0]==='--remote')await cloudflare482();
 else if(args.length===1&&args[0]==='--remote-flags')await cloudflare482({flagsOnly:true});

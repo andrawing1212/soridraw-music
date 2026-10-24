@@ -162,6 +162,7 @@ jobs:
           npx tsc --noEmit
           npm run build
           node scripts/verify-release-promotion-system.mjs
+          node scripts/verify-492-release-partial-failure-guard.mjs
           node scripts/verify-release-controller.mjs
           node scripts/verify-366-cross-environment-profile-like-parity.mjs
           npx tsx scripts/verify-367-production-browser-upgrade-contract.ts

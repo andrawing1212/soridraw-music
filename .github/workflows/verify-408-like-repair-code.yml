@@ -231,6 +231,8 @@ jobs:
           node scripts/verify-478-curated-race-rollback.mjs
           node --check scripts/verify-482-preview-writer-release-gate.mjs
           node scripts/verify-482-preview-writer-release-gate.mjs --self-test
+          # app487: prevent stale app427 empty-command semantics in any later release
+          node scripts/verify-427-legacy-next-song-parity.mjs
           node --check cloudflare/explore-worker/runtime/curated-shared-canonical-466.mjs
           node --check scripts/verify-466-curated-shared-cas.mjs
           node scripts/verify-466-curated-shared-cas.mjs

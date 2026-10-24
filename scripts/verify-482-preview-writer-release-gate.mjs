@@ -194,6 +194,32 @@ async function remoteApproval483() {
   approval483(meta,await response.json());
   console.log('APP483_EXPLICIT_ONE_TIME_MANUAL_APPROVAL=PASS');
 }
+export function versionRestored483(payload,expected) {
+  demand(typeof expected==='string' && expected.length>20,'ROLLBACK_EXPECTED_VERSION_INVALID');
+  demand(deployment482(payload,STAGES[0])===expected,'ROLLBACK_WRONG_ACTIVE_VERSION');
+  return true;
+}
+async function remoteRollback483(expected) {
+  const token=process.env.CLOUDFLARE_API_TOKEN;
+  demand(token && token.length>10,'ROLLBACK_TOKEN_MISSING');
+  const url='https://api.cloudflare.com/client/v4/accounts/'+ACCOUNT
+    +'/workers/scripts/soridraw-explore-preview/deployments';
+  for(let i=0;i<5;i++){
+    const res=await fetch(url,{method:'GET',headers:{
+      Authorization:'Bearer '+token,Accept:'application/json',
+    },signal:AbortSignal.timeout(15000)});
+    demand(res.ok,'ROLLBACK_HTTP_'+res.status);
+    const data=await res.json();
+    demand(data?.success===true,'ROLLBACK_API_FAILED');
+    // Unknown/split version does not become success by retrying.
+    const active=deployment482(data,STAGES[0]);
+    if(active===expected){
+      console.log('APP483_ROLLBACK_EXACT_VERSION_100_PERCENT=PASS');
+      return;
+    }
+  }
+  err('ROLLBACK_VERSION_NOT_CONFIRMED');
+}
 function selfTest482() {
   const mock=Object.fromEntries(Object.entries({
     product_code_target:AUDITED_APP481_SHA,
@@ -284,6 +310,7 @@ else if(args.length===3&&args[0]==='--trigger'){
   trigger482(file,args[2]);
   console.log('APP482_EXACT_AUDITED_TRIGGER_WITHOUT_REPAIR=PASS');
 }else if(args.length===1&&args[0]==='--approval')await remoteApproval483();
+else if(args.length===2&&args[0]==='--verify-rollback')await remoteRollback483(args[1]);
 else if(args.length===1&&args[0]==='--remote')await cloudflare482();
 else if(args.length===1&&args[0]==='--remote-flags')await cloudflare482({flagsOnly:true});
 else if(args.length===1&&args[0]==='--remote-cron')await liveCron482();

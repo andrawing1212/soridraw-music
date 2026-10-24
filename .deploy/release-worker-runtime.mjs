@@ -646,12 +646,14 @@ if (action === 'upload') {
 
 const before = await activeVersion();
 const schedulesBefore = await readSchedules();
-let deployed = false;
+// A CLI can change the live version and then exit nonzero. Mark the
+// attempt *before* invoking it; the old code only marked success afterwards.
+let deployAttempted = false;
 try {
   const version = String(process.env.RELEASE_WORKER_VERSION || '').trim();
   if (!/^[0-9a-f-]{36}$/i.test(version)) throw new Error('RELEASE_WORKER_VERSION is required for activate');
+  deployAttempted = true;
   run(process.execPath, [WRANGLER, 'versions', 'deploy', `${version}@100%`, '--config', CONFIG_PATH, '--yes'], WORKER_DIR);
-  deployed = true;
   await cfPut(`${apiBase}/workers/scripts/${target.worker}/schedules`, schedulesBefore);
   await sleep(2_500);
   await smoke();
@@ -661,13 +663,25 @@ try {
   console.log(`${mode.toUpperCase()}_WORKER_AFTER=${after}`);
   console.log(`${mode.toUpperCase()}_WORKER_SCHEDULES_PRESERVED=${JSON.stringify(schedulesBefore)}`);
 } catch (error) {
-  if (deployed) {
+  if (deployAttempted) {
     try {
-      run(process.execPath, [WRANGLER, 'rollback', before, '--name', target.worker, '--config', CONFIG_PATH, '--message', `automatic ${mode} rollback after release smoke failure`], WORKER_DIR);
-      await cfPut(`${apiBase}/workers/scripts/${target.worker}/schedules`, schedulesBefore);
-      console.error(`${mode.toUpperCase()}_WORKER_ROLLBACK=ATTEMPTED`);
+      // Check live state first: failure may happen before any traffic change.
+      // Never call a failed/attempted rollback "restored".
+      const current = await activeVersion();
+      const currentSchedules = await readSchedules();
+      if (current !== before || JSON.stringify(currentSchedules) !== JSON.stringify(schedulesBefore)) {
+        process.env.RELEASE_WORKER_VERSION = before;
+        process.env.RELEASE_WORKER_SCHEDULES_JSON = JSON.stringify(schedulesBefore);
+        await restore(); // checks exact 100% old version AND schedules after restore
+      }
+      const verified = await activeVersion();
+      const verifiedSchedules = await readSchedules();
+      if (verified !== before || JSON.stringify(verifiedSchedules) !== JSON.stringify(schedulesBefore)) {
+        throw new Error('ROLLBACK_VERSION_OR_CRON_UNVERIFIED');
+      }
+      console.error(`${mode.toUpperCase()}_WORKER_FAILURE_OLD_VERSION_AND_CRON_VERIFIED=PASS`);
     } catch (rollbackError) {
-      console.error(`${mode.toUpperCase()}_WORKER_ROLLBACK_FAILED=${String(rollbackError?.message || rollbackError)}`);
+      throw new AggregateError([error, rollbackError], `${mode.toUpperCase()}_WORKER_ROLLBACK_UNVERIFIED_MANUAL_HOLD`);
     }
   }
   throw error;

@@ -455,7 +455,13 @@ jobs:
             if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
               gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || return 1
             fi
-            ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1
+            # The tag itself may have been published before gh release create
+            # failed; never leave an orphan that blocks future TEST attempts.
+            if git ls-remote --tags origin "refs/tags/$tag" | grep -q .; then
+              git push origin ":refs/tags/$tag" || return 1
+            fi
+            ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 &&
+              ! git ls-remote --tags origin "refs/tags/$tag" | grep -q .
           }
           rollback_branch(){
             local branch="$1" original="$2" promoted_file="$3" flag="$4" current tree rollback
@@ -525,7 +531,11 @@ jobs:
             echo 'RELEASE_ROLLBACK_INCOMPLETE_MANUAL_HOLD=FAIL'
             exit 1
           fi
-          echo 'RELEASE_ROLLBACK_ATTEMPTED_COMPONENTS_VERIFIED=PASS'
+          if [ "$mutated" = true ]; then
+            echo 'RELEASE_ROLLBACK_ATTEMPTED_COMPONENTS_VERIFIED=PASS'
+          else
+            echo 'RELEASE_PREFLIGHT_FAILED_NO_MUTATION=PASS'
+          fi
 
       - name: Record pre-mutation failure as BLOCKED
         if: failure()

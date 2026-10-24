@@ -1,3 +1,24 @@
+## NEXT — #203 app484 exact PR/head owner approval + partial CLI rollback audit (2026-10-25 KST)
+- app483 source audit FAIL on default-main-only manual `workflow_dispatch`, while cron and exact rollback PASS. app484 fixes launch path with existing PREVIEW trigger-file `push`; merged trigger-only PR must be authorized by a GitHub owner comment specifying its final GitHub-retrieved PR HEAD, merge SHA and current preview SHA, with exactly one first-attempt matching push run. Reject direct pushes, non-merge, unknown API response, PR other file changes, wrong owner, duplicate/reused approval. `main` must remain untouched.
+- Wrangler deploy may partially succeed then CLI fail: set `deploy_started=1` just before upload; on failure after start check old active version, otherwise guarded rollback and exact 100% version verification, no unproven success report. Existing cron postcheck, 035/069 queue zero, Reader OFF remain. In-flight server requests/DO jobs and prior 13/13/12/12 mismatch still HOLD.
+- PR #462 stays Draft/unmerged and must pass final CI and separate **감사방** source review before any further action. Existing app481 PR #461 audited source SHA `5bf84dee4c9db7f0ce8296a57781be9161d8e59f` unchanged. No trigger PR, merge, deployment, user data or TEST/PRODUCTION edits authorized.
+
+---
+
+## NEXT — #203 app483 one-use manual deploy approval + rollback gate audit (2026-10-25 KST)
+- PR #462 app482 separate 감사방 **FAIL** at fixed SHA `8d4eaafc936fa32ef30ff355f4b50e7fc5d0538d` (three findings). app483 fixes only release infrastructure: manual `workflow_dispatch` on preview with owner-only input matching exact trigger HEAD SHA + phrase, Actions read-only one-run dedup including failures, first-run attempt only; postdeploy remote actual cron check; rollback command success + live exact old version; zero rows in both bounded known like queues 035/069. Dedicated negative tests; source-only PR CI, then fixed SHA to **감사방**, not Work.
+- One-use safety is bound to a manually invoked GitHub Actions run on exact PREVIEW HEAD; a static release trigger approval string cannot auto-deploy. New HEAD requires a new explicit manual dispatch. The current obsolete app434 trigger intentionally fails exact app481 gate. Full background/in-flight queue quiescence is **not established** by two zero counts. If upstream like state changes or cannot be verified, release MUST remain HOLD.
+- No PR merge, manual dispatch, app481 deployment, trigger update, remote flag edit, Worker rollback, user-data mutation or TEST/PRODUCTION promotion in this task. App481 PR #461 SHA `5bf84dee4c9db7f0ce8296a57781be9161d8e59f` still audited source PASS but undeployed; old Worker drain & 13/13/12/12 parity unresolved.
+
+---
+
+## NEXT — #203 app482 release-infra independent gate, no deployment (2026-10-24 KST)
+- Review `infra/app482-preview-writer-release-barrier` against existing canonical PREVIEW Explore Worker release workflow, independent from app481 PR #461 source PASS (frozen SHA `5bf84dee4c9db7f0ce8296a57781be9161d8e59f`). Keep app481 and original #454 untouched.
+- Required CI/test checks: workflow trusted guard from `github.workflow_sha`, exact product SHA + unique user-approved one-shot Writer-only trigger, repair flags expressly false, live PREVIEW/TEST/PRODUCTION curated flags OFF, active-version 100% and PREVIEW binding identity, D1 `pending069=0` before Wrangler deploy, empty preview cron; no old queue drain/temporary cron and no unrelated migration/like repairs. After deploy flags must still be OFF, rollback to old writer only while all remote Readers OFF. Negative tests for missing/duplicate/wrong source and unsafe flags/queue/cron.
+- **No trigger edits and no deploy in this task.** Continue PR-level CI; freeze final infrastructure SHA and seek independent **감사방**, not Work room. Only after audit PASS may infra PR be promoted separately from the product; only after explicit PREVIEW Worker release approval may app481 product be merged to preview and new trigger be safely armed. TEST/main, PRODUCTION, shared D1/R2 user data, cached derived repairs and reader flags remain unmodified. Existing live 13/13/12/12 & old Writer drain HOLD are not solved.
+
+---
+
 ## NEXT — #203 live writer compatibility HOLD, after app480 source audit PASS (2026-10-24 KST)
 - PR #459 fixed head `a586e4e940ed3cb91a25ecda054258b8e0807331` audit PASS, merged diagnostic-only preview `8ad53be2e860bb0d1deec77f2d0dbdaf33872193`. Product app475 PR #454 `ef3a5abe272d7a5e81c6743ec0c6d8f8846ae82d` stays DRAFT, unchanged/unreleased.
 - Read-only run #40097597597: PREVIEW browser curated GET API selection PASS, current PREVIEW active Worker fails compatible write route check `PREVIEW_WRITER_ROUTE_MISSING_477`. TEST/PRODUCTION live browser routing NOT CHECKED because probe is fail-fast. Canonical/PREVIEW/TEST/PRODUCTION 13/13/12/12, missing TEST/PROD one song each. PREVIEW three rollout flags OFF; old in-flight drain proof unavailable.

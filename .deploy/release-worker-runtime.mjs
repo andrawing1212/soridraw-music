@@ -665,15 +665,12 @@ try {
 } catch (error) {
   if (deployAttempted) {
     try {
-      // Check live state first: failure may happen before any traffic change.
-      // Never call a failed/attempted rollback "restored".
-      const current = await activeVersion();
-      const currentSchedules = await readSchedules();
-      if (current !== before || JSON.stringify(currentSchedules) !== JSON.stringify(schedulesBefore)) {
-        process.env.RELEASE_WORKER_VERSION = before;
-        process.env.RELEASE_WORKER_SCHEDULES_JSON = JSON.stringify(schedulesBefore);
-        await restore(); // checks exact 100% old version AND schedules after restore
-      }
+      // Even if GET still reports the old version, a failed CLI may have a
+      // pending remote activation. Explicitly restore after *every* attempted
+      // deploy; merely observing the previous version once is not a fence.
+      process.env.RELEASE_WORKER_VERSION = before;
+      process.env.RELEASE_WORKER_SCHEDULES_JSON = JSON.stringify(schedulesBefore);
+      await restore(); // checks exact 100% old version AND schedules
       const verified = await activeVersion();
       const verifiedSchedules = await readSchedules();
       if (verified !== before || JSON.stringify(verifiedSchedules) !== JSON.stringify(schedulesBefore)) {

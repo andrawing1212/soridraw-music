@@ -229,6 +229,8 @@ jobs:
           node scripts/verify-477-curated-active-writer-gate.mjs --self-test
           node --check scripts/verify-478-curated-race-rollback.mjs
           node scripts/verify-478-curated-race-rollback.mjs
+          node --check scripts/verify-482-preview-writer-release-gate.mjs
+          node scripts/verify-482-preview-writer-release-gate.mjs --self-test
           node scripts/verify-412-shared-projection-cas.mjs
           node --check scripts/verify-413-like-exit-flush.mjs
           node scripts/verify-413-like-exit-flush.mjs

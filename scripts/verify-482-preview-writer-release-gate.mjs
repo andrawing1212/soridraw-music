@@ -187,6 +187,19 @@ function selfTest482() {
     assert.throws(()=>pending482(bad),/APP482_/);
   assert.equal(cron482([]),true);
   assert.throws(()=>cron482([{cron:'* * * * *'}]),/APP482_PREVIEW_CRON_NOT_EMPTY_HOLD/);
+  // Verify the actual release wiring too, not only unit-sized mock inputs.
+  const flow=readFileSync('.github/workflows/cloudflare-explore-preview-release.yml','utf8');
+  const currentTrigger=readFileSync('.deploy/preview-worker-release.trigger','utf8');
+  assert.throws(()=>trigger482(currentTrigger,AUDITED_APP481_SHA),/APP482_/,
+    'obsolete app434 trigger must never release app481');
+  assert.match(flow,/ref: \$\{\{ github\.workflow_sha \}\}/);
+  assert.match(flow,/--trigger "\$RUNNER_TEMP\/app482-release-request\.txt" "\$target"/);
+  assert.match(flow,/--pending-file "\$RUNNER_TEMP\/like069-before-deploy\.json"/);
+  assert.match(flow,/--cron-file "\$RUNNER_TEMP\/preview-crons-before\.json"/);
+  assert.match(flow,/node "\$RUNNER_TEMP\/app482-writer-gate\.mjs" --remote-flags/);
+  assert.doesNotMatch(flow,/POST_DEPLOY_PENDING_069_TEMP_CRON=ENABLED/);
+  assert.doesNotMatch(flow,/needs_pending_drain/);
+  assert.doesNotMatch(flow,/PREVIEW_FIXED_CRON_CLEAR=PASS/);
   console.log('APP482_EXACT_APP481_RELEASE_TRIGGER_AND_NO_REPAIR=PASS');
   console.log('APP482_3_ENV_OFF_BINDINGS_AND_VERSION_FIXTURES=PASS');
   console.log('APP482_LIKE069_ZERO_ONLY_AND_EMPTY_CRON_FIXTURES=PASS');

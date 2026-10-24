@@ -1,3 +1,10 @@
+## NEXT — app481 candidate safety preflight / independent audit (2026-10-24 KST)
+- Candidate `prep/app481-curated-writer-preview-preflight`, base `fb99c777225aed60bea0d0fe1b6039401ab019ef`, app475 product SHA `ef3a5abe272d7a5e81c6743ec0c6d8f8846ae82d` (8 unchanged source blobs), app480 merged readonly diagnostic remains. Run combined CI: v466 CAS/publication, v467 Writer-first reader OFF, 468/469 durable repair, 477/478/480 fail-closed verifier, TS, Build, Worker dry-run; verify UI, Stage416, likes regressions.
+- After CI PASS, freeze final candidate SHA and submit to **separate 감사방**, especially safe conflict-free 475+480 integration, flags OFF, no residual legacy reader routing divergence, old in-flight HOLD, shared D1/R2 writes only when requested, wrapper/adapter path for complete Worker. Do not modify original audited app475 PR #454.
+- **No deployment in this task.** PREVIEW Writer-only deployment requires separate explicit release request, first flag reader OFF/ready OFF, keep shadow OFF until separately approved. TEST/main & PRODUCTION remain unchanged; 13/13/12/12 unresolved until approved staged rollout.
+
+---
+
 ## NEXT — #203 live writer compatibility HOLD, after app480 source audit PASS (2026-10-24 KST)
 - PR #459 fixed head `a586e4e940ed3cb91a25ecda054258b8e0807331` audit PASS, merged diagnostic-only preview `8ad53be2e860bb0d1deec77f2d0dbdaf33872193`. Product app475 PR #454 `ef3a5abe272d7a5e81c6743ec0c6d8f8846ae82d` stays DRAFT, unchanged/unreleased.
 - Read-only run #40097597597: PREVIEW browser curated GET API selection PASS, current PREVIEW active Worker fails compatible write route check `PREVIEW_WRITER_ROUTE_MISSING_477`. TEST/PRODUCTION live browser routing NOT CHECKED because probe is fail-fast. Canonical/PREVIEW/TEST/PRODUCTION 13/13/12/12, missing TEST/PROD one song each. PREVIEW three rollout flags OFF; old in-flight drain proof unavailable.

@@ -84,11 +84,22 @@ assert.ok(!absent.userInput, 'historically absent command must remain absent');
 assert.ok(!JSON.stringify(absent).includes('GENERATED MUSIC PROMPT'),
   'generated prompt must never be fabricated as original command');
 
-const explicitEmpty = resolve({
+// Old app versions wrote an empty userInput as a default, not a verified
+// clear. Preserve a real historical requestPayload command in that case.
+const legacyAutoEmpty = resolve({
   appliedKeywords: { userInput: '', genre: ['pop'] },
   requestPayload: { appliedKeywords: { userInput: 'older command' } },
 });
-assert.equal(explicitEmpty.userInput, '', 'explicit current empty command must beat older legacy value');
+assert.equal(legacyAutoEmpty.userInput, 'older command',
+  'legacy default-empty must not erase a real persisted command');
+
+// An explicitly recorded user clear is different from the old default-empty.
+const explicitEmpty = resolve({
+  appliedKeywords: { userInput: '', manualCommandCleared: true, genre: ['pop'] },
+  requestPayload: { appliedKeywords: { userInput: 'older command' } },
+});
+assert.equal(explicitEmpty.userInput, '',
+  'proven current command clear must beat older legacy value');
 
 const favorite = fs.readFileSync('src/pages/FavoritesPage.tsx', 'utf8');
 const globalPlayer = fs.readFileSync('src/components/GlobalPlayer.tsx', 'utf8');

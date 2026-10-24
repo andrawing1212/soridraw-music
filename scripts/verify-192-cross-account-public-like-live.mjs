@@ -111,13 +111,17 @@ assert.match(workerRelease, /PUBLIC_LIKE_CARD_192_ITEMS=PASS/);
 assert.match(workerRelease, /PUBLIC_LIKE_CARD_192_D1_R0_W0=PASS/);
 assert.match(entry, /SORIDRAW_PREDEPLOY_PENDING_LIKE_DRAIN_192_20260924/);
 assert.match(entry, /controller\?\.cron === 'soridraw-preview-pending-like-drain-192'[\s\S]*await baseWorker\.scheduled[\s\S]*await repairSharedPublicLikeCounts191\(env\)/);
-assert.match(workerRelease, /POST_DEPLOY_PENDING_069_DRAIN_REQUIRED=\$pending069/);
-assert.match(workerRelease, /POST_DEPLOY_PENDING_069_TEMP_CRON=ENABLED/);
-assert.match(workerRelease, /POST_DEPLOY_PENDING_069_ATTEMPT=\$attempt COUNT=\$current_pending/);
-assert.match(workerRelease, /POST_DEPLOY_PENDING_069_DRAIN=PASS/);
-assert.match(workerRelease, /preview-temp-drain-cron-192\.json/);
-assert.match(workerRelease, /"cron":"\*\/1 \* \* \* \*"/);
-assert.match(workerRelease, /PREVIEW_FIXED_CRON_CLEAR=PASS/);
+// app482 PREVIEW Writer-only releases must NOT drain an existing shared like
+// queue or enable a temporary cron. Keep the app192 handler intact for the
+// legacy compatibility contract, but change the release guard to HOLD.
+assert.match(workerRelease, /APP482_PENDING069_ZERO=PASS|--pending-file "\$RUNNER_TEMP\/like069-before-deploy\.json"/);
+assert.match(workerRelease, /APP482_PREVIEW_CRON_UNCHANGED=PASS/);
+assert.match(workerRelease, /--remote-flags/);
+assert.doesNotMatch(workerRelease, /POST_DEPLOY_PENDING_069_TEMP_CRON=ENABLED/);
+assert.doesNotMatch(workerRelease, /POST_DEPLOY_PENDING_069_DRAIN_REQUIRED=\$pending069/);
+assert.doesNotMatch(workerRelease, /POST_DEPLOY_PENDING_069_ATTEMPT=\$attempt/);
+assert.doesNotMatch(workerRelease, /preview-temp-drain-cron-192\.json/);
+assert.doesNotMatch(workerRelease, /PREVIEW_FIXED_CRON_CLEAR=PASS/);
 assert.doesNotMatch(workerRelease, /PRE_DEPLOY_PENDING_069_DRAIN=START/);
 assert.doesNotMatch(workerRelease, /wrangler\.preview\.jsonc[\s\S]{0,200}triggers\s*:/);
 

@@ -229,11 +229,53 @@ jobs:
           node scripts/verify-477-curated-active-writer-gate.mjs --self-test
           node --check scripts/verify-478-curated-race-rollback.mjs
           node scripts/verify-478-curated-race-rollback.mjs
+          node --check scripts/verify-482-preview-writer-release-gate.mjs
+          node scripts/verify-482-preview-writer-release-gate.mjs --self-test
+          # app487: prevent stale app427 empty-command semantics in any later release
+          node scripts/verify-427-legacy-next-song-parity.mjs
+      - name: Reproduce exact app434 legacy-to-app487 predeploy verifier pin offline
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Re-run the same immutable historical 427 blob verification as the
+          # live release workflow, then overlay only the reviewed current test.
+          modern="8e2e69b2afec1977dc6d31ed33d554a99f9dc023"
+          legacy="7c80e7e52d92e0ac81f102b6ceae75d42a3b2eaf"
+          pinned="72d7d05fb41e3606641bdc1b281158ab9cea5e14"
+          test "$(git hash-object scripts/verify-427-legacy-next-song-parity.mjs)" = "$modern"
+          cp scripts/verify-427-legacy-next-song-parity.mjs "$RUNNER_TEMP/app487-verifier.mjs"
+          git fetch --no-tags --depth=1 origin "$pinned"
+          test "$(git rev-parse "$pinned:scripts/verify-427-legacy-next-song-parity.mjs")" = "$legacy"
+          git show "$pinned:scripts/verify-427-legacy-next-song-parity.mjs" > scripts/verify-427-legacy-next-song-parity.mjs
+          test "$(git hash-object scripts/verify-427-legacy-next-song-parity.mjs)" = "$legacy"
+          test "$(git hash-object "$RUNNER_TEMP/app487-verifier.mjs")" = "$modern"
+          cp "$RUNNER_TEMP/app487-verifier.mjs" scripts/verify-427-legacy-next-song-parity.mjs
+          node scripts/verify-204-explore-next-song-parity.mjs
+          node scripts/verify-427-legacy-next-song-parity.mjs
+          echo 'APP487_EXACT_RELEASE_PREDEPLOY_VERIFIER_PIN_OFFLINE=PASS'
+          node --check cloudflare/explore-worker/runtime/curated-shared-canonical-466.mjs
+          node --check scripts/verify-466-curated-shared-cas.mjs
+          node scripts/verify-466-curated-shared-cas.mjs
+          node scripts/verify-466-publication-like-protection.mjs
+          node --check scripts/verify-467-curated-writer-fence.mjs
+          node scripts/verify-467-curated-writer-fence.mjs
+          node --check cloudflare/explore-worker/runtime/curated-projection-repair-468.mjs
+          node --check scripts/verify-468-curated-durable-repair.mjs
+          node scripts/verify-468-curated-durable-repair.mjs
+          node --check scripts/verify-469-direct-curated-repair.mjs
+          node scripts/verify-469-direct-curated-repair.mjs
           node scripts/verify-412-shared-projection-cas.mjs
           node --check scripts/verify-413-like-exit-flush.mjs
           node scripts/verify-413-like-exit-flush.mjs
           node --check scripts/verify-414-pending-only-lifecycle.mjs
           node scripts/verify-414-pending-only-lifecycle.mjs
+      - name: Build candidate Explore Worker in dry-run only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          npm install --no-package-lock --ignore-scripts --no-audit --no-fund
+          node ./node_modules/wrangler/bin/wrangler.js deploy --config canonical/wrangler.preview.jsonc --dry-run
       - name: Stage419 isolated actual-171 SQL cutover regression
         run: |
           node --check cloudflare/explore-worker/runtime/like-d1only-batch-adapter-420.mjs

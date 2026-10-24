@@ -450,5 +450,15 @@ jobs:
             "$RUNNER_TEMP/rtdb-candidate434-readonly.json" \
             "$RUNNER_TEMP/rtdb-mode434-readonly.txt"
           echo '434_SHARED_RTDB_PUBLICATION_ADDITIVE_READONLY_AUDIT=PASS'
+      # One-shot non-mutating live Functions metadata inventory for app496.
+      # Runs only on this exact diagnostic PR branch; no ongoing API polling.
+      # Uses the Firebase-authenticated service token from the Rules audit.
+      - name: App496 read-only actual Cloud Functions metadata inventory
+        if: github.event_name == 'pull_request' && github.head_ref == 'audit/app496-live-function-metadata-readonly'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/audit-496-live-cloud-functions-readonly.py --self-test
+          python3 scripts/audit-496-live-cloud-functions-readonly.py
       - name: Confirm no product deployment
         run: echo '408_QUALITY=PASS;NO_DEPLOYMENT;NO_SHARED_DATA_CHANGE'

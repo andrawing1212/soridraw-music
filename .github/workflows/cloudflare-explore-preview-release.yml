@@ -50,6 +50,12 @@ jobs:
           node --check scripts/verify-482-preview-writer-release-gate.mjs
           node scripts/verify-482-preview-writer-release-gate.mjs --self-test
           cp scripts/verify-482-preview-writer-release-gate.mjs "$RUNNER_TEMP/app482-writer-gate.mjs"
+          # The audited Writer target predates app459's distinction between
+          # legacy auto-empty and proven manual command clearing. Preserve the
+          # entire strict app427 regression with only the corrected fixtures.
+          modern427_blob="8e2e69b2afec1977dc6d31ed33d554a99f9dc023"
+          test "$(git hash-object scripts/verify-427-legacy-next-song-parity.mjs)" = "$modern427_blob"
+          cp scripts/verify-427-legacy-next-song-parity.mjs "$RUNNER_TEMP/app487-modern-427-verifier.mjs"
 
       - name: Resolve exact approved PREVIEW source
         id: source
@@ -114,6 +120,10 @@ jobs:
           test "$(git rev-parse "$verifier427_commit:scripts/verify-427-legacy-next-song-parity.mjs")" = "$verifier427_blob"
           git show "$verifier427_commit:scripts/verify-427-legacy-next-song-parity.mjs" > scripts/verify-427-legacy-next-song-parity.mjs
           test "$(git hash-object scripts/verify-427-legacy-next-song-parity.mjs)" = "$verifier427_blob"
+          # Preserve the historical verifier hash above, then select the
+          # reviewed app487 compatibility verifier; product/Worker stay pinned.
+          test "$(git hash-object "$RUNNER_TEMP/app487-modern-427-verifier.mjs")" = '8e2e69b2afec1977dc6d31ed33d554a99f9dc023'
+          cp "$RUNNER_TEMP/app487-modern-427-verifier.mjs" scripts/verify-427-legacy-next-song-parity.mjs
           expected="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
           actual="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
           test "$expected" = "$actual"
@@ -121,6 +131,7 @@ jobs:
           node scripts/verify-204-explore-next-song-parity.mjs
           node scripts/verify-427-legacy-next-song-parity.mjs
           echo 'APP434_PINNED_VERIFIER_ONLY_WORKER_UNCHANGED=PASS'
+          echo 'APP487_MANUAL_CLEAR_VS_LEGACY_AUTO_EMPTY_RELEASE_VERIFIER=PASS'
 
       - name: Verify app245 canonical lock and syntax
         working-directory: cloudflare/explore-worker

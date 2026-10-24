@@ -273,9 +273,11 @@ function selfTest482() {
   const trigger=Object.entries(mock).map(([k,v])=>k+'='+v).join('\n')+'\n';
   assert.equal(trigger482(trigger,AUDITED_APP481_SHA),AUDITED_APP481_SHA);
   for(const [k,v] of Object.entries(mock)) {
+    if(k!=='approval_pr')
     assert.throws(()=>trigger482(trigger.replace(k+'='+v,k+'=1'),AUDITED_APP481_SHA),/APP482_/);
     assert.throws(()=>trigger482(trigger+k+'='+v+'\n',AUDITED_APP481_SHA),/APP482_/);
   }
+  assert.throws(()=>trigger482(trigger.replace('approval_pr=462','approval_pr=0'),AUDITED_APP481_SHA),/APP482_/);
   assert.throws(()=>trigger482(trigger,'1'.repeat(40)),/APP482_TARGET_SHA_NOT_AUDITED_APP481_HOLD/);
   assert.throws(()=>trigger482(trigger.replace('curated_writer_only_481=true',''),AUDITED_APP481_SHA),/APP482_/);
   const preview={bindings:[

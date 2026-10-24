@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""App496 bounded GET-only Cloud Functions metadata, never a user-data query."""
+import hashlib
+import json
+import os
+import re
+import sys
+from pathlib import Path
+import requests
+from google.auth.transport.requests import Request
+from google.oauth2 import service_account
+
+PROJECT="soridraw-app-866a5"
+URL=f"https://cloudfunctions.googleapis.com/v2/projects/{PROJECT}/locations/-/functions"
+MAX_PAGES=4
+FAMILY_PREFIX={
+    "STAGE416":("stage416","recordPrivateLike416","privateLikeFinalReceipt416","publicLikeRelease416","masterGetLikeBatchTiming416","masterSetLikeBatchTiming416"),
+    "STAGE420":("publishExploreLikeIntent420","renewExploreLikePermit420","recoverExploreLikePermit420","masterUnlockExploreLike420","masterGetAtomicLikeLimit420","masterUnlockAtomicLike420","masterRecoverHeldAtomicLike420"),
+    "OTHER_CANDIDATE":("publicationRelease431","masterSetSplitFrameMode"),
+}
+
+def classify(item):
+    name=item.get("name")
+    if not isinstance(name,str) or not name.startswith(f"projects/{PROJECT}/locations/"):
+        raise ValueError("APP496_INVALID_PROJECT_OR_FUNCTION")
+    parts=name.split("/")
+    if len(parts)!=6 or parts[4]!="functions" or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,124}",parts[5]):
+        raise ValueError("APP496_INVALID_FUNCTION_PATH")
+    function=parts[5]
+    family=next((k for k,prefixes in FAMILY_PREFIX.items() if function.startswith(prefixes)),"ESTABLISHED_OR_OTHER")
+    return (function,parts[3],str(item.get("environment") or "GEN_1"),str(item.get("state") or "UNKNOWN"),family)
+
+def source_export_candidates():
+    src=Path("functions/src/index.ts").read_text(encoding="utf8")
+    names=set(re.findall(r"\bexport\s+const\s+([A-Za-z][A-Za-z0-9_]*)\s*=",src))
+    for block in re.findall(r"\bexport\s*\{([^}]+)\}\s*from\s*[\"']",src,re.S):
+        for token in block.split(","):
+            name=token.strip().split(" as ")[-1].strip()
+            if re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*",name): names.add(name)
+    return names
+
+def self_test():
+    good={"name":f"projects/{PROJECT}/locations/us-central1/functions/recordPrivateLike416Test","environment":"GEN_2","state":"ACTIVE"}
+    assert classify(good)==("recordPrivateLike416Test","us-central1","GEN_2","ACTIVE","STAGE416")
+    for bad in [{"name":"projects/other/locations/us-central1/functions/foo"},{"name":f"projects/{PROJECT}/locations/us-central1/functions/$bad"}]:
+        try: classify(bad)
+        except ValueError: pass
+        else: raise AssertionError("invalid project/function not rejected")
+    assert source_export_candidates()
+    print("APP496_LOCAL_FUNCTION_METADATA_SCOPE_FIXTURES=PASS")
+    print("APP496_DATABASE_READ_WRITE=0")
+
+def main():
+    if sys.argv[1:]==["--self-test"]: return self_test()
+    path=os.environ.get("GOOGLE_GHA_CREDS_PATH") or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    if not path: raise ValueError("APP496_SERVICE_CREDENTIAL_PATH_MISSING")
+    creds=service_account.Credentials.from_service_account_file(path,scopes=["https://www.googleapis.com/auth/cloud-platform"])
+    creds.refresh(Request())
+    token=""
+    seen=set()
+    rows=[]
+    for page in range(MAX_PAGES):
+        params={"pageSize":1000}
+        if token:
+            if len(token)>1500 or not re.fullmatch(r"[A-Za-z0-9_~=./+-]+",token):
+                raise ValueError("APP496_PAGE_TOKEN_INVALID")
+            params["pageToken"]=token
+        response=requests.get(URL,params=params,headers={
+            "Authorization":"Bearer "+creds.token,"Accept":"application/json"
+        },timeout=35)
+        if response.status_code!=200:
+            raise ValueError("APP496_FUNCTIONS_METADATA_HTTP_"+str(response.status_code)+"_HOLD")
+        data=response.json()
+        functions=data.get("functions",[])
+        if not isinstance(functions,list): raise ValueError("APP496_FUNCTIONS_RESPONSE_INVALID")
+        rows.extend(classify(item) for item in functions)
+        token=str(data.get("nextPageToken") or "")
+        if not token: break
+        if token in seen: raise ValueError("APP496_FUNCTIONS_PAGE_REPEATED_HOLD")
+        seen.add(token)
+    else: raise ValueError("APP496_FUNCTIONS_LIST_TRUNCATED_HOLD")
+    if not rows: raise ValueError("APP496_FUNCTIONS_LIST_EMPTY_HOLD")
+    if len(rows)!=len(set((x[0],x[1]) for x in rows)):
+        raise ValueError("APP496_DUPLICATE_FUNCTION_NAMES_HOLD")
+    rows.sort()
+    names=source_export_candidates()
+    matches=sum(x[0] in names for x in rows)
+    candidates=[x for x in rows if x[4]!="ESTABLISHED_OR_OTHER"]
+    digest=hashlib.sha256(json.dumps(rows,separators=(",",":")).encode()).hexdigest()
+    print(f"APP496_LIVE_FUNCTION_METADATA_GET_ONLY=PASS project={PROJECT} functions={len(rows)}")
+    print(f"APP496_LIVE_FUNCTION_MATCHES_EXPLICIT_SOURCE_EXPORT={matches}")
+    print(f"APP496_LIVE_CANDIDATE_FUNCTION_COUNT={len(candidates)}")
+    print("APP496_LIVE_FUNCTION_METADATA_SHA256="+digest)
+    for name,region,gen,state,family in candidates:
+        print(f"APP496_CANDIDATE_LIVE name={name} region={region} generation={gen} state={state} family={family}")
+    print("APP496_FUNCTION_SOURCE_ONLY_EXPORT_NOT_AUTOMATIC_DEPLOYMENT")
+    print("APP496_DATABASE_READ_WRITE=0;FUNCTION_DEPLOYMENT=NONE")
+
+try:
+    main()
+except Exception as exc:
+    error=str(exc)
+    if not re.fullmatch(r"APP496_[A-Z0-9_]+",error):
+        error="APP496_METADATA_UNKNOWN_ERROR_HOLD"
+    print(error,file=sys.stderr)
+    sys.exit(1)

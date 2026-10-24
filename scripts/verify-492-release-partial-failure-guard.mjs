@@ -47,7 +47,7 @@ async function simulate(source,type,scenario){
   const state={active:OLD,restoreCalls:0,runCalls:0,logs:[],schedules:[{cron:'0 0 1 1 *'}]};
   const ctx={
     process:{env:{RELEASE_WORKER_VERSION:NEW,RELEASE_MEDIA_WORKER_VERSION:NEW}},
-    mode:'test',WRANGLER:'wrangler',CONFIG_PATH:'config',WORKER_DIR:'fixture',target:{worker:'fixture'},
+    mode:'test',WRANGLER:'wrangler',CONFIG_PATH:'config',WORKER_DIR:'fixture',apiBase:'https://mock.api.invalid',target:{worker:'fixture'},
     console:{log:x=>state.logs.push(x),error:x=>state.logs.push(x)},
     AggregateError,Error,JSON,String,
     activeVersion:async()=>state.active,

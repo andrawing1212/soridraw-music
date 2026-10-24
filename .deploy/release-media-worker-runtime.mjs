@@ -316,11 +316,10 @@ try {
 } catch (error) {
   if (deployAttempted) {
     try {
-      const current = await activeVersion();
-      if (current !== before) {
-        process.env.RELEASE_MEDIA_WORKER_VERSION = before;
-        await restore(); // exact old version reaches 100%, otherwise throws
-      }
+      // A nonzero CLI exit can precede a delayed remote activation; an
+      // immediate GET of the old version alone is not rollback proof.
+      process.env.RELEASE_MEDIA_WORKER_VERSION = before;
+      await restore(); // explicit old-version activation; exact 100% verified
       const verified = await waitForActiveVersion(before);
       if (verified !== before) throw new Error('ROLLBACK_OLD_VERSION_UNVERIFIED');
       console.error(`${mode.toUpperCase()}_MEDIA_WORKER_FAILURE_OLD_VERSION_VERIFIED=PASS`);

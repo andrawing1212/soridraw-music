@@ -93,6 +93,23 @@ jobs:
             cloudflare/explore-worker/.remote-worker/version.txt
           retention-days: 1
 
+      # app490: verify the actual captured, remotely active bundle rather
+      # than assuming source punctuation matches the original unbundled file.
+      # This never changes the archived module or accesses user data.
+      - name: Verify captured PREVIEW module strict Writer dispatch read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          import { source477 } from './scripts/verify-477-curated-active-writer-gate.mjs';
+          const source=readFileSync('cloudflare/explore-worker/.remote-worker/worker.js','utf8');
+          const version=readFileSync('cloudflare/explore-worker/.remote-worker/version.txt','utf8').trim();
+          if(version!=='2960d485-fe66-4136-9f84-41ce3e0d4b58') throw Error('APP490_ACTIVE_VERSION_CHANGED_HOLD');
+          const hash=source477({result:{modules:[{content_base64:Buffer.from(source).toString('base64')}]}},'PREVIEW');
+          console.log('APP490_ACTUAL_PREVIEW_WORKER_STRICT_WRITER_ROUTE=PASS bundleHash='+hash);
+          NODE
+
       # app476: only the three new curated rollout switches are checked.
       # No changes to Worker configuration, shared D1, or R2; log states
       # only, never the full settings response, secret contents or token.

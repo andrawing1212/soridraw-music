@@ -86,7 +86,9 @@ async function simulate(source,type,scenario){
   }else{
     assert.ok(failure && String(failure.message).includes('SIMULATED_CLI_NONZERO'));
     assert.equal(state.active,OLD,'partial failure must leave exact original active');
-    assert.equal(state.restoreCalls,scenario==='cliFailsAfterChange'?1:0);
+    // Even if the first remote GET shows the old version, restore again:
+    // a failed CLI may have queued a delayed remote activation.
+    assert.equal(state.restoreCalls,1,'every failed deploy attempt requires verified restore');
     assert.ok(state.logs.some(x=>String(x).includes(isWorker
       ? 'WORKER_FAILURE_OLD_VERSION_AND_CRON_VERIFIED=PASS'
       : 'MEDIA_WORKER_FAILURE_OLD_VERSION_VERIFIED=PASS')));

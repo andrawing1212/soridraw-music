@@ -1,3 +1,12 @@
+## CURRENT — #203 app480 audit PASS / live Worker readiness HOLD (2026-10-24 KST)
+- Independent dedicated 감사방 source PASS on PR #459 fixed SHA `a586e4e940ed3cb91a25ecda054258b8e0807331`, quality CI #40064416623 PASS. Source-only PR #459 merged into preview as `8ad53be2e860bb0d1deec77f2d0dbdaf33872193`; follow-up preview push CI #40097597593 PASS. Product candidate app475 PR #454 remains DRAFT SHA `ef3a5abe272d7a5e81c6743ec0c6d8f8846ae82d`, unmerged/undeployed.
+- Read-only live workflow #40097597597 overall **FAIL/HOLD (correct release stop)**. Shared canonical D1=13 (fingerprint 2d75e6737537e5), PREVIEW v307=13 matching, TEST v307=12 and PRODUCTION v307=12, each missing one and order DRIFT. Nothing restored or migrated.
+- PREVIEW real Firebase-hosted browser chosen curated **GET** Worker endpoint PASS, `PREVIEW_RUNTIME_SELECTED_API=PASS observed=1`. Actual PREVIEW Worker version `86470d9a-0051-47e7-8ced-f319913f5b58` lacks verified new writer route: `APP477_WRITER_READINESS=HOLD reason=PREVIEW_WRITER_ROUTE_MISSING_477`. PREVIEW live shared D1/R2/isolated cache/DO bindings PASS; its three rollout variables remain OFF.
+- TEST and PRODUCTION active Worker source/version/bindings and browser GET routing **NOT VERIFIED by this run**: fail-fast at PREVIEW, do not infer PASS. Independent old in-flight Writer drain certification still HOLD. No app, Worker, Functions or Hosting deployment; shared original data read-only; canonical writes 0.
+- No TEST/PRODUCTION promotion; no new shared reader enablement; no derived cache reconciliation before all Writers replaced/retired and approved. Next: preserve product app475 SHA; separately preflight PREVIEW writer-only stage with reader OFF; any deployment requires explicit approval. 13/13/13/13 & PC/mobile parity not achieved.
+
+---
+
 ## CURRENT — #203 app477 active Writer gate source candidate (2026-10-24 KST)
 
 - app479 after separate 감사방 app478 FAIL (one remaining frontend selection gap): deployed Firebase guest app is now launched in a real headless browser; actual /v1/curated-revision or /v1/curated request origin is intercepted (no Worker D1 call) and compared to the correct PREVIEW/TEST/PRODUCTION Worker. An embedded URL literal alone cannot PASS; missing requests, mismatched VITE_EXPLORE_API_BASE selection, or blocked browser are HOLD/FAIL. Offline override negative regression added. PR #459 stays DRAFT; independent exact-SHA audit, real Cloudflare/browser probe and old in-flight retirement are NOT yet PASS. No app475, server, user-data or flag changes.

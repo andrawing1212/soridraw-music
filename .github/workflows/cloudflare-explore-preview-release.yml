@@ -311,7 +311,7 @@ jobs:
           printf '%s' "$production" > "$RUNNER_TEMP/production-before.txt"
           curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Accept: application/json' \
             "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" \
-            | jq -c '.result.schedules // [] | map({cron})' > "$RUNNER_TEMP/preview-crons-before.json"
+            | jq -ec 'if .success == true and (.result.schedules | type) == "array" then .result.schedules | map({cron}) else error("APP482_CRON_RESPONSE_UNVERIFIED") end' > "$RUNNER_TEMP/preview-crons-before.json"
           echo "PREVIEW_BEFORE=$preview"
           echo "TEST_BEFORE=$test_worker"
           echo "PRODUCTION_BEFORE=$production"
@@ -357,6 +357,7 @@ jobs:
           node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT COUNT(*) AS pending069 FROM explore_like_batches_069" --json > "$RUNNER_TEMP/like069-before-deploy.json"
           node "$RUNNER_TEMP/app482-writer-gate.mjs" --pending-file "$RUNNER_TEMP/like069-before-deploy.json"
           node "$RUNNER_TEMP/app482-writer-gate.mjs" --remote-flags
+          node "$RUNNER_TEMP/app482-writer-gate.mjs" --remote-cron
           (
             cd canonical
             node ../node_modules/wrangler/bin/wrangler.js deploy --config wrangler.preview.jsonc

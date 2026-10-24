@@ -34,6 +34,10 @@ jobs:
         run: |
           node --check scripts/diagnose-p0-curated-three-env-readonly.mjs
           node scripts/diagnose-p0-curated-three-env-readonly.mjs --self-test
+          node --check scripts/verify-477-curated-active-writer-gate.mjs
+          node scripts/verify-477-curated-active-writer-gate.mjs --self-test
+          node --check scripts/verify-478-curated-race-rollback.mjs
+          node scripts/verify-478-curated-race-rollback.mjs
       - name: Compare shared D1 curated membership and three real public environments
         id: curated_parity
         continue-on-error: true
@@ -157,9 +161,22 @@ jobs:
           })().catch(error => { console.error(String(error.message || error)); process.exit(1); });
           NODE
 
+      # Audit-only GET verification, never activates writers/readers or writes D1/R2.
+      # A failed or unprovable old in-flight drain MUST remain a release HOLD.
+      # Browser must execute the deployed Firebase guest app to prove the
+      # actually selected curated API. All curated requests are intercepted,
+      # and other Worker API requests are blocked (no extra D1 reads).
+      - name: Install browser probe dependency (CI only)
+        run: npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright-core@1.56.1
+      - name: Compare three active Worker writers and retirement proof read-only
+        id: active_writer_gate
+        continue-on-error: true
+        run: node scripts/verify-477-curated-active-writer-gate.mjs
+
       - name: Enforce curated parity result after original source archive
         if: always()
         shell: bash
         run: |
           test "${{ steps.curated_parity.outcome }}" = success
+          test "${{ steps.active_writer_gate.outcome }}" = success
           echo 'P0_CURATED_PARITY_FINAL=PASS'

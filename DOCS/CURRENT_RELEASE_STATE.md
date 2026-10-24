@@ -1,3 +1,18 @@
+## CURRENT — #203 app477 active Writer gate source candidate (2026-10-24 KST)
+
+- app479 after separate 감사방 app478 FAIL (one remaining frontend selection gap): deployed Firebase guest app is now launched in a real headless browser; actual /v1/curated-revision or /v1/curated request origin is intercepted (no Worker D1 call) and compared to the correct PREVIEW/TEST/PRODUCTION Worker. An embedded URL literal alone cannot PASS; missing requests, mismatched VITE_EXPLORE_API_BASE selection, or blocked browser are HOLD/FAIL. Offline override negative regression added. PR #459 stays DRAFT; independent exact-SHA audit, real Cloudflare/browser probe and old in-flight retirement are NOT yet PASS. No app475, server, user-data or flag changes.
+
+- app478 follow-up to 감사방 FAIL PR #459 SHA c1f0cc9e03a3624c1d6ebae7363f95539414cad9: enforce explicit isolated EXPLORE_CACHE on all three Workers, verify Firebase real origin deployed bundle and Cloudflare zone routes/custom domain ownership, add deterministic late old D1 writer/member/visibility/CAS/ACK/rollback fixtures. Existing PR #454 app475 exact SHA unchanged. Prior app477 audit FAIL remains until new fixed SHA independent re-audit. Current active runtime and 13/13/12/12 parity are still unverified/FAIL, all v466 reader/ready flags must stay OFF. No deployment, migration or user data writes.
+
+
+- Candidate branch: audit/app477-curated-active-writer-gate from preview bb2a784b827f668725b55acbb5a5bdb54b13ac9b. Scope: read-only verification script and existing CI/workflow; no app runtime modification.
+- Product app475 PR #454 audited SHA ef3a5abe272d7a5e81c6743ec0c6d8f8846ae82d untouched, still DRAFT/unmerged/unreleased.
+- app477 fail-closed checks all three live deployments 100% single version, active module route cues, bindings/flags, Workers.dev routes and public revision. Cloudflare GET only; no D1 query, R2 write, data migration or deployment.
+- CRITICAL HOLD: Cloudflare 100% active version alone cannot prove old in-flight Worker requests have finished. The release gate intentionally cannot mark ready without independently verifiable drain evidence; a self-declared proof is not sufficient.
+- Latest confirmed original/preview/test/prod = 13/13/12/12 FAIL (run 40035848324). Stage416 1/4 25%; historical speed 5/5 100%; #203 rollout A-D completed 0/4. Current app477 source PR/CI and live audit still pending.
+- Next: PR CI and independent audit at exact SHA. No TEST/PRODUCTION promotion, reader ON, shared data modification or Cloudflare deploy.
+
+---
 ## CURRENT — #203 mixed-writer retirement design locked (2026-10-24 KST)
 
 - **New exact release gate:** `DOCS/CURATED_203_MIXED_WRITER_ROLLOUT.md`. Writer first on each environment, reader OFF; three active Writer versions/routes + old in-flight completion attestation; bounded canonical vs shared v466 and three legacy v307 R2 reconciliation; only then separate reader activation. No data original copy/delete/backfill. If old in-flight drain proof unavailable, STOP.

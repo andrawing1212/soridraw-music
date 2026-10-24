@@ -1,3 +1,17 @@
+## NEXT — app477 read-only active Writer gate QA (2026-10-24 KST)
+
+- app479 minimal final source audit: verify the runtime browser actually observes the chosen curated GET origin from each live Firebase app, catches VITE_EXPLORE_API_BASE wrong-host override, and does not mistake bundled URL literals for an executed branch. The browser aborts Worker backend requests, blocks service workers, and only observes guest navigation; absence of a request must HOLD. Run source tests and CI, then separate 감사방 exact SHA; live Cloudflare remains a separate read-only verification. Keep v466 reader OFF and all deployment approvals unchanged.
+
+- app478: Address independent 감사방 FAIL on PR #459. Recheck three origin-to-Worker mapping via compiled Firebase frontend bundle plus Cloudflare worker domains/zone routes; require isolated EXPLORE_CACHE on PREVIEW/TEST/PRODUCTION. Deterministic old late D1-only write/member/visibility, CAS conflict, durable ACK generation and rollback-order tests must PASS. Reader activation always HOLD without independently verified old in-flight completion. Freeze final SHA only after CI PASS and hand to separate 감사방; then run Cloudflare GET-only live check. Do not touch app475, shared data, remote flags, or deployments.
+
+
+- Source branch audit/app477-curated-active-writer-gate based on preview bb2a784b827f668725b55acbb5a5bdb54b13ac9b. Separate product PR #454 SHA ef3a5abe272d7a5e81c6743ec0c6d8f8846ae82d stays unchanged.
+- Validate verify-477-curated-active-writer-gate.mjs --self-test via existing PR CI, check TypeScript and Build, review three environments' active Worker GET route/membership read only after merge.
+- All active Workers must be compatible, live flags remain OFF, and old in-flight retirement evidence must be independently verifiable. Existing Cloudflare API only verifies current routing and cannot prove drain; app477 correctly HOLDs instead of claiming rollout readiness.
+- Dedicated separate 감사방 exact SHA audit required before merge. Never enable v466 reader or shadow flags, modify user originals or deploy Worker/Hosting/Functions as part of this audit.
+- Next one action after source CI: freeze SHA, independent audit, repair if FAIL. Later staged Writer rollout requires TEST/PRODUCTION director approvals.
+
+---
 ## NEXT — #203 one implementation: three-Worker live Writer retirement attestation (2026-10-24 KST)
 
 - Design and release STOPs: `DOCS/CURATED_203_MIXED_WRITER_ROLLOUT.md` (read first). No code deployment, migration, shared data writes or automatic flag enablement.

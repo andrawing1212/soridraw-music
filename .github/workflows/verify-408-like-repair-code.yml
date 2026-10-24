@@ -225,6 +225,10 @@ jobs:
           node --check cloudflare/explore-worker/patches/060-shared-profile-r2-parity.mjs
           node --check cloudflare/explore-worker/patches/062-shared-track-card-r2.mjs
           node --check scripts/verify-412-shared-projection-cas.mjs
+          node --check scripts/verify-477-curated-active-writer-gate.mjs
+          node scripts/verify-477-curated-active-writer-gate.mjs --self-test
+          node --check scripts/verify-478-curated-race-rollback.mjs
+          node scripts/verify-478-curated-race-rollback.mjs
           node scripts/verify-412-shared-projection-cas.mjs
           node --check scripts/verify-413-like-exit-flush.mjs
           node scripts/verify-413-like-exit-flush.mjs

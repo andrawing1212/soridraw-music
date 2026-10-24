@@ -43,19 +43,31 @@ for(const stage of stages) {
   frontendAssets477(html,[js],stage);
   const canonical='https://'+stage.worker+'.andrawing1212.workers.dev';
   const curated='/v1/curated-revision?collection=soridraw';
-  assert.equal(selectedRuntimeApi477([canonical+curated],stage).endpoint,canonical);
+  const request=(method,url=canonical+curated)=>({method,url});
+  assert.equal(selectedRuntimeApi477([request('GET')],stage).endpoint,canonical);
   assert.throws(()=>selectedRuntimeApi477([],stage),
-    /RUNTIME_CURATED_REQUEST_NOT_OBSERVED/);
+    /RUNTIME_CURATED_GET_NOT_OBSERVED/);
+  assert.throws(()=>selectedRuntimeApi477([request('OPTIONS')],stage),
+    /RUNTIME_CURATED_GET_NOT_OBSERVED/);
+  assert.throws(()=>selectedRuntimeApi477([request('OPTIONS'),request('HEAD'),request('POST')],stage),
+    /RUNTIME_CURATED_GET_NOT_OBSERVED/);
+  assert.throws(()=>selectedRuntimeApi477([{url:canonical+curated}],stage),
+    /RUNTIME_CURATED_GET_NOT_OBSERVED/);
+  assert.throws(()=>selectedRuntimeApi477([canonical+curated],stage),
+    /RUNTIME_CURATED_GET_NOT_OBSERVED/);
   // Existing bundle may contain all correct URL literals while build-time
   // VITE_EXPLORE_API_BASE actually chooses a wrong host at runtime.
   const override='https://foreign-worker.example.test';
   frontendAssets477(html,[js+';const VITE_EXPLORE_API_BASE="'+override+'";'],stage);
-  assert.throws(()=>selectedRuntimeApi477([override+curated],stage),
+  assert.throws(()=>selectedRuntimeApi477([request('GET',override+curated)],stage),
     /RUNTIME_SELECTED_API_MISMATCH/);
-  assert.throws(()=>selectedRuntimeApi477([canonical+curated,override+curated],stage),
+  assert.throws(()=>selectedRuntimeApi477([request('GET'),request('GET',override+curated)],stage),
     /RUNTIME_SELECTED_API_MISMATCH/);
-  assert.throws(()=>selectedRuntimeApi477([canonical+'/v1/feed'],stage),
-    /RUNTIME_CURATED_REQUEST_NOT_OBSERVED/);
+  assert.throws(()=>selectedRuntimeApi477([request('OPTIONS'),request('GET',override+curated)],stage),
+    /RUNTIME_SELECTED_API_MISMATCH/);
+  assert.equal(selectedRuntimeApi477([request('OPTIONS'),request('GET')],stage).observed,1);
+  assert.throws(()=>selectedRuntimeApi477([request('GET',canonical+'/v1/feed')],stage),
+    /RUNTIME_CURATED_GET_NOT_OBSERVED/);
   assert.throws(()=>frontendAssets477(html,[js.replace(stage.worker,'foreign-worker')],stage),
     /LIVE_APP_API_BUNDLE_MISMATCH/);
 }
@@ -182,6 +194,7 @@ assert.throws(()=>activation477(healthy,{
 
 console.log('APP478_LIVE_ORIGIN_OWNERSHIP_AND_ISOLATED_R2_FIXTURES=PASS');
 console.log('APP479_ACTUAL_RUNTIME_API_SELECTION_OVERRIDE_REGRESSION=PASS');
+console.log('APP480_GET_ONLY_OPTIONS_PREFLIGHT_HOLD_REGRESSION=PASS');
 console.log('APP478_DEFERRED_OLD_D1_WRITER_VISIBILITY_REMOVAL=PASS');
 console.log('APP478_CAS_RESERVATION_AND_ROLLBACK_ORDER=PASS');
 console.log('APP478_LIVE_DRAIN_ATTESTATION=HOLD');

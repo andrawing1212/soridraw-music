@@ -153,11 +153,16 @@ const isCuratedProbe477 = value => {
 };
 export function selectedRuntimeApi477(observedRequests,target) {
   need(Array.isArray(observedRequests),target.name,'RUNTIME_REQUESTS_UNREADABLE');
-  const candidates=observedRequests.filter(isCuratedProbe477);
-  need(candidates.length>0,target.name,'RUNTIME_CURATED_REQUEST_NOT_OBSERVED');
+  // Only an actual GET attempt demonstrates that the deployed app selected
+  // this API. OPTIONS preflight, HEAD, POST or URL-only fixtures do not count.
+  const candidates=observedRequests.filter(request=>
+    request?.method==='GET'
+    && typeof request?.url==='string'
+    && isCuratedProbe477(request.url));
+  need(candidates.length>0,target.name,'RUNTIME_CURATED_GET_NOT_OBSERVED');
   const expected='https://'+target.worker+'.andrawing1212.workers.dev';
-  for(const url of candidates) {
-    const origin=new URL(url).origin;
+  for(const request of candidates) {
+    const origin=new URL(request.url).origin;
     need(origin===expected,target.name,'RUNTIME_SELECTED_API_MISMATCH');
   }
   return {endpoint:expected,observed:candidates.length};
@@ -181,7 +186,7 @@ async function browserRuntimeApi477(target) {
       await page.route('**/*',async route=>{
         const request=route.request(),u=new URL(request.url());
         if(isCuratedProbe477(u.href)) {
-          seen.push(u.href);
+          seen.push({url:u.href,method:request.method()});
           // Interception prevents a real R2/D1 read; the observed target is
           // chosen by the deployed running app, not by this test.
           return route.fulfill({status:503,contentType:'application/json',
@@ -201,7 +206,7 @@ async function browserRuntimeApi477(target) {
       // Fresh guest session with SW disabled. If the app uses tab navigation
       // rather than an /explore route, try that real UI path once.
       await page.waitForTimeout(3500);
-      if(!seen.length) {
+      if(!seen.some(request=>request.method==='GET'&&isCuratedProbe477(request.url))) {
         const home=await page.goto(target.origin+'/',{
           waitUntil:'domcontentloaded',timeout:45000,
         });

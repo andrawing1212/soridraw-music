@@ -139,13 +139,7 @@ try {
   writeFileSync(backup,'previous-release\t'+old+'\n');
   writeFileSync(previousHash,createHash('sha256').update(html).digest('hex')+'\n');
   writeFileSync(flag,'true');
-  const mockHelper=helper.replaceAll('
-console.log('APP493_NO_HOSTING_REBUILD_AND_PARTIAL_RELEASE_MARKER=PASS');
-console.log('APP492_PRE_MUTATION_MARKERS_8_OF_8=PASS');
-console.log('APP492_WORKER_AND_MEDIA_CLI_PARTIAL_FAILURE_ROLLBACK_8_SCENARIOS=PASS');
-console.log('APP492_UNPROVEN_ROLLBACK_FAIL_CLOSED=PASS');
-console.log('APP492_REMOTE_WRITES=0');
-+'{{ steps.auth.outputs.access_token }}','MOCK_TOKEN');
+  const mockHelper=helper.replaceAll(String.fromCharCode(36)+'{{ steps.auth.outputs.access_token }}','MOCK_TOKEN');
   for(const scenario of [
     ['unchanged',old,0,0],
     ['clone_ok',latest,0,1],

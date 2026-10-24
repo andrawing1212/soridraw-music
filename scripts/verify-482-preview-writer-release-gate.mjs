@@ -106,6 +106,26 @@ export function cron482(value) {
   demand(Array.isArray(value)&&value.length===0,'PREVIEW_CRON_NOT_EMPTY');
   return true;
 }
+// Unlike a stored cron snapshot, this checks the actual schedule again
+// immediately before uploading the Worker. Unknown API shape is HOLD.
+export function remoteCronResult482(payload) {
+  demand(payload?.success===true && Array.isArray(payload?.result?.schedules),
+    'REMOTE_CRON_RESPONSE_UNVERIFIED');
+  cron482(payload.result.schedules);
+  return true;
+}
+async function liveCron482() {
+  const token=process.env.CLOUDFLARE_API_TOKEN;
+  demand(typeof token==='string'&&token.length>10,'CLOUDFLARE_TOKEN_UNAVAILABLE');
+  const response=await fetch('https://api.cloudflare.com/client/v4/accounts/'
+    +ACCOUNT+'/workers/scripts/soridraw-explore-preview/schedules',{
+    method:'GET',headers:{Authorization:'Bearer '+token,Accept:'application/json'},
+    signal:AbortSignal.timeout(15000),
+  });
+  demand(response.ok,'REMOTE_CRON_HTTP_'+response.status);
+  remoteCronResult482(await response.json());
+  console.log('APP482_PREVIEW_LIVE_CRON_EMPTY=PASS');
+}
 async function cloudflare482({flagsOnly=false}={}){
   const token=process.env.CLOUDFLARE_API_TOKEN;
   demand(typeof token==='string'&&token.length>10,'CLOUDFLARE_TOKEN_UNAVAILABLE');
@@ -186,6 +206,10 @@ function selfTest482() {
     [{results:[{pending069:'abc'}]}],[{results:[{pending069:0},{pending069:0}]}]])
     assert.throws(()=>pending482(bad),/APP482_/);
   assert.equal(cron482([]),true);
+  assert.equal(remoteCronResult482({success:true,result:{schedules:[]}}),true);
+  assert.throws(()=>remoteCronResult482({success:false,result:{schedules:[]}}),/APP482_REMOTE_CRON_RESPONSE_UNVERIFIED_HOLD/);
+  assert.throws(()=>remoteCronResult482({success:true,result:{}}),/APP482_REMOTE_CRON_RESPONSE_UNVERIFIED_HOLD/);
+  assert.throws(()=>remoteCronResult482({success:true,result:{schedules:[{cron:'* * * * *'}]}}),/APP482_PREVIEW_CRON_NOT_EMPTY_HOLD/);
   assert.throws(()=>cron482([{cron:'* * * * *'}]),/APP482_PREVIEW_CRON_NOT_EMPTY_HOLD/);
   // Verify the actual release wiring too, not only unit-sized mock inputs.
   const flow=readFileSync('.github/workflows/cloudflare-explore-preview-release.yml','utf8');
@@ -196,6 +220,7 @@ function selfTest482() {
   assert.match(flow,/--trigger "\$RUNNER_TEMP\/app482-release-request\.txt" "\$target"/);
   assert.match(flow,/--pending-file "\$RUNNER_TEMP\/like069-before-deploy\.json"/);
   assert.match(flow,/--cron-file "\$RUNNER_TEMP\/preview-crons-before\.json"/);
+  assert.match(flow,/node "\$RUNNER_TEMP\/app482-writer-gate\.mjs" --remote-cron/);
   assert.match(flow,/node "\$RUNNER_TEMP\/app482-writer-gate\.mjs" --remote-flags/);
   assert.doesNotMatch(flow,/POST_DEPLOY_PENDING_069_TEMP_CRON=ENABLED/);
   assert.doesNotMatch(flow,/needs_pending_drain/);
@@ -213,6 +238,7 @@ else if(args.length===3&&args[0]==='--trigger'){
   console.log('APP482_EXACT_AUDITED_TRIGGER_WITHOUT_REPAIR=PASS');
 }else if(args.length===1&&args[0]==='--remote')await cloudflare482();
 else if(args.length===1&&args[0]==='--remote-flags')await cloudflare482({flagsOnly:true});
+else if(args.length===1&&args[0]==='--remote-cron')await liveCron482();
 else if(args.length===2&&args[0]==='--pending-file'){
   pending482(JSON.parse(readFileSync(args[1],'utf8')));
   console.log('APP482_PENDING069_ZERO=PASS');

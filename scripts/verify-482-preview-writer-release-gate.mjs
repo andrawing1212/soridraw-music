@@ -377,13 +377,16 @@ function selfTest482() {
   assert.throws(()=>trigger482(currentTrigger,AUDITED_APP481_SHA),/APP482_/,
     'obsolete app434 trigger must never release app481');
   assert.match(flow,/ref: \$\{\{ github\.workflow_sha \}\}/);
-  assert.match(flow,/workflow_dispatch:/);
-  assert.doesNotMatch(flow,/^\s+push:\s*$/m);
-  assert.match(flow,/--approval/);
+  assert.match(flow,/on:\n  push:\n    branches: \[preview\]/);
+  assert.doesNotMatch(flow,/workflow_dispatch:/);
+  assert.match(flow,/--approval-pr "\$RUNNER_TEMP\/app482-release-request.txt"/);
   assert.match(flow,/--verify-rollback "\$before"/);
   assert.match(flow,/APP483_ROLLBACK_EXACT_VERSION_AND_CRON=PASS/);
   assert.doesNotMatch(flow,/rollback "\$before"[^\n]*\|\| true/);
   assert.match(flow,/SELECT \(SELECT COUNT\(\*\) FROM explore_like_batches_035\) AS pending035/);
+  assert.match(flow,/deploy_started=1/);
+  assert.match(flow,/\[ "\$deploy_started" = 1 \]/);
+  assert.match(flow,/APP484_RELEASE_FAILURE_ROLLBACK_TO/);
   const deployIndex=flow.indexOf('          deployed=1');
   assert.ok(deployIndex>=0 && flow.slice(deployIndex,deployIndex+240).includes('--remote-cron'));
 
@@ -398,7 +401,7 @@ function selfTest482() {
   console.log('APP482_EXACT_APP481_RELEASE_TRIGGER_AND_NO_REPAIR=PASS');
   console.log('APP482_3_ENV_OFF_BINDINGS_AND_VERSION_FIXTURES=PASS');
   console.log('APP483_LIKE035_AND_069_ZERO_AND_EMPTY_CRON_FIXTURES=PASS');
-  console.log('APP483_MANUAL_ONCE_POST_CRON_ROLLBACK_TESTS=PASS');
+  console.log('APP484_PR_OWNER_ONE_SHOT_AND_PARTIAL_FAILURE_GATE=PASS');
   console.log('APP482_REMOTE_AND_DEPLOYMENT=NOT_RUN');
 }
 const args=process.argv.slice(2);

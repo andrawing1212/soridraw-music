@@ -97,6 +97,8 @@ def main():
     if not Path("functions/src/securedIndex.ts").is_file():
         raise ValueError("APP496_GENERATED_SECURED_INDEX_MISSING_HOLD")
     matches=sum(x[0] in names for x in rows)
+    if matches!=len(rows):
+        raise ValueError("APP496_LIVE_FUNCTION_MISSING_FROM_GENERATED_EXPORT_HOLD")
     candidates=[x for x in rows if x[4]!="ESTABLISHED_OR_OTHER"]
     digest=hashlib.sha256(json.dumps(rows,separators=(",",":")).encode()).hexdigest()
     print(f"APP496_LIVE_FUNCTION_METADATA_GET_ONLY=PASS project={PROJECT} functions={len(rows)}")

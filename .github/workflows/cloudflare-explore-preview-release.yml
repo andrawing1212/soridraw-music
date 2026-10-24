@@ -3,6 +3,9 @@ name: SORIDRAW PREVIEW Explore Worker Release
 # Fast PREVIEW loop: one repository-owned complete Worker, one preflight, one deploy.
 # No live-source download, no patch replay, no D1/user-data migration, no dynamic config rebuild.
 # 103 adds one additive SQLite Durable Object namespace and removes the fixed like cron.
+# app484: a preview-only push of one release-trigger PR activates this job.
+# The owner's comment tied to its exact head SHA is checked before deployment.
+# A static trigger line is never sufficient approval.
 on:
   push:
     branches: [preview]
@@ -11,6 +14,9 @@ on:
 
 permissions:
   contents: read
+  actions: read
+  issues: read
+  pull-requests: read
 
 concurrency:
   group: soridraw-preview-explore-worker-release
@@ -30,16 +36,40 @@ jobs:
       PREVIEW_ORIGIN: https://preview.soridraw.com
 
     steps:
+      # The guard belongs to this reviewed workflow SHA, not to the older
+      # immutable product SHA checked out below.
+      - name: Pin trusted app482 Writer release guard
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 1
+      - name: Validate and retain app482 release guard outside product worktree
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/verify-482-preview-writer-release-gate.mjs
+          node scripts/verify-482-preview-writer-release-gate.mjs --self-test
+          cp scripts/verify-482-preview-writer-release-gate.mjs "$RUNNER_TEMP/app482-writer-gate.mjs"
+
       - name: Resolve exact approved PREVIEW source
         id: source
         shell: bash
         run: |
           set -euo pipefail
           trigger_url="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/.deploy/preview-worker-release.trigger"
-          target="$(curl -fsSL "$trigger_url" | sed -n 's/^product_code_target=//p' | tail -1 | tr -d '\r')"
-          printf '%s' "$target" | grep -Eq '^[0-9a-f]{40}$'
+          curl -fsSL "$trigger_url" > "$RUNNER_TEMP/app482-release-request.txt"
+          target="$(sed -n 's/^product_code_target=//p' "$RUNNER_TEMP/app482-release-request.txt" | tail -1 | tr -d '\r')"
+          node "$RUNNER_TEMP/app482-writer-gate.mjs" --trigger "$RUNNER_TEMP/app482-release-request.txt" "$target"
           echo "sha=$target" >> "$GITHUB_OUTPUT"
           echo "LOCKED_PREVIEW_SHA=$target"
+
+      - name: Verify owner-approved trigger PR and one-use merge SHA
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          node "$RUNNER_TEMP/app482-writer-gate.mjs" --approval-pr "$RUNNER_TEMP/app482-release-request.txt"
 
       - name: Checkout exact PREVIEW source
         uses: actions/checkout@v4
@@ -295,10 +325,18 @@ jobs:
           printf '%s' "$production" > "$RUNNER_TEMP/production-before.txt"
           curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Accept: application/json' \
             "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" \
-            | jq -c '.result.schedules // [] | map({cron})' > "$RUNNER_TEMP/preview-crons-before.json"
+            | jq -ec 'if .success == true and (.result.schedules | type) == "array" then .result.schedules | map({cron}) else error("APP482_CRON_RESPONSE_UNVERIFIED") end' > "$RUNNER_TEMP/preview-crons-before.json"
           echo "PREVIEW_BEFORE=$preview"
           echo "TEST_BEFORE=$test_worker"
           echo "PRODUCTION_BEFORE=$production"
+
+      - name: Confirm current live Writers OFF and PREVIEW cron empty before deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          node "$RUNNER_TEMP/app482-writer-gate.mjs" --remote
+          node "$RUNNER_TEMP/app482-writer-gate.mjs" --cron-file "$RUNNER_TEMP/preview-crons-before.json"
+          echo 'APP482_LIVE_RELEASE_GUARD_BEFORE_DEPLOY=PASS'
 
       - name: Deploy canonical PREVIEW Worker once and verify
         working-directory: cloudflare/explore-worker
@@ -309,73 +347,63 @@ jobs:
           CFG="$PWD/canonical/wrangler.preview.jsonc"
           before="$(cat "$RUNNER_TEMP/preview-before.txt")"
           deployed=0
+          deploy_started=0
 
           restore_previous() {
             status=$?
-            if [ "$status" -ne 0 ] && [ "$deployed" = 1 ]; then
-              echo "SMOKE_FAILED_ROLLBACK_TO=$before"
-              node "$WRANGLER" rollback "$before" --name "$PREVIEW_WORKER" --config "$CFG" --message 'automatic rollback after PREVIEW smoke failure' || true
-              curl -fsS -X PUT -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json' \
-                --data-binary @"$RUNNER_TEMP/preview-crons-before.json" \
-                "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" >/dev/null || true
-              echo 'PREVIEW_ROLLBACK=ATTEMPTED'
+            if [ "$status" -ne 0 ] && { [ "$deployed" = 1 ] || [ "$deploy_started" = 1 ]; }; then
+              # No old Writer rollback while any environment could be reading v466.
+              # Neither cron nor queue state is changed by this writer-only path.
+              if ! node "$RUNNER_TEMP/app482-writer-gate.mjs" --remote-flags; then
+                echo 'APP482_ROLLBACK_FLAGS_NOT_VERIFIED_MANUAL_HOLD'
+                exit "$status"
+              fi
+              # Wrangler can apply a version before the CLI reports failure.
+              # Query actual active version even after a failed deployment command.
+              if node "$RUNNER_TEMP/app482-writer-gate.mjs" --verify-rollback "$before"; then
+                echo 'APP484_PARTIAL_DEPLOY_OLD_WORKER_STILL_100_PERCENT=PASS'
+              else
+                echo "APP484_RELEASE_FAILURE_ROLLBACK_TO=$before"
+                if ! node "$WRANGLER" rollback "$before" --name "$PREVIEW_WORKER" --config "$CFG" --message 'PREVIEW rollback after Worker release failure'; then
+                  echo 'APP484_ROLLBACK_COMMAND_FAILED_MANUAL_HOLD'
+                  exit 1
+                fi
+                if ! node "$RUNNER_TEMP/app482-writer-gate.mjs" --verify-rollback "$before"; then
+                  echo 'APP484_ROLLBACK_OLD_VERSION_UNVERIFIED_MANUAL_HOLD'
+                  exit 1
+                fi
+              fi
+              if ! node "$RUNNER_TEMP/app482-writer-gate.mjs" --remote-cron; then
+                echo 'APP483_ROLLBACK_CRON_UNVERIFIED_MANUAL_HOLD'
+                exit 1
+              fi
+              echo 'APP483_ROLLBACK_EXACT_VERSION_AND_CRON=PASS'
             fi
             exit "$status"
           }
           trap restore_previous EXIT
 
-          # 192 transition: the currently deployed Worker has a confirmed
-          # scheduled-aggregate crash (escaped newline commented out its owner
-          # declaration). Do not try to execute that broken runtime to drain an
-          # accepted 069 row. Deploy the audited fixed Worker first, then wake it
-          # with one temporary PREVIEW cron and require the queue to reach zero.
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT COUNT(*) AS pending069 FROM explore_like_batches_069" --json > "$RUNNER_TEMP/like069-before-deploy.json"
-          pending069="$(node -e "const r=require(process.env.RUNNER_TEMP+'/like069-before-deploy.json');const x=r.flatMap(v=>v.results||[]).find(v=>'pending069' in v);process.stdout.write(String(Number(x?.pending069||0)))")"
-          echo "PRE_DEPLOY_PENDING_069=$pending069"
-          test "$pending069" -le 50
-          needs_pending_drain=0
-          if [ "$pending069" != 0 ]; then
-            needs_pending_drain=1
-            echo "POST_DEPLOY_PENDING_069_DRAIN_REQUIRED=$pending069"
-          fi
-
+          # app482 Writer-only release: the old app192 queue-drain/temporary
+          # cron path is NOT part of this release. Any pending like row HOLDS.
+          # Read-only COUNT, then repeat remote flags immediately before upload.
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT (SELECT COUNT(*) FROM explore_like_batches_035) AS pending035, (SELECT COUNT(*) FROM explore_like_batches_069) AS pending069" --json > "$RUNNER_TEMP/like069-before-deploy.json"
+          node "$RUNNER_TEMP/app482-writer-gate.mjs" --pending-file "$RUNNER_TEMP/like069-before-deploy.json"
+          node "$RUNNER_TEMP/app482-writer-gate.mjs" --remote-flags
+          node "$RUNNER_TEMP/app482-writer-gate.mjs" --remote-cron
+          deploy_started=1
           (
             cd canonical
             node ../node_modules/wrangler/bin/wrangler.js deploy --config wrangler.preview.jsonc
           )
           deployed=1
+          node "$RUNNER_TEMP/app482-writer-gate.mjs" --remote-flags
+          node "$RUNNER_TEMP/app482-writer-gate.mjs" --remote-cron
+          echo 'APP483_PREVIEW_WRITER_ONLY_DEPLOYED_READER_OFF_AND_LIVE_CRON_EMPTY=PASS'
 
-          if [ "$needs_pending_drain" = 1 ]; then
-            echo 'POST_DEPLOY_PENDING_069_DRAIN=START'
-            printf '[{"cron":"*/1 * * * *"}]' > "$RUNNER_TEMP/preview-temp-drain-cron-192.json"
-            curl -fsS -X PUT -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json' \
-              --data-binary @"$RUNNER_TEMP/preview-temp-drain-cron-192.json" \
-              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" >/dev/null
-            echo 'POST_DEPLOY_PENDING_069_TEMP_CRON=ENABLED'
-
-            drained=0
-            for attempt in $(seq 1 36); do
-              node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT COUNT(*) AS pending069 FROM explore_like_batches_069" --json > "$RUNNER_TEMP/like069-postdeploy-drain.json"
-              current_pending="$(node -e "const r=require(process.env.RUNNER_TEMP+'/like069-postdeploy-drain.json');const x=r.flatMap(v=>v.results||[]).find(v=>'pending069' in v);process.stdout.write(String(Number(x?.pending069||0)))")"
-              echo "POST_DEPLOY_PENDING_069_ATTEMPT=$attempt COUNT=$current_pending"
-              if [ "$current_pending" = 0 ]; then
-                drained=1
-                break
-              fi
-              sleep 10
-            done
-            test "$drained" = 1
-            echo 'POST_DEPLOY_PENDING_069_DRAIN=PASS'
-          fi
-
-          # Wrangler does not delete a previously configured cron merely because the
-          # new config omits triggers. 103 intentionally has no fixed like cron, so
-          # clear PREVIEW schedules explicitly after the new version is active.
-          printf '[]' > "$RUNNER_TEMP/preview-crons-103.json"
-          curl -fsS -X PUT -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json' \
-            --data-binary @"$RUNNER_TEMP/preview-crons-103.json" \
-            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" >/dev/null
-          echo 'PREVIEW_FIXED_CRON_CLEAR=PASS'
+          # app482 preflight requires an empty live schedule. Preserve it:
+          # no unnecessary PUT, temporary cron or automatic user queue drain.
+          node "$RUNNER_TEMP/app482-writer-gate.mjs" --cron-file "$RUNNER_TEMP/preview-crons-before.json"
+          echo 'APP482_PREVIEW_CRON_UNCHANGED=PASS'
 
           # Cloudflare can report the new version deployed before every edge POP is
           # serving it.  Probe one cheap R2 card first, then run the full smoke once.

@@ -67,7 +67,7 @@ export function bindings477(payload,target) {
 }
 
 const ROUTES = [
-  "segments307[1] === 'curation'",'handleCurationMutation307',
+  'handleCurationMutation307',
   '/v1/me/music-note-publications/batch','isTrackVisibilityMutation307',
   'visibility','/v1/curated-revision','/v1/curated','/curated-repair-468/',
 ];
@@ -88,6 +88,10 @@ export function source477(payload,name) {
     body+=Buffer.from(m.content_base64,'base64').toString('utf8')+'\n';
   }
   need(body.length>5000,name,'MODULE_TOO_SMALL');
+  // Wrangler preserves the dispatch but rewrites string quotes in its bundle.
+  // Require the actual strict comparison regardless of quote style.
+  need(/segments307\[1\]\s*===\s*(['"])curation\1/.test(body),
+    name,'WRITER_CURATION_DISPATCH_MISSING');
   for(const route of ROUTES) need(body.includes(route),name,'WRITER_ROUTE_MISSING');
   for(const cue of CUES) need(body.includes(cue),name,'WRITER_CUE_MISSING');
   return fingerprint(body);
@@ -298,9 +302,13 @@ export function selfTest477() {
   bindings477({result:{bindings:rows}},t);
   assert.throws(()=>bindings477({result:{bindings:[...rows,{name:FLAGS[1],type:'plain_text',text:'1'}]}},t),/UNSAFE/);
   assert.throws(()=>bindings477({result:{bindings:rows.filter(x=>x.name!=='PROFILE_MEDIA')}},t),/BINDING_PROFILE_MEDIA/);
-  const fixture=[...ROUTES,...CUES].join('\n').padEnd(5200,' ');
+  const fixture=["segments307[1] === 'curation'",...ROUTES,...CUES].join('\n').padEnd(5200,' ');
   const wrap=s=>({result:{modules:[{content_base64:Buffer.from(s).toString('base64')}]}});
   source477(wrap(fixture),t.name);
+  source477(wrap(fixture.replace("segments307[1] === 'curation'",
+    'segments307[1] === "curation"')),t.name);
+  assert.throws(()=>source477(wrap(fixture.replace("segments307[1] === 'curation'",
+    'segments307[1] === "non-curation"')),t.name),/WRITER_CURATION_DISPATCH_MISSING/);
   assert.throws(()=>source477(wrap(fixture.replace('isTrackVisibilityMutation307','broken')),t.name),/WRITER_ROUTE_MISSING/);
   assert.throws(()=>source477(wrap(fixture.replace('CURATED_SHADOW_PUBLICATION_PENDING_471','broken')),t.name),/WRITER_CUE_MISSING/);
   assert.throws(()=>route477({result:{enabled:false}},null,t),/OWNER_UNVERIFIED/);

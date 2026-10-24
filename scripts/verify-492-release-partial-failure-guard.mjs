@@ -3,6 +3,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const controller=readFileSync('.github/workflows/soridraw-release-promotion.yml','utf8');
 const worker=readFileSync('.deploy/release-worker-runtime.mjs','utf8');
@@ -121,6 +126,61 @@ assert.ok(!restoredController.includes('hosting-rollback"; git worktree add'),
 assert.ok(restoredController.includes('RELEASE_ROLLBACK_INCOMPLETE_MANUAL_HOLD=FAIL'));
 assert.ok(restoredController.includes('printf true > "$RUNNER_TEMP/test-release-mutated"\n          gh release create'),
   'partial GitHub release publish must be rollback-safe');
+// Exercise the real, extracted Hosting rollback Bash function with local
+// curl/jq/npx mocks. No HTTP, Firebase, Worker or GitHub connections occur.
+const hostingHarness=mkdtempSync(join(tmpdir(),'app492-hosting-'));
+try {
+  const old='sites/soridraw-test/versions/old12345';
+  const latest='sites/soridraw-test/versions/new67890';
+  const html='<html><body>Original TEST release</body></html>';
+  const backup=join(hostingHarness,'before.tsv');
+  const previousHash=join(hostingHarness,'before.sha');
+  const flag=join(hostingHarness,'mutated');
+  writeFileSync(backup,'previous-release\t'+old+'\n');
+  writeFileSync(previousHash,createHash('sha256').update(html).digest('hex')+'\n');
+  writeFileSync(flag,'true');
+  const mockHelper=helper.replaceAll('
+console.log('APP493_NO_HOSTING_REBUILD_AND_PARTIAL_RELEASE_MARKER=PASS');
+console.log('APP492_PRE_MUTATION_MARKERS_8_OF_8=PASS');
+console.log('APP492_WORKER_AND_MEDIA_CLI_PARTIAL_FAILURE_ROLLBACK_8_SCENARIOS=PASS');
+console.log('APP492_UNPROVEN_ROLLBACK_FAIL_CLOSED=PASS');
+console.log('APP492_REMOTE_WRITES=0');
++'{{ steps.auth.outputs.access_token }}','MOCK_TOKEN');
+  for(const scenario of [
+    ['unchanged',old,0,0],
+    ['clone_ok',latest,0,1],
+    ['cli_nonzero_after_remote_change',latest,0,1],
+    ['cli_nonzero_before_remote_change',latest,1,1],
+    ['wrong_index',latest,1,1],
+  ]) {
+    const [name,initial,expectedExit,expectedClones]=scenario;
+    const bash=[
+      'set -o pipefail',
+      'CURRENT_VERSION="$INITIAL_VERSION"; export CURRENT_VERSION',
+      'CLONES=0',
+      'curl() { case "$*" in *firebasehosting.googleapis.com*) printf "%s" "{}";; *soridraw-test.web.app/*) if [ "$CASE" = wrong_index ]; then printf "WRONG_INDEX"; else printf "%s" "$EXPECTED_HTML"; fi ;; *) return 42;; esac; }',
+      'jq() { cat >/dev/null; printf "%s\\n" "$CURRENT_VERSION"; }',
+      'npx() { CLONES=$((CLONES+1)); case "$*" in *"hosting:clone soridraw-test@old12345 soridraw-test:live"*) ;; *) return 42;; esac; case "$CASE" in cli_nonzero_before_remote_change) return 81;; *) CURRENT_VERSION="$OLD_VERSION"; export CURRENT_VERSION;; esac; [ "$CASE" = cli_nonzero_after_remote_change ] && return 82; return 0; }',
+      'sleep() { :; }',
+      mockHelper,
+      'restore_hosting soridraw-test "$BACKUP" "$HASH" "$FLAG"',
+      'rc=$?',
+      'printf "RESULT=%s CLONES=%s\\n" "$rc" "$CLONES"',
+    ].join('\n');
+    const proc=spawnSync('bash',['-c',bash],{
+      env:{...process.env,CASE:name,INITIAL_VERSION:initial,OLD_VERSION:old,EXPECTED_HTML:html,BACKUP:backup,HASH:previousHash,FLAG:flag,FIREBASE_PROJECT:'mock-local'},
+      encoding:'utf8',timeout:12000,
+    });
+    assert.equal(proc.status,0,name+' mock bash crashed: '+proc.stderr);
+    const found=proc.stdout.match(/RESULT=(\d+) CLONES=(\d+)/);
+    assert.ok(found,name+' missing result: '+proc.stdout+' stderr='+proc.stderr);
+    assert.equal(Number(found[1])===0,expectedExit===0,name+' status: '+proc.stdout);
+    assert.equal(Number(found[2]),expectedClones,name+' clone calls');
+    if(expectedExit===0) assert.match(proc.stdout,/HOSTING_EXACT_PREVIOUS_VERSION_AND_INDEX=PASS/);
+    else assert.doesNotMatch(proc.stdout,/HOSTING_EXACT_PREVIOUS_VERSION_AND_INDEX=PASS/);
+  }
+} finally { rmSync(hostingHarness,{recursive:true,force:true}); }
+console.log('APP493_ACTUAL_BASH_HOSTING_ROLLBACK_MOCK_5_CASES=PASS');
 console.log('APP493_EXACT_PREVIOUS_HOSTING_VERSION_RESTORE_AND_FAIL_CLOSED=PASS');
 console.log('APP493_NO_HOSTING_REBUILD_AND_PARTIAL_RELEASE_MARKER=PASS');
 console.log('APP492_PRE_MUTATION_MARKERS_8_OF_8=PASS');

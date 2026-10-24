@@ -284,12 +284,45 @@ function selfTest482() {
   assert.throws(()=>remoteCronResult482({success:true,result:{}}),/APP482_REMOTE_CRON_RESPONSE_UNVERIFIED_HOLD/);
   assert.throws(()=>remoteCronResult482({success:true,result:{schedules:[{cron:'* * * * *'}]}}),/APP482_PREVIEW_CRON_NOT_EMPTY_HOLD/);
   assert.throws(()=>cron482([{cron:'* * * * *'}]),/APP482_PREVIEW_CRON_NOT_EMPTY_HOLD/);
+  const meta={actor:'andrawing1212',event:'workflow_dispatch',ref:'refs/heads/preview',
+    sha:'a'.repeat(40),approvedSha:'a'.repeat(40),attempt:'1',
+    phrase:'DEPLOY_APP481_PREVIEW_WRITER_ONLY',runId:'10001'};
+  const initialRun={id:10001,head_sha:meta.sha,event:'workflow_dispatch'};
+  assert.equal(approval483(meta,{total_count:1,workflow_runs:[initialRun]}),true);
+  for(const changed of [{actor:'different'},{event:'push'},{ref:'refs/heads/main'},
+    {approvedSha:'b'.repeat(40)},{attempt:'2'}, {runId:'10002'},
+    {phrase:'DEPLOY_APP481_PREVIEW_WRITER_ONLY_REUSED'}])
+    assert.throws(()=>approval483({...meta,...changed},{
+      total_count:1,workflow_runs:[initialRun]}),/APP482_/);
+  assert.throws(()=>approval483(meta,{total_count:2,
+    workflow_runs:[initialRun,{...initialRun,id:10000}]}),/APP482_/);
+  assert.throws(()=>approval483(meta,{total_count:1,workflow_runs:[]}),/APP482_/);
+  assert.throws(()=>approval483(meta,{workflow_runs:[initialRun]}),/APP482_/);
+  const old={result:{deployments:[{versions:[{
+    version_id:'b'.repeat(30),percentage:100,
+  }]}]}};
+  assert.equal(versionRestored483(old,'b'.repeat(30)),true);
+  assert.throws(()=>versionRestored483(old,'c'.repeat(30)),/ROLLBACK_WRONG_ACTIVE_VERSION/);
+  assert.throws(()=>versionRestored483({result:{deployments:[{versions:[
+    {version_id:'b'.repeat(30),percentage:90},
+    {version_id:'c'.repeat(30),percentage:10},
+  ]}]}},'b'.repeat(30)),/SPLIT_OR_UNVERIFIED_VERSION/);
   // Verify the actual release wiring too, not only unit-sized mock inputs.
   const flow=readFileSync('.github/workflows/cloudflare-explore-preview-release.yml','utf8');
   const currentTrigger=readFileSync('.deploy/preview-worker-release.trigger','utf8');
   assert.throws(()=>trigger482(currentTrigger,AUDITED_APP481_SHA),/APP482_/,
     'obsolete app434 trigger must never release app481');
   assert.match(flow,/ref: \$\{\{ github\.workflow_sha \}\}/);
+  assert.match(flow,/workflow_dispatch:/);
+  assert.doesNotMatch(flow,/^\s+push:\s*$/m);
+  assert.match(flow,/--approval/);
+  assert.match(flow,/--verify-rollback "\$before"/);
+  assert.match(flow,/APP483_ROLLBACK_EXACT_VERSION_AND_CRON=PASS/);
+  assert.doesNotMatch(flow,/rollback "\$before"[^\n]*\|\| true/);
+  assert.match(flow,/SELECT \(SELECT COUNT\(\*\) FROM explore_like_batches_035\) AS pending035/);
+  const deployIndex=flow.indexOf('          deployed=1');
+  assert.ok(deployIndex>=0 && flow.slice(deployIndex,deployIndex+240).includes('--remote-cron'));
+
   assert.match(flow,/--trigger "\$RUNNER_TEMP\/app482-release-request\.txt" "\$target"/);
   assert.match(flow,/--pending-file "\$RUNNER_TEMP\/like069-before-deploy\.json"/);
   assert.match(flow,/--cron-file "\$RUNNER_TEMP\/preview-crons-before\.json"/);
@@ -301,6 +334,7 @@ function selfTest482() {
   console.log('APP482_EXACT_APP481_RELEASE_TRIGGER_AND_NO_REPAIR=PASS');
   console.log('APP482_3_ENV_OFF_BINDINGS_AND_VERSION_FIXTURES=PASS');
   console.log('APP483_LIKE035_AND_069_ZERO_AND_EMPTY_CRON_FIXTURES=PASS');
+  console.log('APP483_MANUAL_ONCE_POST_CRON_ROLLBACK_TESTS=PASS');
   console.log('APP482_REMOTE_AND_DEPLOYMENT=NOT_RUN');
 }
 const args=process.argv.slice(2);

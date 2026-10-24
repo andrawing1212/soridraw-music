@@ -393,6 +393,11 @@ function selfTest482() {
   assert.throws(()=>trigger482(stale434Fixture,AUDITED_APP481_SHA),/APP482_/,
     'legacy target must not pass this guard');
   assert.match(flow,/ref: \$\{\{ github\.workflow_sha \}\}/);
+  assert.match(flow,/app487-modern-427-verifier\.mjs/);
+  assert.match(flow,/8e2e69b2afec1977dc6d31ed33d554a99f9dc023/);
+  const modernLegacyVerifier=readFileSync('scripts/verify-427-legacy-next-song-parity.mjs','utf8');
+  assert.match(modernLegacyVerifier,/legacy default-empty must not erase a real persisted command/);
+  assert.match(modernLegacyVerifier,/manualCommandCleared: true/);
   assert.match(flow,/on:\n  push:\n    branches: \[preview\]/);
   assert.doesNotMatch(flow,/workflow_dispatch:/);
   assert.match(flow,/--approval-pr "\$RUNNER_TEMP\/app482-release-request.txt"/);

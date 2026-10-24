@@ -92,15 +92,21 @@ export function deployment482(payload,stage) {
   return v[0].version_id;
 }
 export function pending482(payload){
-  demand(Array.isArray(payload),'LIKE069_RESPONSE_INVALID');
+  // Both known like batch tables are checked. Unknown in-flight Durable
+  // Object/scheduler operations remain an explicit, separate release risk.
+  demand(Array.isArray(payload),'LIKE_BATCH_RESPONSE_INVALID');
   const rows=payload.flatMap(p=>Array.isArray(p?.results)?p.results:[]);
-  demand(rows.length===1 && Object.prototype.hasOwnProperty.call(rows[0],'pending069'),
-    'LIKE069_COUNT_MISSING_OR_AMBIGUOUS');
-  const v=rows[0].pending069;
-  demand((typeof v==='number'||typeof v==='string') && String(v).trim()!==''
-    && Number.isSafeInteger(Number(v)) && Number(v)>=0,'LIKE069_COUNT_INVALID');
-  demand(Number(v)===0,'LIKE069_PENDING_NOT_ZERO');
-  return 0;
+  demand(rows.length===1 && ['pending035','pending069'].every(key=>
+    Object.prototype.hasOwnProperty.call(rows[0],key)),
+    'LIKE_BATCH_COUNTS_MISSING_OR_AMBIGUOUS');
+  for(const key of ['pending035','pending069']){
+    const v=rows[0][key];
+    demand((typeof v==='number'||typeof v==='string')
+      && String(v).trim()!=='' && Number.isSafeInteger(Number(v))
+      && Number(v)>=0,key.toUpperCase()+'_COUNT_INVALID');
+    demand(Number(v)===0,key.toUpperCase()+'_NOT_ZERO');
+  }
+  return true;
 }
 export function cron482(value) {
   demand(Array.isArray(value)&&value.length===0,'PREVIEW_CRON_NOT_EMPTY');
@@ -239,10 +245,12 @@ function selfTest482() {
     {version_id:'a'.repeat(30),percentage:90},{version_id:'b'.repeat(30),percentage:10},
   ]}]}},STAGES[0]),/SPLIT_OR_UNVERIFIED_VERSION/);
   assert.throws(()=>deployment482({result:{deployments:[]}},STAGES[0]),/DEPLOYMENT_UNKNOWN/);
-  assert.equal(pending482([{results:[{pending069:0}]}]),0);
-  for(const bad of [[],[{results:[]}],[{results:[{pending069:1}]}],
-    [{results:[{pending069:-1}]}],[{results:[{pending069:null}]}],
-    [{results:[{pending069:'abc'}]}],[{results:[{pending069:0},{pending069:0}]}]])
+  assert.equal(pending482([{results:[{pending035:0,pending069:0}]}]),true);
+  for(const bad of [[],[{results:[]}],[{results:[{pending035:1,pending069:0}]}],
+    [{results:[{pending035:0,pending069:1}]}],[{results:[{pending035:-1,pending069:0}]}],
+    [{results:[{pending035:0,pending069:null}]}],[{results:[{pending035:0,pending069:'bad'}]}],
+    [{results:[{pending069:0}]}],[{results:[{pending035:0}]}],
+    [{results:[{pending035:0,pending069:0},{pending035:0,pending069:0}]}]])
     assert.throws(()=>pending482(bad),/APP482_/);
   assert.equal(cron482([]),true);
   assert.equal(remoteCronResult482({success:true,result:{schedules:[]}}),true);
@@ -266,7 +274,7 @@ function selfTest482() {
   assert.doesNotMatch(flow,/PREVIEW_FIXED_CRON_CLEAR=PASS/);
   console.log('APP482_EXACT_APP481_RELEASE_TRIGGER_AND_NO_REPAIR=PASS');
   console.log('APP482_3_ENV_OFF_BINDINGS_AND_VERSION_FIXTURES=PASS');
-  console.log('APP482_LIKE069_ZERO_ONLY_AND_EMPTY_CRON_FIXTURES=PASS');
+  console.log('APP483_LIKE035_AND_069_ZERO_AND_EMPTY_CRON_FIXTURES=PASS');
   console.log('APP482_REMOTE_AND_DEPLOYMENT=NOT_RUN');
 }
 const args=process.argv.slice(2);

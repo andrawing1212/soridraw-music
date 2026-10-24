@@ -347,24 +347,31 @@ jobs:
           CFG="$PWD/canonical/wrangler.preview.jsonc"
           before="$(cat "$RUNNER_TEMP/preview-before.txt")"
           deployed=0
+          deploy_started=0
 
           restore_previous() {
             status=$?
-            if [ "$status" -ne 0 ] && [ "$deployed" = 1 ]; then
+            if [ "$status" -ne 0 ] && { [ "$deployed" = 1 ] || [ "$deploy_started" = 1 ]; }; then
               # No old Writer rollback while any environment could be reading v466.
               # Neither cron nor queue state is changed by this writer-only path.
               if ! node "$RUNNER_TEMP/app482-writer-gate.mjs" --remote-flags; then
                 echo 'APP482_ROLLBACK_FLAGS_NOT_VERIFIED_MANUAL_HOLD'
                 exit "$status"
               fi
-              echo "SMOKE_FAILED_ROLLBACK_TO=$before"
-              if ! node "$WRANGLER" rollback "$before" --name "$PREVIEW_WORKER" --config "$CFG" --message 'automatic rollback after PREVIEW smoke failure'; then
-                echo 'APP483_ROLLBACK_COMMAND_FAILED_MANUAL_HOLD'
-                exit 1
-              fi
-              if ! node "$RUNNER_TEMP/app482-writer-gate.mjs" --verify-rollback "$before"; then
-                echo 'APP483_ROLLBACK_VERSION_NOT_RESTORED_MANUAL_HOLD'
-                exit 1
+              # Wrangler can apply a version before the CLI reports failure.
+              # Query actual active version even after a failed deployment command.
+              if node "$RUNNER_TEMP/app482-writer-gate.mjs" --verify-rollback "$before"; then
+                echo 'APP484_PARTIAL_DEPLOY_OLD_WORKER_STILL_100_PERCENT=PASS'
+              else
+                echo "APP484_RELEASE_FAILURE_ROLLBACK_TO=$before"
+                if ! node "$WRANGLER" rollback "$before" --name "$PREVIEW_WORKER" --config "$CFG" --message 'PREVIEW rollback after Worker release failure'; then
+                  echo 'APP484_ROLLBACK_COMMAND_FAILED_MANUAL_HOLD'
+                  exit 1
+                fi
+                if ! node "$RUNNER_TEMP/app482-writer-gate.mjs" --verify-rollback "$before"; then
+                  echo 'APP484_ROLLBACK_OLD_VERSION_UNVERIFIED_MANUAL_HOLD'
+                  exit 1
+                fi
               fi
               if ! node "$RUNNER_TEMP/app482-writer-gate.mjs" --remote-cron; then
                 echo 'APP483_ROLLBACK_CRON_UNVERIFIED_MANUAL_HOLD'
@@ -383,6 +390,7 @@ jobs:
           node "$RUNNER_TEMP/app482-writer-gate.mjs" --pending-file "$RUNNER_TEMP/like069-before-deploy.json"
           node "$RUNNER_TEMP/app482-writer-gate.mjs" --remote-flags
           node "$RUNNER_TEMP/app482-writer-gate.mjs" --remote-cron
+          deploy_started=1
           (
             cd canonical
             node ../node_modules/wrangler/bin/wrangler.js deploy --config wrangler.preview.jsonc

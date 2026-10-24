@@ -99,6 +99,30 @@ for(const [type,source] of [['worker',worker],['media',media]]){
   for(const caseName of ['success','cliFailsBeforeChange','cliFailsAfterChange','restoreFails'])
     await simulate(source,type,caseName);
 }
+// app493: the exact existing Hosting release is the only acceptable rollback.
+// The rollback must use site@oldVersion -> sameSite:live, not rebuild old source.
+const restoredController=readFileSync('.github/workflows/soridraw-release-promotion.yml','utf8');
+for (const stage of ['soridraw-test','soridraw']){
+  assert.ok(restoredController.includes('restore_hosting '+stage+' "$RUNNER_TEMP/'),
+    stage+' must be restored using the exact saved Hosting version');
+}
+const first=restoredController.indexOf('          restore_hosting(){');
+const last=restoredController.indexOf('\n          if [ "${{ steps.request.outputs.mode }}" = test ]; then',first);
+assert.ok(first>0&&last>first,'missing exact Hosting rollback helper');
+const helper=restoredController.slice(first,last);
+assert.ok(helper.includes('hosting:clone "$site@$version_id" "$site:live"'));
+assert.ok(helper.includes('HOSTING_EXACT_PREVIOUS_VERSION_AND_INDEX=PASS'));
+assert.ok(helper.includes('HOSTING_PREVIOUS_VERSION_OR_BYTES_UNVERIFIED'));
+assert.ok(helper.includes('sha256sum'));
+assert.ok(!helper.includes('npm run build')&&!helper.includes(' deploy --only hosting'),
+  'rollback must not rebuild an older source tree');
+assert.ok(!restoredController.includes('hosting-rollback"; git worktree add'),
+  'old re-build based Hosting rollback must be removed');
+assert.ok(restoredController.includes('RELEASE_ROLLBACK_INCOMPLETE_MANUAL_HOLD=FAIL'));
+assert.ok(restoredController.includes('printf true > "$RUNNER_TEMP/test-release-mutated"\n          gh release create'),
+  'partial GitHub release publish must be rollback-safe');
+console.log('APP493_EXACT_PREVIOUS_HOSTING_VERSION_RESTORE_AND_FAIL_CLOSED=PASS');
+console.log('APP493_NO_HOSTING_REBUILD_AND_PARTIAL_RELEASE_MARKER=PASS');
 console.log('APP492_PRE_MUTATION_MARKERS_8_OF_8=PASS');
 console.log('APP492_WORKER_AND_MEDIA_CLI_PARTIAL_FAILURE_ROLLBACK_8_SCENARIOS=PASS');
 console.log('APP492_UNPROVEN_ROLLBACK_FAIL_CLOSED=PASS');

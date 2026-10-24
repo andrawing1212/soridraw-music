@@ -268,6 +268,7 @@ function selfTest482() {
     D1_migration:'false',D1_schema_write:'false',user_data_backfill:'false',
     hosting_deploy:'false',functions_deploy:'false',shared_rtdb_rules_deploy:'false',
     repair_shared_like_snapshot_156:'false',repair_shared_like_snapshot_191:'false',
+    approval_pr:'462',approval_pr_head_sha:'a'.repeat(40),
   }).map(([k,v])=>[k,v]));
   const trigger=Object.entries(mock).map(([k,v])=>k+'='+v).join('\n')+'\n';
   assert.equal(trigger482(trigger,AUDITED_APP481_SHA),AUDITED_APP481_SHA);
@@ -322,20 +323,45 @@ function selfTest482() {
   assert.throws(()=>remoteCronResult482({success:true,result:{}}),/APP482_REMOTE_CRON_RESPONSE_UNVERIFIED_HOLD/);
   assert.throws(()=>remoteCronResult482({success:true,result:{schedules:[{cron:'* * * * *'}]}}),/APP482_PREVIEW_CRON_NOT_EMPTY_HOLD/);
   assert.throws(()=>cron482([{cron:'* * * * *'}]),/APP482_PREVIEW_CRON_NOT_EMPTY_HOLD/);
-  const meta={actor:'andrawing1212',event:'workflow_dispatch',ref:'refs/heads/preview',
-    sha:'a'.repeat(40),approvedSha:'a'.repeat(40),attempt:'1',
-    phrase:'DEPLOY_APP481_PREVIEW_WRITER_ONLY',runId:'10001'};
-  const initialRun={id:10001,head_sha:meta.sha,event:'workflow_dispatch'};
-  assert.equal(approval483(meta,{total_count:1,workflow_runs:[initialRun]}),true);
-  for(const changed of [{actor:'different'},{event:'push'},{ref:'refs/heads/main'},
-    {approvedSha:'b'.repeat(40)},{attempt:'2'}, {runId:'10002'},
-    {phrase:'DEPLOY_APP481_PREVIEW_WRITER_ONLY_REUSED'}])
-    assert.throws(()=>approval483({...meta,...changed},{
-      total_count:1,workflow_runs:[initialRun]}),/APP482_/);
-  assert.throws(()=>approval483(meta,{total_count:2,
-    workflow_runs:[initialRun,{...initialRun,id:10000}]}),/APP482_/);
-  assert.throws(()=>approval483(meta,{total_count:1,workflow_runs:[]}),/APP482_/);
-  assert.throws(()=>approval483(meta,{workflow_runs:[initialRun]}),/APP482_/);
+  const meta={event:'push',ref:'refs/heads/preview',
+    repository:'andrawing1212/soridraw-music',sha:'c'.repeat(40),
+    attempt:'1',runId:'10001'};
+  const approvedPr={number:462,base:{ref:'preview'},head:{sha:'a'.repeat(40)},
+    merge_commit_sha:meta.sha,created_at:'2026-10-24T12:00:00Z',
+    merged_at:'2026-10-24T13:00:00Z'};
+  const approvedComment={user:{login:'andrawing1212'},
+    body:'APPROVE_APP481_PREVIEW_WRITER_ONLY_HEAD='+'a'.repeat(40),
+    created_at:'2026-10-24T12:30:00Z'};
+  const approvedRun={id:10001,head_sha:meta.sha,event:'push'};
+  const args=[meta,trigger,[approvedPr],[approvedComment],
+    {total_count:1,workflow_runs:[approvedRun]}, {commit:{sha:meta.sha}},
+    {files:[{filename:'.deploy/preview-worker-release.trigger'}]},
+    [{filename:'.deploy/preview-worker-release.trigger'}]];
+  assert.equal(approval484(...args),true);
+  const reject=(index,bad)=>{
+    const altered=[...args];altered[index]=bad;
+    assert.throws(()=>approval484(...altered),/APP482_/);
+  };
+  reject(0,{...meta,event:'workflow_dispatch'});
+  reject(0,{...meta,ref:'refs/heads/main'});
+  reject(0,{...meta,attempt:'2'});
+  reject(0,{...meta,sha:'d'.repeat(40)});
+  reject(1,trigger.replace('approval_pr=462','approval_pr=463'));
+  reject(1,trigger.replace('approval_pr_head_sha='+'a'.repeat(40),
+    'approval_pr_head_sha='+'b'.repeat(40)));
+  reject(2,[]);
+  reject(2,[{...approvedPr,merge_commit_sha:'e'.repeat(40)}]);
+  reject(2,[{...approvedPr,head:{sha:'e'.repeat(40)}}]);
+  reject(3,[{...approvedComment,user:{login:'wrong'}}]);
+  reject(3,[{...approvedComment,created_at:'2026-10-24T13:05:00Z'}]);
+  reject(3,[{...approvedComment,body:'APPROVE_APP481_PREVIEW_WRITER_ONLY_HEAD='+'b'.repeat(40)}]);
+  reject(3,[approvedComment,approvedComment]);
+  reject(4,{total_count:2,workflow_runs:[approvedRun,{...approvedRun,id:10000}]});
+  reject(4,{total_count:1,workflow_runs:[]});
+  reject(5,{commit:{sha:'f'.repeat(40)}});
+  reject(6,{files:[{filename:'.deploy/preview-worker-release.trigger'},
+    {filename:'src/App.tsx'}]});
+  reject(7,[{filename:'.github/workflows/cloudflare-explore-preview-release.yml'}]);
   const old={result:{deployments:[{versions:[{
     version_id:'b'.repeat(30),percentage:100,
   }]}]}};

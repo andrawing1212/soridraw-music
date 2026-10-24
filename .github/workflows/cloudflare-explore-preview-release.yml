@@ -3,14 +3,23 @@ name: SORIDRAW PREVIEW Explore Worker Release
 # Fast PREVIEW loop: one repository-owned complete Worker, one preflight, one deploy.
 # No live-source download, no patch replay, no D1/user-data migration, no dynamic config rebuild.
 # 103 adds one additive SQLite Durable Object namespace and removes the fixed like cron.
+# No push-armed deployment. Each run requires a fresh manual approval action
+# on the current PREVIEW HEAD, owner identity, and first/single run per SHA.
 on:
-  push:
-    branches: [preview]
-    paths:
-      - '.deploy/preview-worker-release.trigger'
+  workflow_dispatch:
+    inputs:
+      approved_commit_sha:
+        description: 'Type the exact current PREVIEW commit SHA (40 chars)'
+        required: true
+        type: string
+      approval_phrase:
+        description: 'Type DEPLOY_APP481_PREVIEW_WRITER_ONLY'
+        required: true
+        type: string
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: soridraw-preview-explore-worker-release
@@ -44,6 +53,16 @@ jobs:
           node --check scripts/verify-482-preview-writer-release-gate.mjs
           node scripts/verify-482-preview-writer-release-gate.mjs --self-test
           cp scripts/verify-482-preview-writer-release-gate.mjs "$RUNNER_TEMP/app482-writer-gate.mjs"
+
+      - name: Validate fresh manual owner dispatch and one-use HEAD
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APP482_APPROVED_COMMIT_SHA: ${{ inputs.approved_commit_sha }}
+          APP482_APPROVAL_PHRASE: ${{ inputs.approval_phrase }}
+        run: |
+          set -euo pipefail
+          node "$RUNNER_TEMP/app482-writer-gate.mjs" --approval
 
       - name: Resolve exact approved PREVIEW source
         id: source
@@ -344,8 +363,19 @@ jobs:
                 exit "$status"
               fi
               echo "SMOKE_FAILED_ROLLBACK_TO=$before"
-              node "$WRANGLER" rollback "$before" --name "$PREVIEW_WORKER" --config "$CFG" --message 'automatic rollback after PREVIEW smoke failure' || true
-              echo 'PREVIEW_ROLLBACK=ATTEMPTED'
+              if ! node "$WRANGLER" rollback "$before" --name "$PREVIEW_WORKER" --config "$CFG" --message 'automatic rollback after PREVIEW smoke failure'; then
+                echo 'APP483_ROLLBACK_COMMAND_FAILED_MANUAL_HOLD'
+                exit 1
+              fi
+              if ! node "$RUNNER_TEMP/app482-writer-gate.mjs" --verify-rollback "$before"; then
+                echo 'APP483_ROLLBACK_VERSION_NOT_RESTORED_MANUAL_HOLD'
+                exit 1
+              fi
+              if ! node "$RUNNER_TEMP/app482-writer-gate.mjs" --remote-cron; then
+                echo 'APP483_ROLLBACK_CRON_UNVERIFIED_MANUAL_HOLD'
+                exit 1
+              fi
+              echo 'APP483_ROLLBACK_EXACT_VERSION_AND_CRON=PASS'
             fi
             exit "$status"
           }
@@ -354,7 +384,7 @@ jobs:
           # app482 Writer-only release: the old app192 queue-drain/temporary
           # cron path is NOT part of this release. Any pending like row HOLDS.
           # Read-only COUNT, then repeat remote flags immediately before upload.
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT COUNT(*) AS pending069 FROM explore_like_batches_069" --json > "$RUNNER_TEMP/like069-before-deploy.json"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT (SELECT COUNT(*) FROM explore_like_batches_035) AS pending035, (SELECT COUNT(*) FROM explore_like_batches_069) AS pending069" --json > "$RUNNER_TEMP/like069-before-deploy.json"
           node "$RUNNER_TEMP/app482-writer-gate.mjs" --pending-file "$RUNNER_TEMP/like069-before-deploy.json"
           node "$RUNNER_TEMP/app482-writer-gate.mjs" --remote-flags
           node "$RUNNER_TEMP/app482-writer-gate.mjs" --remote-cron
@@ -364,7 +394,8 @@ jobs:
           )
           deployed=1
           node "$RUNNER_TEMP/app482-writer-gate.mjs" --remote-flags
-          echo 'APP482_PREVIEW_WRITER_ONLY_DEPLOYED_READER_OFF=PASS'
+          node "$RUNNER_TEMP/app482-writer-gate.mjs" --remote-cron
+          echo 'APP483_PREVIEW_WRITER_ONLY_DEPLOYED_READER_OFF_AND_LIVE_CRON_EMPTY=PASS'
 
           # app482 preflight requires an empty live schedule. Preserve it:
           # no unnecessary PUT, temporary cron or automatic user queue drain.

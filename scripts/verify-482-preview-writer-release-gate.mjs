@@ -188,7 +188,14 @@ export function approval484(meta,trigger,associated,comments,runs,branch,commit,
   const approvals=comments.filter(c=>c?.user?.login==='andrawing1212'
     &&c?.body?.trim()===expected
     &&typeof c.created_at==='string'
-    &&c.created_at>=pr.created_at&&c.created_at<pr.merged_at);
+    &&typeof c.updated_at==='string'
+    &&Number.isFinite(Date.parse(c.created_at))
+    &&Number.isFinite(Date.parse(c.updated_at))
+    &&Number.isFinite(Date.parse(pr.created_at))
+    &&Number.isFinite(Date.parse(pr.merged_at))
+    &&Date.parse(c.created_at)>=Date.parse(pr.created_at)
+    &&Date.parse(c.created_at)<=Date.parse(c.updated_at)
+    &&Date.parse(c.updated_at)<Date.parse(pr.merged_at));
   demand(approvals.length===1,'OWNER_EXPLICIT_PR_APPROVAL_MISSING_OR_REUSED');
   demand(runs?.total_count===1 && Array.isArray(runs?.workflow_runs)
     &&runs.workflow_runs.length===1,'PREVIOUS_OR_UNKNOWN_APPROVAL_RUN');
@@ -329,7 +336,7 @@ function selfTest482() {
     merged_at:'2026-10-24T13:00:00Z'};
   const approvedComment={user:{login:'andrawing1212'},
     body:'APPROVE_APP481_PREVIEW_WRITER_ONLY_HEAD='+'a'.repeat(40),
-    created_at:'2026-10-24T12:30:00Z'};
+    created_at:'2026-10-24T12:30:00Z',updated_at:'2026-10-24T12:30:00Z'};
   const approvedRun={id:10001,head_sha:meta.sha,event:'push'};
   const args=[meta,trigger,[approvedPr],[approvedComment],
     {total_count:1,workflow_runs:[approvedRun]}, {commit:{sha:meta.sha}},
@@ -349,7 +356,18 @@ function selfTest482() {
   reject(2,[{...approvedPr,merge_commit_sha:'e'.repeat(40)}]);
   reject(2,[{...approvedPr,head:{sha:'e'.repeat(40)}}]);
   reject(3,[{...approvedComment,user:{login:'wrong'}}]);
-  reject(3,[{...approvedComment,created_at:'2026-10-24T13:05:00Z'}]);
+  reject(3,[{...approvedComment,created_at:'2026-10-24T13:05:00Z',
+    updated_at:'2026-10-24T13:05:00Z'}]);
+  // An innocent comment written before merge but edited into an approval AFTER merge
+  // must never satisfy the approval evidence.
+  reject(3,[{...approvedComment,updated_at:'2026-10-24T13:05:00Z'}]);
+  reject(3,[{...approvedComment,updated_at:'2026-10-24T13:00:00Z'}]);
+  reject(3,[{...approvedComment,updated_at:'2026-10-24T12:29:59Z'}]);
+  reject(3,[{...approvedComment,updated_at:'invalid-date'}]);
+  reject(3,[{...approvedComment,updated_at:undefined}]);
+  assert.equal(approval484(...[meta,trigger,[approvedPr],
+    [{...approvedComment,updated_at:'2026-10-24T12:45:00Z'}],
+    args[4],args[5],args[6],args[7]]),true);
   reject(3,[{...approvedComment,body:'APPROVE_APP481_PREVIEW_WRITER_ONLY_HEAD='+'b'.repeat(40)}]);
   reject(3,[approvedComment,approvedComment]);
   reject(4,{total_count:2,workflow_runs:[approvedRun,{...approvedRun,id:10000}]});
@@ -399,6 +417,7 @@ function selfTest482() {
   console.log('APP483_LIKE035_AND_069_ZERO_AND_EMPTY_CRON_FIXTURES=PASS');
   assert.doesNotMatch(trigger,/approval_pr_head_sha/);
   console.log('APP484_NON_SELF_REFERENTIAL_PR_OWNER_APPROVAL=PASS');
+  console.log('APP485_OWNER_APPROVAL_UPDATED_BEFORE_MERGE_ONLY=PASS');
   console.log('APP482_REMOTE_AND_DEPLOYMENT=NOT_RUN');
 }
 const args=process.argv.slice(2);

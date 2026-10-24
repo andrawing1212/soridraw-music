@@ -227,6 +227,8 @@ jobs:
           node --check scripts/verify-412-shared-projection-cas.mjs
           node --check scripts/verify-477-curated-active-writer-gate.mjs
           node scripts/verify-477-curated-active-writer-gate.mjs --self-test
+          node --check scripts/verify-489-preview-writer-postflight.mjs
+          node scripts/verify-489-preview-writer-postflight.mjs --self-test
           node --check scripts/verify-478-curated-race-rollback.mjs
           node scripts/verify-478-curated-race-rollback.mjs
           node --check scripts/verify-482-preview-writer-release-gate.mjs

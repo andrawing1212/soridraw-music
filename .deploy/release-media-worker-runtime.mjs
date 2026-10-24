@@ -299,12 +299,14 @@ if (action === 'upload') {
 }
 
 const before = await activeVersion();
-let deployed = false;
+// Treat a failed CLI invocation as a possible live change, even if it
+// never returned a success code. Never infer that no traffic was modified.
+let deployAttempted = false;
 try {
   const version = String(process.env.RELEASE_MEDIA_WORKER_VERSION || '').trim();
   if (!/^[0-9a-f-]{36}$/i.test(version)) throw new Error('RELEASE_MEDIA_WORKER_VERSION is required for activate');
+  deployAttempted = true;
   run(process.execPath, [WRANGLER, 'versions', 'deploy', `${version}@100%`, '--config', CONFIG_PATH, '--yes'], WORKER_DIR);
-  deployed = true;
   await waitForActiveVersion(version);
   await smoke();
   const after = await activeVersion();
@@ -312,12 +314,18 @@ try {
   console.log(`${mode.toUpperCase()}_MEDIA_WORKER_BEFORE=${before}`);
   console.log(`${mode.toUpperCase()}_MEDIA_WORKER_AFTER=${after}`);
 } catch (error) {
-  if (deployed) {
+  if (deployAttempted) {
     try {
-      run(process.execPath, [WRANGLER, 'rollback', before, '--name', target.worker, '--config', CONFIG_PATH, '--message', `automatic ${mode} media rollback after release smoke failure`], WORKER_DIR);
-      console.error(`${mode.toUpperCase()}_MEDIA_WORKER_ROLLBACK=ATTEMPTED`);
+      const current = await activeVersion();
+      if (current !== before) {
+        process.env.RELEASE_MEDIA_WORKER_VERSION = before;
+        await restore(); // exact old version reaches 100%, otherwise throws
+      }
+      const verified = await waitForActiveVersion(before);
+      if (verified !== before) throw new Error('ROLLBACK_OLD_VERSION_UNVERIFIED');
+      console.error(`${mode.toUpperCase()}_MEDIA_WORKER_FAILURE_OLD_VERSION_VERIFIED=PASS`);
     } catch (rollbackError) {
-      console.error(`${mode.toUpperCase()}_MEDIA_WORKER_ROLLBACK_FAILED=${String(rollbackError?.message || rollbackError)}`);
+      throw new AggregateError([error, rollbackError], `${mode.toUpperCase()}_MEDIA_WORKER_ROLLBACK_UNVERIFIED_MANUAL_HOLD`);
     }
   }
   throw error;

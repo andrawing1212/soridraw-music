@@ -115,8 +115,16 @@ const first=restoredController.indexOf('          restore_hosting(){');
 const last=restoredController.indexOf('\n          if [ "${{ steps.request.outputs.mode }}" = test ]; then',first);
 assert.ok(first>0&&last>first,'missing exact Hosting rollback helper');
 const helper=restoredController.slice(first,last);
-assert.ok(helper.includes('hosting:clone "$site@$version_id" "$site:live"'));
+assert.ok(helper.includes('hosting:clone "$site:@$version_id" "$site:live"'));
 assert.ok(helper.includes('HOSTING_EXACT_PREVIOUS_VERSION_AND_INDEX=PASS'));
+// Firebase documented form is SITE:@VERSION, not SITE@VERSION.
+assert.ok(restoredController.includes('hosting:clone "soridraw-test:@$test_hosting_version_id" soridraw:live'),
+  'Production must clone exact immutable TEST Hosting version');
+assert.ok(!restoredController.includes('hosting:clone "soridraw-test@$test_hosting_version_id"'),
+  'Broken Firebase version syntax must not return');
+assert.ok(!helper.includes('hosting:clone "$site@$version_id"'),
+  'Broken rollback version syntax must not return');
+
 assert.ok(helper.includes('HOSTING_PREVIOUS_VERSION_OR_BYTES_UNVERIFIED'));
 assert.ok(helper.includes('sha256sum'));
 assert.ok(!helper.includes('npm run build')&&!helper.includes(' deploy --only hosting'),
@@ -154,7 +162,7 @@ try {
       'CLONES=0',
       'curl() { case "$*" in *firebasehosting.googleapis.com*) printf "%s" "{}";; *soridraw-test.web.app/*) if [ "$CASE" = wrong_index ]; then printf "WRONG_INDEX"; else printf "%s" "$EXPECTED_HTML"; fi ;; *) return 42;; esac; }',
       'jq() { cat >/dev/null; printf "%s\\n" "$CURRENT_VERSION"; }',
-      'npx() { CLONES=$((CLONES+1)); case "$*" in *"hosting:clone soridraw-test@old12345 soridraw-test:live"*) ;; *) return 42;; esac; case "$CASE" in cli_nonzero_before_remote_change) return 81;; *) CURRENT_VERSION="$OLD_VERSION"; export CURRENT_VERSION;; esac; [ "$CASE" = cli_nonzero_after_remote_change ] && return 82; return 0; }',
+      'npx() { CLONES=$((CLONES+1)); case "$*" in *"hosting:clone soridraw-test:@old12345 soridraw-test:live"*) ;; *) return 42;; esac; case "$CASE" in cli_nonzero_before_remote_change) return 81;; *) CURRENT_VERSION="$OLD_VERSION"; export CURRENT_VERSION;; esac; [ "$CASE" = cli_nonzero_after_remote_change ] && return 82; return 0; }',
       'sleep() { :; }',
       mockHelper,
       'restore_hosting soridraw-test "$BACKUP" "$HASH" "$FLAG"',

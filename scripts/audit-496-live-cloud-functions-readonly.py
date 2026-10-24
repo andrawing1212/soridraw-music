@@ -33,7 +33,7 @@ def classify(item):
 def source_export_candidates():
     src=Path("functions/src/index.ts").read_text(encoding="utf8")
     names=set(re.findall(r"\bexport\s+const\s+([A-Za-z][A-Za-z0-9_]*)\s*=",src))
-    for block in re.findall(r"\bexport\s*\{([^}]+)\}\s*from\s*[\"']",src,re.S):
+    for block in re.findall(r"\bexport\s*\{([^}]+)\}",src,re.S):
         for token in block.split(","):
             name=token.strip().split(" as ")[-1].strip()
             if re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*",name): names.add(name)
@@ -89,6 +89,10 @@ def main():
     digest=hashlib.sha256(json.dumps(rows,separators=(",",":")).encode()).hexdigest()
     print(f"APP496_LIVE_FUNCTION_METADATA_GET_ONLY=PASS project={PROJECT} functions={len(rows)}")
     print(f"APP496_LIVE_FUNCTION_MATCHES_EXPLICIT_SOURCE_EXPORT={matches}")
+    for name,region,gen,state,family in rows:
+        if name not in names:
+            print(f"APP496_LIVE_FUNCTION_NOT_FOUND_IN_EXPLICIT_SOURCE_EXPORT name={name} region={region} generation={gen} state={state}")
+    print("APP496_NAME_MATCH_NOT_EQUAL_TO_FUNCTIONS_DEPLOYMENT_PROOF")
     print(f"APP496_LIVE_CANDIDATE_FUNCTION_COUNT={len(candidates)}")
     print("APP496_LIVE_FUNCTION_METADATA_SHA256="+digest)
     for name,region,gen,state,family in candidates:

@@ -167,7 +167,7 @@ export function selectedRuntimeApi477(observedRequests,target) {
   }
   return {endpoint:expected,observed:candidates.length};
 }
-async function browserRuntimeApi477(target) {
+export async function browserRuntimeApi477(target,viewport={width:1280,height:800}) {
   const {existsSync}=await import('node:fs');
   const {chromium}=await import('playwright-core');
   const paths=[process.env.CHROME_BIN,'/usr/bin/google-chrome',
@@ -179,7 +179,7 @@ async function browserRuntimeApi477(target) {
   });
   try {
     const ctx=await browser.newContext({
-      viewport:{width:1280,height:800},serviceWorkers:'block',locale:'ko-KR',
+      viewport,serviceWorkers:'block',locale:'ko-KR',
     });
     try {
       const page=await ctx.newPage(),seen=[];

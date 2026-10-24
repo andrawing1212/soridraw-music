@@ -168,6 +168,16 @@ jobs:
       # and other Worker API requests are blocked (no extra D1 reads).
       - name: Install browser probe dependency (CI only)
         run: npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright-core@1.56.1
+      # app489: independent PREVIEW postflight within the existing read-only
+      # audit; mobile/PC requests are intercepted before Worker/D1 access.
+      # Keep full three-environment readiness HOLD as a separate gate.
+      - name: Verify deployed PREVIEW Writer module and PC/mobile origin selection read-only
+        id: preview_writer_postflight
+        continue-on-error: true
+        run: |
+          node --check scripts/verify-489-preview-writer-postflight.mjs
+          node scripts/verify-489-preview-writer-postflight.mjs --self-test
+          node scripts/verify-489-preview-writer-postflight.mjs
       - name: Compare three active Worker writers and retirement proof read-only
         id: active_writer_gate
         continue-on-error: true
@@ -177,6 +187,7 @@ jobs:
         if: always()
         shell: bash
         run: |
+          test "${{ steps.preview_writer_postflight.outcome }}" = success
           test "${{ steps.curated_parity.outcome }}" = success
           test "${{ steps.active_writer_gate.outcome }}" = success
           echo 'P0_CURATED_PARITY_FINAL=PASS'

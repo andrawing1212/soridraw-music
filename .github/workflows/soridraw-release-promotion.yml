@@ -437,6 +437,7 @@ jobs:
         run: |
           set +e
           mutated=false
+          rollback_failed=false
           for flag in "$RUNNER_TEMP"/*-mutated; do
             [ -f "$flag" ] && [ "$(cat "$flag")" = true ] && mutated=true
           done
@@ -495,19 +496,24 @@ jobs:
             echo "HOSTING_EXACT_PREVIOUS_VERSION_AND_INDEX=PASS site=$site"
           }
           if [ "${{ steps.request.outputs.mode }}" = test ]; then
-            rollback_worker test "$(cat "$RUNNER_TEMP/test-worker-before" 2>/dev/null)" "$RUNNER_TEMP/test-worker-schedules-before" "$RUNNER_TEMP/test-worker-mutated"
-            rollback_media_worker test "$(cat "$RUNNER_TEMP/test-media-worker-before" 2>/dev/null)" "$RUNNER_TEMP/test-media-worker-mutated"
-            rollback_release "$RUNNER_TEMP/test-release-mutated" "$RUNNER_TEMP/test-release-tag"
-            rollback_branch main "$(cat "$RUNNER_TEMP/main-before")" "$RUNNER_TEMP/main-promoted" "$RUNNER_TEMP/test-branch-mutated"
-            restore_hosting soridraw-test "$RUNNER_TEMP/test-hosting-before" "$RUNNER_TEMP/test-host-before" "$RUNNER_TEMP/test-hosting-mutated"
+            rollback_worker test "$(cat "$RUNNER_TEMP/test-worker-before" 2>/dev/null)" "$RUNNER_TEMP/test-worker-schedules-before" "$RUNNER_TEMP/test-worker-mutated" || rollback_failed=true
+            rollback_media_worker test "$(cat "$RUNNER_TEMP/test-media-worker-before" 2>/dev/null)" "$RUNNER_TEMP/test-media-worker-mutated" || rollback_failed=true
+            rollback_release "$RUNNER_TEMP/test-release-mutated" "$RUNNER_TEMP/test-release-tag" || rollback_failed=true
+            rollback_branch main "$(cat "$RUNNER_TEMP/main-before")" "$RUNNER_TEMP/main-promoted" "$RUNNER_TEMP/test-branch-mutated" || rollback_failed=true
+            restore_hosting soridraw-test "$RUNNER_TEMP/test-hosting-before" "$RUNNER_TEMP/test-host-before" "$RUNNER_TEMP/test-hosting-mutated" || rollback_failed=true
           fi
           if [ "${{ steps.request.outputs.mode }}" = production ]; then
-            rollback_worker production "$(cat "$RUNNER_TEMP/production-worker-before" 2>/dev/null)" "$RUNNER_TEMP/production-worker-schedules-before" "$RUNNER_TEMP/production-worker-mutated"
-            rollback_media_worker production "$(cat "$RUNNER_TEMP/production-media-worker-before" 2>/dev/null)" "$RUNNER_TEMP/production-media-worker-mutated"
-            rollback_branch production "$(cat "$RUNNER_TEMP/production-before")" "$RUNNER_TEMP/production-promoted" "$RUNNER_TEMP/production-branch-mutated"
-            restore_hosting soridraw "$RUNNER_TEMP/production-hosting-before" "$RUNNER_TEMP/production-host-before" "$RUNNER_TEMP/production-hosting-mutated"
+            rollback_worker production "$(cat "$RUNNER_TEMP/production-worker-before" 2>/dev/null)" "$RUNNER_TEMP/production-worker-schedules-before" "$RUNNER_TEMP/production-worker-mutated" || rollback_failed=true
+            rollback_media_worker production "$(cat "$RUNNER_TEMP/production-media-worker-before" 2>/dev/null)" "$RUNNER_TEMP/production-media-worker-mutated" || rollback_failed=true
+            rollback_branch production "$(cat "$RUNNER_TEMP/production-before")" "$RUNNER_TEMP/production-promoted" "$RUNNER_TEMP/production-branch-mutated" || rollback_failed=true
+            restore_hosting soridraw "$RUNNER_TEMP/production-hosting-before" "$RUNNER_TEMP/production-host-before" "$RUNNER_TEMP/production-hosting-mutated" || rollback_failed=true
           fi
           [ "$mutated" = true ] && node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update FAILED || true
+          if [ "$rollback_failed" = true ]; then
+            echo 'RELEASE_ROLLBACK_INCOMPLETE_MANUAL_HOLD=FAIL'
+            exit 1
+          fi
+          echo 'RELEASE_ROLLBACK_ATTEMPTED_COMPONENTS_VERIFIED=PASS'
 
       - name: Record pre-mutation failure as BLOCKED
         if: failure()

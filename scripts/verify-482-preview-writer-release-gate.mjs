@@ -149,6 +149,45 @@ async function cloudflare482({flagsOnly=false}={}){
   }
   console.log('APP482_REMOTE_GET_ONLY=PASS');
 }
+// Manual GitHub Actions dispatch is the actual one-use approval, never a
+// reusable line in the trigger. Any second run for the same HEAD is HOLD.
+export function approval483(meta,payload) {
+  demand(meta.actor==='andrawing1212','APPROVER_NOT_OWNER');
+  demand(meta.event==='workflow_dispatch'&&meta.ref==='refs/heads/preview','MANUAL_PREVIEW_ONLY');
+  demand(/^[a-f0-9]{40}$/.test(meta.sha)&&meta.approvedSha===meta.sha,'APPROVED_HEAD_MISMATCH');
+  demand(meta.phrase==='DEPLOY_APP481_PREVIEW_WRITER_ONLY','APPROVAL_PHRASE_MISMATCH');
+  demand(String(meta.attempt)==='1','RERUN_NOT_ALLOWED');
+  demand(/^\d+$/.test(String(meta.runId)),'RUN_ID_INVALID');
+  demand(payload?.total_count===1&&payload.workflow_runs?.length===1,
+    'PREVIOUS_OR_UNKNOWN_APPROVAL_RUN');
+  const found=payload.workflow_runs[0];
+  demand(String(found.id)===String(meta.runId)
+    &&found.head_sha===meta.sha&&found.event==='workflow_dispatch','CURRENT_APPROVAL_NOT_PROVEN');
+  return true;
+}
+async function remoteApproval483() {
+  const token=process.env.GITHUB_TOKEN;
+  demand(token&&token.length>10,'GITHUB_ACTIONS_READ_TOKEN_MISSING');
+  demand(process.env.GITHUB_REPOSITORY==='andrawing1212/soridraw-music','WRONG_REPOSITORY');
+  const meta={
+    actor:process.env.GITHUB_ACTOR,event:process.env.GITHUB_EVENT_NAME,
+    ref:process.env.GITHUB_REF,sha:process.env.GITHUB_SHA,
+    approvedSha:process.env.APP482_APPROVED_COMMIT_SHA,
+    phrase:process.env.APP482_APPROVAL_PHRASE,
+    attempt:process.env.GITHUB_RUN_ATTEMPT,runId:process.env.GITHUB_RUN_ID,
+  };
+  const url='https://api.github.com/repos/andrawing1212/soridraw-music/actions'
+    +'/workflows/cloudflare-explore-preview-release.yml/runs'
+    +'?event=workflow_dispatch&head_sha='+encodeURIComponent(String(meta.sha||''))
+    +'&per_page=100&page=1';
+  const response=await fetch(url,{method:'GET',headers:{
+    Authorization:'Bearer '+token,Accept:'application/vnd.github+json',
+    'X-GitHub-Api-Version':'2022-11-28',
+  },signal:AbortSignal.timeout(15000)});
+  demand(response.ok,'GITHUB_ACTIONS_RUNS_HTTP_'+response.status);
+  approval483(meta,await response.json());
+  console.log('APP483_EXPLICIT_ONE_TIME_MANUAL_APPROVAL=PASS');
+}
 function selfTest482() {
   const mock=Object.fromEntries(Object.entries({
     product_code_target:AUDITED_APP481_SHA,
@@ -236,7 +275,8 @@ else if(args.length===3&&args[0]==='--trigger'){
   const file=readFileSync(args[1],'utf8');
   trigger482(file,args[2]);
   console.log('APP482_EXACT_AUDITED_TRIGGER_WITHOUT_REPAIR=PASS');
-}else if(args.length===1&&args[0]==='--remote')await cloudflare482();
+}else if(args.length===1&&args[0]==='--approval')await remoteApproval483();
+else if(args.length===1&&args[0]==='--remote')await cloudflare482();
 else if(args.length===1&&args[0]==='--remote-flags')await cloudflare482({flagsOnly:true});
 else if(args.length===1&&args[0]==='--remote-cron')await liveCron482();
 else if(args.length===2&&args[0]==='--pending-file'){

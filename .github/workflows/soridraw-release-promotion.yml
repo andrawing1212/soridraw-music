@@ -410,7 +410,7 @@ jobs:
           test_hosting_version_id="${TEST_HOSTING_VERSION##*/}"
           test -n "$test_hosting_version_id"
           printf true > "$RUNNER_TEMP/production-hosting-mutated"
-          npx --yes firebase-tools@latest hosting:clone "soridraw-test@$test_hosting_version_id" soridraw:live --project "$FIREBASE_PROJECT" --non-interactive
+          npx --yes firebase-tools@latest hosting:clone "soridraw-test:@$test_hosting_version_id" soridraw:live --project "$FIREBASE_PROJECT" --non-interactive
           echo FIREBASE_PRODUCTION_HOSTING_CLONED_FROM_TEST=PASS
 
       - name: PROD_VERIFY
@@ -496,7 +496,7 @@ jobs:
             }
             current="$(hosting_current_version)" || return 1
             if [ "$current" != "$expected" ]; then
-              npx --yes firebase-tools@latest hosting:clone "$site@$version_id" "$site:live" \
+              npx --yes firebase-tools@latest hosting:clone "$site:@$version_id" "$site:live" \
                 --project "$FIREBASE_PROJECT" --non-interactive || clone_exit=$?
               echo "HOSTING_RESTORE_CLI_EXIT=$site:$clone_exit"
             fi

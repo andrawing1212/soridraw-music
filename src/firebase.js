@@ -139,11 +139,15 @@ export const writeRememberLoginPreference = (value) => {
 // open tab. Restore from ONE original persistence instead: detect LOCAL/SESSION
 // using key existence only, otherwise allow IndexedDB. New login modes remain
 // explicitly selected in App.tsx after authStateReady().
+const safeBrowserStore = (name) => {
+  try { return typeof window !== 'undefined' ? window[name] : null; }
+  catch { return null; }
+};
 const startupAuthStore = selectStartupAuthPersistence({
   apiKey: firebaseConfig.apiKey,
   rememberLogin: readRememberLoginPreference(),
-  localStorage: typeof window === 'undefined' ? null : window.localStorage,
-  sessionStorage: typeof window === 'undefined' ? null : window.sessionStorage,
+  localStorage: safeBrowserStore('localStorage'),
+  sessionStorage: safeBrowserStore('sessionStorage'),
 });
 const startupAuthPersistence = startupAuthStore === 'local'
   ? browserLocalPersistence

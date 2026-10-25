@@ -5,6 +5,11 @@ on:
     paths:
       - 'scripts/release-owner-acceptance-497.mjs'
       - 'scripts/verify-497-owner-acceptance-gate.mjs'
+      - 'scripts/verify-497-controller-owner-gate-wiring.mjs'
+      - '.github/workflows/soridraw-release-promotion.yml'
+      - '.github/workflows/soridraw-test-owner-acceptance.yml'
+      - 'scripts/sign-497-owner-acceptance-cli.mjs'
+      - 'scripts/verify-497-owner-acceptance-cli.mjs'
       - '.github/workflows/app497-owner-acceptance-guard.yml'
   workflow_dispatch:
 
@@ -24,5 +29,9 @@ jobs:
           node-version: '22'
       - name: Reject missing and spoofed TEST owner acceptance
         run: node scripts/verify-497-owner-acceptance-gate.mjs
+      - name: Confirm pending-test and PROD owner gate integration
+        run: node scripts/verify-497-controller-owner-gate-wiring.mjs
+      - name: Verify legacy promotion-controller smoke fixtures
+        run: node scripts/verify-release-controller.mjs
       - name: Prove no release execution
         run: echo 'APP497_ATTESTATION_FIXTURES_ONLY;NO_RELEASE_CONTROLLER_DISPATCH;NO_HOSTING_WORKER_FUNCTIONS_RULES_OR_DATA_CHANGES'

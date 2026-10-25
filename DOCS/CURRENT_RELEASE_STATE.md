@@ -1,3 +1,12 @@
+## CURRENT — app500 로그인 유지 OFF/ON 감사 FAIL 대응 수정 후보 (2026-10-25 KST)
+- **사용자 우선 지시:** 말로만 감사·보류 반복하지 않고 실제 로그인 저장 개선을 완성. app500 source-only PR #488 `fix/app500-durable-auth-quota-recovery`, 시작 기준 preview `5a2c29efb0b2101729ab63d7de533c009d83fa77`, 실제 PREVIEW app468 Firebase Hosting `d4c2c39af3aec6f895bdfff33afdb6f8f2c37805` unchanged.
+- **기존 후보 `f2c807007b1e4d678a5f7a8e4a8f3767b91f7789` 소스 감사 FAIL 두 건 수정:** `getAuth` SDK 기본 restore는 SESSION을 IndexedDB로 이동시킬 수 있음 → `initializeAuth`에서 명시적 `browserPopupRedirectResolver`와 로그인 유지 ON=`IndexedDB→LOCAL→SESSION`, OFF=`SESSION→IndexedDB→LOCAL` 우선순위를 사용. 사용자 로그인 유지 설정만 호스트 전용 SameSite=Lax 기능성 쿠키 `soridraw_remember_login_v1`(1/0) 및 기존 localStorage에 동시 저장, quota 시 쿠키 복구, Firebase 토큰 쿠키 저장 금지. 저장소 전체 차단과 브라우저 eviction에서 100% 영구 로그인 보장 불가.
+- **임시 로그인 알림:** 사용자가 ON인데 `session/memory`로 로그인 성공하면 기존 토스트로 명확하게 장기 저장 실패를 알림 (Google/이메일). 기존 UID/초안·Music Note/Library·UI 레이아웃·Worker·Functions·Rules 공유 원본 변경 없음.
+- **검증:** old `f2c8070` 2 CI PASS는 새 후보 PASS가 아님. 관련 검사 확장 진행, 새 exact SHA CI 최종 PASS 전. 독립 Work 실행 0, Chrome 모바일 종료→재진입 실기기 0, PREVIEW/TEST/PRODUCTION 배포 0. `APP500_RELEASE=HOLD`. GitHub app497 #485/#469는 기존 HOLD.
+- **다음:** 최종 HEAD 기준 app498 auth + product 전체 CI 성공→ Work 독립 감사→ PREVIEW 승격/실사용 검증. TEST/PROD 승격 금지.
+- Stage416 1/4 25% OFF, 과거 속도 5/5 100%(재검증 전), app500 2/4 50%(코드/자동검증 단계).
+---
+
 ## CURRENT — app500 Auth 영구 저장 quota 대응 후보 (2026-10-25 KST)
 - **사용자 우선 요청:** 모바일 Chrome 저장 공간 부족 시 장기 로그인 유지 우선 복구. app497 릴리스 엔진 작업은 HOLD 유지; 원래 PREVIEW 배포 app468 `d4c2c39af3aec6f895bdfff33afdb6f8f2c37805` 변화 없음.
 - **기준:** 작업 시작 실제 preview `5a2c29efb0b2101729ab63d7de533c009d83fa77`. source-only Draft [PR #488](https://github.com/andrawing1212/soridraw-music/pull/488) `fix/app500-durable-auth-quota-recovery`; 최종 감사/병합/배포 **아직 없음**.

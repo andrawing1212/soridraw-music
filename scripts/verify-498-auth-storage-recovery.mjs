@@ -7,7 +7,7 @@ import { transform } from 'esbuild';
 const ts = readFileSync('src/lib/authStorageRecovery.ts', 'utf8');
 const source = readFileSync('src/App.tsx', 'utf8');
 const { code } = await transform(ts, { loader: 'ts', format: 'esm', target: 'es2022' });
-const { isRecoverableAuthStorageError: isStorageError, resolveAuthPersistence: resolve } =
+const { isRecoverableAuthStorageError: isStorageError, probeAuthStorageCapacity: probe, resolveAuthPersistence: resolve } =
   await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 
 for (const error of [
@@ -68,9 +68,29 @@ await assert.rejects(
 );
 assert.deepEqual(attempts.splice(0), ['session', 'memory']);
 
+const existingDraft = new Map([['draft_music_note', 'preserve-user-data']]);
+const probeOps = [];
+const fakeStore = {
+  setItem: (key, value) => { probeOps.push(['set', key, value.length]); existingDraft.set(key, value); },
+  removeItem: (key) => { probeOps.push(['remove', key]); existingDraft.delete(key); },
+};
+probe(fakeStore);
+assert.equal(existingDraft.size, 1, 'preflight must remove only its temporary key');
+assert.equal(existingDraft.get('draft_music_note'), 'preserve-user-data');
+assert.deepEqual(probeOps.map(row => row[0]), ['set', 'remove']);
+assert.equal(probeOps[0][2], 4096);
+
+let removedAfterQuota = false;
+assert.throws(() => probe({
+  setItem: () => { throw quota(); },
+  removeItem: () => { removedAfterQuota = true; },
+}), (error) => error.code === 22);
+assert.equal(removedAfterQuota, false, 'failed preflight must not delete existing keys');
+
 // Source integration protection. This check deliberately inspects only the
 // login/persistence owner paths, not unrelated user data/cache behavior.
-assert.match(source, /isRecoverableAuthStorageError, resolveAuthPersistence, type AuthStorageMode/);
+assert.match(source, /isRecoverableAuthStorageError, probeAuthStorageCapacity, resolveAuthPersistence, type AuthStorageMode/);
+assert.match(source, /probeAuthStorageCapacity\(mode === 'local' \? localStorage : sessionStorage\)/);
 assert.match(source, /const authPersistenceFallbackModeRef = useRef<AuthStorageMode \| null>\(null\)/);
 assert.match(source, /const prepareAuthAttempt = async \(\) => \{/);
 assert.match(source, /resolveAuthPersistence\(preferredMode, applyAuthPersistence, preferenceStorageFull\)/);

@@ -17,6 +17,8 @@
 1. SDK `getAuth(app)`가 시작 단계에서 기존 IndexedDB/localStorage/sessionStorage Firebase 사용자 인증을 복원하도록 맡기고, startup `setPersistence()` 강제 이동을 제거.
 2. 새로운 로그인에서 `로그인 유지 ON`인 경우 **IndexedDB LOCAL → WebStorage LOCAL → SESSION → MEMORY** 순서로 지원되는 Firebase 지속성 적용. `rememberLogin` localStorage 설정 쓰기 실패 시에도 IndexedDB를 먼저 시도하며, localStorage 저장 공간과 IndexedDB 저장 용량을 혼동하지 않음.
 3. OAuth popup의 늦은 quota 실패에 기존 계정이 확인되면 절대 signOut/migration 하지 않음. 기존 계정이 없으면 실패한 저장 방식 다음 대안을 검토한 뒤 사용자 클릭으로 다시 로그인.
+   - 이메일 로그인도 실제 자격 증명 기록 단계에서 quota가 실패하면 남은 영구 방식을 확인하고 사용자가 다시 클릭하도록 함. 자동 비밀번호 재전송/재로그인 금지.
+   - 이메일 신규가입 도중의 quota 오류는 서버 가입이 이미 완료되었을 수 있으므로 **회원가입 재요청을 자동 반복하지 않음**. 기존 계정이 있다면 보존하고, 상태가 불확실하면 이메일 로그인으로 확인하도록 안내.
 4. `로그인 유지 OFF`는 새로운 로그인에서 session→memory로 유지. 이미 로그인된 사용자는 새 진입만으로 저장소를 강제로 바꾸지 않음.
 5. 임시 저장 로그인만 가능할 때는 영구 로그인 PASS로 주장하지 않음.
 
@@ -29,7 +31,7 @@
 
 ## 검사
 - 기존 `scripts/verify-498-auth-storage-recovery.mjs` 확장:
-  IndexedDB 성공 / IndexedDB unavailable → local 성공 / 둘 다 가득 참 → session / 모든 영구 실패 → memory / localStorage 설정 저장실패에서도 IndexedDB / popup 뒤늦은 저장실패 / 비관련 Auth 에러 전파 / 초안 비삭제.
+  IndexedDB 성공 / IndexedDB unavailable → local 성공 / 둘 다 가득 참 → session / 모든 영구 실패 → memory / localStorage 설정 저장실패에서도 IndexedDB / popup·이메일 로그인 뒤늦은 저장실패 / 불확실한 신규가입 안전 안내 / 비관련 Auth 에러 전파 / 초안 비삭제.
 - `.github/workflows/verify-408-like-repair-code.yml`에서 검사 + TypeScript + Build + 제품 회귀 (PR 체크).
 - **아직 미검증**: 같은 모바일 Chrome 실제 login ON + 브라우저 종료/재실행, 기존 legacy local/session/IndexedDB 회원 유지, 두 탭·동일 계정, Safari private/storage 완전 거부 등.
 - 본 코드가 브라우저 또는 OS의 모든 영구 저장이 차단된 환경까지 로그인 유지 100%를 보장하지는 않음.

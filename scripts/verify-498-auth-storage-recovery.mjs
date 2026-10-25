@@ -162,5 +162,15 @@ assert.ok(source.includes('recoverAuthPersistenceAfterWriteFailure('),
 assert.ok(source.includes('if (auth.currentUser) return null;'),
   'restored accounts must not be migrated without an explicit new login');
 
+const emailFlow = source.slice(source.indexOf('const handleEmailAuth = async'),
+  source.indexOf('const ensureAuthUserDocument = async'));
+assert.ok(emailFlow.includes("authMode === 'login'") && emailFlow.includes('recoverAuthPersistenceAfterWriteFailure('),
+  'late email-login quota errors must attempt remaining storage backends');
+assert.ok(emailFlow.includes("authMode === 'signup'") && emailFlow.includes('회원가입을 반복하지 말고'),
+  'uncertain signup result must never blindly retry remote account creation');
+const emailRecovery = emailFlow.slice(emailFlow.indexOf("console.error('Email auth error:'"));
+assert.ok(!/signInWithEmailAndPassword\(|createUserWithEmailAndPassword\(|signOut\(|localStorage\.clear\(|sessionStorage\.clear\(/.test(emailRecovery),
+  'email quota recovery must not replay credentials, sign out, or clear app data');
+
 console.log('SORIDRAW_APP498_AUTH_STORAGE_RECOVERY=PASS');
 console.log('SORIDRAW_APP500_DURABLE_AUTH_QUOTA_RECOVERY=PASS');

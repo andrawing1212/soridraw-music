@@ -96,8 +96,11 @@ assert.match(source, /const prepareAuthAttempt = async \(\) => \{/);
 assert.match(source, /if \(auth\.currentUser\) return null;/);
 assert.match(source, /if \(isRecoverableAuthStorageError\(popupError\)\) \{[\s\S]*?if \(auth\.currentUser\) \{/);
 assert.ok(!/signOut\(|localStorage\.clear\(|sessionStorage\.clear\(/.test(source.slice(
-  source.indexOf('const prepareAuthAttempt = async'), source.indexOf('// 3. HANDLE REDIRECT RESULT')
-)), 'app498 must not log out active users or clear any auth/app storage');
+  source.indexOf('const prepareAuthAttempt = async'), source.indexOf('const handleLogin = () =>')
+)), 'app498 prepareAuthAttempt must not log out existing users or clear browser storage');
+assert.ok(!/signOut\(|localStorage\.clear\(|sessionStorage\.clear\(/.test(source.slice(
+  source.indexOf('const handleGoogleLogin = async'), source.indexOf('// 3. HANDLE REDIRECT RESULT')
+)), 'app498 Google popup error handling must not log out users or erase browser storage');
 assert.match(source, /resolveAuthPersistence\(preferredMode, applyAuthPersistence, preferenceStorageFull\)/);
 assert.match(source, /if \(isRecoverableAuthStorageError\(popupError\)\) \{/);
 assert.match(source, /authPersistenceFallbackModeRef\.current = 'memory'/);

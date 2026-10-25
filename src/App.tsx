@@ -1210,8 +1210,8 @@ const isPureInstrumentalBgmGenreSelection = (ids: Array<string | null | undefine
   const cleanIds = ids.filter((id): id is string => Boolean(id));
   return cleanIds.length > 0 && cleanIds.every(isInstrumentalBgmGenreId);
 };
-import { signInWithPopup, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, browserLocalPersistence, inMemoryPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, fetchSignInMethodsForEmail, type User } from 'firebase/auth';
-import { isRecoverableAuthStorageError, probeAuthStorageCapacity, resolveAuthPersistence, type AuthStorageMode } from './lib/authStorageRecovery';
+import { signInWithPopup, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, browserLocalPersistence, indexedDBLocalPersistence, inMemoryPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, fetchSignInMethodsForEmail, type User } from 'firebase/auth';
+import { isRecoverableAuthStorageError, probeAuthStorageCapacity, resolveAuthPersistence, recoverAuthPersistenceAfterWriteFailure, type AuthStorageMode } from './lib/authStorageRecovery';
 
 type AuthMode = 'login' | 'signup' | 'reset';
 type EmailVerificationGate = 'idle' | 'checking' | 'required';
@@ -7731,21 +7731,29 @@ function App() {
 
   // app498: quota-limited browsers must still be able to sign in without
   // deleting app drafts, local-first caches, or Firebase user data.
+  // app500: keep existing signed-in accounts intact. For NEW sign-ins, prefer
+  // Firebase IndexedDB durability before trying localStorage, then session/memory.
   const authPersistenceFallbackModeRef = useRef<AuthStorageMode | null>(null);
+  const authPersistenceActiveModeRef = useRef<AuthStorageMode | null>(null);
+  const authPreferenceStorageFullRef = useRef(false);
   const applyAuthPersistence = async (mode: AuthStorageMode): Promise<void> => {
-    if (mode !== 'memory') {
+    // Web Storage quota and IndexedDB quota are not interchangeable.
+    // Never reject IndexedDB because a localStorage 4KB probe fails.
+    if (mode === 'local' || mode === 'session') {
       probeAuthStorageCapacity(mode === 'local' ? localStorage : sessionStorage);
     }
-    await setPersistence(auth, mode === 'local'
-      ? browserLocalPersistence
-      : mode === 'session'
-        ? browserSessionPersistence
-        : inMemoryPersistence);
+    await setPersistence(auth, mode === 'indexeddb'
+      ? indexedDBLocalPersistence
+      : mode === 'local'
+        ? browserLocalPersistence
+        : mode === 'session'
+          ? browserSessionPersistence
+          : inMemoryPersistence);
   };
 
   const prepareAuthAttempt = async () => {
-    // Already signed-in users must keep their existing Auth persistence and
-    // unsaved local-first work. Never downgrade a live auto-login session.
+    // A saved user may already have durable credentials. Do not migrate,
+    // sign out or rewrite that session on a quota error.
     if (auth.currentUser) return null;
     let preferenceStorageFull = false;
     try {
@@ -7754,24 +7762,29 @@ function App() {
       if (!isRecoverableAuthStorageError(error)) throw error;
       preferenceStorageFull = true;
     }
+    authPreferenceStorageFullRef.current = preferenceStorageFull;
 
-    // After popup quota recovery, do not retry the broken store on every click.
     const recoveredMode = authPersistenceFallbackModeRef.current;
     if (recoveredMode) {
       try {
         await applyAuthPersistence(recoveredMode);
+        authPersistenceActiveModeRef.current = recoveredMode;
         return recoveredMode;
       } catch (error) {
         if (!isRecoverableAuthStorageError(error) || recoveredMode === 'memory') throw error;
-        await applyAuthPersistence('memory');
-        authPersistenceFallbackModeRef.current = 'memory';
-        return 'memory';
+        const nextMode = await recoverAuthPersistenceAfterWriteFailure(
+          recoveredMode, applyAuthPersistence, preferenceStorageFull,
+        );
+        authPersistenceFallbackModeRef.current = nextMode;
+        authPersistenceActiveModeRef.current = nextMode;
+        return nextMode;
       }
     }
 
     const preferredMode = rememberLogin ? 'local' : 'session';
     const mode = await resolveAuthPersistence(preferredMode, applyAuthPersistence, preferenceStorageFull);
-    authPersistenceFallbackModeRef.current = mode === preferredMode ? null : mode;
+    authPersistenceActiveModeRef.current = mode;
+    authPersistenceFallbackModeRef.current = mode === 'indexeddb' || mode === preferredMode ? null : mode;
     return mode;
   };
 
@@ -8122,16 +8135,24 @@ function App() {
             showAuthError('로그인은 연결되었습니다. 브라우저 저장 공간이 부족할 수 있으니 작성 중인 내용은 먼저 보관해주세요.');
             return;
           }
-          if (authPersistenceFallbackModeRef.current === 'memory') {
+          const failedMode = authPersistenceActiveModeRef.current;
+          if (!failedMode || failedMode === 'memory') {
             showAuthError('이 브라우저의 Google 인증 저장 공간 오류가 계속됩니다. 다른 브라우저에서 로그인해주세요. 앱 데이터는 삭제하지 않았습니다.');
             return;
           }
           try {
-            await applyAuthPersistence('memory');
-            authPersistenceFallbackModeRef.current = 'memory';
-            showAuthError('브라우저 저장 공간 오류를 감지해 임시 로그인 방식으로 전환했습니다. Google 로그인을 다시 눌러주세요. 앱을 닫으면 로그인이 해제될 수 있습니다.');
+            // A credential write can fail after the initial preflight.
+            // Try the remaining durable store before reducing login lifetime.
+            const nextMode = await recoverAuthPersistenceAfterWriteFailure(
+              failedMode, applyAuthPersistence, authPreferenceStorageFullRef.current,
+            );
+            authPersistenceActiveModeRef.current = nextMode;
+            authPersistenceFallbackModeRef.current = nextMode;
+            showAuthError(nextMode === 'indexeddb' || nextMode === 'local'
+              ? '다른 영구 저장 방법을 준비했습니다. Google 로그인을 다시 눌러주세요.'
+              : '브라우저 저장 공간 오류를 감지해 임시 로그인 방식으로 전환했습니다. Google 로그인을 다시 눌러주세요. 앱을 닫으면 로그인이 해제될 수 있습니다.');
           } catch (recoveryError) {
-            console.error('[Auth] Non-destructive memory persistence recovery failed:', recoveryError);
+            console.error('[Auth] Non-destructive persistence recovery failed:', recoveryError);
             showAuthError(getAuthErrorMessage(popupError));
           }
           return;

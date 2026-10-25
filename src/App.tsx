@@ -7752,8 +7752,10 @@ function App() {
   };
 
   const prepareAuthAttempt = async () => {
-    // A saved user may already have durable credentials. Do not migrate,
-    // sign out or rewrite that session on a quota error.
+    // Do not start a NEW login or setPersistence during old-account hydration.
+    // A stale currentUser=null before Auth is ready could migrate an existing
+    // user's session or change another tab's login state.
+    await auth.authStateReady();
     if (auth.currentUser) return null;
     // A small first-party cookie preserves the preference when Web Storage is full.
     // The return value indicates localStorage only: IndexedDB remains eligible.

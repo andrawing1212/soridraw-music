@@ -7,7 +7,7 @@ import { transform } from 'esbuild';
 const ts = readFileSync('src/lib/authStorageRecovery.ts', 'utf8');
 const source = readFileSync('src/App.tsx', 'utf8');
 const { code } = await transform(ts, { loader: 'ts', format: 'esm', target: 'es2022' });
-const { isRecoverableAuthStorageError: isStorageError, probeAuthStorageCapacity: probe, resolveAuthPersistence: resolve } =
+const { isRecoverableAuthStorageError: isStorageError, probeAuthStorageCapacity: probe, resolveAuthPersistence: resolve, recoverAuthPersistenceAfterWriteFailure: recoverAfter } =
   await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 
 for (const error of [
@@ -27,28 +27,52 @@ for (const error of [
   assert.equal(isStorageError(error), false, `unrelated authentication error swallowed: ${JSON.stringify(error)}`);
 }
 
+// app500: IndexedDB remains eligible even if the tiny localStorage
+// preference write failed. Only actual Auth storage failure may downgrade.
 const attempts = [];
 const setMode = async (mode) => { attempts.push(mode); };
-assert.equal(await resolve('local', setMode), 'local');
-assert.deepEqual(attempts.splice(0), ['local']);
+assert.equal(await resolve('local', setMode), 'indexeddb');
+assert.deepEqual(attempts.splice(0), ['indexeddb']);
 assert.equal(await resolve('session', setMode), 'session');
 assert.deepEqual(attempts.splice(0), ['session']);
 
 const quota = () => Object.assign(new Error('quota exceeded'), { code: 22 });
 assert.equal(await resolve('local', async (mode) => {
   attempts.push(mode);
-  if (mode === 'local') throw quota();
+  if (mode === 'indexeddb') throw quota();
+}), 'local');
+assert.deepEqual(attempts.splice(0), ['indexeddb', 'local']);
+
+assert.equal(await resolve('local', async (mode) => {
+  attempts.push(mode);
+  if (mode === 'indexeddb' || mode === 'local') throw quota();
 }), 'session');
-assert.deepEqual(attempts.splice(0), ['local', 'session']);
+assert.deepEqual(attempts.splice(0), ['indexeddb', 'local', 'session']);
 
 assert.equal(await resolve('local', async (mode) => {
   attempts.push(mode);
   if (mode !== 'memory') throw quota();
 }), 'memory');
-assert.deepEqual(attempts.splice(0), ['local', 'session', 'memory']);
+assert.deepEqual(attempts.splice(0), ['indexeddb', 'local', 'session', 'memory']);
 
-assert.equal(await resolve('local', setMode, true), 'session');
+assert.equal(await resolve('local', setMode, true), 'indexeddb');
+assert.deepEqual(attempts.splice(0), ['indexeddb']);
+assert.equal(await resolve('local', async (mode) => {
+  attempts.push(mode);
+  if (mode === 'indexeddb') throw quota();
+}, true), 'session');
+assert.deepEqual(attempts.splice(0), ['indexeddb', 'session']);
+
+assert.equal(await recoverAfter('indexeddb', setMode), 'local');
+assert.deepEqual(attempts.splice(0), ['local']);
+assert.equal(await recoverAfter('indexeddb', setMode, true), 'session');
 assert.deepEqual(attempts.splice(0), ['session']);
+assert.equal(await recoverAfter('local', setMode), 'session');
+assert.deepEqual(attempts.splice(0), ['session']);
+assert.equal(await recoverAfter('session', setMode), 'memory');
+assert.deepEqual(attempts.splice(0), ['memory']);
+await assert.rejects(() => recoverAfter('memory', setMode), /No remaining/);
+assert.deepEqual(attempts, []);
 
 await assert.rejects(
   () => resolve('local', async (mode) => {
@@ -57,7 +81,7 @@ await assert.rejects(
   }),
   (error) => error.code === 'auth/unauthorized-domain',
 );
-assert.deepEqual(attempts.splice(0), ['local']);
+assert.deepEqual(attempts.splice(0), ['indexeddb']);
 
 await assert.rejects(
   () => resolve('session', async (mode) => {
@@ -67,6 +91,15 @@ await assert.rejects(
   (error) => error.code === 22,
 );
 assert.deepEqual(attempts.splice(0), ['session', 'memory']);
+
+await assert.rejects(
+  () => recoverAfter('indexeddb', async (mode) => {
+    attempts.push(mode);
+    throw Object.assign(new Error('Unauthorized domain'), { code: 'auth/unauthorized-domain' });
+  }),
+  (error) => error.code === 'auth/unauthorized-domain',
+);
+assert.deepEqual(attempts.splice(0), ['local']);
 
 const existingDraft = new Map([['draft_music_note', 'preserve-user-data']]);
 const probeOps = [];
@@ -115,4 +148,17 @@ assert.match(source, /useEffect\(\(\) => \{\s*try \{\s*localStorage\.setItem\('r
 const authPart = source.slice(source.indexOf('const prepareAuthAttempt = async'), source.indexOf('// 3. HANDLE REDIRECT RESULT'));
 assert.ok(!/localStorage\.clear\(|sessionStorage\.clear\(|deleteDatabase\(|caches\.delete\(/.test(authPart),
   'Login recovery must not erase any browser/app cache');
+
+const firebaseSource = readFileSync('src/firebase.js', 'utf8');
+assert.ok(firebaseSource.includes('export const auth = getAuth(app);'));
+assert.ok(!firebaseSource.includes('setPersistence(auth, initialAuthPersistence)'),
+  'startup must never demote a restored account on a missing/blocked preference');
+assert.ok(source.includes("mode === 'indexeddb'") && source.includes('indexedDBLocalPersistence'),
+  'new sign-ins must try IndexedDB as a durable backend');
+assert.ok(source.includes('recoverAuthPersistenceAfterWriteFailure('),
+  'a late OAuth credential quota error must try remaining persistent stores');
+assert.ok(source.includes('if (auth.currentUser) return null;'),
+  'restored accounts must not be migrated without an explicit new login');
+
 console.log('SORIDRAW_APP498_AUTH_STORAGE_RECOVERY=PASS');
+console.log('SORIDRAW_APP500_DURABLE_AUTH_QUOTA_RECOVERY=PASS');

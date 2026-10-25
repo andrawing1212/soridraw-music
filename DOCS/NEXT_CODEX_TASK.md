@@ -1,3 +1,11 @@
+## NEXT — app500 로그인 지속성 사용자 정책 수정 검증 (2026-10-25)
+- PR #488 `fix/app500-durable-auth-quota-recovery` (branch 기준 preview `5a2c29efb0b2101729ab63d7de533c009d83fa77`). Source audit에서 밝혀진 `getAuth` OFF 세션 영구승격 위험, quota로 '로그인 유지 ON' 설정 소실, session fallback 무경고를 최소 코드로 수정하는 개발 후보 작성.
+- 수정 대상 `src/firebase.js`, `src/App.tsx`, `scripts/verify-498-auth-storage-recovery.mjs`, `DOCS/APP500_DURABLE_AUTH_STORAGE_REPAIR.md`. Firebase `initializeAuth`의 OFF SESSION-first / ON durable-first, popup resolver 유지, 브라우저 저장 공간 부족 시 boolean cookie backup(credential never stored), Google/email temp warning, UID·초안 보호.
+- **다음 하나:** 정확한 PR 최신 SHA에서 targeted Auth 검사·TypeScript·Build·전체 회귀 CI PASS 확인. FAIL이면 같은 branch 최소 수정. 최종 SHA 고정 후 **독립 Work High 읽기 전용 감사** 수행. 검증 없는 merge/deploy 금지.
+- Chrome 실기기 기존 로그인 ON/OFF, storage quota, popup/이메일, restart, PC↔mobile, multi-tab, cookie disabled는 별도 사용자 기기 확인 필수. 메모리/세션 성공을 장기 로그인 PASS로 보고하지 않음.
+- 사용자 공유 원본·Music Note/Library/Explore UI/Worker/Functions/Cloudflare/Stage416 OFF/Reader OFF 고정. TEST/PRODUCTION 승격 승인 없음. app497 #485 HOLD 유지.
+---
+
 ## NEXT — app500 저장 공간 부족 자동로그인 우선 복구 (2026-10-25 KST)
 - **사용자 명시 최우선:** 앱 내 로그인 유지 ON 상태에서 모바일 Chrome localStorage quota가 가득 차더라도 오래 로그인되도록 Firebase 기본 영구 저장 우선순위 복원. 자동 로그인 외 기능/UI/음악 원본 데이터 금지.
 - 개발 후보 Draft [PR #488](https://github.com/andrawing1212/soridraw-music/pull/488), base preview `5a2c29efb0b2101729ab63d7de533c009d83fa77`; `DOCS/APP500_DURABLE_AUTH_STORAGE_REPAIR.md`. 후보는 미병합·미배포. `getAuth`는 default IndexedDB→localStorage→session persistence 지원; startup에 `setPersistence` 강제하지 않고 신규 로그인에서만 명시적 IndexedDB LOCAL→Web LOCAL→session→memory fallback.

@@ -460,5 +460,16 @@ jobs:
           set -euo pipefail
           python3 scripts/audit-496-live-cloud-functions-readonly.py --self-test
           python3 scripts/audit-496-live-cloud-functions-readonly.py
+      - name: App497 frozen release attestation gap audit — EXPECTED RELEASE HOLD
+        if: github.event_name == 'pull_request' && github.head_ref == 'audit/app497-release-attestation-gaps'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/audit-497-release-attestation-gaps.mjs --self-test
+          git fetch --no-tags origin fix/app492-release-controller-partial-failure-guard
+          test "$(git rev-parse FETCH_HEAD)" = "f521b9c8808397d47b596f840ff816cac374dd91"
+          git show f521b9c8808397d47b596f840ff816cac374dd91:.github/workflows/soridraw-release-promotion.yml > "$RUNNER_TEMP/app497-frozen-controller.yml"
+          node scripts/audit-497-release-attestation-gaps.mjs --workflow "$RUNNER_TEMP/app497-frozen-controller.yml"
+          echo 'APP497_EXPECTED_RELEASE_GATE=HOLD;THIS_IS_NOT_A_DEPLOYMENT_PASS'
       - name: Confirm no product deployment
         run: echo '408_QUALITY=PASS;NO_DEPLOYMENT;NO_SHARED_DATA_CHANGE'

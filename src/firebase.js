@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken as getAppCheckToken } from "firebase/app-check";
-import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence, browserSessionPersistence } from "firebase/auth";
+import { initializeAuth, browserPopupRedirectResolver, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, GoogleAuthProvider } from "firebase/auth";
+import { selectStartupAuthPersistence, protectInitialAuthRestore } from "./lib/authRestorePersistence";
 import { getFirestore, initializeFirestore, memoryLocalCache, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -84,26 +85,87 @@ export const getFirebaseAppCheckToken = async () => {
 // Do not replace window.fetch globally: Firebase Auth popup sign-in and other
 // browser integrations must keep the native fetch implementation.
 
-const readRememberLoginPreference = () => {
-  if (typeof window === "undefined") return false;
+// Store ONLY the remember-login boolean in a small first-party functional cookie.
+// Firebase credentials/tokens remain exclusively under the SDK's control.
+// The cookie survives a full localStorage quota (when cookies are allowed).
+const REMEMBER_LOGIN_COOKIE = 'soridraw_remember_login_v1';
+const readRememberLoginCookie = () => {
+  if (typeof document === 'undefined') return null;
   try {
-    return window.localStorage.getItem("rememberLogin") === "true";
+    const prefix = REMEMBER_LOGIN_COOKIE + '=';
+    const match = document.cookie.split(';').map(value => value.trim()).find(value => value.startsWith(prefix));
+    const value = match ? match.slice(prefix.length) : '';
+    return value === '1' ? true : value === '0' ? false : null;
+  } catch {
+    return null;
+  }
+};
+
+export const readRememberLoginPreference = () => {
+  const cookieValue = readRememberLoginCookie();
+  // The cookie wins if localStorage contains stale OFF following a quota failure.
+  if (cookieValue !== null) return cookieValue;
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem('rememberLogin') === 'true';
+  } catch {
+    // Unknown is NOT a user opt-out. Prefer protecting a previously durable
+    // account over silently selecting tab-only Auth on a blocked browser store.
+    return true;
+  }
+};
+
+export const writeRememberLoginPreference = (value) => {
+  if (typeof document !== 'undefined') {
+    try {
+      const secure = typeof location !== 'undefined' && location.protocol === 'https:' ? '; Secure' : '';
+      document.cookie = REMEMBER_LOGIN_COOKIE + '=' + (value ? '1' : '0')
+        + '; Path=/; Max-Age=31536000; SameSite=Lax' + secure;
+    } catch {
+      // Some restricted browsers block cookies too; never delete other data.
+    }
+  }
+  if (typeof window === 'undefined') return false;
+  try {
+    window.localStorage.setItem('rememberLogin', String(value));
+    return true;
   } catch {
     return false;
   }
 };
 
-const initialAuthPersistence = readRememberLoginPreference()
-  ? browserLocalPersistence
-  : browserSessionPersistence;
-
-// Use Firebase's standard Auth initializer so popup/redirect sign-in keeps the
-// default browser resolver on mobile. Login persistence still follows the
-// saved "remember login" preference instead of being forced to local storage.
-export const auth = getAuth(app);
-void setPersistence(auth, initialAuthPersistence).catch((error) => {
-  console.warn("[Firebase Auth] persistence setup failed:", error);
+// Firebase migrates a recovered user to the first available store in an
+// array, clearing SDK Auth keys in the other stores. That can log out an older
+// open tab. Restore from ONE original persistence instead: detect LOCAL/SESSION
+// using key existence only, otherwise allow IndexedDB. New login modes remain
+// explicitly selected in App.tsx after authStateReady().
+const safeBrowserStore = (name) => {
+  try { return typeof window !== 'undefined' ? window[name] : null; }
+  catch { return null; }
+};
+const startupAuthStore = selectStartupAuthPersistence({
+  apiKey: firebaseConfig.apiKey,
+  rememberLogin: readRememberLoginPreference(),
+  localStorage: safeBrowserStore('localStorage'),
+  sessionStorage: safeBrowserStore('sessionStorage'),
 });
+const startupAuthPersistence = startupAuthStore === 'local'
+  ? browserLocalPersistence
+  : startupAuthStore === 'session'
+    ? browserSessionPersistence : indexedDBLocalPersistence;
+
+let startupAuthWriteBlocked = false;
+const safeStartupAuth = protectInitialAuthRestore(startupAuthPersistence, () => {
+  // No token, user object, or browser data is read/copied into this marker.
+  startupAuthWriteBlocked = true;
+});
+export const didAuthRestoreStorageWriteFail = () => startupAuthWriteBlocked;
+export const auth = initializeAuth(app, {
+  persistence: safeStartupAuth.persistence,
+  popupRedirectResolver: browserPopupRedirectResolver,
+});
+// The wrapper's startup-only protection must not mask writes from new sign-in.
+void auth.authStateReady().then(safeStartupAuth.markReady, safeStartupAuth.markReady);
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({

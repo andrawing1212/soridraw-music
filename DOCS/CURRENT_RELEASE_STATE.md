@@ -1,3 +1,31 @@
+## CURRENT — app500 Work P1 ×2 후 직접 복구 후보 (2026-10-25 KST)
+- **사용자 명시 운영 규칙:** Codex·Work 사용량 제한 때문에 **한 사용 주기(약 5시간)에 같은 문제로 여러 작업을 반복 요청하지 않는다**. 반드시 합친 단일 명령을 채팅에서 **사용자에게 직접 전달**, GitHub 댓글은 보조 기록. 현 Codex/Work 사용량 소진 시 추가 명령 금지. Work·Codex 동시 코드 수정 금지.
+- **기준:** 개발 PR #488 `fix/app500-durable-auth-quota-recovery` base actual preview `5a2c29efb0b2101729ab63d7de533c009d83fa77`. Codex가 로컬 P1 SDK 검사를 했으나 **commit/push 전 사용량 소진·중단**; 그 작업물은 GitHub에 전달되지 않음. 마지막 감사받은 SHA `fe5d176bd8452179ad8c190d21bd18f868db2a50`는 Work Medium P1 2건 FAIL (기존 LOCAL 탭 강제 로그아웃, 초기 자격 증명 quota 오류). 기존 app468 PREVIEW Hosting은 미변경.
+- **ChatGPT 최소 직접 보완 진행:** `src/lib/authRestorePersistence.js`로 기존 SDK auth LOCAL/SESSION 키의 **존재만 판정**하여 최초 인증을 **기존 저장소 단 한 곳**에서 복원. Firebase SDK 여러 저장소 배열의 자동 이전/타 저장소 키 삭제를 회피. 초기 기존 동일 UID의 저장 실패 중 **quota/security만** 원본 보존하며 새 UID·초기화 완료 후 오류는 전파. `src/firebase.js`는 명시적 Popup resolver 유지, 신규 로그인 persistence는 기존 `App.tsx`에서 계속 결정. `App.tsx`는 `auth.authStateReady()` 이후 신규 로그인 선택. source verifier 확장 및 실제 `firebase/auth` 패키지로 무네트워크 초기화 검사 추가. **최종 SDK/전체 CI 검증 전**.
+- **보호:** 기존 LOCAL 사용자 인증 키 임의 이전·삭제/신규 UID 재사용/Firestore canonical 사용자 데이터/초안/Music Note·Library/좋아요/Stage416 OFF/Reader OFF/기존 UI/Worker·Functions·Rules 변경 금지. 앱 버전·PREVIEW/TEST/PROD 배포 변경 없음. `APP500_RELEASE=HOLD`.
+- **다음:** 정확한 최종 PR HEAD에서 SDK quota, Auth recovery, 전체 제품 CI PASS 확인 → 독립 Work 재감사는 5시간 제한/사용량 회복 뒤 단일 명령만 사용자에게 전달 → 사용자 Chrome 기존·빈 캐시/두 탭/브라우저 완전 재시작 실측 전 PREVIEW/TEST 승격 금지.
+---
+
+## CURRENT — app500 로그인 유지 OFF/ON 감사 FAIL 대응 수정 후보 (2026-10-25 KST)
+- **사용자 우선 지시:** 말로만 감사·보류 반복하지 않고 실제 로그인 저장 개선을 완성. app500 source-only PR #488 `fix/app500-durable-auth-quota-recovery`, 시작 기준 preview `5a2c29efb0b2101729ab63d7de533c009d83fa77`, 실제 PREVIEW app468 Firebase Hosting `d4c2c39af3aec6f895bdfff33afdb6f8f2c37805` unchanged.
+- **기존 후보 `f2c807007b1e4d678a5f7a8e4a8f3767b91f7789` 소스 감사 FAIL 두 건 수정:** `getAuth` SDK 기본 restore는 SESSION을 IndexedDB로 이동시킬 수 있음 → `initializeAuth`에서 명시적 `browserPopupRedirectResolver`와 로그인 유지 ON=`IndexedDB→LOCAL→SESSION`, OFF=`SESSION→IndexedDB→LOCAL` 우선순위를 사용. 사용자 로그인 유지 설정만 호스트 전용 SameSite=Lax 기능성 쿠키 `soridraw_remember_login_v1`(1/0) 및 기존 localStorage에 동시 저장, quota 시 쿠키 복구, Firebase 토큰 쿠키 저장 금지. 저장소 전체 차단과 브라우저 eviction에서 100% 영구 로그인 보장 불가.
+- **임시 로그인 알림:** 사용자가 ON인데 `session/memory`로 로그인 성공하면 기존 토스트로 명확하게 장기 저장 실패를 알림 (Google/이메일). 기존 UID/초안·Music Note/Library·UI 레이아웃·Worker·Functions·Rules 공유 원본 변경 없음.
+- **검증:** old `f2c8070` 2 CI PASS는 새 후보 PASS가 아님. 관련 검사 확장 진행, 새 exact SHA CI 최종 PASS 전. 독립 Work 실행 0, Chrome 모바일 종료→재진입 실기기 0, PREVIEW/TEST/PRODUCTION 배포 0. `APP500_RELEASE=HOLD`. GitHub app497 #485/#469는 기존 HOLD.
+- **다음:** 최종 HEAD 기준 app498 auth + product 전체 CI 성공→ Work 독립 감사→ PREVIEW 승격/실사용 검증. TEST/PROD 승격 금지.
+- Stage416 1/4 25% OFF, 과거 속도 5/5 100%(재검증 전), app500 2/4 50%(코드/자동검증 단계).
+---
+
+## CURRENT — app500 Auth 영구 저장 quota 대응 후보 (2026-10-25 KST)
+- **사용자 우선 요청:** 모바일 Chrome 저장 공간 부족 시 장기 로그인 유지 우선 복구. app497 릴리스 엔진 작업은 HOLD 유지; 원래 PREVIEW 배포 app468 `d4c2c39af3aec6f895bdfff33afdb6f8f2c37805` 변화 없음.
+- **기준:** 작업 시작 실제 preview `5a2c29efb0b2101729ab63d7de533c009d83fa77`. source-only Draft [PR #488](https://github.com/andrawing1212/soridraw-music/pull/488) `fix/app500-durable-auth-quota-recovery`; 최종 감사/병합/배포 **아직 없음**.
+- **핵심 후보:** Firebase `getAuth` 시작 시 영구 사용자 session 복원 기능 유지(앱 시작 강제 `setPersistence(local/session)` 제거). 신규 자동로그인 ON: IndexedDB 영구 저장→localStorage 영구 저장→session→memory. localStorage rememberLogin preference 쓰기 실패로 IndexedDB 시도를 차단하지 않음. popup 내부 late quota 오류 시 다음 영구 저장 방법부터 복구. 이미 인증된 사용자 세션/UID 이동 및 초기화 금지.
+- **변경:** `src/firebase.js`, `src/App.tsx`, `src/lib/authStorageRecovery.ts`, `scripts/verify-498-auth-storage-recovery.mjs`, 기존 품질 CI workflow 및 `DOCS/APP500_DURABLE_AUTH_STORAGE_REPAIR.md`. 앱 사용자 UI/추천·좋아요/Firestore·D1/Functions/Rules/Worker 원본 구조 변경 없음.
+- **검증:** GitHub source PR 자동 CI 진행/최종 SHA 완료 판정 전. 코드 리뷰·독립 감사와 모바일 Chrome 실제 기존 세션/용량 부족/브라우저 종료→재실행/다중 탭 검증은 **미완료**. `AUTOLOGIN_PERSISTENCE=UNVERIFIED`, `APP500_RELEASE=HOLD`. 모든 영구 저장이 브라우저에서 차단되면 100% 자동로그인 보장 불가.
+- **다음:** PR #488 final SHA TypeScript/Build/회귀 CI 확인 → 독립 감사 → PREVIEW 검증 배포 기준 확인 → 사용자 실기기 판정. app497 Draft PR #485 충돌 통합은 그 후 재개. 공유 사용자 데이터 변환·삭제/TEST/PROD 승격 금지.
+- **진행률:** Stage416 1/4·25% OFF, 기존 앱 속도 5/5·100% 과거 기록(재측정 전), app500 Auth quota 후보 2/4·50%(코드 후보 작성·자동/실기기 검증 미완료).
+
+---
+
 ## CURRENT — app499 자동로그인 유지 감사 + app497 배포엔진 재개 (2026-10-25 KST)
 - **사용자 명령:** 모바일 Chrome 로그인 유지 추가확인 후 이전 개발방의 app497 TEST→PRODUCTION 배포엔진 승인 안전장치 작업 재개. 기준 실제 preview HEAD `e4b232118e0623486528e52d952787eaede7dcce`; 실제 PREVIEW Hosting app468 `d4c2c39af3aec6f895bdfff33afdb6f8f2c37805`. TEST/main/PRODUCTION 공유 원본 변경 없음.
 - **자동로그인 소스 감사:** `DOCS/APP499_AUTH_PERSISTENCE_AUDIT.md` 참조. app466 모바일 Chrome 계정 로그인 성공은 사용자 이미지로 확인, session fallback Toast가 표시됨. app467은 Toast만 제거해 **영구 로그인 복구 보장 아님**. `src/firebase.js`의 비동기 startup persistence와 `src/App.tsx`의 local→session→memory fallback은 localStorage quota 시 장기 로그인을 보장하지 못함. 기기 Chrome 전체 종료→재실행 실측, PC↔모바일·기존 캐시·빈 캐시·UID/미저장 작업 유지 테스트 **미실시, AUTOLOGIN_PERSISTENCE=UNVERIFIED/AT_RISK**. 자동 사용자 데이터/브라우저 캐시 삭제 금지. 인증 서버·배포 변경 없음.

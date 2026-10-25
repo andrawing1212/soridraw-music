@@ -1,3 +1,26 @@
+## NEXT — app500 기존 SDK 계정 보존·초기 quota 복구 최종검사 (2026-10-25)
+- **현 작업자:** ChatGPT가 같은 Draft PR #488 개발 브랜치만 작업; Codex/Work 쿼터 소진으로 추가 실행 요청 금지. 향후 필요 시 약 5시간 재설정 이후 Work Medium 독립 검증 **1건**을 이 채팅에서 사용자에게 직접 전달.
+- Work P1 이슈: (1) SDK 자동 LOCAL→IndexedDB 이동이 옛 탭 로그아웃을 초래 (2) Auth initialize 같은 UID 저장 공간 부족 시 SDK 초기화 실패. 실제 SDK 검증 코드 `scripts/verify-500-auth-sdk-restore.mjs`는 기존 캐시/모의 userdata, 네트워크 차단 상태에서 돌려야 함.
+- 파일 `src/lib/authRestorePersistence.js`, `src/firebase.js`, `src/App.tsx`, `scripts/verify-498-auth-storage-recovery.mjs`, 새 SDK 검사 및 기존 `app498-auth-storage-recovery-quality.yml`의 타깃 CI를 정확한 최종 commit에서 확인. 원본 SDK 인증키 삭제/앱 초안 삭제 금지.
+- 최종 결과 Work 감사 PASS, PC/모바일 기존 Chrome session·LOCAL·IndexedDB/쿼터+멀티탭·재실행 QA 전 `APP500_RELEASE=HOLD`; 사용자 배포 명령 없음. app497 #485/#469 HOLD.
+---
+
+## NEXT — app500 로그인 지속성 사용자 정책 수정 검증 (2026-10-25)
+- PR #488 `fix/app500-durable-auth-quota-recovery` (branch 기준 preview `5a2c29efb0b2101729ab63d7de533c009d83fa77`). Source audit에서 밝혀진 `getAuth` OFF 세션 영구승격 위험, quota로 '로그인 유지 ON' 설정 소실, session fallback 무경고를 최소 코드로 수정하는 개발 후보 작성.
+- 수정 대상 `src/firebase.js`, `src/App.tsx`, `scripts/verify-498-auth-storage-recovery.mjs`, `DOCS/APP500_DURABLE_AUTH_STORAGE_REPAIR.md`. Firebase `initializeAuth`의 OFF SESSION-first / ON durable-first, popup resolver 유지, 브라우저 저장 공간 부족 시 boolean cookie backup(credential never stored), Google/email temp warning, UID·초안 보호.
+- **다음 하나:** 정확한 PR 최신 SHA에서 targeted Auth 검사·TypeScript·Build·전체 회귀 CI PASS 확인. FAIL이면 같은 branch 최소 수정. 최종 SHA 고정 후 **독립 Work High 읽기 전용 감사** 수행. 검증 없는 merge/deploy 금지.
+- Chrome 실기기 기존 로그인 ON/OFF, storage quota, popup/이메일, restart, PC↔mobile, multi-tab, cookie disabled는 별도 사용자 기기 확인 필수. 메모리/세션 성공을 장기 로그인 PASS로 보고하지 않음.
+- 사용자 공유 원본·Music Note/Library/Explore UI/Worker/Functions/Cloudflare/Stage416 OFF/Reader OFF 고정. TEST/PRODUCTION 승격 승인 없음. app497 #485 HOLD 유지.
+---
+
+## NEXT — app500 저장 공간 부족 자동로그인 우선 복구 (2026-10-25 KST)
+- **사용자 명시 최우선:** 앱 내 로그인 유지 ON 상태에서 모바일 Chrome localStorage quota가 가득 차더라도 오래 로그인되도록 Firebase 기본 영구 저장 우선순위 복원. 자동 로그인 외 기능/UI/음악 원본 데이터 금지.
+- 개발 후보 Draft [PR #488](https://github.com/andrawing1212/soridraw-music/pull/488), base preview `5a2c29efb0b2101729ab63d7de533c009d83fa77`; `DOCS/APP500_DURABLE_AUTH_STORAGE_REPAIR.md`. 후보는 미병합·미배포. `getAuth`는 default IndexedDB→localStorage→session persistence 지원; startup에 `setPersistence` 강제하지 않고 신규 로그인에서만 명시적 IndexedDB LOCAL→Web LOCAL→session→memory fallback.
+- **정확한 다음 하나:** PR #488 마지막 HEAD quality CI(`verify-498-auth-storage-recovery.mjs`, TypeScript, Build, 기존 Like/Music Note 회귀) 확인하고 실패 시 로그인 코드만 최소 수정, SHA 동결 뒤 독립 Work 감사. 기존 세션 hydrate/rememberLogin OFF/Google popup 및 quota-full/IndexedDB blocked/스토리지 완전 차단/다중 탭 인증 회귀 확인.
+- Work PASS 이전 merger/deploy 금지. PREVIEW Hosting-only 검증 뒤 사용자 모바일 Chrome 전체 종료/재실행·미저장 작업 보존 실기기 확인. TEST/PRODUCTION은 별도 승인, 사용자 원본 삭제·캐시 전체 정리 금지. app497 PR #485, #469는 HOLD 상태 그대로.
+- Stage416 1/4 25% OFF, 기존 속도 5/5 100% 과거 기준, app500 후보 2/4 50% (자동/기기 검증 전).
+---
+
 ## NEXT — app497 통합 Codex High 작업 및 app499 로그인 유지 최종 실측 (2026-10-25 KST)
 - **현재 실제 제품:** preview `e4b232118e0623486528e52d952787eaede7dcce`/배포 app468 `d4c2c39af3aec6f895bdfff33afdb6f8f2c37805`; Source-only app497 owner acceptance candidate Draft PR [#485](https://github.com/andrawing1212/soridraw-music/pull/485), frozen release engine PR #469 `f521b9c8808397d47b596f840ff816cac374dd91`. 현 app497 브랜치에 예전 6개 release-engine 변경이 포함되어 있어 현재 preview(app468)와 merge conflict **가능; 무단 merge 금지**.
 - **Codex High 필수:** #485의 정확한 최종 SHA와 브랜치 CI 확인, 현재 app468 HEAD 기반으로 복원·rebase/통합하고 frozen Worker rollback/Hosting SITE:@VERSION 검증 유지. TEST 자동검사는 `TEST_AUTO_CHECKED`만 발급; `TEST_VERIFIED` 자동발급·고정 parity PASS 영구 금지. 별도 owner-initiated workflow에 서명키/권한/재실행 차단·출처 정확성, signed source/tree/Hosting/Worker/Media, PC·모바일 기존·빈 캐시·로그인·Music Note·Library·좋아요·추천·공개상태, 실제 3환경 parity 증빙 모두 필수. PROD preflight는 signed owner acceptance 없으면 배포 이전 단계에서 실패. HMAC 키 `SORIDRAW_RELEASE_ATTESTATION_KEY`는 관리자가 안전하게 구성하는 별도 준비사항; 현재 키 존재는 **확인되지 않음**, secret 없이 절대로 성공 처리 금지.

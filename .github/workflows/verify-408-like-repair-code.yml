@@ -378,6 +378,8 @@ jobs:
         run: node scripts/verify-studio-generation-modal-lazy.mjs
       - name: Verify lazy Master diagnostics original reset behavior
         run: node scripts/verify-217-cache-live-update-reset.mjs
+      - name: Verify app500 durable authentication quota recovery
+        run: node scripts/verify-498-auth-storage-recovery.mjs
       - name: TypeScript
         run: npm run lint
       - name: Build

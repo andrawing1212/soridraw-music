@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken as getAppCheckToken } from "firebase/app-check";
-import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence, browserSessionPersistence } from "firebase/auth";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore, initializeFirestore, memoryLocalCache, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -84,26 +84,12 @@ export const getFirebaseAppCheckToken = async () => {
 // Do not replace window.fetch globally: Firebase Auth popup sign-in and other
 // browser integrations must keep the native fetch implementation.
 
-const readRememberLoginPreference = () => {
-  if (typeof window === "undefined") return false;
-  try {
-    return window.localStorage.getItem("rememberLogin") === "true";
-  } catch {
-    return false;
-  }
-};
-
-const initialAuthPersistence = readRememberLoginPreference()
-  ? browserLocalPersistence
-  : browserSessionPersistence;
-
-// Use Firebase's standard Auth initializer so popup/redirect sign-in keeps the
-// default browser resolver on mobile. Login persistence still follows the
-// saved "remember login" preference instead of being forced to local storage.
+// Firebase getAuth() loads existing sessions from IndexedDB, localStorage or
+// sessionStorage in the SDK's supported order. Do not call setPersistence at
+// startup: that could migrate a valid existing account into a full store or
+// downgrade a durable account when the rememberLogin preference is unreadable.
+// A *new* sign-in explicitly chooses its mode in App.tsx based on the checkbox.
 export const auth = getAuth(app);
-void setPersistence(auth, initialAuthPersistence).catch((error) => {
-  console.warn("[Firebase Auth] persistence setup failed:", error);
-});
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({

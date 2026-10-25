@@ -7743,6 +7743,9 @@ function App() {
   };
 
   const prepareAuthAttempt = async () => {
+    // Already signed-in users must keep their existing Auth persistence and
+    // unsaved local-first work. Never downgrade a live auto-login session.
+    if (auth.currentUser) return null;
     let preferenceStorageFull = false;
     try {
       localStorage.setItem('rememberLogin', String(rememberLogin));
@@ -8112,6 +8115,12 @@ function App() {
         const authErrorMessage = getAuthErrorMessage(popupError);
         
         if (isRecoverableAuthStorageError(popupError)) {
+          // A popup may have already committed Firebase Auth before a later
+          // storage write fails; never migrate a newly authenticated account.
+          if (auth.currentUser) {
+            showAuthError('로그인은 연결되었습니다. 브라우저 저장 공간이 부족할 수 있으니 작성 중인 내용은 먼저 보관해주세요.');
+            return;
+          }
           if (authPersistenceFallbackModeRef.current === 'memory') {
             showAuthError('이 브라우저의 Google 인증 저장 공간 오류가 계속됩니다. 다른 브라우저에서 로그인해주세요. 앱 데이터는 삭제하지 않았습니다.');
             return;

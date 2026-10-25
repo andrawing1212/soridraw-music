@@ -55,6 +55,13 @@ try {
     new Promise((_, reject) => setTimeout(() => reject(new Error('Firebase Auth bootstrap timed out')), 12000)),
   ]);
   guarded.markReady();
+  if (auth.currentUser?.uid !== savedUid) {
+    console.error('Auth fixture no restored UID', {
+      persistedKeyStillPresent: browserStore.has(authKey),
+      persistedUidUnchanged: browserStore.get(authKey)?.uid === savedUid,
+      removals, rejectedWrites, harmlessWarning, sdkName:auth.name,
+    });
+  }
   assert.equal(auth.currentUser?.uid, savedUid,
     'real SDK must finish restoring the same UID even when initial user rewrite hits quota');
   assert.equal(browserStore.get(authKey)?.uid, savedUid,

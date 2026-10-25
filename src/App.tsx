@@ -7736,6 +7736,12 @@ function App() {
   const authPersistenceFallbackModeRef = useRef<AuthStorageMode | null>(null);
   const authPersistenceActiveModeRef = useRef<AuthStorageMode | null>(null);
   const authPreferenceStorageFullRef = useRef(false);
+  // A user switching the remember-login checkbox explicitly requests a new
+  // policy. Do not reuse a temporary fallback from the previous preference.
+  useEffect(() => {
+    authPersistenceFallbackModeRef.current = null;
+    authPersistenceActiveModeRef.current = null;
+  }, [rememberLogin]);
   const applyAuthPersistence = async (mode: AuthStorageMode): Promise<void> => {
     // Web Storage quota and IndexedDB quota are not interchangeable.
     // Never reject IndexedDB because a localStorage 4KB probe fails.

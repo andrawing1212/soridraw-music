@@ -136,7 +136,7 @@ assert.ok(!/signOut\(|localStorage\.clear\(|sessionStorage\.clear\(/.test(source
 )), 'app498 Google popup error handling must not log out users or erase browser storage');
 assert.match(source, /resolveAuthPersistence\(preferredMode, applyAuthPersistence, preferenceStorageFull\)/);
 assert.match(source, /if \(isRecoverableAuthStorageError\(popupError\)\) \{/);
-assert.match(source, /authPersistenceFallbackModeRef\.current = 'memory'/);
+assert.match(source, /authPersistenceFallbackModeRef\.current = nextMode/);
 assert.match(source, /if \(authPersistenceFallbackModeRef\.current === 'memory'\) \{/);
 assert.match(source, /if \(authPersistenceFallbackModeRef\.current === 'memory'\) \{/);
 assert.ok(!source.includes('현재 브라우저에서는 로그인 유지 대신 탭 단위로 로그인됩니다.'),

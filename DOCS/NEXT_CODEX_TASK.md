@@ -1,3 +1,10 @@
+## NEXT — app500 기존 SDK 계정 보존·초기 quota 복구 최종검사 (2026-10-25)
+- **현 작업자:** ChatGPT가 같은 Draft PR #488 개발 브랜치만 작업; Codex/Work 쿼터 소진으로 추가 실행 요청 금지. 향후 필요 시 약 5시간 재설정 이후 Work Medium 독립 검증 **1건**을 이 채팅에서 사용자에게 직접 전달.
+- Work P1 이슈: (1) SDK 자동 LOCAL→IndexedDB 이동이 옛 탭 로그아웃을 초래 (2) Auth initialize 같은 UID 저장 공간 부족 시 SDK 초기화 실패. 실제 SDK 검증 코드 `scripts/verify-500-auth-sdk-restore.mjs`는 기존 캐시/모의 userdata, 네트워크 차단 상태에서 돌려야 함.
+- 파일 `src/lib/authRestorePersistence.js`, `src/firebase.js`, `src/App.tsx`, `scripts/verify-498-auth-storage-recovery.mjs`, 새 SDK 검사 및 기존 `app498-auth-storage-recovery-quality.yml`의 타깃 CI를 정확한 최종 commit에서 확인. 원본 SDK 인증키 삭제/앱 초안 삭제 금지.
+- 최종 결과 Work 감사 PASS, PC/모바일 기존 Chrome session·LOCAL·IndexedDB/쿼터+멀티탭·재실행 QA 전 `APP500_RELEASE=HOLD`; 사용자 배포 명령 없음. app497 #485/#469 HOLD.
+---
+
 ## NEXT — app500 로그인 지속성 사용자 정책 수정 검증 (2026-10-25)
 - PR #488 `fix/app500-durable-auth-quota-recovery` (branch 기준 preview `5a2c29efb0b2101729ab63d7de533c009d83fa77`). Source audit에서 밝혀진 `getAuth` OFF 세션 영구승격 위험, quota로 '로그인 유지 ON' 설정 소실, session fallback 무경고를 최소 코드로 수정하는 개발 후보 작성.
 - 수정 대상 `src/firebase.js`, `src/App.tsx`, `scripts/verify-498-auth-storage-recovery.mjs`, `DOCS/APP500_DURABLE_AUTH_STORAGE_REPAIR.md`. Firebase `initializeAuth`의 OFF SESSION-first / ON durable-first, popup resolver 유지, 브라우저 저장 공간 부족 시 boolean cookie backup(credential never stored), Google/email temp warning, UID·초안 보호.

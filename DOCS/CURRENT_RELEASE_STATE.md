@@ -1,3 +1,14 @@
+## CURRENT — app500 사용자 승인 PREVIEW Hosting 배포 요청 (2026-10-26 KST)
+- 사용자: Work Medium 독립 감사 PASS 후 **PREVIEW 배포 진행 승인**. TEST/PRODUCTION 승인 아님.
+- 감사받은 로그인 소스 SHA `c3d96814964e8d7d6197f0b72c3cd969820661a0` (Work: P1 2건 PASS, 실제 Chrome 실기기 QA 미완료). 릴리스 PR #488이 `preview`에 merge commit `4f5af7e9212649300f981ca0ab280da5733da71d`로 승격됨.
+- Work 감사 이후 변경은 앱 `public/app-version.json` 468→500 및 냉동 app434 Worker 검사 버전 500 허용 2개뿐; Worker 코드/Functions/Rules/D1/공유 원본 불변. 앱 버전 변경만으로 서버 읽기·데이터 재생성 금지.
+- 릴리스 후보 head `08897d5392dcefd643cbc9823b6162f5b6667b96`: Auth + 실제 Firebase SDK + TypeScript + Build CI `40241336836` PASS, 전체 제품 회귀 `40241336861` PASS.
+- 릴리스 실행은 별도 명시적 trigger PR `release/app500-preview-hosting-20261026`만 사용: `.deploy/preview-app-release.trigger` → canonical `.github/workflows/firebase-hosting-custom-preview.yml` Firebase Hosting-only. Worker/Functions/RTDB Rules/Cloudflare/TEST/PRODUCTION/사용자 원본 변경 없음.
+- merge 전 보호 브랜치 main `b13360df1bab52e2d3b746ea47dc4e3718eef85c`, production `fa81b02b695a8e935cdbbf8cab1efe1b2c9387f4`. 이전 라이브 PREVIEW app468; Hosting 실제 app500 배포 결과·정확한 index/버전/TEST·PROD 불변 검증 전까지 **배포 완료 아님**.
+- 실제 모바일 Chrome 기존 저장소/ON-OFF/브라우저 완전 종료·재실행/두 탭/Google·이메일/초안·좋아요 대기열은 **미검증**. PREVIEW 확인 후 사용자 실사용 검증, 실패 시 TEST 승격 금지.
+- Codex/Work는 5시간 주기 내 동일 작업 추가 반복 요청 금지. 명령은 사용자에게 직접 전달하고 필요할 때만 한 번의 통합 요청.
+---
+
 ## CURRENT — app500 Work P1 ×2 후 직접 복구 후보 (2026-10-25 KST)
 - **사용자 명시 운영 규칙:** Codex·Work 사용량 제한 때문에 **한 사용 주기(약 5시간)에 같은 문제로 여러 작업을 반복 요청하지 않는다**. 반드시 합친 단일 명령을 채팅에서 **사용자에게 직접 전달**, GitHub 댓글은 보조 기록. 현 Codex/Work 사용량 소진 시 추가 명령 금지. Work·Codex 동시 코드 수정 금지.
 - **기준:** 개발 PR #488 `fix/app500-durable-auth-quota-recovery` base actual preview `5a2c29efb0b2101729ab63d7de533c009d83fa77`. Codex가 로컬 P1 SDK 검사를 했으나 **commit/push 전 사용량 소진·중단**; 그 작업물은 GitHub에 전달되지 않음. 마지막 감사받은 SHA `fe5d176bd8452179ad8c190d21bd18f868db2a50`는 Work Medium P1 2건 FAIL (기존 LOCAL 탭 강제 로그아웃, 초기 자격 증명 quota 오류). 기존 app468 PREVIEW Hosting은 미변경.

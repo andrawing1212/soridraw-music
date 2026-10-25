@@ -1,3 +1,11 @@
+## NEXT — app500 PREVIEW Hosting postflight·모바일 Chrome 확인 (2026-10-26 KST)
+- **배포 요청 승인됨:** Work Medium 정확 SHA `c3d96814964e8d7d6197f0b72c3cd969820661a0` 독립 PASS, release candidate `08897d5392dcefd643cbc9823b6162f5b6667b96` 두 CI PASS; PR #488가 `preview` merge SHA `4f5af7e9212649300f981ca0ab280da5733da71d`로 완료, 앱 버전 500.
+- **지금 한 작업:** 기존 `.deploy/preview-app-release.trigger` Hosting-only PR을 merge해 `.github/workflows/firebase-hosting-custom-preview.yml` 시작. Workflow exact target SHA·TypeScript·Build·필요한 Tests·Firebase PREVIEW Hosting·preview.soridraw.com 정확한 build/index/500 및 TEST/PROD 불변 PASS 확인. 미완료면 배포 완료 보고 금지.
+- **후속:** Chrome 기존 로그인 ON/OFF, LOCAL/SESSION/IndexedDB/용량 부족/동시 탭/브라우저 종료·재실행, Google/이메일 인증, 초안·하트 대기열·PC↔모바일 확인. 실기기 확인 전 장기 로그인 보장 PASS 금지. TEST/PRODUCTION 별도 요청 전 승격 금지.
+- 공유 사용자 원본/Firestore/D1/Rules/Functions/Worker 미변경, Stage416 OFF, Reader OFF, app497 #485/#469 HOLD.
+- Codex/Work 추가 중복 요청 금지: 한 사용 주기 약 5시간마다 하나의 통합 명령을 사용자에게 직접 전달.
+---
+
 ## NEXT — app500 기존 SDK 계정 보존·초기 quota 복구 최종검사 (2026-10-25)
 - **현 작업자:** ChatGPT가 같은 Draft PR #488 개발 브랜치만 작업; Codex/Work 쿼터 소진으로 추가 실행 요청 금지. 향후 필요 시 약 5시간 재설정 이후 Work Medium 독립 검증 **1건**을 이 채팅에서 사용자에게 직접 전달.
 - Work P1 이슈: (1) SDK 자동 LOCAL→IndexedDB 이동이 옛 탭 로그아웃을 초래 (2) Auth initialize 같은 UID 저장 공간 부족 시 SDK 초기화 실패. 실제 SDK 검증 코드 `scripts/verify-500-auth-sdk-restore.mjs`는 기존 캐시/모의 userdata, 네트워크 차단 상태에서 돌려야 함.

@@ -103,7 +103,7 @@ export function assertAcceptanceEvidence(evidence, pendingManifest, ownerLogin) 
     throw Error('OWNER_ACCEPTANCE_MEASURED_3ENV_PARITY_REQUIRED');
   if (evidence.sharedUserOriginalsUnchanged !== true ||
       evidence.stage416Off !== true || evidence.readerOff !== true ||
-      evidence.noUserDataCopy === false)
+      evidence.noUserDataCopy !== true)
     throw Error('OWNER_ACCEPTANCE_SHARED_DATA_OR_FLAGS_UNVERIFIED');
 }
 

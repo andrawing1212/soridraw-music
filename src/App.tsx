@@ -29,6 +29,7 @@ import {
   removeStudioHeartPendingIntent,
   updateStudioHeartPendingIntent,
   writeStudioHeartPendingIntent,
+  writeStudioHeartPendingIntentChecked,
   type StudioHeartPendingIntent,
 } from './lib/studioHeartBatch';
 
@@ -11938,7 +11939,18 @@ const toggleCycleVariantSelection = (
       pendingRemotePreviewVersion: existing?.pendingRemotePreviewVersion || 0,
       retryCount: 0,
     };
-    writeStudioHeartPendingIntent(intent);
+    const durableIntentResult = writeStudioHeartPendingIntentChecked(intent);
+    if (durableIntentResult === 'blocked-existing') {
+      // A previous click is still queued. A direct new write could be reversed
+      // by that older timer, so preserve its durable intent and reject this one.
+      throw new Error('STUDIO_HEART_PENDING_STORAGE_BLOCKED_WITH_EXISTING');
+    }
+    if (durableIntentResult === 'blocked-empty') {
+      // No old pending action can race with this click. Bypass the batching
+      // queue and let the caller use the existing one-item canonical save path.
+      // No optimistic "saved" toast or phantom Music Note row is published.
+      return false;
+    }
     scheduleStudioHeartPendingIntent(safeDocumentId);
 
     // app302 option-2:
@@ -16819,6 +16831,9 @@ ${normalizePromptForDisplay(result.prompt)}
       }
     } catch (error) {
       console.warn('Studio favorite toggle failed.', error);
+      if ((error as Error)?.message === 'STUDIO_HEART_PENDING_STORAGE_BLOCKED_WITH_EXISTING') {
+        showToast('브라우저 저장 공간이 부족하여 이번 하트 변경을 저장하지 못했습니다. 이전 저장 대기는 보존했습니다.');
+      }
     } finally {
       const elapsed = Date.now() - favoriteToggleStartedAt;
       if (elapsed < 450) {

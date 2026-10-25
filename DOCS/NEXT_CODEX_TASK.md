@@ -1,3 +1,10 @@
+## NEXT — app500 PREVIEW 배포 완료 → 모바일 Chrome 로그인 실사용 QA (2026-10-26)
+- Firebase PREVIEW 배포 **성공**: run `40242015534`, 실제 호스팅 배포 소스 `8da70f240bbca8e1b8305f11cdd8cd240efcda10`, preview.soridraw.com app-version=500 및 remote/local index SHA 동일, TEST/PRODUCTION untouched, Worker/Functions/Rules/D1/user data unchanged. 추가 배포 **불필요**.
+- app500 로그인 소스 Work Medium P1 ×2 **PASS**, SDK/TS/Build/전체 제품 CI **PASS**. 그러나 실제 Android Chrome 영구 로그인·기존 SESSION/LOCAL/IndexedDB, 두 탭, quota, 이메일/Google 로그인, 신규가입, Music Note 초안/좋아요 대기열/PC↔모바일 QA는 **미검증**.
+- 다음은 사용자 실기기 **PREVIEW** 확인: 기존 계정 로그인 유지 ON 상태로 브라우저 완전 종료 후 재실행 시 로그인 유지; OFF이면 설정대로 작동; 기존·신규 탭 동시 실행해 세션 유지; 저장 공간 부족에서 인증 오류/초안 손실 없는지 점검. 사이트 데이터 전체 초기화/사용자 원본 삭제 금지.
+- 사용자 실사용 결과 PASS 시에만 다음 TEST 승격 **별도 사용자 요청**을 기다린다. app497 release engine PR #485/#469 HOLD, Stage416 OFF, Reader OFF; 앱 UI 및 공유 원본 보호. Codex/Work 반복 명령 금지; 약 5시간 사용 주기당 한 개 통합 명령을 사용자에게 직접 제공.
+---
+
 ## NEXT — app500 PREVIEW Hosting postflight·모바일 Chrome 확인 (2026-10-26 KST)
 - **배포 요청 승인됨:** Work Medium 정확 SHA `c3d96814964e8d7d6197f0b72c3cd969820661a0` 독립 PASS, release candidate `08897d5392dcefd643cbc9823b6162f5b6667b96` 두 CI PASS; PR #488가 `preview` merge SHA `4f5af7e9212649300f981ca0ab280da5733da71d`로 완료, 앱 버전 500.
 - **지금 한 작업:** 기존 `.deploy/preview-app-release.trigger` Hosting-only PR을 merge해 `.github/workflows/firebase-hosting-custom-preview.yml` 시작. Workflow exact target SHA·TypeScript·Build·필요한 Tests·Firebase PREVIEW Hosting·preview.soridraw.com 정확한 build/index/500 및 TEST/PROD 불변 PASS 확인. 미완료면 배포 완료 보고 금지.

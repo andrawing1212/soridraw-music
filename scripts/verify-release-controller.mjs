@@ -49,7 +49,7 @@ function validate(source = workflow) {
   const prodDeploy = step(source, 'PROD_DEPLOY verified identities only');
   assert.match(prodDeploy, /release-media-worker-runtime\.mjs production upload/);
   assert.match(prodDeploy, /release-media-worker-runtime\.mjs production activate/);
-  assert.match(prodDeploy, /hosting:clone "soridraw-test@\$test_hosting_version_id"/);
+  assert.match(prodDeploy, /hosting:clone "soridraw-test:@\$test_hosting_version_id"/);
   assert.doesNotMatch(prodDeploy, /refs\/heads\/production/);
   assert.doesNotMatch(prodDeploy, /soridraw-test:live/);
   assert.doesNotMatch(prodDeploy, /soridraw-test:@/);

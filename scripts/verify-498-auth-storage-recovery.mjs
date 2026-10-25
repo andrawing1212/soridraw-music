@@ -143,16 +143,16 @@ assert.match(source, /if \(authPersistenceFallbackModeRef\.current === 'memory'\
 assert.match(source, /if \(authPersistenceFallbackModeRef\.current === 'memory'\) \{/);
 assert.ok(!source.includes('현재 브라우저에서는 로그인 유지 대신 탭 단위로 로그인됩니다.'),
   'Successful session fallback must not show a misleading blocking-style toast');
-assert.ok(source.includes('임시 로그인으로 연결되었습니다. 브라우저를 닫으면 다시 로그인해야 할 수 있습니다.'),
-  'Memory-only auth must still warn about possible sign-out');
-assert.match(source, /const prepareAuthAttempt =[\s\S]*?try \{\s*localStorage\.setItem\('rememberLogin'/);
-assert.match(source, /useEffect\(\(\) => \{\s*try \{\s*localStorage\.setItem\('rememberLogin'/);
+assert.ok(source.includes('로그인은 연결되었지만 이 브라우저에서 장기 저장은 실패했습니다.'),
+  'Session and memory auth must both warn remember-login users');
+assert.match(source, /const prepareAuthAttempt =[\s\S]*?writeRememberLoginPreference\(rememberLogin\)/);
+assert.match(source, /useEffect\(\(\) => \{[\s\S]*?writeRememberLoginPreference\(rememberLogin\);\s*\}, \[rememberLogin\]\)/);
 const authPart = source.slice(source.indexOf('const prepareAuthAttempt = async'), source.indexOf('// 3. HANDLE REDIRECT RESULT'));
 assert.ok(!/localStorage\.clear\(|sessionStorage\.clear\(|deleteDatabase\(|caches\.delete\(/.test(authPart),
   'Login recovery must not erase any browser/app cache');
 
 const firebaseSource = readFileSync('src/firebase.js', 'utf8');
-assert.ok(firebaseSource.includes('export const auth = getAuth(app);'));
+assert.ok(firebaseSource.includes('export const auth = initializeAuth(app, {'));
 assert.ok(!firebaseSource.includes('setPersistence(auth, initialAuthPersistence)'),
   'startup must never demote a restored account on a missing/blocked preference');
 assert.ok(source.includes("mode === 'indexeddb'") && source.includes('indexedDBLocalPersistence'),
@@ -173,6 +173,81 @@ assert.ok(emailFlow.includes("authMode === 'signup'") && emailFlow.includes('회
 const emailRecovery = emailFlow.slice(emailFlow.indexOf("console.error('Email auth error:'"));
 assert.ok(!/signInWithEmailAndPassword\(|createUserWithEmailAndPassword\(|signOut\(|localStorage\.clear\(|sessionStorage\.clear\(/.test(emailRecovery),
   'email quota recovery must not replay credentials, sign out, or clear app data');
+
+
+const { runInNewContext } = await import('node:vm');
+const firebasePreferenceBlock = firebaseSource.slice(firebaseSource.indexOf('const REMEMBER_LOGIN_COOKIE'),
+  firebaseSource.indexOf('export const googleProvider ='));
+assert.ok(firebasePreferenceBlock.includes('const REMEMBER_LOGIN_COOKIE'));
+assert.match(firebasePreferenceBlock, /popupRedirectResolver: browserPopupRedirectResolver/,
+  'explicit Auth initializer must retain mobile Google popup/redirect resolver');
+assert.match(firebasePreferenceBlock, /\[browserSessionPersistence, indexedDBLocalPersistence, browserLocalPersistence\]/,
+  'OFF must initialize SESSION first; Firebase otherwise migrates tab-only credentials to LOCAL');
+assert.match(firebasePreferenceBlock, /\[indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence\]/,
+  'ON must initialize durable IndexedDB first and allow Web local fallback');
+assert.ok(!firebasePreferenceBlock.includes('accessToken') && !firebasePreferenceBlock.includes('refreshToken'),
+  'functional cookie must never hold Firebase credentials');
+
+const preferenceFixture = ({ initial = {}, blocked = false, cookieInitial = '' } = {}) => {
+  const store = new Map(Object.entries(initial));
+  const cookieStore = new Map();
+  if (cookieInitial) {
+    const [key, value] = cookieInitial.split('=');
+    cookieStore.set(key, value);
+  }
+  const browser = {
+    localStorage: {
+      getItem: key => { if (blocked) throw Object.assign(new Error('blocked'), { name: 'SecurityError' }); return store.has(key) ? store.get(key) : null; },
+      setItem: (key, value) => { if (blocked) throw Object.assign(new Error('full'), { name: 'QuotaExceededError' }); store.set(key, value); },
+    },
+  };
+  const document = {
+    get cookie() { return [...cookieStore].map(([k,v]) => k+'='+v).join('; '); },
+    set cookie(text) { const [kv] = text.split(';'); const pos = kv.indexOf('='); cookieStore.set(kv.slice(0,pos), kv.slice(pos+1)); },
+  };
+  const ctx = { window: browser, document, location: { protocol: 'https:' },
+    app: {}, indexedDBLocalPersistence: 'indexeddb',
+    browserLocalPersistence: 'local', browserSessionPersistence: 'session',
+    browserPopupRedirectResolver: 'popup',
+    initializeAuth: (_app, deps) => deps,
+  };
+  return runInNewContext(firebasePreferenceBlock.replace(/export const /g, 'const ')
+      + '\n({ auth, readRememberLoginPreference, writeRememberLoginPreference })', ctx);
+};
+const fromLocalTrue = preferenceFixture({ initial: { rememberLogin: 'true' } });
+assert.equal(fromLocalTrue.readRememberLoginPreference(), true);
+assert.deepEqual(Array.from(fromLocalTrue.auth.persistence), ['indexeddb','local','session']);
+assert.equal(fromLocalTrue.auth.popupRedirectResolver, 'popup');
+
+const fromLocalFalse = preferenceFixture({ initial: { rememberLogin: 'false' } });
+assert.equal(fromLocalFalse.readRememberLoginPreference(), false);
+assert.deepEqual(Array.from(fromLocalFalse.auth.persistence), ['session','indexeddb','local']);
+const brandNew = preferenceFixture();
+assert.equal(brandNew.readRememberLoginPreference(), false);
+assert.equal(brandNew.auth.persistence[0], 'session');
+
+const quotaButCookieOn = preferenceFixture({
+  initial: {rememberLogin:'false'}, blocked: true,
+  cookieInitial: 'soridraw_remember_login_v1=1',
+});
+assert.equal(quotaButCookieOn.readRememberLoginPreference(), true);
+assert.equal(quotaButCookieOn.auth.persistence[0], 'indexeddb');
+assert.equal(quotaButCookieOn.writeRememberLoginPreference(true), false);
+assert.equal(quotaButCookieOn.readRememberLoginPreference(), true,
+  'cookie must preserve ON when localStorage write is blocked');
+const blockedWithoutCookie = preferenceFixture({blocked:true});
+assert.equal(blockedWithoutCookie.readRememberLoginPreference(), true,
+  'storage errors are unknown, not an explicit user opt-out');
+assert.equal(blockedWithoutCookie.auth.persistence[0], 'indexeddb');
+const recovered = preferenceFixture({initial:{rememberLogin:'false'}});
+assert.equal(recovered.writeRememberLoginPreference(true), true);
+assert.equal(recovered.readRememberLoginPreference(), true);
+assert.equal(recovered.writeRememberLoginPreference(false), true);
+assert.equal(recovered.readRememberLoginPreference(), false);
+
+assert.match(source, /authPersistenceActiveModeRef.current === 'session'[\s\S]*?authPersistenceActiveModeRef.current === 'memory'/,
+  'both temporary fallback modes must be disclosed for remember-login ON');
+console.log('SORIDRAW_APP500_PREFERENCE_RESTORE_POLICY=PASS');
 
 console.log('SORIDRAW_APP498_AUTH_STORAGE_RECOVERY=PASS');
 console.log('SORIDRAW_APP500_DURABLE_AUTH_QUOTA_RECOVERY=PASS');

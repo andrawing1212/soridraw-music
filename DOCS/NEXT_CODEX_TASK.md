@@ -1,3 +1,10 @@
+## NEXT — app501 Recent save-heart Music Note phantom save regression (2026-10-26)
+- 사용자가 app500 PREVIEW에서 로그인 유지·동시 탭 **PASS**, 최근 생성곡 저장하트→Music Note 누락 **FAIL** 보고. TEST/PROD 승격 HOLD.
+- 원인 후보: 30초 Studio pending localStorage full 시 `writeAll` 실패를 숨겨도 저장 성공 토스트, canonical flush 없음. branch `fix/app501-studio-heart-quota-safe`에서 **정확한 local pending 저장 read-back**, 새 save 실패만 기존 one-item canonical 즉시 저장, 이전 pending 충돌 시 재저장 차단·오류 안내. 정상 30초 W0/W1·즉시 local/다른 기기 RTDB preview·Music Note 표시·UI·비용 불변.
+- **다음:** `verify-501-studio-heart-quota-safe.ts`와 기존 product quality CI, TS, Build PASS 확인; 문제 있으면 해당 경로만 최소 수정. 사용자 직접 PREVIEW 신규 배포 승인이 없으므로 **코드 PR만**, 기존 Hosting 유지. 추가 Codex·Work 연속 명령 금지.
+- 저장 실패 원본 데이터 삭제/overwrite, 사이트 데이터 초기화, 모든 favorites 서버 재조회, Stage416 활성화, main/production/Worker/Functions/Rules 변경 금지.
+---
+
 ## NEXT — app500 PREVIEW 배포 완료 → 모바일 Chrome 로그인 실사용 QA (2026-10-26)
 - Firebase PREVIEW 배포 **성공**: run `40242015534`, 실제 호스팅 배포 소스 `8da70f240bbca8e1b8305f11cdd8cd240efcda10`, preview.soridraw.com app-version=500 및 remote/local index SHA 동일, TEST/PRODUCTION untouched, Worker/Functions/Rules/D1/user data unchanged. 추가 배포 **불필요**.
 - app500 로그인 소스 Work Medium P1 ×2 **PASS**, SDK/TS/Build/전체 제품 CI **PASS**. 그러나 실제 Android Chrome 영구 로그인·기존 SESSION/LOCAL/IndexedDB, 두 탭, quota, 이메일/Google 로그인, 신규가입, Music Note 초안/좋아요 대기열/PC↔모바일 QA는 **미검증**.

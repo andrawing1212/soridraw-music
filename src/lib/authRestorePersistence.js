@@ -67,20 +67,6 @@ export const protectInitialAuthRestore = (UnderlyingPersistence, onWriteBlocked 
       }
     }
 
-    async _remove(key) {
-      // A failed initial restore must never erase an existing SDK auth record.
-      // Normal explicit signOut after Auth is ready still removes its key.
-      if (!initialRestoreFinished && key.startsWith('firebase:authUser:')) {
-        try {
-          const prior = await super._get(key);
-          if (prior && typeof prior.uid === 'string') return;
-        } catch {
-          // Do not turn a blocked read into an indiscriminate delete.
-          return;
-        }
-      }
-      return super._remove(key);
-    }
   };
   return {
     persistence: ProtectedPersistence,

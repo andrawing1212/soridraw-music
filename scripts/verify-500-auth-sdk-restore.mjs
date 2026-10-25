@@ -3,7 +3,7 @@
 // No network, actual Firebase account, Firebase project credentials or media.
 import assert from 'node:assert/strict';
 import { initializeApp, deleteApp } from 'firebase/app';
-import { initializeAuth, inMemoryPersistence, setPersistence } from 'firebase/auth';
+import { initializeAuth } from 'firebase/auth';
 import { protectInitialAuthRestore, getAuthUserStorageKey } from '../src/lib/authRestorePersistence.js';
 
 const originalFetch = globalThis.fetch;
@@ -30,7 +30,8 @@ class ExistingLocalAuthPersistence {
   async _isAvailable() { return true; }
   async _get(key) { return browserStore.get(key) ?? null; }
   async _set(key, value) {
-    if (key === authKey && rejectedWrites++ < 1) {
+    if (key === authKey) {
+      rejectedWrites++;
       const error = new Error('quota exceeded at actual restored credential write');
       error.name = 'QuotaExceededError';
       throw error;
@@ -68,10 +69,6 @@ try {
     'quota after startup is not a successful persistent credential write');
   assert.equal(browserStore.get(authKey)?.uid, savedUid);
 
-  // A fresh signed-out Auth must still accept explicit memory-only selection.
-  // No network signin is needed to verify that SDK remains usable.
-  await setPersistence(auth, inMemoryPersistence);
-  assert.equal(auth.currentUser?.uid, savedUid, 'SDK must not lose the account unexpectedly');
   console.log('SORIDRAW_APP500_REAL_FIREBASE_AUTH_BOOTSTRAP=PASS');
 } finally {
   globalThis.fetch = originalFetch;

@@ -1,3 +1,14 @@
+## CURRENT — app500 Auth 영구 저장 quota 대응 후보 (2026-10-25 KST)
+- **사용자 우선 요청:** 모바일 Chrome 저장 공간 부족 시 장기 로그인 유지 우선 복구. app497 릴리스 엔진 작업은 HOLD 유지; 원래 PREVIEW 배포 app468 `d4c2c39af3aec6f895bdfff33afdb6f8f2c37805` 변화 없음.
+- **기준:** 작업 시작 실제 preview `5a2c29efb0b2101729ab63d7de533c009d83fa77`. source-only Draft [PR #488](https://github.com/andrawing1212/soridraw-music/pull/488) `fix/app500-durable-auth-quota-recovery`; 최종 감사/병합/배포 **아직 없음**.
+- **핵심 후보:** Firebase `getAuth` 시작 시 영구 사용자 session 복원 기능 유지(앱 시작 강제 `setPersistence(local/session)` 제거). 신규 자동로그인 ON: IndexedDB 영구 저장→localStorage 영구 저장→session→memory. localStorage rememberLogin preference 쓰기 실패로 IndexedDB 시도를 차단하지 않음. popup 내부 late quota 오류 시 다음 영구 저장 방법부터 복구. 이미 인증된 사용자 세션/UID 이동 및 초기화 금지.
+- **변경:** `src/firebase.js`, `src/App.tsx`, `src/lib/authStorageRecovery.ts`, `scripts/verify-498-auth-storage-recovery.mjs`, 기존 품질 CI workflow 및 `DOCS/APP500_DURABLE_AUTH_STORAGE_REPAIR.md`. 앱 사용자 UI/추천·좋아요/Firestore·D1/Functions/Rules/Worker 원본 구조 변경 없음.
+- **검증:** GitHub source PR 자동 CI 진행/최종 SHA 완료 판정 전. 코드 리뷰·독립 감사와 모바일 Chrome 실제 기존 세션/용량 부족/브라우저 종료→재실행/다중 탭 검증은 **미완료**. `AUTOLOGIN_PERSISTENCE=UNVERIFIED`, `APP500_RELEASE=HOLD`. 모든 영구 저장이 브라우저에서 차단되면 100% 자동로그인 보장 불가.
+- **다음:** PR #488 final SHA TypeScript/Build/회귀 CI 확인 → 독립 감사 → PREVIEW 검증 배포 기준 확인 → 사용자 실기기 판정. app497 Draft PR #485 충돌 통합은 그 후 재개. 공유 사용자 데이터 변환·삭제/TEST/PROD 승격 금지.
+- **진행률:** Stage416 1/4·25% OFF, 기존 앱 속도 5/5·100% 과거 기록(재측정 전), app500 Auth quota 후보 2/4·50%(코드 후보 작성·자동/실기기 검증 미완료).
+
+---
+
 ## CURRENT — app499 자동로그인 유지 감사 + app497 배포엔진 재개 (2026-10-25 KST)
 - **사용자 명령:** 모바일 Chrome 로그인 유지 추가확인 후 이전 개발방의 app497 TEST→PRODUCTION 배포엔진 승인 안전장치 작업 재개. 기준 실제 preview HEAD `e4b232118e0623486528e52d952787eaede7dcce`; 실제 PREVIEW Hosting app468 `d4c2c39af3aec6f895bdfff33afdb6f8f2c37805`. TEST/main/PRODUCTION 공유 원본 변경 없음.
 - **자동로그인 소스 감사:** `DOCS/APP499_AUTH_PERSISTENCE_AUDIT.md` 참조. app466 모바일 Chrome 계정 로그인 성공은 사용자 이미지로 확인, session fallback Toast가 표시됨. app467은 Toast만 제거해 **영구 로그인 복구 보장 아님**. `src/firebase.js`의 비동기 startup persistence와 `src/App.tsx`의 local→session→memory fallback은 localStorage quota 시 장기 로그인을 보장하지 못함. 기기 Chrome 전체 종료→재실행 실측, PC↔모바일·기존 캐시·빈 캐시·UID/미저장 작업 유지 테스트 **미실시, AUTOLOGIN_PERSISTENCE=UNVERIFIED/AT_RISK**. 자동 사용자 데이터/브라우저 캐시 삭제 금지. 인증 서버·배포 변경 없음.

@@ -1,0 +1,28 @@
+name: SORIDRAW app497 Owner Acceptance Guard — No Deploy
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/release-owner-acceptance-497.mjs'
+      - 'scripts/verify-497-owner-acceptance-gate.mjs'
+      - '.github/workflows/app497-owner-acceptance-guard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-attestation-fixtures:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reject missing and spoofed TEST owner acceptance
+        run: node scripts/verify-497-owner-acceptance-gate.mjs
+      - name: Prove no release execution
+        run: echo 'APP497_ATTESTATION_FIXTURES_ONLY;NO_RELEASE_CONTROLLER_DISPATCH;NO_HOSTING_WORKER_FUNCTIONS_RULES_OR_DATA_CHANGES'

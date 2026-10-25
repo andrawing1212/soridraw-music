@@ -7987,7 +7987,35 @@ function App() {
       setIsAuthModalOpen(false);
     } catch (error: any) {
       console.error('Email auth error:', error);
-      setAuthMessage(getEmailAuthErrorMessage(error));
+      // An email credential write may fail after IndexedDB availability
+      // passed. Preserve any already-authenticated account, and let the user
+      // retry manually with the next storage backend (never replay credentials).
+      if (isRecoverableAuthStorageError(error) && auth.currentUser) {
+        setAuthMessage('계정은 연결되었지만 로그인 저장 공간이 부족할 수 있습니다. 작성 중인 내용은 먼저 보관해주세요.');
+      } else if (isRecoverableAuthStorageError(error) && authMode === 'login'
+        && authPersistenceActiveModeRef.current && authPersistenceActiveModeRef.current !== 'memory') {
+        try {
+          const nextMode = await recoverAuthPersistenceAfterWriteFailure(
+            authPersistenceActiveModeRef.current,
+            applyAuthPersistence,
+            authPreferenceStorageFullRef.current,
+          );
+          authPersistenceActiveModeRef.current = nextMode;
+          authPersistenceFallbackModeRef.current = nextMode;
+          setAuthMessage(nextMode === 'local' || nextMode === 'indexeddb'
+            ? '다른 영구 저장 방법을 준비했습니다. 이메일 로그인을 다시 눌러주세요.'
+            : '브라우저 저장 공간이 부족해 임시 로그인 방식으로 전환했습니다. 이메일 로그인을 다시 눌러주세요. 브라우저를 닫으면 로그인이 풀릴 수 있습니다.');
+        } catch (recoveryError) {
+          console.error('[Auth] Non-destructive email persistence recovery failed:', recoveryError);
+          setAuthMessage(getEmailAuthErrorMessage(error));
+        }
+      } else if (isRecoverableAuthStorageError(error) && authMode === 'signup') {
+        // A signup request can have completed remotely even when its local
+        // Auth persistence failed; a blind repeated signup could be unsafe.
+        setAuthMessage('가입 처리가 이미 완료되었을 수 있습니다. 회원가입을 반복하지 말고 이메일 로그인으로 확인해주세요. 앱 데이터는 삭제하지 않았습니다.');
+      } else {
+        setAuthMessage(getEmailAuthErrorMessage(error));
+      }
     } finally {
       setIsLoggingIn(false);
     }

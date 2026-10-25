@@ -11,7 +11,8 @@ export const isRecoverableAuthStorageError = (error: unknown): boolean => {
   const message = String(item.message ?? '').toLowerCase();
 
   if (code === '22' || code === '1014' || code === 'quotaexceedederror'
-    || code === 'auth/web-storage-unsupported') return true;
+    || code === 'auth/web-storage-unsupported'
+    || code === 'auth/unsupported-persistence-type') return true;
   if (name === 'quotaexceedederror' || name === 'ns_error_dom_quota_reached'
     || name === 'securityerror') return true;
   if (/quota.*exceed|storage.*quota|storage.*space|storage.*full|storage.*disabled/.test(message)) return true;

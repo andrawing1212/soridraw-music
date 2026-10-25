@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   readStudioHeartPendingIntent,
-  writeStudioHeartPendingIntent,
   writeStudioHeartPendingIntentChecked,
   type StudioHeartPendingIntent,
 } from '../src/lib/studioHeartBatch';
@@ -70,7 +69,9 @@ try {
     'only an independently verified durable write may enter the 30-second queue');
   assert.ok(queue.indexOf('durableIntentResult ===') < queue.indexOf('publishMusicNoteHeartPreviewDelta('),
     'never broadcast saved membership without either a durable queue or canonical write');
-  const heart = app.slice(app.indexOf('const handleToggleCurrentStudioFavorite ='),app.indexOf('  const ',app.indexOf('const handleToggleCurrentStudioFavorite =')+60));
+  const heartStart = app.indexOf('const handleToggleCurrentStudioFavorite =');
+  assert.ok(heartStart >= 0);
+  const heart = app.slice(heartStart, heartStart + 24000);
   assert.match(heart,/if \(queueStudioHeartPendingIntent\([\s\S]*?\)\) \{[\s\S]*?return;/,
     'successful batch alone may short-circuit, quota-blocked fresh saves must continue to direct favorite path');
   assert.ok(heart.includes("await toggleFavorite(heartSnapshot as SongResult"),

@@ -1210,7 +1210,7 @@ const isPureInstrumentalBgmGenreSelection = (ids: Array<string | null | undefine
   return cleanIds.length > 0 && cleanIds.every(isInstrumentalBgmGenreId);
 };
 import { signInWithPopup, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, browserLocalPersistence, inMemoryPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, fetchSignInMethodsForEmail, type User } from 'firebase/auth';
-import { isRecoverableAuthStorageError, resolveAuthPersistence, type AuthStorageMode } from './lib/authStorageRecovery';
+import { isRecoverableAuthStorageError, probeAuthStorageCapacity, resolveAuthPersistence, type AuthStorageMode } from './lib/authStorageRecovery';
 
 type AuthMode = 'login' | 'signup' | 'reset';
 type EmailVerificationGate = 'idle' | 'checking' | 'required';
@@ -7731,12 +7731,16 @@ function App() {
   // app498: quota-limited browsers must still be able to sign in without
   // deleting app drafts, local-first caches, or Firebase user data.
   const authPersistenceFallbackModeRef = useRef<AuthStorageMode | null>(null);
-  const applyAuthPersistence = (mode: AuthStorageMode): Promise<void> =>
-    setPersistence(auth, mode === 'local'
+  const applyAuthPersistence = async (mode: AuthStorageMode): Promise<void> => {
+    if (mode !== 'memory') {
+      probeAuthStorageCapacity(mode === 'local' ? localStorage : sessionStorage);
+    }
+    await setPersistence(auth, mode === 'local'
       ? browserLocalPersistence
       : mode === 'session'
         ? browserSessionPersistence
         : inMemoryPersistence);
+  };
 
   const prepareAuthAttempt = async () => {
     let preferenceStorageFull = false;

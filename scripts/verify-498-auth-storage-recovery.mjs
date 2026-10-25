@@ -174,19 +174,68 @@ assert.ok(!/signInWithEmailAndPassword\(|createUserWithEmailAndPassword\(|signOu
 
 
 const { runInNewContext } = await import('node:vm');
+const { selectStartupAuthPersistence, protectInitialAuthRestore, getAuthUserStorageKey } =
+  await import('../src/lib/authRestorePersistence.js');
+const authStorageKey = getAuthUserStorageKey('test-key');
+const fixtureStorage = (value = null) => ({
+  getItem: name => name === authStorageKey ? value : null,
+});
+assert.equal(selectStartupAuthPersistence({
+  apiKey:'test-key', rememberLogin:true,
+  localStorage:fixtureStorage('legacy-local-user'), sessionStorage:fixtureStorage(),
+}), 'local', 'existing LOCAL Auth must not migrate to IndexedDB and sign out old tabs');
+assert.equal(selectStartupAuthPersistence({
+  apiKey:'test-key', rememberLogin:false,
+  localStorage:fixtureStorage(), sessionStorage:fixtureStorage('legacy-session-user'),
+}), 'session', 'existing OFF SESSION account must not migrate to permanent storage');
+assert.equal(selectStartupAuthPersistence({
+  apiKey:'test-key', rememberLogin:true,
+  localStorage:fixtureStorage(), sessionStorage:fixtureStorage('old-session'),
+}), 'session', 'even ON must preserve a restored SESSION user until explicit new sign-in');
+assert.equal(selectStartupAuthPersistence({
+  apiKey:'test-key', rememberLogin:true,
+  localStorage:fixtureStorage(), sessionStorage:fixtureStorage(),
+}), 'indexeddb', 'IndexedDB remains the default for existing IDB users');
+assert.equal(selectStartupAuthPersistence({
+  apiKey:'test-key', rememberLogin:false,
+  localStorage:fixtureStorage('old-local'), sessionStorage:fixtureStorage('old-session'),
+}), 'session', 'conflicting legacy stores must follow explicit OFF choice without deletion');
+assert.equal(selectStartupAuthPersistence({
+  apiKey:'test-key', rememberLogin:true,
+  localStorage:{getItem:()=>{throw Error('Storage blocked')}},
+  sessionStorage:fixtureStorage(),
+}), 'indexeddb', 'blocked Web Storage must not crash Auth bootstrap');
+const quotaError = Object.assign(new Error('quota exceeded'), { name:'QuotaExceededError' });
+let previousUser = {uid:'same-account', stsTokenManager:{ accessToken:'sdk-owned' }};
+let attemptedWrites = 0, warnings = 0;
+class FakeAuthStore {
+  async _set(_key, value) { attemptedWrites++; if (attemptedWrites <= 3) throw quotaError; previousUser=value; }
+  async _get() { return previousUser; }
+}
+const wrapper = protectInitialAuthRestore(FakeAuthStore,()=>warnings++);
+const persistence = new wrapper.persistence();
+await persistence._set(authStorageKey,{uid:'same-account'});
+assert.equal(warnings,1);
+assert.equal(previousUser.uid,'same-account');
+await assert.rejects(() => persistence._set(authStorageKey,{uid:'different-account'}));
+assert.equal(previousUser.uid,'same-account', 'quota must not authorize writing a different UID');
+wrapper.markReady();
+await assert.rejects(() => persistence._set(authStorageKey,{uid:'same-account'}));
+assert.equal(warnings,1, 'late login/refresh failures must not be silently hidden');
+
 const firebasePreferenceBlock = firebaseSource.slice(firebaseSource.indexOf('const REMEMBER_LOGIN_COOKIE'),
   firebaseSource.indexOf('export const googleProvider ='));
 assert.ok(firebasePreferenceBlock.includes('const REMEMBER_LOGIN_COOKIE'));
-assert.match(firebasePreferenceBlock, /popupRedirectResolver: browserPopupRedirectResolver/,
-  'explicit Auth initializer must retain mobile Google popup/redirect resolver');
-assert.match(firebasePreferenceBlock, /\[browserSessionPersistence, indexedDBLocalPersistence, browserLocalPersistence\]/,
-  'OFF must initialize SESSION first; Firebase otherwise migrates tab-only credentials to LOCAL');
-assert.match(firebasePreferenceBlock, /\[indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence\]/,
-  'ON must initialize durable IndexedDB first and allow Web local fallback');
+assert.match(firebasePreferenceBlock, /popupRedirectResolver: browserPopupRedirectResolver/);
+assert.ok(firebasePreferenceBlock.includes('persistence: safeStartupAuth.persistence'),
+  'Auth startup must use one preserved persistence, not a migrating array');
+assert.ok(!firebasePreferenceBlock.includes('persistence: rememberLoginOnStartup'),
+  'do not reinstate SDK migration of old Auth keys');
 assert.ok(!firebasePreferenceBlock.includes('accessToken') && !firebasePreferenceBlock.includes('refreshToken'),
   'functional cookie must never hold Firebase credentials');
 
-const preferenceFixture = ({ initial = {}, blocked = false, cookieInitial = '' } = {}) => {
+const preferenceFixture = ({ initial = {}, blocked = false, cookieInitial = '',
+  storedLocal = null, storedSession = null } = {}) => {
   const store = new Map(Object.entries(initial));
   const cookieStore = new Map();
   if (cookieInitial) {
@@ -195,54 +244,51 @@ const preferenceFixture = ({ initial = {}, blocked = false, cookieInitial = '' }
   }
   const browser = {
     localStorage: {
-      getItem: key => { if (blocked) throw Object.assign(new Error('blocked'), { name: 'SecurityError' }); return store.has(key) ? store.get(key) : null; },
-      setItem: (key, value) => { if (blocked) throw Object.assign(new Error('full'), { name: 'QuotaExceededError' }); store.set(key, value); },
+      getItem: key => {if(blocked)throw Error('blocked');return key===authStorageKey&&storedLocal?storedLocal:store.get(key)??null;},
+      setItem: (key,value)=>{if(blocked)throw quotaError;store.set(key,value);},
     },
+    sessionStorage: {getItem: key=>key===authStorageKey?storedSession:null},
   };
   const document = {
     get cookie() { return [...cookieStore].map(([k,v]) => k+'='+v).join('; '); },
     set cookie(text) { const [kv] = text.split(';'); const pos = kv.indexOf('='); cookieStore.set(kv.slice(0,pos), kv.slice(pos+1)); },
   };
   const ctx = { window: browser, document, location: { protocol: 'https:' },
-    app: {}, indexedDBLocalPersistence: 'indexeddb',
-    browserLocalPersistence: 'local', browserSessionPersistence: 'session',
+    firebaseConfig:{apiKey:'test-key'},
+    selectStartupAuthPersistence, protectInitialAuthRestore,
+    app: {}, indexedDBLocalPersistence: class Indexed {},
+    browserLocalPersistence:class Local {}, browserSessionPersistence:class Session {},
     browserPopupRedirectResolver: 'popup',
-    initializeAuth: (_app, deps) => deps,
+    initializeAuth: (_app,deps)=>({...deps,authStateReady:()=>Promise.resolve()}),
   };
   return runInNewContext(firebasePreferenceBlock.replace(/export const /g, 'const ')
-      + '\n({ auth, readRememberLoginPreference, writeRememberLoginPreference })', ctx);
+      + '\n({ auth, startupAuthStore, readRememberLoginPreference, writeRememberLoginPreference })', ctx);
 };
-const fromLocalTrue = preferenceFixture({ initial: { rememberLogin: 'true' } });
+const fromLocalTrue = preferenceFixture({ initial:{rememberLogin:'true'},storedLocal:'existing-user' });
 assert.equal(fromLocalTrue.readRememberLoginPreference(), true);
-assert.deepEqual(Array.from(fromLocalTrue.auth.persistence), ['indexeddb','local','session']);
-assert.equal(fromLocalTrue.auth.popupRedirectResolver, 'popup');
-
-const fromLocalFalse = preferenceFixture({ initial: { rememberLogin: 'false' } });
+assert.equal(fromLocalTrue.startupAuthStore, 'local');
+assert.equal(fromLocalTrue.auth.popupRedirectResolver,'popup');
+const fromLocalFalse = preferenceFixture({initial:{rememberLogin:'false'},storedSession:'old-session'});
 assert.equal(fromLocalFalse.readRememberLoginPreference(), false);
-assert.deepEqual(Array.from(fromLocalFalse.auth.persistence), ['session','indexeddb','local']);
+assert.equal(fromLocalFalse.startupAuthStore,'session');
 const brandNew = preferenceFixture();
-assert.equal(brandNew.readRememberLoginPreference(), false);
-assert.equal(brandNew.auth.persistence[0], 'session');
-
+assert.equal(brandNew.readRememberLoginPreference(),false);
+assert.equal(brandNew.startupAuthStore,'indexeddb');
 const quotaButCookieOn = preferenceFixture({
-  initial: {rememberLogin:'false'}, blocked: true,
-  cookieInitial: 'soridraw_remember_login_v1=1',
+  initial:{rememberLogin:'false'},blocked:true,
+  cookieInitial:'soridraw_remember_login_v1=1',
 });
-assert.equal(quotaButCookieOn.readRememberLoginPreference(), true);
-assert.equal(quotaButCookieOn.auth.persistence[0], 'indexeddb');
-assert.equal(quotaButCookieOn.writeRememberLoginPreference(true), false);
-assert.equal(quotaButCookieOn.readRememberLoginPreference(), true,
-  'cookie must preserve ON when localStorage write is blocked');
+assert.equal(quotaButCookieOn.readRememberLoginPreference(),true);
+assert.equal(quotaButCookieOn.startupAuthStore,'indexeddb');
+assert.equal(quotaButCookieOn.writeRememberLoginPreference(true),false);
+assert.equal(quotaButCookieOn.readRememberLoginPreference(),true);
 const blockedWithoutCookie = preferenceFixture({blocked:true});
-assert.equal(blockedWithoutCookie.readRememberLoginPreference(), true,
-  'storage errors are unknown, not an explicit user opt-out');
-assert.equal(blockedWithoutCookie.auth.persistence[0], 'indexeddb');
+assert.equal(blockedWithoutCookie.readRememberLoginPreference(),true);
 const recovered = preferenceFixture({initial:{rememberLogin:'false'}});
-assert.equal(recovered.writeRememberLoginPreference(true), true);
-assert.equal(recovered.readRememberLoginPreference(), true);
-assert.equal(recovered.writeRememberLoginPreference(false), true);
-assert.equal(recovered.readRememberLoginPreference(), false);
-
+assert.equal(recovered.writeRememberLoginPreference(true),true);
+assert.equal(recovered.readRememberLoginPreference(),true);
+assert.equal(recovered.writeRememberLoginPreference(false),true);
+assert.equal(recovered.readRememberLoginPreference(),false);
 assert.match(source, /authPersistenceActiveModeRef.current === 'session'[\s\S]*?authPersistenceActiveModeRef.current === 'memory'/,
   'both temporary fallback modes must be disclosed for remember-login ON');
 console.log('SORIDRAW_APP500_PREFERENCE_RESTORE_POLICY=PASS');

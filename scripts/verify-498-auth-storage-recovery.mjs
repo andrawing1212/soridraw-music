@@ -122,7 +122,7 @@ assert.equal(removedAfterQuota, false, 'failed preflight must not delete existin
 
 // Source integration protection. This check deliberately inspects only the
 // login/persistence owner paths, not unrelated user data/cache behavior.
-assert.match(source, /isRecoverableAuthStorageError, probeAuthStorageCapacity, resolveAuthPersistence, type AuthStorageMode/);
+assert.match(source, /isRecoverableAuthStorageError, probeAuthStorageCapacity, resolveAuthPersistence, recoverAuthPersistenceAfterWriteFailure, type AuthStorageMode/);
 assert.match(source, /probeAuthStorageCapacity\(mode === 'local' \? localStorage : sessionStorage\)/);
 assert.match(source, /const authPersistenceFallbackModeRef = useRef<AuthStorageMode \| null>\(null\)/);
 assert.match(source, /const prepareAuthAttempt = async \(\) => \{/);

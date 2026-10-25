@@ -4,6 +4,10 @@ on:
     branches: [preview]
     paths:
       - 'src/App.tsx'
+      - 'src/pages/FavoritesPage.tsx'
+      - 'src/pages/SunoLibraryPage.tsx'
+      - 'src/lib/nextSongPendingBridge.ts'
+      - 'scripts/verify-468-next-song-navigation.mjs'
       - 'src/firebase.js'
       - 'src/lib/authStorageRecovery.ts'
       - 'scripts/verify-498-auth-storage-recovery.mjs'
@@ -31,6 +35,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Auth quota and nondestructive fallback regression
         run: node scripts/verify-498-auth-storage-recovery.mjs
+      - name: Next-song quota and Studio navigation regression
+        run: node scripts/verify-468-next-song-navigation.mjs
       - name: Auth navigation readiness regression
         run: node scripts/verify-035-auth-nav-readiness.mjs
       - name: TypeScript

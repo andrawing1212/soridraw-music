@@ -1,3 +1,11 @@
+## CURRENT — app500 PREVIEW 사용자 실사용 회귀: Recent 저장하트→Music Note 누락 (2026-10-26 KST)
+- **사용자 실제 QA:** app500 `preview.soridraw.com` 로그인 유지·새 탭(1,2) **PASS**. **FAIL:** 최근 생성곡 저장하트를 눌러 저장한 새 곡이 Music Note에 나타나지 않음. **TEST/PRODUCTION 승격 즉시 HOLD**, 원본 삭제·캐시 초기화·재저장 반복·임의 라이브 데이터 수정 금지.
+- **코드상 재현 가능 원인:** 기존 `src/lib/studioHeartBatch.ts`의 `writeAll()`이 localStorage `QuotaExceededError`를 무시하고, `src/App.tsx` `queueStudioHeartPendingIntent`는 실제 임시저장 실패에도 곧바로 `true`·'저장되었습니다.' 반환. 정산 timer는 저장되지 않은 intent를 찾지 못하고 종료해 Music Note 항목이 남지 않을 수 있음. 사용자 기기의 정확한 오류 원인은 실제 브라우저 진단 전 미확정.
+- **안전 수정 후보:** PR 개발 branch `fix/app501-studio-heart-quota-safe`는 기존 30초 W0/W1 묶음 저장을 그대로 유지하되 pending intent 성공을 같은 UID·곡 ID·시각·요청 상태의 **localStorage read-back**으로 확인. 새 곡의 pending 쓰기 실패 + 기존 pending 없음이면 기존 **단일 곡 정식 Firestore 저장** 경로로 전환, '저장됨' 거짓 안내 금지. 해당 곡에 이전 pending이 남은 실패라면 기존 예약을 덮어쓰거나 경쟁 저장하지 않고 오류를 알림. 정상 경로 서버 IO/화면/UI 변화 없음.
+- **검사 게이트:** `scripts/verify-501-studio-heart-quota-safe.ts`에 실제 mock localStorage full/정상/기존 pending 보호 및 App 연결 검사 추가. TypeScript / Build / 전 제품 검사 및 Work/사용자 실기기 검증 전 `APP501_RELEASE=HOLD`. 배포 명령 없음. PREVIEW 라이브 app500 Hosting source `8da70f240bbca8e1b8305f11cdd8cd240efcda10`, 최신 preview HEAD 문서 merge `2868753884598658b3784036c6e42f44f3a47c7e`; TEST/PROD/Worker/Functions/Rules/공유 원본 변동 없음.
+- **Codex/Work:** 5시간 주기당 중복 요청 금지. 추가 AI 작업자 명령 없이 ChatGPT가 별도 preview PR에서 최소 수정.
+---
+
 ## CURRENT — app500 Firebase PREVIEW Hosting 배포 완료 / 실기기 QA 대기 (2026-10-26 KST)
 - **PREVIEW 배포 성공:** 사용자 명시 승인 기반 app500 로그인 유지 안정화. PR #488 코드 승격 merge `4f5af7e9212649300f981ca0ab280da5733da71d`; 릴리스 전용 PR #489 merge **실제 배포 소스 SHA** `8da70f240bbca8e1b8305f11cdd8cd240efcda10`. 배포 Workflow `.github/workflows/firebase-hosting-custom-preview.yml` run **`40242015534` SUCCESS**, 잠금 SHA 위와 정확히 일치.
 - **사이트 실제 확인:** Workflow가 `https://preview.soridraw.com/` 원격 index.html과 로컬 배포 빌드 SHA256 일치 확인 **PREVIEW_EXACT_BUILD=PASS**, 사이트 `/app-version.json` **500**, `FIREBASE_PREVIEW_DEPLOY=PASS`. 직접 별도 브라우저/모바일 측정은 하지 않았으며 URL 검증은 배포 CI의 실제 HTTP 확인 결과임.

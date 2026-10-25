@@ -36,6 +36,15 @@
 - **아직 미검증**: 같은 모바일 Chrome 실제 login ON + 브라우저 종료/재실행, 기존 legacy local/session/IndexedDB 회원 유지, 두 탭·동일 계정, Safari private/storage 완전 거부 등.
 - 본 코드가 브라우저 또는 OS의 모든 영구 저장이 차단된 환경까지 로그인 유지 100%를 보장하지는 않음.
 
+## app500 감사 FAIL 대응 — 재구현 v2 (2026-10-25 KST)
+- 원본 코드 후보 `f2c807007b1e4d678a5f7a8e4a8f3767b91f7789`의 공식 SDK 동작 대조에서 `getAuth` 자동 SESSION→IndexedDB 승격 위험 및 ON 선택값 localStorage quota 소실을 확인했음. 소스 감사 결과 FAIL, 임의 배포하지 않음.
+- 수정: `src/firebase.js`에 **Firebase `initializeAuth`와 명시적 `browserPopupRedirectResolver`**를 사용. ON이면 `[IndexedDB LOCAL, Web LOCAL, SESSION]`, OFF이면 **`[SESSION, IndexedDB LOCAL, Web LOCAL]`** 순으로 기존 계정 복원 우선순위를 정함. 기본값은 전과 같이 OFF, 기존 ON 상태와 OFF 의도 구별. Auth SDK 기본 `getAuth`가 무조건 IndexedDB로 SESSION 자격 증명을 이동시키는 경로를 방지.
+- 로그인 유지 선택값은 Firebase 토큰과 분리하여 **자사 호스트 전용 `soridraw_remember_login_v1` 기능성 쿠키**에 작은 `1/0`만 저장, `localStorage` 보조 병행. 쿠키가 있으면 기존 localStorage stale 값보다 우선. 쿠키/웹 저장 접근 모두 차단되면 장기 로그인 100% 불가; `localStorage` 읽기 실패를 사용자 명시 OFF로 오인하지 않고 보존 우선.
+- 사용자가 ON으로 새 로그인 시 IndexedDB→Web LOCAL→SESSION→MEMORY 유지, session/memory fallback 성공은 **장기 로그인 아님**을 기존 토스트로 알림 (Google/이메일). 다른 UI 속성 및 기존 음악 화면 변경 금지.
+- 위험: Firebase는 여러 저장소의 기존 계정을 첫 사용 가능한 우선순위로 옮길 수 있고, 다른 탭 사용자에게 영향을 줄 수 있음. 기존 PC·모바일 인증과 Google popup 포함한 실제 브라우저 통합테스트 및 Work 독립 감사 전에는 계속 HOLD.
+- 테스트 확장: `verify-498-auth-storage-recovery.mjs`에 Auth startup preference-first 스토어 선택, stale localStorage와 쿠키 충돌, quota blocked ON, 기본 OFF, popup resolver, 로그인 토큰 쿠키 미저장 검사. exact CI 최종 HEAD 검증 대기.
+- PREVIEW 앱 버전, Hosting, Firebase Functions, Cloudflare, 공유 원본 DB 변경 없음. CODEX source candidate만 갱신.
+
 ## 배포 게이트
 - PR 소스 CI 전체 PASS, 정확한 최종 SHA 고정, 독립 Work 감사, 필요한 PREVIEW 배포 승인/정책 검증까지 HOLD.
 - 실제 배포는 release trigger를 통해 exact SHA로만, 사용자 원본/Functions/Worker/Rules/TEST/main/PROD 변경 없이 Hosting-only.

@@ -1,3 +1,10 @@
+## Work Medium FAIL 재수정 후보 — 신규 스토어 이동 없는 초기 인증 (2026-10-25)
+- Work 정확한 감사지점 `fe5d176bd8452179ad8c190d21bd18f868db2a50`: **FAIL P1 두 건**. 기존 LOCAL 사용자 SDK 자동 IndexedDB 이동→타 탭 로그아웃; 초기 실제 user write quota → Auth bootstrap 거부. Codex 로컬 수정은 commit/push 전 중단되어 GitHub에 없었음.
+- 새 source-only 개발 후보는 **정상 기존 영구/세션 사용자 첫 인증에서는 한 저장소만 선택**하여 SDK 자동 이전/타 저장소 삭제를 방지. 신규 로그인 체크박스 ON의 IndexedDB 우선은 `App.tsx`에서 인증 준비 후에만 적용.
+- 기존 로그인 동일 UID의 초기 refresh 저장 시 quota/security 오류는 기존 영구 원본을 지우지 않고 해당 브라우저 메모리에 계속 복원. 신규 UID, 초기화 완료 후, 비저장 오류는 절대 성공으로 오인하지 않음. 완전 차단 브라우저는 임시 로그인/수동 재시도를 허용하되 100% 로그인 유지 보장하지 않음.
+- SDK 실제 인증 복원 오류 주입 검사, 소스 회귀, TypeScript/Build/제품 검사 CI, Work 독립 재감사, 실제 Chrome 다중 탭/재실행 테스트 전 배포·승격 금지. 기존 UI/서버/사용자 원본은 무변경.
+---
+
 # app500 — Auth 영구 저장 quota 안정화 (2026-10-25)
 
 ## 범위

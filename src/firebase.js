@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken as getAppCheckToken } from "firebase/app-check";
 import { initializeAuth, browserPopupRedirectResolver, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, GoogleAuthProvider } from "firebase/auth";
+import { selectStartupAuthPersistence, protectInitialAuthRestore } from "./lib/authRestorePersistence";
 import { getFirestore, initializeFirestore, memoryLocalCache, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -133,18 +134,34 @@ export const writeRememberLoginPreference = (value) => {
   }
 };
 
-// Firebase scans the supplied stores and migrates recovered users to the first
-// supported one. OFF MUST put SESSION first or an old tab-scoped login would
-// silently turn into permanent login on an app update. ON prefers durable
-// IndexedDB, then durable Web Storage. Explicit popup resolver preserves Google
-// popup/redirect support on mobile.
-const rememberLoginOnStartup = readRememberLoginPreference();
+// Firebase migrates a recovered user to the first available store in an
+// array, clearing SDK Auth keys in the other stores. That can log out an older
+// open tab. Restore from ONE original persistence instead: detect LOCAL/SESSION
+// using key existence only, otherwise allow IndexedDB. New login modes remain
+// explicitly selected in App.tsx after authStateReady().
+const startupAuthStore = selectStartupAuthPersistence({
+  apiKey: firebaseConfig.apiKey,
+  rememberLogin: readRememberLoginPreference(),
+  localStorage: typeof window === 'undefined' ? null : window.localStorage,
+  sessionStorage: typeof window === 'undefined' ? null : window.sessionStorage,
+});
+const startupAuthPersistence = startupAuthStore === 'local'
+  ? browserLocalPersistence
+  : startupAuthStore === 'session'
+    ? browserSessionPersistence : indexedDBLocalPersistence;
+
+let startupAuthWriteBlocked = false;
+const safeStartupAuth = protectInitialAuthRestore(startupAuthPersistence, () => {
+  // No token, user object, or browser data is read/copied into this marker.
+  startupAuthWriteBlocked = true;
+});
+export const didAuthRestoreStorageWriteFail = () => startupAuthWriteBlocked;
 export const auth = initializeAuth(app, {
-  persistence: rememberLoginOnStartup
-    ? [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence]
-    : [browserSessionPersistence, indexedDBLocalPersistence, browserLocalPersistence],
+  persistence: safeStartupAuth.persistence,
   popupRedirectResolver: browserPopupRedirectResolver,
 });
+// The wrapper's startup-only protection must not mask writes from new sign-in.
+void auth.authStateReady().then(safeStartupAuth.markReady, safeStartupAuth.markReady);
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({

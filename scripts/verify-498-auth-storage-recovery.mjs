@@ -105,7 +105,11 @@ assert.match(source, /resolveAuthPersistence\(preferredMode, applyAuthPersistenc
 assert.match(source, /if \(isRecoverableAuthStorageError\(popupError\)\) \{/);
 assert.match(source, /authPersistenceFallbackModeRef\.current = 'memory'/);
 assert.match(source, /if \(authPersistenceFallbackModeRef\.current === 'memory'\) \{/);
-assert.match(source, /if \(authPersistenceFallbackModeRef\.current\) \{/);
+assert.match(source, /if \(authPersistenceFallbackModeRef\.current === 'memory'\) \{/);
+assert.ok(!source.includes('현재 브라우저에서는 로그인 유지 대신 탭 단위로 로그인됩니다.'),
+  'Successful session fallback must not show a misleading blocking-style toast');
+assert.ok(source.includes('임시 로그인으로 연결되었습니다. 브라우저를 닫으면 다시 로그인해야 할 수 있습니다.'),
+  'Memory-only auth must still warn about possible sign-out');
 assert.match(source, /const prepareAuthAttempt =[\s\S]*?try \{\s*localStorage\.setItem\('rememberLogin'/);
 assert.match(source, /useEffect\(\(\) => \{\s*try \{\s*localStorage\.setItem\('rememberLogin'/);
 const authPart = source.slice(source.indexOf('const prepareAuthAttempt = async'), source.indexOf('// 3. HANDLE REDIRECT RESULT'));

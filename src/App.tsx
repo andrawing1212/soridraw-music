@@ -8162,10 +8162,11 @@ function App() {
         } catch (dbErr) {
           console.error("Failed to sync Google user document:", dbErr);
         }
-        if (authPersistenceFallbackModeRef.current) {
-          showAuthError(authPersistenceFallbackModeRef.current === 'memory'
-            ? '임시 로그인으로 연결되었습니다. 브라우저를 닫으면 다시 로그인해야 할 수 있습니다.'
-            : '현재 브라우저에서는 로그인 유지 대신 탭 단위로 로그인됩니다.');
+        // app467: successful session fallback does not need an intrusive
+        // full-screen toast. Keep the essential warning for memory-only
+        // authentication, which may be lost on refresh or tab closure.
+        if (authPersistenceFallbackModeRef.current === 'memory') {
+          showAuthError('임시 로그인으로 연결되었습니다. 브라우저를 닫으면 다시 로그인해야 할 수 있습니다.');
         }
       }
     } catch (error: any) {

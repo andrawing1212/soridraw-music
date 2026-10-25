@@ -10,6 +10,8 @@ on:
       - 'scripts/verify-468-next-song-navigation.mjs'
       - 'src/firebase.js'
       - 'src/lib/authStorageRecovery.ts'
+      - 'src/lib/authRestorePersistence.js'
+      - 'scripts/verify-500-auth-sdk-restore.mjs'
       - 'scripts/verify-498-auth-storage-recovery.mjs'
       - '.github/workflows/app498-auth-storage-recovery-quality.yml'
   workflow_dispatch:
@@ -35,6 +37,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Auth quota and nondestructive fallback regression
         run: node scripts/verify-498-auth-storage-recovery.mjs
+      - name: Pinned Firebase SDK restored account and quota regression
+        run: node scripts/verify-500-auth-sdk-restore.mjs
       - name: Next-song quota and Studio navigation regression
         run: node scripts/verify-468-next-song-navigation.mjs
       - name: Auth navigation readiness regression

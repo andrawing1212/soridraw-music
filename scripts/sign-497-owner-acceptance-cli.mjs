@@ -14,18 +14,15 @@ if (process.env.GITHUB_EVENT_NAME !== 'workflow_dispatch' ||
     process.env.OWNER_ACCEPTANCE_EXPLICIT_CONFIRMATION !== 'ACCEPT_TEST_RESULTS')
   throw Error('OWNER_ACCEPTANCE_ONLY_REPOSITORY_OWNER_EXPLICIT_MANUAL_ACTION');
 const pending=JSON.parse(readFileSync(pendingPath,'utf8'));
-const evidence=JSON.parse(readFileSync(evidencePath,'utf8'));
-if (evidence.ownerLogin !== process.env.GITHUB_ACTOR)
-  throw Error('OWNER_ACCEPTANCE_OWNER_ID_MISMATCH');
-const authorizedAt=new Date();
-if (!Number.isFinite(Date.parse(evidence.ownerAuthorizedAt)) ||
-    Math.abs(authorizedAt.getTime()-Date.parse(evidence.ownerAuthorizedAt)) > 15*60*1000)
-  throw Error('OWNER_ACCEPTANCE_EXPIRED_OR_STALE');
-if (!evidence.ownerApprovalRef?.includes('/actions/runs/'))
-  throw Error('OWNER_ACCEPTANCE_EXPECT_REAL_ACTION_RUN_REFERENCE');
-if (evidence.ownerApprovalRef !==
-    `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`)
-  throw Error('OWNER_ACCEPTANCE_GITHUB_RUN_REFERENCE_MISMATCH');
+const ownerEvidence=JSON.parse(readFileSync(evidencePath,'utf8'));
+// Approval identity/time/run URL come ONLY from the trusted GitHub workflow,
+// never from user-input JSON. Input supplies observed device/parity evidence.
+const evidence={
+  ...ownerEvidence,
+  ownerLogin:process.env.GITHUB_ACTOR,
+  ownerAuthorizedAt:new Date().toISOString(),
+  ownerApprovalRef:`https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+};
 if (evidence.pendingManifestSha256 !== sha256(canonicalJSON(pending)))
   throw Error('OWNER_ACCEPTANCE_WRONG_PENDING_MANIFEST');
 const signed=signOwnerAcceptance(

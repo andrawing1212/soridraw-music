@@ -161,6 +161,8 @@ assert.ok(source.includes('recoverAuthPersistenceAfterWriteFailure('),
   'a late OAuth credential quota error must try remaining persistent stores');
 assert.ok(source.includes('if (auth.currentUser) return null;'),
   'restored accounts must not be migrated without an explicit new login');
+assert.match(source, /authPersistenceFallbackModeRef\.current = null;\s*authPersistenceActiveModeRef\.current = null;\s*\}, \[rememberLogin\]\)/,
+  'changing the remember-login checkbox must discard a prior temporary downgrade');
 
 const emailFlow = source.slice(source.indexOf('const handleEmailAuth = async'),
   source.indexOf('const ensureAuthUserDocument = async'));

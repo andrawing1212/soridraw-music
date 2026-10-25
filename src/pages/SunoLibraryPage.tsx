@@ -1,4 +1,5 @@
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
+import { stageNextSongKeywords } from '../lib/nextSongPendingBridge';
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
 import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
@@ -4970,14 +4971,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
 
     const serialized = JSON.stringify(appliedKeywords);
-    sessionStorage.setItem("pendingAppliedKeywords", serialized);
-    localStorage.setItem("pendingAppliedKeywordsBackup", serialized);
-
-    console.log("Saved pendingAppliedKeywords:", {
-      appliedKeywords,
-      sessionValue: sessionStorage.getItem("pendingAppliedKeywords"),
-      localBackup: localStorage.getItem("pendingAppliedKeywordsBackup"),
-    });
+    // app468: write both old handoff keys if possible, but do not let Chrome's
+    // QuotaExceededError cancel the next-song navigation. Same-tab memory
+    // keeps the selected recipe until Studio successfully applies it.
+    stageNextSongKeywords(serialized);
 
     showToast("다음 곡에 곡 설정이 복원되었습니다.");
 

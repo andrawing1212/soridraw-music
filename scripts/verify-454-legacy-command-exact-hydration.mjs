@@ -241,6 +241,12 @@ const clickContext={
  sessionStorage:{setItem:(k,v)=>sent.set(k,v)},
  localStorage:{setItem:(k,v)=>sent.set(k,v)},
  requestAnimationFrame:(fn)=>fn(), navigate:(route)=>{navigated=route;},
+ // app468: the actual click stages the exact recipe via the shared bridge.
+ stageNextSongKeywords:(serialized)=>{
+   sent.set('pendingAppliedKeywords',serialized);
+   sent.set('pendingAppliedKeywordsBackup',serialized);
+   return {sessionSaved:true,backupSaved:true};
+ },
  resolveMusicNoteNextSongRecipe:resolve,
  getSongGenreValues:(song)=>{
    displayGenreCalls++;

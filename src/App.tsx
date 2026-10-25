@@ -1,4 +1,5 @@
 import { runV1MutationBoundary, type V1MutationMirrorTarget } from './data/v1MutationBoundary';
+import { readNextSongKeywords, clearNextSongKeywords } from './lib/nextSongPendingBridge';
 import {
   acknowledgeRecentSongsSignalVersion,
   publishMusicNoteSaveStateDelta,
@@ -13859,9 +13860,10 @@ const unlockAllFavorites = async () => {
     let isCancelled = false;
 
     const applyPendingKeywordsIfAny = async () => {
-      const pending =
-        sessionStorage.getItem('pendingAppliedKeywords') ||
-        localStorage.getItem('pendingAppliedKeywordsBackup');
+      // app468: the Music Note/Library click can stage the exact recipe in
+      // memory if Chrome quota blocks either storage key. Never read a stale
+      // old storage backup ahead of the latest same-tab click.
+      const pending = readNextSongKeywords();
 
       if (!pending) return false;
 
@@ -13878,14 +13880,13 @@ const unlockAllFavorites = async () => {
         if (isCancelled) return true;
 
         applyKeywordsToNext(keywords);
-        sessionStorage.removeItem('pendingAppliedKeywords');
-        localStorage.removeItem('pendingAppliedKeywordsBackup');
+        clearNextSongKeywords(pending);
         window.scrollTo(0, 0);
         return true;
       } catch (e) {
-        console.error('Failed to parse pending keywords', e);
-        sessionStorage.removeItem('pendingAppliedKeywords');
-        localStorage.removeItem('pendingAppliedKeywordsBackup');
+        // Do not erase an unapplied pending recipe after a transient error.
+        // It can still be retried when the user returns to Studio.
+        console.error('Failed to apply pending next-song keywords:', e);
         return false;
       }
     };
@@ -20677,7 +20678,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   </h3>
                   <div className="flex items-center gap-2 shrink-0">
                     <button
-                      onClick={() => applyKeywordsToNext(result.appliedKeywords)}
+                      onClick={() => {
+                        applyKeywordsToNext(result.appliedKeywords);
+                        // app468: restore the selected recipe AND return to the
+                        // Create workspace. Use the existing URL-owned Split
+                        // navigation (and Classic fallback); never mutate the
+                        // Split geometry or recreate the Studio.
+                        navigateStudioWorkspaceView('create');
+                      }}
                       onMouseEnter={() => setHoveredItem({ id: 'apply-keywords-all', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
                       data-soridraw-button-variant="primary"

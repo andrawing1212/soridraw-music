@@ -1,4 +1,5 @@
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
+import { stageNextSongKeywords } from '../lib/nextSongPendingBridge';
 import {
   MUSIC_NOTE_SYNC_EVENT,
   publishMusicNoteDetailPreviewDelta,
@@ -5260,8 +5261,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       isLyricMode: false,
     };
     const serialized = JSON.stringify(pendingKeywords);
-    sessionStorage.setItem('pendingAppliedKeywords', serialized);
-    localStorage.setItem('pendingAppliedKeywordsBackup', serialized);
+    // app468: a full browser store must not block the click-to-Studio handoff.
+    // Keep the exact selected recipe in same-tab memory as well as best-effort
+    // legacy session/local storage; do not clear unrelated user data.
+    stageNextSongKeywords(serialized);
     setSelectedSong(null);
     setActiveFavoriteMenuId(null);
 

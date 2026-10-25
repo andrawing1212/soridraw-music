@@ -140,7 +140,6 @@ assert.match(source, /resolveAuthPersistence\(preferredMode, applyAuthPersistenc
 assert.match(source, /if \(isRecoverableAuthStorageError\(popupError\)\) \{/);
 assert.match(source, /authPersistenceFallbackModeRef\.current = nextMode/);
 assert.match(source, /if \(authPersistenceFallbackModeRef\.current === 'memory'\) \{/);
-assert.match(source, /if \(authPersistenceFallbackModeRef\.current === 'memory'\) \{/);
 assert.ok(!source.includes('현재 브라우저에서는 로그인 유지 대신 탭 단위로 로그인됩니다.'),
   'Successful session fallback must not show a misleading blocking-style toast');
 assert.ok(source.includes('로그인은 연결되었지만 이 브라우저에서 장기 저장은 실패했습니다.'),

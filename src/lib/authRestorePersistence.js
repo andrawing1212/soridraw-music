@@ -37,6 +37,17 @@ export const selectStartupAuthPersistence = ({
   return 'indexeddb';
 };
 
+const isStorageWriteError = error => {
+  const name = String(error?.name ?? '').toLowerCase();
+  const code = String(error?.code ?? '').toLowerCase();
+  const message = String(error?.message ?? '').toLowerCase();
+  return name === 'quotaexceedederror' || name === 'securityerror'
+    || name === 'ns_error_dom_quota_reached'
+    || code === '22' || code === '1014'
+    || code === 'auth/web-storage-unsupported'
+    || /quota.*exceed|storage.*quota|storage.*full|storage.*disabled/.test(message);
+};
+
 const isSameSavedAccount = async (persistence, key, value) => {
   if (!key.startsWith('firebase:authUser:') || !value || typeof value.uid !== 'string') return false;
   try {
@@ -59,7 +70,8 @@ export const protectInitialAuthRestore = (UnderlyingPersistence, onWriteBlocked 
       try {
         return await super._set(key, value);
       } catch (error) {
-        if (!initialRestoreFinished && await isSameSavedAccount(this, key, value)) {
+        if (!initialRestoreFinished && isStorageWriteError(error)
+          && await isSameSavedAccount(this, key, value)) {
           onWriteBlocked(error);
           return;
         }

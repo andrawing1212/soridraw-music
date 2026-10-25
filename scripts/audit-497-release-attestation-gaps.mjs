@@ -16,7 +16,7 @@ function examine(source) {
     '- name: PROD_PREFLIGHT revalidate TEST manifest and live release');
   const prod = part(source, '- name: PROD_PREFLIGHT revalidate TEST manifest and live release',
     '- name: PROD_DEPLOY verified identities only');
-  const prelude = part(source, '- name: Materialize exact release source',
+  const prelude = part(source, '- name: Load source identity',
     '- name: PREFLIGHT build and static verification');
   const hardcodedPass = /parity:\s*\{\s*reference:\s*'PREVIEW'\s*,\s*status:\s*'PASS'\s*\}/.test(verify);
   const automaticTestVerified = /state:\s*'TEST_VERIFIED'/.test(verify)
@@ -33,7 +33,7 @@ function examine(source) {
 }
 function selfTest() {
   const source = [
-    '- name: Materialize exact release source',
+    '- name: Load source identity',
     "if(m.state!=='TEST_VERIFIED') throw Error('no');",
     '- name: PREFLIGHT build and static verification',
     '- name: TEST_VERIFY and freeze durable manifest',

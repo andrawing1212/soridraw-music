@@ -1,7 +1,7 @@
 // A full or restricted browser store must not make Google sign-in impossible.
 // Keep the recovery strictly limited to Firebase Auth persistence; never clear
 // SORIDRAW local caches, Music Note drafts, or other application storage.
-export type AuthStorageMode = 'local' | 'session' | 'memory';
+export type AuthStorageMode = 'indexeddb' | 'local' | 'session' | 'memory';
 
 export const isRecoverableAuthStorageError = (error: unknown): boolean => {
   if (!error || typeof error !== 'object') return false;
@@ -46,8 +46,10 @@ export const resolveAuthPersistence = async (
   apply: (mode: AuthStorageMode) => Promise<void>,
   skipLocal = false,
 ): Promise<AuthStorageMode> => {
+  // A saturated localStorage does not imply IndexedDB is unavailable.
+  // Prefer the Firebase durable store used by getAuth() before Web Storage.
   const modes: AuthStorageMode[] = preferred === 'local'
-    ? skipLocal ? ['session', 'memory'] : ['local', 'session', 'memory']
+    ? skipLocal ? ['indexeddb', 'session', 'memory'] : ['indexeddb', 'local', 'session', 'memory']
     : ['session', 'memory'];
 
   let lastStorageError: unknown;
@@ -57,6 +59,34 @@ export const resolveAuthPersistence = async (
       return mode;
     } catch (error) {
       // Never suppress an unrelated Firebase authentication or security error.
+      if (!isRecoverableAuthStorageError(error)) throw error;
+      lastStorageError = error;
+    }
+  }
+  throw lastStorageError;
+};
+
+/**
+ * A login can pass the persistence preflight but fail to write its credentials
+ * later. On a second user click, try only the remaining storage backends.
+ * Never remove SORIDRAW drafts/caches or downgrade an authenticated user.
+ */
+export const recoverAuthPersistenceAfterWriteFailure = async (
+  failedMode: AuthStorageMode,
+  apply: (mode: AuthStorageMode) => Promise<void>,
+  skipLocal = false,
+): Promise<AuthStorageMode> => {
+  const candidates: AuthStorageMode[] = failedMode === 'indexeddb'
+    ? skipLocal ? ['session', 'memory'] : ['local', 'session', 'memory']
+    : failedMode === 'local' ? ['session', 'memory']
+    : failedMode === 'session' ? ['memory'] : [];
+
+  let lastStorageError: unknown = new Error('No remaining Firebase Auth persistence mode');
+  for (const mode of candidates) {
+    try {
+      await apply(mode);
+      return mode;
+    } catch (error) {
       if (!isRecoverableAuthStorageError(error)) throw error;
       lastStorageError = error;
     }

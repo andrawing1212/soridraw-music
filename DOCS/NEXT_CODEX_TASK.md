@@ -1,3 +1,11 @@
+## NEXT — app500 저장 공간 부족 자동로그인 우선 복구 (2026-10-25 KST)
+- **사용자 명시 최우선:** 앱 내 로그인 유지 ON 상태에서 모바일 Chrome localStorage quota가 가득 차더라도 오래 로그인되도록 Firebase 기본 영구 저장 우선순위 복원. 자동 로그인 외 기능/UI/음악 원본 데이터 금지.
+- 개발 후보 Draft [PR #488](https://github.com/andrawing1212/soridraw-music/pull/488), base preview `5a2c29efb0b2101729ab63d7de533c009d83fa77`; `DOCS/APP500_DURABLE_AUTH_STORAGE_REPAIR.md`. 후보는 미병합·미배포. `getAuth`는 default IndexedDB→localStorage→session persistence 지원; startup에 `setPersistence` 강제하지 않고 신규 로그인에서만 명시적 IndexedDB LOCAL→Web LOCAL→session→memory fallback.
+- **정확한 다음 하나:** PR #488 마지막 HEAD quality CI(`verify-498-auth-storage-recovery.mjs`, TypeScript, Build, 기존 Like/Music Note 회귀) 확인하고 실패 시 로그인 코드만 최소 수정, SHA 동결 뒤 독립 Work 감사. 기존 세션 hydrate/rememberLogin OFF/Google popup 및 quota-full/IndexedDB blocked/스토리지 완전 차단/다중 탭 인증 회귀 확인.
+- Work PASS 이전 merger/deploy 금지. PREVIEW Hosting-only 검증 뒤 사용자 모바일 Chrome 전체 종료/재실행·미저장 작업 보존 실기기 확인. TEST/PRODUCTION은 별도 승인, 사용자 원본 삭제·캐시 전체 정리 금지. app497 PR #485, #469는 HOLD 상태 그대로.
+- Stage416 1/4 25% OFF, 기존 속도 5/5 100% 과거 기준, app500 후보 2/4 50% (자동/기기 검증 전).
+---
+
 ## NEXT — app497 통합 Codex High 작업 및 app499 로그인 유지 최종 실측 (2026-10-25 KST)
 - **현재 실제 제품:** preview `e4b232118e0623486528e52d952787eaede7dcce`/배포 app468 `d4c2c39af3aec6f895bdfff33afdb6f8f2c37805`; Source-only app497 owner acceptance candidate Draft PR [#485](https://github.com/andrawing1212/soridraw-music/pull/485), frozen release engine PR #469 `f521b9c8808397d47b596f840ff816cac374dd91`. 현 app497 브랜치에 예전 6개 release-engine 변경이 포함되어 있어 현재 preview(app468)와 merge conflict **가능; 무단 merge 금지**.
 - **Codex High 필수:** #485의 정확한 최종 SHA와 브랜치 CI 확인, 현재 app468 HEAD 기반으로 복원·rebase/통합하고 frozen Worker rollback/Hosting SITE:@VERSION 검증 유지. TEST 자동검사는 `TEST_AUTO_CHECKED`만 발급; `TEST_VERIFIED` 자동발급·고정 parity PASS 영구 금지. 별도 owner-initiated workflow에 서명키/권한/재실행 차단·출처 정확성, signed source/tree/Hosting/Worker/Media, PC·모바일 기존·빈 캐시·로그인·Music Note·Library·좋아요·추천·공개상태, 실제 3환경 parity 증빙 모두 필수. PROD preflight는 signed owner acceptance 없으면 배포 이전 단계에서 실패. HMAC 키 `SORIDRAW_RELEASE_ATTESTATION_KEY`는 관리자가 안전하게 구성하는 별도 준비사항; 현재 키 존재는 **확인되지 않음**, secret 없이 절대로 성공 처리 금지.

@@ -25,6 +25,22 @@ export const isRecoverableAuthStorageError = (error: unknown): boolean => {
   return false;
 };
 
+// One small write/read-neutral probe before opening a Google popup helps catch
+// nearly-full Web Storage before the user selects an account. Only our temporary
+// probe key is removed; no existing browser or app data is touched.
+export const probeAuthStorageCapacity = (
+  storage: Pick<Storage, 'setItem' | 'removeItem'>,
+): void => {
+  const key = `__soridraw_auth_probe_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  let wroteProbe = false;
+  try {
+    storage.setItem(key, 's'.repeat(4096));
+    wroteProbe = true;
+  } finally {
+    if (wroteProbe) storage.removeItem(key);
+  }
+};
+
 export const resolveAuthPersistence = async (
   preferred: 'local' | 'session',
   apply: (mode: AuthStorageMode) => Promise<void>,

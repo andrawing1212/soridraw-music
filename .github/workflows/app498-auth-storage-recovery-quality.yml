@@ -1,0 +1,41 @@
+name: SORIDRAW app498 Auth Storage Recovery — No Deploy
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'src/App.tsx'
+      - 'src/firebase.js'
+      - 'src/lib/authStorageRecovery.ts'
+      - 'scripts/verify-498-auth-storage-recovery.mjs'
+      - '.github/workflows/app498-auth-storage-recovery-quality.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  auth-storage-source-and-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact candidate SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Auth quota and nondestructive fallback regression
+        run: node scripts/verify-498-auth-storage-recovery.mjs
+      - name: Auth navigation readiness regression
+        run: node scripts/verify-035-auth-nav-readiness.mjs
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+      - name: Confirm read-only quality run
+        run: echo 'APP498_SOURCE_QA_ONLY;NO_FIREBASE_CLOUDFLARE_DEPLOYMENT;NO_SHARED_DATA_CHANGE'

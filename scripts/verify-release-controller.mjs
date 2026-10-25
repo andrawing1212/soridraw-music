@@ -52,7 +52,6 @@ function validate(source = workflow) {
   assert.match(prodDeploy, /hosting:clone "soridraw-test:@\$test_hosting_version_id"/);
   assert.doesNotMatch(prodDeploy, /refs\/heads\/production/);
   assert.doesNotMatch(prodDeploy, /soridraw-test:live/);
-  assert.doesNotMatch(prodDeploy, /soridraw-test:@/);
 
   const testVerify = step(source, 'TEST_VERIFY and freeze durable manifest');
   const prodPreflight = step(source, 'PROD_PREFLIGHT revalidate TEST manifest and live release');

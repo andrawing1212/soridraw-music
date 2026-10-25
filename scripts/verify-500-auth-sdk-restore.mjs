@@ -3,13 +3,19 @@
 // No network, actual Firebase account, Firebase project credentials or media.
 import assert from 'node:assert/strict';
 import { initializeApp, deleteApp } from 'firebase/app';
-import { initializeAuth } from 'firebase/auth';
 import { protectInitialAuthRestore, getAuthUserStorageKey } from '../src/lib/authRestorePersistence.js';
 
 const originalFetch = globalThis.fetch;
-globalThis.fetch = async () => { throw new TypeError('offline Auth SDK fixture: network disabled'); };
-const authKey = getAuthUserStorageKey('app500-offline-test', 'app500-sdk-check');
+// Firebase captures its fetch implementation during module initialization.
+// Use only an in-process fake userInfo response; never contact Firebase.
 const savedUid = 'test-restored-existing-account';
+globalThis.fetch = async () => ({
+  ok: true, status: 200, statusText: 'OK',
+  json: async () => ({ users: [{ localId: savedUid, emailVerified: false,
+    createdAt:'0', lastLoginAt:'0' }] }),
+});
+const { initializeAuth } = await import('firebase/auth');
+const authKey = getAuthUserStorageKey('app500-offline-test', 'app500-sdk-check');
 const originalAccount = {
   uid: savedUid,
   emailVerified: false,

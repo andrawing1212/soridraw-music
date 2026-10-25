@@ -1166,7 +1166,7 @@ import {
   deleteField,
   query as firestoreQuery
 } from './lib/firestoreMeasured';
-import { auth, googleProvider, db, functions, httpsCallable, getFirebaseAppCheckToken } from './firebase';
+import { auth, googleProvider, db, functions, httpsCallable, getFirebaseAppCheckToken, readRememberLoginPreference, writeRememberLoginPreference } from './firebase';
 import { startUserPresence } from './services/presenceService';
 import { writeGeminiAutoModelFallback } from './services/geminiModelPreferences';
 import { buildEmailVerificationActionSettings } from './constants/emailVerification';
@@ -5434,13 +5434,7 @@ function App() {
   const [authPassword, setAuthPassword] = useState('');
   const [authPasswordConfirm, setAuthPasswordConfirm] = useState('');
   const [authMessage, setAuthMessage] = useState<string | null>(null);
-  const [rememberLogin, setRememberLogin] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('rememberLogin') === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [rememberLogin, setRememberLogin] = useState<boolean>(readRememberLoginPreference);
   const [userRole, setUserRole] = useState<UserRole>('free');
   const [staffRole, setStaffRole] = useState<StaffRole>(null);
   const [adminPermissions, setAdminPermissions] = useState<AdminPermissions>({ ...EMPTY_ADMIN_PERMISSIONS });
@@ -7761,13 +7755,9 @@ function App() {
     // A saved user may already have durable credentials. Do not migrate,
     // sign out or rewrite that session on a quota error.
     if (auth.currentUser) return null;
-    let preferenceStorageFull = false;
-    try {
-      localStorage.setItem('rememberLogin', String(rememberLogin));
-    } catch (error) {
-      if (!isRecoverableAuthStorageError(error)) throw error;
-      preferenceStorageFull = true;
-    }
+    // A small first-party cookie preserves the preference when Web Storage is full.
+    // The return value indicates localStorage only: IndexedDB remains eligible.
+    const preferenceStorageFull = !writeRememberLoginPreference(rememberLogin);
     authPreferenceStorageFullRef.current = preferenceStorageFull;
 
     const recoveredMode = authPersistenceFallbackModeRef.current;
@@ -7991,6 +7981,11 @@ function App() {
       setAuthPassword('');
       setAuthPasswordConfirm('');
       setIsAuthModalOpen(false);
+      if (rememberLogin && (authPersistenceActiveModeRef.current === 'session'
+        || authPersistenceActiveModeRef.current === 'memory')) {
+        setToast({ message: '로그인은 연결되었지만 장기 저장은 실패했습니다. 브라우저를 닫으면 다시 로그인해야 할 수 있습니다.', visible: true });
+        window.setTimeout(() => setToast(previous => ({ ...previous, visible: false })), 5000);
+      }
     } catch (error: any) {
       console.error('Email auth error:', error);
       // An email credential write may fail after IndexedDB availability
@@ -8221,8 +8216,9 @@ function App() {
         // app467: successful session fallback does not need an intrusive
         // full-screen toast. Keep the essential warning for memory-only
         // authentication, which may be lost on refresh or tab closure.
-        if (authPersistenceFallbackModeRef.current === 'memory') {
-          showAuthError('임시 로그인으로 연결되었습니다. 브라우저를 닫으면 다시 로그인해야 할 수 있습니다.');
+        if (rememberLogin && (authPersistenceActiveModeRef.current === 'session'
+          || authPersistenceActiveModeRef.current === 'memory')) {
+          showAuthError('로그인은 연결되었지만 이 브라우저에서 장기 저장은 실패했습니다. 브라우저를 닫으면 다시 로그인해야 할 수 있습니다.');
         }
       }
     } catch (error: any) {
@@ -9896,15 +9892,9 @@ const toggleCycleVariantSelection = (
   useEffect(() => { userRef.current = user; }, [user]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('rememberLogin', String(rememberLogin));
-    } catch (error) {
-      // Remember-login is an optional preference. It must not crash React
-      // when this browser has exhausted its storage quota.
-      if (!isRecoverableAuthStorageError(error)) {
-        console.warn('[Auth] Could not persist remember-login preference:', error);
-      }
-    }
+    // Authentication state stays in Firebase's storage; only this boolean
+    // preference is copied to a quota-independent first-party cookie.
+    writeRememberLoginPreference(rememberLogin);
   }, [rememberLogin]);
 
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });

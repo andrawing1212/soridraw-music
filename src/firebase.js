@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken as getAppCheckToken } from "firebase/app-check";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { initializeAuth, browserPopupRedirectResolver, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore, initializeFirestore, memoryLocalCache, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -84,12 +84,67 @@ export const getFirebaseAppCheckToken = async () => {
 // Do not replace window.fetch globally: Firebase Auth popup sign-in and other
 // browser integrations must keep the native fetch implementation.
 
-// Firebase getAuth() loads existing sessions from IndexedDB, localStorage or
-// sessionStorage in the SDK's supported order. Do not call setPersistence at
-// startup: that could migrate a valid existing account into a full store or
-// downgrade a durable account when the rememberLogin preference is unreadable.
-// A *new* sign-in explicitly chooses its mode in App.tsx based on the checkbox.
-export const auth = getAuth(app);
+// Store ONLY the remember-login boolean in a small first-party functional cookie.
+// Firebase credentials/tokens remain exclusively under the SDK's control.
+// The cookie survives a full localStorage quota (when cookies are allowed).
+const REMEMBER_LOGIN_COOKIE = 'soridraw_remember_login_v1';
+const readRememberLoginCookie = () => {
+  if (typeof document === 'undefined') return null;
+  try {
+    const prefix = REMEMBER_LOGIN_COOKIE + '=';
+    const match = document.cookie.split(';').map(value => value.trim()).find(value => value.startsWith(prefix));
+    const value = match ? match.slice(prefix.length) : '';
+    return value === '1' ? true : value === '0' ? false : null;
+  } catch {
+    return null;
+  }
+};
+
+export const readRememberLoginPreference = () => {
+  const cookieValue = readRememberLoginCookie();
+  // The cookie wins if localStorage contains stale OFF following a quota failure.
+  if (cookieValue !== null) return cookieValue;
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem('rememberLogin') === 'true';
+  } catch {
+    // Unknown is NOT a user opt-out. Prefer protecting a previously durable
+    // account over silently selecting tab-only Auth on a blocked browser store.
+    return true;
+  }
+};
+
+export const writeRememberLoginPreference = (value) => {
+  if (typeof document !== 'undefined') {
+    try {
+      const secure = typeof location !== 'undefined' && location.protocol === 'https:' ? '; Secure' : '';
+      document.cookie = REMEMBER_LOGIN_COOKIE + '=' + (value ? '1' : '0')
+        + '; Path=/; Max-Age=31536000; SameSite=Lax' + secure;
+    } catch {
+      // Some restricted browsers block cookies too; never delete other data.
+    }
+  }
+  if (typeof window === 'undefined') return false;
+  try {
+    window.localStorage.setItem('rememberLogin', String(value));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// Firebase scans the supplied stores and migrates recovered users to the first
+// supported one. OFF MUST put SESSION first or an old tab-scoped login would
+// silently turn into permanent login on an app update. ON prefers durable
+// IndexedDB, then durable Web Storage. Explicit popup resolver preserves Google
+// popup/redirect support on mobile.
+const rememberLoginOnStartup = readRememberLoginPreference();
+export const auth = initializeAuth(app, {
+  persistence: rememberLoginOnStartup
+    ? [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence]
+    : [browserSessionPersistence, indexedDBLocalPersistence, browserLocalPersistence],
+  popupRedirectResolver: browserPopupRedirectResolver,
+});
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({

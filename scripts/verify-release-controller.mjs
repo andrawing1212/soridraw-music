@@ -59,7 +59,11 @@ function validate(source = workflow) {
   assert.match(testVerify, /node "\$RELEASE_ROOT\/scripts\/release-controller-policy\.mjs" identity "\$RELEASE_ROOT"/);
   assert.doesNotMatch(testVerify, /release-controller-policy\.mjs" identity "\$GITHUB_WORKSPACE"/);
   assert.match(testVerify, /gh release create/);
-  assert.match(testVerify, /schema:4/);
+  assert.match(testVerify, /schema:5/);
+  assert.match(testVerify, /state:'TEST_AUTO_CHECKED'/);
+  assert.match(testVerify, /status:'PENDING_OWNER_ACCEPTANCE'/);
+  assert.doesNotMatch(testVerify, /state:'TEST_VERIFIED'/);
+  assert.doesNotMatch(testVerify, /parity:\{reference:'PREVIEW',status:'PASS'\}/);
   assert.match(testVerify, /production-environment-contract\.json/);
   assert.match(testVerify, /BROWSER_UPGRADE_CONTRACT_SHA256/);
   assert.match(testVerify, /release-production-environment-contract\.mjs snapshot/);

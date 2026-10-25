@@ -1,3 +1,12 @@
+## CURRENT — app500 Firebase PREVIEW Hosting 배포 완료 / 실기기 QA 대기 (2026-10-26 KST)
+- **PREVIEW 배포 성공:** 사용자 명시 승인 기반 app500 로그인 유지 안정화. PR #488 코드 승격 merge `4f5af7e9212649300f981ca0ab280da5733da71d`; 릴리스 전용 PR #489 merge **실제 배포 소스 SHA** `8da70f240bbca8e1b8305f11cdd8cd240efcda10`. 배포 Workflow `.github/workflows/firebase-hosting-custom-preview.yml` run **`40242015534` SUCCESS**, 잠금 SHA 위와 정확히 일치.
+- **사이트 실제 확인:** Workflow가 `https://preview.soridraw.com/` 원격 index.html과 로컬 배포 빌드 SHA256 일치 확인 **PREVIEW_EXACT_BUILD=PASS**, 사이트 `/app-version.json` **500**, `FIREBASE_PREVIEW_DEPLOY=PASS`. 직접 별도 브라우저/모바일 측정은 하지 않았으며 URL 검증은 배포 CI의 실제 HTTP 확인 결과임.
+- **릴리스 사전품질:** Work Medium 로그인 소스/격리 Firebase SDK 감사 `c3d96814964e8d7d6197f0b72c3cd969820661a0` P1 2건 PASS. 앱 버전 468→500 및 Worker 동결 테스트 버전 허용만 추가해 소스 릴리스 후보 `08897d5392dcefd643cbc9823b6162f5b6667b96` Auth SDK/TS/Build `40241336836` SUCCESS, 전체 회귀 `40241336861` SUCCESS, 배포 전용 PR #489 제품 검사 `40241818578` SUCCESS.
+- **서버/사용자 데이터:** Firebase Hosting만 배포. `SHARED_RTDB_RULES_DEPLOY=SKIPPED`, Worker/Functions/D1/migration/user original data 변경 없음. Workflow `TEST_PRODUCTION_UNCHANGED=PASS`: TEST·PROD HTML 및 main/production SHA 보존. Stage416 OFF, Reader OFF, app497 #485/#469 HOLD.
+- **미검증/위험:** 실제 모바일 Chrome 저장소 포화·기존 LOCAL/SESSION/IDB 로그인 ON/OFF·브라우저 완전 종료→재진입·두 탭 공존·Google/이메일 로그인·Music Note/Library 작성 중 초안/하트 대기열 PC↔모바일 실측 **UNVERIFIED**. Firebase SDK 내부 persistence 확장 부분은 향후 SDK 업그레이드 시 재감사. 청구 실제 비용 미계측. 실기기 QA FAIL이면 **TEST 승격 HOLD**, 사용자 원본/브라우저 데이터 전체 삭제 금지.
+- **다음 한 작업:** 사용자가 **PREVIEW 사이트에서** PC/모바일 기존 계정으로 로그인 유지 ON/OFF, 브라우저 전체 종료/재실행, 두 탭, 초안 보존을 검증. 문제가 생기면 재현 시나리오를 받아 preview만 수정. TEST/PRODUCTION은 별도 명시 승인 전 승격 금지. Codex/Work 중복 요청 금지: 약 5시간 주기당 합친 명령 한 개를 사용자에게 직접 전달.
+---
+
 ## CURRENT — app500 사용자 승인 PREVIEW Hosting 배포 요청 (2026-10-26 KST)
 - 사용자: Work Medium 독립 감사 PASS 후 **PREVIEW 배포 진행 승인**. TEST/PRODUCTION 승인 아님.
 - 감사받은 로그인 소스 SHA `c3d96814964e8d7d6197f0b72c3cd969820661a0` (Work: P1 2건 PASS, 실제 Chrome 실기기 QA 미완료). 릴리스 PR #488이 `preview`에 merge commit `4f5af7e9212649300f981ca0ab280da5733da71d`로 승격됨.

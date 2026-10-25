@@ -95,6 +95,31 @@ export const writeStudioHeartPendingIntent = (intent: StudioHeartPendingIntent):
   return normalized;
 };
 
+// app501 — localStorage quota may silently reject the underlying batched
+// write. Never declare a Studio heart saved unless the exact latest intent is
+// readable back. The common path is still the same 30-second W0/W1 batch.
+export const writeStudioHeartPendingIntentChecked = (
+  intent: StudioHeartPendingIntent,
+): 'stored' | 'blocked-empty' | 'blocked-existing' => {
+  const uid = String(intent?.uid || '').trim();
+  const documentId = String(intent?.documentId || '').trim();
+  if (!uid || !documentId) return 'blocked-empty';
+  const previous = readStudioHeartPendingIntent(uid, documentId);
+  writeStudioHeartPendingIntent(intent);
+  const confirmed = readStudioHeartPendingIntent(uid, documentId);
+  if (
+    confirmed
+    && confirmed.uid === uid
+    && confirmed.documentId === documentId
+    && confirmed.updatedAtMs === Math.max(1, Math.floor(Number(intent.updatedAtMs || 0)))
+    && confirmed.desiredSaved === intent.desiredSaved
+    && confirmed.identityKey === intent.identityKey
+  ) return 'stored';
+  // An older pending mutation may still run. Do not perform a competing direct
+  // write or pretend the new click was accepted if that mutation is retained.
+  return previous ? 'blocked-existing' : 'blocked-empty';
+};
+
 export const removeStudioHeartPendingIntent = (uid: string, documentId: string): void => {
   const safeDocumentId = String(documentId || '').trim();
   if (!uid || !safeDocumentId) return;

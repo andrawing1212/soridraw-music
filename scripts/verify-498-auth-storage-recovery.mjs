@@ -14,6 +14,7 @@ for (const error of [
   { code: 22 }, { code: '22' }, { code: 1014 },
   { name: 'QuotaExceededError' }, { name: 'SecurityError' },
   { code: 'auth/web-storage-unsupported' },
+  { code: 'auth/unsupported-persistence-type' },
   { message: 'The storage quota has been exceeded' },
   { cause: { code: 22 } },
 ]) {
@@ -21,6 +22,7 @@ for (const error of [
 }
 for (const error of [
   null, {}, { code: 'auth/unauthorized-domain' },
+  { code: 'auth/invalid-persistence-type' },
   { code: 'auth/popup-blocked' }, { code: 'auth/invalid-credential' },
   { code: 'auth/too-many-requests' }, { name: 'TypeError', message: 'network failed' },
 ]) {

@@ -7750,8 +7750,15 @@ function App() {
     // After popup quota recovery, do not retry the broken store on every click.
     const recoveredMode = authPersistenceFallbackModeRef.current;
     if (recoveredMode) {
-      await applyAuthPersistence(recoveredMode);
-      return recoveredMode;
+      try {
+        await applyAuthPersistence(recoveredMode);
+        return recoveredMode;
+      } catch (error) {
+        if (!isRecoverableAuthStorageError(error) || recoveredMode === 'memory') throw error;
+        await applyAuthPersistence('memory');
+        authPersistenceFallbackModeRef.current = 'memory';
+        return 'memory';
+      }
     }
 
     const preferredMode = rememberLogin ? 'local' : 'session';

@@ -93,6 +93,11 @@ assert.match(source, /isRecoverableAuthStorageError, probeAuthStorageCapacity, r
 assert.match(source, /probeAuthStorageCapacity\(mode === 'local' \? localStorage : sessionStorage\)/);
 assert.match(source, /const authPersistenceFallbackModeRef = useRef<AuthStorageMode \| null>\(null\)/);
 assert.match(source, /const prepareAuthAttempt = async \(\) => \{/);
+assert.match(source, /if \(auth\.currentUser\) return null;/);
+assert.match(source, /if \(isRecoverableAuthStorageError\(popupError\)\) \{[\s\S]*?if \(auth\.currentUser\) \{/);
+assert.ok(!/signOut\(|localStorage\.clear\(|sessionStorage\.clear\(/.test(source.slice(
+  source.indexOf('const prepareAuthAttempt = async'), source.indexOf('// 3. HANDLE REDIRECT RESULT')
+)), 'app498 must not log out active users or clear any auth/app storage');
 assert.match(source, /resolveAuthPersistence\(preferredMode, applyAuthPersistence, preferenceStorageFull\)/);
 assert.match(source, /if \(isRecoverableAuthStorageError\(popupError\)\) \{/);
 assert.match(source, /authPersistenceFallbackModeRef\.current = 'memory'/);

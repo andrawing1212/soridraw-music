@@ -202,19 +202,24 @@ export const queueMusicNoteFolderStructureBatch = (
 
   const current = readPending(key) || { updatedAtMs: 0 };
   if (normalizedVersion < safeVersion(current[mode]?.version)) return;
+  // A new edit may replace an in-flight edit with the same proposed version.
+  // Give the replacement its own increasing version so its later settlement
+  // stays valid under the strict server-side version check.
+  const nextVersion = normalizedVersion === safeVersion(current[mode]?.version)
+    ? normalizedVersion + 1 : normalizedVersion;
   const now = Date.now();
   const next: PendingMusicNoteFolderStructure = {
     ...current,
     [mode]: {
       folders,
-      version: Math.max(normalizedVersion, safeVersion(current[mode]?.version)),
+      version: nextVersion,
       updatedAtMs: now,
     },
     updatedAtMs: now,
   };
   const durable = writePending(key, next);
   failedAttempts.delete(key);
-  reportStatus(key, { state: 'unsaved', durable, storageRisk: !durable, version: normalizedVersion, delivery: 'pending' });
+  reportStatus(key, { state: 'unsaved', durable, storageRisk: !durable, version: nextVersion, delivery: 'pending' });
   if (!durable) warnPendingQuotaRisk506(key);
   // Healthy changes retain app301's trailing 60-second canonical batch.
   // Only a failed local durable write triggers one immediate canonical attempt.

@@ -337,6 +337,20 @@ for (const failure of ['denied', 'aborted']) {
   console.log('APP514_P1_RTDB_REJECTED_PREVIEW_REFRESHES_WARM_RECEIVER_R1=PASS');
 }
 
+// A slow device clock cannot permanently strand a legitimate next edit:
+ // a rejected write learns the canonical version without overwriting it.
+{
+  const canonical = { data: { musicNoteStructureVersion: 100_001, musicNoteFolders: { myNote: folders('newest-server') } } };
+  const d = device(bus(), { quota: true, canonical, clock: 50_000 });
+  await d.page.persist('myNote', folders('slow-clock-draft'));
+  await d.advance(0);
+  assert.equal(d.batch.getMusicNoteFolderSaveStatus(uid).state, 'failed');
+  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'newest-server');
+  assert.ok(d.page.nextVersion(uid) >= 100_002, 'next human edit starts above observed server version');
+  assert.ok(d.batch.getPendingMusicNoteFolderStructureBatch(uid), 'rejected draft is not deleted');
+  console.log('APP514_P1_SLOW_CLOCK_LEARNS_CANONICAL_WATERMARK_WITHOUT_OVERWRITE=PASS');
+}
+
 // A newer RTDB transport revision wins despite a sender's lower device clock;
 // duplicate/older delivery cannot overwrite it. No canonical IO on receiver.
 {

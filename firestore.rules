@@ -117,22 +117,6 @@ service cloud.firestore {
             request.resource.data.exploreLikeSyncSignal.results.size() <= 50);
       }
 
-      // app511: shared-data compatible guard for browsers still running an
-      // older app build. Even a legacy absolute updateDoc cannot lower an
-      // already-committed playlist compatibility version.
-      // This compares the pre/post value in the same Rules evaluation and
-      // adds no client page-entry/Firestore read.
-      function playlistsRevisionNeverDecreases() {
-        let previous = resource.data.get('syncVersions', {});
-        let incoming = request.resource.data.get('syncVersions', {});
-        return !(previous is map) ||
-          !('playlists' in previous) ||
-          !(previous.playlists is int) ||
-          (incoming is map &&
-            incoming.get('playlists', -1) is int &&
-            incoming.get('playlists', -1) >= previous.playlists);
-      }
-
       function isValidSelfUpdate() {
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'uid', 'email', 'displayName', 'photoURL', 'providerIds',
@@ -170,8 +154,7 @@ service cloud.firestore {
       allow create: if isOwner(uid) && isValidSelfCreate();
       // Owner-safe fields are checked first so ordinary self updates do not pay
       // an admin-dependent users/{uid} rules lookup. Admin semantics stay intact.
-      allow update: if playlistsRevisionNeverDecreases() &&
-        ((isOwner(uid) && isValidSelfUpdate()) || isMaster() || validUserManagerUpdate());
+      allow update: if (isOwner(uid) && isValidSelfUpdate()) || isMaster() || validUserManagerUpdate();
 
       // SORIDRAW_BACKEND_V2_STEP2B_ADDITIVE_RULES
       // Additive V2 private-data rules only. Existing V1 rules remain unchanged.

@@ -1,3 +1,9 @@
+## NEXT — app504 저장공간 안전 진단·후속 제한된 보수 (2026-10-26 KST)
+- separate Draft app504 `fix/app504-storage-capacity-readonly`: Admin CACHE LIVE의 명시 버튼 하나로 저장공간 크기만 읽고 표시. 곡/UID/토큰/가사/원문·키 이름 로그/서버 전송 없음, 원본/Outbox 삭제·확장권한 요청 없음, 프로그램 초기화/방문당 자동 스캔 없음. TypeScript/Build/`verify-217-cache-live-update-reset` 포함 CI 후 정확 SHA 독립 Work READ ONLY 감사.
+- 앱 기존 `soridrawPersistentCache` Explore cache는 localStorage 기반, Studio 하트 pending은 song+baseline 객체 포함. 실제 모바일 로컬 크기 및 분포 미측정 상태. 따라서 저장공간 부족 원인을 한 항목으로 확정하거나 자동 정리하지 말 것.
+- 진단 PREVIEW 실사용 후 원인별 용량 예산/공개 캐시 유효 기간 제한/선별적 IndexedDB 이동안을 독립 구현; 하위호환·원본 보존·중복 저장/서버 재조회 비용·Crash recovery 필수. app503 #496 수정은 별도 감사·승격, app502 #495 재감사 별도. 상세 `DOCS/BROWSER_STORAGE_CAPACITY_PLAN.md`.
+---
+
 ## NEXT — app501 실사용 FAIL에 대한 exact-song canonical 진단/보존적 복구 설계 (2026-10-26)
 - 현재 PREVIEW app501 정상 배포된 소스 `13a3b961ac0a362db51a5d6d084f77fb57262fb9`, preview HEAD는 문서 merge commit 이후 변경될 수 있음. USER QA FAIL: 동일 UID `먼 길을 돌아온 밤` 기존 PC Chrome **하트 ON/목록 ON**, 모바일 **하트 ON/목록 OFF**, 다른 PC 브라우저 **하트 OFF/목록 OFF**. 실제 Firestore 원본 미검증. TEST/PRODUCTION 절대 승격 금지.
 - **원인 소스 관측:** App `isSongFavorited`가 브라우저별 `readRecentHeartAuthority` 저장 신호를 정식 favoritesStore보다 먼저 사용하여 하트 ON 단독 지속 가능. PC의 RTDB `__studioHeartRemotePreviewLocal`가 비 canonical 목록 행으로 남을 수 있음. 이 둘이 원인을 확정하는 것은 아니고 기기별 캐시와 공유 원본 정확 비교 필요.

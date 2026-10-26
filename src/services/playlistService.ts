@@ -628,16 +628,34 @@ export const applyLibraryPlaylistSyncSignalToCache = async (
     }
   }
 
-  const version = signal.syncVersion;
   const listSnapshot = await readLibraryPlaylistListCache(safeUid);
   if (!listSnapshot) return false;
-  if (listSnapshot.version >= version) return true;
+
+  // app512: older clients still publish a real canonical change after their
+  // absolute users.syncVersions.playlists update, even if their revision is
+  // lower than the preceding RTDB delta. Never silently discard that change
+  // solely because the new device has a higher cached numeric revision.
+  //
+  // Apply ONLY if this device holds the exact preceding RTDB snapshot. If an
+  // intermediate mutation is missing OR this device is further ahead, do not
+  // overwrite its cache with a possibly obsolete partial delta.
+  const isLegacyRevisionRegression512 = signal.previousSyncVersion > signal.syncVersion;
+  if (isLegacyRevisionRegression512) {
+    if (listSnapshot.version !== signal.previousSyncVersion) return false;
+  } else if (listSnapshot.version >= signal.syncVersion) {
+    return true;
+  }
 
   // app293 continuity fence: RTDB stores only the newest delta. If this device
   // was offline long enough to miss an earlier signal, never advance its cache
   // revision using only the newest patch. Returning false preserves the existing
   // users.syncVersions fallback, which refreshes canonical Firestore once.
   if (signal.previousSyncVersion > 0 && listSnapshot.version < signal.previousSyncVersion) return false;
+
+  // A lower legacy revision is a transport ordering defect, not permission to
+  // lower the local cache's monotonic watermark. The incoming *payload* is
+  // still the newest delta, so apply it only at the exact continuity fence.
+  const version = Math.max(signal.syncVersion, listSnapshot.version);
 
   const previousList = listSnapshot.items;
   const playlistRevision = (playlistId: string): number => Number(

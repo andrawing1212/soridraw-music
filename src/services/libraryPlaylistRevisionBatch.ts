@@ -15,6 +15,10 @@ const timers = new Map<string, number>();
 const inflight = new Map<string, Promise<void>>();
 const pendingMemory = new Map<string, PendingPlaylistRevision>();
 const latestSharedSignalVersionByUid = new Map<string, number>();
+// app507: these flags exist only after the device fails to persist a pending
+// compatibility version. Ordinary healthy Library edits retain their 60s batch.
+const undurablePendingUids507 = new Set<string>();
+const quotaRetryBudget507 = new Map<string, number>();
 
 const normalizeUid = (uid: string): string => String(uid || '').trim();
 const storageKey = (uid: string): string => `${STORAGE_PREFIX}.${normalizeUid(uid)}`;
@@ -42,12 +46,28 @@ const readPending = (uid: string): PendingPlaylistRevision | null => {
   }
 };
 
-const writePending = (uid: string, value: PendingPlaylistRevision): void => {
+const writePending = (uid: string, value: PendingPlaylistRevision): boolean => {
   const safeUid = normalizeUid(uid);
-  if (!safeUid) return;
+  if (!safeUid) return false;
   pendingMemory.set(safeUid, value);
-  if (typeof localStorage === 'undefined') return;
-  try { localStorage.setItem(storageKey(safeUid), JSON.stringify(value)); } catch {}
+  let durable = false;
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const serialized = JSON.stringify(value);
+      localStorage.setItem(storageKey(safeUid), serialized);
+      durable = localStorage.getItem(storageKey(safeUid)) === serialized;
+    } catch {
+      // A silently rejected write or QuotaExceededError is not durable.
+    }
+  }
+  if (durable) {
+    undurablePendingUids507.delete(safeUid);
+    quotaRetryBudget507.delete(safeUid);
+  } else {
+    undurablePendingUids507.add(safeUid);
+    quotaRetryBudget507.set(safeUid, 1); // at most one timed retry while offline
+  }
+  return durable;
 };
 
 const clearPending = (uid: string): void => {
@@ -57,6 +77,8 @@ const clearPending = (uid: string): void => {
   if (timer !== undefined && typeof window !== 'undefined') window.clearTimeout(timer);
   timers.delete(safeUid);
   pendingMemory.delete(safeUid);
+  undurablePendingUids507.delete(safeUid);
+  quotaRetryBudget507.delete(safeUid);
   if (typeof localStorage !== 'undefined') {
     try { localStorage.removeItem(storageKey(safeUid)); } catch {}
   }
@@ -100,6 +122,14 @@ const scheduleFlush = (uid: string, delayMs = LIBRARY_PLAYLIST_REVISION_BATCH_MS
   timers.set(safeUid, timer);
 };
 
+const retryUndurableOnce507 = (uid: string): void => {
+  if (!undurablePendingUids507.has(uid)) return;
+  const remaining = quotaRetryBudget507.get(uid) || 0;
+  if (remaining <= 0) return; // Avoid a timer loop when the device is offline.
+  quotaRetryBudget507.set(uid, remaining - 1);
+  scheduleFlush(uid, LIBRARY_PLAYLIST_REVISION_BATCH_MS);
+};
+
 // app295: Folder metadata stays canonical immediately, while the compatibility
 // users.syncVersions.playlists signal is collapsed to one UID-wide write after
 // 60 seconds of quiet. Current app devices still receive each changed-folder
@@ -110,11 +140,13 @@ export const queueLibraryPlaylistRevisionBatch = (uid: string, syncVersion: numb
   if (!safeUid || version <= 0) return;
 
   const current = readPending(safeUid);
-  writePending(safeUid, {
+  const durable = writePending(safeUid, {
     latestVersion: Math.max(version, current?.latestVersion || 0),
     updatedAt: Date.now(),
   });
-  scheduleFlush(safeUid);
+  // Canonical playlists are already written by the Library mutation.
+  // Only an undurable *compatibility revision* uses an urgent bounded flush.
+  scheduleFlush(safeUid, durable ? LIBRARY_PLAYLIST_REVISION_BATCH_MS : 0);
 };
 
 // Any path that still writes users.syncVersions.playlists immediately can retire
@@ -151,7 +183,10 @@ export const flushLibraryPlaylistRevisionBatch = async (uid: string): Promise<vo
     let sharedSignalVersion = latestSharedSignalVersionByUid.get(safeUid) || 0;
     if (sharedSignalVersion < pending.latestVersion) {
       const fetchedSignalVersion = await readLatestSharedSignalVersion(safeUid);
-      if (fetchedSignalVersion === null) return;
+      if (fetchedSignalVersion === null) {
+        retryUndurableOnce507(safeUid);
+        return;
+      }
       sharedSignalVersion = fetchedSignalVersion;
       noteLibraryPlaylistRevisionSignal(safeUid, fetchedSignalVersion);
     }
@@ -167,9 +202,10 @@ export const flushLibraryPlaylistRevisionBatch = async (uid: string): Promise<vo
       clearPending(safeUid);
       return;
     }
-    scheduleFlush(safeUid);
+    scheduleFlush(safeUid, undurablePendingUids507.has(safeUid) ? 0 : LIBRARY_PLAYLIST_REVISION_BATCH_MS);
   })().catch((error) => {
-    console.warn('[Library playlist revision batch] flush deferred; durable pending marker kept.', error);
+    console.warn('[Library playlist revision batch] flush deferred; pending version remains in memory.', error);
+    retryUndurableOnce507(safeUid);
   }).finally(() => {
     inflight.delete(safeUid);
   });

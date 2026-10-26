@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import {
   readStudioHeartPendingIntent,
   listStudioHeartPendingIntents,
@@ -271,3 +272,10 @@ try {
   if (savedGlobal) Object.defineProperty(globalThis,'localStorage',savedGlobal);
   else delete (globalThis as any).localStorage;
 }
+
+// app507 executes real VM-wrapped Library quota/revision behavior inside the
+// already-required targeted product CI, not as an unexecuted test artifact.
+execFileSync(process.execPath, ['scripts/verify-507-library-revision-quota-safe.mjs'], {
+  stdio: 'inherit',
+});
+console.log('APP507_LIBRARY_QUOTA_EXECUTABLE_CI_GATE=PASS');

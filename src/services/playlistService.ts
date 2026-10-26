@@ -587,6 +587,17 @@ const getPlaylistItemUniqueKey = (item: Partial<PlaylistItem> | any) => {
 // recent RTDB delta cannot safely be replayed. No collection scan, no page
 // entry read, and no automatic fallback for the +60s delayed rename/order.
 const exactGapRecoveryInflight513 = new Map<string, Promise<boolean>>();
+const exactGapRecoveryCompleted513 = new Set<string>();
+const exactGapRecoverySeenPrefix513 = 'soridraw.library.exactGapRepairSeen.v1.';
+const readExactGapMarker513 = (uid: string): string => {
+  try { return localStorage.getItem(exactGapRecoverySeenPrefix513 + uid) || ''; } catch { return ''; }
+};
+const markExactGapRecovered513 = (uid: string, signature: string): void => {
+  exactGapRecoveryCompleted513.add(signature);
+  try { localStorage.setItem(exactGapRecoverySeenPrefix513 + uid, signature); } catch {
+    // Quota-full devices retain dedupe in the current app session only.
+  }
+};
 export const recoverLibraryPlaylistGapExactDocument513 = async (
   uid: string,
   signal: LibraryPlaylistSyncSignal,
@@ -621,6 +632,7 @@ export const recoverLibraryPlaylistGapExactDocument513 = async (
   if (signal.operation !== 'playlist-delete' && !itemBefore) return false;
 
   const signature = `${safeUid}:${signal.version}:${signal.operation}:${playlistId}:${itemId}`;
+  if (exactGapRecoveryCompleted513.has(signature) || readExactGapMarker513(safeUid) === signature) return true;
   const running = exactGapRecoveryInflight513.get(signature);
   if (running) return running;
   const attempt = (async (): Promise<boolean> => {
@@ -667,8 +679,13 @@ export const recoverLibraryPlaylistGapExactDocument513 = async (
     }
   })();
   exactGapRecoveryInflight513.set(signature, attempt);
-  try { return await attempt; }
-  finally { exactGapRecoveryInflight513.delete(signature); }
+  try {
+    const repaired = await attempt;
+    if (repaired) markExactGapRecovered513(safeUid, signature);
+    return repaired;
+  } finally {
+    exactGapRecoveryInflight513.delete(signature);
+  }
 };
 
 const isSamePlaylistSourceItem = (a: Partial<PlaylistItem> | any, b: Partial<PlaylistItem> | any) => {

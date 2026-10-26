@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, collection } from 'firebase/firestore';
 
 // Real Firestore emulator, real Rules parser and enforcement. No production
 // project/network/data. The source firestore.rules file is NEVER modified.
@@ -71,6 +71,29 @@ try {
   }, { merge: true }));
   assert.equal(await readTitle(), 'old-intent-fast-clock');
   console.log('APP514_EMULATOR_FAST_CLOCK_STALE_INTENT_CAN_OVERWRITE=CONFIRMED_RISK');
+
+  // Immutable archive: trusted trigger/Admin SDK can create, owner can
+  // read only after pressing the recovery button; no account can mutate it.
+  const archivedPath = path + '/legacy_recovery/' + 'a'.repeat(40);
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), archivedPath), {
+      schemaVersion: 1, source: 'legacy-writer-after-modern', observedAtMs: 1000,
+      changedModes: ['myNote'],
+      beforeFolders: { myNote: [{ id: 'f', title: 'before' }] },
+      afterFolders: { myNote: [{ id: 'f', title: 'after' }] },
+    });
+  });
+  const ownerArchive = doc(env.authenticatedContext(uid).firestore(), archivedPath);
+  const otherArchive = doc(env.authenticatedContext('not-owner').firestore(), archivedPath);
+  assert.equal((await assertSucceeds(getDoc(ownerArchive))).data()?.beforeFolders?.myNote?.[0]?.title, 'before');
+  assert.equal((await assertSucceeds(getDocs(collection(
+    env.authenticatedContext(uid).firestore(), path, 'legacy_recovery',
+  )))).size, 1);
+  await assertFails(getDoc(otherArchive));
+  await assertFails(getDocs(collection(env.authenticatedContext('not-owner').firestore(), path, 'legacy_recovery')));
+  await assertFails(setDoc(ownerArchive, { observedAtMs: 2 }, { merge: true }));
+  await assertFails(setDoc(otherArchive, { observedAtMs: 2 }, { merge: true }));
+  console.log('APP514_EMULATOR_RECOVERY_OWNER_READ_ONLY_NONOWNER_DENIED=PASS');
 
   const favorite = doc(env.authenticatedContext(uid).firestore(), 'favorites/fixture-app514-song');
   await assertSucceeds(setDoc(favorite, { uid, title: 'isolated fake song' }));

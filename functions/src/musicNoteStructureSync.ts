@@ -75,3 +75,17 @@ export const buildLegacyMusicNoteFolderRecovery = (
     priorWriterToken: token,
   };
 };
+
+// Recovery is deliberately a read-only choice. Applying either snapshot to
+// canonical Firestore must be an explicit, separately authorized operation;
+// silent automatic replay could delete legitimate edits on another device.
+export const chooseLegacyMusicNoteFolderRecovery = (
+  recovery: LegacyMusicNoteFolderRecovery,
+  choice: 'before' | 'after',
+): Record<string, unknown> => {
+  const folders = choice === 'before' ? recovery.beforeFolders : recovery.afterFolders;
+  if (recovery.schemaVersion !== 1 || recovery.source !== 'legacy-writer-after-modern') {
+    throw new Error('invalid legacy recovery record');
+  }
+  return JSON.parse(JSON.stringify(folders));
+};

@@ -2794,6 +2794,11 @@ updates: draft.updates,
       mode === 'sharedNote' ? DEFAULT_SHARED_NOTE_FOLDERS : DEFAULT_MY_NOTE_FOLDERS,
     );
     const structureVersion = getNextMusicNoteStructureVersion(user.uid);
+    // Capture the pre-edit view before optimistic RTDB/cache publication.
+    // A server transaction may commit only if that mode has not changed
+    // since this device last saw it. A missing local mode is represented by null.
+    const previousMode = musicNoteStructureSharedSessions.get(user.uid)?.data?.musicNoteFolders?.[mode];
+    const baseFolders = Array.isArray(previousMode) ? previousMode : null;
     const folderItems = normalized.map((folder, index) => ({
       id: folder.id,
       title: folder.title,
@@ -2818,7 +2823,9 @@ updates: draft.updates,
         uid: user.uid,
         affectedCount: 1,
         syncStructure: structureSyncPatch,
-      }, writeMusicNoteStructureIfNewer(user.uid, structureSyncPatch));
+      }, writeMusicNoteStructureIfNewer(user.uid, structureSyncPatch, [
+        { mode, folders: baseFolders },
+      ]));
       markMusicNoteFolderStructureCommitted(user.uid, mode, structureVersion);
       publishMusicNoteStructureSession(user.uid, structureSyncPatch, structureVersion, true);
       return;
@@ -2830,7 +2837,7 @@ updates: draft.updates,
     publishMusicNoteStructureSession(user.uid, structureSyncPatch, structureVersion, true);
     // Persist the pending final state before waiting on the network so reload,
     // app backgrounding, or a failed RTDB request cannot lose the canonical intent.
-    queueMusicNoteFolderStructureBatch(user.uid, mode, folderItems, structureVersion);
+    queueMusicNoteFolderStructureBatch(user.uid, mode, folderItems, structureVersion, baseFolders);
     let finalVersion = structureVersion;
     try {
       const liveVersion = await publishMusicNoteStructureDelta(user.uid, structureSyncPatch);

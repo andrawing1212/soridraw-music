@@ -495,3 +495,8 @@ for (const verifier of [
   execFileSync(process.execPath, [verifier], { stdio: 'inherit' });
 }
 console.log('APP508_ALL_QUOTA_EXECUTABLE_CI_GATE=PASS');
+
+// Guard against a rules-only monotonic patch blocking legacy playlist song
+// writes that share an atomic batch with users.syncVersions.playlists.
+execFileSync(process.execPath, ['scripts/verify-511-legacy-playlist-atomic-safety.mjs'], { stdio: 'inherit' });
+console.log('APP511_LEGACY_ATOMIC_EXECUTABLE_CI_GATE=PASS');

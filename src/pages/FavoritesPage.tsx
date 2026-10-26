@@ -2821,15 +2821,22 @@ updates: draft.updates,
     };
 
     if (options.immediate) {
-      await runV1MutationBoundary({
-        domain: 'musicNote',
-        operation: 'structure-update',
-        uid: user.uid,
-        affectedCount: 1,
-        syncStructure: structureSyncPatch,
-      }, writeMusicNoteStructureIfNewer(user.uid, structureSyncPatch, [
-        { mode, folders: baseFolders },
-      ]));
+      try {
+        await runV1MutationBoundary({
+          domain: 'musicNote',
+          operation: 'structure-update',
+          uid: user.uid,
+          affectedCount: 1,
+          syncStructure: structureSyncPatch,
+        }, writeMusicNoteStructureIfNewer(user.uid, structureSyncPatch, [
+          { mode, folders: baseFolders },
+        ]));
+      } catch (error) {
+        // A failed immediate delete must not lose its latest folder intent.
+        // Keep it as ordinary pending for safe recovery; do not claim saved.
+        queueMusicNoteFolderStructureBatch(user.uid, mode, folderItems, structureVersion, baseFolders);
+        throw error;
+      }
       markMusicNoteFolderStructureCommitted(user.uid, mode, structureVersion);
       publishMusicNoteStructureSession(user.uid, structureSyncPatch, structureVersion, true);
       return;

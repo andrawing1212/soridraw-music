@@ -193,4 +193,22 @@ const item = id => ({ id, title: id, order: 1 });
   assert.deepEqual(x.cachedItems.get('folder-a').items.map(v => v.id), ['item-1']);
   console.log('APP513_SAME_VERSION_CHANGED_PARENT_FAILS_CLOSED=PASS');
 }
+// A past success marker must not mask a later cache loss: the same latest
+// RTDB event can reappear after an app restart or local cache eviction.
+{
+  const x = setup({
+    canonical: {
+      path: 'user_playlists/user-a/lists/folder-a/items/item-2',
+      data: item('item-2'),
+    },
+    beforeItems: [item('item-1')],
+  });
+  const payload = { playlistId: 'folder-a', item: item('item-2') };
+  assert.equal(await x.recover('item-add', payload, 10021), true);
+  x.cachedItems.set('folder-a', { version: 49, items: [item('item-1')] });
+  assert.equal(await x.recover('item-add', payload, 10021), true);
+  assert.equal(x.stats.exact, 2, 'stale marker cannot falsely skip needed exact read');
+  assert.deepEqual(x.cachedItems.get('folder-a').items.map(v => v.id), ['item-1', 'item-2']);
+  console.log('APP513_STALE_REPAIR_MARKER_AFTER_CACHE_LOSS_REVALIDATED=PASS');
+}
 console.log('APP513_EXACT_GAP_SOURCE_RUNTIME_GATE=PASS');

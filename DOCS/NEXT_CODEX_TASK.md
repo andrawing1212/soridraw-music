@@ -1,3 +1,10 @@
+## NEXT — app506 quota-full Music Note 폴더 canonical 안전 감사 (2026-10-26 KST)
+- 별도 Draft 브랜치 `fix/app506-folder-quota-safe-settlement`: source readback 실패만 즉시 bounded canonical flush (정상 +60초 무변경), 실패 시 토스트·메모리 유지·60초 오류 재시도. 영구 저장 성공 전 사용자에게 확정이라고 표시하면 안 됨.
+- 반드시 런타임 테스트: 정상 localStorage +60초 R0/W0, quota write fail + immediate O(1) Firestore structure attempt, silent write-without-readback, existing durable previous pending 보존/성공 뒤 stale 삭제, server offline immediate fail → 단일 60초 재시도, 추가 곡/폴더 변경 중 오래된 ACK이 최신값 삭제하지 않음, PC/mobile immediate RTDB, 기존 folder create/delete/reorder; TypeScript/Build.
+- 원본 browser cache 삭제 금지, 임시 대기열 무제한 서버 writes 금지, user data migration 금지. 위험: offline+storage-block+tab-close의 완전 내구성 별도 해결 필요; #499 Library revision/favoriteCount 남음. Audit FAIL이면 배포 중단.
+- app505 PR #498 Work READ-ONLY 감사 별도, app506 SHA를 섞지 말 것. 각 독립 PASS 후 결합 commit 재회귀 및 PREVIEW만 승격; TEST/PRODUCTION 별도 승인이 필요.
+---
+
 ## NEXT — app501 실사용 FAIL에 대한 exact-song canonical 진단/보존적 복구 설계 (2026-10-26)
 - 현재 PREVIEW app501 정상 배포된 소스 `13a3b961ac0a362db51a5d6d084f77fb57262fb9`, preview HEAD는 문서 merge commit 이후 변경될 수 있음. USER QA FAIL: 동일 UID `먼 길을 돌아온 밤` 기존 PC Chrome **하트 ON/목록 ON**, 모바일 **하트 ON/목록 OFF**, 다른 PC 브라우저 **하트 OFF/목록 OFF**. 실제 Firestore 원본 미검증. TEST/PRODUCTION 절대 승격 금지.
 - **원인 소스 관측:** App `isSongFavorited`가 브라우저별 `readRecentHeartAuthority` 저장 신호를 정식 favoritesStore보다 먼저 사용하여 하트 ON 단독 지속 가능. PC의 RTDB `__studioHeartRemotePreviewLocal`가 비 canonical 목록 행으로 남을 수 있음. 이 둘이 원인을 확정하는 것은 아니고 기기별 캐시와 공유 원본 정확 비교 필요.

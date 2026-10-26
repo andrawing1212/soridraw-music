@@ -351,6 +351,27 @@ for (const failure of ['denied', 'aborted']) {
   console.log('APP514_SERVER_REVISION_INDEPENDENT_FOLDER_MODES=PASS');
 }
 
+// A folder deletion right after an unsaved rename is immediate. It must use
+// the original canonical baseline, then consume the still-pending rename.
+{
+  const canonical = { data: {
+    musicNoteStructureVersion: 42,
+    musicNoteFolders: { myNote: folders('original') },
+  } };
+  const d = device(bus(), { canonical });
+  d.page.publish(uid, { musicNoteFolders: { myNote: folders('original') },
+    musicNoteStructureVersion: 42 }, 42);
+  await d.page.persist('myNote', folders('unsaved-rename'));
+  assert.ok(d.batch.getPendingMusicNoteFolderStructureBatch(uid));
+  await d.page.persist('myNote', folders('immediate-delete'), { immediate: true });
+  assert.equal(canonical.data.musicNoteStructureVersion, 43);
+  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'immediate-delete');
+  assert.equal(d.batch.getPendingMusicNoteFolderStructureBatch(uid), null);
+  await d.advance(60_000);
+  assert.equal(d.writes.length, 1, 'no delayed stale rename after immediate delete');
+  console.log('APP514_IMMEDIATE_DELETE_AFTER_PENDING_RENAME_USES_ORIGINAL_BASE=PASS');
+}
+
 // Rejected old Firestore update sends one conflict-only RTDB signal. A warm
 // receiving device must re-read canonical rather than keep an uncommitted UI.
 {

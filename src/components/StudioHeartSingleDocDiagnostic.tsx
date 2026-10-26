@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase';
 import {
   findSingleLocalFavoriteDocumentId,
@@ -16,33 +17,97 @@ export default function StudioHeartSingleDocDiagnostic() {
   const [busy, setBusy] = useState(false);
   const [alreadyRead, setAlreadyRead] = useState(false);
   const uid = String(auth.currentUser?.uid || '').trim();
+  const uidRef = useRef(uid);
+  const titleRef = useRef(title);
+  const documentIdRef = useRef(documentId);
+  const busyRef = useRef(false);
+  const requestSequenceRef = useRef(0);
+  const activeRequestRef = useRef<{ sequence: number; uid: string; documentId: string; title: string } | null>(null);
+
+  // A late response must never label a different document or signed-in user.
+  // Invalidate synchronously when either input changes, even if an event
+  // was already queued before the disabled input was painted.
+  const invalidateRequest = () => {
+    requestSequenceRef.current += 1;
+    activeRequestRef.current = null;
+    busyRef.current = false;
+    setBusy(false);
+    setAlreadyRead(false);
+    setReport(null);
+  };
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      const nextUid = String(user?.uid || '').trim();
+      if (uidRef.current === nextUid) return;
+      uidRef.current = nextUid;
+      invalidateRequest();
+      setMessage('로그인 계정이 변경되어 이전 조회 결과를 폐기했습니다.');
+    });
+    return () => {
+      // Also discard responses from a hidden/unmounted diagnostic panel.
+      requestSequenceRef.current += 1;
+      activeRequestRef.current = null;
+      busyRef.current = false;
+      unsubscribe();
+    };
+  }, []);
 
   const findLocal = () => {
-    setReport(null);
-    setAlreadyRead(false);
-    const match = findSingleLocalFavoriteDocumentId(uid, title);
+    if (busyRef.current) return;
+    invalidateRequest();
+    const match = findSingleLocalFavoriteDocumentId(String(auth.currentUser?.uid || '').trim(), titleRef.current);
     if (!match) {
+      documentIdRef.current = '';
       setDocumentId('');
       setMessage('현재 기기에 정확히 일치하는 저장곡이 없거나 동명곡이 있습니다. 원본 PC에서 고유 문서번호를 확인하세요.');
       return;
     }
+    documentIdRef.current = match;
     setDocumentId(match);
     setMessage('현재 브라우저에서 고유 문서번호를 찾았습니다. 서버 조회 전까지는 로컬 기록입니다.');
   };
 
   const inspect = async () => {
-    if (busy || alreadyRead || !uid || !documentId.trim()) return;
+    const requestUid = String(auth.currentUser?.uid || '').trim();
+    const requestDocumentId = documentIdRef.current.trim();
+    const requestTitle = titleRef.current;
+    if (busyRef.current || alreadyRead || !requestUid || requestUid !== uidRef.current
+      || !requestDocumentId || documentId.trim() !== requestDocumentId || title !== requestTitle) return;
+    const request = {
+      sequence: ++requestSequenceRef.current,
+      uid: requestUid,
+      documentId: requestDocumentId,
+      title: requestTitle,
+    };
+    activeRequestRef.current = request;
+    busyRef.current = true;
     setBusy(true);
     setReport(null);
     setMessage('');
     setAlreadyRead(true);
+    const isCurrentRequest = () => (
+      activeRequestRef.current?.sequence === request.sequence
+      && uidRef.current === request.uid
+      && auth.currentUser?.uid === request.uid
+      && documentIdRef.current.trim() === request.documentId
+      && titleRef.current === request.title
+    );
     try {
-      const result = await inspectExactStudioHeartDocument(uid, documentId);
+      const result = await inspectExactStudioHeartDocument(request.uid, request.documentId);
+      if (!isCurrentRequest()) return;
       setReport(result);
       setMessage('서버 원본 1건만 읽었습니다. 곡이나 브라우저 캐시는 수정하지 않았습니다.');
     } catch {
+      if (!isCurrentRequest()) return;
       setMessage('서버 확인 실패: 로그인 상태, 권한 또는 네트워크를 확인하세요. 실패를 저장곡 없음으로 해석하면 안 됩니다.');
-    } finally { setBusy(false); }
+    } finally {
+      if (isCurrentRequest()) {
+        activeRequestRef.current = null;
+        busyRef.current = false;
+        setBusy(false);
+      }
+    }
   };
 
   const label = (value: boolean | null) => value === null ? '판정 불가' : value ? '예' : '아니요';
@@ -55,11 +120,16 @@ export default function StudioHeartSingleDocDiagnostic() {
       <input
         aria-label="현재 기기에 있는 곡의 정확한 제목"
         value={title}
-        onChange={(event) => { setTitle(event.target.value); setReport(null); setAlreadyRead(false); }}
+        disabled={busy}
+        onChange={(event) => {
+          titleRef.current = event.target.value;
+          invalidateRequest();
+          setTitle(event.target.value);
+        }}
         placeholder="정확한 곡 제목 (로컬 검색만)"
         className="mt-2 w-full rounded border border-white/15 bg-black/30 px-2 py-1.5 text-[11px] text-white"
       />
-      <button type="button" onClick={findLocal}
+      <button type="button" disabled={busy} onClick={findLocal}
         className="mt-1 rounded border border-white/15 px-2 py-1 text-[11px] font-bold">
         이 브라우저에서 문서 찾기 · 서버 0회
       </button>
@@ -67,12 +137,17 @@ export default function StudioHeartSingleDocDiagnostic() {
         저장 문서번호 (다른 기기에서는 원본 PC 번호 붙여넣기)
       </label>
       <input id="studio-heart-exact-doc-id" value={documentId}
-        onChange={(event) => { setDocumentId(event.target.value); setReport(null); setAlreadyRead(false); }}
+        disabled={busy}
+        onChange={(event) => {
+          documentIdRef.current = event.target.value;
+          invalidateRequest();
+          setDocumentId(event.target.value);
+        }}
         placeholder="정확한 저장 문서번호"
         className="mt-1 w-full rounded border border-white/15 bg-black/30 px-2 py-1.5 text-[11px] text-white"
       />
       <div className="mt-1 flex flex-wrap gap-1">
-        <button type="button" disabled={!documentId.trim()}
+        <button type="button" disabled={!documentId.trim() || busy}
           onClick={() => { if (documentId) void navigator.clipboard?.writeText(documentId); }}
           className="rounded border border-white/15 px-2 py-1 disabled:opacity-40">문서번호 복사</button>
         <button type="button" disabled={!uid || !documentId.trim() || busy || alreadyRead}

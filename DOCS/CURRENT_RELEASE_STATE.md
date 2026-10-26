@@ -1,3 +1,11 @@
+## CURRENT — app502 Work P2 stale-response UI race FAIL 대응 (2026-10-26 KST)
+- **독립 Work 감사 결과:** PR #495 고정 SHA `a6bd96a7a7287c94a6da53fa46d420cce42e09cd` **FAIL P2**. 조회 A 진행 중 문서 입력 B로 변경 시 A의 비동기 결과가 B 아래 표시됨(실제 컴포넌트 격리 재현); B 서버 조회는 발생하지 않음. 따라서 PREVIEW 배포 HOLD.
+- **최소 수정 진행:** 동일 `fix/app502-single-song-readonly-diagnostic` Draft PR에서 관리자 CACHE LIVE 진단 UI에 요청 번호+인증 UID+문서번호+입력 제목을 고정하고 응답/오류/종료 시 모두 일치 검사. 입력/로그인 UID 변경 또는 컴포넌트 해제 시 기존 응답 무효화, 진행 중 문서번호·제목 입력과 로컬 찾기 잠금, 옛 요청의 finally가 새 요청 잠금을 해제하지 못하게 함.
+- **회귀 추가:** 기존 `scripts/verify-501-studio-heart-quota-safe.ts`에서 실제 TSX 컴포넌트를 분리 실행하고 A 요청 중 B 입력, A 완료 결과 무시, B 명시 요청만 결과 표시, UID A→B 전환 중 A 응답 무시 및 신규 요청 잠금 유지, 중복 클릭 한 번만 서버 호출 등을 검사. 이 회귀가 실제 CI에서 통과하기 전 수정 완료를 선언하지 않음.
+- **변경 범위:** 진단 UI + 해당 verifier + 이 상태 문서만, Firestore 쿼리/Rules/Studio 저장·하트/30초 batch/RTDB/데이터 원본/Worker/Functions/Cloudflare/TEST/PRODUCTION 변경 없음. app501 PREVIEW 실사용 3브라우저 동기화는 여전히 FAIL. 실제 Firestore 사용자 인증 단건 조회와 3브라우저 서버 비교는 미검증.
+- **게이트:** 새 최종 PR SHA TypeScript/Build/제품 CI PASS → **별도 Work 재감사 PASS** → 그 뒤에만 PREVIEW Hosting 진단 도입 검토. 자동 제품 검사는 실사용 성공을 뜻하지 않음. Stage416 1/4·25% OFF / 앱 속도 개선 과거 5/5·100% / app502 진단 2/4·50%(코드·검사 후보 작성, CI·감사·배포 미완).
+---
+
 ## CURRENT — app502 진단 단건 조회의 미존재 문서 보안 규칙 오류 방어 (2026-10-26 KST)
 - **배포 차단 검토 결과:** 이전 app502 PR #495 `getDocFromServer(favorites/{id})`는 현재 공유 `firestore.rules` (`resource.data.uid == request.auth.uid || isAdmin()`)에 의해 없는 문서에서 접근 거부가 발생할 수 있고, '미존재' 여부를 확정하지 못하는 진단 기능 실패 위험. 현행 규칙/계정·캐시/원본 데이터 절대 변경 없이 좁은 방식으로 조정.
 - **새 후보:** 로그인된 UID와 사용자 브라우저의 정확한 favorite documentId를 모두 equality 조건으로 지정한 `getDocsFromServer(query(collection('favorites'), where(documentId(),'==',id), where('uid','==',uid), limit(1)))` **명시 버튼 1회당 최대 1건 R1** 조회. 서버-only로 브라우저 캐시 false-negative 방지, 규칙 owner 조건에 맞는 안전 범위만 응답. 조회 결과 0이면 해당 UID의 정확한 ID로 소유자 일치 문서가 확인되지 않았다는 뜻, 다른 UID가 그 ID를 소유하지 않음까지 주장하지 않음. 네트워크/권한/인덱스 오류는 존재/부재 판정하지 않음.

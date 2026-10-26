@@ -2265,7 +2265,7 @@ updates: draft.updates,
     const onFolderStorageRisk506 = (event: Event) => {
       const detail = (event as CustomEvent<{ uid?: string }>).detail;
       if (!user?.uid || detail?.uid !== user.uid) return;
-      showFavoriteToast('기기 저장공간 부족: 폴더 변경을 서버에 즉시 저장 중입니다. 완료 전 앱을 닫지 마세요.', 10000);
+      showFavoriteToast('기기 저장공간 부족: 폴더 변경을 서버에 저장하는 중입니다. 저장 완료 전 앱을 닫지 마세요.', 10000);
     };
     window.addEventListener(MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT, onFolderStorageRisk506);
     return () => window.removeEventListener(MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT, onFolderStorageRisk506);

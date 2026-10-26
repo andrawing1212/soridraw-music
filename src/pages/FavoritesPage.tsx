@@ -18,6 +18,7 @@ import {
   flushMusicNoteFolderStructureBatch,
   markMusicNoteFolderStructureCommitted,
   queueMusicNoteFolderStructureBatch,
+  writeMusicNoteStructureIfNewer,
   resumeMusicNoteFolderStructureBatch,
 } from '../services/musicNoteFolderStructureBatch';
 import React, { useState, useEffect, useLayoutEffect, useRef, useDeferredValue } from 'react';
@@ -499,7 +500,7 @@ const flushMusicNoteCardStateServerWrite = (uid: string): Promise<boolean> => {
           },
           musicNoteStructureVersion: structureVersion,
         },
-      }, setDoc(doc(db, 'user_structures', uid), structurePatch, { merge: true }));
+      }, writeMusicNoteStructureIfNewer(uid, structurePatch));
       publishMusicNoteStructureSession(uid, {
         musicNoteCardState: {
           schemaVersion: 1,
@@ -2808,7 +2809,7 @@ updates: draft.updates,
         uid: user.uid,
         affectedCount: 1,
         syncStructure: structureSyncPatch,
-      }, setDoc(doc(db, 'user_structures', user.uid), structureSyncPatch, { merge: true }));
+      }, writeMusicNoteStructureIfNewer(user.uid, structureSyncPatch));
       markMusicNoteFolderStructureCommitted(user.uid, mode, structureVersion);
       publishMusicNoteStructureSession(user.uid, structureSyncPatch, structureVersion, true);
       return;

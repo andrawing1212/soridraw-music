@@ -1,11 +1,19 @@
 # SORIDRAW Explore Like Final Architecture Lock
 
-Status: **LOCKED**
+Status: **HISTORICAL — 과거 app137/2026-09-22 설계 기록 (현행 구현 기준 아님)**
 Date: 2026-09-22
 Branch: preview
 
-이 문서는 app137 이후 Explore 좋아요 구조의 최종 기준이다.
-앞으로 이 기능은 아래 계약에서 벗어나는 방향으로 임의 확장하지 않는다.
+## 현행 기준 안내 — 2026-10-27 확인
+
+- 현재 `preview` 코드 `src/services/exploreLikeService.ts`는 `EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000`: **마지막 좋아요/해제 클릭 후 5초** 묶음 전송이 현재 활성 동작이다. 과거의 **30초** 문구를 적용하거나 타이머를 되돌리지 않는다.
+- Stage416 개인 5분 후보 플래그와 별도 공개 5분 후보 플래그는 **OFF**. 향후 1/3/5/10/20분 운영 계획은 현재 배포 동작이 아니다. 공개 `likeCount` 갱신은 개인 하트 저장과 별개의 처리 경로다.
+- 최신 좋아요 동결 기준: `.agents/skills/local-first-like-sync/references/soridraw-app410-like-convergence-frozen.md`, 작업 시작 기준 `AGENTS.md`, 실제 `preview` 코드. 2026-10-09의 비용 판단 변경으로 아래 'W1~W2 무조건 합격' 표현도 현행 강제 규칙이 아니다.
+- **아래 1~10절은 당시 설계 이력이다. 현재 코드 변경 지시나 신규 개발 합격 기준으로 직접 사용하지 않는다.** Music Note/Studio 저장 하트의 별도 30초 규칙과 혼동하지 않는다.
+
+---
+
+이하 내용은 app137 당시 설계 기준을 역사적으로 보존한 것이다.
 
 ## 1. 최종 목표
 - 하트/숫자는 클릭 즉시 local 반영.

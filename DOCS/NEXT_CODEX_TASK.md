@@ -1,3 +1,9 @@
+## NEXT — app501 P1 20→21 대기곡 보존 독립 재감사 (2026-10-26 KST)
+- 이전 SHA `12ea676e3a66306599b9af9901f6348f9fab40a3` 독립 감사 FAIL P1. app501 PR #491 `fix/app501-studio-heart-quota-safe`에서 소스 `acf8499cce1cae057ffc49d93f3a15b2cff3f7e1` 수정: 20 pending 자동 절단 제거, 초과 새 곡 `blocked-capacity`와 1곡 canonical fallback; 동일 곡 20번째 수정 허용. 기존 outbox/preview/30초 묶음/저장 원본 보호.
+- `scripts/verify-501-studio-heart-quota-safe.ts` 20→21 no-eviction (raw bytes), unchecked writer, same document replacement, freed slot, legacy 22 records, original quota/3 devices/phantom tests.
+- 정확한 최종 SHA의 두 GitHub Actions TypeScript/Build/전체 제품 회귀 확인 후 그 SHA로 감사방 **읽기 전용 재감사**. 독립 감사 PASS 및 사용자 PC/모바일/Firestore 실측 전 실제 앱 저장 성공/배포 완료 주장 금지. PREVIEW app500, TEST/PRODUCTION HOLD.
+---
+
 ## NEXT — app501 정확 SHA 독립 감사 및 PREVIEW 데이터 안전 검증 (2026-10-26)
 - 문제: Recent 저장 하트 3곡은 모두 체크지만 기존 PC Music Note 3곡/모바일 2곡/새 PC 브라우저 최초 1곡→재접속 2곡. `먼 길을 돌아온 밤` 원본 저장 여부 미확정. 실사용자 곡 삭제/해제/재저장/캐시 삭제 금지.
 - 후보 PR #491 `fix/app501-studio-heart-quota-safe`: quota-full에서 pending write read-back 검증 후 단일곡 canonical fallback, 기존 pending 중복경쟁 차단. RTDB remote preview는 화면·로컬 캐시만, derived Catalog 재출판 금지. Catalog onData 및 manual refresh는 optimistic rows를 newer canonical로 합치지 않고 기존 active preview는 overlay 유지. 읽기/탭 이동 Firestore 쓰기 금지, 30초 per-song 배치 및 app349 동기화 보호.

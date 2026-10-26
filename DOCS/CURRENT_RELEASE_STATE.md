@@ -1,3 +1,12 @@
+## CURRENT — app501 독립 감사 FAIL 대응 P1 20→21 Studio 대기곡 보호 (2026-10-26 KST)
+- 감사 기준 `12ea676e3a66306599b9af9901f6348f9fab40a3`에서 P1 FAIL: `studioHeartBatch.writeAll` 20개 초과 `slice`가 기존 가장 오래된 pending 곡을 조용히 버려 canonical 30초 저장 유실 가능.
+- **수정된 코드 SHA `acf8499cce1cae057ffc49d93f3a15b2cff3f7e1`:** 기존 대기곡을 읽거나 저장할 때 목록 `slice(0,20)` 제거. `writeAll` 20 초과 새 곡은 기존 20개 변경 없이 거부, `writeStudioHeartPendingIntentChecked` 새 `blocked-capacity` 상태 반환, App은 해당 새 곡만 기존 단일곡 canonical 서버 저장으로 fallback (기존 pending·30초 타이머/실시간 신호 불변). 이미 queued 동일 곡 변경은 20개 상태에서도 허용. 오래된 원본 pending 기록이 21개 이상이더라도 임의 잘라내지 않음.
+- **신규 테스트:** 실제 20개 상태에서 21번째 write 거부 및 기존 20개 바이트 단위 보존; legacy unchecked writer도 원본 보존; 20개에서 같은 곡 수정; 기존 1개 정상 settle 후 21번째 저장; 22개 legacy storage read/write no-truncate. 기존 app501 quota 및 PC/mobile 가상 3곡·Music Note preview Catalog 격리 검증도 계속 실행.
+- **검증:** GitHub 최종 HEAD CI TypeScript/Build/전체 관련 테스트 결과 확인 및 독립 감사 재검증 전 PASS/승격 주장 금지. 사용자 사진의 실제 3곡 Firestore canonical 여부 미확인; 기존 PC/모바일 표시 불일치 실사용 검증 전.
+- **안전:** PR #491 Draft 개발 브랜치만 변경. 실제 preview.soridraw.com 앱은 app500 유지. user original data/브라우저 저장소/UI/Worker/Functions/Rules/Firebase Hosting/TEST/PRODUCTION 미변경. Stage416 OFF/Reader OFF.
+- **다음:** exact 최종 SHA CI 확인 → 감사방 독립 재감사(20→21 기존 곡 무손실 집중) → PASS인 경우에만 PREVIEW 승인된 릴리스 절차 판단, 이후 실기기/Firestore 인증 읽기 검증. 데이터 강제 복구나 전체 캐시 삭제 금지.
+---
+
 ## CURRENT — app501 Music Note 새 브라우저 hydrate / RTDB 임시목록 격리 수정 (2026-10-26 KST)
 - **사용자 직접 증거:** 기존 PC Music Note 최근 3곡, 모바일 2곡, 다른 PC 브라우저 최초 접속 1곡 → 새로고침 후 2곡. `먼 길을 돌아온 밤`은 기존 PC에만 보이고 `어제의 네게 묻는다`는 최초 접속 때 누락했다가 새로고침 후 표시. 모든 Recent 하트 저장으로 보고. 실제 사용자 Firestore 문서는 사용자 인증·곡 ID 없어서 읽기 전용 미확인. 브라우저 표시/RTDB preview를 canonical로 오인 금지.
 - **코드상 수정:** 기존 app500 `applyRemoteStudioHeartPreview`는 RTDB 수신곡을 local cache로 저장하면서 파생 Catalog 재출판 경로를 호출할 수 있고, 전체 Catalog onData의 `localNewer`는 `__studioHeartRemotePreviewLocal`을 새로운 canonical 곡으로 채택할 가능성이 있었음. app501 PR #491에서 preview 수신, catalog read/refresh의 `writeFavoritesCache(..., {publishDerived:false})`를 적용하고, pending/remote-preview 표식은 newer canonical merge에서 제외. 수동 refresh의 `favoritesStore.setFavorites(merged)` 중복 overwrite 제거, 기존 `setFavorites`가 실제 활성 optimistic overlay를 유지.

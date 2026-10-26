@@ -11,6 +11,8 @@ Explicit user instructions always override this skill.
 
 ## SORIDRAW current verified freeze — MUST READ FIRST
 
+**2026-10-27 현재 소스 우선 정정:** `AGENTS.md`가 가리키는 app410 실사용 정상 기준과 현행 `preview`의 `EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000` (**Explore 개인 좋아요 마지막 클릭 후 5초 묶음 전송**)을 따른다. 이 파일에 남은 과거 app164/app160 및 30초 언급은 역사적 기준이고, Studio/Music Note 저장 하트는 별도 30초이다. Stage416 개인 5분 후보는 현재 OFF. 현행 코드/사용자 지시와 충돌하는 역사적 서술로 정상 기능을 변경하지 않는다.
+
 As of 2026-09-25 KST, the user confirmed the **newly published track first-like defect resolved on PREVIEW app164 + Worker195**. The previous PREVIEW app160 + Worker195 verification of existing likes/unlikes, same-account PC↔mobile and cross-account public likeCount remains the protected historical baseline. **Do not touch any working like function unless a concrete new defect is reported and the user explicitly authorizes the exact change.** Read `references/soridraw-app164-worker195-frozen.md`, `references/soridraw-app160-worker195-frozen.md`, and current `DOCS/CURRENT_RELEASE_STATE.md` before any SORIDRAW like-related work. The app141 baseline remains historical receiver-order guidance. The user's app164 confirmation does not independently prove every new-device/cross-account case or live physical D1 billing.
 
 As of 2026-10-03 KST, the user also confirmed the **PREVIEW app302 Studio save-heart / Music Note local-first patch is normally applied on a real device**. This is a separate heart domain from Explore public likes: Studio save-heart uses the Music Note favorite/canonical path, not the Explore public-like state machine. Before touching Studio save/unsave heart behavior, also read `.agents/skills/song-save-edit-sync-cost/SKILL.md` and `.agents/skills/song-save-edit-sync-cost/references/soridraw-app349-studio-heart-settlement-media-baseline.md`. The app302 confirmation protects the visible behavior and the app302b pending-layer cleanup, but does **not** by itself convert unmeasured Firestore/D1 cost targets into measured billing proof.
@@ -105,7 +107,7 @@ A user click updates local UI/state immediately and records one durable local in
 Batching is allowed when the product does not require server-immediate settlement. Multiple changes inside the batch window should collapse to the final desired state per item.
 
 For SORIDRAW Explore public likes:
-- keep the verified trailing batch window at 30 seconds;
+- preserve the current app410 `EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000` trailing **5-second** personal Explore-like batch; older 30-second descriptions are historical, not the live setting;
 - keep the W1 queue-intake architecture;
 - do not reintroduce direct per-track interactive settlement;
 - do not turn navigation, focus, page exit, or idle time into automatic repeated mutation retries.
@@ -172,7 +174,7 @@ Targets:
 - cross-device UI notification: no additional canonical database read/write beyond the already accepted mutation path;
 - mutation cost must remain O(1), independent of total users, total tracks, or total likes.
 
-When Cloudflare D1 is used for a SORIDRAW-like interactive mutation, W1-W2 rows-written is the hard pass range. W3+ is a failure unless the user explicitly changes that cost policy.
+For SORIDRAW the director changed this rule on 2026-10-09: W1-W2 is an efficiency target, **not an unconditional release gate**. W3+ alone does not justify breaking normal like behavior or expensive redesign. Judge actual billed D1 rows together with Worker/R2/DO/Firebase totals, O(1) changed-item work, user-visible correctness, and 100k-user cost. Repeated whole-list reads or writes on no-op navigation still fail. For other apps, define a suitable bound explicitly.
 
 In another database, translate this into the closest equivalent: bounded constant-row mutation work with no fan-out proportional to collection size.
 

@@ -100,8 +100,15 @@ assert.equal(transactions,0);
 pending=null;
 console.log('APP514_RECOVERY_PENDING_LOCAL_EDIT_REJECTED_R0W0=PASS');
 
+const untouched = await exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','after');
+assert.equal(untouched.changed,false);
+assert.equal(writes,0);
+assert.equal(emitted.length,0);
+console.log('APP514_RECOVERY_ALREADY_CURRENT_NO_EXTRA_WRITE_OR_SIGNAL=PASS');
+
 const out=await exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','before');
 assert.equal(out.version,8);
+assert.equal(out.changed,true);
 assert.equal(out.folders[0].title,'Before');
 assert.equal(canonical.musicNoteFolders.myNote[0].title,'Before');
 assert.equal(canonical.musicNoteFolders.sharedNote[0].title,'Shared');
@@ -121,3 +128,14 @@ assert.equal(writes,1);
 await assert.rejects(exports.restoreMusicNoteFolderRecovery(uid,'../bad','myNote','before'),/잘못된/);
 assert.equal(writes,1);
 console.log('APP514_RECOVERY_CONCURRENT_DEVICE_AND_MALFORMED_REQUEST_FAIL_CLOSED=PASS');
+
+// A historical version that drops a folder ID may orphan song references.
+// Keep the archive for explicit deeper review, but do not silently delete.
+data.beforeFolders.myNote = [{id:'default',title:'Before'}];
+data.afterFolders.myNote = [
+  {id:'default',title:'After'}, {id:'song-folder',title:'Used by songs'},
+];
+canonical.musicNoteFolders.myNote = copy(data.afterFolders.myNote);
+await assert.rejects(exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','before'),/폴더 삭제/);
+assert.equal(writes,1);
+console.log('APP514_RECOVERY_ORPHANING_FOLDER_DELETE_BLOCKED=PASS');

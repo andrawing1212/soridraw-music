@@ -21,8 +21,9 @@ import {
   type CloudflareDiagnosticState,
 } from '../lib/cloudflareDiagnostics';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache } from '../lib/userProfileCache';
-import { hasAdminPermission } from '../constants/adminPermissions';
+import { inspectBrowserStorageCapacity504, type BrowserStorageAudit504 } from '../lib/browserStorageCapacityAudit504';import { hasAdminPermission } from '../constants/adminPermissions';
 import { favoritesStore } from '../hooks/useFavoritesStore';
+import StudioHeartSingleDocDiagnostic from './StudioHeartSingleDocDiagnostic';
 import { CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, readCatalogRuntimeDiagnostic, resetCatalogRuntimeDiagnostics, type CatalogRuntimeDiagnosticKind, type CatalogRuntimeDiagnosticState } from '../lib/catalogRuntimeDiagnostics';
 import { PAGE_SYNC_DIAGNOSTICS_UPDATE_EVENT, readPageSyncDiagnostics, resetPageSyncDiagnostics, type PageSyncDiagnosticState } from '../lib/pageSyncCoordinator';
 
@@ -220,7 +221,8 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
   const [serverUsage, setServerUsage] = useState<FirestoreServerUsage | null>(null);
   const [serverLoading, setServerLoading] = useState(false);
   const [serverError, setServerError] = useState('');
-  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [storageAudit504, setStorageAudit504] = useState<BrowserStorageAudit504 | null>(null);
+  const [storageAuditBusy504, setStorageAuditBusy504] = useState(false);  const panelRef = useRef<HTMLDivElement | null>(null);
   const serverLoadingRef = useRef(false);
   const dragRef = useRef<{
     pointerId: number;
@@ -244,6 +246,18 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
   const persistPosition = useCallback((next: PanelPosition) => {
     try { window.localStorage.setItem(PANEL_POSITION_STORAGE_KEY, JSON.stringify(next)); } catch {}
   }, []);
+
+  // Manually inspect storage sizes only. No page-entry reads, writes, purge,
+  // server traffic or telemetry. Works with a full/blocked localStorage.
+  const inspectStorage504 = async () => {
+    if (!canUseDiagnostics || !enabled || storageAuditBusy504) return;
+    setStorageAuditBusy504(true);
+    try {
+      setStorageAudit504(await inspectBrowserStorageCapacity504());
+    } finally {
+      setStorageAuditBusy504(false);
+    }
+  };
 
   const loadServerUsage = useCallback(async () => {
     if (!canUseDiagnostics || !enabled || serverLoadingRef.current) return;
@@ -682,6 +696,46 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
               <span className="shrink-0 tabular-nums">시도 {catalogRuntime.musicNote.attempt || 0} · rev {catalogRuntime.musicNote.revision || '—'}</span>
             </div>
           </div>
+
+          <StudioHeartSingleDocDiagnostic />
+
+          <section className="mt-2 rounded-xl bg-white/[0.035] px-2.5 py-2 text-[10px] text-white/65">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-black">기기 저장공간 · 읽기 전용</span>
+              <button type="button" disabled={storageAuditBusy504}
+                onClick={() => { void inspectStorage504(); }}
+                className="rounded border border-white/20 px-2 py-1 font-bold disabled:opacity-40">
+                {storageAuditBusy504 ? '측정 중…' : '내 기기 저장량 확인'}
+              </button>
+            </div>
+            <div className="mt-1 text-white/45">버튼을 누를 때만 용량 계산 · 서버 0회 · 곡/UID/키/값 공개 0 · 삭제 0</div>
+            {storageAudit504 && (
+              <div className="mt-1.5 space-y-1">
+                <div>localStorage: {storageAudit504.local.available
+                  ? `약 ${(storageAudit504.local.approxBytes / 1048576).toFixed(2)} MiB · ${storageAudit504.local.items}개`
+                  : '측정 불가'}</div>
+                {storageAudit504.local.buckets.map((bucket) => (
+                  <div key={bucket.label} className="flex justify-between gap-1 text-white/50">
+                    <span>{bucket.label}</span>
+                    <span>{(bucket.approxBytes / 1024).toFixed(1)} KiB · {bucket.items}개</span>
+                  </div>
+                ))}
+                <div>sessionStorage: {storageAudit504.session.available
+                  ? `약 ${(storageAudit504.session.approxBytes / 1048576).toFixed(2)} MiB · ${storageAudit504.session.items}개`
+                  : '측정 불가'}</div>
+                <div>브라우저 전체 저장 추정: {storageAudit504.browserUsageBytes === null
+                  ? '미지원/불명'
+                  : `${(storageAudit504.browserUsageBytes / 1048576).toFixed(1)} MiB`}
+                  {' / 허용 추정 '}
+                  {storageAudit504.browserQuotaBytes === null
+                    ? '불명'
+                    : `${(storageAudit504.browserQuotaBytes / 1048576).toFixed(1)} MiB`}
+                </div>
+                <div>영속 저장 허용: {storageAudit504.persisted === null ? '확인 불가' : storageAudit504.persisted ? '예' : '아니요'}</div>
+                <div className="text-white/40">Web Storage는 UTF-16 근사치. 전체 저장 추정치는 IndexedDB/캐시 등을 포함하며 localStorage 한도와는 다릅니다. 측정만으로 데이터 안전/서버 저장을 확정하지 않습니다.</div>
+              </div>
+            )}
+          </section>
 
           <div className="mt-2 space-y-1">
             {rows.map(({ domain, label }) => {

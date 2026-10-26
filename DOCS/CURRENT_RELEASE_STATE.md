@@ -1,3 +1,32 @@
+## CURRENT — app511 legacy Library atomic batch guard, no Rules deploy (2026-10-26 KST)
+- `fix/app511-legacy-playlists-monotonic-rules` based on app510 #506 `4814f7ffaf9f168bfe692eb553cffabc9a947a2b`. Current `preview` baseline `6e8543eb6525dd22a97a6d684de111613b0934bd`; deployed PREVIEW app501 still PC↔mobile Music Note QA FAIL.
+- Existing main/TEST old `playlistService.ts` batches actual Library rename/reorder/add/delete/move/color/order *together with* absolute `users.syncVersions.playlists`. Blanket shared Rules monotonic guard would reject **entire old-client canonical playlist mutation** if lower version; do not deploy. This draft briefly explored Rules protection but **reverted firestore.rules to byte-identical baseline before PR**. No shared Rules/DB changes.
+- New `scripts/verify-511-legacy-playlist-atomic-safety.mjs` asserts 6+ mixed atomic writers, app510 new-new transaction, no destructive Rules guard, and deterministic old 50/new 51 atomic rejection hazard. Mandatory targeted product CI execution. Static/source simulation only, actual Firestore emulator/old-client PC-mobile mixed live QA still REQUIRED. app510 modern-modern monotonic only; cross-version risk remains. Details `DOCS/APP511_LEGACY_ATOMIC_RULES_SAFETY.md`.
+- No browser storage clear, mass migration, forced canonical recreation, environment deploy or user originals changed. app511 and app510 Draft, independent Work audit pending; main/TEST/PRODUCTION unchanged.
+---
+
+## CURRENT — app510 quota emergency coalescing + Library transactional revision candidate (2026-10-26 KST)
+- Working branch `fix/app510-quota-cooldown-monotonic-library` derived from app509 red-team tests, itself based on app508 integrated source `e5157de7bef31670c675562c2dce5e7acb914640` (preview base `6e8543eb6525dd22a97a6d684de111613b0934bd`). All old PRs #503 app508 and #504 app509 frozen.
+- app509 mock explicitly reproduced P1 #505: 5 quota-full edits produced 5 expedited structure writes; two sessions version 51 then 50 allowed downgrade. app510 candidate introduces 5-second **undurable-only** per-UID emergency cooldown after first urgent attempt and Firestore transactional conditional Library revision at canonical batch settlement. Normal Music Note and Library +60s unchanged, no additional page read.
+- **Cost tradeoff:** Library transaction adds Firestore users/{uid} **R1 per actual compatibility revision settlement**, not on page entry. It can skip stale writes; transaction retries under conflict may increase reads. Quota burst bound targets fewer structure writes than per-click urgent; localStorage blocked + offline + tab close still unsafe. **Old open TEST/PROD cached app with absolute updateDoc may still lower revision**; shared Rules backward-compatibility review required before release. Never claim cross-version monotonicity solved.
+- app510 source, TypeScript/Build/runtime CI and separate independent Work READ ONLY audit pending. PREVIEW live app501 PC↔mobile Music Note QA FAIL; exact favorite original of `먼 길을 돌아온 밤` UNKNOWN. main/TEST/PRODUCTION, Firebase hosting, Cloudflare, user originals unchanged; no data migration or deletion. Derived favoriteCount ACK idempotency #502 excluded.
+---
+
+## CURRENT — app508 browser quota integrated candidate (2026-10-26 KST)
+- Integration Draft `fix/app508-all-storage-quota-integration` from app505 #498 `19576687cf5ae2f7fb0d7a8328033ebd2cb5f624`, with app506 #500 `f7dbda9c2c4c5498e48e061f244412697c522a4e` and app507 #501 `d1b2329666408d3373784f6fe601e73454217ef4`, all originally from preview `6e8543eb6525dd22a97a6d684de111613b0934bd`.
+- Scope: mobile Explore '다음곡에 적용' quota-safe SPA Studio handoff, one-song read-only admin exact Firestore diagnostic, admin-click storage size breakdown, quota-failed-only Music Note folder canonical fallback and Library compatibility revision fallback. Existing +30s Studio heart, +60s folders/Library, +150s Recent healthy behavior untouched.
+- User original song `먼 길을 돌아온 밤` Firestore canonical existence UNKNOWN; do not reset old PC browser or re-save original. No full cache clear, destructive migration, forced app-wide refresh, shared-data writes. app508 CI/full executable suite and separate Work READ-ONLY audit required before PREVIEW merge/deploy. App version/live PREVIEW remains app501 user QA FAIL. TEST/main/PRODUCTION unchanged, Stage416/Reader OFF.
+- Remaining: offline+storage blocked+tab-close not crash-proof; app502 actual one-doc authenticated verification R1 pending; actual mobile storage usage unmeasured; user device acceptance pending; derived favoriteCount exactly-once ambiguity issue #502 (not modified). See `DOCS/APP508_QUOTA_INTEGRATION_AUDIT.md`.
+---
+
+## CURRENT — app505 브라우저 quota 안전 통합 후보, 병합·배포 HOLD (2026-10-26 KST)
+- 기준 preview HEAD `6e8543eb6525dd22a97a6d684de111613b0934bd` · live Firebase PREVIEW app501 사용자 Music Note 실사용 QA **FAIL**. main/TEST 및 PRODUCTION 유지, Stage416/Reader OFF.
+- app502 PR #495 단일곡 Admin CACHE LIVE read-only query (원본 PC 존재 여부는 여전히 미확정), exact source `256c99eefb39a740fd874a460d1bd7e8c3a9b8f8` CI PASS. app503 PR #496 quota-safe Explore/GlobalPlayer 다음곡 전달 `ef06a0128df90ae271558c8b553e0489e78161cd` CI PASS. app504 PR #497 Admin 수동 크기 진단 `58c9d48de4a1e2488e4035b1c9b1568619007b88` CI PASS.
+- **통합 브랜치 `fix/app505-storage-diagnostics-integration`**: 세 PR의 기능·회귀검사를 `preview` 기초에서 결합. 두 CACHE LIVE 변경을 동시 보존. 자동 시험 및 독립 Work 검증 전 PR Draft/합병·Firebase Hosting 배포 금지. 사용자의 PC/모바일 인증기기 캐시나 Firestore 원본 삭제·이전·재저장 절대 금지.
+- app504는 관리자 클릭 시 기기 내 크기만 계산하며, 실제 모바일 용량·원인 분포 및 저장 원본 확정은 **미측정**. 아직 IndexedDB migration / 자동 cache eviction / full read 는 실행하지 않음. 상세 `DOCS/BROWSER_STORAGE_CAPACITY_PLAN.md` 참고.
+- 검증 이후에도 사용자 모바일 실제 '다음곡에 적용' 동작, 동일 3브라우저 정확 favorites 원본, 비용/캐시, PC↔모바일 동작까지 PASS 전 TEST 승격 금지. TEST→PRODUCTION 별도 명시 승인.
+---
+
 ## CURRENT — app501 PREVIEW 실제 사용자 3브라우저 Music Note/하트 동기화 FAIL (2026-10-26 KST)
 - **실사용 QA 판정 FAIL:** app501 Firebase PREVIEW Hosting은 run #40258981882 / exact SHA `13a3b961ac0a362db51a5d6d084f77fb57262fb9`에서 배포 PASS, 소스 독립 감사 SHA `d1fabebfcd3473f8d1f7c0b5605dde91e8b20942` PASS였으나 실제 사용자가 확인한 기존 누락곡 `먼 길을 돌아온 밤`은 수정되지 않음.
 - **동일 계정의 실제 기기별 상태:** 기존 PC Chrome: Recent 저장하트 체크 + Music Note 곡 **있음**. 모바일: 저장하트 **체크** + Music Note 곡 **없음**. 다른 PC 브라우저: 저장하트 **해제** + Music Note 곡 **없음**. 나머지 두 최근곡은 비교 기준이며, 다른 PC 최초 진입에서 `어제의 네게 묻는다`가 일시 누락했다가 새로고침 뒤 등장한 전력이 있음.

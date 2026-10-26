@@ -1,6 +1,6 @@
 import { db, realtimeDb } from '../firebase';
 import { onValue, ref, runTransaction as runRealtimeTransaction, type Unsubscribe } from 'firebase/database';
-import { collection, doc, writeBatch, serverTimestamp, getDocs, query, where, orderBy, limit } from '../lib/firestoreMeasured';
+import { collection, doc, writeBatch, serverTimestamp, getDocFromServer, getDocs, query, where, orderBy, limit } from '../lib/firestoreMeasured';
 import { Playlist, PlaylistItem } from '../types';
 import { v1UserDataReadAdapter } from './v1UserDataReadAdapter';
 import { readUserProfileCache } from '../lib/userProfileCache';
@@ -583,6 +583,130 @@ const getPlaylistItemUniqueKey = (item: Partial<PlaylistItem> | any) => {
   return `${sourceType}:${sourceId}`;
 };
 
+// app513: only reconcile an already-committed exact document when the most
+// recent RTDB delta cannot safely be replayed. No collection scan, no page
+// entry read, and no automatic fallback for the +60s delayed rename/order.
+const exactGapRecoveryInflight513 = new Map<string, Promise<boolean>>();
+const exactGapRecoveryCompleted513 = new Map<string, string>();
+const exactGapRecoverySeenPrefix513 = 'soridraw.library.exactGapRepairSeen.v1.';
+const readExactGapMarker513 = (uid: string): string => {
+  try { return localStorage.getItem(exactGapRecoverySeenPrefix513 + uid) || ''; } catch { return ''; }
+};
+const markExactGapRecovered513 = (uid: string, signature: string): void => {
+  exactGapRecoveryCompleted513.set(uid, signature);
+  try { localStorage.setItem(exactGapRecoverySeenPrefix513 + uid, signature); } catch {
+    // Quota-full devices retain dedupe in the current app session only.
+  }
+};
+export const recoverLibraryPlaylistGapExactDocument513 = async (
+  uid: string,
+  signal: LibraryPlaylistSyncSignal,
+): Promise<boolean> => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid || !signal || signal.truncated || !signal.payloadJson
+    || signal.originDeviceId === getLibraryPlaylistSyncDeviceId()
+    || !['item-add', 'item-delete', 'playlist-delete'].includes(signal.operation)) return false;
+
+  let payload: Record<string, unknown>;
+  try {
+    const raw = JSON.parse(signal.payloadJson);
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+    payload = raw as Record<string, unknown>;
+  } catch { return false; }
+
+  const playlistId = String(payload.playlistId || '').trim();
+  const itemId = String(signal.operation === 'item-add'
+    ? (payload.item as any)?.id || ''
+    : payload.itemId || '').trim();
+  // Firestore IDs must be one path segment; never accept arbitrary paths from
+  // a user-supplied or malformed RTDB payload.
+  const isDocSegment = (value: string): boolean =>
+    value.length > 0 && value.length <= 1500 && value !== '.' && value !== '..' && !value.includes('/');
+  if (!isDocSegment(playlistId) || (signal.operation !== 'playlist-delete' && !isDocSegment(itemId))) return false;
+
+  const listBefore = await readLibraryPlaylistListCache(safeUid);
+  if (!listBefore) return false;
+  const itemBefore = signal.operation === 'playlist-delete'
+    ? null
+    : await readLibraryPlaylistItemsCache(safeUid, playlistId);
+  if (signal.operation !== 'playlist-delete'
+    && (!itemBefore || !listBefore.items.some((item) => item.id === playlistId))) return false;
+
+  const signature = `${safeUid}:${signal.version}:${signal.operation}:${playlistId}:${itemId}`;
+  // A saved success marker is not evidence that the item/folder is STILL in
+  // the expected cache state. Another local edit or cache eviction may have
+  // changed it since the previous gap repair; never report a false recovery.
+  const alreadyRepairedInCache513 = signal.operation === 'playlist-delete'
+    ? !listBefore.items.some((entry) => entry.id === playlistId)
+    : signal.operation === 'item-add'
+      ? itemBefore!.items.some((entry) => entry.id === itemId)
+      : !itemBefore!.items.some((entry) => entry.id === itemId);
+  if (alreadyRepairedInCache513
+    && (exactGapRecoveryCompleted513.get(safeUid) === signature
+      || readExactGapMarker513(safeUid) === signature)) return true;
+  const running = exactGapRecoveryInflight513.get(signature);
+  if (running) return running;
+  const attempt = (async (): Promise<boolean> => {
+    try {
+      const reference = signal.operation === 'playlist-delete'
+        ? doc(db, 'user_playlists', safeUid, 'lists', playlistId)
+        : doc(db, 'user_playlists', safeUid, 'lists', playlistId, 'items', itemId);
+      const document = await getDocFromServer(reference); // One exact canonical read.
+      // app513 final audit: an in-flight exact lookup must not resurrect a
+      // deleted playlist or apply an item mutation to a changed parent folder.
+      // No server IO: both snapshots are already available in local cache.
+      const currentList = await readLibraryPlaylistListCache(safeUid);
+      const originalFolder = listBefore.items.find((item) => item.id === playlistId);
+      const currentFolder = currentList?.items.find((item) => item.id === playlistId);
+      if (!currentList || currentList.version !== listBefore.version
+        || JSON.stringify(currentFolder ?? null) !== JSON.stringify(originalFolder ?? null)) return false;
+      if (signal.operation === 'item-add') {
+        if (!document.exists()) return false;
+        const canonical = { ...(document.data() as Record<string, unknown>), id: itemId } as PlaylistItem;
+        const current = await readLibraryPlaylistItemsCache(safeUid, playlistId);
+        if (!current || current.version !== itemBefore!.version) return false;
+        if (current.items.some((item) => item.id === itemId)) return false; // Avoid overwriting newer local content.
+        await patchLibraryPlaylistItemsCache(safeUid, playlistId,
+          (items) => items.some((item) => item.id === itemId) ? items : [...items, canonical],
+          current.version);
+        return true;
+      }
+      if (document.exists()) return false; // Deletion not confirmed, fail closed.
+      if (signal.operation === 'item-delete') {
+        const current = await readLibraryPlaylistItemsCache(safeUid, playlistId);
+        if (!current || current.version !== itemBefore!.version) return false;
+        const oldItem = itemBefore!.items.find((item) => item.id === itemId);
+        const nowItem = current.items.find((item) => item.id === itemId);
+        if (JSON.stringify(nowItem ?? null) !== JSON.stringify(oldItem ?? null)) return false;
+        if (!nowItem) return true;
+        await patchLibraryPlaylistItemsCache(safeUid, playlistId,
+          (items) => items.filter((item) => item.id !== itemId), current.version);
+        return true;
+      }
+      const listCurrent = await readLibraryPlaylistListCache(safeUid);
+      if (!listCurrent || listCurrent.version !== listBefore.version) return false;
+      const oldFolder = listBefore.items.find((folder) => folder.id === playlistId);
+      const nowFolder = listCurrent.items.find((folder) => folder.id === playlistId);
+      if (JSON.stringify(nowFolder ?? null) !== JSON.stringify(oldFolder ?? null)) return false;
+      if (!nowFolder) return true;
+      await patchLibraryPlaylistListCache(safeUid, (items) => items.filter((item) => item.id !== playlistId), listCurrent.version);
+      await deleteLibraryPlaylistItemsCache(safeUid, playlistId);
+      return true;
+    } catch (error) {
+      console.warn('[Library gap exact repair] one-document lookup unavailable:', error);
+      return false;
+    }
+  })();
+  exactGapRecoveryInflight513.set(signature, attempt);
+  try {
+    const repaired = await attempt;
+    if (repaired) markExactGapRecovered513(safeUid, signature);
+    return repaired;
+  } finally {
+    exactGapRecoveryInflight513.delete(signature);
+  }
+};
+
 const isSamePlaylistSourceItem = (a: Partial<PlaylistItem> | any, b: Partial<PlaylistItem> | any) => {
   const keyA = getPlaylistItemUniqueKey(a);
   const keyB = getPlaylistItemUniqueKey(b);
@@ -628,16 +752,34 @@ export const applyLibraryPlaylistSyncSignalToCache = async (
     }
   }
 
-  const version = signal.syncVersion;
   const listSnapshot = await readLibraryPlaylistListCache(safeUid);
   if (!listSnapshot) return false;
-  if (listSnapshot.version >= version) return true;
+
+  // app512: older clients still publish a real canonical change after their
+  // absolute users.syncVersions.playlists update, even if their revision is
+  // lower than the preceding RTDB delta. Never silently discard that change
+  // solely because the new device has a higher cached numeric revision.
+  //
+  // Apply ONLY if this device holds the exact preceding RTDB snapshot. If an
+  // intermediate mutation is missing OR this device is further ahead, do not
+  // overwrite its cache with a possibly obsolete partial delta.
+  const isLegacyRevisionRegression512 = signal.previousSyncVersion > signal.syncVersion;
+  if (isLegacyRevisionRegression512) {
+    if (listSnapshot.version !== signal.previousSyncVersion) return false;
+  } else if (listSnapshot.version >= signal.syncVersion) {
+    return true;
+  }
 
   // app293 continuity fence: RTDB stores only the newest delta. If this device
   // was offline long enough to miss an earlier signal, never advance its cache
   // revision using only the newest patch. Returning false preserves the existing
   // users.syncVersions fallback, which refreshes canonical Firestore once.
   if (signal.previousSyncVersion > 0 && listSnapshot.version < signal.previousSyncVersion) return false;
+
+  // A lower legacy revision is a transport ordering defect, not permission to
+  // lower the local cache's monotonic watermark. The incoming *payload* is
+  // still the newest delta, so apply it only at the exact continuity fence.
+  const version = Math.max(signal.syncVersion, listSnapshot.version);
 
   const previousList = listSnapshot.items;
   const playlistRevision = (playlistId: string): number => Number(

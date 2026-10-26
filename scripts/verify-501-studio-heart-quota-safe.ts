@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { runInNewContext } from 'node:vm';
+import * as ts from 'typescript';
 import {
   readStudioHeartPendingIntent,
   listStudioHeartPendingIntents,
@@ -264,6 +267,209 @@ try {
   assert.ok(refresh.includes('isStudioHeartOptimisticFavorite(favorite)'));
   assert.ok(refresh.includes('writeFavoritesCache(uid, merged, { publishDerived: false })'));
   assert.ok(!refresh.includes('favoritesStore.setFavorites(merged)'));
+  const diagnostic = readFileSync('src/lib/studioHeartSingleDocDiagnostic.ts', 'utf8');
+  const diagnosticUi = readFileSync('src/components/StudioHeartSingleDocDiagnostic.tsx', 'utf8');
+  const diagnosticPanel = readFileSync('src/components/CacheDiagnosticsOverlayImpl.tsx', 'utf8');
+  assert.ok(diagnostic.includes("where(firestoreDocumentId(), '==', documentId)"),
+    'Firestore query must bind the exact document ID');
+  assert.ok(diagnostic.includes("where('uid', '==', uid)"),
+    'Firestore query must filter by the signed-in account for rules-compatible missing detection');
+  assert.ok(diagnostic.includes('limit(1)'),
+    'no user favorites collection scan is allowed');
+  assert.equal((diagnostic.match(/getDocsFromServer\(/g) || []).length, 1,
+    'one explicit server-only bounded query per click');
+  assert.ok(!diagnostic.includes('getDocFromServer('),
+    'owner-only direct document reads cannot reliably distinguish missing from permission denied');
+  assert.ok(diagnostic.includes('if (auth.currentUser?.uid !== uid)'));
+  assert.ok(diagnostic.includes("readCatalogSnapshotFromLocalCache('musicNote', uid)"));
+  assert.ok(diagnostic.includes('candidates.size === 1'),
+    'duplicate-title local rows must require explicit exact document ID');
+  assert.ok(!/\b(?:setDoc|updateDoc|deleteDoc|addDoc|writeBatch|getDocs)\s*\(/.test(diagnostic),
+    'diagnostic must not write, backfill or change canonical data');
+  assert.ok(!diagnostic.includes('getDocs('),
+    'automatic cache-fallback reads are not server authority');
+  assert.ok(diagnosticUi.includes('onClick={() => void inspect()}'));
+  assert.ok(diagnosticUi.includes('!uid || !documentId.trim() || busy || alreadyRead'));
+  assert.ok(diagnosticPanel.includes('<StudioHeartSingleDocDiagnostic />'));
+
+  // Independent Work P2: exercise the actual React component in an isolated
+  // hook/JSX runtime, with deferred server responses. A response for A must
+  // never appear under a newly entered B ID or after an account switch.
+  const compiledDiagnosticUi = ts.transpileModule(diagnosticUi, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      jsx: ts.JsxEmit.ReactJSX,
+      target: ts.ScriptTarget.ES2022,
+    },
+    fileName: 'StudioHeartSingleDocDiagnostic.tsx',
+  }).outputText;
+  const mockAuth: { currentUser: { uid: string } | null } = { currentUser: { uid: 'owner-A' } };
+  const authListeners = new Set<(user: { uid: string } | null) => void>();
+  const hookValues: any[] = [];
+  let hookIndex = 0;
+  const cleanups: Array<() => void> = [];
+  const inFlightReads: Array<{
+    uid: string;
+    documentId: string;
+    resolve: (value: any) => void;
+    reject: (error: Error) => void;
+  }> = [];
+  const mockReact = {
+    useState: (initial: any) => {
+      const slot = hookIndex++;
+      if (!(slot in hookValues)) hookValues[slot] = initial;
+      return [hookValues[slot], (next: any) => {
+        hookValues[slot] = typeof next === 'function' ? next(hookValues[slot]) : next;
+      }];
+    },
+    useRef: (initial: any) => {
+      const slot = hookIndex++;
+      if (!(slot in hookValues)) hookValues[slot] = { current: initial };
+      return hookValues[slot];
+    },
+    useEffect: (effect: () => (() => void) | void) => {
+      const slot = hookIndex++;
+      if (slot in hookValues) return;
+      hookValues[slot] = true;
+      const cleanup = effect();
+      if (cleanup) cleanups.push(cleanup);
+    },
+  };
+  const jsx = (type: any, props: any) => ({ type, props: props || {} });
+  const cjsModule: { exports: any } = { exports: {} };
+  runInNewContext(compiledDiagnosticUi, {
+    exports: cjsModule.exports,
+    module: cjsModule,
+    require: (name: string) => {
+      if (name === 'react') return mockReact;
+      if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
+      if (name === 'firebase/auth') return {
+        onAuthStateChanged: (_auth: unknown, listener: (user: { uid: string } | null) => void) => {
+          authListeners.add(listener);
+          listener(mockAuth.currentUser);
+          return () => { authListeners.delete(listener); };
+        },
+      };
+      if (name === '../firebase') return { auth: mockAuth };
+      if (name === '../lib/studioHeartSingleDocDiagnostic') return {
+        findSingleLocalFavoriteDocumentId: () => null,
+        inspectExactStudioHeartDocument: (uid: string, documentId: string) => new Promise(
+          (resolve, reject) => { inFlightReads.push({ uid, documentId, resolve, reject }); },
+        ),
+      };
+      throw new Error('unexpected component import: ' + name);
+    },
+  });
+  const Component = cjsModule.exports.default as () => any;
+  const renderDiagnostic = (): any => {
+    hookIndex = 0;
+    return Component();
+  };
+  const findUi = (node: any, predicate: (n: any) => boolean): any => {
+    if (Array.isArray(node)) {
+      for (const child of node) {
+        const match = findUi(child, predicate);
+        if (match) return match;
+      }
+      return null;
+    }
+    if (!node || typeof node !== 'object') return null;
+    if (predicate(node)) return node;
+    return findUi(node.props?.children, predicate);
+  };
+  const getDocInput = (tree: any) => findUi(tree, (n) => n.type === 'input' && n.props?.id === 'studio-heart-exact-doc-id');
+  const getTitleInput = (tree: any) => findUi(tree, (n) => n.type === 'input' && n.props?.['aria-label'] === '현재 기기에 있는 곡의 정확한 제목');
+  const getReadButton = (tree: any) => findUi(tree, (n) => n.type === 'button' && /서버 저장문서 1건 확인|확인 중/.test(JSON.stringify(n.props?.children)));
+  const getLocalButton = (tree: any) => findUi(tree, (n) => n.type === 'button' && JSON.stringify(n.props?.children).includes('이 브라우저에서 문서 찾기'));
+  const hasServerReport = (tree: any) => JSON.stringify(tree).includes('이 계정의 서버 저장문서 존재');
+  const makeReport = (documentPresent: boolean) => ({
+    documentPresent,
+    ownerMatchesSignedInUser: documentPresent ? true : null,
+    serverActive: documentPresent ? true : null,
+    deviceMusicNoteRow: false,
+    deviceRowIsOptimistic: false,
+    devicePendingIntent: false,
+    devicePendingDesiredSaved: null,
+    deviceRecentHeartAuthority: null,
+    deviceCatalogCached: false,
+    deviceCatalogContainsDocument: null,
+  });
+  let uiTree = renderDiagnostic();
+  getDocInput(uiTree).props.onChange({ target: { value: 'A' } });
+  uiTree = renderDiagnostic();
+  getReadButton(uiTree).props.onClick();
+  assert.equal(inFlightReads.length, 1);
+  assert.equal(inFlightReads[0].documentId, 'A');
+  assert.equal(inFlightReads[0].uid, 'owner-A');
+  uiTree = renderDiagnostic();
+  assert.equal(getDocInput(uiTree).props.disabled, true, 'document ID locked during remote read');
+  assert.equal(getTitleInput(uiTree).props.disabled, true, 'local title locked during remote read');
+  assert.equal(getLocalButton(uiTree).props.disabled, true, 'local lookup locked during remote read');
+  getReadButton(uiTree).props.onClick();
+  assert.equal(inFlightReads.length, 1, 'concurrent clicks cannot issue extra Firestore queries');
+
+  // A queued input event may have started before React paints disabled=true.
+  // The component still has to discard A when its displayed target becomes B.
+  getDocInput(uiTree).props.onChange({ target: { value: 'B' } });
+  inFlightReads[0].resolve(makeReport(true));
+  // VM-transpiled async handlers complete on the next event-loop turn;
+  // a single Promise.resolve() tick can inspect UI before React state settles.
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  uiTree = renderDiagnostic();
+  assert.equal(getDocInput(uiTree).props.value, 'B');
+  assert.equal(hasServerReport(uiTree), false, 'A response must not appear below B document input');
+  assert.ok(!JSON.stringify(uiTree).includes('서버 원본 1건만 읽었습니다.'));
+  assert.equal(inFlightReads.length, 1, 'B has not been queried automatically');
+  console.log('APP502_UI_RACE_A_RESPONSE_DISCARDED_AFTER_B_INPUT=PASS');
+
+  // A valid B request can complete, then any new input invalidates its report.
+  getReadButton(uiTree).props.onClick();
+  assert.equal(inFlightReads.length, 2);
+  assert.equal(inFlightReads[1].documentId, 'B');
+  inFlightReads[1].resolve(makeReport(true));
+  // VM-transpiled async handlers complete on the next event-loop turn;
+  // a single Promise.resolve() tick can inspect UI before React state settles.
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  uiTree = renderDiagnostic();
+  assert.equal(hasServerReport(uiTree), true);
+  getTitleInput(uiTree).props.onChange({ target: { value: 'changed title' } });
+  uiTree = renderDiagnostic();
+  assert.equal(hasServerReport(uiTree), false, 'changing the local title clears the old server result');
+
+  // Account switch invalidates C, even if an older C response arrives while a
+  // new account's D request is active. Old finally cannot unlock the new read.
+  getDocInput(uiTree).props.onChange({ target: { value: 'C' } });
+  uiTree = renderDiagnostic();
+  getReadButton(uiTree).props.onClick();
+  assert.equal(inFlightReads.length, 3);
+  assert.equal(inFlightReads[2].uid, 'owner-A');
+  mockAuth.currentUser = { uid: 'owner-B' };
+  for (const listener of authListeners) listener(mockAuth.currentUser);
+  uiTree = renderDiagnostic();
+  assert.equal(hasServerReport(uiTree), false);
+  getDocInput(uiTree).props.onChange({ target: { value: 'D' } });
+  uiTree = renderDiagnostic();
+  getReadButton(uiTree).props.onClick();
+  assert.equal(inFlightReads.length, 4);
+  assert.equal(inFlightReads[3].uid, 'owner-B');
+  inFlightReads[2].resolve(makeReport(true));
+  // VM-transpiled async handlers complete on the next event-loop turn;
+  // a single Promise.resolve() tick can inspect UI before React state settles.
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  uiTree = renderDiagnostic();
+  assert.equal(hasServerReport(uiTree), false, 'old UID response must not show under a new UID');
+  assert.equal(getDocInput(uiTree).props.disabled, true, 'old request finally cannot unlock newer request');
+  inFlightReads[3].resolve(makeReport(false));
+  // VM-transpiled async handlers complete on the next event-loop turn;
+  // a single Promise.resolve() tick can inspect UI before React state settles.
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  uiTree = renderDiagnostic();
+  assert.equal(hasServerReport(uiTree), true, 'the newest UID/ID request may render');
+  assert.ok(JSON.stringify(uiTree).includes('아니요'));
+  for (const cleanup of cleanups) cleanup();
+  console.log('APP502_UI_RACE_UID_AND_REQUEST_SEQUENCE_ISOLATED=PASS');
+
+  console.log('APP502_EXACT_SINGLE_DOC_READ_ONLY_MANUAL_DIAGNOSTIC=PASS');
   console.log('APP501_COLD_CATALOG_READ_NO_PHANTOM_PUBLISH=PASS');
   console.log('APP501_APP_RECENT_TO_MUSIC_NOTE_FALLBACK_CONTRACT=PASS');
   console.log('SORIDRAW_APP501_STUDIO_HEART_QUOTA_SAFE=PASS');
@@ -271,3 +477,36 @@ try {
   if (savedGlobal) Object.defineProperty(globalThis,'localStorage',savedGlobal);
   else delete (globalThis as any).localStorage;
 }
+
+// The targeted source-quality workflow already runs this app501/502 verifier.
+// Explicitly include the separate app503 Explore/GlobalPlayer *executable*
+// quota-full handoff regression in the same pinned CI gate. The broader
+// release-system audit may also call verify-201, but cannot substitute here.
+execFileSync(process.execPath, ['scripts/verify-201-explore-track-action-sheet.mjs'], {
+  stdio: 'inherit',
+});
+console.log('APP505_QUOTA_HANDOFF_EXECUTABLE_CI_GATE=PASS');
+
+// app508: all quota safety regressions must execute together on one tree.
+for (const verifier of [
+  'scripts/verify-506-folder-quota-safe-settlement.mjs',
+  'scripts/verify-507-library-revision-quota-safe.mjs',
+]) {
+  execFileSync(process.execPath, [verifier], { stdio: 'inherit' });
+}
+console.log('APP508_ALL_QUOTA_EXECUTABLE_CI_GATE=PASS');
+
+// Guard against a rules-only monotonic patch blocking legacy playlist song
+// writes that share an atomic batch with users.syncVersions.playlists.
+execFileSync(process.execPath, ['scripts/verify-511-legacy-playlist-atomic-safety.mjs'], { stdio: 'inherit' });
+console.log('APP511_LEGACY_ATOMIC_EXECUTABLE_CI_GATE=PASS');
+
+// app512 — execute legacy mixed-version RTDB delta recovery in a real
+// transpiled playlistService VM with zero Firestore/RTDB or storage IO.
+execFileSync(process.execPath, ['scripts/verify-512-legacy-library-delta-continuity.mjs'], { stdio: 'inherit' });
+console.log('APP512_LEGACY_DELTA_EXECUTABLE_CI_GATE=PASS');
+
+// app513: runtime fault injection for exact one-document recovery on a
+// confirmed canonical item/folder change, with no collection read.
+execFileSync(process.execPath, ['scripts/verify-513-library-gap-exact-doc-recovery.mjs'], { stdio: 'inherit' });
+console.log('APP513_EXACT_GAP_EXECUTABLE_CI_GATE=PASS');

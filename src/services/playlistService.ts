@@ -629,7 +629,8 @@ export const recoverLibraryPlaylistGapExactDocument513 = async (
   const itemBefore = signal.operation === 'playlist-delete'
     ? null
     : await readLibraryPlaylistItemsCache(safeUid, playlistId);
-  if (signal.operation !== 'playlist-delete' && !itemBefore) return false;
+  if (signal.operation !== 'playlist-delete'
+    && (!itemBefore || !listBefore.items.some((item) => item.id === playlistId))) return false;
 
   const signature = `${safeUid}:${signal.version}:${signal.operation}:${playlistId}:${itemId}`;
   if (exactGapRecoveryCompleted513.has(signature) || readExactGapMarker513(safeUid) === signature) return true;
@@ -641,6 +642,14 @@ export const recoverLibraryPlaylistGapExactDocument513 = async (
         ? doc(db, 'user_playlists', safeUid, 'lists', playlistId)
         : doc(db, 'user_playlists', safeUid, 'lists', playlistId, 'items', itemId);
       const document = await getDocFromServer(reference); // One exact canonical read.
+      // app513 final audit: an in-flight exact lookup must not resurrect a
+      // deleted playlist or apply an item mutation to a changed parent folder.
+      // No server IO: both snapshots are already available in local cache.
+      const currentList = await readLibraryPlaylistListCache(safeUid);
+      const originalFolder = listBefore.items.find((item) => item.id === playlistId);
+      const currentFolder = currentList?.items.find((item) => item.id === playlistId);
+      if (!currentList || currentList.version !== listBefore.version
+        || JSON.stringify(currentFolder ?? null) !== JSON.stringify(originalFolder ?? null)) return false;
       if (signal.operation === 'item-add') {
         if (!document.exists()) return false;
         const canonical = { ...(document.data() as Record<string, unknown>), id: itemId } as PlaylistItem;

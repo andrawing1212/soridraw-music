@@ -1,3 +1,9 @@
+## NEXT — app501 PREVIEW 실기기 PC↔모바일 Music Note 3곡 검증 (2026-10-26 KST)
+- Firebase PREVIEW Hosting `preview.soridraw.com` app501 **run #40258981882 PASS**, exact 배포 `13a3b961ac0a362db51a5d6d084f77fb57262fb9`; 사용자 제공 독립 소스 감사 `d1fabebfcd3473f8d1f7c0b5605dde91e8b20942` PASS, 제품 회귀 #40258811630 PASS. TEST/PRODUCTION main/production/Hosting 변화 없음, Worker/Functions/D1/shared Rules/user originals 변경 없음.
+- **다음 한 작업:** 기존 PC 브라우저, 모바일 Chrome, 새 PC 브라우저에서 기존 최근 `어릴 적 나에게 묻는다` / `먼 길을 돌아온 밤` / `어제의 네게 묻는다` Music Note membership과 Recent 하트 표시 **보기만** 비교. 기존 저장/저장해제, Music Note 항목 삭제, Cache/Cookie/LocalStorage 리셋 금지. 현상 지속 시 해당 UID exact favoriteFirestoreId를 인증 후 단건 read-only Firestore 확인하고 PC-only speculative row와 구별; 자동 데이터 복구·전체 backfill 절대 금지.
+- app501 5/6·83%, Stage416 1/4·25% OFF, 과거 앱 속도 개선 5/5·100%; TEST/PRODUCTION은 사용자의 별도 승인 및 실사용 QA PASS까지 HOLD.
+---
+
 ## NEXT — app501 P1 기존 22건 초과 outbox 정상 종료 재감사 (2026-10-26)
 - 이전 감사 `c94c0e5ec6beedb840ceb28b8a5bbf29a1ea5856`은 **FAIL**: 22건에서 1건 정상 완료 후에도 21건 기록을 저장하지 못하고 재접속 시 완료 건 중복 처리 위험.
 - 동일 PR #491 브랜치에서 `writeAll` 과용량 처리 시 현재 저장소에 이미 존재하는 ID만 통과(기존 항목 수정·삭제 허용), 새로운 ID가 한 개라도 들어오면 거부. 일반 20→21 신규 곡은 `blocked-capacity` → 기존 1곡 canonical fallback. 22→21→20/기존 곡 retry/20건 경계/19건 재진입 자동회귀 추가. 기존 30초 묶음, RTDB 즉시, 정상 캐시·비용, 모든 UI/원본 보존.

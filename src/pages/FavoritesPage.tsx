@@ -2386,7 +2386,7 @@ updates: draft.updates,
         }, result.version, true);
         setFolderRecoveryConfirm(null);
         setFolderRecoveryOpen(false);
-        showFavoriteToast('선택한 폴더 상태를 서버에 복원했습니다.');
+        showFavoriteToast(result.changed ? '선택한 폴더 상태를 서버에 복원했습니다.' : '선택한 상태가 이미 서버에 적용되어 있습니다.');
       }
     } catch (error: any) {
       if (folderRecoveryUidRef.current === requestUid) {

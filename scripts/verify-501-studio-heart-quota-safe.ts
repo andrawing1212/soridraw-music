@@ -6,16 +6,22 @@ import {
   type StudioHeartPendingIntent,
 } from '../src/lib/studioHeartBatch';
 
-const values = new Map<string, string>();
-let quotaFull = false;
+// Two independent browsers sharing the same UID, but not browser storage.
+// This is a controlled local-only simulation, not a live Firestore acceptance test.
+const pcValues = new Map<string, string>();
+const mobileValues = new Map<string, string>();
+let activeDevice: 'pc' | 'mobile' = 'pc';
+let pcQuotaFull = false;
+let mobileQuotaFull = false;
 const quota = Object.assign(new Error('quota exceeded'), { name: 'QuotaExceededError' });
+const activeValues = () => activeDevice === 'pc' ? pcValues : mobileValues;
 const storageMock = {
-  getItem: (key: string) => values.get(key) ?? null,
+  getItem: (key: string) => activeValues().get(key) ?? null,
   setItem: (key: string, value: string) => {
-    if (quotaFull) throw quota;
-    values.set(key, value);
+    if (activeDevice === 'pc' ? pcQuotaFull : mobileQuotaFull) throw quota;
+    activeValues().set(key, value);
   },
-  removeItem: (key: string) => values.delete(key),
+  removeItem: (key: string) => activeValues().delete(key),
 };
 const savedGlobal = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
 Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storageMock });
@@ -41,7 +47,7 @@ try {
   assert.equal(readStudioHeartPendingIntent(healthy.uid, healthy.documentId)?.desiredSaved, true);
   console.log('APP501_HEALTHY_STUDIO_HEART_BATCH_STILL_DURABLE=PASS');
 
-  quotaFull = true;
+  pcQuotaFull = true;
   const firstSave = makeIntent('storage-full-new');
   assert.equal(writeStudioHeartPendingIntentChecked(firstSave), 'blocked-empty',
     'quota blocked a first save, so App must use its direct one-row canonical save path');
@@ -55,10 +61,71 @@ try {
     'original queued mutation must remain durable');
   console.log('APP501_QUOTA_BLOCKED_OLD_PENDING_PRESERVED=PASS');
 
-  quotaFull = false;
+  pcQuotaFull = false;
   assert.equal(writeStudioHeartPendingIntentChecked(changedHealthy), 'stored');
   assert.equal(readStudioHeartPendingIntent(healthy.uid, healthy.documentId)?.desiredSaved, false);
   console.log('APP501_RECOVERED_STORAGE_PRESERVES_30S_BATCH=PASS');
+
+  // A: PC save (mobile observes only). B: mobile save (PC observes only).
+  // C: mobile save while PC is closed. Each song must have its own durable
+  // pending slot; the remote RTDB preview must never be mistaken for this slot.
+  const A = makeIntent('three-A-from-pc', true, healthy.updatedAtMs + 5);
+  const B = makeIntent('three-B-from-mobile', true, healthy.updatedAtMs + 6);
+  const C = makeIntent('three-C-mobile-offline-pc', true, healthy.updatedAtMs + 7);
+  activeDevice = 'pc';
+  assert.equal(writeStudioHeartPendingIntentChecked(A), 'stored');
+  activeDevice = 'mobile';
+  assert.equal(readStudioHeartPendingIntent(A.uid, A.documentId), null, 'PC browser pending cannot materialize as mobile canonical');
+  assert.equal(writeStudioHeartPendingIntentChecked(B), 'stored');
+  assert.equal(writeStudioHeartPendingIntentChecked(C), 'stored');
+  assert.equal(readStudioHeartPendingIntent(B.uid, B.documentId)?.desiredSaved, true);
+  assert.equal(readStudioHeartPendingIntent(C.uid, C.documentId)?.desiredSaved, true);
+  activeDevice = 'pc';
+  assert.equal(readStudioHeartPendingIntent(A.uid, A.documentId)?.desiredSaved, true);
+  assert.equal(readStudioHeartPendingIntent(B.uid, B.documentId), null, 'RTDB preview is not a PC pending intent');
+  activeDevice = 'mobile';
+  console.log('APP501_THREE_SONG_PC_MOBILE_SEPARATE_PENDING_AND_OFFLINE_PEER=PASS');
+
+  // Same UID, mobile-only storage rejection: app500 falsely acknowledged and
+  // broadcast this path; app501 must direct-save one canonical row instead.
+  mobileQuotaFull = true;
+  const blockedMobile = makeIntent('mobile-quota-new-song', true, healthy.updatedAtMs + 8);
+  assert.equal(writeStudioHeartPendingIntentChecked(blockedMobile), 'blocked-empty');
+  assert.equal(readStudioHeartPendingIntent(blockedMobile.uid, blockedMobile.documentId), null);
+  assert.equal(readStudioHeartPendingIntent(B.uid, B.documentId)?.desiredSaved, true,
+    'quota failure on another song must not remove an already pending song');
+  mobileQuotaFull = false;
+  assert.equal(writeStudioHeartPendingIntentChecked(blockedMobile), 'stored');
+  assert.equal(readStudioHeartPendingIntent(blockedMobile.uid, blockedMobile.documentId)?.desiredSaved, true);
+  console.log('APP501_MOBILE_QUOTA_RECOVERY_INDEPENDENT_OF_PC_AND_EXISTING_SONGS=PASS');
+
+  // A failed replacement with identical millisecond/state but changed content
+  // must not be accepted solely because its older metadata matches.
+  activeDevice = 'pc';
+  const sameTimestampChangedSong = {
+    ...A,
+    song: { ...A.song, title: 'changed after the original save attempt' },
+  };
+  pcQuotaFull = true;
+  assert.equal(writeStudioHeartPendingIntentChecked(sameTimestampChangedSong), 'blocked-existing');
+  assert.equal(readStudioHeartPendingIntent(A.uid, A.documentId)?.song.title, A.song.title);
+  pcQuotaFull = false;
+  assert.equal(writeStudioHeartPendingIntentChecked(sameTimestampChangedSong), 'stored');
+  assert.equal(readStudioHeartPendingIntent(A.uid, A.documentId)?.song.title, sameTimestampChangedSong.song.title);
+  console.log('APP501_SAME_MILLISECOND_REJECTED_WRITE_CANNOT_LOOK_DURABLE=PASS');
+
+  // Simulate a reload by replacing storage's JS reference but keeping persisted
+  // bytes. Browser persistence is per-device; the canonical server is external.
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: { ...storageMock },
+  });
+  activeDevice = 'mobile';
+  assert.equal(readStudioHeartPendingIntent(B.uid, B.documentId)?.desiredSaved, true);
+  assert.equal(readStudioHeartPendingIntent(C.uid, C.documentId)?.desiredSaved, true);
+  activeDevice = 'pc';
+  assert.equal(readStudioHeartPendingIntent(A.uid, A.documentId)?.song.title, sameTimestampChangedSong.song.title);
+  console.log('APP501_THREE_SONG_PENDING_SURVIVES_SIMULATED_BROWSER_RELOAD=PASS');
 
   const app = readFileSync('src/App.tsx','utf8');
   const queue = app.slice(app.indexOf('const queueStudioHeartPendingIntent ='),app.indexOf('  useEffect(() => {',app.indexOf('const queueStudioHeartPendingIntent =')));

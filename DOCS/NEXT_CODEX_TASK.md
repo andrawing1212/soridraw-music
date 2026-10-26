@@ -1,3 +1,10 @@
+## NEXT — app501 3곡 PC↔모바일 저장 불일치 독립 감사 (2026-10-26)
+- 사용자 보고: PC에서 저장한 곡은 모바일에도 보이지만 모바일에서 저장한 곡은 기기 Music Note에 누락할 수 있고, PC·모바일 Recent 3곡 Music Note 목록이 다름. 기존 저장곡 대부분 정상. 기존 곡 저장 해제/재저장·사이트 데이터 초기화 금지.
+- app501 Draft PR #491 동일 브랜치: 브라우저 localStorage pending 실패 무시로 생기는 실시간 가짜 저장을 read-back+canonical 단일 곡 fallback으로 보호, 동일 밀리초/동일 상태의 오래된 pending이 새 곡 본문을 대신하지 않도록 검사 강화. PC/모바일 독립 storage, A=PC/B=모바일/C=모바일 PC 오프라인, mobile quota, 기존 pending 보존, 재시작 local persistence 회귀를 기존 app501 verifier에 포함.
+- CI TypeScript/Build/제품 회귀 PASS, 독립 감사 및 서버 원본/실기기 확인 전 **실제 서버 저장 확인 완료 아님**. Mock만으로 Firestore 저장 PASS, 두 기기 실제 convergence PASS 주장 금지. main/production/data/hosting/workers/rules 무변경.
+- 다음 한 작업: 정확한 최종 SHA의 CI 및 독립 감사, 이후 필요 시 실제 기기에서 세 곡만 새 미저장 테스트 항목으로 검증. 배포는 고정 릴리스 경로/승인 규칙 준수, TEST·PRODUCTION HOLD.
+---
+
 ## NEXT — app501 Recent save-heart Music Note phantom save regression (2026-10-26)
 - 사용자가 app500 PREVIEW에서 로그인 유지·동시 탭 **PASS**, 최근 생성곡 저장하트→Music Note 누락 **FAIL** 보고. TEST/PROD 승격 HOLD.
 - 원인 후보: 30초 Studio pending localStorage full 시 `writeAll` 실패를 숨겨도 저장 성공 토스트, canonical flush 없음. branch `fix/app501-studio-heart-quota-safe`에서 **정확한 local pending 저장 read-back**, 새 save 실패만 기존 one-item canonical 즉시 저장, 이전 pending 충돌 시 재저장 차단·오류 안내. 정상 30초 W0/W1·즉시 local/다른 기기 RTDB preview·Music Note 표시·UI·비용 불변.

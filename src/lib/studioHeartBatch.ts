@@ -114,6 +114,12 @@ export const writeStudioHeartPendingIntentChecked = (
     && confirmed.updatedAtMs === Math.max(1, Math.floor(Number(intent.updatedAtMs || 0)))
     && confirmed.desiredSaved === intent.desiredSaved
     && confirmed.identityKey === intent.identityKey
+    && confirmed.baselineSaved === intent.baselineSaved
+    && confirmed.signalVersion === intent.signalVersion
+    && confirmed.pendingRemotePreviewVersion === intent.pendingRemotePreviewVersion
+    && confirmed.retryCount === intent.retryCount
+    && JSON.stringify(confirmed.song) === JSON.stringify(intent.song)
+    && JSON.stringify(confirmed.baselineFavorite) === JSON.stringify(intent.baselineFavorite)
   ) return 'stored';
   // An older pending mutation may still run. Do not perform a competing direct
   // write or pretend the new click was accepted if that mutation is retained.

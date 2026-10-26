@@ -1,3 +1,11 @@
+## CURRENT — app501 PC↔모바일 Music Note 목록 불일치 / 3곡 저장 검증 확대 (2026-10-26 KST)
+- **신규 사용자 증거:** 같은 계정 PC에서 Recent 저장하트 클릭 시 모바일에 보이기도 하나, 모바일에서 저장한 곡은 모바일 Music Note에 없고 PC에는 RTDB 화면 미리보기가 남을 수 있음. 이전 테스트 3곡에서 두 기기의 Music Note 목록이 실제 불일치함. 사용자 기존 Music Note 대부분 정상 저장 → **기존 곡 저장 해제/재저장/데이터 삭제/브라우저 초기화 금지**.
+- **소스 확인:** 배포된 app500은 모바일 localStorage pending 쓰기 실패가 무시되더라도 다른 기기로 heart-preview 신호를 송출하고 30초 timer에서는 저장할 pending이 없음. 이는 비대칭 증상과 일치하지만 모바일 실제 QuotaExceededError와 실제 Firestore 미확정 여부는 사용자 기기·서버 실측 전 미확정.
+- **수정/검증 후보:** 기존 app501 Draft PR #491 브랜치에서 동일 UID의 서로 다른 PC·모바일 로컬 저장소를 모사하여 A=PC, B=모바일, C=모바일(PC 오프라인) 각각 개별 곡 pending 및 기기 분리·저장공간 부족·복구·브라우저 재실행을 자동 확인. 같은 밀리초에 이전 pending과 신규 본문이 달라도 읽기값이 옛것이면 새 저장 성공으로 판정하지 않도록 read-back 확인을 전체 내용까지 강화. 기존 정상 30초 Firestore 배치·RTDB 즉시표시 보호.
+- **엄격한 결과 구분:** 위 테스트는 **가상 로컬저장소 + 소스 회귀**이며 실제 Firebase Firestore 저장 확인, 실제 Android Chrome 저장 공간, PC↔모바일 브라우저 결과를 증명하지 않음. 서버 원본·기존 곡은 미접촉. 전체 CI 결과 및 독립 감사 전 PASS/배포 주장 금지. Firebase PREVIEW 현행은 app500, TEST/PROD/Worker/Functions/Rules 불변. Stage416 OFF, Reader OFF.
+- **다음:** 고정 PR HEAD에서 app501/기존 제품/TypeScript/Build CI 결과 확인 → 독립 감사 → 실제 3곡 브라우저·해당 문서만 read-only Firestore 확인 가능한 검증 수단 확보. PREVIEW 배포 전 실제 원본 위험/단말 교차 검증 필수.
+---
+
 ## CURRENT — app500 PREVIEW 사용자 실사용 회귀: Recent 저장하트→Music Note 누락 (2026-10-26 KST)
 - **사용자 실제 QA:** app500 `preview.soridraw.com` 로그인 유지·새 탭(1,2) **PASS**. **FAIL:** 최근 생성곡 저장하트를 눌러 저장한 새 곡이 Music Note에 나타나지 않음. **TEST/PRODUCTION 승격 즉시 HOLD**, 원본 삭제·캐시 초기화·재저장 반복·임의 라이브 데이터 수정 금지.
 - **코드상 재현 가능 원인:** 기존 `src/lib/studioHeartBatch.ts`의 `writeAll()`이 localStorage `QuotaExceededError`를 무시하고, `src/App.tsx` `queueStudioHeartPendingIntent`는 실제 임시저장 실패에도 곧바로 `true`·'저장되었습니다.' 반환. 정산 timer는 저장되지 않은 intent를 찾지 못하고 종료해 Music Note 항목이 남지 않을 수 있음. 사용자 기기의 정확한 오류 원인은 실제 브라우저 진단 전 미확정.

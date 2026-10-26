@@ -27,3 +27,51 @@ export const getMusicNoteStructureSignalVersion = (
   if (requested > current) return requested;
   return Math.max(eventVersion, current + 1);
 };
+
+
+// app514 staged mixed-version recovery. An older browser writes complete folder
+// arrays with setDoc(merge:true) but leaves the newer browser's writer token
+// untouched. Save BOTH immutable before/after mode snapshots on a real
+// overwriting legacy write, never on a healthy modern commit or card-only edit.
+export type LegacyMusicNoteFolderRecovery = {
+  schemaVersion: 1;
+  source: 'legacy-writer-after-modern';
+  changedModes: Array<'myNote' | 'sharedNote'>;
+  beforeFolders: Record<string, unknown>;
+  afterFolders: Record<string, unknown>;
+  beforeVersion: number;
+  afterVersion: number;
+  priorWriterToken: string;
+};
+
+export const buildLegacyMusicNoteFolderRecovery = (
+  before: any,
+  after: any,
+): LegacyMusicNoteFolderRecovery | null => {
+  const token = typeof before?.musicNoteStructureWriterToken === 'string'
+    ? before.musicNoteStructureWriterToken : '';
+  if (token.length < 8 || token !== after?.musicNoteStructureWriterToken) return null;
+  const original = before?.musicNoteFolders;
+  const next = after?.musicNoteFolders;
+  if (!original || !next || typeof original !== 'object' || typeof next !== 'object') return null;
+  const changedModes = (['myNote', 'sharedNote'] as const).filter(mode =>
+    !isDeepStrictEqual(original[mode] ?? null, next[mode] ?? null),
+  );
+  if (!changedModes.length) return null;
+  const beforeFolders: Record<string, unknown> = {};
+  const afterFolders: Record<string, unknown> = {};
+  for (const mode of changedModes) {
+    beforeFolders[mode] = original[mode] ?? null;
+    afterFolders[mode] = next[mode] ?? null;
+  }
+  return {
+    schemaVersion: 1,
+    source: 'legacy-writer-after-modern',
+    changedModes,
+    beforeFolders,
+    afterFolders,
+    beforeVersion: Number(before?.musicNoteStructureVersion || 0) || 0,
+    afterVersion: Number(after?.musicNoteStructureVersion || 0) || 0,
+    priorWriterToken: token,
+  };
+};

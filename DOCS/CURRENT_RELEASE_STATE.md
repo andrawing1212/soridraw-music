@@ -1,3 +1,11 @@
+## CURRENT — app504 브라우저 저장용량 비파괴 진단 개발 PR (2026-10-26 KST)
+- 사용자 Android Explore '다음곡에 적용' 저장공간 초과 후 스튜디오 이동 실패. 별도 app503 PR #496에서 app468 memory-first bridge 재사용 수정, CI #40314789771 TypeScript/Build/제품 검사 SUCCESS. 독립 감사·PREVIEW 배포·실기기 QA 전.
+- 이번 app504는 **브라우저 저장공간 원인을 측정하기 위한 관리자 CACHE LIVE 읽기 전용 진단**. 버튼 클릭 시 local/sessionStorage 키값의 크기 합산(값/키 노출 없음), browser estimate quota/usage 및 persisted status를 표시. 자동 서버 조회/저장/삭제/캐시 초기화/영구저장 권한 요청 없음. 실제 기기 수치는 아직 미측정.
+- 현재 source: `src/lib/soridrawPersistentCache.ts`는 실제 localStorage 기반, `src/lib/studioHeartBatch.ts`는 미확정 하트 곡/원본 상태를 localStorage에 보관해 용량 위험 가능. 후자 자동 삭제 절대 금지. 구체 사용량 확인 전 IndexedDB 전환/자동 purge 불허.
+- app502 PR #495 exact SHA `256c99eefb39a740fd874a460d1bd7e8c3a9b8f8` 기존 진단 독립 감사 대기. app503, app504와 병렬 소스 병합/배포 금지; 각 고정 SHA 감사 후 검증된 조합만 PREVIEW 배포. 실제 live PREVIEW app501 사용자 QA FAIL, TEST/PRODUCTION HOLD, Stage416/Reader OFF.
+- app504 상세 비교·실행 순서: `DOCS/BROWSER_STORAGE_CAPACITY_PLAN.md`. 이 브랜치 소스 테스트/최종 SHA/독립 감사 전 완료 보고 금지. 원본 PC/모바일 사용자 캐시 변경 없음.
+---
+
 ## CURRENT — app501 PREVIEW 실제 사용자 3브라우저 Music Note/하트 동기화 FAIL (2026-10-26 KST)
 - **실사용 QA 판정 FAIL:** app501 Firebase PREVIEW Hosting은 run #40258981882 / exact SHA `13a3b961ac0a362db51a5d6d084f77fb57262fb9`에서 배포 PASS, 소스 독립 감사 SHA `d1fabebfcd3473f8d1f7c0b5605dde91e8b20942` PASS였으나 실제 사용자가 확인한 기존 누락곡 `먼 길을 돌아온 밤`은 수정되지 않음.
 - **동일 계정의 실제 기기별 상태:** 기존 PC Chrome: Recent 저장하트 체크 + Music Note 곡 **있음**. 모바일: 저장하트 **체크** + Music Note 곡 **없음**. 다른 PC 브라우저: 저장하트 **해제** + Music Note 곡 **없음**. 나머지 두 최근곡은 비교 기준이며, 다른 PC 최초 진입에서 `어제의 네게 묻는다`가 일시 누락했다가 새로고침 뒤 등장한 전력이 있음.

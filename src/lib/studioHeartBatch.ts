@@ -49,8 +49,7 @@ export const listStudioHeartPendingIntents = (uid: string): StudioHeartPendingIn
     return Object.values(raw)
       .map((value) => normalizeIntent(uid, value))
       .filter((value): value is StudioHeartPendingIntent => Boolean(value))
-      .sort((left, right) => right.updatedAtMs - left.updatedAtMs)
-      .slice(0, MAX_INTENTS);
+      .sort((left, right) => right.updatedAtMs - left.updatedAtMs);
   } catch {
     return [];
   }
@@ -60,8 +59,10 @@ const writeAll = (uid: string, intents: StudioHeartPendingIntent[]) => {
   if (!uid || typeof localStorage === 'undefined') return;
   const ordered = [...intents]
     .filter((intent) => intent?.documentId && intent.uid === uid)
-    .sort((left, right) => right.updatedAtMs - left.updatedAtMs)
-    .slice(0, MAX_INTENTS);
+    .sort((left, right) => right.updatedAtMs - left.updatedAtMs);
+  // Never discard an older unsettled song to accept a new one.
+  // Any oversized legacy outbox is preserved unchanged, too.
+  if (ordered.length > MAX_INTENTS) return;
   const next: Record<string, StudioHeartPendingIntent> = {};
   for (const intent of ordered) next[intent.documentId] = intent;
   try {
@@ -100,11 +101,15 @@ export const writeStudioHeartPendingIntent = (intent: StudioHeartPendingIntent):
 // readable back. The common path is still the same 30-second W0/W1 batch.
 export const writeStudioHeartPendingIntentChecked = (
   intent: StudioHeartPendingIntent,
-): 'stored' | 'blocked-empty' | 'blocked-existing' => {
+): 'stored' | 'blocked-empty' | 'blocked-existing' | 'blocked-capacity' => {
   const uid = String(intent?.uid || '').trim();
   const documentId = String(intent?.documentId || '').trim();
   if (!uid || !documentId) return 'blocked-empty';
-  const previous = readStudioHeartPendingIntent(uid, documentId);
+  const allPending = listStudioHeartPendingIntents(uid);
+  const previous = allPending.find((item) => item.documentId === documentId) || null;
+  // At 20 songs, allow existing edits but send a new song to the
+  // single-document canonical fallback rather than evicting older intents.
+  if (!previous && allPending.length >= MAX_INTENTS) return 'blocked-capacity';
   writeStudioHeartPendingIntent(intent);
   const confirmed = readStudioHeartPendingIntent(uid, documentId);
   if (

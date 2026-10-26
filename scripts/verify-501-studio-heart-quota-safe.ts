@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   readStudioHeartPendingIntent,
+  listStudioHeartPendingIntents,
+  removeStudioHeartPendingIntent,
+  writeStudioHeartPendingIntent,
   writeStudioHeartPendingIntentChecked,
   isStudioHeartOptimisticFavorite,
   type StudioHeartPendingIntent,
@@ -67,6 +70,50 @@ try {
   assert.equal(readStudioHeartPendingIntent(healthy.uid, healthy.documentId)?.desiredSaved, false);
   console.log('APP501_RECOVERED_STORAGE_PRESERVES_30S_BATCH=PASS');
 
+  // P1 regression: 21st new song cannot silently evict the oldest of 20.
+  activeDevice = 'pc';
+  const capacityUid = 'app501-capacity-uid';
+  const capacitySongs = Array.from({ length: 20 }, (_, i) => ({ ...makeIntent('cap-' + i, true, healthy.updatedAtMs + 100 + i), uid: capacityUid }));
+  for (const intent of capacitySongs) assert.equal(writeStudioHeartPendingIntentChecked(intent), 'stored');
+  const capacityKey = 'soridraw_studio_heart_pending_v1_' + capacityUid;
+  const fullBytes = pcValues.get(capacityKey);
+  assert.ok(fullBytes);
+  const song21 = { ...makeIntent('cap-21', true, healthy.updatedAtMs + 200), uid: capacityUid };
+  assert.equal(writeStudioHeartPendingIntentChecked(song21), 'blocked-capacity');
+  assert.equal(pcValues.get(capacityKey), fullBytes, 'no queued song may be evicted');
+  assert.equal(listStudioHeartPendingIntents(capacityUid).length, 20);
+  for (const intent of capacitySongs) assert.equal(readStudioHeartPendingIntent(capacityUid, intent.documentId)?.desiredSaved, true);
+  writeStudioHeartPendingIntent(song21);
+  assert.equal(pcValues.get(capacityKey), fullBytes, 'unchecked writer must not truncate full outbox');
+  console.log('APP501_CAPACITY_20_TO_21_NO_EVICTION=PASS');
+
+  // Editing an existing queued song at capacity retains the other 19.
+  const replacement = { ...capacitySongs[0], desiredSaved: false, updatedAtMs: healthy.updatedAtMs + 201 };
+  assert.equal(writeStudioHeartPendingIntentChecked(replacement), 'stored');
+  assert.equal(readStudioHeartPendingIntent(capacityUid, replacement.documentId)?.desiredSaved, false);
+  assert.equal(listStudioHeartPendingIntents(capacityUid).length, 20);
+  for (const intent of capacitySongs.slice(1)) assert.equal(readStudioHeartPendingIntent(capacityUid, intent.documentId)?.desiredSaved, true);
+  console.log('APP501_CAPACITY_EXISTING_SONG_CAN_CHANGE=PASS');
+
+  // Once an existing pending song has settled, the next new song fits.
+  removeStudioHeartPendingIntent(capacityUid, capacitySongs[19].documentId);
+  assert.equal(writeStudioHeartPendingIntentChecked(song21), 'stored');
+  assert.equal(readStudioHeartPendingIntent(capacityUid, song21.documentId)?.desiredSaved, true);
+  assert.equal(listStudioHeartPendingIntents(capacityUid).length, 20);
+  console.log('APP501_CAPACITY_REOPENS_AFTER_SETTLEMENT=PASS');
+
+  // If an older browser already has >20 records, never silently clip it.
+  const legacyUid = 'app501-legacy-over-capacity';
+  const legacyKey = 'soridraw_studio_heart_pending_v1_' + legacyUid;
+  const legacyItems = Array.from({ length: 22 }, (_, i) => ({ ...makeIntent('legacy-' + i, true, healthy.updatedAtMs + 500 + i), uid: legacyUid }));
+  const legacyRaw = Object.fromEntries(legacyItems.map((item) => [item.documentId, item]));
+  pcValues.set(legacyKey, JSON.stringify(legacyRaw));
+  assert.equal(listStudioHeartPendingIntents(legacyUid).length, 22);
+  const legacy23 = { ...makeIntent('legacy-23', true, healthy.updatedAtMs + 600), uid: legacyUid };
+  assert.equal(writeStudioHeartPendingIntentChecked(legacy23), 'blocked-capacity');
+  writeStudioHeartPendingIntent(legacy23);
+  assert.equal(pcValues.get(legacyKey), JSON.stringify(legacyRaw));
+  console.log('APP501_LEGACY_OVER_CAPACITY_NO_TRUNCATION=PASS');
   // A: PC save (mobile observes only). B: mobile save (PC observes only).
   // C: mobile save while PC is closed. Each song must have its own durable
   // pending slot; the remote RTDB preview must never be mistaken for this slot.
@@ -142,7 +189,7 @@ try {
   const queue = app.slice(app.indexOf('const queueStudioHeartPendingIntent ='),app.indexOf('  useEffect(() => {',app.indexOf('const queueStudioHeartPendingIntent =')));
   assert.ok(queue.includes("const durableIntentResult = writeStudioHeartPendingIntentChecked(intent);"));
   assert.match(queue,/durableIntentResult === 'blocked-existing'[\s\S]*?throw new Error\('STUDIO_HEART_PENDING_STORAGE_BLOCKED_WITH_EXISTING'\)/);
-  assert.match(queue,/durableIntentResult === 'blocked-empty'[\s\S]*?return false;/);
+  assert.match(queue,/durableIntentResult === 'blocked-empty'[\s\S]*?blocked-capacity'[\s\S]*?return false;/);
   assert.ok(queue.indexOf('durableIntentResult ===') < queue.indexOf('scheduleStudioHeartPendingIntent(safeDocumentId)'),
     'only an independently verified durable write may enter the 30-second queue');
   assert.ok(queue.indexOf('durableIntentResult ===') < queue.indexOf('publishMusicNoteHeartPreviewDelta('),

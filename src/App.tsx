@@ -11949,7 +11949,7 @@ const toggleCycleVariantSelection = (
       // by that older timer, so preserve its durable intent and reject this one.
       throw new Error('STUDIO_HEART_PENDING_STORAGE_BLOCKED_WITH_EXISTING');
     }
-    if (durableIntentResult === 'blocked-empty') {
+    if (durableIntentResult === 'blocked-empty' || durableIntentResult === 'blocked-capacity') {
       // No old pending action can race with this click. Bypass the batching
       // queue and let the caller use the existing one-item canonical save path.
       // No optimistic "saved" toast or phantom Music Note row is published.

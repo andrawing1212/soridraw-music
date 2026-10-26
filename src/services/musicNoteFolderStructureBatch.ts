@@ -1,4 +1,4 @@
-import { doc, setDoc } from '../lib/firestoreMeasured';
+import { doc, runTransaction } from '../lib/firestoreMeasured';
 import { db } from '../firebase';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 
@@ -73,6 +73,29 @@ const storageKey = (uid: string): string => `${STORAGE_PREFIX}.${safeUid(uid)}`;
 const safeVersion = (value: unknown): number => {
   const parsed = Number(value || 0);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
+};
+
+// app514 P1: compare server and candidate inside one atomic Firestore transaction.
+// A delayed device cannot overwrite a newer canonical structure version.
+// A stale failure must NOT trigger the post-success RTDB signal or clear pending.
+export const writeMusicNoteStructureIfNewer = async (
+  uid: string,
+  patch: { musicNoteStructureVersion: number; [key: string]: unknown },
+): Promise<void> => {
+  const key = safeUid(uid);
+  const version = safeVersion(patch.musicNoteStructureVersion);
+  if (!key || version <= 0) throw new Error('MUSIC_NOTE_STRUCTURE_INVALID_VERSION');
+  const structureRef = doc(db, 'user_structures', key);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(structureRef);
+    const serverVersion = safeVersion(snapshot.data()?.musicNoteStructureVersion);
+    if (serverVersion >= version) {
+      throw Object.assign(new Error('MUSIC_NOTE_STRUCTURE_STALE_SERVER_VERSION'), {
+        code: 'music-note/stale-structure-version',
+      });
+    }
+    transaction.set(structureRef, patch, { merge: true });
+  });
 };
 
 const normalizeModeState = (value: any): PendingModeState | undefined => {
@@ -287,7 +310,7 @@ export const flushMusicNoteFolderStructureBatch = async (uid: string): Promise<v
         uid: key,
         affectedCount: 1,
         syncStructure: structurePatch,
-      }, setDoc(doc(db, 'user_structures', key), structurePatch, { merge: true }));
+      }, writeMusicNoteStructureIfNewer(key, structurePatch));
     } finally {
       if (ackWarning !== undefined) window.clearTimeout(ackWarning);
     }
@@ -314,8 +337,9 @@ export const flushMusicNoteFolderStructureBatch = async (uid: string): Promise<v
     reportStatus(key, { state: 'failed', durable: !undurablePendingUids510.has(key) });
     const attempts = (failedAttempts.get(key) || 0) + 1;
     const code = String(error?.code || '');
-    failedAttempts.set(key, /permission-denied|unauthenticated/.test(code) ? MAX_AUTOMATIC_ATTEMPTS : attempts);
-    if (attempts < MAX_AUTOMATIC_ATTEMPTS && !/permission-denied|unauthenticated/.test(code)) schedule(key);
+    const nonRetryable = /permission-denied|unauthenticated|stale-structure-version/.test(code);
+    failedAttempts.set(key, nonRetryable ? MAX_AUTOMATIC_ATTEMPTS : attempts);
+    if (attempts < MAX_AUTOMATIC_ATTEMPTS && !nonRetryable) schedule(key);
     else {
       const timer = timers.get(key);
       if (timer !== undefined && typeof window !== 'undefined') window.clearTimeout(timer);

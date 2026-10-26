@@ -17,6 +17,8 @@ type PendingMusicNoteFolderStructure = {
 };
 
 const MUSIC_NOTE_FOLDER_BATCH_MS = 60_000;
+// app506: emitted only when a pending folder structure cannot be persisted locally.
+export const MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT = 'soridraw:music-note:folder-pending-quota-risk';
 const STORAGE_PREFIX = 'soridraw.musicNote.folderStructureBatch.v1';
 
 const timers = new Map<string, number>();
@@ -59,12 +61,28 @@ const readPending = (uid: string): PendingMusicNoteFolderStructure | null => {
   }
 };
 
-const writePending = (uid: string, pending: PendingMusicNoteFolderStructure): void => {
+const writePending = (uid: string, pending: PendingMusicNoteFolderStructure): boolean => {
   const key = safeUid(uid);
-  if (!key) return;
+  if (!key) return false;
   memoryPending.set(key, pending);
-  if (typeof localStorage === 'undefined') return;
-  try { localStorage.setItem(storageKey(key), JSON.stringify(pending)); } catch {}
+  if (typeof localStorage === 'undefined') return false;
+  try {
+    const serialized = JSON.stringify(pending);
+    localStorage.setItem(storageKey(key), serialized);
+    // A write that reports success but cannot be read back is NOT durable.
+    return localStorage.getItem(storageKey(key)) === serialized;
+  } catch {
+    return false;
+  }
+};
+
+const warnPendingQuotaRisk506 = (uid: string): void => {
+  if (typeof window === 'undefined') return;
+  // No song/folder contents, IDs, or server request. This warning does NOT claim
+  // an offline memory-only edit survived a reload.
+  window.dispatchEvent(new CustomEvent(MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT, {
+    detail: { uid },
+  }));
 };
 
 const clearAll = (uid: string): void => {
@@ -112,8 +130,11 @@ export const queueMusicNoteFolderStructureBatch = (
     },
     updatedAtMs: now,
   };
-  writePending(key, next);
-  schedule(key);
+  const durable = writePending(key, next);
+  if (!durable) warnPendingQuotaRisk506(key);
+  // Healthy changes retain app301's trailing 60-second canonical batch.
+  // Only a failed local durable write triggers one immediate canonical attempt.
+  schedule(key, durable ? MUSIC_NOTE_FOLDER_BATCH_MS : 0);
 };
 
 export const markMusicNoteFolderStructureCommitted = (
@@ -134,8 +155,9 @@ export const markMusicNoteFolderStructureCommitted = (
     clearAll(key);
     return;
   }
-  writePending(key, next);
-  schedule(key);
+  const durable = writePending(key, next);
+  if (!durable) warnPendingQuotaRisk506(key);
+  schedule(key, durable ? MUSIC_NOTE_FOLDER_BATCH_MS : 0);
 };
 
 export const flushMusicNoteFolderStructureBatch = async (uid: string): Promise<void> => {
@@ -188,8 +210,9 @@ export const flushMusicNoteFolderStructureBatch = async (uid: string): Promise<v
       clearAll(key);
       return;
     }
-    writePending(key, next);
-    schedule(key);
+    const durable = writePending(key, next);
+    if (!durable) warnPendingQuotaRisk506(key);
+    schedule(key, durable ? MUSIC_NOTE_FOLDER_BATCH_MS : 0);
   })().catch((error) => {
     console.warn('[Music Note folder batch] canonical flush deferred; pending final state kept.', error);
     schedule(key);

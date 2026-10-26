@@ -1316,6 +1316,8 @@ export default function FavoritesPage({
   const [favoriteMemoExpanded, setFavoriteMemoExpanded] = useState(false);
   const [favoriteToastMessage, setFavoriteToastMessage] = useState<string | null>(null);
   const [folderSaveStatus, setFolderSaveStatus] = useState<MusicNoteFolderSaveStatus | null>(null);
+  const folderRecoveryUidRef = useRef(user?.uid);
+  folderRecoveryUidRef.current = user?.uid;
   const [folderRecoveryOpen, setFolderRecoveryOpen] = useState(false);
   const [folderRecoveryRecords, setFolderRecoveryRecords] = useState<MusicNoteFolderRecoveryRecord[]>([]);
   const [folderRecoveryLoading, setFolderRecoveryLoading] = useState(false);
@@ -2359,11 +2361,11 @@ updates: draft.updates,
     setFolderRecoveryConfirm(null);
     try {
       const records = await listMusicNoteFolderRecovery(requestUid);
-      if (user?.uid === requestUid) setFolderRecoveryRecords(records);
+      if (folderRecoveryUidRef.current === requestUid) setFolderRecoveryRecords(records);
     } catch {
-      if (user?.uid === requestUid) setFolderRecoveryError('충돌 기록을 읽지 못했습니다. 서버 권한 적용 여부를 확인해 주세요.');
+      if (folderRecoveryUidRef.current === requestUid) setFolderRecoveryError('충돌 기록을 읽지 못했습니다. 서버 권한 적용 여부를 확인해 주세요.');
     } finally {
-      setFolderRecoveryLoading(false);
+      if (folderRecoveryUidRef.current === requestUid) setFolderRecoveryLoading(false);
     }
   };
 
@@ -2377,7 +2379,7 @@ updates: draft.updates,
         requestUid, folderRecoveryConfirm.id, folderRecoveryConfirm.mode, folderRecoveryConfirm.choice,
       );
       // Authoritative ACK only, never a speculative optimistic replacement.
-      if (user?.uid === requestUid) {
+      if (folderRecoveryUidRef.current === requestUid) {
         publishMusicNoteStructureSession(requestUid, {
           musicNoteFolders: { [folderRecoveryConfirm.mode]: result.folders },
           musicNoteStructureVersion: result.version,
@@ -2387,10 +2389,12 @@ updates: draft.updates,
         showFavoriteToast('선택한 폴더 상태를 서버에 복원했습니다.');
       }
     } catch (error: any) {
-      setFolderRecoveryError(String(error?.message || '복원을 완료하지 못했습니다.'));
-      setFolderRecoveryConfirm(null);
+      if (folderRecoveryUidRef.current === requestUid) {
+        setFolderRecoveryError(String(error?.message || '복원을 완료하지 못했습니다.'));
+        setFolderRecoveryConfirm(null);
+      }
     } finally {
-      setFolderRecoveryBusy(false);
+      if (folderRecoveryUidRef.current === requestUid) setFolderRecoveryBusy(false);
     }
   };
 

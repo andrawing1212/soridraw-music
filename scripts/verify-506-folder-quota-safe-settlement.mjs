@@ -58,6 +58,7 @@ const mockRequire = (id) => {
       canonical.push(...staged);
     },
   };
+  if (id.endsWith('userDomainSyncService')) return { publishMusicNoteStructureDelta: async () => 0 };
   if (id.endsWith('firebase')) return { db: {} };
   if (id.endsWith('v1MutationBoundary')) return { runV1MutationBoundary: (_operation, promise) => promise };
   throw new Error('unapproved dependency ' + id);

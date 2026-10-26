@@ -148,3 +148,20 @@ console.log('APP506_OLD_INFLIGHT_ACK_CANNOT_ERASE_LATEST_QUOTA_EDIT=PASS');
 // guarantee survival of full tab termination; never overclaim durability.
 assert.equal(page.includes("window.addEventListener(MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT"), true);
 console.log('APP506_NO_CACHE_PURGE_USER_WARNING=PASS');
+
+// app509 RED-TEAM ONLY: after each quota-failed, *accepted* edit, an
+// immediate server ACK followed by the next edit can produce one W per edit
+// rather than the healthy 60s collapsed W1. This is a cost-risk observation,
+// not a declaration that normal batching failed or that data was changed.
+const writesBeforeBurst509 = canonical.length;
+for (let revision509 = 7; revision509 <= 11; revision509 += 1) {
+  api.queueMusicNoteFolderStructureBatch(
+    'user-a', 'myNote', folder('burst-' + revision509), revision509,
+  );
+  assert.equal(lastActive().ms, 0);
+  await runNext();
+}
+const quotaBurstWrites509 = canonical.length - writesBeforeBurst509;
+assert.equal(quotaBurstWrites509, 5,
+  'current emergency path does one canonical write per separated quota edit');
+console.log('APP509_REDTEAM_QUOTA_BURST_W5_RISK_REPRODUCED=PASS');

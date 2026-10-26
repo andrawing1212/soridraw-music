@@ -411,7 +411,9 @@ try {
   // The component still has to discard A when its displayed target becomes B.
   getDocInput(uiTree).props.onChange({ target: { value: 'B' } });
   inFlightReads[0].resolve(makeReport(true));
-  await Promise.resolve();
+  // VM-transpiled async handlers complete on the next event-loop turn;
+  // a single Promise.resolve() tick can inspect UI before React state settles.
+  await new Promise<void>((resolve) => setImmediate(resolve));
   uiTree = renderDiagnostic();
   assert.equal(getDocInput(uiTree).props.value, 'B');
   assert.equal(hasServerReport(uiTree), false, 'A response must not appear below B document input');
@@ -424,7 +426,9 @@ try {
   assert.equal(inFlightReads.length, 2);
   assert.equal(inFlightReads[1].documentId, 'B');
   inFlightReads[1].resolve(makeReport(true));
-  await Promise.resolve();
+  // VM-transpiled async handlers complete on the next event-loop turn;
+  // a single Promise.resolve() tick can inspect UI before React state settles.
+  await new Promise<void>((resolve) => setImmediate(resolve));
   uiTree = renderDiagnostic();
   assert.equal(hasServerReport(uiTree), true);
   getTitleInput(uiTree).props.onChange({ target: { value: 'changed title' } });
@@ -448,12 +452,16 @@ try {
   assert.equal(inFlightReads.length, 4);
   assert.equal(inFlightReads[3].uid, 'owner-B');
   inFlightReads[2].resolve(makeReport(true));
-  await Promise.resolve();
+  // VM-transpiled async handlers complete on the next event-loop turn;
+  // a single Promise.resolve() tick can inspect UI before React state settles.
+  await new Promise<void>((resolve) => setImmediate(resolve));
   uiTree = renderDiagnostic();
   assert.equal(hasServerReport(uiTree), false, 'old UID response must not show under a new UID');
   assert.equal(getDocInput(uiTree).props.disabled, true, 'old request finally cannot unlock newer request');
   inFlightReads[3].resolve(makeReport(false));
-  await Promise.resolve();
+  // VM-transpiled async handlers complete on the next event-loop turn;
+  // a single Promise.resolve() tick can inspect UI before React state settles.
+  await new Promise<void>((resolve) => setImmediate(resolve));
   uiTree = renderDiagnostic();
   assert.equal(hasServerReport(uiTree), true, 'the newest UID/ID request may render');
   assert.ok(JSON.stringify(uiTree).includes('아니요'));

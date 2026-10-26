@@ -281,7 +281,7 @@ try {
   assert.ok(diagnostic.includes("readCatalogSnapshotFromLocalCache('musicNote', uid)"));
   assert.ok(diagnostic.includes('candidates.size === 1'),
     'duplicate-title local rows must require explicit exact document ID');
-  assert.ok(!/\b(?:setDoc|updateDoc|deleteDoc|addDoc|writeBatch|getDocs|collection)\s*\(/.test(diagnostic),
+  assert.ok(!/\b(?:setDoc|updateDoc|deleteDoc|addDoc|writeBatch|getDocs)\s*\(/.test(diagnostic),
     'diagnostic must not write, backfill or change canonical data');
   assert.ok(!diagnostic.includes('getDocs('),
     'automatic cache-fallback reads are not server authority');

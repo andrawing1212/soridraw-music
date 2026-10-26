@@ -83,7 +83,7 @@ export default function StudioHeartSingleDocDiagnostic() {
       </div>
       {message ? <div role="status" className="mt-2 break-words text-[10px]">{message}</div> : null}
       {report ? <div className="mt-2 space-y-0.5 rounded bg-black/20 px-2 py-1.5 text-[11px]">
-        <div>Firestore 문서 존재: {label(report.documentPresent)}</div>
+        <div>이 계정의 서버 저장문서 존재: {label(report.documentPresent)}</div>
         <div>로그인 계정 소유: {label(report.ownerMatchesSignedInUser)}</div>
         <div>서버 저장 상태 활성: {label(report.serverActive)}</div>
         <div>이 기기 Music Note 목록: {label(report.deviceMusicNoteRow)}</div>

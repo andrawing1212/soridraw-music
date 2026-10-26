@@ -20,3 +20,9 @@ Runnable `scripts/verify-513-library-gap-exact-doc-recovery.mjs` loads transpile
 **Residual**: This fixes only the explicitly identifiable latest mutation. It cannot reconstruct unknown prior missed events, a cold cache, or initial login gaps without a separate limited canonical reconciliation plan. No actual Firestore emulator or real-browser mixed-version parity has been claimed. Old production clients may still lower derived compatibility revision. No blanket Firestore monotonic Rules: those would reject older atomic canonical playlist edits (app511). Source CI PASS is not Work audit; Work High read-only exact SHA and PC/mobile acceptance gate remain.
 
 No deployment or user data modification authorized from this draft.
+
+## Final source-safety patch (2026-10-26 KST)
+
+A delayed exact-document read is not enough to authorize applying an item change if the **parent playlist folder changed during that same network request**. Item add/delete now require the parent folder to remain present and unchanged in the local list cache (both folder content and cached revision), in addition to the existing item-cache version fence. This avoids restoring an orphan item after a same-version legacy folder deletion/rename. The exact remote read remains one document; new checks use local cache only (R0). The executable test injects a concurrent folder deletion and rename while the Firestore exact read is in flight. Failure leaves original local cache unchanged and does not mark the delta as repaired.
+
+Remain explicit: unresolved earlier missed deltas, cold cache, derived server version regression, old-browser mixed-version behavior and independent Work/real device audit are **NOT** fixed by this check. Current GitHub source work is still not a PREVIEW deployment.

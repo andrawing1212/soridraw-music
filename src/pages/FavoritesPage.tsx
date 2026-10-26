@@ -23,6 +23,11 @@ import {
   resumeMusicNoteFolderStructureBatch,
 } from '../services/musicNoteFolderStructureBatch';
 import React, { useState, useEffect, useLayoutEffect, useRef, useDeferredValue } from 'react';
+import {
+  listMusicNoteFolderRecovery,
+  restoreMusicNoteFolderRecovery,
+  type MusicNoteFolderRecoveryRecord,
+} from '../services/musicNoteFolderRecovery';
 import { useMediaQuery } from '../lib/mediaQueryStore';
 import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
 import { createPortal } from 'react-dom';
@@ -1311,6 +1316,14 @@ export default function FavoritesPage({
   const [favoriteMemoExpanded, setFavoriteMemoExpanded] = useState(false);
   const [favoriteToastMessage, setFavoriteToastMessage] = useState<string | null>(null);
   const [folderSaveStatus, setFolderSaveStatus] = useState<MusicNoteFolderSaveStatus | null>(null);
+  const [folderRecoveryOpen, setFolderRecoveryOpen] = useState(false);
+  const [folderRecoveryRecords, setFolderRecoveryRecords] = useState<MusicNoteFolderRecoveryRecord[]>([]);
+  const [folderRecoveryLoading, setFolderRecoveryLoading] = useState(false);
+  const [folderRecoveryBusy, setFolderRecoveryBusy] = useState(false);
+  const [folderRecoveryError, setFolderRecoveryError] = useState('');
+  const [folderRecoveryConfirm, setFolderRecoveryConfirm] = useState<{
+    id: string; mode: 'myNote' | 'sharedNote'; choice: 'before' | 'after';
+  } | null>(null);
   const favoriteToastTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSyncEnabled, setIsSyncEnabled] = useState(false);
@@ -2327,6 +2340,59 @@ updates: draft.updates,
     !folderSaveStatus.durable ? '기기 저장공간 부족 또는 접근 제한: 앱을 닫으면 변경이 사라질 수 있습니다.' : '',
     folderSaveStatus.delivery === 'failed' ? '다른 기기로의 실시간 전달에 실패했습니다.' : '',
   ].filter(Boolean).join(' ') : null;
+
+  useEffect(() => {
+    // Never retain a previous account's private conflict snapshots.
+    setFolderRecoveryOpen(false);
+    setFolderRecoveryRecords([]);
+    setFolderRecoveryConfirm(null);
+    setFolderRecoveryError('');
+  }, [user?.uid]);
+
+  const openFolderRecovery = async () => {
+    if (!user?.uid || folderRecoveryLoading || folderRecoveryBusy) return;
+    const requestUid = user.uid;
+    setFolderRecoveryOpen(true);
+    setFolderRecoveryLoading(true);
+    setFolderRecoveryRecords([]);
+    setFolderRecoveryError('');
+    setFolderRecoveryConfirm(null);
+    try {
+      const records = await listMusicNoteFolderRecovery(requestUid);
+      if (user?.uid === requestUid) setFolderRecoveryRecords(records);
+    } catch {
+      if (user?.uid === requestUid) setFolderRecoveryError('충돌 기록을 읽지 못했습니다. 서버 권한 적용 여부를 확인해 주세요.');
+    } finally {
+      setFolderRecoveryLoading(false);
+    }
+  };
+
+  const confirmFolderRecovery = async () => {
+    if (!user?.uid || !folderRecoveryConfirm || folderRecoveryBusy) return;
+    const requestUid = user.uid;
+    setFolderRecoveryBusy(true);
+    setFolderRecoveryError('');
+    try {
+      const result = await restoreMusicNoteFolderRecovery(
+        requestUid, folderRecoveryConfirm.id, folderRecoveryConfirm.mode, folderRecoveryConfirm.choice,
+      );
+      // Authoritative ACK only, never a speculative optimistic replacement.
+      if (user?.uid === requestUid) {
+        publishMusicNoteStructureSession(requestUid, {
+          musicNoteFolders: { [folderRecoveryConfirm.mode]: result.folders },
+          musicNoteStructureVersion: result.version,
+        }, result.version, true);
+        setFolderRecoveryConfirm(null);
+        setFolderRecoveryOpen(false);
+        showFavoriteToast('선택한 폴더 상태를 서버에 복원했습니다.');
+      }
+    } catch (error: any) {
+      setFolderRecoveryError(String(error?.message || '복원을 완료하지 못했습니다.'));
+      setFolderRecoveryConfirm(null);
+    } finally {
+      setFolderRecoveryBusy(false);
+    }
+  };
 
   const handleManualFavoriteSync = async () => {
     if (!onManualSyncFavorites || isManualSyncingFavorites) return;
@@ -7514,6 +7580,15 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       </div>
       )}
 
+      {!isMusicNoteSharedView && user?.uid && (
+        <div className="soridraw-musicnote-region-top flex justify-end" data-selection-keep="true">
+          <button type="button" onClick={() => void openFolderRecovery()}
+            className="text-[11px] font-semibold text-white/45 underline underline-offset-4 hover:text-[#FFC1BC]">
+            폴더 충돌 기록 확인
+          </button>
+        </div>
+      )}
+
       {!isMusicNoteSharedView && (
       <div className="soridraw-musicnote-region-top mt-2 md:mt-3 space-y-4 md:space-y-5">
         <div className="soridraw-responsive-top-controls soridraw-stable-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
@@ -8741,6 +8816,79 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               </motion.div>
             </motion.div>
           </StudioCenterModalPortal>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {folderRecoveryOpen && user?.uid && (
+          <motion.div data-selection-keep="true" data-floating-menu="true"
+            className="fixed inset-0 z-[330] flex items-center justify-center bg-black/75 px-3 py-5 backdrop-blur-sm"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => { if (!folderRecoveryBusy) { setFolderRecoveryOpen(false); setFolderRecoveryConfirm(null); } }}>
+            <motion.div role="dialog" aria-modal="true" aria-label="뮤직노트 폴더 충돌 기록"
+              className="w-full max-w-[560px] max-h-[85vh] overflow-y-auto rounded-2xl border border-white/15 bg-[#181818] p-5 text-white shadow-2xl"
+              onClick={(event) => event.stopPropagation()}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-bold">뮤직노트 폴더 충돌 기록</h3>
+                  <p className="mt-1 text-xs text-white/60">최근 기록 10개까지만 확인합니다. 기록을 선택해도 자동 복원되지 않습니다.</p>
+                </div>
+                <button type="button" aria-label="닫기" disabled={folderRecoveryBusy}
+                  onClick={() => { setFolderRecoveryOpen(false); setFolderRecoveryConfirm(null); }}
+                  className="p-2 text-white/70 hover:text-white"><X className="h-4 w-4" /></button>
+              </div>
+              {folderRecoveryLoading && <p className="mt-5 text-sm text-white/70">기록을 확인하고 있습니다.</p>}
+              {!folderRecoveryLoading && !folderRecoveryRecords.length && !folderRecoveryError && (
+                <p className="mt-5 text-sm text-white/60">확인 가능한 폴더 충돌 기록이 없습니다.</p>
+              )}
+              {folderRecoveryError && <p role="alert" className="mt-4 text-sm text-rose-300">{folderRecoveryError}</p>}
+              <div className="mt-4 space-y-4">
+                {folderRecoveryRecords.map(record => (
+                  <div key={record.id} className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
+                    <p className="mb-2 text-xs text-white/50">
+                      {record.observedAtMs > 0 ? new Date(record.observedAtMs).toLocaleString('ko-KR') : '충돌 기록'}
+                    </p>
+                    {record.changedModes.map(mode => (
+                      <div key={mode} className="mb-3 last:mb-0">
+                        <p className="mb-2 text-sm font-bold">{mode === 'myNote' ? '마이 노트' : '공유 노트'}</p>
+                        {(['before', 'after'] as const).map(choice => {
+                          const list = record[choice === 'before' ? 'beforeFolders' : 'afterFolders'][mode] || [];
+                          const isSelected = folderRecoveryConfirm?.id === record.id
+                            && folderRecoveryConfirm.mode === mode && folderRecoveryConfirm.choice === choice;
+                          return (
+                            <button type="button" key={choice} disabled={folderRecoveryBusy}
+                              onClick={() => { setFolderRecoveryConfirm({ id: record.id, mode, choice }); setFolderRecoveryError(''); }}
+                              className={`mb-2 block w-full rounded-lg border px-3 py-2 text-left text-xs disabled:opacity-50 ${isSelected ? 'border-[#FF7A72] bg-[#FF7A72]/15' : 'border-white/15 bg-black/20'}`}>
+                              <strong>{choice === 'before' ? '덮어쓰기 전' : '덮어쓰기 후'}</strong>
+                              <span className="ml-2 text-white/60">폴더 {list.length}개</span>
+                              <p className="mt-1 break-words text-white/65">
+                                {list.map((folder: any) => String(folder?.title || folder?.name || '이름 없음')).join(' · ').slice(0, 250)}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+              {folderRecoveryConfirm && (
+                <div className="mt-4 rounded-xl border border-amber-300/30 bg-amber-200/5 p-3 text-sm">
+                  <p>선택한 <strong>{folderRecoveryConfirm.mode === 'myNote' ? '마이 노트' : '공유 노트'}</strong> 폴더를
+                    <strong>{folderRecoveryConfirm.choice === 'before' ? ' 덮어쓰기 전' : ' 덮어쓰기 후'}</strong> 상태로 복원합니다.</p>
+                  <p className="mt-2 text-xs text-white/60">현재 서버 폴더가 충돌 직후 상태와 달라졌으면 복원을 거절합니다. 곡 원본은 수정하지 않습니다.</p>
+                  <div className="mt-3 flex justify-end gap-2">
+                    <button type="button" disabled={folderRecoveryBusy} onClick={() => setFolderRecoveryConfirm(null)}
+                      className="rounded-lg border border-white/20 px-3 py-2 text-xs">취소</button>
+                    <button type="button" disabled={folderRecoveryBusy} onClick={() => void confirmFolderRecovery()}
+                      className="rounded-lg bg-[#FF7A72] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
+                      {folderRecoveryBusy ? '서버 확인 중' : '선택한 상태로 복원 확정'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 

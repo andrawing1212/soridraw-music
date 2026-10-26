@@ -11,6 +11,7 @@ import {
   MUSIC_NOTE_FOLDER_SAVE_STATUS_EVENT,
   getMusicNoteFolderSaveStatus,
   getPendingMusicNoteFolderStructureBatch,
+  getObservedMusicNoteStructureVersion,
   promoteMusicNoteFolderStructureVersion,
   reportMusicNoteFolderDelivery,
   retryMusicNoteFolderStructureBatch,
@@ -270,12 +271,12 @@ const getNextMusicNoteStructureVersion = (uid: string): number => {
   const localVersion = Math.max(Number(readMusicNoteStructureCache(uid)?.version || 0),
     Number(musicNoteStructureSharedSessions.get(uid)?.version || 0));
   const profileVersion = getMusicNoteStructureProfileVersion(uid);
-  return Math.max(Date.now(), localVersion + 1, profileVersion + 1);
+  return Math.max(Date.now(), localVersion + 1, profileVersion + 1, getObservedMusicNoteStructureVersion(uid) + 1);
 };
 
-const ensureMusicNoteStructureFresh = (uid: string, session: MusicNoteStructureSharedSession): Promise<void> => {
+const ensureMusicNoteStructureFresh = (uid: string, session: MusicNoteStructureSharedSession, force = false): Promise<void> => {
   const profileVersion = getMusicNoteStructureProfileVersion(uid);
-  if (session.data !== null && session.verified && profileVersion <= session.version) {
+  if (!force && session.data !== null && session.verified && profileVersion <= session.version) {
     return Promise.resolve();
   }
   if (session.syncInFlight) return session.syncInFlight;
@@ -2663,6 +2664,14 @@ updates: draft.updates,
         const parsed = JSON.parse(itemJson);
         if (parsed?.__musicNoteStructureSync !== true || !parsed?.data || typeof parsed.data !== 'object') return;
         const patch = parsed.data as Record<string, any>;
+
+        if (patch.__musicNoteCanonicalConflict === true) {
+          // Only a rejected server write triggers this single authoritative
+          // refresh. Never treat the RTDB preview as Firestore confirmation.
+          const session = musicNoteStructureSharedSessions.get(uid);
+          if (session) void ensureMusicNoteStructureFresh(uid, session, true);
+          return;
+        }
 
         if (patch.musicNoteCardStateDelta && typeof patch.musicNoteCardStateDelta === 'object') {
           const deltaId = String(patch.musicNoteCardStateDelta.id || '').trim();

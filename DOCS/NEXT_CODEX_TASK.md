@@ -1,3 +1,9 @@
+## NEXT — app507 Library revision quota 보호 검사 + favoriteCount 위험 분리 (2026-10-26 KST)
+- `fix/app507-library-revision-quota-safe` CI/TypeScript/Build/Work 독립 감사 게이트. 정상 +60초 batch, quota 및 silent read-back 실패에만 bounded immediate compatibility version update; RTDB offline 60초 1회 retry, stale in-flight ACK 최신 pending 보존, 캐시/원본 불변, 일반 사용자 R0/W0. `scripts/verify-507-library-revision-quota-safe.mjs` 실행형 테스트를 기존 product workflow에 연결. Work가 최종 exact SHA를 읽기 전용 검증하기 전 배포 금지.
+- **favoriteCount delta 별도 High 위험:** `src/services/musicNoteFavoriteCountBatch.ts`가 `state.delta -= captured` 후 서버 `increment(captured)`를 호출한다. 성공 응답 분실·브라우저 crash·재전송 구간에서 exactly-once 보장이 없으므로 단순 재시도/즉시쓰기로 바꾸면 통계 중복·누락 가능. Firestore 원본 favorite membership과 통계 분리, idempotent mutation receipt/transaction 또는 서버 측 bounded authoritative reconciliation 별도 설계·독립 감사. 위험 승인 없이는 수정하지 않는다.
+- app505 #498 / app506 #500과 격리한 PR로 유지. 정상 folder +60s, Studio save heart +30s, Recent edit +150s, Music Note detail +60s, Explore public likes, Admin UI 변경 없음. 통합 SHA 새로 만들 때 전체 실행형 회귀/Work/실기기 검증 필수.
+---
+
 ## NEXT — app501 실사용 FAIL에 대한 exact-song canonical 진단/보존적 복구 설계 (2026-10-26)
 - 현재 PREVIEW app501 정상 배포된 소스 `13a3b961ac0a362db51a5d6d084f77fb57262fb9`, preview HEAD는 문서 merge commit 이후 변경될 수 있음. USER QA FAIL: 동일 UID `먼 길을 돌아온 밤` 기존 PC Chrome **하트 ON/목록 ON**, 모바일 **하트 ON/목록 OFF**, 다른 PC 브라우저 **하트 OFF/목록 OFF**. 실제 Firestore 원본 미검증. TEST/PRODUCTION 절대 승격 금지.
 - **원인 소스 관측:** App `isSongFavorited`가 브라우저별 `readRecentHeartAuthority` 저장 신호를 정식 favoritesStore보다 먼저 사용하여 하트 ON 단독 지속 가능. PC의 RTDB `__studioHeartRemotePreviewLocal`가 비 canonical 목록 행으로 남을 수 있음. 이 둘이 원인을 확정하는 것은 아니고 기기별 캐시와 공유 원본 정확 비교 필요.

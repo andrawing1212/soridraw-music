@@ -1,3 +1,8 @@
+## NEXT — app502 정확한 UID·문서번호 서버 1건 조회 독립 감사 (2026-10-26)
+- PR #495 단일곡 읽기 진단에서 없는 `favorites/{id}` 단건 `getDocFromServer`가 기존 `resource.data.uid` 규칙과 만나면 permission-denied 가능성을 검토하여 **server-only exact documentId + uid equality limit(1) query**로 보강. 같은 사용자 다른 곡 전체/다른 UID 원본은 조회할 수 없고 임시 표시·하트·원본 자체는 수정하지 않음.
+- 최종 SHA Actions app501+app502 회귀 / TS / Build PASS 확인 뒤, 별도 Work 감사에서 Firestore Rules `allow list`에 소유 UID equality query가 부합하는지, 데이터 인덱스 필요 여부, quota R1 및 결과 0/denied 구분, admin CACHE LIVE gated UI, 3브라우저 exact-ID 링크 일치 확인.
+- 독립 감사 PASS 후에만 Firebase PREVIEW Hosting app502 진단용 배포 판단. TEST/PRODUCTION/user originals HOLD.
+---
 ## NEXT — app502 Read-only exact ID diagnostic final QA + audit (2026-10-26 KST)
 - admin CACHE LIVE only (admin gate + enabled), 1곡 exact id from own browser unique local favorite row or manually pasted same exact id from original PC. Local-only checks R0 and **button-click one** `getDocFromServer(favorites/{id})` R1; owner match, removal flags, local/remote preview markers, local pending, recent-heart local authority, local Catalog membership booleans. Never expose UID, lyrics, song payload, auth tokens in UI logs. Never mutate any existing music note or cache.
 - 검증: existing `scripts/verify-501-studio-heart-quota-safe.ts` app502 read-only static guards (single getDocFromServer, no writes/collection queries, manual click, auth identity). Final GitHub TS/Build/product CI → exact SHA 독립 Work/GPT-6 감사 → PASS일 때만 Firebase PREVIEW Hosting 릴리스. TEST/PRODUCTION HOLD, real Firestore existence unknown until actual user's explicit click.

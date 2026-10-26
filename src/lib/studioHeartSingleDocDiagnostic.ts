@@ -1,12 +1,15 @@
 import { auth, db } from '../firebase';
-import { doc, getDocFromServer } from './firestoreMeasured';
+import { collection, documentId, limit, query, where } from './firestoreMeasured';
+import { getDocsFromServer } from 'firebase/firestore';
+import { markFirestoreActualRead } from './cacheDiagnostics';
 import { favoritesStore } from '../hooks/useFavoritesStore';
 import { readStudioHeartPendingIntent } from './studioHeartBatch';
 import { readCatalogSnapshotFromLocalCache } from './userDataEngine';
 import { isMusicNoteItemRemoved } from './musicNoteSavedState';
 
-// app502: one voluntarily invoked READ ONLY inspection. No collection query,
-// mutations, cache invalidation, uploads, logging of song content, or page-entry IO.
+// app502: one voluntarily invoked read-only, one-result EXACT-ID + UID query.
+// No collection scan, mutations, cache invalidation, uploads, song-content logs,
+// or page-entry IO. Supports missing records under existing owner-based Rules.
 export type StudioHeartExactReadReport = {
   documentPresent: boolean;
   ownerMatchesSignedInUser: boolean | null;
@@ -75,16 +78,30 @@ export const inspectExactStudioHeartDocument = async (
   const catalog = await readCatalogSnapshotFromLocalCache('musicNote', uid);
   if (auth.currentUser?.uid !== uid) throw new Error('AUTH_CHANGED');
 
-  // The ONLY intentional Firestore read, performed after an explicit click.
-  const serverSnapshot = await getDocFromServer(doc(db, 'favorites', documentId));
+  // Existing favorites rules check resource.data.uid; a direct get on a
+  // NONEXISTENT document may be denied instead of returning exists=false.
+  // A server-only exact-ID + exact-UID query keeps the same one-item bound and
+  // proves absence of an active document owned by this account without relaxing
+  // shared TEST/PRODUCTION security rules or scanning a full collection.
+  const exactOwnerQuery = query(
+    collection(db, 'favorites'),
+    where(documentId(), '==', documentId),
+    where('uid', '==', uid),
+    limit(1),
+  );
+  const serverResult = await getDocsFromServer(exactOwnerQuery);
+  // A no-match query still has a minimum one-read server billing unit.
+  markFirestoreActualRead(Math.max(1, serverResult.size), 'favorites:manual-single-id-owner-diagnostic');
   if (auth.currentUser?.uid !== uid) throw new Error('AUTH_CHANGED');
-  const exists = serverSnapshot.exists();
-  const serverData = exists ? serverSnapshot.data() : null;
+  const ownerDocument = serverResult.docs[0] || null;
+  const exists = Boolean(ownerDocument);
+  const serverData = ownerDocument?.data() ?? null;
   const serverUid = serverData?.uid;
   return {
     documentPresent: exists,
-    ownerMatchesSignedInUser: !exists ? null
-      : typeof serverUid === 'string' && serverUid ? serverUid === uid : null,
+    // A zero-result query means this user's exact ID has no matching row,
+    // not that we have proven no foreign document can share this ID.
+    ownerMatchesSignedInUser: !exists ? null : serverUid === uid,
     serverActive: exists ? !isMusicNoteItemRemoved(serverData) : null,
     deviceMusicNoteRow: Boolean(visible),
     deviceRowIsOptimistic: Boolean(visible?.__studioHeartPendingLocal || visible?.__studioHeartRemotePreviewLocal),

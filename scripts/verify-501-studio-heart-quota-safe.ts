@@ -267,15 +267,24 @@ try {
   const diagnostic = readFileSync('src/lib/studioHeartSingleDocDiagnostic.ts', 'utf8');
   const diagnosticUi = readFileSync('src/components/StudioHeartSingleDocDiagnostic.tsx', 'utf8');
   const diagnosticPanel = readFileSync('src/components/CacheDiagnosticsOverlayImpl.tsx', 'utf8');
-  assert.ok(diagnostic.includes("getDocFromServer(doc(db, 'favorites', documentId))"),
-    'one exact signed-in Firestore favorite is the only remote diagnosis query');
-  assert.equal((diagnostic.match(/getDocFromServer\(/g) || []).length, 1);
+  assert.ok(diagnostic.includes("where(documentId(), '==', documentId)"),
+    'Firestore query must bind the exact document ID');
+  assert.ok(diagnostic.includes("where('uid', '==', uid)"),
+    'Firestore query must filter by the signed-in account for rules-compatible missing detection');
+  assert.ok(diagnostic.includes('limit(1)'),
+    'no user favorites collection scan is allowed');
+  assert.equal((diagnostic.match(/getDocsFromServer\(/g) || []).length, 1,
+    'one explicit server-only bounded query per click');
+  assert.ok(!diagnostic.includes('getDocFromServer('),
+    'owner-only direct document reads cannot reliably distinguish missing from permission denied');
   assert.ok(diagnostic.includes('if (auth.currentUser?.uid !== uid)'));
   assert.ok(diagnostic.includes("readCatalogSnapshotFromLocalCache('musicNote', uid)"));
   assert.ok(diagnostic.includes('candidates.size === 1'),
     'duplicate-title local rows must require explicit exact document ID');
   assert.ok(!/\b(?:setDoc|updateDoc|deleteDoc|addDoc|writeBatch|getDocs|collection)\s*\(/.test(diagnostic),
-    'diagnostic must not write, scan, backfill or change canonical data');
+    'diagnostic must not write, backfill or change canonical data');
+  assert.ok(!diagnostic.includes('getDocs('),
+    'automatic cache-fallback reads are not server authority');
   assert.ok(diagnosticUi.includes('onClick={() => void inspect()}'));
   assert.ok(diagnosticUi.includes('!uid || !documentId.trim() || busy || alreadyRead'));
   assert.ok(diagnosticPanel.includes('<StudioHeartSingleDocDiagnostic />'));

@@ -1,3 +1,8 @@
+## CURRENT — app502 진단 단건 조회의 미존재 문서 보안 규칙 오류 방어 (2026-10-26 KST)
+- **배포 차단 검토 결과:** 이전 app502 PR #495 `getDocFromServer(favorites/{id})`는 현재 공유 `firestore.rules` (`resource.data.uid == request.auth.uid || isAdmin()`)에 의해 없는 문서에서 접근 거부가 발생할 수 있고, '미존재' 여부를 확정하지 못하는 진단 기능 실패 위험. 현행 규칙/계정·캐시/원본 데이터 절대 변경 없이 좁은 방식으로 조정.
+- **새 후보:** 로그인된 UID와 사용자 브라우저의 정확한 favorite documentId를 모두 equality 조건으로 지정한 `getDocsFromServer(query(collection('favorites'), where(documentId(),'==',id), where('uid','==',uid), limit(1)))` **명시 버튼 1회당 최대 1건 R1** 조회. 서버-only로 브라우저 캐시 false-negative 방지, 규칙 owner 조건에 맞는 안전 범위만 응답. 조회 결과 0이면 해당 UID의 정확한 ID로 소유자 일치 문서가 확인되지 않았다는 뜻, 다른 UID가 그 ID를 소유하지 않음까지 주장하지 않음. 네트워크/권한/인덱스 오류는 존재/부재 판정하지 않음.
+- **안전:** 위 경계 query는 UID 전체 카탈로그/컬렉션 순회가 아니라 문서번호와 소유자를 고정한 bounded lookup. 방문/새로고침은 R0/W0, 명시 클릭만 서버 요청 1회; shared rules/Worker/Functions/D1/Firestore 원본/UI 기본 화면/migration/TEST/PRODUCTION 변경 0. 인덱스·실제 Firestore Rules 적합성은 실기기 PREVIEW R1 검증 전 미확정. CI 및 독립 감사 PASS 전 합병/배포 금지. PREVIEW app501 유지.
+---
 ## CURRENT — app502 Admin CACHE LIVE 정확한 Music Note 1곡 R1 읽기 전용 진단 후보 (2026-10-26 KST)
 - **사용자 승인 작업:** PREVIEW app501 실사용 FAIL, `먼 길을 돌아온 밤` 기존 PC 하트 ON/목록 ON, 모바일 하트 ON/목록 OFF, 다른 PC 브라우저 하트 OFF/목록 OFF. 지금 필요한 것은 실제 서버 `favorites/{exact-id}`의 존재 여부 판정이지, 다른 곡 하트 초기화나 데이터 재저장 아님.
 - **app502 구현 후보:** 관리자용 기존 `CACHE LIVE`가 활성화된 경우에만 `StudioHeartSingleDocDiagnostic` 로컬 진단 UI 노출. 현재 브라우저의 저장곡에서 정확히 동명 1건인 경우에만 실제 문서 ID를 찾아서 복사(서버 R0). 다른 브라우저에서는 동일 정확한 ID를 입력. **명시적 `서버 저장문서 1건 확인` 클릭 시만** 현재 로그인 UID를 재확인하고 `getDocFromServer(doc(db,'favorites',exactId))` 한 번 수행. 곡 제목 기반 서버 검색/전체 목록 재조회/새 브라우저 자체 자동 읽기 금지. 문서 존재/소유 여부/삭제 플래그, 로컬 favoritesStore/pending, 브라우저 하트 기록, 로컬 Catalog 포함 여부를 비민감 boolean만 반환. Firestore 내용/UID/곡 가사/토큰 로그 금지. 진단 중 저장/삭제/캐시 재작성 0.

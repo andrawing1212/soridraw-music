@@ -1,3 +1,4 @@
+import { stageNextSongKeywords } from '../lib/nextSongPendingBridge';
 import { EXPLORE_VIEWER_GENRES_EVENT, readExploreViewerGenres } from '../services/exploreCreatorProfileCache';
 import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 import { rankExploreCreators } from '../services/exploreCreatorRecommendations';
@@ -4554,8 +4555,9 @@ export default function ExplorePage() {
         throw new Error('이 곡은 적용할 설정 정보가 없어요.');
       }
       const serialized = JSON.stringify(nextSong);
-      sessionStorage.setItem('pendingAppliedKeywords', serialized);
-      localStorage.setItem('pendingAppliedKeywordsBackup', serialized);
+      // app503: mobile localStorage quota must not block the same-tab Studio handoff.
+      // Reuse app468's memory/session/backup bridge; it never deletes user data.
+      stageNextSongKeywords(serialized);
       await flushExploreLikeBoundary094();
       closeMoreSheet();
       navigate('/studio?applyPending=1');

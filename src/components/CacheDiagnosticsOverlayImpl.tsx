@@ -23,6 +23,7 @@ import {
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache } from '../lib/userProfileCache';
 import { hasAdminPermission } from '../constants/adminPermissions';
 import { favoritesStore } from '../hooks/useFavoritesStore';
+import StudioHeartSingleDocDiagnostic from './StudioHeartSingleDocDiagnostic';
 import { CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, readCatalogRuntimeDiagnostic, resetCatalogRuntimeDiagnostics, type CatalogRuntimeDiagnosticKind, type CatalogRuntimeDiagnosticState } from '../lib/catalogRuntimeDiagnostics';
 import { PAGE_SYNC_DIAGNOSTICS_UPDATE_EVENT, readPageSyncDiagnostics, resetPageSyncDiagnostics, type PageSyncDiagnosticState } from '../lib/pageSyncCoordinator';
 
@@ -682,6 +683,8 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
               <span className="shrink-0 tabular-nums">시도 {catalogRuntime.musicNote.attempt || 0} · rev {catalogRuntime.musicNote.revision || '—'}</span>
             </div>
           </div>
+
+          <StudioHeartSingleDocDiagnostic />
 
           <div className="mt-2 space-y-1">
             {rows.map(({ domain, label }) => {

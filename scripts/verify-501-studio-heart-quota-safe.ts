@@ -486,3 +486,12 @@ execFileSync(process.execPath, ['scripts/verify-201-explore-track-action-sheet.m
   stdio: 'inherit',
 });
 console.log('APP505_QUOTA_HANDOFF_EXECUTABLE_CI_GATE=PASS');
+
+// app508: all quota safety regressions must execute together on one tree.
+for (const verifier of [
+  'scripts/verify-506-folder-quota-safe-settlement.mjs',
+  'scripts/verify-507-library-revision-quota-safe.mjs',
+]) {
+  execFileSync(process.execPath, [verifier], { stdio: 'inherit' });
+}
+console.log('APP508_ALL_QUOTA_EXECUTABLE_CI_GATE=PASS');

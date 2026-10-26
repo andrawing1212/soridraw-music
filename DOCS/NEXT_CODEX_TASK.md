@@ -1,3 +1,9 @@
+## NEXT — app501 정확 SHA 독립 감사 및 PREVIEW 데이터 안전 검증 (2026-10-26)
+- 문제: Recent 저장 하트 3곡은 모두 체크지만 기존 PC Music Note 3곡/모바일 2곡/새 PC 브라우저 최초 1곡→재접속 2곡. `먼 길을 돌아온 밤` 원본 저장 여부 미확정. 실사용자 곡 삭제/해제/재저장/캐시 삭제 금지.
+- 후보 PR #491 `fix/app501-studio-heart-quota-safe`: quota-full에서 pending write read-back 검증 후 단일곡 canonical fallback, 기존 pending 중복경쟁 차단. RTDB remote preview는 화면·로컬 캐시만, derived Catalog 재출판 금지. Catalog onData 및 manual refresh는 optimistic rows를 newer canonical로 합치지 않고 기존 active preview는 overlay 유지. 읽기/탭 이동 Firestore 쓰기 금지, 30초 per-song 배치 및 app349 동기화 보호.
+- 현재 구현 소스 SHA `c6e297db3aeb28f7b7950fe5505514c2a6a08d6c`, 문서 커밋 포함 정확 HEAD 확인. 최종 CI TypeScript/Build/관련 회귀 PASS 확인 후 독립 감사방으로 대상 SHA 전달. Audit: full catalog read -> pending/preview overlay, warm/new browser cache vs revision, manual refresh, false success, 3곡 identity, R0/W0 unchanged normal, QA in browser still unverified. FAIL 시 수정, PASS 시 PREVIEW만 배포 검증 가능, TEST/PROD 별도 승인.
+---
+
 ## NEXT — app501 3곡 PC↔모바일 저장 불일치 독립 감사 (2026-10-26)
 - 사용자 보고: PC에서 저장한 곡은 모바일에도 보이지만 모바일에서 저장한 곡은 기기 Music Note에 누락할 수 있고, PC·모바일 Recent 3곡 Music Note 목록이 다름. 기존 저장곡 대부분 정상. 기존 곡 저장 해제/재저장·사이트 데이터 초기화 금지.
 - app501 Draft PR #491 동일 브랜치: 브라우저 localStorage pending 실패 무시로 생기는 실시간 가짜 저장을 read-back+canonical 단일 곡 fallback으로 보호, 동일 밀리초/동일 상태의 오래된 pending이 새 곡 본문을 대신하지 않도록 검사 강화. PC/모바일 독립 storage, A=PC/B=모바일/C=모바일 PC 오프라인, mobile quota, 기존 pending 보존, 재시작 local persistence 회귀를 기존 app501 verifier에 포함.

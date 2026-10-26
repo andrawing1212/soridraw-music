@@ -1,3 +1,11 @@
+## CURRENT — app501 Music Note 새 브라우저 hydrate / RTDB 임시목록 격리 수정 (2026-10-26 KST)
+- **사용자 직접 증거:** 기존 PC Music Note 최근 3곡, 모바일 2곡, 다른 PC 브라우저 최초 접속 1곡 → 새로고침 후 2곡. `먼 길을 돌아온 밤`은 기존 PC에만 보이고 `어제의 네게 묻는다`는 최초 접속 때 누락했다가 새로고침 후 표시. 모든 Recent 하트 저장으로 보고. 실제 사용자 Firestore 문서는 사용자 인증·곡 ID 없어서 읽기 전용 미확인. 브라우저 표시/RTDB preview를 canonical로 오인 금지.
+- **코드상 수정:** 기존 app500 `applyRemoteStudioHeartPreview`는 RTDB 수신곡을 local cache로 저장하면서 파생 Catalog 재출판 경로를 호출할 수 있고, 전체 Catalog onData의 `localNewer`는 `__studioHeartRemotePreviewLocal`을 새로운 canonical 곡으로 채택할 가능성이 있었음. app501 PR #491에서 preview 수신, catalog read/refresh의 `writeFavoritesCache(..., {publishDerived:false})`를 적용하고, pending/remote-preview 표식은 newer canonical merge에서 제외. 수동 refresh의 `favoritesStore.setFavorites(merged)` 중복 overwrite 제거, 기존 `setFavorites`가 실제 활성 optimistic overlay를 유지.
+- **검증 범위:** app501 기존 실제 pending read-back/3곡 가상 PC-모바일 테스트에 Catalog A,C/E + phantom B/pending D 가상 회귀 및 정적 no-republish 검증 추가. Firestore 원본 접근·실기기 PC/모바일 기능·서버 원본 저장 검사는 아직 수행하지 않음. CI 및 독립 감사 전 배포·최종 PASS 주장 금지.
+- **최종 구현 후보 브랜치:** `fix/app501-studio-heart-quota-safe`, 소스 보강 `c6e297db3aeb28f7b7950fe5505514c2a6a08d6c`. 이번 문서 커밋의 정확한 최종 SHA/Actions는 GitHub에서 별도 확인. 기존 배포 PREVIEW app500, TEST/PRODUCTION/Worker/Functions/Rules/공유 원본 변경 없음. 기존 저장된 곡·브라우저 캐시 초기화 금지. Stage416 OFF, Reader OFF.
+- **다음 작업:** 새 커밋 최종 Actions TypeScript/Build/제품/회귀 확인 → Work/GPT-6 감사방 exact SHA 독립 소스 감사 → FAIL이면 수정/재감사, PASS이면 별도 PREVIEW 릴리스 검증 및 사용자의 기존 PC/모바일 캐시·새 브라우저 실측. 원본 3곡은 권한 있는 exact-id Firestore 읽기 전용 확인 전 절대 자동 복구/강제 재저장하지 않음.
+---
+
 ## CURRENT — app501 PC↔모바일 Music Note 목록 불일치 / 3곡 저장 검증 확대 (2026-10-26 KST)
 - **신규 사용자 증거:** 같은 계정 PC에서 Recent 저장하트 클릭 시 모바일에 보이기도 하나, 모바일에서 저장한 곡은 모바일 Music Note에 없고 PC에는 RTDB 화면 미리보기가 남을 수 있음. 이전 테스트 3곡에서 두 기기의 Music Note 목록이 실제 불일치함. 사용자 기존 Music Note 대부분 정상 저장 → **기존 곡 저장 해제/재저장/데이터 삭제/브라우저 초기화 금지**.
 - **소스 확인:** 배포된 app500은 모바일 localStorage pending 쓰기 실패가 무시되더라도 다른 기기로 heart-preview 신호를 송출하고 30초 timer에서는 저장할 pending이 없음. 이는 비대칭 증상과 일치하지만 모바일 실제 QuotaExceededError와 실제 Firestore 미확정 여부는 사용자 기기·서버 실측 전 미확정.

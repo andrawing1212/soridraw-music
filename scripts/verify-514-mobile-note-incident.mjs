@@ -111,7 +111,9 @@ function device(transport, { quota = false, server = 'online', clock = 100_000, 
     getDocFromServer: async () => {
       reads++;
       if (holdRead) await new Promise(resolve => readsHeld.push(resolve));
-      return { exists: () => true, data: () => ({ musicNoteFolders: { myNote: folders('old-server') }, musicNoteStructureVersion: 1 }) };
+      const remote = Object.keys(canonical.data).length
+        ? canonical.data : { musicNoteFolders: { myNote: folders('old-server') }, musicNoteStructureVersion: 1 };
+      return { exists: () => true, data: () => copy(remote) };
     },
   };
   const globals = {
@@ -124,13 +126,17 @@ function device(transport, { quota = false, server = 'online', clock = 100_000, 
     runInNewContext(transpile(read(path)), { ...globals, exports, require });
     return exports;
   };
+  let sync;
   const batch = load('src/services/musicNoteFolderStructureBatch.ts', name => {
     if (name.endsWith('firestoreMeasured')) return measured;
+    if (name.endsWith('userDomainSyncService')) return {
+      publishMusicNoteStructureDelta: (who, structure) => sync.publishMusicNoteStructureDelta(who, structure),
+    };
     if (name.endsWith('firebase')) return { db: {} };
     if (name.endsWith('v1MutationBoundary')) return boundary;
     throw new Error(name);
   });
-  const sync = load('src/services/userDomainSyncService.ts', name => {
+  sync = load('src/services/userDomainSyncService.ts', name => {
     if (name === 'firebase/auth') return { onAuthStateChanged: (_auth, fn) => fn({ uid }) };
     if (name === 'firebase/database') return transport.sdk;
     if (name.endsWith('firebase')) return { auth: { currentUser: { uid } }, realtimeDb: {} };
@@ -303,6 +309,32 @@ for (const failure of ['denied', 'aborted']) {
   await a.advance(600_000);
   assert.equal(a.attempts, 1, 'version conflict is not automatically retried');
   console.log('APP514_P1_STALE_A_V100000_CANNOT_OVERWRITE_B_V100001=PASS');
+}
+
+// Rejected old Firestore update sends one conflict-only RTDB signal. A warm
+// receiving device must re-read canonical rather than keep an uncommitted UI.
+{
+  const canonical = { data: {} };
+  const wire = bus();
+  const a = device(wire, { server: 'hold', canonical });
+  const b = device(bus(), { canonical });
+  const c = device(wire, { canonical });
+  c.page.publish(uid, { musicNoteFolders: { myNote: folders('baseline') }, musicNoteStructureVersion: 1 }, 1);
+  c.page.subscribe(uid, () => {});
+  await a.page.persist('myNote', folders('old-preview'));
+  assert.equal(c.page.session().data.musicNoteFolders.myNote[1].title, 'old-preview');
+  assert.equal(c.reads, 0);
+  await a.advance(60_000);
+  b.batch.queueMusicNoteFolderStructureBatch(uid, 'myNote', folders('new-canonical'), 100_001);
+  await b.advance(60_000);
+  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'new-canonical');
+  a.held.shift()(); await tick();
+  assert.equal(a.batch.getMusicNoteFolderSaveStatus(uid).state, 'failed');
+  assert.equal(c.reads, 1, 'only actual stale conflict causes canonical refresh');
+  assert.equal(c.page.session().data.musicNoteFolders.myNote[1].title, 'new-canonical');
+  assert.equal(c.batch.getObservedMusicNoteStructureVersion(uid), 0, 'receivers do not forge commit ACK');
+  assert.equal(a.batch.getObservedMusicNoteStructureVersion(uid), 100_001);
+  console.log('APP514_P1_RTDB_REJECTED_PREVIEW_REFRESHES_WARM_RECEIVER_R1=PASS');
 }
 
 // A newer RTDB transport revision wins despite a sender's lower device clock;

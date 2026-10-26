@@ -9,6 +9,9 @@ type PendingModeState = {
   folders: unknown[];
   version: number;
   updatedAtMs: number;
+  // Original folder view when the first unsaved edit was made. Persist it so
+  // a reopened tab cannot overwrite a newer remote edit from stale cache.
+  baseFolders?: unknown[] | null;
 };
 
 type PendingMusicNoteFolderStructure = {
@@ -81,12 +84,28 @@ const safeVersion = (value: unknown): number => {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
 };
 
+// Stable projection ignores updatedAt timestamps: reorder/rename and membership
+// matter, but a freshly rendered card timestamp is not a structural conflict.
+const comparableFolders = (value: unknown): string => JSON.stringify(
+  Array.isArray(value) ? value.map((item: any) => ({
+    id: String(item?.id || item?.folderId || ''),
+    title: String(item?.title || item?.name || ''),
+    order: Number(item?.order || 0),
+    isDefault: Boolean(item?.isDefault || item?.id === 'default'),
+  })) : null,
+);
+export type MusicNoteStructureBase = {
+  mode: MusicNoteFolderModeKey;
+  folders: unknown[] | null;
+};
+
 // app514 P1: compare server and candidate inside one atomic Firestore transaction.
 // A delayed device cannot overwrite a newer canonical structure version.
 // A stale failure must NOT trigger the post-success RTDB signal or clear pending.
 export const writeMusicNoteStructureIfNewer = async (
   uid: string,
   patch: { musicNoteStructureVersion: number; [key: string]: unknown },
+  expectedBases?: MusicNoteStructureBase[],
 ): Promise<void> => {
   const key = safeUid(uid);
   const version = safeVersion(patch.musicNoteStructureVersion);
@@ -96,15 +115,31 @@ export const writeMusicNoteStructureIfNewer = async (
     await runTransaction(db, async (transaction) => {
       const snapshot = await transaction.get(structureRef);
       const serverVersion = safeVersion(snapshot.data()?.musicNoteStructureVersion);
-      if (serverVersion >= version) {
-        // Never treat an older write as an acknowledged commit.
+      if (expectedBases?.length) {
+        const remoteFolders = snapshot.data()?.musicNoteFolders || {};
+        for (const base of expectedBases) {
+          if (comparableFolders(remoteFolders[base.mode]) !== comparableFolders(base.folders)) {
+            throw Object.assign(new Error('MUSIC_NOTE_STRUCTURE_STALE_SERVER_VERSION'), {
+              code: 'music-note/stale-structure-version', serverVersion,
+            });
+          }
+        }
+      } else if (serverVersion >= version) {
+        // Legacy pending created before the base-snapshot protocol retains the
+        // previous fail-closed behavior; never replay it as a fresh new edit.
         throw Object.assign(new Error('MUSIC_NOTE_STRUCTURE_STALE_SERVER_VERSION'), {
-          code: 'music-note/stale-structure-version',
-          serverVersion,
+          code: 'music-note/stale-structure-version', serverVersion,
         });
       }
-      transaction.set(structureRef, patch, { merge: true });
+      // Once this client has a content baseline, the server allocates the next
+      // committed revision; device clocks only label the optimistic RTDB preview.
+      transaction.set(structureRef, {
+        ...patch,
+        musicNoteStructureVersion: expectedBases?.length ? serverVersion + 1 : version,
+      }, { merge: true });
     });
+    // A successful transaction is authoritative even if local device time is wrong.
+    // Transaction revision is also used by the existing server-side sync trigger.
     rememberServerVersion(key, version);
   } catch (error) {
     const stale = error as { code?: string; serverVersion?: number };
@@ -126,7 +161,11 @@ const normalizeModeState = (value: any): PendingModeState | undefined => {
   const version = safeVersion(value?.version);
   const updatedAtMs = safeVersion(value?.updatedAtMs);
   if (!Array.isArray(value?.folders) || version <= 0 || updatedAtMs <= 0) return undefined;
-  return { folders: value.folders, version, updatedAtMs };
+  return {
+    folders: value.folders, version, updatedAtMs,
+    ...(Object.prototype.hasOwnProperty.call(value, 'baseFolders') && (value.baseFolders === null || Array.isArray(value.baseFolders))
+      ? { baseFolders: value.baseFolders } : {}),
+  };
 };
 
 const readPending = (uid: string): PendingMusicNoteFolderStructure | null => {
@@ -219,6 +258,7 @@ export const queueMusicNoteFolderStructureBatch = (
   mode: MusicNoteFolderModeKey,
   folders: unknown[],
   version: number,
+  baseFolders?: unknown[] | null,
 ): void => {
   const key = safeUid(uid);
   const normalizedVersion = safeVersion(version);
@@ -238,6 +278,9 @@ export const queueMusicNoteFolderStructureBatch = (
       folders,
       version: nextVersion,
       updatedAtMs: now,
+      ...(Object.prototype.hasOwnProperty.call(current[mode] || {}, 'baseFolders')
+        ? { baseFolders: current[mode]?.baseFolders }
+        : baseFolders === null || Array.isArray(baseFolders) ? { baseFolders } : {}),
     },
     updatedAtMs: now,
   };
@@ -339,7 +382,10 @@ export const flushMusicNoteFolderStructureBatch = async (uid: string): Promise<v
         uid: key,
         affectedCount: 1,
         syncStructure: structurePatch,
-      }, writeMusicNoteStructureIfNewer(key, structurePatch));
+      }, writeMusicNoteStructureIfNewer(key, structurePatch,
+        [capturedMy && { mode: 'myNote' as const, folders: capturedMy.baseFolders },
+         capturedShared && { mode: 'sharedNote' as const, folders: capturedShared.baseFolders }]
+          .filter((base): base is MusicNoteStructureBase => Boolean(base && base.folders !== undefined))));
     } finally {
       if (ackWarning !== undefined) window.clearTimeout(ackWarning);
     }

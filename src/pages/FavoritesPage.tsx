@@ -8,6 +8,7 @@ import {
   readPendingMusicNoteSyncSignal,
 } from '../services/userDomainSyncService';
 import {
+  MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT,
   flushMusicNoteFolderStructureBatch,
   markMusicNoteFolderStructureCommitted,
   queueMusicNoteFolderStructureBatch,
@@ -2249,7 +2250,7 @@ updates: draft.updates,
     return FAVORITE_COLOR_OPTIONS.find(c => c.value === saved)?.color || '#6b7280';
   };
 
-  const showFavoriteToast = (message: string) => {
+  const showFavoriteToast = (message: string, displayMs = 2200) => {
     if (favoriteToastTimerRef.current) {
       clearTimeout(favoriteToastTimerRef.current);
     }
@@ -2257,8 +2258,18 @@ updates: draft.updates,
     favoriteToastTimerRef.current = setTimeout(() => {
       setFavoriteToastMessage(null);
       favoriteToastTimerRef.current = null;
-    }, 2200);
+    }, displayMs);
   };
+
+  useEffect(() => {
+    const onFolderStorageRisk506 = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string }>).detail;
+      if (!user?.uid || detail?.uid !== user.uid) return;
+      showFavoriteToast('기기 저장공간 부족: 폴더 변경을 서버에 즉시 저장 중입니다. 완료 전 앱을 닫지 마세요.', 10000);
+    };
+    window.addEventListener(MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT, onFolderStorageRisk506);
+    return () => window.removeEventListener(MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT, onFolderStorageRisk506);
+  }, [user?.uid]);
 
   const handleManualFavoriteSync = async () => {
     if (!onManualSyncFavorites || isManualSyncingFavorites) return;

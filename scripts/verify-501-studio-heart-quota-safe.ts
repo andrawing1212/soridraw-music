@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import {
   readStudioHeartPendingIntent,
   listStudioHeartPendingIntents,
@@ -271,3 +272,10 @@ try {
   if (savedGlobal) Object.defineProperty(globalThis,'localStorage',savedGlobal);
   else delete (globalThis as any).localStorage;
 }
+
+// Preserve existing targeted quality workflow and exercise app506 quota failure
+// recovery as a mandatory runtime test (not a static source-only assertion).
+execFileSync(process.execPath, ['scripts/verify-506-folder-quota-safe-settlement.mjs'], {
+  stdio: 'inherit',
+});
+console.log('APP506_FOLDER_QUOTA_EXECUTABLE_CI_GATE=PASS');

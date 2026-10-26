@@ -1,3 +1,10 @@
+## CURRENT — app506 Music Note 폴더 quota 장애 안전 경로 코드 후보 (2026-10-26 KST)
+- 별도 preview 기반 Draft 개발 브랜치 `fix/app506-folder-quota-safe-settlement` (기준 `6e8543eb6525dd22a97a6d684de111613b0934bd`). #499 저장공간 부족 시 미확정 폴더 변경 유실 위험 중 **Music Note 60초 폴더 구조 저장 경로만** 최소 수정. 정상 60초 최종 묶음 유지.
+- pending localStorage 쓰기를 read-back 검증. quota/차단/읽기 불일치 때만 메모리 상태를 지키고 **즉시 canonical 구조 저장 1회 시도** + 기존 Music Note 토스트에서 임시 저장 불확실성을 10초 안내. 서버 실패 시 0ms 무한재시도 없이 60초 재시도·기존 메모리 상태 유지. Browser tab 완전 종료 + 오프라인 + localStorage 실패 **이중장애** 시 영구 보존 보장 불가: IndexedDB 등 별도 지속 저장 설계가 필요. 거짓 완료 선언 금지.
+- 기존 app301 Music Note 폴더 Create/Rename/Reorder 정상 +60초, Delete immediate, PC/mobile RTDB 즉시, Studio heart +30초, Recent +150초, Library +60초, 서버 mutation edge 비용·UI 레이아웃 전부 불변. `scripts/verify-506-folder-quota-safe-settlement.mjs`를 기존 targeted CI에서 실행하도록 연결. 소스 CI·독립 Work 감사·PREVIEW 실사용 전 **미검증 후보**.
+- 별도 app505 통합 PR #498 최종 `19576687cf5ae2f7fb0d7a8328033ebd2cb5f624`는 자동검사 PASS지만 Work 독립 감사 대기, PREVIEW live app501 사용자 동기화 QA FAIL 유지. TEST/PRODUCTION/실사용 데이터/Cloudflare/Rules/Functions 불변.
+---
+
 ## CURRENT — app501 PREVIEW 실제 사용자 3브라우저 Music Note/하트 동기화 FAIL (2026-10-26 KST)
 - **실사용 QA 판정 FAIL:** app501 Firebase PREVIEW Hosting은 run #40258981882 / exact SHA `13a3b961ac0a362db51a5d6d084f77fb57262fb9`에서 배포 PASS, 소스 독립 감사 SHA `d1fabebfcd3473f8d1f7c0b5605dde91e8b20942` PASS였으나 실제 사용자가 확인한 기존 누락곡 `먼 길을 돌아온 밤`은 수정되지 않음.
 - **동일 계정의 실제 기기별 상태:** 기존 PC Chrome: Recent 저장하트 체크 + Music Note 곡 **있음**. 모바일: 저장하트 **체크** + Music Note 곡 **없음**. 다른 PC 브라우저: 저장하트 **해제** + Music Note 곡 **없음**. 나머지 두 최근곡은 비교 기준이며, 다른 PC 최초 진입에서 `어제의 네게 묻는다`가 일시 누락했다가 새로고침 뒤 등장한 전력이 있음.

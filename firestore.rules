@@ -243,6 +243,14 @@ service cloud.firestore {
       allow read, write: if isOwner(uid) || isAdmin();
     }
 
+    // app514: old/new-client conflict snapshots are private and immutable.
+    // Owners may inspect them on demand, but only trusted Functions/Admin SDK
+    // can create archives or restore data through the guarded parent update.
+    match /user_structures/{uid}/legacy_recovery/{recoveryId} {
+      allow get, list: if isOwner(uid);
+      allow create, update, delete: if false;
+    }
+
     // SORIDRAW 902 user list bundle cache
     // Additive cache only: original favorites and suno_tracks remain authoritative.
     // Only the owner (or an app admin) can access the two fixed cache documents.

@@ -1,3 +1,10 @@
+## CURRENT — app507 Library 버전 대기 기록 quota 안전 후보 (2026-10-26 KST)
+- 기준 `preview` `6e8543eb6525dd22a97a6d684de111613b0934bd`, 별도 `fix/app507-library-revision-quota-safe` Draft 작업. #499의 **Library playlists 동기화 호환 revision만** 다룸. 사용자 곡/폴더 원본 저장 및 Explore/Studio 하트 자체는 변경하지 않음.
+- Library 변경 원본은 기존 경로에서 개별 canonical playlist 문서에 저장됨. `src/services/libraryPlaylistRevisionBatch.ts`는 `users.syncVersions.playlists`라는 파생 동기화 버전의 60초 묶음을 담당. 정상 read-back 성공에는 기존 +60초, Firestore R0/W0 on queue. localStorage quota 또는 읽기 재확인 실패 때만 메모리에 대기를 보존하고 현재 UID 하나의 즉시 bounded 버전 확정 시도. RTDB/Firestore 오프라인이면 타이머 60초 최대 한 번 재시도, 이후 사용자 Library 재진입/새 mutation에서 재개 (무한 폴링 금지). 최신 버전과 이전 서버 응답 경합 보호 테스트 추가.
+- 브라우저 저장도 실패하고 네트워크까지 끊기고 앱을 완전히 종료하면 미확정 호환 버전은 여전히 유실 가능. Library 원본 손실과 구별해야 함. 이 경우 정확한 실기기 검증 전 합격 주장 금지.
+- app505 PR #498 SHA `19576687cf5ae2f7fb0d7a8328033ebd2cb5f624`, app506 PR #500 SHA `f7dbda9c2c4c5498e48e061f244412697c522a4e` 소스 CI PASS지만 독립 감사·실배포 전. PREVIEW live app501 실제 동기화 QA FAIL; main/TEST/PRODUCTION/공유 데이터 변경 없음. 저장곡 수 favoriteCount delta는 숫자 increment 중복 가능성을 별도 설계 후에만 수정.
+---
+
 ## CURRENT — app501 PREVIEW 실제 사용자 3브라우저 Music Note/하트 동기화 FAIL (2026-10-26 KST)
 - **실사용 QA 판정 FAIL:** app501 Firebase PREVIEW Hosting은 run #40258981882 / exact SHA `13a3b961ac0a362db51a5d6d084f77fb57262fb9`에서 배포 PASS, 소스 독립 감사 SHA `d1fabebfcd3473f8d1f7c0b5605dde91e8b20942` PASS였으나 실제 사용자가 확인한 기존 누락곡 `먼 길을 돌아온 밤`은 수정되지 않음.
 - **동일 계정의 실제 기기별 상태:** 기존 PC Chrome: Recent 저장하트 체크 + Music Note 곡 **있음**. 모바일: 저장하트 **체크** + Music Note 곡 **없음**. 다른 PC 브라우저: 저장하트 **해제** + Music Note 곡 **없음**. 나머지 두 최근곡은 비교 기준이며, 다른 PC 최초 진입에서 `어제의 네게 묻는다`가 일시 누락했다가 새로고침 뒤 등장한 전력이 있음.

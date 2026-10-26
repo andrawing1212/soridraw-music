@@ -42,10 +42,20 @@ const mockedWindow = {
 const mockRequire = (id) => {
   if (id.endsWith('firestoreMeasured')) return {
     doc: (_db, collection, uid) => ({ collection, uid }),
-    setDoc: async (ref, value) => {
+    setDoc: () => { throw new Error('unguarded canonical structure write'); },
+    runTransaction: async (_db, update) => {
       if (failServer) throw new Error('offline');
-      if (holdServer) await new Promise((resolve) => heldServerResolutions.push(resolve));
-      canonical.push({ ref, value: JSON.parse(JSON.stringify(value)) });
+      if (holdServer) await new Promise(resolve => heldServerResolutions.push(resolve));
+      const staged = [];
+      const transaction = {
+        get: async () => ({ data: () => canonical.at(-1)?.value || {} }),
+        set: (ref, value, options) => {
+          assert.equal(options?.merge, true);
+          staged.push({ ref, value: JSON.parse(JSON.stringify(value)) });
+        },
+      };
+      await update(transaction);
+      canonical.push(...staged);
     },
   };
   if (id.endsWith('firebase')) return { db: {} };

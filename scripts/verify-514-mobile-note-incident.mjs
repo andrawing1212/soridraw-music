@@ -56,7 +56,7 @@ function bus() {
     },
   };
 }
-function device(transport, { quota = false, server = 'online', clock = 100_000 } = {}) {
+function device(transport, { quota = false, server = 'online', clock = 100_000, canonical = { data: {} } } = {}) {
   let now = clock;
   const records = new Map([['original-song-cache', 'protected-prompt-lyrics-heart-bytes']]);
   const timers = new Map(); const events = new Map(); const writes = []; const held = []; const readsHeld = [];
@@ -76,13 +76,37 @@ function device(transport, { quota = false, server = 'online', clock = 100_000 }
   const boundary = { runV1MutationBoundary: (_context, promise) => promise, addV1MutationPostSuccessHook: () => {} };
   const measured = {
     doc: (_db, ...parts) => parts.join('/'),
-    setDoc: async (path, value) => {
-      assert.equal(path, `user_structures/${uid}`); attempts++;
+    setDoc: () => { throw new Error('unguarded Music Note structure write'); },
+    runTransaction: async (_db, update) => {
+      attempts++;
       if (server === 'denied' || server === 'offline') throw Object.assign(new Error(server), {
         code: server === 'denied' ? 'permission-denied' : 'unavailable',
       });
       if (server === 'hold') await new Promise(resolve => held.push(resolve));
-      writes.push(copy(value));
+      const staged = [];
+      const transaction = {
+        get: async path => {
+          assert.equal(path, `user_structures/${uid}`);
+          reads++;
+          return { data: () => copy(canonical.data) };
+        },
+        set: (path, value, options) => {
+          assert.equal(path, `user_structures/${uid}`);
+          assert.equal(options?.merge, true);
+          staged.push(copy(value));
+        },
+      };
+      const result = await update(transaction);
+      for (const value of staged) {
+        canonical.data = {
+          ...canonical.data, ...value,
+          ...(value.musicNoteFolders ? {
+            musicNoteFolders: { ...(canonical.data.musicNoteFolders || {}), ...value.musicNoteFolders },
+          } : {}),
+        };
+        writes.push(copy(value));
+      }
+      return result;
     },
     getDocFromServer: async () => {
       reads++;
@@ -251,9 +275,34 @@ for (const failure of ['denied', 'aborted']) {
   d.batch.retryMusicNoteFolderStructureBatch(uid); // ordinary reconnect
   await d.advance(59_999); assert.equal(d.attempts, 0);
   await d.advance(1); assert.equal(d.writes.length, 1);
-  d.page.subscribe(uid, () => {}); assert.equal(d.reads, 0);
+  assert.equal(d.reads, 1, 'one transaction read only when canonical changes');
+  d.page.subscribe(uid, () => {}); assert.equal(d.reads, 1);
   await d.advance(600_000); assert.equal(d.writes.length, 1);
   console.log('APP514_HEALTHY_60S_W1_IDLE_AND_WARM_R0=PASS');
+}
+
+// P1: a delayed v100000 flush must not overwrite a newer v100001
+// canonical version, and its rejection must preserve the pending edit.
+{
+  const canonical = { data: {} };
+  const a = device(bus(), { server: 'hold', canonical });
+  const b = device(bus(), { canonical });
+  a.batch.queueMusicNoteFolderStructureBatch(uid, 'myNote', folders('stale-device-a'), 100_000);
+  await a.advance(60_000);
+  assert.equal(a.attempts, 1);
+  b.batch.queueMusicNoteFolderStructureBatch(uid, 'myNote', folders('newer-device-b'), 100_001);
+  await b.advance(60_000);
+  assert.equal(canonical.data.musicNoteStructureVersion, 100_001);
+  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'newer-device-b');
+  a.held.shift()(); await tick();
+  assert.equal(canonical.data.musicNoteStructureVersion, 100_001, 'late write cannot downgrade version');
+  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'newer-device-b', 'late write cannot replace folders');
+  assert.equal(a.writes.length, 0);
+  assert.equal(a.batch.getMusicNoteFolderSaveStatus(uid).state, 'failed');
+  assert.ok(a.batch.getPendingMusicNoteFolderStructureBatch(uid), 'stale unsaved edit stays available');
+  await a.advance(600_000);
+  assert.equal(a.attempts, 1, 'version conflict is not automatically retried');
+  console.log('APP514_P1_STALE_A_V100000_CANNOT_OVERWRITE_B_V100001=PASS');
 }
 
 // A newer RTDB transport revision wins despite a sender's lower device clock;

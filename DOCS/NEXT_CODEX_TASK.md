@@ -1,3 +1,9 @@
+## NEXT — app501 P1 기존 22건 초과 outbox 정상 종료 재감사 (2026-10-26)
+- 이전 감사 `c94c0e5ec6beedb840ceb28b8a5bbf29a1ea5856`은 **FAIL**: 22건에서 1건 정상 완료 후에도 21건 기록을 저장하지 못하고 재접속 시 완료 건 중복 처리 위험.
+- 동일 PR #491 브랜치에서 `writeAll` 과용량 처리 시 현재 저장소에 이미 존재하는 ID만 통과(기존 항목 수정·삭제 허용), 새로운 ID가 한 개라도 들어오면 거부. 일반 20→21 신규 곡은 `blocked-capacity` → 기존 1곡 canonical fallback. 22→21→20/기존 곡 retry/20건 경계/19건 재진입 자동회귀 추가. 기존 30초 묶음, RTDB 즉시, 정상 캐시·비용, 모든 UI/원본 보존.
+- 정확한 최신 GitHub HEAD에서 product+TypeScript+Build PASS 확인 후 감사방 **새 SHA** 읽기 전용 재검증. Firestore 사용자 3곡 canonical 및 실제 PC/모바일 일치는 별개 실기기 미검증. PREVIEW 현재 app500 유지, TEST/PRODUCTION HOLD.
+---
+
 ## NEXT — app501 P1 20→21 대기곡 보존 독립 재감사 (2026-10-26 KST)
 - 이전 SHA `12ea676e3a66306599b9af9901f6348f9fab40a3` 독립 감사 FAIL P1. app501 PR #491 `fix/app501-studio-heart-quota-safe`에서 소스 `acf8499cce1cae057ffc49d93f3a15b2cff3f7e1` 수정: 20 pending 자동 절단 제거, 초과 새 곡 `blocked-capacity`와 1곡 canonical fallback; 동일 곡 20번째 수정 허용. 기존 outbox/preview/30초 묶음/저장 원본 보호.
 - `scripts/verify-501-studio-heart-quota-safe.ts` 20→21 no-eviction (raw bytes), unchecked writer, same document replacement, freed slot, legacy 22 records, original quota/3 devices/phantom tests.

@@ -1,3 +1,11 @@
+## CURRENT — app501 독립 감사 재FAIL (22→21→20 대기열 복구) 최소 수정 (2026-10-26 KST)
+- **고정 감사 SHA `c94c0e5ec6beedb840ceb28b8a5bbf29a1ea5856`**: CI PASS, 독립 감사 **FAIL**. 과거 대기열이 22건이면 첫 서버 저장 완료 후 삭제를 시도해도 `writeAll()`의 `ordered.length > 20` 무조건 거부로 22→21 기록이 반영되지 않아, 재접속 시 이미 끝난 곡이 다시 처리될 위험.
+- **최소 보강:** `src/lib/studioHeartBatch.ts`의 **20개 초과 대기열**은 이전에 저장되어 있던 `documentId`만 유지·수정·제거하는 경우에 쓰기를 허용. **새로운 documentId가 끼어드는 경우는 차단**하여 기존 저장곡을 밀어내지 않음. `writeStudioHeartPendingIntentChecked`의 20건 이상 새 곡 `blocked-capacity` → 기존 단일 곡 저장은 그대로 유지. 기존 곡 30초 batch/RTDB 즉시 동기화/Media/Catalog/비용 로직 변경 없음.
+- **강화 검증:** 22곡 대기에서 기존 곡 업데이트·재시도 저장, 정상 서버 확정 후 삭제 22→21→20, 삭제된 곡 재시작 후 재처리되지 않음(로컬 저장 기록 확인), 기존 나머지 20곡 보존, 20곡에서 신규 곡 여전히 차단, 19곡에서 신규 저장 허용. 이전 20→21 데이터 무손실, 모바일 quota, 3곡 가상 동기화, Catalog phantom tests 전부 재실행.
+- **상태:** PR #491 동일 개발 브랜치 Draft에서 코드·테스트 수정. 최종 HEAD GitHub CI 및 독립 감사 PASS 전 PREVIEW 병합/배포 HOLD. 라이브 PREVIEW app500, TEST/PRODUCTION/실사용자 원본/브라우저 저장소/Worker/Functions/Rules 불변. 사용자 「먼 길을 돌아온 밤」 등 3곡 실제 Firestore 원본 미검증.
+- **다음:** 최종 exact SHA CI TypeScript/Build/제품 QA → 감사방 22→21→20 포함 집중 읽기 전용 재감사 → PASS일 때만 PREVIEW 릴리스 경로 검토.
+---
+
 ## CURRENT — app501 독립 감사 FAIL 대응 P1 20→21 Studio 대기곡 보호 (2026-10-26 KST)
 - 감사 기준 `12ea676e3a66306599b9af9901f6348f9fab40a3`에서 P1 FAIL: `studioHeartBatch.writeAll` 20개 초과 `slice`가 기존 가장 오래된 pending 곡을 조용히 버려 canonical 30초 저장 유실 가능.
 - **수정된 코드 SHA `acf8499cce1cae057ffc49d93f3a15b2cff3f7e1`:** 기존 대기곡을 읽거나 저장할 때 목록 `slice(0,20)` 제거. `writeAll` 20 초과 새 곡은 기존 20개 변경 없이 거부, `writeStudioHeartPendingIntentChecked` 새 `blocked-capacity` 상태 반환, App은 해당 새 곡만 기존 단일곡 canonical 서버 저장으로 fallback (기존 pending·30초 타이머/실시간 신호 불변). 이미 queued 동일 곡 변경은 20개 상태에서도 허용. 오래된 원본 pending 기록이 21개 이상이더라도 임의 잘라내지 않음.

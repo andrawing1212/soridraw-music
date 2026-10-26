@@ -60,9 +60,15 @@ const writeAll = (uid: string, intents: StudioHeartPendingIntent[]) => {
   const ordered = [...intents]
     .filter((intent) => intent?.documentId && intent.uid === uid)
     .sort((left, right) => right.updatedAtMs - left.updatedAtMs);
-  // Never discard an older unsettled song to accept a new one.
-  // Any oversized legacy outbox is preserved unchanged, too.
-  if (ordered.length > MAX_INTENTS) return;
+  // Capacity limits new song additions, not completion/removal or updates
+  // of an already persisted intent. A legacy outbox with 21+ entries must be
+  // able to drain 22 -> 21 -> 20 without losing any other unsettled song.
+  if (ordered.length > MAX_INTENTS) {
+    const previousIds = new Set(
+      listStudioHeartPendingIntents(uid).map((intent) => intent.documentId),
+    );
+    if (ordered.some((intent) => !previousIds.has(intent.documentId))) return;
+  }
   const next: Record<string, StudioHeartPendingIntent> = {};
   for (const intent of ordered) next[intent.documentId] = intent;
   try {

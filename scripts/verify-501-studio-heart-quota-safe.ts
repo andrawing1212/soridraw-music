@@ -114,6 +114,58 @@ try {
   writeStudioHeartPendingIntent(legacy23);
   assert.equal(pcValues.get(legacyKey), JSON.stringify(legacyRaw));
   console.log('APP501_LEGACY_OVER_CAPACITY_NO_TRUNCATION=PASS');
+  // Independent audit P1: the legacy 22-item queue must drain after a
+  // successful canonical commit. Declining to remove a settled song creates
+  // a replay on browser restart and can double-apply the operation.
+  const legacyUpdate = {
+    ...legacyItems[0],
+    retryCount: 1,
+    updatedAtMs: healthy.updatedAtMs + 700,
+  };
+  assert.equal(writeStudioHeartPendingIntentChecked(legacyUpdate), 'stored',
+    'existing song retry metadata must remain writable at 22');
+  assert.equal(readStudioHeartPendingIntent(legacyUid, legacyUpdate.documentId)?.retryCount, 1);
+  assert.equal(listStudioHeartPendingIntents(legacyUid).length, 22);
+  for (const other of legacyItems.slice(1)) {
+    assert.equal(readStudioHeartPendingIntent(legacyUid, other.documentId)?.desiredSaved, true);
+  }
+  console.log('APP501_LEGACY_OVERSIZED_EXISTING_UPDATE=PASS');
+
+  // Canonical settlement #1: 22 -> 21. Store must really lose the completed
+  // document while retaining the other 21, including after a simulated reload.
+  removeStudioHeartPendingIntent(legacyUid, legacyItems[0].documentId);
+  assert.equal(listStudioHeartPendingIntents(legacyUid).length, 21);
+  assert.equal(readStudioHeartPendingIntent(legacyUid, legacyItems[0].documentId), null);
+  assert.equal(Object.keys(JSON.parse(pcValues.get(legacyKey)!)).length, 21);
+  for (const item of legacyItems.slice(1)) {
+    assert.equal(readStudioHeartPendingIntent(legacyUid, item.documentId)?.desiredSaved, true);
+  }
+  // A new 22nd item still may not enter before the queue reaches capacity.
+  assert.equal(writeStudioHeartPendingIntentChecked(legacy23), 'blocked-capacity');
+  console.log('APP501_LEGACY_DRAIN_22_TO_21=PASS');
+
+  // Canonical settlement #2: 21 -> 20 (exact full-capacity boundary).
+  removeStudioHeartPendingIntent(legacyUid, legacyItems[1].documentId);
+  assert.equal(listStudioHeartPendingIntents(legacyUid).length, 20);
+  assert.equal(readStudioHeartPendingIntent(legacyUid, legacyItems[1].documentId), null);
+  assert.equal(Object.keys(JSON.parse(pcValues.get(legacyKey)!)).length, 20);
+  for (const item of legacyItems.slice(2)) {
+    assert.equal(readStudioHeartPendingIntent(legacyUid, item.documentId)?.desiredSaved, true);
+  }
+  assert.equal(writeStudioHeartPendingIntentChecked(legacy23), 'blocked-capacity');
+  console.log('APP501_LEGACY_DRAIN_21_TO_20=PASS');
+
+  // Once one more song settles there is room for the next fresh intent.
+  removeStudioHeartPendingIntent(legacyUid, legacyItems[2].documentId);
+  assert.equal(listStudioHeartPendingIntents(legacyUid).length, 19);
+  assert.equal(writeStudioHeartPendingIntentChecked(legacy23), 'stored');
+  assert.equal(listStudioHeartPendingIntents(legacyUid).length, 20);
+  assert.equal(readStudioHeartPendingIntent(legacyUid, legacy23.documentId)?.desiredSaved, true);
+  for (const item of legacyItems.slice(3)) {
+    assert.equal(readStudioHeartPendingIntent(legacyUid, item.documentId)?.desiredSaved, true);
+  }
+  console.log('APP501_LEGACY_DRAIN_REOPENS_AT_19=PASS');
+
   // A: PC save (mobile observes only). B: mobile save (PC observes only).
   // C: mobile save while PC is closed. Each song must have its own durable
   // pending slot; the remote RTDB preview must never be mistaken for this slot.

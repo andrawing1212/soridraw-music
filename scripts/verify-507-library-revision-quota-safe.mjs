@@ -16,8 +16,9 @@ const setup = (sharedServer509 = null) => {
   const local = new Map();
   const timers = [];
   const updates = [];
+  const standaloneServer510 = { version: 0, writes: [] };
   const waiters = [];
-  const state = { quota: false, silent: false, offline: false, firestoreFails: false, hold: false, reads: 0, remoteVersion: 0 };
+  const state = { quota: false, silent: false, offline: false, firestoreFails: false, hold: false, reads: 0, transactionReads: 0, remoteVersion: 0 };
   const store = {
     getItem: (key) => local.get(key) ?? null,
     setItem: (key, value) => {
@@ -42,14 +43,33 @@ const setup = (sharedServer509 = null) => {
     };
     if (id.endsWith('/firestoreMeasured')) return {
       doc: (_db, collection, uid) => ({ collection, uid }),
-      updateDoc: async (document, payload) => {
+      // Firestore transaction mock: transaction reads a server snapshot,
+      // submits conditionally, then retries if another context changed it.
+      runTransaction: async (_db, mutate) => {
         if (state.firestoreFails) throw new Error('server rejected');
-        if (state.hold) await new Promise((resolve) => waiters.push(resolve));
-        updates.push({ document, payload });
-        if (sharedServer509) {
-          sharedServer509.version = payload['syncVersions.playlists'];
-          sharedServer509.writes.push(sharedServer509.version);
+        const backend = sharedServer509 || standaloneServer510;
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          const observed = backend.version;
+          let write = null;
+          const tx = {
+            get: async () => {
+              state.transactionReads += 1;
+              return { exists: () => true, data: () => ({ syncVersions: { playlists: observed } }) };
+            },
+            update: (document, payload) => { write = { document, payload }; },
+          };
+          const result = await mutate(tx);
+          if (state.hold) await new Promise((resolve) => waiters.push(resolve));
+          if (backend.version !== observed) continue; // optimistic conflict retry
+          if (write) {
+            const next = write.payload['syncVersions.playlists'];
+            backend.version = next;
+            backend.writes.push(next);
+            updates.push(write);
+          }
+          return result;
         }
+        throw new Error('ABORTED transaction conflict retry budget');
       },
     };
     if (id.endsWith('/firebase')) return { db: {}, realtimeDb: {} };
@@ -81,6 +101,7 @@ const setup = (sharedServer509 = null) => {
   assert.equal(x.api.getPendingLibraryPlaylistRevisionBatch('user-a').latestVersion, 11);
   await x.pulse();
   assert.equal(x.updates.length, 1);
+  assert.equal(x.state.transactionReads, 1, 'only the 60s settlement performs R1 transaction read');
   assert.equal(x.updates[0].payload['syncVersions.playlists'], 11);
   assert.equal(x.api.getPendingLibraryPlaylistRevisionBatch('user-a'), null);
   console.log('APP507_LIBRARY_HEALTHY_60SEC_NO_EXTRA_IO=PASS');
@@ -168,28 +189,32 @@ const setup = (sharedServer509 = null) => {
   console.log('APP507_LIBRARY_DOUBLE_FAILURE_CRASH_DURABILITY_REMAINS_UNVERIFIED=PASS');
 }
 
-// app509 RED-TEAM ONLY: two old/current app sessions may have a race even
-// after reading their latest RTDB floor. Firestore updateDoc sets an absolute
-// revision, not a monotonic compare-and-set. A deliberately delayed older
-// update can lower the newest shared users.syncVersions.playlists value.
+// app510: simultaneous modern browser sessions with the same UID cannot
+// downgrade the stored compatibility version. A transaction whose read
+// becomes stale is re-run against the latest server revision.
 {
-  const sharedServer509 = { version: 0, writes: [] };
-  const oldSession509 = setup(sharedServer509);
-  const newSession509 = setup(sharedServer509);
-  oldSession509.state.hold = true;
-  oldSession509.api.queueLibraryPlaylistRevisionBatch('user-a', 50);
-  const oldPromise509 = oldSession509.api.flushLibraryPlaylistRevisionBatch('user-a');
+  const sharedServer510 = { version: 0, writes: [] };
+  const oldSession510 = setup(sharedServer510);
+  const newSession510 = setup(sharedServer510);
+  oldSession510.state.hold = true;
+  oldSession510.api.queueLibraryPlaylistRevisionBatch('user-a', 50);
+  const oldPromise510 = oldSession510.api.flushLibraryPlaylistRevisionBatch('user-a');
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(oldSession509.waiters.length, 1);
-  newSession509.state.remoteVersion = 51;
-  newSession509.api.queueLibraryPlaylistRevisionBatch('user-a', 51);
-  await newSession509.pulse();
-  assert.equal(sharedServer509.version, 51);
-  oldSession509.state.hold = false;
-  oldSession509.settle();
-  await oldPromise509;
-  assert.deepEqual(sharedServer509.writes, [51, 50]);
-  assert.equal(sharedServer509.version, 50,
-    'current updateDoc without transaction permits cross-session downgrade');
-  console.log('APP509_REDTEAM_CROSS_SESSION_REVISION_DOWNGRADE_RISK_REPRODUCED=PASS');
+  assert.equal(oldSession510.waiters.length, 1);
+  newSession510.state.remoteVersion = 51;
+  newSession510.api.queueLibraryPlaylistRevisionBatch('user-a', 51);
+  await newSession510.pulse();
+  assert.equal(sharedServer510.version, 51);
+  oldSession510.state.hold = false;
+  oldSession510.settle();
+  await oldPromise510;
+  assert.deepEqual(sharedServer510.writes, [51],
+    'an older transaction must retry and skip write after newer commit');
+  assert.equal(sharedServer510.version, 51);
+  assert.ok(oldSession510.state.transactionReads >= 2, 'transaction conflict is retried');
+  console.log('APP510_CROSS_SESSION_NEW_CLIENT_MONOTONIC_REVISION=PASS');
 }
+// New code can prevent downgrades by other transactional clients, but an
+// obsolete cached app with unconditional updateDoc may still overwrite it.
+// No unverified claim that this changes the behavior of already-open tabs.
+console.log('APP510_LEGACY_ABSOLUTE_WRITER_MIGRATION_RISK_DOCUMENTED=PASS');

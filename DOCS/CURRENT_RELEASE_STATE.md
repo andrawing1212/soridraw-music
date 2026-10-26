@@ -1,3 +1,11 @@
+## CURRENT — app502 Admin CACHE LIVE 정확한 Music Note 1곡 R1 읽기 전용 진단 후보 (2026-10-26 KST)
+- **사용자 승인 작업:** PREVIEW app501 실사용 FAIL, `먼 길을 돌아온 밤` 기존 PC 하트 ON/목록 ON, 모바일 하트 ON/목록 OFF, 다른 PC 브라우저 하트 OFF/목록 OFF. 지금 필요한 것은 실제 서버 `favorites/{exact-id}`의 존재 여부 판정이지, 다른 곡 하트 초기화나 데이터 재저장 아님.
+- **app502 구현 후보:** 관리자용 기존 `CACHE LIVE`가 활성화된 경우에만 `StudioHeartSingleDocDiagnostic` 로컬 진단 UI 노출. 현재 브라우저의 저장곡에서 정확히 동명 1건인 경우에만 실제 문서 ID를 찾아서 복사(서버 R0). 다른 브라우저에서는 동일 정확한 ID를 입력. **명시적 `서버 저장문서 1건 확인` 클릭 시만** 현재 로그인 UID를 재확인하고 `getDocFromServer(doc(db,'favorites',exactId))` 한 번 수행. 곡 제목 기반 서버 검색/전체 목록 재조회/새 브라우저 자체 자동 읽기 금지. 문서 존재/소유 여부/삭제 플래그, 로컬 favoritesStore/pending, 브라우저 하트 기록, 로컬 Catalog 포함 여부를 비민감 boolean만 반환. Firestore 내용/UID/곡 가사/토큰 로그 금지. 진단 중 저장/삭제/캐시 재작성 0.
+- **예외 처리:** 원본 브라우저에서 동일 제목 여러 개/정확 id 없는 경우 자동 판정하지 않고 멈춤. 인증 변경·권한/네트워크 오류를 '서버에 곡 없음'으로 오인하지 않음. 현존 Music Note 하트, +30초 배치, RTDB, 앱 레이아웃/사용자 기본 UI, Worker/Functions/D1/Rules/서버 원본에 영향 없음.
+- **품질 게이트:** 기존 app501 verifier에 app502 exact doc read-only/static guard 추가. GitHub 최종 SHA에서 TypeScript/Build/제품 회귀 성공, 독립 감사 PASS 전 PREVIEW 병합/배포 금지. 실제 사용자 브라우저에서 진단 버튼 실행 전 서버 결과 미확정. 기존 app501 PREVIEW `https://preview.soridraw.com` 유지, TEST/PROD 승격 HOLD.
+- **진척:** Stage416 1/4·25%(OFF), 이전 앱 속도 개선 5/5·100%(기존 기준), app501 실제 저장곡 수렴 5/6·83% 실기기 FAIL. 현재 app502 단건 읽기 진단 개발 단계 1/4(설계 및 안전 범위 확정), 코드/CI 감사/배포 검증에 따라 갱신.
+---
+
 ## CURRENT — app501 PREVIEW 실제 사용자 3브라우저 Music Note/하트 동기화 FAIL (2026-10-26 KST)
 - **실사용 QA 판정 FAIL:** app501 Firebase PREVIEW Hosting은 run #40258981882 / exact SHA `13a3b961ac0a362db51a5d6d084f77fb57262fb9`에서 배포 PASS, 소스 독립 감사 SHA `d1fabebfcd3473f8d1f7c0b5605dde91e8b20942` PASS였으나 실제 사용자가 확인한 기존 누락곡 `먼 길을 돌아온 밤`은 수정되지 않음.
 - **동일 계정의 실제 기기별 상태:** 기존 PC Chrome: Recent 저장하트 체크 + Music Note 곡 **있음**. 모바일: 저장하트 **체크** + Music Note 곡 **없음**. 다른 PC 브라우저: 저장하트 **해제** + Music Note 곡 **없음**. 나머지 두 최근곡은 비교 기준이며, 다른 PC 최초 진입에서 `어제의 네게 묻는다`가 일시 누락했다가 새로고침 뒤 등장한 전력이 있음.

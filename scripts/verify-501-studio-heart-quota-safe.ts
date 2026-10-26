@@ -264,6 +264,22 @@ try {
   assert.ok(refresh.includes('isStudioHeartOptimisticFavorite(favorite)'));
   assert.ok(refresh.includes('writeFavoritesCache(uid, merged, { publishDerived: false })'));
   assert.ok(!refresh.includes('favoritesStore.setFavorites(merged)'));
+  const diagnostic = readFileSync('src/lib/studioHeartSingleDocDiagnostic.ts', 'utf8');
+  const diagnosticUi = readFileSync('src/components/StudioHeartSingleDocDiagnostic.tsx', 'utf8');
+  const diagnosticPanel = readFileSync('src/components/CacheDiagnosticsOverlayImpl.tsx', 'utf8');
+  assert.ok(diagnostic.includes("getDocFromServer(doc(db, 'favorites', documentId))"),
+    'one exact signed-in Firestore favorite is the only remote diagnosis query');
+  assert.equal((diagnostic.match(/getDocFromServer\\(/g) || []).length, 1);
+  assert.ok(diagnostic.includes('if (auth.currentUser?.uid !== uid)'));
+  assert.ok(diagnostic.includes("readCatalogSnapshotFromLocalCache('musicNote', uid)"));
+  assert.ok(diagnostic.includes('candidates.size === 1'),
+    'duplicate-title local rows must require explicit exact document ID');
+  assert.ok(!/\\b(?:setDoc|updateDoc|deleteDoc|addDoc|writeBatch|getDocs|collection)\\s*\\(/.test(diagnostic),
+    'diagnostic must not write, scan, backfill or change canonical data');
+  assert.ok(diagnosticUi.includes('onClick={() => void inspect()}'));
+  assert.ok(diagnosticUi.includes('!uid || !documentId.trim() || busy || alreadyRead'));
+  assert.ok(diagnosticPanel.includes('<StudioHeartSingleDocDiagnostic />'));
+  console.log('APP502_EXACT_SINGLE_DOC_READ_ONLY_MANUAL_DIAGNOSTIC=PASS');
   console.log('APP501_COLD_CATALOG_READ_NO_PHANTOM_PUBLISH=PASS');
   console.log('APP501_APP_RECENT_TO_MUSIC_NOTE_FALLBACK_CONTRACT=PASS');
   console.log('SORIDRAW_APP501_STUDIO_HEART_QUOTA_SAFE=PASS');

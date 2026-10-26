@@ -1,3 +1,9 @@
+## NEXT — app502 Read-only exact ID diagnostic final QA + audit (2026-10-26 KST)
+- admin CACHE LIVE only (admin gate + enabled), 1곡 exact id from own browser unique local favorite row or manually pasted same exact id from original PC. Local-only checks R0 and **button-click one** `getDocFromServer(favorites/{id})` R1; owner match, removal flags, local/remote preview markers, local pending, recent-heart local authority, local Catalog membership booleans. Never expose UID, lyrics, song payload, auth tokens in UI logs. Never mutate any existing music note or cache.
+- 검증: existing `scripts/verify-501-studio-heart-quota-safe.ts` app502 read-only static guards (single getDocFromServer, no writes/collection queries, manual click, auth identity). Final GitHub TS/Build/product CI → exact SHA 독립 Work/GPT-6 감사 → PASS일 때만 Firebase PREVIEW Hosting 릴리스. TEST/PRODUCTION HOLD, real Firestore existence unknown until actual user's explicit click.
+- 사용자는 원본 PC Chrome `먼 길을 돌아온 밤` Music Note를 먼저 열고 CACHE LIVE에서 로컬 문서번호 찾기 → 서버 1건 확인; 다른 PC/모바일에서는 복사된 exact ID를 넣어 같은 방식으로 확인. 서버에 곡이 없으면 이후 별도 사용자 원본 복구 승인 없이는 데이터 write 금지.
+---
+
 ## NEXT — app501 실사용 FAIL에 대한 exact-song canonical 진단/보존적 복구 설계 (2026-10-26)
 - 현재 PREVIEW app501 정상 배포된 소스 `13a3b961ac0a362db51a5d6d084f77fb57262fb9`, preview HEAD는 문서 merge commit 이후 변경될 수 있음. USER QA FAIL: 동일 UID `먼 길을 돌아온 밤` 기존 PC Chrome **하트 ON/목록 ON**, 모바일 **하트 ON/목록 OFF**, 다른 PC 브라우저 **하트 OFF/목록 OFF**. 실제 Firestore 원본 미검증. TEST/PRODUCTION 절대 승격 금지.
 - **원인 소스 관측:** App `isSongFavorited`가 브라우저별 `readRecentHeartAuthority` 저장 신호를 정식 favoritesStore보다 먼저 사용하여 하트 ON 단독 지속 가능. PC의 RTDB `__studioHeartRemotePreviewLocal`가 비 canonical 목록 행으로 남을 수 있음. 이 둘이 원인을 확정하는 것은 아니고 기기별 캐시와 공유 원본 정확 비교 필요.

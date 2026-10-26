@@ -1,3 +1,44 @@
+## CURRENT — app501 독립 감사 재FAIL (22→21→20 대기열 복구) 최소 수정 (2026-10-26 KST)
+- **고정 감사 SHA `c94c0e5ec6beedb840ceb28b8a5bbf29a1ea5856`**: CI PASS, 독립 감사 **FAIL**. 과거 대기열이 22건이면 첫 서버 저장 완료 후 삭제를 시도해도 `writeAll()`의 `ordered.length > 20` 무조건 거부로 22→21 기록이 반영되지 않아, 재접속 시 이미 끝난 곡이 다시 처리될 위험.
+- **최소 보강:** `src/lib/studioHeartBatch.ts`의 **20개 초과 대기열**은 이전에 저장되어 있던 `documentId`만 유지·수정·제거하는 경우에 쓰기를 허용. **새로운 documentId가 끼어드는 경우는 차단**하여 기존 저장곡을 밀어내지 않음. `writeStudioHeartPendingIntentChecked`의 20건 이상 새 곡 `blocked-capacity` → 기존 단일 곡 저장은 그대로 유지. 기존 곡 30초 batch/RTDB 즉시 동기화/Media/Catalog/비용 로직 변경 없음.
+- **강화 검증:** 22곡 대기에서 기존 곡 업데이트·재시도 저장, 정상 서버 확정 후 삭제 22→21→20, 삭제된 곡 재시작 후 재처리되지 않음(로컬 저장 기록 확인), 기존 나머지 20곡 보존, 20곡에서 신규 곡 여전히 차단, 19곡에서 신규 저장 허용. 이전 20→21 데이터 무손실, 모바일 quota, 3곡 가상 동기화, Catalog phantom tests 전부 재실행.
+- **상태:** PR #491 동일 개발 브랜치 Draft에서 코드·테스트 수정. 최종 HEAD GitHub CI 및 독립 감사 PASS 전 PREVIEW 병합/배포 HOLD. 라이브 PREVIEW app500, TEST/PRODUCTION/실사용자 원본/브라우저 저장소/Worker/Functions/Rules 불변. 사용자 「먼 길을 돌아온 밤」 등 3곡 실제 Firestore 원본 미검증.
+- **다음:** 최종 exact SHA CI TypeScript/Build/제품 QA → 감사방 22→21→20 포함 집중 읽기 전용 재감사 → PASS일 때만 PREVIEW 릴리스 경로 검토.
+---
+
+## CURRENT — app501 독립 감사 FAIL 대응 P1 20→21 Studio 대기곡 보호 (2026-10-26 KST)
+- 감사 기준 `12ea676e3a66306599b9af9901f6348f9fab40a3`에서 P1 FAIL: `studioHeartBatch.writeAll` 20개 초과 `slice`가 기존 가장 오래된 pending 곡을 조용히 버려 canonical 30초 저장 유실 가능.
+- **수정된 코드 SHA `acf8499cce1cae057ffc49d93f3a15b2cff3f7e1`:** 기존 대기곡을 읽거나 저장할 때 목록 `slice(0,20)` 제거. `writeAll` 20 초과 새 곡은 기존 20개 변경 없이 거부, `writeStudioHeartPendingIntentChecked` 새 `blocked-capacity` 상태 반환, App은 해당 새 곡만 기존 단일곡 canonical 서버 저장으로 fallback (기존 pending·30초 타이머/실시간 신호 불변). 이미 queued 동일 곡 변경은 20개 상태에서도 허용. 오래된 원본 pending 기록이 21개 이상이더라도 임의 잘라내지 않음.
+- **신규 테스트:** 실제 20개 상태에서 21번째 write 거부 및 기존 20개 바이트 단위 보존; legacy unchecked writer도 원본 보존; 20개에서 같은 곡 수정; 기존 1개 정상 settle 후 21번째 저장; 22개 legacy storage read/write no-truncate. 기존 app501 quota 및 PC/mobile 가상 3곡·Music Note preview Catalog 격리 검증도 계속 실행.
+- **검증:** GitHub 최종 HEAD CI TypeScript/Build/전체 관련 테스트 결과 확인 및 독립 감사 재검증 전 PASS/승격 주장 금지. 사용자 사진의 실제 3곡 Firestore canonical 여부 미확인; 기존 PC/모바일 표시 불일치 실사용 검증 전.
+- **안전:** PR #491 Draft 개발 브랜치만 변경. 실제 preview.soridraw.com 앱은 app500 유지. user original data/브라우저 저장소/UI/Worker/Functions/Rules/Firebase Hosting/TEST/PRODUCTION 미변경. Stage416 OFF/Reader OFF.
+- **다음:** exact 최종 SHA CI 확인 → 감사방 독립 재감사(20→21 기존 곡 무손실 집중) → PASS인 경우에만 PREVIEW 승인된 릴리스 절차 판단, 이후 실기기/Firestore 인증 읽기 검증. 데이터 강제 복구나 전체 캐시 삭제 금지.
+---
+
+## CURRENT — app501 Music Note 새 브라우저 hydrate / RTDB 임시목록 격리 수정 (2026-10-26 KST)
+- **사용자 직접 증거:** 기존 PC Music Note 최근 3곡, 모바일 2곡, 다른 PC 브라우저 최초 접속 1곡 → 새로고침 후 2곡. `먼 길을 돌아온 밤`은 기존 PC에만 보이고 `어제의 네게 묻는다`는 최초 접속 때 누락했다가 새로고침 후 표시. 모든 Recent 하트 저장으로 보고. 실제 사용자 Firestore 문서는 사용자 인증·곡 ID 없어서 읽기 전용 미확인. 브라우저 표시/RTDB preview를 canonical로 오인 금지.
+- **코드상 수정:** 기존 app500 `applyRemoteStudioHeartPreview`는 RTDB 수신곡을 local cache로 저장하면서 파생 Catalog 재출판 경로를 호출할 수 있고, 전체 Catalog onData의 `localNewer`는 `__studioHeartRemotePreviewLocal`을 새로운 canonical 곡으로 채택할 가능성이 있었음. app501 PR #491에서 preview 수신, catalog read/refresh의 `writeFavoritesCache(..., {publishDerived:false})`를 적용하고, pending/remote-preview 표식은 newer canonical merge에서 제외. 수동 refresh의 `favoritesStore.setFavorites(merged)` 중복 overwrite 제거, 기존 `setFavorites`가 실제 활성 optimistic overlay를 유지.
+- **검증 범위:** app501 기존 실제 pending read-back/3곡 가상 PC-모바일 테스트에 Catalog A,C/E + phantom B/pending D 가상 회귀 및 정적 no-republish 검증 추가. Firestore 원본 접근·실기기 PC/모바일 기능·서버 원본 저장 검사는 아직 수행하지 않음. CI 및 독립 감사 전 배포·최종 PASS 주장 금지.
+- **최종 구현 후보 브랜치:** `fix/app501-studio-heart-quota-safe`, 소스 보강 `c6e297db3aeb28f7b7950fe5505514c2a6a08d6c`. 이번 문서 커밋의 정확한 최종 SHA/Actions는 GitHub에서 별도 확인. 기존 배포 PREVIEW app500, TEST/PRODUCTION/Worker/Functions/Rules/공유 원본 변경 없음. 기존 저장된 곡·브라우저 캐시 초기화 금지. Stage416 OFF, Reader OFF.
+- **다음 작업:** 새 커밋 최종 Actions TypeScript/Build/제품/회귀 확인 → Work/GPT-6 감사방 exact SHA 독립 소스 감사 → FAIL이면 수정/재감사, PASS이면 별도 PREVIEW 릴리스 검증 및 사용자의 기존 PC/모바일 캐시·새 브라우저 실측. 원본 3곡은 권한 있는 exact-id Firestore 읽기 전용 확인 전 절대 자동 복구/강제 재저장하지 않음.
+---
+
+## CURRENT — app501 PC↔모바일 Music Note 목록 불일치 / 3곡 저장 검증 확대 (2026-10-26 KST)
+- **신규 사용자 증거:** 같은 계정 PC에서 Recent 저장하트 클릭 시 모바일에 보이기도 하나, 모바일에서 저장한 곡은 모바일 Music Note에 없고 PC에는 RTDB 화면 미리보기가 남을 수 있음. 이전 테스트 3곡에서 두 기기의 Music Note 목록이 실제 불일치함. 사용자 기존 Music Note 대부분 정상 저장 → **기존 곡 저장 해제/재저장/데이터 삭제/브라우저 초기화 금지**.
+- **소스 확인:** 배포된 app500은 모바일 localStorage pending 쓰기 실패가 무시되더라도 다른 기기로 heart-preview 신호를 송출하고 30초 timer에서는 저장할 pending이 없음. 이는 비대칭 증상과 일치하지만 모바일 실제 QuotaExceededError와 실제 Firestore 미확정 여부는 사용자 기기·서버 실측 전 미확정.
+- **수정/검증 후보:** 기존 app501 Draft PR #491 브랜치에서 동일 UID의 서로 다른 PC·모바일 로컬 저장소를 모사하여 A=PC, B=모바일, C=모바일(PC 오프라인) 각각 개별 곡 pending 및 기기 분리·저장공간 부족·복구·브라우저 재실행을 자동 확인. 같은 밀리초에 이전 pending과 신규 본문이 달라도 읽기값이 옛것이면 새 저장 성공으로 판정하지 않도록 read-back 확인을 전체 내용까지 강화. 기존 정상 30초 Firestore 배치·RTDB 즉시표시 보호.
+- **엄격한 결과 구분:** 위 테스트는 **가상 로컬저장소 + 소스 회귀**이며 실제 Firebase Firestore 저장 확인, 실제 Android Chrome 저장 공간, PC↔모바일 브라우저 결과를 증명하지 않음. 서버 원본·기존 곡은 미접촉. 전체 CI 결과 및 독립 감사 전 PASS/배포 주장 금지. Firebase PREVIEW 현행은 app500, TEST/PROD/Worker/Functions/Rules 불변. Stage416 OFF, Reader OFF.
+- **다음:** 고정 PR HEAD에서 app501/기존 제품/TypeScript/Build CI 결과 확인 → 독립 감사 → 실제 3곡 브라우저·해당 문서만 read-only Firestore 확인 가능한 검증 수단 확보. PREVIEW 배포 전 실제 원본 위험/단말 교차 검증 필수.
+---
+
+## CURRENT — app500 PREVIEW 사용자 실사용 회귀: Recent 저장하트→Music Note 누락 (2026-10-26 KST)
+- **사용자 실제 QA:** app500 `preview.soridraw.com` 로그인 유지·새 탭(1,2) **PASS**. **FAIL:** 최근 생성곡 저장하트를 눌러 저장한 새 곡이 Music Note에 나타나지 않음. **TEST/PRODUCTION 승격 즉시 HOLD**, 원본 삭제·캐시 초기화·재저장 반복·임의 라이브 데이터 수정 금지.
+- **코드상 재현 가능 원인:** 기존 `src/lib/studioHeartBatch.ts`의 `writeAll()`이 localStorage `QuotaExceededError`를 무시하고, `src/App.tsx` `queueStudioHeartPendingIntent`는 실제 임시저장 실패에도 곧바로 `true`·'저장되었습니다.' 반환. 정산 timer는 저장되지 않은 intent를 찾지 못하고 종료해 Music Note 항목이 남지 않을 수 있음. 사용자 기기의 정확한 오류 원인은 실제 브라우저 진단 전 미확정.
+- **안전 수정 후보:** PR 개발 branch `fix/app501-studio-heart-quota-safe`는 기존 30초 W0/W1 묶음 저장을 그대로 유지하되 pending intent 성공을 같은 UID·곡 ID·시각·요청 상태의 **localStorage read-back**으로 확인. 새 곡의 pending 쓰기 실패 + 기존 pending 없음이면 기존 **단일 곡 정식 Firestore 저장** 경로로 전환, '저장됨' 거짓 안내 금지. 해당 곡에 이전 pending이 남은 실패라면 기존 예약을 덮어쓰거나 경쟁 저장하지 않고 오류를 알림. 정상 경로 서버 IO/화면/UI 변화 없음.
+- **검사 게이트:** `scripts/verify-501-studio-heart-quota-safe.ts`에 실제 mock localStorage full/정상/기존 pending 보호 및 App 연결 검사 추가. TypeScript / Build / 전 제품 검사 및 Work/사용자 실기기 검증 전 `APP501_RELEASE=HOLD`. 배포 명령 없음. PREVIEW 라이브 app500 Hosting source `8da70f240bbca8e1b8305f11cdd8cd240efcda10`, 최신 preview HEAD 문서 merge `2868753884598658b3784036c6e42f44f3a47c7e`; TEST/PROD/Worker/Functions/Rules/공유 원본 변동 없음.
+- **Codex/Work:** 5시간 주기당 중복 요청 금지. 추가 AI 작업자 명령 없이 ChatGPT가 별도 preview PR에서 최소 수정.
+---
+
 ## CURRENT — app500 Firebase PREVIEW Hosting 배포 완료 / 실기기 QA 대기 (2026-10-26 KST)
 - **PREVIEW 배포 성공:** 사용자 명시 승인 기반 app500 로그인 유지 안정화. PR #488 코드 승격 merge `4f5af7e9212649300f981ca0ab280da5733da71d`; 릴리스 전용 PR #489 merge **실제 배포 소스 SHA** `8da70f240bbca8e1b8305f11cdd8cd240efcda10`. 배포 Workflow `.github/workflows/firebase-hosting-custom-preview.yml` run **`40242015534` SUCCESS**, 잠금 SHA 위와 정확히 일치.
 - **사이트 실제 확인:** Workflow가 `https://preview.soridraw.com/` 원격 index.html과 로컬 배포 빌드 SHA256 일치 확인 **PREVIEW_EXACT_BUILD=PASS**, 사이트 `/app-version.json` **500**, `FIREBASE_PREVIEW_DEPLOY=PASS`. 직접 별도 브라우저/모바일 측정은 하지 않았으며 URL 검증은 배포 CI의 실제 HTTP 확인 결과임.

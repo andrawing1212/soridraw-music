@@ -49,8 +49,7 @@ export const listStudioHeartPendingIntents = (uid: string): StudioHeartPendingIn
     return Object.values(raw)
       .map((value) => normalizeIntent(uid, value))
       .filter((value): value is StudioHeartPendingIntent => Boolean(value))
-      .sort((left, right) => right.updatedAtMs - left.updatedAtMs)
-      .slice(0, MAX_INTENTS);
+      .sort((left, right) => right.updatedAtMs - left.updatedAtMs);
   } catch {
     return [];
   }
@@ -60,8 +59,16 @@ const writeAll = (uid: string, intents: StudioHeartPendingIntent[]) => {
   if (!uid || typeof localStorage === 'undefined') return;
   const ordered = [...intents]
     .filter((intent) => intent?.documentId && intent.uid === uid)
-    .sort((left, right) => right.updatedAtMs - left.updatedAtMs)
-    .slice(0, MAX_INTENTS);
+    .sort((left, right) => right.updatedAtMs - left.updatedAtMs);
+  // Capacity limits new song additions, not completion/removal or updates
+  // of an already persisted intent. A legacy outbox with 21+ entries must be
+  // able to drain 22 -> 21 -> 20 without losing any other unsettled song.
+  if (ordered.length > MAX_INTENTS) {
+    const previousIds = new Set(
+      listStudioHeartPendingIntents(uid).map((intent) => intent.documentId),
+    );
+    if (ordered.some((intent) => !previousIds.has(intent.documentId))) return;
+  }
   const next: Record<string, StudioHeartPendingIntent> = {};
   for (const intent of ordered) next[intent.documentId] = intent;
   try {
@@ -95,6 +102,41 @@ export const writeStudioHeartPendingIntent = (intent: StudioHeartPendingIntent):
   return normalized;
 };
 
+// app501 — localStorage quota may silently reject the underlying batched
+// write. Never declare a Studio heart saved unless the exact latest intent is
+// readable back. The common path is still the same 30-second W0/W1 batch.
+export const writeStudioHeartPendingIntentChecked = (
+  intent: StudioHeartPendingIntent,
+): 'stored' | 'blocked-empty' | 'blocked-existing' | 'blocked-capacity' => {
+  const uid = String(intent?.uid || '').trim();
+  const documentId = String(intent?.documentId || '').trim();
+  if (!uid || !documentId) return 'blocked-empty';
+  const allPending = listStudioHeartPendingIntents(uid);
+  const previous = allPending.find((item) => item.documentId === documentId) || null;
+  // At 20 songs, allow existing edits but send a new song to the
+  // single-document canonical fallback rather than evicting older intents.
+  if (!previous && allPending.length >= MAX_INTENTS) return 'blocked-capacity';
+  writeStudioHeartPendingIntent(intent);
+  const confirmed = readStudioHeartPendingIntent(uid, documentId);
+  if (
+    confirmed
+    && confirmed.uid === uid
+    && confirmed.documentId === documentId
+    && confirmed.updatedAtMs === Math.max(1, Math.floor(Number(intent.updatedAtMs || 0)))
+    && confirmed.desiredSaved === intent.desiredSaved
+    && confirmed.identityKey === intent.identityKey
+    && confirmed.baselineSaved === intent.baselineSaved
+    && confirmed.signalVersion === intent.signalVersion
+    && confirmed.pendingRemotePreviewVersion === intent.pendingRemotePreviewVersion
+    && confirmed.retryCount === intent.retryCount
+    && JSON.stringify(confirmed.song) === JSON.stringify(intent.song)
+    && JSON.stringify(confirmed.baselineFavorite) === JSON.stringify(intent.baselineFavorite)
+  ) return 'stored';
+  // An older pending mutation may still run. Do not perform a competing direct
+  // write or pretend the new click was accepted if that mutation is retained.
+  return previous ? 'blocked-existing' : 'blocked-empty';
+};
+
 export const removeStudioHeartPendingIntent = (uid: string, documentId: string): void => {
   const safeDocumentId = String(documentId || '').trim();
   if (!uid || !safeDocumentId) return;
@@ -115,3 +157,10 @@ export const updateStudioHeartPendingIntent = (
   }
   return writeStudioHeartPendingIntent(next);
 };
+
+// Only durable canonical favorites may be merged into the server Catalog.
+// Immediate pending/RTDB previews remain visible through App overlays.
+export const isStudioHeartOptimisticFavorite = (favorite: any): boolean => (
+  favorite?.__studioHeartPendingLocal === true
+  || favorite?.__studioHeartRemotePreviewLocal === true
+);

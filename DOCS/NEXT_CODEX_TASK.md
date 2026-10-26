@@ -1,3 +1,35 @@
+## NEXT — app501 P1 기존 22건 초과 outbox 정상 종료 재감사 (2026-10-26)
+- 이전 감사 `c94c0e5ec6beedb840ceb28b8a5bbf29a1ea5856`은 **FAIL**: 22건에서 1건 정상 완료 후에도 21건 기록을 저장하지 못하고 재접속 시 완료 건 중복 처리 위험.
+- 동일 PR #491 브랜치에서 `writeAll` 과용량 처리 시 현재 저장소에 이미 존재하는 ID만 통과(기존 항목 수정·삭제 허용), 새로운 ID가 한 개라도 들어오면 거부. 일반 20→21 신규 곡은 `blocked-capacity` → 기존 1곡 canonical fallback. 22→21→20/기존 곡 retry/20건 경계/19건 재진입 자동회귀 추가. 기존 30초 묶음, RTDB 즉시, 정상 캐시·비용, 모든 UI/원본 보존.
+- 정확한 최신 GitHub HEAD에서 product+TypeScript+Build PASS 확인 후 감사방 **새 SHA** 읽기 전용 재검증. Firestore 사용자 3곡 canonical 및 실제 PC/모바일 일치는 별개 실기기 미검증. PREVIEW 현재 app500 유지, TEST/PRODUCTION HOLD.
+---
+
+## NEXT — app501 P1 20→21 대기곡 보존 독립 재감사 (2026-10-26 KST)
+- 이전 SHA `12ea676e3a66306599b9af9901f6348f9fab40a3` 독립 감사 FAIL P1. app501 PR #491 `fix/app501-studio-heart-quota-safe`에서 소스 `acf8499cce1cae057ffc49d93f3a15b2cff3f7e1` 수정: 20 pending 자동 절단 제거, 초과 새 곡 `blocked-capacity`와 1곡 canonical fallback; 동일 곡 20번째 수정 허용. 기존 outbox/preview/30초 묶음/저장 원본 보호.
+- `scripts/verify-501-studio-heart-quota-safe.ts` 20→21 no-eviction (raw bytes), unchecked writer, same document replacement, freed slot, legacy 22 records, original quota/3 devices/phantom tests.
+- 정확한 최종 SHA의 두 GitHub Actions TypeScript/Build/전체 제품 회귀 확인 후 그 SHA로 감사방 **읽기 전용 재감사**. 독립 감사 PASS 및 사용자 PC/모바일/Firestore 실측 전 실제 앱 저장 성공/배포 완료 주장 금지. PREVIEW app500, TEST/PRODUCTION HOLD.
+---
+
+## NEXT — app501 정확 SHA 독립 감사 및 PREVIEW 데이터 안전 검증 (2026-10-26)
+- 문제: Recent 저장 하트 3곡은 모두 체크지만 기존 PC Music Note 3곡/모바일 2곡/새 PC 브라우저 최초 1곡→재접속 2곡. `먼 길을 돌아온 밤` 원본 저장 여부 미확정. 실사용자 곡 삭제/해제/재저장/캐시 삭제 금지.
+- 후보 PR #491 `fix/app501-studio-heart-quota-safe`: quota-full에서 pending write read-back 검증 후 단일곡 canonical fallback, 기존 pending 중복경쟁 차단. RTDB remote preview는 화면·로컬 캐시만, derived Catalog 재출판 금지. Catalog onData 및 manual refresh는 optimistic rows를 newer canonical로 합치지 않고 기존 active preview는 overlay 유지. 읽기/탭 이동 Firestore 쓰기 금지, 30초 per-song 배치 및 app349 동기화 보호.
+- 현재 구현 소스 SHA `c6e297db3aeb28f7b7950fe5505514c2a6a08d6c`, 문서 커밋 포함 정확 HEAD 확인. 최종 CI TypeScript/Build/관련 회귀 PASS 확인 후 독립 감사방으로 대상 SHA 전달. Audit: full catalog read -> pending/preview overlay, warm/new browser cache vs revision, manual refresh, false success, 3곡 identity, R0/W0 unchanged normal, QA in browser still unverified. FAIL 시 수정, PASS 시 PREVIEW만 배포 검증 가능, TEST/PROD 별도 승인.
+---
+
+## NEXT — app501 3곡 PC↔모바일 저장 불일치 독립 감사 (2026-10-26)
+- 사용자 보고: PC에서 저장한 곡은 모바일에도 보이지만 모바일에서 저장한 곡은 기기 Music Note에 누락할 수 있고, PC·모바일 Recent 3곡 Music Note 목록이 다름. 기존 저장곡 대부분 정상. 기존 곡 저장 해제/재저장·사이트 데이터 초기화 금지.
+- app501 Draft PR #491 동일 브랜치: 브라우저 localStorage pending 실패 무시로 생기는 실시간 가짜 저장을 read-back+canonical 단일 곡 fallback으로 보호, 동일 밀리초/동일 상태의 오래된 pending이 새 곡 본문을 대신하지 않도록 검사 강화. PC/모바일 독립 storage, A=PC/B=모바일/C=모바일 PC 오프라인, mobile quota, 기존 pending 보존, 재시작 local persistence 회귀를 기존 app501 verifier에 포함.
+- CI TypeScript/Build/제품 회귀 PASS, 독립 감사 및 서버 원본/실기기 확인 전 **실제 서버 저장 확인 완료 아님**. Mock만으로 Firestore 저장 PASS, 두 기기 실제 convergence PASS 주장 금지. main/production/data/hosting/workers/rules 무변경.
+- 다음 한 작업: 정확한 최종 SHA의 CI 및 독립 감사, 이후 필요 시 실제 기기에서 세 곡만 새 미저장 테스트 항목으로 검증. 배포는 고정 릴리스 경로/승인 규칙 준수, TEST·PRODUCTION HOLD.
+---
+
+## NEXT — app501 Recent save-heart Music Note phantom save regression (2026-10-26)
+- 사용자가 app500 PREVIEW에서 로그인 유지·동시 탭 **PASS**, 최근 생성곡 저장하트→Music Note 누락 **FAIL** 보고. TEST/PROD 승격 HOLD.
+- 원인 후보: 30초 Studio pending localStorage full 시 `writeAll` 실패를 숨겨도 저장 성공 토스트, canonical flush 없음. branch `fix/app501-studio-heart-quota-safe`에서 **정확한 local pending 저장 read-back**, 새 save 실패만 기존 one-item canonical 즉시 저장, 이전 pending 충돌 시 재저장 차단·오류 안내. 정상 30초 W0/W1·즉시 local/다른 기기 RTDB preview·Music Note 표시·UI·비용 불변.
+- **다음:** `verify-501-studio-heart-quota-safe.ts`와 기존 product quality CI, TS, Build PASS 확인; 문제 있으면 해당 경로만 최소 수정. 사용자 직접 PREVIEW 신규 배포 승인이 없으므로 **코드 PR만**, 기존 Hosting 유지. 추가 Codex·Work 연속 명령 금지.
+- 저장 실패 원본 데이터 삭제/overwrite, 사이트 데이터 초기화, 모든 favorites 서버 재조회, Stage416 활성화, main/production/Worker/Functions/Rules 변경 금지.
+---
+
 ## NEXT — app500 PREVIEW 배포 완료 → 모바일 Chrome 로그인 실사용 QA (2026-10-26)
 - Firebase PREVIEW 배포 **성공**: run `40242015534`, 실제 호스팅 배포 소스 `8da70f240bbca8e1b8305f11cdd8cd240efcda10`, preview.soridraw.com app-version=500 및 remote/local index SHA 동일, TEST/PRODUCTION untouched, Worker/Functions/Rules/D1/user data unchanged. 추가 배포 **불필요**.
 - app500 로그인 소스 Work Medium P1 ×2 **PASS**, SDK/TS/Build/전체 제품 CI **PASS**. 그러나 실제 Android Chrome 영구 로그인·기존 SESSION/LOCAL/IndexedDB, 두 탭, quota, 이메일/Google 로그인, 신규가입, Music Note 초안/좋아요 대기열/PC↔모바일 QA는 **미검증**.

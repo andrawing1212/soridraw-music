@@ -29,6 +29,8 @@ import {
   removeStudioHeartPendingIntent,
   updateStudioHeartPendingIntent,
   writeStudioHeartPendingIntent,
+  writeStudioHeartPendingIntentChecked,
+  isStudioHeartOptimisticFavorite,
   type StudioHeartPendingIntent,
 } from './lib/studioHeartBatch';
 
@@ -6297,7 +6299,8 @@ function App() {
   const withRemotePreview = overlayStudioHeartRemotePreviewsOnFavorites(safeUid, previewBase);
   const visible = overlayStudioHeartPendingIntentsOnFavorites(safeUid, withRemotePreview);
   favoritesStore.setFavorites(visible);
-  writeFavoritesCache(safeUid, visible);
+  // RTDB preview is local only; never publish it into shared Catalog.
+  writeFavoritesCache(safeUid, visible, { publishDerived: false });
   };
 
   const clearRemoteStudioHeartPreviewFromCanonical = (
@@ -10499,7 +10502,8 @@ const toggleCycleVariantSelection = (
                 const bundleVersion = Number(bundle.updatedAtMs || 0);
                 const localNewer = previous.filter((favorite: any) => {
                   if (!favorite || isFavoriteSoftRemoved(favorite)) return false;
-                  if (favorite?.__studioHeartPendingLocal === true) return false;
+                  // A speculative RTDB preview must not become canonical.
+                  if (isStudioHeartOptimisticFavorite(favorite)) return false;
                   const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
                   if (favoriteId && localDeletedIds.has(favoriteId)) return false;
                   const favoriteVersion = Number(favorite?.updatedAtMs || favorite?.createdAtMs || 0)
@@ -10511,7 +10515,8 @@ const toggleCycleVariantSelection = (
                 const authoritative = isFullMusicNoteCatalog
                   ? mergeFavoritePages(catalogFavorites, localNewer)
                   : mergeFavoriteFirstPageWithCache(catalogFavorites, previous, false);
-                writeFavoritesCache(currentUser.uid, authoritative);
+                // Reading Catalog must never cause a derived Catalog write.
+                writeFavoritesCache(currentUser.uid, authoritative, { publishDerived: false });
                 return authoritative;
               });
 
@@ -11201,7 +11206,7 @@ const toggleCycleVariantSelection = (
       const bundleVersion = Number(bundle.updatedAtMs || 0);
       const localNewer = (Array.isArray(previous) ? previous : []).filter((favorite: any) => {
         if (!favorite || isFavoriteSoftRemoved(favorite)) return false;
-        if (favorite?.__studioHeartPendingLocal === true) return false;
+        if (isStudioHeartOptimisticFavorite(favorite)) return false;
         const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
         if (favoriteId && localDeletedIds.has(favoriteId)) return false;
         const favoriteVersion = Number(favorite?.updatedAtMs || favorite?.createdAtMs || 0)
@@ -11217,8 +11222,8 @@ const toggleCycleVariantSelection = (
         !bundle.hasMore,
       );
       setFavorites(merged);
-      writeFavoritesCache(uid, merged);
-      favoritesStore.setFavorites(merged);
+      // Read-only refresh must preserve active optimistic overlays.
+      writeFavoritesCache(uid, merged, { publishDerived: false });
       favoritePaginationCursorRef.current = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;
       favoritePaginationExhaustedRef.current = !bundle.hasMore;
       favoritePaginationFallbackModeRef.current = false;
@@ -11938,7 +11943,18 @@ const toggleCycleVariantSelection = (
       pendingRemotePreviewVersion: existing?.pendingRemotePreviewVersion || 0,
       retryCount: 0,
     };
-    writeStudioHeartPendingIntent(intent);
+    const durableIntentResult = writeStudioHeartPendingIntentChecked(intent);
+    if (durableIntentResult === 'blocked-existing') {
+      // A previous click is still queued. A direct new write could be reversed
+      // by that older timer, so preserve its durable intent and reject this one.
+      throw new Error('STUDIO_HEART_PENDING_STORAGE_BLOCKED_WITH_EXISTING');
+    }
+    if (durableIntentResult === 'blocked-empty' || durableIntentResult === 'blocked-capacity') {
+      // No old pending action can race with this click. Bypass the batching
+      // queue and let the caller use the existing one-item canonical save path.
+      // No optimistic "saved" toast or phantom Music Note row is published.
+      return false;
+    }
     scheduleStudioHeartPendingIntent(safeDocumentId);
 
     // app302 option-2:
@@ -16819,6 +16835,9 @@ ${normalizePromptForDisplay(result.prompt)}
       }
     } catch (error) {
       console.warn('Studio favorite toggle failed.', error);
+      if ((error as Error)?.message === 'STUDIO_HEART_PENDING_STORAGE_BLOCKED_WITH_EXISTING') {
+        showToast('브라우저 저장 공간이 부족하여 이번 하트 변경을 저장하지 못했습니다. 이전 저장 대기는 보존했습니다.');
+      }
     } finally {
       const elapsed = Date.now() - favoriteToggleStartedAt;
       if (elapsed < 450) {

@@ -7,10 +7,11 @@
 2. `DOCS/NEXT_CODEX_TASK.md` — 현재 구현 작업이 있을 때 범위/합격선/중단 조건
 3. `DOCS/WORK_AUDIT_CHECKLIST.md` — 구현 완료 후 독립 검증 기준
 4. `DOCS/WORKFLOW_GUARDRAILS.md` — 브랜치·배포·데이터·비용·안전 고정 규칙
-5. `DOCS/CODEX_USAGE_BUDGET.md` — Codex 사용량 절약 규칙
-6. 필요 시 `DOCS/DEPLOYMENT_PROGRESS.md`
-7. 과거 원인이 정말 필요할 때만 `DOCS/WORK_LOG.md`
-8. 실제 `preview` HEAD와 최근 commit을 확인해 문서와 실제 GitHub가 일치하는지 확인
+5. **`DOCS/DIRECTOR_WORK_RULES_AND_DAILY_ROUTINE.md` — 디렉터의 승인 범위 끝까지 유지, 매 작업 체크리스트, 작업물 조기 보존, 매일 루틴 (필수)**
+6. `DOCS/CODEX_USAGE_BUDGET.md` — Codex 사용량 절약 규칙
+7. 필요 시 `DOCS/DEPLOYMENT_PROGRESS.md`
+8. 과거 원인이 정말 필요할 때만 `DOCS/WORK_LOG.md`
+9. 실제 `preview` HEAD와 최근 commit을 확인해 문서와 실제 GitHub가 일치하는지 확인
 
 ## 기능별 스킬
 - 좋아요/해제, 개인 좋아요 카탈로그, PC↔모바일 동기화, Explore 좋아요 비용 최적화 작업 전에는 반드시 `.agents/skills/local-first-like-sync/SKILL.md`를 읽는다.
@@ -20,6 +21,14 @@
 - **Music Note / Library 폴더 생성·저장·이름변경·삭제·드래그 순서이동·PC↔모바일 동기화·Firestore 비용**을 변경하거나 감사할 때는 반드시 `.agents/skills/music-note-library-folder-sync-cost/SKILL.md`를 읽는다. 현재 보호 기준은 `.agents/skills/music-note-library-folder-sync-cost/references/soridraw-app301-folder-baseline.md`다. app301 정상 폴더 경로는 구체 오류나 사용자 명시 변경 지시 없이 다시 구조 변경하지 않는다.
 - 비용/캐시/동기화 변경이면 `references/cost-regression-checklist.md`도 함께 읽는다.
 - 이 스킬은 정상 기능을 비용 때문에 삭제하거나 약화하는 근거로 사용할 수 없다. 현재 사용자 지시와 `CURRENT_RELEASE_STATE.md`가 항상 우선한다.
+
+## 디렉터 작업 계약 — 모든 개발/감사 채팅 필수
+
+- `DOCS/DIRECTOR_WORK_RULES_AND_DAILY_ROUTINE.md`를 새 작업 시작 시 읽고 **매 작업의 목표/전체 합의 기능/안전선/담당자/저장·검증/다음 작업** 체크리스트를 사용자에게 먼저 보고한다.
+- 사용자 승인을 받은 세부 동작은 **전부 합격할 때까지 추적**한다. 구현 편의로 일부를 조용히 빼거나 같은 작업 명령문을 번복하지 않는다.
+- Codex/Work 사용량이 부족해지기 전에 **복구 가능한 GitHub commit/push와 정확한 상태 기록을 우선**한다. 원격 미저장은 완료 아님.
+- 매일 GitHub 현재 기준으로 **오늘 한 작업 → 복구 지점 → 검증 → 다음 날 한 작업** 루틴을 정한다. 긴급 장애가 생기면 안전 복구 우선.
+- 모든 채팅은 같은 GitHub 기준을 사용하지만, 다른 Codex 채팅의 임시 로컬 작업을 자동 재개할 수 있다고 주장하지 않는다.
 
 ## 절대 원칙
 - 현재 사용자 지시 → `CURRENT_RELEASE_STATE.md` → GitHub/Firebase/Cloudflare 실제 상태 순으로 판단한다.

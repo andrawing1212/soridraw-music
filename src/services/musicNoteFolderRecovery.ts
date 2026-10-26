@@ -35,7 +35,7 @@ export const listMusicNoteFolderRecovery = async (uid: string): Promise<MusicNot
 
 export const restoreMusicNoteFolderRecovery = async (
   uid: string, recordId: string, mode: MusicNoteFolderModeKey, choice: 'before' | 'after',
-): Promise<{ folders: unknown[]; version: number }> => {
+): Promise<{ folders: unknown[]; version: number; changed: boolean }> => {
   if (!uid?.trim() || !/^[a-f0-9]{40}$/.test(recordId)
     || !['myNote', 'sharedNote'].includes(mode) || !['before', 'after'].includes(choice)) {
     throw new Error('잘못된 복원 요청입니다.');
@@ -68,16 +68,28 @@ export const restoreMusicNoteFolderRecovery = async (
       throw new Error('다른 기기에서 폴더가 변경되었습니다. 복원을 중단했습니다.');
     }
     const versionRaw = Number(canonicalSnap.data()?.musicNoteStructureVersion || 0);
-    const version = (Number.isFinite(versionRaw) && versionRaw > 0 ? Math.floor(versionRaw) : 0) + 1;
+    const currentVersion = Number.isFinite(versionRaw) && versionRaw > 0 ? Math.floor(versionRaw) : 0;
+    // 'After' may already be the current canonical state. Do not charge a
+    // redundant W1 or broadcast if the user just confirmed that choice.
+    if (JSON.stringify(selected) === JSON.stringify(expected)) {
+      return { folders: selected as unknown[], version: currentVersion, changed: false };
+    }
+    // Removing a folder ID can orphan saved songs without knowing their
+    // membership. This recovery UI must NEVER silently delete folder IDs.
+    const selectedIds = new Set(selected.map((item: any) => String(item?.id || '')));
+    if (expected.some((item: any) => !selectedIds.has(String(item?.id || '')))) {
+      throw new Error('이 복원에는 폴더 삭제가 포함됩니다. 곡 연결을 확인하지 않아 안전을 위해 중단했습니다.');
+    }
+    const version = currentVersion + 1;
     txn.set(parent, {
       musicNoteFolders: { [mode]: selected },
       musicNoteStructureVersion: version,
       musicNoteStructureWriterToken: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     }, { merge: true });
-    return { folders: selected as unknown[], version };
+    return { folders: selected as unknown[], version, changed: true };
   });
   // Firestore ACK is authoritative; RTDB is just a best-effort warm-device hint.
-  void publishMusicNoteStructureDelta(uid, {
+  if (result.changed) void publishMusicNoteStructureDelta(uid, {
     musicNoteFolders: { [mode]: result.folders },
     musicNoteStructureVersion: result.version,
   }).catch(() => {});

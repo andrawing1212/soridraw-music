@@ -1,3 +1,10 @@
+## NEXT — app501 실사용 FAIL에 대한 exact-song canonical 진단/보존적 복구 설계 (2026-10-26)
+- 현재 PREVIEW app501 정상 배포된 소스 `13a3b961ac0a362db51a5d6d084f77fb57262fb9`, preview HEAD는 문서 merge commit 이후 변경될 수 있음. USER QA FAIL: 동일 UID `먼 길을 돌아온 밤` 기존 PC Chrome **하트 ON/목록 ON**, 모바일 **하트 ON/목록 OFF**, 다른 PC 브라우저 **하트 OFF/목록 OFF**. 실제 Firestore 원본 미검증. TEST/PRODUCTION 절대 승격 금지.
+- **원인 소스 관측:** App `isSongFavorited`가 브라우저별 `readRecentHeartAuthority` 저장 신호를 정식 favoritesStore보다 먼저 사용하여 하트 ON 단독 지속 가능. PC의 RTDB `__studioHeartRemotePreviewLocal`가 비 canonical 목록 행으로 남을 수 있음. 이 둘이 원인을 확정하는 것은 아니고 기기별 캐시와 공유 원본 정확 비교 필요.
+- **다음 단일 구현/진단 작업:** 기존 PC의 원본 곡을 보호하면서, 사용자 브라우저에서 명시적으로 실행하는 **비파괴·원곡 1건 read-only** 진단(UID 인증 context 내부; 실제 favoriteFirestoreId, Music Note Catalog 존재/제외 여부, recentHeartAuthority state, pending intent, 저장 성공 실패 버전, Firestore getDocFromServer(favorites/{exactId}) exists/uid-match/soft-removed 여부). 브라우저 로딩/재방문·업데이트 시 자동 DB 조회/기록 금지; 실제 곡 프롬프트/가사/토큰·개인정보 출력 금지; 추측 title-only 검색 금지. 실제 원본 존재 PASS일 경우에는 정확한 Catalog/캐시 복구만, 원본 부재일 경우 보존적 단일곡 재저장은 사용자 별도 명시 승인 후. 현재 ChatGPT 연결 GitHub 단독으로 사용자 인증된 Firestore를 조회할 수 없음.
+- 기존 30초 곡별 batch, Local First, PC↔모바일 즉시 하트, 기존 저장곡/미디어/Library/Explore, read0/writes0 unchanged-cache 원칙 보호. 별도 구현은 preview + CI + 독립 감사 후 PREVIEW만, TEST/PRODUCTION HOLD.
+---
+
 ## NEXT — app501 PREVIEW 실기기 PC↔모바일 Music Note 3곡 검증 (2026-10-26 KST)
 - Firebase PREVIEW Hosting `preview.soridraw.com` app501 **run #40258981882 PASS**, exact 배포 `13a3b961ac0a362db51a5d6d084f77fb57262fb9`; 사용자 제공 독립 소스 감사 `d1fabebfcd3473f8d1f7c0b5605dde91e8b20942` PASS, 제품 회귀 #40258811630 PASS. TEST/PRODUCTION main/production/Hosting 변화 없음, Worker/Functions/D1/shared Rules/user originals 변경 없음.
 - **다음 한 작업:** 기존 PC 브라우저, 모바일 Chrome, 새 PC 브라우저에서 기존 최근 `어릴 적 나에게 묻는다` / `먼 길을 돌아온 밤` / `어제의 네게 묻는다` Music Note membership과 Recent 하트 표시 **보기만** 비교. 기존 저장/저장해제, Music Note 항목 삭제, Cache/Cookie/LocalStorage 리셋 금지. 현상 지속 시 해당 UID exact favoriteFirestoreId를 인증 후 단건 read-only Firestore 확인하고 PC-only speculative row와 구별; 자동 데이터 복구·전체 backfill 절대 금지.

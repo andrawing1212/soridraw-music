@@ -12,7 +12,7 @@ const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 
-const setup = () => {
+const setup = (sharedServer509 = null) => {
   const local = new Map();
   const timers = [];
   const updates = [];
@@ -46,6 +46,10 @@ const setup = () => {
         if (state.firestoreFails) throw new Error('server rejected');
         if (state.hold) await new Promise((resolve) => waiters.push(resolve));
         updates.push({ document, payload });
+        if (sharedServer509) {
+          sharedServer509.version = payload['syncVersions.playlists'];
+          sharedServer509.writes.push(sharedServer509.version);
+        }
       },
     };
     if (id.endsWith('/firebase')) return { db: {}, realtimeDb: {} };
@@ -162,4 +166,30 @@ const setup = () => {
   assert.equal(x.local.has(x.key), false);
   assert.equal(x.updates.length, 0);
   console.log('APP507_LIBRARY_DOUBLE_FAILURE_CRASH_DURABILITY_REMAINS_UNVERIFIED=PASS');
+}
+
+// app509 RED-TEAM ONLY: two old/current app sessions may have a race even
+// after reading their latest RTDB floor. Firestore updateDoc sets an absolute
+// revision, not a monotonic compare-and-set. A deliberately delayed older
+// update can lower the newest shared users.syncVersions.playlists value.
+{
+  const sharedServer509 = { version: 0, writes: [] };
+  const oldSession509 = setup(sharedServer509);
+  const newSession509 = setup(sharedServer509);
+  oldSession509.state.hold = true;
+  oldSession509.api.queueLibraryPlaylistRevisionBatch('user-a', 50);
+  const oldPromise509 = oldSession509.api.flushLibraryPlaylistRevisionBatch('user-a');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(oldSession509.waiters.length, 1);
+  newSession509.state.remoteVersion = 51;
+  newSession509.api.queueLibraryPlaylistRevisionBatch('user-a', 51);
+  await newSession509.pulse();
+  assert.equal(sharedServer509.version, 51);
+  oldSession509.state.hold = false;
+  oldSession509.settle();
+  await oldPromise509;
+  assert.deepEqual(sharedServer509.writes, [51, 50]);
+  assert.equal(sharedServer509.version, 50,
+    'current updateDoc without transaction permits cross-session downgrade');
+  console.log('APP509_REDTEAM_CROSS_SESSION_REVISION_DOWNGRADE_RISK_REPRODUCED=PASS');
 }

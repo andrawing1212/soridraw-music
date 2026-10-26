@@ -500,3 +500,8 @@ console.log('APP508_ALL_QUOTA_EXECUTABLE_CI_GATE=PASS');
 // writes that share an atomic batch with users.syncVersions.playlists.
 execFileSync(process.execPath, ['scripts/verify-511-legacy-playlist-atomic-safety.mjs'], { stdio: 'inherit' });
 console.log('APP511_LEGACY_ATOMIC_EXECUTABLE_CI_GATE=PASS');
+
+// app512 — execute legacy mixed-version RTDB delta recovery in a real
+// transpiled playlistService VM with zero Firestore/RTDB or storage IO.
+execFileSync(process.execPath, ['scripts/verify-512-legacy-library-delta-continuity.mjs'], { stdio: 'inherit' });
+console.log('APP512_LEGACY_DELTA_EXECUTABLE_CI_GATE=PASS');

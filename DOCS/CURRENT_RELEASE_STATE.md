@@ -1,3 +1,11 @@
+## CURRENT — app505 브라우저 quota 안전 통합 후보, 병합·배포 HOLD (2026-10-26 KST)
+- 기준 preview HEAD `6e8543eb6525dd22a97a6d684de111613b0934bd` · live Firebase PREVIEW app501 사용자 Music Note 실사용 QA **FAIL**. main/TEST 및 PRODUCTION 유지, Stage416/Reader OFF.
+- app502 PR #495 단일곡 Admin CACHE LIVE read-only query (원본 PC 존재 여부는 여전히 미확정), exact source `256c99eefb39a740fd874a460d1bd7e8c3a9b8f8` CI PASS. app503 PR #496 quota-safe Explore/GlobalPlayer 다음곡 전달 `ef06a0128df90ae271558c8b553e0489e78161cd` CI PASS. app504 PR #497 Admin 수동 크기 진단 `58c9d48de4a1e2488e4035b1c9b1568619007b88` CI PASS.
+- **통합 브랜치 `fix/app505-storage-diagnostics-integration`**: 세 PR의 기능·회귀검사를 `preview` 기초에서 결합. 두 CACHE LIVE 변경을 동시 보존. 자동 시험 및 독립 Work 검증 전 PR Draft/합병·Firebase Hosting 배포 금지. 사용자의 PC/모바일 인증기기 캐시나 Firestore 원본 삭제·이전·재저장 절대 금지.
+- app504는 관리자 클릭 시 기기 내 크기만 계산하며, 실제 모바일 용량·원인 분포 및 저장 원본 확정은 **미측정**. 아직 IndexedDB migration / 자동 cache eviction / full read 는 실행하지 않음. 상세 `DOCS/BROWSER_STORAGE_CAPACITY_PLAN.md` 참고.
+- 검증 이후에도 사용자 모바일 실제 '다음곡에 적용' 동작, 동일 3브라우저 정확 favorites 원본, 비용/캐시, PC↔모바일 동작까지 PASS 전 TEST 승격 금지. TEST→PRODUCTION 별도 명시 승인.
+---
+
 ## CURRENT — app501 PREVIEW 실제 사용자 3브라우저 Music Note/하트 동기화 FAIL (2026-10-26 KST)
 - **실사용 QA 판정 FAIL:** app501 Firebase PREVIEW Hosting은 run #40258981882 / exact SHA `13a3b961ac0a362db51a5d6d084f77fb57262fb9`에서 배포 PASS, 소스 독립 감사 SHA `d1fabebfcd3473f8d1f7c0b5605dde91e8b20942` PASS였으나 실제 사용자가 확인한 기존 누락곡 `먼 길을 돌아온 밤`은 수정되지 않음.
 - **동일 계정의 실제 기기별 상태:** 기존 PC Chrome: Recent 저장하트 체크 + Music Note 곡 **있음**. 모바일: 저장하트 **체크** + Music Note 곡 **없음**. 다른 PC 브라우저: 저장하트 **해제** + Music Note 곡 **없음**. 나머지 두 최근곡은 비교 기준이며, 다른 PC 최초 진입에서 `어제의 네게 묻는다`가 일시 누락했다가 새로고침 뒤 등장한 전력이 있음.

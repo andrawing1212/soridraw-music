@@ -1,3 +1,9 @@
+## NEXT — app508 exact-SHA joint audit and PREVIEW only (2026-10-26 KST)
+- Candidate Draft `fix/app508-all-storage-quota-integration`: exact merged-on-branch features of #498 #500 #501. Run actual CI TypeScript/Build and all app502+503+504+506+507 VM regressions, inspect logs. Independently audit exact SHA via Work Medium/High READ ONLY `DOCS/WORK_AUDIT_CHECKLIST.md`, app301 folder and app349 heart protection. FAIL -> no merge/deploy; repair only separate candidate and repeat both.
+- Verify app503 quota-full/blocked-both handoff to Studio; app502 admin exact-UID single-owner Firestore read only on click, no private values; app504 admin manual local/session size estimation no deletion, no automatic IO; app506 storage read-back quota immediate one-UID fallback and warning, bounded retry, 60s healthy; app507 derived Library revision monotonic, old ACK, 60s healthy, offline bounded. No normal R/W added, unchanged browser cache retained.
+- Real user's authenticated Firestore canonical membership, PC/Android/iOS storage, and physical route navigation **not measured**. Independent PASS then existing canonical PREVIEW Firebase workflow only; exact release build proof; physical same-account PC/mobile/new-browser parity before any TEST. Keep main/PRODUCTION unchanged and shared originals unmodified. Issue #502 statistic increment idempotency separate high-risk design, do not blindly retry.
+---
+
 ## NEXT — app505 통합 CI·독립 감사·PREVIEW 검증 게이트 (2026-10-26 KST)
 - 현재 독립 브랜치 `fix/app505-storage-diagnostics-integration`; 세 Draft PR #495 app502, #496 app503, #497 app504 소스와 회귀 검사 결합. UI 일반 사용자 레이아웃·좋아요 동작·30초 저장하트/150초 Recent·60초 Music Note 편집 기존 보호.
 - 정확 SHA GitHub product-quality CI: TypeScript, Build, app501+502 UI race, app503 storage quota actual bridge, app504 Admin read-only privacy, app349 media/Studio, Explore/Library 관련 회귀. 실패 시 이 통합 브랜치만 최소 수정 후 새 SHA/CI. **별도 Work Medium READ ONLY 통합 고정 SHA 감사 PASS 전 병합·PREVIEW 배포 금지**.

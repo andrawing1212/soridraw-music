@@ -18,6 +18,8 @@ const canonical = [];
 let quota = false;
 let silentReject = false;
 let failServer = false;
+let holdServer = false;
+const heldServerResolutions = [];
 const key = 'soridraw.musicNote.folderStructureBatch.v1.user-a';
 const storage = {
   getItem: (k) => records.get(k) ?? null,
@@ -41,6 +43,7 @@ const mockRequire = (id) => {
     doc: (_db, collection, uid) => ({ collection, uid }),
     setDoc: async (ref, value) => {
       if (failServer) throw new Error('offline');
+      if (holdServer) await new Promise((resolve) => heldServerResolutions.push(resolve));
       canonical.push({ ref, value: JSON.parse(JSON.stringify(value)) });
     },
   };
@@ -117,6 +120,29 @@ await runNext();
 assert.equal(canonical.at(-1).value.musicNoteStructureVersion, 4);
 assert.equal(api.getPendingMusicNoteFolderStructureBatch('user-a'), null);
 console.log('APP506_OFFLINE_MEMORY_RETRY_BOUNDED_UNTIL_SERVER_ACK=PASS');
+
+// One old in-flight canonical response must not clear a newer same-UID edit.
+// A second quota-failed click is kept in memory while the prior request awaits.
+holdServer = true;
+api.queueMusicNoteFolderStructureBatch('user-a', 'myNote', folder('slow-v5'), 5);
+await runNext();
+assert.equal(heldServerResolutions.length, 1);
+api.queueMusicNoteFolderStructureBatch('user-a', 'myNote', folder('latest-v6'), 6);
+assert.equal(api.getPendingMusicNoteFolderStructureBatch('user-a').myNote.version, 6);
+await runNext(); // Existing in-flight request must be reused, no concurrent write.
+assert.equal(heldServerResolutions.length, 1);
+holdServer = false;
+heldServerResolutions.shift()();
+await new Promise(resolve => setImmediate(resolve));
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(api.getPendingMusicNoteFolderStructureBatch('user-a').myNote.version, 6,
+  'old ACK must not clear a newer edit');
+assert.equal(lastActive().ms, 0, 'newest quota-failed edit must still settle');
+await runNext();
+assert.equal(canonical.at(-1).value.musicNoteStructureVersion, 6);
+assert.equal(canonical.at(-1).value.musicNoteFolders.myNote[0].title, 'latest-v6');
+assert.equal(api.getPendingMusicNoteFolderStructureBatch('user-a'), null);
+console.log('APP506_OLD_INFLIGHT_ACK_CANNOT_ERASE_LATEST_QUOTA_EDIT=PASS');
 
 // Offline + both browser storage and network blocked remains unable to
 // guarantee survival of full tab termination; never overclaim durability.

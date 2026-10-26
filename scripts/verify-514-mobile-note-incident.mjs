@@ -372,6 +372,31 @@ for (const failure of ['denied', 'aborted']) {
   console.log('APP514_IMMEDIATE_DELETE_AFTER_PENDING_RENAME_USES_ORIGINAL_BASE=PASS');
 }
 
+// Coexistence stage: old app can still save using existing Rules. If an old
+// client changed the mode after the new client's last baseline, the modern
+// writer must NOT silently replace the old user's saved folder.
+{
+  const canonical = { data: {
+    musicNoteStructureVersion: 900_000,
+    musicNoteFolders: { myNote: folders('first-server') },
+  } };
+  const modern = device(bus(), { quota: true, canonical, clock: 700_000 });
+  modern.page.publish(uid, {
+    musicNoteFolders: { myNote: folders('first-server') }, musicNoteStructureVersion: 900_000,
+  }, 900_000);
+  // Existing legacy setDoc(..., merge:true) updates the canonical document.
+  canonical.data = {
+    ...canonical.data, musicNoteStructureVersion: 800_000,
+    musicNoteFolders: { myNote: folders('legacy-user-edit') },
+  };
+  await modern.page.persist('myNote', folders('modern-stale-view'));
+  await modern.advance(0);
+  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'legacy-user-edit');
+  assert.equal(modern.batch.getMusicNoteFolderSaveStatus(uid).state, 'failed');
+  assert.ok(modern.batch.getPendingMusicNoteFolderStructureBatch(uid));
+  console.log('APP514_LEGACY_WRITE_PRESERVED_FROM_STALE_MODERN_CLIENT=PASS');
+}
+
 // Rejected old Firestore update sends one conflict-only RTDB signal. A warm
 // receiving device must re-read canonical rather than keep an uncommitted UI.
 {

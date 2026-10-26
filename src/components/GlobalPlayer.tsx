@@ -1,3 +1,4 @@
+import { stageNextSongKeywords } from '../lib/nextSongPendingBridge';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
@@ -742,8 +743,8 @@ export default function GlobalPlayer() {
     }
 
     const serialized = JSON.stringify(appliedKeywords);
-    sessionStorage.setItem('pendingAppliedKeywords', serialized);
-    localStorage.setItem('pendingAppliedKeywordsBackup', serialized);
+    // Share the same quota-safe Studio handoff used by Explore.
+    stageNextSongKeywords(serialized);
 
     if (!auth.currentUser) {
       if (confirm('로그인 후 다음 곡에 설정이 적용됩니다. 로그인 화면으로 이동할까요?')) {

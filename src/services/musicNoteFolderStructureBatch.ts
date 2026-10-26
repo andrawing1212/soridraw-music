@@ -137,6 +137,10 @@ export const writeMusicNoteStructureIfNewer = async (
       committedRevision = expectedBases?.length ? serverVersion + 1 : version;
       transaction.set(structureRef, {
         ...patch, musicNoteStructureVersion: committedRevision,
+        // A legacy setDoc(merge:true) cannot refresh this token. The existing
+        // server write trigger can then preserve both folder versions if a
+        // previously deployed browser overwrites a modern committed edit.
+        musicNoteStructureWriterToken: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       }, { merge: true });
     });
     // A successful transaction is authoritative even if local device time is wrong.

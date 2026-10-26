@@ -1,3 +1,10 @@
+## CURRENT — app508 browser quota integrated candidate (2026-10-26 KST)
+- Integration Draft `fix/app508-all-storage-quota-integration` from app505 #498 `19576687cf5ae2f7fb0d7a8328033ebd2cb5f624`, with app506 #500 `f7dbda9c2c4c5498e48e061f244412697c522a4e` and app507 #501 `d1b2329666408d3373784f6fe601e73454217ef4`, all originally from preview `6e8543eb6525dd22a97a6d684de111613b0934bd`.
+- Scope: mobile Explore '다음곡에 적용' quota-safe SPA Studio handoff, one-song read-only admin exact Firestore diagnostic, admin-click storage size breakdown, quota-failed-only Music Note folder canonical fallback and Library compatibility revision fallback. Existing +30s Studio heart, +60s folders/Library, +150s Recent healthy behavior untouched.
+- User original song `먼 길을 돌아온 밤` Firestore canonical existence UNKNOWN; do not reset old PC browser or re-save original. No full cache clear, destructive migration, forced app-wide refresh, shared-data writes. app508 CI/full executable suite and separate Work READ-ONLY audit required before PREVIEW merge/deploy. App version/live PREVIEW remains app501 user QA FAIL. TEST/main/PRODUCTION unchanged, Stage416/Reader OFF.
+- Remaining: offline+storage blocked+tab-close not crash-proof; app502 actual one-doc authenticated verification R1 pending; actual mobile storage usage unmeasured; user device acceptance pending; derived favoriteCount exactly-once ambiguity issue #502 (not modified). See `DOCS/APP508_QUOTA_INTEGRATION_AUDIT.md`.
+---
+
 ## CURRENT — app505 브라우저 quota 안전 통합 후보, 병합·배포 HOLD (2026-10-26 KST)
 - 기준 preview HEAD `6e8543eb6525dd22a97a6d684de111613b0934bd` · live Firebase PREVIEW app501 사용자 Music Note 실사용 QA **FAIL**. main/TEST 및 PRODUCTION 유지, Stage416/Reader OFF.
 - app502 PR #495 단일곡 Admin CACHE LIVE read-only query (원본 PC 존재 여부는 여전히 미확정), exact source `256c99eefb39a740fd874a460d1bd7e8c3a9b8f8` CI PASS. app503 PR #496 quota-safe Explore/GlobalPlayer 다음곡 전달 `ef06a0128df90ae271558c8b553e0489e78161cd` CI PASS. app504 PR #497 Admin 수동 크기 진단 `58c9d48de4a1e2488e4035b1c9b1568619007b88` CI PASS.

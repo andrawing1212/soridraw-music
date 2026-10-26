@@ -505,3 +505,8 @@ console.log('APP511_LEGACY_ATOMIC_EXECUTABLE_CI_GATE=PASS');
 // transpiled playlistService VM with zero Firestore/RTDB or storage IO.
 execFileSync(process.execPath, ['scripts/verify-512-legacy-library-delta-continuity.mjs'], { stdio: 'inherit' });
 console.log('APP512_LEGACY_DELTA_EXECUTABLE_CI_GATE=PASS');
+
+// app513: runtime fault injection for exact one-document recovery on a
+// confirmed canonical item/folder change, with no collection read.
+execFileSync(process.execPath, ['scripts/verify-513-library-gap-exact-doc-recovery.mjs'], { stdio: 'inherit' });
+console.log('APP513_EXACT_GAP_EXECUTABLE_CI_GATE=PASS');

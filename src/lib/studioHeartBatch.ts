@@ -146,3 +146,10 @@ export const updateStudioHeartPendingIntent = (
   }
   return writeStudioHeartPendingIntent(next);
 };
+
+// Only durable canonical favorites may be merged into the server Catalog.
+// Immediate pending/RTDB previews remain visible through App overlays.
+export const isStudioHeartOptimisticFavorite = (favorite: any): boolean => (
+  favorite?.__studioHeartPendingLocal === true
+  || favorite?.__studioHeartRemotePreviewLocal === true
+);

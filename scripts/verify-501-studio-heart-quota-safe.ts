@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import {
   readStudioHeartPendingIntent,
   writeStudioHeartPendingIntentChecked,
+  isStudioHeartOptimisticFavorite,
   type StudioHeartPendingIntent,
 } from '../src/lib/studioHeartBatch';
 
@@ -127,6 +128,16 @@ try {
   assert.equal(readStudioHeartPendingIntent(A.uid, A.documentId)?.song.title, sameTimestampChangedSong.song.title);
   console.log('APP501_THREE_SONG_PENDING_SURVIVES_SIMULATED_BROWSER_RELOAD=PASS');
 
+  // A full Catalog must not adopt a newer PC-only RTDB phantom as real.
+  const simulatedCatalog = [{ id: 'A' }, { id: 'C' }];
+  const localItems = [
+    { id: 'B', updatedAtMs: 9999, __studioHeartRemotePreviewLocal: true },
+    { id: 'D', updatedAtMs: 9999, __studioHeartPendingLocal: true },
+    { id: 'E', updatedAtMs: 9999 },
+  ];
+  const trueNewer = localItems.filter((item) => !isStudioHeartOptimisticFavorite(item) && item.updatedAtMs > 1000);
+  assert.deepEqual([...simulatedCatalog, ...trueNewer].map((i) => i.id), ['A', 'C', 'E']);
+  console.log('APP501_CATALOG_PHANTOM_NOT_CANONICAL=PASS');
   const app = readFileSync('src/App.tsx','utf8');
   const queue = app.slice(app.indexOf('const queueStudioHeartPendingIntent ='),app.indexOf('  useEffect(() => {',app.indexOf('const queueStudioHeartPendingIntent =')));
   assert.ok(queue.includes("const durableIntentResult = writeStudioHeartPendingIntentChecked(intent);"));
@@ -145,6 +156,16 @@ try {
     'existing one-song canonical saving path must remain as the fallback');
   assert.ok(app.includes("브라우저 저장 공간이 부족하여 이번 하트 변경을 저장하지 못했습니다."),
     'conflicting pending failure must be disclosed rather than returning a false saved toast');
+  const remotePreview = app.slice(app.indexOf('const applyRemoteStudioHeartPreview ='), app.indexOf('const clearRemoteStudioHeartPreviewFromCanonical ='));
+  assert.ok(remotePreview.includes('writeFavoritesCache(safeUid, visible, { publishDerived: false })'));
+  const hydrate = app.slice(app.indexOf("unsubMusicNoteBundle = subscribeListBundle('musicNote'"), app.indexOf('const loadMoreFavorites ='));
+  assert.ok(hydrate.includes('isStudioHeartOptimisticFavorite(favorite)'));
+  assert.ok(hydrate.includes('writeFavoritesCache(currentUser.uid, authoritative, { publishDerived: false })'));
+  const refresh = app.slice(app.indexOf('const refreshFavoritesFromServerFirstPage ='), app.indexOf('const refreshFavoritesFromServerFirstPage =') + 5000);
+  assert.ok(refresh.includes('isStudioHeartOptimisticFavorite(favorite)'));
+  assert.ok(refresh.includes('writeFavoritesCache(uid, merged, { publishDerived: false })'));
+  assert.ok(!refresh.includes('favoritesStore.setFavorites(merged)'));
+  console.log('APP501_COLD_CATALOG_READ_NO_PHANTOM_PUBLISH=PASS');
   console.log('APP501_APP_RECENT_TO_MUSIC_NOTE_FALLBACK_CONTRACT=PASS');
   console.log('SORIDRAW_APP501_STUDIO_HEART_QUOTA_SAFE=PASS');
 } finally {

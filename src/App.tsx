@@ -30,6 +30,7 @@ import {
   updateStudioHeartPendingIntent,
   writeStudioHeartPendingIntent,
   writeStudioHeartPendingIntentChecked,
+  isStudioHeartOptimisticFavorite,
   type StudioHeartPendingIntent,
 } from './lib/studioHeartBatch';
 
@@ -6298,7 +6299,8 @@ function App() {
   const withRemotePreview = overlayStudioHeartRemotePreviewsOnFavorites(safeUid, previewBase);
   const visible = overlayStudioHeartPendingIntentsOnFavorites(safeUid, withRemotePreview);
   favoritesStore.setFavorites(visible);
-  writeFavoritesCache(safeUid, visible);
+  // RTDB preview is local only; never publish it into shared Catalog.
+  writeFavoritesCache(safeUid, visible, { publishDerived: false });
   };
 
   const clearRemoteStudioHeartPreviewFromCanonical = (
@@ -10500,7 +10502,8 @@ const toggleCycleVariantSelection = (
                 const bundleVersion = Number(bundle.updatedAtMs || 0);
                 const localNewer = previous.filter((favorite: any) => {
                   if (!favorite || isFavoriteSoftRemoved(favorite)) return false;
-                  if (favorite?.__studioHeartPendingLocal === true) return false;
+                  // A speculative RTDB preview must not become canonical.
+                  if (isStudioHeartOptimisticFavorite(favorite)) return false;
                   const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
                   if (favoriteId && localDeletedIds.has(favoriteId)) return false;
                   const favoriteVersion = Number(favorite?.updatedAtMs || favorite?.createdAtMs || 0)
@@ -10512,7 +10515,8 @@ const toggleCycleVariantSelection = (
                 const authoritative = isFullMusicNoteCatalog
                   ? mergeFavoritePages(catalogFavorites, localNewer)
                   : mergeFavoriteFirstPageWithCache(catalogFavorites, previous, false);
-                writeFavoritesCache(currentUser.uid, authoritative);
+                // Reading Catalog must never cause a derived Catalog write.
+                writeFavoritesCache(currentUser.uid, authoritative, { publishDerived: false });
                 return authoritative;
               });
 
@@ -11202,7 +11206,7 @@ const toggleCycleVariantSelection = (
       const bundleVersion = Number(bundle.updatedAtMs || 0);
       const localNewer = (Array.isArray(previous) ? previous : []).filter((favorite: any) => {
         if (!favorite || isFavoriteSoftRemoved(favorite)) return false;
-        if (favorite?.__studioHeartPendingLocal === true) return false;
+        if (isStudioHeartOptimisticFavorite(favorite)) return false;
         const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
         if (favoriteId && localDeletedIds.has(favoriteId)) return false;
         const favoriteVersion = Number(favorite?.updatedAtMs || favorite?.createdAtMs || 0)
@@ -11218,8 +11222,8 @@ const toggleCycleVariantSelection = (
         !bundle.hasMore,
       );
       setFavorites(merged);
-      writeFavoritesCache(uid, merged);
-      favoritesStore.setFavorites(merged);
+      // Read-only refresh must preserve active optimistic overlays.
+      writeFavoritesCache(uid, merged, { publishDerived: false });
       favoritePaginationCursorRef.current = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;
       favoritePaginationExhaustedRef.current = !bundle.hasMore;
       favoritePaginationFallbackModeRef.current = false;

@@ -1,5 +1,5 @@
 import { auth, db } from '../firebase';
-import { collection, documentId, limit, query, where } from './firestoreMeasured';
+import { collection, documentId as firestoreDocumentId, limit, query, where } from './firestoreMeasured';
 import { getDocsFromServer } from 'firebase/firestore';
 import { markFirestoreActualRead } from './cacheDiagnostics';
 import { favoritesStore } from '../hooks/useFavoritesStore';
@@ -85,7 +85,7 @@ export const inspectExactStudioHeartDocument = async (
   // shared TEST/PRODUCTION security rules or scanning a full collection.
   const exactOwnerQuery = query(
     collection(db, 'favorites'),
-    where(documentId(), '==', documentId),
+    where(firestoreDocumentId(), '==', documentId),
     where('uid', '==', uid),
     limit(1),
   );

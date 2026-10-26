@@ -267,7 +267,7 @@ try {
   const diagnostic = readFileSync('src/lib/studioHeartSingleDocDiagnostic.ts', 'utf8');
   const diagnosticUi = readFileSync('src/components/StudioHeartSingleDocDiagnostic.tsx', 'utf8');
   const diagnosticPanel = readFileSync('src/components/CacheDiagnosticsOverlayImpl.tsx', 'utf8');
-  assert.ok(diagnostic.includes("where(documentId(), '==', documentId)"),
+  assert.ok(diagnostic.includes("where(firestoreDocumentId(), '==', documentId)"),
     'Firestore query must bind the exact document ID');
   assert.ok(diagnostic.includes("where('uid', '==', uid)"),
     'Firestore query must filter by the signed-in account for rules-compatible missing detection');

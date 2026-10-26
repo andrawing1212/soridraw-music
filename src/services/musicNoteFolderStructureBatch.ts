@@ -1,6 +1,7 @@
 import { doc, runTransaction } from '../lib/firestoreMeasured';
 import { db } from '../firebase';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
+import { publishMusicNoteStructureDelta } from './userDomainSyncService';
 
 export type MusicNoteFolderModeKey = 'myNote' | 'sharedNote';
 
@@ -41,6 +42,11 @@ const inflight = new Map<string, Promise<void>>();
 const memoryPending = new Map<string, PendingMusicNoteFolderStructure>();
 const undurablePendingUids510 = new Set<string>();
 const lastQuotaAttemptAt510 = new Map<string, number>();
+const observedServerVersions = new Map<string, number>();
+export const getObservedMusicNoteStructureVersion = (uid: string): number => observedServerVersions.get(safeUid(uid)) || 0;
+const rememberServerVersion = (uid: string, version: number): void => {
+  observedServerVersions.set(uid, Math.max(getObservedMusicNoteStructureVersion(uid), version));
+};
 
 export const getMusicNoteFolderSaveStatus = (uid: string) => saveStatuses.get(uid) || null;
 const reportStatus = (uid: string, patch: Partial<MusicNoteFolderSaveStatus>) => {
@@ -86,16 +92,34 @@ export const writeMusicNoteStructureIfNewer = async (
   const version = safeVersion(patch.musicNoteStructureVersion);
   if (!key || version <= 0) throw new Error('MUSIC_NOTE_STRUCTURE_INVALID_VERSION');
   const structureRef = doc(db, 'user_structures', key);
-  await runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(structureRef);
-    const serverVersion = safeVersion(snapshot.data()?.musicNoteStructureVersion);
-    if (serverVersion >= version) {
-      throw Object.assign(new Error('MUSIC_NOTE_STRUCTURE_STALE_SERVER_VERSION'), {
-        code: 'music-note/stale-structure-version',
-      });
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(structureRef);
+      const serverVersion = safeVersion(snapshot.data()?.musicNoteStructureVersion);
+      if (serverVersion >= version) {
+        // Never treat an older write as an acknowledged commit.
+        throw Object.assign(new Error('MUSIC_NOTE_STRUCTURE_STALE_SERVER_VERSION'), {
+          code: 'music-note/stale-structure-version',
+          serverVersion,
+        });
+      }
+      transaction.set(structureRef, patch, { merge: true });
+    });
+    rememberServerVersion(key, version);
+  } catch (error) {
+    const stale = error as { code?: string; serverVersion?: number };
+    if (stale?.code === 'music-note/stale-structure-version') {
+      rememberServerVersion(key, safeVersion(stale.serverVersion));
+      // An earlier RTDB preview may be visible on another device even though
+      // Firestore rejected it. One conflict-only RTDB signal makes receivers
+      // refresh the authoritative structure; no steady-state reads/writes.
+      void publishMusicNoteStructureDelta(key, {
+        __musicNoteCanonicalConflict: true,
+        musicNoteStructureVersion: safeVersion(stale.serverVersion),
+      }).catch(() => { /* The unsaved state remains visible if RTDB is unavailable. */ });
     }
-    transaction.set(structureRef, patch, { merge: true });
-  });
+    throw error;
+  }
 };
 
 const normalizeModeState = (value: any): PendingModeState | undefined => {

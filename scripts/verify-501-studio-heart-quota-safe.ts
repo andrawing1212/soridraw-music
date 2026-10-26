@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { runInNewContext } from 'node:vm';
 import * as ts from 'typescript';
 import {
@@ -476,3 +477,12 @@ try {
   if (savedGlobal) Object.defineProperty(globalThis,'localStorage',savedGlobal);
   else delete (globalThis as any).localStorage;
 }
+
+// The targeted source-quality workflow already runs this app501/502 verifier.
+// Explicitly include the separate app503 Explore/GlobalPlayer *executable*
+// quota-full handoff regression in the same pinned CI gate. The broader
+// release-system audit may also call verify-201, but cannot substitute here.
+execFileSync(process.execPath, ['scripts/verify-201-explore-track-action-sheet.mjs'], {
+  stdio: 'inherit',
+});
+console.log('APP505_QUOTA_HANDOFF_EXECUTABLE_CI_GATE=PASS');

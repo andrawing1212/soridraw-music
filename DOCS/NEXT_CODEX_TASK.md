@@ -1,3 +1,10 @@
+## NEXT — app505 통합 CI·독립 감사·PREVIEW 검증 게이트 (2026-10-26 KST)
+- 현재 독립 브랜치 `fix/app505-storage-diagnostics-integration`; 세 Draft PR #495 app502, #496 app503, #497 app504 소스와 회귀 검사 결합. UI 일반 사용자 레이아웃·좋아요 동작·30초 저장하트/150초 Recent·60초 Music Note 편집 기존 보호.
+- 정확 SHA GitHub product-quality CI: TypeScript, Build, app501+502 UI race, app503 storage quota actual bridge, app504 Admin read-only privacy, app349 media/Studio, Explore/Library 관련 회귀. 실패 시 이 통합 브랜치만 최소 수정 후 새 SHA/CI. **별도 Work Medium READ ONLY 통합 고정 SHA 감사 PASS 전 병합·PREVIEW 배포 금지**.
+- 통합 감사: 실제 `CacheDiagnosticsOverlayImpl.tsx`에 두 진단 컴포넌트 충돌 없음, 외부 데이터 read는 관리자 단건 명시 클릭만, 저장공간 측정은 로컬 read-only, quota-full 시 nextSong memory/session handoff & Studio navigation, 사용자 미확정 outbox·캐시 불변, CSS·Firebase/Cloudflare·Worker/Functions/Rules 무변경.
+- PREVIEW 배포 후 모바일 Chrome/PC에서 실사용 전용 비파괴 QA. 미확정 곡 인증된 Firestore R1은 사용자 명시 관리자 진단으로만; 원본 존재 미확정 상태 자동 재저장 절대 금지. 저장 용량 실측 뒤 공개 캐시만 예산화/선택적 IndexedDB 이전 여부 판단. user originals migration 금지. 세 환경 공유 데이터 복제 금지.
+---
+
 ## NEXT — app501 실사용 FAIL에 대한 exact-song canonical 진단/보존적 복구 설계 (2026-10-26)
 - 현재 PREVIEW app501 정상 배포된 소스 `13a3b961ac0a362db51a5d6d084f77fb57262fb9`, preview HEAD는 문서 merge commit 이후 변경될 수 있음. USER QA FAIL: 동일 UID `먼 길을 돌아온 밤` 기존 PC Chrome **하트 ON/목록 ON**, 모바일 **하트 ON/목록 OFF**, 다른 PC 브라우저 **하트 OFF/목록 OFF**. 실제 Firestore 원본 미검증. TEST/PRODUCTION 절대 승격 금지.
 - **원인 소스 관측:** App `isSongFavorited`가 브라우저별 `readRecentHeartAuthority` 저장 신호를 정식 favoritesStore보다 먼저 사용하여 하트 ON 단독 지속 가능. PC의 RTDB `__studioHeartRemotePreviewLocal`가 비 canonical 목록 행으로 남을 수 있음. 이 둘이 원인을 확정하는 것은 아니고 기기별 캐시와 공유 원본 정확 비교 필요.

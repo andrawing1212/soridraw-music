@@ -311,6 +311,46 @@ for (const failure of ['denied', 'aborted']) {
   console.log('APP514_P1_STALE_A_V100000_CANNOT_OVERWRITE_B_V100001=PASS');
 }
 
+// Server allocates revision for modern folder edits. A device with a high
+// or low clock cannot write an old folder state over another committed edit.
+{
+  const canonical = { data: {
+    musicNoteStructureVersion: 900_000,
+    musicNoteFolders: { myNote: folders('baseline'), sharedNote: folders('shared-base') },
+  } };
+  const slow = device(bus(), { quota: true, canonical, clock: 100_000 });
+  const staleFast = device(bus(), { quota: true, canonical, clock: 9_000_000 });
+  for (const d of [slow, staleFast]) {
+    d.page.publish(uid, { musicNoteFolders: {
+      myNote: folders('baseline'), sharedNote: folders('shared-base'),
+    }, musicNoteStructureVersion: 100 }, 100);
+  }
+  await slow.page.persist('myNote', folders('slow-clock-new'));
+  await slow.advance(0);
+  assert.equal(canonical.data.musicNoteStructureVersion, 900_001,
+    'Firestore allocates from committed revision, not sender Date.now');
+  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'slow-clock-new');
+  await staleFast.page.persist('myNote', folders('fast-clock-stale'));
+  await staleFast.advance(0);
+  assert.equal(canonical.data.musicNoteStructureVersion, 900_001);
+  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'slow-clock-new');
+  assert.equal(staleFast.batch.getMusicNoteFolderSaveStatus(uid).state, 'failed');
+  assert.ok(staleFast.batch.getPendingMusicNoteFolderStructureBatch(uid));
+  console.log('APP514_SERVER_REVISION_HIGH_LOW_CLOCK_STALE_BASE_GUARD=PASS');
+
+  // Different folder modes can settle without overwriting one another.
+  const otherMode = device(bus(), { quota: true, canonical, clock: 50_000 });
+  otherMode.page.publish(uid, { musicNoteFolders: {
+    myNote: folders('slow-clock-new'), sharedNote: folders('shared-base'),
+  }, musicNoteStructureVersion: 1 }, 1);
+  await otherMode.page.persist('sharedNote', folders('shared-updated'));
+  await otherMode.advance(0);
+  assert.equal(canonical.data.musicNoteStructureVersion, 900_002);
+  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'slow-clock-new');
+  assert.equal(canonical.data.musicNoteFolders.sharedNote[1].title, 'shared-updated');
+  console.log('APP514_SERVER_REVISION_INDEPENDENT_FOLDER_MODES=PASS');
+}
+
 // Rejected old Firestore update sends one conflict-only RTDB signal. A warm
 // receiving device must re-read canonical rather than keep an uncommitted UI.
 {

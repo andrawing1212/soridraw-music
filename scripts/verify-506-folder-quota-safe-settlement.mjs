@@ -6,7 +6,7 @@ import ts from 'typescript';
 const source = readFileSync('src/services/musicNoteFolderStructureBatch.ts', 'utf8');
 const page = readFileSync('src/pages/FavoritesPage.tsx', 'utf8');
 assert.match(page, /MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT/);
-assert.match(page, /기기 저장공간 부족: 폴더 변경을 서버에 즉시 저장 중입니다/);
+assert.match(page, /기기 저장공간 부족: 폴더 변경을 서버에 저장하는 중입니다/);
 assert.match(page, /showFavoriteToast\('[^']+', 10000\)/);
 assert.match(source, /const MUSIC_NOTE_FOLDER_BATCH_MS = 60_000/);
 assert.match(source, /schedule\(key, durable \? MUSIC_NOTE_FOLDER_BATCH_MS : emergencyDelay510\(key\)\)/);

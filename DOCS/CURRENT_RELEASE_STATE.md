@@ -1,3 +1,12 @@
+## CURRENT — app501 Firebase PREVIEW Hosting 배포 PASS / Music Note 실기기 QA 대기 (2026-10-26 KST)
+- **소스:** app501 PR #491 독립 소스 감사 **PASS** 고정 SHA `d1fabebfcd3473f8d1f7c0b5605dde91e8b20942`, 코드 preview merge `139b6427abb315d4158fbe477e7c3f88afc44e0d`. 릴리스 전용 PR #492 앱 버전 500→501 + 냉동 Worker 검사 frontend 허용 버전 + 고정 PREVIEW Hosting 트리거만 변경. 정확한 Firebase 배포 SHA **`13a3b961ac0a362db51a5d6d084f77fb57262fb9`**.
+- **PREVIEW 실배포:** canonical `.github/workflows/firebase-hosting-custom-preview.yml` run **40258981882 SUCCESS**. 로그의 `LOCKED_PREVIEW_SHA=13a3b961...`, `PREVIEW_APP_VERSION=501`, `PREVIEW_EXACT_BUILD=PASS` (배포된 `https://preview.soridraw.com/`의 실제 index.html SHA256 일치), `FIREBASE_PREVIEW_DEPLOY=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`, `TEST_PRODUCTION_UNCHANGED=PASS` 전부 확인. PR #492 preflight product CI #40258811630 PASS, PR #491 소스 CI #40257124683/#40257124727 PASS.
+- **범위·데이터:** Firebase PREVIEW Hosting만 변경. Worker/Functions/Cloudflare/D1/공유 RTDB Rules/Firestore Rules/사용자 canonical originals/개인 브라우저 cache/migration/backfill 삭제·수정 **0**. TEST main `b13360df1bab52e2d3b746ea47dc4e3718eef85c`, PRODUCTION `fa81b02b695a8e935cdbbf8cab1efe1b2c9387f4` 불변. Stage416/Reader OFF. 상태 문서만 갱신하는 후속 commit은 배포 소스 SHA와 구별.
+- **남은 실제 문제:** 기존 PC Music Note 최근 3곡, 모바일 2곡, 새 PC 브라우저 최초 1곡→새로고침 2곡. `먼 길을 돌아온 밤`은 기존 PC에서만 보였으나 이는 canonical 서버 문서인지 PC cached speculative preview인지 **미확인**. app501은 향후 거짓 저장을 방어하지만 **기존 원본 강제 복구 아님**. 사용자 인증된 exact-ID Firestore read-only 확인, 실제 PC/모바일/new browser 표시 및 서버 비용 실측 미검증. 저장하트 변경·곡 재생성·사이트 캐시 삭제·전체 동기화 금지.
+- **3중 진행:** Stage416 1/4·25% (OFF), 앱 속도 개선 기존 5/5·100% (과거 기준), app501 Music Note 저장 안정화 5/6·83% (코드/CI/감사/Hosting PASS, 실기기 QA 대기). 실사용 PASS 전 TEST/PRODUCTION 승격 HOLD.
+- **다음:** PREVIEW app501에서 기존 PC/모바일/새 PC 브라우저 Music Note 최근 3곡 목록·Recent 하트 상태를 변경하지 않고 비교. 불일치 시 원본 확인 후 보존적 단일곡 복구만 별도 설계.
+---
+
 ## CURRENT — app501 독립 감사 재FAIL (22→21→20 대기열 복구) 최소 수정 (2026-10-26 KST)
 - **고정 감사 SHA `c94c0e5ec6beedb840ceb28b8a5bbf29a1ea5856`**: CI PASS, 독립 감사 **FAIL**. 과거 대기열이 22건이면 첫 서버 저장 완료 후 삭제를 시도해도 `writeAll()`의 `ordered.length > 20` 무조건 거부로 22→21 기록이 반영되지 않아, 재접속 시 이미 끝난 곡이 다시 처리될 위험.
 - **최소 보강:** `src/lib/studioHeartBatch.ts`의 **20개 초과 대기열**은 이전에 저장되어 있던 `documentId`만 유지·수정·제거하는 경우에 쓰기를 허용. **새로운 documentId가 끼어드는 경우는 차단**하여 기존 저장곡을 밀어내지 않음. `writeStudioHeartPendingIntentChecked`의 20건 이상 새 곡 `blocked-capacity` → 기존 단일 곡 저장은 그대로 유지. 기존 곡 30초 batch/RTDB 즉시 동기화/Media/Catalog/비용 로직 변경 없음.

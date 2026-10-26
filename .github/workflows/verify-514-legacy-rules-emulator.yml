@@ -1,0 +1,43 @@
+name: SORIDRAW app514 Staged Legacy Rules Emulator (No Deploy)
+
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'DOCS/APP514_USER_STRUCTURES_GUARD_CANDIDATE.md'
+      - 'scripts/verify-514-legacy-rules-emulator.mjs'
+      - '.github/workflows/verify-514-legacy-rules-emulator.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  legacy-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install project SDK and isolated Rules test helper
+        run: |
+          npm ci --no-audit --no-fund
+          npm install --no-save --package-lock=false --no-audit --no-fund @firebase/rules-unit-testing
+      - name: Test candidate rules only in local Firestore emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "require('fs').writeFileSync('/tmp/app514-firebase.json', JSON.stringify({firestore:{rules:'firestore.rules'},emulators:{firestore:{host:'127.0.0.1',port:8099}}}))"
+          npx --yes firebase-tools@latest emulators:exec --only firestore \
+            --project demo-soridraw-app514-guard \
+            --config /tmp/app514-firebase.json \
+            "node scripts/verify-514-legacy-rules-emulator.mjs"
+          git diff --exit-code -- firestore.rules
+          echo 'APP514_LIVE_RULES_CHANGE=0'
+          echo 'APP514_DEPLOYMENT=0'

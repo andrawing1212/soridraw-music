@@ -19,7 +19,7 @@ import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useGlobalPlayerControls } from '../contexts/GlobalPlayerContext';
 import { applyRecoveredSunoAudioUrl, downloadSunoAudioWithRecovery, recoverSunoAudioUrl } from '../services/sunoAudioRecovery';
 // SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
-import { applyLibraryPlaylistSyncSignalToCache, ensureDefaultPlaylists, refreshPlaylistsFromServer, getPlaylistsByType, createPlaylist, renamePlaylist, reorderPlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, getLibraryPlaylistSyncDeviceId, subscribeLibraryPlaylistSync, toggleTrackLike, flushLibraryPlaylistRenameBatch, resumeLibraryPlaylistRenameBatch, flushLibraryPlaylistOrderBatch, resumeLibraryPlaylistOrderBatch } from '../services/playlistService';
+import { applyLibraryPlaylistSyncSignalToCache, recoverLibraryPlaylistGapExactDocument513, ensureDefaultPlaylists, refreshPlaylistsFromServer, getPlaylistsByType, createPlaylist, renamePlaylist, reorderPlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, getLibraryPlaylistSyncDeviceId, subscribeLibraryPlaylistSync, toggleTrackLike, flushLibraryPlaylistRenameBatch, resumeLibraryPlaylistRenameBatch, flushLibraryPlaylistOrderBatch, resumeLibraryPlaylistOrderBatch } from '../services/playlistService';
 import {
   flushLibraryPlaylistRevisionBatch,
   markLibraryPlaylistRevisionCommitted,
@@ -1739,7 +1739,16 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       }
       if (signal.originDeviceId === getLibraryPlaylistSyncDeviceId()) return;
       void applyLibraryPlaylistSyncSignalToCache(uid, signal).then((applied) => {
-        if (applied) markCacheDiagnostic('library', 'CACHE', 0);
+        if (applied) {
+          markCacheDiagnostic('library', 'CACHE', 0);
+          return;
+        }
+        // app513: only a genuinely missing RTDB change can request at most
+        // one already-canonical exact document. No list query or page-entry IO.
+        // This restores the *affected* item/folder, not an unknown full gap.
+        void recoverLibraryPlaylistGapExactDocument513(uid, signal);
+      }).catch((error) => {
+        console.warn('[Library sync] local delta merge unavailable; cache preserved.', error);
       });
     });
   }, [user?.uid, isSharedView]);

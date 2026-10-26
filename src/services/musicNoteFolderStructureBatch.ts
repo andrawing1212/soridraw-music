@@ -95,9 +95,13 @@ const warnPendingQuotaRisk506 = (uid: string): void => {
   if (typeof window === 'undefined') return;
   // No song/folder contents, IDs, or server request. This warning does NOT claim
   // an offline memory-only edit survived a reload.
-  window.dispatchEvent(new CustomEvent(MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT, {
-    detail: { uid },
-  }));
+  try {
+    window.dispatchEvent(new CustomEvent(MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT, {
+      detail: { uid },
+    }));
+  } catch {
+    // A missing CustomEvent API cannot block the canonical fallback timer.
+  }
 };
 
 const clearAll = (uid: string): void => {

@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
+import ts from 'typescript';
 
 const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
+const player = readFileSync('src/components/GlobalPlayer.tsx', 'utf8');
+const bridge = readFileSync('src/lib/nextSongPendingBridge.ts', 'utf8');
 const actionService = readFileSync('src/services/exploreTrackActionService.ts', 'utf8');
 const socialCss = readFileSync('src/components/explore/exploreSocial.css', 'utf8');
 
@@ -24,8 +28,56 @@ assert.match(page, />공유</, 'share action must remain in the sheet');
 assert.match(page, /<strong>다음곡에 적용<\/strong>/, 'next-song apply action must remain in the sheet');
 assert.match(page, /<strong>싫어요<\/strong>/, 'dislike action must remain in the sheet');
 
-assert.match(page, /sessionStorage\.setItem\('pendingAppliedKeywords'/, 'next-song apply must reuse the existing pending keyword handoff');
-assert.match(page, /localStorage\.setItem\('pendingAppliedKeywordsBackup'/, 'next-song apply backup handoff must remain');
+// app503: the same-tab handoff must survive QuotaExceededError without
+// preventing navigation or deleting Music Note/Library/original browser data.
+assert.match(page, /import \{ stageNextSongKeywords \} from '\.\.\/lib\/nextSongPendingBridge'/);
+assert.match(page, /stageNextSongKeywords\(serialized\);[\s\S]{0,180}?await flushExploreLikeBoundary094\(\);[\s\S]{0,100}?closeMoreSheet\(\);[\s\S]{0,100}?navigate\('\/studio\?applyPending=1'\)/);
+assert.match(player, /import \{ stageNextSongKeywords \} from '\.\.\/lib\/nextSongPendingBridge'/);
+assert.match(player, /stageNextSongKeywords\(serialized\);[\s\S]{0,550}?navigate\('\/studio\?applyPending=1'\)/);
+assert.doesNotMatch(page, /localStorage\.setItem\('pendingAppliedKeywordsBackup'/);
+assert.doesNotMatch(player, /localStorage\.setItem\('pendingAppliedKeywordsBackup'/);
+
+// Exercise the existing production bridge, not a duplicated fake. Simulate
+// mobile quota-full backup, both storages blocked, rapid repeated applies,
+// and stale async clear against a newer pending recipe.
+const module = { exports: {} };
+const originalRecords = new Map([['protected-user-draft', 'keep-me']]);
+const sessionRecords = new Map();
+const makeStorage = (records, failWrites = false) => ({
+  getItem: (key) => records.get(key) ?? null,
+  setItem: (key, value) => {
+    if (failWrites) throw new Error('QuotaExceededError');
+    records.set(key, value);
+  },
+  removeItem: (key) => records.delete(key),
+});
+const context = {
+  exports: module.exports,
+  module,
+  window: { sessionStorage: makeStorage(sessionRecords), localStorage: makeStorage(originalRecords, true) },
+};
+const executableBridge = ts.transpileModule(bridge, {
+  fileName: 'nextSongPendingBridge.ts',
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+runInNewContext(executableBridge, context);
+const { stageNextSongKeywords, readNextSongKeywords, clearNextSongKeywords } = module.exports;
+const first = JSON.stringify({ userInput: 'A-original-song', appliedKeywords: { genre: ['Dream Pop'] } });
+const second = JSON.stringify({ userInput: 'B-latest-song', appliedKeywords: { genre: ['Hip-Hop'] } });
+assert.deepEqual(JSON.parse(JSON.stringify(stageNextSongKeywords(first))), { sessionSaved: true, backupSaved: false });
+assert.equal(readNextSongKeywords(), first, 'quota-full backup must not discard same-tab recipe');
+assert.equal(sessionRecords.get('pendingAppliedKeywords'), first);
+assert.equal(originalRecords.get('protected-user-draft'), 'keep-me');
+context.window.sessionStorage = makeStorage(sessionRecords, true);
+assert.deepEqual(JSON.parse(JSON.stringify(stageNextSongKeywords(second))), { sessionSaved: false, backupSaved: false });
+assert.equal(readNextSongKeywords(), second, 'both storage failures still allow same-tab apply via memory');
+clearNextSongKeywords(first);
+assert.equal(readNextSongKeywords(), second, 'stale cleanup may not erase latest click');
+clearNextSongKeywords(second);
+assert.equal(originalRecords.get('protected-user-draft'), 'keep-me', 'no unrelated browser data deleted');
+assert.equal(readNextSongKeywords(), null, 'applied pending handoff must be cleared');
+console.log('APP503_EXPLORE_QUOTA_FULL_ROUTE_SAFE_MEMORY_HANDOFF=PASS');
+console.log('APP503_LATEST_RECIPE_AND_USER_STORAGE_PRESERVED=PASS');
 assert.match(page, /navigate\('\/studio\?applyPending=1'\)/, 'next-song apply must route through the existing studio apply path');
 assert.match(page, /await saveExploreTrackToSharedNote\(user, (?:authorizedTrack|track), folder\)/, 'shared-note action must use the Music Note shared-note path');
 assert.doesNotMatch(page, /addPlaylistItem|getPlaylistsByType|ensureDefaultPlaylists/, 'Explore action sheet must not use Library playlist storage');

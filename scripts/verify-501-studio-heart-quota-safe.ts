@@ -378,7 +378,7 @@ try {
   };
   const getDocInput = (tree: any) => findUi(tree, (n) => n.type === 'input' && n.props?.id === 'studio-heart-exact-doc-id');
   const getTitleInput = (tree: any) => findUi(tree, (n) => n.type === 'input' && n.props?.['aria-label'] === '현재 기기에 있는 곡의 정확한 제목');
-  const getReadButton = (tree: any) => findUi(tree, (n) => n.type === 'button' && JSON.stringify(n.props?.children).includes('서버 저장문서 1건 확인'));
+  const getReadButton = (tree: any) => findUi(tree, (n) => n.type === 'button' && /서버 저장문서 1건 확인|확인 중/.test(JSON.stringify(n.props?.children)));
   const getLocalButton = (tree: any) => findUi(tree, (n) => n.type === 'button' && JSON.stringify(n.props?.children).includes('이 브라우저에서 문서 찾기'));
   const hasServerReport = (tree: any) => JSON.stringify(tree).includes('이 계정의 서버 저장문서 존재');
   const makeReport = (documentPresent: boolean) => ({

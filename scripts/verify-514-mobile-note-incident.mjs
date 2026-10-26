@@ -397,6 +397,22 @@ for (const failure of ['denied', 'aborted']) {
   console.log('APP514_LEGACY_WRITE_PRESERVED_FROM_STALE_MODERN_CLIENT=PASS');
 }
 
+// Immediate user action rejected by a conflict is still captured as pending,
+// never silently discarded or promoted to a successful canonical mutation.
+{
+  const canonical = { data: {
+    musicNoteStructureVersion: 100,
+    musicNoteFolders: { myNote: folders('remote-new') },
+  } };
+  const d = device(bus(), { canonical });
+  d.page.publish(uid, { musicNoteFolders: { myNote: folders('stale-local') },
+    musicNoteStructureVersion: 50 }, 50);
+  await assert.rejects(d.page.persist('myNote', folders('unsaved-immediate'), { immediate: true }));
+  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'remote-new');
+  assert.equal(d.batch.getPendingMusicNoteFolderStructureBatch(uid).myNote.folders[1].title, 'unsaved-immediate');
+  console.log('APP514_IMMEDIATE_CONFLICT_RETAINS_UNSAVED_FOLDER_INTENT=PASS');
+}
+
 // Rejected old Firestore update sends one conflict-only RTDB signal. A warm
 // receiving device must re-read canonical rather than keep an uncommitted UI.
 {

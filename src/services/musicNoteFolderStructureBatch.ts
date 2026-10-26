@@ -111,6 +111,7 @@ export const writeMusicNoteStructureIfNewer = async (
   const version = safeVersion(patch.musicNoteStructureVersion);
   if (!key || version <= 0) throw new Error('MUSIC_NOTE_STRUCTURE_INVALID_VERSION');
   const structureRef = doc(db, 'user_structures', key);
+  let committedRevision = version;
   try {
     await runTransaction(db, async (transaction) => {
       const snapshot = await transaction.get(structureRef);
@@ -133,14 +134,14 @@ export const writeMusicNoteStructureIfNewer = async (
       }
       // Once this client has a content baseline, the server allocates the next
       // committed revision; device clocks only label the optimistic RTDB preview.
+      committedRevision = expectedBases?.length ? serverVersion + 1 : version;
       transaction.set(structureRef, {
-        ...patch,
-        musicNoteStructureVersion: expectedBases?.length ? serverVersion + 1 : version,
+        ...patch, musicNoteStructureVersion: committedRevision,
       }, { merge: true });
     });
     // A successful transaction is authoritative even if local device time is wrong.
     // Transaction revision is also used by the existing server-side sync trigger.
-    rememberServerVersion(key, version);
+    rememberServerVersion(key, committedRevision);
   } catch (error) {
     const stale = error as { code?: string; serverVersion?: number };
     if (stale?.code === 'music-note/stale-structure-version') {

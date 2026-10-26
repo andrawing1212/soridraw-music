@@ -1,5 +1,5 @@
 import { get, ref } from 'firebase/database';
-import { doc, updateDoc } from '../lib/firestoreMeasured';
+import { doc, runTransaction } from '../lib/firestoreMeasured';
 import { db, realtimeDb } from '../firebase';
 import { readUserProfileCache } from '../lib/userProfileCache';
 
@@ -193,8 +193,19 @@ export const flushLibraryPlaylistRevisionBatch = async (uid: string): Promise<vo
     const targetVersion = Math.max(pending.latestVersion, sharedSignalVersion, cachedRemote);
     if (targetVersion <= 0) return;
 
-    await updateDoc(doc(db, 'users', safeUid), {
-      'syncVersions.playlists': targetVersion,
+    // app510: compare against the actual server revision in the same
+    // transaction that writes the new compatibility version. An old tab's
+    // delayed update can never lower a newer app510 transaction's value.
+    // One users/{uid} transaction read occurs only at the 60s settlement (or
+    // exceptional quota flush), never on page entry or normal folder clicks.
+    const userRef = doc(db, 'users', safeUid);
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(userRef);
+      if (!snapshot.exists()) throw new Error('MISSING_USER_REVISION_DOCUMENT');
+      const serverVersion = safeVersion((snapshot.data() as any)?.syncVersions?.playlists);
+      if (serverVersion < targetVersion) {
+        transaction.update(userRef, { 'syncVersions.playlists': targetVersion });
+      }
     });
 
     const latest = readPending(safeUid);

@@ -15,7 +15,7 @@ assert.match(proposed, /changed\.hasAny\(\['musicNoteFolders'\]\)/);
 assert.match(liveRules, /match \/user_structures\/\{uid\} \{\s*allow read, write: if isOwner\(uid\) \|\| isAdmin\(\);/);
 assert.match(modern, /await runTransaction\(db, async \(transaction\)/);
 assert.match(modern, /serverVersion >= version/);
-assert.match(page, /writeMusicNoteStructureIfNewer\(user\.uid, structureSyncPatch\)/);
+assert.match(page, /writeMusicNoteStructureIfNewer\(user\.uid, structureSyncPatch,/);
 assert.match(page, /publishMusicNoteStructureDelta\(user\.uid, structureSyncPatch\)/);
 
 // Legacy setDoc(...,{merge:true}) writes a *complete mode array* and a

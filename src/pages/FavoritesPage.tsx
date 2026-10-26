@@ -2798,7 +2798,11 @@ updates: draft.updates,
     // A server transaction may commit only if that mode has not changed
     // since this device last saw it. A missing local mode is represented by null.
     const previousMode = musicNoteStructureSharedSessions.get(user.uid)?.data?.musicNoteFolders?.[mode];
-    const baseFolders = Array.isArray(previousMode) ? previousMode : null;
+    const pendingBase = getPendingMusicNoteFolderStructureBatch(user.uid)?.[mode]?.baseFolders;
+    // Immediate folder deletion must use the pre-batch baseline, not an
+    // optimistic rename made moments earlier but not yet saved to Firestore.
+    const baseFolders = pendingBase === null || Array.isArray(pendingBase)
+      ? pendingBase : Array.isArray(previousMode) ? previousMode : null;
     const folderItems = normalized.map((folder, index) => ({
       id: folder.id,
       title: folder.title,

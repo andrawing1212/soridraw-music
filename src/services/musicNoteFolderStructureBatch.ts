@@ -22,6 +22,18 @@ const MUSIC_NOTE_FOLDER_BATCH_MS = 60_000;
 const MUSIC_NOTE_QUOTA_EMERGENCY_COOLDOWN_MS = 5_000;
 // app506: emitted only when a pending folder structure cannot be persisted locally.
 export const MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT = 'soridraw:music-note:folder-pending-quota-risk';
+export const MUSIC_NOTE_FOLDER_SAVE_STATUS_EVENT = 'soridraw:music-note:folder-save-status';
+export type MusicNoteFolderSaveStatus = {
+  state: 'unsaved' | 'saving' | 'unconfirmed' | 'server-confirmed' | 'failed';
+  durable: boolean;
+  storageRisk?: boolean;
+  version: number;
+  delivery: 'pending' | 'sent' | 'failed';
+};
+const saveStatuses = new Map<string, MusicNoteFolderSaveStatus>();
+const failedAttempts = new Map<string, number>();
+const MAX_AUTOMATIC_ATTEMPTS = 3;
+const SERVER_ACK_WARNING_MS = 15_000;
 const STORAGE_PREFIX = 'soridraw.musicNote.folderStructureBatch.v1';
 
 const timers = new Map<string, number>();
@@ -29,6 +41,32 @@ const inflight = new Map<string, Promise<void>>();
 const memoryPending = new Map<string, PendingMusicNoteFolderStructure>();
 const undurablePendingUids510 = new Set<string>();
 const lastQuotaAttemptAt510 = new Map<string, number>();
+
+export const getMusicNoteFolderSaveStatus = (uid: string) => saveStatuses.get(uid) || null;
+const reportStatus = (uid: string, patch: Partial<MusicNoteFolderSaveStatus>) => {
+  const previous = saveStatuses.get(uid);
+  const next: MusicNoteFolderSaveStatus = {
+    state: 'unsaved', durable: !undurablePendingUids510.has(uid), version: 0,
+    delivery: 'pending', ...previous, ...patch,
+  };
+  saveStatuses.set(uid, next);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(MUSIC_NOTE_FOLDER_SAVE_STATUS_EVENT, { detail: { uid } }));
+  }
+};
+
+// RTDB acknowledgement proves transport only, never Firestore persistence.
+export const reportMusicNoteFolderDelivery = (uid: string, version: number, delivery: 'sent' | 'failed') => {
+  if (saveStatuses.get(uid)?.version === version) reportStatus(uid, { delivery });
+};
+
+// Browsers may ignore beforeunload on mobile termination. Keep the visible
+// warning as well; memory-only pending is never advertised as crash durable.
+if (typeof window !== 'undefined') window.addEventListener?.('beforeunload', (event) => {
+  if (![...undurablePendingUids510].some(uid => memoryPending.has(uid))) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
 
 const safeUid = (uid: string): string => String(uid || '').trim();
 const storageKey = (uid: string): string => `${STORAGE_PREFIX}.${safeUid(uid)}`;
@@ -140,6 +178,7 @@ export const queueMusicNoteFolderStructureBatch = (
   if (!key || normalizedVersion <= 0 || !Array.isArray(folders)) return;
 
   const current = readPending(key) || { updatedAtMs: 0 };
+  if (normalizedVersion < safeVersion(current[mode]?.version)) return;
   const now = Date.now();
   const next: PendingMusicNoteFolderStructure = {
     ...current,
@@ -151,10 +190,28 @@ export const queueMusicNoteFolderStructureBatch = (
     updatedAtMs: now,
   };
   const durable = writePending(key, next);
+  failedAttempts.delete(key);
+  reportStatus(key, { state: 'unsaved', durable, storageRisk: !durable, version: normalizedVersion, delivery: 'pending' });
   if (!durable) warnPendingQuotaRisk506(key);
   // Healthy changes retain app301's trailing 60-second canonical batch.
   // Only a failed local durable write triggers one immediate canonical attempt.
   schedule(key, durable ? MUSIC_NOTE_FOLDER_BATCH_MS : emergencyDelay510(key));
+};
+
+// A late RTDB ACK may promote only the very edit that is still pending.
+// It must not resurrect an already-settled edit or replace a newer one.
+export const promoteMusicNoteFolderStructureVersion = (
+  uid: string, mode: MusicNoteFolderModeKey, expectedVersion: number, version: number,
+): boolean => {
+  const current = readPending(uid);
+  const captured = current?.[mode];
+  if (!current || !captured || captured.version !== expectedVersion || version <= expectedVersion) return false;
+  const next = { ...current, [mode]: { ...captured, version } };
+  const durable = writePending(uid, next);
+  reportStatus(uid, { durable, storageRisk: !durable || saveStatuses.get(uid)?.storageRisk });
+  // Keep the existing deadline. An ACK is not a new user edit.
+  if (!durable) schedule(uid, emergencyDelay510(uid));
+  return true;
 };
 
 export const markMusicNoteFolderStructureCommitted = (
@@ -173,6 +230,7 @@ export const markMusicNoteFolderStructureCommitted = (
   delete next[mode];
   if (!next.myNote && !next.sharedNote) {
     clearAll(key);
+    reportStatus(key, { state: 'server-confirmed', durable: true });
     return;
   }
   const durable = writePending(key, next);
@@ -197,6 +255,7 @@ export const flushMusicNoteFolderStructureBatch = async (uid: string): Promise<v
 
     const capturedMy = pending.myNote;
     const capturedShared = pending.sharedNote;
+    reportStatus(key, { state: 'saving', durable: !undurablePendingUids510.has(key) });
     const structureVersion = Math.max(
       safeVersion(capturedMy?.version),
       safeVersion(capturedShared?.version),
@@ -216,31 +275,52 @@ export const flushMusicNoteFolderStructureBatch = async (uid: string): Promise<v
       musicNoteStructureVersion: structureVersion,
     };
 
-    await runV1MutationBoundary({
-      domain: 'musicNote',
-      operation: 'structure-update',
-      uid: key,
-      affectedCount: 1,
-      syncStructure: structurePatch,
-    }, setDoc(doc(db, 'user_structures', key), structurePatch, { merge: true }));
+    // Offline Firestore writes can remain unresolved instead of rejecting.
+    // Report an unknown ACK without launching a second concurrent write.
+    const ackWarning = typeof window !== 'undefined' ? window.setTimeout(() => {
+      reportStatus(key, { state: 'unconfirmed', durable: !undurablePendingUids510.has(key) });
+    }, SERVER_ACK_WARNING_MS) : undefined;
+    try {
+      await runV1MutationBoundary({
+        domain: 'musicNote',
+        operation: 'structure-update',
+        uid: key,
+        affectedCount: 1,
+        syncStructure: structurePatch,
+      }, setDoc(doc(db, 'user_structures', key), structurePatch, { merge: true }));
+    } finally {
+      if (ackWarning !== undefined) window.clearTimeout(ackWarning);
+    }
+    failedAttempts.delete(key);
 
     const latest = readPending(key);
     if (!latest) return;
 
     const next: PendingMusicNoteFolderStructure = { ...latest, updatedAtMs: latest.updatedAtMs };
-    if (capturedMy && latest.myNote && latest.myNote.version <= capturedMy.version) delete next.myNote;
-    if (capturedShared && latest.sharedNote && latest.sharedNote.version <= capturedShared.version) delete next.sharedNote;
+    if (capturedMy && latest.myNote === capturedMy) delete next.myNote;
+    if (capturedShared && latest.sharedNote === capturedShared) delete next.sharedNote;
 
     if (!next.myNote && !next.sharedNote) {
       clearAll(key);
+      reportStatus(key, { state: 'server-confirmed', durable: true });
       return;
     }
     const durable = writePending(key, next);
+    reportStatus(key, { state: 'unsaved', durable });
     if (!durable) warnPendingQuotaRisk506(key);
     schedule(key, durable ? MUSIC_NOTE_FOLDER_BATCH_MS : emergencyDelay510(key));
   })().catch((error) => {
     console.warn('[Music Note folder batch] canonical flush deferred; pending final state kept.', error);
-    schedule(key);
+    reportStatus(key, { state: 'failed', durable: !undurablePendingUids510.has(key) });
+    const attempts = (failedAttempts.get(key) || 0) + 1;
+    const code = String(error?.code || '');
+    failedAttempts.set(key, /permission-denied|unauthenticated/.test(code) ? MAX_AUTOMATIC_ATTEMPTS : attempts);
+    if (attempts < MAX_AUTOMATIC_ATTEMPTS && !/permission-denied|unauthenticated/.test(code)) schedule(key);
+    else {
+      const timer = timers.get(key);
+      if (timer !== undefined && typeof window !== 'undefined') window.clearTimeout(timer);
+      timers.delete(key);
+    }
   }).finally(() => {
     inflight.delete(key);
   });
@@ -253,8 +333,18 @@ export const resumeMusicNoteFolderStructureBatch = (uid: string): void => {
   const key = safeUid(uid);
   const pending = readPending(key);
   if (!key || !pending) return;
+  if ((failedAttempts.get(key) || 0) >= MAX_AUTOMATIC_ATTEMPTS) return;
   const elapsed = Math.max(0, Date.now() - safeVersion(pending.updatedAtMs));
   schedule(key, Math.max(0, MUSIC_NOTE_FOLDER_BATCH_MS - elapsed));
+};
+
+export const retryMusicNoteFolderStructureBatch = (uid: string): void => {
+  if (!readPending(uid)) return;
+  const status = saveStatuses.get(uid);
+  // A routine online event must not shorten a healthy trailing 60s batch.
+  if (!undurablePendingUids510.has(uid) && status?.state !== 'failed' && status?.state !== 'unconfirmed') return;
+  failedAttempts.delete(uid);
+  schedule(uid, emergencyDelay510(uid));
 };
 
 export const getPendingMusicNoteFolderStructureBatch = (

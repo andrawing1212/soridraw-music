@@ -5,9 +5,9 @@ import ts from 'typescript';
 
 const source = readFileSync('src/services/musicNoteFolderStructureBatch.ts', 'utf8');
 const page = readFileSync('src/pages/FavoritesPage.tsx', 'utf8');
-assert.match(page, /MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT/);
-assert.match(page, /기기 저장공간 부족: 폴더 변경을 서버에 저장하는 중입니다/);
-assert.match(page, /showFavoriteToast\('[^']+', 10000\)/);
+assert.match(page, /MUSIC_NOTE_FOLDER_SAVE_STATUS_EVENT/);
+assert.match(page, /폴더 변경의 서버 저장을 확인했습니다/);
+assert.match(page, /폴더 변경의 서버 저장에 실패했습니다/);
 assert.match(source, /const MUSIC_NOTE_FOLDER_BATCH_MS = 60_000/);
 assert.match(source, /schedule\(key, durable \? MUSIC_NOTE_FOLDER_BATCH_MS : emergencyDelay510\(key\)\)/);
 assert.match(source, /MUSIC_NOTE_QUOTA_EMERGENCY_COOLDOWN_MS = 5_000/);
@@ -37,7 +37,7 @@ const mockedWindow = {
     return timers.length;
   },
   clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].active = false; },
-  dispatchEvent: (ev) => { fired.push(ev); return true; },
+  dispatchEvent: (ev) => { if (ev.type.includes('quota-risk')) fired.push(ev); return true; },
 };
 const mockRequire = (id) => {
   if (id.endsWith('firestoreMeasured')) return {
@@ -147,7 +147,7 @@ console.log('APP506_OLD_INFLIGHT_ACK_CANNOT_ERASE_LATEST_QUOTA_EDIT=PASS');
 
 // Offline + both browser storage and network blocked remains unable to
 // guarantee survival of full tab termination; never overclaim durability.
-assert.equal(page.includes("window.addEventListener(MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT"), true);
+assert.equal(page.includes("window.addEventListener(MUSIC_NOTE_FOLDER_SAVE_STATUS_EVENT"), true);
 console.log('APP506_NO_CACHE_PURGE_USER_WARNING=PASS');
 
 // app510 positive regression: persistent quota across five edits no longer

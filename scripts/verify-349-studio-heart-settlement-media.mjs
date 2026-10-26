@@ -71,7 +71,9 @@ assert.equal(cached.length, 1);
 
 const remote = extractConstArrow(app, 'applyRemoteStudioHeartPreview', '\n\n  const clearRemoteStudioHeartPreviewFromCanonical');
 assert.match(remote, /favoritesStore\.setFavorites\(visible\)/);
-assert.match(remote, /writeFavoritesCache\(safeUid, visible\)/);
+// app501 keeps the app349 immediate cache materialization, but forbids
+// publishing speculative preview rows back into the shared canonical Catalog.
+assert.match(remote, /writeFavoritesCache\(safeUid, visible, \{ publishDerived: false \}\)/);
 assert.match(remote, /overlayStudioHeartRemotePreviewsOnFavorites/);
 assert.doesNotMatch(remote, /getDoc\(|getDocs\(|setDoc\(|updateDoc\(|fetch\(/);
 

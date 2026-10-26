@@ -8,7 +8,13 @@ import {
   readPendingMusicNoteSyncSignal,
 } from '../services/userDomainSyncService';
 import {
-  MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT,
+  MUSIC_NOTE_FOLDER_SAVE_STATUS_EVENT,
+  getMusicNoteFolderSaveStatus,
+  getPendingMusicNoteFolderStructureBatch,
+  promoteMusicNoteFolderStructureVersion,
+  reportMusicNoteFolderDelivery,
+  retryMusicNoteFolderStructureBatch,
+  type MusicNoteFolderSaveStatus,
   flushMusicNoteFolderStructureBatch,
   markMusicNoteFolderStructureCommitted,
   queueMusicNoteFolderStructureBatch,
@@ -153,6 +159,8 @@ type MusicNoteStructureCacheEnvelope = {
 
 const MUSIC_NOTE_STRUCTURE_CACHE_STORAGE_BASE = 'soridraw_music_note_structure_cache_v1';
 const musicNoteStructureSharedSessions = new Map<string, MusicNoteStructureSharedSession>();
+// RTDB ordering is independent of device-clock/canonical structure versions.
+const musicNoteFolderSignalVersions = new Map<string, number>();
 
 const getMusicNoteStructureCacheStorageKey = (uid: string) => `${MUSIC_NOTE_STRUCTURE_CACHE_STORAGE_BASE}_${uid}`;
 
@@ -213,7 +221,11 @@ const writeMusicNoteStructureCache = (
   version: number,
   verified = true,
 ): MusicNoteStructureCacheEnvelope => {
-  const previous = readMusicNoteStructureCache(uid);
+  // Quota refusal leaves disk behind. Preserve the latest session's other
+  // folder mode/card state instead of replacing it with stale disk data.
+  const memory = musicNoteStructureSharedSessions.get(uid);
+  const disk = readMusicNoteStructureCache(uid);
+  const previous = memory && memory.data !== null && memory.version >= Number(disk?.version || 0) ? memory : disk;
   const next: MusicNoteStructureCacheEnvelope = {
     schemaVersion: 1,
     version: Math.max(Number(previous?.version || 0), Math.max(0, Math.floor(Number(version || 0)))),
@@ -254,7 +266,8 @@ const publishMusicNoteStructureSession = (
 };
 
 const getNextMusicNoteStructureVersion = (uid: string): number => {
-  const localVersion = Number(readMusicNoteStructureCache(uid)?.version || 0);
+  const localVersion = Math.max(Number(readMusicNoteStructureCache(uid)?.version || 0),
+    Number(musicNoteStructureSharedSessions.get(uid)?.version || 0));
   const profileVersion = getMusicNoteStructureProfileVersion(uid);
   return Math.max(Date.now(), localVersion + 1, profileVersion + 1);
 };
@@ -268,11 +281,22 @@ const ensureMusicNoteStructureFresh = (uid: string, session: MusicNoteStructureS
 
   session.syncInFlight = (async () => {
     try {
+      const beforeRead = session.data;
       const snapshot = await getDocFromServer(doc(db, 'user_structures', uid));
       const data: any = snapshot.exists() ? snapshot.data() : {};
       const serverDocumentVersion = Number(data?.musicNoteStructureVersion || 0);
       const resolvedVersion = Math.max(profileVersion, Number.isFinite(serverDocumentVersion) ? serverDocumentVersion : 0);
-      publishMusicNoteStructureSession(uid, projectMusicNoteStructureData(data), resolvedVersion, true);
+      // A read started before a local edit/RTDB preview is no longer authority
+      // for that session. Do not stamp old data with the newer profile version.
+      if (session.data !== beforeRead) return;
+      const pending = getPendingMusicNoteFolderStructureBatch(uid);
+      const projected = projectMusicNoteStructureData(data);
+      for (const mode of ['myNote', 'sharedNote'] as const) {
+        if (pending?.[mode]) {
+          projected.musicNoteFolders = { ...projected.musicNoteFolders, [mode]: pending[mode].folders };
+        }
+      }
+      publishMusicNoteStructureSession(uid, projected, resolvedVersion, true);
     } catch (error) {
       console.warn('Music Note structure refresh failed; keeping verified local cache when available.', error);
     } finally {
@@ -286,9 +310,14 @@ const subscribeMusicNoteStructureDocument = (uid: string, listener: (data: any) 
   let session = musicNoteStructureSharedSessions.get(uid);
   if (!session) {
     const cached = readMusicNoteStructureCache(uid);
+    const pending = getPendingMusicNoteFolderStructureBatch(uid);
+    const pendingFolders = {
+      ...(pending?.myNote ? { myNote: pending.myNote.folders } : {}),
+      ...(pending?.sharedNote ? { sharedNote: pending.sharedNote.folders } : {}),
+    };
     session = {
-      data: cached?.data || null,
-      version: Number(cached?.version || 0),
+      data: pending ? mergeMusicNoteStructureData(cached?.data, { musicNoteFolders: pendingFolders }) : cached?.data || null,
+      version: Math.max(Number(cached?.version || 0), pending?.myNote?.version || 0, pending?.sharedNote?.version || 0),
       verified: cached?.verified === true,
       listeners: new Set(),
       syncInFlight: null,
@@ -1279,6 +1308,7 @@ export default function FavoritesPage({
   const [favoriteMemoSavingIds, setFavoriteMemoSavingIds] = useState<Record<string, boolean>>({});
   const [favoriteMemoExpanded, setFavoriteMemoExpanded] = useState(false);
   const [favoriteToastMessage, setFavoriteToastMessage] = useState<string | null>(null);
+  const [folderSaveStatus, setFolderSaveStatus] = useState<MusicNoteFolderSaveStatus | null>(null);
   const favoriteToastTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSyncEnabled, setIsSyncEnabled] = useState(false);
@@ -2262,14 +2292,39 @@ updates: draft.updates,
   };
 
   useEffect(() => {
-    const onFolderStorageRisk506 = (event: Event) => {
+    let clearConfirmed: ReturnType<typeof setTimeout> | undefined;
+    const updateStatus = () => {
+      if (clearConfirmed) clearTimeout(clearConfirmed);
+      const status = user?.uid ? getMusicNoteFolderSaveStatus(user.uid) : null;
+      const visible = status && (status.storageRisk || status.state === 'failed'
+        || status.state === 'unconfirmed' || status.delivery === 'failed');
+      setFolderSaveStatus(visible ? status : null);
+      if (status?.state === 'server-confirmed' && status.delivery === 'sent') {
+        clearConfirmed = setTimeout(() => setFolderSaveStatus(null), 5000);
+      }
+    };
+    const onFolderSaveStatus = (event: Event) => {
       const detail = (event as CustomEvent<{ uid?: string }>).detail;
       if (!user?.uid || detail?.uid !== user.uid) return;
-      showFavoriteToast('기기 저장공간 부족: 폴더 변경을 서버에 저장하는 중입니다. 저장 완료 전 앱을 닫지 마세요.', 10000);
+      updateStatus();
     };
-    window.addEventListener(MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT, onFolderStorageRisk506);
-    return () => window.removeEventListener(MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT, onFolderStorageRisk506);
+    updateStatus();
+    window.addEventListener(MUSIC_NOTE_FOLDER_SAVE_STATUS_EVENT, onFolderSaveStatus);
+    return () => {
+      if (clearConfirmed) clearTimeout(clearConfirmed);
+      window.removeEventListener(MUSIC_NOTE_FOLDER_SAVE_STATUS_EVENT, onFolderSaveStatus);
+    };
   }, [user?.uid]);
+
+  const folderSaveMessage = folderSaveStatus ? [
+    folderSaveStatus.state === 'server-confirmed' ? '폴더 변경의 서버 저장을 확인했습니다.'
+      : folderSaveStatus.state === 'failed' ? '폴더 변경의 서버 저장에 실패했습니다.'
+      : folderSaveStatus.state === 'unconfirmed' ? '폴더 변경의 서버 응답이 없어 저장 여부를 확인하지 못했습니다.'
+      : folderSaveStatus.state === 'saving' ? '폴더 변경을 서버에 저장 중입니다. 아직 완료되지 않았습니다.'
+      : '폴더 변경이 아직 서버에 저장되지 않았습니다.',
+    !folderSaveStatus.durable ? '기기 저장공간 부족 또는 접근 제한: 앱을 닫으면 변경이 사라질 수 있습니다.' : '',
+    folderSaveStatus.delivery === 'failed' ? '다른 기기로의 실시간 전달에 실패했습니다.' : '',
+  ].filter(Boolean).join(' ') : null;
 
   const handleManualFavoriteSync = async () => {
     if (!onManualSyncFavorites || isManualSyncingFavorites) return;
@@ -2627,6 +2682,17 @@ updates: draft.updates,
           }
         }
 
+        if (patch.musicNoteFolders && signalVersion > 0) {
+          if (signalVersion <= (musicNoteFolderSignalVersions.get(uid) || 0)) return;
+          musicNoteFolderSignalVersions.set(uid, signalVersion);
+        }
+        const pendingFolders = getPendingMusicNoteFolderStructureBatch(uid);
+        for (const mode of ['myNote', 'sharedNote'] as const) {
+          if (patch.musicNoteFolders?.[mode] && pendingFolders?.[mode]
+            && Number(patch.musicNoteStructureVersion || 0) < pendingFolders[mode].version) {
+            delete patch.musicNoteFolders[mode];
+          }
+        }
         const structureVersion = Math.max(
           Number(patch.musicNoteStructureVersion || 0),
           Number(signalVersion || 0),
@@ -2694,8 +2760,11 @@ updates: draft.updates,
     // Preserve app301's 60-second batching while the app is simply hidden.
     // An actual page exit still uses the original pending-only pagehide path.
     window.addEventListener('pagehide', flushOnPageHide);
+    const retryOnOnline = () => retryMusicNoteFolderStructureBatch(uid);
+    window.addEventListener('online', retryOnOnline);
     return () => {
       window.removeEventListener('pagehide', flushOnPageHide);
+      window.removeEventListener('online', retryOnOnline);
     };
   }, [user?.uid]);
 
@@ -2755,16 +2824,19 @@ updates: draft.updates,
     let finalVersion = structureVersion;
     try {
       const liveVersion = await publishMusicNoteStructureDelta(user.uid, structureSyncPatch);
+      reportMusicNoteFolderDelivery(user.uid, structureVersion, 'sent');
       finalVersion = Math.max(finalVersion, Number(liveVersion || 0));
     } catch (error) {
+      reportMusicNoteFolderDelivery(user.uid, structureVersion, 'failed');
       console.warn('Music Note folder live sync signal failed; canonical batch remains queued.', error);
     }
-    if (finalVersion !== structureVersion) {
+    if (finalVersion !== structureVersion && promoteMusicNoteFolderStructureVersion(
+      user.uid, mode, structureVersion, finalVersion,
+    )) {
       publishMusicNoteStructureSession(user.uid, {
         ...structureSyncPatch,
         musicNoteStructureVersion: finalVersion,
       }, finalVersion, true);
-      queueMusicNoteFolderStructureBatch(user.uid, mode, folderItems, finalVersion);
     }
   };
 
@@ -8757,8 +8829,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       </AnimatePresence>
 
       <AnimatePresence>
-        {favoriteToastMessage && (
+        {(folderSaveMessage || favoriteToastMessage) && (
           <motion.div
+            role="status"
             initial={{ opacity: 0, y: 14, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 14, scale: 0.96 }}
@@ -8769,9 +8842,14 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             )}
           >
             <span className="inline-flex items-center gap-2 whitespace-pre-line">
-              <Check className="h-4 w-4 text-[#FF7A72]" />
-              {favoriteToastMessage}
+              {!folderSaveMessage || folderSaveStatus?.state === 'server-confirmed'
+                ? <Check className="h-4 w-4 text-[#FF7A72]" /> : null}
+              {folderSaveMessage || favoriteToastMessage}
             </span>
+            {folderSaveStatus?.state === 'failed' && user?.uid ? (
+              <button type="button" className="ml-2 underline"
+                onClick={() => retryMusicNoteFolderStructureBatch(user.uid)}>저장 다시 시도</button>
+            ) : null}
           </motion.div>
         )}
       </AnimatePresence>

@@ -523,12 +523,20 @@ const publishSignal = async (
     // Keep the existing one tiny RTDB mutation, but allocate a UID-wide
     // monotonic version inside that same node.
     const signalRef = ref(realtimeDb, `userSync/${uid}/musicNote`);
+    if (context.operation === 'structure-update' && !buildSignal(context, result).itemJson) {
+      // An empty envelope cannot deliver folders. Fail visibly on the caller;
+      // canonical settlement remains independent, with no schema/rule changes.
+      throw new Error('MUSIC_NOTE_STRUCTURE_SIGNAL_TOO_LARGE');
+    }
     const transaction = await runTransaction(signalRef, (current) => {
       const currentVersion = Math.max(0, Math.floor(Number(current?.version || 0)));
       const signal = buildSignal(context, result);
       signal.version = Math.max(Date.now(), currentVersion + 1);
       return signal;
     }, { applyLocally: true });
+    if (context.operation === 'structure-update' && !transaction.committed) {
+      throw new Error('MUSIC_NOTE_STRUCTURE_SIGNAL_NOT_COMMITTED');
+    }
     return Math.max(0, Math.floor(Number(transaction.snapshot.val()?.version || 0)));
   }
 

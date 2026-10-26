@@ -1,4 +1,5 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
+import { createHash } from "node:crypto";
 import { defineSecret } from "firebase-functions/params";
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
@@ -19,7 +20,7 @@ import {
   type LibraryListBundleCore,
   type LibraryTrackMutation,
 } from "./libraryBundleFreshness";
-import { hasMusicNoteStructureRelevantChange, getMusicNoteStructureSignalVersion } from "./musicNoteStructureSync";
+import { hasMusicNoteStructureRelevantChange, getMusicNoteStructureSignalVersion, buildLegacyMusicNoteFolderRecovery } from "./musicNoteStructureSync";
 import { publishGuardedLikeSignal420 } from "./exploreLikeAbuseGate420";
 import { hasExactRecentApprovedLike420 } from "./exploreLikeApprovalRecovery420";
 import { issueLikePermit420, issueRenewedLikePermitV2420 } from "./exploreLikePermit420";
@@ -65,6 +66,31 @@ export const syncMusicNoteStructureVersion = functions
     const eventTimeMs = Date.parse(String(context.timestamp || "")) || Date.now();
     const firestore = admin.firestore();
     const userRef = firestore.collection("users").doc(uid);
+
+    // ONLY a legacy folder overwrite after a modern commit writes a recovery
+    // record. Existing clients remain writable under unchanged Rules. Both
+    // versions survive privately for later explicit, non-destructive restore.
+    const legacyRecovery = buildLegacyMusicNoteFolderRecovery(before, after);
+    if (legacyRecovery) {
+      const recoveryPayload = {
+        ...legacyRecovery,
+        observedAtMs: eventTimeMs,
+      };
+      if (Buffer.byteLength(JSON.stringify(recoveryPayload), "utf8") > 750_000) {
+        throw new Error("app514 legacy folder conflict too large to archive safely");
+      }
+      const eventKey = createHash("sha256")
+        .update(String(context.eventId || "")).digest("hex").slice(0, 40);
+      const recoveryRef = firestore.collection("user_structures").doc(uid)
+        .collection("legacy_recovery").doc(eventKey);
+      try {
+        // create() is idempotent across retried Firestore events. Never erase
+        // a previous recovery record or change the canonical folder state.
+        await recoveryRef.create(recoveryPayload);
+      } catch (error: any) {
+        if (Number(error?.code) !== 6 && String(error?.code) !== "already-exists") throw error;
+      }
+    }
 
     await firestore.runTransaction(async (transaction) => {
       const userSnapshot = await transaction.get(userRef);

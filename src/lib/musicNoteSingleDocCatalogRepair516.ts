@@ -1,4 +1,5 @@
-import { auth, db } from '../firebase';
+import { auth, db, realtimeDb } from '../firebase';
+import { get, ref } from 'firebase/database';
 import { collection, documentId as firestoreDocumentId, limit, query, where } from './firestoreMeasured';
 import { getDocsFromServer } from 'firebase/firestore';
 import { markFirestoreActualRead } from './cacheDiagnostics';
@@ -41,9 +42,47 @@ export const repairSingleExactMusicNoteCatalog516 = async (
     || isMusicNoteItemRemoved(canonical)) throw new Error('CANONICAL_NOT_ACTIVE');
   if (readStudioHeartPendingIntent(exactUid, exactId)) throw new Error('PENDING_FAVORITE_INTENT');
 
-  const outcome = await reconcileExactMusicNoteCatalogFromCanonical516(exactUid, exactId, canonical);
+  // A different signed-in device can start an unsave before its trailing
+  // Firestore write is visible. The RTDB change fence catches the common
+  // observed race, while canonical re-reads catch committed unsaves.
+  const signalRef = ref(realtimeDb, `userSync/${exactUid}/musicNote`);
+  const captureSignal = async () => {
+    const snapshot = await get(signalRef); // Only on explicit admin click.
+    const signal = snapshot.val();
+    const exactIds = Array.isArray(signal?.documentIds) ? signal.documentIds : [];
+    const affectsThisSong = exactIds.some((id: unknown) => String(id) === exactId);
+    if (affectsThisSong && (
+      signal?.operation === 'heart-preview-unsave'
+      || signal?.operation === 'unsave'
+    )) throw new Error('REMOTE_UNSAVE_IN_PROGRESS');
+    return Math.max(0, Math.floor(Number(signal?.version || 0)));
+  };
+  const initialSignalVersion = await captureSignal();
+  const initialFingerprint = JSON.stringify(canonical);
+  const revalidate = async (): Promise<boolean> => {
+    if (auth.currentUser?.uid !== exactUid || readStudioHeartPendingIntent(exactUid, exactId)) return false;
+    try {
+      if (await captureSignal() !== initialSignalVersion) return false;
+      const latest = await getDocsFromServer(exactQuery);
+      markFirestoreActualRead(Math.max(1, latest.size), 'favorites:manual-exact-catalog-recheck516');
+      if (auth.currentUser?.uid !== exactUid || readStudioHeartPendingIntent(exactUid, exactId)) return false;
+      const doc = latest.docs[0];
+      if (!doc || doc.id !== exactId) return false;
+      const data = doc.data();
+      if (String(data?.uid || '') !== exactUid || isMusicNoteItemRemoved(data)
+        || JSON.stringify(data) !== initialFingerprint) return false;
+      // A remote preview may start while the canonical server read is in flight.
+      return await captureSignal() === initialSignalVersion
+        && auth.currentUser?.uid === exactUid
+        && !readStudioHeartPendingIntent(exactUid, exactId);
+    } catch {
+      return false; // Ambiguity is never sufficient to trigger a save.
+    }
+  };
+
+  const outcome = await reconcileExactMusicNoteCatalogFromCanonical516(exactUid, exactId, canonical, revalidate);
   if (outcome === 'deferred') throw new Error('CATALOG_RECOVERY_UNCONFIRMED');
-  if (auth.currentUser?.uid !== exactUid) throw new Error('AUTH_CHANGED');
+  if (auth.currentUser?.uid !== exactUid || !await revalidate()) throw new Error('CANONICAL_CHANGED_BEFORE_SIGNAL');
 
   const item = projectCatalogItemForSync('musicNote', {
     ...canonical,

@@ -302,6 +302,48 @@ for (const failure of ['denied', 'aborted']) {
   console.log('APP514_CARD_ONLY_NO_FENCE_REAL_FOLDER_FENCE_ACTIVE=PASS');
 }
 
+// WORK P1: an old My Note pending without baseline must never piggyback
+// on a new Shared Note baseline and overwrite a newer canonical My Note.
+{
+  const canonical = { data: { musicNoteStructureVersion: 500,
+    musicNoteFolders: { myNote: folders('remote-new'), sharedNote: folders('shared-base') } } };
+  const d = device(bus(), { canonical });
+  d.batch.queueMusicNoteFolderStructureBatch(uid, 'myNote', folders('legacy-old'), 600);
+  d.batch.queueMusicNoteFolderStructureBatch(uid, 'sharedNote',
+    folders('shared-draft'), 601, folders('shared-base'));
+  await d.advance(60_000);
+  assert.equal(d.writes.length, 0, 'unchecked mixed pending must not write any folder');
+  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'remote-new');
+  assert.equal(canonical.data.musicNoteFolders.sharedNote[1].title, 'shared-base');
+  assert.equal(d.batch.getMusicNoteFolderSaveStatus(uid).state, 'failed');
+  assert.ok(d.batch.getPendingMusicNoteFolderStructureBatch(uid).myNote,
+    'legacy pending survives failed mixed settlement');
+  assert.ok(d.batch.getPendingMusicNoteFolderStructureBatch(uid).sharedNote,
+    'modern pending survives failed mixed settlement');
+  console.log('APP514_MIXED_LEGACY_NEW_PENDING_FAIL_CLOSED=PASS');
+}
+
+// WORK P2: an unchanged folder with a new timestamp must not issue a raw
+// folder-map write that the shared Firestore Rules would reject.
+{
+  const canonical = { data: { musicNoteStructureVersion: 10,
+    musicNoteStructureWriterToken: 'existing-token',
+    musicNoteFolders: { myNote: folders('same'), updatedAt: 100 } } };
+  const d = device(bus(), { canonical });
+  await d.batch.writeMusicNoteStructureIfNewer(uid, {
+    musicNoteStructureVersion: 11,
+    musicNoteFolders: {
+      myNote: folders('same').map(x => ({ ...x, updatedAt: 200 })),
+      updatedAt: 200,
+    },
+  }, [{ mode: 'myNote', folders: folders('same') }]);
+  assert.equal(d.reads, 1);
+  assert.equal(d.writes.length, 0, 'same logical folders must not rewrite timestamp map');
+  assert.equal(canonical.data.musicNoteStructureVersion, 10);
+  assert.equal(canonical.data.musicNoteStructureWriterToken, 'existing-token');
+  console.log('APP514_IDENTICAL_FOLDERS_NO_RULES_REJECTION_NO_WRITE=PASS');
+}
+
 // Healthy persistence stays 60s; warm subscribe does not add server reads.
 {
   const d = device(bus());
@@ -725,23 +767,34 @@ console.log('APP514_OLD_PREVIEW_RECONNECT_CONFIRMATION_ONLY_IF_UNVERIFIED=PASS')
   console.log('APP514_OLD_PC_REPEATED_EDITS_ONE_TRAILING_CANONICAL_READ=PASS');
 }
 
-// A current-version RTDB folder preview remains immediate/R0 and does NOT
-// launch the legacy 65-second read or alter the existing 60-second batching.
+// WORK P1: even a V2 current-client RTDB preview is NOT server-confirmed.
+// It stays instant/R0, then makes one bounded canonical check after the
+// existing 60-second save window; failed writes cannot persist as verified.
 {
-  const d=device(bus());
-  d.page.publish(uid,{musicNoteFolders:{myNote:folders('initial')},
-    musicNoteStructureVersion:1},1);
+  const canonical={data:{musicNoteStructureVersion:1,
+    musicNoteFolders:{myNote:folders('server-original')}}};
+  const d=device(bus(),{canonical});
+  d.page.publish(uid,{musicNoteFolders:{myNote:folders('server-original')},
+    musicNoteStructureVersion:1},1,true);
   d.page.subscribe(uid,()=>{});
   await tick();
   assert.equal(d.reads,0);
   await d.sync.publishMusicNoteStructureDelta(uid,{
-    musicNoteFolders:{myNote:folders('new-phone-signal')},musicNoteStructureVersion:2,
+    musicNoteFolders:{myNote:folders('failed-phone-preview')},musicNoteStructureVersion:2,
   });
-  assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title,'new-phone-signal');
-  await d.advance(70_000);
+  assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title,'failed-phone-preview');
+  assert.equal(d.page.session().verified,false,'V2 preview cannot claim Firestore success');
+  assert.equal(JSON.parse(d.records.get(`soridraw_music_note_structure_cache_v1_${uid}`)).verified,false);
+  await d.advance(64_999);
   assert.equal(d.reads,0);
+  await d.advance(1);
+  assert.equal(d.reads,1,'one confirmation only after the normal save window');
+  assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title,'server-original');
+  assert.equal(d.page.session().verified,true);
+  await d.advance(600_000);
+  assert.equal(d.reads,1,'no steady polling after canonical reconciliation');
   assert.equal(d.attempts,0);
-  console.log('APP514_NEW_PHONE_IMMEDIATE_FOLDER_RTDB_R0_NO_EXTRA_READ=PASS');
+  console.log('APP514_NEW_PHONE_UNCOMMITTED_RTDB_PREVIEW_CORRECTS_ONCE=PASS');
 }
 
 // If an old client legitimately settles before the confirmation deadline,

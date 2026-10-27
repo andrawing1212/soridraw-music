@@ -1,6 +1,6 @@
 import { db } from '../firebase';
 import { collection, doc, getDoc, getDocFromServer, getDocs, limit, orderBy, query, runTransaction } from '../lib/firestoreMeasured';
-import { getPendingMusicNoteFolderStructureBatch, getMusicNoteFolderEditEpoch, getMusicNoteLegacyFolderSignature, type MusicNoteFolderModeKey } from './musicNoteFolderStructureBatch';
+import { getPendingMusicNoteFolderStructureBatch, getMusicNoteFolderEditEpoch, getMusicNoteLegacyFolderSignature, getMusicNoteEffectiveLegacyMode, type MusicNoteFolderModeKey } from './musicNoteFolderStructureBatch';
 import { publishMusicNoteStructureDelta } from './userDomainSyncService';
 
 // Loaded only when the user opens the recovery dialog. No listener, polling,
@@ -207,7 +207,9 @@ export const getMusicNoteLegacyFolderComparison = async (
     getDocFromServer(doc(db, 'user_structures', uid, 'folder_state', 'v2')),
   ]);
   if (!modern.exists()) return null; // no migration; legacy remains canonical
-  const legacyFolders = legacy.data()?.musicNoteFolders || {};
+  const legacyFolders = Object.fromEntries((['myNote', 'sharedNote'] as const)
+    .map(mode => [mode, getMusicNoteEffectiveLegacyMode(legacy.data(), mode)])
+    .filter(([, folders]) => Array.isArray(folders)));
   const modernFolders = modern.data()?.musicNoteFolders || {};
   const signatures = modern.data()?.legacyBaseSignatures || {};
   const changedModes = (['myNote', 'sharedNote'] as const).filter(mode =>
@@ -252,7 +254,7 @@ export const restoreMusicNoteLegacyFolderChoice = async (
   const result = await runTransaction(db, async txn => {
     const [legacy, modern] = [await txn.get(legacyRef), await txn.get(v2Ref)];
     if (!modern.exists()) throw new Error('신버전 폴더 정본이 없어 복원할 수 없습니다.');
-    const legacyNow = legacy.data()?.musicNoteFolders?.[mode];
+    const legacyNow = getMusicNoteEffectiveLegacyMode(legacy.data(), mode);
     const modernNow = modern.data()?.musicNoteFolders?.[mode];
     const legacyExpected = expected.legacyFolders[mode];
     const modernExpected = expected.modernFolders[mode];

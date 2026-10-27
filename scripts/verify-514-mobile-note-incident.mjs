@@ -637,3 +637,95 @@ console.log('APP514_EXACT_FAVORITE_EXISTS_MISSING_REMOVED_DENIED_THREE_DEVICES_R
   assert.equal(JSON.parse(d.records.get(cacheKey)).profileVersionSeen,502);
   console.log('APP514_LONG_RUNNING_READ_RETRIES_LATEST_REMOTE_PROFILE_ONCE=PASS');
 }
+
+
+// Mixed-version PC: old browser broadcasts a folder preview immediately,
+// but its delayed setDoc is denied by the new server guard. Other devices
+// briefly show the preview, then self-correct from canonical exactly once.
+{
+  const canonical={data:{musicNoteStructureVersion:200,
+    musicNoteFolders:{myNote:folders('phone-saved')}}};
+  const d=device(bus(),{canonical});
+  d.page.publish(uid,{musicNoteFolders:{myNote:folders('phone-saved')},
+    musicNoteStructureVersion:200},200,true);
+  d.page.subscribe(uid,()=>{});
+  await tick();
+  assert.equal(d.reads,0);
+  const oldSignal=(name)=>JSON.stringify({
+    __musicNoteStructureSync:true,
+    data:{musicNoteFolders:{myNote:folders(name)},musicNoteStructureVersion:150},
+  });
+  d.page.receive(oldSignal('PC-old-unsaved'),1000);
+  assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title,'PC-old-unsaved',
+    'older client preview remains immediate');
+  assert.equal(d.page.session().verified,false,
+    'legacy preview cannot masquerade as server confirmation');
+  assert.equal(JSON.parse(d.records.get(`soridraw_music_note_structure_cache_v1_${uid}`)).verified,false);
+  await d.advance(64_999);
+  assert.equal(d.reads,0,'legacy confirmation not polled while 60s batch can settle');
+  await d.advance(1);
+  assert.equal(d.reads,1,'one bounded server confirmation for old-client preview');
+  assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title,'phone-saved',
+    'blocked old write cannot remain on phone screen');
+  assert.equal(d.page.session().verified,true);
+  await d.advance(300_000);
+  assert.equal(d.reads,1,'no recurring read after canonical correction');
+  console.log('APP514_OLD_PC_REJECTED_WRITE_PHONE_UI_CORRECTS_ONCE=PASS');
+}
+
+// A current-version RTDB folder preview remains immediate/R0 and does NOT
+// launch the legacy 65-second read or alter the existing 60-second batching.
+{
+  const d=device(bus());
+  d.page.publish(uid,{musicNoteFolders:{myNote:folders('initial')},
+    musicNoteStructureVersion:1},1);
+  d.page.subscribe(uid,()=>{});
+  await tick();
+  assert.equal(d.reads,0);
+  await d.sync.publishMusicNoteStructureDelta(uid,{
+    musicNoteFolders:{myNote:folders('new-phone-signal')},musicNoteStructureVersion:2,
+  });
+  assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title,'new-phone-signal');
+  await d.advance(70_000);
+  assert.equal(d.reads,0);
+  assert.equal(d.attempts,0);
+  console.log('APP514_NEW_PHONE_IMMEDIATE_FOLDER_RTDB_R0_NO_EXTRA_READ=PASS');
+}
+
+// If an old client legitimately settles before the confirmation deadline,
+// the authoritative refresh retains its new folder instead of undoing it.
+{
+  const canonical={data:{musicNoteStructureVersion:20,
+    musicNoteFolders:{myNote:folders('initial')}}};
+  const d=device(bus(),{canonical});
+  d.page.publish(uid,{musicNoteFolders:{myNote:folders('initial')},
+    musicNoteStructureVersion:20},20);
+  d.page.subscribe(uid,()=>{});
+  await tick();
+  d.page.receive(JSON.stringify({__musicNoteStructureSync:true,
+    data:{musicNoteFolders:{myNote:folders('old-PC-valid')},
+      musicNoteStructureVersion:21}}),1000);
+  canonical.data.musicNoteFolders.myNote=folders('old-PC-valid');
+  canonical.data.musicNoteStructureVersion=21;
+  await d.advance(65_000);
+  assert.equal(d.reads,1);
+  assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title,'old-PC-valid');
+  console.log('APP514_OLD_PC_LEGITIMATE_SAVED_EDIT_SURVIVES_CONFIRM=PASS');
+}
+
+// An existing unconfirmed old-client display cache is not permanently
+// trusted on a warm reload, even when no new profile event arrives.
+{
+  const canonical={data:{musicNoteStructureVersion:20,
+    musicNoteFolders:{myNote:folders('actual')}}};
+  const d=device(bus(),{canonical});
+  d.records.set(`soridraw_music_note_structure_cache_v1_${uid}`,
+    JSON.stringify({schemaVersion:1,version:9999,profileVersionSeen:10,
+      verified:false,data:{musicNoteFolders:{myNote:folders('old-preview')}}}));
+  d.setProfileVersion(10,false);
+  d.page.subscribe(uid,()=>{});
+  await tick();
+  assert.equal(d.reads,1);
+  assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title,'actual');
+  console.log('APP514_REOPEN_OLD_PREVIEW_CACHE_CORRECTS_ONCE=PASS');
+}

@@ -101,6 +101,13 @@ export const restoreMusicNoteFolderRecovery = async (
     // Reads come before writes, all from server; a concurrent edit retries or fails.
     const recoverySnap = await txn.get(archived);
     const canonicalSnap = await txn.get(parent);
+    const v2Snapshot = await txn.get(doc(db, 'user_structures', uid, 'folder_state', 'v2'));
+    // Historical archives describe the OLD parent, not the isolated V2
+    // canonical. Restoring them directly could be invisible or misleading.
+    // On V2 accounts, use the explicit old-versus-modern comparison instead.
+    if (v2Snapshot.exists()) {
+      throw new Error('신버전 폴더가 활성화되어 이전 기록을 직접 복원할 수 없습니다. 구버전 PC·신버전 폴더 비교를 이용해 주세요.');
+    }
     let history = recoverySnap.data();
     if (recoverySnap.exists() && history?.schemaVersion === 2) {
       const parts: Record<string, string> = {};

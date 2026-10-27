@@ -2849,11 +2849,12 @@ updates: draft.updates,
         );
         publishMusicNoteStructureSession(uid, projectMusicNoteStructureData(patch),
           structureVersion, !fromOlderFolderClient);
-        if (fromOlderFolderClient && !legacyMusicNoteFolderCheckTimers.has(uid)) {
+        if (fromOlderFolderClient) {
           // The old browser may broadcast before its 60s Firestore save. Keep
-          // immediate visibility, then verify ONCE after that settlement window.
-          // A rejected legacy write is corrected even without a new profile
-          // version signal. Current-client writes never schedule this read.
+          // immediate visibility, then verify once 65s after the LAST edit.
+          // Repeated renames collapse into one check, like the write batch.
+          const previous = legacyMusicNoteFolderCheckTimers.get(uid);
+          if (previous !== undefined) window.clearTimeout(previous);
           const timer = window.setTimeout(() => {
             legacyMusicNoteFolderCheckTimers.delete(uid);
             const current = musicNoteStructureSharedSessions.get(uid);

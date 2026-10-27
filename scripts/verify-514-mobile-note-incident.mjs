@@ -193,6 +193,79 @@ function device(transport, { quota = false, server = 'online', clock = 100_000, 
   };
 }
 
+// app515 P1: old accounts keep actual folder arrays under two top-level
+// fields. The first modern save must use the displayed (normalized) old mode
+// as a CAS baseline and copy the untouched other mode to independent V2.
+{
+  const oldMy = [
+    { id: 'default', title: '기본', order: 1, isDefault: true },
+    { id: 'folder-a', title: 'Legacy My', order: 2 },
+  ];
+  const oldShared = [
+    { id: 'default', title: '기본', order: 1, isDefault: true },
+    { id: 'shared-a', title: 'Legacy Shared', order: 2 },
+  ];
+  const canonical = { data: {
+    myNoteFolders: copy(oldMy), sharedNoteFolders: copy(oldShared),
+    musicNoteStructureVersion: 19,
+  }};
+  const d = device(bus(), { canonical });
+  d.page.publish(uid, {
+    myNoteFolders: copy(oldMy), sharedNoteFolders: copy(oldShared),
+    musicNoteStructureVersion: 19,
+  }, 19, true);
+  await d.page.persist('myNote', [
+    oldMy[0], { ...oldMy[1], title: 'Legacy edited from modern' },
+  ]);
+  assert.equal(d.page.session().verified, false,
+    'editing a legacy-only account must not advertise server confirmation');
+  await d.advance(60_000);
+  assert.equal(d.batch.getMusicNoteFolderSaveStatus(uid).state, 'server-confirmed');
+  assert.equal(canonical.modern?.musicNoteFolders?.myNote?.[1]?.title, 'Legacy edited from modern');
+  assert.equal(canonical.modern?.musicNoteFolders?.sharedNote?.[1]?.title, 'Legacy Shared');
+  assert.equal(canonical.data.myNoteFolders[1].title, 'Legacy My',
+    'do not rewrite or erase original old-client source');
+  assert.equal(canonical.data.sharedNoteFolders[1].title, 'Legacy Shared');
+  assert.equal(d.writes.length, 1);
+  console.log('APP515_LEGACY_TOP_LEVEL_MY_SHARED_FIRST_V2_SAVE_W1_PRESERVES_BOTH=PASS');
+}
+{
+  const original = [{ id: 'default', title: '기본', order: 1, isDefault: true }];
+  const canonical = { data: { sharedNoteFolders: copy(original), musicNoteStructureVersion: 1 } };
+  const d = device(bus(), { canonical });
+  d.page.publish(uid, { sharedNoteFolders: copy(original), musicNoteStructureVersion: 1 }, 1, true);
+  // A second old PC edits before the first new V2 transaction settles.
+  canonical.data.sharedNoteFolders = [{ ...original[0], title: 'Other PC newer edit' }];
+  await d.page.persist('sharedNote', [{ ...original[0], title: 'Stale modern edit' }]);
+  await d.advance(60_000);
+  assert.equal(d.writes.length, 0);
+  assert.equal(canonical.modern, undefined);
+  assert.ok(d.batch.getPendingMusicNoteFolderStructureBatch(uid)?.sharedNote,
+    'stale edit must remain pending rather than overwrite another old PC');
+  console.log('APP515_LEGACY_TOP_LEVEL_STALE_FIRST_V2_SAVE_FAILS_CLOSED=PASS');
+}
+
+// app515 P1: optimistic local cache and an RTDB delivery/version must never
+// mark an unpersisted folder as verified, including a failed Firestore save.
+{
+  const canonical = { data: { musicNoteStructureVersion: 9,
+    musicNoteFolders: { myNote: folders('server-original') } } };
+  const d = device(bus(), { server: 'denied', canonical });
+  const cacheKey = `soridraw_music_note_structure_cache_v1_${uid}`;
+  d.page.publish(uid, { musicNoteFolders: { myNote: folders('server-original') },
+    musicNoteStructureVersion: 9 }, 9, true);
+  await d.page.persist('myNote', folders('unsaved-preview'));
+  assert.equal(d.page.session().verified, false, 'RTDB transport is not a Firestore ACK');
+  assert.equal(JSON.parse(d.records.get(cacheKey))?.verified, false);
+  assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title, 'unsaved-preview');
+  await d.advance(60_000);
+  assert.equal(d.batch.getMusicNoteFolderSaveStatus(uid).state, 'failed');
+  assert.equal(d.page.session().verified, false, 'failed server persistence must not become verified');
+  assert.equal(JSON.parse(d.records.get(cacheKey))?.verified, false);
+  assert.ok(d.batch.getPendingMusicNoteFolderStructureBatch(uid));
+  console.log('APP515_UNSAVED_R1_RTDB_ACK_AND_FIRESTORE_FAIL_NEVER_VERIFIED=PASS');
+}
+
 // Actual quota + UI/session merge: editing another mode must retain the first.
 {
   const d = device(bus(), { quota: true });

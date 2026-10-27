@@ -1,44 +1,25 @@
-# app514 — proposed legacy Music Note structure fence (NOT ACTIVE)
+# app514 — 폴더 최신 저장 보호 규칙 (소스 준비, 배포하지 않음)
 
-Scope: `user_structures/{uid}` ONLY. `firestore.rules` remains unchanged. This is a staged **candidate**, not a deployed security rule.
+## 사용자가 겪는 상황
 
-## Proposed replacement for the existing `user_structures` match
+1. 휴대폰에서 폴더 이름을 **완성곡**으로 바꾸고 서버 저장이 완료됨
+2. 오래 켜둔 PC는 아직 **작업곡**으로 보여 다른 폴더 수정과 함께 예전 목록을 보냄
+3. PC의 오래된 프로그램이 60초 뒤 서버에 저장하더라도 **완성곡**을 되돌리면 안 됨
+4. PC가 보낸 예전 화면을 휴대폰이 잠깐 표시했다면 일정 시간 뒤 서버 저장 내용과 다시 맞춰야 함
 
-```firestore
-match /user_structures/{uid} {
-  function validMusicNoteStructureVersionUpdate() {
-    let beforeVersion = resource.data.get('musicNoteStructureVersion', 0);
-    let afterVersion = request.resource.data.get('musicNoteStructureVersion', 0);
-    let changed = request.resource.data.diff(resource.data).affectedKeys();
+## 이번 PR의 소스 구현 (아직 실제 서비스에 적용 안 됨)
 
-    // Old documents without a version remain compatible until first modern
-    // versioned settlement. Thereafter any write must not lower the version.
-    return !resource.data.keys().hasAny(['musicNoteStructureVersion'])
-      || (beforeVersion is int && afterVersion is int
-        && afterVersion >= beforeVersion
-        && (!changed.hasAny(['musicNoteFolders']) || afterVersion > beforeVersion));
-  }
+- `firestore.rules`의 `user_structures/{uid}` 업데이트: 서버에 최신 앱 저장 토큰이 있는 상태에서 폴더 내용이 바뀌는 쓰기는 **이전 토큰과 다른 새 토큰 + 증가된 저장 번호**가 있어야 허용
+- 이는 기존 앱의 `setDoc(..., merge:true)`가 최신 토큰을 그대로 남겨놓는 특성을 이용함. PC 시간이 크게 앞서 숫자가 커도 **토큰이 그대로면 폴더 덮어쓰기를 거절**함
+- **곡 좋아요·잠금 카드 상태만 바꾸는 기존 쓰기는 차단하지 않음.** 해당 쓰기가 함께 저장 번호를 낮출 가능성은 남고, 서버와 최신 앱에서 폴더 저장을 별도로 검사함
+- 최신 앱이 보내는 폴더 알림에 전용 식별자를 넣음(서버 문서 변경 없음). 예전 앱 알림은 기존처럼 즉시 표시하지만 **첫 알림 후 65초에만 서버 내용 1건 확인**; 저장 거절된 예전 변경이 화면에 영구히 남지 않게 함
+- 예전 알림을 받은 직후 앱을 닫으면 화면 캐시를 '미확정'으로 보존하여 다음 열기에서 정확한 서버 폴더를 확인. 최신 앱끼리의 정상 동기화·변경 없는 화면 재방문에는 조회 추가 없음
 
-  allow read: if isOwner(uid) || isAdmin();
-  allow create: if isOwner(uid) || isAdmin();
-  allow update: if (isOwner(uid) || isAdmin())
-    && validMusicNoteStructureVersionUpdate();
-  allow delete: if isOwner(uid) || isAdmin();
-}
-```
+## 출시 전 반드시 해결/검증할 조건
 
-## Compatibility evidence and rollout gate
+- 예전 프로그램으로 폴더를 변경하면 서버가 **저장을 거절할 수 있음**. 기존 프로그램은 새 오류 안내를 표시하지 못하므로 사용자 수정이 조용히 미저장될 위험이 남음. 구버전 접속 전환·실제 PC↔휴대폰 검증 없이 공용 Rules 활성화 금지
+- PREVIEW·TEST·PRODUCTION이 **실제 서버 규칙과 사용자 데이터를 공유함**. Rules 배포 시 세 환경의 기존 열려 있는 브라우저에 영향 발생 가능
+- 오래 켜둔 PC/휴대폰 변경, 60초 저장, 기존 카드 상태, 폴더 삭제 직후 곡 이동, 오프라인 후 재접속, 캐시 재실행을 에뮬레이터·독립 감사·실기기로 검증
+- 기존 곡/가사/프롬프트·폴더 데이터 강제 수정, 삭제, 백필, 캐시 강제 초기화 금지
 
-- **Fresh modern browser:** v100001 → v100002 folder edit accepted; version carried by same document. A transaction may retry; separate `user_structures` read and write cost already exists in app514.
-- **Delayed old browser:** v100000 folder overwrite after v100001 denied, protecting canonical folders.
-- **Old browser against already-modern data:** its existing `setDoc(..., merge:true)` may reject. *Not transparently backward compatible*; the user's old edit could remain only in local pending data. Updating only the new client **cannot** fix that old browser's error reporting. This risk requires a staged legacy-client transition/real-device proof before enabling.
-- **Legacy no-version document:** unchanged older schema can continue writing while neither version exists. Once versioned, an old versionless folder update merges the existing version without incrementing it and is denied.
-- **Unrelated mutations:** `favorites`, `user_recent_songs`, Library `user-playlists` and their atomic write batches are NOT within this match. Existing Music Note card-state writes to `user_structures` still need mixed old/new compatibility testing, since any old sender lowering the shared structure version is denied even without a folder change.
-- **Gaps:** Rule validation must run in a Firestore emulator (not a text-only JS model), test old browser's bundled client against the actual Rules, and inspect preexisting document version shapes. Older clients whose clocks are ahead could still propose a higher number and overwrite legitimate latest state; this monotonic fence is *necessary but not a complete global ordering protocol*.
-- **Deployment:** PREVIEW/TEST/PRODUCTION share actual user canonical data. Explicit director approval, independent exact-SHA audit, emulator and real-device old/new tests are required before altering `firestore.rules` or deploying. Do not auto-upgrade users, reset caches, backfill originals, or alter their music data.
-
-## Minimum acceptance before Rules activation
-
-1. Actual old-browser saved folder and card state behavior, current new-browser folder rename/delete/reorder and mixed PC/mobile offline→online convergence verified; failed legacy writes are visibly recoverable without erasing song edits.
-2. Firestore emulator rule PASS: stale and equal-version folder overwrite denied; newer accepted; card-only and original favorites/library writes unaffected.
-3. No shared environment Rules deployment until a separate explicit command.
+**현재 상태: PR #512 소스와 자동검사 후보만. 병합·배포 승인 아님.**

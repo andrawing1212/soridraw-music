@@ -246,6 +246,36 @@ service cloud.firestore {
       allow read, write: if isOwner(uid) || isAdmin();
     }
 
+    // app515: v2 canonical lives away from all older merge:true parent writes.
+    // One document per user, no public list or client-side deletion. The
+    // migrating browser can only advance version with a rotated writer token.
+    match /user_structures/{uid}/folder_state/{stateId} {
+      function validModernFolderState() {
+        return stateId == 'v2'
+          && request.resource.data.keys().hasOnly([
+            'schemaVersion', 'musicNoteFolders',
+            'musicNoteStructureVersion', 'musicNoteStructureWriterToken'
+          ])
+          && request.resource.data.keys().hasAll([
+            'schemaVersion', 'musicNoteFolders',
+            'musicNoteStructureVersion', 'musicNoteStructureWriterToken'
+          ])
+          && request.resource.data.schemaVersion == 2
+          && request.resource.data.musicNoteFolders is map
+          && request.resource.data.musicNoteStructureVersion is number
+          && request.resource.data.musicNoteStructureVersion > 0
+          && request.resource.data.musicNoteStructureWriterToken is string
+          && request.resource.data.musicNoteStructureWriterToken.size() >= 8;
+      }
+      allow get: if stateId == 'v2' && (isOwner(uid) || isAdmin());
+      allow list, delete: if false;
+      allow create: if (isOwner(uid) || isAdmin()) && validModernFolderState();
+      allow update: if (isOwner(uid) || isAdmin()) && validModernFolderState()
+        && resource.data.musicNoteStructureVersion is number
+        && request.resource.data.musicNoteStructureVersion > resource.data.musicNoteStructureVersion
+        && request.resource.data.musicNoteStructureWriterToken != resource.data.musicNoteStructureWriterToken;
+    }
+
     // app514: old/new-client conflict snapshots are private and immutable.
     // Owners may inspect them on demand, but only trusted Functions/Admin SDK
     // can create archives or restore data through the guarded parent update.

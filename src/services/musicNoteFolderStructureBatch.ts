@@ -526,6 +526,16 @@ export const flushMusicNoteFolderStructureBatch = async (uid: string): Promise<v
     }
   }).finally(() => {
     inflight.delete(key);
+    // A scheduled retry can fire while this ACK's promise is still in
+    // flight. The callback correctly reuses the existing promise, but its
+    // timer is then gone. Re-arm the remaining newer local edit only after
+    // the old ACK is fully settled; never retry failed/conflicted data here.
+    if (!timers.has(key) && readPending(key)
+      && saveStatuses.get(key)?.state === 'unsaved'
+      && (failedAttempts.get(key) || 0) < MAX_AUTOMATIC_ATTEMPTS) {
+      schedule(key, undurablePendingUids510.has(key)
+        ? emergencyDelay510(key) : MUSIC_NOTE_FOLDER_BATCH_MS);
+    }
   });
 
   inflight.set(key, task);

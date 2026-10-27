@@ -21,6 +21,7 @@ const canonical = {
   musicNoteStructureVersion:7, musicNoteCardState: { items:{} },
 };
 let reads = 0, transactions = 0, writes = 0, pending = null, listCalls = 0;
+let manifestCount = 1;
 let editEpoch = 0, afterCanonicalRead = null, afterTransactionCommit = null;
 const archiveParts = {};
 const copy = value => JSON.parse(JSON.stringify(value));
@@ -33,9 +34,17 @@ const sdk = {
   getDocs: async request => {
     assert.equal(request.ref, 'user_structures/fixture-owner/legacy_recovery');
     assert.equal(request.args[0].key, 'observedAtMs');
-    assert.equal(request.args[1].number, 10);
-    reads++; listCalls++;
-    return { docs:[{id,data:()=>copy(data)}] };
+    const requested = request.args[1].number;
+    assert.ok(requested === 1 || requested === 10);
+    const docs = Array.from({ length: Math.min(requested, manifestCount) }, (_, index) => ({
+      id: index === 0 ? id : id.slice(0, -2) + String(index).padStart(2, '0'),
+      data: () => copy(data),
+    }));
+    // Firestore charges returned document reads (and at least one read for an
+    // empty query), not "one read per getDocs() call".
+    reads += Math.max(1, docs.length);
+    listCalls++;
+    return { docs };
   },
   getDoc: async path => {
     reads++;
@@ -185,6 +194,15 @@ assert.equal(records[0].beforeFolders.myNote[0].title,'Before');
 assert.match(page,/getMusicNoteFolderRecoveryDetail\(/);
 assert.match(page,/folderRecoverySelectedId === record\.id && record\.detailLoaded/);
 console.log('APP514_RECOVERY_ON_DEMAND_BOUNDED_READ=PASS');
+manifestCount = 10;
+const beforeOlder = reads;
+const older = await exports.listMusicNoteFolderRecovery(uid, true);
+assert.equal(older.length, 10);
+assert.equal(reads - beforeOlder, 10,
+  'ten result documents must be billed R10 even though getDocs ran only once');
+assert.match(page, /이전 기록 더 보기/);
+manifestCount = 1;
+console.log('APP515_RECOVERY_INITIAL_LIST_R1_OLDER_EXPLICIT_LIST_R10=PASS');
 
 pending={myNote:{version:8,folders:[]}};
 await assert.rejects(exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','before'),/아직 저장되지 않은/);

@@ -67,38 +67,8 @@ export const syncMusicNoteStructureVersion = functions
     const firestore = admin.firestore();
     const userRef = firestore.collection("users").doc(uid);
 
-    // ONLY a legacy folder overwrite after a modern commit writes a recovery
-    // record. Existing clients remain writable under unchanged Rules. Both
-    // versions survive privately for later explicit, non-destructive restore.
-    const legacyRecovery = buildLegacyMusicNoteFolderRecovery(before, after);
-    if (legacyRecovery) {
-      const recoveryPayload = {
-        ...legacyRecovery,
-        observedAtMs: eventTimeMs,
-      };
-      const archive = planLegacyMusicNoteFolderRecoveryArchive(recoveryPayload);
-      const eventKey = createHash("sha256")
-        .update(String(context.eventId || "")).digest("hex").slice(0, 40);
-      const recoveryRef = firestore.collection("user_structures").doc(uid)
-        .collection("legacy_recovery").doc(eventKey);
-      try {
-        // create() is idempotent across retried Firestore events. Never erase
-        // a previous recovery record or change the canonical folder state.
-        if (!archive.parts.length) {
-          await recoveryRef.create(archive.manifest);
-        } else {
-          const archiveBatch = firestore.batch();
-          archiveBatch.create(recoveryRef, archive.manifest);
-          for (const part of archive.parts) {
-            archiveBatch.create(recoveryRef.collection("parts").doc(part.id), { payload: part.payload });
-          }
-          await archiveBatch.commit();
-        }
-      } catch (error: any) {
-        if (Number(error?.code) !== 6 && String(error?.code) !== "already-exists") throw error;
-      }
-    }
-
+    // The ordinary version signal is the critical path for PC↔mobile
+    // convergence. Recovery archive work must never delay or suppress it.
     await firestore.runTransaction(async (transaction) => {
       const userSnapshot = await transaction.get(userRef);
       if (!userSnapshot.exists) return;
@@ -107,6 +77,47 @@ export const syncMusicNoteStructureVersion = functions
       if (nextVersion <= currentVersion) return;
       transaction.set(userRef, { syncVersions: { musicNoteStructure: nextVersion } }, { merge: true });
     });
+
+    // An older browser may overwrite a modern folder state. Preserve its
+    // before/after snapshots when possible, but never propagate an archive
+    // failure into the normal sync trigger (no song data is modified here).
+    try {
+      const legacyRecovery = buildLegacyMusicNoteFolderRecovery(before, after);
+      if (legacyRecovery) {
+        const recoveryPayload = {
+          ...legacyRecovery,
+          observedAtMs: eventTimeMs,
+        };
+        const archive = planLegacyMusicNoteFolderRecoveryArchive(recoveryPayload);
+        const eventKey = createHash("sha256")
+          .update(String(context.eventId || "")).digest("hex").slice(0, 40);
+        const recoveryRef = firestore.collection("user_structures").doc(uid)
+          .collection("legacy_recovery").doc(eventKey);
+        try {
+          // create() is idempotent across retried Firestore events. Never erase
+          // a previous recovery record or change the canonical folder state.
+          if (!archive.parts.length) {
+            await recoveryRef.create(archive.manifest);
+          } else {
+            const archiveBatch = firestore.batch();
+            archiveBatch.create(recoveryRef, archive.manifest);
+            for (const part of archive.parts) {
+              archiveBatch.create(recoveryRef.collection("parts").doc(part.id), { payload: part.payload });
+            }
+            await archiveBatch.commit();
+          }
+        } catch (error: any) {
+          if (Number(error?.code) !== 6 && String(error?.code) !== "already-exists") throw error;
+        }
+      }
+    } catch (error: any) {
+      // Only log a bounded diagnostic marker, never folder/song contents.
+      // An archive failure needs incident follow-up; it is NOT a sync failure.
+      console.error("APP514_LEGACY_RECOVERY_ARCHIVE_FAILED", {
+        eventId: String(context.eventId || "").slice(0, 80),
+        code: String(error?.code || "archive-error").slice(0, 64),
+      });
+    }
   });
 
 // SORIDRAW_SECTION_TAGS_SHARED_BUNDLE_20260904

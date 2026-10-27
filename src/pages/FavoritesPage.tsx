@@ -150,7 +150,10 @@ const mergeMusicNoteDetailPatch = (base: Record<string, any>, patch: Record<stri
 
 type MusicNoteStructureSharedSession = {
   data: any | null;
+  // Local/RTDB optimistic version is NOT the canonical profile version.
   version: number;
+  profileVersionSeen: number;
+  refreshPending: boolean;
   verified: boolean;
   listeners: Set<(data: any) => void>;
   syncInFlight: Promise<void> | null;
@@ -160,6 +163,9 @@ type MusicNoteStructureSharedSession = {
 type MusicNoteStructureCacheEnvelope = {
   schemaVersion: 1;
   version: number;
+  // Persist the last *server-confirmed* profile signal independently from
+  // optimistic device time. Legacy envelopes require at most one R1 upgrade.
+  profileVersionSeen?: number;
   verified: boolean;
   updatedAtMs: number;
   data: any;
@@ -198,6 +204,7 @@ const readMusicNoteStructureCache = (uid: string): MusicNoteStructureCacheEnvelo
     return {
       schemaVersion: 1,
       version: Math.max(0, Math.floor(Number(parsed?.version || 0))),
+      profileVersionSeen: Math.max(0, Math.floor(Number(parsed?.profileVersionSeen || 0))),
       verified: parsed?.verified === true,
       updatedAtMs: Math.max(0, Math.floor(Number(parsed?.updatedAtMs || 0))),
       data: parsed.data,
@@ -237,6 +244,9 @@ const writeMusicNoteStructureCache = (
   const next: MusicNoteStructureCacheEnvelope = {
     schemaVersion: 1,
     version: Math.max(Number(previous?.version || 0), Math.max(0, Math.floor(Number(version || 0)))),
+    // Do not mark an optimistic RTDB/local edit as an acknowledged server sync.
+    profileVersionSeen: Math.max(Number(previous?.profileVersionSeen || 0),
+      Number(memory?.profileVersionSeen || 0)),
     verified: verified || previous?.verified === true,
     updatedAtMs: Date.now(),
     data: mergeMusicNoteStructureData(previous?.data, patch),
@@ -259,6 +269,8 @@ const publishMusicNoteStructureSession = (
     session = {
       data: cached.data,
       version: cached.version,
+      profileVersionSeen: cached.profileVersionSeen || 0,
+      refreshPending: false,
       verified: cached.verified,
       listeners: new Set(),
       syncInFlight: null,
@@ -268,6 +280,7 @@ const publishMusicNoteStructureSession = (
   } else {
     session.data = cached.data;
     session.version = cached.version;
+    session.profileVersionSeen = Math.max(session.profileVersionSeen, cached.profileVersionSeen || 0);
     session.verified = cached.verified;
   }
   session.listeners.forEach((subscriber) => subscriber(cached.data));
@@ -282,10 +295,15 @@ const getNextMusicNoteStructureVersion = (uid: string): number => {
 
 const ensureMusicNoteStructureFresh = (uid: string, session: MusicNoteStructureSharedSession, force = false): Promise<void> => {
   const profileVersion = getMusicNoteStructureProfileVersion(uid);
-  if (!force && session.data !== null && session.verified && profileVersion <= session.version) {
+  if (!force && session.data !== null && session.verified && profileVersion <= session.profileVersionSeen) {
     return Promise.resolve();
   }
-  if (session.syncInFlight) return session.syncInFlight;
+  if (session.syncInFlight) {
+    // A second device can update the profile while a prior server read is
+    // still pending. Do not lose that signal when the first read settles.
+    if (force || profileVersion > session.profileVersionSeen) session.refreshPending = true;
+    return session.syncInFlight;
+  }
 
   session.syncInFlight = (async () => {
     try {
@@ -296,7 +314,10 @@ const ensureMusicNoteStructureFresh = (uid: string, session: MusicNoteStructureS
       const resolvedVersion = Math.max(profileVersion, Number.isFinite(serverDocumentVersion) ? serverDocumentVersion : 0);
       // A read started before a local edit/RTDB preview is no longer authority
       // for that session. Do not stamp old data with the newer profile version.
-      if (session.data !== beforeRead) return;
+      if (session.data !== beforeRead) {
+        session.refreshPending = true;
+        return;
+      }
       const pending = getPendingMusicNoteFolderStructureBatch(uid);
       const projected = projectMusicNoteStructureData(data);
       for (const mode of ['myNote', 'sharedNote'] as const) {
@@ -304,11 +325,27 @@ const ensureMusicNoteStructureFresh = (uid: string, session: MusicNoteStructureS
           projected.musicNoteFolders = { ...projected.musicNoteFolders, [mode]: pending[mode].folders };
         }
       }
+      // This marker advances only after an authoritative Firestore read.
+      session.profileVersionSeen = Math.max(session.profileVersionSeen, profileVersion);
       publishMusicNoteStructureSession(uid, projected, resolvedVersion, true);
+      // A newer profile signal can arrive while this read is in flight.
+      if (getMusicNoteStructureProfileVersion(uid) > session.profileVersionSeen) {
+        session.refreshPending = true;
+      }
     } catch (error) {
       console.warn('Music Note structure refresh failed; keeping verified local cache when available.', error);
     } finally {
       session.syncInFlight = null;
+      if (session.refreshPending) {
+        session.refreshPending = false;
+        // A stale read may be retried after it completes, not while a second
+        // read would compete with it. No polling or new steady-state listener.
+        queueMicrotask(() => {
+          if (musicNoteStructureSharedSessions.get(uid) === session) {
+            void ensureMusicNoteStructureFresh(uid, session);
+          }
+        });
+      }
     }
   })();
   return session.syncInFlight;
@@ -326,6 +363,8 @@ const subscribeMusicNoteStructureDocument = (uid: string, listener: (data: any) 
     session = {
       data: pending ? mergeMusicNoteStructureData(cached?.data, { musicNoteFolders: pendingFolders }) : cached?.data || null,
       version: Math.max(Number(cached?.version || 0), pending?.myNote?.version || 0, pending?.sharedNote?.version || 0),
+      profileVersionSeen: cached?.profileVersionSeen || 0,
+      refreshPending: false,
       verified: cached?.verified === true,
       listeners: new Set(),
       syncInFlight: null,
@@ -350,7 +389,7 @@ const subscribeMusicNoteStructureDocument = (uid: string, listener: (data: any) 
       const current = musicNoteStructureSharedSessions.get(uid);
       if (!current) return;
       const nextRemoteVersion = getMusicNoteStructureProfileVersion(uid);
-      if (nextRemoteVersion > current.version) void ensureMusicNoteStructureFresh(uid, current);
+      if (nextRemoteVersion > current.profileVersionSeen) void ensureMusicNoteStructureFresh(uid, current);
     }) as EventListener);
   }
 

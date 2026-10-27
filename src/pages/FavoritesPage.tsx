@@ -154,6 +154,7 @@ type MusicNoteStructureSharedSession = {
   version: number;
   profileVersionSeen: number;
   refreshPending: boolean;
+  refreshForce: boolean;
   verified: boolean;
   listeners: Set<(data: any) => void>;
   syncInFlight: Promise<void> | null;
@@ -271,6 +272,7 @@ const publishMusicNoteStructureSession = (
       version: cached.version,
       profileVersionSeen: cached.profileVersionSeen || 0,
       refreshPending: false,
+      refreshForce: false,
       verified: cached.verified,
       listeners: new Set(),
       syncInFlight: null,
@@ -301,7 +303,10 @@ const ensureMusicNoteStructureFresh = (uid: string, session: MusicNoteStructureS
   if (session.syncInFlight) {
     // A second device can update the profile while a prior server read is
     // still pending. Do not lose that signal when the first read settles.
-    if (force || profileVersion > session.profileVersionSeen) session.refreshPending = true;
+    if (force || profileVersion > session.profileVersionSeen) {
+      session.refreshPending = true;
+      if (force) session.refreshForce = true;
+    }
     return session.syncInFlight;
   }
 
@@ -316,6 +321,7 @@ const ensureMusicNoteStructureFresh = (uid: string, session: MusicNoteStructureS
       // for that session. Do not stamp old data with the newer profile version.
       if (session.data !== beforeRead) {
         session.refreshPending = true;
+        if (force) session.refreshForce = true;
         return;
       }
       const pending = getPendingMusicNoteFolderStructureBatch(uid);
@@ -337,12 +343,14 @@ const ensureMusicNoteStructureFresh = (uid: string, session: MusicNoteStructureS
     } finally {
       session.syncInFlight = null;
       if (session.refreshPending) {
+        const retryForce = session.refreshForce;
         session.refreshPending = false;
+        session.refreshForce = false;
         // A stale read may be retried after it completes, not while a second
         // read would compete with it. No polling or new steady-state listener.
         queueMicrotask(() => {
           if (musicNoteStructureSharedSessions.get(uid) === session) {
-            void ensureMusicNoteStructureFresh(uid, session);
+            void ensureMusicNoteStructureFresh(uid, session, retryForce);
           }
         });
       }
@@ -365,6 +373,7 @@ const subscribeMusicNoteStructureDocument = (uid: string, listener: (data: any) 
       version: Math.max(Number(cached?.version || 0), pending?.myNote?.version || 0, pending?.sharedNote?.version || 0),
       profileVersionSeen: cached?.profileVersionSeen || 0,
       refreshPending: false,
+      refreshForce: false,
       verified: cached?.verified === true,
       listeners: new Set(),
       syncInFlight: null,

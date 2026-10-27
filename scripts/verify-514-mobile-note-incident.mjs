@@ -679,6 +679,30 @@ console.log('APP514_OLD_PREVIEW_RECONNECT_CONFIRMATION_ONLY_IF_UNVERIFIED=PASS')
   console.log('APP514_OLD_PC_REJECTED_WRITE_PHONE_UI_CORRECTS_ONCE=PASS');
 }
 
+// Repeated old-browser renames keep their 60s final-state batch window.
+// Verify once after the last change, not between two still-pending edits.
+{
+  const canonical={data:{musicNoteStructureVersion:500,
+    musicNoteFolders:{myNote:folders('server-new')}}};
+  const d=device(bus(),{canonical});
+  d.page.publish(uid,{musicNoteFolders:{myNote:folders('server-new')},
+    musicNoteStructureVersion:500},500);
+  d.page.subscribe(uid,()=>{});
+  await tick();
+  const legacy=name=>JSON.stringify({__musicNoteStructureSync:true,
+    data:{musicNoteFolders:{myNote:folders(name)},musicNoteStructureVersion:400}});
+  d.page.receive(legacy('first-old-edit'),1000);
+  await d.advance(40_000);
+  d.page.receive(legacy('second-old-edit'),1001);
+  assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title,'second-old-edit');
+  await d.advance(25_000);
+  assert.equal(d.reads,0,'do not verify before the second edit settles');
+  await d.advance(40_000);
+  assert.equal(d.reads,1);
+  assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title,'server-new');
+  console.log('APP514_OLD_PC_REPEATED_EDITS_ONE_TRAILING_CANONICAL_READ=PASS');
+}
+
 // A current-version RTDB folder preview remains immediate/R0 and does NOT
 // launch the legacy 65-second read or alter the existing 60-second batching.
 {

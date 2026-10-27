@@ -94,6 +94,17 @@ try {
   await assertFails(setDoc(ownerArchive, { observedAtMs: 2 }, { merge: true }));
   await assertFails(setDoc(otherArchive, { observedAtMs: 2 }, { merge: true }));
   console.log('APP514_EMULATOR_RECOVERY_OWNER_READ_ONLY_NONOWNER_DENIED=PASS');
+  const partPath = archivedPath + '/parts/beforeFolders_myNote_0';
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), partPath), { payload: '[{"id":"default"}]' });
+  });
+  assert.equal((await assertSucceeds(getDoc(doc(
+    env.authenticatedContext(uid).firestore(), partPath,
+  )))).data()?.payload, '[{"id":"default"}]');
+  await assertFails(getDoc(doc(env.authenticatedContext('not-owner').firestore(), partPath)));
+  await assertFails(getDocs(collection(env.authenticatedContext(uid).firestore(), archivedPath, 'parts')));
+  await assertFails(setDoc(doc(env.authenticatedContext(uid).firestore(), partPath), { payload:'forged' }));
+  console.log('APP514_EMULATOR_IMMUTABLE_ARCHIVE_SHARD_OWNER_EXACT_READ_ONLY=PASS');
 
   const favorite = doc(env.authenticatedContext(uid).firestore(), 'favorites/fixture-app514-song');
   await assertSucceeds(setDoc(favorite, { uid, title: 'isolated fake song' }));

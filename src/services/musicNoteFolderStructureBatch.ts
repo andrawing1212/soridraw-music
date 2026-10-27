@@ -104,6 +104,53 @@ const comparableFolders = (value: unknown): string => JSON.stringify(
     isDefault: Boolean(item?.isDefault || item?.id === 'default'),
   })) : null,
 );
+// app515 P1: the legacy parent had two older top-level folder fields.
+// Match the page's existing normalizer when reading those fields so the
+// first V2 CAS compares the same folders the user actually edited. This
+// helper reads only the already-fetched parent; it never adds server reads.
+const legacyFolderDefaults: Record<MusicNoteFolderModeKey, { id: string; title: string; order: number; isDefault?: boolean }[]> = {
+  myNote: [
+    { id: 'default', title: '기본', order: 1, isDefault: true },
+    { id: '1', title: '1', order: 2 }, { id: '2', title: '2', order: 3 },
+    { id: '3', title: '3', order: 4 },
+  ],
+  sharedNote: [
+    { id: 'default', title: '기본', order: 1, isDefault: true },
+    { id: '1', title: '1', order: 2 }, { id: '2', title: '2', order: 3 },
+  ],
+};
+const normalizeTopLevelLegacyFolders = (value: unknown, mode: MusicNoteFolderModeKey): unknown[] => {
+  const source = Array.isArray(value) && value.length ? value : legacyFolderDefaults[mode];
+  const withDefault = source.some((item: any) => item?.id === 'default' || item?.folderId === 'default')
+    ? source : [legacyFolderDefaults[mode][0], ...source];
+  const seen = new Set<string>();
+  return withDefault
+    .filter((folder: any) => folder && typeof folder === 'object')
+    .map((folder: any, index: number) => ({
+      id: String(folder.id || folder.folderId || `folder-${index}`).trim(),
+      title: String(folder.title || folder.name || '').trim(),
+      order: Number.isFinite(Number(folder.order)) ? Number(folder.order) : index + 1,
+      isDefault: Boolean(folder.isDefault || folder.id === 'default' || folder.folderId === 'default'),
+      createdAt: Number.isFinite(Number(folder.createdAt)) ? Number(folder.createdAt) : undefined,
+      updatedAt: Number.isFinite(Number(folder.updatedAt)) ? Number(folder.updatedAt) : undefined,
+    }))
+    .filter((folder: any) => folder.id && folder.title)
+    .filter((folder: any) => {
+      if (seen.has(folder.id)) return false;
+      seen.add(folder.id);
+      return true;
+    })
+    .sort((a: any, b: any) => a.id === 'default' ? -1 : b.id === 'default' ? 1 : (a.order || 999) - (b.order || 999))
+    .map((folder: any, index: number) => ({ ...folder, order: index + 1, isDefault: folder.id === 'default' || folder.isDefault }));
+};
+export const getMusicNoteEffectiveLegacyMode = (
+  record: any, mode: MusicNoteFolderModeKey,
+): unknown[] | null => {
+  if (Array.isArray(record?.musicNoteFolders?.[mode])) return record.musicNoteFolders[mode];
+  const topLevel = mode === 'myNote' ? record?.myNoteFolders : record?.sharedNoteFolders;
+  return Array.isArray(topLevel) ? normalizeTopLevelLegacyFolders(topLevel, mode) : null;
+};
+
 // Content-only fingerprint of the legacy folder view at first V2 migration.
 // Avoid duplicating arbitrarily large complete folder arrays in the new
 // document; two independent 32-bit streams plus length keep the marker tiny.
@@ -154,7 +201,15 @@ export const writeMusicNoteStructureIfNewer = async (
         ? await transaction.get(structureRef) : null;
       const active = folderWrite && v2Snapshot?.exists() ? v2Snapshot : legacySnapshot;
       const serverVersion = safeVersion(active?.data()?.musicNoteStructureVersion);
-      const serverFolders = active?.data()?.musicNoteFolders || {};
+      const storedFolders = active?.data()?.musicNoteFolders || {};
+      const serverFolders = folderWrite && !v2Snapshot?.exists()
+        ? {
+          ...storedFolders,
+          ...Object.fromEntries((['myNote', 'sharedNote'] as const)
+            .map(mode => [mode, getMusicNoteEffectiveLegacyMode(active?.data(), mode)])
+            .filter(([, folders]) => Array.isArray(folders))),
+        }
+        : storedFolders;
       // Pending written by an older app can lack the original baseline.
       // Never let such a payload overwrite an already-populated V2 document
       // or bootstrap V2 over legitimate older-client folder edits.
@@ -198,7 +253,13 @@ export const writeMusicNoteStructureIfNewer = async (
         // An initial V2 snapshot copies only the server's current legacy view,
         // atomically with the first edit. Later old-client edits stay separate.
         const nextFolders: Record<string, unknown> = {
-          ...(!v2Snapshot?.exists() ? serverFolders : {}),
+          ...(!v2Snapshot?.exists() ? {
+            // Freeze both views on the first migration, including the other
+            // mode if only one mode was edited; later old clients remain
+            // independently visible in the comparison dialog.
+            myNote: serverFolders.myNote || legacyFolderDefaults.myNote,
+            sharedNote: serverFolders.sharedNote || legacyFolderDefaults.sharedNote,
+          } : {}),
           ...Object.fromEntries(changedModes.map(mode => [mode, folderModes?.[mode]])),
           ...(folderModes && Object.prototype.hasOwnProperty.call(folderModes, 'updatedAt')
             ? { updatedAt: folderModes.updatedAt } : {}),

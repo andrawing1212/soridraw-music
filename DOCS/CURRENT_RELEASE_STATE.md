@@ -1,3 +1,13 @@
+## CURRENT — app514 WORK P1 구형 PC 안전 공존 / Draft PR #512 (2026-10-28 KST)
+
+- **작업 상태:** PR #512의 이전 WORK FAIL(P1 3/P2 1) 중 혼합 pending, 미확정 RTDB, 동일 폴더 타임스탬프 3건 수정·테스트. 마지막 남은 P1은 구버전 PC 폴더 저장과 최신 서버 폴더 보호의 동시 보장.
+- **구버전 저장 실패 방지 최소 수정:** `firestore.rules`의 `user_structures/{uid}` owner read/write 원래 허용 규칙 복귀(공유 서비스와 동일). 원래 guard는 에뮬레이터 **메모리 안에서만** 적용해 설계 테스트 유지. `legacy_recovery` owner 읽기 전용 보호 유지. 서버 원본 변경 없음.
+- **아직 FAIL:** 구형 PC의 무조건 `merge:true` 지연 폴더 쓰기를 허용하면 다른 최신 기기의 폴더를 덮을 수 있다. 구형 클라이언트에 기준 버전과 토큰이 없으므로 단순 Rules로 '정상 옛기기 편집 허용'과 '오래된 쓰기 거절'을 동시에 보장할 수 없음. 기존 Functions archive는 실배포/복구 검증 이전이라 무손실 대안으로 간주하지 않는다.
+- **필수 다음 단계:** 격리 에뮬레이터의 호환/비호환 두 경로 검사, GitHub PR HEAD CI, 독립 WORK 감사(실사용 모델명·버전 명시), PC·모바일 구버전 혼합 실제 확인과 릴리스 전환 정책. **기존 PR #512 Draft 유지, merge/RULES/배포 금지.**
+- **주의:** 실서비스 app501 Music Note 누락곡 서버 원본 존재 여부 UNKNOWN; cache 전체삭제, 자동복구, 사용자의 실제 파일 편집/마이그레이션 금지. 60초 저장, Studio heart, Music Note/Library, 비용 보호.
+
+---
+
 ## CURRENT — app514 incident source candidate, no deployment (2026-10-27 KST)
 - Issue #511; branch `fix/app514-p0-mobile-note-quota-incident`. Product base `f31bbf6801f9aa1fbfa0690f4783d70c9c9f32b5`; existing incident documentation commits through `9ebc6e4bc3669553022e49d4f4b3e28d4c0d06db` preserved. This candidate is NOT real-device acceptance or a recovered-song claim.
 - Reproduced in executable source VMs: quota-refused structure cache loses the other folder mode when merging from stale disk; delayed RTDB response can replace/requeue newer edits; equal-version old canonical ACK can clear newer content; a cold read can overwrite a newer live edit. Original preview fails the quota session test; candidate passes. Actual user's mobile storage size, Rules/network error and server originals remain unmeasured.

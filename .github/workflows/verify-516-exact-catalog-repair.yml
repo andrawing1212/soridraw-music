@@ -1,4 +1,4 @@
-name: Verify app516 Exact Music Note Catalog Repair (No Deploy)
+name: Verify app516 Read-only Music Note Diagnostic (No Deploy)
 
 on:
   pull_request:
@@ -28,7 +28,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: TypeScript
         run: npx tsc --noEmit
-      - name: app516 exact one-record runtime fault injection
+      - name: app516 read-only exact-ID and no-writer safety guard
         run: node scripts/verify-516-exact-catalog-repair.mjs
       - name: Existing Music Note canonical/media guard
         run: node scripts/verify-349-studio-heart-settlement-media.mjs

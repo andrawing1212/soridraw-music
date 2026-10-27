@@ -6,6 +6,7 @@ import {
   inspectExactStudioHeartDocument,
   type StudioHeartExactReadReport,
 } from '../lib/studioHeartSingleDocDiagnostic';
+import { repairSingleExactMusicNoteCatalog516 } from '../lib/musicNoteSingleDocCatalogRepair516';
 
 // Admin-only existing CACHE LIVE panel: no action on render, and exactly one
 // Firestore document read only on explicit "서버 1건 확인" button click.
@@ -16,6 +17,7 @@ export default function StudioHeartSingleDocDiagnostic() {
   const [report, setReport] = useState<StudioHeartExactReadReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [alreadyRead, setAlreadyRead] = useState(false);
+  const [repaired, setRepaired] = useState(false);
   const uid = String(auth.currentUser?.uid || '').trim();
   const uidRef = useRef(uid);
   const titleRef = useRef(title);
@@ -33,6 +35,7 @@ export default function StudioHeartSingleDocDiagnostic() {
     busyRef.current = false;
     setBusy(false);
     setAlreadyRead(false);
+    setRepaired(false);
     setReport(null);
   };
 
@@ -110,10 +113,57 @@ export default function StudioHeartSingleDocDiagnostic() {
     }
   };
 
+  // Explicit manual action after a successful exact owner/active canonical read.
+  // Never auto-repair on render, route entry, or a failed/ambiguous diagnostic.
+  const repair = async () => {
+    const requestUid = String(auth.currentUser?.uid || '').trim();
+    const requestId = documentIdRef.current.trim();
+    const requestTitle = titleRef.current;
+    if (busyRef.current || repaired || !alreadyRead
+      || !report?.documentPresent || report.ownerMatchesSignedInUser !== true
+      || report.serverActive !== true || report.devicePendingIntent
+      || !requestUid || requestUid !== uidRef.current
+      || requestId !== documentId.trim() || requestTitle !== title) return;
+    const request = {
+      sequence: ++requestSequenceRef.current,
+      uid: requestUid,
+      documentId: requestId,
+      title: requestTitle,
+    };
+    activeRequestRef.current = request;
+    busyRef.current = true;
+    setBusy(true);
+    setMessage('');
+    const isCurrentRequest = () => (
+      activeRequestRef.current?.sequence === request.sequence
+      && uidRef.current === request.uid
+      && auth.currentUser?.uid === request.uid
+      && documentIdRef.current.trim() === request.documentId
+      && titleRef.current === request.title
+    );
+    try {
+      const outcome = await repairSingleExactMusicNoteCatalog516(request.uid, request.documentId);
+      if (!isCurrentRequest()) return;
+      setRepaired(true);
+      setMessage(outcome === 'repaired'
+        ? '서버에 있던 곡 1건을 공유 목록에 보완하고 다른 기기에 변경 신호를 보냈습니다. 곡 원본은 수정하지 않았습니다.'
+        : '공유 서버 목록에는 이미 곡이 있습니다. 다른 기기에 변경 신호를 다시 보냈습니다. 원본은 수정하지 않았습니다.');
+    } catch {
+      if (!isCurrentRequest()) return;
+      setMessage('목록 복구를 확정하지 못했습니다. 서버/권한/동기화 오류 또는 미확정 저장 여부를 확인하세요. 원본 곡은 수정하지 않았으며, 무작정 다시 누르지 마세요.');
+    } finally {
+      if (isCurrentRequest()) {
+        activeRequestRef.current = null;
+        busyRef.current = false;
+        setBusy(false);
+      }
+    }
+  };
+
   const label = (value: boolean | null) => value === null ? '판정 불가' : value ? '예' : '아니요';
   return (
     <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.035] p-2.5 text-[11px] text-white/75">
-      <div className="font-black text-white/90">뮤직노트 특정곡 원본 확인 · 읽기 전용</div>
+      <div className="font-black text-white/90">뮤직노트 특정곡 원본 확인 · 필요 시 수동 목록 복구</div>
       <div className="mt-1 text-[10px] leading-4 text-white/55">
         원본 PC에서 먼저 곡을 찾으세요. 하트·저장곡·브라우저 기록을 변경하지 않습니다.
       </div>
@@ -168,6 +218,18 @@ export default function StudioHeartSingleDocDiagnostic() {
         <div>이 기기 하트 기록: {label(report.deviceRecentHeartAuthority)}</div>
         <div>이 기기 Catalog 캐시 존재: {label(report.deviceCatalogCached)}</div>
         <div>Catalog 캐시에 저장곡 포함: {label(report.deviceCatalogContainsDocument)}</div>
+        <div className="pt-2 text-[10px] text-white/50">
+          아래 버튼은 명시적으로 누를 때만 서버 원본 1건과 공유 목록을 재확인합니다.
+          원본 저장곡은 변경하지 않고 공유 목록에 누락됐을 때만 해당 1건을 추가하며, 다른 기기에 변경 신호를 보냅니다.
+        </div>
+        <button type="button"
+          disabled={busy || repaired || !report.documentPresent
+            || report.ownerMatchesSignedInUser !== true || report.serverActive !== true
+            || report.devicePendingIntent}
+          onClick={() => void repair()}
+          className="mt-1 rounded bg-white/10 px-2 py-1.5 text-[11px] font-bold disabled:opacity-40">
+          {busy ? '단건 목록 확인 중…' : repaired ? '이번 단건 복구 완료' : '서버 원본 기준 · 저장곡 목록 1건 복구'}
+        </button>
         <div className="pt-1 text-[10px] text-white/50">문서번호·계정번호·가사·인증정보는 결과에 포함되지 않습니다.</div>
       </div> : null}
     </div>

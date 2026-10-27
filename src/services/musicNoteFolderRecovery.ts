@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, doc, getDoc, getDocs, limit, orderBy, query, runTransaction } from '../lib/firestoreMeasured';
+import { collection, doc, getDoc, getDocFromServer, getDocs, limit, orderBy, query, runTransaction } from '../lib/firestoreMeasured';
 import { getPendingMusicNoteFolderStructureBatch, getMusicNoteFolderEditEpoch, type MusicNoteFolderModeKey } from './musicNoteFolderStructureBatch';
 import { publishMusicNoteStructureDelta } from './userDomainSyncService';
 
@@ -170,5 +170,112 @@ export const restoreMusicNoteFolderRecovery = async (
     musicNoteFolders: { [mode]: result.folders },
     musicNoteStructureVersion: result.version,
   }).catch(() => {});
+  return { ...result, localEditDuringRestore };
+};
+
+
+// app515: compare the old PC's last committed folder view with the
+// independent modern v2 canonical, only when user presses "conflict records".
+// Two exact server gets per request, no subscription, scan, or automatic replay.
+export type MusicNoteLegacyFolderComparison = {
+  legacyFolders: Partial<Record<MusicNoteFolderModeKey, unknown[]>>;
+  modernFolders: Partial<Record<MusicNoteFolderModeKey, unknown[]>>;
+  changedModes: MusicNoteFolderModeKey[];
+};
+const logicalFolderView = (value: unknown): string => JSON.stringify(
+  Array.isArray(value) ? value.map((folder: any) => ({
+    id: String(folder?.id || folder?.folderId || ''),
+    title: String(folder?.title || folder?.name || ''),
+    order: Number(folder?.order || 0),
+    isDefault: Boolean(folder?.isDefault || folder?.id === 'default'),
+  })) : null,
+);
+
+export const getMusicNoteLegacyFolderComparison = async (
+  uid: string,
+): Promise<MusicNoteLegacyFolderComparison | null> => {
+  if (!uid?.trim()) throw new Error('로그인이 필요합니다.');
+  const [legacy, modern] = await Promise.all([
+    getDocFromServer(doc(db, 'user_structures', uid)),
+    getDocFromServer(doc(db, 'user_structures', uid, 'folder_state', 'v2')),
+  ]);
+  if (!modern.exists()) return null; // no migration; legacy remains canonical
+  const legacyFolders = legacy.data()?.musicNoteFolders || {};
+  const modernFolders = modern.data()?.musicNoteFolders || {};
+  const changedModes = (['myNote', 'sharedNote'] as const).filter(mode =>
+    Array.isArray(legacyFolders[mode]) && Array.isArray(modernFolders[mode])
+    && logicalFolderView(legacyFolders[mode]) !== logicalFolderView(modernFolders[mode]));
+  return {
+    legacyFolders: Object.fromEntries(changedModes.map(mode => [mode, legacyFolders[mode]])),
+    modernFolders: Object.fromEntries(changedModes.map(mode => [mode, modernFolders[mode]])),
+    changedModes,
+  };
+};
+
+// Applying old PC content is an explicit owner action to the V2 document
+// ONLY. The old source is never edited. CAS checks both observed snapshots
+// and protects unsaved newer local work and folder IDs used by songs.
+export const restoreMusicNoteLegacyFolderChoice = async (
+  uid: string, mode: MusicNoteFolderModeKey, choice: 'legacy' | 'modern',
+  expected: MusicNoteLegacyFolderComparison,
+  isSessionCurrent: () => boolean = () => true,
+): Promise<{ folders: unknown[]; version: number; changed: boolean; localEditDuringRestore: boolean }> => {
+  if (!uid?.trim() || !['myNote', 'sharedNote'].includes(mode)
+    || !['legacy', 'modern'].includes(choice) || !expected.changedModes.includes(mode)) {
+    throw new Error('잘못된 폴더 비교 요청입니다.');
+  }
+  if (getPendingMusicNoteFolderStructureBatch(uid)?.[mode]) {
+    throw new Error('이 기기에 아직 저장되지 않은 폴더 변경이 있습니다. 먼저 저장 문제를 해결해 주세요.');
+  }
+  const epoch = getMusicNoteFolderEditEpoch(uid, mode);
+  const guard = () => {
+    if (!isSessionCurrent() || getMusicNoteFolderEditEpoch(uid, mode) !== epoch
+      || getPendingMusicNoteFolderStructureBatch(uid)?.[mode]) {
+      throw new Error('복원 중 계정이나 폴더 수정 상태가 바뀌었습니다. 복원을 중단했습니다.');
+    }
+  };
+  guard();
+  const legacyRef = doc(db, 'user_structures', uid);
+  const v2Ref = doc(db, 'user_structures', uid, 'folder_state', 'v2');
+  const result = await runTransaction(db, async txn => {
+    const [legacy, modern] = [await txn.get(legacyRef), await txn.get(v2Ref)];
+    if (!modern.exists()) throw new Error('신버전 폴더 정본이 없어 복원할 수 없습니다.');
+    const legacyNow = legacy.data()?.musicNoteFolders?.[mode];
+    const modernNow = modern.data()?.musicNoteFolders?.[mode];
+    const legacyExpected = expected.legacyFolders[mode];
+    const modernExpected = expected.modernFolders[mode];
+    if (!Array.isArray(legacyNow) || !Array.isArray(modernNow)
+      || !Array.isArray(legacyExpected) || !Array.isArray(modernExpected)
+      || JSON.stringify(legacyNow) !== JSON.stringify(legacyExpected)
+      || JSON.stringify(modernNow) !== JSON.stringify(modernExpected)) {
+      throw new Error('다른 기기에서 폴더가 변경되었습니다. 비교 기록을 다시 확인해 주세요.');
+    }
+    guard();
+    const version = Number(modern.data()?.musicNoteStructureVersion || 0);
+    if (choice === 'modern') return { folders: modernNow, version, changed: false };
+    if (logicalFolderView(legacyNow) === logicalFolderView(modernNow)) {
+      return { folders: modernNow, version, changed: false };
+    }
+    const legacyIds = new Set(legacyNow.map((item: any) => String(item?.id || '')));
+    if (modernNow.some((item: any) => !legacyIds.has(String(item?.id || '')))) {
+      throw new Error('이 복원에는 폴더 삭제가 포함됩니다. 곡 연결을 확인하지 않아 안전을 위해 중단했습니다.');
+    }
+    const nextVersion = Math.max(0, Math.floor(version)) + 1;
+    txn.set(v2Ref, {
+      schemaVersion: 2,
+      musicNoteFolders: { [mode]: legacyNow },
+      musicNoteStructureVersion: nextVersion,
+      musicNoteStructureWriterToken: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    }, { merge: true });
+    return { folders: legacyNow, version: nextVersion, changed: true };
+  });
+  const localEditDuringRestore = !isSessionCurrent() || getMusicNoteFolderEditEpoch(uid, mode) !== epoch
+    || Boolean(getPendingMusicNoteFolderStructureBatch(uid)?.[mode]);
+  if (result.changed && !localEditDuringRestore) {
+    void publishMusicNoteStructureDelta(uid, {
+      musicNoteFolders: { [mode]: result.folders },
+      musicNoteStructureVersion: result.version,
+    }).catch(() => {});
+  }
   return { ...result, localEditDuringRestore };
 };

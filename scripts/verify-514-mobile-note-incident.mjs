@@ -735,3 +735,27 @@ console.log('APP514_OLD_PREVIEW_RECONNECT_CONFIRMATION_ONLY_IF_UNVERIFIED=PASS')
   assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title,'actual');
   console.log('APP514_REOPEN_OLD_PREVIEW_CACHE_CORRECTS_ONCE=PASS');
 }
+
+
+// A folder signal that fit the old 24K RTDB limit must still be deliverable
+// when the new protocol marker adds bytes near the limit.
+{
+  const wire=bus(), d=device(wire);
+  let nearLimit=null;
+  for(let length=23750;length<24000;length++){
+    const payload={musicNoteFolders:{myNote:[{id:'default',title:'x'.repeat(length)}]},
+      musicNoteStructureVersion:1};
+    const plain=JSON.stringify({__musicNoteStructureSync:true,data:payload});
+    const tagged=JSON.stringify({__musicNoteStructureSync:true,
+      __musicNoteFolderProtocolV2:true,data:payload});
+    if(plain.length<=24000 && tagged.length>24000){nearLimit=payload;break;}
+  }
+  assert.ok(nearLimit,'must exercise exactly the old transport boundary');
+  await d.sync.publishMusicNoteStructureDelta(uid,nearLimit);
+  const value=wire.values.get(`userSync/${uid}/musicNote`);
+  assert.ok(value.itemJson,'near-limit folder payload is still transmitted');
+  const decoded=JSON.parse(value.itemJson);
+  assert.equal(decoded.__musicNoteFolderProtocolV2,undefined);
+  assert.equal(decoded.data.musicNoteFolders.myNote[0].title,nearLimit.musicNoteFolders.myNote[0].title);
+  console.log('APP514_NEAR_LIMIT_LEGACY_COMPAT_RTDB_SIGNAL_RETAINS_PAYLOAD=PASS');
+}

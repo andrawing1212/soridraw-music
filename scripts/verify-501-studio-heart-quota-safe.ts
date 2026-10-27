@@ -357,9 +357,6 @@ try {
           (resolve, reject) => { inFlightReads.push({ uid, documentId, resolve, reject }); },
         ),
       };
-      if (name === '../lib/musicNoteSingleDocCatalogRepair516') return {
-        repairSingleExactMusicNoteCatalog516: async () => 'already-present',
-      };
       throw new Error('unexpected component import: ' + name);
     },
   });

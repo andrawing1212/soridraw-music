@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { createHash } from "node:crypto";
 import { defineSecret } from "firebase-functions/params";
@@ -124,6 +125,33 @@ export const syncMusicNoteStructureVersion = functions
     // users/{uid} signal must not cancel archiving of a committed legacy edit.
     const [signalResult] = await Promise.allSettled([signalTask, archiveTask]);
     if (signalResult.status === "rejected") throw signalResult.reason;
+  });
+
+// app515 v2 modern folder state is isolated from the old merge:true parent.
+// Exactly one tiny user profile version signal per confirmed v2 change;
+// no warm page scan, scheduled job or duplicate original-structure write.
+// This trigger must be explicitly deployed together with the new app/Rules
+// following separate director approval: PR source alone is NOT live.
+export const syncMusicNoteFolderStateV2Version = functions
+  .region("asia-northeast3")
+  .firestore.document("user_structures/{uid}/folder_state/v2")
+  .onWrite(async (change, context) => {
+    const before = change.before.exists ? (change.before.data() || {}) : null;
+    const after = change.after.exists ? (change.after.data() || {}) : null;
+    if (!after || (before && isDeepStrictEqual(before?.musicNoteFolders, after?.musicNoteFolders))) return;
+    const uid = String(context.params.uid || "").trim();
+    if (!uid) return;
+    const eventTimeMs = Date.parse(String(context.timestamp || "")) || Date.now();
+    const firestore = admin.firestore();
+    const userRef = firestore.collection("users").doc(uid);
+    await firestore.runTransaction(async txn => {
+      const snapshot = await txn.get(userRef);
+      if (!snapshot.exists) return;
+      const current = Number(snapshot.data()?.syncVersions?.musicNoteStructure || 0);
+      const next = getMusicNoteStructureSignalVersion(after, eventTimeMs, current);
+      if (next <= current) return;
+      txn.set(userRef, { syncVersions: { musicNoteStructure: next } }, { merge: true });
+    });
   });
 
 // SORIDRAW_SECTION_TAGS_SHARED_BUNDLE_20260904

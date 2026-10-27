@@ -280,6 +280,28 @@ for (const failure of ['denied', 'aborted']) {
   console.log('APP514_RTDB_DENIED_ABORTED_OVERSIZED_DISTINCT_FROM_CANONICAL=PASS');
 }
 
+// A card-only save is not a folder edit: it must not activate the shared
+// old-browser folder fence. An actual folder change still stamps the token.
+{
+  const canonical = { data: { musicNoteStructureVersion: 0 } };
+  const d = device(bus(), { canonical });
+  await d.batch.writeMusicNoteStructureIfNewer(uid, {
+    musicNoteStructureVersion: 1,
+    musicNoteCardState: { schemaVersion: 1, items: {} },
+  });
+  assert.equal(canonical.data.musicNoteStructureWriterToken, undefined,
+    'card-only persistence must leave old browser folder saves compatible');
+  assert.equal(d.writes.length, 1);
+  await d.batch.writeMusicNoteStructureIfNewer(uid, {
+    musicNoteStructureVersion: 2,
+    musicNoteFolders: { myNote: folders('genuine-folder-change') },
+  }, [{ mode: 'myNote', folders: null }]);
+  assert.ok(typeof canonical.data.musicNoteStructureWriterToken === 'string'
+    && canonical.data.musicNoteStructureWriterToken.length >= 8,
+    'real folder change must keep its server-side protection');
+  console.log('APP514_CARD_ONLY_NO_FENCE_REAL_FOLDER_FENCE_ACTIVE=PASS');
+}
+
 // Healthy persistence stays 60s; warm subscribe does not add server reads.
 {
   const d = device(bus());

@@ -3,9 +3,35 @@ import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import { doc, setDoc, getDoc, getDocs, collection } from 'firebase/firestore';
 
-// Execute the actual staged source Rules in an isolated emulator only.
-// This never deploys or changes shared PREVIEW/TEST/PRODUCTION Rules.
-const rules = readFileSync('firestore.rules', 'utf8');
+// The deployable shared Rules MUST keep old browsers able to save. Exercise
+// the restrictive future design only as an in-memory emulator candidate,
+// never by placing that guard in the deployable firestore.rules file.
+const liveRules = readFileSync('firestore.rules', 'utf8');
+const ownerParent = `    match /user_structures/{uid} {
+      allow read, write: if isOwner(uid) || isAdmin();
+    }`;
+assert.ok(liveRules.includes(ownerParent), 'shared Rules must remain legacy-compatible');
+assert.doesNotMatch(liveRules, /function safeMusicNoteFolderUpdate\(\)/);
+const guardedParent = `    match /user_structures/{uid} {
+      function safeMusicNoteFolderUpdate() {
+        let changed = request.resource.data.diff(resource.data).affectedKeys();
+        let oldVersion = resource.data.get('musicNoteStructureVersion', 0);
+        let nextVersion = request.resource.data.get('musicNoteStructureVersion', 0);
+        let oldToken = resource.data.get('musicNoteStructureWriterToken', '');
+        let nextToken = request.resource.data.get('musicNoteStructureWriterToken', '');
+        return !changed.hasAny(['musicNoteFolders'])
+          || oldToken == ''
+          || (oldVersion is number && nextVersion is number
+            && nextVersion > oldVersion
+            && nextToken is string && nextToken.size() >= 8
+            && nextToken != oldToken);
+      }
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid) || isAdmin();
+      allow update: if (isOwner(uid) || isAdmin()) && safeMusicNoteFolderUpdate();
+      allow delete: if isOwner(uid) || isAdmin();
+    }`;
+const rules = liveRules.replace(ownerParent, guardedParent);
 assert.match(rules, /function safeMusicNoteFolderUpdate\(\)/);
 const uid = 'fixture-app514-owner';
 const path = 'user_structures/' + uid;
@@ -136,4 +162,31 @@ try {
 } finally {
   await env.cleanup();
 }
-console.log('APP514_EMULATOR_STAGED_FOLDER_FENCE_MIXED_CLIENT_CONTRACT=PASS');
+console.log('APP514_EMULATOR_STAGED_FOLDER_FENCE_CANDIDATE_ONLY=PASS');
+
+// The actual deployable shared Rules must accept a legitimate old PC edit,
+// even after a modern writer has created a token. The same test also shows
+// why we cannot claim legacy-vs-modern freshness is fully resolved yet.
+const coexistence = await initializeTestEnvironment({
+  projectId: 'demo-soridraw-app514-legacy-live',
+  firestore: { host: '127.0.0.1', port: 8099, rules: liveRules },
+});
+try {
+  await coexistence.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), path), initial);
+  });
+  const oldPc = doc(coexistence.authenticatedContext(uid).firestore(), path);
+  await assertSucceeds(setDoc(oldPc, {
+    musicNoteStructureVersion: 100000,
+    musicNoteFolders: { myNote: [{ id: 'f', title: 'legitimate-old-PC-save' }] },
+  }, { merge: true }));
+  assert.equal((await getDoc(oldPc)).data()?.musicNoteFolders?.myNote?.[0]?.title,
+    'legitimate-old-PC-save');
+  await assertFails(setDoc(doc(coexistence.authenticatedContext('not-owner').firestore(), path), {
+    musicNoteFolders: { myNote: [{ id: 'f', title: 'forged' }] },
+  }, { merge: true }));
+  console.log('APP514_SHARED_RULES_LEGACY_OWNER_EDIT_ACCEPTED_NONOWNER_DENIED=PASS');
+  console.log('APP514_LEGACY_OVERWRITE_REMAINS_A_RELEASE_GATE_NOT_A_PASS=KNOWN_RISK');
+} finally {
+  await coexistence.cleanup();
+}

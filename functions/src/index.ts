@@ -1,4 +1,6 @@
+import { isDeepStrictEqual } from "node:util";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
+import { createHash } from "node:crypto";
 import { defineSecret } from "firebase-functions/params";
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
@@ -19,7 +21,7 @@ import {
   type LibraryListBundleCore,
   type LibraryTrackMutation,
 } from "./libraryBundleFreshness";
-import { hasMusicNoteStructureRelevantChange, getMusicNoteStructureSignalVersion } from "./musicNoteStructureSync";
+import { hasMusicNoteStructureRelevantChange, getMusicNoteStructureSignalVersion, buildLegacyMusicNoteFolderRecovery, planLegacyMusicNoteFolderRecoveryArchive } from "./musicNoteStructureSync";
 import { publishGuardedLikeSignal420 } from "./exploreLikeAbuseGate420";
 import { hasExactRecentApprovedLike420 } from "./exploreLikeApprovalRecovery420";
 import { issueLikePermit420, issueRenewedLikePermitV2420 } from "./exploreLikePermit420";
@@ -66,13 +68,89 @@ export const syncMusicNoteStructureVersion = functions
     const firestore = admin.firestore();
     const userRef = firestore.collection("users").doc(uid);
 
-    await firestore.runTransaction(async (transaction) => {
+    // Start the ordinary profile signal immediately; the independent recovery
+    // task must still run if this transaction fails or has to retry.
+    const signalTask = firestore.runTransaction(async (transaction) => {
       const userSnapshot = await transaction.get(userRef);
       if (!userSnapshot.exists) return;
       const currentVersion = Number(userSnapshot.data()?.syncVersions?.musicNoteStructure || 0);
       const nextVersion = getMusicNoteStructureSignalVersion(after, eventTimeMs, currentVersion);
       if (nextVersion <= currentVersion) return;
       transaction.set(userRef, { syncVersions: { musicNoteStructure: nextVersion } }, { merge: true });
+    });
+
+    // Legacy before/after snapshots are taken from the Firestore event itself.
+    // Run this independently of profile sync: failure in either path must not
+    // prevent the other path from being attempted.
+    const archiveTask = (async () => {
+    try {
+      const legacyRecovery = buildLegacyMusicNoteFolderRecovery(before, after);
+      if (legacyRecovery) {
+        const recoveryPayload = {
+          ...legacyRecovery,
+          observedAtMs: eventTimeMs,
+        };
+        const archive = planLegacyMusicNoteFolderRecoveryArchive(recoveryPayload);
+        const eventKey = createHash("sha256")
+          .update(String(context.eventId || "")).digest("hex").slice(0, 40);
+        const recoveryRef = firestore.collection("user_structures").doc(uid)
+          .collection("legacy_recovery").doc(eventKey);
+        try {
+          // create() is idempotent across retried Firestore events. Never erase
+          // a previous recovery record or change the canonical folder state.
+          if (!archive.parts.length) {
+            await recoveryRef.create(archive.manifest);
+          } else {
+            const archiveBatch = firestore.batch();
+            archiveBatch.create(recoveryRef, archive.manifest);
+            for (const part of archive.parts) {
+              archiveBatch.create(recoveryRef.collection("parts").doc(part.id), { payload: part.payload });
+            }
+            await archiveBatch.commit();
+          }
+        } catch (error: any) {
+          if (Number(error?.code) !== 6 && String(error?.code) !== "already-exists") throw error;
+        }
+      }
+    } catch (error: any) {
+      // Log bounded metadata, not user content. An archive failure is still a
+      // release blocker: this asynchronous trigger cannot guarantee a backup.
+      console.error("APP514_LEGACY_RECOVERY_ARCHIVE_FAILED", {
+        eventId: String(context.eventId || "").slice(0, 80),
+        code: String(error?.code || "archive-error").slice(0, 64),
+      });
+    }
+    })();
+    // allSettled waits for both independent attempts. In particular, a failed
+    // users/{uid} signal must not cancel archiving of a committed legacy edit.
+    const [signalResult] = await Promise.allSettled([signalTask, archiveTask]);
+    if (signalResult.status === "rejected") throw signalResult.reason;
+  });
+
+// app515 v2 modern folder state is isolated from the old merge:true parent.
+// Exactly one tiny user profile version signal per confirmed v2 change;
+// no warm page scan, scheduled job or duplicate original-structure write.
+// This trigger must be explicitly deployed together with the new app/Rules
+// following separate director approval: PR source alone is NOT live.
+export const syncMusicNoteFolderStateV2Version = functions
+  .region("asia-northeast3")
+  .firestore.document("user_structures/{uid}/folder_state/v2")
+  .onWrite(async (change, context) => {
+    const before = change.before.exists ? (change.before.data() || {}) : null;
+    const after = change.after.exists ? (change.after.data() || {}) : null;
+    if (!after || (before && isDeepStrictEqual(before?.musicNoteFolders, after?.musicNoteFolders))) return;
+    const uid = String(context.params.uid || "").trim();
+    if (!uid) return;
+    const eventTimeMs = Date.parse(String(context.timestamp || "")) || Date.now();
+    const firestore = admin.firestore();
+    const userRef = firestore.collection("users").doc(uid);
+    await firestore.runTransaction(async txn => {
+      const snapshot = await txn.get(userRef);
+      if (!snapshot.exists) return;
+      const current = Number(snapshot.data()?.syncVersions?.musicNoteStructure || 0);
+      const next = getMusicNoteStructureSignalVersion(after, eventTimeMs, current);
+      if (next <= current) return;
+      txn.set(userRef, { syncVersions: { musicNoteStructure: next } }, { merge: true });
     });
   });
 

@@ -442,13 +442,24 @@ const buildSignal = (
   if (kind === 'musicNote') {
     try {
       if (context.syncStructure && typeof context.syncStructure === 'object') {
-        const encoded = JSON.stringify({
-          __musicNoteStructureSync: true,
-          data: context.syncStructure,
+        const folderPayload = (context.syncStructure as Record<string, unknown>).musicNoteFolders;
+        const hasFolder = Boolean(folderPayload && typeof folderPayload === 'object');
+        const legacyCompatible = JSON.stringify({
+          __musicNoteStructureSync: true, data: context.syncStructure,
         });
-        // Reuse the already-approved bounded itemJson field so no RTDB rule or
-        // schema expansion is needed for folder/card-state live sync.
+        const encoded = hasFolder ? JSON.stringify({
+          __musicNoteStructureSync: true,
+          // Identify current clients without changing Firestore/RTDB schema.
+          __musicNoteFolderProtocolV2: true,
+          data: context.syncStructure,
+        }) : legacyCompatible;
+        // Never turn an already-legal near-limit folder signal into a failed
+        // transport just because the marker adds a few bytes. Rare unmarked
+        // fallback receives one bounded old-format confirmation instead.
         if (encoded.length <= MAX_SYNC_ITEM_JSON_CHARS) itemJson = encoded;
+        else if (hasFolder && legacyCompatible.length <= MAX_SYNC_ITEM_JSON_CHARS) {
+          itemJson = legacyCompatible;
+        }
       } else {
         const rawSyncItems = Array.isArray(context.syncItems)
           ? context.syncItems.slice(0, MAX_DOCUMENT_IDS)
@@ -523,12 +534,20 @@ const publishSignal = async (
     // Keep the existing one tiny RTDB mutation, but allocate a UID-wide
     // monotonic version inside that same node.
     const signalRef = ref(realtimeDb, `userSync/${uid}/musicNote`);
+    if (context.operation === 'structure-update' && !buildSignal(context, result).itemJson) {
+      // An empty envelope cannot deliver folders. Fail visibly on the caller;
+      // canonical settlement remains independent, with no schema/rule changes.
+      throw new Error('MUSIC_NOTE_STRUCTURE_SIGNAL_TOO_LARGE');
+    }
     const transaction = await runTransaction(signalRef, (current) => {
       const currentVersion = Math.max(0, Math.floor(Number(current?.version || 0)));
       const signal = buildSignal(context, result);
       signal.version = Math.max(Date.now(), currentVersion + 1);
       return signal;
     }, { applyLocally: true });
+    if (context.operation === 'structure-update' && !transaction.committed) {
+      throw new Error('MUSIC_NOTE_STRUCTURE_SIGNAL_NOT_COMMITTED');
+    }
     return Math.max(0, Math.floor(Number(transaction.snapshot.val()?.version || 0)));
   }
 

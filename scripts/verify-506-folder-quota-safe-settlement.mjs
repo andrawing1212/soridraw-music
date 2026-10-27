@@ -5,9 +5,9 @@ import ts from 'typescript';
 
 const source = readFileSync('src/services/musicNoteFolderStructureBatch.ts', 'utf8');
 const page = readFileSync('src/pages/FavoritesPage.tsx', 'utf8');
-assert.match(page, /MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT/);
-assert.match(page, /기기 저장공간 부족: 폴더 변경을 서버에 저장하는 중입니다/);
-assert.match(page, /showFavoriteToast\('[^']+', 10000\)/);
+assert.match(page, /MUSIC_NOTE_FOLDER_SAVE_STATUS_EVENT/);
+assert.match(page, /폴더 변경의 서버 저장을 확인했습니다/);
+assert.match(page, /폴더 변경의 서버 저장에 실패했습니다/);
 assert.match(source, /const MUSIC_NOTE_FOLDER_BATCH_MS = 60_000/);
 assert.match(source, /schedule\(key, durable \? MUSIC_NOTE_FOLDER_BATCH_MS : emergencyDelay510\(key\)\)/);
 assert.match(source, /MUSIC_NOTE_QUOTA_EMERGENCY_COOLDOWN_MS = 5_000/);
@@ -16,6 +16,7 @@ const records = new Map();
 const timers = [];
 const fired = [];
 const canonical = [];
+let v2State = null;
 let quota = false;
 let silentReject = false;
 let failServer = false;
@@ -37,17 +38,39 @@ const mockedWindow = {
     return timers.length;
   },
   clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].active = false; },
-  dispatchEvent: (ev) => { fired.push(ev); return true; },
+  dispatchEvent: (ev) => { if (ev.type.includes('quota-risk')) fired.push(ev); return true; },
 };
 const mockRequire = (id) => {
   if (id.endsWith('firestoreMeasured')) return {
-    doc: (_db, collection, uid) => ({ collection, uid }),
-    setDoc: async (ref, value) => {
+    doc: (_db, ...parts) => parts.join('/'),
+    setDoc: () => { throw new Error('unguarded canonical structure write'); },
+    runTransaction: async (_db, update) => {
       if (failServer) throw new Error('offline');
-      if (holdServer) await new Promise((resolve) => heldServerResolutions.push(resolve));
-      canonical.push({ ref, value: JSON.parse(JSON.stringify(value)) });
+      if (holdServer) await new Promise(resolve => heldServerResolutions.push(resolve));
+      const staged = [];
+      const transaction = {
+        get: async path => ({
+          exists: () => path.endsWith('/folder_state/v2') && Boolean(v2State),
+          data: () => path.endsWith('/folder_state/v2') ? v2State || {} : {},
+        }),
+        set: (ref, value, options) => {
+          assert.equal(options?.merge, true);
+          staged.push({ ref, value: JSON.parse(JSON.stringify(value)) });
+        },
+      };
+      await update(transaction);
+      for (const item of staged) {
+        if (item.ref.endsWith('/folder_state/v2')) {
+          v2State = {
+            ...(v2State || {}), ...item.value,
+            musicNoteFolders: { ...(v2State?.musicNoteFolders || {}), ...(item.value.musicNoteFolders || {}) },
+          };
+        }
+        canonical.push(item);
+      }
     },
   };
+  if (id.endsWith('userDomainSyncService')) return { publishMusicNoteStructureDelta: async () => 0 };
   if (id.endsWith('firebase')) return { db: {} };
   if (id.endsWith('v1MutationBoundary')) return { runV1MutationBoundary: (_operation, promise) => promise };
   throw new Error('unapproved dependency ' + id);
@@ -101,7 +124,7 @@ console.log('APP506_QUOTA_IMMEDIATE_CANONICAL_NO_OLD_STALE_PENDING=PASS');
 
 quota = false;
 silentReject = true;
-api.queueMusicNoteFolderStructureBatch('user-a', 'myNote', folder('silent-refusal'), 3);
+api.queueMusicNoteFolderStructureBatch('user-a', 'myNote', folder('silent-refusal'), 3, folder('quota-newer'));
 assert.ok(lastActive().ms <= 5_000, 'silent refusal uses the bounded quota cooldown');
 assert.equal(fired.length, 2);
 await runNext();
@@ -111,7 +134,10 @@ console.log('APP506_LOCAL_READBACK_VERIFIED=PASS');
 silentReject = false;
 quota = true;
 failServer = true;
-api.queueMusicNoteFolderStructureBatch('user-a', 'sharedNote', folder('offline-survivor'), 4);
+api.queueMusicNoteFolderStructureBatch('user-a', 'sharedNote', folder('offline-survivor'), 4, [
+  { id: 'default', title: '기본', order: 1, isDefault: true },
+  { id: '1', title: '1', order: 2 }, { id: '2', title: '2', order: 3 },
+]);
 assert.ok(lastActive().ms <= 5_000);
 await runNext();
 assert.equal(api.getPendingMusicNoteFolderStructureBatch('user-a').sharedNote.folders[0].title, 'offline-survivor');
@@ -125,7 +151,7 @@ console.log('APP506_OFFLINE_MEMORY_RETRY_BOUNDED_UNTIL_SERVER_ACK=PASS');
 // One old in-flight canonical response must not clear a newer same-UID edit.
 // A second quota-failed click is kept in memory while the prior request awaits.
 holdServer = true;
-api.queueMusicNoteFolderStructureBatch('user-a', 'myNote', folder('slow-v5'), 5);
+api.queueMusicNoteFolderStructureBatch('user-a', 'myNote', folder('slow-v5'), 5, folder('silent-refusal'));
 await runNext();
 assert.equal(heldServerResolutions.length, 1);
 api.queueMusicNoteFolderStructureBatch('user-a', 'myNote', folder('latest-v6'), 6);
@@ -147,19 +173,19 @@ console.log('APP506_OLD_INFLIGHT_ACK_CANNOT_ERASE_LATEST_QUOTA_EDIT=PASS');
 
 // Offline + both browser storage and network blocked remains unable to
 // guarantee survival of full tab termination; never overclaim durability.
-assert.equal(page.includes("window.addEventListener(MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT"), true);
+assert.equal(page.includes("window.addEventListener(MUSIC_NOTE_FOLDER_SAVE_STATUS_EVENT"), true);
 console.log('APP506_NO_CACHE_PURGE_USER_WARNING=PASS');
 
 // app510 positive regression: persistent quota across five edits no longer
 // forces five canonical writes. First urgent write remains; subsequent clicks
 // within the cooldown collapse to one latest per-UID final state.
 const writesBeforeBurst510 = canonical.length;
-api.queueMusicNoteFolderStructureBatch('user-a', 'myNote', folder('burst-7'), 7);
+api.queueMusicNoteFolderStructureBatch('user-a', 'myNote', folder('burst-7'), 7, folder('latest-v6'));
 assert.ok(lastActive().ms <= 5_000);
 await runNext();
 for (let revision510 = 8; revision510 <= 11; revision510 += 1) {
   api.queueMusicNoteFolderStructureBatch(
-    'user-a', 'myNote', folder('burst-' + revision510), revision510,
+    'user-a', 'myNote', folder('burst-' + revision510), revision510, folder('burst-7'),
   );
   assert.ok(lastActive().ms > 0 && lastActive().ms <= 5_000,
     'quota burst after ACK must be postponed within the five-second ceiling');
@@ -168,7 +194,8 @@ assert.equal(canonical.length - writesBeforeBurst510, 1,
   'no repeated canonical writes until the short cooldown is flushed');
 await runNext();
 assert.equal(canonical.length - writesBeforeBurst510, 2);
-assert.equal(canonical.at(-1).value.musicNoteStructureVersion, 11);
+assert.equal(canonical.at(-1).value.musicNoteStructureVersion, 8,
+  'v2 allocates the next server revision; optimistic final edit 11 is not a canonical revision');
 assert.equal(canonical.at(-1).value.musicNoteFolders.myNote[0].title, 'burst-11');
 assert.equal(api.getPendingMusicNoteFolderStructureBatch('user-a'), null);
 console.log('APP510_QUOTA_FIVE_EDITS_COALESCED_W2=PASS');

@@ -1,0 +1,461 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
+import ts from 'typescript';
+
+const source = readFileSync('src/services/musicNoteFolderRecovery.ts', 'utf8');
+const page = readFileSync('src/pages/FavoritesPage.tsx', 'utf8');
+const rules = readFileSync('firestore.rules', 'utf8');
+const emitted = [];
+const id = 'a'.repeat(40);
+const uid = 'fixture-owner';
+const data = {
+  schemaVersion: 1, source: 'legacy-writer-after-modern',
+  observedAtMs: 1000, changedModes: ['myNote'],
+  beforeFolders: { myNote: [{ id: 'default', title: 'Before' }] },
+  afterFolders: { myNote: [{ id: 'default', title: 'After' }] },
+};
+const untouchedOriginalSong = { prompt:'private-prompt',lyrics:'private-lyrics' };
+const canonical = {
+  musicNoteFolders: { myNote: [{ id:'default',title:'After' }], sharedNote:[{id:'default',title:'Shared'}] },
+  musicNoteStructureVersion:7, musicNoteCardState: { items:{} },
+};
+let reads = 0, transactions = 0, writes = 0, pending = null, listCalls = 0;
+let manifestCount = 1;
+let editEpoch = 0, afterCanonicalRead = null, afterTransactionCommit = null;
+const archiveParts = {};
+const copy = value => JSON.parse(JSON.stringify(value));
+const sdk = {
+  collection: (_db, ...segments) => segments.join('/'),
+  doc: (_db, ...segments) => segments.join('/'),
+  query: (ref, ...args) => ({ref,args}),
+  orderBy: (key, dir) => ({key,dir}),
+  limit: number => ({number}),
+  getDocs: async request => {
+    assert.equal(request.ref, 'user_structures/fixture-owner/legacy_recovery');
+    assert.equal(request.args[0].key, 'observedAtMs');
+    const requested = request.args[1].number;
+    assert.ok(requested === 1 || requested === 10);
+    const docs = Array.from({ length: Math.min(requested, manifestCount) }, (_, index) => ({
+      id: index === 0 ? id : id.slice(0, -2) + String(index).padStart(2, '0'),
+      data: () => copy(data),
+    }));
+    // Firestore charges returned document reads (and at least one read for an
+    // empty query), not "one read per getDocs() call".
+    reads += Math.max(1, docs.length);
+    listCalls++;
+    return { docs };
+  },
+  getDoc: async path => {
+    reads++;
+    if (path === 'user_structures/fixture-owner/legacy_recovery/'+id) {
+      return {exists:()=>true,data:()=>copy(data)};
+    }
+    assert.ok(path.startsWith('user_structures/fixture-owner/legacy_recovery/'+id+'/parts/'));
+    const partId=path.split('/').at(-1);
+    return {exists:()=>Object.hasOwn(archiveParts,partId),data:()=>({payload:archiveParts[partId]})};
+  },
+  runTransaction: async (_db, callback) => {
+    transactions++;
+    const staged=[];
+    const txn={
+      get: async path => {
+        reads++;
+        if(path.endsWith('/'+id)) return {exists:()=>true,data:()=>copy(data)};
+        if(path.includes('/parts/')) {
+          const partId=path.split('/').at(-1);
+          return {exists:()=>Object.hasOwn(archiveParts,partId),data:()=>({payload:archiveParts[partId]})};
+        }
+        if(path==='user_structures/fixture-owner/folder_state/v2') {
+          return {exists:()=>false,data:()=>({})};
+        }
+        assert.equal(path,'user_structures/fixture-owner');
+        if (afterCanonicalRead) { const callback=afterCanonicalRead; afterCanonicalRead=null; callback(); }
+        return {data:()=>copy(canonical)};
+      },
+      set: (path,patch,options) => {
+        assert.equal(path, 'user_structures/fixture-owner');
+        assert.equal(options?.merge,true);
+        staged.push(patch);
+      },
+    };
+    const result=await callback(txn);
+    for(const patch of staged){
+      canonical.musicNoteFolders={...canonical.musicNoteFolders,...copy(patch.musicNoteFolders)};
+      canonical.musicNoteStructureVersion=patch.musicNoteStructureVersion;
+      canonical.musicNoteStructureWriterToken=patch.musicNoteStructureWriterToken;
+      canonical.musicNoteFolderRecoveryMarker=copy(patch.musicNoteFolderRecoveryMarker);
+      writes++;
+    }
+    if (afterTransactionCommit) {
+      const callback=afterTransactionCommit; afterTransactionCommit=null; callback();
+    }
+    return result;
+  },
+};
+const exports = {};
+runInNewContext(ts.transpileModule(source,{
+  fileName:'musicNoteFolderRecovery.ts',
+  compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS},
+}).outputText,{
+  exports, console, Date, Math,
+  require: name => {
+    if(name.endsWith('/firebase')) return {db:{}};
+    if(name.endsWith('/firestoreMeasured')) return sdk;
+    if(name.endsWith('/musicNoteFolderStructureBatch')) return {
+      getPendingMusicNoteFolderStructureBatch:()=>pending,
+      getMusicNoteFolderEditEpoch:()=>editEpoch,
+      getMusicNoteLegacyFolderSignature:value=>JSON.stringify(value),
+      getMusicNoteEffectiveLegacyMode:(data,mode)=>
+        data?.musicNoteFolders?.[mode] || data?.[mode==='myNote'?'myNoteFolders':'sharedNoteFolders'] || null,
+    };
+    if(name.endsWith('/userDomainSyncService')) return {
+      publishMusicNoteStructureDelta: async (...args) => { emitted.push(copy(args)); return 8; },
+    };
+    throw new Error('unapproved import '+name);
+  },
+});
+assert.equal(reads,0,'no read on import/visit');
+assert.match(page,/폴더 충돌 기록 확인/);
+assert.match(page,/선택한 상태로 복원 확정/);
+assert.match(page,/restoreMusicNoteFolderRecovery\(/);
+assert.match(page,/getMusicNoteLegacyFolderComparison\(/);
+assert.match(page,/restoreMusicNoteLegacyFolderChoice\(/);
+assert.match(rules,/match \/user_structures\/\{uid\}\/legacy_recovery\/\{recoveryId\}/);
+assert.match(rules,/allow create, update, delete: if false/);
+console.log('APP514_RECOVERY_NO_AUTOMATIC_READ_AND_EXPLICIT_UI=PASS');
+// A legacy recovery archive must be attempted even when the independent
+// users/{uid} profile-signal transaction fails. Check the actual trigger
+// control-flow contract; it must await both branches, not short-circuit.
+const triggerSource = readFileSync('functions/src/index.ts', 'utf8');
+const triggerBegin = triggerSource.indexOf('export const syncMusicNoteStructureVersion');
+const triggerEnd = triggerSource.indexOf('// SORIDRAW_SECTION_TAGS_SHARED_BUNDLE_', triggerBegin);
+assert.ok(triggerBegin >= 0 && triggerEnd > triggerBegin);
+const triggerBody = triggerSource.slice(triggerBegin, triggerEnd);
+assert.match(triggerBody, /const signalTask = firestore\.runTransaction\(/);
+assert.match(triggerBody, /const archiveTask = \(async \(\) => \{/);
+assert.match(triggerBody, /const \[signalResult\] = await Promise\.allSettled\(\[signalTask, archiveTask\]\)/);
+assert.match(triggerBody, /if \(signalResult\.status === "rejected"\) throw signalResult\.reason/);
+assert.match(triggerBody, /APP514_LEGACY_RECOVERY_ARCHIVE_FAILED/);
+console.log('APP514_LEGACY_ARCHIVE_INDEPENDENT_OF_PROFILE_SIGNAL_FAILURE=PASS');
+
+// Exercise the real Functions helper, not only a mocked UI record: when an
+// older tab overwrites one mode, both complete versions are preserved and
+// an unrelated mode is not mistakenly marked as changed.
+const functionExports = {};
+const functionHelper = readFileSync('functions/src/musicNoteStructureSync.ts', 'utf8');
+runInNewContext(ts.transpileModule(functionHelper, {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+}).outputText, {
+  exports: functionExports, Buffer,
+  require: name => {
+    if (name === 'node:util') return {
+      isDeepStrictEqual: (a, b) => JSON.stringify(a) === JSON.stringify(b),
+    };
+    throw new Error('unexpected Functions helper import ' + name);
+  },
+});
+const beforeLegacyWrite = {
+  musicNoteStructureWriterToken: 'modern-writer-12345',
+  musicNoteStructureVersion: 100001,
+  musicNoteFolders: {
+    myNote: [{id:'default',title:'Latest-phone-folder'}],
+    sharedNote: [{id:'shared',title:'Shared-untouched'}],
+  },
+};
+const afterLegacyWrite = {
+  ...copy(beforeLegacyWrite),
+  musicNoteStructureVersion: 100000,
+  musicNoteFolders: {
+    myNote: [{id:'default',title:'Older-PC-edit'}],
+    sharedNote: copy(beforeLegacyWrite.musicNoteFolders.sharedNote),
+  },
+};
+const archivedConflict = functionExports.buildLegacyMusicNoteFolderRecovery(beforeLegacyWrite, afterLegacyWrite);
+assert.ok(archivedConflict);
+assert.deepEqual(Array.from(archivedConflict.changedModes), ['myNote']);
+assert.equal(archivedConflict.beforeFolders.myNote[0].title,'Latest-phone-folder');
+assert.equal(archivedConflict.afterFolders.myNote[0].title,'Older-PC-edit');
+assert.equal(Object.hasOwn(archivedConflict.beforeFolders,'sharedNote'), false);
+assert.equal(functionExports.buildLegacyMusicNoteFolderRecovery(
+  beforeLegacyWrite, {...afterLegacyWrite, musicNoteStructureWriterToken:'new-modern-token-123'},
+), null, 'new current-client commits must not generate false legacy archives');
+assert.equal(functionExports.buildLegacyMusicNoteFolderRecovery(
+  beforeLegacyWrite, {...copy(beforeLegacyWrite), musicNoteCardState:{items:{a:{liked:true}}}},
+), null, 'card-only changes must not consume recovery writes');
+console.log('APP514_BACKEND_LEGACY_BEFORE_AFTER_SNAPSHOTS_EXACT_AND_CARD_ONLY_W0=PASS');
+
+const records=await exports.listMusicNoteFolderRecovery(uid);
+assert.equal(reads,1);
+assert.equal(records.length,1);
+assert.deepEqual(Array.from(records[0].changedModes), ['myNote']);
+assert.equal(records[0].detailLoaded,true);
+assert.equal(records[0].beforeFolders.myNote[0].title,'Before');
+assert.match(page,/getMusicNoteFolderRecoveryDetail\(/);
+assert.match(page,/folderRecoverySelectedId === record\.id && record\.detailLoaded/);
+console.log('APP514_RECOVERY_ON_DEMAND_BOUNDED_READ=PASS');
+manifestCount = 10;
+const beforeOlder = reads;
+const older = await exports.listMusicNoteFolderRecovery(uid, true);
+assert.equal(older.length, 10);
+assert.equal(reads - beforeOlder, 10,
+  'ten result documents must be billed R10 even though getDocs ran only once');
+assert.match(page, /이전 기록 더 보기/);
+manifestCount = 1;
+console.log('APP515_RECOVERY_INITIAL_LIST_R1_OLDER_EXPLICIT_LIST_R10=PASS');
+
+pending={myNote:{version:8,folders:[]}};
+await assert.rejects(exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','before'),/아직 저장되지 않은/);
+assert.equal(transactions,0);
+pending=null;
+console.log('APP514_RECOVERY_PENDING_LOCAL_EDIT_REJECTED_R0W0=PASS');
+
+const untouched = await exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','after');
+assert.equal(untouched.changed,false);
+assert.equal(writes,0);
+assert.equal(emitted.length,0);
+console.log('APP514_RECOVERY_ALREADY_CURRENT_NO_EXTRA_WRITE_OR_SIGNAL=PASS');
+
+const out=await exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','before');
+assert.equal(out.version,8);
+assert.equal(out.changed,true);
+assert.equal(out.folders[0].title,'Before');
+assert.equal(canonical.musicNoteFolders.myNote[0].title,'Before');
+assert.equal(canonical.musicNoteFolders.sharedNote[0].title,'Shared');
+assert.equal(canonical.musicNoteCardState.items.constructor,Object);
+assert.equal(writes,1);
+assert.equal(emitted.length,1);
+assert.equal(untouchedOriginalSong.prompt,'private-prompt');
+console.log('APP514_RECOVERY_MANUAL_SERVER_ACK_AND_OTHER_MODES_INTACT=PASS');
+
+await assert.rejects(exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','before'),/다른 기기에서/);
+assert.equal(writes,1,'old record may not silently overwrite subsequent state');
+console.log('APP514_RECOVERY_STALE_REPLAY_REJECTED_NO_EXTRA_WRITE=PASS');
+
+// Explicit after-choice is now a safe one-step undo, but only if the marker
+// and server revision prove no other device has changed the folders.
+const reversed=await exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','after');
+assert.equal(reversed.version,9);
+assert.equal(reversed.changed,true);
+assert.equal(canonical.musicNoteFolders.myNote[0].title,'After');
+assert.equal(writes,2);
+console.log('APP514_RECOVERY_UNDO_SAME_ARCHIVE_WITH_UNCHANGED_REVISION=PASS');
+
+canonical.musicNoteFolders.myNote=[{id:'default',title:'Device C'}];
+await assert.rejects(exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','after'),/다른 기기에서/);
+assert.equal(writes,2);
+await assert.rejects(exports.restoreMusicNoteFolderRecovery(uid,'../bad','myNote','before'),/잘못된/);
+assert.equal(writes,2);
+console.log('APP514_RECOVERY_CONCURRENT_DEVICE_AND_MALFORMED_REQUEST_FAIL_CLOSED=PASS');
+
+// A historical version that drops a folder ID may orphan song references.
+// Keep the archive for explicit deeper review, but do not silently delete.
+data.beforeFolders.myNote = [{id:'default',title:'Before'}];
+data.afterFolders.myNote = [
+  {id:'default',title:'After'}, {id:'song-folder',title:'Used by songs'},
+];
+canonical.musicNoteFolders.myNote = copy(data.afterFolders.myNote);
+await assert.rejects(exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','before'),/폴더 삭제/);
+assert.equal(writes,2);
+console.log('APP514_RECOVERY_ORPHANING_FOLDER_DELETE_BLOCKED=PASS');
+
+// Account switch and another local edit DURING Firestore reads must reject
+// before a single write occurs; no account or pending edit may be overwritten.
+canonical.musicNoteFolders.myNote=copy(data.afterFolders.myNote);
+const noMoreWrites=writes;
+afterCanonicalRead=()=>{ editEpoch++; pending={myNote:{version:9,folders:[]}}; };
+await assert.rejects(exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','before'),/복원 중/);
+assert.equal(writes,noMoreWrites);
+pending=null;
+await assert.rejects(exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','before',()=>false),/복원 중/);
+assert.equal(writes,noMoreWrites);
+console.log('APP514_RECOVERY_CONCURRENT_LOCAL_EDIT_AND_ACCOUNT_SWITCH_BLOCKED=PASS');
+
+
+// Schema v2 large conflict: parts are read only on explicit dialog and
+// inside the confirmation transaction; exactly reconstruct the full arrays.
+{
+  const oldBefore=[{id:'default',title:'Whole before'}, {id:'extra',title:'Keep extra'}];
+  const oldAfter=[{id:'default',title:'Whole after'}, {id:'extra',title:'Keep extra'}];
+  const beforeJson=JSON.stringify(oldBefore);
+  const afterJson=JSON.stringify(oldAfter);
+  const beforeSplit=Math.floor(beforeJson.length/2);
+  Object.assign(archiveParts,{
+    beforeFolders_myNote_0:beforeJson.slice(0,beforeSplit),
+    beforeFolders_myNote_1:beforeJson.slice(beforeSplit),
+    afterFolders_myNote_0:afterJson,
+  });
+  data.schemaVersion=2;
+  data.partIds=Object.keys(archiveParts);
+  delete data.beforeFolders;
+  delete data.afterFolders;
+  canonical.musicNoteFolders.myNote=copy(oldAfter);
+  const beforeReads=reads;
+  const loaded=await exports.listMusicNoteFolderRecovery(uid);
+  assert.equal(loaded.length,1);
+  assert.equal(loaded[0].detailLoaded,false);
+  assert.deepEqual(Array.from(loaded[0].changedModes), ['myNote']);
+  assert.equal(loaded[0].beforeFolders.myNote,undefined);
+  assert.equal(reads-beforeReads,1,'one bounded list query; never fan out for unselected shards');
+  const beforeDetail=reads;
+  const selected=await exports.getMusicNoteFolderRecoveryDetail(uid,id);
+  assert.equal(selected.detailLoaded,true);
+  assert.equal(selected.beforeFolders.myNote[1].title,'Keep extra');
+  assert.equal(reads-beforeDetail,4,'one selected manifest and three selected shards only');
+  const beforeWrites=writes;
+  const restored=await exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','before');
+  assert.equal(restored.changed,true);
+  assert.equal(canonical.musicNoteFolders.myNote[0].title,'Whole before');
+  assert.equal(writes,beforeWrites+1);
+  console.log('APP514_RECOVERY_LARGE_SHARDED_RECORD_ON_DEMAND_READ_AND_RESTORE=PASS');
+}
+
+
+// If this device starts a newer edit between the canonical Firestore ACK
+// and the RTDB preview, do not transmit the older recovery state. Keep the
+// real pending edit for its normal batch rather than claiming restoration
+// became the latest visible folder state.
+{
+  data.schemaVersion=1;
+  data.beforeFolders={myNote:[{id:'default',title:'Previous'}]};
+  data.afterFolders={myNote:[{id:'default',title:'Current'}]};
+  delete data.partIds;
+  canonical.musicNoteFolders.myNote=copy(data.afterFolders.myNote);
+  canonical.musicNoteFolderRecoveryMarker=null;
+  pending=null;
+  const emittedBefore=emitted.length;
+  const writesBefore=writes;
+  afterTransactionCommit=()=>{
+    editEpoch++;
+    pending={myNote:{version:700,folders:[{id:'default',title:'Newer local edit'}]}};
+  };
+  const late=await exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','before');
+  assert.equal(late.changed,true);
+  assert.equal(late.localEditDuringRestore,true);
+  assert.equal(writes,writesBefore+1);
+  assert.equal(emitted.length,emittedBefore,
+    'A stale confirmed recovery must never publish RTDB after a newer edit');
+  assert.equal(pending.myNote.folders[0].title,'Newer local edit');
+  console.log('APP514_LATE_NEW_LOCAL_EDIT_SUPPRESSES_STALE_RECOVERY_RTDB=PASS');
+}
+
+
+// app515 executable cross-version compare. Run the real service from source in
+// an isolated second VM, with two independent fake Firestore documents.
+// Modern-only edits must not show as old PC conflicts; a later old PC edit is
+// selectable without changing the old source or unrelated folder mode.
+{
+  const modernOriginal = [{id:'default',title:'Old source at migration'}];
+  const legacyNow = [{id:'default',title:'Legacy PC genuine later edit'}];
+  const modernNow = [{id:'default',title:'New mobile saved edit'}];
+  const sharedOriginal = [{id:'shared',title:'Shared unchanged'}];
+  const oldParent = {
+    musicNoteFolders:{myNote:copy(modernOriginal),sharedNote:copy(sharedOriginal)},
+    musicNoteStructureVersion:100,
+  };
+  const modern = {
+    schemaVersion:2,musicNoteStructureVersion:201,
+    musicNoteStructureWriterToken:'writer-modern-201',
+    legacyBaseSignatures:{
+      myNote:JSON.stringify(modernOriginal),
+      sharedNote:JSON.stringify(sharedOriginal),
+    },
+    musicNoteFolders:{myNote:copy(modernNow),sharedNote:copy(sharedOriginal)},
+  };
+  const modeSignature = value=>JSON.stringify(value);
+  const compareWrites=[]; const compareEmits=[];
+  let compareReadCount=0, comparePending=null, compareEpoch=0;
+  const parentPath='user_structures/'+uid;
+  const v2Path=parentPath+'/folder_state/v2';
+  const sdkCompare={
+    doc:(_db,...segments)=>segments.join('/'),
+    getDocFromServer:async path=>{
+      compareReadCount++;
+      const value=path===parentPath?oldParent:modern;
+      assert.ok([parentPath,v2Path].includes(path));
+      return {exists:()=>Boolean(value),data:()=>copy(value)};
+    },
+    runTransaction:async (_db,fn)=>{
+      const staged=[];
+      const txn={
+        get:async path=>{
+          compareReadCount++;
+          assert.ok([parentPath,v2Path].includes(path));
+          const value=path===parentPath?oldParent:modern;
+          return {exists:()=>Boolean(value),data:()=>copy(value)};
+        },
+        set:(path,patch,opt)=>{assert.equal(path,v2Path);assert.equal(opt?.merge,true);staged.push(patch);},
+      };
+      const result=await fn(txn);
+      for(const patch of staged){
+        modern.musicNoteFolders={...modern.musicNoteFolders,...copy(patch.musicNoteFolders)};
+        modern.musicNoteStructureVersion=patch.musicNoteStructureVersion;
+        modern.musicNoteStructureWriterToken=patch.musicNoteStructureWriterToken;
+        modern.legacyBaseSignatures={...modern.legacyBaseSignatures,...patch.legacyBaseSignatures};
+        compareWrites.push(copy(patch));
+      }
+      return result;
+    },
+  };
+  const compareExports={};
+  runInNewContext(ts.transpileModule(source,{
+    fileName:'musicNoteFolderRecovery.ts',
+    compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS},
+  }).outputText,{
+    exports:compareExports, console, Date, Math,
+    require:name=>{
+      if(name.endsWith('/firebase'))return {db:{}};
+      if(name.endsWith('/firestoreMeasured'))return sdkCompare;
+      if(name.endsWith('/musicNoteFolderStructureBatch'))return {
+        getPendingMusicNoteFolderStructureBatch:()=>comparePending,
+        getMusicNoteFolderEditEpoch:()=>compareEpoch,
+        getMusicNoteLegacyFolderSignature:modeSignature,
+        getMusicNoteEffectiveLegacyMode:(data,mode)=>
+          data?.musicNoteFolders?.[mode] || data?.[mode==='myNote'?'myNoteFolders':'sharedNoteFolders'] || null,
+      };
+      if(name.endsWith('/userDomainSyncService'))return {
+        publishMusicNoteStructureDelta:async (...args)=>{compareEmits.push(copy(args));},
+      };
+      throw Error('unapproved compare import '+name);
+    },
+  });
+
+  // The migration itself and new-only changes cannot be misreported as
+  // legacy conflicts just because two canonical documents differ.
+  let cmp=await compareExports.getMusicNoteLegacyFolderComparison(uid);
+  assert.equal(cmp.changedModes.length,0);
+  assert.equal(compareReadCount,2,'two exact reads only upon explicit dialog open');
+  oldParent.musicNoteFolders.myNote=copy(legacyNow);
+  cmp=await compareExports.getMusicNoteLegacyFolderComparison(uid);
+  assert.deepEqual(Array.from(cmp.changedModes),['myNote']);
+  assert.equal(cmp.modernFolders.myNote[0].title,'New mobile saved edit');
+  assert.equal(cmp.legacyFolders.myNote[0].title,'Legacy PC genuine later edit');
+  assert.equal(compareWrites.length,0);
+  console.log('APP515_EXPLICIT_OLD_V2_COMPARISON_R2_NO_FALSE_CONFLICT_W0=PASS');
+
+  const keep=await compareExports.restoreMusicNoteLegacyFolderChoice(uid,'myNote','modern',cmp);
+  assert.equal(keep.changed,false);assert.equal(compareWrites.length,0);
+  comparePending={myNote:{folders:copy(legacyNow),version:3}};
+  await assert.rejects(compareExports.restoreMusicNoteLegacyFolderChoice(uid,'myNote','legacy',cmp),
+    /아직 저장되지 않은/);
+  comparePending=null;
+  assert.equal(compareWrites.length,0);
+  console.log('APP515_LOCAL_PENDING_AND_KEEP_MODERN_ARE_W0=PASS');
+
+  oldParent.musicNoteFolders.myNote=[{id:'default',title:'Another old device changed'}];
+  await assert.rejects(compareExports.restoreMusicNoteLegacyFolderChoice(uid,'myNote','legacy',cmp),
+    /다른 기기에서/);
+  assert.equal(compareWrites.length,0);
+  oldParent.musicNoteFolders.myNote=copy(legacyNow);
+  const chosen=await compareExports.restoreMusicNoteLegacyFolderChoice(uid,'myNote','legacy',cmp);
+  assert.equal(chosen.changed,true);
+  assert.equal(compareWrites.length,1);
+  assert.equal(modern.musicNoteFolders.myNote[0].title,'Legacy PC genuine later edit');
+  assert.equal(modern.musicNoteFolders.sharedNote[0].title,'Shared unchanged');
+  assert.equal(oldParent.musicNoteFolders.myNote[0].title,'Legacy PC genuine later edit');
+  assert.equal(modern.legacyBaseSignatures.myNote,modeSignature(legacyNow));
+  assert.equal(compareEmits.length,1);
+  cmp=await compareExports.getMusicNoteLegacyFolderComparison(uid);
+  assert.equal(cmp.changedModes.length,0,'reconciled edit should not be offered again');
+  console.log('APP515_MANUAL_CAS_RESTORE_ONE_V2_WRITE_LEGACY_AND_SHARED_UNCHANGED=PASS');
+}

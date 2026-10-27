@@ -1,3 +1,52 @@
+## CURRENT — app515 v2 isolated Music Note folder canonical candidate (2026-10-28 KST)
+
+- **승인 범위:** 디렉터가 기존 Draft PR #512에서 신버전 전용 `user_structures/{uid}/folder_state/v2` 실제 코드 경로, 옛 PC 비교/선택 복원, PC↔모바일 동기화, 비용·안전 검증을 승인. PR 병합·Rules 적용·배포는 승인하지 않음.
+- **구현 후보:** `musicNoteFolderStructureBatch.ts`에서 신버전 폴더 변경은 기존 부모가 아니라 독립 v2 문서에 원자적으로 저장; 기존 구형 브라우저는 부모에 계속 저장. 처음 생성할 때만 부모 R1을 추가로 읽어 현재 폴더와 소형 기준 서명을 보존하고, 이후 V2 갱신은 R1/W1, 내용 동일이면 W0. 기존 60초 배치, 무저장 캐시 경고, 모드별 최신 기준 비교 유지. 동시 로컬 편집 뒤 ACK에서 후속 pending baseline을 안전하게 갱신.
+- **읽기/신호:** 신형 앱은 필요한 canonical 확인에서 old parent의 카드상태와 v2 폴더를 합쳐 읽음. 현재 비용: 최초/미확인/실제 신호 확인은 **두 문서 R2**(구성상 기존 대비 R1 추가), 검증된 warm 화면 이동은 R0 목표. `syncMusicNoteFolderStateV2Version` 신규 Functions source는 실제 v2 변경 시 기존 user profile version 신호를 올림; 이는 **아직 미배포**.
+- **수동 비교:** 구형 원본과 신형 V2 스냅샷은 사용자가 폴더 충돌 기록 화면을 열 때에만 조회(R2 추가 + 기존 기록 R1). 최초 분리 시 원본의 소형 서명과 비교해 구형에서 실제 변경된 모드만 노출. 사용자 확인 후 v2만 트랜잭션으로 복원, 다른 기기 갱신·삭제/미저장 편집 안전 차단. 기존 `legacy_recovery` 과거 기록은 V2 전환 뒤 구형 정본에 잘못 적용되지 않도록 직접 복원 차단.
+- **공유 Rules:** 구형 부모 owner read/write 보호를 유지, v2 전용 owner GET/CREATE/UPDATE와 버전·토큰 증가·스키마 검사 추가. V2 delete/list 차단. 이 Rules는 PR 소스만 수정했으며 모든 배포 환경에서 **활성화하지 않음**. 원본 곡/가사/하트·대량 사용자 데이터는 변경하지 않음.
+- **테스트/릴리스 HOLD:** app506 quota·동시 ACK·app514 old/new VM/Rules emulator/복구 UI 비교 VM을 변경한 소스에 맞춰 검증 중. 정확한 마지막 HEAD CI 완료·독립 WORK 감사·실제 인증 PC/모바일 구/신 버전 검증 전까지 PASS 주장·PR 병합·배포 금지. 구형↔구형 동시 쓰기는 원래 클라이언트가 무조건 merge하며 이 구조만으로 보장 불가. 실제 최신 구형 편집 알림 UX·R2 비용·1MiB 등 독립 감사 필수.
+
+---
+
+## CURRENT — app514 충돌 전·후 폴더 복구 기록 보강 / Draft PR #512 (2026-10-28 KST)
+
+- 기존 `legacy_recovery`는 구형 클라이언트가 최신 폴더를 덮어쓴 Firestore 이벤트의 before/after 배열을 비공개로 보관하고, 사용자가 명시적으로 기록을 읽고 확인해 복원하는 구조. UI·기존 저장/선택 기능 재사용, 자동 복원/페이지 방문 조회 추가 없음.
+- **이번 최소 수정:** `functions/src/index.ts`에서 users 프로필 동기화 트랜잭션과 archive 기록 시도를 독립 병렬 작업으로 분리하고 `Promise.allSettled`로 양쪽 완료 대기. 프로필 sync 실패로 archive 시도 자체가 건너뛰던 경로를 막음. 프로필 오류는 정상적으로 실패 처리하며 archive 오류는 bounded 로그를 남김. 기존 사용자 원본·캐시·Firestore Rules·별도 서비스·비용 정책 변경 없음.
+- **검증:** 기존 복구 UI VM + 실제 `buildLegacyMusicNoteFolderRecovery` Functions helper의 옛 PC/최신 폴더 양쪽 기록, 카드 상태만 변경 시 archive W0, archive와 signal 분리 소스 계약을 타깃 실행형 검사에 추가. 정확한 PR HEAD의 GitHub CI 결과로만 검증 통과를 판정.
+- **미해결 P1 / 배포 HOLD:** 구형 `setDoc(merge:true)`의 오래된 쓰기를 기존 Rules가 허용하는 동안 최신 canonical 덮어쓰기를 완전 차단할 수 없음. Functions는 커밋 **이후** 실행되며 실패·미배포·지연·기록 한도 상황에서 양쪽 기록이 반드시 보존되는 것을 보장하지 않음. 실기기 PC·모바일 혼합 검증, 별도 독립 WORK 재감사(실제 사용 모델명/버전 보고), 전환 정책 전까지 PR 병합·공유 Rules·PREVIEW/TEST/PRODUCTION 배포 금지.
+- 원본 PC의 기존 누락곡 Firestore 존재 여부 UNKNOWN. 사용자의 폴더/곡 강제 재저장·복원·캐시 삭제·데이터 마이그레이션 금지.
+
+---
+
+## CURRENT — app514 WORK P1 구형 PC 안전 공존 / Draft PR #512 (2026-10-28 KST)
+
+- **작업 상태:** PR #512의 이전 WORK FAIL(P1 3/P2 1) 중 혼합 pending, 미확정 RTDB, 동일 폴더 타임스탬프 3건 수정·테스트. 마지막 남은 P1은 구버전 PC 폴더 저장과 최신 서버 폴더 보호의 동시 보장.
+- **구버전 저장 실패 방지 최소 수정:** `firestore.rules`의 `user_structures/{uid}` owner read/write 원래 허용 규칙 복귀(공유 서비스와 동일). 원래 guard는 에뮬레이터 **메모리 안에서만** 적용해 설계 테스트 유지. `legacy_recovery` owner 읽기 전용 보호 유지. 서버 원본 변경 없음.
+- **아직 FAIL:** 구형 PC의 무조건 `merge:true` 지연 폴더 쓰기를 허용하면 다른 최신 기기의 폴더를 덮을 수 있다. 구형 클라이언트에 기준 버전과 토큰이 없으므로 단순 Rules로 '정상 옛기기 편집 허용'과 '오래된 쓰기 거절'을 동시에 보장할 수 없음. 기존 Functions archive는 실배포/복구 검증 이전이라 무손실 대안으로 간주하지 않는다.
+- **필수 다음 단계:** 격리 에뮬레이터의 호환/비호환 두 경로 검사, GitHub PR HEAD CI, 독립 WORK 감사(실사용 모델명·버전 명시), PC·모바일 구버전 혼합 실제 확인과 릴리스 전환 정책. **기존 PR #512 Draft 유지, merge/RULES/배포 금지.**
+- **주의:** 실서비스 app501 Music Note 누락곡 서버 원본 존재 여부 UNKNOWN; cache 전체삭제, 자동복구, 사용자의 실제 파일 편집/마이그레이션 금지. 60초 저장, Studio heart, Music Note/Library, 비용 보호.
+
+---
+
+## CURRENT — app514 incident source candidate, no deployment (2026-10-27 KST)
+- Issue #511; branch `fix/app514-p0-mobile-note-quota-incident`. Product base `f31bbf6801f9aa1fbfa0690f4783d70c9c9f32b5`; existing incident documentation commits through `9ebc6e4bc3669553022e49d4f4b3e28d4c0d06db` preserved. This candidate is NOT real-device acceptance or a recovered-song claim.
+- Reproduced in executable source VMs: quota-refused structure cache loses the other folder mode when merging from stale disk; delayed RTDB response can replace/requeue newer edits; equal-version old canonical ACK can clear newer content; a cold read can overwrite a newer live edit. Original preview fails the quota session test; candidate passes. Actual user's mobile storage size, Rules/network error and server originals remain unmeasured.
+- Minimal client correction: merge latest session/cache, restore durable pending folders on reopen, separate RTDB transport ordering from device-clock versions, fence late ACK/hydration, and show persistent unsaved/saving/unconfirmed/failed states with server-confirmed only after Firestore ACK. RTDB failure is separate from canonical success; empty/aborted structure deliveries fail explicitly. No preview/canonical favorite recovery, heart changes, Explore next-song changes or Library implementation.
+- Healthy folder batch stays +60s; quota first attempt immediate, subsequent attempts coalesce within 5s. Transient rejected writes stop after 3 attempts, permission/auth rejection stops immediately; explicit retry/reconnect can resume pending. Unresolved SDK writes display unconfirmed after 15s and never start a parallel retry. Memory-only pending gets a close warning; OS termination with storage+network unavailable still cannot be guaranteed durable.
+- Validation PASS: TypeScript, Vite Build, integrated app501–513 executable suite (including app502 diagnostic/UI races, app503 quota handoff, app506/507/511/512/513), new app514 13 scenario groups, protected app349 settlement/media and app301 folder checks, app452 media and app434 publication ordering. app349's stale assertion was updated to require app501's existing `publishDerived: false`; product heart code is unchanged. Existing quality workflow runs the new test; no release workflow/trigger change.
+- Cost: VM healthy batch Firestore R0/W1, quota burst W2/5 edits remains PASS; receiver R0/W0; no page-entry write or new canonical read. RTDB retains existing immediate transaction + post-canonical hook; transport is not free. Manual favorite diagnostic is exact document ID + authenticated UID + limit(1), minimum R1/query, W0. Actual billing and physical PC↔mobile proof are not measured.
+- RELEASE HOLD / remaining P0 evidence: existing PC, mobile and second PC must compare the same exact favorite IDs through existing admin CACHE LIVE read-only diagnostic. No authenticated browser/UID/exact IDs are available here. Do not infer deletion or force re-save. Preserve originals, prompts, lyrics, hearts and caches. Actual favorite recovery and live folder incident closure remain blocked pending this evidence and independent source review.
+- No deployment, shared Rules/Functions/Worker/D1 mutation, migration, cache purge or user-data write performed. main `b13360df1bab52e2d3b746ea47dc4e3718eef85c` and production `fa81b02b695a8e935cdbbf8cab1efe1b2c9387f4` unchanged. Existing task branch reused; one Draft PR; no new/deleted workflow or branch, existing quality workflow only extended. Detailed evidence and safe next steps: `DOCS/APP514_MOBILE_NOTE_INCIDENT.md`.
+---
+
+## CURRENT — app513 PREVIEW REAL USER QA FAIL, immediate P0 incident (2026-10-26 16:01 KST)
+- LIVE PREVIEW integrated app513 **Hosting PASS, user QA FAIL**, source SHA `74ab1ae5728e0dc4dfcae62cfd5f7563efd956e6`, preview release SHA `f31bbf6801f9aa1fbfa0690f4783d70c9c9f32b5`, GitHub workflow `40349965499` SUCCESS. A source Work GO and passing VM CI are NOT user acceptance. TEST/main `b13360df1bab52e2d3b746ea47dc4e3718eef85c`, PRODUCTION `fa81b02b695a8e935cdbbf8cab1efe1b2c9387f4` protected; halt all promotion.
+- User reports same-account mobile Music Note shows only `어릴 적 나에게 묻는다` among three historical Recent saves, with `먼 길을 돌아온 밤` and `어제의 네게 묻는다` absent there after app513; older PC/second PC hearts/catalog differ. **NOT PROVEN deleted from canonical Firestore**. Never clear or overwrite original PC browser/cache, retoggle hearts or force song re-save. Use existing manual admin exact-doc R1 authenticated check only; three-browser same UID identity and favoriteFirestoreId must match.
+- Mobile My Note folder rename/move fails cross-device: screenshots show exact quota toast `기기 저장공간 부족: 폴더 변경을 서버에 저장하는 중입니다. 저장 완료 전 앱을 닫지 마세요.`; after dismiss local change can appear only on mobile, other devices unchanged. `src/services/musicNoteFolderStructureBatch.ts` quota-failed durable pending is memory-only; emergency Firestore write may fail and retry, while toast does NOT confirm server ACK. RTDB success and canonical user_structures doc both unverified in actual user session. **P0/P1 user incident #511**.
+- Explore `다음곡에 적용` real mobile PASS (protect), Library unused by user = NOT TESTED, do not ask user to run unrelated Library steps. No auto bulk read, delete, migration, storage purge, rollback or deploy. `fix/app514-p0-mobile-note-quota-incident` incident branch from live preview HEAD for single Codex High root-cause and minimal fix; independent Work source audit + real PC/mobile acceptance required before next PREVIEW.
+---
+
 ## CURRENT — app511 legacy Library atomic batch guard, no Rules deploy (2026-10-26 KST)
 - `fix/app511-legacy-playlists-monotonic-rules` based on app510 #506 `4814f7ffaf9f168bfe692eb553cffabc9a947a2b`. Current `preview` baseline `6e8543eb6525dd22a97a6d684de111613b0934bd`; deployed PREVIEW app501 still PC↔mobile Music Note QA FAIL.
 - Existing main/TEST old `playlistService.ts` batches actual Library rename/reorder/add/delete/move/color/order *together with* absolute `users.syncVersions.playlists`. Blanket shared Rules monotonic guard would reject **entire old-client canonical playlist mutation** if lower version; do not deploy. This draft briefly explored Rules protection but **reverted firestore.rules to byte-identical baseline before PR**. No shared Rules/DB changes.

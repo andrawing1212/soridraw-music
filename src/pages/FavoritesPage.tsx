@@ -8,13 +8,31 @@ import {
   readPendingMusicNoteSyncSignal,
 } from '../services/userDomainSyncService';
 import {
-  MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT,
+  MUSIC_NOTE_FOLDER_SAVE_STATUS_EVENT,
+  getMusicNoteFolderSaveStatus,
+  getPendingMusicNoteFolderStructureBatch,
+  getObservedMusicNoteStructureVersion,
+  markMusicNoteFolderEdited,
+  promoteMusicNoteFolderStructureVersion,
+  reportMusicNoteFolderDelivery,
+  retryMusicNoteFolderStructureBatch,
+  type MusicNoteFolderSaveStatus,
   flushMusicNoteFolderStructureBatch,
   markMusicNoteFolderStructureCommitted,
   queueMusicNoteFolderStructureBatch,
+  writeMusicNoteStructureIfNewer,
   resumeMusicNoteFolderStructureBatch,
 } from '../services/musicNoteFolderStructureBatch';
 import React, { useState, useEffect, useLayoutEffect, useRef, useDeferredValue } from 'react';
+import {
+  listMusicNoteFolderRecovery,
+  getMusicNoteFolderRecoveryDetail,
+  restoreMusicNoteFolderRecovery,
+  getMusicNoteLegacyFolderComparison,
+  restoreMusicNoteLegacyFolderChoice,
+  type MusicNoteLegacyFolderComparison,
+  type MusicNoteFolderRecoveryRecord,
+} from '../services/musicNoteFolderRecovery';
 import { useMediaQuery } from '../lib/mediaQueryStore';
 import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
 import { createPortal } from 'react-dom';
@@ -136,7 +154,11 @@ const mergeMusicNoteDetailPatch = (base: Record<string, any>, patch: Record<stri
 
 type MusicNoteStructureSharedSession = {
   data: any | null;
+  // Local/RTDB optimistic version is NOT the canonical profile version.
   version: number;
+  profileVersionSeen: number;
+  refreshPending: boolean;
+  refreshForce: boolean;
   verified: boolean;
   listeners: Set<(data: any) => void>;
   syncInFlight: Promise<void> | null;
@@ -146,6 +168,9 @@ type MusicNoteStructureSharedSession = {
 type MusicNoteStructureCacheEnvelope = {
   schemaVersion: 1;
   version: number;
+  // Persist the last *server-confirmed* profile signal independently from
+  // optimistic device time. Legacy envelopes require at most one R1 upgrade.
+  profileVersionSeen?: number;
   verified: boolean;
   updatedAtMs: number;
   data: any;
@@ -153,6 +178,12 @@ type MusicNoteStructureCacheEnvelope = {
 
 const MUSIC_NOTE_STRUCTURE_CACHE_STORAGE_BASE = 'soridraw_music_note_structure_cache_v1';
 const musicNoteStructureSharedSessions = new Map<string, MusicNoteStructureSharedSession>();
+// RTDB ordering is independent of device-clock/canonical structure versions.
+const musicNoteFolderSignalVersions = new Map<string, number>();
+// Only older open tabs send folder deltas without the v2 marker. Their
+// optimistic UI must settle against canonical after the existing 60s batch.
+const legacyMusicNoteFolderCheckTimers = new Map<string, number>();
+const LEGACY_MUSIC_NOTE_FOLDER_CONFIRM_MS = 65_000;
 
 const getMusicNoteStructureCacheStorageKey = (uid: string) => `${MUSIC_NOTE_STRUCTURE_CACHE_STORAGE_BASE}_${uid}`;
 
@@ -182,6 +213,7 @@ const readMusicNoteStructureCache = (uid: string): MusicNoteStructureCacheEnvelo
     return {
       schemaVersion: 1,
       version: Math.max(0, Math.floor(Number(parsed?.version || 0))),
+      profileVersionSeen: Math.max(0, Math.floor(Number(parsed?.profileVersionSeen || 0))),
       verified: parsed?.verified === true,
       updatedAtMs: Math.max(0, Math.floor(Number(parsed?.updatedAtMs || 0))),
       data: parsed.data,
@@ -213,11 +245,20 @@ const writeMusicNoteStructureCache = (
   version: number,
   verified = true,
 ): MusicNoteStructureCacheEnvelope => {
-  const previous = readMusicNoteStructureCache(uid);
+  // Quota refusal leaves disk behind. Preserve the latest session's other
+  // folder mode/card state instead of replacing it with stale disk data.
+  const memory = musicNoteStructureSharedSessions.get(uid);
+  const disk = readMusicNoteStructureCache(uid);
+  const previous = memory && memory.data !== null && memory.version >= Number(disk?.version || 0) ? memory : disk;
   const next: MusicNoteStructureCacheEnvelope = {
     schemaVersion: 1,
     version: Math.max(Number(previous?.version || 0), Math.max(0, Math.floor(Number(version || 0)))),
-    verified: verified || previous?.verified === true,
+    // Do not mark an optimistic RTDB/local edit as an acknowledged server sync.
+    profileVersionSeen: Math.max(Number(previous?.profileVersionSeen || 0),
+      Number(memory?.profileVersionSeen || 0)),
+    // An unconfirmed legacy preview must not inherit an earlier verified
+    // flag: a reload then needs a canonical check, not stale optimistic data.
+    verified,
     updatedAtMs: Date.now(),
     data: mergeMusicNoteStructureData(previous?.data, patch),
   };
@@ -239,6 +280,9 @@ const publishMusicNoteStructureSession = (
     session = {
       data: cached.data,
       version: cached.version,
+      profileVersionSeen: cached.profileVersionSeen || 0,
+      refreshPending: false,
+      refreshForce: false,
       verified: cached.verified,
       listeners: new Set(),
       syncInFlight: null,
@@ -248,35 +292,96 @@ const publishMusicNoteStructureSession = (
   } else {
     session.data = cached.data;
     session.version = cached.version;
+    session.profileVersionSeen = Math.max(session.profileVersionSeen, cached.profileVersionSeen || 0);
     session.verified = cached.verified;
   }
   session.listeners.forEach((subscriber) => subscriber(cached.data));
 };
 
 const getNextMusicNoteStructureVersion = (uid: string): number => {
-  const localVersion = Number(readMusicNoteStructureCache(uid)?.version || 0);
+  const localVersion = Math.max(Number(readMusicNoteStructureCache(uid)?.version || 0),
+    Number(musicNoteStructureSharedSessions.get(uid)?.version || 0));
   const profileVersion = getMusicNoteStructureProfileVersion(uid);
-  return Math.max(Date.now(), localVersion + 1, profileVersion + 1);
+  return Math.max(Date.now(), localVersion + 1, profileVersion + 1, getObservedMusicNoteStructureVersion(uid) + 1);
 };
 
-const ensureMusicNoteStructureFresh = (uid: string, session: MusicNoteStructureSharedSession): Promise<void> => {
+const ensureMusicNoteStructureFresh = (uid: string, session: MusicNoteStructureSharedSession, force = false): Promise<void> => {
   const profileVersion = getMusicNoteStructureProfileVersion(uid);
-  if (session.data !== null && session.verified && profileVersion <= session.version) {
+  if (!force && session.data !== null && session.verified && profileVersion <= session.profileVersionSeen) {
     return Promise.resolve();
   }
-  if (session.syncInFlight) return session.syncInFlight;
+  if (session.syncInFlight) {
+    // A second device can update the profile while a prior server read is
+    // still pending. Do not lose that signal when the first read settles.
+    if (force || profileVersion > session.profileVersionSeen) {
+      session.refreshPending = true;
+      if (force) session.refreshForce = true;
+    }
+    return session.syncInFlight;
+  }
 
   session.syncInFlight = (async () => {
     try {
-      const snapshot = await getDocFromServer(doc(db, 'user_structures', uid));
-      const data: any = snapshot.exists() ? snapshot.data() : {};
-      const serverDocumentVersion = Number(data?.musicNoteStructureVersion || 0);
+      const beforeRead = session.data;
+      // app515: fetch both independent stores on a required canonical refresh.
+      // Warm verified entries stay R0; a real refresh has R2 (legacy card /
+      // old-browser comparison plus modern folder), never a polling listener.
+      const [legacySnapshot, modernSnapshot] = await Promise.all([
+        getDocFromServer(doc(db, 'user_structures', uid)),
+        getDocFromServer(doc(db, 'user_structures', uid, 'folder_state', 'v2')),
+      ]);
+      const legacyData: any = legacySnapshot.exists() ? legacySnapshot.data() : {};
+      const modernData: any = modernSnapshot.exists() ? modernSnapshot.data() : null;
+      // The v2 folder state has priority only once it exists. Legacy cards
+      // and song data are never erased or migrated by a folder refresh.
+      const data: any = {
+        ...legacyData,
+        ...(modernData ? {
+          musicNoteFolders: modernData.musicNoteFolders,
+          musicNoteStructureVersion: modernData.musicNoteStructureVersion,
+        } : {}),
+      };
+      const serverDocumentVersion = Math.max(Number(data?.musicNoteStructureVersion || 0),
+        Number(legacyData?.musicNoteStructureVersion || 0));
       const resolvedVersion = Math.max(profileVersion, Number.isFinite(serverDocumentVersion) ? serverDocumentVersion : 0);
-      publishMusicNoteStructureSession(uid, projectMusicNoteStructureData(data), resolvedVersion, true);
+      // A read started before a local edit/RTDB preview is no longer authority
+      // for that session. Do not stamp old data with the newer profile version.
+      if (session.data !== beforeRead) {
+        session.refreshPending = true;
+        if (force) session.refreshForce = true;
+        return;
+      }
+      const pending = getPendingMusicNoteFolderStructureBatch(uid);
+      const projected = projectMusicNoteStructureData(data);
+      for (const mode of ['myNote', 'sharedNote'] as const) {
+        if (pending?.[mode]) {
+          projected.musicNoteFolders = { ...projected.musicNoteFolders, [mode]: pending[mode].folders };
+        }
+      }
+      // This marker advances only after an authoritative Firestore read.
+      session.profileVersionSeen = Math.max(session.profileVersionSeen, profileVersion);
+      publishMusicNoteStructureSession(uid, projected, resolvedVersion,
+        !pending?.myNote && !pending?.sharedNote);
+      // A newer profile signal can arrive while this read is in flight.
+      if (getMusicNoteStructureProfileVersion(uid) > session.profileVersionSeen) {
+        session.refreshPending = true;
+      }
     } catch (error) {
       console.warn('Music Note structure refresh failed; keeping verified local cache when available.', error);
     } finally {
       session.syncInFlight = null;
+      if (session.refreshPending) {
+        const retryForce = session.refreshForce;
+        session.refreshPending = false;
+        session.refreshForce = false;
+        // A stale read may be retried after it completes, not while a second
+        // read would compete with it. No polling or new steady-state listener.
+        queueMicrotask(() => {
+          if (musicNoteStructureSharedSessions.get(uid) === session) {
+            void ensureMusicNoteStructureFresh(uid, session, retryForce);
+          }
+        });
+      }
     }
   })();
   return session.syncInFlight;
@@ -286,10 +391,20 @@ const subscribeMusicNoteStructureDocument = (uid: string, listener: (data: any) 
   let session = musicNoteStructureSharedSessions.get(uid);
   if (!session) {
     const cached = readMusicNoteStructureCache(uid);
+    const pending = getPendingMusicNoteFolderStructureBatch(uid);
+    const pendingFolders = {
+      ...(pending?.myNote ? { myNote: pending.myNote.folders } : {}),
+      ...(pending?.sharedNote ? { sharedNote: pending.sharedNote.folders } : {}),
+    };
     session = {
-      data: cached?.data || null,
-      version: Number(cached?.version || 0),
-      verified: cached?.verified === true,
+      data: pending ? mergeMusicNoteStructureData(cached?.data, { musicNoteFolders: pendingFolders }) : cached?.data || null,
+      version: Math.max(Number(cached?.version || 0), pending?.myNote?.version || 0, pending?.sharedNote?.version || 0),
+      profileVersionSeen: cached?.profileVersionSeen || 0,
+      refreshPending: false,
+      refreshForce: false,
+      // Pending local edits are never an authoritative server-confirmed view,
+      // even when an older cached envelope had verified=true.
+      verified: cached?.verified === true && !pending?.myNote && !pending?.sharedNote,
       listeners: new Set(),
       syncInFlight: null,
       profileListenerAttached: false,
@@ -313,11 +428,18 @@ const subscribeMusicNoteStructureDocument = (uid: string, listener: (data: any) 
       const current = musicNoteStructureSharedSessions.get(uid);
       if (!current) return;
       const nextRemoteVersion = getMusicNoteStructureProfileVersion(uid);
-      if (nextRemoteVersion > current.version) void ensureMusicNoteStructureFresh(uid, current);
+      if (nextRemoteVersion > current.profileVersionSeen) void ensureMusicNoteStructureFresh(uid, current);
     }) as EventListener);
   }
 
-  void ensureMusicNoteStructureFresh(uid, session);
+  // Reopening an already-durable local folder batch needs no extra reads
+  // while the ordinary 60s flush is pending. Keep it unverified and visible;
+  // a genuinely newer profile signal still triggers the canonical R2 check.
+  // This saves warm navigation R0 without pretending local data is committed.
+  const openPending = getPendingMusicNoteFolderStructureBatch(uid);
+  if (!openPending || getMusicNoteStructureProfileVersion(uid) > session.profileVersionSeen) {
+    void ensureMusicNoteStructureFresh(uid, session);
+  }
 
   return () => {
     session?.listeners.delete(listener);
@@ -470,7 +592,7 @@ const flushMusicNoteCardStateServerWrite = (uid: string): Promise<boolean> => {
           },
           musicNoteStructureVersion: structureVersion,
         },
-      }, setDoc(doc(db, 'user_structures', uid), structurePatch, { merge: true }));
+      }, writeMusicNoteStructureIfNewer(uid, structurePatch));
       publishMusicNoteStructureSession(uid, {
         musicNoteCardState: {
           schemaVersion: 1,
@@ -1279,6 +1401,26 @@ export default function FavoritesPage({
   const [favoriteMemoSavingIds, setFavoriteMemoSavingIds] = useState<Record<string, boolean>>({});
   const [favoriteMemoExpanded, setFavoriteMemoExpanded] = useState(false);
   const [favoriteToastMessage, setFavoriteToastMessage] = useState<string | null>(null);
+  const [folderSaveStatus, setFolderSaveStatus] = useState<MusicNoteFolderSaveStatus | null>(null);
+  const folderRecoveryRequestRef = useRef(0);
+  const folderRecoveryUidRef = useRef(user?.uid);
+  folderRecoveryUidRef.current = user?.uid;
+  const [folderRecoveryOpen, setFolderRecoveryOpen] = useState(false);
+  const [folderRecoveryRecords, setFolderRecoveryRecords] = useState<MusicNoteFolderRecoveryRecord[]>([]);
+  const [folderRecoveryShowingOlder, setFolderRecoveryShowingOlder] = useState(false);
+  const [folderRecoveryOlderLoading, setFolderRecoveryOlderLoading] = useState(false);
+  const [folderRecoverySelectedId, setFolderRecoverySelectedId] = useState<string | null>(null);
+  const [folderRecoveryDetailLoading, setFolderRecoveryDetailLoading] = useState(false);
+  const [folderLegacyComparison, setFolderLegacyComparison] = useState<MusicNoteLegacyFolderComparison | null>(null);
+  const [folderLegacyConfirm, setFolderLegacyConfirm] = useState<{
+    mode: 'myNote' | 'sharedNote'; choice: 'legacy' | 'modern';
+  } | null>(null);
+  const [folderRecoveryLoading, setFolderRecoveryLoading] = useState(false);
+  const [folderRecoveryBusy, setFolderRecoveryBusy] = useState(false);
+  const [folderRecoveryError, setFolderRecoveryError] = useState('');
+  const [folderRecoveryConfirm, setFolderRecoveryConfirm] = useState<{
+    id: string; mode: 'myNote' | 'sharedNote'; choice: 'before' | 'after';
+  } | null>(null);
   const favoriteToastTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSyncEnabled, setIsSyncEnabled] = useState(false);
@@ -2262,14 +2404,228 @@ updates: draft.updates,
   };
 
   useEffect(() => {
-    const onFolderStorageRisk506 = (event: Event) => {
+    let clearConfirmed: ReturnType<typeof setTimeout> | undefined;
+    const updateStatus = () => {
+      if (clearConfirmed) clearTimeout(clearConfirmed);
+      const status = user?.uid ? getMusicNoteFolderSaveStatus(user.uid) : null;
+      const visible = status && (status.storageRisk || status.state === 'failed'
+        || status.state === 'unconfirmed' || status.delivery === 'failed');
+      setFolderSaveStatus(visible ? status : null);
+      if (status?.state === 'server-confirmed' && status.delivery === 'sent') {
+        clearConfirmed = setTimeout(() => setFolderSaveStatus(null), 5000);
+      }
+    };
+    const onFolderSaveStatus = (event: Event) => {
       const detail = (event as CustomEvent<{ uid?: string }>).detail;
       if (!user?.uid || detail?.uid !== user.uid) return;
-      showFavoriteToast('기기 저장공간 부족: 폴더 변경을 서버에 저장하는 중입니다. 저장 완료 전 앱을 닫지 마세요.', 10000);
+      updateStatus();
     };
-    window.addEventListener(MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT, onFolderStorageRisk506);
-    return () => window.removeEventListener(MUSIC_NOTE_FOLDER_QUOTA_RISK_EVENT, onFolderStorageRisk506);
+    updateStatus();
+    window.addEventListener(MUSIC_NOTE_FOLDER_SAVE_STATUS_EVENT, onFolderSaveStatus);
+    return () => {
+      if (clearConfirmed) clearTimeout(clearConfirmed);
+      window.removeEventListener(MUSIC_NOTE_FOLDER_SAVE_STATUS_EVENT, onFolderSaveStatus);
+    };
   }, [user?.uid]);
+
+  const folderSaveMessage = folderSaveStatus ? [
+    folderSaveStatus.state === 'server-confirmed' ? '폴더 변경의 서버 저장을 확인했습니다.'
+      : folderSaveStatus.state === 'failed' ? '폴더 변경의 서버 저장에 실패했습니다.'
+      : folderSaveStatus.state === 'unconfirmed' ? '폴더 변경의 서버 응답이 없어 저장 여부를 확인하지 못했습니다.'
+      : folderSaveStatus.state === 'saving' ? '폴더 변경을 서버에 저장 중입니다. 아직 완료되지 않았습니다.'
+      : '폴더 변경이 아직 서버에 저장되지 않았습니다.',
+    !folderSaveStatus.durable ? '기기 저장공간 부족 또는 접근 제한: 앱을 닫으면 변경이 사라질 수 있습니다.' : '',
+    folderSaveStatus.delivery === 'failed' ? '다른 기기로의 실시간 전달에 실패했습니다.' : '',
+  ].filter(Boolean).join(' ') : null;
+
+  useEffect(() => {
+    // Invalidate both pending reads and writes before a different account
+    // opens recovery. Do not leave disabled buttons stuck across account swaps.
+    folderRecoveryRequestRef.current += 1;
+    setFolderRecoveryLoading(false);
+    setFolderRecoveryBusy(false);
+    // Never retain a previous account's private conflict snapshots.
+    setFolderRecoveryOpen(false);
+    setFolderRecoveryRecords([]);
+    setFolderRecoveryShowingOlder(false);
+    setFolderRecoveryOlderLoading(false);
+    setFolderRecoverySelectedId(null);
+    setFolderRecoveryDetailLoading(false);
+    setFolderLegacyComparison(null);
+    setFolderLegacyConfirm(null);
+    setFolderRecoveryConfirm(null);
+    setFolderRecoveryError('');
+  }, [user?.uid]);
+
+  const openFolderRecovery = async () => {
+    if (!user?.uid || folderRecoveryLoading || folderRecoveryBusy) return;
+    const requestUid = user.uid;
+    const requestNumber = ++folderRecoveryRequestRef.current;
+    setFolderRecoveryOpen(true);
+    setFolderRecoveryLoading(true);
+    setFolderRecoveryRecords([]);
+    setFolderRecoveryShowingOlder(false);
+    setFolderRecoveryOlderLoading(false);
+    setFolderRecoverySelectedId(null);
+    setFolderRecoveryDetailLoading(false);
+    setFolderLegacyComparison(null);
+    setFolderLegacyConfirm(null);
+    setFolderRecoveryError('');
+    setFolderRecoveryConfirm(null);
+    try {
+      // Only this explicit dialog reads recovery records and the two folder
+      // stores. No page-open polling or background comparison.
+      const [records, comparison] = await Promise.all([
+        listMusicNoteFolderRecovery(requestUid),
+        getMusicNoteLegacyFolderComparison(requestUid),
+      ]);
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) {
+        setFolderRecoveryRecords(records);
+        setFolderLegacyComparison(comparison);
+      }
+    } catch {
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) setFolderRecoveryError('충돌 기록을 읽지 못했습니다. 서버 권한 적용 여부를 확인해 주세요.');
+    } finally {
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) setFolderRecoveryLoading(false);
+    }
+  };
+
+  const openOlderFolderRecovery = async () => {
+    if (!user?.uid || folderRecoveryOlderLoading || folderRecoveryBusy || folderRecoveryDetailLoading
+      || folderRecoveryShowingOlder) return;
+    const requestUid = user.uid;
+    const requestNumber = ++folderRecoveryRequestRef.current;
+    setFolderRecoveryOlderLoading(true);
+    setFolderRecoveryError('');
+    try {
+      // An explicit action restores the previous ten-item list. R billed is
+      // up to ten returned documents, never a single 'query read'.
+      const records = await listMusicNoteFolderRecovery(requestUid, true);
+      if (folderRecoveryUidRef.current === requestUid
+        && folderRecoveryRequestRef.current === requestNumber) {
+        setFolderRecoveryRecords(records);
+        setFolderRecoveryShowingOlder(true);
+        setFolderRecoverySelectedId(null);
+        setFolderRecoveryConfirm(null);
+      }
+    } catch (error: any) {
+      if (folderRecoveryUidRef.current === requestUid
+        && folderRecoveryRequestRef.current === requestNumber) {
+        setFolderRecoveryError(String(error?.message || '이전 충돌 기록을 읽지 못했습니다.'));
+      }
+    } finally {
+      if (folderRecoveryUidRef.current === requestUid
+        && folderRecoveryRequestRef.current === requestNumber) setFolderRecoveryOlderLoading(false);
+    }
+  };
+
+  const openFolderRecoveryDetail = async (record: MusicNoteFolderRecoveryRecord) => {
+    if (!user?.uid || folderRecoveryBusy || folderRecoveryDetailLoading || folderRecoveryOlderLoading) return;
+    if (folderRecoverySelectedId === record.id) {
+      setFolderRecoverySelectedId(null);
+      setFolderRecoveryConfirm(null);
+      return;
+    }
+    if (record.detailLoaded) {
+      setFolderRecoverySelectedId(record.id);
+      setFolderRecoveryConfirm(null);
+      return;
+    }
+    const requestUid = user.uid;
+    const requestNumber = ++folderRecoveryRequestRef.current;
+    setFolderRecoveryDetailLoading(true);
+    setFolderRecoveryError('');
+    setFolderRecoveryConfirm(null);
+    try {
+      const detail = await getMusicNoteFolderRecoveryDetail(requestUid, record.id);
+      if (folderRecoveryUidRef.current === requestUid
+        && folderRecoveryRequestRef.current === requestNumber) {
+        setFolderRecoveryRecords(current => current.map(row => row.id === detail.id ? detail : row));
+        setFolderRecoverySelectedId(detail.id);
+      }
+    } catch (error: any) {
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) {
+        setFolderRecoveryError(String(error?.message || '선택한 충돌 기록을 읽지 못했습니다.'));
+      }
+    } finally {
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) {
+        setFolderRecoveryDetailLoading(false);
+      }
+    }
+  };
+
+  const confirmLegacyFolderChoice = async () => {
+    if (!user?.uid || !folderLegacyComparison || !folderLegacyConfirm || folderRecoveryBusy) return;
+    const requestUid = user.uid;
+    const requestNumber = ++folderRecoveryRequestRef.current;
+    setFolderRecoveryBusy(true);
+    setFolderRecoveryError('');
+    try {
+      const result = await restoreMusicNoteLegacyFolderChoice(
+        requestUid, folderLegacyConfirm.mode, folderLegacyConfirm.choice,
+        folderLegacyComparison,
+        () => folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber,
+      );
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber
+        && !result.localEditDuringRestore) {
+        if (result.changed) publishMusicNoteStructureSession(requestUid, {
+          musicNoteFolders: { [folderLegacyConfirm.mode]: result.folders },
+          musicNoteStructureVersion: result.version,
+        }, result.version, true);
+        setFolderLegacyConfirm(null);
+        setFolderRecoveryOpen(false);
+        showFavoriteToast(result.changed
+          ? '선택한 구버전 폴더를 신버전 저장소에 복원했습니다.'
+          : '기존 신버전 폴더 상태를 유지했습니다.');
+      } else if (folderRecoveryUidRef.current === requestUid && result.localEditDuringRestore) {
+        setFolderRecoveryError('복원 중 새 폴더 수정이 생겼습니다. 새 수정은 유지하고 화면 갱신은 중단했습니다.');
+        setFolderLegacyConfirm(null);
+      }
+    } catch (error: any) {
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) {
+        setFolderRecoveryError(String(error?.message || '복원하지 못했습니다.'));
+        setFolderLegacyConfirm(null);
+      }
+    } finally {
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) {
+        setFolderRecoveryBusy(false);
+      }
+    }
+  };
+
+  const confirmFolderRecovery = async () => {
+    if (!user?.uid || !folderRecoveryConfirm || folderRecoveryBusy) return;
+    const requestUid = user.uid;
+    const requestNumber = ++folderRecoveryRequestRef.current;
+    setFolderRecoveryBusy(true);
+    setFolderRecoveryError('');
+    try {
+      const result = await restoreMusicNoteFolderRecovery(
+        requestUid, folderRecoveryConfirm.id, folderRecoveryConfirm.mode, folderRecoveryConfirm.choice,
+        () => folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber,
+      );
+      // Authoritative ACK only, never a speculative optimistic replacement.
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber && !result.localEditDuringRestore) {
+        publishMusicNoteStructureSession(requestUid, {
+          musicNoteFolders: { [folderRecoveryConfirm.mode]: result.folders },
+          musicNoteStructureVersion: result.version,
+        }, result.version, true);
+        setFolderRecoveryConfirm(null);
+        setFolderRecoveryOpen(false);
+        showFavoriteToast(result.changed ? '선택한 폴더 상태를 서버에 복원했습니다.' : '선택한 상태가 이미 서버에 적용되어 있습니다.');
+      } else if (folderRecoveryUidRef.current === requestUid && result.localEditDuringRestore) {
+        setFolderRecoveryError('복원 중 이 기기에서 새 폴더 수정이 생겼습니다. 새 수정은 유지하고 복원 화면 갱신은 중단했습니다.');
+        setFolderRecoveryConfirm(null);
+      }
+    } catch (error: any) {
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) {
+        setFolderRecoveryError(String(error?.message || '복원을 완료하지 못했습니다.'));
+        setFolderRecoveryConfirm(null);
+      }
+    } finally {
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) setFolderRecoveryBusy(false);
+    }
+  };
 
   const handleManualFavoriteSync = async () => {
     if (!onManualSyncFavorites || isManualSyncingFavorites) return;
@@ -2607,6 +2963,17 @@ updates: draft.updates,
         const parsed = JSON.parse(itemJson);
         if (parsed?.__musicNoteStructureSync !== true || !parsed?.data || typeof parsed.data !== 'object') return;
         const patch = parsed.data as Record<string, any>;
+        // Both old and new RTDB folder payloads are previews, never a
+        // canonical Firestore acknowledgement. Require a later server check.
+        const hasUnconfirmedFolderPreview = Boolean(patch.musicNoteFolders);
+
+        if (patch.__musicNoteCanonicalConflict === true) {
+          // Only a rejected server write triggers this single authoritative
+          // refresh. Never treat the RTDB preview as Firestore confirmation.
+          const session = musicNoteStructureSharedSessions.get(uid);
+          if (session) void ensureMusicNoteStructureFresh(uid, session, true);
+          return;
+        }
 
         if (patch.musicNoteCardStateDelta && typeof patch.musicNoteCardStateDelta === 'object') {
           const deltaId = String(patch.musicNoteCardStateDelta.id || '').trim();
@@ -2627,12 +2994,40 @@ updates: draft.updates,
           }
         }
 
+        if (patch.musicNoteFolders && signalVersion > 0) {
+          if (signalVersion <= (musicNoteFolderSignalVersions.get(uid) || 0)) return;
+          musicNoteFolderSignalVersions.set(uid, signalVersion);
+        }
+        const pendingFolders = getPendingMusicNoteFolderStructureBatch(uid);
+        for (const mode of ['myNote', 'sharedNote'] as const) {
+          if (patch.musicNoteFolders?.[mode] && pendingFolders?.[mode]
+            && Number(patch.musicNoteStructureVersion || 0) < pendingFolders[mode].version) {
+            delete patch.musicNoteFolders[mode];
+          }
+        }
         const structureVersion = Math.max(
           Number(patch.musicNoteStructureVersion || 0),
           Number(signalVersion || 0),
           Number(readMusicNoteStructureCache(uid)?.version || 0),
         );
-        publishMusicNoteStructureSession(uid, projectMusicNoteStructureData(patch), structureVersion, true);
+        // A card-only RTDB update cannot upgrade an earlier unconfirmed
+        // folder preview to server-confirmed.
+        const previousUnconfirmed = musicNoteStructureSharedSessions.get(uid)?.verified === false;
+        publishMusicNoteStructureSession(uid, projectMusicNoteStructureData(patch),
+          structureVersion, !hasUnconfirmedFolderPreview && !previousUnconfirmed);
+        if (hasUnconfirmedFolderPreview) {
+          // Both client versions may broadcast before their 60s Firestore save.
+          // Keep immediate visibility, then verify once 65s after the LAST edit.
+          // Repeated renames collapse into one check, like the write batch.
+          const previous = legacyMusicNoteFolderCheckTimers.get(uid);
+          if (previous !== undefined) window.clearTimeout(previous);
+          const timer = window.setTimeout(() => {
+            legacyMusicNoteFolderCheckTimers.delete(uid);
+            const current = musicNoteStructureSharedSessions.get(uid);
+            if (current && !current.verified) void ensureMusicNoteStructureFresh(uid, current, true);
+          }, LEGACY_MUSIC_NOTE_FOLDER_CONFIRM_MS);
+          legacyMusicNoteFolderCheckTimers.set(uid, timer);
+        }
       } catch {}
     };
 
@@ -2643,9 +3038,24 @@ updates: draft.updates,
     };
 
     window.addEventListener(MUSIC_NOTE_SYNC_EVENT, handleStructureSync as EventListener);
+    const checkLegacyOnReconnect = () => {
+      const current = musicNoteStructureSharedSessions.get(uid);
+      // A denied legacy write produces no canonical notification. A failed
+      // offline confirmation must get one more chance after reconnect.
+      if (current && !current.verified) void ensureMusicNoteStructureFresh(uid, current, true);
+    };
+    window.addEventListener('online', checkLegacyOnReconnect);
     const pending = readPendingMusicNoteSyncSignal(uid);
     if (pending?.operation === 'structure-update') applyStructurePayload(String(pending.itemJson || ''), Number(pending.version || 0));
-    return () => window.removeEventListener(MUSIC_NOTE_SYNC_EVENT, handleStructureSync as EventListener);
+    return () => {
+      window.removeEventListener(MUSIC_NOTE_SYNC_EVENT, handleStructureSync as EventListener);
+      window.removeEventListener('online', checkLegacyOnReconnect);
+      const timer = legacyMusicNoteFolderCheckTimers.get(uid);
+      if (timer !== undefined) window.clearTimeout(timer);
+      legacyMusicNoteFolderCheckTimers.delete(uid);
+      // Keep unverified folder previews in local cache, so reopening will read
+      // canonical. No background Firestore read after unmount/logout.
+    };
   }, [user?.uid]);
 
   useEffect(() => {
@@ -2694,8 +3104,11 @@ updates: draft.updates,
     // Preserve app301's 60-second batching while the app is simply hidden.
     // An actual page exit still uses the original pending-only pagehide path.
     window.addEventListener('pagehide', flushOnPageHide);
+    const retryOnOnline = () => retryMusicNoteFolderStructureBatch(uid);
+    window.addEventListener('online', retryOnOnline);
     return () => {
       window.removeEventListener('pagehide', flushOnPageHide);
+      window.removeEventListener('online', retryOnOnline);
     };
   }, [user?.uid]);
 
@@ -2710,11 +3123,29 @@ updates: draft.updates,
     options: { immediate?: boolean } = {},
   ) => {
     if (!user?.uid) return;
+    if (options.immediate) markMusicNoteFolderEdited(user.uid, mode);
     const normalized = normalizeMusicNoteFolders(
       folders,
       mode === 'sharedNote' ? DEFAULT_SHARED_NOTE_FOLDERS : DEFAULT_MY_NOTE_FOLDERS,
     );
     const structureVersion = getNextMusicNoteStructureVersion(user.uid);
+    // Capture the pre-edit view before optimistic RTDB/cache publication.
+    // A server transaction may commit only if that mode has not changed
+    // since this device last saw it. A missing local mode is represented by null.
+    const folderSession = musicNoteStructureSharedSessions.get(user.uid)?.data;
+    const storedPreviousMode = folderSession?.musicNoteFolders?.[mode];
+    const legacyPreviousMode = mode === 'myNote' ? folderSession?.myNoteFolders : folderSession?.sharedNoteFolders;
+    // The UI already displays the normalized old top-level field. Capture
+    // that identical view for the first V2 compare-and-swap transaction.
+    const previousMode = Array.isArray(storedPreviousMode) ? storedPreviousMode
+      : Array.isArray(legacyPreviousMode) ? normalizeMusicNoteFolders(
+        legacyPreviousMode, mode === 'sharedNote' ? DEFAULT_SHARED_NOTE_FOLDERS : DEFAULT_MY_NOTE_FOLDERS,
+      ) : null;
+    const pendingBase = getPendingMusicNoteFolderStructureBatch(user.uid)?.[mode]?.baseFolders;
+    // Immediate folder deletion must use the pre-batch baseline, not an
+    // optimistic rename made moments earlier but not yet saved to Firestore.
+    const baseFolders = pendingBase === null || Array.isArray(pendingBase)
+      ? pendingBase : Array.isArray(previousMode) ? previousMode : null;
     const folderItems = normalized.map((folder, index) => ({
       id: folder.id,
       title: folder.title,
@@ -2733,13 +3164,22 @@ updates: draft.updates,
     };
 
     if (options.immediate) {
-      await runV1MutationBoundary({
-        domain: 'musicNote',
-        operation: 'structure-update',
-        uid: user.uid,
-        affectedCount: 1,
-        syncStructure: structureSyncPatch,
-      }, setDoc(doc(db, 'user_structures', user.uid), structureSyncPatch, { merge: true }));
+      try {
+        await runV1MutationBoundary({
+          domain: 'musicNote',
+          operation: 'structure-update',
+          uid: user.uid,
+          affectedCount: 1,
+          syncStructure: structureSyncPatch,
+        }, writeMusicNoteStructureIfNewer(user.uid, structureSyncPatch, [
+          { mode, folders: baseFolders },
+        ]));
+      } catch (error) {
+        // A failed immediate delete must not lose its latest folder intent.
+        // Keep it as ordinary pending for safe recovery; do not claim saved.
+        queueMusicNoteFolderStructureBatch(user.uid, mode, folderItems, structureVersion, baseFolders);
+        throw error;
+      }
       markMusicNoteFolderStructureCommitted(user.uid, mode, structureVersion);
       publishMusicNoteStructureSession(user.uid, structureSyncPatch, structureVersion, true);
       return;
@@ -2748,23 +3188,26 @@ updates: draft.updates,
     // app296 — folder metadata is local/RTDB-first. The other device sees this
     // immediately, while Firestore canonical persistence collapses to the final
     // My/Shared structure after 60 seconds of quiet.
-    publishMusicNoteStructureSession(user.uid, structureSyncPatch, structureVersion, true);
+    publishMusicNoteStructureSession(user.uid, structureSyncPatch, structureVersion, false);
     // Persist the pending final state before waiting on the network so reload,
     // app backgrounding, or a failed RTDB request cannot lose the canonical intent.
-    queueMusicNoteFolderStructureBatch(user.uid, mode, folderItems, structureVersion);
+    queueMusicNoteFolderStructureBatch(user.uid, mode, folderItems, structureVersion, baseFolders);
     let finalVersion = structureVersion;
     try {
       const liveVersion = await publishMusicNoteStructureDelta(user.uid, structureSyncPatch);
+      reportMusicNoteFolderDelivery(user.uid, structureVersion, 'sent');
       finalVersion = Math.max(finalVersion, Number(liveVersion || 0));
     } catch (error) {
+      reportMusicNoteFolderDelivery(user.uid, structureVersion, 'failed');
       console.warn('Music Note folder live sync signal failed; canonical batch remains queued.', error);
     }
-    if (finalVersion !== structureVersion) {
+    if (finalVersion !== structureVersion && promoteMusicNoteFolderStructureVersion(
+      user.uid, mode, structureVersion, finalVersion,
+    )) {
       publishMusicNoteStructureSession(user.uid, {
         ...structureSyncPatch,
         musicNoteStructureVersion: finalVersion,
-      }, finalVersion, true);
-      queueMusicNoteFolderStructureBatch(user.uid, mode, folderItems, finalVersion);
+      }, finalVersion, false);
     }
   };
 
@@ -7414,6 +7857,15 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       </div>
       )}
 
+      {!isMusicNoteSharedView && user?.uid && (
+        <div className="soridraw-musicnote-region-top flex justify-end" data-selection-keep="true">
+          <button type="button" onClick={() => void openFolderRecovery()}
+            className="text-[11px] font-semibold text-white/45 underline underline-offset-4 hover:text-[#FFC1BC]">
+            폴더 충돌 기록 확인
+          </button>
+        </div>
+      )}
+
       {!isMusicNoteSharedView && (
       <div className="soridraw-musicnote-region-top mt-2 md:mt-3 space-y-4 md:space-y-5">
         <div className="soridraw-responsive-top-controls soridraw-stable-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
@@ -8645,6 +9097,139 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       </AnimatePresence>
 
       <AnimatePresence>
+        {folderRecoveryOpen && user?.uid && (
+          <motion.div data-selection-keep="true" data-floating-menu="true"
+            className="fixed inset-0 z-[330] flex items-center justify-center bg-black/75 px-3 py-5 backdrop-blur-sm"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => { if (!folderRecoveryBusy) { setFolderRecoveryOpen(false); setFolderRecoveryConfirm(null); } }}>
+            <motion.div role="dialog" aria-modal="true" aria-label="뮤직노트 폴더 충돌 기록"
+              className="w-full max-w-[560px] max-h-[85vh] overflow-y-auto rounded-2xl border border-white/15 bg-[#181818] p-5 text-white shadow-2xl"
+              onClick={(event) => event.stopPropagation()}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-bold">뮤직노트 폴더 충돌 기록</h3>
+                  <p className="mt-1 text-xs text-white/60">최신 기록 1개를 먼저 확인합니다. 이전 기록은 요청할 때만 읽으며 자동 복원되지 않습니다.</p>
+                </div>
+                <button type="button" aria-label="닫기" disabled={folderRecoveryBusy}
+                  onClick={() => { folderRecoveryRequestRef.current += 1; setFolderRecoveryOpen(false); setFolderRecoveryConfirm(null); setFolderRecoverySelectedId(null); setFolderRecoveryDetailLoading(false); setFolderRecoveryOlderLoading(false); }}
+                  className="p-2 text-white/70 hover:text-white"><X className="h-4 w-4" /></button>
+              </div>
+              {folderRecoveryLoading && <p className="mt-5 text-sm text-white/70">기록을 확인하고 있습니다.</p>}
+              {!folderRecoveryLoading && !folderRecoveryRecords.length && !folderLegacyComparison?.changedModes.length && !folderRecoveryError && (
+                <p className="mt-5 text-sm text-white/60">확인 가능한 폴더 충돌 기록이 없습니다.</p>
+              )}
+              {folderRecoveryError && <p role="alert" className="mt-4 text-sm text-rose-300">{folderRecoveryError}</p>}
+              {folderLegacyComparison && folderLegacyComparison.changedModes.length > 0 && (
+                <section className="mt-4 rounded-xl bg-white/[0.04] p-3">
+                  <p className="mb-2 text-sm font-bold">구버전 PC · 신버전 폴더 비교</p>
+                  <p className="mb-3 text-xs text-white/60">두 저장소의 내용을 비교합니다. 선택만으로는 저장되지 않습니다. 다른 기기가 다시 수정했다면 복원을 중단합니다.</p>
+                  {folderLegacyComparison.changedModes.map(mode => (
+                    <div key={mode} className="mb-3">
+                      <p className="mb-2 text-xs font-semibold">{mode === 'myNote' ? '마이 노트' : '공유 노트'}</p>
+                      {(['modern', 'legacy'] as const).map(choice => {
+                        const list = folderLegacyComparison[choice === 'modern' ? 'modernFolders' : 'legacyFolders'][mode] || [];
+                        const selected = folderLegacyConfirm?.mode === mode && folderLegacyConfirm.choice === choice;
+                        return (
+                          <button type="button" key={choice} disabled={folderRecoveryBusy}
+                            onClick={() => { setFolderLegacyConfirm({ mode, choice }); setFolderRecoveryConfirm(null); setFolderRecoveryError(''); }}
+                            className={`mb-2 block w-full rounded-lg bg-black/25 px-3 py-2 text-left text-xs ${selected ? 'ring-1 ring-[#FF7A72]' : ''}`}>
+                            <strong>{choice === 'modern' ? '신버전 최신 폴더 유지' : '구버전 PC 편집 선택'}</strong>
+                            <span className="ml-2 text-white/60">폴더 {list.length}개</span>
+                            <p className="mt-1 break-words text-white/65">
+                              {list.map((folder: any) => String(folder?.title || folder?.name || '이름 없음')).join(' · ').slice(0, 250)}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
+                  {folderLegacyConfirm && (
+                    <div className="mt-2 rounded-lg bg-amber-300/10 p-3 text-xs">
+                      <p>선택한 {folderLegacyConfirm.choice === 'legacy' ? '구버전 PC' : '신버전'} 상태를 확정합니다. 구버전 원본은 변경하지 않습니다.</p>
+                      <div className="mt-3 flex justify-end gap-2">
+                        <button type="button" disabled={folderRecoveryBusy} onClick={() => setFolderLegacyConfirm(null)}>취소</button>
+                        <button type="button" disabled={folderRecoveryBusy} onClick={() => void confirmLegacyFolderChoice()}
+                          className="rounded-lg bg-[#FF7A72] px-3 py-2 font-bold text-white">
+                          {folderRecoveryBusy ? '서버 확인 중' : '선택한 상태로 복원 확정'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
+              <div className="mt-4 space-y-3">
+                {folderRecoveryRecords.map(record => (
+                  <div key={record.id} className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
+                    <button type="button"
+                      disabled={folderRecoveryBusy || folderRecoveryDetailLoading}
+                      onClick={() => void openFolderRecoveryDetail(record)}
+                      className="w-full rounded-lg bg-black/20 p-2 text-left text-xs text-white/85 disabled:opacity-50">
+                      <strong>{record.observedAtMs > 0 ? new Date(record.observedAtMs).toLocaleString('ko-KR') : '충돌 기록'}</strong>
+                      <span className="ml-2 text-white/60">
+                        {record.changedModes.map(mode => mode === 'myNote' ? '마이 노트' : '공유 노트').join(' · ')}
+                      </span>
+                      <p className="mt-1 text-white/60">
+                        {folderRecoverySelectedId === record.id ? '상세 접기'
+                          : folderRecoveryDetailLoading ? '상세 확인 중'
+                          : '이 기록의 덮어쓰기 전·후 폴더 확인'}
+                      </p>
+                    </button>
+                    {folderRecoverySelectedId === record.id && record.detailLoaded && (
+                      <div className="mt-3">
+                    {record.changedModes.map(mode => (
+                      <div key={mode} className="mb-3 last:mb-0">
+                        <p className="mb-2 text-sm font-bold">{mode === 'myNote' ? '마이 노트' : '공유 노트'}</p>
+                        {(['before', 'after'] as const).map(choice => {
+                          const list = record[choice === 'before' ? 'beforeFolders' : 'afterFolders'][mode] || [];
+                          const isSelected = folderRecoveryConfirm?.id === record.id
+                            && folderRecoveryConfirm.mode === mode && folderRecoveryConfirm.choice === choice;
+                          return (
+                            <button type="button" key={choice} disabled={folderRecoveryBusy}
+                              onClick={() => { setFolderRecoveryConfirm({ id: record.id, mode, choice }); setFolderRecoveryError(''); }}
+                              className={`mb-2 block w-full rounded-lg border px-3 py-2 text-left text-xs disabled:opacity-50 ${isSelected ? 'border-[#FF7A72] bg-[#FF7A72]/15' : 'border-white/15 bg-black/20'}`}>
+                              <strong>{choice === 'before' ? '덮어쓰기 전' : '덮어쓰기 후'}</strong>
+                              <span className="ml-2 text-white/60">폴더 {list.length}개</span>
+                              <p className="mt-1 break-words text-white/65">
+                                {list.map((folder: any) => String(folder?.title || folder?.name || '이름 없음')).join(' · ').slice(0, 250)}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {!folderRecoveryLoading && !folderRecoveryShowingOlder && folderRecoveryRecords.length > 0 && (
+                <button type="button" disabled={folderRecoveryOlderLoading || folderRecoveryBusy || folderRecoveryDetailLoading}
+                  onClick={() => void openOlderFolderRecovery()}
+                  className="mt-3 w-full rounded-lg bg-white/[0.05] px-3 py-2 text-xs text-white/70 disabled:opacity-50">
+                  {folderRecoveryOlderLoading ? '이전 기록 확인 중' : '이전 기록 더 보기 (최대 10건)'}
+                </button>
+              )}
+              {folderRecoveryConfirm && (
+                <div className="mt-4 rounded-xl border border-amber-300/30 bg-amber-200/5 p-3 text-sm">
+                  <p>선택한 <strong>{folderRecoveryConfirm.mode === 'myNote' ? '마이 노트' : '공유 노트'}</strong> 폴더를
+                    <strong>{folderRecoveryConfirm.choice === 'before' ? ' 덮어쓰기 전' : ' 덮어쓰기 후'}</strong> 상태로 복원합니다.</p>
+                  <p className="mt-2 text-xs text-white/60">현재 서버 폴더가 충돌 직후 상태와 달라졌으면 복원을 거절합니다. 곡 원본은 수정하지 않습니다.</p>
+                  <div className="mt-3 flex justify-end gap-2">
+                    <button type="button" disabled={folderRecoveryBusy} onClick={() => setFolderRecoveryConfirm(null)}
+                      className="rounded-lg border border-white/20 px-3 py-2 text-xs">취소</button>
+                    <button type="button" disabled={folderRecoveryBusy} onClick={() => void confirmFolderRecovery()}
+                      className="rounded-lg bg-[#FF7A72] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
+                      {folderRecoveryBusy ? '서버 확인 중' : '선택한 상태로 복원 확정'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {musicNoteFolderPicker && (
           <motion.div
             data-selection-keep="true"
@@ -8757,8 +9342,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       </AnimatePresence>
 
       <AnimatePresence>
-        {favoriteToastMessage && (
+        {(folderSaveMessage || favoriteToastMessage) && (
           <motion.div
+            role="status"
             initial={{ opacity: 0, y: 14, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 14, scale: 0.96 }}
@@ -8769,9 +9355,14 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             )}
           >
             <span className="inline-flex items-center gap-2 whitespace-pre-line">
-              <Check className="h-4 w-4 text-[#FF7A72]" />
-              {favoriteToastMessage}
+              {!folderSaveMessage || folderSaveStatus?.state === 'server-confirmed'
+                ? <Check className="h-4 w-4 text-[#FF7A72]" /> : null}
+              {folderSaveMessage || favoriteToastMessage}
             </span>
+            {folderSaveStatus?.state === 'failed' && user?.uid ? (
+              <button type="button" className="ml-2 underline"
+                onClick={() => retryMusicNoteFolderStructureBatch(user.uid)}>저장 다시 시도</button>
+            ) : null}
           </motion.div>
         )}
       </AnimatePresence>

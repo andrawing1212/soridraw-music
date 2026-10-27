@@ -54,6 +54,31 @@ jobs:
           sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
           echo "LOCKED_PREVIEW_SHA=$target"
 
+      - name: APP515 refuse PREVIEW rollback to V2-unaware folder reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The candidate checkout can be old; load the guard from the
+          # current preview ref, never the rollback target SHA.
+          if git cat-file -e origin/preview:scripts/verify-515-v2-release-floor.mjs 2>/dev/null; then
+            git show origin/preview:scripts/verify-515-v2-release-floor.mjs > "$RUNNER_TEMP/app515-v2-release-floor.mjs"
+            node "$RUNNER_TEMP/app515-v2-release-floor.mjs" "$PWD"
+          fi
+
+      - name: APP515 require active release controller before first V2 PREVIEW
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -Fq "'folder_state', 'v2'" src/services/musicNoteFolderStructureBatch.ts; then
+            controller="$(git show origin/main:.github/workflows/soridraw-release-promotion.yml)"
+            grep -Fq "APP515_V2_TEST_ROLLBACK_BLOCKED_HOLD" <<<"$controller" || {
+              echo "APP515_V2_PREVIEW_BLOCKED: update the live main release controller first"; exit 1;
+            }
+            grep -Fq "APP515_V2_PRODUCTION_ROLLBACK_BLOCKED_HOLD" <<<"$controller" || {
+              echo "APP515_V2_PREVIEW_BLOCKED: production rollback guard not live"; exit 1;
+            }
+          fi
+
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:

@@ -357,6 +357,9 @@ try {
           (resolve, reject) => { inFlightReads.push({ uid, documentId, resolve, reject }); },
         ),
       };
+      if (name === '../lib/userDataEngine') return {
+        inspectExactSharedMusicNoteCatalog517: async () => ({ materialized: false, membership: null, revision: 0, itemCount: null }),
+      };
       throw new Error('unexpected component import: ' + name);
     },
   });

@@ -638,6 +638,8 @@ for (const failure of ['denied', 'aborted']) {
   }));
   d.page.subscribe(uid, () => {});
   assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title, 'pending-reload');
+  assert.equal(d.page.session().verified, false,
+    'warm pending stays unverified even if an older disk cache claimed verified');
   assert.equal(d.reads, 0); assert.equal(d.attempts, 0);
   console.log('APP514_PENDING_RELOAD_OVER_STALE_VERIFIED_CACHE_R0_W0=PASS');
 }

@@ -182,6 +182,11 @@ try {
   }, { merge: true }));
   assert.equal((await getDoc(oldPc)).data()?.musicNoteFolders?.myNote?.[0]?.title,
     'legitimate-old-PC-save');
+  // The modern B canonical value is already lost here if the trigger archive
+  // fails or never runs. This is a deliberate negative deployment gate.
+  assert.notEqual((await getDoc(oldPc)).data()?.musicNoteFolders?.myNote?.[0]?.title,
+    initial.musicNoteFolders.myNote[0].title);
+  console.log('APP515_SINGLE_DOCUMENT_LEGACY_OVERWRITE_ARCHIVE_FAILURE=KNOWN_RISK');
   await assertFails(setDoc(doc(coexistence.authenticatedContext('not-owner').firestore(), path), {
     musicNoteFolders: { myNote: [{ id: 'f', title: 'forged' }] },
   }, { merge: true }));
@@ -197,7 +202,17 @@ const separateV2Candidate = liveRules.replace(ownerParent, ownerParent + `
     match /user_structures/{uid}/folder_state/{stateId} {
       allow get: if stateId == 'v2' && isOwner(uid);
       allow list, delete: if false;
-      allow create, update: if stateId == 'v2' && isOwner(uid);
+      allow create: if stateId == 'v2' && isOwner(uid)
+        && request.resource.data.schemaVersion == 2
+        && request.resource.data.musicNoteStructureVersion is number
+        && request.resource.data.musicNoteStructureVersion > 0
+        && request.resource.data.musicNoteStructureWriterToken is string;
+      allow update: if stateId == 'v2' && isOwner(uid)
+        && request.resource.data.schemaVersion == 2
+        && request.resource.data.musicNoteStructureVersion is number
+        && request.resource.data.musicNoteStructureVersion > resource.data.musicNoteStructureVersion
+        && request.resource.data.musicNoteStructureWriterToken is string
+        && request.resource.data.musicNoteStructureWriterToken != resource.data.musicNoteStructureWriterToken;
     }
 `);
 assert.notEqual(separateV2Candidate, liveRules);
@@ -223,6 +238,7 @@ try {
   // The new B device saves to its independent document using one W1.
   await assertSucceeds(setDoc(v2Path, {
     schemaVersion: 2, musicNoteStructureVersion: 100001,
+    musicNoteStructureWriterToken: 'mobile-b-token-100001',
     musicNoteFolders: {
       myNote: [{ id: 'b', title: 'Mobile B latest' }],
       sharedNote: [{ id: 's', title: 'Shared original' }],
@@ -233,6 +249,16 @@ try {
   await assertSucceeds(setDoc(legacyPath, {
     musicNoteStructureVersion: 100000,
     musicNoteFolders: { myNote: [{ id: 'a', title: 'PC A unsaved edit' }] },
+  }, { merge: true }));
+  await assertFails(setDoc(v2Path, {
+    schemaVersion: 2, musicNoteStructureVersion: 100000,
+    musicNoteStructureWriterToken: 'stale-modern-replay',
+    musicNoteFolders: { myNote: [{ id: 'x', title: 'stale modern' }] },
+  }, { merge: true }));
+  await assertFails(setDoc(v2Path, {
+    schemaVersion: 2, musicNoteStructureVersion: 100002,
+    musicNoteStructureWriterToken: 'mobile-b-token-100001',
+    musicNoteFolders: { myNote: [{ id: 'x', title: 'same token' }] },
   }, { merge: true }));
   const bSaved = (await getDoc(v2Path)).data();
   const aSaved = (await getDoc(legacyPath)).data();

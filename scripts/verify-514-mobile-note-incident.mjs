@@ -639,6 +639,12 @@ console.log('APP514_EXACT_FAVORITE_EXISTS_MISSING_REMOVED_DENIED_THREE_DEVICES_R
 }
 
 
+// Offline confirmation must remain retryable on reconnect; the event
+// handler is installed only on Music Note and reads only for unverified data.
+assert.match(page, /window\.addEventListener\('online', checkLegacyOnReconnect\)/);
+assert.match(page, /if \(current && !current\.verified\) void ensureMusicNoteStructureFresh\(uid, current, true\)/);
+console.log('APP514_OLD_PREVIEW_RECONNECT_CONFIRMATION_ONLY_IF_UNVERIFIED=PASS');
+
 // Mixed-version PC: old browser broadcasts a folder preview immediately,
 // but its delayed setDoc is denied by the new server guard. Other devices
 // briefly show the preview, then self-correct from canonical exactly once.

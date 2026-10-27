@@ -89,13 +89,13 @@ export const restoreMusicNoteFolderRecovery = async (
     const currentVersion = Number.isFinite(versionRaw) && versionRaw > 0 ? Math.floor(versionRaw) : 0;
     // 'After' may already be the current canonical state. Do not charge a
     // redundant W1 or broadcast if the user just confirmed that choice.
-    if (JSON.stringify(selected) === JSON.stringify(expected)) {
+    if (JSON.stringify(selected) === JSON.stringify(baseline)) {
       return { folders: selected as unknown[], version: currentVersion, changed: false };
     }
     // Removing a folder ID can orphan saved songs without knowing their
     // membership. This recovery UI must NEVER silently delete folder IDs.
     const selectedIds = new Set(selected.map((item: any) => String(item?.id || '')));
-    if (expected.some((item: any) => !selectedIds.has(String(item?.id || '')))) {
+    if (baseline.some((item: any) => !selectedIds.has(String(item?.id || '')))) {
       throw new Error('이 복원에는 폴더 삭제가 포함됩니다. 곡 연결을 확인하지 않아 안전을 위해 중단했습니다.');
     }
     const version = currentVersion + 1;

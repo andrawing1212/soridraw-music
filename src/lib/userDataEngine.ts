@@ -1081,7 +1081,11 @@ export const reconcileExactMusicNoteCatalogFromCanonical516 = async (
   // R2 Catalog for its current complete state; no Firestore collection scans.
   const remote = await readRemoteCatalogSnapshot('musicNote', safeUid, 0, null, false);
   if (!remote || auth.currentUser?.uid !== safeUid) return 'deferred';
-  if (remote.items.some((item) => String(item?.id || '') === safeId)) return 'already-present';
+  const matching = remote.items.find((item) => String(item?.id || '') === safeId);
+  if (matching && !isMusicNoteItemRemoved(matching)) return 'already-present';
+  // Never create a second row if a legacy alias points to this exact document.
+  if (remote.items.some((item) => String(item?.id || '') !== safeId
+    && String(item?.firestoreId || '') === safeId)) return 'deferred';
 
   // A legacy content ID must never override the exact Firestore document ID.
   const source = { ...canonical, id: safeId, firestoreId: safeId };
@@ -1089,7 +1093,7 @@ export const reconcileExactMusicNoteCatalogFromCanonical516 = async (
   if (!projection || projection.id !== safeId) return 'deferred';
   const built = buildCatalogDelta('musicNote', remote, [source], Date.now());
   if (!built || built.delta.upserts.length !== 1 || built.delta.deletedIds.length !== 0
-    || built.nextSnapshot.itemCount !== remote.itemCount + 1
+    || built.nextSnapshot.itemCount !== remote.itemCount + (matching ? 0 : 1)
     || auth.currentUser?.uid !== safeUid) return 'deferred';
   const published = await publishRemoteCatalogDelta(safeUid, built.delta);
   if (!published || published.conflict || published.itemCount !== built.nextSnapshot.itemCount
@@ -1098,7 +1102,7 @@ export const reconcileExactMusicNoteCatalogFromCanonical516 = async (
   // An ACK is not enough. Re-read shared R2 and verify exact membership before
   // telling other devices that this canonical item is available.
   const confirmed = await readRemoteCatalogSnapshot('musicNote', safeUid, 0, null, false);
-  return confirmed?.items.some((item) => String(item?.id || '') === safeId)
+  return confirmed?.items.some((item) => String(item?.id || '') === safeId && !isMusicNoteItemRemoved(item))
     ? 'repaired' : 'deferred';
 };
 

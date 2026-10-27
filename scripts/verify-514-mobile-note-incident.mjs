@@ -517,11 +517,11 @@ for (const failure of ['denied', 'aborted']) {
   assert.equal(effective(canonical).musicNoteFolders.myNote[1].title, 'new-canonical');
   a.held.shift()(); await tick();
   assert.equal(a.batch.getMusicNoteFolderSaveStatus(uid).state, 'failed');
-  assert.equal(c.reads, 1, 'only actual stale conflict causes canonical refresh');
+  assert.equal(c.reads, 2, 'only actual stale conflict reads legacy cards and v2 folders');
   assert.equal(c.page.session().data.musicNoteFolders.myNote[1].title, 'new-canonical');
   assert.equal(c.batch.getObservedMusicNoteStructureVersion(uid), 0, 'receivers do not forge commit ACK');
   assert.equal(a.batch.getObservedMusicNoteStructureVersion(uid), 100_001);
-  console.log('APP514_P1_RTDB_REJECTED_PREVIEW_REFRESHES_WARM_RECEIVER_R1=PASS');
+  console.log('APP515_P1_RTDB_REJECTED_PREVIEW_REFRESHES_WARM_RECEIVER_R2=PASS');
 }
 
 // A slow device clock cannot permanently strand a legitimate next edit:
@@ -574,7 +574,7 @@ for (const failure of ['denied', 'aborted']) {
   const d = device(bus(), { quota: true }); d.holdRead();
   d.page.subscribe(uid, () => {});
   await d.page.persist('myNote', folders('new-during-read'));
-  d.readsHeld.shift()(); await tick();
+  d.readsHeld.splice(0).forEach(release => release()); await tick();
   assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title, 'new-during-read');
   console.log('APP514_STALE_HYDRATION_CANNOT_OVERWRITE_EDIT=PASS');
 }
@@ -648,19 +648,19 @@ console.log('APP514_EXACT_FAVORITE_EXISTS_MISSING_REMOVED_DENIED_THREE_DEVICES_R
   effective(canonical).musicNoteFolders.myNote = folders('new-from-phone');
   d.setProfileVersion(102);
   await tick();
-  assert.equal(d.reads, 1, 'new profile revision gets one canonical read');
+  assert.equal(d.reads,2, 'new profile revision gets one canonical read');
   assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title, 'new-from-phone');
   d.setProfileVersion(102);
   await tick();
-  assert.equal(d.reads, 1, 'unchanged profile must not reread');
+  assert.equal(d.reads,2, 'unchanged profile must not reread');
   effective(canonical).musicNoteStructureVersion = 303;
   effective(canonical).musicNoteFolders.myNote = folders('newer-from-phone');
   d.setProfileVersion(103);
   await tick();
-  assert.equal(d.reads, 2, 'future profile updates still work with fast local clock');
+  assert.equal(d.reads,4, 'future profile updates still work with fast local clock');
   assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title, 'newer-from-phone');
   assert.equal(JSON.parse(d.records.get(cacheKey)).profileVersionSeen, 103);
-  console.log('APP514_FAST_CLOCK_LONG_OPEN_PC_RECEIVES_PHONE_UPDATES_R1_PER_CHANGE=PASS');
+  console.log('APP515_FAST_CLOCK_LONG_OPEN_PC_RECEIVES_PHONE_UPDATES_R2_PER_CHANGE=PASS');
 }
 
 // A pre-fix browser cache lacks the server revision watermark. It needs
@@ -678,13 +678,13 @@ console.log('APP514_EXACT_FAVORITE_EXISTS_MISSING_REMOVED_DENIED_THREE_DEVICES_R
   d.setProfileVersion(120, false);
   d.page.subscribe(uid, () => {});
   await tick();
-  assert.equal(d.reads, 1, 'legacy high-clock cache gets a one-time server correction');
+  assert.equal(d.reads,2, 'legacy high-clock cache gets a one-time server correction');
   assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title, 'authoritative');
   assert.equal(JSON.parse(d.records.get(cacheKey)).profileVersionSeen, 120);
   d.setProfileVersion(120);
   await tick();
-  assert.equal(d.reads, 1, 'legacy upgrade does not start polling');
-  console.log('APP514_LEGACY_CLOCK_CACHE_ONE_TIME_AUTHORITATIVE_UPGRADE_R1=PASS');
+  assert.equal(d.reads,2, 'legacy upgrade does not start polling');
+  console.log('APP515_LEGACY_CLOCK_CACHE_ONE_TIME_AUTHORITATIVE_UPGRADE_R2=PASS');
 }
 
 // Two device updates while first server read is still in flight must not
@@ -704,14 +704,14 @@ console.log('APP514_EXACT_FAVORITE_EXISTS_MISSING_REMOVED_DENIED_THREE_DEVICES_R
   d.holdRead();
   d.setProfileVersion(501);
   await tick();
-  assert.equal(d.reads,1);
+  assert.equal(d.reads,2);
   d.setProfileVersion(502);
   effective(canonical).musicNoteStructureVersion=502;
   effective(canonical).musicNoteFolders.myNote=folders('second-phone-edit');
   d.unholdRead();
-  d.readsHeld.shift()();
+  d.readsHeld.splice(0).forEach(release => release());
   await tick();
-  assert.equal(d.reads,2,'queued newer profile signal must not be swallowed');
+  assert.equal(d.reads,4,'queued newer profile signal must not be swallowed');
   assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title,'second-phone-edit');
   assert.equal(JSON.parse(d.records.get(cacheKey)).profileVersionSeen,502);
   console.log('APP514_LONG_RUNNING_READ_RETRIES_LATEST_REMOTE_PROFILE_ONCE=PASS');
@@ -749,12 +749,12 @@ console.log('APP514_OLD_PREVIEW_RECONNECT_CONFIRMATION_ONLY_IF_UNVERIFIED=PASS')
   await d.advance(64_999);
   assert.equal(d.reads,0,'legacy confirmation not polled while 60s batch can settle');
   await d.advance(1);
-  assert.equal(d.reads,1,'one bounded server confirmation for old-client preview');
+  assert.equal(d.reads,2,'one bounded server confirmation for old-client preview');
   assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title,'phone-saved',
     'blocked old write cannot remain on phone screen');
   assert.equal(d.page.session().verified,true);
   await d.advance(300_000);
-  assert.equal(d.reads,1,'no recurring read after canonical correction');
+  assert.equal(d.reads,2,'no recurring read after canonical correction');
   console.log('APP514_OLD_PC_REJECTED_WRITE_PHONE_UI_CORRECTS_ONCE=PASS');
 }
 
@@ -777,7 +777,7 @@ console.log('APP514_OLD_PREVIEW_RECONNECT_CONFIRMATION_ONLY_IF_UNVERIFIED=PASS')
   await d.advance(25_000);
   assert.equal(d.reads,0,'do not verify before the second edit settles');
   await d.advance(40_000);
-  assert.equal(d.reads,1);
+  assert.equal(d.reads,2);
   assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title,'server-new');
   console.log('APP514_OLD_PC_REPEATED_EDITS_ONE_TRAILING_CANONICAL_READ=PASS');
 }
@@ -803,11 +803,11 @@ console.log('APP514_OLD_PREVIEW_RECONNECT_CONFIRMATION_ONLY_IF_UNVERIFIED=PASS')
   await d.advance(64_999);
   assert.equal(d.reads,0);
   await d.advance(1);
-  assert.equal(d.reads,1,'one confirmation only after the normal save window');
+  assert.equal(d.reads,2,'one confirmation only after the normal save window');
   assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title,'server-original');
   assert.equal(d.page.session().verified,true);
   await d.advance(600_000);
-  assert.equal(d.reads,1,'no steady polling after canonical reconciliation');
+  assert.equal(d.reads,2,'no steady polling after canonical reconciliation');
   assert.equal(d.attempts,0);
   console.log('APP514_NEW_PHONE_UNCOMMITTED_RTDB_PREVIEW_CORRECTS_ONCE=PASS');
 }
@@ -828,7 +828,7 @@ console.log('APP514_OLD_PREVIEW_RECONNECT_CONFIRMATION_ONLY_IF_UNVERIFIED=PASS')
   effective(canonical).musicNoteFolders.myNote=folders('old-PC-valid');
   effective(canonical).musicNoteStructureVersion=21;
   await d.advance(65_000);
-  assert.equal(d.reads,1);
+  assert.equal(d.reads,2);
   assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title,'old-PC-valid');
   console.log('APP514_OLD_PC_LEGITIMATE_SAVED_EDIT_SURVIVES_CONFIRM=PASS');
 }
@@ -845,7 +845,7 @@ console.log('APP514_OLD_PREVIEW_RECONNECT_CONFIRMATION_ONLY_IF_UNVERIFIED=PASS')
   d.setProfileVersion(10,false);
   d.page.subscribe(uid,()=>{});
   await tick();
-  assert.equal(d.reads,1);
+  assert.equal(d.reads,2);
   assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title,'actual');
   console.log('APP514_REOPEN_OLD_PREVIEW_CACHE_CORRECTS_ONCE=PASS');
 }

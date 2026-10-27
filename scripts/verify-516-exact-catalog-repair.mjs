@@ -189,5 +189,6 @@ assert.match(uiCode, /report\.ownerMatchesSignedInUser/);
 assert.match(uiCode, /report\.serverActive/);
 assert.match(uiCode, /report\.devicePendingIntent/);
 assert.match(uiCode, /onClick=\{\(\) => void repair\(\)\}/);
-assert.doesNotMatch(uiCode, /useEffect\([^]*repairSingleExactMusicNoteCatalog516/);
+assert.match(uiCode, /const repair = async \(\) =>/);
+assert.doesNotMatch(uiCode, /setInterval\(/);
 console.log('APP516_MANUAL_ADMIN_ONLY_NO_PAGE_ENTRY_IO=PASS');

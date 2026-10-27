@@ -251,6 +251,12 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Oversized immutable recovery records only; read exact parts by ID.
+    match /user_structures/{uid}/legacy_recovery/{recoveryId}/parts/{partId} {
+      allow get: if isOwner(uid);
+      allow list, create, update, delete: if false;
+    }
+
     // SORIDRAW 902 user list bundle cache
     // Additive cache only: original favorites and suno_tracks remain authoritative.
     // Only the owner (or an app admin) can access the two fixed cache documents.

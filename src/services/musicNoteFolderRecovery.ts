@@ -1,6 +1,6 @@
 import { db } from '../firebase';
 import { collection, doc, getDoc, getDocFromServer, getDocs, limit, orderBy, query, runTransaction } from '../lib/firestoreMeasured';
-import { getPendingMusicNoteFolderStructureBatch, getMusicNoteFolderEditEpoch, type MusicNoteFolderModeKey } from './musicNoteFolderStructureBatch';
+import { getPendingMusicNoteFolderStructureBatch, getMusicNoteFolderEditEpoch, getMusicNoteLegacyFolderSignature, type MusicNoteFolderModeKey } from './musicNoteFolderStructureBatch';
 import { publishMusicNoteStructureDelta } from './userDomainSyncService';
 
 // Loaded only when the user opens the recovery dialog. No listener, polling,
@@ -202,8 +202,13 @@ export const getMusicNoteLegacyFolderComparison = async (
   if (!modern.exists()) return null; // no migration; legacy remains canonical
   const legacyFolders = legacy.data()?.musicNoteFolders || {};
   const modernFolders = modern.data()?.musicNoteFolders || {};
+  const signatures = modern.data()?.legacyBaseSignatures || {};
   const changedModes = (['myNote', 'sharedNote'] as const).filter(mode =>
     Array.isArray(legacyFolders[mode]) && Array.isArray(modernFolders[mode])
+    // Old branch is only a conflict candidate after its content diverges
+    // from the original migrated legacy view. New-only edits are not conflicts.
+    && (!signatures[mode]
+      || getMusicNoteLegacyFolderSignature(legacyFolders[mode]) !== signatures[mode])
     && logicalFolderView(legacyFolders[mode]) !== logicalFolderView(modernFolders[mode]));
   return {
     legacyFolders: Object.fromEntries(changedModes.map(mode => [mode, legacyFolders[mode]])),
@@ -264,6 +269,9 @@ export const restoreMusicNoteLegacyFolderChoice = async (
     txn.set(v2Ref, {
       schemaVersion: 2,
       musicNoteFolders: { [mode]: legacyNow },
+      // Reconciled old edit becomes the new comparison baseline. Unrelated
+      // mode signatures remain unchanged by merge:true nested-map semantics.
+      legacyBaseSignatures: { [mode]: getMusicNoteLegacyFolderSignature(legacyNow) },
       musicNoteStructureVersion: nextVersion,
       musicNoteStructureWriterToken: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     }, { merge: true });

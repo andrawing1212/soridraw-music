@@ -48,11 +48,17 @@ const expandRecovery = (history: any, parts: Record<string, string>): any => {
   }
   return expanded;
 };
-export const listMusicNoteFolderRecovery = async (uid: string): Promise<MusicNoteFolderRecoveryRecord[]> => {
+export const listMusicNoteFolderRecovery = async (
+  uid: string, showOlder = false,
+): Promise<MusicNoteFolderRecoveryRecord[]> => {
   if (!uid?.trim()) throw new Error('로그인이 필요합니다.');
   const recovery = collection(db, 'user_structures', uid, 'legacy_recovery');
-  const snapshot = await getDocs(query(recovery, orderBy('observedAtMs', 'desc'), limit(10)));
-  // Only the 10 manifest docs. NO bulk shard fan-out on dialog open.
+  // Firestore bills by documents returned, NOT by getDocs call count.
+  // Initial open: up to R1 for the newest manifest; on explicit request:
+  // up to R10 for the existing ten-record view (including the first).
+  // Neither path reads any large snapshot shards.
+  const snapshot = await getDocs(query(recovery, orderBy('observedAtMs', 'desc'), limit(showOlder ? 10 : 1)));
+  // Only bounded manifests. NO bulk shard fan-out on dialog open.
   return snapshot.docs.map(entry => {
     const value = entry.data();
     const modes = (['myNote', 'sharedNote'] as const).filter(mode =>

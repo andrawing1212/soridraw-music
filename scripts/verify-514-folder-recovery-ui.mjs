@@ -119,6 +119,52 @@ assert.match(triggerBody, /if \(signalResult\.status === "rejected"\) throw sign
 assert.match(triggerBody, /APP514_LEGACY_RECOVERY_ARCHIVE_FAILED/);
 console.log('APP514_LEGACY_ARCHIVE_INDEPENDENT_OF_PROFILE_SIGNAL_FAILURE=PASS');
 
+// Exercise the real Functions helper, not only a mocked UI record: when an
+// older tab overwrites one mode, both complete versions are preserved and
+// an unrelated mode is not mistakenly marked as changed.
+const functionExports = {};
+const functionHelper = readFileSync('functions/src/musicNoteStructureSync.ts', 'utf8');
+runInNewContext(ts.transpileModule(functionHelper, {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+}).outputText, {
+  exports: functionExports, Buffer,
+  require: name => {
+    if (name === 'node:util') return {
+      isDeepStrictEqual: (a, b) => JSON.stringify(a) === JSON.stringify(b),
+    };
+    throw new Error('unexpected Functions helper import ' + name);
+  },
+});
+const beforeLegacyWrite = {
+  musicNoteStructureWriterToken: 'modern-writer-12345',
+  musicNoteStructureVersion: 100001,
+  musicNoteFolders: {
+    myNote: [{id:'default',title:'Latest-phone-folder'}],
+    sharedNote: [{id:'shared',title:'Shared-untouched'}],
+  },
+};
+const afterLegacyWrite = {
+  ...copy(beforeLegacyWrite),
+  musicNoteStructureVersion: 100000,
+  musicNoteFolders: {
+    myNote: [{id:'default',title:'Older-PC-edit'}],
+    sharedNote: copy(beforeLegacyWrite.musicNoteFolders.sharedNote),
+  },
+};
+const archivedConflict = functionExports.buildLegacyMusicNoteFolderRecovery(beforeLegacyWrite, afterLegacyWrite);
+assert.ok(archivedConflict);
+assert.deepEqual(Array.from(archivedConflict.changedModes), ['myNote']);
+assert.equal(archivedConflict.beforeFolders.myNote[0].title,'Latest-phone-folder');
+assert.equal(archivedConflict.afterFolders.myNote[0].title,'Older-PC-edit');
+assert.equal(Object.hasOwn(archivedConflict.beforeFolders,'sharedNote'), false);
+assert.equal(functionExports.buildLegacyMusicNoteFolderRecovery(
+  beforeLegacyWrite, {...afterLegacyWrite, musicNoteStructureWriterToken:'new-modern-token-123'},
+), null, 'new current-client commits must not generate false legacy archives');
+assert.equal(functionExports.buildLegacyMusicNoteFolderRecovery(
+  beforeLegacyWrite, {...copy(beforeLegacyWrite), musicNoteCardState:{items:{a:{liked:true}}}},
+), null, 'card-only changes must not consume recovery writes');
+console.log('APP514_BACKEND_LEGACY_BEFORE_AFTER_SNAPSHOTS_EXACT_AND_CARD_ONLY_W0=PASS');
+
 const records=await exports.listMusicNoteFolderRecovery(uid);
 assert.equal(reads,1);
 assert.equal(records.length,1);

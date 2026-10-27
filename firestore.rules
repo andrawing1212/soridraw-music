@@ -253,7 +253,7 @@ service cloud.firestore {
       function validModernFolderState() {
         return stateId == 'v2'
           && request.resource.data.keys().hasOnly([
-            'schemaVersion', 'musicNoteFolders',
+            'schemaVersion', 'musicNoteFolders', 'legacyBaseSignatures',
             'musicNoteStructureVersion', 'musicNoteStructureWriterToken'
           ])
           && request.resource.data.keys().hasAll([
@@ -262,6 +262,9 @@ service cloud.firestore {
           ])
           && request.resource.data.schemaVersion == 2
           && request.resource.data.musicNoteFolders is map
+          && request.resource.data.legacyBaseSignatures is map
+          && request.resource.data.legacyBaseSignatures.get('myNote', '') is string
+          && request.resource.data.legacyBaseSignatures.get('sharedNote', '') is string
           && request.resource.data.musicNoteStructureVersion is number
           && request.resource.data.musicNoteStructureVersion > 0
           && request.resource.data.musicNoteStructureWriterToken is string

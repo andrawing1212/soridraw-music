@@ -1,3 +1,14 @@
+## CURRENT — app515 Music Note V2 릴리스 HOLD (2026-10-28 KST)
+- 현재 GitHub: `preview` 확인 HEAD `d983f4a68f18050c21294f691efe455fcd3b34a0`; app515 제품 Draft PR #512 HEAD `357686900da3abcbddb6a691d9a5c96f2f36e483`, 미병합·미배포, 최신 관련 CI 5/5 PASS(소스/가상 검사). 실서버·실기기 PASS 아님.
+- 릴리스 안전 PR #521은 별도 감사 PASS 후 `main` 병합 완료, 실제 `main` HEAD `b33fb67aeffebe9e09104175eb3fbab7cd15874b`. PREVIEW 수동 배포 및 TEST/PRODUCTION 구버전 자동 롤백 차단 소스 설치됨. 실제 배포 차단 실행은 미검증.
+- V2 후보는 구버전 부모 `user_structures/{uid}` 저장과 신버전 `user_structures/{uid}/folder_state/v2` 폴더 정본을 분리하고, 충돌/pending/ACK 미확정·수동 복원과 조회 비용을 보호. P1 집중 독립 감사 PASS 및 P2 소스 검토 기록은 PR #512에 보존. 신규 실기기 합격으로 해석 금지.
+- 공유 Firestore/Auth 실제 프로젝트 `soridraw-app-866a5`와 PREVIEW Hosting `soridraw`는 서로 다름. 공유 Rules release/Functions 상태, `asia-northeast3` 트리거·실청구 비용 및 구형 PC/신형 PC·모바일 혼합 인증 시험은 미검증.
+- 기존 PC·모바일 저장곡/가사/프롬프트/미디어/폴더/하트/로컬 pending·캐시 변경 금지. `먼 길을 돌아온 밤` 실제 canonical 원본 존재 여부 미확정. 전체 읽기·강제 재저장·migration·캐시 삭제 금지.
+- **다음 단일 작업:** 공유 Firebase 현재 Rules/Functions/트리거·권한을 *읽기 전용*으로 확인하고 증거 기록. 인증 불가면 미확인으로 중단. Rules(구형 부모 유지) → 신규 V2 Function 하나 → V2 PREVIEW 앱은 각각 별도 디렉터 승인 뒤에만. TEST/PRODUCTION 전부 RELEASE HOLD.
+- 참조: PR #512, PR #521, `DOCS/MUSIC_NOTE_V2_ROLLBACK_POLICY.md`. 아래 오래된 CURRENT는 이 기록으로 대체되는 당시 스냅샷.
+
+---
+
 ## CURRENT — app511 legacy Library atomic batch guard, no Rules deploy (2026-10-26 KST)
 - `fix/app511-legacy-playlists-monotonic-rules` based on app510 #506 `4814f7ffaf9f168bfe692eb553cffabc9a947a2b`. Current `preview` baseline `6e8543eb6525dd22a97a6d684de111613b0934bd`; deployed PREVIEW app501 still PC↔mobile Music Note QA FAIL.
 - Existing main/TEST old `playlistService.ts` batches actual Library rename/reorder/add/delete/move/color/order *together with* absolute `users.syncVersions.playlists`. Blanket shared Rules monotonic guard would reject **entire old-client canonical playlist mutation** if lower version; do not deploy. This draft briefly explored Rules protection but **reverted firestore.rules to byte-identical baseline before PR**. No shared Rules/DB changes.

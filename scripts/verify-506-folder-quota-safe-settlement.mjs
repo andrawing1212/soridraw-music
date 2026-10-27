@@ -134,7 +134,10 @@ console.log('APP506_LOCAL_READBACK_VERIFIED=PASS');
 silentReject = false;
 quota = true;
 failServer = true;
-api.queueMusicNoteFolderStructureBatch('user-a', 'sharedNote', folder('offline-survivor'), 4, null);
+api.queueMusicNoteFolderStructureBatch('user-a', 'sharedNote', folder('offline-survivor'), 4, [
+  { id: 'default', title: '기본', order: 1, isDefault: true },
+  { id: '1', title: '1', order: 2 }, { id: '2', title: '2', order: 3 },
+]);
 assert.ok(lastActive().ms <= 5_000);
 await runNext();
 assert.equal(api.getPendingMusicNoteFolderStructureBatch('user-a').sharedNote.folders[0].title, 'offline-survivor');

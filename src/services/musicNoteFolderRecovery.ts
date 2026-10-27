@@ -12,6 +12,9 @@ export type MusicNoteFolderRecoveryRecord = {
   beforeFolders: Partial<Record<MusicNoteFolderModeKey, unknown[]>>;
   afterFolders: Partial<Record<MusicNoteFolderModeKey, unknown[]>>;
   observedAtMs: number;
+  // Split archives are listed without reading any parts. Explicitly open
+  // one record to load complete before/after snapshots.
+  detailLoaded: boolean;
 };
 // Reassemble immutable shards on explicit recovery view / transaction only.
 const recoveryParts = (history: any): string[] => {
@@ -49,30 +52,60 @@ export const listMusicNoteFolderRecovery = async (uid: string): Promise<MusicNot
   if (!uid?.trim()) throw new Error('로그인이 필요합니다.');
   const recovery = collection(db, 'user_structures', uid, 'legacy_recovery');
   const snapshot = await getDocs(query(recovery, orderBy('observedAtMs', 'desc'), limit(10)));
-  const populated = await Promise.all(snapshot.docs.map(async entry => {
-    let value = entry.data();
-    if (value?.schemaVersion === 2) {
-      const parts: Record<string, string> = {};
-      await Promise.all(recoveryParts(value).map(async id => {
-        const part = await getDoc(doc(db, 'user_structures', uid, 'legacy_recovery', entry.id, 'parts', id));
-        if (!part.exists()) throw new Error('충돌 기록 일부를 읽을 수 없습니다.');
-        parts[id] = part.data()?.payload;
-      }));
-      value = expandRecovery(value, parts);
-    }
+  // Only the 10 manifest docs. NO bulk shard fan-out on dialog open.
+  return snapshot.docs.map(entry => {
+    const value = entry.data();
     const modes = (['myNote', 'sharedNote'] as const).filter(mode =>
-      Array.isArray(value?.beforeFolders?.[mode]) && Array.isArray(value?.afterFolders?.[mode])
-      && Array.isArray(value?.changedModes) && value.changedModes.includes(mode),
+      Array.isArray(value?.changedModes) && value.changedModes.includes(mode)
+      && (value?.schemaVersion === 2
+        ? recoveryParts(value).some(id => id.startsWith(`beforeFolders_${mode}_`))
+          && recoveryParts(value).some(id => id.startsWith(`afterFolders_${mode}_`))
+        : Array.isArray(value?.beforeFolders?.[mode]) && Array.isArray(value?.afterFolders?.[mode])),
     );
     return {
       id: entry.id,
       changedModes: modes,
-      beforeFolders: value?.beforeFolders || {},
-      afterFolders: value?.afterFolders || {},
+      // Existing schema-1 manifests already carry content. The screen still
+      // requires a deliberate selection before displaying any details.
+      beforeFolders: value?.schemaVersion === 1 ? value.beforeFolders || {} : {},
+      afterFolders: value?.schemaVersion === 1 ? value.afterFolders || {} : {},
       observedAtMs: Number(value?.observedAtMs || 0),
+      detailLoaded: value?.schemaVersion === 1,
     };
-  }));
-  return populated.filter(record => record.changedModes.length > 0);
+  }).filter(record => record.changedModes.length > 0);
+};
+
+// Opening a single selected archive performs at most one manifest get plus
+// its own <=32 shard gets. Other nine records are never expanded.
+export const getMusicNoteFolderRecoveryDetail = async (
+  uid: string, recordId: string,
+): Promise<MusicNoteFolderRecoveryRecord> => {
+  if (!uid?.trim() || !/^[a-f0-9]{40}$/.test(recordId)) throw new Error('잘못된 복구 기록 요청입니다.');
+  const entry = await getDoc(doc(db, 'user_structures', uid, 'legacy_recovery', recordId));
+  if (!entry.exists()) throw new Error('복구 기록을 찾을 수 없습니다.');
+  let value = entry.data();
+  if (value?.schemaVersion === 2) {
+    const parts: Record<string, string> = {};
+    await Promise.all(recoveryParts(value).map(async id => {
+      const part = await getDoc(doc(db, 'user_structures', uid, 'legacy_recovery', recordId, 'parts', id));
+      if (!part.exists()) throw new Error('복구 기록 조각이 없습니다.');
+      parts[id] = part.data()?.payload;
+    }));
+    value = expandRecovery(value, parts);
+  }
+  if (value?.schemaVersion !== 1 || value?.source !== 'legacy-writer-after-modern') {
+    throw new Error('복구 기록 형식을 확인할 수 없습니다.');
+  }
+  const modes = (['myNote', 'sharedNote'] as const).filter(mode =>
+    Array.isArray(value?.changedModes) && value.changedModes.includes(mode)
+    && Array.isArray(value?.beforeFolders?.[mode]) && Array.isArray(value?.afterFolders?.[mode]));
+  if (!modes.length) throw new Error('복구할 수 있는 폴더가 없습니다.');
+  return {
+    id: recordId, changedModes: modes,
+    beforeFolders: value.beforeFolders,
+    afterFolders: value.afterFolders,
+    observedAtMs: Number(value.observedAtMs || 0), detailLoaded: true,
+  };
 };
 
 export const restoreMusicNoteFolderRecovery = async (

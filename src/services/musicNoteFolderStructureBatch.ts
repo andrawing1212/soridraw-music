@@ -46,6 +46,16 @@ const memoryPending = new Map<string, PendingMusicNoteFolderStructure>();
 const undurablePendingUids510 = new Set<string>();
 const lastQuotaAttemptAt510 = new Map<string, number>();
 const observedServerVersions = new Map<string, number>();
+// In-memory epoch for edits during a user-confirmed recovery transaction.
+// It is never a server write and cannot cause steady-state polling.
+const folderEditEpoch = new Map<string, number>();
+const folderEditKey = (uid: string, mode: MusicNoteFolderModeKey): string => `${safeUid(uid)}:${mode}`;
+export const getMusicNoteFolderEditEpoch = (uid: string, mode: MusicNoteFolderModeKey): number =>
+  folderEditEpoch.get(folderEditKey(uid, mode)) || 0;
+export const markMusicNoteFolderEdited = (uid: string, mode: MusicNoteFolderModeKey): void => {
+  const key = folderEditKey(uid, mode);
+  folderEditEpoch.set(key, (folderEditEpoch.get(key) || 0) + 1);
+};
 export const getObservedMusicNoteStructureVersion = (uid: string): number => observedServerVersions.get(safeUid(uid)) || 0;
 const rememberServerVersion = (uid: string, version: number): void => {
   observedServerVersions.set(uid, Math.max(getObservedMusicNoteStructureVersion(uid), version));
@@ -271,6 +281,7 @@ export const queueMusicNoteFolderStructureBatch = (
 
   const current = readPending(key) || { updatedAtMs: 0 };
   if (normalizedVersion < safeVersion(current[mode]?.version)) return;
+  markMusicNoteFolderEdited(key, mode);
   // A new edit may replace an in-flight edit with the same proposed version.
   // Give the replacement its own increasing version so its later settlement
   // stays valid under the strict server-side version check.

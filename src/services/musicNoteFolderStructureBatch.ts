@@ -489,6 +489,18 @@ export const flushMusicNoteFolderStructureBatch = async (uid: string): Promise<v
     const next: PendingMusicNoteFolderStructure = { ...latest, updatedAtMs: latest.updatedAtMs };
     if (capturedMy && latest.myNote === capturedMy) delete next.myNote;
     if (capturedShared && latest.sharedNote === capturedShared) delete next.sharedNote;
+    // A newer local edit may arrive while the previous edit awaits Firestore
+    // ACK. The previous edit is now canonical, so safely rebase ONLY a pending
+    // revision whose original baseline is still the captured baseline.
+    // Otherwise a late ACK must not rewrite an unrelated newer local base.
+    for (const mode of ['myNote', 'sharedNote'] as const) {
+      const captured = mode === 'myNote' ? capturedMy : capturedShared;
+      const queued = next[mode];
+      if (captured && queued && queued !== captured
+        && comparableFolders(queued.baseFolders) === comparableFolders(captured.baseFolders)) {
+        next[mode] = { ...queued, baseFolders: captured.folders };
+      }
+    }
 
     if (!next.myNote && !next.sharedNote) {
       clearAll(key);

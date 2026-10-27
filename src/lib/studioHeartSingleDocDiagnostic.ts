@@ -61,6 +61,18 @@ const readDeviceRecentHeartAuthority = (uid: string, documentId: string): boolea
   } catch { return null; }
 };
 
+// app516: server Catalog identity is item.id (Firestore document key).
+// A legacy firestoreId alias can differ; it must not mask an exact ID match.
+export const catalogContainsExactFavoriteDocument516 = (items: unknown, documentId: string): boolean => (
+  Array.isArray(items) && items.some((item: any) => {
+    if (!item || isMusicNoteItemRemoved(item)) return false;
+    const canonicalId = String(item.id || '').trim();
+    return canonicalId
+      ? canonicalId === documentId
+      : String(item.firestoreId || '').trim() === documentId;
+  })
+);
+
 export const inspectExactStudioHeartDocument = async (
   expectedUid: string,
   rawDocumentId: string,
@@ -110,7 +122,7 @@ export const inspectExactStudioHeartDocument = async (
     deviceRecentHeartAuthority: readDeviceRecentHeartAuthority(uid, documentId),
     deviceCatalogCached: Boolean(catalog),
     deviceCatalogContainsDocument: catalog
-      ? catalog.items.some((item: any) => documentIdOf(item) === documentId && !isMusicNoteItemRemoved(item))
+      ? catalogContainsExactFavoriteDocument516(catalog.items, documentId)
       : null,
   };
 };

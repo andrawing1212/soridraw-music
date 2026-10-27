@@ -352,9 +352,16 @@ for (const failure of ['denied', 'aborted']) {
   await d.advance(59_999); assert.equal(d.attempts, 0);
   await d.advance(1); assert.equal(d.writes.length, 1);
   assert.equal(d.reads, 1, 'one transaction read only when canonical changes');
-  d.page.subscribe(uid, () => {}); assert.equal(d.reads, 1);
-  await d.advance(600_000); assert.equal(d.writes.length, 1);
-  console.log('APP514_HEALTHY_60S_W1_IDLE_AND_WARM_R0=PASS');
+  d.page.subscribe(uid, () => {});
+  await tick();
+  assert.equal(d.reads, 2, 'first warm load confirms the V2 RTDB preview once');
+  d.page.subscribe(uid, () => {});
+  await tick();
+  assert.equal(d.reads, 2, 'subsequent warm loads do not reread canonical');
+  await d.advance(600_000);
+  assert.equal(d.reads, 2, 'no polling after canonical confirmation');
+  assert.equal(d.writes.length, 1);
+  console.log('APP514_HEALTHY_60S_W1_V2_CONFIRM_ONCE_WARM_R0=PASS');
 }
 
 // P1: a delayed v100000 flush must not overwrite a newer v100001

@@ -31,6 +31,22 @@ if (process.argv.includes('--selftest')) {
   assert.equal(check(true, path => path === 'src/pages/FavoritesPage.tsx' ? '' : paths[path]), false);
   assert.equal(check(true, path => path === 'firestore.rules' ? '' : paths[path]), false);
   assert.equal(check(false, () => ''), true, 'before the V2 adoption no unrelated release may be affected');
+  // Fail closed for *automatic* rollback, not only initial promotion. The
+  // only two historical Hosting redeploy call sites must stay behind the
+  // V2 compatibility check; older immutable controller is not yet protected.
+  const controller = readFileSync('.github/workflows/soridraw-release-promotion.yml', 'utf8');
+  const previewWorkflow = readFileSync('.github/workflows/firebase-hosting-custom-preview.yml', 'utf8');
+  for (const stage of ['test', 'production']) {
+    assert.ok(controller.includes(`if rollback_v2_compatible ${stage} `),
+      `missing auto-rollback V2 guard for ${stage}`);
+    assert.ok(controller.includes(`APP515_V2_${stage.toUpperCase()}_ROLLBACK_BLOCKED_HOLD`));
+  }
+  assert.ok(previewWorkflow.includes('APP515 require active release controller before first V2 PREVIEW'),
+    'first V2 hosting release must be held until main controller includes the guard');
+  assert.ok(previewWorkflow.includes('origin/main:.github/workflows/soridraw-release-promotion.yml'));
+  assert.ok(controller.includes('if rollback_v2_compatible test') &&
+    controller.includes('if rollback_v2_compatible production'));
+  console.log('APP515_RELEASE_V2_AUTOMATIC_ROLLBACK_GUARDS_AND_CONTROLLER_ACTIVATION=PASS');
   console.log('APP515_RELEASE_V2_ROLLBACK_FLOOR_TEST_PASS');
 } else {
   const target = process.argv[2];

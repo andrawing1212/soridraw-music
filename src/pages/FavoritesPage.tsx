@@ -431,7 +431,14 @@ const subscribeMusicNoteStructureDocument = (uid: string, listener: (data: any) 
     }) as EventListener);
   }
 
-  void ensureMusicNoteStructureFresh(uid, session);
+  // Reopening an already-durable local folder batch needs no extra reads
+  // while the ordinary 60s flush is pending. Keep it unverified and visible;
+  // a genuinely newer profile signal still triggers the canonical R2 check.
+  // This saves warm navigation R0 without pretending local data is committed.
+  const openPending = getPendingMusicNoteFolderStructureBatch(uid);
+  if (!openPending || getMusicNoteStructureProfileVersion(uid) > session.profileVersionSeen) {
+    void ensureMusicNoteStructureFresh(uid, session);
+  }
 
   return () => {
     session?.listeners.delete(listener);

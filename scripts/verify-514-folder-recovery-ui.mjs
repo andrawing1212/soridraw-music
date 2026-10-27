@@ -21,7 +21,7 @@ const canonical = {
   musicNoteStructureVersion:7, musicNoteCardState: { items:{} },
 };
 let reads = 0, transactions = 0, writes = 0, pending = null, listCalls = 0;
-let editEpoch = 0, afterCanonicalRead = null;
+let editEpoch = 0, afterCanonicalRead = null, afterTransactionCommit = null;
 const archiveParts = {};
 const copy = value => JSON.parse(JSON.stringify(value));
 const sdk = {
@@ -71,6 +71,9 @@ const sdk = {
       canonical.musicNoteStructureWriterToken=patch.musicNoteStructureWriterToken;
       canonical.musicNoteFolderRecoveryMarker=copy(patch.musicNoteFolderRecoveryMarker);
       writes++;
+    }
+    if (afterTransactionCommit) {
+      const callback=afterTransactionCommit; afterTransactionCommit=null; callback();
     }
     return result;
   },
@@ -206,4 +209,33 @@ console.log('APP514_RECOVERY_CONCURRENT_LOCAL_EDIT_AND_ACCOUNT_SWITCH_BLOCKED=PA
   assert.equal(canonical.musicNoteFolders.myNote[0].title,'Whole before');
   assert.equal(writes,beforeWrites+1);
   console.log('APP514_RECOVERY_LARGE_SHARDED_RECORD_ON_DEMAND_READ_AND_RESTORE=PASS');
+}
+
+
+// If this device starts a newer edit between the canonical Firestore ACK
+// and the RTDB preview, do not transmit the older recovery state. Keep the
+// real pending edit for its normal batch rather than claiming restoration
+// became the latest visible folder state.
+{
+  data.schemaVersion=1;
+  data.beforeFolders={myNote:[{id:'default',title:'Previous'}]};
+  data.afterFolders={myNote:[{id:'default',title:'Current'}]};
+  delete data.partIds;
+  canonical.musicNoteFolders.myNote=copy(data.afterFolders.myNote);
+  canonical.musicNoteFolderRecoveryMarker=null;
+  pending=null;
+  const emittedBefore=emitted.length;
+  const writesBefore=writes;
+  afterTransactionCommit=()=>{
+    editEpoch++;
+    pending={myNote:{version:700,folders:[{id:'default',title:'Newer local edit'}]}};
+  };
+  const late=await exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','before');
+  assert.equal(late.changed,true);
+  assert.equal(late.localEditDuringRestore,true);
+  assert.equal(writes,writesBefore+1);
+  assert.equal(emitted.length,emittedBefore,
+    'A stale confirmed recovery must never publish RTDB after a newer edit');
+  assert.equal(pending.myNote.folders[0].title,'Newer local edit');
+  console.log('APP514_LATE_NEW_LOCAL_EDIT_SUPPRESSES_STALE_RECOVERY_RTDB=PASS');
 }

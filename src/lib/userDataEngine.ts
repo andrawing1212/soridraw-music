@@ -1057,6 +1057,40 @@ export const flushPendingCatalogPublishes = async (uid: string): Promise<void> =
 };
 
 /**
+ * Read-only *client-side* exact-recovery inspector. Unlike the ordinary
+ * readRemoteCatalogSnapshot(), it NEVER writes the fetched base to IndexedDB
+ * or catalogMemory, even when an error/race happens later. Worker GET retains
+ * its pre-existing shared-R2 seed behavior and is not a guaranteed R2 W0.
+ */
+export const readRemoteCatalogForExactRecovery516 = async (
+  uid: string,
+): Promise<SoridrawCatalogSnapshot | null> => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid || !isPreviewCatalogEnabled() || auth.currentUser?.uid !== safeUid) return null;
+  const before = await readCatalogSnapshotFromLocalCache('musicNote', safeUid);
+  if (auth.currentUser?.uid !== safeUid) return null;
+  const headers = await authenticatedHeaders(false);
+  if (!headers || auth.currentUser?.uid !== safeUid) return null;
+  try {
+    const response = await fetch(`${resolveCatalogEndpoint()}/v1/catalog/musicNote`, {
+      method: 'GET', headers, cache: 'no-store',
+    });
+    if (!response.ok || auth.currentUser?.uid !== safeUid) return null;
+    const payload: unknown = await response.json();
+    if (!isValidSnapshot('musicNote', payload)) return null;
+    // An older R2 base must never be used to publish a new delta, and must
+    // never overwrite a newer in-flight IndexedDB/catalogMemory state.
+    const latest = await readCatalogSnapshotFromLocalCache('musicNote', safeUid);
+    if (auth.currentUser?.uid !== safeUid
+      || (before && payload.revision < before.revision)
+      || (latest && payload.revision < latest.revision)) return null;
+    return payload;
+  } catch {
+    return null; // Failed admin inspection is not mutation authority.
+  }
+};
+
+/**
  * app516: An admin's explicitly requested, exact-document recovery only.
  * The caller must first re-read the real owner-owned Firestore favorite and
  * refuse removed or pending records. This cannot run on page entry.
@@ -1069,6 +1103,7 @@ export const reconcileExactMusicNoteCatalogFromCanonical516 = async (
   uid: string,
   documentId: string,
   canonical: Record<string, any>,
+  revalidate: () => Promise<boolean>,
 ): Promise<'already-present' | 'repaired' | 'deferred'> => {
   const safeUid = String(uid || '').trim();
   const safeId = String(documentId || '').trim();
@@ -1079,10 +1114,13 @@ export const reconcileExactMusicNoteCatalogFromCanonical516 = async (
 
   // Do not use a local snapshot as authority. Ask the authenticated shared
   // R2 Catalog for its current complete state; no Firestore collection scans.
-  const remote = await readRemoteCatalogSnapshot('musicNote', safeUid, 0, null, false);
+  const remote = await readRemoteCatalogForExactRecovery516(safeUid);
   if (!remote || auth.currentUser?.uid !== safeUid) return 'deferred';
   const matching = remote.items.find((item) => String(item?.id || '') === safeId);
-  if (matching && !isMusicNoteItemRemoved(matching)) return 'already-present';
+  if (matching && !isMusicNoteItemRemoved(matching)) {
+    return await revalidate() && auth.currentUser?.uid === safeUid
+      ? 'already-present' : 'deferred';
+  }
   // Never create a second row if a legacy alias points to this exact document.
   if (remote.items.some((item) => String(item?.id || '') !== safeId
     && String(item?.firestoreId || '') === safeId)) return 'deferred';
@@ -1095,14 +1133,22 @@ export const reconcileExactMusicNoteCatalogFromCanonical516 = async (
   if (!built || built.delta.upserts.length !== 1 || built.delta.deletedIds.length !== 0
     || built.nextSnapshot.itemCount !== remote.itemCount + (matching ? 0 : 1)
     || auth.currentUser?.uid !== safeUid) return 'deferred';
+  // A can read an active favorite, then B may unsave it while A is fetching
+  // R2. Recheck the *current* canonical and pending/RTDB fences at the last
+  // client-side checkpoint before issuing a single-record delta.
+  if (!await revalidate() || auth.currentUser?.uid !== safeUid) return 'deferred';
+  const newestLocal = await readCatalogSnapshotFromLocalCache('musicNote', safeUid);
+  if (newestLocal && newestLocal.revision > remote.revision) return 'deferred';
+  if (!await revalidate() || auth.currentUser?.uid !== safeUid) return 'deferred';
   const published = await publishRemoteCatalogDelta(safeUid, built.delta);
   if (!published || published.conflict || published.itemCount !== built.nextSnapshot.itemCount
     || auth.currentUser?.uid !== safeUid) return 'deferred';
 
   // An ACK is not enough. Re-read shared R2 and verify exact membership before
   // telling other devices that this canonical item is available.
-  const confirmed = await readRemoteCatalogSnapshot('musicNote', safeUid, 0, null, false);
+  const confirmed = await readRemoteCatalogForExactRecovery516(safeUid);
   return confirmed?.items.some((item) => String(item?.id || '') === safeId && !isMusicNoteItemRemoved(item))
+    && await revalidate() && auth.currentUser?.uid === safeUid
     ? 'repaired' : 'deferred';
 };
 

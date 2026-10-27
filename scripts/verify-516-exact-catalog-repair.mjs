@@ -22,13 +22,16 @@ const base = () => ({
   itemCount: 1, complete: true, generatedAtMs: 100,
 });
 const copy = value => JSON.parse(JSON.stringify(value));
-const makeEnvironment = ({ serverBase = base(), canonical = favorite, pending = false, failRead = false, failPost = false } = {}) => {
+const makeEnvironment = ({ serverBase = base(), canonical = favorite, pending = false, failRead = false, failPost = false, onGet = null, onPost = null } = {}) => {
   const stats = { workerGets: 0, workerPosts: 0, docReads: 0, otherQueries: 0, canonicalWrites: 0, broadcast: 0 };
   let remote = copy(serverBase);
+  let actualCanonical = canonical ? copy(canonical) : null;
+  let signal = { version: 10, operation: 'save', documentIds: [] };
   const auth = { currentUser: { uid, getIdToken: async () => 'mock-user-token' } };
   const mockFetch = async (_url, opts) => {
     if (opts?.method === 'GET') {
       stats.workerGets++;
+      if (onGet) onGet({ setCanonical: v => { actualCanonical = v ? copy(v) : null; }, setSignal: v => { signal = copy(v); } });
       if (failRead) return { status: 503, ok: false, text: async () => 'offline' };
       return { status: 200, ok: true, json: async () => copy(remote) };
     }
@@ -36,6 +39,7 @@ const makeEnvironment = ({ serverBase = base(), canonical = favorite, pending = 
       stats.otherQueries++; throw new Error('unexpected full-scan or request');
     }
     stats.workerPosts++;
+    if (onPost) onPost({ setCanonical: v => { actualCanonical = v ? copy(v) : null; }, setSignal: v => { signal = copy(v); } });
     if (failPost) return { status: 409, ok: false, json: async () => ({ revision: 777, itemCount: remote.itemCount }) };
     const d = JSON.parse(opts.body);
     assert.equal(d.baseRevision, remote.revision);
@@ -69,7 +73,11 @@ const makeEnvironment = ({ serverBase = base(), canonical = favorite, pending = 
     console: { warn: () => {} },
   });
   const repairMocks = name => {
-    if (name === '../firebase') return { auth, db: {} };
+    if (name === '../firebase') return { auth, db: {}, realtimeDb: {} };
+    if (name === 'firebase/database') return {
+      ref: (_db, path) => path,
+      get: async () => ({ val: () => copy(signal) }),
+    };
     if (name === './firestoreMeasured') return {
       collection: () => 'favorites',
       documentId: () => '__name__',
@@ -79,8 +87,8 @@ const makeEnvironment = ({ serverBase = base(), canonical = favorite, pending = 
     };
     if (name === 'firebase/firestore') return { getDocsFromServer: async () => {
       stats.docReads++;
-      if (!canonical) return { size: 0, docs: [] };
-      return { size: 1, docs: [{ id: songId, data: () => copy(canonical) }] };
+      if (!actualCanonical) return { size: 0, docs: [] };
+      return { size: 1, docs: [{ id: songId, data: () => copy(actualCanonical) }] };
     } };
     if (name === './cacheDiagnostics') return { markFirestoreActualRead: () => {} };
     if (name === './studioHeartBatch') return { readStudioHeartPendingIntent: () => pending ? { desiredSaved: true } : null };
@@ -94,13 +102,15 @@ const makeEnvironment = ({ serverBase = base(), canonical = favorite, pending = 
   };
   const repair = {};
   runInNewContext(repairCode, { exports: repair, require: repairMocks });
-  return { auth, stats, repair: repair.repairSingleExactMusicNoteCatalog516, engine, getRemote: () => copy(remote) };
+  return { auth, stats, repair: repair.repairSingleExactMusicNoteCatalog516, engine, getRemote: () => copy(remote),
+    setCanonical: v => { actualCanonical = v ? copy(v) : null; },
+    setSignal: v => { signal = copy(v); } };
 };
 
 {
   const x = makeEnvironment();
   assert.equal(await x.repair(uid, songId), 'repaired');
-  assert.equal(x.stats.docReads, 1);
+  assert.ok(x.stats.docReads >= 3, 'must re-read canonical before shared write and RTDB signal');
   assert.equal(x.stats.workerPosts, 1);
   assert.equal(x.stats.broadcast, 1);
   assert.deepEqual(x.getRemote().items.map(item => item.id), ['untouched', songId]);
@@ -165,6 +175,64 @@ console.log('APP516_REMOVED_MISSING_PENDING_NEVER_REPAIR=PASS');
   assert.equal(x.stats.docReads + x.stats.workerGets + x.stats.workerPosts + x.stats.broadcast, 0);
   console.log('APP516_AUTH_CHANGED_ZERO_IO=PASS');
 }
+{
+  // P1 independent-audit reproduction: PC A first reads an active document,
+  // mobile B unsaves while A fetches R2. A must never put the old save back.
+  const x = makeEnvironment({ onGet: ({ setCanonical, setSignal }) => {
+    setCanonical({ ...favorite, saved: false });
+    setSignal({ version: 11, operation: 'heart-preview-unsave', documentIds: [songId] });
+  } });
+  await assert.rejects(() => x.repair(uid, songId), /CATALOG_RECOVERY_UNCONFIRMED/);
+  assert.equal(x.stats.workerPosts, 0, 'latest unsave must stop stale R2 upsert');
+  assert.equal(x.stats.broadcast, 0, 'latest unsave must not send stale save signal');
+  console.log('APP516_AUDIT_P1_CROSS_DEVICE_UNSAVE_AFTER_INITIAL_READ_ABORT=PASS');
+}
+{
+  // B can commit an unsave without an observed RTDB event. Canonical re-read
+  // must independently reject the stale first read.
+  const x = makeEnvironment({ onGet: ({ setCanonical }) => setCanonical({ ...favorite, saved: false }) });
+  await assert.rejects(() => x.repair(uid, songId), /CATALOG_RECOVERY_UNCONFIRMED/);
+  assert.equal(x.stats.workerPosts, 0);
+  assert.equal(x.stats.broadcast, 0);
+  console.log('APP516_AUDIT_P1_COMMITTED_UNSAVE_WITHOUT_RTD_BROADCAST_ABORT=PASS');
+}
+{
+  // Even when canonical is unchanged, a new remote heart-preview during R2
+  // inspection invalidates the source-of-truth fence.
+  const x = makeEnvironment({ onGet: ({ setSignal }) => setSignal({
+    version: 12, operation: 'heart-preview-unsave', documentIds: [songId],
+  }) });
+  await assert.rejects(() => x.repair(uid, songId));
+  assert.equal(x.stats.workerPosts, 0);
+  assert.equal(x.stats.broadcast, 0);
+  console.log('APP516_AUDIT_P1_REMOTE_PENDING_UNSAVE_FENCE_ABORT=PASS');
+}
+{
+  // P2 audit: unrelated local revision 200 must survive an older R2 revision
+  // 100 even if a repair cannot be completed. Exactly no local replacement.
+  const x = makeEnvironment({ failPost: true });
+  const newest = { ...base(), revision: 200, items: [
+    { id: 'local-latest-unrelated', firestoreId: 'local-latest-unrelated', saved: true, createdAtMs: 900 },
+  ], itemCount: 1 };
+  await x.engine.writeCatalogSnapshotToLocalCache('musicNote', uid, newest);
+  await assert.rejects(() => x.repair(uid, songId), /CATALOG_RECOVERY_UNCONFIRMED/);
+  const persisted = await x.engine.readCatalogSnapshotFromLocalCache('musicNote', uid);
+  assert.equal(persisted.revision, 200);
+  assert.deepEqual(persisted.items.map(item => item.id), ['local-latest-unrelated']);
+  assert.equal(x.stats.workerPosts, 0, 'stale R2 cannot be used as base');
+  console.log('APP516_AUDIT_P2_STALE_R2_MUST_NOT_CLOBBER_NEWER_CACHE=PASS');
+}
+{
+  const x = makeEnvironment({ failPost: true });
+  const local = base();
+  await x.engine.writeCatalogSnapshotToLocalCache('musicNote', uid, local);
+  await assert.rejects(() => x.repair(uid, songId), /CATALOG_RECOVERY_UNCONFIRMED/);
+  const after = await x.engine.readCatalogSnapshotFromLocalCache('musicNote', uid);
+  assert.equal(after.revision, 100);
+  assert.deepEqual(after.items.map(item=>item.id), ['untouched']);
+  console.log('APP516_AUDIT_P2_FAILED_POST_PRESERVES_ALL_CACHED_ROWS=PASS');
+}
+
 {
   const diagMocks = name => {
     if (name === '../firebase') return { auth: {} };

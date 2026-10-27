@@ -1,3 +1,13 @@
+## CURRENT — app514 충돌 전·후 폴더 복구 기록 보강 / Draft PR #512 (2026-10-28 KST)
+
+- 기존 `legacy_recovery`는 구형 클라이언트가 최신 폴더를 덮어쓴 Firestore 이벤트의 before/after 배열을 비공개로 보관하고, 사용자가 명시적으로 기록을 읽고 확인해 복원하는 구조. UI·기존 저장/선택 기능 재사용, 자동 복원/페이지 방문 조회 추가 없음.
+- **이번 최소 수정:** `functions/src/index.ts`에서 users 프로필 동기화 트랜잭션과 archive 기록 시도를 독립 병렬 작업으로 분리하고 `Promise.allSettled`로 양쪽 완료 대기. 프로필 sync 실패로 archive 시도 자체가 건너뛰던 경로를 막음. 프로필 오류는 정상적으로 실패 처리하며 archive 오류는 bounded 로그를 남김. 기존 사용자 원본·캐시·Firestore Rules·별도 서비스·비용 정책 변경 없음.
+- **검증:** 기존 복구 UI VM + 실제 `buildLegacyMusicNoteFolderRecovery` Functions helper의 옛 PC/최신 폴더 양쪽 기록, 카드 상태만 변경 시 archive W0, archive와 signal 분리 소스 계약을 타깃 실행형 검사에 추가. 정확한 PR HEAD의 GitHub CI 결과로만 검증 통과를 판정.
+- **미해결 P1 / 배포 HOLD:** 구형 `setDoc(merge:true)`의 오래된 쓰기를 기존 Rules가 허용하는 동안 최신 canonical 덮어쓰기를 완전 차단할 수 없음. Functions는 커밋 **이후** 실행되며 실패·미배포·지연·기록 한도 상황에서 양쪽 기록이 반드시 보존되는 것을 보장하지 않음. 실기기 PC·모바일 혼합 검증, 별도 독립 WORK 재감사(실제 사용 모델명/버전 보고), 전환 정책 전까지 PR 병합·공유 Rules·PREVIEW/TEST/PRODUCTION 배포 금지.
+- 원본 PC의 기존 누락곡 Firestore 존재 여부 UNKNOWN. 사용자의 폴더/곡 강제 재저장·복원·캐시 삭제·데이터 마이그레이션 금지.
+
+---
+
 ## CURRENT — app514 WORK P1 구형 PC 안전 공존 / Draft PR #512 (2026-10-28 KST)
 
 - **작업 상태:** PR #512의 이전 WORK FAIL(P1 3/P2 1) 중 혼합 pending, 미확정 RTDB, 동일 폴더 타임스탬프 3건 수정·테스트. 마지막 남은 P1은 구버전 PC 폴더 저장과 최신 서버 폴더 보호의 동시 보장.

@@ -54,6 +54,9 @@ const sdk = {
           const partId=path.split('/').at(-1);
           return {exists:()=>Object.hasOwn(archiveParts,partId),data:()=>({payload:archiveParts[partId]})};
         }
+        if(path==='user_structures/fixture-owner/folder_state/v2') {
+          return {exists:()=>false,data:()=>({})};
+        }
         assert.equal(path,'user_structures/fixture-owner');
         if (afterCanonicalRead) { const callback=afterCanonicalRead; afterCanonicalRead=null; callback(); }
         return {data:()=>copy(canonical)};
@@ -90,6 +93,7 @@ runInNewContext(ts.transpileModule(source,{
     if(name.endsWith('/musicNoteFolderStructureBatch')) return {
       getPendingMusicNoteFolderStructureBatch:()=>pending,
       getMusicNoteFolderEditEpoch:()=>editEpoch,
+      getMusicNoteLegacyFolderSignature:value=>JSON.stringify(value),
     };
     if(name.endsWith('/userDomainSyncService')) return {
       publishMusicNoteStructureDelta: async (...args) => { emitted.push(copy(args)); return 8; },
@@ -101,6 +105,8 @@ assert.equal(reads,0,'no read on import/visit');
 assert.match(page,/폴더 충돌 기록 확인/);
 assert.match(page,/선택한 상태로 복원 확정/);
 assert.match(page,/restoreMusicNoteFolderRecovery\(/);
+assert.match(page,/getMusicNoteLegacyFolderComparison\(/);
+assert.match(page,/restoreMusicNoteLegacyFolderChoice\(/);
 assert.match(rules,/match \/user_structures\/\{uid\}\/legacy_recovery\/\{recoveryId\}/);
 assert.match(rules,/allow create, update, delete: if false/);
 console.log('APP514_RECOVERY_NO_AUTOMATIC_READ_AND_EXPLICIT_UI=PASS');

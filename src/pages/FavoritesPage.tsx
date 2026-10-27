@@ -1407,6 +1407,8 @@ export default function FavoritesPage({
   folderRecoveryUidRef.current = user?.uid;
   const [folderRecoveryOpen, setFolderRecoveryOpen] = useState(false);
   const [folderRecoveryRecords, setFolderRecoveryRecords] = useState<MusicNoteFolderRecoveryRecord[]>([]);
+  const [folderRecoveryShowingOlder, setFolderRecoveryShowingOlder] = useState(false);
+  const [folderRecoveryOlderLoading, setFolderRecoveryOlderLoading] = useState(false);
   const [folderRecoverySelectedId, setFolderRecoverySelectedId] = useState<string | null>(null);
   const [folderRecoveryDetailLoading, setFolderRecoveryDetailLoading] = useState(false);
   const [folderLegacyComparison, setFolderLegacyComparison] = useState<MusicNoteLegacyFolderComparison | null>(null);
@@ -2445,6 +2447,8 @@ updates: draft.updates,
     // Never retain a previous account's private conflict snapshots.
     setFolderRecoveryOpen(false);
     setFolderRecoveryRecords([]);
+    setFolderRecoveryShowingOlder(false);
+    setFolderRecoveryOlderLoading(false);
     setFolderRecoverySelectedId(null);
     setFolderRecoveryDetailLoading(false);
     setFolderLegacyComparison(null);
@@ -2460,6 +2464,8 @@ updates: draft.updates,
     setFolderRecoveryOpen(true);
     setFolderRecoveryLoading(true);
     setFolderRecoveryRecords([]);
+    setFolderRecoveryShowingOlder(false);
+    setFolderRecoveryOlderLoading(false);
     setFolderRecoverySelectedId(null);
     setFolderRecoveryDetailLoading(false);
     setFolderLegacyComparison(null);
@@ -2481,6 +2487,35 @@ updates: draft.updates,
       if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) setFolderRecoveryError('충돌 기록을 읽지 못했습니다. 서버 권한 적용 여부를 확인해 주세요.');
     } finally {
       if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) setFolderRecoveryLoading(false);
+    }
+  };
+
+  const openOlderFolderRecovery = async () => {
+    if (!user?.uid || folderRecoveryOlderLoading || folderRecoveryBusy || folderRecoveryDetailLoading
+      || folderRecoveryShowingOlder) return;
+    const requestUid = user.uid;
+    const requestNumber = ++folderRecoveryRequestRef.current;
+    setFolderRecoveryOlderLoading(true);
+    setFolderRecoveryError('');
+    try {
+      // An explicit action restores the previous ten-item list. R billed is
+      // up to ten returned documents, never a single 'query read'.
+      const records = await listMusicNoteFolderRecovery(requestUid, true);
+      if (folderRecoveryUidRef.current === requestUid
+        && folderRecoveryRequestRef.current === requestNumber) {
+        setFolderRecoveryRecords(records);
+        setFolderRecoveryShowingOlder(true);
+        setFolderRecoverySelectedId(null);
+        setFolderRecoveryConfirm(null);
+      }
+    } catch (error: any) {
+      if (folderRecoveryUidRef.current === requestUid
+        && folderRecoveryRequestRef.current === requestNumber) {
+        setFolderRecoveryError(String(error?.message || '이전 충돌 기록을 읽지 못했습니다.'));
+      }
+    } finally {
+      if (folderRecoveryUidRef.current === requestUid
+        && folderRecoveryRequestRef.current === requestNumber) setFolderRecoveryOlderLoading(false);
     }
   };
 
@@ -9073,10 +9108,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-base font-bold">뮤직노트 폴더 충돌 기록</h3>
-                  <p className="mt-1 text-xs text-white/60">최근 기록 10개까지만 확인합니다. 기록을 선택해도 자동 복원되지 않습니다.</p>
+                  <p className="mt-1 text-xs text-white/60">최신 기록 1개를 먼저 확인합니다. 이전 기록은 요청할 때만 읽으며 자동 복원되지 않습니다.</p>
                 </div>
                 <button type="button" aria-label="닫기" disabled={folderRecoveryBusy}
-                  onClick={() => { folderRecoveryRequestRef.current += 1; setFolderRecoveryOpen(false); setFolderRecoveryConfirm(null); setFolderRecoverySelectedId(null); setFolderRecoveryDetailLoading(false); }}
+                  onClick={() => { folderRecoveryRequestRef.current += 1; setFolderRecoveryOpen(false); setFolderRecoveryConfirm(null); setFolderRecoverySelectedId(null); setFolderRecoveryDetailLoading(false); setFolderRecoveryOlderLoading(false); }}
                   className="p-2 text-white/70 hover:text-white"><X className="h-4 w-4" /></button>
               </div>
               {folderRecoveryLoading && <p className="mt-5 text-sm text-white/70">기록을 확인하고 있습니다.</p>}
@@ -9167,6 +9202,13 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   </div>
                 ))}
               </div>
+              {!folderRecoveryLoading && !folderRecoveryShowingOlder && folderRecoveryRecords.length > 0 && (
+                <button type="button" disabled={folderRecoveryOlderLoading || folderRecoveryBusy || folderRecoveryDetailLoading}
+                  onClick={() => void openOlderFolderRecovery()}
+                  className="mt-3 w-full rounded-lg bg-white/[0.05] px-3 py-2 text-xs text-white/70 disabled:opacity-50">
+                  {folderRecoveryOlderLoading ? '이전 기록 확인 중' : '이전 기록 더 보기 (최대 10건)'}
+                </button>
+              )}
               {folderRecoveryConfirm && (
                 <div className="mt-4 rounded-xl border border-amber-300/30 bg-amber-200/5 p-3 text-sm">
                   <p>선택한 <strong>{folderRecoveryConfirm.mode === 'myNote' ? '마이 노트' : '공유 노트'}</strong> 폴더를

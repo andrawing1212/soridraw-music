@@ -22,6 +22,7 @@ const canonical = {
 };
 let reads = 0, transactions = 0, writes = 0, pending = null, listCalls = 0;
 let editEpoch = 0, afterCanonicalRead = null;
+const archiveParts = {};
 const copy = value => JSON.parse(JSON.stringify(value));
 const sdk = {
   collection: (_db, ...segments) => segments.join('/'),
@@ -36,6 +37,12 @@ const sdk = {
     reads++; listCalls++;
     return { docs:[{id,data:()=>copy(data)}] };
   },
+  getDoc: async path => {
+    reads++;
+    assert.ok(path.startsWith('user_structures/fixture-owner/legacy_recovery/'+id+'/parts/'));
+    const partId=path.split('/').at(-1);
+    return {exists:()=>Object.hasOwn(archiveParts,partId),data:()=>({payload:archiveParts[partId]})};
+  },
   runTransaction: async (_db, callback) => {
     transactions++;
     const staged=[];
@@ -43,6 +50,10 @@ const sdk = {
       get: async path => {
         reads++;
         if(path.endsWith('/'+id)) return {exists:()=>true,data:()=>copy(data)};
+        if(path.includes('/parts/')) {
+          const partId=path.split('/').at(-1);
+          return {exists:()=>Object.hasOwn(archiveParts,partId),data:()=>({payload:archiveParts[partId]})};
+        }
         assert.equal(path,'user_structures/fixture-owner');
         if (afterCanonicalRead) { const callback=afterCanonicalRead; afterCanonicalRead=null; callback(); }
         return {data:()=>copy(canonical)};
@@ -72,7 +83,7 @@ runInNewContext(ts.transpileModule(source,{
   exports, console, Date, Math,
   require: name => {
     if(name.endsWith('/firebase')) return {db:{}};
-    if(name.endsWith('/firestoreMeasured')) return {...sdk, getDoc: async () => { throw new Error('Unexpected shard read'); }};
+    if(name.endsWith('/firestoreMeasured')) return sdk;
     if(name.endsWith('/musicNoteFolderStructureBatch')) return {
       getPendingMusicNoteFolderStructureBatch:()=>pending,
       getMusicNoteFolderEditEpoch:()=>editEpoch,
@@ -164,3 +175,35 @@ pending=null;
 await assert.rejects(exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','before',()=>false),/복원 중/);
 assert.equal(writes,noMoreWrites);
 console.log('APP514_RECOVERY_CONCURRENT_LOCAL_EDIT_AND_ACCOUNT_SWITCH_BLOCKED=PASS');
+
+
+// Schema v2 large conflict: parts are read only on explicit dialog and
+// inside the confirmation transaction; exactly reconstruct the full arrays.
+{
+  const oldBefore=[{id:'default',title:'Whole before'}, {id:'extra',title:'Keep extra'}];
+  const oldAfter=[{id:'default',title:'Whole after'}, {id:'extra',title:'Keep extra'}];
+  const beforeJson=JSON.stringify(oldBefore);
+  const afterJson=JSON.stringify(oldAfter);
+  const beforeSplit=Math.floor(beforeJson.length/2);
+  Object.assign(archiveParts,{
+    beforeFolders_myNote_0:beforeJson.slice(0,beforeSplit),
+    beforeFolders_myNote_1:beforeJson.slice(beforeSplit),
+    afterFolders_myNote_0:afterJson,
+  });
+  data.schemaVersion=2;
+  data.partIds=Object.keys(archiveParts);
+  delete data.beforeFolders;
+  delete data.afterFolders;
+  canonical.musicNoteFolders.myNote=copy(oldAfter);
+  const beforeReads=reads;
+  const loaded=await exports.listMusicNoteFolderRecovery(uid);
+  assert.equal(loaded.length,1);
+  assert.equal(loaded[0].beforeFolders.myNote[1].title,'Keep extra');
+  assert.equal(reads-beforeReads,4,'one manifest query + three exact shard gets');
+  const beforeWrites=writes;
+  const restored=await exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','before');
+  assert.equal(restored.changed,true);
+  assert.equal(canonical.musicNoteFolders.myNote[0].title,'Whole before');
+  assert.equal(writes,beforeWrites+1);
+  console.log('APP514_RECOVERY_LARGE_SHARDED_RECORD_ON_DEMAND_READ_AND_RESTORE=PASS');
+}

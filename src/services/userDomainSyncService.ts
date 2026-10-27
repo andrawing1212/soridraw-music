@@ -443,18 +443,23 @@ const buildSignal = (
     try {
       if (context.syncStructure && typeof context.syncStructure === 'object') {
         const folderPayload = (context.syncStructure as Record<string, unknown>).musicNoteFolders;
-        const encoded = JSON.stringify({
-          __musicNoteStructureSync: true,
-          // Current clients can identify a current-version optimistic folder
-          // signal. Older open tabs lack this marker and need a bounded
-          // eventual canonical confirmation by the receiver.
-          ...(folderPayload && typeof folderPayload === 'object'
-            ? { __musicNoteFolderProtocolV2: true } : {}),
-          data: context.syncStructure,
+        const hasFolder = Boolean(folderPayload && typeof folderPayload === 'object');
+        const legacyCompatible = JSON.stringify({
+          __musicNoteStructureSync: true, data: context.syncStructure,
         });
-        // Reuse the already-approved bounded itemJson field so no RTDB rule or
-        // schema expansion is needed for folder/card-state live sync.
+        const encoded = hasFolder ? JSON.stringify({
+          __musicNoteStructureSync: true,
+          // Identify current clients without changing Firestore/RTDB schema.
+          __musicNoteFolderProtocolV2: true,
+          data: context.syncStructure,
+        }) : legacyCompatible;
+        // Never turn an already-legal near-limit folder signal into a failed
+        // transport just because the marker adds a few bytes. Rare unmarked
+        // fallback receives one bounded old-format confirmation instead.
         if (encoded.length <= MAX_SYNC_ITEM_JSON_CHARS) itemJson = encoded;
+        else if (hasFolder && legacyCompatible.length <= MAX_SYNC_ITEM_JSON_CHARS) {
+          itemJson = legacyCompatible;
+        }
       } else {
         const rawSyncItems = Array.isArray(context.syncItems)
           ? context.syncItems.slice(0, MAX_DOCUMENT_IDS)

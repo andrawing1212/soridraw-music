@@ -238,29 +238,12 @@ service cloud.firestore {
       allow write: if isOwner(uid) || isAdmin();
     }
 
-    // User custom structures. A long-open older browser may still attempt
-    // setDoc(..., merge:true) using a stale complete folder array. After the
-    // first modern writer-token commit, folder changes must use a NEW token
-    // and a newer canonical revision. Do not restrict unrelated card-state
-    // updates from older clients; these must remain usable during rollout.
+    // app514 staged coexistence: old browser's successful folder edit must
+    // not be silently denied by shared Rules. Atomic current-client checks
+    // still protect modern-modern writes; long-open legacy clients require
+    // an independently verified transition before a stricter guard activates.
     match /user_structures/{uid} {
-      function safeMusicNoteFolderUpdate() {
-        let changed = request.resource.data.diff(resource.data).affectedKeys();
-        let oldVersion = resource.data.get('musicNoteStructureVersion', 0);
-        let nextVersion = request.resource.data.get('musicNoteStructureVersion', 0);
-        let oldToken = resource.data.get('musicNoteStructureWriterToken', '');
-        let nextToken = request.resource.data.get('musicNoteStructureWriterToken', '');
-        return !changed.hasAny(['musicNoteFolders'])
-          || oldToken == ''
-          || (oldVersion is number && nextVersion is number
-            && nextVersion > oldVersion
-            && nextToken is string && nextToken.size() >= 8
-            && nextToken != oldToken);
-      }
-      allow read: if isOwner(uid) || isAdmin();
-      allow create: if isOwner(uid) || isAdmin();
-      allow update: if (isOwner(uid) || isAdmin()) && safeMusicNoteFolderUpdate();
-      allow delete: if isOwner(uid) || isAdmin();
+      allow read, write: if isOwner(uid) || isAdmin();
     }
 
     // app514: old/new-client conflict snapshots are private and immutable.

@@ -198,24 +198,11 @@ try {
 // A failed/no-op Functions archive can then leave both edits durable.
 // This candidate exists in emulator memory ONLY. No app path or live Rules
 // are switched, and this test does NOT declare full migration complete.
-const separateV2Candidate = liveRules.replace(ownerParent, ownerParent + `
-    match /user_structures/{uid}/folder_state/{stateId} {
-      allow get: if stateId == 'v2' && isOwner(uid);
-      allow list, delete: if false;
-      allow create: if stateId == 'v2' && isOwner(uid)
-        && request.resource.data.schemaVersion == 2
-        && request.resource.data.musicNoteStructureVersion is number
-        && request.resource.data.musicNoteStructureVersion > 0
-        && request.resource.data.musicNoteStructureWriterToken is string;
-      allow update: if stateId == 'v2' && isOwner(uid)
-        && request.resource.data.schemaVersion == 2
-        && request.resource.data.musicNoteStructureVersion is number
-        && request.resource.data.musicNoteStructureVersion > resource.data.musicNoteStructureVersion
-        && request.resource.data.musicNoteStructureWriterToken is string
-        && request.resource.data.musicNoteStructureWriterToken != resource.data.musicNoteStructureWriterToken;
-    }
-`);
-assert.notEqual(separateV2Candidate, liveRules);
+// app515 runtime source now includes the V2 match. Test the deployable
+// Rules directly rather than injecting a duplicate synthetic match.
+const separateV2Candidate = liveRules;
+assert.match(separateV2Candidate, /match \/user_structures\/\{uid\}\/folder_state\/\{stateId\}/);
+
 const isolated = await initializeTestEnvironment({
   projectId: 'demo-soridraw-app515-dual-path',
   firestore: { host: '127.0.0.1', port: 8099, rules: separateV2Candidate },

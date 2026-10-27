@@ -71,7 +71,8 @@ assert.equal(cached.length, 1);
 
 const remote = extractConstArrow(app, 'applyRemoteStudioHeartPreview', '\n\n  const clearRemoteStudioHeartPreviewFromCanonical');
 assert.match(remote, /favoritesStore\.setFavorites\(visible\)/);
-assert.match(remote, /writeFavoritesCache\(safeUid, visible\)/);
+// Current app501 receiver deliberately keeps speculative RTDB preview out of shared Catalog.
+assert.match(remote, /writeFavoritesCache\(safeUid, visible, \{ publishDerived: false \}\)/);
 assert.match(remote, /overlayStudioHeartRemotePreviewsOnFavorites/);
 assert.doesNotMatch(remote, /getDoc\(|getDocs\(|setDoc\(|updateDoc\(|fetch\(/);
 

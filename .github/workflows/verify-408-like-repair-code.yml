@@ -388,6 +388,7 @@ jobs:
         run: |
           node scripts/verify-514-mobile-note-incident.mjs
           node scripts/verify-514-folder-recovery-ui.mjs
+          node scripts/verify-515-v2-release-floor.mjs --selftest
           node scripts/verify-514-legacy-structure-guard-model.mjs
           node scripts/verify-349-studio-heart-settlement-media.mjs
           node scripts/verify-301-library-folder-create-delete-cost.mjs

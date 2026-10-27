@@ -172,6 +172,7 @@ function device(transport, { quota = false, server = 'online', clock = 100_000, 
       if (notify) window.dispatchEvent(new CustomEvent('profile', { detail: { uid } }));
     },
     holdRead: () => { holdRead = true; },
+    unholdRead: () => { holdRead = false; },
     async advance(ms) {
       const target = now + ms;
       for (;;) {
@@ -628,6 +629,7 @@ console.log('APP514_EXACT_FAVORITE_EXISTS_MISSING_REMOVED_DENIED_THREE_DEVICES_R
   d.setProfileVersion(502);
   canonical.data.musicNoteStructureVersion=502;
   canonical.data.musicNoteFolders.myNote=folders('second-phone-edit');
+  d.unholdRead();
   d.readsHeld.shift()();
   await tick();
   assert.equal(d.reads,2,'queued newer profile signal must not be swallowed');

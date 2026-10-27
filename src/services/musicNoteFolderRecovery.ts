@@ -1,6 +1,6 @@
 import { db } from '../firebase';
 import { collection, doc, getDocs, limit, orderBy, query, runTransaction } from '../lib/firestoreMeasured';
-import { getPendingMusicNoteFolderStructureBatch, type MusicNoteFolderModeKey } from './musicNoteFolderStructureBatch';
+import { getPendingMusicNoteFolderStructureBatch, getMusicNoteFolderEditEpoch, type MusicNoteFolderModeKey } from './musicNoteFolderStructureBatch';
 import { publishMusicNoteStructureDelta } from './userDomainSyncService';
 
 // Loaded only when the user opens the recovery dialog. No listener, polling,
@@ -35,7 +35,8 @@ export const listMusicNoteFolderRecovery = async (uid: string): Promise<MusicNot
 
 export const restoreMusicNoteFolderRecovery = async (
   uid: string, recordId: string, mode: MusicNoteFolderModeKey, choice: 'before' | 'after',
-): Promise<{ folders: unknown[]; version: number; changed: boolean }> => {
+  isSessionCurrent: () => boolean = () => true,
+): Promise<{ folders: unknown[]; version: number; changed: boolean; localEditDuringRestore: boolean }> => {
   if (!uid?.trim() || !/^[a-f0-9]{40}$/.test(recordId)
     || !['myNote', 'sharedNote'].includes(mode) || !['before', 'after'].includes(choice)) {
     throw new Error('잘못된 복원 요청입니다.');
@@ -44,6 +45,14 @@ export const restoreMusicNoteFolderRecovery = async (
   if (getPendingMusicNoteFolderStructureBatch(uid)?.[mode]) {
     throw new Error('이 기기에 아직 저장되지 않은 폴더 변경이 있습니다. 먼저 저장 문제를 해결해 주세요.');
   }
+  const editEpoch = getMusicNoteFolderEditEpoch(uid, mode);
+  const assertNoNewLocalEdit = (): void => {
+    if (!isSessionCurrent() || getMusicNoteFolderEditEpoch(uid, mode) !== editEpoch
+      || getPendingMusicNoteFolderStructureBatch(uid)?.[mode]) {
+      throw new Error('복원 중 계정이나 폴더 수정 상태가 바뀌었습니다. 복원을 중단했습니다.');
+    }
+  };
+  assertNoNewLocalEdit();
   const parent = doc(db, 'user_structures', uid);
   const archived = doc(db, 'user_structures', uid, 'legacy_recovery', recordId);
   const result = await runTransaction(db, async txn => {
@@ -61,12 +70,21 @@ export const restoreMusicNoteFolderRecovery = async (
     if (!Array.isArray(expected) || !Array.isArray(selected)) {
       throw new Error('이 폴더 기록은 복원할 수 없습니다.');
     }
-    // Fail closed if someone has touched this mode since the legacy collision.
-    // This also prevents re-applying the same old record after a prior restore.
+    // First restore: only from the archived after-state. Undo: only after
+    // THIS record's previous restore, with unchanged server revision.
     const current = canonicalSnap.data()?.musicNoteFolders?.[mode];
-    if (!Array.isArray(current) || JSON.stringify(current) !== JSON.stringify(expected)) {
+    const canonicalVersion = Number(canonicalSnap.data()?.musicNoteStructureVersion || 0);
+    const marker = canonicalSnap.data()?.musicNoteFolderRecoveryMarker;
+    const undo = choice === 'after'
+      && marker?.recordId === recordId && marker?.mode === mode
+      && marker?.choice === 'before' && marker?.version === canonicalVersion;
+    const baseline = undo ? history?.beforeFolders?.[mode] : expected;
+    if (!Array.isArray(current) || JSON.stringify(current) !== JSON.stringify(baseline)) {
       throw new Error('다른 기기에서 폴더가 변경되었습니다. 복원을 중단했습니다.');
     }
+    // The server read could have been held while the user made another local
+    // edit or switched accounts. Check AFTER both Firestore reads, before set.
+    assertNoNewLocalEdit();
     const versionRaw = Number(canonicalSnap.data()?.musicNoteStructureVersion || 0);
     const currentVersion = Number.isFinite(versionRaw) && versionRaw > 0 ? Math.floor(versionRaw) : 0;
     // 'After' may already be the current canonical state. Do not charge a
@@ -84,14 +102,19 @@ export const restoreMusicNoteFolderRecovery = async (
     txn.set(parent, {
       musicNoteFolders: { [mode]: selected },
       musicNoteStructureVersion: version,
+      musicNoteFolderRecoveryMarker: { recordId, mode, choice, version },
       musicNoteStructureWriterToken: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     }, { merge: true });
     return { folders: selected as unknown[], version, changed: true };
   });
+  // If a local edit appeared after transaction planning, do not repaint over
+  // it on this device. Preserve its pending data for explicit settlement.
+  const localEditDuringRestore = !isSessionCurrent() || getMusicNoteFolderEditEpoch(uid, mode) !== editEpoch
+    || Boolean(getPendingMusicNoteFolderStructureBatch(uid)?.[mode]);
   // Firestore ACK is authoritative; RTDB is just a best-effort warm-device hint.
   if (result.changed) void publishMusicNoteStructureDelta(uid, {
     musicNoteFolders: { [mode]: result.folders },
     musicNoteStructureVersion: result.version,
   }).catch(() => {});
-  return result;
+  return { ...result, localEditDuringRestore };
 };

@@ -65,6 +65,20 @@ jobs:
             node "$RUNNER_TEMP/app515-v2-release-floor.mjs" "$PWD"
           fi
 
+      - name: APP515 require active release controller before first V2 PREVIEW
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -Fq "'folder_state', 'v2'" src/services/musicNoteFolderStructureBatch.ts; then
+            controller="$(git show origin/main:.github/workflows/soridraw-release-promotion.yml)"
+            grep -Fq "APP515_V2_TEST_ROLLBACK_BLOCKED_HOLD" <<<"$controller" || {
+              echo "APP515_V2_PREVIEW_BLOCKED: update the live main release controller first"; exit 1;
+            }
+            grep -Fq "APP515_V2_PRODUCTION_ROLLBACK_BLOCKED_HOLD" <<<"$controller" || {
+              echo "APP515_V2_PREVIEW_BLOCKED: production rollback guard not live"; exit 1;
+            }
+          fi
+
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:

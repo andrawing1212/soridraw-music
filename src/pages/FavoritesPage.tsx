@@ -2520,7 +2520,7 @@ updates: draft.updates,
   };
 
   const openFolderRecoveryDetail = async (record: MusicNoteFolderRecoveryRecord) => {
-    if (!user?.uid || folderRecoveryBusy || folderRecoveryDetailLoading) return;
+    if (!user?.uid || folderRecoveryBusy || folderRecoveryDetailLoading || folderRecoveryOlderLoading) return;
     if (folderRecoverySelectedId === record.id) {
       setFolderRecoverySelectedId(null);
       setFolderRecoveryConfirm(null);

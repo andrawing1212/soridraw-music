@@ -442,8 +442,14 @@ const buildSignal = (
   if (kind === 'musicNote') {
     try {
       if (context.syncStructure && typeof context.syncStructure === 'object') {
+        const folderPayload = (context.syncStructure as Record<string, unknown>).musicNoteFolders;
         const encoded = JSON.stringify({
           __musicNoteStructureSync: true,
+          // Current clients can identify a current-version optimistic folder
+          // signal. Older open tabs lack this marker and need a bounded
+          // eventual canonical confirmation by the receiver.
+          ...(folderPayload && typeof folderPayload === 'object'
+            ? { __musicNoteFolderProtocolV2: true } : {}),
           data: context.syncStructure,
         });
         // Reuse the already-approved bounded itemJson field so no RTDB rule or

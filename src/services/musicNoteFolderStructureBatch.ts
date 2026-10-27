@@ -142,21 +142,46 @@ export const writeMusicNoteStructureIfNewer = async (
           code: 'music-note/stale-structure-version', serverVersion,
         });
       }
+      // A mixed old/new batch must not include an unchecked legacy mode:
+      // validating Shared Note alone must never overwrite newer My Note.
+      const folderModes = patch.musicNoteFolders && typeof patch.musicNoteFolders === 'object'
+        ? patch.musicNoteFolders as Record<string, unknown> : null;
+      const requestedModes = (['myNote', 'sharedNote'] as const).filter(mode =>
+        folderModes && Object.prototype.hasOwnProperty.call(folderModes, mode));
+      if (expectedBases?.length && requestedModes.some(mode =>
+        !expectedBases.some(base => base.mode === mode))) {
+        throw Object.assign(new Error('MUSIC_NOTE_STRUCTURE_UNVERIFIED_FOLDER_BASE'), {
+          code: 'music-note/stale-structure-version', serverVersion,
+        });
+      }
       // Once this client has a content baseline, the server allocates the next
       // committed revision; device clocks only label the optimistic RTDB preview.
       committedRevision = expectedBases?.length ? serverVersion + 1 : version;
-      const folderModes = patch.musicNoteFolders && typeof patch.musicNoteFolders === 'object'
-        ? patch.musicNoteFolders as Record<string, unknown> : null;
       const serverFolders = snapshot.data()?.musicNoteFolders || {};
-      const changesFolders = Boolean(folderModes && (['myNote', 'sharedNote'] as const).some(mode =>
-        Object.prototype.hasOwnProperty.call(folderModes, mode)
-        && comparableFolders(folderModes[mode]) !== comparableFolders(serverFolders[mode])));
+      const changedModes = requestedModes.filter(mode =>
+        comparableFolders(folderModes?.[mode]) !== comparableFolders(serverFolders[mode]));
+      const nextPatch: Record<string, unknown> = { ...patch };
+      if (folderModes) {
+        // Do not rewrite identical folder arrays or their metadata timestamps:
+        // Rules compare raw maps, while the client compares logical structure.
+        if (changedModes.length) {
+          nextPatch.musicNoteFolders = {
+            ...Object.fromEntries(changedModes.map(mode => [mode, folderModes[mode]])),
+            ...(Object.prototype.hasOwnProperty.call(folderModes, 'updatedAt')
+              ? { updatedAt: folderModes.updatedAt } : {}),
+          };
+        } else {
+          delete nextPatch.musicNoteFolders;
+        }
+      }
+      if (Object.keys(nextPatch).every(key => key === 'musicNoteStructureVersion')) {
+        committedRevision = serverVersion; // already canonical: no write or token
+        return;
+      }
       transaction.set(structureRef, {
-        ...patch, musicNoteStructureVersion: committedRevision,
-        // Only an actual folder change should activate the mixed-version
-        // writer-token fence. Card-state-only writes must not unexpectedly
-        // make older browser folder saves fail.
-        ...(changesFolders
+        ...nextPatch, musicNoteStructureVersion: committedRevision,
+        // Only a real folder change activates the mixed-version writer fence.
+        ...(changedModes.length
           ? { musicNoteStructureWriterToken: `${Date.now()}-${Math.random().toString(36).slice(2)}` }
           : {}),
       }, { merge: true });

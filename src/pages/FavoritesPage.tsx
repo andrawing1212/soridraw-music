@@ -176,6 +176,10 @@ const MUSIC_NOTE_STRUCTURE_CACHE_STORAGE_BASE = 'soridraw_music_note_structure_c
 const musicNoteStructureSharedSessions = new Map<string, MusicNoteStructureSharedSession>();
 // RTDB ordering is independent of device-clock/canonical structure versions.
 const musicNoteFolderSignalVersions = new Map<string, number>();
+// Only older open tabs send folder deltas without the v2 marker. Their
+// optimistic UI must settle against canonical after the existing 60s batch.
+const legacyMusicNoteFolderCheckTimers = new Map<string, number>();
+const LEGACY_MUSIC_NOTE_FOLDER_CONFIRM_MS = 65_000;
 
 const getMusicNoteStructureCacheStorageKey = (uid: string) => `${MUSIC_NOTE_STRUCTURE_CACHE_STORAGE_BASE}_${uid}`;
 
@@ -248,7 +252,9 @@ const writeMusicNoteStructureCache = (
     // Do not mark an optimistic RTDB/local edit as an acknowledged server sync.
     profileVersionSeen: Math.max(Number(previous?.profileVersionSeen || 0),
       Number(memory?.profileVersionSeen || 0)),
-    verified: verified || previous?.verified === true,
+    // An unconfirmed legacy preview must not inherit an earlier verified
+    // flag: a reload then needs a canonical check, not stale optimistic data.
+    verified,
     updatedAtMs: Date.now(),
     data: mergeMusicNoteStructureData(previous?.data, patch),
   };
@@ -2795,6 +2801,8 @@ updates: draft.updates,
         const parsed = JSON.parse(itemJson);
         if (parsed?.__musicNoteStructureSync !== true || !parsed?.data || typeof parsed.data !== 'object') return;
         const patch = parsed.data as Record<string, any>;
+        const fromOlderFolderClient = Boolean(patch.musicNoteFolders)
+          && parsed.__musicNoteFolderProtocolV2 !== true;
 
         if (patch.__musicNoteCanonicalConflict === true) {
           // Only a rejected server write triggers this single authoritative
@@ -2839,7 +2847,20 @@ updates: draft.updates,
           Number(signalVersion || 0),
           Number(readMusicNoteStructureCache(uid)?.version || 0),
         );
-        publishMusicNoteStructureSession(uid, projectMusicNoteStructureData(patch), structureVersion, true);
+        publishMusicNoteStructureSession(uid, projectMusicNoteStructureData(patch),
+          structureVersion, !fromOlderFolderClient);
+        if (fromOlderFolderClient && !legacyMusicNoteFolderCheckTimers.has(uid)) {
+          // The old browser may broadcast before its 60s Firestore save. Keep
+          // immediate visibility, then verify ONCE after that settlement window.
+          // A rejected legacy write is corrected even without a new profile
+          // version signal. Current-client writes never schedule this read.
+          const timer = window.setTimeout(() => {
+            legacyMusicNoteFolderCheckTimers.delete(uid);
+            const current = musicNoteStructureSharedSessions.get(uid);
+            if (current && !current.verified) void ensureMusicNoteStructureFresh(uid, current, true);
+          }, LEGACY_MUSIC_NOTE_FOLDER_CONFIRM_MS);
+          legacyMusicNoteFolderCheckTimers.set(uid, timer);
+        }
       } catch {}
     };
 
@@ -2852,7 +2873,14 @@ updates: draft.updates,
     window.addEventListener(MUSIC_NOTE_SYNC_EVENT, handleStructureSync as EventListener);
     const pending = readPendingMusicNoteSyncSignal(uid);
     if (pending?.operation === 'structure-update') applyStructurePayload(String(pending.itemJson || ''), Number(pending.version || 0));
-    return () => window.removeEventListener(MUSIC_NOTE_SYNC_EVENT, handleStructureSync as EventListener);
+    return () => {
+      window.removeEventListener(MUSIC_NOTE_SYNC_EVENT, handleStructureSync as EventListener);
+      const timer = legacyMusicNoteFolderCheckTimers.get(uid);
+      if (timer !== undefined) window.clearTimeout(timer);
+      legacyMusicNoteFolderCheckTimers.delete(uid);
+      // Keep unverified legacy preview in local cache, so reopening will read
+      // canonical. No background Firestore read after unmount/logout.
+    };
   }, [user?.uid]);
 
   useEffect(() => {

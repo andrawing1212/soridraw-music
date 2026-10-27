@@ -79,7 +79,7 @@ console.log('APP514_RECOVERY_ONLY_CHANGED_MODES_AND_EXPLICIT_CHOICE=PASS');
 const indexSource = require('node:fs').readFileSync('src/index.ts', 'utf8');
 assert.match(indexSource, /buildLegacyMusicNoteFolderRecovery\(before, after\)/);
 assert.match(indexSource, /\.collection\("legacy_recovery"\)\.doc\(eventKey\)/);
-assert.match(indexSource, /await recoveryRef\.create\(recoveryPayload\)/);
+assert.match(indexSource, /await recoveryRef\.create\(archive\.manifest\)/);
 assert.match(indexSource, /if \(legacyRecovery\)/);
 console.log('APP514_RECOVERY_CONFLICT_ONLY_IDEMPOTENT_WRITE_PATH=PASS');
 

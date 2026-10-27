@@ -2801,8 +2801,9 @@ updates: draft.updates,
         const parsed = JSON.parse(itemJson);
         if (parsed?.__musicNoteStructureSync !== true || !parsed?.data || typeof parsed.data !== 'object') return;
         const patch = parsed.data as Record<string, any>;
-        const fromOlderFolderClient = Boolean(patch.musicNoteFolders)
-          && parsed.__musicNoteFolderProtocolV2 !== true;
+        // Both old and new RTDB folder payloads are previews, never a
+        // canonical Firestore acknowledgement. Require a later server check.
+        const hasUnconfirmedFolderPreview = Boolean(patch.musicNoteFolders);
 
         if (patch.__musicNoteCanonicalConflict === true) {
           // Only a rejected server write triggers this single authoritative
@@ -2848,10 +2849,10 @@ updates: draft.updates,
           Number(readMusicNoteStructureCache(uid)?.version || 0),
         );
         publishMusicNoteStructureSession(uid, projectMusicNoteStructureData(patch),
-          structureVersion, !fromOlderFolderClient);
-        if (fromOlderFolderClient) {
-          // The old browser may broadcast before its 60s Firestore save. Keep
-          // immediate visibility, then verify once 65s after the LAST edit.
+          structureVersion, !hasUnconfirmedFolderPreview);
+        if (hasUnconfirmedFolderPreview) {
+          // Both client versions may broadcast before their 60s Firestore save.
+          // Keep immediate visibility, then verify once 65s after the LAST edit.
           // Repeated renames collapse into one check, like the write batch.
           const previous = legacyMusicNoteFolderCheckTimers.get(uid);
           if (previous !== undefined) window.clearTimeout(previous);
@@ -2887,7 +2888,7 @@ updates: draft.updates,
       const timer = legacyMusicNoteFolderCheckTimers.get(uid);
       if (timer !== undefined) window.clearTimeout(timer);
       legacyMusicNoteFolderCheckTimers.delete(uid);
-      // Keep unverified legacy preview in local cache, so reopening will read
+      // Keep unverified folder previews in local cache, so reopening will read
       // canonical. No background Firestore read after unmount/logout.
     };
   }, [user?.uid]);

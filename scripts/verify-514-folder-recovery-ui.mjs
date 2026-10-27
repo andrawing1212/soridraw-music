@@ -104,6 +104,20 @@ assert.match(page,/restoreMusicNoteFolderRecovery\(/);
 assert.match(rules,/match \/user_structures\/\{uid\}\/legacy_recovery\/\{recoveryId\}/);
 assert.match(rules,/allow create, update, delete: if false/);
 console.log('APP514_RECOVERY_NO_AUTOMATIC_READ_AND_EXPLICIT_UI=PASS');
+// A legacy recovery archive must be attempted even when the independent
+// users/{uid} profile-signal transaction fails. Check the actual trigger
+// control-flow contract; it must await both branches, not short-circuit.
+const triggerSource = readFileSync('functions/src/index.ts', 'utf8');
+const triggerBegin = triggerSource.indexOf('export const syncMusicNoteStructureVersion');
+const triggerEnd = triggerSource.indexOf('// SORIDRAW_SECTION_TAGS_SHARED_BUNDLE_', triggerBegin);
+assert.ok(triggerBegin >= 0 && triggerEnd > triggerBegin);
+const triggerBody = triggerSource.slice(triggerBegin, triggerEnd);
+assert.match(triggerBody, /const signalTask = firestore\.runTransaction\(/);
+assert.match(triggerBody, /const archiveTask = \(async \(\) => \{/);
+assert.match(triggerBody, /const \[signalResult\] = await Promise\.allSettled\(\[signalTask, archiveTask\]\)/);
+assert.match(triggerBody, /if \(signalResult\.status === "rejected"\) throw signalResult\.reason/);
+assert.match(triggerBody, /APP514_LEGACY_RECOVERY_ARCHIVE_FAILED/);
+console.log('APP514_LEGACY_ARCHIVE_INDEPENDENT_OF_PROFILE_SIGNAL_FAILURE=PASS');
 
 const records=await exports.listMusicNoteFolderRecovery(uid);
 assert.equal(reads,1);

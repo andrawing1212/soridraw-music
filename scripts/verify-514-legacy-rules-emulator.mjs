@@ -3,17 +3,10 @@ import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import { doc, setDoc, getDoc, getDocs, collection } from 'firebase/firestore';
 
-// Real Firestore emulator, real Rules parser and enforcement. No production
-// project/network/data. The source firestore.rules file is NEVER modified.
-const proposed = readFileSync('DOCS/APP514_USER_STRUCTURES_GUARD_CANDIDATE.md', 'utf8');
-const snippet = proposed.match(/```firestore\s*\n([\s\S]*?)\n```/)?.[1];
-assert.ok(snippet, 'candidate snippet is missing');
-const original = readFileSync('firestore.rules', 'utf8');
-const baseline = `match /user_structures/{uid} {
-      allow read, write: if isOwner(uid) || isAdmin();
-    }`;
-assert.equal(original.split(baseline).length, 2, 'must have one unchanged user_structures rule');
-const rules = original.replace(baseline, snippet);
+// Execute the actual staged source Rules in an isolated emulator only.
+// This never deploys or changes shared PREVIEW/TEST/PRODUCTION Rules.
+const rules = readFileSync('firestore.rules', 'utf8');
+assert.match(rules, /function safeMusicNoteFolderUpdate\(\)/);
 const uid = 'fixture-app514-owner';
 const path = 'user_structures/' + uid;
 const env = await initializeTestEnvironment({
@@ -22,6 +15,7 @@ const env = await initializeTestEnvironment({
 });
 const initial = {
   musicNoteStructureVersion: 100001,
+  musicNoteStructureWriterToken: 'modern-writer-100001',
   musicNoteFolders: { myNote: [{ id: 'f', title: 'canonical-new' }] },
   musicNoteCardState: { items: { s: { liked: true } } },
 };
@@ -44,13 +38,16 @@ try {
   console.log('APP514_EMULATOR_EQUAL_VERSION_FOLDER_DENIED=PASS');
 
   await assertSucceeds(setDoc(owner, { musicNoteStructureVersion: 100002,
+    musicNoteStructureWriterToken: 'modern-writer-100002',
     musicNoteFolders: { myNote: [{ id: 'f', title: 'new-client' }] } }, { merge: true }));
   assert.equal(await readTitle(), 'new-client');
   console.log('APP514_EMULATOR_FRESH_MODERN_FOLDER_ACCEPTED=PASS');
 
-  await assertFails(setDoc(owner, { musicNoteStructureVersion: 100000,
+  await assertSucceeds(setDoc(owner, { musicNoteStructureVersion: 100000,
     musicNoteCardState: { items: { s: { liked: false } } } }, { merge: true }));
-  console.log('APP514_EMULATOR_OLD_CARD_STATE_WRITER_REJECTED_COMPAT_BLOCKER=PASS');
+  assert.equal((await getDoc(owner)).data()?.musicNoteCardState?.items?.s?.liked, false);
+  assert.equal(await readTitle(), 'new-client');
+  console.log('APP514_EMULATOR_OLD_CARD_STATE_WRITER_STILL_WORKS=PASS');
 
   await assertFails(setDoc(owner, {
     musicNoteFolders: { myNote: [{ id: 'f', title: 'versionless-legacy' }] },
@@ -63,14 +60,41 @@ try {
   }, { merge: true }));
   console.log('APP514_EMULATOR_NONOWNER_DENIED=PASS');
 
-  // Confirms the candidate is NOT a complete solution: device-clock version
-  // can be higher for an older human intent. Do not activate this rule alone.
-  await assertSucceeds(setDoc(owner, {
+  // Old browser with a fast local clock still has the unchanged modern token.
+  // Do not allow it to overwrite the legitimate new folder just by advancing
+  // its timestamp-based numeric version.
+  await assertFails(setDoc(owner, {
     musicNoteStructureVersion: 200000,
     musicNoteFolders: { myNote: [{ id: 'f', title: 'old-intent-fast-clock' }] },
   }, { merge: true }));
-  assert.equal(await readTitle(), 'old-intent-fast-clock');
-  console.log('APP514_EMULATOR_FAST_CLOCK_STALE_INTENT_CAN_OVERWRITE=CONFIRMED_RISK');
+  assert.equal(await readTitle(), 'new-client');
+  console.log('APP514_EMULATOR_FAST_CLOCK_OLD_FOLDER_DENIED=PASS');
+
+  // Full modern edit is still accepted even when an old card-only write
+  // pushed the legacy numeric version down.
+  await assertSucceeds(setDoc(owner, {
+    musicNoteStructureVersion: 100001,
+    musicNoteStructureWriterToken: 'modern-writer-100003',
+    musicNoteFolders: { myNote: [{ id: 'f', title: 'newest-modern' }] },
+  }, { merge: true }));
+  assert.equal(await readTitle(), 'newest-modern');
+  console.log('APP514_EMULATOR_MODERN_AFTER_LEGACY_CARD_ONLY=PASS');
+
+  // Old data with no writer token must remain editable during transition.
+  // The owner can only write its own document; simulate a tokenless document
+  // on the same owner path after testing the main locked document.
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), path), {
+      musicNoteFolders: { myNote: [{ id: 'f', title: 'tokenless' }] },
+      musicNoteStructureVersion: 4,
+    });
+  });
+  await assertSucceeds(setDoc(owner, {
+    musicNoteFolders: { myNote: [{ id: 'f', title: 'old-before-upgrade' }] },
+    musicNoteStructureVersion: 5,
+  }, { merge: true }));
+  assert.equal(await readTitle(), 'old-before-upgrade');
+  console.log('APP514_EMULATOR_TOKENLESS_EXISTING_USER_NOT_LOCKED=PASS');
 
   // Immutable archive: trusted trigger/Admin SDK can create, owner can
   // read only after pressing the recovery button; no account can mutate it.
@@ -112,4 +136,4 @@ try {
 } finally {
   await env.cleanup();
 }
-console.log('APP514_EMULATOR_CANDIDATE_VALID_BUT_UNSAFE_FOR_LEGACY_RELEASE=PASS');
+console.log('APP514_EMULATOR_STAGED_FOLDER_FENCE_MIXED_CLIENT_CONTRACT=PASS');

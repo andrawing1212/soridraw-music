@@ -452,23 +452,43 @@ jobs:
           rollback_media_worker(){ stage="$1"; version="$2"; flag="$3"; [ "$(cat "$flag" 2>/dev/null)" = true ] || return; cd "$RELEASE_ROOT"; RELEASE_MEDIA_WORKER_VERSION="$version" node .deploy/release-media-worker-runtime.mjs "$stage" restore; }
           rollback_release(){ flag="$1"; tag_file="$2"; [ "$(cat "$flag" 2>/dev/null)" = true ] || return; tag="$(cat "$tag_file" 2>/dev/null)"; [ -n "$tag" ] || return; gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag; }
           rollback_branch(){ branch="$1"; original="$2"; promoted_file="$3"; flag="$4"; [ "$(cat "$flag" 2>/dev/null)" = true ] || return; [ -f "$promoted_file" ] || return; current="$(git ls-remote origin "refs/heads/$branch"|cut -f1)"; test "$current" = "$(cat "$promoted_file")" || return; tree="$(git rev-parse "$original^{tree}")"; rollback="$(printf 'rollback: restore %s after failed controlled release\n' "$branch"|git commit-tree "$tree" -p "$current")"; git push origin "$rollback:refs/heads/$branch"; }
+          # Only a V2-aware previous app is safe to restore once V2 has been
+          # adopted. On guard/tool errors fail closed for Hosting and branch,
+          # but still attempt the original Workers/Media compensation.
+          rollback_v2_compatible(){
+            stage="$1"; original="$2"; root="$RUNNER_TEMP/app515-rollback-$stage"
+            [ -n "$original" ] || return 1
+            rm -rf "$root"
+            git worktree add --detach "$root" "$original" || return 1
+            node "$GITHUB_WORKSPACE/scripts/verify-515-v2-release-floor.mjs" "$root"
+          }
           if [ "${{ steps.request.outputs.mode }}" = test ]; then
             rollback_worker test "$(cat "$RUNNER_TEMP/test-worker-before" 2>/dev/null)" "$RUNNER_TEMP/test-worker-schedules-before" "$RUNNER_TEMP/test-worker-mutated"
             rollback_media_worker test "$(cat "$RUNNER_TEMP/test-media-worker-before" 2>/dev/null)" "$RUNNER_TEMP/test-media-worker-mutated"
             rollback_release "$RUNNER_TEMP/test-release-mutated" "$RUNNER_TEMP/test-release-tag"
-            rollback_branch main "$(cat "$RUNNER_TEMP/main-before")" "$RUNNER_TEMP/main-promoted" "$RUNNER_TEMP/test-branch-mutated"
-            if [ "$(cat "$RUNNER_TEMP/test-hosting-mutated" 2>/dev/null)" = true ]; then
-              rm -rf "$RUNNER_TEMP/hosting-rollback"; git worktree add --detach "$RUNNER_TEMP/hosting-rollback" "$(cat "$RUNNER_TEMP/main-before")"
-              (cd "$RUNNER_TEMP/hosting-rollback" && npm ci --no-audit --no-fund && npm run build && npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-test.json --non-interactive)
+            if [ "$(cat "$RUNNER_TEMP/test-branch-mutated" 2>/dev/null)" = true ] || [ "$(cat "$RUNNER_TEMP/test-hosting-mutated" 2>/dev/null)" = true ]; then
+              if rollback_v2_compatible test "$(cat "$RUNNER_TEMP/main-before")"; then
+                rollback_branch main "$(cat "$RUNNER_TEMP/main-before")" "$RUNNER_TEMP/main-promoted" "$RUNNER_TEMP/test-branch-mutated"
+                if [ "$(cat "$RUNNER_TEMP/test-hosting-mutated" 2>/dev/null)" = true ]; then
+                  (cd "$RUNNER_TEMP/app515-rollback-test" && npm ci --no-audit --no-fund && npm run build && npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-test.json --non-interactive)
+                fi
+              else
+                echo "APP515_V2_TEST_ROLLBACK_BLOCKED_HOLD: previous Hosting/branch cannot safely read V2; fix forward only"
+              fi
             fi
           fi
           if [ "${{ steps.request.outputs.mode }}" = production ]; then
             rollback_worker production "$(cat "$RUNNER_TEMP/production-worker-before" 2>/dev/null)" "$RUNNER_TEMP/production-worker-schedules-before" "$RUNNER_TEMP/production-worker-mutated"
             rollback_media_worker production "$(cat "$RUNNER_TEMP/production-media-worker-before" 2>/dev/null)" "$RUNNER_TEMP/production-media-worker-mutated"
-            rollback_branch production "$(cat "$RUNNER_TEMP/production-before")" "$RUNNER_TEMP/production-promoted" "$RUNNER_TEMP/production-branch-mutated"
-            if [ "$(cat "$RUNNER_TEMP/production-hosting-mutated" 2>/dev/null)" = true ]; then
-              rm -rf "$RUNNER_TEMP/hosting-rollback"; git worktree add --detach "$RUNNER_TEMP/hosting-rollback" "$(cat "$RUNNER_TEMP/production-before")"
-              (cd "$RUNNER_TEMP/hosting-rollback" && npm ci --no-audit --no-fund && npm run build && npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-production.json --non-interactive)
+            if [ "$(cat "$RUNNER_TEMP/production-branch-mutated" 2>/dev/null)" = true ] || [ "$(cat "$RUNNER_TEMP/production-hosting-mutated" 2>/dev/null)" = true ]; then
+              if rollback_v2_compatible production "$(cat "$RUNNER_TEMP/production-before")"; then
+                rollback_branch production "$(cat "$RUNNER_TEMP/production-before")" "$RUNNER_TEMP/production-promoted" "$RUNNER_TEMP/production-branch-mutated"
+                if [ "$(cat "$RUNNER_TEMP/production-hosting-mutated" 2>/dev/null)" = true ]; then
+                  (cd "$RUNNER_TEMP/app515-rollback-production" && npm ci --no-audit --no-fund && npm run build && npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-production.json --non-interactive)
+                fi
+              else
+                echo "APP515_V2_PRODUCTION_ROLLBACK_BLOCKED_HOLD: previous Hosting/branch cannot safely read V2; fix forward only"
+              fi
             fi
           fi
           [ "$mutated" = true ] && node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update FAILED || true

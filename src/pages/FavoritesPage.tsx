@@ -2871,10 +2871,18 @@ updates: draft.updates,
     };
 
     window.addEventListener(MUSIC_NOTE_SYNC_EVENT, handleStructureSync as EventListener);
+    const checkLegacyOnReconnect = () => {
+      const current = musicNoteStructureSharedSessions.get(uid);
+      // A denied legacy write produces no canonical notification. A failed
+      // offline confirmation must get one more chance after reconnect.
+      if (current && !current.verified) void ensureMusicNoteStructureFresh(uid, current, true);
+    };
+    window.addEventListener('online', checkLegacyOnReconnect);
     const pending = readPendingMusicNoteSyncSignal(uid);
     if (pending?.operation === 'structure-update') applyStructurePayload(String(pending.itemJson || ''), Number(pending.version || 0));
     return () => {
       window.removeEventListener(MUSIC_NOTE_SYNC_EVENT, handleStructureSync as EventListener);
+      window.removeEventListener('online', checkLegacyOnReconnect);
       const timer = legacyMusicNoteFolderCheckTimers.get(uid);
       if (timer !== undefined) window.clearTimeout(timer);
       legacyMusicNoteFolderCheckTimers.delete(uid);

@@ -67,9 +67,9 @@ export const syncMusicNoteStructureVersion = functions
     const firestore = admin.firestore();
     const userRef = firestore.collection("users").doc(uid);
 
-    // The ordinary version signal is the critical path for PC↔mobile
-    // convergence. Recovery archive work must never delay or suppress it.
-    await firestore.runTransaction(async (transaction) => {
+    // Start the ordinary profile signal immediately; the independent recovery
+    // task must still run if this transaction fails or has to retry.
+    const signalTask = firestore.runTransaction(async (transaction) => {
       const userSnapshot = await transaction.get(userRef);
       if (!userSnapshot.exists) return;
       const currentVersion = Number(userSnapshot.data()?.syncVersions?.musicNoteStructure || 0);
@@ -78,9 +78,10 @@ export const syncMusicNoteStructureVersion = functions
       transaction.set(userRef, { syncVersions: { musicNoteStructure: nextVersion } }, { merge: true });
     });
 
-    // An older browser may overwrite a modern folder state. Preserve its
-    // before/after snapshots when possible, but never propagate an archive
-    // failure into the normal sync trigger (no song data is modified here).
+    // Legacy before/after snapshots are taken from the Firestore event itself.
+    // Run this independently of profile sync: failure in either path must not
+    // prevent the other path from being attempted.
+    const archiveTask = (async () => {
     try {
       const legacyRecovery = buildLegacyMusicNoteFolderRecovery(before, after);
       if (legacyRecovery) {
@@ -111,13 +112,18 @@ export const syncMusicNoteStructureVersion = functions
         }
       }
     } catch (error: any) {
-      // Only log a bounded diagnostic marker, never folder/song contents.
-      // An archive failure needs incident follow-up; it is NOT a sync failure.
+      // Log bounded metadata, not user content. An archive failure is still a
+      // release blocker: this asynchronous trigger cannot guarantee a backup.
       console.error("APP514_LEGACY_RECOVERY_ARCHIVE_FAILED", {
         eventId: String(context.eventId || "").slice(0, 80),
         code: String(error?.code || "archive-error").slice(0, 64),
       });
     }
+    })();
+    // allSettled waits for both independent attempts. In particular, a failed
+    // users/{uid} signal must not cancel archiving of a committed legacy edit.
+    const [signalResult] = await Promise.allSettled([signalTask, archiveTask]);
+    if (signalResult.status === "rejected") throw signalResult.reason;
   });
 
 // SORIDRAW_SECTION_TAGS_SHARED_BUNDLE_20260904

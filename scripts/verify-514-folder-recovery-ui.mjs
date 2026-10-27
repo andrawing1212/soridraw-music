@@ -305,3 +305,122 @@ console.log('APP514_RECOVERY_CONCURRENT_LOCAL_EDIT_AND_ACCOUNT_SWITCH_BLOCKED=PA
   assert.equal(pending.myNote.folders[0].title,'Newer local edit');
   console.log('APP514_LATE_NEW_LOCAL_EDIT_SUPPRESSES_STALE_RECOVERY_RTDB=PASS');
 }
+
+
+// app515 executable cross-version compare. Run the real service from source in
+// an isolated second VM, with two independent fake Firestore documents.
+// Modern-only edits must not show as old PC conflicts; a later old PC edit is
+// selectable without changing the old source or unrelated folder mode.
+{
+  const modernOriginal = [{id:'default',title:'Old source at migration'}];
+  const legacyNow = [{id:'default',title:'Legacy PC genuine later edit'}];
+  const modernNow = [{id:'default',title:'New mobile saved edit'}];
+  const sharedOriginal = [{id:'shared',title:'Shared unchanged'}];
+  const oldParent = {
+    musicNoteFolders:{myNote:copy(modernOriginal),sharedNote:copy(sharedOriginal)},
+    musicNoteStructureVersion:100,
+  };
+  const modern = {
+    schemaVersion:2,musicNoteStructureVersion:201,
+    musicNoteStructureWriterToken:'writer-modern-201',
+    legacyBaseSignatures:{
+      myNote:JSON.stringify(modernOriginal),
+      sharedNote:JSON.stringify(sharedOriginal),
+    },
+    musicNoteFolders:{myNote:copy(modernNow),sharedNote:copy(sharedOriginal)},
+  };
+  const modeSignature = value=>JSON.stringify(value);
+  const compareWrites=[]; const compareEmits=[];
+  let compareReadCount=0, comparePending=null, compareEpoch=0;
+  const parentPath='user_structures/'+uid;
+  const v2Path=parentPath+'/folder_state/v2';
+  const sdkCompare={
+    doc:(_db,...segments)=>segments.join('/'),
+    getDocFromServer:async path=>{
+      compareReadCount++;
+      const value=path===parentPath?oldParent:modern;
+      assert.ok([parentPath,v2Path].includes(path));
+      return {exists:()=>Boolean(value),data:()=>copy(value)};
+    },
+    runTransaction:async (_db,fn)=>{
+      const staged=[];
+      const txn={
+        get:async path=>{
+          compareReadCount++;
+          assert.ok([parentPath,v2Path].includes(path));
+          const value=path===parentPath?oldParent:modern;
+          return {exists:()=>Boolean(value),data:()=>copy(value)};
+        },
+        set:(path,patch,opt)=>{assert.equal(path,v2Path);assert.equal(opt?.merge,true);staged.push(patch);},
+      };
+      const result=await fn(txn);
+      for(const patch of staged){
+        modern.musicNoteFolders={...modern.musicNoteFolders,...copy(patch.musicNoteFolders)};
+        modern.musicNoteStructureVersion=patch.musicNoteStructureVersion;
+        modern.musicNoteStructureWriterToken=patch.musicNoteStructureWriterToken;
+        modern.legacyBaseSignatures={...modern.legacyBaseSignatures,...patch.legacyBaseSignatures};
+        compareWrites.push(copy(patch));
+      }
+      return result;
+    },
+  };
+  const compareExports={};
+  runInNewContext(ts.transpileModule(source,{
+    fileName:'musicNoteFolderRecovery.ts',
+    compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS},
+  }).outputText,{
+    exports:compareExports, console, Date, Math,
+    require:name=>{
+      if(name.endsWith('/firebase'))return {db:{}};
+      if(name.endsWith('/firestoreMeasured'))return sdkCompare;
+      if(name.endsWith('/musicNoteFolderStructureBatch'))return {
+        getPendingMusicNoteFolderStructureBatch:()=>comparePending,
+        getMusicNoteFolderEditEpoch:()=>compareEpoch,
+        getMusicNoteLegacyFolderSignature:modeSignature,
+      };
+      if(name.endsWith('/userDomainSyncService'))return {
+        publishMusicNoteStructureDelta:async (...args)=>{compareEmits.push(copy(args));},
+      };
+      throw Error('unapproved compare import '+name);
+    },
+  });
+
+  // The migration itself and new-only changes cannot be misreported as
+  // legacy conflicts just because two canonical documents differ.
+  let cmp=await compareExports.getMusicNoteLegacyFolderComparison(uid);
+  assert.equal(cmp.changedModes.length,0);
+  assert.equal(compareReadCount,2,'two exact reads only upon explicit dialog open');
+  oldParent.musicNoteFolders.myNote=copy(legacyNow);
+  cmp=await compareExports.getMusicNoteLegacyFolderComparison(uid);
+  assert.deepEqual(Array.from(cmp.changedModes),['myNote']);
+  assert.equal(cmp.modernFolders.myNote[0].title,'New mobile saved edit');
+  assert.equal(cmp.legacyFolders.myNote[0].title,'Legacy PC genuine later edit');
+  assert.equal(compareWrites.length,0);
+  console.log('APP515_EXPLICIT_OLD_V2_COMPARISON_R2_NO_FALSE_CONFLICT_W0=PASS');
+
+  const keep=await compareExports.restoreMusicNoteLegacyFolderChoice(uid,'myNote','modern',cmp);
+  assert.equal(keep.changed,false);assert.equal(compareWrites.length,0);
+  comparePending={myNote:{folders:copy(legacyNow),version:3}};
+  await assert.rejects(compareExports.restoreMusicNoteLegacyFolderChoice(uid,'myNote','legacy',cmp),
+    /아직 저장되지 않은/);
+  comparePending=null;
+  assert.equal(compareWrites.length,0);
+  console.log('APP515_LOCAL_PENDING_AND_KEEP_MODERN_ARE_W0=PASS');
+
+  oldParent.musicNoteFolders.myNote=[{id:'default',title:'Another old device changed'}];
+  await assert.rejects(compareExports.restoreMusicNoteLegacyFolderChoice(uid,'myNote','legacy',cmp),
+    /다른 기기에서/);
+  assert.equal(compareWrites.length,0);
+  oldParent.musicNoteFolders.myNote=copy(legacyNow);
+  const chosen=await compareExports.restoreMusicNoteLegacyFolderChoice(uid,'myNote','legacy',cmp);
+  assert.equal(chosen.changed,true);
+  assert.equal(compareWrites.length,1);
+  assert.equal(modern.musicNoteFolders.myNote[0].title,'Legacy PC genuine later edit');
+  assert.equal(modern.musicNoteFolders.sharedNote[0].title,'Shared unchanged');
+  assert.equal(oldParent.musicNoteFolders.myNote[0].title,'Legacy PC genuine later edit');
+  assert.equal(modern.legacyBaseSignatures.myNote,modeSignature(legacyNow));
+  assert.equal(compareEmits.length,1);
+  cmp=await compareExports.getMusicNoteLegacyFolderComparison(uid);
+  assert.equal(cmp.changedModes.length,0,'reconciled edit should not be offered again');
+  console.log('APP515_MANUAL_CAS_RESTORE_ONE_V2_WRITE_LEGACY_AND_SHARED_UNCHANGED=PASS');
+}

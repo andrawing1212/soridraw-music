@@ -26,6 +26,7 @@ import {
 import React, { useState, useEffect, useLayoutEffect, useRef, useDeferredValue } from 'react';
 import {
   listMusicNoteFolderRecovery,
+  getMusicNoteFolderRecoveryDetail,
   restoreMusicNoteFolderRecovery,
   getMusicNoteLegacyFolderComparison,
   restoreMusicNoteLegacyFolderChoice,
@@ -1406,6 +1407,8 @@ export default function FavoritesPage({
   folderRecoveryUidRef.current = user?.uid;
   const [folderRecoveryOpen, setFolderRecoveryOpen] = useState(false);
   const [folderRecoveryRecords, setFolderRecoveryRecords] = useState<MusicNoteFolderRecoveryRecord[]>([]);
+  const [folderRecoverySelectedId, setFolderRecoverySelectedId] = useState<string | null>(null);
+  const [folderRecoveryDetailLoading, setFolderRecoveryDetailLoading] = useState(false);
   const [folderLegacyComparison, setFolderLegacyComparison] = useState<MusicNoteLegacyFolderComparison | null>(null);
   const [folderLegacyConfirm, setFolderLegacyConfirm] = useState<{
     mode: 'myNote' | 'sharedNote'; choice: 'legacy' | 'modern';
@@ -2442,6 +2445,8 @@ updates: draft.updates,
     // Never retain a previous account's private conflict snapshots.
     setFolderRecoveryOpen(false);
     setFolderRecoveryRecords([]);
+    setFolderRecoverySelectedId(null);
+    setFolderRecoveryDetailLoading(false);
     setFolderLegacyComparison(null);
     setFolderLegacyConfirm(null);
     setFolderRecoveryConfirm(null);
@@ -2455,6 +2460,8 @@ updates: draft.updates,
     setFolderRecoveryOpen(true);
     setFolderRecoveryLoading(true);
     setFolderRecoveryRecords([]);
+    setFolderRecoverySelectedId(null);
+    setFolderRecoveryDetailLoading(false);
     setFolderLegacyComparison(null);
     setFolderLegacyConfirm(null);
     setFolderRecoveryError('');
@@ -2474,6 +2481,41 @@ updates: draft.updates,
       if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) setFolderRecoveryError('충돌 기록을 읽지 못했습니다. 서버 권한 적용 여부를 확인해 주세요.');
     } finally {
       if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) setFolderRecoveryLoading(false);
+    }
+  };
+
+  const openFolderRecoveryDetail = async (record: MusicNoteFolderRecoveryRecord) => {
+    if (!user?.uid || folderRecoveryBusy || folderRecoveryDetailLoading) return;
+    if (folderRecoverySelectedId === record.id) {
+      setFolderRecoverySelectedId(null);
+      setFolderRecoveryConfirm(null);
+      return;
+    }
+    if (record.detailLoaded) {
+      setFolderRecoverySelectedId(record.id);
+      setFolderRecoveryConfirm(null);
+      return;
+    }
+    const requestUid = user.uid;
+    const requestNumber = ++folderRecoveryRequestRef.current;
+    setFolderRecoveryDetailLoading(true);
+    setFolderRecoveryError('');
+    setFolderRecoveryConfirm(null);
+    try {
+      const detail = await getMusicNoteFolderRecoveryDetail(requestUid, record.id);
+      if (folderRecoveryUidRef.current === requestUid
+        && folderRecoveryRequestRef.current === requestNumber) {
+        setFolderRecoveryRecords(current => current.map(row => row.id === detail.id ? detail : row));
+        setFolderRecoverySelectedId(detail.id);
+      }
+    } catch (error: any) {
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) {
+        setFolderRecoveryError(String(error?.message || '선택한 충돌 기록을 읽지 못했습니다.'));
+      }
+    } finally {
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) {
+        setFolderRecoveryDetailLoading(false);
+      }
     }
   };
 
@@ -9034,7 +9076,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   <p className="mt-1 text-xs text-white/60">최근 기록 10개까지만 확인합니다. 기록을 선택해도 자동 복원되지 않습니다.</p>
                 </div>
                 <button type="button" aria-label="닫기" disabled={folderRecoveryBusy}
-                  onClick={() => { setFolderRecoveryOpen(false); setFolderRecoveryConfirm(null); }}
+                  onClick={() => { folderRecoveryRequestRef.current += 1; setFolderRecoveryOpen(false); setFolderRecoveryConfirm(null); setFolderRecoverySelectedId(null); setFolderRecoveryDetailLoading(false); }}
                   className="p-2 text-white/70 hover:text-white"><X className="h-4 w-4" /></button>
               </div>
               {folderRecoveryLoading && <p className="mt-5 text-sm text-white/70">기록을 확인하고 있습니다.</p>}
@@ -9080,12 +9122,25 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   )}
                 </section>
               )}
-              <div className="mt-4 space-y-4">
+              <div className="mt-4 space-y-3">
                 {folderRecoveryRecords.map(record => (
                   <div key={record.id} className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
-                    <p className="mb-2 text-xs text-white/50">
-                      {record.observedAtMs > 0 ? new Date(record.observedAtMs).toLocaleString('ko-KR') : '충돌 기록'}
-                    </p>
+                    <button type="button"
+                      disabled={folderRecoveryBusy || folderRecoveryDetailLoading}
+                      onClick={() => void openFolderRecoveryDetail(record)}
+                      className="w-full rounded-lg bg-black/20 p-2 text-left text-xs text-white/85 disabled:opacity-50">
+                      <strong>{record.observedAtMs > 0 ? new Date(record.observedAtMs).toLocaleString('ko-KR') : '충돌 기록'}</strong>
+                      <span className="ml-2 text-white/60">
+                        {record.changedModes.map(mode => mode === 'myNote' ? '마이 노트' : '공유 노트').join(' · ')}
+                      </span>
+                      <p className="mt-1 text-white/60">
+                        {folderRecoverySelectedId === record.id ? '상세 접기'
+                          : folderRecoveryDetailLoading ? '상세 확인 중'
+                          : '이 기록의 덮어쓰기 전·후 폴더 확인'}
+                      </p>
+                    </button>
+                    {folderRecoverySelectedId === record.id && record.detailLoaded && (
+                      <div className="mt-3">
                     {record.changedModes.map(mode => (
                       <div key={mode} className="mb-3 last:mb-0">
                         <p className="mb-2 text-sm font-bold">{mode === 'myNote' ? '마이 노트' : '공유 노트'}</p>
@@ -9107,6 +9162,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         })}
                       </div>
                     ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

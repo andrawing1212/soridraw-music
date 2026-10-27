@@ -1316,6 +1316,7 @@ export default function FavoritesPage({
   const [favoriteMemoExpanded, setFavoriteMemoExpanded] = useState(false);
   const [favoriteToastMessage, setFavoriteToastMessage] = useState<string | null>(null);
   const [folderSaveStatus, setFolderSaveStatus] = useState<MusicNoteFolderSaveStatus | null>(null);
+  const folderRecoveryRequestRef = useRef(0);
   const folderRecoveryUidRef = useRef(user?.uid);
   folderRecoveryUidRef.current = user?.uid;
   const [folderRecoveryOpen, setFolderRecoveryOpen] = useState(false);
@@ -2344,6 +2345,11 @@ updates: draft.updates,
   ].filter(Boolean).join(' ') : null;
 
   useEffect(() => {
+    // Invalidate both pending reads and writes before a different account
+    // opens recovery. Do not leave disabled buttons stuck across account swaps.
+    folderRecoveryRequestRef.current += 1;
+    setFolderRecoveryLoading(false);
+    setFolderRecoveryBusy(false);
     // Never retain a previous account's private conflict snapshots.
     setFolderRecoveryOpen(false);
     setFolderRecoveryRecords([]);
@@ -2354,6 +2360,7 @@ updates: draft.updates,
   const openFolderRecovery = async () => {
     if (!user?.uid || folderRecoveryLoading || folderRecoveryBusy) return;
     const requestUid = user.uid;
+    const requestNumber = ++folderRecoveryRequestRef.current;
     setFolderRecoveryOpen(true);
     setFolderRecoveryLoading(true);
     setFolderRecoveryRecords([]);
@@ -2361,25 +2368,27 @@ updates: draft.updates,
     setFolderRecoveryConfirm(null);
     try {
       const records = await listMusicNoteFolderRecovery(requestUid);
-      if (folderRecoveryUidRef.current === requestUid) setFolderRecoveryRecords(records);
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) setFolderRecoveryRecords(records);
     } catch {
-      if (folderRecoveryUidRef.current === requestUid) setFolderRecoveryError('충돌 기록을 읽지 못했습니다. 서버 권한 적용 여부를 확인해 주세요.');
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) setFolderRecoveryError('충돌 기록을 읽지 못했습니다. 서버 권한 적용 여부를 확인해 주세요.');
     } finally {
-      if (folderRecoveryUidRef.current === requestUid) setFolderRecoveryLoading(false);
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) setFolderRecoveryLoading(false);
     }
   };
 
   const confirmFolderRecovery = async () => {
     if (!user?.uid || !folderRecoveryConfirm || folderRecoveryBusy) return;
     const requestUid = user.uid;
+    const requestNumber = ++folderRecoveryRequestRef.current;
     setFolderRecoveryBusy(true);
     setFolderRecoveryError('');
     try {
       const result = await restoreMusicNoteFolderRecovery(
         requestUid, folderRecoveryConfirm.id, folderRecoveryConfirm.mode, folderRecoveryConfirm.choice,
+        () => folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber,
       );
       // Authoritative ACK only, never a speculative optimistic replacement.
-      if (folderRecoveryUidRef.current === requestUid) {
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber && !result.localEditDuringRestore) {
         publishMusicNoteStructureSession(requestUid, {
           musicNoteFolders: { [folderRecoveryConfirm.mode]: result.folders },
           musicNoteStructureVersion: result.version,
@@ -2389,12 +2398,12 @@ updates: draft.updates,
         showFavoriteToast(result.changed ? '선택한 폴더 상태를 서버에 복원했습니다.' : '선택한 상태가 이미 서버에 적용되어 있습니다.');
       }
     } catch (error: any) {
-      if (folderRecoveryUidRef.current === requestUid) {
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) {
         setFolderRecoveryError(String(error?.message || '복원을 완료하지 못했습니다.'));
         setFolderRecoveryConfirm(null);
       }
     } finally {
-      if (folderRecoveryUidRef.current === requestUid) setFolderRecoveryBusy(false);
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) setFolderRecoveryBusy(false);
     }
   };
 

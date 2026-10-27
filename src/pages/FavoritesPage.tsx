@@ -359,7 +359,8 @@ const ensureMusicNoteStructureFresh = (uid: string, session: MusicNoteStructureS
       }
       // This marker advances only after an authoritative Firestore read.
       session.profileVersionSeen = Math.max(session.profileVersionSeen, profileVersion);
-      publishMusicNoteStructureSession(uid, projected, resolvedVersion, true);
+      publishMusicNoteStructureSession(uid, projected, resolvedVersion,
+        !pending?.myNote && !pending?.sharedNote);
       // A newer profile signal can arrive while this read is in flight.
       if (getMusicNoteStructureProfileVersion(uid) > session.profileVersionSeen) {
         session.refreshPending = true;
@@ -400,7 +401,9 @@ const subscribeMusicNoteStructureDocument = (uid: string, listener: (data: any) 
       profileVersionSeen: cached?.profileVersionSeen || 0,
       refreshPending: false,
       refreshForce: false,
-      verified: cached?.verified === true,
+      // Pending local edits are never an authoritative server-confirmed view,
+      // even when an older cached envelope had verified=true.
+      verified: cached?.verified === true && !pending?.myNote && !pending?.sharedNote,
       listeners: new Set(),
       syncInFlight: null,
       profileListenerAttached: false,
@@ -2923,8 +2926,11 @@ updates: draft.updates,
           Number(signalVersion || 0),
           Number(readMusicNoteStructureCache(uid)?.version || 0),
         );
+        // A card-only RTDB update cannot upgrade an earlier unconfirmed
+        // folder preview to server-confirmed.
+        const previousUnconfirmed = musicNoteStructureSharedSessions.get(uid)?.verified === false;
         publishMusicNoteStructureSession(uid, projectMusicNoteStructureData(patch),
-          structureVersion, !hasUnconfirmedFolderPreview);
+          structureVersion, !hasUnconfirmedFolderPreview && !previousUnconfirmed);
         if (hasUnconfirmedFolderPreview) {
           // Both client versions may broadcast before their 60s Firestore save.
           // Keep immediate visibility, then verify once 65s after the LAST edit.
@@ -3042,7 +3048,15 @@ updates: draft.updates,
     // Capture the pre-edit view before optimistic RTDB/cache publication.
     // A server transaction may commit only if that mode has not changed
     // since this device last saw it. A missing local mode is represented by null.
-    const previousMode = musicNoteStructureSharedSessions.get(user.uid)?.data?.musicNoteFolders?.[mode];
+    const folderSession = musicNoteStructureSharedSessions.get(user.uid)?.data;
+    const storedPreviousMode = folderSession?.musicNoteFolders?.[mode];
+    const legacyPreviousMode = mode === 'myNote' ? folderSession?.myNoteFolders : folderSession?.sharedNoteFolders;
+    // The UI already displays the normalized old top-level field. Capture
+    // that identical view for the first V2 compare-and-swap transaction.
+    const previousMode = Array.isArray(storedPreviousMode) ? storedPreviousMode
+      : Array.isArray(legacyPreviousMode) ? normalizeMusicNoteFolders(
+        legacyPreviousMode, mode === 'sharedNote' ? DEFAULT_SHARED_NOTE_FOLDERS : DEFAULT_MY_NOTE_FOLDERS,
+      ) : null;
     const pendingBase = getPendingMusicNoteFolderStructureBatch(user.uid)?.[mode]?.baseFolders;
     // Immediate folder deletion must use the pre-batch baseline, not an
     // optimistic rename made moments earlier but not yet saved to Firestore.
@@ -3090,7 +3104,7 @@ updates: draft.updates,
     // app296 — folder metadata is local/RTDB-first. The other device sees this
     // immediately, while Firestore canonical persistence collapses to the final
     // My/Shared structure after 60 seconds of quiet.
-    publishMusicNoteStructureSession(user.uid, structureSyncPatch, structureVersion, true);
+    publishMusicNoteStructureSession(user.uid, structureSyncPatch, structureVersion, false);
     // Persist the pending final state before waiting on the network so reload,
     // app backgrounding, or a failed RTDB request cannot lose the canonical intent.
     queueMusicNoteFolderStructureBatch(user.uid, mode, folderItems, structureVersion, baseFolders);
@@ -3109,7 +3123,7 @@ updates: draft.updates,
       publishMusicNoteStructureSession(user.uid, {
         ...structureSyncPatch,
         musicNoteStructureVersion: finalVersion,
-      }, finalVersion, true);
+      }, finalVersion, false);
     }
   };
 

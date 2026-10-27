@@ -319,9 +319,26 @@ const ensureMusicNoteStructureFresh = (uid: string, session: MusicNoteStructureS
   session.syncInFlight = (async () => {
     try {
       const beforeRead = session.data;
-      const snapshot = await getDocFromServer(doc(db, 'user_structures', uid));
-      const data: any = snapshot.exists() ? snapshot.data() : {};
-      const serverDocumentVersion = Number(data?.musicNoteStructureVersion || 0);
+      // app515: fetch both independent stores on a required canonical refresh.
+      // Warm verified entries stay R0; a real refresh has R2 (legacy card /
+      // old-browser comparison plus modern folder), never a polling listener.
+      const [legacySnapshot, modernSnapshot] = await Promise.all([
+        getDocFromServer(doc(db, 'user_structures', uid)),
+        getDocFromServer(doc(db, 'user_structures', uid, 'folder_state', 'v2')),
+      ]);
+      const legacyData: any = legacySnapshot.exists() ? legacySnapshot.data() : {};
+      const modernData: any = modernSnapshot.exists() ? modernSnapshot.data() : null;
+      // The v2 folder state has priority only once it exists. Legacy cards
+      // and song data are never erased or migrated by a folder refresh.
+      const data: any = {
+        ...legacyData,
+        ...(modernData ? {
+          musicNoteFolders: modernData.musicNoteFolders,
+          musicNoteStructureVersion: modernData.musicNoteStructureVersion,
+        } : {}),
+      };
+      const serverDocumentVersion = Math.max(Number(data?.musicNoteStructureVersion || 0),
+        Number(legacyData?.musicNoteStructureVersion || 0));
       const resolvedVersion = Math.max(profileVersion, Number.isFinite(serverDocumentVersion) ? serverDocumentVersion : 0);
       // A read started before a local edit/RTDB preview is no longer authority
       // for that session. Do not stamp old data with the newer profile version.

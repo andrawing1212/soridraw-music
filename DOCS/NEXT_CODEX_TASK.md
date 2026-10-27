@@ -1,3 +1,14 @@
+## NEXT — app515 충돌 원본 분리 전환 설계 승인 게이트 (2026-10-28 KST)
+
+- **WORK 최신 FAIL:** 구버전 PC A의 `user_structures/{uid}` 무조건 `setDoc(merge:true)` 지연 저장이 최신 모바일 B의 같은 문서를 덮어쓸 수 있음. 사후 Firestore Functions 복구 아카이브 쓰기도 실패·미배포·권한/오류 상황에서 반드시 성공하지 않으므로 '정상 구형 편집 허용 + 최신 덮어쓰기 완전 차단'을 동일 문서/이전 클라이언트 변경 없이 충족할 수 없음.
+- **app515 확인할 최소 대안:** 이미 열린 구버전은 원본 `user_structures/{uid}`에 계속 정상 저장하고, 신버전 폴더만 **별도 문서 `user_structures/{uid}/folder_state/v2`**를 정본으로 사용. 같은 문서에 덮어쓰지 않아 최신 B와 마지막 구형 A 내용이 함수/아카이브 실패와 무관하게 각기 보존됨. 원본/카드/곡 구조 이동·삭제·일괄 이관 없음.
+- **승인 전 실행 범위:** 새 경로를 **에뮬레이터 내부 Rules 후보로만** 만들고 구형/신형 병렬 저장, Functions archive 전면 실패, owner-only 보안, 구형 연속 편집을 격리 검사한다. 실사용 파일 `firestore.rules`, 읽기/쓰기 UI·서버 함수·캐시는 바꾸지 않는다. 이 검사는 **구조 가능성 증명이지 서비스 구현 PASS가 아님**.
+- **신규 정본 경로 구현에는 별도 승인 필요:** 신형 최초 진입/서버 동기화에서 V2 존재 여부 확인(조건부 R1 등 비용), 카드 상태와 원본 경로의 정확한 합성, 최초 이관 시 경합 방지, modern↔modern CAS W1, old↔modern 충돌 선택 UI(기존 수동 복구 재사용), V2 trigger/syncVersions 전달, 계정·오프라인·버전 역전, 1MiB/권한/스토리지 오류, Test/Prod 구형 탭 공존 시나리오를 안전하게 완료해야 함.
+- **미보장:** 구형 A1/A2 등 **구형↔구형 동시 덮어쓰기**는 여전히 이전 클라이언트 설계상의 한계. 별도 V2 정본도 실사용 연결 전이므로 PR #512 Draft/미배포/HOLD 유지. 안전을 위해 직접 구형 저장을 막거나 사용자 로컬 캐시를 지우지 않는다.
+- **출시 기준:** 승인된 구조 전체 구현→결정적 테스트/타깃 CI→WORK 독립 재감사→PC/모바일 실인증 혼합 QA→디렉터 별도 배포 승인. 사용자 원본·데이터 일괄 변경 금지.
+
+---
+
 ## NEXT — app514 exact candidate review + authenticated original evidence; NO DEPLOY (2026-10-27 KST)
 - Implementation and local TypeScript/Build/integrated app501–513/app514/protected app349/app301 checks PASS on `fix/app514-p0-mobile-note-quota-incident`; product base `f31bbf6801f9aa1fbfa0690f4783d70c9c9f32b5`, prior incident docs through `9ebc6e4bc3669553022e49d4f4b3e28d4c0d06db` preserved. Use the single Draft PR's latest exact SHA and CI results; do not restart the investigation or create another candidate branch/PR.
 - Independent read-only review: ACK-grounded status, rejected vs unresolved Firestore writes, bounded retries, normal +60s batching, quota+two-device RTDB receive, stale disk and ACK/hydration ordering, existing pending/caches/media protected. `node scripts/verify-514-mobile-note-incident.mjs`; full commands and limits in `DOCS/APP514_MOBILE_NOTE_INCIDENT.md`.

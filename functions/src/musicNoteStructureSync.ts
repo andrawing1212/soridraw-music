@@ -89,3 +89,59 @@ export const chooseLegacyMusicNoteFolderRecovery = (
   }
   return JSON.parse(JSON.stringify(folders));
 };
+
+
+// A whole before+after pair can exceed Firestore's 1 MiB document limit.
+// Split only oversized, genuine legacy conflicts into immutable bounded parts.
+// An event creates one manifest + at most 32 parts atomically; healthy writes
+// still have zero recovery writes and require no additional reads.
+export type LegacyRecoveryArchivePart = { id: string; payload: string };
+export type LegacyRecoveryArchivePlan = {
+  manifest: Record<string, unknown>;
+  parts: LegacyRecoveryArchivePart[];
+};
+const LEGACY_RECOVERY_SINGLE_DOC_BYTES = 700_000;
+const LEGACY_RECOVERY_PART_BYTES = 300_000;
+export const planLegacyMusicNoteFolderRecoveryArchive = (
+  payload: LegacyMusicNoteFolderRecovery & { observedAtMs: number },
+): LegacyRecoveryArchivePlan => {
+  if (Buffer.byteLength(JSON.stringify(payload), 'utf8') <= LEGACY_RECOVERY_SINGLE_DOC_BYTES) {
+    return { manifest: payload, parts: [] };
+  }
+  const parts: LegacyRecoveryArchivePart[] = [];
+  for (const side of ['beforeFolders', 'afterFolders'] as const) {
+    for (const mode of payload.changedModes) {
+      const raw = JSON.stringify(payload[side][mode] ?? null);
+      let chunk = '';
+      let size = 0;
+      let index = 0;
+      for (const character of raw) {
+        const bytes = Buffer.byteLength(character, 'utf8');
+        if (size + bytes > LEGACY_RECOVERY_PART_BYTES && chunk) {
+          parts.push({ id: `${side}_${mode}_${index++}`, payload: chunk });
+          chunk = '';
+          size = 0;
+        }
+        chunk += character;
+        size += bytes;
+      }
+      if (chunk) parts.push({ id: `${side}_${mode}_${index}`, payload: chunk });
+    }
+  }
+  // Canonical user_structures is at most 1 MiB, so 32 parts is generous.
+  // Never silently truncate or reduce fidelity to fit a document.
+  if (parts.length > 32) throw new Error('app514 oversized recovery exceeds bounded archive parts');
+  return {
+    manifest: {
+      schemaVersion: 2,
+      source: payload.source,
+      changedModes: payload.changedModes,
+      beforeVersion: payload.beforeVersion,
+      afterVersion: payload.afterVersion,
+      observedAtMs: payload.observedAtMs,
+      priorWriterToken: payload.priorWriterToken,
+      partIds: parts.map(part => part.id),
+    },
+    parts,
+  };
+};

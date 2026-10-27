@@ -226,6 +226,7 @@ try {
   await assertSucceeds(setDoc(v2Path, {
     schemaVersion: 2, musicNoteStructureVersion: 100001,
     musicNoteStructureWriterToken: 'mobile-b-token-100001',
+    legacyBaseSignatures: { myNote: 'source-a', sharedNote: 'source-s' },
     musicNoteFolders: {
       myNote: [{ id: 'b', title: 'Mobile B latest' }],
       sharedNote: [{ id: 's', title: 'Shared original' }],
@@ -252,6 +253,14 @@ try {
   assert.equal(bSaved?.musicNoteFolders?.myNote?.[0]?.title, 'Mobile B latest');
   assert.equal(aSaved?.musicNoteFolders?.myNote?.[0]?.title, 'PC A unsaved edit');
   assert.equal(aSaved?.musicNoteFolders?.sharedNote?.[0]?.title, 'Shared original');
+  await assertSucceeds(setDoc(v2Path, {
+    schemaVersion: 2, musicNoteStructureVersion: 100002,
+    musicNoteStructureWriterToken: 'mobile-b-token-100002',
+    musicNoteFolders: { myNote: [{ id: 'b', title: 'B latest again' }] },
+  }, { merge: true }));
+  assert.equal((await getDoc(v2Path)).data()?.musicNoteFolders?.myNote?.[0]?.title,
+    'B latest again');
+  assert.equal((await getDoc(v2Path)).data()?.legacyBaseSignatures?.myNote, 'source-a');
   await assertFails(getDoc(otherV2));
   await assertFails(setDoc(otherV2, { schemaVersion: 2 }));
   await assertFails(setDoc(doc(isolated.authenticatedContext(uid).firestore(),
@@ -261,7 +270,7 @@ try {
     musicNoteFolders: { myNote: [{ id: 'a', title: 'PC A final edit' }] },
   }, { merge: true }));
   assert.equal((await getDoc(v2Path)).data()?.musicNoteFolders?.myNote?.[0]?.title,
-    'Mobile B latest');
+    'B latest again');
   assert.equal((await getDoc(legacyPath)).data()?.musicNoteFolders?.myNote?.[0]?.title,
     'PC A final edit');
   console.log('APP515_ISOLATED_V2_CANONICAL_SURVIVES_LEGACY_STALE_WRITES_WITHOUT_FUNCTION_ARCHIVE=PASS');

@@ -20,7 +20,7 @@ import {
   type LibraryListBundleCore,
   type LibraryTrackMutation,
 } from "./libraryBundleFreshness";
-import { hasMusicNoteStructureRelevantChange, getMusicNoteStructureSignalVersion, buildLegacyMusicNoteFolderRecovery } from "./musicNoteStructureSync";
+import { hasMusicNoteStructureRelevantChange, getMusicNoteStructureSignalVersion, buildLegacyMusicNoteFolderRecovery, planLegacyMusicNoteFolderRecoveryArchive } from "./musicNoteStructureSync";
 import { publishGuardedLikeSignal420 } from "./exploreLikeAbuseGate420";
 import { hasExactRecentApprovedLike420 } from "./exploreLikeApprovalRecovery420";
 import { issueLikePermit420, issueRenewedLikePermitV2420 } from "./exploreLikePermit420";
@@ -76,9 +76,7 @@ export const syncMusicNoteStructureVersion = functions
         ...legacyRecovery,
         observedAtMs: eventTimeMs,
       };
-      if (Buffer.byteLength(JSON.stringify(recoveryPayload), "utf8") > 750_000) {
-        throw new Error("app514 legacy folder conflict too large to archive safely");
-      }
+      const archive = planLegacyMusicNoteFolderRecoveryArchive(recoveryPayload);
       const eventKey = createHash("sha256")
         .update(String(context.eventId || "")).digest("hex").slice(0, 40);
       const recoveryRef = firestore.collection("user_structures").doc(uid)
@@ -86,7 +84,16 @@ export const syncMusicNoteStructureVersion = functions
       try {
         // create() is idempotent across retried Firestore events. Never erase
         // a previous recovery record or change the canonical folder state.
-        await recoveryRef.create(recoveryPayload);
+        if (!archive.parts.length) {
+          await recoveryRef.create(archive.manifest);
+        } else {
+          const archiveBatch = firestore.batch();
+          archiveBatch.create(recoveryRef, archive.manifest);
+          for (const part of archive.parts) {
+            archiveBatch.create(recoveryRef.collection("parts").doc(part.id), { payload: part.payload });
+          }
+          await archiveBatch.commit();
+        }
       } catch (error: any) {
         if (Number(error?.code) !== 6 && String(error?.code) !== "already-exists") throw error;
       }

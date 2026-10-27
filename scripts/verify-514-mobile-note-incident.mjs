@@ -26,6 +26,7 @@ const tick = async () => { for (let i = 0; i < 12; i++) await Promise.resolve();
 const copy = x => JSON.parse(JSON.stringify(x));
 const uid = 'fixture-owner';
 const folders = name => [{ id: 'default', title: 'My Note', isDefault: true }, { id: 'folder-a', title: name }];
+const effective = canonical => canonical.modern || canonical.data;
 function bus() {
   const listeners = new Map();
   const values = new Map();
@@ -86,31 +87,38 @@ function device(transport, { quota = false, server = 'online', clock = 100_000, 
       const staged = [];
       const transaction = {
         get: async path => {
-          assert.equal(path, `user_structures/${uid}`);
           reads++;
-          return { data: () => copy(canonical.data) };
+          const isV2 = path === `user_structures/${uid}/folder_state/v2`;
+          assert.ok(isV2 || path === `user_structures/${uid}`);
+          const value = isV2 ? canonical.modern : canonical.data;
+          return { exists: () => Boolean(value && Object.keys(value).length), data: () => copy(value || {}) };
         },
         set: (path, value, options) => {
-          assert.equal(path, `user_structures/${uid}`);
+          assert.ok([ `user_structures/${uid}`, `user_structures/${uid}/folder_state/v2` ].includes(path));
           assert.equal(options?.merge, true);
-          staged.push(copy(value));
+          staged.push({path,value:copy(value)});
         },
       };
       const result = await update(transaction);
-      for (const value of staged) {
-        canonical.data = {
-          ...canonical.data, ...value,
+      for (const {path,value} of staged) {
+        const target = path.endsWith('/folder_state/v2') ? 'modern' : 'data';
+        const previous = canonical[target] || {};
+        canonical[target] = {
+          ...previous, ...value,
           ...(value.musicNoteFolders ? {
-            musicNoteFolders: { ...(canonical.data.musicNoteFolders || {}), ...value.musicNoteFolders },
+            musicNoteFolders: { ...(previous.musicNoteFolders || {}), ...value.musicNoteFolders },
           } : {}),
         };
         writes.push(copy(value));
       }
       return result;
     },
-    getDocFromServer: async () => {
+    getDocFromServer: async path => {
       reads++;
       if (holdRead) await new Promise(resolve => readsHeld.push(resolve));
+      if (path.endsWith('/folder_state/v2')) {
+        return { exists: () => Boolean(canonical.modern), data: () => copy(canonical.modern || {}) };
+      }
       const remote = Object.keys(canonical.data).length
         ? canonical.data : { musicNoteFolders: { myNote: folders('old-server') }, musicNoteStructureVersion: 1 };
       return { exists: () => true, data: () => copy(remote) };
@@ -296,8 +304,8 @@ for (const failure of ['denied', 'aborted']) {
     musicNoteStructureVersion: 2,
     musicNoteFolders: { myNote: folders('genuine-folder-change') },
   }, [{ mode: 'myNote', folders: null }]);
-  assert.ok(typeof canonical.data.musicNoteStructureWriterToken === 'string'
-    && canonical.data.musicNoteStructureWriterToken.length >= 8,
+  assert.ok(typeof canonical.modern?.musicNoteStructureWriterToken === 'string'
+    && canonical.modern.musicNoteStructureWriterToken.length >= 8,
     'real folder change must keep its server-side protection');
   console.log('APP514_CARD_ONLY_NO_FENCE_REAL_FOLDER_FENCE_ACTIVE=PASS');
 }
@@ -313,8 +321,8 @@ for (const failure of ['denied', 'aborted']) {
     folders('shared-draft'), 601, folders('shared-base'));
   await d.advance(60_000);
   assert.equal(d.writes.length, 0, 'unchecked mixed pending must not write any folder');
-  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'remote-new');
-  assert.equal(canonical.data.musicNoteFolders.sharedNote[1].title, 'shared-base');
+  assert.equal(effective(canonical).musicNoteFolders.myNote[1].title, 'remote-new');
+  assert.equal(effective(canonical).musicNoteFolders.sharedNote[1].title, 'shared-base');
   assert.equal(d.batch.getMusicNoteFolderSaveStatus(uid).state, 'failed');
   assert.ok(d.batch.getPendingMusicNoteFolderStructureBatch(uid).myNote,
     'legacy pending survives failed mixed settlement');
@@ -337,9 +345,9 @@ for (const failure of ['denied', 'aborted']) {
       updatedAt: 200,
     },
   }, [{ mode: 'myNote', folders: folders('same') }]);
-  assert.equal(d.reads, 1);
+  assert.equal(d.reads, 2);
   assert.equal(d.writes.length, 0, 'same logical folders must not rewrite timestamp map');
-  assert.equal(canonical.data.musicNoteStructureVersion, 10);
+  assert.equal(effective(canonical).musicNoteStructureVersion, 10);
   assert.equal(canonical.data.musicNoteStructureWriterToken, 'existing-token');
   console.log('APP514_IDENTICAL_FOLDERS_NO_RULES_REJECTION_NO_WRITE=PASS');
 }
@@ -351,15 +359,15 @@ for (const failure of ['denied', 'aborted']) {
   d.batch.retryMusicNoteFolderStructureBatch(uid); // ordinary reconnect
   await d.advance(59_999); assert.equal(d.attempts, 0);
   await d.advance(1); assert.equal(d.writes.length, 1);
-  assert.equal(d.reads, 1, 'one transaction read only when canonical changes');
+  assert.equal(d.reads, 2, 'one v2 probe plus one migration-only legacy read');
   d.page.subscribe(uid, () => {});
   await tick();
-  assert.equal(d.reads, 2, 'first warm load confirms the V2 RTDB preview once');
+  assert.equal(d.reads, 4, 'first canonical confirmation reads old cards and V2 folders');
   d.page.subscribe(uid, () => {});
   await tick();
-  assert.equal(d.reads, 2, 'subsequent warm loads do not reread canonical');
+  assert.equal(d.reads, 4, 'subsequent warm loads do not reread canonical');
   await d.advance(600_000);
-  assert.equal(d.reads, 2, 'no polling after canonical confirmation');
+  assert.equal(d.reads, 4, 'no polling after canonical confirmation');
   assert.equal(d.writes.length, 1);
   console.log('APP514_HEALTHY_60S_W1_V2_CONFIRM_ONCE_WARM_R0=PASS');
 }
@@ -375,11 +383,11 @@ for (const failure of ['denied', 'aborted']) {
   assert.equal(a.attempts, 1);
   b.batch.queueMusicNoteFolderStructureBatch(uid, 'myNote', folders('newer-device-b'), 100_001);
   await b.advance(60_000);
-  assert.equal(canonical.data.musicNoteStructureVersion, 100_001);
-  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'newer-device-b');
+  assert.equal(effective(canonical).musicNoteStructureVersion, 100_001);
+  assert.equal(effective(canonical).musicNoteFolders.myNote[1].title, 'newer-device-b');
   a.held.shift()(); await tick();
-  assert.equal(canonical.data.musicNoteStructureVersion, 100_001, 'late write cannot downgrade version');
-  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'newer-device-b', 'late write cannot replace folders');
+  assert.equal(effective(canonical).musicNoteStructureVersion, 100_001, 'late write cannot downgrade version');
+  assert.equal(effective(canonical).musicNoteFolders.myNote[1].title, 'newer-device-b', 'late write cannot replace folders');
   assert.equal(a.writes.length, 0);
   assert.equal(a.batch.getMusicNoteFolderSaveStatus(uid).state, 'failed');
   assert.ok(a.batch.getPendingMusicNoteFolderStructureBatch(uid), 'stale unsaved edit stays available');
@@ -404,13 +412,13 @@ for (const failure of ['denied', 'aborted']) {
   }
   await slow.page.persist('myNote', folders('slow-clock-new'));
   await slow.advance(0);
-  assert.equal(canonical.data.musicNoteStructureVersion, 900_001,
+  assert.equal(effective(canonical).musicNoteStructureVersion, 900_001,
     'Firestore allocates from committed revision, not sender Date.now');
-  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'slow-clock-new');
+  assert.equal(effective(canonical).musicNoteFolders.myNote[1].title, 'slow-clock-new');
   await staleFast.page.persist('myNote', folders('fast-clock-stale'));
   await staleFast.advance(0);
-  assert.equal(canonical.data.musicNoteStructureVersion, 900_001);
-  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'slow-clock-new');
+  assert.equal(effective(canonical).musicNoteStructureVersion, 900_001);
+  assert.equal(effective(canonical).musicNoteFolders.myNote[1].title, 'slow-clock-new');
   assert.equal(staleFast.batch.getMusicNoteFolderSaveStatus(uid).state, 'failed');
   assert.ok(staleFast.batch.getPendingMusicNoteFolderStructureBatch(uid));
   console.log('APP514_SERVER_REVISION_HIGH_LOW_CLOCK_STALE_BASE_GUARD=PASS');
@@ -422,9 +430,9 @@ for (const failure of ['denied', 'aborted']) {
   }, musicNoteStructureVersion: 1 }, 1);
   await otherMode.page.persist('sharedNote', folders('shared-updated'));
   await otherMode.advance(0);
-  assert.equal(canonical.data.musicNoteStructureVersion, 900_002);
-  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'slow-clock-new');
-  assert.equal(canonical.data.musicNoteFolders.sharedNote[1].title, 'shared-updated');
+  assert.equal(effective(canonical).musicNoteStructureVersion, 900_002);
+  assert.equal(effective(canonical).musicNoteFolders.myNote[1].title, 'slow-clock-new');
+  assert.equal(effective(canonical).musicNoteFolders.sharedNote[1].title, 'shared-updated');
   console.log('APP514_SERVER_REVISION_INDEPENDENT_FOLDER_MODES=PASS');
 }
 
@@ -441,8 +449,8 @@ for (const failure of ['denied', 'aborted']) {
   await d.page.persist('myNote', folders('unsaved-rename'));
   assert.ok(d.batch.getPendingMusicNoteFolderStructureBatch(uid));
   await d.page.persist('myNote', folders('immediate-delete'), { immediate: true });
-  assert.equal(canonical.data.musicNoteStructureVersion, 43);
-  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'immediate-delete');
+  assert.equal(effective(canonical).musicNoteStructureVersion, 43);
+  assert.equal(effective(canonical).musicNoteFolders.myNote[1].title, 'immediate-delete');
   assert.equal(d.batch.getPendingMusicNoteFolderStructureBatch(uid), null);
   await d.advance(60_000);
   assert.equal(d.writes.length, 1, 'no delayed stale rename after immediate delete');
@@ -468,7 +476,7 @@ for (const failure of ['denied', 'aborted']) {
   };
   await modern.page.persist('myNote', folders('modern-stale-view'));
   await modern.advance(0);
-  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'legacy-user-edit');
+  assert.equal(effective(canonical).musicNoteFolders.myNote[1].title, 'legacy-user-edit');
   assert.equal(modern.batch.getMusicNoteFolderSaveStatus(uid).state, 'failed');
   assert.ok(modern.batch.getPendingMusicNoteFolderStructureBatch(uid));
   console.log('APP514_LEGACY_WRITE_PRESERVED_FROM_STALE_MODERN_CLIENT=PASS');
@@ -485,7 +493,7 @@ for (const failure of ['denied', 'aborted']) {
   d.page.publish(uid, { musicNoteFolders: { myNote: folders('stale-local') },
     musicNoteStructureVersion: 50 }, 50);
   await assert.rejects(d.page.persist('myNote', folders('unsaved-immediate'), { immediate: true }));
-  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'remote-new');
+  assert.equal(effective(canonical).musicNoteFolders.myNote[1].title, 'remote-new');
   assert.equal(d.batch.getPendingMusicNoteFolderStructureBatch(uid).myNote.folders[1].title, 'unsaved-immediate');
   console.log('APP514_IMMEDIATE_CONFLICT_RETAINS_UNSAVED_FOLDER_INTENT=PASS');
 }
@@ -506,7 +514,7 @@ for (const failure of ['denied', 'aborted']) {
   await a.advance(60_000);
   b.batch.queueMusicNoteFolderStructureBatch(uid, 'myNote', folders('new-canonical'), 100_001);
   await b.advance(60_000);
-  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'new-canonical');
+  assert.equal(effective(canonical).musicNoteFolders.myNote[1].title, 'new-canonical');
   a.held.shift()(); await tick();
   assert.equal(a.batch.getMusicNoteFolderSaveStatus(uid).state, 'failed');
   assert.equal(c.reads, 1, 'only actual stale conflict causes canonical refresh');
@@ -524,7 +532,7 @@ for (const failure of ['denied', 'aborted']) {
   await d.page.persist('myNote', folders('slow-clock-draft'));
   await d.advance(0);
   assert.equal(d.batch.getMusicNoteFolderSaveStatus(uid).state, 'failed');
-  assert.equal(canonical.data.musicNoteFolders.myNote[1].title, 'newest-server');
+  assert.equal(effective(canonical).musicNoteFolders.myNote[1].title, 'newest-server');
   assert.ok(d.page.nextVersion(uid) >= 100_002, 'next human edit starts above observed server version');
   assert.ok(d.batch.getPendingMusicNoteFolderStructureBatch(uid), 'rejected draft is not deleted');
   console.log('APP514_P1_SLOW_CLOCK_LEARNS_CANONICAL_WATERMARK_WITHOUT_OVERWRITE=PASS');
@@ -636,8 +644,8 @@ console.log('APP514_EXACT_FAVORITE_EXISTS_MISSING_REMOVED_DENIED_THREE_DEVICES_R
   d.page.subscribe(uid, () => {});
   await tick();
   assert.equal(d.reads, 0, 'warm unchanged profile still R0');
-  canonical.data.musicNoteStructureVersion = 302;
-  canonical.data.musicNoteFolders.myNote = folders('new-from-phone');
+  effective(canonical).musicNoteStructureVersion = 302;
+  effective(canonical).musicNoteFolders.myNote = folders('new-from-phone');
   d.setProfileVersion(102);
   await tick();
   assert.equal(d.reads, 1, 'new profile revision gets one canonical read');
@@ -645,8 +653,8 @@ console.log('APP514_EXACT_FAVORITE_EXISTS_MISSING_REMOVED_DENIED_THREE_DEVICES_R
   d.setProfileVersion(102);
   await tick();
   assert.equal(d.reads, 1, 'unchanged profile must not reread');
-  canonical.data.musicNoteStructureVersion = 303;
-  canonical.data.musicNoteFolders.myNote = folders('newer-from-phone');
+  effective(canonical).musicNoteStructureVersion = 303;
+  effective(canonical).musicNoteFolders.myNote = folders('newer-from-phone');
   d.setProfileVersion(103);
   await tick();
   assert.equal(d.reads, 2, 'future profile updates still work with fast local clock');
@@ -698,8 +706,8 @@ console.log('APP514_EXACT_FAVORITE_EXISTS_MISSING_REMOVED_DENIED_THREE_DEVICES_R
   await tick();
   assert.equal(d.reads,1);
   d.setProfileVersion(502);
-  canonical.data.musicNoteStructureVersion=502;
-  canonical.data.musicNoteFolders.myNote=folders('second-phone-edit');
+  effective(canonical).musicNoteStructureVersion=502;
+  effective(canonical).musicNoteFolders.myNote=folders('second-phone-edit');
   d.unholdRead();
   d.readsHeld.shift()();
   await tick();
@@ -817,8 +825,8 @@ console.log('APP514_OLD_PREVIEW_RECONNECT_CONFIRMATION_ONLY_IF_UNVERIFIED=PASS')
   d.page.receive(JSON.stringify({__musicNoteStructureSync:true,
     data:{musicNoteFolders:{myNote:folders('old-PC-valid')},
       musicNoteStructureVersion:21}}),1000);
-  canonical.data.musicNoteFolders.myNote=folders('old-PC-valid');
-  canonical.data.musicNoteStructureVersion=21;
+  effective(canonical).musicNoteFolders.myNote=folders('old-PC-valid');
+  effective(canonical).musicNoteStructureVersion=21;
   await d.advance(65_000);
   assert.equal(d.reads,1);
   assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title,'old-PC-valid');

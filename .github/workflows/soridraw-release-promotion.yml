@@ -151,6 +151,14 @@ jobs:
           git worktree add --detach "$RUNNER_TEMP/release-source" "$(test "$MODE" = production && node -p "require('$RUNNER_TEMP/manifest/soridraw-release-manifest.json').sourcePreviewSha" || printf '%s' "$TARGET")"
           echo "RELEASE_ROOT=$RUNNER_TEMP/release-source" >> "$GITHUB_ENV"
 
+      - name: APP515 stop V2-incompatible rollback before any deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Read origin/preview from the controller's locked git fetch. Even
+          # if target_sha selects an older commit, the check remains active.
+          node "$GITHUB_WORKSPACE/scripts/verify-515-v2-release-floor.mjs" "$RELEASE_ROOT"
+
       - name: PREFLIGHT build and static verification
         if: steps.request.outputs.mode != 'production'
         shell: bash

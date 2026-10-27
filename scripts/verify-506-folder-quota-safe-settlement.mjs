@@ -41,14 +41,19 @@ const mockedWindow = {
 };
 const mockRequire = (id) => {
   if (id.endsWith('firestoreMeasured')) return {
-    doc: (_db, collection, uid) => ({ collection, uid }),
+    doc: (_db, ...parts) => parts.join('/'),
     setDoc: () => { throw new Error('unguarded canonical structure write'); },
     runTransaction: async (_db, update) => {
       if (failServer) throw new Error('offline');
       if (holdServer) await new Promise(resolve => heldServerResolutions.push(resolve));
       const staged = [];
       const transaction = {
-        get: async () => ({ data: () => canonical.at(-1)?.value || {} }),
+        get: async path => ({
+          // app515 tests the isolated V2 path rather than the parent. Only
+          // the first V2 write needs a legacy bootstrap read.
+          exists: () => path.endsWith('/folder_state/v2') && canonical.length > 0,
+          data: () => canonical.at(-1)?.value || {},
+        }),
         set: (ref, value, options) => {
           assert.equal(options?.merge, true);
           staged.push({ ref, value: JSON.parse(JSON.stringify(value)) });

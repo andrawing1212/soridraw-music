@@ -1,3 +1,12 @@
+## NEXT — app515 공유 Firebase 읽기 전용 배포 사전 점검 (2026-10-28 KST)
+- 제품 후보 Draft PR #512 정확 HEAD `357686900da3abcbddb6a691d9a5c96f2f36e483` (CI 5/5, 미병합·미배포). main 선행 보호 PR #521 병합 SHA `b33fb67aeffebe9e09104175eb3fbab7cd15874b` 확인.
+- **이번 한 작업:** 공유 Firestore/Auth `soridraw-app-866a5`의 현재 적용 Rules, 구버전 부모 owner write 보존 상태, `syncMusicNoteStructureVersion` / `syncMusicNoteFolderStateV2Version`의 활성 배포·리전·이벤트 트리거·권한을 **읽기 전용**으로 확인한다. PREVIEW Hosting Firebase 프로젝트 `soridraw`에 shared Rules/Functions 작업을 적용하지 않는다. 접근 권한이나 실제 증거가 없으면 미확인 항목을 보고하고 중단한다.
+- 이후(현재 범위 밖): 별도 QA 계정으로 구형 PC A/신형 모바일 B/신형 PC C 혼합 저장·60초 지연/실패/수동 복원/실제 R·W 계측 계획. 공유 Rules → 신규 V2 Function 1개 → V2 PREVIEW 배포는 각각 명시 승인 전 실행 금지. TEST·PRODUCTION 승격 HOLD.
+- 보호: 기존 사용자 PC 원본·모바일 캐시·pending·하트·폴더·곡·가사/미디어 삭제/초기화/재저장·migration·전체 스캔 금지. 자동 테스트 PASS를 실인증 Firebase/기기 PASS로 표현하지 않는다.
+- 참조: PR #512 최신 댓글, PR #521, `DOCS/MUSIC_NOTE_V2_ROLLBACK_POLICY.md`. 아래 NEXT는 과거 지시로 보존.
+
+---
+
 ## NEXT — app511 old-browser Library canonical safety and targeted audit (2026-10-26 KST)
 - Exact app511 branch: ensure Firestore Rules unmodified vs app510/preview; static mixed legacy atomic source checks must PASS. TypeScript, Build, app501–app510 executable tests and app511 old-browser atomic test must PASS in actual GitHub workflow; independent Work High READ ONLY on frozen SHA required before any PREVIEW.
 - Do not add global monotonic security Rules: old main/test/production `playlistService.ts` puts user-playlists song edits in same atomic commit as version. A lower delayed legacy version would cause the *whole* edited song/folder batch to be denied. Constrain correction to compatible new-client derived signal or safe staged upgrade, with full 100K cost audit and no old-browser data loss.

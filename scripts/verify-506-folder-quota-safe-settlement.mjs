@@ -191,7 +191,8 @@ assert.equal(canonical.length - writesBeforeBurst510, 1,
   'no repeated canonical writes until the short cooldown is flushed');
 await runNext();
 assert.equal(canonical.length - writesBeforeBurst510, 2);
-assert.equal(canonical.at(-1).value.musicNoteStructureVersion, 11);
+assert.equal(canonical.at(-1).value.musicNoteStructureVersion, 8,
+  'v2 allocates the next server revision; optimistic final edit 11 is not a canonical revision');
 assert.equal(canonical.at(-1).value.musicNoteFolders.myNote[0].title, 'burst-11');
 assert.equal(api.getPendingMusicNoteFolderStructureBatch('user-a'), null);
 console.log('APP510_QUOTA_FIVE_EDITS_COALESCED_W2=PASS');

@@ -517,7 +517,7 @@ const MUSIC_NOTE_MEDIA_FIELDS = [
 ];
 
 const catalogRouteFromPath = (pathname) => {
-  const match = String(pathname || '').match(/^\/v1\/catalog\/(musicNote|library)(?:\/(delta|bootstrap))?$/);
+  const match = String(pathname || '').match(/^\/v1\/catalog\/(musicNote|library)(?:\/(delta|bootstrap|inspect-exact))?$/);
   return match ? { kind: match[1], action: match[2] || 'base' } : null;
 };
 
@@ -1011,6 +1011,8 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
   if (!route || !CATALOG_KINDS.has(route.kind)) return jsonResponse({ ok: false, code: 'INVALID_CATALOG_KIND' }, 404, origin);
   let identity;
   try {
+    // Existing normal GET requires owner auth. Manual exact inspection also
+    // requires App Check and never falls through to the shared seed routine.
     const isCatalogRead = request.method === 'GET' && route.action === 'base';
     identity = isCatalogRead
       ? await requireCatalogReadIdentity(request, env)
@@ -1020,6 +1022,34 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
   }
 
   try {
+    if (request.method === 'GET' && route.action === 'inspect-exact') {
+      // app517: read-only owner-authenticated diagnostic of one R2 catalog ID.
+      // NEVER call getCatalogState/getOrBuildCatalog here: those may seed
+      // shared R2 from legacy. No writes, canonical Firestore queries or repair.
+      // Keep this manual endpoint out of ordinary page entry and RTDB handlers.
+      if (route.kind !== 'musicNote') {
+        return jsonResponse({ ok: false, code: 'INSPECT_KIND_UNSUPPORTED' }, 404, origin);
+      }
+      if (!isSharedCatalogEnabled(env) || !env?.CATALOG) {
+        return jsonResponse({ ok: false, code: 'SHARED_CATALOG_UNAVAILABLE' }, 503, origin);
+      }
+      const exactId = text(url.searchParams.get('documentId'));
+      if (!exactId || exactId.length > 240 || exactId === '.' || exactId === '..'
+        || /[\\/]/.test(exactId)) {
+        return jsonResponse({ ok: false, code: 'INVALID_EXACT_ID' }, 400, origin);
+      }
+      const current = await readCatalogStateFromBucket(env.CATALOG, identity.uid, 'musicNote');
+      if (!current) {
+        return jsonResponse({ ok: true, materialized: false, membership: null,
+          revision: 0, itemCount: null }, 200, origin);
+      }
+      const catalog = materializeCatalogState(current, 'musicNote');
+      // Catalog canonical row identity is item.id; aliases are not authority.
+      const membership = catalog.items.some((item) => text(item?.id) === exactId);
+      return jsonResponse({ ok: true, materialized: true, membership,
+        revision: catalog.revision, itemCount: catalog.itemCount }, 200, origin);
+    }
+
     if (request.method === 'GET' && route.action === 'base') {
       const state = await getCatalogState(identity, route.kind, catalogRequiredRevision(request), env);
       const knownRevision = catalogKnownRevision(request);

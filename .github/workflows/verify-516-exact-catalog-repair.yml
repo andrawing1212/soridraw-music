@@ -1,0 +1,38 @@
+name: Verify app516 Exact Music Note Catalog Repair (No Deploy)
+
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'src/lib/userDataEngine.ts'
+      - 'src/lib/musicNoteSingleDocCatalogRepair516.ts'
+      - 'src/lib/studioHeartSingleDocDiagnostic.ts'
+      - 'src/components/StudioHeartSingleDocDiagnostic.tsx'
+      - 'scripts/verify-516-exact-catalog-repair.mjs'
+      - '.github/workflows/verify-516-exact-catalog-repair.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-catalog-repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: app516 exact one-record runtime fault injection
+        run: node scripts/verify-516-exact-catalog-repair.mjs
+      - name: Existing Music Note canonical/media guard
+        run: node scripts/verify-349-studio-heart-settlement-media.mjs
+      - name: Existing Library exact recovery guard
+        run: node scripts/verify-513-library-gap-exact-doc-recovery.mjs
+      - name: Build
+        run: npm run build

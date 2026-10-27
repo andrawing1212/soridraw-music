@@ -54,6 +54,17 @@ jobs:
           sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
           echo "LOCKED_PREVIEW_SHA=$target"
 
+      - name: APP515_MAIN_PREVIEW_V2_GUARD
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This workflow is triggered from main, but it checks out arbitrary
+          # old/new preview source. Load protection from immutable LIVE main,
+          # never from the selected target_sha, before any shared Rules PUT
+          # or Hosting deployment. No Firebase mutation in this step.
+          git show origin/main:scripts/verify-515-main-release-floor.mjs > "$RUNNER_TEMP/app515-main-release-floor.mjs"
+          node "$RUNNER_TEMP/app515-main-release-floor.mjs" "$PWD"
+
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:

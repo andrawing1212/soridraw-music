@@ -1,0 +1,25 @@
+name: app515 Main V2 Release Floor — Read Only
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/firebase-hosting-custom-preview.yml'
+      - '.github/workflows/soridraw-release-promotion.yml'
+      - '.github/workflows/verify-515-main-release-floor.yml'
+      - 'scripts/verify-515-main-release-floor.mjs'
+
+permissions:
+  contents: read
+
+jobs:
+  main-release-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout only proposed protected controller
+        uses: actions/checkout@v4
+      - name: Check immutable main PREVIEW dispatch and rollback guards
+        run: |
+          node --check scripts/verify-515-main-release-floor.mjs
+          node scripts/verify-515-main-release-floor.mjs --selftest

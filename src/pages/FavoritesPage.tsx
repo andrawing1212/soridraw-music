@@ -12,6 +12,7 @@ import {
   getMusicNoteFolderSaveStatus,
   getPendingMusicNoteFolderStructureBatch,
   getObservedMusicNoteStructureVersion,
+  markMusicNoteFolderEdited,
   promoteMusicNoteFolderStructureVersion,
   reportMusicNoteFolderDelivery,
   retryMusicNoteFolderStructureBatch,
@@ -2396,6 +2397,9 @@ updates: draft.updates,
         setFolderRecoveryConfirm(null);
         setFolderRecoveryOpen(false);
         showFavoriteToast(result.changed ? '선택한 폴더 상태를 서버에 복원했습니다.' : '선택한 상태가 이미 서버에 적용되어 있습니다.');
+      } else if (folderRecoveryUidRef.current === requestUid && result.localEditDuringRestore) {
+        setFolderRecoveryError('복원 중 이 기기에서 새 폴더 수정이 생겼습니다. 새 수정은 유지하고 복원 화면 갱신은 중단했습니다.');
+        setFolderRecoveryConfirm(null);
       }
     } catch (error: any) {
       if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) {
@@ -2868,6 +2872,7 @@ updates: draft.updates,
     options: { immediate?: boolean } = {},
   ) => {
     if (!user?.uid) return;
+    if (options.immediate) markMusicNoteFolderEdited(user.uid, mode);
     const normalized = normalizeMusicNoteFolders(
       folders,
       mode === 'sharedNote' ? DEFAULT_SHARED_NOTE_FOLDERS : DEFAULT_MY_NOTE_FOLDERS,

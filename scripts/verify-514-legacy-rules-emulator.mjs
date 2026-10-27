@@ -187,6 +187,79 @@ try {
   }, { merge: true }));
   console.log('APP514_SHARED_RULES_LEGACY_OWNER_EDIT_ACCEPTED_NONOWNER_DENIED=PASS');
   console.log('APP514_LEGACY_OVERWRITE_REMAINS_A_RELEASE_GATE_NOT_A_PASS=KNOWN_RISK');
+
+// app515 RELEASE-BLOCKED FEASIBILITY PROOF. An old browser always writes
+// user_structures/{uid}; a new client COULD write a distinct v2 document.
+// A failed/no-op Functions archive can then leave both edits durable.
+// This candidate exists in emulator memory ONLY. No app path or live Rules
+// are switched, and this test does NOT declare full migration complete.
+const separateV2Candidate = liveRules.replace(ownerParent, ownerParent + `
+    match /user_structures/{uid}/folder_state/{stateId} {
+      allow get: if stateId == 'v2' && isOwner(uid);
+      allow list, delete: if false;
+      allow create, update: if stateId == 'v2' && isOwner(uid);
+    }
+`);
+assert.notEqual(separateV2Candidate, liveRules);
+const isolated = await initializeTestEnvironment({
+  projectId: 'demo-soridraw-app515-dual-path',
+  firestore: { host: '127.0.0.1', port: 8099, rules: separateV2Candidate },
+});
+try {
+  const ownerDb = isolated.authenticatedContext(uid).firestore();
+  const legacyPath = doc(ownerDb, path);
+  const v2Path = doc(ownerDb, path, 'folder_state', 'v2');
+  const otherV2 = doc(isolated.authenticatedContext('not-owner').firestore(),
+    path, 'folder_state', 'v2');
+  await isolated.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), path), {
+      musicNoteFolders: {
+        myNote: [{ id: 'a', title: 'Old PC original' }],
+        sharedNote: [{ id: 's', title: 'Shared original' }],
+      },
+      musicNoteStructureVersion: 99,
+    });
+  });
+  // The new B device saves to its independent document using one W1.
+  await assertSucceeds(setDoc(v2Path, {
+    schemaVersion: 2, musicNoteStructureVersion: 100001,
+    musicNoteFolders: {
+      myNote: [{ id: 'b', title: 'Mobile B latest' }],
+      sharedNote: [{ id: 's', title: 'Shared original' }],
+    },
+  }));
+  // After B commits, long-open old A does its existing legacy setDoc.
+  // Simulate COMPLETE archive/Functions failure: NO legacy_recovery write.
+  await assertSucceeds(setDoc(legacyPath, {
+    musicNoteStructureVersion: 100000,
+    musicNoteFolders: { myNote: [{ id: 'a', title: 'PC A unsaved edit' }] },
+  }, { merge: true }));
+  const bSaved = (await getDoc(v2Path)).data();
+  const aSaved = (await getDoc(legacyPath)).data();
+  assert.equal(bSaved?.musicNoteFolders?.myNote?.[0]?.title, 'Mobile B latest');
+  assert.equal(aSaved?.musicNoteFolders?.myNote?.[0]?.title, 'PC A unsaved edit');
+  assert.equal(aSaved?.musicNoteFolders?.sharedNote?.[0]?.title, 'Shared original');
+  await assertFails(getDoc(otherV2));
+  await assertFails(setDoc(otherV2, { schemaVersion: 2 }));
+  await assertFails(setDoc(doc(isolated.authenticatedContext(uid).firestore(),
+    path, 'folder_state', 'v3'), { schemaVersion: 3 }));
+  // Even a second legitimate old edit cannot change the newer branch.
+  await assertSucceeds(setDoc(legacyPath, {
+    musicNoteFolders: { myNote: [{ id: 'a', title: 'PC A final edit' }] },
+  }, { merge: true }));
+  assert.equal((await getDoc(v2Path)).data()?.musicNoteFolders?.myNote?.[0]?.title,
+    'Mobile B latest');
+  assert.equal((await getDoc(legacyPath)).data()?.musicNoteFolders?.myNote?.[0]?.title,
+    'PC A final edit');
+  console.log('APP515_ISOLATED_V2_CANONICAL_SURVIVES_LEGACY_STALE_WRITES_WITHOUT_FUNCTION_ARCHIVE=PASS');
+  console.log('APP515_LEGACY_AND_MODERN_EDITS_STORED_SEPARATELY_W1_EACH=PASS');
+  // Release is still blocked: new app migration/read/dual-path compare,
+  // concurrent modern-new writes, hard 1MiB guards and shared Rules are NOT
+  // deployed or connected. Old-vs-old clients still write one legacy document.
+} finally {
+  await isolated.cleanup();
+}
+
 } finally {
   await coexistence.cleanup();
 }

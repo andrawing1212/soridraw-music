@@ -354,6 +354,7 @@ jobs:
           npm --prefix functions ci --no-audit --no-fund
           npm --prefix functions run build
           npm --prefix functions run test:music-note-structure-sync
+          npm --prefix functions exec -- node scripts/test-514-recovery-trigger-isolation.cjs
       - name: Verify large Music Note shared-folder first-match semantics and cost
         run: node scripts/verify-music-note-shared-dedup-linear.mjs
       - name: Verify app428 publication consistency contracts

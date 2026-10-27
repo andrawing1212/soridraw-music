@@ -27,6 +27,9 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useDeferredValue }
 import {
   listMusicNoteFolderRecovery,
   restoreMusicNoteFolderRecovery,
+  getMusicNoteLegacyFolderComparison,
+  restoreMusicNoteLegacyFolderChoice,
+  type MusicNoteLegacyFolderComparison,
   type MusicNoteFolderRecoveryRecord,
 } from '../services/musicNoteFolderRecovery';
 import { useMediaQuery } from '../lib/mediaQueryStore';
@@ -1393,6 +1396,10 @@ export default function FavoritesPage({
   folderRecoveryUidRef.current = user?.uid;
   const [folderRecoveryOpen, setFolderRecoveryOpen] = useState(false);
   const [folderRecoveryRecords, setFolderRecoveryRecords] = useState<MusicNoteFolderRecoveryRecord[]>([]);
+  const [folderLegacyComparison, setFolderLegacyComparison] = useState<MusicNoteLegacyFolderComparison | null>(null);
+  const [folderLegacyConfirm, setFolderLegacyConfirm] = useState<{
+    mode: 'myNote' | 'sharedNote'; choice: 'legacy' | 'modern';
+  } | null>(null);
   const [folderRecoveryLoading, setFolderRecoveryLoading] = useState(false);
   const [folderRecoveryBusy, setFolderRecoveryBusy] = useState(false);
   const [folderRecoveryError, setFolderRecoveryError] = useState('');
@@ -2425,6 +2432,8 @@ updates: draft.updates,
     // Never retain a previous account's private conflict snapshots.
     setFolderRecoveryOpen(false);
     setFolderRecoveryRecords([]);
+    setFolderLegacyComparison(null);
+    setFolderLegacyConfirm(null);
     setFolderRecoveryConfirm(null);
     setFolderRecoveryError('');
   }, [user?.uid]);
@@ -2436,15 +2445,64 @@ updates: draft.updates,
     setFolderRecoveryOpen(true);
     setFolderRecoveryLoading(true);
     setFolderRecoveryRecords([]);
+    setFolderLegacyComparison(null);
+    setFolderLegacyConfirm(null);
     setFolderRecoveryError('');
     setFolderRecoveryConfirm(null);
     try {
-      const records = await listMusicNoteFolderRecovery(requestUid);
-      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) setFolderRecoveryRecords(records);
+      // Only this explicit dialog reads recovery records and the two folder
+      // stores. No page-open polling or background comparison.
+      const [records, comparison] = await Promise.all([
+        listMusicNoteFolderRecovery(requestUid),
+        getMusicNoteLegacyFolderComparison(requestUid),
+      ]);
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) {
+        setFolderRecoveryRecords(records);
+        setFolderLegacyComparison(comparison);
+      }
     } catch {
       if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) setFolderRecoveryError('충돌 기록을 읽지 못했습니다. 서버 권한 적용 여부를 확인해 주세요.');
     } finally {
       if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) setFolderRecoveryLoading(false);
+    }
+  };
+
+  const confirmLegacyFolderChoice = async () => {
+    if (!user?.uid || !folderLegacyComparison || !folderLegacyConfirm || folderRecoveryBusy) return;
+    const requestUid = user.uid;
+    const requestNumber = ++folderRecoveryRequestRef.current;
+    setFolderRecoveryBusy(true);
+    setFolderRecoveryError('');
+    try {
+      const result = await restoreMusicNoteLegacyFolderChoice(
+        requestUid, folderLegacyConfirm.mode, folderLegacyConfirm.choice,
+        folderLegacyComparison,
+        () => folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber,
+      );
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber
+        && !result.localEditDuringRestore) {
+        if (result.changed) publishMusicNoteStructureSession(requestUid, {
+          musicNoteFolders: { [folderLegacyConfirm.mode]: result.folders },
+          musicNoteStructureVersion: result.version,
+        }, result.version, true);
+        setFolderLegacyConfirm(null);
+        setFolderRecoveryOpen(false);
+        showFavoriteToast(result.changed
+          ? '선택한 구버전 폴더를 신버전 저장소에 복원했습니다.'
+          : '기존 신버전 폴더 상태를 유지했습니다.');
+      } else if (folderRecoveryUidRef.current === requestUid && result.localEditDuringRestore) {
+        setFolderRecoveryError('복원 중 새 폴더 수정이 생겼습니다. 새 수정은 유지하고 화면 갱신은 중단했습니다.');
+        setFolderLegacyConfirm(null);
+      }
+    } catch (error: any) {
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) {
+        setFolderRecoveryError(String(error?.message || '복원하지 못했습니다.'));
+        setFolderLegacyConfirm(null);
+      }
+    } finally {
+      if (folderRecoveryUidRef.current === requestUid && folderRecoveryRequestRef.current === requestNumber) {
+        setFolderRecoveryBusy(false);
+      }
     }
   };
 
@@ -8959,10 +9017,48 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   className="p-2 text-white/70 hover:text-white"><X className="h-4 w-4" /></button>
               </div>
               {folderRecoveryLoading && <p className="mt-5 text-sm text-white/70">기록을 확인하고 있습니다.</p>}
-              {!folderRecoveryLoading && !folderRecoveryRecords.length && !folderRecoveryError && (
+              {!folderRecoveryLoading && !folderRecoveryRecords.length && !folderLegacyComparison?.changedModes.length && !folderRecoveryError && (
                 <p className="mt-5 text-sm text-white/60">확인 가능한 폴더 충돌 기록이 없습니다.</p>
               )}
               {folderRecoveryError && <p role="alert" className="mt-4 text-sm text-rose-300">{folderRecoveryError}</p>}
+              {folderLegacyComparison && folderLegacyComparison.changedModes.length > 0 && (
+                <section className="mt-4 rounded-xl bg-white/[0.04] p-3">
+                  <p className="mb-2 text-sm font-bold">구버전 PC · 신버전 폴더 비교</p>
+                  <p className="mb-3 text-xs text-white/60">두 저장소의 내용을 비교합니다. 선택만으로는 저장되지 않습니다. 다른 기기가 다시 수정했다면 복원을 중단합니다.</p>
+                  {folderLegacyComparison.changedModes.map(mode => (
+                    <div key={mode} className="mb-3">
+                      <p className="mb-2 text-xs font-semibold">{mode === 'myNote' ? '마이 노트' : '공유 노트'}</p>
+                      {(['modern', 'legacy'] as const).map(choice => {
+                        const list = folderLegacyComparison[choice === 'modern' ? 'modernFolders' : 'legacyFolders'][mode] || [];
+                        const selected = folderLegacyConfirm?.mode === mode && folderLegacyConfirm.choice === choice;
+                        return (
+                          <button type="button" key={choice} disabled={folderRecoveryBusy}
+                            onClick={() => { setFolderLegacyConfirm({ mode, choice }); setFolderRecoveryConfirm(null); setFolderRecoveryError(''); }}
+                            className={`mb-2 block w-full rounded-lg bg-black/25 px-3 py-2 text-left text-xs ${selected ? 'ring-1 ring-[#FF7A72]' : ''}`}>
+                            <strong>{choice === 'modern' ? '신버전 최신 폴더 유지' : '구버전 PC 편집 선택'}</strong>
+                            <span className="ml-2 text-white/60">폴더 {list.length}개</span>
+                            <p className="mt-1 break-words text-white/65">
+                              {list.map((folder: any) => String(folder?.title || folder?.name || '이름 없음')).join(' · ').slice(0, 250)}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
+                  {folderLegacyConfirm && (
+                    <div className="mt-2 rounded-lg bg-amber-300/10 p-3 text-xs">
+                      <p>선택한 {folderLegacyConfirm.choice === 'legacy' ? '구버전 PC' : '신버전'} 상태를 확정합니다. 구버전 원본은 변경하지 않습니다.</p>
+                      <div className="mt-3 flex justify-end gap-2">
+                        <button type="button" disabled={folderRecoveryBusy} onClick={() => setFolderLegacyConfirm(null)}>취소</button>
+                        <button type="button" disabled={folderRecoveryBusy} onClick={() => void confirmLegacyFolderChoice()}
+                          className="rounded-lg bg-[#FF7A72] px-3 py-2 font-bold text-white">
+                          {folderRecoveryBusy ? '서버 확인 중' : '선택한 상태로 복원 확정'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
               <div className="mt-4 space-y-4">
                 {folderRecoveryRecords.map(record => (
                   <div key={record.id} className="rounded-xl border border-white/10 bg-white/[0.035] p-3">

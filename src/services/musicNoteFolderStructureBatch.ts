@@ -104,6 +104,20 @@ const comparableFolders = (value: unknown): string => JSON.stringify(
     isDefault: Boolean(item?.isDefault || item?.id === 'default'),
   })) : null,
 );
+// Content-only fingerprint of the legacy folder view at first V2 migration.
+// Avoid duplicating arbitrarily large complete folder arrays in the new
+// document; two independent 32-bit streams plus length keep the marker tiny.
+export const getMusicNoteLegacyFolderSignature = (folders: unknown): string => {
+  const raw = comparableFolders(folders);
+  let a = 2166136261, b = 0x9e3779b9;
+  for (let i = 0; i < raw.length; i++) {
+    const value = raw.charCodeAt(i);
+    a = Math.imul(a ^ value, 16777619);
+    b = Math.imul(b ^ value, 2246822519);
+  }
+  return `${raw.length}:${(a >>> 0).toString(16)}:${(b >>> 0).toString(16)}`;
+};
+
 export type MusicNoteStructureBase = {
   mode: MusicNoteFolderModeKey;
   folders: unknown[] | null;
@@ -182,6 +196,14 @@ export const writeMusicNoteStructureIfNewer = async (
         transaction.set(v2Ref, {
           schemaVersion: 2,
           musicNoteFolders: nextFolders,
+          ...(!v2Snapshot?.exists() ? {
+            // Only first migration records old-mode fingerprints; subsequent
+            // legacy edits do not modify them until the user reconciles.
+            legacyBaseSignatures: {
+              myNote: getMusicNoteLegacyFolderSignature(serverFolders.myNote),
+              sharedNote: getMusicNoteLegacyFolderSignature(serverFolders.sharedNote),
+            },
+          } : {}),
           musicNoteStructureVersion: committedRevision,
           musicNoteStructureWriterToken: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         }, { merge: true });

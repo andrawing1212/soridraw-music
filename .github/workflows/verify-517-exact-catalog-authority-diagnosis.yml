@@ -1,0 +1,35 @@
+name: Verify app517 Exact Catalog Authority Diagnosis (No Deploy)
+
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'cloudflare/media-worker/src/index.js'
+      - 'src/lib/userDataEngine.ts'
+      - 'src/components/StudioHeartSingleDocDiagnostic.tsx'
+      - 'scripts/verify-517-exact-catalog-authority-diagnosis.mjs'
+      - '.github/workflows/verify-517-exact-catalog-authority-diagnosis.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  read-only-catalog-inspection:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Exact R2 no-write inspection fault injection
+        run: node scripts/verify-517-exact-catalog-authority-diagnosis.mjs
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+      - name: Existing Music Note save safety
+        run: node scripts/verify-349-studio-heart-settlement-media.mjs

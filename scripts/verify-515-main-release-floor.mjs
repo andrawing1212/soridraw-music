@@ -55,6 +55,24 @@ if (process.argv.includes('--selftest')) {
   assert.throws(()=>assertReleaseSafe({previewModern:false,candidateModern:true,read:known,controller:guarded.controller,previewWorkflow:''}),/MAIN_PREVIEW_NOT_PROTECTED/);
   assert.throws(()=>assertReleaseSafe({previewModern:true,candidateModern:false,read:()=>'',...guarded}),/V2_ROLLBACK_BLOCKED/);
   assert.throws(()=>assertReleaseSafe({previewModern:false,candidateModern:true,read:path=>path==='firestore.rules'?'':known(path),...guarded}),/V2_ROLLBACK_BLOCKED/);
+  // P2-2 regression protects the existing immutable main dispatch path.
+  const actualPreview = readFileSync('.github/workflows/firebase-hosting-custom-preview.yml','utf8');
+  const actualController = readFileSync('.github/workflows/soridraw-release-promotion.yml','utf8');
+  const pGuard = actualPreview.indexOf('      - name: APP515_MAIN_PREVIEW_V2_GUARD');
+  assert.ok(pGuard > actualPreview.indexOf('      - name: Lock source and protected refs')
+    && pGuard < actualPreview.indexOf('      - name: Authenticate Firebase')
+    && pGuard < actualPreview.indexOf('      - name: Deploy PREVIEW Hosting only'),
+    'main PREVIEW dispatch must check V2 floor before all mutations');
+  assert.ok(actualPreview.includes('git show origin/main:scripts/verify-515-main-release-floor.mjs'),
+    'main PREVIEW dispatch must never trust the target SHA for safety script');
+  assert.ok(actualController.indexOf('      - name: APP515 main-controller V2 candidate preflight before any mutation')
+    < actualController.indexOf('      - name: PREFLIGHT build and static verification'));
+  for (const mode of ['test','production']) {
+    assert.ok(actualController.includes('if rollback_v2_compatible ' + mode + ' ')
+      && actualController.includes(mode === 'test' ? CONTROLLER_TEST : CONTROLLER_PROD),
+      'missing automatic Hosting/branch rollback guard: '+mode);
+  }
+  console.log('APP515_MAIN_WORKFLOW_DISPATCH_AND_AUTOROLLBACK_GUARDS_SELFTEST=PASS');
   console.log('APP515_MAIN_PREVIEW_DISPATCH_V2_PROTECTION_SELFTEST=PASS');
 } else {
   const root = process.argv[2];

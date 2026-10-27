@@ -87,7 +87,9 @@ async function runCase(mode, before=original, after=old) {
   for(const mode of ['archive-fail','plan-fail']) {
     const r=await runCase(mode);
     assert.equal(r.thrown,undefined,mode+' must not block normal sync');
-    assert.deepEqual(r.steps.slice(0,2),['sync-start','sync-written']);
+    assert.equal(r.steps[0], 'sync-start');
+    assert.ok(r.steps.includes('sync-written'), 'profile signal must complete after archive error');
+    assert.ok(r.steps.includes('archive-plan'), 'archive failure must be exercised');
     assert.equal(r.errors.length,1,'archive failure logged once');
     assert.equal(r.errors[0][0],'APP514_LEGACY_RECOVERY_ARCHIVE_FAILED');
     assert.ok(!JSON.stringify(r.errors).includes('Modern saved'),'no private folder names in log');
@@ -95,9 +97,10 @@ async function runCase(mode, before=original, after=old) {
   }
   const normal=await runCase('archive-success');
   assert.equal(normal.thrown,undefined);
-  assert.deepEqual(normal.steps,['sync-start','sync-written','archive-plan','archive-create']);
+  assert.deepEqual(normal.steps,['sync-start','archive-plan','archive-create','sync-written'],
+    'independent archive may start before profile settlement without delaying its write');
   assert.equal(normal.errors.length,0);
-  console.log('APP514_CONFLICT_ARCHIVE_AFTER_NORMAL_VERSION_SIGNAL=PASS');
+  console.log('APP514_CONFLICT_ARCHIVE_PARALLEL_TO_NORMAL_VERSION_SIGNAL=PASS');
   const dup=await runCase('archive-exists');
   assert.equal(dup.thrown,undefined);
   assert.equal(dup.errors.length,0,'duplicate event is idempotent and quiet');
@@ -109,6 +112,8 @@ async function runCase(mode, before=original, after=old) {
   console.log('APP514_HEALTHY_MODERN_SYNC_HAS_NO_ARCHIVE_W=PASS');
   const fail=await runCase('sync-fail');
   assert.match(String(fail.thrown?.message),/sync offline/);
-  assert.deepEqual(fail.steps,['sync-start']);
+  assert.deepEqual(fail.steps,['sync-start','archive-plan','archive-create'],
+    'even failed profile sync must not skip legacy before/after archive');
+  assert.equal(fail.errors.length,0,'successful archive stays intact when sync fails');
   console.log('APP514_REAL_SYNC_FAILURE_NOT_MASKED=PASS');
 })().catch(err=>{console.error(err);process.exitCode=1;});

@@ -1,3 +1,14 @@
+## CURRENT — app515 v2 isolated Music Note folder canonical candidate (2026-10-28 KST)
+
+- **승인 범위:** 디렉터가 기존 Draft PR #512에서 신버전 전용 `user_structures/{uid}/folder_state/v2` 실제 코드 경로, 옛 PC 비교/선택 복원, PC↔모바일 동기화, 비용·안전 검증을 승인. PR 병합·Rules 적용·배포는 승인하지 않음.
+- **구현 후보:** `musicNoteFolderStructureBatch.ts`에서 신버전 폴더 변경은 기존 부모가 아니라 독립 v2 문서에 원자적으로 저장; 기존 구형 브라우저는 부모에 계속 저장. 처음 생성할 때만 부모 R1을 추가로 읽어 현재 폴더와 소형 기준 서명을 보존하고, 이후 V2 갱신은 R1/W1, 내용 동일이면 W0. 기존 60초 배치, 무저장 캐시 경고, 모드별 최신 기준 비교 유지. 동시 로컬 편집 뒤 ACK에서 후속 pending baseline을 안전하게 갱신.
+- **읽기/신호:** 신형 앱은 필요한 canonical 확인에서 old parent의 카드상태와 v2 폴더를 합쳐 읽음. 현재 비용: 최초/미확인/실제 신호 확인은 **두 문서 R2**(구성상 기존 대비 R1 추가), 검증된 warm 화면 이동은 R0 목표. `syncMusicNoteFolderStateV2Version` 신규 Functions source는 실제 v2 변경 시 기존 user profile version 신호를 올림; 이는 **아직 미배포**.
+- **수동 비교:** 구형 원본과 신형 V2 스냅샷은 사용자가 폴더 충돌 기록 화면을 열 때에만 조회(R2 추가 + 기존 기록 R1). 최초 분리 시 원본의 소형 서명과 비교해 구형에서 실제 변경된 모드만 노출. 사용자 확인 후 v2만 트랜잭션으로 복원, 다른 기기 갱신·삭제/미저장 편집 안전 차단. 기존 `legacy_recovery` 과거 기록은 V2 전환 뒤 구형 정본에 잘못 적용되지 않도록 직접 복원 차단.
+- **공유 Rules:** 구형 부모 owner read/write 보호를 유지, v2 전용 owner GET/CREATE/UPDATE와 버전·토큰 증가·스키마 검사 추가. V2 delete/list 차단. 이 Rules는 PR 소스만 수정했으며 모든 배포 환경에서 **활성화하지 않음**. 원본 곡/가사/하트·대량 사용자 데이터는 변경하지 않음.
+- **테스트/릴리스 HOLD:** app506 quota·동시 ACK·app514 old/new VM/Rules emulator/복구 UI 비교 VM을 변경한 소스에 맞춰 검증 중. 정확한 마지막 HEAD CI 완료·독립 WORK 감사·실제 인증 PC/모바일 구/신 버전 검증 전까지 PASS 주장·PR 병합·배포 금지. 구형↔구형 동시 쓰기는 원래 클라이언트가 무조건 merge하며 이 구조만으로 보장 불가. 실제 최신 구형 편집 알림 UX·R2 비용·1MiB 등 독립 감사 필수.
+
+---
+
 ## CURRENT — app514 충돌 전·후 폴더 복구 기록 보강 / Draft PR #512 (2026-10-28 KST)
 
 - 기존 `legacy_recovery`는 구형 클라이언트가 최신 폴더를 덮어쓴 Firestore 이벤트의 before/after 배열을 비공개로 보관하고, 사용자가 명시적으로 기록을 읽고 확인해 복원하는 구조. UI·기존 저장/선택 기능 재사용, 자동 복원/페이지 방문 조회 추가 없음.

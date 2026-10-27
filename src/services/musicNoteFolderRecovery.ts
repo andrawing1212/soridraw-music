@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, doc, getDocs, limit, orderBy, query, runTransaction } from '../lib/firestoreMeasured';
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, runTransaction } from '../lib/firestoreMeasured';
 import { getPendingMusicNoteFolderStructureBatch, getMusicNoteFolderEditEpoch, type MusicNoteFolderModeKey } from './musicNoteFolderStructureBatch';
 import { publishMusicNoteStructureDelta } from './userDomainSyncService';
 
@@ -13,12 +13,53 @@ export type MusicNoteFolderRecoveryRecord = {
   afterFolders: Partial<Record<MusicNoteFolderModeKey, unknown[]>>;
   observedAtMs: number;
 };
+// Reassemble immutable shards on explicit recovery view / transaction only.
+const recoveryParts = (history: any): string[] => {
+  if (history?.schemaVersion !== 2) return [];
+  const ids = history.partIds;
+  if (!Array.isArray(ids) || ids.length < 2 || ids.length > 32
+    || !ids.every((id: unknown) => typeof id === 'string'
+      && /^(beforeFolders|afterFolders)_(myNote|sharedNote)_([0-9]{1,3})$/.test(id))
+    || new Set(ids).size !== ids.length) throw new Error('복구 기록 조각이 올바르지 않습니다.');
+  return ids as string[];
+};
+const expandRecovery = (history: any, parts: Record<string, string>): any => {
+  if (history?.schemaVersion !== 2) return history;
+  const ids = recoveryParts(history);
+  const expanded = { ...history, schemaVersion: 1, beforeFolders: {}, afterFolders: {} };
+  for (const side of ['beforeFolders', 'afterFolders'] as const) {
+    for (const mode of history.changedModes || []) {
+      if (mode !== 'myNote' && mode !== 'sharedNote') throw new Error('복구 기록 폴더가 올바르지 않습니다.');
+      const prefix = `${side}_${mode}_`;
+      const matches = ids.filter(id => id.startsWith(prefix))
+        .sort((a, b) => Number(a.slice(prefix.length)) - Number(b.slice(prefix.length)));
+      if (!matches.length || matches.some((id, index) => Number(id.slice(prefix.length)) !== index)) {
+        throw new Error('복구 기록에 필요한 조각이 없습니다.');
+      }
+      const json = matches.map(id => parts[id]).join('');
+      if (matches.some(id => typeof parts[id] !== 'string')) throw new Error('복구 기록을 모두 읽지 못했습니다.');
+      const folders = JSON.parse(json);
+      if (!Array.isArray(folders)) throw new Error('폴더 복구 형식이 잘못됐습니다.');
+      expanded[side][mode] = folders;
+    }
+  }
+  return expanded;
+};
 export const listMusicNoteFolderRecovery = async (uid: string): Promise<MusicNoteFolderRecoveryRecord[]> => {
   if (!uid?.trim()) throw new Error('로그인이 필요합니다.');
   const recovery = collection(db, 'user_structures', uid, 'legacy_recovery');
   const snapshot = await getDocs(query(recovery, orderBy('observedAtMs', 'desc'), limit(10)));
-  return snapshot.docs.map(entry => {
-    const value = entry.data();
+  const populated = await Promise.all(snapshot.docs.map(async entry => {
+    let value = entry.data();
+    if (value?.schemaVersion === 2) {
+      const parts: Record<string, string> = {};
+      await Promise.all(recoveryParts(value).map(async id => {
+        const part = await getDoc(doc(db, 'user_structures', uid, 'legacy_recovery', entry.id, 'parts', id));
+        if (!part.exists()) throw new Error('충돌 기록 일부를 읽을 수 없습니다.');
+        parts[id] = part.data()?.payload;
+      }));
+      value = expandRecovery(value, parts);
+    }
     const modes = (['myNote', 'sharedNote'] as const).filter(mode =>
       Array.isArray(value?.beforeFolders?.[mode]) && Array.isArray(value?.afterFolders?.[mode])
       && Array.isArray(value?.changedModes) && value.changedModes.includes(mode),
@@ -30,7 +71,8 @@ export const listMusicNoteFolderRecovery = async (uid: string): Promise<MusicNot
       afterFolders: value?.afterFolders || {},
       observedAtMs: Number(value?.observedAtMs || 0),
     };
-  }).filter(record => record.changedModes.length > 0);
+  }));
+  return populated.filter(record => record.changedModes.length > 0);
 };
 
 export const restoreMusicNoteFolderRecovery = async (
@@ -59,7 +101,16 @@ export const restoreMusicNoteFolderRecovery = async (
     // Reads come before writes, all from server; a concurrent edit retries or fails.
     const recoverySnap = await txn.get(archived);
     const canonicalSnap = await txn.get(parent);
-    const history = recoverySnap.data();
+    let history = recoverySnap.data();
+    if (recoverySnap.exists() && history?.schemaVersion === 2) {
+      const parts: Record<string, string> = {};
+      for (const id of recoveryParts(history)) {
+        const part = await txn.get(doc(db, 'user_structures', uid, 'legacy_recovery', recordId, 'parts', id));
+        if (!part.exists()) throw new Error('충돌 기록 조각이 없습니다.');
+        parts[id] = part.data()?.payload;
+      }
+      history = expandRecovery(history, parts);
+    }
     if (!recoverySnap.exists() || history?.schemaVersion !== 1
       || history?.source !== 'legacy-writer-after-modern'
       || !Array.isArray(history?.changedModes) || !history.changedModes.includes(mode)) {

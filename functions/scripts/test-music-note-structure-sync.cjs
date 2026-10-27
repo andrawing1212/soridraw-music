@@ -13,7 +13,8 @@ assert.equal(getMusicNoteStructureSignalVersion({}, 130, 110), 130, 'legacy clie
 assert.equal(getMusicNoteStructureSignalVersion({ musicNoteStructureVersion: 120 }, 130, 140), 141, 'stale or concurrent client mutation advances the authority version');
 console.log('Music Note structure signal contract: 7 cases PASS');
 
-const { buildLegacyMusicNoteFolderRecovery, chooseLegacyMusicNoteFolderRecovery } =
+const { buildLegacyMusicNoteFolderRecovery, chooseLegacyMusicNoteFolderRecovery,
+  planLegacyMusicNoteFolderRecoveryArchive } =
   require('../lib/musicNoteStructureSync.js');
 const originalFolders = {
   myNote: [{ id: 'default', title: 'My Note' }, { id: 'f', title: 'modern-stored' }],
@@ -81,3 +82,38 @@ assert.match(indexSource, /\.collection\("legacy_recovery"\)\.doc\(eventKey\)/);
 assert.match(indexSource, /await recoveryRef\.create\(recoveryPayload\)/);
 assert.match(indexSource, /if \(legacyRecovery\)/);
 console.log('APP514_RECOVERY_CONFLICT_ONLY_IDEMPOTENT_WRITE_PATH=PASS');
+
+
+const smallArchive = planLegacyMusicNoteFolderRecoveryArchive({
+  ...conflicting, observedAtMs: 1700000000000,
+});
+assert.equal(smallArchive.parts.length, 0);
+assert.equal(smallArchive.manifest.schemaVersion, 1);
+console.log('APP514_NORMAL_CONFLICT_ONE_IMMUTABLE_ARCHIVE_DOC=PASS');
+
+const bigText = Array(400_000).fill('가').join('');
+const largeBefore = [{id:'default', title:'kept'}, {id:'large', title:bigText}];
+const largeAfter = [{id:'default', title:'kept'}, {id:'large', title:bigText+' updated'}];
+const largePlan=planLegacyMusicNoteFolderRecoveryArchive({
+  ...conflicting,
+  beforeFolders:{myNote:largeBefore},
+  afterFolders:{myNote:largeAfter},
+  observedAtMs:1700000000000,
+});
+assert.equal(largePlan.manifest.schemaVersion, 2);
+assert.ok(largePlan.parts.length>2 && largePlan.parts.length<=32);
+assert.deepEqual(largePlan.manifest.partIds, largePlan.parts.map(p=>p.id));
+for(const part of largePlan.parts){
+  assert.ok(Buffer.byteLength(part.payload, 'utf8')<=300000);
+}
+const rebuild = (side, mode) => JSON.parse(largePlan.parts
+  .filter(p=>p.id.startsWith(side+'_'+mode+'_'))
+  .sort((a,b)=>Number(a.id.split('_').at(-1))-Number(b.id.split('_').at(-1)))
+  .map(p=>p.payload).join(''));
+assert.deepEqual(rebuild('beforeFolders','myNote'),largeBefore);
+assert.deepEqual(rebuild('afterFolders','myNote'),largeAfter);
+const src=require('node:fs').readFileSync('src/index.ts','utf8');
+assert.match(src,/archiveBatch\.create\(recoveryRef, archive\.manifest\)/);
+assert.match(src,/archiveBatch\.create\(recoveryRef\.collection\("parts"\)\.doc\(part\.id\)/);
+assert.match(src,/await archiveBatch\.commit\(\)/);
+console.log('APP514_OVERSIZED_CONFLICT_ATOMIC_ARCHIVE_SHARDS_NO_TRUNCATION=PASS');

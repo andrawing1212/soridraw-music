@@ -1,0 +1,39 @@
+name: SORIDRAW app515 Shared Firebase Live Inventory (Read-only)
+
+# Manual only. No push/PR/schedule trigger, no app deployment.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app515-shared-firebase-readonly
+  cancel-in-progress: false
+
+jobs:
+  shared-firebase-inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate using existing GitHub secret
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      - name: Install Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Inspect exact shared-project Rules and Functions (metadata only)
+        env:
+          GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
+          GCLOUD_PROJECT: soridraw-app-866a5
+          APP515_REPORT_PATH: ${{ runner.temp }}/app515-shared-firebase-inventory.json
+        run: python3 scripts/app515-shared-firebase-readonly.py
+      - name: Preserve sanitized report without repository commits
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app515-shared-firebase-readonly-result
+          path: ${{ runner.temp }}/app515-shared-firebase-inventory.json
+          if-no-files-found: warn
+          retention-days: 7

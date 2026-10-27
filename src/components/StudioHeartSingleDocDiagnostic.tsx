@@ -6,6 +6,10 @@ import {
   inspectExactStudioHeartDocument,
   type StudioHeartExactReadReport,
 } from '../lib/studioHeartSingleDocDiagnostic';
+import {
+  inspectExactSharedMusicNoteCatalog517,
+  type ExactSharedCatalogMembership517,
+} from '../lib/userDataEngine';
 
 // Admin-only existing CACHE LIVE panel: no action on render, and exactly one
 // Firestore document read only on explicit "서버 1건 확인" button click.
@@ -16,6 +20,8 @@ export default function StudioHeartSingleDocDiagnostic() {
   const [report, setReport] = useState<StudioHeartExactReadReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [alreadyRead, setAlreadyRead] = useState(false);
+  const [sharedResult, setSharedResult] = useState<ExactSharedCatalogMembership517 | null>(null);
+  const [sharedInspected, setSharedInspected] = useState(false);
   const uid = String(auth.currentUser?.uid || '').trim();
   const uidRef = useRef(uid);
   const titleRef = useRef(title);
@@ -34,6 +40,8 @@ export default function StudioHeartSingleDocDiagnostic() {
     setBusy(false);
     setAlreadyRead(false);
     setReport(null);
+    setSharedResult(null);
+    setSharedInspected(false);
   };
 
   useEffect(() => {
@@ -110,6 +118,49 @@ export default function StudioHeartSingleDocDiagnostic() {
     }
   };
 
+  const inspectShared = async () => {
+    const requestUid = String(auth.currentUser?.uid || '').trim();
+    const requestId = documentIdRef.current.trim();
+    const requestTitle = titleRef.current;
+    if (busyRef.current || sharedInspected || !alreadyRead || !report?.documentPresent
+      || report.ownerMatchesSignedInUser !== true || !requestUid
+      || uidRef.current !== requestUid || requestId !== documentId.trim()
+      || requestTitle !== title) return;
+    const request = {
+      sequence: ++requestSequenceRef.current,
+      uid: requestUid,
+      documentId: requestId,
+      title: requestTitle,
+    };
+    activeRequestRef.current = request;
+    busyRef.current = true;
+    setBusy(true);
+    setSharedResult(null);
+    setSharedInspected(true);
+    setMessage('');
+    const isCurrentRequest = () => (
+      activeRequestRef.current?.sequence === request.sequence
+      && uidRef.current === request.uid && auth.currentUser?.uid === request.uid
+      && documentIdRef.current.trim() === request.documentId
+      && titleRef.current === request.title
+    );
+    try {
+      const result = await inspectExactSharedMusicNoteCatalog517(request.uid, request.documentId);
+      if (!isCurrentRequest()) return;
+      setSharedResult(result);
+      setMessage('공유 서버 Catalog의 해당 곡 포함 여부만 확인했습니다. 곡이나 캐시를 수정하지 않았습니다.');
+    } catch {
+      if (!isCurrentRequest()) return;
+      setMessage('공유 서버 Catalog 확인 실패: 새 진단 서버 미배포, 인증 또는 네트워크 문제일 수 있습니다. 누락으로 판정하지 마세요.');
+    } finally {
+      if (isCurrentRequest()) {
+        activeRequestRef.current = null;
+        busyRef.current = false;
+        setBusy(false);
+      }
+    }
+  };
+
   const label = (value: boolean | null) => value === null ? '판정 불가' : value ? '예' : '아니요';
   return (
     <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.035] p-2.5 text-[11px] text-white/75">
@@ -168,6 +219,21 @@ export default function StudioHeartSingleDocDiagnostic() {
         <div>이 기기 하트 기록: {label(report.deviceRecentHeartAuthority)}</div>
         <div>이 기기 Catalog 캐시 존재: {label(report.deviceCatalogCached)}</div>
         <div>Catalog 캐시에 저장곡 포함: {label(report.deviceCatalogContainsDocument)}</div>
+        <button type="button"
+          disabled={busy || sharedInspected || !report.documentPresent || report.ownerMatchesSignedInUser !== true}
+          onClick={() => void inspectShared()}
+          className="mt-2 rounded border border-white/15 px-2 py-1 font-bold disabled:opacity-40">
+          {busy ? '공유 목록 확인 중…' : '공유 Catalog 원본 1건 비교 · 읽기 전용'}
+        </button>
+        {sharedResult ? <div className="mt-1 space-y-0.5 text-[10px] text-white/70">
+          <div>공유 Catalog 존재: {label(sharedResult.materialized)}</div>
+          <div>공유 Catalog에 이 곡 포함: {label(sharedResult.membership)}</div>
+          <div>공유 Catalog 버전: {sharedResult.revision || '—'}</div>
+          <div>이 기기 캐시와 포함 여부 일치: {
+            sharedResult.membership === null || report.deviceCatalogContainsDocument === null
+              ? '판정 불가' : label(sharedResult.membership === report.deviceCatalogContainsDocument)
+          }</div>
+        </div> : null}
         <div className="pt-1 text-[10px] text-white/50">문서번호·계정번호·가사·인증정보는 결과에 포함되지 않습니다.</div>
       </div> : null}
     </div>

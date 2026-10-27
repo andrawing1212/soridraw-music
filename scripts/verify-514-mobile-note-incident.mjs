@@ -60,7 +60,7 @@ function device(transport, { quota = false, server = 'online', clock = 100_000, 
   let now = clock;
   const records = new Map([['original-song-cache', 'protected-prompt-lyrics-heart-bytes']]);
   const timers = new Map(); const events = new Map(); const writes = []; const held = []; const readsHeld = [];
-  let nextTimer = 0; let holdRead = false; let attempts = 0; let reads = 0;
+  let nextTimer = 0; let holdRead = false; let attempts = 0; let reads = 0; let profileVersion = 0;
   const storage = {
     getItem: key => records.get(key) ?? null,
     setItem: (key, value) => { if (quota) throw new Error('QuotaExceededError'); records.set(key, value); },
@@ -156,7 +156,8 @@ function device(transport, { quota = false, server = 'online', clock = 100_000, 
     exports.nextVersion = () => getNextMusicNoteStructureVersion(uid);
   `), {
     ...globals, ...batch, ...sync, ...boundary, ...measured, exports: pageExports, uid, user: { uid }, db: {},
-    readUserProfileCache: () => null, USER_PROFILE_CACHE_EVENT: 'profile',
+    readUserProfileCache: () => ({ syncVersions: { musicNoteStructure: profileVersion } }),
+    USER_PROFILE_CACHE_EVENT: 'profile',
     normalizeMusicNoteFolders: list => list, DEFAULT_MY_NOTE_FOLDERS: [], DEFAULT_SHARED_NOTE_FOLDERS: [],
   });
   window.addEventListener(sync.MUSIC_NOTE_SYNC_EVENT, event => {
@@ -166,6 +167,10 @@ function device(transport, { quota = false, server = 'online', clock = 100_000, 
     batch, sync, page: pageExports, records, writes, held, readsHeld, window,
     get attempts() { return attempts; }, get reads() { return reads; },
     setServer: value => { server = value; }, setQuota: value => { quota = value; },
+    setProfileVersion: (value, notify = true) => {
+      profileVersion = value;
+      if (notify) window.dispatchEvent(new CustomEvent('profile', { detail: { uid } }));
+    },
     holdRead: () => { holdRead = true; },
     async advance(ms) {
       const target = now + ms;
@@ -541,3 +546,92 @@ for (const serverState of ['exists', 'missing', 'removed', 'denied']) {
   }
 }
 console.log('APP514_EXACT_FAVORITE_EXISTS_MISSING_REMOVED_DENIED_THREE_DEVICES_READ_ONLY=PASS');
+
+
+// Clock drift must never make a long-open device treat a newer canonical
+// profile notification as older than a speculative Date.now() cache version.
+{
+  const canonical = { data: {
+    musicNoteStructureVersion: 301, musicNoteFolders: { myNote: folders('old-server') },
+  } };
+  const d = device(bus(), { canonical, clock: 9_000_000 });
+  const cacheKey = `soridraw_music_note_structure_cache_v1_${uid}`;
+  d.records.set(cacheKey, JSON.stringify({
+    schemaVersion: 1, version: 9_000_000, profileVersionSeen: 101,
+    verified: true, data: { musicNoteFolders: { myNote: folders('old-server') } },
+  }));
+  d.setProfileVersion(101, false);
+  d.page.subscribe(uid, () => {});
+  await tick();
+  assert.equal(d.reads, 0, 'warm unchanged profile still R0');
+  canonical.data.musicNoteStructureVersion = 302;
+  canonical.data.musicNoteFolders.myNote = folders('new-from-phone');
+  d.setProfileVersion(102);
+  await tick();
+  assert.equal(d.reads, 1, 'new profile revision gets one canonical read');
+  assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title, 'new-from-phone');
+  d.setProfileVersion(102);
+  await tick();
+  assert.equal(d.reads, 1, 'unchanged profile must not reread');
+  canonical.data.musicNoteStructureVersion = 303;
+  canonical.data.musicNoteFolders.myNote = folders('newer-from-phone');
+  d.setProfileVersion(103);
+  await tick();
+  assert.equal(d.reads, 2, 'future profile updates still work with fast local clock');
+  assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title, 'newer-from-phone');
+  assert.equal(JSON.parse(d.records.get(cacheKey)).profileVersionSeen, 103);
+  console.log('APP514_FAST_CLOCK_LONG_OPEN_PC_RECEIVES_PHONE_UPDATES_R1_PER_CHANGE=PASS');
+}
+
+// A pre-fix browser cache lacks the server revision watermark. It needs
+// at most one one-time read after upgrade, not repeated reads on each visit.
+{
+  const canonical = { data: {
+    musicNoteStructureVersion: 400, musicNoteFolders: { myNote: folders('authoritative') },
+  } };
+  const d = device(bus(), { canonical });
+  const cacheKey = `soridraw_music_note_structure_cache_v1_${uid}`;
+  d.records.set(cacheKey, JSON.stringify({
+    schemaVersion:1, version: 9_000_000_000, verified:true,
+    data:{ musicNoteFolders: { myNote: folders('stale-pre-upgrade') } },
+  }));
+  d.setProfileVersion(120, false);
+  d.page.subscribe(uid, () => {});
+  await tick();
+  assert.equal(d.reads, 1, 'legacy high-clock cache gets a one-time server correction');
+  assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title, 'authoritative');
+  assert.equal(JSON.parse(d.records.get(cacheKey)).profileVersionSeen, 120);
+  d.setProfileVersion(120);
+  await tick();
+  assert.equal(d.reads, 1, 'legacy upgrade does not start polling');
+  console.log('APP514_LEGACY_CLOCK_CACHE_ONE_TIME_AUTHORITATIVE_UPGRADE_R1=PASS');
+}
+
+// Two device updates while first server read is still in flight must not
+// lose the second update or silently stop listening because of device time.
+{
+  const canonical={data:{ musicNoteStructureVersion:501, musicNoteFolders: { myNote: folders('first') } }};
+  const d=device(bus(),{canonical});
+  const cacheKey=`soridraw_music_note_structure_cache_v1_${uid}`;
+  d.records.set(cacheKey,JSON.stringify({
+    schemaVersion:1,version:900000,profileVersionSeen:500,verified:true,
+    data:{musicNoteFolders:{myNote:folders('cached')}},
+  }));
+  d.setProfileVersion(500,false);
+  d.page.subscribe(uid,()=>{});
+  await tick();
+  assert.equal(d.reads,0);
+  d.holdRead();
+  d.setProfileVersion(501);
+  await tick();
+  assert.equal(d.reads,1);
+  d.setProfileVersion(502);
+  canonical.data.musicNoteStructureVersion=502;
+  canonical.data.musicNoteFolders.myNote=folders('second-phone-edit');
+  d.readsHeld.shift()();
+  await tick();
+  assert.equal(d.reads,2,'queued newer profile signal must not be swallowed');
+  assert.equal(d.page.session().data.musicNoteFolders.myNote[1].title,'second-phone-edit');
+  assert.equal(JSON.parse(d.records.get(cacheKey)).profileVersionSeen,502);
+  console.log('APP514_LONG_RUNNING_READ_RETRIES_LATEST_REMOTE_PROFILE_ONCE=PASS');
+}

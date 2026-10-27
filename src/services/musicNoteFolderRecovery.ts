@@ -163,7 +163,10 @@ export const restoreMusicNoteFolderRecovery = async (
   const localEditDuringRestore = !isSessionCurrent() || getMusicNoteFolderEditEpoch(uid, mode) !== editEpoch
     || Boolean(getPendingMusicNoteFolderStructureBatch(uid)?.[mode]);
   // Firestore ACK is authoritative; RTDB is just a best-effort warm-device hint.
-  if (result.changed) void publishMusicNoteStructureDelta(uid, {
+  // A newer local folder edit wins visually and in outbound RTDB traffic.
+  // The server's canonical sync-version trigger handles remote convergence
+  // without replaying an already-stale restoration preview.
+  if (result.changed && !localEditDuringRestore) void publishMusicNoteStructureDelta(uid, {
     musicNoteFolders: { [mode]: result.folders },
     musicNoteStructureVersion: result.version,
   }).catch(() => {});

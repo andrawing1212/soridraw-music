@@ -26,12 +26,13 @@ const makeEnvironment = ({ serverBase = base(), canonical = favorite, pending = 
   const stats = { workerGets: 0, workerPosts: 0, docReads: 0, otherQueries: 0, canonicalWrites: 0, broadcast: 0 };
   let remote = copy(serverBase);
   let actualCanonical = canonical ? copy(canonical) : null;
+  let pendingState = pending;
   let signal = { version: 10, operation: 'save', documentIds: [] };
   const auth = { currentUser: { uid, getIdToken: async () => 'mock-user-token' } };
   const mockFetch = async (_url, opts) => {
     if (opts?.method === 'GET') {
       stats.workerGets++;
-      if (onGet) onGet({ setCanonical: v => { actualCanonical = v ? copy(v) : null; }, setSignal: v => { signal = copy(v); } });
+      if (onGet) onGet({ setCanonical: v => { actualCanonical = v ? copy(v) : null; }, setSignal: v => { signal = copy(v); }, setPending: v => { pendingState = v; } });
       if (failRead) return { status: 503, ok: false, text: async () => 'offline' };
       return { status: 200, ok: true, json: async () => copy(remote) };
     }
@@ -91,7 +92,7 @@ const makeEnvironment = ({ serverBase = base(), canonical = favorite, pending = 
       return { size: 1, docs: [{ id: songId, data: () => copy(actualCanonical) }] };
     } };
     if (name === './cacheDiagnostics') return { markFirestoreActualRead: () => {} };
-    if (name === './studioHeartBatch') return { readStudioHeartPendingIntent: () => pending ? { desiredSaved: true } : null };
+    if (name === './studioHeartBatch') return { readStudioHeartPendingIntent: () => pendingState ? { desiredSaved: true } : null };
     if (name === './musicNoteSavedState') return { isMusicNoteItemRemoved: item => !active(item) };
     if (name === './userDataEngine') return engine;
     if (name === '../services/userDomainSyncService') return { publishMusicNoteSaveStateDelta: async (u, id, item) => {
@@ -104,7 +105,7 @@ const makeEnvironment = ({ serverBase = base(), canonical = favorite, pending = 
   runInNewContext(repairCode, { exports: repair, require: repairMocks });
   return { auth, stats, repair: repair.repairSingleExactMusicNoteCatalog516, engine, getRemote: () => copy(remote),
     setCanonical: v => { actualCanonical = v ? copy(v) : null; },
-    setSignal: v => { signal = copy(v); } };
+    setSignal: v => { signal = copy(v); }, setPending: v => { pendingState = v; } };
 };
 
 {
@@ -206,6 +207,15 @@ console.log('APP516_REMOVED_MISSING_PENDING_NEVER_REPAIR=PASS');
   assert.equal(x.stats.workerPosts, 0);
   assert.equal(x.stats.broadcast, 0);
   console.log('APP516_AUDIT_P1_REMOTE_PENDING_UNSAVE_FENCE_ABORT=PASS');
+}
+{
+  // A local click may start *after* the initial canonical query but during R2
+  // GET. The last pre-write checkpoint must detect it before any R2 mutation.
+  const x = makeEnvironment({ onGet: ({ setPending }) => setPending(true) });
+  await assert.rejects(() => x.repair(uid, songId), /CATALOG_RECOVERY_UNCONFIRMED/);
+  assert.equal(x.stats.workerPosts, 0);
+  assert.equal(x.stats.broadcast, 0);
+  console.log('APP516_AUDIT_P1_NEW_LOCAL_PENDING_DURING_R2_READ_ABORT=PASS');
 }
 {
   // P2 audit: unrelated local revision 200 must survive an older R2 revision

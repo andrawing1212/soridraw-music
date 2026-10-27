@@ -39,6 +39,9 @@ const sdk = {
   },
   getDoc: async path => {
     reads++;
+    if (path === 'user_structures/fixture-owner/legacy_recovery/'+id) {
+      return {exists:()=>true,data:()=>copy(data)};
+    }
     assert.ok(path.startsWith('user_structures/fixture-owner/legacy_recovery/'+id+'/parts/'));
     const partId=path.split('/').at(-1);
     return {exists:()=>Object.hasOwn(archiveParts,partId),data:()=>({payload:archiveParts[partId]})};
@@ -177,7 +180,10 @@ const records=await exports.listMusicNoteFolderRecovery(uid);
 assert.equal(reads,1);
 assert.equal(records.length,1);
 assert.deepEqual(Array.from(records[0].changedModes), ['myNote']);
+assert.equal(records[0].detailLoaded,true);
 assert.equal(records[0].beforeFolders.myNote[0].title,'Before');
+assert.match(page,/getMusicNoteFolderRecoveryDetail\(/);
+assert.match(page,/folderRecoverySelectedId === record\.id && record\.detailLoaded/);
 console.log('APP514_RECOVERY_ON_DEMAND_BOUNDED_READ=PASS');
 
 pending={myNote:{version:8,folders:[]}};
@@ -269,8 +275,15 @@ console.log('APP514_RECOVERY_CONCURRENT_LOCAL_EDIT_AND_ACCOUNT_SWITCH_BLOCKED=PA
   const beforeReads=reads;
   const loaded=await exports.listMusicNoteFolderRecovery(uid);
   assert.equal(loaded.length,1);
-  assert.equal(loaded[0].beforeFolders.myNote[1].title,'Keep extra');
-  assert.equal(reads-beforeReads,4,'one manifest query + three exact shard gets');
+  assert.equal(loaded[0].detailLoaded,false);
+  assert.deepEqual(Array.from(loaded[0].changedModes), ['myNote']);
+  assert.equal(loaded[0].beforeFolders.myNote,undefined);
+  assert.equal(reads-beforeReads,1,'one bounded list query; never fan out for unselected shards');
+  const beforeDetail=reads;
+  const selected=await exports.getMusicNoteFolderRecoveryDetail(uid,id);
+  assert.equal(selected.detailLoaded,true);
+  assert.equal(selected.beforeFolders.myNote[1].title,'Keep extra');
+  assert.equal(reads-beforeDetail,4,'one selected manifest and three selected shards only');
   const beforeWrites=writes;
   const restored=await exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','before');
   assert.equal(restored.changed,true);

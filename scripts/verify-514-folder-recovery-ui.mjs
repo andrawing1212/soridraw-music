@@ -94,6 +94,8 @@ runInNewContext(ts.transpileModule(source,{
       getPendingMusicNoteFolderStructureBatch:()=>pending,
       getMusicNoteFolderEditEpoch:()=>editEpoch,
       getMusicNoteLegacyFolderSignature:value=>JSON.stringify(value),
+      getMusicNoteEffectiveLegacyMode:(data,mode)=>
+        data?.musicNoteFolders?.[mode] || data?.[mode==='myNote'?'myNoteFolders':'sharedNoteFolders'] || null,
     };
     if(name.endsWith('/userDomainSyncService')) return {
       publishMusicNoteStructureDelta: async (...args) => { emitted.push(copy(args)); return 8; },
@@ -377,6 +379,8 @@ console.log('APP514_RECOVERY_CONCURRENT_LOCAL_EDIT_AND_ACCOUNT_SWITCH_BLOCKED=PA
         getPendingMusicNoteFolderStructureBatch:()=>comparePending,
         getMusicNoteFolderEditEpoch:()=>compareEpoch,
         getMusicNoteLegacyFolderSignature:modeSignature,
+        getMusicNoteEffectiveLegacyMode:(data,mode)=>
+          data?.musicNoteFolders?.[mode] || data?.[mode==='myNote'?'myNoteFolders':'sharedNoteFolders'] || null,
       };
       if(name.endsWith('/userDomainSyncService'))return {
         publishMusicNoteStructureDelta:async (...args)=>{compareEmits.push(copy(args));},

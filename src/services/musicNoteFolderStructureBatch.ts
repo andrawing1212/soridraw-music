@@ -155,6 +155,16 @@ export const writeMusicNoteStructureIfNewer = async (
       const active = folderWrite && v2Snapshot?.exists() ? v2Snapshot : legacySnapshot;
       const serverVersion = safeVersion(active?.data()?.musicNoteStructureVersion);
       const serverFolders = active?.data()?.musicNoteFolders || {};
+      // Pending written by an older app can lack the original baseline.
+      // Never let such a payload overwrite an already-populated V2 document
+      // or bootstrap V2 over legitimate older-client folder edits.
+      if (folderWrite && !expectedBases?.length
+        && (Boolean(v2Snapshot?.exists())
+          || (['myNote', 'sharedNote'] as const).some(mode => Array.isArray(serverFolders[mode])))) {
+        throw Object.assign(new Error('MUSIC_NOTE_STRUCTURE_BASELINE_REQUIRED'), {
+          code: 'music-note/stale-structure-version', serverVersion,
+        });
+      }
       if (expectedBases?.length) {
         for (const base of expectedBases) {
           if (comparableFolders(serverFolders[base.mode]) !== comparableFolders(base.folders)) {

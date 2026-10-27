@@ -145,12 +145,20 @@ export const writeMusicNoteStructureIfNewer = async (
       // Once this client has a content baseline, the server allocates the next
       // committed revision; device clocks only label the optimistic RTDB preview.
       committedRevision = expectedBases?.length ? serverVersion + 1 : version;
+      const folderModes = patch.musicNoteFolders && typeof patch.musicNoteFolders === 'object'
+        ? patch.musicNoteFolders as Record<string, unknown> : null;
+      const serverFolders = snapshot.data()?.musicNoteFolders || {};
+      const changesFolders = Boolean(folderModes && (['myNote', 'sharedNote'] as const).some(mode =>
+        Object.prototype.hasOwnProperty.call(folderModes, mode)
+        && comparableFolders(folderModes[mode]) !== comparableFolders(serverFolders[mode])));
       transaction.set(structureRef, {
         ...patch, musicNoteStructureVersion: committedRevision,
-        // A legacy setDoc(merge:true) cannot refresh this token. The existing
-        // server write trigger can then preserve both folder versions if a
-        // previously deployed browser overwrites a modern committed edit.
-        musicNoteStructureWriterToken: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        // Only an actual folder change should activate the mixed-version
+        // writer-token fence. Card-state-only writes must not unexpectedly
+        // make older browser folder saves fail.
+        ...(changesFolders
+          ? { musicNoteStructureWriterToken: `${Date.now()}-${Math.random().toString(36).slice(2)}` }
+          : {}),
       }, { merge: true });
     });
     // A successful transaction is authoritative even if local device time is wrong.

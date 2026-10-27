@@ -21,6 +21,7 @@ const canonical = {
   musicNoteStructureVersion:7, musicNoteCardState: { items:{} },
 };
 let reads = 0, transactions = 0, writes = 0, pending = null, listCalls = 0;
+let editEpoch = 0, afterCanonicalRead = null;
 const copy = value => JSON.parse(JSON.stringify(value));
 const sdk = {
   collection: (_db, ...segments) => segments.join('/'),
@@ -43,6 +44,7 @@ const sdk = {
         reads++;
         if(path.endsWith('/'+id)) return {exists:()=>true,data:()=>copy(data)};
         assert.equal(path,'user_structures/fixture-owner');
+        if (afterCanonicalRead) { const callback=afterCanonicalRead; afterCanonicalRead=null; callback(); }
         return {data:()=>copy(canonical)};
       },
       set: (path,patch,options) => {
@@ -56,6 +58,7 @@ const sdk = {
       canonical.musicNoteFolders={...canonical.musicNoteFolders,...copy(patch.musicNoteFolders)};
       canonical.musicNoteStructureVersion=patch.musicNoteStructureVersion;
       canonical.musicNoteStructureWriterToken=patch.musicNoteStructureWriterToken;
+      canonical.musicNoteFolderRecoveryMarker=copy(patch.musicNoteFolderRecoveryMarker);
       writes++;
     }
     return result;
@@ -69,9 +72,10 @@ runInNewContext(ts.transpileModule(source,{
   exports, console, Date, Math,
   require: name => {
     if(name.endsWith('/firebase')) return {db:{}};
-    if(name.endsWith('/firestoreMeasured')) return sdk;
+    if(name.endsWith('/firestoreMeasured')) return {...sdk, getDoc: async () => { throw new Error('Unexpected shard read'); }};
     if(name.endsWith('/musicNoteFolderStructureBatch')) return {
       getPendingMusicNoteFolderStructureBatch:()=>pending,
+      getMusicNoteFolderEditEpoch:()=>editEpoch,
     };
     if(name.endsWith('/userDomainSyncService')) return {
       publishMusicNoteStructureDelta: async (...args) => { emitted.push(copy(args)); return 8; },
@@ -122,11 +126,20 @@ await assert.rejects(exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','bef
 assert.equal(writes,1,'old record may not silently overwrite subsequent state');
 console.log('APP514_RECOVERY_STALE_REPLAY_REJECTED_NO_EXTRA_WRITE=PASS');
 
+// Explicit after-choice is now a safe one-step undo, but only if the marker
+// and server revision prove no other device has changed the folders.
+const reversed=await exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','after');
+assert.equal(reversed.version,9);
+assert.equal(reversed.changed,true);
+assert.equal(canonical.musicNoteFolders.myNote[0].title,'After');
+assert.equal(writes,2);
+console.log('APP514_RECOVERY_UNDO_SAME_ARCHIVE_WITH_UNCHANGED_REVISION=PASS');
+
 canonical.musicNoteFolders.myNote=[{id:'default',title:'Device C'}];
 await assert.rejects(exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','after'),/다른 기기에서/);
-assert.equal(writes,1);
+assert.equal(writes,2);
 await assert.rejects(exports.restoreMusicNoteFolderRecovery(uid,'../bad','myNote','before'),/잘못된/);
-assert.equal(writes,1);
+assert.equal(writes,2);
 console.log('APP514_RECOVERY_CONCURRENT_DEVICE_AND_MALFORMED_REQUEST_FAIL_CLOSED=PASS');
 
 // A historical version that drops a folder ID may orphan song references.
@@ -137,5 +150,17 @@ data.afterFolders.myNote = [
 ];
 canonical.musicNoteFolders.myNote = copy(data.afterFolders.myNote);
 await assert.rejects(exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','before'),/폴더 삭제/);
-assert.equal(writes,1);
+assert.equal(writes,2);
 console.log('APP514_RECOVERY_ORPHANING_FOLDER_DELETE_BLOCKED=PASS');
+
+// Account switch and another local edit DURING Firestore reads must reject
+// before a single write occurs; no account or pending edit may be overwritten.
+canonical.musicNoteFolders.myNote=copy(data.afterFolders.myNote);
+const noMoreWrites=writes;
+afterCanonicalRead=()=>{ editEpoch++; pending={myNote:{version:9,folders:[]}}; };
+await assert.rejects(exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','before'),/복원 중/);
+assert.equal(writes,noMoreWrites);
+pending=null;
+await assert.rejects(exports.restoreMusicNoteFolderRecovery(uid,id,'myNote','before',()=>false),/복원 중/);
+assert.equal(writes,noMoreWrites);
+console.log('APP514_RECOVERY_CONCURRENT_LOCAL_EDIT_AND_ACCOUNT_SWITCH_BLOCKED=PASS');

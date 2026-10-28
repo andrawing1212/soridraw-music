@@ -76,7 +76,9 @@ export const createApp518ServerBridge=({
       r2.loadCompleteFencedOwnerR2({uid:account,projectItem,sortItems}),
      readR2HeadAgain:async account=>{
       const value=await r2.readOwnerHead(account);
-      return {...value.head,etag:value.etag};
+      return {...value.head,etag:value.etag,
+       verifiedByServer:value.verifiedByServer,ownerUid:value.ownerUid,
+       fencedWritersVerified:value.fencedWritersVerified};
      },
     });
     // A moving R2 HEAD or temporary index IO must use bounded retry,

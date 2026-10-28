@@ -209,3 +209,18 @@
 - Firebase `onDocumentWritten/onDelete` 실행 export, Firebase↔Worker 실제 HTTP 경로, Firebase·Cloudflare Secret/환경 변수, Cloudflare D1 생성/마이그레이션, Worker cron/queue, 모든 PREVIEW·TEST·PRODUCTION 구형 shared R2 Writer 공통 fencing은 **아직 모두 미연결/미승인**. 현재 환경에 이 소스가 자동으로 활성화되는 경로 0개.
 - Cloudflare R2 provider는 기존 `catalogJournal.js` 실제 스키마를 사용하지만 전체 서버 검증 전 shared 캐시/HEAD에 write 금지. 특히 D1에 ACK만 쓰고 클라이언트 표시가 자동으로 최신이 된다고 가정하지 않는다. PC↔모바일 실인증, 캐시 freshness, 삭제곡 복구·누락곡 1건도 QA 미실시.
 - 사용자 승인 범위는 **코드·GitHub 검사만**. 다음은 이 정확 SHA의 독립 감사 FAIL/PASS와 배포 전 구형 Writer·인증된 실제 Firebase 이벤트 순서·실제 D1/원본 데이터 분리 등 보류 항목 검증.
+
+## 2026-10-28 P1 두 건 집중 수정 — ① 두 번째 영구 삭제 ② R2 v1 / D1 v2 복구
+
+**배경:** 소스 사전감사에서 발견한 P1: (1) 한 문서의 `delete→save→delete`에서 두 번째 이벤트를 이전 receipt 때문에 차단, (2) R2의 이전 확정 v1에 대한 D1 반영이 실패하고 최신 D1 outbox v2가 생기면 재생을 무조건 차단.
+
+### 변경 코드
+- `functions/src/app518CanonicalSourceProvider.ts`: Firestore 서버가 제공한 delete 이벤트의 **삭제 직전 문서 updateTime**을 `beforeSourceVersionNs`라는 **세대 구별 표식**으로만 사용. 삭제 완료 시각·최종 D1 버전으로는 사용 금지. 같은 uid+문서 receipt를 Firestore Admin transaction에서 정확 읽기 후, 첫 이벤트 W1 create, **더 새로운 실제 문서 세대의 두 번째 삭제 W1 update**, 동일 eventId 중복 W0, 이전 세대 지연 이벤트 W0, 같은 세대 다른 eventId 또는 구형 무버전 receipt는 안전 보류. 현재 favorites 문서가 있으면 W0. **receipt의 서버 updateTime만** 삭제 D1 정본 버전으로 사용. 실제 Firebase 이벤트 export는 아직 없음.
+- `catalogHardDeleteReceipt518.js`, `catalogHardDeleteSource518.js`: beforeUpdateTime 전달 및 receipt.beforeSourceVersionNs의 서버 검증·단조 증가 확인 후에만 D1 접수. 기존 저장곡 문서 복원/재생성 불가. Cloudflare 종속 후보에는 실기기/실서버 호출 없음.
+- `catalogIndexAdvance518.js`: R2 HEAD는 모든 공유 Writer 차단이 확인된 서버 확정 journal이라는 전제 아래, D1 최신 pending source v2보다 **이전의 확정 v1**도 delta 연속성·멤버십 수량·계정·버전 단조성 확인 후 D1 index로 재생. D1 outbox 행의 버전이 R2보다 더 오래된 경우 또는 **같은 source 버전에 다른 상태**인 경우는 차단. 이후 v2는 여전히 pending이고 최신 Firestore exact 재확인 후 R2 CAS·D1 index 업데이트·ACK로 수렴. 과거 R2 v1을 최신 D1 v2로 잘못 ACK하는 일은 없음.
+- `scripts/verify-518-index-delta-recovery.mjs`: R2 v1 저장 성공→D1 실패→동일 곡의 pending v2 삭제 시 과거 journal 재생→v2 삭제까지 완성 및 역순 v0 검증. `verify-518-hard-delete-receipt.mjs`·`verify-518-hard-delete-source.mjs`: 이전/더 새로운 삭제 세대, 소유권 위조/receipt 누락 W0/실제 이벤트 시각이 아닌 receipt 서버 시각. `functions/scripts/test-app518-delete-event-epochs.cjs`: 실제 컴파일한 Firebase Admin provider를 가상 Firestore transaction으로 실행, delete→save→delete 및 역순/중복 저장 W1/W0 직접 검증. 신규 검사도 app518 GitHub 집중 워크플로에 포함.
+
+### 유지하는 위험·보호
+- 신규 receipt는 구형 영구 삭제(문서가 완전 삭제된 경우)에만 Firestore W1/최신 세대당 추가 W1. 일반 저장/soft-delete Firestore 추가 receipt W0. 인덱스 회복은 필요할 때만 해당 UID의 제한된 R2 journal tail을 읽고 D1 변경. 새 page-open/polling 불필요한 비용 0.
+- 독립적인 타 작업자 재감사, 실제 서비스 이벤트 인증·HMAC secrets 설정/Worker endpoint/Queue/Cron, 공유 PREVIEW·TEST·PRODUCTION 모든 구형 Writer 차단, >2만곡, 사용자 원본 1건 복구, PC/모바일 및 비용 실측은 **미완료**. 합격된 소스 테스트를 배포 PASS라고 표현 금지.
+- 승인 범위: **PR #528 Draft 후보의 코드 수정·검사·GitHub 저장만**. D1 생성·마이그레이션, Firebase Rules/Functions, Worker/Hosting 배포 및 실데이터 처리 **없음**.

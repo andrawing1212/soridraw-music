@@ -103,7 +103,7 @@ export const dispatchApp518VerifiedEnqueue=async({
   if(!Number.isFinite(epochMs)||epochMs<=0
     ||new Date(epochMs).toISOString().slice(0,19)!==iso[1])
     throw Error("APP518_SOURCE_UPDATE_TIME_INVALID");
-  const version=(BigInt(epochMs)*1_000_000n+
+  const version=(BigInt(epochMs)*BigInt(1000000)+
     BigInt((iso[2]||"").padEnd(9,"0")||"0")).toString().padStart(21,"0");
   const signed=signApp518ServiceRequest({secret,nowMs,body:{
     action:"enqueue",uid:source.uid,documentId:source.documentId,

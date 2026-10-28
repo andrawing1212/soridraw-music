@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS music_note_catalog_outbox_518 (
   desired_state TEXT NOT NULL CHECK(desired_state IN ('saved','removed')),
   ack_version_ns TEXT,
   attempt_count INTEGER NOT NULL DEFAULT 0 CHECK(attempt_count >= 0),
+  -- NULL=eligible; terminal HOLD retains latest pending source without polling.
+  hold_reason TEXT CHECK(hold_reason IS NULL OR length(hold_reason) BETWEEN 1 AND 80),
   next_attempt_ms INTEGER NOT NULL DEFAULT 0,
   updated_at_ms INTEGER NOT NULL,
   acked_at_ms INTEGER,
@@ -16,4 +18,5 @@ CREATE TABLE IF NOT EXISTS music_note_catalog_outbox_518 (
 
 CREATE INDEX IF NOT EXISTS idx_music_note_catalog_outbox_518_due
  ON music_note_catalog_outbox_518(next_attempt_ms, owner_uid, favorite_id)
- WHERE ack_version_ns IS NULL OR ack_version_ns != source_version_ns;
+ WHERE (ack_version_ns IS NULL OR ack_version_ns != source_version_ns)
+ AND hold_reason IS NULL;

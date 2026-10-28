@@ -22,17 +22,17 @@ const marker='canonical518:';
 // must reread the latest D1 + R2 and retry, not ACK stale work.
 export const INDEX_INSERT_GUARDED_518=[
  'INSERT OR IGNORE INTO music_note_catalog_member_518(owner_uid,generation,favorite_id)',
- 'SELECT ?,?,? WHERE EXISTS (',
- ' SELECT 1 FROM music_note_catalog_index_meta_518',
- " WHERE owner_uid=? AND generation=? AND indexed_revision=? AND head_etag=?",
- " AND expected_count=? AND status='ready')",
+ 'SELECT owner_uid,generation,? FROM music_note_catalog_index_meta_518',
+ "WHERE owner_uid=? AND generation=? AND indexed_revision=? AND head_etag=?",
+ "AND expected_count=? AND status='ready'",
 ].join(' ');
 export const INDEX_DELETE_GUARDED_518=[
  'DELETE FROM music_note_catalog_member_518',
  'WHERE owner_uid=? AND generation=? AND favorite_id=?',
  'AND EXISTS (SELECT 1 FROM music_note_catalog_index_meta_518',
- " WHERE owner_uid=? AND generation=? AND indexed_revision=? AND head_etag=?",
- " AND expected_count=? AND status='ready')",
+ "WHERE music_note_catalog_index_meta_518.owner_uid=music_note_catalog_member_518.owner_uid",
+ "AND music_note_catalog_index_meta_518.generation=music_note_catalog_member_518.generation",
+ "AND indexed_revision=? AND head_etag=? AND expected_count=? AND status='ready')",
 ].join(' ');
 export const INDEX_META_ADVANCE_GUARDED_518=[
  'UPDATE music_note_catalog_index_meta_518',
@@ -136,11 +136,11 @@ export const reconcileIndexedHead518=async({
    if(!!start===finalPresent)continue;
    if(finalPresent){
     statements.push(db.prepare(INDEX_INSERT_GUARDED_518).bind(
-     uid,meta.generation,id,uid,meta.generation,
-     meta.indexed_revision,meta.head_etag,meta.expected_count));
+     id,uid,meta.generation,meta.indexed_revision,
+     meta.head_etag,meta.expected_count));
    }else{
     statements.push(db.prepare(INDEX_DELETE_GUARDED_518).bind(
-     uid,meta.generation,id,uid,meta.generation,
+     uid,meta.generation,id,
      meta.indexed_revision,meta.head_etag,meta.expected_count));
    }
   }

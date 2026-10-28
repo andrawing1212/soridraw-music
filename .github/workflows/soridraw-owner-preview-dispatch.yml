@@ -80,8 +80,16 @@ jobs:
           else
             app_workflow="$(git show "$sha:.github/workflows/firebase-hosting-custom-preview.yml")"
             grep -Fq '      target_sha:' <<< "$app_workflow"
+            grep -Fq 'APP515_MAIN_PREVIEW_V2_GUARD' <<< "$app_workflow"
+            grep -Fq 'git show origin/main:scripts/verify-515-main-release-floor.mjs' <<< "$app_workflow"
+            grep -Fq 'APP526_PINNED_PREVIEW_RELEASE_GUARD' <<< "$app_workflow"
+            grep -Fq 'APP526_MANUAL_SHA_RACE_BLOCKED' <<< "$app_workflow"
+            grep -Fq 'APP526_MANUAL_SHARED_RTDB_RULES_DEPLOY=SKIPPED' <<< "$app_workflow"
             grep -Fq 'Verify PREVIEW exact build' <<< "$app_workflow"
             grep -Fq 'Verify TEST and PRODUCTION unchanged' <<< "$app_workflow"
+            if grep -Fq 'trigger_url=' <<< "$app_workflow"; then
+              echo 'Denied: app workflow reads branch event SHA instead of approved source'; exit 2
+            fi
           fi
 
           echo "service=$service" >> "$GITHUB_OUTPUT"

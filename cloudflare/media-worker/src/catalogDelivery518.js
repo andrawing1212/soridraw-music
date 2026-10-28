@@ -7,6 +7,7 @@ import {CatalogR2ContractError518} from './catalogR2Provider518.js';
 import {
  getDueFavoriteChanges518,enqueueVerifiedFavorite518,
  acknowledgeExactFavorite518,scheduleFailedFavorite518,holdExactFavorite518,
+ deferPagedFavorite518,
 } from './catalogD1Outbox518.js';
 const text=x=>typeof x==='string'?x.trim():'';
 const isState=x=>x==='saved'||x==='removed';
@@ -87,6 +88,18 @@ export const deliverDueCanonicalFavorites518=async({
        uid,documentId:id,sourceVersionNs:version,
        desiredState:row.desired_state,canonical,
      });
+     // Only a successful, durable page advancement can request the next
+     // scheduler tick. It is not a failed R2 write and must not exhaust the
+     // eight-attempt IO retry budget while 50k songs are staged.
+     if(['RETRYABLE_INDEX_PAGING_IN_PROGRESS',
+       'RETRYABLE_INDEX_RECOVERY_PAGING_IN_PROGRESS']
+        .includes(delivered?.code)){
+       const next=await deferPagedFavorite518({
+        db,uid,documentId:id,sourceVersionNs:version,nowMs,
+       });
+       if(next.code==='PAGE_CONTINUATION_SCHEDULED')result.retry++;
+       continue;
+     }
      if(!delivered||delivered.versionVerified!==true
        ||delivered.ownerVerified!==true
        ||delivered.casVerified!==true

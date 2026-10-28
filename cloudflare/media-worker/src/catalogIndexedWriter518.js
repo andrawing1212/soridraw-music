@@ -33,7 +33,9 @@ export const applyIndexedCanonicalR2Delta518=async({
    ||!Number.isSafeInteger(nowMs)||nowMs<0)return deny('DENY_ARGUMENTS');
  const source=()=>readExactCanonical(uid,documentId);
  const reconcileOrRecover=async()=>{
-  const replay=await reconcileOrRecover();
+  const replay=await reconcileIndexedHead518({
+   db,uid,nowMs,loadVerifiedHead:readOwnerHead,
+  });
   if(replay.code!=='HOLD_COMPACTED_OR_DIVERGENT_HEAD'
      ||typeof loadCompleteFencedOwnerR2!=='function')return replay;
   // Expensive one-owner R2 materialization ONLY on a proved compaction gap.

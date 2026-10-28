@@ -108,8 +108,7 @@ export const createOwnerR2Provider518=({
   const materialized=materializeCatalogJournal({
     baseSnapshot:base,head:before.head,projectItem,sortItems,
   });
-  if(!materialized||materialized.itemCount>20000
-    ||materialized.items.length!==before.head.itemCount)
+  if(!materialized||materialized.items.length!==before.head.itemCount)
     throw new CatalogR2ContractError518('APP518_BASE_MATERIALIZE_INVALID_OR_OVERSIZED');
   const after=await readOwnerHead(uid);
   if(before.etag!==after.etag||

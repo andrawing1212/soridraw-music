@@ -8,7 +8,12 @@ CREATE TABLE IF NOT EXISTS music_note_catalog_index_meta_518 (
   expected_count INTEGER NOT NULL CHECK(expected_count BETWEEN 0 AND 20000),
   head_etag TEXT NOT NULL CHECK(length(head_etag) BETWEEN 1 AND 256),
   status TEXT NOT NULL CHECK(status IN ('building','ready')),
-  checked_at_ms INTEGER NOT NULL
+  checked_at_ms INTEGER NOT NULL,
+  -- Staging is invisible to readers until exact old-HEAD CAS promotes it.
+  recovery_generation INTEGER CHECK(recovery_generation > 0),
+  recovery_revision INTEGER CHECK(recovery_revision > 0),
+  recovery_etag TEXT CHECK(length(recovery_etag) BETWEEN 1 AND 256),
+  recovery_count INTEGER CHECK(recovery_count BETWEEN 0 AND 20000)
 ) WITHOUT ROWID;
 
 CREATE TABLE IF NOT EXISTS music_note_catalog_member_518 (

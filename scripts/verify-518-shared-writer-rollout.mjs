@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {
  FENCE_CONTRACT_518,MEDIA_TARGETS_518,assessSharedWriterCutover518,
+ assessLegacyMediaMutation518,
 } from '../cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js';
 import {
  classifyCatalogAuthority518,decideCatalogWriterAuthority518,
@@ -108,6 +109,49 @@ for(const operation of ['legacy-delta','bootstrap','rebuild','seed-legacy']){
   kind:'musicNote',head:protectedOwner,operation,
  }).code,/^DENY_/);
 }
+// The existing release controller must enforce the three-Worker barrier
+// before upload, activation AND restoring a previous version.
+const releases=readFileSync('.deploy/release-media-worker-runtime.mjs','utf8');
+assert.match(releases,/assessLegacyMediaMutation518/);
+const boundary=releases.indexOf("if (['upload', 'activate', 'restore'].includes(action))");
+assert.ok(boundary>0);
+const restoreDispatch=releases.indexOf("if (action === 'restore') {");
+const uploadDispatch=releases.indexOf("if (action === 'upload') {");
+assert.ok(boundary<restoreDispatch&&boundary<uploadDispatch);
+assert.match(releases,/Object.values\(TARGETS\)\.map/);
+assert.match(releases,/workers\/scripts\/\$\{worker\}\/settings/);
+const valid={action:'restore',sourceCanonicalFlag:null,
+ liveCanonicalFlags:[null,null,null]};
+for(const action of ['upload','activate','restore']){
+ assert.equal(assessLegacyMediaMutation518({...valid,action}).pass,true);
+ for(let i=0;i<3;i++){
+  const flags=[null,null,null];flags[i]='ENABLED_AFTER_SHARED_ROLLOUT';
+  assert.equal(assessLegacyMediaMutation518({
+   ...valid,action,liveCanonicalFlags:flags,
+  }).pass,false);
+ }
+ for(const sourceCanonicalFlag of [
+  'ENABLED_AFTER_SHARED_ROLLOUT','OFF','UNKNOWN_SECRET',
+ ]){
+  assert.equal(assessLegacyMediaMutation518({
+   ...valid,action,sourceCanonicalFlag,
+  }).pass,false);
+ }
+}
+for(const liveCanonicalFlags of [
+ [],[null],[null,null],[null,null,null,null],
+ [null,null,'UNKNOWN_SECRET'],[null,'OFF',null],
+]){
+ assert.equal(assessLegacyMediaMutation518({
+  ...valid,liveCanonicalFlags,
+ }).pass,false);
+}
+assert.equal(assessLegacyMediaMutation518({
+ ...valid,action:'dry-run',
+}).pass,false);
+console.log('APP518_RELEASE_CONTROLLER_ALL_THREE_LIVE_FLAGS_BEFORE_MUTATION=PASS');
+console.log('APP518_LEGACY_UPLOAD_ACTIVATE_RESTORE_STOP_AFTER_CANONICAL=PASS');
+
 console.log('APP518_THREE_IMMUTABLE_WORKER_VERSIONS_REQUIRED=PASS');
 console.log('APP518_TRAFFIC_SPLIT_OLD_TEST_PROD_WORKER_DENIED=PASS');
 console.log('APP518_SHARED_R2_BINDINGS_AND_CANONICAL_OFF_REQUIRED=PASS');

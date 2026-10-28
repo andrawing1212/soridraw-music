@@ -13,7 +13,7 @@ export const parseFirestoreUpdateTimeNs518 = (value) => {
   if (!Number.isFinite(wholeMs) || wholeMs <= 0
     || new Date(wholeMs).toISOString().slice(0, 19) !== match[1]) return null;
   const nanos = (match[2] || '').padEnd(9, '0');
-  return String(BigInt(wholeMs) * 1_000_000n + BigInt(nanos || '0'));
+  return String(BigInt(wholeMs) * 1_000_000n + BigInt(nanos || '0')).padStart(21, '0');
 };
 
 const validId = (value) => Boolean(text(value)

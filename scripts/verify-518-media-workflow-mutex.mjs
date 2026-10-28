@@ -3,6 +3,9 @@ import {readFileSync} from 'node:fs';
 const preview=readFileSync('.github/workflows/cloudflare-media-r2-preview-deploy.yml','utf8');
 const cutover=readFileSync('.github/workflows/cloudflare-media-shared-catalog-cutover.yml','utf8');
 const promotion=readFileSync('.github/workflows/soridraw-release-promotion.yml','utf8');
+const packageJson=JSON.parse(readFileSync('cloudflare/media-worker/package.json','utf8'));
+assert.match(packageJson.scripts.deploy,/MEDIA_DIRECT_DEPLOY_BLOCKED_USE_APPROVED_SHARED_RELEASE_CONTROLLER/);
+assert.doesNotMatch(packageJson.scripts.deploy,/^wrangler deploy/);
 const group='soridraw-media-shared-r2-mutation';
 for(const [name,workflow] of [['PREVIEW',preview],['SHARED_CUTOVER',cutover],['TEST_PRODUCTION_PROMOTION',promotion]]){
  assert.match(workflow,new RegExp('group: '+group));
@@ -35,3 +38,5 @@ console.log('APP518_SHARED_CUTOVER_MANUAL_SHA_AND_APPROVAL=PASS');
 console.log('APP518_PINNED_OLD_SOURCE_WITHOUT_GUARD_BLOCKED=PASS');
 
 console.log('APP518_TEST_PRODUCTION_PROMOTION_SAME_MUTEX_AND_PINNED_FENCE=PASS');
+
+console.log('APP518_MEDIA_NPM_DIRECT_DEPLOY_BYPASS_CLOSED=PASS');

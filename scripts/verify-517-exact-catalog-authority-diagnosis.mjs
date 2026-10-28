@@ -240,5 +240,18 @@ console.log('APP517_MANUAL_ONLY_NO_CLIENT_CACHE_OR_R2_WRITES=PASS');
   assert.match(workflow,/git merge-base --is-ancestor/);
   assert.match(workflow,/DEPLOY_PREVIEW_MEDIA/);
   assert.doesNotMatch(workflow,/r2 bucket create|r2 object put|wrangler secret put/);
+  const checked = 'node scripts/verify-356-shared-private-catalog-authority.mjs';
+  const preflight = workflow.indexOf('Preflight shared Catalog authority compatibility (no deployment)');
+  const deploy = workflow.indexOf('Deploy preview media Worker with R2 binding');
+  assert.ok(preflight >= 0 && deploy > preflight, 'Catalog check must run BEFORE deployment');
+  assert.ok(workflow.indexOf(checked, preflight) > preflight
+    && workflow.indexOf(checked, preflight) < deploy,
+    'legacy Catalog static guard must be a pre-deploy release gate');
+  assert.ok(workflow.indexOf(checked, deploy) > deploy,
+    'retain post-deploy Catalog guard too');
+  const legacyGuard = fs.readFileSync('scripts/verify-356-shared-private-catalog-authority.mjs','utf8');
+  assert.match(legacyGuard, /delta\\\\\|bootstrap\\\\\|inspect-exact/);
+  assert.match(legacyGuard, /catalog bootstrap route missing/);
+  console.log('APP517_LEGACY_CATALOG_PREDEPLOY_AND_POSTDEPLOY_GATES=PASS');
   console.log('APP517_NO_AUTODEPLOY_EXACT_SHA_MANUAL_NO_R2_SMOKE_WRITES=PASS');
 }

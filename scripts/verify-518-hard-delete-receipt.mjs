@@ -61,7 +61,7 @@ assert.equal(r.allowD1Enqueue,false);
 // Source can be converted to current D1 outbox version, never before.updateTime
 let binds=[];
 const db={prepare:()=>({bind(...values){binds.push(values);return {
- async run(){return {meta:{changes:1}}};
+ async run(){return {meta:{changes:1}};}
 }}})};
 t=make();
 r=await t.run();

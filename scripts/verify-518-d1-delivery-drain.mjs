@@ -145,6 +145,74 @@ assert.equal(ctx.row.hold_reason,'RETRY_BUDGET_EXHAUSTED');
 assert.equal(ctx.row.ack_version_ns,null);
 assert.equal((await run(ctx.db,async()=>{throw Error('no repeat');},
  async()=>{throw Error('no repeat');})).attempted,0);
+// P1 regression: stage index HEAD drift and compaction HEAD motion are
+// temporary. Do not permanently HOLD an otherwise valid unchanged source.
+// The next due attempt must re-check the same exact canonical and may ACK.
+for(const transientCode of [
+ 'RETRYABLE_INDEX_RETRYABLE_R2_HEAD_MOVED',
+ 'RETRYABLE_INDEX_RECOVERY_HOLD_RECOVERY_HEAD_MOVED',
+]){
+ ctx=makeDb();
+ let tryCalls=0;
+ result=await run(ctx.db,async()=>canonical(1),async()=>{
+  tryCalls++;
+  return {code:transientCode,ownerVerified:false,
+   versionVerified:false,casVerified:false};
+ });
+ assert.equal(result.attempted,1,transientCode);
+ assert.equal(result.acked,0,transientCode);
+ assert.equal(result.retry,1,transientCode);
+ assert.equal(result.held,0,transientCode);
+ assert.equal(ctx.row.hold_reason,null,transientCode);
+ assert.equal(ctx.row.attempt_count,1,transientCode);
+ assert.ok(ctx.row.next_attempt_ms>nowMs,transientCode);
+ const next=ctx.row.next_attempt_ms;
+ assert.equal((await run(ctx.db,async()=>{throw Error('not due');},
+  async()=>{throw Error('not due');},next-1)).attempted,0);
+ result=await run(ctx.db,async()=>canonical(1),async input=>{
+  tryCalls++;
+  return {code:'APPLIED',sourceVersionNs:input.sourceVersionNs,
+   ownerVerified:true,versionVerified:true,casVerified:true};
+ },next);
+ assert.equal(result.acked,1,transientCode);
+ assert.equal(ctx.row.ack_version_ns,ver(1),transientCode);
+ assert.equal(tryCalls,2,transientCode);
+ assert.equal(ctx.row.hold_reason,null,transientCode);
+}
+// Genuine permanent authority/budget failures must still hold exactly once.
+for(const terminalCode of [
+ 'RETRYABLE_INDEX_DENY_UNVERIFIED_OR_OVERSIZED_SNAPSHOT',
+ 'RETRYABLE_INDEX_HOLD_STAGE_RESTART_BUDGET_EXHAUSTED',
+ 'RETRYABLE_INDEX_RECOVERY_HOLD_NON_MONOTONIC_RECOVERY_HEAD',
+]){
+ ctx=makeDb();
+ result=await run(ctx.db,async()=>canonical(1),async()=>({
+  code:terminalCode,ownerVerified:false,
+  versionVerified:false,casVerified:false,
+ }));
+ assert.equal(result.held,1,terminalCode);
+ assert.equal(result.retry,0,terminalCode);
+ assert.equal(ctx.row.hold_reason,'INDEX_CONTRACT',terminalCode);
+ const lastWrites=ctx.counts.writes;
+ assert.equal((await run(ctx.db,async()=>{throw Error('held');},
+   async()=>{throw Error('held');})).attempted,0);
+ assert.equal(ctx.counts.writes,lastWrites,terminalCode);
+}
+// Repeated transient HEAD movement has the existing finite retry limit,
+// never a permanent hot-loop of Firestore/R2 calls.
+ctx=makeDb({attempt_count:8});
+result=await run(ctx.db,async()=>canonical(1),async()=>({
+ code:'RETRYABLE_INDEX_RECOVERY_HOLD_RECOVERY_HEAD_MOVED',
+ ownerVerified:false,versionVerified:false,casVerified:false,
+}));
+assert.equal(result.held,1);
+assert.equal(ctx.row.hold_reason,'RETRY_BUDGET_EXHAUSTED');
+assert.equal(ctx.row.ack_version_ns,null);
+assert.equal((await run(ctx.db,async()=>{throw Error('held');},
+  async()=>{throw Error('held');})).attempted,0);
+console.log('APP518_STAGE_AND_COMPACTION_HEAD_DRIFT_RETRY_NOT_PERMANENT_HOLD=PASS');
+console.log('APP518_TERMINAL_RECOVERY_CONTRACT_STILL_DURABLY_HELD=PASS');
+console.log('APP518_TRANSIENT_DRIFT_RETRY_BUDGET_BOUNDED=PASS');
 console.log('APP518_D1_TERMINAL_ERROR_HOLD_W1_AND_NO_HOURLY_RETRY=PASS');
 console.log('APP518_D1_TRANSIENT_RETRY_BUDGET_CAPPED_PENDING_PRESERVED=PASS');
 console.log('APP518_D1_DELIVERY_READS_FRESH_CANONICAL_AND_REQUEUES_DRIFT=PASS');

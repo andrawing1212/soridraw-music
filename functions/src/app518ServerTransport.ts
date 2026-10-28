@@ -72,3 +72,48 @@ export const handleVerifiedApp518ExactSource=async({
   return {status:409,code:result.code};
  return {status:200,code:"SOURCE_VERIFIED",source:result.source};
 };
+
+
+/**
+ * Future authenticated Firebase -> Cloudflare dispatcher. No live listener.
+ * Caller MUST provide the exact server-rechecked source, not event.after.
+ * Failed requests throw so a future durable event delivery can retry.
+ */
+export const dispatchApp518VerifiedEnqueue=async({
+  source,secret,workerUrl,expectedHostname,nowMs,post=fetch,
+}:{
+  source:App518Source;secret:string;workerUrl:string;
+  expectedHostname:string;nowMs:number;post?:typeof fetch;
+}):Promise<{code:string}>=>{
+  let dest:URL;
+  try{dest=new URL(workerUrl);}catch{throw Error("APP518_WORKER_URL_INVALID");}
+  if(dest.protocol!=="https:"||dest.hostname!==expectedHostname
+    ||dest.username||dest.password||dest.hash||dest.search||dest.port)
+    throw Error("APP518_WORKER_HOST_NOT_PINNED");
+  if(source.verifiedByServer!==true||source.origin!=="server-exact-read"
+    ||!valid(source.uid,128)||!valid(source.documentId)
+    ||!["saved","removed"].includes(source.state)
+    ||typeof source.updateTime!=="string")
+    throw Error("APP518_SOURCE_UNVERIFIED");
+  // Same fixed-width nanosecond representation as D1 outbox; no client time.
+  const updateTime=source.updateTime;
+  const iso=/^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d{1,9}))?Z$/.exec(updateTime);
+  if(!iso)throw Error("APP518_SOURCE_UPDATE_TIME_INVALID");
+  const epochMs=Date.parse(iso[1]+"Z");
+  if(!Number.isFinite(epochMs)||epochMs<=0
+    ||new Date(epochMs).toISOString().slice(0,19)!==iso[1])
+    throw Error("APP518_SOURCE_UPDATE_TIME_INVALID");
+  const version=(BigInt(epochMs)*1_000_000n+
+    BigInt((iso[2]||"").padEnd(9,"0")||"0")).toString().padStart(21,"0");
+  const signed=signApp518ServiceRequest({secret,nowMs,body:{
+    action:"enqueue",uid:source.uid,documentId:source.documentId,
+    sourceVersionNs:version,desiredState:source.state,
+  }});
+  const response=await post(dest.href,{method:"POST",headers:signed.headers,
+    body:signed.body,redirect:"error"});
+  if(!response.ok)throw Error("APP518_WORKER_ENQUEUE_RETRYABLE");
+  const result=await response.json() as {code?:string};
+  if(!["ENQUEUED","STALE_OR_DUPLICATE"].includes(result?.code||""))
+    throw Error("APP518_WORKER_ENQUEUE_UNVERIFIED");
+  return {code:result.code||""};
+};

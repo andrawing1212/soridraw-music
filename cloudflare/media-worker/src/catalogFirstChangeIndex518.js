@@ -9,7 +9,9 @@
 import {CatalogR2ContractError518} from './catalogR2Provider518.js';
 
 const txt=x=>typeof x==='string'?x.trim():'';
-const maxItems=20000,chunkSize=128;
+// One parameterized SQLite JSON1 statement inserts a bounded page; each page
+// is atomic and reduces D1 statements without limiting the owner's song count.
+const chunkSize=512;
 const safeUid=x=>txt(x).length>0&&txt(x).length<=128&&!/[\\/]/.test(txt(x));
 const safeId=x=>txt(x).length>0&&txt(x).length<=240&&!/[\\/]/.test(txt(x))
   &&txt(x)!=='.'&&txt(x)!=='..';
@@ -45,6 +47,11 @@ export const INDEX_ROTATE_BUILDING_518=[
 export const INDEX_MEMBER_STAGE_518=[
  'INSERT OR IGNORE INTO music_note_catalog_member_518',
  '(owner_uid,generation,favorite_id) VALUES (?, ?, ?)',
+].join(' ');
+export const INDEX_MEMBER_BULK_STAGE_518=[
+ 'INSERT OR IGNORE INTO music_note_catalog_member_518',
+ '(owner_uid,generation,favorite_id)',
+ 'SELECT ?, ?, value FROM json_each(?)',
 ].join(' ');
 export const INDEX_COUNT_518=[
  'SELECT COUNT(*) AS n FROM music_note_catalog_member_518',
@@ -109,8 +116,8 @@ export const stageFirstChangedOwnerIndex518=async({
          ||nowMs-previous.checked_at_ms<60000)
          return deny('RETRYABLE_STAGE_RESTART_COOLDOWN');
      }
-     if(checkedHead.itemCount>maxItems)
-       return deny('DENY_UNVERIFIED_OR_OVERSIZED_SNAPSHOT');
+     // Never reject an authenticated owner solely for exceeding 20k songs.
+     // Remaining capacity depends on worker resources, not an arbitrary count.
    }
 
    // This provider must itself verify same owner, schema 4, complete status,
@@ -120,8 +127,7 @@ export const stageFirstChangedOwnerIndex518=async({
    if(materialized?.verifiedByServer!==true||materialized.ownerUid!==uid
      ||materialized.kind!=='musicNote'||materialized.complete!==true
      ||!safeHead(materialized.head)||!Array.isArray(materialized.items)
-     ||materialized.items.length!==materialized.head.itemCount
-     ||materialized.items.length>maxItems)
+     ||materialized.items.length!==materialized.head.itemCount)
      return {code:'DENY_UNVERIFIED_OR_OVERSIZED_SNAPSHOT',complete:false,
        r2FullReads:fullReads,d1RowsWritten:0};
    const head=materialized.head;
@@ -185,17 +191,18 @@ export const stageFirstChangedOwnerIndex518=async({
        return {code:'DENY_CONCURRENT_GENERATION',complete:false,
          r2FullReads:fullReads,d1RowsWritten:writes};
    }
-   // All staging is scoped to this (uid,generation). D1 batch() is atomic
-   // PER CHUNK. A crash leaves status='building' until safe same-revision retry.
+   // A single parameterized SQLite JSON1 statement atomically stages each
+   // bounded ID page. No per-song SQL statements or truncated owner index.
+   // Crash leaves an invisible building generation; exact-HEAD retry is
+   // idempotent and inserts only missing IDs.
    for(let i=0;i<ids.length;i+=chunkSize){
-     const stmts=ids.slice(i,i+chunkSize).map(id=>db.prepare(INDEX_MEMBER_STAGE_518)
-       .bind(uid,head.headRevision,id));
-     const receipts=await db.batch(stmts);
-     if(!Array.isArray(receipts)||receipts.length!==stmts.length
-       ||receipts.some(x=>x?.success===false))
+     const result=await db.prepare(INDEX_MEMBER_BULK_STAGE_518)
+       .bind(uid,head.headRevision,JSON.stringify(ids.slice(i,i+chunkSize))).run();
+     const changed=Number(result?.meta?.changes);
+     if(!Number.isSafeInteger(changed)||changed<0||changed>Math.min(chunkSize,ids.length-i))
        return {code:'RETRYABLE_STAGE_INCOMPLETE',complete:false,
          r2FullReads:fullReads,d1RowsWritten:writes};
-     writes+=receipts.reduce((n,x)=>n+Math.max(0,Number(x?.meta?.changes||0)),0);
+     writes+=changed;
    }
    const tally=await db.prepare(INDEX_COUNT_518)
      .bind(uid,head.headRevision).first();

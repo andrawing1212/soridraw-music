@@ -231,7 +231,7 @@ const altered=await advancePagedOwnerIndex518({
  db:db.db,uid,mode:'first',verifiedPendingMutation:true,nowMs:400,
  readOwnerHead:interrupted.state,baseReader:interrupted.reader,projectItem:x=>x,
 });
-assert.equal(altered.code,'DENY_PAGED_R2_CONTRACT');
+assert.equal(altered.code,'HOLD_PAGED_PROGRESS_CONTRACT');
 assert.equal(db.meta.status,'building');
 // Only a durable cursor continuation can schedule the next outbox tick;
 // it never increments ordinary network failure attempt_count.

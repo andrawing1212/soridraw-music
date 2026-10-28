@@ -38,6 +38,27 @@ assert db.execute(exact,(uid,gen,"song-300")).fetchone()[0]==1
 assert db.execute(exact,(uid,gen,"missing-song")).fetchone() is None
 assert db.execute(exact,("other-owner",gen,"song-300")).fetchone() is None
 assert db.execute(count,(uid,gen)).fetchone()[0]==301
+# An abandoned building generation can rotate to a newer, proven HEAD,
+# but never modify an existing READY generation or a foreign owner's rows.
+rotate=("UPDATE music_note_catalog_index_meta_518 "
+ "SET generation=?,indexed_revision=?,expected_count=?,head_etag=?,"
+ "checked_at_ms=?,restart_count=restart_count+1 "
+ "WHERE owner_uid=? AND generation=? AND indexed_revision=? "
+ "AND expected_count=? AND head_etag=? AND status='building' "
+ "AND restart_count<3 AND checked_at_ms<=?")
+other="owner-B"
+assert ch(begin,(other,300,300,1,'"old"',100))==1
+assert ch(stage,(other,300,"old-song"))==1
+assert ch(rotate,(301,301,1,'"new"',60100,uid,300,300,1,'"old"',100))==0
+assert ch(rotate,(301,301,1,'"new"',200,other,300,300,1,'"old"',-59800))==0
+assert ch(rotate,(301,301,1,'"new"',60100,other,300,300,1,'"old"',100))==1
+assert db.execute(count,(other,300)).fetchone()[0]==1
+assert db.execute(count,(other,301)).fetchone()[0]==0
+assert ch(rotate,(302,302,1,'"v2"',120100,other,301,301,1,'"new"',60100))==1
+assert ch(rotate,(303,303,1,'"v3"',180100,other,302,302,1,'"v2"',120100))==1
+assert ch(rotate,(304,304,1,'"v4"',240100,other,303,303,1,'"v3"',180100))==0
+assert db.execute("SELECT restart_count,status,generation FROM music_note_catalog_index_meta_518 WHERE owner_uid=?",(other,)).fetchone()==(3,"building",303)
+assert db.execute(meta,(uid,)).fetchone()==(gen,gen,301,etag,"ready")
 plan=" ".join(str(x[3]) for x in db.execute("EXPLAIN QUERY PLAN "+exact,(uid,gen,"song-300")))
 assert "PRIMARY KEY" in plan or "INDEX" in plan,plan
 forbidden=["lyrics","prompt","audio","media","title"]
@@ -46,4 +67,5 @@ print("APP518_D1_EXACT_INDEX_SQL_PARTIAL_CRASH_RESUME=PASS")
 print("APP518_D1_INDEX_WRONG_ETAG_AND_REVISION_FINALIZE_DENIED=PASS")
 print("APP518_D1_INDEX_OWNER_ISOLATION_AND_PRIMARY_KEY_COST=PASS")
 print("APP518_D1_FIRST_INDEX_W_N_PLUS_TWO=303")
+print("APP518_D1_STALE_BUILDING_ROTATION_SQL_SAFE_AND_BOUNDED=PASS")
 print("APP518_D1_INDEX_SQL_LIVE_CLOUD_WRITES=ZERO")

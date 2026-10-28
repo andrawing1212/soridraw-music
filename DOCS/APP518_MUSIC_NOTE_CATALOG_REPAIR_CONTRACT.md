@@ -345,3 +345,16 @@
 **회귀 테스트:** 구형 `921311a2…` 조상 FAIL, 현 HEAD는 기준 이후, 기준 SHA의 Git object ID와 현재 소스의 blob ID가 동일해야 함, 3개 워크플로 모두 사전 고정 및 배포 이전 단계인지 확인. 과거 app518 대용량 분할·재개 소스는 변경하지 않음.
 
 **릴리스 한계:** 이 차단은 최신 GitHub 워크플로를 통하는 배포만 보호. GitHub 구버전 워크플로 수동 재실행, 과거에 실행 중인 작업, 직접 Wrangler/Cloudflare Dashboard/외부 배포, Cloudflare 제어면의 TOCTOU 경쟁 및 원자적 전역 잠금은 통제 못 함. 또한 `git merge-base --is-ancestor`는 안전 기준 commit이 릴리스 SHA의 **실제 조상**이어야 하므로 squash/rebase로 commit 구조가 바뀌면 **안전하게 HOLD하고 새 기준 감사 및 승인 필요**. 현재 데이터·Worker·R2·D1·배포 0변경, 신규 코드에 대한 Work 독립 재감사 전 PASS 아님, 전체 RELEASE HOLD 유지.
+
+
+## 2026-10-29 app518 소스 연결 구현 — 실서버 활성화 없음
+
+**이번 승인 범위:** 기존 서버 후보 모듈을 실제 Firebase Functions 이벤트 진입점 및 Media Worker HTTP/예약 실행 진입점에 연결하는 소스 작업과 가상검사, GitHub 저장. 실제 Worker/Functions/R2/D1/Secret/규칙 배포 및 사용자 데이터 변경 없음.
+
+- `functions/src/app518LiveConnector.ts`: 기존 Worker의 정확한 Music Note 77개 출력 필드와 일치하는 이벤트 필드 검사. 무관 메타데이터 변경은 정확 Firestore 추가 R0 / Cloudflare R0·W0. 저장·공개·키워드·미디어·폴더·삭제는 서버의 해당 favorites 문서만 재조회. Firestore hard delete에는 기존 트랜잭션 영구 영수증으로 새 서버 타임스탬프를 기록하고 중복·이전 이벤트를 보류.
+- `functions/src/index.ts`: `app518FavoriteCatalogChanged` (asia-northeast3 Firestore onWrite) 와 `app518ExactFavoriteSource` (HMAC 인증 HTTPS POST) 소스 등록. 배포되지 않았고 `SORIDRAW_APP518_BRIDGE_ACTIVE=ENABLED_AFTER_SHARED_ROLLOUT` 없으면 요청 전부 비활성. 암호 `SORIDRAW_CATALOG_SERVER_HMAC_518`는 소스에 저장하지 않으며 현재 Secret provisioning **없음**. 변경과 무관한 이벤트는 URL/Secret 확인 이전 즉시 무시; 영구 HOLD는 무한 재시도하지 않음.
+- `cloudflare/media-worker/src/index.js`: `POST /v1/server/catalog518`에서 기존 HMAC `catalogServerBridge518` + 서버만 접근하는 정확 Firestore 콜백 `catalogFirebaseFetcher518` 연결. D1에 한 곡만 버전별 넣고, 조건 충족 시 한 곡 처리; retry `scheduled` 메서드는 소스에만 존재. `wrangler.jsonc`에 cron/D1 binding/secret/canonical flag **추가하지 않았으므로 실제 실행 없음**. `SORIDRAW_APP518_RELEASE_FENCES_VERIFIED=APPROVED_ALL_3_AND_NO_OLD_WRITERS`와 기존 518 canonical flag, D1, HMAC 및 고정 Firebase URL이 모두 있어야 작동.
+- 가상검사 `scripts/verify-518-live-connector.mjs`: 무관 이벤트 R0/W0, 77개 필드 일치, HMAC 서명 전송, hard delete 영수증 W1·중복 W0, 뒤늦은 삭제로 최신 저장곡 삭제 금지, OFF Worker HTTP·scheduler 차단. 기존 app518·app517·제품 동작 회귀 CI 재사용.
+- **릴리스 차단 유지:** 이 Worker `index.js`의 Git blob이 새 코드로 변했지만 현재 3개 배포 워크플로는 이전 독립 감사 기준 blob만 승인한다. 따라서 **이 SHA의 직접 배포는 immutable SHA 보호로 거절**된다. 이 안전장치를 임의로 해제·갱신하지 않음.
+
+**미완료(운영 승인과 실환경 증거가 필요한 부분):** 공유 R2 Writer PREVIEW/TEST/PRODUCTION 전체 호환 확인·구형 in-flight 종료, 실제 Cloudflare API Editor 및 구형 실행 위험, D1 migration/binding, Secret 양쪽 프로비저닝, Firebase Functions 선택 배포, Worker HTTPS 콜백 주소 고정, 재시도 cron 연결 및 Workers Free CPU·D1/R2 계측, PC↔모바일 로그인 상태에서 저장·삭제 반영 및 결함곡 단건 복구. 이 소스 후보를 사용자 저장곡 오류 해결 완료 또는 실제 Firebase↔Worker 성공으로 표시하지 않는다. **PR #528 Draft / RELEASE HOLD / NO-GO 유지.**

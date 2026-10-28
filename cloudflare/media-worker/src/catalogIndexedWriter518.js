@@ -104,6 +104,23 @@ export const applyIndexedCanonicalR2Delta518=async({
   });
   if(!['INDEX_ADVANCED','ALREADY_INDEXED'].includes(replay.code))
    return deny('RETRYABLE_INDEX_'+replay.code);
+  // An eventually-consistent/stale HEAD read can misleadingly say
+  // ALREADY_INDEXED at the *previous* revision. Verify the exact mutation
+  // is visible on R2 and D1 meta matches that same new HEAD before ACK.
+  const confirmed=await readOwnerHead(uid);
+  if(!verifiedHead(confirmed,uid)
+    ||confirmed.head.headRevision<nextHead.headRevision
+    ||!confirmed.head.recentMutations?.some(x=>x.id===mutationId))
+    return deny('RETRYABLE_POST_CAS_VISIBILITY');
+  const indexed=await readIndexedMembership518({
+   db,uid,documentId,r2Head:{
+    headRevision:confirmed.head.headRevision,
+    itemCount:confirmed.head.itemCount,etag:confirmed.etag,
+   },
+  });
+  if(indexed.code!=='EXACT_MEMBERSHIP'
+    ||indexed.present!==(desiredState==='saved'))
+    return deny('RETRYABLE_POST_CAS_MEMBERSHIP');
   return {code:'APPLIED',ownerVerified:true,versionVerified:true,
    casVerified:true,sourceVersionNs,r2Puts:1};
  }

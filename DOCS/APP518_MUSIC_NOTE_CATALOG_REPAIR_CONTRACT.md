@@ -6,7 +6,7 @@
 - 로그인한 소유자의 정확한 Firestore favorites 문서가 존재하고 저장 활성: 예.
 - 인증된 공유 R2 Catalog는 존재하나 정확한 item.id가 누락: 예. 보고된 revision: 1792973560426.
 - 원본 PC Music Note 행은 있으나 PC 로컬 Catalog도 같은 ID 누락.
-- 과거 누락의 단일 원인 미확정. 현재 브라우저에서 Firestore 정본 확정과 R2 파생 게시가 분리되고, pending publish/dirty revision의 프로세스 메모리 유실 가능성 확인.
+- 과거 누락의 단일 원인 미확정. 실제 소스에서 App.tsx의 writeFavoritesCache → scheduleCatalogSnapshotPublishIfDirty는 메모리 변경을 기록할 뿐 서버 POST를 즉시 보장하지 않음. pageSyncCoordinator.ts에서 페이지 종료·명시적 동기화 시 handlers.flush 이후 flushPendingCatalogPublishes를 호출하는 구조. scripts/verify-081-page-exit-batch.mjs는 의도적으로 Catalog 전송 타이머 금지를 검사함. 앱 종료/전송 실패 뒤 미반영 상태를 서버에서 재시도한다는 보장은 없음. 이 기존 동작을 단순 타이머 추가로 바꾸면 구형 스냅샷 역전 위험이 있으므로 금지.
 
 ## 구현한 부분
 - cloudflare/media-worker/src/catalogCanonicalFence518.js: Firestore 검증된 updateTime 나노초 비교, owner UID/문서 ID 확인, 영속 tombstone 전제, 오래된 save 이벤트/중복/동일 버전 충돌 fail-closed.

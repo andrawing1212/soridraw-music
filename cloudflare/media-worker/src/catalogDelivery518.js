@@ -5,10 +5,22 @@
 import {parseFirestoreUpdateTimeNs518} from './catalogCanonicalFence518.js';
 import {
  getDueFavoriteChanges518,enqueueVerifiedFavorite518,
- acknowledgeExactFavorite518,scheduleFailedFavorite518,
+ acknowledgeExactFavorite518,scheduleFailedFavorite518,holdExactFavorite518,
 } from './catalogD1Outbox518.js';
 const text=x=>typeof x==='string'?x.trim():'';
 const isState=x=>x==='saved'||x==='removed';
+// Only demonstrably non-retryable contract errors get a durable HOLD at
+// first failure. Unknown IO/timeout errors use bounded retries before HOLD.
+export const permanentDeliveryHoldReason518=code=>{
+ if(typeof code!=='string')return null;
+ if(code.startsWith('DENY_')||code.startsWith('HOLD_')
+   ||code.startsWith('RETRYABLE_INDEX_DENY_')
+   ||code.startsWith('RETRYABLE_INDEX_HOLD_')
+   ||code.startsWith('RETRYABLE_INDEX_RECOVERY_DENY_')
+   ||code.startsWith('RETRYABLE_INDEX_RECOVERY_HOLD_'))
+  return 'INDEX_CONTRACT';
+ return null;
+};
 const validRow=row=>row&&text(row.owner_uid)&&text(row.favorite_id)
  &&/^\d{16,21}$/.test(text(row.source_version_ns))
  &&isState(row.desired_state)
@@ -25,7 +37,7 @@ export const deliverDueCanonicalFavorites518=async({
    return {code:'DENY_DEPENDENCIES',attempted:0,acked:0,retry:0,drift:0};
  const fetched=await getDueFavoriteChanges518({db,nowMs,limit:maxItems});
  if(fetched.code!=='OK')return {code:'DENY_DUE_QUEUE',attempted:0,acked:0,retry:0,drift:0};
- const result={code:'OK',attempted:0,acked:0,retry:0,drift:0};
+ const result={code:'OK',attempted:0,acked:0,retry:0,held:0,drift:0};
  // Sequential by design in source prototype; final scheduler can apply
  // bounded concurrency once actual subrequest/CPU costs are measured.
  for(const row of fetched.rows){
@@ -59,6 +71,7 @@ export const deliverDueCanonicalFavorites518=async({
            attemptCount:Number(row.attempt_count),
          });
          if(scheduled.code==='RETRY_SCHEDULED')result.retry++;
+         if(scheduled.code==='HELD')result.held++;
        }
        continue;
      }
@@ -73,6 +86,17 @@ export const deliverDueCanonicalFavorites518=async({
        ||delivered.casVerified!==true
        ||delivered.sourceVersionNs!==version
        ||!['APPLIED','ALREADY_APPLIED'].includes(delivered.code)){
+       const permanent=permanentDeliveryHoldReason518(delivered?.code);
+       if(permanent){
+         const held=await holdExactFavorite518({
+           db,uid,documentId:id,sourceVersionNs:version,nowMs,
+           reason:permanent,
+         });
+         if(held.code==='HELD')result.held++;
+         // Outbox retains the exact source/version; next genuinely newer
+         // source clears HOLD on verified enqueue. No endless scheduled R/W.
+         continue;
+       }
        throw new Error('R2_UNVERIFIED_ACK');
      }
      const ack=await acknowledgeExactFavorite518({
@@ -89,6 +113,7 @@ export const deliverDueCanonicalFavorites518=async({
        attemptCount:Number(row.attempt_count),
      });
      if(scheduled.code==='RETRY_SCHEDULED')result.retry++;
+     if(scheduled.code==='HELD')result.held++;
    }
  }
  return result;

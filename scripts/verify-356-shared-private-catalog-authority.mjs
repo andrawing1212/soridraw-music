@@ -10,9 +10,15 @@ assert.match(worker, /SORIDRAW_SHARED_PRIVATE_CATALOG_AUTHORITY_356/);
 assert.match(worker, /const catalogBucket = \(env\) =>/);
 assert.match(worker, /env\?\.CATALOG \? env\.CATALOG : env\.MEDIA/);
 assert.match(worker, /catalogAuthorityMode/);
+// Preserve the exact supported routes and their bootstrap guard. app517 adds
+// a read-only manual inspect-exact action; no other route expansion is allowed.
+const allowedCatalogRouteSignatures = [
+  "match(/^\\/v1\\/catalog\\/(musicNote|library)(?:\\/(delta|bootstrap))?$/)",
+  "match(/^\\/v1\\/catalog\\/(musicNote|library)(?:\\/(delta|bootstrap|inspect-exact))?$/)",
+];
 assert.ok(
-  worker.includes("match(/^\\/v1\\/catalog\\/(musicNote|library)(?:\\/(delta|bootstrap))?$/)"),
-  'catalog bootstrap route missing',
+  allowedCatalogRouteSignatures.some((signature) => worker.includes(signature)),
+  'catalog bootstrap route missing or unexpected Catalog route expansion',
 );
 
 for (const token of [

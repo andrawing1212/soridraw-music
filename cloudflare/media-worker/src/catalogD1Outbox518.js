@@ -16,14 +16,14 @@ export const UPSERT_CANONICAL_518=[
  'ON CONFLICT(owner_uid,favorite_id) DO UPDATE SET',
  'source_version_ns=excluded.source_version_ns,',
  'desired_state=excluded.desired_state,',
- 'attempt_count=0, next_attempt_ms=0, updated_at_ms=excluded.updated_at_ms',
+ 'attempt_count=0, next_attempt_ms=0, hold_reason=NULL, updated_at_ms=excluded.updated_at_ms',
  'WHERE excluded.source_version_ns > music_note_catalog_outbox_518.source_version_ns',
 ].join('\n');
 export const SELECT_DUE_518=[
  'SELECT owner_uid,favorite_id,source_version_ns,desired_state,attempt_count',
  'FROM music_note_catalog_outbox_518',
  'WHERE (ack_version_ns IS NULL OR ack_version_ns != source_version_ns)',
- 'AND next_attempt_ms <= ?',
+ 'AND hold_reason IS NULL AND next_attempt_ms <= ?',
  'ORDER BY next_attempt_ms,owner_uid,favorite_id LIMIT ?',
 ].join('\n');
 export const ACK_EXACT_518=[
@@ -31,16 +31,24 @@ export const ACK_EXACT_518=[
  'SET ack_version_ns=source_version_ns,acked_at_ms=?,attempt_count=0',
  'WHERE owner_uid=? AND favorite_id=? AND source_version_ns=?',
  'AND (ack_version_ns IS NULL OR ack_version_ns != source_version_ns)',
+ 'AND hold_reason IS NULL',
 ].join('\n');
 export const REQUEUE_EXACT_518=[
  'UPDATE music_note_catalog_outbox_518',
  'SET attempt_count=attempt_count+1,next_attempt_ms=?,updated_at_ms=?',
  'WHERE owner_uid=? AND favorite_id=? AND source_version_ns=?',
  'AND (ack_version_ns IS NULL OR ack_version_ns != source_version_ns)',
- 'AND attempt_count=?',
+ 'AND attempt_count=? AND hold_reason IS NULL',
+].join('\n');
+export const HOLD_EXACT_518=[
+ 'UPDATE music_note_catalog_outbox_518',
+ 'SET hold_reason=?,updated_at_ms=?',
+ 'WHERE owner_uid=? AND favorite_id=? AND source_version_ns=?',
+ 'AND (ack_version_ns IS NULL OR ack_version_ns != source_version_ns)',
+ 'AND hold_reason IS NULL',
 ].join('\n');
 export const READ_ONE_518=[
- 'SELECT owner_uid,favorite_id,source_version_ns,desired_state,ack_version_ns,attempt_count,next_attempt_ms',
+ 'SELECT owner_uid,favorite_id,source_version_ns,desired_state,ack_version_ns,attempt_count,next_attempt_ms,hold_reason',
  'FROM music_note_catalog_outbox_518 WHERE owner_uid=? AND favorite_id=?',
 ].join('\n');
 
@@ -79,6 +87,27 @@ export const acknowledgeExactFavorite518=async({
  const writes=Math.max(0,Number(result?.meta?.changes||0));
  return {code:writes===1?'ACKED':'STALE_OR_ALREADY_ACKED',d1Writes:writes};
 };
+// Persistent source-outbox rows are never deleted. Once the bounded retry
+// budget is exhausted the same version is HELD instead of polling hourly
+// forever. A newer verified source version clears this HOLD automatically.
+export const MAX_RETRY_ATTEMPTS_518=8;
+const HOLD_CODES_518=new Set([
+ 'CANONICAL_FENCE','SOURCE_CONTRACT','INDEX_CONTRACT',
+ 'RETRY_BUDGET_EXHAUSTED','MANUAL_REVIEW_REQUIRED',
+]);
+export const holdExactFavorite518=async({
+ db,uid,documentId,sourceVersionNs,nowMs,reason,
+}={})=>{
+ if(!database(db)||!okUid(uid)||!okId(documentId)||!epoch(nowMs)
+   ||!/^[0-9]{21}$/.test(text(sourceVersionNs))
+   ||!HOLD_CODES_518.has(reason))
+   return {code:'DENY_HOLD_ARGUMENTS',d1Writes:0};
+ const result=await db.prepare(HOLD_EXACT_518).bind(
+   reason,nowMs,text(uid),text(documentId),sourceVersionNs).run();
+ const writes=Math.max(0,Number(result?.meta?.changes||0));
+ return {code:writes===1?'HELD':'STALE_OR_ALREADY_HELD',
+   d1Writes:writes};
+};
 export const boundedRetryDelay518=attempts=>{
  if(!Number.isSafeInteger(attempts)||attempts<0)return null;
  return Math.min(3600000,5000*2**Math.min(10,attempts));
@@ -89,6 +118,13 @@ export const scheduleFailedFavorite518=async({
  if(!database(db)||!okUid(uid)||!okId(documentId)||!epoch(nowMs)
    ||!/^\d{21}$/.test(text(sourceVersionNs)))
    return {code:'DENY_ARGUMENTS',d1Writes:0};
+ if(!Number.isSafeInteger(attemptCount)||attemptCount<0)
+   return {code:'DENY_ARGUMENTS',d1Writes:0};
+ if(attemptCount>=MAX_RETRY_ATTEMPTS_518)
+   return holdExactFavorite518({
+    db,uid,documentId,sourceVersionNs,nowMs,
+    reason:'RETRY_BUDGET_EXHAUSTED',
+   });
  const delay=boundedRetryDelay518(attemptCount);
  if(delay===null||!Number.isSafeInteger(nowMs+delay))
    return {code:'DENY_ARGUMENTS',d1Writes:0};

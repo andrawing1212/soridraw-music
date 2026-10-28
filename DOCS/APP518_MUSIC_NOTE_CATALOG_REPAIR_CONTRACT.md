@@ -322,3 +322,16 @@
 - 새 회귀 검사는 3환경 한 곳만 canonical ON/값 불명·비밀, 구형 restore/activate/upload, 자동 rollback 직전 재검사 조건을 포함한다. CI는 실제 Cloudflare 요청을 하지 않는다.
 - **중요:** 이 스크립트를 우회한 직접 Cloudflare UI·Wrangler·오래된 워크플로·이전에 시작한 요청은 막을 수 없다. 정본 전환을 실행하는 별도 fenced-only 배포 제어와 immutable version 승인·구형 실행 종료·실제 Firebase 배송 확인은 아직 미완료. 소스의 사전 보호가 실제 세 Worker 보호 설치를 의미하지 않는다.
 - 현재 PR #528 Draft·미병합·미배포, 실데이터 변경 0, 전체 RELEASE HOLD.
+
+### 2026-10-29 후속 독립 감사 FAIL(P1 2·P2 1) — 배포 우회·동시 실행·불완전 Cloudflare 설정
+
+**원본 감사 SHA:** `921311a29632c4f79554b52cca354736b18dc6ef`. 감사 확인: P1-1 기존 `cloudflare-media-r2-preview-deploy.yml`의 `npm run deploy`가 518 보호 스크립트 우회, P1-2 미공유 workflow 동시 실행과 preflight→실변경 경쟁, P2-1 /settings 빈 bindings를 정본 OFF로 오인. **이전 CI 3/3은 이 문제의 PASS 근거가 아님.**
+
+**최소 후보 패치(새 SHA에서 독립 재감사 필요):**
+- `cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js`의 `assertLegacyMediaBindingsComplete518`은 실제 Worker 3개의 설정에서 **유효한 MEDIA R2 버킷, 공유 CATALOG R2 버킷, `SORIDRAW_SHARED_CATALOG_V1=1`**이 각각 한 건 정확히 존재해야 승인. 빈/누락/중복/잘못된 타입 또는 버킷/불확실한 값은 HOLD. `SORIDRAW_CANONICAL_CATALOG_518`은 OFF 문자열까지 *존재 자체를* HOLD 처리. 비밀은 노출하지 않음.
+- `.deploy/release-media-worker-runtime.mjs`에서 upload·activate·restore 및 자동 rollback 이전 동일한 3개 환경의 **완전한 바인딩**을 검사. Cloudflare GET 실패·불완전 응답이면 변경 금지. 기존 유효한 shared flag 1 환경의 배포 방식만 보호.
+- `cloudflare-media-r2-preview-deploy.yml`은 인증된 release controller를 통한 `upload→activate`로 교체, 기존 직접 `npm run deploy` 제거; 구형 보호 코드가 없는 승인 SHA는 배포 금지. `cloudflare/media-worker/package.json`의 직접 `npm run deploy`도 명시적으로 차단.
+- `cloudflare-media-shared-catalog-cutover.yml`은 더 이상 preview push로 자동 Worker 전환하지 않고 정확 SHA와 명시 문구를 요구하는 수동 전환만 허용. `soridraw-release-promotion.yml`은 release-source 작업 디렉터리에 protected source가 없는 TEST/PRODUCTION 배포 거절. 3개 배포 워크플로 전부 **동일 `soridraw-media-shared-r2-mutation` concurrency 그룹** / `cancel-in-progress:false`로 serialize. 자동 rollback도 같은 락 안에서 실행되도록 워크플로 전체에 적용.
+- 오프라인 검사는 정적 배포 경로, 누락·중복·빈 Cloudflare settings, 3 workflow 공용 mutex, 오래된 source SHA 거부 및 기존 브라우저 정책 회귀. 실제 Cloudflare에 API 요청·배포·변경 없음.
+
+**남은 경계/엄격한 HOLD:** GitHub Actions concurrency는 **이 그룹의 최신 워크플로 실행끼리만** 서로 배제한다. 과거 SHA/과거에 이미 시작된 실행, Cloudflare Dashboard·직접 Wrangler·외부 자동화의 배포, GitHub 밖에서 생긴 canonical 변수를 **검사와 실행 사이에 원자적으로 동결할 권한은 없다**. 따라서 이번 패치가 P1-2의 **전역 경쟁 완전 해소**를 의미하지 않음. 실변경 전 전역 배포 권한/잠금 또는 모든 Writer 포함한 정본 전환 게이트 증명·별도 디렉터 승인과 실환경 감사 필요. PREVIEW/TEST/PRODUCTION 실제 보호 코드는 여전히 미배포이며 Firebase↔Cloudflare 인증·대기열·ACK 실연결과 Cloudflare Free CPU/메모리/비용도 미검증. **Draft / 미병합·미배포 / 실데이터 변경 0 / RELEASE HOLD/NO-GO** 유지.

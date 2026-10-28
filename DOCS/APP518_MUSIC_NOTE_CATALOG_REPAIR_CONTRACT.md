@@ -165,3 +165,29 @@
 - **증분 비용 목표 수정:** 정상 변경 1건에서 기존 outbox D1 W1 접수 + W1 ACK 외에, 인덱스 메타 `indexed_revision/ETag/count` W1, membership가 실제 추가/삭제되는 경우 곡별 행 W1. 즉 **D1 W3(기존 곡 내용 변경) 또는 W4(실제 곡 추가/삭제)**가 목표. 재시도/동시 충돌은 추가 D1/R2 읽기·쓰기가 발생할 수 있음. R2 HEAD GET/CAS PUT, Firestore 정확 R1, Functions/Worker 실행 비용 별도. 앱 진입/페이지 전환 신규 R0/W0 유지. 한 번만 실시하는 첫 색인 W=N+2는 별도.
 - **남은 배포 차단 사유:** (1) 공유 PREVIEW/TEST/PRODUCTION 모든 구형 Writer가 canonical source fence를 적용한다는 근거 없음, (2) 기존 hard-delete 문서의 최신 삭제 커밋 버전 보장 없음, (3) 전체 journal compaction 후 이전 D1 색인에서 이어지는 delta가 사라진 경우 자동 재색인/복구 경로 미완성, (4) 실제 Firebase 변경 이벤트·서버 인증·R2 HEAD ETag provider·D1 예약 재시도 미연결, (5) >20k 곡 색인·대량 동시 변경 실측 안 됨. source helper만 PASS이며 실제 동기화 기능 완료 아님.
 - **운영 및 데이터 상태:** 기존 app517 PREVIEW 앱·Worker 유지, PR #528 Draft·미병합, D1 생성·SQL 마이그레이션 실행/공유 Rules·Functions·Worker 배포 없음, 사용자 데이터 0건 변경. 독립 재감사 미실시.
+
+## 2026-10-28 R2 압축 복구·구형 영구 삭제 순서 보호 — 개발 범위
+
+**디렉터 승인:** 두 P1 위험의 코드·검사만 개발. 공유 D1/Firestore/Worker/Rules 실제 적용·기존곡 수정은 허가되지 않음.
+
+### P1: R2 delta 압축 후 D1 색인 누락
+
+- `catalogCompactionRecovery518.js`는 pending 변경이 있으면서 실제 서버가 **D1 색인의 indexed_revision보다 R2 baseRevision이 커졌음**을 확인한 경우에만 실행하는 비활성 보조 코드. **정확 UID·완전한 R2 BASE+HEAD·모든 환경 구형 Writer 차단 사실이 서버에서 증명돼야** 한다.
+- 현재 색인 generation은 유지하면서 새로운 generation에 해당 사용자 곡 ID만 128개씩 분리해서 기록. 현재 세대는 계속 보존; **모든 ID·카운트와 최신 R2 HEAD ETag가 확인돼야** 조건부 D1 메타 교체. 중단 시 옛 색인은 원형 보존, 새 색인은 보이지 않으며 동일 R2 HEAD일 때만 재시작 가능. R2 HEAD가 중간에 바뀌면 안전 차단. 이 부분의 실제 provider/스케줄러/정확한 R2 배포 아직 없음.
+- `catalogIndexedWriter518.js`에서는 일반 작은 delta 재생이 compaction gap을 명확히 보고하는 경우에만 복구를 요청. 복구 뒤에도 기존 exact Firestore → R2 조건부 쓰기 → D1 membership 확인 → ACK의 원칙을 지킴.
+- 비용: 정상 곡 1건 변경은 **D1 W3~W4 목표 유지**. *압축 복구가 필요할 때만* 해당 계정 곡 N개 색인 재생성 W=N+2, R2 전체 materialized GET 1 및 HEAD 재확인, D1 bounded batch. 이 비용은 0이 아니며 장기 운영에서는 기존 journal compaction을 D1 ACK/색인보다 먼저 진행하지 않도록 조정해야 함. 이전 세대의 오래된 D1 행도 남으므로 안전한 순차 정리 방식은 남은 과제.
+- 2만 곡 초과, 이미 복구 시도 중 R2 HEAD가 다른 세대로 바뀐 상태, 다른 환경의 구형 Worker가 HEAD를 수정하는 경우는 **안전 차단** 상태. 이것만으로 모든 사용자 복구가 완료된 것은 아님.
+
+### P1: 구형 브라우저의 영구 삭제
+
+- 확인된 제약: Firestore favorites 문서의 `deleteDoc` 후에는 최신 updateTime이 존재하지 않는다. 삭제 이벤트의 before.updateTime이나 함수 접수 시각을 삭제 커밋 버전으로 사용하는 것은 금지.
+- `catalogHardDeleteReceipt518.js`·`catalogHardDeleteSource518.js`: **서버에서 실제 문서 삭제 이벤트와 이전 소유권을 확인**했을 때만 실행할 수 있는 보조 코드. Firestore Admin transaction이 본인 exact favorites 문서 부재 + 기존 receipt 이벤트 중복을 확인하고, **별도 개인용 삭제 receipt 문서에 서버가 발급하는 timestamp**를 기록하는 방식. 현재 favorites 문서를 재생성하지 않음. transaction 충돌 또는 더 최신 저장곡 존재 시 삭제 거부. transaction 후 소유자 exact favorites/receipt 상태를 다시 읽고, **receipt의 실제 Firestore updateTime**만 D1 원장의 삭제 버전으로 접수. R2 변경은 이후 별도 정확 버전 CAS에서만 수행.
+- 정상 저장 및 soft-delete는 기존 updateTime을 재사용하고 추가 receipt W0. 구형 영구 삭제에 한해 **Firestore receipt W1(이벤트 중복 시 W0)** + 거래 내부 exact read·최종 확인 read·D1 처리 비용이 발생. 이 비용은 D1 W3/4와 별도이며 기존 사용자 개인정보를 receipt에 복사하지 않는다.
+- 현재 코드는 의존성 주입/가상 Firebase provider 검증뿐. Firestore Admin transactional provider 실제 구현, 인증, Rules, 서버 배포, sidecar collection 정책/보관량·비용, 과거 삭제 이벤트 백필과 구형 앱 버전 혼재 검증은 여전히 **미완료**. 이벤트 도착이 여러 번/역순일 수 있으므로 이벤트 ID와 현재 exact 문서 상태 검증이 필수. 별도 승인 전 개인정보 포함된 원본/실사용자 Firestore에 기록 절대 금지.
+
+### 실행형 검사 및 배포 차단
+
+- 신규 `verify-518-compaction-recovery.mjs`, `verify-518-compaction-recovery-sql.py`: N=301 실제 D1 W303 모델, 중단·재시도 W0, 다른 계정/HEAD 경합, 기존 generation 무변경 및 조건부 교체, R2 전체 조회는 compaction gap일 때만.
+- 신규 `verify-518-hard-delete-receipt.mjs`, `verify-518-hard-delete-source.mjs`: 삭제 이벤트 위조/중복·영구삭제 후 재저장, receipt 발급 시각과 이전 updateTime 구분, 새 저장이 나중에 오면 old delete 미적용, 개인정보 무기록.
+- 기존 다음곡 적용/공개·비공개/하트·Recent/Library·app517 및 전체 제품 검사를 계속 적용. 실제 PC↔모바일 테스트, 10만 사용자 peak와 실제 서버 요금 검증은 별도.
+- CI PASS라도 전체 app518 서버 동기화·확정 누락곡 단건 복구는 **미완료**. 특히 모든 환경 구형 Writer fencing, >20K/다른 HEAD 세대 복구, old index 안전 정리, 실제 Cloudflare/Firebase 서버 연결 및 독립 감사 PASS가 남아 있으면 PR #528은 Draft HOLD.

@@ -252,3 +252,11 @@
 - **비용과 제한:** 새 압축 복구 첫 회 `D1 W=N+2`, 이후 HEAD 이동에 따른 회전 한 번에 최대 추가 `메타 W1+새 세대 회원 ID N건`. 자동 회전은 3회 초과 금지; 이동한 HEAD가 쿨다운 중이면 **HEAD 단건 읽기만, 전체 R2 materialization 0**. 정상 곡 변경 W3~W4 목표/앱 진입 R0/W0와 구분. 옛 staging/구 READY 세대의 장기 D1 보관·안전한 bounded GC 및 실제 비용 검증은 별도 미완료 항목이다.
 - **소스 검증:** `verify-518-compaction-recovery.mjs`(중단·HEAD 변경·같은 버전 변조·3회 한도·기존 세대 보호), `verify-518-compaction-recovery-sql.py`(정확한 SQL 소유권·쿨다운·회전 예산·동시 조건·READY 교체). 실제 GitHub Actions exact-SHA 결과를 별도로 확인한 후에만 코드 검사 PASS 보고.
 - **남은 P1:** >20,000곡 계정 처리, 공유 PREVIEW/TEST/PRODUCTION 구형 Writer 전체 fence, Firebase↔Cloudflare 실제 Functions/HMAC/D1/Worker/cron 연동, D1 미완성 세대 정리, 실제 사용자 1곡 단건 복구·PC/모바일 일치/월 비용 측정. **기존 독립 감사 전체 FAIL·RELEASE HOLD 유지**. PR #528 Draft, migration 실행·실데이터 변경·병합·배포 금지.
+
+## 2026-10-29 P1 전달 경로 영구 HOLD 오분류 수정 — 무배포
+
+- 직전 소스 검토에서 발견한 두 P1은 `catalogServerBridge518.js`에서 **모든 첫 색인 실패를 `HOLD_INDEX_*`로 감싼 문제**, `catalogDelivery518.js`에서 **`RETRYABLE_INDEX_RECOVERY_HOLD_RECOVERY_HEAD_MOVED`를 영구 HOLD로 분류한 문제**. 단일 원본 버전이 유지되면 D1 outbox `hold_reason`에 고정돼 이후 R2 HEAD가 안정되어도 자동 처리에서 제외되는 위험이었다.
+- 수정은 **서버 진입 브리지의 첫 색인 실패 표시를 `RETRYABLE_INDEX_*`로 변경**하고, delivery 분류에서 **정확한 `RETRYABLE_INDEX_RECOVERY_HOLD_RECOVERY_HEAD_MOVED` 한 가지만 일시적 오류로 취급**한다. 기존 `RETRYABLE_INDEX_DENY_*`, `RETRYABLE_INDEX_HOLD_*`, `RETRYABLE_INDEX_RECOVERY_HOLD_NON_MONOTONIC_RECOVERY_HEAD` 등의 영구 계약 위반은 계속 즉시 HOLD. 광범위한 HOLD 해제나 과거 outbox 자동 초기화/데이터 수정 없음.
+- 실제 큐에서는 기존 `scheduleFailedFavorite518`의 **최대 8회·지수 백오프·초과 시 영구 HOLD W1**을 그대로 사용. 처음 1회 재시도 예약 외 R2 영구 실패 호출을 무제한 허용하지 않음. 정상 원본이 없거나 이전 삭제 세대가 다른 경우 R2 mutation 및 ACK 금지.
+- 새 테스트는 첫 색인 HEAD 변경과 압축 HEAD 변경 오류가 **ACK 금지→예약 재시도→정확 원본 재확인→ACK** 되는지 확인한다. 진짜 불가한 원본/HEAD/예산 오류가 즉시 HOLD하고 반복 호출 0인지도 검증한다. 서버 브리지 실제 모듈 → D1 due → 첫 색인 예외 → 예약 재시도 경로도 실행형 mock으로 확인한다.
+- 이 코드는 여전히 **미연결 후보**. 실제 D1 생성·마이그레이션·Firebase↔Cloudflare Secret/HTTPS/Cron/3환경 Worker 차단·기기 실제 검증 미완료. 사용자 원본·기존 PC↔모바일 동기화·캐시·PREVIEW/TEST/PRODUCTION 배포는 건드리지 않는다. **PR #528 Draft / 전체 RELEASE HOLD 유지**, 새 SHA의 CI 및 독립 감사가 별도로 필요하다.

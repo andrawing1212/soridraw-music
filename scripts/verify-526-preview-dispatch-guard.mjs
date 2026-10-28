@@ -60,7 +60,8 @@ function testStep(shell, {event = 'workflow_dispatch', eventSha = sha, approvedS
     env: { ...process.env,
       GITHUB_EVENT_NAME: event, GITHUB_SHA: eventSha,
       APPROVED_SHA: approvedSha, TARGET_SHA: targetSha,
-      NPX_MARKER: npxMarker, PATH: fakeBin + path.delimiter + process.env.PATH,
+      NPX_MARKER: npxMarker, FIREBASE_PROJECT: 'soridraw',
+      PATH: fakeBin + path.delimiter + process.env.PATH,
       GITHUB_OUTPUT: path.join(dir, 'gh-output'),
     },
   });

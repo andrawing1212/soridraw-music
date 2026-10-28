@@ -128,8 +128,9 @@ export const stageFirstChangedOwnerIndex518=async({
    // If R2 changed after our cheap HEAD check, never publish or rotate
    // against a different materialization. A later bounded attempt retries.
    if(checkedHead&&!sameHead(checkedHead,head))
-     return {code:'RETRYABLE_R2_HEAD_MOVED',complete:false,
-       r2FullReads:fullReads,d1RowsWritten:writes};
+     return {code:checkedHead.headRevision===head.headRevision
+       ?'HOLD_NON_MONOTONIC_STAGING_HEAD':'RETRYABLE_R2_HEAD_MOVED',
+       complete:false,r2FullReads:fullReads,d1RowsWritten:writes};
    if(previous?.status==='building'&&(previous.generation!==head.headRevision
      ||previous.indexed_revision!==head.headRevision
      ||previous.expected_count!==head.itemCount

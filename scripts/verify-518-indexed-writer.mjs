@@ -26,19 +26,17 @@ const make=()=>{
   async batch(stmts){
    if(failBatch){failBatch=false;throw Error('D1_CRASH_AFTER_R2_CAS');}
    const output=[];
-   const allow=(args,offset)=>{
-    const [owner,gen,rev,headEtag,count]=args.slice(offset);
-    return owner===uid&&gen===meta.generation&&rev===meta.indexed_revision
+   const allow=(owner,gen,rev,headEtag,count)=>
+    owner===uid&&gen===meta.generation&&rev===meta.indexed_revision
      &&headEtag===meta.head_etag&&count===meta.expected_count;
-   };
    for(const {sql,args} of stmts){
     let change=0;
     if(sql.startsWith('INSERT OR IGNORE INTO music_note_catalog_member_518')){
-     if(allow(args,3)&&!members.has(args[2])){members.add(args[2]);change=1;}
+     if(allow(...args.slice(1))&&!members.has(args[0])){members.add(args[0]);change=1;}
     }else if(sql.startsWith('DELETE FROM music_note_catalog_member_518')){
-     if(allow(args,3)&&members.delete(args[2]))change=1;
+     if(allow(args[0],args[1],...args.slice(3))&&members.delete(args[2]))change=1;
     }else if(sql.startsWith('UPDATE music_note_catalog_index_meta_518')){
-     if(allow(args,4)){
+     if(allow(...args.slice(4))){
       meta.indexed_revision=args[0];meta.head_etag=args[1];
       meta.expected_count=args[2];change=1;
      }

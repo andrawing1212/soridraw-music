@@ -6,7 +6,10 @@ import {CatalogR2ContractError518} from './catalogR2Provider518.js';
 const text=x=>typeof x==='string'?x.trim():'';
 const validId=x=>text(x).length>0&&text(x).length<=240&&
  !/[\\/]/.test(text(x))&&text(x)!=='.'&&text(x)!=='..';
+// Stop after 128KiB of source bytes per page as well as 256 IDs; otherwise
+// 256 unusually large entries could exceed Workers Free subrequest/CPU limits.
 const RANGE_BYTES=65536,MAX_ITEM_BYTES=131072,MAX_META_BYTES=8192;
+const MAX_PAGE_SOURCE_BYTES=131072;
 const contract=code=>{throw new CatalogR2ContractError518(code);};
 const prefix=uid=>'catalog/v5/'+encodeURIComponent(uid)+'/musicNote/';
 const decoder=new TextDecoder('utf-8',{fatal:true});
@@ -153,6 +156,7 @@ export const createR2BasePageReader518=({
    ids.push(text(item.id));
    seen++;
    if(seen>head.baseItemCount)contract('APP518_PAGED_TOO_MANY_ITEMS');
+   if(at-offset>=MAX_PAGE_SOURCE_BYTES)break;
   }
   return {ids,offset:at,seen,done:false,baseEtag,baseSize};
  };

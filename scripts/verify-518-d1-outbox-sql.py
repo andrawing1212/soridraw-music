@@ -44,9 +44,9 @@ assert enqueue(t2,"removed")==1
 assert enqueue(t1,"saved")==0,"old save cannot supersede remove"
 assert [dict(r)["source_version_ns"] for r in db.execute(due,(1000,32))]==[t2]
 assert changes(ack,(2000,uid,song,t1))==0,"late ACK must not mask pending delete"
-assert changes(retry,(6000,2000,uid,song,t1))==0,"late error must not delay newer delete"
-assert changes(retry,(6000,2000,uid,song,t2))==1
-assert not list(db.execute(due,(5000,32))),"retry must honor due index"
+assert changes(retry,(6000,2000,uid,song,t1,0))==0,"late error must not delay newer delete"
+assert changes(retry,(6000,2000,uid,song,t2,0))==1
+assert changes(retry,(6000,2000,uid,song,t2,0))==0, 'same failed attempt must be W0'\nassert not list(db.execute(due,(5000,32))),"retry must honor due index"
 assert len(list(db.execute(due,(6000,32))))==1
 assert changes(ack,(7000,uid,song,t2))==1
 assert changes(ack,(7000,uid,song,t2))==0,"idempotent ACK W0"

@@ -19,7 +19,8 @@ const sameHead=(a,b)=>safeHead(a)&&safeHead(b)
  &&a.itemCount===b.itemCount&&a.etag===b.etag;
 
 export const INDEX_META_READ_518=[
- 'SELECT generation,indexed_revision,expected_count,head_etag,status',
+ 'SELECT generation,indexed_revision,expected_count,head_etag,status,' +
+ 'recovery_generation,recovery_revision,recovery_etag,recovery_count',
  'FROM music_note_catalog_index_meta_518 WHERE owner_uid=?',
 ].join(' ');
 export const INDEX_META_BEGIN_518=[

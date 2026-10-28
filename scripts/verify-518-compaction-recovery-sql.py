@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Execute actual compaction recovery D1 SQL on SQLite in-memory; no Cloudflare calls."""
-import ast,pathlib,re,sqlite3
+import ast,pathlib,re,sqlite3,json
 root=pathlib.Path(__file__).resolve().parents[1]
 sql=(root/"cloudflare/media-worker/migrations/518_music_note_catalog_first_change_index.sql").read_text()
 source=(root/"cloudflare/media-worker/src/catalogCompactionRecovery518.js").read_text()
@@ -57,3 +57,31 @@ print("APP518_COMPACTION_ROTATE_SQL_OWNER_COOLDOWN_AND_BUDGET=PASS")
 print("APP518_RECOVERY_SQL_OWNER_AND_OLD_HEAD_CAS=PASS")
 print("APP518_RECOVERY_STAGE_INVISIBLE_UNTIL_GUARDED_PROMOTION=PASS")
 print("APP518_RECOVERY_NO_USER_DATA_OR_LIVE_D1_IO=PASS")
+
+# Real SQLite JSON1 bulk membership import on the exact new schema. 20,001
+# is above the historical hard cap. Duplicate pages must not double-write;
+# staging stays invisible until the exact HEAD is promoted by SQL CAS.
+index_source=(root/"cloudflare/media-worker/src/catalogFirstChangeIndex518.js").read_text()
+source=index_source
+bulk=extract("INDEX_MEMBER_BULK_STAGE_518")
+mark_ready=extract("INDEX_MARK_READY_518")
+large_uid="owner-over-20k"
+large_size=20001
+db.execute("INSERT INTO music_note_catalog_index_meta_518(owner_uid,generation,indexed_revision,expected_count,head_etag,status,checked_at_ms) VALUES(?,?,?,?,?,'building',?)",
+ (large_uid,300,300,large_size,'"large-head"',1000))
+sql_calls=0
+for start in range(0,large_size,512):
+ ids=["song-"+str(i) for i in range(start,min(start+512,large_size))]
+ assert changes(bulk,(large_uid,300,json.dumps(ids)))==len(ids)
+ sql_calls+=1
+assert sql_calls==40
+assert changes(bulk,(large_uid,300,json.dumps(["song-0","song-511"])))==0
+assert db.execute("SELECT expected_count,status FROM music_note_catalog_index_meta_518 WHERE owner_uid=?",(large_uid,)).fetchone()==(large_size,'building')
+assert db.execute("SELECT count(*) FROM music_note_catalog_member_518 WHERE owner_uid=? AND generation=?",(large_uid,300)).fetchone()[0]==large_size
+assert changes(mark_ready,(1100,large_uid,300,large_size,'"wrong-head"'))==0
+assert changes(mark_ready,(1100,"attacker",300,large_size,'"large-head"'))==0
+assert changes(mark_ready,(1100,large_uid,300,large_size,'"large-head"'))==1
+assert changes(mark_ready,(1101,large_uid,300,large_size,'"large-head"'))==0
+assert db.execute("SELECT status FROM music_note_catalog_index_meta_518 WHERE owner_uid=?",(large_uid,)).fetchone()==('ready',)
+assert db.execute("SELECT count(*) FROM music_note_catalog_member_518 WHERE owner_uid=? AND generation=?",(uid,113)).fetchone()[0]==2
+print("APP518_20001_SQLITE_JSON1_IMPORT_COUNT_CAS_AND_IDEMPOTENCE=PASS")

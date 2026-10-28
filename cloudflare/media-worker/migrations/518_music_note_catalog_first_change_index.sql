@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS music_note_catalog_index_meta_518 (
   owner_uid TEXT PRIMARY KEY NOT NULL CHECK(length(owner_uid) BETWEEN 1 AND 128),
   generation INTEGER NOT NULL CHECK(generation > 0),
+  indexed_revision INTEGER NOT NULL CHECK(indexed_revision > 0),
   expected_count INTEGER NOT NULL CHECK(expected_count BETWEEN 0 AND 20000),
   head_etag TEXT NOT NULL CHECK(length(head_etag) BETWEEN 1 AND 256),
   status TEXT NOT NULL CHECK(status IN ('building','ready')),

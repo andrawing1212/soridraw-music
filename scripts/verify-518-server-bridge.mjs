@@ -63,6 +63,48 @@ const retry=await bridge.drainServerPending({nowMs,limit:4});
 assert.equal(retry.code,'OK');
 assert.equal(retry.attempted,0);
 assert.equal(reads,1);assert.equal(d1Writes,1);
+// P1 bridge->delivery integration: transient first-index R2 failure
+// must schedule a bounded retry, not set a permanent outbox HOLD.
+// Uses the actual bridge/drain/staging modules, not a copied error string.
+const queuedRow={owner_uid:uid,favorite_id:documentId,
+ source_version_ns:version,desired_state:'saved',ack_version_ns:null,
+ attempt_count:0,next_attempt_ms:0,hold_reason:null};
+let retries=0,cloudReads=0,cloudPuts=0;
+const pendingDb={prepare(sql){return {bind(...args){return {
+ async first(){return null;}, // no existing owner index
+ async all(){return {results:queuedRow.hold_reason===null&&
+   queuedRow.next_attempt_ms<=args[0]?[{...queuedRow}]:[]};},
+ async run(){
+  if(!sql.includes('attempt_count=attempt_count+1'))
+   throw Error('unexpected bridge outbox write: '+sql);
+  assert.equal(args[4],queuedRow.source_version_ns);
+  assert.equal(args[5],queuedRow.attempt_count);
+  queuedRow.next_attempt_ms=args[0];queuedRow.attempt_count++;
+  retries++;return {meta:{changes:1}};
+ },
+};}};},async batch(){throw Error('no staging rows should be written');}};
+const transientBridge=build({env:{
+ ...env,CATALOG_OUTBOX_518:pendingDb,
+ CATALOG:{
+  async get(){cloudReads++;throw Error('transient R2 materialization failure');},
+  async put(){cloudPuts++;throw Error('unexpected R2 write');},
+ },
+}});
+assert.equal(transientBridge.enabled,true);
+const processed=await transientBridge.drainServerPending({nowMs,limit:4});
+assert.equal(processed.attempted,1);
+assert.equal(processed.acked,0);
+assert.equal(processed.retry,1);
+assert.equal(processed.held,0);
+assert.equal(queuedRow.hold_reason,null);
+assert.equal(queuedRow.attempt_count,1);
+assert.ok(queuedRow.next_attempt_ms>nowMs);
+assert.equal(retries,1);
+assert.equal(cloudReads,1);
+assert.equal(cloudPuts,0);
+assert.equal((await transientBridge.drainServerPending({nowMs,limit:4})).attempted,0);
+assert.equal(retries,1,'same due tick must not retry repeatedly');
+console.log('APP518_BRIDGE_TRANSIENT_INDEX_FAILURE_RETAINS_BOUNDED_RETRY=PASS');
 console.log('APP518_SIGNED_EVENT_FRESH_EXACT_FIRESTORE_BEFORE_D1=PASS');
 console.log('APP518_STALE_FOREIGN_UNSIGNED_EVENT_D1_W0=PASS');
 console.log('APP518_SHARED_RELEASE_FENCE_GATE_PREVENTS_BOOTSTRAP=PASS');

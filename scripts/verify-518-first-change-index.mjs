@@ -18,9 +18,9 @@ const mkdb=()=>{
    },
    async run(){
     if(sql.startsWith('INSERT OR IGNORE INTO music_note_catalog_index_meta_518')){
-     const [uid,generation,expected_count,head_etag,now]=args;
+     const [uid,generation,indexed_revision,expected_count,head_etag,now]=args;
      if(metas.has(uid))return {meta:{changes:0}};
-     metas.set(uid,{generation,expected_count,head_etag,status:'building',checked_at_ms:now});
+     metas.set(uid,{generation,indexed_revision,expected_count,head_etag,status:'building',checked_at_ms:now});
      stats.writes++;return {meta:{changes:1}};
     }
     if(sql.startsWith('UPDATE music_note_catalog_index_meta_518')){

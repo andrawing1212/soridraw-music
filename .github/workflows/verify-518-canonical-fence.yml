@@ -93,6 +93,7 @@ jobs:
           node scripts/verify-518-r2-binding.mjs
           node scripts/verify-518-server-transport.mjs
           node scripts/verify-518-server-bridge.mjs
+          npm --prefix functions ci --no-audit --no-fund
           npm --prefix functions run build
       - name: Protect existing next-song, publication, Music Note and local-first behaviors
         run: |

@@ -1,5 +1,5 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
-import {handleApp518FavoriteEvent} from "./app518LiveConnector";
+import {handleApp518FavoriteEvent,planApp518FavoriteChange} from "./app518LiveConnector";
 import {handleVerifiedApp518ExactSource} from "./app518ServerTransport";
 
 import { defineSecret } from "firebase-functions/params";
@@ -4498,6 +4498,13 @@ export const app518FavoriteCatalogChanged=functions
     const after=change.after.exists?change.after.data()||null:null;
     const uid=String(after?.uid||before?.uid||"");
     const id=String(context.params.favoriteId||"");
+    // Keep metadata-only saves at Firestore R0 / Cloudflare R0/W0 even
+    // if a future operational secret or Worker hostname is unavailable.
+    const plan=planApp518FavoriteChange({uid,documentId:id,before,after});
+    if(plan==="IGNORE")return;
+    if(plan==="DENY"){
+      console.warn("APP518_EVENT_DENIED_OWNER_OR_ID");return;
+    }
     const hostname=String(process.env.SORIDRAW_APP518_WORKER_HOST||"");
     const workerUrl=String(process.env.SORIDRAW_APP518_WORKER_URL||"");
     if(!hostname||!workerUrl)throw new Error("APP518_WORKER_UNPROVISIONED");
@@ -4509,6 +4516,9 @@ export const app518FavoriteCatalogChanged=functions
         secret:process.env.SORIDRAW_CATALOG_SERVER_HMAC_518||"",
         workerUrl,expectedHostname:hostname,nowMs:Date.now()},
     });
+    // Invalid source/receipt is a permanent fail-closed HOLD: never create
+    // an unbounded paid retry storm for an event that cannot be repaired.
+    // Transient transport/Firestore failures still throw for event retry.
     if(result.code.startsWith("DENY_")||result.code.startsWith("HOLD_"))
-      throw new Error("APP518_SOURCE_HOLD");
+      console.warn("APP518_EVENT_TERMINAL_HOLD",result.code);
   });

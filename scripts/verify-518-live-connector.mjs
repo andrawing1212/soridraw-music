@@ -13,6 +13,9 @@ assert.ok(match);
 const canonical=[...match[1].matchAll(/'([^']+)'/g)].map(x=>x[1]);
 assert.deepEqual([...APP518_MUSIC_NOTE_FIELDS],canonical,
   'Firebase event classifier must use the exact existing Worker projection');
+const {readExactApp518Source}=require('../functions/lib/app518CanonicalSourceProvider.js');
+const {createExactFirebaseFetcher518,CatalogFirebaseSourceHold518}
+ =await import('../cloudflare/media-worker/src/catalogFirebaseFetcher518.js');
 const uid='owner',documentId='favorite-1',timestamp='2026-10-28T13:00:00.000000123Z';
 const base={uid,title:'Song',saved:true,isPublic:false,
   audioUrl:'https://example.test/audio',appliedKeywords:{style:['indie']}};
@@ -24,6 +27,12 @@ assert.equal(plan(base,{...base,isPublic:true}),'RECHECK');
 assert.equal(plan(base,{...base,audioUrl:'https://example.test/b'}),'RECHECK');
 assert.equal(plan(base,{...base,appliedKeywords:{style:['lofi']}}),'RECHECK');
 assert.equal(plan(base,{...base,saved:false}),'RECHECK');
+for(const removed of [
+ {...base,hidden:true},{...base,favoriteHidden:true},
+ {...base,deletedAt:'2026-10-28'},{...base,trashedAt:'2026-10-28'},
+]){
+ assert.equal(plan(base,removed),'RECHECK');
+}
 assert.equal(plan(base,null),'DELETE_RECEIPT');
 assert.equal(plan(null,base),'RECHECK');
 assert.equal(plan(null,{uid,saved:false,favoriteRemoved:true}),'RECHECK',
@@ -84,6 +93,15 @@ assert.equal(reads,0);assert.equal(posts,0);assert.equal(writes,0);
 let result=await event(null,base);
 assert.equal(result.code,'ENQUEUED');
 assert.equal(reads,1);assert.equal(posts,1);assert.equal(writes,0);
+// Audit P1-1: each legacy exclusion marker must produce a removed source;
+ // no saved item may reach R2 as a bad projection and strand deletion.
+for(const marker of ['hidden','favoriteHidden','deletedAt','trashedAt']){
+ favorite={...base,[marker]:marker.endsWith('At')?'2026-10-28':true};
+ const canonical=await readExactApp518Source(db,uid,documentId);
+ assert.equal(canonical.code,'SOURCE_VERIFIED',marker);
+ assert.equal(canonical.source.state,'removed',marker);
+ assert.equal(canonical.source.item,undefined,marker);
+}
 favorite={...base,isPublic:true};
 result=await event(base,{...base,isPublic:true});
 assert.equal(result.code,'ENQUEUED');
@@ -99,6 +117,31 @@ const stale=await event(base,null,'hard-delete-1',timestamp);
 assert.equal(stale.code,'SKIP_NEWER_SAVE_PRESENT');
 assert.equal(writes,1,'delayed delete must not undo newer save');
 assert.equal(plan(base,{...base,uid:'foreign'}),'DENY');
+// Audit P1-2: immutable owner conflict is terminal; 503 stays retryable.
+const exactFetcher=createExactFirebaseFetcher518({
+ sourceUrl:'https://source.example.test/exact',expectedHostname:'source.example.test',
+ secret,clock:()=>nowMs,
+ fetcher:async()=>Response.json({code:'DENY_OWNER_OR_ABSENT'},{status:409}),
+});
+await assert.rejects(exactFetcher(uid,documentId),error=>
+ error instanceof CatalogFirebaseSourceHold518&&error.code==='DENY_OWNER_OR_ABSENT');
+const badJsonFetcher=createExactFirebaseFetcher518({
+ sourceUrl:'https://source.example.test/exact',expectedHostname:'source.example.test',
+ secret,clock:()=>nowMs,
+ fetcher:async()=>new Response('{broken',{status:200}),
+});
+await assert.rejects(badJsonFetcher(uid,documentId),error=>
+ error instanceof CatalogFirebaseSourceHold518);
+const temporaryFetcher=createExactFirebaseFetcher518({
+ sourceUrl:'https://source.example.test/exact',expectedHostname:'source.example.test',
+ secret,clock:()=>nowMs,
+ fetcher:async()=>Response.json({code:'HOLD_NO_HARD_DELETE_RECEIPT'},{status:409}),
+});
+await assert.rejects(temporaryFetcher(uid,documentId),error=>
+ !(error instanceof CatalogFirebaseSourceHold518));
+const rulesSource=readFileSync('firestore.rules','utf8');
+assert.ok(/allow update: if isAuthenticated\(\)[\s\S]*?request\.resource\.data\.uid == resource\.data\.uid;/.test(rulesSource),
+ 'favorite uid must be immutable even under owner/admin update');
 const off=await worker.fetch(new Request(
  'https://soridraw-media-preview.example.test/v1/server/catalog518',{method:'POST',
  headers:{'content-type':'application/json'},body:'{}'}),{

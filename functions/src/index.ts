@@ -4503,7 +4503,13 @@ export const app518FavoriteCatalogChanged=functions
     const plan=planApp518FavoriteChange({uid,documentId:id,before,after});
     if(plan==="IGNORE")return;
     if(plan==="DENY"){
-      console.warn("APP518_EVENT_DENIED_OWNER_OR_ID");return;
+      // Old existing documents may have crossed owner UIDs before Rules
+      // enforce immutability. Do not guess an owner or forge a removal.
+      // Keep an explicit privacy-safe operational reconciliation alert.
+      if(before?.uid&&after?.uid&&before.uid!==after.uid)
+        console.error("APP518_OWNER_UID_CHANGE_MANUAL_RECONCILIATION_REQUIRED");
+      else console.warn("APP518_EVENT_DENIED_OWNER_OR_ID");
+      return;
     }
     const hostname=String(process.env.SORIDRAW_APP518_WORKER_HOST||"");
     const workerUrl=String(process.env.SORIDRAW_APP518_WORKER_URL||"");

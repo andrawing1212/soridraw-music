@@ -53,7 +53,11 @@ const sourceFromFavorite=(uid:string,id:string,snap:admin.firestore.DocumentSnap
   if(!snap.exists||!data||data.uid!==uid)return {code:"DENY_OWNER_OR_ABSENT"};
   const updateTime=fromTimestamp(snap.updateTime);
   if(!updateTime)return {code:"DENY_NO_SERVER_UPDATE_TIME"};
-  const removed=data.favoriteRemoved===true||data.saved===false;
+  // Match the existing Media Worker Music Note projection exclusion exactly.
+  // A hidden/trashed item is a canonical removal, not an invalid saved item.
+  const removed=data.favoriteRemoved===true||data.saved===false
+    ||data.hidden===true||data.favoriteHidden===true
+    ||Boolean(data.deletedAt)||Boolean(data.trashedAt);
   const item=removed?undefined:{...data,id,uid};
   return {code:"SOURCE_VERIFIED",source:{
     uid,documentId:id,verifiedByServer:true,origin:"server-exact-read",

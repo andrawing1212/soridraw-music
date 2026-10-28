@@ -16,7 +16,7 @@ import {
 import { decideCatalogWriterAuthority518, classifyCatalogAuthority518 } from './catalogAuthorityPolicy518.js';
 import { FENCE_CONTRACT_518 } from './catalogSharedWriterRolloutGate518.js';
 import {createApp518ServerBridge} from './catalogServerBridge518.js';
-import {createExactFirebaseFetcher518} from './catalogFirebaseFetcher518.js';
+import {createExactFirebaseFetcher518,CatalogFirebaseSourceHold518} from './catalogFirebaseFetcher518.js';
 
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -1293,7 +1293,9 @@ const handleApp518ServerRoute=async(request,env,ctx)=>{
     const status=reply.code==='ENQUEUED'||reply.code==='STALE_OR_DUPLICATE'
       ||reply.code==='STALE_SIGNED_EVENT_NO_WRITE'?200:409;
     return jsonResponse({code:reply.code},status);
-  }catch{
+  }catch(error){
+    if(error instanceof CatalogFirebaseSourceHold518)
+      return jsonResponse({code:'HOLD_EXACT_SOURCE_CONTRACT'},409);
     return jsonResponse({code:'HOLD_APP518_SERVER_IO_RETRY'},503);
   }
 };

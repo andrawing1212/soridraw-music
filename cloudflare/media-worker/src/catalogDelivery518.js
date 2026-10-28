@@ -4,6 +4,7 @@
 // A returned HTTP 200 or ordinary legacy Catalog delta is NEVER an ACK.
 import {parseFirestoreUpdateTimeNs518} from './catalogCanonicalFence518.js';
 import {CatalogR2ContractError518} from './catalogR2Provider518.js';
+import {CatalogFirebaseSourceHold518} from './catalogFirebaseFetcher518.js';
 import {
  getDueFavoriteChanges518,enqueueVerifiedFavorite518,
  acknowledgeExactFavorite518,scheduleFailedFavorite518,holdExactFavorite518,
@@ -127,6 +128,14 @@ export const deliverDueCanonicalFavorites518=async({
    }catch(error){
      // Also protect direct R2 provider calls (e.g. a READY index writer)
      // from downgrading foreign-owner/corrupt R2 authority to transient IO.
+     if(error instanceof CatalogFirebaseSourceHold518){
+       const held=await holdExactFavorite518({
+         db,uid,documentId:id,sourceVersionNs:version,nowMs,
+         reason:'SOURCE_CONTRACT',
+       });
+       if(held.code==='HELD')result.held++;
+       continue;
+     }
      if(error instanceof CatalogR2ContractError518){
        const held=await holdExactFavorite518({
          db,uid,documentId:id,sourceVersionNs:version,nowMs,

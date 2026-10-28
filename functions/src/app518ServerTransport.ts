@@ -111,6 +111,18 @@ export const dispatchApp518VerifiedEnqueue=async({
   }});
   const response=await post(dest.href,{method:"POST",headers:signed.headers,
     body:signed.body,redirect:"error"});
+  // A verified Worker 409 containing a known terminal source/owner code is
+  // NOT a transport outage. Keep it terminal (no unbounded Firebase retry).
+  // 5xx, malformed responses, and network failures still retry.
+  if(response.status===409){
+    let conflict:{code?:unknown};
+    try{conflict=await response.json() as {code?:unknown};}
+    catch{throw Error("APP518_WORKER_ENQUEUE_RETRYABLE");}
+    if(typeof conflict?.code==="string"
+      &&/^(DENY|HOLD)_[A-Z0-9_]{1,100}$/.test(conflict.code)
+      &&conflict.code!=="HOLD_APP518_SERVER_IO_RETRY")
+      return {code:conflict.code};
+  }
   if(!response.ok)throw Error("APP518_WORKER_ENQUEUE_RETRYABLE");
   const result=await response.json() as {code?:string};
   if(!["ENQUEUED","STALE_OR_DUPLICATE","STALE_SIGNED_EVENT_NO_WRITE"].includes(result?.code||""))

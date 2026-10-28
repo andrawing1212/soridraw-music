@@ -7,7 +7,7 @@
  */
 import {createHmac,timingSafeEqual} from "node:crypto";
 import * as admin from "firebase-admin";
-import {readExactApp518Source} from "./app518CanonicalSourceProvider";
+import {readExactApp518Source, type App518Source} from "./app518CanonicalSourceProvider";
 const valid=(s:string,n=240)=>s.length>0&&s.length<=n&&!/[\\/]/.test(s);
 export type App518ServicePayload={
  action:"enqueue"|"exact-source"|"retry";

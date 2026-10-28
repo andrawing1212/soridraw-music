@@ -20,7 +20,21 @@ const mkdb=()=>{
     if(sql.startsWith('INSERT OR IGNORE INTO music_note_catalog_index_meta_518')){
      const [uid,generation,indexed_revision,expected_count,head_etag,now]=args;
      if(metas.has(uid))return {meta:{changes:0}};
-     metas.set(uid,{generation,indexed_revision,expected_count,head_etag,status:'building',checked_at_ms:now});
+     metas.set(uid,{generation,indexed_revision,expected_count,head_etag,status:'building',checked_at_ms:now,restart_count:0});
+     stats.writes++;return {meta:{changes:1}};
+    }
+    if(sql.startsWith('UPDATE music_note_catalog_index_meta_518')
+       &&sql.includes('SET generation=?')){
+     const [gen,indexRev,count,etag,now,uid,oldGen,oldRev,
+       oldCount,oldEtag,cutoff]=args;
+     const row=metas.get(uid);
+     if(!row||row.status!=='building'||row.generation!==oldGen
+       ||row.indexed_revision!==oldRev||row.expected_count!==oldCount
+       ||row.head_etag!==oldEtag||row.restart_count>=3
+       ||row.checked_at_ms>cutoff)return {meta:{changes:0}};
+     Object.assign(row,{generation:gen,indexed_revision:indexRev,
+       expected_count:count,head_etag:etag,checked_at_ms:now,
+       restart_count:row.restart_count+1});
      stats.writes++;return {meta:{changes:1}};
     }
     if(sql.startsWith('UPDATE music_note_catalog_index_meta_518')){
@@ -108,6 +122,62 @@ const resumed=await run(store.db);
 assert.equal(resumed.code,'INDEX_READY');
 assert.equal(store.stats.writes,previousWrites+1);
 assert.equal(store.members.size,301);
+// A stale, invisible 301-song import may advance only after a NEWER
+// server-verified R2 revision; old staged rows never become READY.
+store=mkdb();
+const stageMoved=await run(store.db,{readR2HeadAgain:async()=>moved});
+assert.equal(stageMoved.code,'RETRYABLE_R2_HEAD_MOVED');
+assert.equal(store.metas.get(owner).status,'building');
+const newerSnap={...snap,head:moved,items:[...items,{id:'f-301'}]};
+assert.equal((await run(store.db,{nowMs:200,
+ loadMaterializedR2Once:async()=>newerSnap,
+ readR2HeadAgain:async()=>moved})).code,'RETRYABLE_STAGE_RESTART_COOLDOWN');
+assert.equal(store.metas.get(owner).generation,head.headRevision);
+assert.equal((await run(store.db,{nowMs:60012,
+ loadMaterializedR2Once:async()=>newerSnap,
+ readR2HeadAgain:async()=>moved})).code,'INDEX_READY');
+assert.equal(store.metas.get(owner).generation,moved.headRevision);
+assert.equal(store.metas.get(owner).restart_count,1);
+assert.equal(store.members.size,603,'old 301 staged + new 302 isolated');
+assert.equal((await readIndexedMembership518({
+ db:store.db,uid:owner,documentId:'f-301',r2Head:moved})).present,true);
+assert.equal((await readIndexedMembership518({
+ db:store.db,uid:owner,documentId:'f-1',r2Head:head})).code,
+ 'DENY_INDEX_HEAD_DRIFT');
+
+// If the supposed replacement uses the same revision but different ETag,
+// never silently recycle an index generation.
+store=mkdb();
+assert.equal((await run(store.db,{readR2HeadAgain:async()=>moved})).code,
+ 'RETRYABLE_R2_HEAD_MOVED');
+const suspicious={...snap,head:{...head,etag:'"foreign"'}};
+assert.equal((await run(store.db,{nowMs:60012,
+ loadMaterializedR2Once:async()=>suspicious})).code,
+ 'HOLD_NON_MONOTONIC_STAGING_HEAD');
+
+// A hot owner may exhaust at most three version rotations: fail closed
+// instead of creating infinitely many full R2 reads and D1 staging writes.
+store=mkdb();
+assert.equal((await run(store.db,{readR2HeadAgain:async()=>moved})).code,
+ 'RETRYABLE_R2_HEAD_MOVED');
+for(let i=1;i<=3;i++){
+ const nextHead={...head,headRevision:head.headRevision+i,
+   itemCount:301,etag:'"new-'+i+'"'};
+ const next={...snap,head:nextHead};
+ assert.equal((await run(store.db,{nowMs:60010*i,
+   loadMaterializedR2Once:async()=>next,
+   readR2HeadAgain:async()=>({...nextHead,etag:'"other-'+i+'"'})})).code,
+   'RETRYABLE_R2_HEAD_MOVED');
+ assert.equal(store.metas.get(owner).restart_count,i);
+}
+const lastHead={...head,headRevision:head.headRevision+4,etag:'"new-4"'};
+const written=store.stats.writes;
+assert.equal((await run(store.db,{nowMs:300000,
+ loadMaterializedR2Once:async()=>({...snap,head:lastHead})})).code,
+ 'HOLD_STAGE_RESTART_BUDGET_EXHAUSTED');
+assert.equal(store.stats.writes,written,'exhausted must not write');
+assert.equal(store.metas.get(owner).status,'building');
+
 store=mkdb();
 const tooMany=Array.from({length:20001},(_,n)=>({id:'f-'+n}));
 const overflow=await run(store.db,{loadMaterializedR2Once:async()=>({
@@ -115,6 +185,7 @@ const overflow=await run(store.db,{loadMaterializedR2Once:async()=>({
 assert.equal(overflow.code,'DENY_UNVERIFIED_OR_OVERSIZED_SNAPSHOT');
 assert.equal(store.stats.writes,0);
 
+console.log('APP518_FIRST_INDEX_STALE_HEAD_ROTATION_BOUNDED_AND_OWNER_SAFE=PASS');
 console.log('APP518_FIRST_CONFIRMED_CHANGE_ONLY_INDEX_IMPORT=PASS');
 console.log('APP518_OWNER_INDEX_128_ROW_BATCH_AND_READY_HEAD_CHECK=PASS');
 console.log('APP518_CRASH_RESUME_AND_R2_RACE_FAIL_CLOSED=PASS');

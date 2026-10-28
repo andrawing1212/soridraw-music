@@ -63,6 +63,12 @@ jobs:
         working-directory: cloudflare/media-worker
         run: npm run check
 
+      - name: Preflight shared Catalog authority compatibility (no deployment)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-356-shared-private-catalog-authority.mjs
+
       - name: Verify existing private R2 bindings (no bucket creation)
         working-directory: cloudflare/media-worker
         shell: bash

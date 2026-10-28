@@ -65,12 +65,14 @@ export const createApp518ServerBridge=({
   return {code:queued.code,accepted:queued.code==='ENQUEUED',
    d1Writes:queued.d1Writes};
  };
- const drainServerPending=async({nowMs,limit=16}={})=>{
+ // Workers Free: one confirmed source per invocation. A 16-owner batch
+ // could multiply the single-owner D1/R2 page budget past Free limits.
+ const drainServerPending=async({nowMs,limit=1}={})=>{
   if(!enabled)return {code:'HOLD_RELEASE_OR_SERVER_DEPENDENCIES'};
   // One due batch only. Caller must be an authenticated server scheduler,
   // never the same public URL as browser GET/POST.
   return deliverDueCanonicalFavorites518({
-   db,nowMs,maxItems:limit,readExactCanonical,
+   db,nowMs,maxItems:1,readExactCanonical,
    applyVersionedR2:async({uid,documentId,sourceVersionNs,
      desiredState,canonical})=>{
     // First confirmed mutation owner index; one-off full R2 read only when

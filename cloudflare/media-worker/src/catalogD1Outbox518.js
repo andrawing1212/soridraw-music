@@ -16,7 +16,7 @@ export const UPSERT_CANONICAL_518=[
  'ON CONFLICT(owner_uid,favorite_id) DO UPDATE SET',
  'source_version_ns=excluded.source_version_ns,',
  'desired_state=excluded.desired_state,',
- 'attempt_count=0, next_attempt_ms=0, hold_reason=NULL, updated_at_ms=excluded.updated_at_ms',
+ 'attempt_count=0, manual_recovery_count=0, next_attempt_ms=0, hold_reason=NULL, updated_at_ms=excluded.updated_at_ms',
  'WHERE excluded.source_version_ns > music_note_catalog_outbox_518.source_version_ns',
 ].join('\n');
 export const SELECT_DUE_518=[
@@ -71,8 +71,16 @@ export const HOLD_EXACT_518=[
  'AND (ack_version_ns IS NULL OR ack_version_ns != source_version_ns)',
  'AND hold_reason IS NULL',
 ].join('\n');
+// Server-only, signed recovery: same version, owner, state and one attempt.
+export const RESUME_EXHAUSTED_EXACT_518=[
+ 'UPDATE music_note_catalog_outbox_518',
+ 'SET hold_reason=NULL,attempt_count=0,manual_recovery_count=1,next_attempt_ms=?,updated_at_ms=?',
+ 'WHERE owner_uid=? AND favorite_id=? AND source_version_ns=?',
+ 'AND desired_state=? AND hold_reason=? AND manual_recovery_count=0',
+ 'AND (ack_version_ns IS NULL OR ack_version_ns != source_version_ns)',
+].join('\n');
 export const READ_ONE_518=[
- 'SELECT owner_uid,favorite_id,source_version_ns,desired_state,ack_version_ns,attempt_count,next_attempt_ms,hold_reason',
+ 'SELECT owner_uid,favorite_id,source_version_ns,desired_state,ack_version_ns,attempt_count,next_attempt_ms,hold_reason,manual_recovery_count',
  'FROM music_note_catalog_outbox_518 WHERE owner_uid=? AND favorite_id=?',
 ].join('\n');
 
@@ -110,6 +118,24 @@ export const acknowledgeExactFavorite518=async({
    nowMs,text(uid),text(documentId),sourceVersionNs).run();
  const writes=Math.max(0,Number(result?.meta?.changes||0));
  return {code:writes===1?'ACKED':'STALE_OR_ALREADY_ACKED',d1Writes:writes};
+};
+export const resumeExhaustedExactFavorite518=async({
+ db,uid,documentId,sourceUpdateTime,state,verifiedByServer,nowMs,
+}={})=>{
+ if(!database(db)||!okUid(uid)||!okId(documentId)
+   ||!okState(state)||verifiedByServer!==true||!epoch(nowMs))
+  return {code:'DENY_UNVERIFIED_RECOVERY',d1Writes:0};
+ const version=parseFirestoreUpdateTimeNs518(sourceUpdateTime);
+ if(!version||!Number.isSafeInteger(nowMs+60000))
+  return {code:'DENY_UNVERIFIED_RECOVERY',d1Writes:0};
+ const next=nowMs+60000;
+ const result=await db.prepare(RESUME_EXHAUSTED_EXACT_518).bind(
+  next,nowMs,text(uid),text(documentId),version,state,
+  'RETRY_BUDGET_EXHAUSTED',
+ ).run();
+ const writes=Math.max(0,Number(result?.meta?.changes||0));
+ return {code:writes===1?'RETRY_ARMED':'RECOVERY_NOT_ELIGIBLE',
+  d1Writes:writes,retryAtMs:writes?next:undefined};
 };
 // Persistent source-outbox rows are never deleted. Once the bounded retry
 // budget is exhausted the same version is HELD instead of polling hourly

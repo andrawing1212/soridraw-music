@@ -25,6 +25,7 @@ ack=stmt("ACK_EXACT_518")
 retry=stmt("REQUEUE_EXACT_518")
 hold=stmt("HOLD_EXACT_518")
 exact=stmt("READ_ONE_518")
+resume=stmt("RESUME_EXHAUSTED_EXACT_518")
 t1="1793152800000000001".zfill(21)
 t2="1793152800000000002".zfill(21)
 t3="1793152800000000003".zfill(21)
@@ -80,6 +81,26 @@ assert any(row["owner_uid"]==uid and row["favorite_id"]==song
  for row in db.execute(due,(9999999999,256))),"verified newer version wakes held row"
 print("APP518_D1_TERMINAL_HOLD_ONCE_AND_NO_REPEAT_DUE=PASS")
 print("APP518_D1_HELD_PENDING_PRESERVED_NEWER_SOURCE_REACTIVATES=PASS")
+
+# Audit P2: one exact generation may restart only once after operator
+# explicitly verifies the current source, never for INDEX/SOURCE contract.
+t6="1793152800000000006".zfill(21)
+assert enqueue(t6,"removed")==1
+assert changes(hold,("RETRY_BUDGET_EXHAUSTED",20000,uid,song,t6))==1
+assert changes(resume,(80000,20000,uid,song,t6,"removed","RETRY_BUDGET_EXHAUSTED"))==1
+assert changes(resume,(80000,20000,uid,song,t6,"removed","RETRY_BUDGET_EXHAUSTED"))==0
+assert db.execute(exact,(uid,song)).fetchone()["manual_recovery_count"]==1
+assert not list(db.execute(due,(79999,32))),"manual recovery is delayed"
+assert len(list(db.execute(due,(80000,32))))==1
+assert changes(hold,("RETRY_BUDGET_EXHAUSTED",81000,uid,song,t6))==1
+assert changes(resume,(141000,81000,uid,song,t6,"removed","RETRY_BUDGET_EXHAUSTED"))==0
+assert changes(resume,(141000,81000,uid,song,t6,"saved","RETRY_BUDGET_EXHAUSTED"))==0
+assert changes(resume,(141000,81000,uid,song,t4,"removed","RETRY_BUDGET_EXHAUSTED"))==0
+assert enqueue("1793152800000000007".zfill(21),"saved")==1
+assert db.execute(exact,(uid,song)).fetchone()["manual_recovery_count"]==0
+assert changes(resume,(141000,81000,uid,song,t6,"removed","RETRY_BUDGET_EXHAUSTED"))==0
+print("APP518_MANUAL_EXACT_SOURCE_ONE_RESTART_PER_VERSION=PASS")
+print("APP518_PERMANENT_CONTRACT_HOLD_NOT_AUTO_RELEASED=PASS")
 
 # Cross-owner isolation and no whole-user scan.
 assert enqueue(t2,"removed","owner-2")==1

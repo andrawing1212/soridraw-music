@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS music_note_catalog_outbox_518 (
   desired_state TEXT NOT NULL CHECK(desired_state IN ('saved','removed')),
   ack_version_ns TEXT,
   attempt_count INTEGER NOT NULL DEFAULT 0 CHECK(attempt_count >= 0),
+  -- At most one explicitly authorized recovery for each source generation.
+  manual_recovery_count INTEGER NOT NULL DEFAULT 0 CHECK(manual_recovery_count IN (0,1)),
   -- NULL=eligible; terminal HOLD retains latest pending source without polling.
   hold_reason TEXT CHECK(hold_reason IS NULL OR length(hold_reason) BETWEEN 1 AND 80),
   next_attempt_ms INTEGER NOT NULL DEFAULT 0,

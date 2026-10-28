@@ -64,6 +64,12 @@ const retry=await bridge.drainServerPending({nowMs,limit:4});
 assert.equal(retry.code,'OK');
 assert.equal(retry.attempted,0);
 assert.equal(reads,1);assert.equal(d1Writes,1);
+const signedRetry=await bridge.ingestSignedRequest({
+ request:sign({action:'retry',uid,documentId}),nowMs,
+});
+assert.equal(signedRetry.code,'RETRY_ARMED');
+assert.equal(signedRetry.d1Writes,1);
+assert.equal(d1Writes,2);
 // P1 bridge->delivery integration: transient first-index R2 failure
 // must schedule a bounded retry, not set a permanent outbox HOLD.
 // Uses the actual bridge/drain/staging modules, not a copied error string.

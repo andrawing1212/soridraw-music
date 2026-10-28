@@ -6,7 +6,7 @@
 import {verifyServerRequest518} from './catalogServerAuth518.js';
 import {parseFirestoreUpdateTimeNs518} from './catalogCanonicalFence518.js';
 import {createOwnerR2Provider518} from './catalogR2Provider518.js';
-import {enqueueVerifiedFavorite518} from './catalogD1Outbox518.js';
+import {enqueueVerifiedFavorite518,resumeExhaustedExactFavorite518} from './catalogD1Outbox518.js';
 import {deliverDueCanonicalFavorites518} from './catalogDelivery518.js';
 import {stageFirstChangedOwnerIndex518,INDEX_META_READ_518} from './catalogFirstChangeIndex518.js';
 import {createR2BasePageReader518} from './catalogR2BasePages518.js';
@@ -43,9 +43,19 @@ export const createApp518ServerBridge=({
   if(verified.code!=='VERIFIED_SERVER_REQUEST')return deny(verified.code);
   const payload=verified.payload;
   if(payload.action==='retry'){
-   // Dedicated server scheduler may invoke this after security/cost review.
-   // Never use browser action to drain another owner's pending changes.
-   return {code:'RETRY_READY',accepted:true};
+   // Only an explicitly signed server request may manually resume one
+   // exhausted generation. Verify owner/source before the conditional D1 W1.
+   const current=await readExactCanonical(payload.uid,payload.documentId);
+   if(!validItem(current)||current.uid!==payload.uid
+     ||current.documentId!==payload.documentId)
+    return deny('HOLD_RECOVERY_SOURCE_UNVERIFIED');
+   const resumed=await resumeExhaustedExactFavorite518({
+    db,uid:current.uid,documentId:current.documentId,
+    sourceUpdateTime:current.updateTime,state:current.state,
+    verifiedByServer:true,nowMs,
+   });
+   return {code:resumed.code,accepted:resumed.code==='RETRY_ARMED',
+    d1Writes:resumed.d1Writes};
   }
   if(payload.action!=='enqueue')return deny('DENY_ACTION');
   const canonical=await readExactCanonical(payload.uid,payload.documentId);

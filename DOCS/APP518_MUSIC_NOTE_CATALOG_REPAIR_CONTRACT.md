@@ -358,3 +358,11 @@
 - **릴리스 차단 유지:** 이 Worker `index.js`의 Git blob이 새 코드로 변했지만 현재 3개 배포 워크플로는 이전 독립 감사 기준 blob만 승인한다. 따라서 **이 SHA의 직접 배포는 immutable SHA 보호로 거절**된다. 이 안전장치를 임의로 해제·갱신하지 않음.
 
 **미완료(운영 승인과 실환경 증거가 필요한 부분):** 공유 R2 Writer PREVIEW/TEST/PRODUCTION 전체 호환 확인·구형 in-flight 종료, 실제 Cloudflare API Editor 및 구형 실행 위험, D1 migration/binding, Secret 양쪽 프로비저닝, Firebase Functions 선택 배포, Worker HTTPS 콜백 주소 고정, 재시도 cron 연결 및 Workers Free CPU·D1/R2 계측, PC↔모바일 로그인 상태에서 저장·삭제 반영 및 결함곡 단건 복구. 이 소스 후보를 사용자 저장곡 오류 해결 완료 또는 실제 Firebase↔Worker 성공으로 표시하지 않는다. **PR #528 Draft / RELEASE HOLD / NO-GO 유지.**
+
+
+## app518 감사 P1/P2 후속 최소 수정 — RELEASE HOLD
+
+- P1: hidden/favoriteHidden/deletedAt/trashedAt 제거 의미를 Firebase exact source와 기존 Worker에서 일치. Firestore 409 owner/receipt/schema 오류는 terminal HOLD, 삭제 receipt 선후 경쟁 및 5xx/IO는 제한 재시도. D1 delivery source-contract error 즉시 HOLD.
+- P1: favorites uid 변경을 Firestore Rules 소스에서 거부. 이전에 발생했을 수 있는 uid 이동은 감사 기록으로 명확히 경고하고 소유자를 추정해 R2를 자동 수정하지 않음. 실제 공유 Rules 미배포, 과거 원본 보정 미실시.
+- P2: D1 outbox 재시도 8회 소진 시 영구 자동 HOLD 유지. 명시적 HMAC 서명 서버 단건 retry에 한하여 최신 정확한 UID·documentId·source-version·state를 확인한 후 60초 지연 일회성 재개. 같은 source-version에서 두 번째 재개 불가, INDEX_CONTRACT/SOURCE_CONTRACT 자동 해제 불가. 스키마 변경·실환경 migration 미실행.
+- 세 환경 Cloudflare/Firebase·Secrets·cron·user data 변경, 실제 배포·병합 없음. 실제 ACK/PC↔mobile/구형 Worker 전면 보호/월비용 검증 전 NO-GO. 새로운 SHA 독립 재감사 필요.

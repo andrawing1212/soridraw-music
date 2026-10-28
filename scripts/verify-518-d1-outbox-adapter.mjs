@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {
  enqueueVerifiedFavorite518, getDueFavoriteChanges518,
  acknowledgeExactFavorite518, scheduleFailedFavorite518,
- boundedRetryDelay518, readExactOutbox518,
+ boundedRetryDelay518, readExactOutbox518,resumeExhaustedExactFavorite518,
  MAX_RETRY_ATTEMPTS_518,holdExactFavorite518,
 } from '../cloudflare/media-worker/src/catalogD1Outbox518.js';
 const owner='u1',documentId='saved1',nowMs=1793152800000;
@@ -64,6 +64,19 @@ const held=await holdExactFavorite518({
 });
 assert.equal(held.code,'HELD');
 assert.ok(sql.some(v=>v.includes('SET hold_reason=?')));
+const refused=await resumeExhaustedExactFavorite518({
+ db:fake,uid:owner,documentId,sourceUpdateTime:updateTime,
+ state:'saved',verifiedByServer:false,nowMs,
+});
+assert.equal(refused.code,'DENY_UNVERIFIED_RECOVERY');
+const resumed=await resumeExhaustedExactFavorite518({
+ db:fake,uid:owner,documentId,sourceUpdateTime:updateTime,
+ state:'saved',verifiedByServer:true,nowMs,
+});
+assert.equal(resumed.code,'RETRY_ARMED');
+assert.equal(resumed.retryAtMs,nowMs+60000);
+assert.ok(sql.some(v=>v.includes('manual_recovery_count=0')));
+assert.ok(sql.some(v=>v.includes('manual_recovery_count=1')));
 assert.equal((await holdExactFavorite518({
  db:fake,uid:owner,documentId,sourceVersionNs:a.sourceVersionNs,
  nowMs,reason:'private user-data-in-error',

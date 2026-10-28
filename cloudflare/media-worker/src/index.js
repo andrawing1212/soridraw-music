@@ -1291,7 +1291,7 @@ const handleApp518ServerRoute=async(request,env,ctx)=>{
       else await drain;
     }
     const status=reply.code==='ENQUEUED'||reply.code==='STALE_OR_DUPLICATE'
-      ||reply.code==='STALE_SIGNED_EVENT_NO_WRITE'?200:409;
+      ||reply.code==='STALE_SIGNED_EVENT_NO_WRITE'||reply.code==='RETRY_ARMED'?200:409;
     return jsonResponse({code:reply.code},status);
   }catch(error){
     if(error instanceof CatalogFirebaseSourceHold518)

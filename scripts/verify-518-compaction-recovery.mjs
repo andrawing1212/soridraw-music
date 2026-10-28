@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {CatalogR2ContractError518} from '../cloudflare/media-worker/src/catalogR2Provider518.js';
 import {createEmptyCatalogJournal} from '../cloudflare/media-worker/src/catalogJournal.js';
 import {recoverCompactedOwnerIndex518}
  from '../cloudflare/media-worker/src/catalogCompactionRecovery518.js';
@@ -213,6 +214,25 @@ assert.equal((await t.run({loadCompleteFencedOwnerR2:async()=>({
  ...snap,items:[...snap.items.slice(0,300),snap.items[0]]
 })})).code,'DENY_BAD_OR_DUPLICATE_ID');
 assert.equal(t.counters().writes,0);
+// Work P2: a foreign-owner BASE during READY compaction is a permanent
+// source contract failure, never a generic IO retry. Temporary R2 stream
+// errors remain retryable without modifying visible READY membership.
+t=make();
+r=await t.run({loadCompleteFencedOwnerR2:async()=>{
+ throw new CatalogR2ContractError518('APP518_MISSING_OR_FOREIGN_BASE');
+}});
+assert.equal(r.code,'DENY_RECOVERY_R2_CONTRACT');
+assert.equal(r.d1Writes,0);assert.equal(t.counters().writes,0);
+assert.equal(t.meta.generation,oldGen);
+assert.equal(t.meta.recovery_generation,null);
+t=make();
+r=await t.run({loadCompleteFencedOwnerR2:async()=>{
+ throw new Error('TEMP_R2_BASE_STREAM_FAILURE');
+}});
+assert.equal(r.code,'RETRYABLE_RECOVERY_IO');
+assert.equal(r.d1Writes,0);assert.equal(t.counters().writes,0);
+assert.equal(t.meta.generation,oldGen);
+console.log('APP518_RECOVERY_FOREIGN_R2_CONTRACT_DENY_VS_TRANSIENT_IO_RETRY=PASS');
 console.log('APP518_COMPACTION_MOVED_HEAD_ROTATE_WITH_COOLDOWN_AND_3_RETRY_LIMIT=PASS');
 console.log('APP518_COMPACTION_OWNER_STAGE_AND_ATOMIC_GENERATION_SWAP=PASS');
 console.log('APP518_COMPACTION_CRASH_RESUME_WITHOUT_REWRITING_N=PASS');

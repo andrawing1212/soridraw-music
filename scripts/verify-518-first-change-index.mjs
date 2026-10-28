@@ -64,7 +64,8 @@ const mkdb=()=>{
  };
  return {db,metas,members,stats};
 };
-const owner='owner-1',head={headRevision:1793,itemCount:301,etag:'"stable-head"'};
+const owner='owner-1',head={headRevision:1793,itemCount:301,etag:'"stable-head"',
+ verifiedByServer:true,ownerUid:owner,fencedWritersVerified:true};
 const items=Array.from({length:301},(_,n)=>({id:'f-'+n}));
 const snap={verifiedByServer:true,ownerUid:owner,kind:'musicNote',
  complete:true,head,items};
@@ -129,9 +130,17 @@ const stageMoved=await run(store.db,{readR2HeadAgain:async()=>moved});
 assert.equal(stageMoved.code,'RETRYABLE_R2_HEAD_MOVED');
 assert.equal(store.metas.get(owner).status,'building');
 const newerSnap={...snap,head:moved,items:[...items,{id:'f-301'}]};
-assert.equal((await run(store.db,{nowMs:200,
- loadMaterializedR2Once:async()=>newerSnap,
- readR2HeadAgain:async()=>moved})).code,'RETRYABLE_STAGE_RESTART_COOLDOWN');
+let forbiddenFullReads=0,cheapHeadReads=0;
+for(let i=0;i<3;i++){
+ const cooldown=await run(store.db,{nowMs:200+i,
+  loadMaterializedR2Once:async()=>{forbiddenFullReads++;return newerSnap;},
+  readR2HeadAgain:async()=>{cheapHeadReads++;return moved;}});
+ assert.equal(cooldown.code,'RETRYABLE_STAGE_RESTART_COOLDOWN');
+ assert.equal(cooldown.r2FullReads,0);
+ assert.equal(cooldown.d1RowsWritten,0);
+}
+assert.equal(forbiddenFullReads,0,'cooldown may not materialize the whole R2 owner');
+assert.equal(cheapHeadReads,3,'only 3 bounded HEAD-only probes');
 assert.equal(store.metas.get(owner).generation,head.headRevision);
 assert.equal((await run(store.db,{nowMs:60012,
  loadMaterializedR2Once:async()=>newerSnap,
@@ -172,9 +181,12 @@ for(let i=1;i<=3;i++){
 }
 const lastHead={...head,headRevision:head.headRevision+4,etag:'"new-4"'};
 const written=store.stats.writes;
+let exhaustedFullReads=0;
 assert.equal((await run(store.db,{nowMs:300000,
- loadMaterializedR2Once:async()=>({...snap,head:lastHead})})).code,
+ loadMaterializedR2Once:async()=>{exhaustedFullReads++;return {...snap,head:lastHead};},
+ readR2HeadAgain:async()=>lastHead})).code,
  'HOLD_STAGE_RESTART_BUDGET_EXHAUSTED');
+assert.equal(exhaustedFullReads,0,'exhausted owner has no O(N) materialization');
 assert.equal(store.stats.writes,written,'exhausted must not write');
 assert.equal(store.metas.get(owner).status,'building');
 
@@ -185,6 +197,20 @@ const overflow=await run(store.db,{loadMaterializedR2Once:async()=>({
 assert.equal(overflow.code,'DENY_UNVERIFIED_OR_OVERSIZED_SNAPSHOT');
 assert.equal(store.stats.writes,0);
 
+// A changed HEAD without owner/fence proof must never bypass cooldown.
+store=mkdb();
+assert.equal((await run(store.db,{readR2HeadAgain:async()=>moved})).code,
+ 'RETRYABLE_R2_HEAD_MOVED');
+let unauthorizedReads=0;
+const fakeHead={...moved,ownerUid:'other-owner'};
+const untrusted=await run(store.db,{
+ readR2HeadAgain:async()=>fakeHead,
+ loadMaterializedR2Once:async()=>{unauthorizedReads++;return newerSnap;},
+});
+assert.equal(untrusted.code,'DENY_UNVERIFIED_RESTART_HEAD');
+assert.equal(unauthorizedReads,0);
+console.log('APP518_FIRST_INDEX_COOLDOWN_AND_BUDGET_HEAD_ONLY_R2_FULL_R0=PASS');
+console.log('APP518_FIRST_INDEX_FOREIGN_RESTART_HEAD_DENIED_WITHOUT_FULL_R2_READ=PASS');
 console.log('APP518_FIRST_INDEX_STALE_HEAD_ROTATION_BOUNDED_AND_OWNER_SAFE=PASS');
 console.log('APP518_FIRST_CONFIRMED_CHANGE_ONLY_INDEX_IMPORT=PASS');
 console.log('APP518_OWNER_INDEX_128_ROW_BATCH_AND_READY_HEAD_CHECK=PASS');

@@ -16,7 +16,7 @@ const validRow=row=>row&&text(row.owner_uid)&&text(row.favorite_id)
  &&Number(row.attempt_count)>=0;
 
 export const deliverDueCanonicalFavorites518=async({
- db,nowMs,readExactCanonical,applyVersionedR2,maxItems=64,
+ db,nowMs,readExactCanonical,applyVersionedR2,maxItems=128,
 }={})=>{
  if(!db||!Number.isSafeInteger(nowMs)||nowMs<0
    ||typeof readExactCanonical!=='function'

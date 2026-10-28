@@ -105,7 +105,9 @@ r=await t.run({readR2HeadAgain:async()=>({
 assert.equal(r.code,'HOLD_RECOVERY_HEAD_MOVED');
 assert.equal(t.meta.generation,oldGen);
 r=await t.run({loadCompleteFencedOwnerR2:async()=>({
- ...snap,head:{...head,headRevision:110},etag:'"changed"'
+ ...snap,head:{...createEmptyCatalogJournal({
+  kind:'musicNote',baseKey:'compacted-base-v2',baseRevision:110,itemCount:301,now:5001,
+ }),canonicalAuthority518:true},etag:'"changed"'
 })});
 assert.equal(r.code,'HOLD_RECOVERY_TARGET_MOVED');
 assert.equal(t.meta.generation,oldGen);

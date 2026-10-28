@@ -13,7 +13,8 @@ const snap={uid,ownerUid:uid,verifiedByServer:true,fencedWritersVerified:true,
 function make(){
  const meta={generation:oldGen,indexed_revision:oldRevision,expected_count:1,
   head_etag:'"old"',status:'ready',recovery_generation:null,
-  recovery_revision:null,recovery_etag:null,recovery_count:null};
+  recovery_revision:null,recovery_etag:null,recovery_count:null,
+  recovery_restart_count:0,recovery_checked_at_ms:null};
  const members=new Map([[oldGen,new Set(['old-song'])]]);
  let reads=0,writes=0,batches=0,failStage=false;
  const db={
@@ -26,13 +27,30 @@ function make(){
    },
    async run(){
     if(sql.startsWith('UPDATE music_note_catalog_index_meta_518 SET recovery_generation')){
-     const [gen,rev,targetEtag,count,owner,oldGeneration,oldRev,oldEtag]=args;
+     const [gen,rev,targetEtag,count,now,owner,oldGeneration,oldRev,oldEtag]=args;
      if(owner!==uid||oldGeneration!==meta.generation
       ||oldRev!==meta.indexed_revision||oldEtag!==meta.head_etag
       ||meta.recovery_generation!=null)return {meta:{changes:0}};
      Object.assign(meta,{recovery_generation:gen,recovery_revision:rev,
-      recovery_etag:targetEtag,recovery_count:count});writes++;
+      recovery_etag:targetEtag,recovery_count:count,
+      recovery_restart_count:0,recovery_checked_at_ms:now});writes++;
      return {meta:{changes:1}};
+    }
+    if(sql.startsWith('UPDATE music_note_catalog_index_meta_518 SET recovery_generation')
+       &&sql.includes('recovery_restart_count=recovery_restart_count+1')){
+     const [gen,rev,targetEtag,count,now,owner,oldGen,oldRev,oldEtag,
+       curGen,curRev,curEtag,curCount,deadline]=args;
+     if(owner!==uid||meta.generation!==oldGen
+       ||meta.indexed_revision!==oldRev||meta.head_etag!==oldEtag
+       ||meta.recovery_generation!==curGen||meta.recovery_revision!==curRev
+       ||meta.recovery_etag!==curEtag||meta.recovery_count!==curCount
+       ||meta.recovery_restart_count>=3||meta.recovery_checked_at_ms>deadline)
+       return {meta:{changes:0}};
+     Object.assign(meta,{recovery_generation:gen,recovery_revision:rev,
+       recovery_etag:targetEtag,recovery_count:count,
+       recovery_checked_at_ms:now,
+       recovery_restart_count:meta.recovery_restart_count+1});
+     writes++;return {meta:{changes:1}};
     }
     if(sql.startsWith('UPDATE music_note_catalog_index_meta_518 SET generation=recovery_generation')){
      const [now,owner,gen,rev,oldEtag,newGen,newRev,newEtag,newCount]=args;
@@ -44,6 +62,7 @@ function make(){
      meta.head_etag=newEtag;meta.expected_count=newCount;
      meta.recovery_generation=meta.recovery_revision=
       meta.recovery_etag=meta.recovery_count=null;
+     meta.recovery_restart_count=0;meta.recovery_checked_at_ms=null;
      writes++;return {meta:{changes:1}};
     }
     throw Error('unknown write '+sql);
@@ -104,13 +123,82 @@ r=await t.run({readR2HeadAgain:async()=>({
 })});
 assert.equal(r.code,'HOLD_RECOVERY_HEAD_MOVED');
 assert.equal(t.meta.generation,oldGen);
-r=await t.run({loadCompleteFencedOwnerR2:async()=>({
+const makeMoved=(revision)=>({
  ...snap,head:{...createEmptyCatalogJournal({
-  kind:'musicNote',baseKey:'compacted-base-v2',baseRevision:110,itemCount:301,now:5001,
- }),canonicalAuthority518:true},etag:'"changed"'
-})});
-assert.equal(r.code,'HOLD_RECOVERY_TARGET_MOVED');
+  kind:'musicNote',baseKey:'compacted-base-v'+revision,
+  baseRevision:revision,itemCount:301,now:5000+revision,
+ }),canonicalAuthority518:true},
+ etag:'"head-'+revision+'"',
+});
+const movedSnap=makeMoved(head.headRevision+1);
+const movedProbe=async()=>({
+ verifiedByServer:true,ownerUid:uid,fencedWritersVerified:true,
+ head:movedSnap.head,etag:movedSnap.etag,
+});
+let fullRead=0;
+r=await t.run({nowMs:6010,
+ readR2HeadAgain:movedProbe,
+ loadCompleteFencedOwnerR2:async()=>{fullRead++;return movedSnap;}});
+assert.equal(r.code,'RETRYABLE_RECOVERY_RESTART_COOLDOWN');
+assert.equal(fullRead,0,'HEAD-only cooldown prevents full R2 read');
 assert.equal(t.meta.generation,oldGen);
+r=await t.run({nowMs:66001,
+ readR2HeadAgain:movedProbe,
+ loadCompleteFencedOwnerR2:async()=>movedSnap});
+assert.equal(r.code,'RECOVERY_PROMOTED');
+assert.equal(r.memberCount,301);
+assert.equal(t.meta.generation,movedSnap.head.headRevision);
+assert.equal(t.meta.recovery_generation,null);
+assert.equal(t.members.get(oldGen).has('old-song'),true);
+assert.equal(t.members.get(head.headRevision).size,301,
+ 'abandoned stage is preserved but invisible');
+assert.equal(t.members.get(movedSnap.head.headRevision).size,301);
+
+t=make();
+const wrongHead={...makeMoved(head.headRevision),etag:'"tampered-same-rev"'};
+assert.equal((await t.run({readR2HeadAgain:async()=>({
+ verifiedByServer:true,ownerUid:uid,fencedWritersVerified:true,
+ head:{...head,headRevision:head.headRevision+1},etag:'"moved"',
+})})).code,'HOLD_RECOVERY_HEAD_MOVED');
+fullRead=0;
+r=await t.run({nowMs:66001,
+ readR2HeadAgain:async()=>({verifiedByServer:true,ownerUid:uid,
+ fencedWritersVerified:true,head:wrongHead.head,etag:wrongHead.etag}),
+ loadCompleteFencedOwnerR2:async()=>{fullRead++;return wrongHead;}});
+assert.equal(r.code,'HOLD_NON_MONOTONIC_RECOVERY_HEAD');
+assert.equal(fullRead,0,'untrusted same revision costs no R2 materialization');
+
+t=make();
+r=await t.run({readR2HeadAgain:async()=>({verifiedByServer:true,
+ ownerUid:uid,fencedWritersVerified:true,head:{...head,headRevision:head.headRevision+1},
+ etag:'"moved"'})});
+assert.equal(r.code,'HOLD_RECOVERY_HEAD_MOVED');
+for(let i=1;i<=3;i++){
+ const next=makeMoved(head.headRevision+i);
+ let checkCount=0;
+ r=await t.run({nowMs:6000+60001*i,
+   readR2HeadAgain:async()=>{
+     checkCount++;
+     return {verifiedByServer:true,ownerUid:uid,fencedWritersVerified:true,
+       head:checkCount===1?next.head:{...next.head,headRevision:next.head.headRevision+1},
+       etag:checkCount===1?next.etag:'"moved-after-stage"'};
+   },
+   loadCompleteFencedOwnerR2:async()=>next});
+ assert.equal(r.code,'HOLD_RECOVERY_HEAD_MOVED');
+ assert.equal(t.meta.recovery_restart_count,i);
+ assert.equal(t.meta.generation,oldGen,'never touch existing READY');
+}
+const totalWrites=t.counters().writes;
+fullRead=0;
+const extra=makeMoved(head.headRevision+4);
+r=await t.run({nowMs:300010,
+ readR2HeadAgain:async()=>({verifiedByServer:true,ownerUid:uid,
+  fencedWritersVerified:true,head:extra.head,etag:extra.etag}),
+ loadCompleteFencedOwnerR2:async()=>{fullRead++;return extra;}});
+assert.equal(r.code,'HOLD_RECOVERY_RESTART_BUDGET_EXHAUSTED');
+assert.equal(fullRead,0);
+assert.equal(t.counters().writes,totalWrites);
+
 t=make();
 assert.equal((await t.run({verifiedPendingMutation:false})).code,'DENY_UNVERIFIED_OR_INVALID');
 assert.equal(t.counters().reads+t.counters().writes,0);
@@ -124,6 +212,7 @@ assert.equal((await t.run({loadCompleteFencedOwnerR2:async()=>({
  ...snap,items:[...snap.items.slice(0,300),snap.items[0]]
 })})).code,'DENY_BAD_OR_DUPLICATE_ID');
 assert.equal(t.counters().writes,0);
+console.log('APP518_COMPACTION_MOVED_HEAD_ROTATE_WITH_COOLDOWN_AND_3_RETRY_LIMIT=PASS');
 console.log('APP518_COMPACTION_OWNER_STAGE_AND_ATOMIC_GENERATION_SWAP=PASS');
 console.log('APP518_COMPACTION_CRASH_RESUME_WITHOUT_REWRITING_N=PASS');
 console.log('APP518_COMPACTION_R2_MOVED_HOLD_NO_PARTIAL_INDEX=PASS');

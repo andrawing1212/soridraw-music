@@ -7,6 +7,11 @@ import {
  isValidCatalogJournal,materializeCatalogJournal,
  CATALOG_JOURNAL_MAX_BYTES,
 } from './catalogJournal.js';
+// Only verified owner/schema/authority failures are permanent. Ordinary
+// get()/put() network failures remain retryable; never infer from messages.
+export class CatalogR2ContractError518 extends Error {
+ constructor(code){super(code);this.name='CatalogR2ContractError518';}
+}
 const txt=x=>typeof x==='string'?x.trim():'';
 const validUid=x=>txt(x).length>0&&txt(x).length<=128&&!/[\\/]/.test(txt(x));
 const key=uid=>'catalog/v5/'+encodeURIComponent(uid)+'/musicNote/journal.json';
@@ -37,12 +42,12 @@ export const createOwnerR2Provider518=({
  env,sharedReleaseFencesVerified=false,
 }={})=>{
  const enabled=cutover(env)&&sharedReleaseFencesVerified===true;
- const blocked=()=>{throw new Error('APP518_SHARED_R2_CUTOVER_NOT_APPROVED');};
+ const blocked=()=>{throw new CatalogR2ContractError518('APP518_SHARED_R2_CUTOVER_NOT_APPROVED');};
  const readOwnerHead=async uid=>{
   if(!enabled||!validUid(uid))blocked();
   const object=await env.CATALOG.get(key(uid));
   const result=await strictHead(object,uid);
-  if(!result)throw new Error('APP518_R2_HEAD_UNKNOWN_OR_CORRUPT');
+  if(!result)throw new CatalogR2ContractError518('APP518_R2_HEAD_UNKNOWN_OR_CORRUPT');
   return {verifiedByServer:true,ownerUid:uid,
     fencedWritersVerified:true,head:result.head,etag:result.etag};
  };
@@ -80,26 +85,26 @@ export const createOwnerR2Provider518=({
   const before=await readOwnerHead(uid);
   const baseKey=before.head.baseKey;
   if(!txt(baseKey).startsWith(prefix(uid))||
-    !txt(baseKey).endsWith('.json'))throw new Error('APP518_FOREIGN_BASE_KEY');
+    !txt(baseKey).endsWith('.json'))throw new CatalogR2ContractError518('APP518_FOREIGN_BASE_KEY');
   const object=await env.CATALOG.get(baseKey);
   if(!object||object.customMetadata?.uid!==uid||
     object.customMetadata?.kind!=='musicNote')
-    throw new Error('APP518_MISSING_OR_FOREIGN_BASE');
+    throw new CatalogR2ContractError518('APP518_MISSING_OR_FOREIGN_BASE');
   let base;
   try{base=JSON.parse(await object.text());}catch{
-    throw new Error('APP518_BASE_INVALID_JSON');
+    throw new CatalogR2ContractError518('APP518_BASE_INVALID_JSON');
   }
   if(base?.schemaVersion!==4||base?.authority!=='server'
     ||base?.kind!=='musicNote'||base.complete!==true
     ||!Array.isArray(base.items)||base.revision!==before.head.baseRevision
     ||base.itemCount!==before.head.baseItemCount)
-    throw new Error('APP518_BASE_INVALID');
+    throw new CatalogR2ContractError518('APP518_BASE_INVALID');
   const materialized=materializeCatalogJournal({
     baseSnapshot:base,head:before.head,projectItem,sortItems,
   });
   if(!materialized||materialized.itemCount>20000
     ||materialized.items.length!==before.head.itemCount)
-    throw new Error('APP518_BASE_MATERIALIZE_INVALID_OR_OVERSIZED');
+    throw new CatalogR2ContractError518('APP518_BASE_MATERIALIZE_INVALID_OR_OVERSIZED');
   const after=await readOwnerHead(uid);
   if(before.etag!==after.etag||
     before.head.headRevision!==after.head.headRevision)

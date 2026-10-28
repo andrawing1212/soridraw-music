@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { assessLegacyMediaMutation518 } from '../cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js';
+import { assessLegacyMediaMutation518, assertLegacyMediaBindingsComplete518, MEDIA_TARGETS_518 } from '../cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js';
 
 const mode = String(process.argv[2] || '').trim();
 const action = String(process.argv[3] || 'dry-run').trim();
@@ -282,18 +282,9 @@ if (action === 'dry-run') process.exit(0);
 // the original activation preflight. Never restore a pre-fence version then.
 async function verifyLegacyMediaMutationAllowed518(operation) {
   const canonicalFlags = await Promise.all(
-    Object.values(TARGETS).map(async ({ worker }) => {
-      const settings = await cfGet(`${apiBase}/workers/scripts/${worker}/settings`);
-      if (!Array.isArray(settings?.bindings)) {
-        throw new Error('APP518_MEDIA_RELEASE_HOLD_LIVE_BINDINGS_MISSING');
-      }
-      const flags = settings.bindings.filter((item) => (
-        item?.name === 'SORIDRAW_CANONICAL_CATALOG_518'
-      ));
-      if (flags.length > 1) throw new Error('APP518_MEDIA_RELEASE_HOLD_DUPLICATE_FLAG');
-      if (!flags.length) return null;
-      if (flags[0].type !== 'plain_text') return 'UNKNOWN_SECRET';
-      return String(flags[0].text ?? flags[0].value ?? 'UNKNOWN');
+    MEDIA_TARGETS_518.map(async ({ script, media }) => {
+      const settings = await cfGet(`${apiBase}/workers/scripts/${script}/settings`);
+      return assertLegacyMediaBindingsComplete518(settings, { media });
     }),
   );
   const verdict = assessLegacyMediaMutation518({

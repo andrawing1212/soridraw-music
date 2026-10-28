@@ -80,3 +80,24 @@ export const assessSharedWriterCutover518=({
   pass:true,canEnableCanonical:false,
   require:'FIREBASE_DELIVERY_AND_EXPLICIT_DIRECTOR_DEPLOY_APPROVAL'};
 };
+
+/**
+ * Fail-closed boundary for the EXISTING three-environment Media Worker release
+ * runner (upload/activate/restore). This cannot authorize a canonical cutover.
+ * A canonical flag present in source OR any currently bound live Worker closes
+ * all old release paths, including emergency rollback. A separate audited
+ * canonical-aware controller must handle post-cutover repairs.
+ */
+export const assessLegacyMediaMutation518=({
+ action,sourceCanonicalFlag,liveCanonicalFlags,
+}={})=>{
+ if(!['upload','activate','restore'].includes(action))
+  return deny('HOLD_NOT_A_MEDIA_MUTATION');
+ if(!Array.isArray(liveCanonicalFlags)||liveCanonicalFlags.length!==3)
+  return deny('HOLD_ALL_THREE_LIVE_FLAGS_REQUIRED');
+ const flags=[sourceCanonicalFlag,...liveCanonicalFlags];
+ if(flags.some(f=>f!==null&&f!==undefined&&f!==''))
+  return deny('HOLD_CANONICAL_518_USE_FENCED_RELEASE_CONTROLLER');
+ return {code:'LEGACY_MEDIA_MUTATION_BEFORE_CANONICAL_ONLY',pass:true,
+  canEnableCanonical:false};
+};

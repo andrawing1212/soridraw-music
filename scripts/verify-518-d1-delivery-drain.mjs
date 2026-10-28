@@ -32,6 +32,7 @@ function makeDb(state){
      }else if(sql.startsWith('UPDATE')&&sql.includes('attempt_count=attempt_count+1')){
        if(row.source_version_ns!==args[4]||row.ack_version_ns===args[4])
          return {meta:{changes:0}};
+       if(row.attempt_count!==args[5])return {meta:{changes:0}};
        row.next_attempt_ms=args[0];row.attempt_count++;
      }else throw Error('unknown SQL');
      counts.writes++;return {meta:{changes:1}};

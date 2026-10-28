@@ -61,7 +61,7 @@ assert.ok(pairResult.steps>=2);
 assert.equal(pair.stats().puts,0);
 // 120KiB item and the JSON prefix can fit under 128KiB; 130KiB
 // item may need a prefix-only first step, then its full own page.
-const nearLimit=fixture([{id:'large',createdAtMs:1,title:'한'.repeat(43000)}]);
+const nearLimit=fixture([{id:'large',createdAtMs:1,title:'한'.repeat(43670)}]);
 const large=await crawl(nearLimit);
 assert.deepEqual(large.ids,['large']);
 assert.ok(large.steps>=2,'prefix-only checkpoint permits one long valid item');

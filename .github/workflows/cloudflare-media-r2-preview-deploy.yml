@@ -1,13 +1,18 @@
 name: Cloudflare Media R2 Preview Deploy
 
+# app517: NEVER deploy a Worker merely because source was merged into preview.
+# Only a manual dispatch, with a pinned SHA and explicit deploy confirmation.
 on:
   workflow_dispatch:
-  push:
-    branches: [preview]
-    paths:
-      - 'cloudflare/media-worker/src/**'
-      - 'cloudflare/media-worker/package.json'
-      - 'cloudflare/media-worker/package-lock.json'
+    inputs:
+      commit_sha:
+        description: 'Approved 40-character commit SHA on preview (not a branch)'
+        required: true
+        type: string
+      approve_preview_deploy:
+        description: 'Type DEPLOY_PREVIEW_MEDIA to authorize this specific deployment'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -18,6 +23,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: ${{ inputs.approve_preview_deploy == 'DEPLOY_PREVIEW_MEDIA' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -26,10 +32,23 @@ jobs:
       CATALOG_BUCKET: soridraw-user-catalog
       WORKER_URL: https://soridraw-media-preview.andrawing1212.workers.dev
     steps:
-      - name: Checkout preview
+      - name: Checkout explicitly approved commit (no moving preview HEAD)
         uses: actions/checkout@v4
         with:
-          ref: preview
+          ref: ${{ inputs.commit_sha }}
+          fetch-depth: 0
+
+      - name: Verify SHA is exact and reachable from preview
+        env:
+          APPROVED_SHA: ${{ inputs.commit_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$APPROVED_SHA" =~ ^[a-fA-F0-9]{40}$ ]] || { echo 'Expected exact 40-character commit SHA'; exit 2; }
+          test "$(git rev-parse HEAD)" = "${APPROVED_SHA,,}" || { echo 'Checkout SHA mismatch'; exit 2; }
+          git fetch origin preview --no-tags --quiet
+          git merge-base --is-ancestor "$APPROVED_SHA" FETCH_HEAD || { echo 'SHA not in preview'; exit 2; }
+          echo "APPROVED_PREVIEW_SHA=$APPROVED_SHA"
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
@@ -44,82 +63,49 @@ jobs:
         working-directory: cloudflare/media-worker
         run: npm run check
 
-      - name: Ensure private Standard R2 preview bucket exists
+      - name: Preflight shared Catalog authority compatibility (no deployment)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-356-shared-private-catalog-authority.mjs
+
+      - name: Verify existing private R2 bindings (no bucket creation)
         working-directory: cloudflare/media-worker
         shell: bash
         run: |
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'CLOUDFLARE_API_TOKEN unavailable'; exit 2; }
-          if npx wrangler r2 bucket info "$BUCKET" --json > "$RUNNER_TEMP/r2-info.json" 2> "$RUNNER_TEMP/r2-info.err"; then
-            echo 'R2_BUCKET_ALREADY_EXISTS=true'
-          else
-            echo 'R2 bucket not found; creating APAC Standard bucket.'
-            npx wrangler r2 bucket create "$BUCKET" --location apac --storage-class Standard
-            npx wrangler r2 bucket info "$BUCKET" --json > "$RUNNER_TEMP/r2-info.json"
-          fi
-          node - "$RUNNER_TEMP/r2-info.json" <<'NODE'
+          npx wrangler r2 bucket info "$BUCKET" --json > "$RUNNER_TEMP/r2-info.json"
+          npx wrangler r2 bucket info "$CATALOG_BUCKET" --json > "$RUNNER_TEMP/catalog-r2-info.json"
+          node - "$RUNNER_TEMP/r2-info.json" "$RUNNER_TEMP/catalog-r2-info.json" <<'NODE'
           const fs = require('fs');
-          const data = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-          const name = data.name || data.result?.name;
-          const storageClass = data.storage_class || data.storageClass || data.result?.storage_class || data.result?.storageClass;
-          if (name !== 'soridraw-media-preview') throw new Error(`Unexpected bucket: ${name}`);
-          console.log(`R2_BUCKET=${name}`);
-          console.log(`R2_STORAGE_CLASS=${storageClass || 'Standard'}`);
+          const media = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const catalog = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+          if ((media.name || media.result?.name) !== 'soridraw-media-preview'
+              || (catalog.name || catalog.result?.name) !== 'soridraw-user-catalog') {
+            throw new Error('Unexpected preview R2 buckets');
+          }
+          console.log('EXISTING_R2_BINDINGS=PASS');
           NODE
 
-      - name: Ensure shared private Catalog R2 bucket exists
-        working-directory: cloudflare/media-worker
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'CLOUDFLARE_API_TOKEN unavailable'; exit 2; }
-          if npx wrangler r2 bucket info "$CATALOG_BUCKET" --json > "$RUNNER_TEMP/catalog-r2-info.json" 2> "$RUNNER_TEMP/catalog-r2-info.err"; then
-            echo 'CATALOG_R2_BUCKET_ALREADY_EXISTS=true'
-          else
-            echo 'Shared Catalog R2 bucket not found; creating APAC Standard bucket.'
-            npx wrangler r2 bucket create "$CATALOG_BUCKET" --location apac --storage-class Standard
-            npx wrangler r2 bucket info "$CATALOG_BUCKET" --json > "$RUNNER_TEMP/catalog-r2-info.json"
-          fi
-          node - "$RUNNER_TEMP/catalog-r2-info.json" <<'NODE'
-          const fs = require('fs');
-          const data = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-          const name = data.name || data.result?.name;
-          if (name !== 'soridraw-user-catalog') throw new Error(`Unexpected Catalog bucket: ${name}`);
-          console.log(`CATALOG_R2_BUCKET=${name}`);
-          NODE
-
-      - name: Deploy preview media Worker with R2 binding
-        working-directory: cloudflare/media-worker
-        run: npm run deploy
-
-      - name: Ensure stable media signing secret exists
+      - name: Verify existing media signing secret (no secret creation)
         working-directory: cloudflare/media-worker
         shell: bash
         run: |
           set -euo pipefail
           npx wrangler secret list --format json > "$RUNNER_TEMP/media-secrets.json"
-          if node - "$RUNNER_TEMP/media-secrets.json" <<'NODE'
+          node - "$RUNNER_TEMP/media-secrets.json" <<'NODE'
           const fs = require('fs');
           const list = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-          process.exit(Array.isArray(list) && list.some((item) => item?.name === 'MEDIA_SIGNING_SECRET') ? 0 : 1);
+          if (!Array.isArray(list) || !list.some((item) => item?.name === 'MEDIA_SIGNING_SECRET')) {
+            throw new Error('Required stable MEDIA_SIGNING_SECRET missing; fail closed');
+          }
+          console.log('EXISTING_MEDIA_SIGNING_SECRET=PASS');
           NODE
-          then
-            echo 'MEDIA_SIGNING_SECRET_ALREADY_EXISTS=true'
-          else
-            openssl rand -hex 32 | npx wrangler secret put MEDIA_SIGNING_SECRET
-            echo 'MEDIA_SIGNING_SECRET_CREATED=true'
-          fi
 
-      - name: Prove remote R2 write and read
+      - name: Deploy preview media Worker with R2 binding
         working-directory: cloudflare/media-worker
-        shell: bash
-        run: |
-          set -euo pipefail
-          printf 'SORIDRAW R2 preview connected %s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/r2-smoke.txt"
-          npx wrangler r2 object put "$BUCKET/__smoke/connection.txt" --file "$RUNNER_TEMP/r2-smoke.txt" --content-type text/plain --remote --force
-          npx wrangler r2 object get "$BUCKET/__smoke/connection.txt" --file "$RUNNER_TEMP/r2-smoke-read.txt" --remote
-          cmp "$RUNNER_TEMP/r2-smoke.txt" "$RUNNER_TEMP/r2-smoke-read.txt"
-          echo 'R2_REMOTE_WRITE_READ=PASS'
+        run: npm run deploy
 
       - name: Smoke Worker health and Preview CORS
         shell: bash

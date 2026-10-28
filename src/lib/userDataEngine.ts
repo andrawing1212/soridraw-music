@@ -802,6 +802,49 @@ export const refreshCatalogSnapshotAfterKnownMutation = async (
   return promise;
 };
 
+// app517: Explicit owner-authenticated diagnostic only. This endpoint reads
+// exact shared R2 membership without legacy seeding, Firestore traversal,
+// IndexedDB writes or Catalog publication. Never invoke during page entry.
+export type ExactSharedCatalogMembership517 = {
+  materialized: boolean;
+  membership: boolean | null;
+  revision: number;
+  itemCount: number | null;
+};
+export const inspectExactSharedMusicNoteCatalog517 = async (
+  uid: string,
+  documentId: string,
+): Promise<ExactSharedCatalogMembership517> => {
+  const safeUid = String(uid || '').trim();
+  const safeId = String(documentId || '').trim();
+  if (!safeUid || !safeId || safeId.length > 240 || safeId === '.' || safeId === '..'
+    || /[\\/]/.test(safeId) || auth.currentUser?.uid !== safeUid
+    || !isPreviewCatalogEnabled()) throw new Error('CATALOG_INSPECT_INVALID_ID_OR_OWNER');
+  const headers = await authenticatedHeaders(true);
+  if (!headers || auth.currentUser?.uid !== safeUid) throw new Error('CATALOG_INSPECT_AUTH_UNAVAILABLE');
+  const response = await fetch(
+    `${resolveCatalogEndpoint()}/v1/catalog/musicNote/inspect-exact?documentId=${encodeURIComponent(safeId)}`,
+    { method: 'GET', headers, cache: 'no-store' },
+  );
+  if (!response.ok || auth.currentUser?.uid !== safeUid) throw new Error('CATALOG_INSPECT_FAILED');
+  const payload: any = await response.json();
+  if (payload?.ok !== true || typeof payload.materialized !== 'boolean') throw new Error('CATALOG_INSPECT_INVALID');
+  if (payload.materialized) {
+    if (typeof payload.membership !== 'boolean' || !Number.isInteger(payload.revision)
+      || payload.revision <= 0 || !Number.isInteger(payload.itemCount) || payload.itemCount < 0) {
+      throw new Error('CATALOG_INSPECT_INVALID');
+    }
+  } else if (payload.membership !== null || payload.revision !== 0 || payload.itemCount !== null) {
+    throw new Error('CATALOG_INSPECT_INVALID');
+  }
+  return {
+    materialized: payload.materialized,
+    membership: payload.membership,
+    revision: payload.revision,
+    itemCount: payload.itemCount,
+  };
+};
+
 export const readCatalogSnapshotCacheFirst = async (
   kind: SoridrawCatalogKind,
   uid: string,

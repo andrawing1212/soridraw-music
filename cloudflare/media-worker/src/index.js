@@ -517,7 +517,7 @@ const MUSIC_NOTE_MEDIA_FIELDS = [
 ];
 
 const catalogRouteFromPath = (pathname) => {
-  const match = String(pathname || '').match(/^\/v1\/catalog\/(musicNote|library)(?:\/(delta|bootstrap))?$/);
+  const match = String(pathname || '').match(/^\/v1\/catalog\/(musicNote|library)(?:\/(delta|bootstrap|inspect-exact))?$/);
   return match ? { kind: match[1], action: match[2] || 'base' } : null;
 };
 
@@ -794,6 +794,51 @@ const putCatalogJournalHead = async (env, uid, kind, head, currentObject = null)
   return catalogBucket(env).put(catalogJournalKey(uid, kind), encoded, options);
 };
 
+// app517: inspection alone must distinguish a truly absent R2 object from
+// a network failure, malformed body, invalid journal, missing referenced base,
+// or a corrupt catalog. Do NOT weaken the ordinary Catalog read behavior.
+const readStrictCatalogObjectForInspection = async (bucket, key, kind, journal = false) => {
+  const object = await bucket.get(key); // GET errors propagate; no fallback.
+  if (!object) return null;
+  let payload;
+  try { payload = JSON.parse(await object.text()); }
+  catch { throw new Error('CATALOG_INSPECT_READ_INVALID'); }
+  if (journal ? !isValidCatalogJournal(payload, kind) : !validateCatalogPayload(payload, kind)) {
+    throw new Error('CATALOG_INSPECT_READ_INVALID');
+  }
+  return { object, payload };
+};
+
+const readStrictCatalogStateForInspection = async (bucket, uid, kind) => {
+  // Never issue an R2 LIST, legacy-media read, Firestore scan, seed or write.
+  const journal = await readStrictCatalogObjectForInspection(
+    bucket, catalogJournalKey(uid, kind), kind, true,
+  );
+  if (journal) {
+    const base = await readStrictCatalogObjectForInspection(
+      bucket, journal.payload.baseKey, kind,
+    );
+    if (!base || base.payload.revision !== journal.payload.baseRevision
+      || base.payload.itemCount !== journal.payload.baseItemCount) {
+      throw new Error('CATALOG_INSPECT_READ_INVALID');
+    }
+    return { base: base.payload, head: journal.payload, journalObject: journal.object };
+  }
+  const legacyBase = await readStrictCatalogObjectForInspection(
+    bucket, catalogObjectKey(uid, kind), kind,
+  );
+  if (!legacyBase) return null; // Both keys genuinely absent.
+  return {
+    base: legacyBase.payload,
+    head: createEmptyCatalogJournal({
+      kind, baseKey: catalogObjectKey(uid, kind),
+      baseRevision: legacyBase.payload.revision,
+      itemCount: legacyBase.payload.itemCount,
+    }),
+    journalObject: null,
+  };
+};
+
 const readCatalogStateFromBucket = async (bucket, uid, kind) => {
   const journalRecord = await readCatalogJournalObjectFromBucket(bucket, uid, kind);
   if (journalRecord) {
@@ -1011,6 +1056,8 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
   if (!route || !CATALOG_KINDS.has(route.kind)) return jsonResponse({ ok: false, code: 'INVALID_CATALOG_KIND' }, 404, origin);
   let identity;
   try {
+    // Existing normal GET requires owner auth. Manual exact inspection also
+    // requires App Check and never falls through to the shared seed routine.
     const isCatalogRead = request.method === 'GET' && route.action === 'base';
     identity = isCatalogRead
       ? await requireCatalogReadIdentity(request, env)
@@ -1020,6 +1067,34 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
   }
 
   try {
+    if (request.method === 'GET' && route.action === 'inspect-exact') {
+      // app517: read-only owner-authenticated diagnostic of one R2 catalog ID.
+      // NEVER call getCatalogState/getOrBuildCatalog here: those may seed
+      // shared R2 from legacy. No writes, canonical Firestore queries or repair.
+      // Keep this manual endpoint out of ordinary page entry and RTDB handlers.
+      if (route.kind !== 'musicNote') {
+        return jsonResponse({ ok: false, code: 'INSPECT_KIND_UNSUPPORTED' }, 404, origin);
+      }
+      if (!isSharedCatalogEnabled(env) || !env?.CATALOG) {
+        return jsonResponse({ ok: false, code: 'SHARED_CATALOG_UNAVAILABLE' }, 503, origin);
+      }
+      const exactId = text(url.searchParams.get('documentId'));
+      if (!exactId || exactId.length > 240 || exactId === '.' || exactId === '..'
+        || /[\\/]/.test(exactId)) {
+        return jsonResponse({ ok: false, code: 'INVALID_EXACT_ID' }, 400, origin);
+      }
+      const current = await readStrictCatalogStateForInspection(env.CATALOG, identity.uid, 'musicNote');
+      if (!current) {
+        return jsonResponse({ ok: true, materialized: false, membership: null,
+          revision: 0, itemCount: null }, 200, origin);
+      }
+      const catalog = materializeCatalogState(current, 'musicNote');
+      // Catalog canonical row identity is item.id; aliases are not authority.
+      const membership = catalog.items.some((item) => text(item?.id) === exactId);
+      return jsonResponse({ ok: true, materialized: true, membership,
+        revision: catalog.revision, itemCount: catalog.itemCount }, 200, origin);
+    }
+
     if (request.method === 'GET' && route.action === 'base') {
       const state = await getCatalogState(identity, route.kind, catalogRequiredRevision(request), env);
       const knownRevision = catalogKnownRevision(request);
@@ -1072,6 +1147,10 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
   } catch (error) {
     const code = text(error?.message) || 'CATALOG_FAILED';
     console.error('catalog request failed', { kind: route.kind, action: route.action, error: code });
+    if (route.action === 'inspect-exact') {
+      // Never report "not materialized" on malformed or unreadable R2.
+      return jsonResponse({ ok: false, code: 'CATALOG_INSPECT_UNDETERMINED' }, 503, origin);
+    }
     if (isSharedCatalogEnabled(env) && code === 'CATALOG_REPAIR_REQUIRED') {
       return jsonResponse({
         ok: false,

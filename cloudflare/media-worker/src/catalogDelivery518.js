@@ -51,7 +51,15 @@ export const deliverDueCanonicalFavorites518=async({
        });
        if(next.code==='DENY_UNVERIFIED_OR_UNVERSIONED')throw new Error('SOURCE_CHANGED_UNVERIFIED');
        result.drift++;
-       // Older source version cannot queue over newer D1; no R2 mutation.
+       // Older canonical read than the queued version is not authoritative.
+       // Delay instead of creating a hot loop on the always-due old row.
+       if(BigInt(current)<BigInt(version)){
+         const scheduled=await scheduleFailedFavorite518({
+           db,uid,documentId:id,sourceVersionNs:version,nowMs,
+           attemptCount:Number(row.attempt_count),
+         });
+         if(scheduled.code==='RETRY_SCHEDULED')result.retry++;
+       }
        continue;
      }
      // The interface intentionally requires the provider's durable per-song

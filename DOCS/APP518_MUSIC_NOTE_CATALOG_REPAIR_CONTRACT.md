@@ -234,3 +234,12 @@
 - **비용:** 정상 변경 경로 추가 D1 W0, R2 PUT/GET 증가 없음(단 재시도 ETag 충돌 시 원본 재확인). HOLD 최초 단건 시 D1 W1, 동일 HOLD 이후 자동 due/R2/Firestore 재호출 W0; 전역 스케줄러가 존재한다면 빈 due 확인의 기본 D1 R은 별도. 신규 sourceVersion은 정상 W1 enqueue와 함께 재개. 일반 Music Note local-first batch 및 좋아요/공개·비공개·다음곡·Library UI 변경 없음.
 - 검사: `verify-518-stale-save-delete-race.mjs` 실제 두 Writer 동시 실행, `verify-518-d1-outbox-sql.py` 실제 SQLite HOLD 재조회·새 버전 재개·STALE ACK W0, `verify-518-d1-delivery-drain.mjs` 원장/스케줄 비용, `verify-518-d1-outbox-adapter.mjs` 최대 재시도 및 고정 사유.
 - 이 검사는 작성자가 수행한 source+offline CI일 뿐 독립 재감사 PASS가 아님. PR Draft 유지, D1 실 적용·배포·실기기·실데이터 복구 금지. 공유 3환경 구형 Writer 차단·실서버 Firebase/Cloudflare 인증·추적·2만곡 초과/실비용 검증은 여전히 릴리스 HOLD.
+
+
+## 2026-10-28 독립 재감사 FAIL 인계와 첫 색인 변경 HEAD 복구 후보
+
+- 독립 감사 고정 SHA `65c91f488e04fdeecb9efa5d1797e20fc9fde950`: 기존 P1 삭제곡 부활과 D1 복구, 기존 P2 HOLD 반복 호출은 **소스/모의 시험 PASS**. 전체 **FAIL**: 구형 3환경 Writer 차단, 실제 서버 트리거/HMAC/D1/cron, >2만곡 처리, PC↔모바일 실측·비용이 남음. GitHub PR #528 감사 기록 참조. 이 PASS를 실제 서비스 정상으로 해석 금지.
+- 첫 색인 `building` 상태에서 HEAD가 변했을 때 예전에는 무조건 중단하여 이후 같은 사용자 복구가 막힐 수 있었음. 이번 비활성 후보는 **정확 UID·완전한 서버 검증 R2 snapshot**, **더 큰 HEAD revision**(동일 revision/다른 ETag 불가), **이전 generation 미완료**, **60초 간격**, **최대 3번**을 모두 충족할 때만 D1의 `building` 메타를 1행 조건부 갱신해 새로운 generation으로 스테이징을 재시작함.
+- READY 세대는 재시작·삭제하지 않고, 이전 불완전 generation의 ID들은 **보이지 않는 상태로 남겨** 향후 별도 감사된 소유자별 제한적 청소로 처리함. 이 복구 시도는 변경이 검증된 단일 owner의 실제 pending 처리에만 허용. 다른 계정/페이지 방문/권한 불명/동일 revision ETag 교체/동시 충돌은 FAIL-CLOSED.
+- **비용 위험을 숨기지 않음:** 처음 색인 W=N+2 외에 안전한 HEAD 변경 재시작 1회는 **추가 메타 W1 + 새 세대 N개 ID 쓰기**가 들 수 있음. 최악 3번 제한이므로 이번 소스 후보 자동 복구는 최대 3세대 추가 전체 작성, 기존 세대의 보관 용량은 별도. 재시도 횟수 소진 후 운영자 승인 없는 반복 전체조회/쓰기 금지. 기존 일반 확정 변경 D1 W3~W4 목표와는 **다른 예외 비용**.
+- 검사: JS 실제 첫 색인 실행형 mock + Python 실제 SQLite 구조 및 조건부 SQL. 기존 2만곡 초과 제한은 **해결 전까지 유지**, compaction 복구 자체의 다른 HEAD 세대 HOLD는 **아직 미해결**. 실제 3환경 D1 생성·migration·Worker/Functions/Hosting 배포·실데이터 복구 없음. 새 SHA GitHub Actions 확인 및 후속 독립 감사 필요.

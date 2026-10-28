@@ -103,9 +103,21 @@ export const reconcileIndexedHead518=async({
    const outbox=await db.prepare(
     'SELECT source_version_ns,desired_state FROM music_note_catalog_outbox_518 WHERE owner_uid=? AND favorite_id=?'
    ).bind(uid,mutation.id).first();
-   if(outbox?.source_version_ns!==mutation.version
-     ||outbox?.desired_state!==mutation.state)
+   // R2 deltas were committed at their own verified source versions.
+   // A later Firestore v2 can replace D1's single pending row while R2
+   // still contains committed v1, so equality with the *latest* outbox is
+   // NOT required for replay. Accept historical versions only when older
+   // than D1's exact current source; a future/unrecorded version is unsafe.
+   if(!/^\d{21}$/.test(txt(outbox?.source_version_ns))
+     ||!['saved','removed'].includes(outbox?.desired_state)
+     ||mutation.version>outbox.source_version_ns
+     ||(mutation.version===outbox.source_version_ns
+         &&outbox.desired_state!==mutation.state))
     return reject('HOLD_OUTBOX_VERSION_DRIFT',headReads);
+   const previous=seen.get(mutation.id+'::version');
+   if(previous && mutation.version<=previous)
+    return reject('DENY_NON_MONOTONIC_SOURCE_HISTORY',headReads);
+   seen.set(mutation.id+'::version',mutation.version);
    let present=seen.get(mutation.id);
    if(present===undefined){
     const row=await db.prepare(INDEX_MEMBER_LOOKUP_518)

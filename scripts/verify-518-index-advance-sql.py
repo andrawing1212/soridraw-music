@@ -17,7 +17,7 @@ delete=get('INDEX_DELETE_GUARDED_518')
 advance=get('INDEX_META_ADVANCE_GUARDED_518')
 db=sqlite3.connect(':memory:')
 db.executescript(schema)
-owner='owner',gen=100,old=100,oldetag='"before"'
+owner='owner'; gen=100; old=100; oldetag='"before"'
 db.execute("INSERT INTO music_note_catalog_index_meta_518(owner_uid,generation,indexed_revision,expected_count,head_etag,status,checked_at_ms) VALUES(?,?,?,?,?,'ready',?)",
  (owner,gen,old,1,oldetag,0))
 db.execute("INSERT INTO music_note_catalog_member_518 VALUES (?,?,?)",(owner,gen,'a'))

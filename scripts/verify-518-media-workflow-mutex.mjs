@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const preview=readFileSync('.github/workflows/cloudflare-media-r2-preview-deploy.yml','utf8');
 const cutover=readFileSync('.github/workflows/cloudflare-media-shared-catalog-cutover.yml','utf8');
+const promotion=readFileSync('.github/workflows/soridraw-release-promotion.yml','utf8');
 const group='soridraw-media-shared-r2-mutation';
-for(const [name,workflow] of [['PREVIEW',preview],['SHARED_CUTOVER',cutover]]){
+for(const [name,workflow] of [['PREVIEW',preview],['SHARED_CUTOVER',cutover],['TEST_PRODUCTION_PROMOTION',promotion]]){
  assert.match(workflow,new RegExp('group: '+group));
  assert.match(workflow,/cancel-in-progress: false/);
  assert.match(workflow,/workflow_dispatch:/);
@@ -19,6 +20,10 @@ assert.match(cutover,/if: \$\{\{ inputs\.approve_shared_media_cutover == 'CUTOVE
 assert.match(cutover,/inputs\.commit_sha/);
 assert.match(cutover,/git merge-base --is-ancestor/);
 assert.match(cutover,/verifyLegacyMediaMutationAllowed518/);
+assert.match(promotion,/github.workflow_sha/);
+assert.match(promotion,/test -f "\$RELEASE_ROOT\/cloudflare\/media-worker\/src\/catalogSharedWriterRolloutGate518.js"/);
+assert.match(promotion,/grep -q 'verifyLegacyMediaMutationAllowed518'/);
+assert.match(promotion,/RELEASE_MEDIA_SHARED_R2_518_SOURCE_FENCE=PASS/);
 assert.match(preview,/approve_preview_deploy == 'DEPLOY_PREVIEW_MEDIA'/);
 assert.match(preview,/git merge-base --is-ancestor/);
 assert.match(preview,/verifyLegacyMediaMutationAllowed518/);
@@ -28,3 +33,5 @@ console.log('APP518_PREVIEW_DIRECT_WRANGLER_DEPLOY_BYPASS_CLOSED=PASS');
 console.log('APP518_PREVIEW_AND_CUTOVER_SHARED_MUTEX=PASS');
 console.log('APP518_SHARED_CUTOVER_MANUAL_SHA_AND_APPROVAL=PASS');
 console.log('APP518_PINNED_OLD_SOURCE_WITHOUT_GUARD_BLOCKED=PASS');
+
+console.log('APP518_TEST_PRODUCTION_PROMOTION_SAME_MUTEX_AND_PINNED_FENCE=PASS');

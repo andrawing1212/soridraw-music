@@ -147,10 +147,10 @@ export const createR2BasePageReader518=({
    catch{contract('APP518_PAGED_ITEM_INVALID_JSON');}
    if(!item||Array.isArray(item)||typeof item!=='object'
      ||!validId(item.id))contract('APP518_PAGED_BAD_ID');
-   const projected=projectItem(item,text(item.id));
-   if(projected){if(!validId(projected.id)||projected.id!==text(item.id))
-     contract('APP518_PAGED_BAD_PROJECTION');ids.push(text(item.id));}
-   else contract('APP518_PAGED_UNEXPECTED_FILTERED_ITEM');
+   // Existing materializeCatalogJournal imports BASE membership directly;
+   // projectItem is only applied to later HEAD delta upserts. Do not drop
+   // valid legacy BASE rows based on a second projection.
+   ids.push(text(item.id));
    seen++;
    if(seen>head.baseItemCount)contract('APP518_PAGED_TOO_MANY_ITEMS');
   }

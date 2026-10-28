@@ -26,7 +26,8 @@ function make(){
     throw Error('unknown read '+sql);
    },
    async run(){
-    if(sql.startsWith('UPDATE music_note_catalog_index_meta_518 SET recovery_generation')){
+    if(sql.startsWith('UPDATE music_note_catalog_index_meta_518 SET recovery_generation')
+       &&!sql.includes('recovery_restart_count=recovery_restart_count+1')){
      const [gen,rev,targetEtag,count,now,owner,oldGeneration,oldRev,oldEtag]=args;
      if(owner!==uid||oldGeneration!==meta.generation
       ||oldRev!==meta.indexed_revision||oldEtag!==meta.head_etag

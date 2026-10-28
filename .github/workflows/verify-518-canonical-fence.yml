@@ -9,6 +9,8 @@ on:
       - 'cloudflare/media-worker/src/catalogEventGate518.js'
       - 'cloudflare/media-worker/src/catalogJournalReconcile518.js'
       - 'cloudflare/media-worker/src/catalogAuthorityPolicy518.js'
+      - 'cloudflare/media-worker/src/index.js'
+      - 'scripts/verify-518-worker-compat-switch.mjs'
       - 'scripts/verify-518-catalog-event-cost-gate.mjs'
       - 'scripts/verify-518-journal-cas-simulator.mjs'
       - 'scripts/verify-518-legacy-rebuild-redteam.mjs'
@@ -41,6 +43,7 @@ jobs:
           node scripts/verify-518-journal-cas-simulator.mjs
           node scripts/verify-518-legacy-rebuild-redteam.mjs
           node scripts/verify-518-head-capacity-redteam.mjs
+          node scripts/verify-518-worker-compat-switch.mjs
       - name: Protect existing next-song, publication, Music Note and local-first behaviors
         run: |
           node scripts/verify-204-explore-next-song-parity.mjs
@@ -60,11 +63,19 @@ jobs:
           git fetch origin preview --no-tags
           git diff --name-only origin/preview...HEAD | while IFS= read -r file; do
             case "$file" in
-              cloudflare/media-worker/src/catalogCanonicalFence518.js|cloudflare/media-worker/src/catalogEventGate518.js|cloudflare/media-worker/src/catalogJournalReconcile518.js|cloudflare/media-worker/src/catalogAuthorityPolicy518.js|scripts/verify-518-canonical-fence.mjs|scripts/verify-518-catalog-event-cost-gate.mjs|scripts/verify-518-journal-cas-simulator.mjs|scripts/verify-518-legacy-rebuild-redteam.mjs|scripts/verify-518-head-capacity-redteam.mjs|DOCS/APP518_MUSIC_NOTE_CATALOG_REPAIR_CONTRACT.md|.github/workflows/verify-518-canonical-fence.yml) ;;
+              cloudflare/media-worker/src/catalogCanonicalFence518.js|cloudflare/media-worker/src/catalogEventGate518.js|cloudflare/media-worker/src/catalogJournalReconcile518.js|cloudflare/media-worker/src/catalogAuthorityPolicy518.js|cloudflare/media-worker/src/index.js|scripts/verify-518-worker-compat-switch.mjs|scripts/verify-518-canonical-fence.mjs|scripts/verify-518-catalog-event-cost-gate.mjs|scripts/verify-518-journal-cas-simulator.mjs|scripts/verify-518-legacy-rebuild-redteam.mjs|scripts/verify-518-head-capacity-redteam.mjs|DOCS/APP518_MUSIC_NOTE_CATALOG_REPAIR_CONTRACT.md|.github/workflows/verify-518-canonical-fence.yml) ;;
               *) echo "APP518_UNAPPROVED_PRODUCT_OR_BACKEND_CHANGE=$file"; exit 2 ;;
             esac
           done
           echo APP518_EXISTING_PRODUCT_AND_DEPLOY_FILE_SCOPE=PASS
+      - name: Verify no active canonical source writer/retry enabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -q 'catalogJournalReconcile518' cloudflare/media-worker/src/index.js
+          ! grep -q 'catalogCanonicalFence518' cloudflare/media-worker/src/index.js
+          ! grep -q 'SORIDRAW_CANONICAL_CATALOG_518' cloudflare/media-worker/wrangler.jsonc
+          echo 'APP518_NO_ACTIVE_CANONICAL_SYNC=PASS'
       - name: Verify no active app or Worker integration in the contract-only release
         shell: bash
         run: |

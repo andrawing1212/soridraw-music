@@ -32,7 +32,8 @@ permissions:
 # Firebase Functions/Rules and user data are never deployment components here.
 
 concurrency:
-  group: soridraw-release-controller
+  # A single repository-wide mutex also covers preview Media and shared cutover.
+  group: soridraw-media-shared-r2-mutation
   cancel-in-progress: false
 
 jobs:
@@ -206,6 +207,20 @@ jobs:
           fi
           echo FIREBASE_HOSTING_WRITE_PERMISSIONS=PASS
           echo GITHUB_BRANCH_WRITE_DRY_RUN=PASS
+
+      - name: Reject pre-fence release source for any TEST or PRODUCTION mutation
+        if: steps.request.outputs.mode != 'preflight_only'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The release worktree is a pinned older SHA. A controller loaded
+          # from a safe workflow cannot delegate mutation to an unsafe SHA.
+          test -f "$RELEASE_ROOT/cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js"
+          test -f "$RELEASE_ROOT/.deploy/release-media-worker-runtime.mjs"
+          grep -q 'verifyLegacyMediaMutationAllowed518' "$RELEASE_ROOT/.deploy/release-media-worker-runtime.mjs"
+          test -f "$RELEASE_ROOT/scripts/verify-518-shared-writer-rollout.mjs"
+          (cd "$RELEASE_ROOT" && node scripts/verify-518-shared-writer-rollout.mjs)
+          echo RELEASE_MEDIA_SHARED_R2_518_SOURCE_FENCE=PASS
 
       - name: Install Worker tooling
         shell: bash

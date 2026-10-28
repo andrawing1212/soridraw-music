@@ -6,6 +6,8 @@
 // This index is only a *membership hint*: source versions/deletions still
 // come exclusively from verified Firestore -> D1 outbox.
 
+import {CatalogR2ContractError518} from './catalogR2Provider518.js';
+
 const txt=x=>typeof x==='string'?x.trim():'';
 const maxItems=20000,chunkSize=128;
 const safeUid=x=>txt(x).length>0&&txt(x).length<=128&&!/[\\/]/.test(txt(x));
@@ -82,6 +84,35 @@ export const stageFirstChangedOwnerIndex518=async({
    }
    if(previous?.status&&previous.status!=='building')return deny('DENY_UNKNOWN_STATUS');
 
+   // P2: A suspended first import must cheaply verify the R2 HEAD before
+   // materializing N songs. Same HEAD resumes the staged generation; a
+   // changed HEAD cannot rotate within the 60s cooldown or after 3 tries.
+   // Never trust caller-supplied/unverified owner or R2 authority.
+   let checkedHead=null;
+   if(previous?.status==='building'){
+     checkedHead=await readR2HeadAgain(uid);
+     if(checkedHead?.verifiedByServer!==true||checkedHead.ownerUid!==uid
+       ||checkedHead.fencedWritersVerified!==true||!safeHead(checkedHead))
+       return deny('DENY_UNVERIFIED_RESTART_HEAD');
+     const unchanged=previous.generation===checkedHead.headRevision
+       &&previous.indexed_revision===checkedHead.headRevision
+       &&previous.expected_count===checkedHead.itemCount
+       &&previous.head_etag===checkedHead.etag;
+     if(!unchanged){
+       if(!Number.isSafeInteger(previous.generation)
+         ||checkedHead.headRevision<=previous.generation)
+         return deny('HOLD_NON_MONOTONIC_STAGING_HEAD');
+       if(!Number.isSafeInteger(previous.restart_count)
+         ||previous.restart_count>=3)
+         return deny('HOLD_STAGE_RESTART_BUDGET_EXHAUSTED');
+       if(!Number.isSafeInteger(previous.checked_at_ms)
+         ||nowMs-previous.checked_at_ms<60000)
+         return deny('RETRYABLE_STAGE_RESTART_COOLDOWN');
+     }
+     if(checkedHead.itemCount>maxItems)
+       return deny('DENY_UNVERIFIED_OR_OVERSIZED_SNAPSHOT');
+   }
+
    // This provider must itself verify same owner, schema 4, complete status,
    // and materialize BASE+HEAD at one exact HEAD ETag; not a local browser cache.
    const materialized=await loadMaterializedR2Once(uid);
@@ -94,6 +125,11 @@ export const stageFirstChangedOwnerIndex518=async({
      return {code:'DENY_UNVERIFIED_OR_OVERSIZED_SNAPSHOT',complete:false,
        r2FullReads:fullReads,d1RowsWritten:0};
    const head=materialized.head;
+   // If R2 changed after our cheap HEAD check, never publish or rotate
+   // against a different materialization. A later bounded attempt retries.
+   if(checkedHead&&!sameHead(checkedHead,head))
+     return {code:'RETRYABLE_R2_HEAD_MOVED',complete:false,
+       r2FullReads:fullReads,d1RowsWritten:writes};
    if(previous?.status==='building'&&(previous.generation!==head.headRevision
      ||previous.indexed_revision!==head.headRevision
      ||previous.expected_count!==head.itemCount
@@ -168,6 +204,10 @@ export const stageFirstChangedOwnerIndex518=async({
    // A completed D1 index may be published only if unchanged R2 authority
    // is observed after every inserted chunk, not when a stale browser says so.
    const current=await readR2HeadAgain(uid);
+   if(current?.verifiedByServer!==true||current.ownerUid!==uid
+     ||current.fencedWritersVerified!==true||!safeHead(current))
+     return {code:'DENY_UNVERIFIED_RECHECK_HEAD',complete:false,
+       r2FullReads:fullReads,d1RowsWritten:writes};
    if(!sameHead(head,current))return {code:'RETRYABLE_R2_HEAD_MOVED',
      complete:false,r2FullReads:fullReads,d1RowsWritten:writes};
    const ready=await db.prepare(INDEX_MARK_READY_518).bind(
@@ -179,9 +219,10 @@ export const stageFirstChangedOwnerIndex518=async({
    return {code:'INDEX_READY',complete:true,
      indexedRevision:head.headRevision,expectedCount:head.itemCount,
      headEtag:head.etag,r2FullReads:fullReads,d1RowsWritten:writes};
- }catch{
-   return {code:'RETRYABLE_INDEX_IO_ERROR',complete:false,
-     r2FullReads:fullReads,d1RowsWritten:writes};
+ }catch(error){
+   return {code:error instanceof CatalogR2ContractError518
+     ?'DENY_R2_OWNER_OR_SCHEMA_CONTRACT':'RETRYABLE_INDEX_IO_ERROR',
+     complete:false,r2FullReads:fullReads,d1RowsWritten:writes};
  }
 };
 

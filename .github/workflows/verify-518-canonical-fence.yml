@@ -23,6 +23,7 @@ on:
       - 'cloudflare/media-worker/src/catalogHardDeleteReceipt518.js'
       - 'cloudflare/media-worker/src/catalogHardDeleteSource518.js'
       - 'functions/src/app518CanonicalSourceProvider.ts'
+      - 'functions/scripts/test-app518-delete-event-epochs.cjs'
       - 'functions/src/app518ServerTransport.ts'
       - 'cloudflare/media-worker/src/catalogR2Provider518.js'
       - 'cloudflare/media-worker/src/catalogServerAuth518.js'

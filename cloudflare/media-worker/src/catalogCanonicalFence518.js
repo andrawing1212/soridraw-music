@@ -10,7 +10,8 @@ export const parseFirestoreUpdateTimeNs518 = (value) => {
   const match = text(value).match(/^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d{1,9}))?Z$/);
   if (!match) return null;
   const wholeMs = Date.parse(match[1] + 'Z');
-  if (!Number.isFinite(wholeMs) || wholeMs <= 0) return null;
+  if (!Number.isFinite(wholeMs) || wholeMs <= 0
+    || new Date(wholeMs).toISOString().slice(0, 19) !== match[1]) return null;
   const nanos = (match[2] || '').padEnd(9, '0');
   return String(BigInt(wholeMs) * 1_000_000n + BigInt(nanos || '0'));
 };

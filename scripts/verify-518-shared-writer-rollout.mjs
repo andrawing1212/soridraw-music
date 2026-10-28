@@ -113,11 +113,15 @@ for(const operation of ['legacy-delta','bootstrap','rebuild','seed-legacy']){
 // before upload, activation AND restoring a previous version.
 const releases=readFileSync('.deploy/release-media-worker-runtime.mjs','utf8');
 assert.match(releases,/assessLegacyMediaMutation518/);
-const boundary=releases.indexOf("if (['upload', 'activate', 'restore'].includes(action))");
+const boundary=releases.indexOf("if (['upload','activate','restore'].includes(action))");
 assert.ok(boundary>0);
 const restoreDispatch=releases.indexOf("if (action === 'restore') {");
 const uploadDispatch=releases.indexOf("if (action === 'upload') {");
 assert.ok(boundary<restoreDispatch&&boundary<uploadDispatch);
+const rollback=releases.indexOf("run(process.execPath, [WRANGLER, 'rollback'");
+const rollbackGuard=releases.indexOf("await verifyLegacyMediaMutationAllowed518('restore');");
+assert.ok(rollback>rollbackGuard&&rollbackGuard>uploadDispatch,
+ 'automatic rollback must revalidate all three live canonical bindings');
 assert.match(releases,/Object.values\(TARGETS\)\.map/);
 assert.match(releases,/workers\/scripts\/\$\{worker\}\/settings/);
 const valid={action:'restore',sourceCanonicalFlag:null,

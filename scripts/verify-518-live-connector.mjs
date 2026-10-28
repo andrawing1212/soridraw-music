@@ -105,7 +105,7 @@ for(const marker of ['hidden','favoriteHidden','deletedAt','trashedAt']){
 favorite={...base,isPublic:true};
 result=await event(base,{...base,isPublic:true});
 assert.equal(result.code,'ENQUEUED');
-assert.equal(reads,2);assert.equal(posts,2);
+assert.equal(reads,6);assert.equal(posts,2); // four extra explicit source regression reads
 favorite=null;
 result=await event(base,null,'hard-delete-1',timestamp);
 assert.equal(result.code,'ENQUEUED');assert.equal(writes,1);

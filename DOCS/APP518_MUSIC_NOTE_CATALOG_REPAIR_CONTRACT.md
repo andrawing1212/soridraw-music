@@ -155,3 +155,13 @@
 - 검사: JS mock D1 batch/중단/다른 UID/HEAD 이동/정상 첫 색인/재진입 R0/W0 + Python SQLite 실제 D1 SQL 인덱스/중복/상태 전환/계정 격리 + soft/hard delete 권한. 기존 다음곡·공개·하트·Music Note·Library 제품 회귀/TypeScript 검사는 별개로 지속.
 
 **합격 상태:** 최초 색인 코드·가상 테스트 후보만 구현. D1 실제 연결, 구형 hard-delete 안전 처리, 증분 membership 동기화, 원장 재시도 스케줄러·R2 실제 정확 CAS, 배포·실사용·원본 1건 복구/확정 비용 **모두 미완료**. 기존 PR #528 Draft HOLD.
+
+## 2026-10-28 곡별 증분 반영 + R2 성공 후 D1 실패 복구 — 코드/검사 단계
+
+- `music_note_catalog_index_meta_518`에 변경 가능한 `indexed_revision` 열 추가. 처음 색인한 `generation`은 고정하므로 한 곡 변경마다 기존 곡 N개의 D1 색인을 복사하지 않음. 첫 색인 SQL/test도 함께 수정. **기존 실제 D1에는 이 SQL을 실행한 적 없음**.
+- `catalogIndexAdvance518.js`: owner·R2 HEAD·공유 3환경 writer fence를 서버가 검증한 경우에만 최신 R2 HEAD의 **아직 D1에 반영되지 않은 제한된 delta 구간**을 재생. 각 변경의 `canonical518:<exactId>:<21자리 sourceVersion>`가 정확한 D1 source outbox 버전/상태와 일치하는지 확인, 각 delta의 itemCount·revision 연속성을 검사. 기존 D1 member 한 곡 조회 + 메타 갱신, D1 batch 트랜잭션 내부 이전 HEAD revision/ETag/count 검증; 충돌 시 오래된 index를 쓰지 않음.
+- `catalogIndexedWriter518.js`: Firestore exact 원본·D1 pending 버전·소유자 검증 → 일치하는 R2 HEAD에서 해당 곡 delta만 구성 → ETag 조건부 PUT → journal tail로 D1 index 복구 → 최신 R2 HEAD에서 같은 mutation이 실제 확인되고 D1 membership 상태까지 같아야 완료 신호. R2 성공 뒤 D1 batch 실패 시 **ACK 금지**, 다음 재실행은 과거 R2 PUT를 반복하지 않고 journal tail로 D1만 복구. R2 PUT 충돌은 최대 3번 최신 Firestore/D1/R2 재조회 후 재시도.
+- `verify-518-index-delta-recovery.mjs` / `verify-518-indexed-writer.mjs`: R2 성공/D1 실패→중단→재실행, idempotent W0, 3환경 구형 writer 미차단, compaction으로 필요한 delta가 지워짐, 다른 버전/사용자, D1 동시 충돌, itemCount 불일치, R2 CAS 충돌을 실제 순수 코드와 mock D1로 재현. 기존 app204 다음곡/203 공개/356 실패 복원/349 하트/280 삭제 부활/031 묶음저장 회귀 보호 유지.
+- **증분 비용 목표 수정:** 정상 변경 1건에서 기존 outbox D1 W1 접수 + W1 ACK 외에, 인덱스 메타 `indexed_revision/ETag/count` W1, membership가 실제 추가/삭제되는 경우 곡별 행 W1. 즉 **D1 W3(기존 곡 내용 변경) 또는 W4(실제 곡 추가/삭제)**가 목표. 재시도/동시 충돌은 추가 D1/R2 읽기·쓰기가 발생할 수 있음. R2 HEAD GET/CAS PUT, Firestore 정확 R1, Functions/Worker 실행 비용 별도. 앱 진입/페이지 전환 신규 R0/W0 유지. 한 번만 실시하는 첫 색인 W=N+2는 별도.
+- **남은 배포 차단 사유:** (1) 공유 PREVIEW/TEST/PRODUCTION 모든 구형 Writer가 canonical source fence를 적용한다는 근거 없음, (2) 기존 hard-delete 문서의 최신 삭제 커밋 버전 보장 없음, (3) 전체 journal compaction 후 이전 D1 색인에서 이어지는 delta가 사라진 경우 자동 재색인/복구 경로 미완성, (4) 실제 Firebase 변경 이벤트·서버 인증·R2 HEAD ETag provider·D1 예약 재시도 미연결, (5) >20k 곡 색인·대량 동시 변경 실측 안 됨. source helper만 PASS이며 실제 동기화 기능 완료 아님.
+- **운영 및 데이터 상태:** 기존 app517 PREVIEW 앱·Worker 유지, PR #528 Draft·미병합, D1 생성·SQL 마이그레이션 실행/공유 Rules·Functions·Worker 배포 없음, 사용자 데이터 0건 변경. 독립 재감사 미실시.

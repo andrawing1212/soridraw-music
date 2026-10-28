@@ -54,6 +54,34 @@ jobs:
           sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
           echo "LOCKED_PREVIEW_SHA=$target"
 
+      - name: APP515_MAIN_PREVIEW_V2_GUARD
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Reuse the LIVE main release-floor policy, not an older preview copy.
+          # This is a read-only check before authentication/deploy.
+          git show origin/main:scripts/verify-515-main-release-floor.mjs > "$RUNNER_TEMP/app515-main-release-floor.mjs"
+          node "$RUNNER_TEMP/app515-main-release-floor.mjs" "$PWD"
+
+      - name: APP526_PINNED_PREVIEW_RELEASE_GUARD
+        shell: bash
+        env:
+          APPROVED_SHA: ${{ inputs.target_sha }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ]; then
+            echo 'APP526_PUSH_RELEASE_EXISTING_TRIGGER=PASS'
+            exit 0
+          fi
+          [[ "$APPROVED_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo 'Manual release requires exact SHA'; exit 2; }
+          test "$TARGET_SHA" = "$APPROVED_SHA" || { echo 'Checked-out source mismatch'; exit 2; }
+          test "$GITHUB_SHA" = "$APPROVED_SHA" || { echo 'PREVIEW moved before dispatch: fail closed'; exit 2; }
+          grep -Fxq 'deploy_shared_rtdb_rules=false' .deploy/preview-app-release.trigger
+          grep -Fxq 'functions_deploy=false' .deploy/preview-app-release.trigger
+          grep -Fxq 'release_shared_user_data_change=false' .deploy/preview-app-release.trigger
+          grep -Fxq 'deploy_hosting=true' .deploy/preview-app-release.trigger
+          echo 'APP526_MANUAL_PREVIEW_LOCK=PASS; SHARED_RULES=OFF'
+
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
@@ -111,8 +139,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          trigger_url="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/.deploy/preview-app-release.trigger"
-          if ! curl -fsSL "$trigger_url" | grep -Fxq 'deploy_shared_rtdb_rules=true'; then
+          # Manual PINNED PREVIEW app releases never modify shared Rules, even
+          # if preview/GITHUB_SHA advances after the owner-approved source lock.
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            test "$TARGET_SHA" = "$GITHUB_SHA" || { echo 'APP526_MANUAL_SHA_RACE_BLOCKED'; exit 2; }
+            grep -Fxq 'deploy_shared_rtdb_rules=false' .deploy/preview-app-release.trigger || exit 2
+            echo 'APP526_MANUAL_SHARED_RTDB_RULES_DEPLOY=SKIPPED'
+            exit 0
+          fi
+          # Existing explicitly triggered push release retains its old behavior.
+          if ! grep -Fxq 'deploy_shared_rtdb_rules=true' .deploy/preview-app-release.trigger; then
             echo 'SHARED_RTDB_RULES_DEPLOY=SKIPPED'
             exit 0
           fi
@@ -215,8 +251,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          trigger_url="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/.deploy/preview-app-release.trigger"
-          if curl -fsSL "$trigger_url" | grep -Fxq 'deploy_hosting=false'; then
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            test "$TARGET_SHA" = "$GITHUB_SHA" || { echo 'APP526_MANUAL_SHA_RACE_BLOCKED'; exit 2; }
+            grep -Fxq 'deploy_shared_rtdb_rules=false' .deploy/preview-app-release.trigger || exit 2
+            grep -Fxq 'functions_deploy=false' .deploy/preview-app-release.trigger || exit 2
+            grep -Fxq 'release_shared_user_data_change=false' .deploy/preview-app-release.trigger || exit 2
+          fi
+          if grep -Fxq 'deploy_hosting=false' .deploy/preview-app-release.trigger; then
             echo 'FIREBASE_PREVIEW_HOSTING_DEPLOY=SKIPPED_RULES_ONLY'
             exit 0
           fi
@@ -231,8 +272,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          trigger_url="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/.deploy/preview-app-release.trigger"
-          if curl -fsSL "$trigger_url" | grep -Fxq 'deploy_hosting=false'; then
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            test "$TARGET_SHA" = "$GITHUB_SHA" || { echo 'APP526_MANUAL_SHA_RACE_BLOCKED'; exit 2; }
+            grep -Fxq 'deploy_shared_rtdb_rules=false' .deploy/preview-app-release.trigger || exit 2
+            grep -Fxq 'functions_deploy=false' .deploy/preview-app-release.trigger || exit 2
+            grep -Fxq 'release_shared_user_data_change=false' .deploy/preview-app-release.trigger || exit 2
+          fi
+          if grep -Fxq 'deploy_hosting=false' .deploy/preview-app-release.trigger; then
             echo 'PREVIEW_EXACT_BUILD=SKIPPED_UNCHANGED_HOSTING'
             exit 0
           fi

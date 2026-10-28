@@ -10,6 +10,8 @@ on:
       - 'scripts/verify-517-exact-catalog-authority-diagnosis.mjs'
       - 'scripts/verify-356-shared-private-catalog-authority.mjs'
       - '.github/workflows/cloudflare-media-r2-preview-deploy.yml'
+      - '.github/workflows/firebase-hosting-custom-preview.yml'
+      - 'scripts/verify-526-preview-dispatch-guard.mjs'
       - '.github/workflows/verify-517-exact-catalog-authority-diagnosis.yml'
   workflow_dispatch:
 
@@ -27,6 +29,8 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - name: Verify app526 PREVIEW dispatch SHA and Rules race (shell VM)
+        run: node scripts/verify-526-preview-dispatch-guard.mjs
       - name: Exact R2 no-write inspection fault injection
         run: node scripts/verify-517-exact-catalog-authority-diagnosis.mjs
       - name: Existing shared Catalog authority + app517 route compatibility

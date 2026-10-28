@@ -113,7 +113,7 @@ export const dispatchApp518VerifiedEnqueue=async({
     body:signed.body,redirect:"error"});
   if(!response.ok)throw Error("APP518_WORKER_ENQUEUE_RETRYABLE");
   const result=await response.json() as {code?:string};
-  if(!["ENQUEUED","STALE_OR_DUPLICATE"].includes(result?.code||""))
+  if(!["ENQUEUED","STALE_OR_DUPLICATE","STALE_SIGNED_EVENT_NO_WRITE"].includes(result?.code||""))
     throw Error("APP518_WORKER_ENQUEUE_UNVERIFIED");
   return {code:result.code||""};
 };

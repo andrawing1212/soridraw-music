@@ -23,8 +23,11 @@ const strictHead=async(object,uid)=>{
  if(!object||!checkBody(object)||object.customMetadata.uid!==uid
    ||object.customMetadata.kind!=='musicNote'||!txt(object.etag)
    ||Number(object.size)>CATALOG_JOURNAL_MAX_BYTES)return null;
+ // Reading R2 bytes is fallible IO; invalid bytes are a permanent
+ // contract failure only after a successful read.
+ const body=await object.text();
  try{
-  const head=JSON.parse(await object.text());
+  const head=JSON.parse(body);
   if(!isValidCatalogJournal(head,'musicNote')
     ||head.canonicalAuthority518!==true
     ||Number(object.customMetadata.revision)!==head.headRevision
@@ -90,8 +93,11 @@ export const createOwnerR2Provider518=({
   if(!object||object.customMetadata?.uid!==uid||
     object.customMetadata?.kind!=='musicNote')
     throw new CatalogR2ContractError518('APP518_MISSING_OR_FOREIGN_BASE');
+  // Transient stream failure must escape as retryable IO. Only parsing
+  // successfully read bytes proves permanently invalid JSON.
+  const baseBody=await object.text();
   let base;
-  try{base=JSON.parse(await object.text());}catch{
+  try{base=JSON.parse(baseBody);}catch{
     throw new CatalogR2ContractError518('APP518_BASE_INVALID_JSON');
   }
   if(base?.schemaVersion!==4||base?.authority!=='server'

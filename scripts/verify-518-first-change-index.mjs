@@ -17,6 +17,18 @@ const mkdb=()=>{
     throw Error('unknown SQL first');
    },
    async run(){
+    if(sql.includes('SELECT ?, ?, value FROM json_each(?)')){
+     const [uid,gen,serialized]=args;
+     const ids=JSON.parse(serialized);
+     assert.ok(Array.isArray(ids)&&ids.length>0&&ids.length<=512);
+     stats.batches++;stats.maxChunk=Math.max(stats.maxChunk,ids.length);
+     let changes=0;
+     for(const id of ids){
+      const k=key(uid,gen,id);
+      if(!members.has(k)){members.set(k,true);changes++;stats.writes++;}
+     }
+     return {meta:{changes}};
+    }
     if(sql.startsWith('INSERT OR IGNORE INTO music_note_catalog_index_meta_518')){
      const [uid,generation,indexed_revision,expected_count,head_etag,now]=args;
      if(metas.has(uid))return {meta:{changes:0}};
@@ -79,7 +91,7 @@ assert.equal(result.code,'INDEX_READY');
 assert.equal(result.r2FullReads,1);assert.equal(fullReads,1);assert.equal(headChecks,1);
 assert.equal(store.metas.get(owner).status,'ready');
 assert.equal(store.members.size,301);
-assert.equal(store.stats.batches,3);assert.equal(store.stats.maxChunk,128);
+assert.equal(store.stats.batches,1);assert.equal(store.stats.maxChunk,301);
 assert.equal(store.stats.writes,303);
 let membership=await readIndexedMembership518({
  db:store.db,uid:owner,documentId:'f-300',r2Head:head});
@@ -197,12 +209,59 @@ assert.equal(exhaustedFullReads,0,'exhausted owner has no O(N) materialization')
 assert.equal(store.stats.writes,written,'exhausted must not write');
 assert.equal(store.metas.get(owner).status,'building');
 
+// 20k+ owners have no arbitrary 20k rejection, truncated membership, or
+// hundreds of thousands of one-row SQL statements.
+for(const n of [20001,50001]){
+ store=mkdb();
+ const largeIds=Array.from({length:n},(_,i)=>({id:'large-'+i}));
+ const largeHead={...head,itemCount:n};
+ const largeSnap={...snap,head:largeHead,items:largeIds};
+ const large=await run(store.db,{loadMaterializedR2Once:async()=>largeSnap,
+  readR2HeadAgain:async()=>largeHead});
+ assert.equal(large.code,'INDEX_READY');
+ assert.equal(store.metas.get(owner).status,'ready');
+ assert.equal(store.members.size,n,'no song lost above old 20k bound');
+ assert.equal(store.stats.writes,n+2);
+ assert.equal(store.stats.batches,Math.ceil(n/512),'bounded D1 SQL queries');
+ assert.ok(store.stats.maxChunk<=512);
+ assert.equal((await run(store.db,{loadMaterializedR2Once:async()=>{
+  throw Error('repeat full owner scan forbidden');
+ }})).code,'READY_REQUIRES_HEAD_CAS');
+ assert.equal(store.stats.writes,n+2,'unchanged owner D1 W0');
+}
+// A failed page is invisible until same exact HEAD retry completes; successful
+// SQL pages are idempotent, and other owners remain untouched.
 store=mkdb();
-const tooMany=Array.from({length:20001},(_,n)=>({id:'f-'+n}));
-const overflow=await run(store.db,{loadMaterializedR2Once:async()=>({
- ...snap,head:{...head,itemCount:tooMany.length},items:tooMany})});
-assert.equal(overflow.code,'DENY_UNVERIFIED_OR_OVERSIZED_SNAPSHOT');
-assert.equal(store.stats.writes,0);
+const bigN=20001,bigIds=Array.from({length:bigN},(_,i)=>({id:'f-'+i}));
+const bigHead={...head,itemCount:bigN};
+const bigSnap={...snap,head:bigHead,items:bigIds};
+const normalDb=store.db,originalPrepare=normalDb.prepare;
+let pageNo=0,interrupted=false;
+normalDb.prepare=function(sql){
+ const statement=originalPrepare.call(this,sql);
+ if(!sql.includes('SELECT ?, ?, value FROM json_each(?)'))return statement;
+ return {bind(...args){
+  const prepared=statement.bind(...args);
+  return {...prepared,async run(){
+   if(++pageNo===4&&!interrupted){interrupted=true;throw Error('D1 interrupted');}
+   return prepared.run();
+  }};
+ }};
+};
+let interruptedRun=await run(normalDb,{loadMaterializedR2Once:async()=>bigSnap,
+ readR2HeadAgain:async()=>bigHead});
+assert.equal(interruptedRun.code,'RETRYABLE_INDEX_IO_ERROR');
+assert.equal(store.metas.get(owner).status,'building');
+assert.equal(store.members.size,512*3);
+assert.equal((await readIndexedMembership518({db:normalDb,uid:owner,
+ documentId:'f-3',r2Head:bigHead})).code,'DENY_INDEX_NOT_READY');
+const done=await run(normalDb,{loadMaterializedR2Once:async()=>bigSnap,
+ readR2HeadAgain:async()=>bigHead});
+assert.equal(done.code,'INDEX_READY');
+assert.equal(store.members.size,bigN);
+assert.equal(store.stats.writes,bigN+2,'resume did not rewrite staged songs');
+console.log('APP518_OVER_20K_50K_OWNER_COMPLETE_SQL_PAGED=PASS');
+console.log('APP518_20K_PLUS_CRASH_RESUME_NO_DUPLICATE_WRITES=PASS');
 
 // A changed HEAD without owner/fence proof must never bypass cooldown.
 store=mkdb();

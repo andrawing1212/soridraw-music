@@ -224,3 +224,13 @@
 - 신규 receipt는 구형 영구 삭제(문서가 완전 삭제된 경우)에만 Firestore W1/최신 세대당 추가 W1. 일반 저장/soft-delete Firestore 추가 receipt W0. 인덱스 회복은 필요할 때만 해당 UID의 제한된 R2 journal tail을 읽고 D1 변경. 새 page-open/polling 불필요한 비용 0.
 - 독립적인 타 작업자 재감사, 실제 서비스 이벤트 인증·HMAC secrets 설정/Worker endpoint/Queue/Cron, 공유 PREVIEW·TEST·PRODUCTION 모든 구형 Writer 차단, >2만곡, 사용자 원본 1건 복구, PC/모바일 및 비용 실측은 **미완료**. 합격된 소스 테스트를 배포 PASS라고 표현 금지.
 - 승인 범위: **PR #528 Draft 후보의 코드 수정·검사·GitHub 저장만**. D1 생성·마이그레이션, Firebase Rules/Functions, Worker/Hosting 배포 및 실데이터 처리 **없음**.
+
+## 2026-10-28 독립 감사 `bf92a50c` P1/P2 최소 수정 — 배포 금지
+
+**독립 감사:** P0 없음, P1 1건(오래된 저장 v1이 최신 삭제 v2 뒤 HEAD를 읽고 되살림), P2 1건(영구 HOLD도 매시간 D1/R2 재시도). 둘 다 아직 활성화되지 않은 app518 후보 소스의 발견사항.
+
+- **P1** `catalogIndexedWriter518.js`: 이제 한 번의 시도마다 **R2 HEAD+ETag 취득 → 정확 Firestore sourceVersion 및 D1 outbox 확인 → 그 HEAD의 membership 확인 → 그 ETag에만 R2 CAS** 순서. CAS 충돌은 처음부터 HEAD/정본/원장 전부 재검증, 최대 3회. 새 `verify-518-stale-save-delete-race.mjs`는 실제 Writer 두 개가 `v1 저장 중단→v2 삭제 CAS+색인 업데이트→v1 재개`하는 타이밍을 HEAD 앞·R2 PUT 앞 두 방식으로 재현하고, 최신 삭제 membership 0·원장 v2 ACK·R2 PUT 1만 허용. 이전 `verify-518-index-delta-recovery.mjs`의 R2 v1 성공→D1 장애→v2 삭제 복구 검사를 함께 유지.
+- **P2** 미적용 D1 schema에 `hold_reason` nullable 열 추가, 부분 due-index와 `SELECT_DUE_518`에서 HOLD 제외. `holdExactFavorite518`는 정확 `(uid, favoriteId, sourceVersion)`의 미ACK·미HOLD 행에 고정 사유만 W1 기록(중복 W0). source로부터 증명된 새로운 version이 접수되면 UPSERT로 HOLD 초기화. `catalogDelivery518.js`는 source/index 권한 및 고정 계약 실패만 즉시 HOLD하고, 일시적 통신 실패는 기존 backoff를 쓰되 최대 8회 후 HOLD. 원장 row/원본·ACK는 **삭제하지 않음**. 수동 재개는 별도 서버 관리자 승인·정본 재검증이 필요하며 일반 페이지 방문으로 재개하면 안 됨.
+- **비용:** 정상 변경 경로 추가 D1 W0, R2 PUT/GET 증가 없음(단 재시도 ETag 충돌 시 원본 재확인). HOLD 최초 단건 시 D1 W1, 동일 HOLD 이후 자동 due/R2/Firestore 재호출 W0; 전역 스케줄러가 존재한다면 빈 due 확인의 기본 D1 R은 별도. 신규 sourceVersion은 정상 W1 enqueue와 함께 재개. 일반 Music Note local-first batch 및 좋아요/공개·비공개·다음곡·Library UI 변경 없음.
+- 검사: `verify-518-stale-save-delete-race.mjs` 실제 두 Writer 동시 실행, `verify-518-d1-outbox-sql.py` 실제 SQLite HOLD 재조회·새 버전 재개·STALE ACK W0, `verify-518-d1-delivery-drain.mjs` 원장/스케줄 비용, `verify-518-d1-outbox-adapter.mjs` 최대 재시도 및 고정 사유.
+- 이 검사는 작성자가 수행한 source+offline CI일 뿐 독립 재감사 PASS가 아님. PR Draft 유지, D1 실 적용·배포·실기기·실데이터 복구 금지. 공유 3환경 구형 Writer 차단·실서버 Firebase/Cloudflare 인증·추적·2만곡 초과/실비용 검증은 여전히 릴리스 HOLD.

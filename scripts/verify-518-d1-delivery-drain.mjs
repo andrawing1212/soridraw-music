@@ -7,7 +7,7 @@ const uid='own',documentId='song-a',nowMs=100000;
 function makeDb(state){
  const row={owner_uid:uid,favorite_id:documentId,
    source_version_ns:ver(1),desired_state:'saved',ack_version_ns:null,
-   attempt_count:0,next_attempt_ms:0,...state};
+   attempt_count:0,next_attempt_ms:0,hold_reason:null,...state};
  const counts={reads:0,writes:0};
  const db={prepare(sql){
   return {bind(...args){
@@ -15,7 +15,8 @@ function makeDb(state){
     async all(){
      counts.reads++;
      if(!sql.includes('SELECT owner_uid'))throw Error('wrong due query');
-     return {results:row.ack_version_ns===row.source_version_ns
+     return {results:row.hold_reason!==null
+       ||row.ack_version_ns===row.source_version_ns
        ||row.next_attempt_ms>args[0]?[]:[{...row}]};
     },
     async run(){
@@ -25,15 +26,21 @@ function makeDb(state){
        if(BigInt(v)<=BigInt(row.source_version_ns))return {meta:{changes:0}};
        row.source_version_ns=v;row.desired_state=st;
        row.ack_version_ns=null;row.attempt_count=0;row.next_attempt_ms=0;
+       row.hold_reason=null;
      }else if(sql.startsWith('UPDATE')&&sql.includes('ack_version_ns=source_version_ns')){
        if(row.source_version_ns!==args[3]||row.ack_version_ns===args[3])
          return {meta:{changes:0}};
        row.ack_version_ns=args[3];
      }else if(sql.startsWith('UPDATE')&&sql.includes('attempt_count=attempt_count+1')){
-       if(row.source_version_ns!==args[4]||row.ack_version_ns===args[4])
-         return {meta:{changes:0}};
+       if(row.source_version_ns!==args[4]||row.ack_version_ns===args[4]
+         ||row.hold_reason!==null)return {meta:{changes:0}};
        if(row.attempt_count!==args[5])return {meta:{changes:0}};
        row.next_attempt_ms=args[0];row.attempt_count++;
+     }else if(sql.startsWith('UPDATE')&&sql.includes('SET hold_reason=?')){
+       const [reason,time,owner,doc,v]=args;
+       if(owner!==uid||doc!==documentId||v!==row.source_version_ns
+         ||row.hold_reason!==null)return {meta:{changes:0}};
+       row.hold_reason=reason;
      }else throw Error('unknown SQL');
      counts.writes++;return {meta:{changes:1}};
     },
@@ -105,6 +112,41 @@ ctx=makeDb();
 result=await run(ctx.db,async()=>{throw Error('offline');},
  async()=>{throw Error('must not reach R2');});
 assert.equal(result.retry,1);
+// P2: Contract-invalid terminal source is held once, even if the scheduler
+// runs thousands of times. A new verified source wakes it without scanning.
+ctx=makeDb();
+let applyCalls=0;
+result=await run(ctx.db,async()=>canonical(1),async()=>{
+ applyCalls++;return {code:'DENY_UNFENCED_R2_HEAD',
+ ownerVerified:false,versionVerified:false,casVerified:false};
+});
+assert.equal(result.held,1);
+assert.equal(result.retry,0);
+assert.equal(ctx.row.hold_reason,'INDEX_CONTRACT');
+assert.equal(ctx.row.ack_version_ns,null);
+const pendingWrites=ctx.counts.writes,pendingReads=ctx.counts.reads;
+for(let i=0;i<5;i++){
+ const idle=await run(ctx.db,async()=>{throw Error('held never read');},
+ async()=>{throw Error('held never invoked');});
+ assert.equal(idle.attempted,0);
+}
+assert.equal(ctx.counts.writes,pendingWrites);
+assert.equal(ctx.counts.reads,pendingReads+5,'only bounded empty D1 due queries');
+assert.equal(applyCalls,1);
+result=await run(ctx.db,async()=>canonical(2,'removed'),async()=>{
+ throw Error('should not run while held');
+});
+assert.equal(result.attempted,0);
+ctx=makeDb({attempt_count:8});
+result=await run(ctx.db,async()=>{throw Error('network offline');},
+ async()=>{throw Error('must not call R2');});
+assert.equal(result.held,1);
+assert.equal(ctx.row.hold_reason,'RETRY_BUDGET_EXHAUSTED');
+assert.equal(ctx.row.ack_version_ns,null);
+assert.equal((await run(ctx.db,async()=>{throw Error('no repeat');},
+ async()=>{throw Error('no repeat');})).attempted,0);
+console.log('APP518_D1_TERMINAL_ERROR_HOLD_W1_AND_NO_HOURLY_RETRY=PASS');
+console.log('APP518_D1_TRANSIENT_RETRY_BUDGET_CAPPED_PENDING_PRESERVED=PASS');
 console.log('APP518_D1_DELIVERY_READS_FRESH_CANONICAL_AND_REQUEUES_DRIFT=PASS');
 console.log('APP518_D1_OFFLINE_R2_FAILURE_DURABLE_RETRY=PASS');
 console.log('APP518_D1_ACK_REQUIRES_VERIFIED_EXACT_R2_CAS=PASS');

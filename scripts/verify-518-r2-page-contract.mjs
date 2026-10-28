@@ -13,7 +13,7 @@ const fixture=(items,{trailingComma=false,metadataUid=uid}={})=>{
  const head={...createEmptyCatalogJournal({
   kind:'musicNote',baseKey:key,baseRevision:100,itemCount:items.length,now:1,
  }),canonicalAuthority518:true};
- let reads=0,puts=0,largestRange=0;
+ let reads=0,puts=0,largestRange=0,requestedBytes=0,receivedBytes=0;
  const env={SORIDRAW_CANONICAL_CATALOG_518:'ENABLED_AFTER_SHARED_ROLLOUT',
   CATALOG:{
    async head(){return {etag:'"fixed"',size:bytes.length,
@@ -22,8 +22,9 @@ const fixture=(items,{trailingComma=false,metadataUid=uid}={})=>{
     assert.equal(k,key);assert.ok(opts?.range);
     const {offset,length}=opts.range;
     assert.ok(length<=65536);
-    largestRange=Math.max(largestRange,length);reads++;
+    largestRange=Math.max(largestRange,length);reads++;requestedBytes+=length;
     const slice=bytes.slice(offset,offset+length);
+    receivedBytes+=slice.length;
     return {etag:'"fixed"',customMetadata:{uid:metadataUid,kind:'musicNote'},
       async arrayBuffer(){return slice.buffer.slice(slice.byteOffset,slice.byteOffset+slice.byteLength);}};
    },
@@ -33,14 +34,24 @@ const fixture=(items,{trailingComma=false,metadataUid=uid}={})=>{
   env,sharedReleaseFencesVerified:true,readOwnerHead:async()=>({}),
   projectItem:item=>item,
  });
- return {reader,head,stats:()=>({reads,puts,largestRange})};
+ return {reader,head,stats:()=>({
+  reads,puts,largestRange,requestedBytes,receivedBytes,baseBytes:bytes.length,
+ })};
 };
 const crawl=async data=>{
  const info=await data.reader.inspect({uid,head:data.head});
  let offset=0,seen=0,steps=0,ids=[];
  while(steps++<50){
+  const before=data.stats();
   const p=await data.reader.page({uid,head:data.head,baseEtag:info.baseEtag,
    baseSize:info.baseSize,offset,seen,pageSize:256});
+  const after=data.stats();
+  // Enforce total network bytes requested/received, not only parser's
+  // consumed bytes. A footer re-fetch must count against the same page.
+  assert.ok(after.requestedBytes-before.requestedBytes<=131072,
+   'all R2 range GET requested bytes per page must be <=128KiB');
+  assert.ok(after.receivedBytes-before.receivedBytes<=131072,
+   'all R2 range GET received bytes per page must be <=128KiB');
   assert.ok(p.offset>offset&&p.offset-offset<=131072,
    'source byte budget is a strict 128KiB');
   assert.ok(p.seen>=seen&&p.seen-seen<=256);
@@ -66,6 +77,22 @@ const large=await crawl(nearLimit);
 assert.deepEqual(large.ids,['large']);
 assert.ok(large.steps>=2,'prefix-only checkpoint permits one long valid item');
 assert.equal(nearLimit.stats().puts,0);
+// Audit regression: one valid UTF-8 BASE is exactly 131,007 bytes.
+// The prior implementation made an extra 8,192-byte prefix GET on the last
+// page (139,199 total) despite claiming a 128KiB source-page limit.
+const edgeEmpty=fixture([{id:'edge',createdAtMs:1,title:''}]);
+const edgeTarget=131007;
+const edgeFill=edgeTarget-edgeEmpty.stats().baseBytes;
+assert.ok(edgeFill>0);
+const edge=fixture([{id:'edge',createdAtMs:1,title:'x'.repeat(edgeFill)}]);
+assert.equal(edge.stats().baseBytes,edgeTarget);
+const edgeResult=await crawl(edge);
+assert.deepEqual(edgeResult.ids,['edge']);
+assert.equal(edge.stats().requestedBytes,edgeTarget,
+ 'no redundant R2 prefix re-fetch at end of BASE');
+assert.equal(edge.stats().receivedBytes,edgeTarget);
+assert.equal(edge.stats().puts,0);
+console.log('APP518_REAL_R2_TOTAL_GET_BYTES_131007_LE128K=PASS');
 // A malformed comma after the last item must NEVER disappear when the
 // footer metadata is reassembled without the full items array.
 const malformed=fixture([{id:'a',createdAtMs:1}],{trailingComma:true});

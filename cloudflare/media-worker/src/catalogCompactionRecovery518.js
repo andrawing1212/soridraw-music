@@ -18,15 +18,29 @@ const same=(a,b)=>a&&b&&a.headRevision===b.headRevision&&a.itemCount===b.itemCou
 
 export const RECOVERY_CLAIM_518=[
  'UPDATE music_note_catalog_index_meta_518',
- 'SET recovery_generation=?,recovery_revision=?,recovery_etag=?,recovery_count=?',
+ 'SET recovery_generation=?,recovery_revision=?,recovery_etag=?,recovery_count=?,',
+ 'recovery_checked_at_ms=?,recovery_restart_count=0',
  'WHERE owner_uid=? AND generation=? AND indexed_revision=? AND head_etag=?',
  "AND status='ready' AND recovery_generation IS NULL",
+].join(' ');
+// A verified newer R2 revision may replace only the invisible recovery
+// claim. Never modify READY generation or change another owner's staging.
+// Same-revision/different-ETag is HOLD, not permission to recycle a generation.
+export const RECOVERY_ROTATE_518=[
+ 'UPDATE music_note_catalog_index_meta_518',
+ 'SET recovery_generation=?,recovery_revision=?,recovery_etag=?,recovery_count=?,',
+ 'recovery_checked_at_ms=?,recovery_restart_count=recovery_restart_count+1',
+ 'WHERE owner_uid=? AND generation=? AND indexed_revision=? AND head_etag=?',
+ "AND status='ready' AND recovery_generation=? AND recovery_revision=?",
+ 'AND recovery_etag=? AND recovery_count=?',
+ 'AND recovery_restart_count<3 AND recovery_checked_at_ms<=?',
 ].join(' ');
 export const RECOVERY_PROMOTE_518=[
  'UPDATE music_note_catalog_index_meta_518',
  'SET generation=recovery_generation,indexed_revision=recovery_revision,',
  'head_etag=recovery_etag,expected_count=recovery_count,checked_at_ms=?,',
- 'recovery_generation=NULL,recovery_revision=NULL,recovery_etag=NULL,recovery_count=NULL',
+ 'recovery_generation=NULL,recovery_revision=NULL,recovery_etag=NULL,recovery_count=NULL,',
+ 'recovery_restart_count=0,recovery_checked_at_ms=NULL',
  'WHERE owner_uid=? AND generation=? AND indexed_revision=? AND head_etag=?',
  "AND status='ready' AND recovery_generation=? AND recovery_revision=?",
  'AND recovery_etag=? AND recovery_count=?',
@@ -46,6 +60,34 @@ export const recoverCompactedOwnerIndex518=async({
   if(old?.status!=='ready'||!Number.isSafeInteger(old.generation)
     ||!Number.isSafeInteger(old.indexed_revision)||!txt(old.head_etag))
     return fail('DENY_OLD_INDEX_NOT_READY');
+  // If a previous stage is incomplete, use a small, authenticated HEAD
+  // read BEFORE an O(N) full materialization. A recently moved HEAD should
+  // not cause a fresh N-row import on every scheduler tick.
+  if(old.recovery_generation!=null){
+   if(!Number.isSafeInteger(old.recovery_generation)
+      ||!Number.isSafeInteger(old.recovery_revision)
+      ||!Number.isSafeInteger(old.recovery_count)
+      ||!Number.isSafeInteger(old.recovery_restart_count)
+      ||!Number.isSafeInteger(old.recovery_checked_at_ms))
+     return fail('HOLD_UNVERSIONED_RECOVERY_CLAIM');
+   const probe=await readR2HeadAgain(uid);
+   if(probe?.verifiedByServer!==true||probe?.ownerUid!==uid
+      ||probe?.fencedWritersVerified!==true
+      ||!validHead(probe.head)||!txt(probe.etag))
+     return fail('DENY_RECOVERY_PROBE_UNVERIFIED');
+   const sameClaim=probe.head.headRevision===old.recovery_revision
+      &&probe.head.itemCount===old.recovery_count
+      &&probe.etag===old.recovery_etag;
+   if(!sameClaim){
+     if(probe.head.headRevision<=old.recovery_revision
+        ||probe.head.headRevision<=old.recovery_generation)
+       return fail('HOLD_NON_MONOTONIC_RECOVERY_HEAD');
+     if(old.recovery_restart_count>=3)
+       return fail('HOLD_RECOVERY_RESTART_BUDGET_EXHAUSTED');
+     if(nowMs-old.recovery_checked_at_ms<60000)
+       return fail('RETRYABLE_RECOVERY_RESTART_COOLDOWN');
+   }
+  }
   // The caller must only trigger after bounded delta recovery proves a
   // COMPACTION GAP, not merely because the HEAD changed normally.
   const snapshot=await loadCompleteFencedOwnerR2(uid);fullReads++;
@@ -60,26 +102,43 @@ export const recoverCompactedOwnerIndex518=async({
     return fail('DENY_NOT_A_COMPACTION_GAP',fullReads);
   const nextGen=target.headRevision; // monotonic, never reuse an older generation
   if(nextGen<=old.generation)return fail('DENY_NON_MONOTONIC_GENERATION',fullReads);
-  if(old.recovery_generation!=null &&
+  const changedStage=old.recovery_generation!=null &&
    (old.recovery_generation!==nextGen||old.recovery_revision!==target.headRevision
-    ||old.recovery_etag!==snapshot.etag||old.recovery_count!==target.itemCount))
-    return fail('HOLD_RECOVERY_TARGET_MOVED',fullReads);
+    ||old.recovery_etag!==snapshot.etag||old.recovery_count!==target.itemCount);
+  if(changedStage){
+   if(nextGen<=old.recovery_generation||target.headRevision<=old.recovery_revision)
+     return fail('HOLD_NON_MONOTONIC_RECOVERY_HEAD',fullReads);
+   if(old.recovery_restart_count>=3)
+     return fail('HOLD_RECOVERY_RESTART_BUDGET_EXHAUSTED',fullReads);
+   if(!Number.isSafeInteger(old.recovery_checked_at_ms)
+      ||nowMs-old.recovery_checked_at_ms<60000)
+     return fail('RETRYABLE_RECOVERY_RESTART_COOLDOWN',fullReads);
+  }
   const seen=new Set();
   for(const item of snapshot.items){
    const id=txt(item?.id);
    if(!validId(id)||seen.has(id))return fail('DENY_BAD_OR_DUPLICATE_ID',fullReads);
    seen.add(id);
   }
-  if(old.recovery_generation==null){
-   const claimed=await db.prepare(RECOVERY_CLAIM_518).bind(
-    nextGen,target.headRevision,snapshot.etag,target.itemCount,
-    uid,old.generation,old.indexed_revision,old.head_etag).run();
-   writes+=Number(claimed?.meta?.changes||0);
-   if(Number(claimed?.meta?.changes)!==1)
-    return fail('RETRYABLE_RECOVERY_CLAIM_RACE',fullReads,writes);
+  if(old.recovery_generation==null || changedStage){
+   const query=changedStage?RECOVERY_ROTATE_518:RECOVERY_CLAIM_518;
+   const params=changedStage
+    ?[nextGen,target.headRevision,snapshot.etag,target.itemCount,
+      nowMs,uid,old.generation,old.indexed_revision,old.head_etag,
+      old.recovery_generation,old.recovery_revision,old.recovery_etag,
+      old.recovery_count,nowMs-60000]
+    :[nextGen,target.headRevision,snapshot.etag,target.itemCount,
+      nowMs,uid,old.generation,old.indexed_revision,old.head_etag];
+   const claimed=await db.prepare(query).bind(...params).run();
+   const changed=Number(claimed?.meta?.changes||0);
+   writes+=Math.max(0,changed);
+   if(changed!==1)
+    return fail(changedStage?'RETRYABLE_RECOVERY_ROTATE_RACE':
+      'RETRYABLE_RECOVERY_CLAIM_RACE',fullReads,writes);
   }
-  // A crash after any chunk is resumable with the same HEAD. A changed HEAD
-  // is NEVER silently trusted; wait for an independently approved new epoch.
+  // The previous incomplete generation is invisible; restarting creates a
+  // distinct, greater generation under a bounded claim. No row is deleted.
+  // Same-HEAD crash retries remain idempotent through INSERT OR IGNORE.
   const ids=[...seen];
   for(let i=0;i<ids.length;i+=128){
    const batch=ids.slice(i,i+128).map(id=>db.prepare(INDEX_MEMBER_STAGE_518)

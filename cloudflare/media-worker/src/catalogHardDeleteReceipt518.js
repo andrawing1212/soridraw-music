@@ -18,24 +18,25 @@ const valid=x=>txt(x).length>0&&txt(x).length<=240
 
 export const settleVerifiedHardDelete518=async({
  uid,documentId,deleteEventId,verifiedServerDeleteEvent,beforeOwnerUid,
- transactExactAbsentReceipt,readExactAfterReceipt,
+ beforeUpdateTime,transactExactAbsentReceipt,readExactAfterReceipt,
 }={})=>{
  const reject=code=>({code,allowR2Write:false,allowD1Enqueue:false});
- if(!valid(uid)||!valid(documentId)||!valid(deleteEventId)
+ const eventGeneration=parseFirestoreUpdateTimeNs518(beforeUpdateTime);
+ if(!eventGeneration||!valid(uid)||!valid(documentId)||!valid(deleteEventId)
    ||verifiedServerDeleteEvent!==true||beforeOwnerUid!==uid
    ||typeof transactExactAbsentReceipt!=='function'
    ||typeof readExactAfterReceipt!=='function')
    return reject('DENY_UNVERIFIED_DELETE_EVENT');
  try{
   const result=await transactExactAbsentReceipt({
-   uid,documentId,deleteEventId,
+   uid,documentId,deleteEventId,beforeUpdateTime,
    // Adapter must be a single Firestore transaction that reads exact current
    // favorite and private receipt, and writes only the private receipt when
    // currently absent. Must not use blind setDoc or local/RTDB timestamps.
    requireReadBeforeWrite:true,writeOnlyIfFavoriteAbsent:true,
    requireServerCommitTimestamp:true,neverRecreateFavorite:true,
   });
-  if(!result||!['RECEIPT_COMMITTED','RECEIPT_ALREADY_EXISTS','ACTIVE_FAVORITE'].includes(result.code)
+  if(!result||!['RECEIPT_COMMITTED','RECEIPT_ALREADY_EXISTS','RECEIPT_ADVANCED','ACTIVE_FAVORITE'].includes(result.code)
     ||result.provenTransactional!==true||result.ownerVerified!==true)
    return reject('DENY_UNPROVEN_TRANSACTION');
   if(result.code==='ACTIVE_FAVORITE')return reject('SKIP_LATEST_FAVORITE_PRESENT');
@@ -46,8 +47,11 @@ export const settleVerifiedHardDelete518=async({
   if(proof.favoriteExists===true)return reject('HOLD_LATER_FAVORITE_WRITE');
   if(proof.favoriteExists!==false||proof.receipt?.uid!==uid
     ||proof.receipt.documentId!==documentId
-    ||!txt(proof.receipt.deleteEventId))
+    ||!txt(proof.receipt.deleteEventId)
+    ||!/^(\d{21})$/.test(txt(proof.receipt.beforeSourceVersionNs)))
    return reject('DENY_RECEIPT_MISMATCH');
+  if(proof.receipt.beforeSourceVersionNs<eventGeneration)
+   return reject('DENY_STALE_RECEIPT_GENERATION');
   const version=parseFirestoreUpdateTimeNs518(proof.receipt.updateTime);
   if(!version)return reject('DENY_MISSING_RECEIPT_SERVER_VERSION');
   // A receipt might have been refreshed by a different later verified
@@ -58,7 +62,7 @@ export const settleVerifiedHardDelete518=async({
     verifiedByServer:true,origin:'server-exact-read',uid,documentId,
     state:'removed',updateTime:proof.receipt.updateTime,
    },sourceVersionNs:version,
-   receiptWrites:result.code==='RECEIPT_COMMITTED'?1:0};
+   receiptWrites:['RECEIPT_COMMITTED','RECEIPT_ADVANCED'].includes(result.code)?1:0};
  }catch{
   return reject('RETRYABLE_RECEIPT_TRANSACTION');
  }

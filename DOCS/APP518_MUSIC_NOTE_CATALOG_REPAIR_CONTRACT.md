@@ -335,3 +335,13 @@
 - 오프라인 검사는 정적 배포 경로, 누락·중복·빈 Cloudflare settings, 3 workflow 공용 mutex, 오래된 source SHA 거부 및 기존 브라우저 정책 회귀. 실제 Cloudflare에 API 요청·배포·변경 없음.
 
 **남은 경계/엄격한 HOLD:** GitHub Actions concurrency는 **이 그룹의 최신 워크플로 실행끼리만** 서로 배제한다. 과거 SHA/과거에 이미 시작된 실행, Cloudflare Dashboard·직접 Wrangler·외부 자동화의 배포, GitHub 밖에서 생긴 canonical 변수를 **검사와 실행 사이에 원자적으로 동결할 권한은 없다**. 따라서 이번 패치가 P1-2의 **전역 경쟁 완전 해소**를 의미하지 않음. 실변경 전 전역 배포 권한/잠금 또는 모든 Writer 포함한 정본 전환 게이트 증명·별도 디렉터 승인과 실환경 감사 필요. PREVIEW/TEST/PRODUCTION 실제 보호 코드는 여전히 미배포이며 Firebase↔Cloudflare 인증·대기열·ACK 실연결과 Cloudflare Free CPU/메모리/비용도 미검증. **Draft / 미병합·미배포 / 실데이터 변경 0 / RELEASE HOLD/NO-GO** 유지.
+
+### 2026-10-29 부분 보호 구형 SHA 허용 P1 — 불변 소스 기준 추가 (병합·배포 금지)
+
+독립 감사 고정 SHA `430d64e5d7f3f573a8ca1c7c7c4d23561408624e`에서 **오래된 보호 스크립트의 함수명만 확인하는 배포 3경로의 P1 FAIL** 확인. 예전 `921311a29632c4f79554b52cca354736b18dc6ef`는 함수명은 갖췄으나 빈 Cloudflare `bindings` 설정을 PASS 처리하므로 배포해서는 안 됨.
+
+**패치:** 최신 3개 GitHub 실행 워크플로인 PREVIEW 직접 배포, 공유 Catalog 3환경 전환, TEST/PRODUCTION 승격 모두 실제 변경 전에 **불변 안전 기준 커밋(430d64e5…) 조상 검사** 및 다음 **정확한 Git blob SHA 확인**을 실행한다: Media Worker `src/index.js`, `src/catalogSharedWriterRolloutGate518.js`, `.deploy/release-media-worker-runtime.mjs`, Media Worker `package.json`, `scripts/verify-518-shared-writer-rollout.mjs`. 권한을 갖는 검사 코드는 배포 후보가 제공하는 검증 파일이 아니라 현재 실행 중인 **워크플로 자체에 고정**된 SHA 목록을 사용한다. 구형 SHA, 일부만 고친 SHA, 보호 코드가 변경된 미감사 후속 SHA, 기준 커밋이 fetch되지 않은 경우 **모두 HOLD**. 신규 보호 코드 개선이 필요하면 별도 감사 후 이 whitelist를 함께 갱신한다. 현재 audit SHA는 핵심 파일의 불변 바이트 기준으로만 사용하며, 전체 앱 릴리스 PASS를 의미하지 않음.
+
+**회귀 테스트:** 구형 `921311a2…` 조상 FAIL, 현 HEAD는 기준 이후, 기준 SHA의 Git object ID와 현재 소스의 blob ID가 동일해야 함, 3개 워크플로 모두 사전 고정 및 배포 이전 단계인지 확인. 과거 app518 대용량 분할·재개 소스는 변경하지 않음.
+
+**릴리스 한계:** 이 차단은 최신 GitHub 워크플로를 통하는 배포만 보호. GitHub 구버전 워크플로 수동 재실행, 과거에 실행 중인 작업, 직접 Wrangler/Cloudflare Dashboard/외부 배포, Cloudflare 제어면의 TOCTOU 경쟁 및 원자적 전역 잠금은 통제 못 함. 또한 `git merge-base --is-ancestor`는 안전 기준 commit이 릴리스 SHA의 **실제 조상**이어야 하므로 squash/rebase로 commit 구조가 바뀌면 **안전하게 HOLD하고 새 기준 감사 및 승인 필요**. 현재 데이터·Worker·R2·D1·배포 0변경, 신규 코드에 대한 Work 독립 재감사 전 PASS 아님, 전체 RELEASE HOLD 유지.

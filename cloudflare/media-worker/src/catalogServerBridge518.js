@@ -79,8 +79,11 @@ export const createApp518ServerBridge=({
       return {...value.head,etag:value.etag};
      },
     });
+    // A moving R2 HEAD or temporary index IO must use bounded retry,
+    // not the permanent D1 HOLD path. Truly invalid DENY/HOLD outcomes
+    // remain terminal in catalogDelivery518's existing classifier.
     if(!['INDEX_READY','READY_REQUIRES_HEAD_CAS'].includes(staged.code))
-     return {code:'HOLD_INDEX_'+staged.code};
+     return {code:'RETRYABLE_INDEX_'+staged.code};
     return applyIndexedCanonicalR2Delta518({
      db,uid,documentId,sourceVersionNs,desiredState,
      readExactCanonical,readOwnerHead:r2.readOwnerHead,

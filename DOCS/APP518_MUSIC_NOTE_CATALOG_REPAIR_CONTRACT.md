@@ -61,3 +61,12 @@
 - **지금 완료:** 소스-only 버전 펜스, 의미 있는 field-change/no-op 판별 helper, 비용 목표 및 기존 기능 회귀검사. 실제 기존 애플리케이션 호출과 연결하지 않았음.
 - **남음:** Function 트리거·Worker 최종 단건 read/ETag CAS+영구 tombstone·server→server 인증·모든 환경 legacy writer 호환/순서 보호, 반복 실패 복구 및 월 청구 실측.
 - **배포 허용 조건:** 독립 감사 PASS와 공유 Firebase 기능·Worker 별도 배포 승인. PR #528을 단독 병합해도 Music Note 누락곡은 복구되지 않음. 사전 실사용 PASS나 비용 실측으로 보고 금지.
+
+## 2026-10-28 추가 구현 — single journal-head CAS 시뮬레이션 (프로토타입)
+
+- `catalogJournalReconcile518.js`: 기존 R2 journal HEAD 조건부 PUT(ETag)의 하나의 객체 안에 **Catalog delta + per-document Firestore sourceVersion/tombstone**을 함께 저장하는 순수 의존성 주입형 백엔드 프로토타입. 새 Firestore 원장 문서 W1을 기본설계에 추가하지 않음. 실 Worker에서 import하지 않음.
+- `verify-518-journal-cas-simulator.mjs`: 가짜 base/journal/ETag/Firestore R1로 저장→삭제→구형 save 재전송, 중복 삭제, compaction 후 tombstone 유지, 공개 전환, CAS 충돌 후 원본 재조회, 타 계정 거절을 검증. **실제 Firebase/R2 네트워크 요청 없음.**
+- 원장 용량: 현재 Journal HEAD 바이트 한도 768KiB는 곡별 기록이 매우 많은 계정에서 포화될 수 있음. 프로토타입은 한도에서 **안전 거절**하므로 아직 모든 사용자에게 정상작동하는 해법이 아님. base/journal 컴팩션 후 버전·tombstone 보존 및 기록 규모 테스트가 먼저 필요. 삭제곡을 몰래 살리는 자동 재생성/오래된 클라이언트 fallback 금지.
+- 실제 업데이트 경로에서 과거 앱/Worker가 `sourceLedger518` 검사 없이 같은 HEAD에 delta를 넣으면 보호를 우회할 수 있음. **PREVIEW, TEST, PRODUCTION의 shared Catalog writer 전체**, 앱 버전 혼합 및 release rollback을 감사하기 전 사용 금지.
+- 매번 Firestore를 읽는 방식이 가장 싸다는 뜻도 아님. source snapshot과 event 버전만으로 안전하게 공통 순서를 보증할 수 있으면 R1 절약 후보이지만, 초기 원장 없는 경우와 역순/동시 이벤트에서 잘못된 곡이 되살아날 위험이 없어야 함. 지금은 기능을 우선해 변경된 곡의 정확한 서버 R1을 가정.
+- 실제 함수 트리거, 서버 간 인증, 영속적인 실패 재시도, PR #528 재사용, 주간 비용/악성 반복 제한, 실기기 혼합 호환 등은 **여전히 미완료**. 확인된 누락곡 1건에 대해서도 현재 쓰기 0건.

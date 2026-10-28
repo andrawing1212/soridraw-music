@@ -1,4 +1,7 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
+import {handleApp518FavoriteEvent} from "./app518LiveConnector";
+import {handleVerifiedApp518ExactSource} from "./app518ServerTransport";
+
 import { defineSecret } from "firebase-functions/params";
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
@@ -4447,3 +4450,65 @@ export {
   publicationRelease431Test,
   publicationRelease431Production,
 } from "./explorePublicationReleaseEndpoint431";
+
+
+// app518 source-only staged connection: no deployed Function/secret/trigger is
+// changed by a GitHub commit. Both handlers are runtime OFF by default.
+// Cloudflare, Firebase and D1 must be configured under separate release approval.
+const app518BridgeActive=()=>process.env.SORIDRAW_APP518_BRIDGE_ACTIVE
+  ==="ENABLED_AFTER_SHARED_ROLLOUT";
+const stage518ServerSecret=defineSecret("SORIDRAW_CATALOG_SERVER_HMAC_518");
+const app518Timestamp=(ts:admin.firestore.Timestamp|undefined):string=>{
+  if(!ts)return "";
+  const d=new Date(ts.seconds*1000);
+  return Number.isFinite(d.getTime())?
+    d.toISOString().slice(0,19)+"."+String(ts.nanoseconds).padStart(9,"0")+"Z":"";
+};
+// Server-to-server callback, signed on raw bytes, exact Firestore R1 only.
+// No browser auth, UID headers or IP allowlists can bypass the HMAC.
+export const app518ExactFavoriteSource=onRequest({
+  region:"asia-northeast3",secrets:[stage518ServerSecret],
+  memory:"256MiB",timeoutSeconds:30,
+},async(req,res)=>{
+  res.setHeader("Cache-Control","no-store");
+  if(!app518BridgeActive()){
+    res.status(503).json({code:"HOLD_APP518_RELEASE_OFF"});return;
+  }
+  try{
+    const secret=stage518ServerSecret.value();
+    const result=await handleVerifiedApp518ExactSource({
+      request:{method:req.method,headers:req.headers,
+        rawBody:req.rawBody as Buffer},
+      db:admin.firestore(),secret,nowMs:Date.now(),
+    });
+    res.status(result.status).json(result);
+  }catch{
+    res.status(503).json({code:"HOLD_APP518_SOURCE_UNAVAILABLE"});
+  }
+});
+// Only source-significant favorite changes request one exact server read.
+// Hard-delete receipts are transactionally versioned; duplicate/stale events
+// cannot recreate deleted songs. No scan, browser polling or periodic write.
+export const app518FavoriteCatalogChanged=functions
+  .runWith({secrets:["SORIDRAW_CATALOG_SERVER_HMAC_518"],failurePolicy:true})
+  .region("asia-northeast3").firestore.document("favorites/{favoriteId}")
+  .onWrite(async(change,context)=>{
+    if(!app518BridgeActive())return;
+    const before=change.before.exists?change.before.data()||null:null;
+    const after=change.after.exists?change.after.data()||null:null;
+    const uid=String(after?.uid||before?.uid||"");
+    const id=String(context.params.favoriteId||"");
+    const hostname=String(process.env.SORIDRAW_APP518_WORKER_HOST||"");
+    const workerUrl=String(process.env.SORIDRAW_APP518_WORKER_URL||"");
+    if(!hostname||!workerUrl)throw new Error("APP518_WORKER_UNPROVISIONED");
+    const result=await handleApp518FavoriteEvent({
+      uid,documentId:id,before,after,
+      deleteEventId:context.eventId,
+      beforeUpdateTime:app518Timestamp(change.before.updateTime),
+      dependencies:{db:admin.firestore(),
+        secret:process.env.SORIDRAW_CATALOG_SERVER_HMAC_518||"",
+        workerUrl,expectedHostname:hostname,nowMs:Date.now()},
+    });
+    if(result.code.startsWith("DENY_")||result.code.startsWith("HOLD_"))
+      throw new Error("APP518_SOURCE_HOLD");
+  });

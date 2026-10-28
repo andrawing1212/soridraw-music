@@ -23,6 +23,7 @@ upsert=stmt("UPSERT_CANONICAL_518")
 due=stmt("SELECT_DUE_518")
 ack=stmt("ACK_EXACT_518")
 retry=stmt("REQUEUE_EXACT_518")
+hold=stmt("HOLD_EXACT_518")
 exact=stmt("READ_ONE_518")
 t1="1793152800000000001".zfill(21)
 t2="1793152800000000002".zfill(21)
@@ -57,6 +58,28 @@ assert enqueue(t3,"saved")==1
 assert changes(ack,(9000,uid,song,t2))==0
 assert changes(ack,(10000,uid,song,t3))==1
 assert db.execute(exact,(uid,song)).fetchone()["desired_state"]=="saved"
+
+
+# P2: terminal problem writes one permanent HOLD and retains the versioned
+# pending song without ever re-reading it from the "due" index.
+assert enqueue(t3,"removed")==0,"same-version does not wake an existing row"
+assert enqueue("1793152800000000004".zfill(21),"removed")==1
+t4="1793152800000000004".zfill(21)
+assert changes(hold,("INDEX_CONTRACT",11000,uid,song,t4))==1
+assert changes(hold,("INDEX_CONTRACT",12000,uid,song,t4))==0,"repeat HOLD W0"
+assert changes(retry,(15000,12000,uid,song,t4,0))==0,"held work cannot be requeued"
+assert not any(row["owner_uid"]==uid and row["favorite_id"]==song
+ for row in db.execute(due,(9999999999,256))),"permanent HOLD cannot poll"
+held=db.execute(exact,(uid,song)).fetchone()
+assert held["hold_reason"]=="INDEX_CONTRACT"
+assert held["source_version_ns"]==t4 and held["desired_state"]=="removed"
+assert changes(ack,(16000,uid,song,t4))==0,"held version cannot silently ACK"
+assert enqueue("1793152800000000005".zfill(21),"saved")==1
+assert db.execute(exact,(uid,song)).fetchone()["hold_reason"] is None
+assert any(row["owner_uid"]==uid and row["favorite_id"]==song
+ for row in db.execute(due,(9999999999,256))),"verified newer version wakes held row"
+print("APP518_D1_TERMINAL_HOLD_ONCE_AND_NO_REPEAT_DUE=PASS")
+print("APP518_D1_HELD_PENDING_PRESERVED_NEWER_SOURCE_REACTIVATES=PASS")
 
 # Cross-owner isolation and no whole-user scan.
 assert enqueue(t2,"removed","owner-2")==1

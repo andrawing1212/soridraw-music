@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { assessLegacyMediaMutation518 } from '../cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js';
 
 const mode = String(process.argv[2] || '').trim();
 const action = String(process.argv[3] || 'dry-run').trim();
@@ -275,6 +276,36 @@ console.log(`${mode.toUpperCase()}_MEDIA_WORKER_CODE_SHA256=${bundleCodeSha256}`
 console.log(`${mode.toUpperCase()}_MEDIA_WORKER_DRY_RUN=PASS`);
 
 if (action === 'dry-run') process.exit(0);
+
+// Before ANY Worker mutation, recheck EVERY environment sharing the R2
+// bucket. One live canonical flag (including a secret or unknown value)
+// blocks this older release runner and its unsafe version rollback. This
+// runner is intentionally not authorized to enable or roll back canonical 518.
+if (['upload', 'activate', 'restore'].includes(action)) {
+  const canonicalFlags = await Promise.all(
+    Object.values(TARGETS).map(async ({ worker }) => {
+      const settings = await cfGet(`${apiBase}/workers/scripts/${worker}/settings`);
+      if (!Array.isArray(settings?.bindings)) {
+        throw new Error('APP518_MEDIA_RELEASE_HOLD_LIVE_BINDINGS_MISSING');
+      }
+      const flags = settings.bindings.filter((item) => (
+        item?.name === 'SORIDRAW_CANONICAL_CATALOG_518'
+      ));
+      if (flags.length > 1) throw new Error('APP518_MEDIA_RELEASE_HOLD_DUPLICATE_FLAG');
+      // Even an opaque secret or an unfamiliar value must fail closed.
+      if (!flags.length) return null;
+      if (flags[0].type !== 'plain_text') return 'UNKNOWN_SECRET';
+      return String(flags[0].text ?? flags[0].value ?? 'UNKNOWN');
+    }),
+  );
+  const verdict = assessLegacyMediaMutation518({
+    action,
+    sourceCanonicalFlag: SOURCE_ENV.vars?.SORIDRAW_CANONICAL_CATALOG_518 ?? null,
+    liveCanonicalFlags: canonicalFlags,
+  });
+  if (!verdict.pass) throw new Error(verdict.code);
+  console.log(`${mode.toUpperCase()}_APP518_LEGACY_RELEASE_BOUNDARY=PASS_CANONICAL_OFF_ALL_THREE`);
+}
 if (action === 'restore') {
   await restore();
   process.exit(0);

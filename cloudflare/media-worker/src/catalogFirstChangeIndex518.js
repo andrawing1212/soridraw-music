@@ -19,13 +19,13 @@ const sameHead=(a,b)=>safeHead(a)&&safeHead(b)
  &&a.itemCount===b.itemCount&&a.etag===b.etag;
 
 export const INDEX_META_READ_518=[
- 'SELECT generation,expected_count,head_etag,status',
+ 'SELECT generation,indexed_revision,expected_count,head_etag,status',
  'FROM music_note_catalog_index_meta_518 WHERE owner_uid=?',
 ].join(' ');
 export const INDEX_META_BEGIN_518=[
  'INSERT OR IGNORE INTO music_note_catalog_index_meta_518',
- '(owner_uid,generation,expected_count,head_etag,status,checked_at_ms)',
- "VALUES (?, ?, ?, ?, 'building', ?)",
+ '(owner_uid,generation,indexed_revision,expected_count,head_etag,status,checked_at_ms)',
+ "VALUES (?, ?, ?, ?, ?, 'building', ?)",
 ].join(' ');
 export const INDEX_MEMBER_STAGE_518=[
  'INSERT OR IGNORE INTO music_note_catalog_member_518',
@@ -64,7 +64,7 @@ export const stageFirstChangedOwnerIndex518=async({
      // *separate*, conditional per-item writer. Do not silently use its
      // membership after external legacy writes/compaction.
      return {code:'READY_REQUIRES_HEAD_CAS',complete:true,
-       indexedRevision:previous.generation,expectedCount:previous.expected_count,
+       indexedRevision:previous.indexed_revision,expectedCount:previous.expected_count,
        headEtag:previous.head_etag,r2FullReads:0,d1RowsWritten:0};
    }
    if(previous?.status&&previous.status!=='building')return deny('DENY_UNKNOWN_STATUS');
@@ -82,6 +82,7 @@ export const stageFirstChangedOwnerIndex518=async({
        r2FullReads:fullReads,d1RowsWritten:0};
    const head=materialized.head;
    if(previous?.status==='building'&&(previous.generation!==head.headRevision
+     ||previous.indexed_revision!==head.headRevision
      ||previous.expected_count!==head.itemCount
      ||previous.head_etag!==head.etag))
      return {code:'DENY_CHANGED_SNAPSHOT_DURING_RETRY',complete:false,
@@ -96,10 +97,11 @@ export const stageFirstChangedOwnerIndex518=async({
    }
    if(!previous){
      const result=await db.prepare(INDEX_META_BEGIN_518)
-       .bind(uid,head.headRevision,head.itemCount,head.etag,nowMs).run();
+       .bind(uid,head.headRevision,head.headRevision,head.itemCount,head.etag,nowMs).run();
      writes+=Math.max(0,Number(result?.meta?.changes||0));
      const claim=await db.prepare(INDEX_META_READ_518).bind(uid).first();
      if(claim?.status!=='building'||claim.generation!==head.headRevision
+       ||claim.indexed_revision!==head.headRevision
        ||claim.expected_count!==head.itemCount||claim.head_etag!==head.etag)
        return {code:'DENY_CONCURRENT_GENERATION',complete:false,
          r2FullReads:fullReads,d1RowsWritten:writes};
@@ -150,7 +152,7 @@ export const readIndexedMembership518=async({db,uid,documentId,r2Head}={})=>{
  try{
    const meta=await db.prepare(INDEX_META_READ_518).bind(uid).first();
    if(meta?.status!=='ready')return {code:'DENY_INDEX_NOT_READY'};
-   if(meta.generation!==r2Head.headRevision||meta.head_etag!==r2Head.etag
+   if(meta.indexed_revision!==r2Head.headRevision||meta.head_etag!==r2Head.etag
      ||meta.expected_count!==r2Head.itemCount)
      return {code:'DENY_INDEX_HEAD_DRIFT'};
    const result=await db.prepare(INDEX_MEMBER_LOOKUP_518)

@@ -13,6 +13,7 @@ import {
   materializeCatalogJournal,
   shouldCompactCatalogJournal,
 } from './catalogJournal.js';
+import { decideCatalogWriterAuthority518, classifyCatalogAuthority518 } from './catalogAuthorityPolicy518.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const AUTH_CERT_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
@@ -470,6 +471,12 @@ const CATALOG_JOURNAL_ENGINE_1053 = true;
 // SORIDRAW_SHARED_PRIVATE_CATALOG_AUTHORITY_356
 // Dormant until every release environment is wired to the same private CATALOG
 // bucket. MEDIA remains environment-local for media/archive objects.
+// app518: rollout switch intentionally OFF in all existing environments.
+// Full shared PREVIEW/TEST/PRODUCTION rollout + durable canonical delivery
+// MUST complete before this server authority cutover can be enabled.
+const isCanonicalCatalogAuthority518 = (env) =>
+  text(env?.SORIDRAW_CANONICAL_CATALOG_518) === 'ENABLED_AFTER_SHARED_ROLLOUT';
+
 const isSharedCatalogEnabled = (env) => text(env?.SORIDRAW_SHARED_CATALOG_V1) === '1';
 const catalogBucket = (env) => (
   isSharedCatalogEnabled(env) && env?.CATALOG ? env.CATALOG : env.MEDIA
@@ -866,6 +873,9 @@ const readCatalogStateFromBucket = async (bucket, uid, kind) => {
 
 const seedSharedCatalogFromCurrentLegacy = async (identity, kind, requiredRevision, env) => {
   if (!isSharedCatalogEnabled(env) || !env?.CATALOG || !env?.MEDIA) return null;
+  if (kind === 'musicNote' && isCanonicalCatalogAuthority518(env)) {
+    throw new Error('CATALOG_518_LEGACY_SEED_DISABLED');
+  }
   const existingShared = await readCatalogStateFromBucket(env.CATALOG, identity.uid, kind);
   if (existingShared) return existingShared;
 
@@ -937,6 +947,15 @@ const bootstrapSharedCatalogFromCanonical = async (identity, kind, requiredRevis
   }
   const required = Math.max(0, Math.floor(Number(requiredRevision || 0)));
   const current = await readCatalogStateFromBucket(env.CATALOG, identity.uid, kind);
+  if (kind === 'musicNote' && isCanonicalCatalogAuthority518(env)) {
+    // Do not run an entire Firestore scan or replace a fenced journal HEAD.
+    throw new Error('CATALOG_518_BOOTSTRAP_MUST_RECONCILE_EXACT');
+  }
+  if (kind === 'musicNote' && current &&
+      classifyCatalogAuthority518(current.head, kind).code !== 'LEGACY_UNFENCED') {
+    // Disabled flag does not permit resetting an already fenced HEAD.
+    throw new Error('CATALOG_518_FENCED_REBUILD_DENIED');
+  }
   if (current && (required <= 0 || Number(current.head?.headRevision || 0) >= required)) {
     return materializeCatalogState(current, kind);
   }
@@ -1011,6 +1030,16 @@ const applyCatalogDelta = async (identity, kind, delta, env, executionCtx = null
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const state = await getCatalogState(identity, kind, delta.baseRevision, env);
     const head = state.head;
+    if (kind === 'musicNote') {
+      const authority = decideCatalogWriterAuthority518({
+        kind, head, operation: 'legacy-delta',
+      });
+      if (authority.code !== 'LEGACY_ALLOWED_WHILE_NOT_MIGRATED') {
+        throw new Error('CATALOG_518_LEGACY_WRITER_DENIED');
+      }
+      // This check is repeated after each ETag conflict when the HEAD
+      // is reloaded; no stale preflight may grant a later R2 PUT.
+    }
     const sanitizedDeletedIds = new Set(delta.deletedIds.map((id) => text(id)).filter(Boolean));
     const sanitizedUpserts = [];
     for (const rawItem of delta.upserts) {
@@ -1127,6 +1156,12 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
     }
 
     if (request.method === 'POST' && route.action === 'delta') {
+      if (route.kind === 'musicNote' && isCanonicalCatalogAuthority518(env)) {
+        // A canonical server writer is required after all environments cut over.
+        // Old browsers cannot self-publish stale snapshots into the shared R2.
+        // Do NOT enable until canonical source + retry are durable.
+        return jsonResponse({ok:false,code:'CATALOG_518_CANONICAL_WRITER_REQUIRED'},409,origin);
+      }
       const declaredLength = Number(request.headers.get('content-length') || 0);
       if (declaredLength > 2 * 1024 * 1024) return jsonResponse({ ok: false, code: 'CATALOG_DELTA_TOO_LARGE' }, 413, origin);
       const delta = await request.json();

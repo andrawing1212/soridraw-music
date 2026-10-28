@@ -26,6 +26,8 @@ assert.equal(plan(base,{...base,appliedKeywords:{style:['lofi']}}),'RECHECK');
 assert.equal(plan(base,{...base,saved:false}),'RECHECK');
 assert.equal(plan(base,null),'DELETE_RECEIPT');
 assert.equal(plan(null,base),'RECHECK');
+assert.equal(plan(null,{uid,saved:false,favoriteRemoved:true}),'RECHECK',
+ 'newly created server tombstone must not be suppressed by a null projection');
 assert.equal(plan(base,{...base,uid:'intruder'}),'DENY');
 assert.equal(plan(null,null),'IGNORE');
 for(let n=0;n<1000;n++)assert.equal(plan(base,{...base,ephemeral:n}),'IGNORE');

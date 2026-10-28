@@ -11,14 +11,14 @@ def ch(sql,args):
     before=db.total_changes
     db.execute(sql,args)
     return db.total_changes-before
-meta="SELECT generation,expected_count,head_etag,status FROM music_note_catalog_index_meta_518 WHERE owner_uid=?"
-begin="INSERT OR IGNORE INTO music_note_catalog_index_meta_518 (owner_uid,generation,expected_count,head_etag,status,checked_at_ms) VALUES (?, ?, ?, ?, 'building', ?)"
+meta="SELECT generation,indexed_revision,expected_count,head_etag,status FROM music_note_catalog_index_meta_518 WHERE owner_uid=?"
+begin="INSERT OR IGNORE INTO music_note_catalog_index_meta_518 (owner_uid,generation,indexed_revision,expected_count,head_etag,status,checked_at_ms) VALUES (?, ?, ?, ?, ?, 'building', ?)"
 stage="INSERT OR IGNORE INTO music_note_catalog_member_518 (owner_uid,generation,favorite_id) VALUES (?, ?, ?)"
 count="SELECT COUNT(*) FROM music_note_catalog_member_518 WHERE owner_uid=? AND generation=?"
 ready="UPDATE music_note_catalog_index_meta_518 SET status='ready',checked_at_ms=? WHERE owner_uid=? AND generation=? AND expected_count=? AND head_etag=? AND status='building'"
 exact="SELECT 1 AS present FROM music_note_catalog_member_518 WHERE owner_uid=? AND generation=? AND favorite_id=?"
-assert ch(begin,(uid,gen,len(ids),etag,1000))==1
-assert ch(begin,(uid,gen,len(ids),etag,1000))==0
+assert ch(begin,(uid,gen,gen,len(ids),etag,1000))==1
+assert ch(begin,(uid,gen,gen,len(ids),etag,1000))==0
 assert db.execute(meta,(uid,)).fetchone()[-1]=="building"
 # A crash after 128 entries cannot make the index visible as READY.
 for i in range(128):

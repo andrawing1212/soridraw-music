@@ -93,7 +93,7 @@ export const reconcileIndexedHead518=async({
    ||tail[0].baseItemCount!==meta.expected_count)
    return reject('HOLD_MISSING_DELTA_CHAIN',headReads);
   let revision=meta.indexed_revision,count=meta.expected_count;
-  const seen=new Map(),effects=[];
+  const seen=new Map(),lastVersions=new Map(),effects=[];
   for(const delta of tail){
    if(delta.baseRevision!==revision||delta.baseItemCount!==count)
     return reject('DENY_DELTA_CHAIN_CONFLICT',headReads);
@@ -114,10 +114,10 @@ export const reconcileIndexedHead518=async({
      ||(mutation.version===outbox.source_version_ns
          &&outbox.desired_state!==mutation.state))
     return reject('HOLD_OUTBOX_VERSION_DRIFT',headReads);
-   const previous=seen.get(mutation.id+'::version');
+   const previous=lastVersions.get(mutation.id);
    if(previous && mutation.version<=previous)
     return reject('DENY_NON_MONOTONIC_SOURCE_HISTORY',headReads);
-   seen.set(mutation.id+'::version',mutation.version);
+   lastVersions.set(mutation.id,mutation.version);
    let present=seen.get(mutation.id);
    if(present===undefined){
     const row=await db.prepare(INDEX_MEMBER_LOOKUP_518)

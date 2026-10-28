@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHmac} from 'node:crypto';
+import {createEmptyCatalogJournal} from '../cloudflare/media-worker/src/catalogJournal.js';
 import {createApp518ServerBridge} from '../cloudflare/media-worker/src/catalogServerBridge518.js';
 const uid='owner',documentId='doc-1',nowMs=1793152800000;
 const version='001793152800000000001';
@@ -140,6 +141,123 @@ for(const invalidR2Head of illegalHeads){
  assert.equal(cloudPuts,beforePuts,'invalid HEAD must not PUT');
  assert.equal((await contractBridge.drainServerPending({nowMs,limit:4})).attempted,0);
 }
+// Work P1/P2 exact integration: the REAL R2 provider -> server bridge ->
+// first index / READY compaction -> delivery must preserve permanent-vs-IO.
+// The fake D1 contains only ONE owner/source version; there is no live IO.
+const basePath='catalog/v5/'+uid+'/musicNote/bases/200.json';
+const headFixture={...createEmptyCatalogJournal({
+ kind:'musicNote',baseKey:basePath,baseRevision:200,itemCount:0,now:2000,
+}),canonicalAuthority518:true};
+const baseFixture={schemaVersion:4,authority:'server',kind:'musicNote',
+ complete:true,revision:200,itemCount:0,items:[]};
+function storedHead(mode){
+ const body=JSON.stringify(headFixture);
+ return {etag:'"current-200"',size:Buffer.byteLength(body),
+  customMetadata:{uid,kind:'musicNote',
+   revision:String(headFixture.headRevision),
+   itemCount:String(headFixture.itemCount),
+   baseRevision:String(headFixture.baseRevision)},
+  async text(){
+   if(mode==='HEAD_STREAM')throw Error('TEMP_HEAD_BODY_IO');
+   if(mode==='HEAD_JSON')return '{broken-json';
+   return body;
+  },
+ };
+}
+function storedBase(mode){
+ return {etag:'"base-200"',size:Buffer.byteLength(JSON.stringify(baseFixture)),
+  customMetadata:{uid:mode==='BASE_FOREIGN'?'other-owner':uid,
+   kind:'musicNote'},
+  async text(){
+   if(mode==='BASE_STREAM')throw Error('TEMP_BASE_BODY_IO');
+   if(mode==='BASE_JSON')return '{broken-json';
+   return JSON.stringify(baseFixture);
+  },
+ };
+}
+function deliveryFixture(ready){
+ const row={owner_uid:uid,favorite_id:documentId,
+  source_version_ns:version,desired_state:'saved',ack_version_ns:null,
+  attempt_count:0,next_attempt_ms:0,hold_reason:null};
+ const counter={retry:0,hold:0,puts:0,fullBaseReads:0,headReads:0,
+  unexpectedWrites:0};
+ const meta={generation:100,indexed_revision:100,expected_count:0,
+  head_etag:'"old-100"',status:'ready'};
+ const database={
+  prepare(sql){return {bind(...args){return {
+   async all(){return {results:row.hold_reason===null&&
+    row.next_attempt_ms<=args[0]?[{...row}]:[]};},
+   async first(){
+    if(sql.includes('FROM music_note_catalog_index_meta_518'))
+     return ready?{...meta}:null;
+    if(sql.includes('FROM music_note_catalog_outbox_518'))
+     return {source_version_ns:row.source_version_ns,
+      desired_state:row.desired_state};
+    throw Error('unexpected D1 select: '+sql);
+   },
+   async run(){
+    if(sql.includes('SET hold_reason=?')){
+     assert.equal(args[2],uid);
+     assert.equal(args[3],documentId);
+     row.hold_reason=args[0];counter.hold++;
+     return {meta:{changes:1}};
+    }
+    if(sql.includes('attempt_count=attempt_count+1')){
+     assert.equal(args[4],version);
+     assert.equal(args[5],row.attempt_count);
+     row.next_attempt_ms=args[0];row.attempt_count++;
+     counter.retry++;return {meta:{changes:1}};
+    }
+    counter.unexpectedWrites++;throw Error('unapproved index write');
+   },
+  };}};},
+  async batch(){counter.unexpectedWrites++;throw Error('unexpected D1 batch');},
+ };
+ return {row,counter,database};
+}
+for(const [mode,ready,terminal] of [
+ ['HEAD_STREAM',false,false],['BASE_STREAM',false,false],
+ ['HEAD_JSON',false,true],['BASE_JSON',false,true],
+ ['BASE_FOREIGN',true,true],['BASE_STREAM',true,false],
+]){
+ const {row,counter,database}=deliveryFixture(ready);
+ const testBridge=build({env:{...env,CATALOG_OUTBOX_518:database,
+  CATALOG:{
+   async get(key){
+    if(key.endsWith('/journal.json')){counter.headReads++;return storedHead(mode);}
+    if(key===basePath){counter.fullBaseReads++;return storedBase(mode);}
+    throw Error('unapproved R2 key');
+   },
+   async put(){counter.puts++;throw Error('FORBIDDEN_PUT');},
+  },
+ }});
+ const receipt=await testBridge.drainServerPending({nowMs,limit:4});
+ assert.equal(receipt.code,'OK',mode);
+ assert.equal(receipt.attempted,1,mode);
+ assert.equal(receipt.acked,0,mode);
+ assert.equal(receipt.held,terminal?1:0,mode);
+ assert.equal(receipt.retry,terminal?0:1,mode);
+ assert.equal(row.hold_reason,terminal?'INDEX_CONTRACT':null,mode);
+ assert.equal(counter.puts,0,mode);
+ assert.equal(counter.unexpectedWrites,0,mode);
+ assert.equal(counter.hold,terminal?1:0,mode);
+ assert.equal(counter.retry,terminal?0:1,mode);
+ if(terminal){
+  assert.equal((await testBridge.drainServerPending({nowMs:nowMs+1000000})).attempted,0);
+ }else{
+  assert.ok(row.next_attempt_ms>nowMs,mode);
+  assert.equal((await testBridge.drainServerPending({nowMs:nowMs})).attempted,0);
+  // Exact same source is still eligible at the bounded next attempt.
+  const next=await testBridge.drainServerPending({
+   nowMs:row.next_attempt_ms,limit:4,
+  });
+  assert.equal(next.attempted,1,mode);
+  assert.equal(next.retry,1,mode);
+  assert.equal(row.hold_reason,null,mode);
+ }
+}
+console.log('APP518_BRIDGE_HEAD_BASE_STREAM_IO_RETRY_JSON_CONTRACT_HOLD=PASS');
+console.log('APP518_BRIDGE_READY_COMPACTION_FOREIGN_BASE_HOLD_IO_RETRY=PASS');
 console.log('APP518_BRIDGE_FOREIGN_OWNER_AND_BAD_JSON_TERMINAL_HOLD=PASS');
 console.log('APP518_BRIDGE_TRANSIENT_INDEX_FAILURE_RETAINS_BOUNDED_RETRY=PASS');
 console.log('APP518_SIGNED_EVENT_FRESH_EXACT_FIRESTORE_BEFORE_D1=PASS');

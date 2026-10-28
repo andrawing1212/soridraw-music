@@ -7,7 +7,9 @@ on:
       - 'cloudflare/media-worker/src/catalogCanonicalFence518.js'
       - 'scripts/verify-518-canonical-fence.mjs'
       - 'cloudflare/media-worker/src/catalogEventGate518.js'
+      - 'cloudflare/media-worker/src/catalogJournalReconcile518.js'
       - 'scripts/verify-518-catalog-event-cost-gate.mjs'
+      - 'scripts/verify-518-journal-cas-simulator.mjs'
       - '.github/workflows/verify-518-canonical-fence.yml'
       - 'DOCS/APP518_MUSIC_NOTE_CATALOG_REPAIR_CONTRACT.md'
   workflow_dispatch:
@@ -33,6 +35,7 @@ jobs:
         run: |
           node scripts/verify-518-canonical-fence.mjs
           node scripts/verify-518-catalog-event-cost-gate.mjs
+          node scripts/verify-518-journal-cas-simulator.mjs
       - name: Protect existing next-song, publication, Music Note and local-first behaviors
         run: |
           node scripts/verify-204-explore-next-song-parity.mjs
@@ -52,7 +55,7 @@ jobs:
           git fetch origin preview --no-tags
           git diff --name-only origin/preview...HEAD | while IFS= read -r file; do
             case "$file" in
-              cloudflare/media-worker/src/catalogCanonicalFence518.js|cloudflare/media-worker/src/catalogEventGate518.js|scripts/verify-518-canonical-fence.mjs|scripts/verify-518-catalog-event-cost-gate.mjs|DOCS/APP518_MUSIC_NOTE_CATALOG_REPAIR_CONTRACT.md|.github/workflows/verify-518-canonical-fence.yml) ;;
+              cloudflare/media-worker/src/catalogCanonicalFence518.js|cloudflare/media-worker/src/catalogEventGate518.js|cloudflare/media-worker/src/catalogJournalReconcile518.js|scripts/verify-518-canonical-fence.mjs|scripts/verify-518-catalog-event-cost-gate.mjs|scripts/verify-518-journal-cas-simulator.mjs|DOCS/APP518_MUSIC_NOTE_CATALOG_REPAIR_CONTRACT.md|.github/workflows/verify-518-canonical-fence.yml) ;;
               *) echo "APP518_UNAPPROVED_PRODUCT_OR_BACKEND_CHANGE=$file"; exit 2 ;;
             esac
           done

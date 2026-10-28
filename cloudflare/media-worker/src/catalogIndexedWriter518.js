@@ -48,7 +48,14 @@ export const applyIndexedCanonicalR2Delta518=async({
    ?{code:'INDEX_ADVANCED'}:{code:'RECOVERY_'+recovered.code};
  };
  for(let attempt=0;attempt<3;attempt++){
-  // A late or duplicate Firebase trigger must never be trusted as current.
+  // HEAD first, then revalidate the exact Firestore source AND D1 outbox.
+  // An older delivery cannot read a newer successful delete HEAD while
+  // relying on a source check made before that deletion. All source
+  // checks are tied to the HEAD ETag used by the conditional R2 PUT.
+  // A 412/CAS conflict must restart this whole sequence.
+  const state=await readOwnerHead(uid);
+  if(!verifiedHead(state,uid))return deny('DENY_UNFENCED_R2_HEAD');
+  const head=state.head,etag=state.etag;
   const canonical=await source();
   if(!canonical||canonical.verifiedByServer!==true||canonical.uid!==uid
     ||canonical.documentId!==documentId||canonical.state!==desiredState
@@ -60,9 +67,6 @@ export const applyIndexedCanonicalR2Delta518=async({
   if(queued?.source_version_ns!==sourceVersionNs
     ||queued?.desired_state!==desiredState)
     return deny('HOLD_OUTBOX_SUPERSEDED');
-  const state=await readOwnerHead(uid);
-  if(!verifiedHead(state,uid))return deny('DENY_UNFENCED_R2_HEAD');
-  const head=state.head,etag=state.etag;
   const membership=await readIndexedMembership518({
    db,uid,documentId,r2Head:{
     headRevision:head.headRevision,itemCount:head.itemCount,etag,

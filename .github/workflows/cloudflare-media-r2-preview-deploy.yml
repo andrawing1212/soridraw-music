@@ -82,10 +82,6 @@ jobs:
           console.log('EXISTING_R2_BINDINGS=PASS');
           NODE
 
-      - name: Deploy preview media Worker with R2 binding
-        working-directory: cloudflare/media-worker
-        run: npm run deploy
-
       - name: Verify existing media signing secret (no secret creation)
         working-directory: cloudflare/media-worker
         shell: bash
@@ -100,6 +96,10 @@ jobs:
           }
           console.log('EXISTING_MEDIA_SIGNING_SECRET=PASS');
           NODE
+
+      - name: Deploy preview media Worker with R2 binding
+        working-directory: cloudflare/media-worker
+        run: npm run deploy
 
       - name: Smoke Worker health and Preview CORS
         shell: bash

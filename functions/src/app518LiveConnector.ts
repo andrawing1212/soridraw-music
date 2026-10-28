@@ -124,6 +124,9 @@ export const planApp518FavoriteChange=({uid,documentId,before,after}:{
    ||(before&&before.uid!==uid)||(after&&after.uid!==uid))
    return "DENY";
  if(!before&&!after)return "IGNORE";
+ // A newly created explicit tombstone must still publish a newer remove
+ // generation, even when the catalog projection is intentionally null.
+ if(!before&&after)return "RECHECK";
  if(before&&!after)return "DELETE_RECEIPT";
  return JSON.stringify(projection(before))===JSON.stringify(projection(after))
    ?"IGNORE":"RECHECK";

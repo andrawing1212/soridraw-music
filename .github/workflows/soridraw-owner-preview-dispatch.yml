@@ -1,0 +1,119 @@
+name: SORIDRAW Owner-Approved PREVIEW Dispatch
+
+# Default-branch-only comment bridge. Never deploy on push, PR or schedule.
+# Existing approved PREVIEW workflows keep their own deployment safeguards.
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: write
+
+concurrency:
+  group: soridraw-owner-preview-dispatch
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    if: >-
+      github.event.issue.pull_request != null &&
+      github.actor == 'andrawing1212' &&
+      github.event.comment.user.login == 'andrawing1212' &&
+      startsWith(github.event.comment.body, '/soridraw-preview-deploy ')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REQUEST: ${{ github.event.comment.body }}
+      PR_NUMBER: ${{ github.event.issue.number }}
+      REPOSITORY: ${{ github.repository }}
+
+    steps:
+      - name: Checkout fixed default-branch approval gate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+
+      - name: Authorize precise owner comment and locked PREVIEW merge SHA
+        id: approved
+        shell: bash
+        run: |
+          set -euo pipefail
+          pattern='^/soridraw-preview-deploy (worker|app) ([0-9a-f]{40}) APPROVE_PREVIEW_ONLY$'
+          if [[ ! "$REQUEST" =~ $pattern ]]; then
+            echo 'Denied: invalid one-line deployment approval.' >&2
+            exit 2
+          fi
+          service="${BASH_REMATCH[1]}"
+          sha="${BASH_REMATCH[2]}"
+
+          # Only a merged PREVIEW PR, not an issue, unmerged PR, or TEST/PRODUCTION PR.
+          pr_json="$(gh api "repos/$REPOSITORY/pulls/$PR_NUMBER")"
+          test "$(jq -r '.merged' <<< "$pr_json")" = true
+          test "$(jq -r '.base.ref' <<< "$pr_json")" = preview
+          test "$(jq -r '.merge_commit_sha' <<< "$pr_json")" = "$sha"
+
+          # Lock exact currently active PREVIEW HEAD, never a moving branch.
+          git fetch origin 'refs/heads/preview:refs/remotes/origin/preview' --no-tags --quiet
+          test "$(git rev-parse refs/remotes/origin/preview)" = "$sha"
+          git cat-file -e "${sha}^{commit}"
+
+          # Shared Rules, Functions and user data are never part of this bridge.
+          trigger="$(git show "$sha:.deploy/preview-app-release.trigger")"
+          grep -Fxq 'deploy_shared_rtdb_rules=false' <<< "$trigger"
+          grep -Fxq 'functions_deploy=false' <<< "$trigger"
+          grep -Fxq 'release_shared_user_data_change=false' <<< "$trigger"
+
+          if [[ "$service" = worker ]]; then
+            worker_workflow="$(git show "$sha:.github/workflows/cloudflare-media-r2-preview-deploy.yml")"
+            grep -Fq '  workflow_dispatch:' <<< "$worker_workflow"
+            grep -Fq '      commit_sha:' <<< "$worker_workflow"
+            grep -Fq '      approve_preview_deploy:' <<< "$worker_workflow"
+            grep -Fq 'Preflight shared Catalog authority compatibility (no deployment)' <<< "$worker_workflow"
+            if grep -Eq '^[[:space:]]+push:' <<< "$worker_workflow"; then
+              echo 'Denied: Worker workflow is not manual-only.' >&2
+              exit 2
+            fi
+          else
+            app_workflow="$(git show "$sha:.github/workflows/firebase-hosting-custom-preview.yml")"
+            grep -Fq '      target_sha:' <<< "$app_workflow"
+            grep -Fq 'APP515_MAIN_PREVIEW_V2_GUARD' <<< "$app_workflow"
+            grep -Fq 'git show origin/main:scripts/verify-515-main-release-floor.mjs' <<< "$app_workflow"
+            grep -Fq 'APP526_PINNED_PREVIEW_RELEASE_GUARD' <<< "$app_workflow"
+            grep -Fq 'APP526_MANUAL_SHA_RACE_BLOCKED' <<< "$app_workflow"
+            grep -Fq 'APP526_MANUAL_SHARED_RTDB_RULES_DEPLOY=SKIPPED' <<< "$app_workflow"
+            grep -Fq 'Verify PREVIEW exact build' <<< "$app_workflow"
+            grep -Fq 'Verify TEST and PRODUCTION unchanged' <<< "$app_workflow"
+            if grep -Fq 'trigger_url=' <<< "$app_workflow"; then
+              echo 'Denied: app workflow reads branch event SHA instead of approved source'; exit 2
+            fi
+          fi
+
+          echo "service=$service" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "OWNER_APPROVAL_LOCKED=PASS; TARGET=PREVIEW; SERVICE=$service; SHA=$sha"
+
+      - name: Dispatch ONLY the selected existing PREVIEW workflow
+        shell: bash
+        env:
+          SERVICE: ${{ steps.approved.outputs.service }}
+          LOCKED_SHA: ${{ steps.approved.outputs.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$SERVICE" = worker ]]; then
+            gh api -X POST "repos/$REPOSITORY/actions/workflows/cloudflare-media-r2-preview-deploy.yml/dispatches" \
+              -f ref=preview \
+              -f "inputs[commit_sha]=$LOCKED_SHA" \
+              -f 'inputs[approve_preview_deploy]=DEPLOY_PREVIEW_MEDIA'
+          elif [[ "$SERVICE" = app ]]; then
+            gh api -X POST "repos/$REPOSITORY/actions/workflows/firebase-hosting-custom-preview.yml/dispatches" \
+              -f ref=preview \
+              -f "inputs[target_sha]=$LOCKED_SHA"
+          else
+            exit 2
+          fi
+          echo "PREVIEW_DISPATCH_REQUESTED=PASS; SERVICE=$SERVICE; SHA=$LOCKED_SHA"
+          echo 'Dispatch is not deployment success: downstream workflow and live checks decide.'

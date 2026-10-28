@@ -25,8 +25,8 @@ def ch(q,args):
  before=db.total_changes
  db.execute(q,args)
  return db.total_changes-before
-add_args=(owner,gen,'b',owner,gen,old,oldetag,1)
-delete_args=(owner,gen,'a',owner,gen,old,oldetag,1)
+add_args=('b',owner,gen,old,oldetag,1)
+delete_args=(owner,gen,'a',old,oldetag,1)
 advance_args=(102,'"after"',1,2000,owner,gen,old,oldetag,1)
 with db:
  assert ch(ins,add_args)==1
@@ -41,9 +41,11 @@ with db:
  assert ch(advance,advance_args)==0
 assert db.execute('SELECT favorite_id FROM music_note_catalog_member_518').fetchall()==[('b',)]
 # Exact owner scope; another UID can never modify this index.
-assert ch(delete,('attacker',gen,'b',owner,gen,102,'"after"',1))==0
-assert ch(ins,('attacker',gen,'rogue',owner,gen,102,'"after"',1))==1
+assert ch(delete,('attacker',gen,'b',102,'"after"',1))==0
+assert ch(ins,('rogue','attacker',gen,102,'"after"',1))==0
 # The caller's UID is server verified; SQL candidate must not accept a
 # mismatched owner_uid INSERT even with somebody else's metadata!
+assert db.execute('SELECT favorite_id FROM music_note_catalog_member_518').fetchall()==[('b',)]
 print('APP518_INDEX_INCREMENTAL_SQL_E2E=PASS')
 print('APP518_INDEX_ADVANCE_STALE_HEAD_D1_W0=PASS')
+print('APP518_CROSS_OWNER_SQL_INSERT_DELETE_GUARDS=PASS')

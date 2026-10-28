@@ -20,13 +20,25 @@ const sameHead=(a,b)=>safeHead(a)&&safeHead(b)
 
 export const INDEX_META_READ_518=[
  'SELECT generation,indexed_revision,expected_count,head_etag,status,' +
- 'recovery_generation,recovery_revision,recovery_etag,recovery_count',
+ 'recovery_generation,recovery_revision,recovery_etag,recovery_count,',
+ 'checked_at_ms,restart_count',
  'FROM music_note_catalog_index_meta_518 WHERE owner_uid=?',
 ].join(' ');
 export const INDEX_META_BEGIN_518=[
  'INSERT OR IGNORE INTO music_note_catalog_index_meta_518',
  '(owner_uid,generation,indexed_revision,expected_count,head_etag,status,checked_at_ms)',
  "VALUES (?, ?, ?, ?, ?, 'building', ?)",
+].join(' ');
+// Only a verified NEWER R2 revision may replace an incomplete first import.
+// The old generation stays invisible. At most 3 rotations, >=60s apart;
+// old orphan member rows require separately audited bounded GC later.
+export const INDEX_ROTATE_BUILDING_518=[
+ 'UPDATE music_note_catalog_index_meta_518',
+ 'SET generation=?,indexed_revision=?,expected_count=?,head_etag=?,',
+ 'checked_at_ms=?,restart_count=restart_count+1',
+ 'WHERE owner_uid=? AND generation=? AND indexed_revision=?',
+ 'AND expected_count=? AND head_etag=? AND status=\'building\'',
+ 'AND restart_count<3 AND checked_at_ms<=?',
 ].join(' ');
 export const INDEX_MEMBER_STAGE_518=[
  'INSERT OR IGNORE INTO music_note_catalog_member_518',
@@ -59,7 +71,7 @@ export const stageFirstChangedOwnerIndex518=async({
    ||!Number.isSafeInteger(nowMs)||nowMs<0)return deny('DENY_UNVERIFIED_OR_INVALID');
  let fullReads=0,writes=0;
  try{
-   const previous=await db.prepare(INDEX_META_READ_518).bind(uid).first();
+   let previous=await db.prepare(INDEX_META_READ_518).bind(uid).first();
    if(previous?.status==='ready'){
      // A ready row MUST be reconciled against current R2 HEAD in the
      // *separate*, conditional per-item writer. Do not silently use its
@@ -85,9 +97,38 @@ export const stageFirstChangedOwnerIndex518=async({
    if(previous?.status==='building'&&(previous.generation!==head.headRevision
      ||previous.indexed_revision!==head.headRevision
      ||previous.expected_count!==head.itemCount
-     ||previous.head_etag!==head.etag))
-     return {code:'DENY_CHANGED_SNAPSHOT_DURING_RETRY',complete:false,
-       r2FullReads:fullReads,d1RowsWritten:0};
+     ||previous.head_etag!==head.etag)){
+     // Never reuse the same R2 revision with a different ETag: this may
+     // represent an untrusted older writer, not a monotonic source change.
+     if(!Number.isSafeInteger(previous.generation)
+       ||head.headRevision<=previous.generation)
+       return {code:'HOLD_NON_MONOTONIC_STAGING_HEAD',complete:false,
+         r2FullReads:fullReads,d1RowsWritten:writes};
+     if(!Number.isSafeInteger(previous.restart_count)
+       ||previous.restart_count>=3)
+       return {code:'HOLD_STAGE_RESTART_BUDGET_EXHAUSTED',complete:false,
+         r2FullReads:fullReads,d1RowsWritten:writes};
+     if(!Number.isSafeInteger(previous.checked_at_ms)
+       ||nowMs-previous.checked_at_ms<60000)
+       return {code:'RETRYABLE_STAGE_RESTART_COOLDOWN',complete:false,
+         r2FullReads:fullReads,d1RowsWritten:writes};
+     const rotated=await db.prepare(INDEX_ROTATE_BUILDING_518).bind(
+       head.headRevision,head.headRevision,head.itemCount,head.etag,nowMs,
+       uid,previous.generation,previous.indexed_revision,
+       previous.expected_count,previous.head_etag,nowMs-60000,
+     ).run();
+     const changed=Math.max(0,Number(rotated?.meta?.changes||0));
+     writes+=changed;
+     if(changed!==1)
+       return {code:'RETRYABLE_CONCURRENT_STAGE_ROTATION',complete:false,
+         r2FullReads:fullReads,d1RowsWritten:writes};
+     // The old staged generation is never published or read. No deletion
+     // of user originals, READY rows or another owner's index occurs.
+     previous={generation:head.headRevision,
+       indexed_revision:head.headRevision,expected_count:head.itemCount,
+       head_etag:head.etag,status:'building',checked_at_ms:nowMs,
+       restart_count:previous.restart_count+1};
+   }
    const ids=[];
    const seen=new Set();
    for(const row of materialized.items){

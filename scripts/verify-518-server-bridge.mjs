@@ -69,12 +69,19 @@ assert.equal(reads,1);assert.equal(d1Writes,1);
 const queuedRow={owner_uid:uid,favorite_id:documentId,
  source_version_ns:version,desired_state:'saved',ack_version_ns:null,
  attempt_count:0,next_attempt_ms:0,hold_reason:null};
-let retries=0,cloudReads=0,cloudPuts=0;
+let retries=0,holds=0,cloudReads=0,cloudPuts=0;
 const pendingDb={prepare(sql){return {bind(...args){return {
  async first(){return null;}, // no existing owner index
  async all(){return {results:queuedRow.hold_reason===null&&
    queuedRow.next_attempt_ms<=args[0]?[{...queuedRow}]:[]};},
  async run(){
+  if(sql.includes('SET hold_reason=?')){
+   assert.equal(args[2],uid);
+   assert.equal(args[3],documentId);
+   assert.equal(args[4],queuedRow.source_version_ns);
+   queuedRow.hold_reason=args[0];holds++;
+   return {meta:{changes:1}};
+  }
   if(!sql.includes('attempt_count=attempt_count+1'))
    throw Error('unexpected bridge outbox write: '+sql);
   assert.equal(args[4],queuedRow.source_version_ns);
@@ -104,6 +111,36 @@ assert.equal(cloudReads,1);
 assert.equal(cloudPuts,0);
 assert.equal((await transientBridge.drainServerPending({nowMs,limit:4})).attempted,0);
 assert.equal(retries,1,'same due tick must not retry repeatedly');
+// Real R2 provider contract failures (foreign owner, corrupt JSON) must
+// propagate through first-index into the durable outbox HOLD, not IO retry.
+const illegalHeads=[
+ {etag:'E-foreign',size:20,customMetadata:{uid:'other-user',
+   kind:'musicNote'},async text(){return '{}';}},
+ {etag:'E-corrupt',size:20,customMetadata:{uid,kind:'musicNote'},
+  async text(){return '{invalid-json';}},
+];
+for(const invalidR2Head of illegalHeads){
+ Object.assign(queuedRow,{attempt_count:0,next_attempt_ms:0,
+  hold_reason:null,ack_version_ns:null});
+ const beforeRetries=retries,beforeHolds=holds,beforePuts=cloudPuts;
+ const contractBridge=build({env:{...env,CATALOG_OUTBOX_518:pendingDb,
+  CATALOG:{
+   async get(){cloudReads++;return invalidR2Head;},
+   async put(){cloudPuts++;throw Error('forbidden PUT');},
+  },
+ }});
+ const denied=await contractBridge.drainServerPending({nowMs,limit:4});
+ assert.equal(denied.attempted,1);
+ assert.equal(denied.acked,0);
+ assert.equal(denied.retry,0);
+ assert.equal(denied.held,1);
+ assert.equal(queuedRow.hold_reason,'INDEX_CONTRACT');
+ assert.equal(retries,beforeRetries,'bad owner/schema must not retry as IO');
+ assert.equal(holds,beforeHolds+1);
+ assert.equal(cloudPuts,beforePuts,'invalid HEAD must not PUT');
+ assert.equal((await contractBridge.drainServerPending({nowMs,limit:4})).attempted,0);
+}
+console.log('APP518_BRIDGE_FOREIGN_OWNER_AND_BAD_JSON_TERMINAL_HOLD=PASS');
 console.log('APP518_BRIDGE_TRANSIENT_INDEX_FAILURE_RETAINS_BOUNDED_RETRY=PASS');
 console.log('APP518_SIGNED_EVENT_FRESH_EXACT_FIRESTORE_BEFORE_D1=PASS');
 console.log('APP518_STALE_FOREIGN_UNSIGNED_EVENT_D1_W0=PASS');

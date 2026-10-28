@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS music_note_catalog_outbox_518 (
   owner_uid TEXT NOT NULL CHECK(length(owner_uid) BETWEEN 1 AND 128),
   favorite_id TEXT NOT NULL CHECK(length(favorite_id) BETWEEN 1 AND 240),
-  source_version_ns TEXT NOT NULL CHECK(length(source_version_ns) BETWEEN 16 AND 21),
+  source_version_ns TEXT NOT NULL CHECK(length(source_version_ns) = 21),
   desired_state TEXT NOT NULL CHECK(desired_state IN ('saved','removed')),
   ack_version_ns TEXT,
   attempt_count INTEGER NOT NULL DEFAULT 0 CHECK(attempt_count >= 0),

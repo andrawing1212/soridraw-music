@@ -1,20 +1,30 @@
 name: Cloudflare Media Shared Catalog Coordinated Cutover
 
+# Shared R2 writes cannot be triggered by a source push. Require a
+# director-authorized manual release with an immutable checked-out SHA.
 on:
-  push:
-    branches: [preview]
-    paths:
-      - '.deploy/shared-catalog-cutover.trigger'
+  workflow_dispatch:
+    inputs:
+      approve_shared_media_cutover:
+        description: 'Type CUTOVER_SHARED_MEDIA to approve this three-Worker mutation'
+        required: true
+        type: string
+      commit_sha:
+        description: 'Approved SHA on preview containing the fenced controller'
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: cloudflare-media-shared-catalog-cutover
+  # Same group as the PREVIEW Media deploy workflow.
+  group: soridraw-media-shared-r2-mutation
   cancel-in-progress: false
 
 jobs:
   cutover:
+    if: ${{ inputs.approve_shared_media_cutover == 'CUTOVER_SHARED_MEDIA' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -25,8 +35,22 @@ jobs:
       - name: Checkout exact cutover source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.commit_sha }}
           fetch-depth: 0
+
+      - name: Verify exact SHA approved on preview and guarded controller present
+        shell: bash
+        env:
+          APPROVED_SHA: ${{ inputs.commit_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$APPROVED_SHA" =~ ^[a-fA-F0-9]{40}$ ]] || exit 2
+          test "$(git rev-parse HEAD)" = "${APPROVED_SHA,,}"
+          git fetch origin preview --no-tags --quiet
+          git merge-base --is-ancestor "$APPROVED_SHA" FETCH_HEAD
+          test -f cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js
+          grep -q 'verifyLegacyMediaMutationAllowed518' .deploy/release-media-worker-runtime.mjs
+          echo 'SHARED_MEDIA_MUTATION_SOURCE_GUARD=PASS'
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4

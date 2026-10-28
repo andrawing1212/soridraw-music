@@ -297,3 +297,21 @@
 - **새 CI 근거:** `verify-518-large-paging-concurrency-sql.py`는 실제 SQLite 파일에 두 연결을 열어 stale BASE 재삽입 → 삭제곡 부활, stale delta 삭제 → 최신 저장곡 누락, READY 승격 후 회원 SQL, recovery promotion 후 늦은 쓰기를 모두 **변경 행 0**으로 검증. `verify-518-r2-page-contract.mjs`는 가짜 R2 range에서 80KiB 곡 2개, 큰 UTF-8 단일 곡, trailing comma malformed JSON, 다른 UID 소스를 검사. 기존 첫 색인·복구·서버 Bridge·앱 회귀는 원래 CI에서 별도 재실행.
 - **미완료/릴리스 차단:** 새 수정 SHA의 별도 **Work 독립 재감사 미완료**. Cloudflare Free 실제 10ms CPU·128MB 메모리/D1·R2 실비용, PC↔모바일 검증, 공유 구형 Writer fencing, Firebase↔Cloudflare 서버 인증·trigger/Secret/D1/cron 실연결 미완료. **전체 RELEASE HOLD / NO-GO**, PR Draft 미병합·미배포·실데이터 변경 없음.
 
+
+## 2026-10-29 구형 Worker 공유 R2 쓰기 P1 — 3환경 사전보호 후보 (배포 금지)
+
+**현장 읽기 전용 확인:** Cloudflare UI에서 현재 3개 Media Worker는 모두 동일한 `CATALOG=soridraw-user-catalog`, `SORIDRAW_SHARED_CATALOG_V1=1`, `SORIDRAW_CANONICAL_CATALOG_518` 미표시. PREVIEW active prefix `83175bcc`, TEST `f0a86688`, PRODUCTION `2c2e3236`, 각각 트래픽 100%. **활성 소스의 518 fenced writer 포함 여부·구형 in-flight 완료는 입증되지 않음.** 이 8자리 접두어는 불변 전체 version ID/감사 출처를 대신하지 않음.
+
+**확인된 4개 구형 쓰기 경로:** 기존 Media Worker `index.js`의 `POST /v1/catalog/musicNote/delta`, `POST .../bootstrap`, 공유 Catalog 없을 때 legacy MEDIA seed, `compactCatalogJournal`의 BASE/HEAD 변경. 구형 Worker는 app518 canonical/tombstone을 이해하지 못하므로 신형 Worker의 HEAD 보호·R2 ETag만으로 오래된 Worker가 최신 상태를 덮어쓰는 사고를 막을 수 없음. **현존 서비스/버킷/권한을 즉시 중지하거나 플래그를 OFF로 바꾸는 것은 해결책이 아니며 사용자 동기화를 망가뜨릴 수 있음.**
+
+**기존 PR #528 보호 코드 재사용:** `catalogAuthorityPolicy518.js`의 protected HEAD 구형 delta/seed/rebuild 거부 및 `index.js`의 source-verified HEAD check, `SORIDRAW_CANONICAL_CATALOG_518` 기본 OFF 유지. 추가적인 별도 R2 저장 키, 계정 전체 조회, Firestore/D1 폴링, 사용자 데이터 마이그레이션 없음.
+
+**이번 최소 소스 보강 (후보 브랜치 ONLY):**
+- `catalogSharedWriterRolloutGate518.js`: 반드시 **PREVIEW·TEST·PRODUCTION 3개**의 동일 공유 버킷/정확 worker·MEDIA 이름·플래그 OFF·단일 활성 버전 100%·감사로 확인한 **전체** 버전 ID·보호 코드 health identity·서로 최소 10분 간격의 두 Cloudflare live 관측이 일치해야 소스-호환 사전 점검 가능. 이전 in-flight 종료를 별도 독립 감사로 증명하고, 자동 rollback 대상도 감사된 fenced 버전으로 고정해야 함. 어느 하나라도 없으면 HOLD. 100% 라우팅만으로 오래된 실행 종료를 추정하지 않음. `pass:true`여도 `canEnableCanonical:false`: 정본/Function/D1 연동·별도 배포 승인은 독립 조건임.
+- 후보 `cloudflare/media-worker/src/index.js`의 GET `/health`에 **비밀정보 없는 코드 설치 마커** `catalogWriterFence518` 추가. 마커는 Worker 코드가 가진 기능만 말하며 실제 다른 두 Worker의 호환, 실데이터·이전 비행 종료, 정본 활성화를 보증하지 않음. 구형 Worker에는 마커가 없어 자동 FAIL.
+- `scripts/verify-518-live-media-writer-readonly.mjs --live`는 계정 권한이 있을 때만 Cloudflare **GET deployments/settings**와 Worker **GET /health** 각각 3개를 단발 수집하며, R2/D1/Firestore 객체·시크릿 값·전체 사용자 데이터 불조회. `--self-test`는 Cloudflare 연결 없이 mock GET만 검증. 수집 결과는 **관측 증거**일 뿐 자동 배포 허가가 아니고, 이를 승인된 immutable version 및 실제 구형 실행 종료 증거와 대조해야 함. 실행 시 GitHub 로그에 계정 토큰·개인정보 노출 금지.
+- `scripts/verify-518-shared-writer-rollout.mjs`: 단일 PREVIEW만 업그레이드, 구형 TEST/PROD, 100% 미달/분할 트래픽, R2 이름·플래그 불일치, 복수 버전, 불확실한 HEAD 마커, 구형 롤백, 관측 10분 미달/오래된 관측, in-flight 미증명, 변조된 버전 attestation 모두 FAIL. 아직 migration 없는 구형 브라우저의 정상 delta는 보호, protected owner의 구형 delta/seed/rebuild는 거부하는 소스 정책 회귀 포함.
+
+**중요한 해결 범위 한계:** 이 코드는 실제 Cloudflare Worker를 바꾸지 않음. `catalogSharedWriterRolloutGate518`는 **독립 사전 점검을 위한 소스 후보**이며 현재 기존 배포 워크플로에 자동 연결하지 않았음. 특히 과거 자동 rollback 명령이 이전 구형 version을 복원할 수 있으므로 **서버 전환 전에** 배포·롤백 제어를 별도 승인 범위에서 수정/검증하지 않으면 NO-GO. 위 코드만으로 현재 live 3환경 보호 P1이 해결됐다고 표현하지 말 것. 구형 브라우저의 canonical 전환 **이후** 저장·삭제는 서버 정본 전달·재시도가 실제 작동하고 실기기에서 보존될 때까지 중단 가능성이 있어, 사전 호환성 합격 전 전환 금지.
+
+**다음 단계 / 명확한 차단:** 새 SHA CI+별도 Work 독립 감사 → 인증된 Cloudflare 정확 version/바인딩/GET health read-only 증거 수집 → 세 Worker fenced-source 코드를 모두 먼저 설치(별도 명시 배포 승인 전 금지), 기존 정상 delta 사용 유지 → in-flight 종료/old rollback 차단 검증 → Firebase↔D1↔R2 정본 전달/구형 브라우저 보존 실검증 → 별도 사용자 승인을 받은 후에만 canonical 518 활성화. TEST·PRODUCTION 승격, 병합, 실데이터 수정, 버킷 변경 모두 현재 금지. **전체 RELEASE HOLD / NO-GO 유지.**

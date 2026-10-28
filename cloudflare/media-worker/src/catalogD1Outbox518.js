@@ -71,7 +71,7 @@ export const acknowledgeExactFavorite518=async({
  db,uid,documentId,sourceVersionNs,nowMs,r2VerifiedVersionNs,
 }={})=>{
  if(!database(db)||!okUid(uid)||!okId(documentId)||!epoch(nowMs)
-   ||!/^\d{16,21}$/.test(text(sourceVersionNs))
+   ||!/^\d{21}$/.test(text(sourceVersionNs))
    ||r2VerifiedVersionNs!==sourceVersionNs)
    return {code:'DENY_UNVERIFIED_R2_ACK',d1Writes:0};
  const result=await db.prepare(ACK_EXACT_518).bind(
@@ -87,7 +87,7 @@ export const scheduleFailedFavorite518=async({
  db,uid,documentId,sourceVersionNs,nowMs,attemptCount,
 }={})=>{
  if(!database(db)||!okUid(uid)||!okId(documentId)||!epoch(nowMs)
-   ||!/^\d{16,21}$/.test(text(sourceVersionNs)))
+   ||!/^\d{21}$/.test(text(sourceVersionNs)))
    return {code:'DENY_ARGUMENTS',d1Writes:0};
  const delay=boundedRetryDelay518(attemptCount);
  if(delay===null||!Number.isSafeInteger(nowMs+delay))

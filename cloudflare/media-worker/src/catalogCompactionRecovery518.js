@@ -7,6 +7,7 @@
 // evidence that a newer pending canonical change was acknowledged.
 import {INDEX_META_READ_518,INDEX_MEMBER_STAGE_518,INDEX_COUNT_518} from './catalogFirstChangeIndex518.js';
 import {isValidCatalogJournal} from './catalogJournal.js';
+import {CatalogR2ContractError518} from './catalogR2Provider518.js';
 const txt=x=>typeof x==='string'?x.trim():'';
 const validUid=x=>txt(x).length>0&&txt(x).length<=128&&!/[\\/]/.test(txt(x));
 const validId=x=>txt(x).length>0&&txt(x).length<=240&&txt(x)!=='.'&&txt(x)!=='..'&&!/[\\/]/.test(txt(x));
@@ -168,7 +169,10 @@ export const recoverCompactedOwnerIndex518=async({
   // audited. Never delete member rows while an in-flight consumer may refer.
   return {code:'RECOVERY_PROMOTED',complete:true,fullReads,d1Writes:writes,
    revision:target.headRevision,memberCount:ids.length};
- }catch{
-  return fail('RETRYABLE_RECOVERY_IO',fullReads,writes);
+ }catch(error){
+  // A verified foreign-owner/schema failure cannot be healed by retrying
+  // the same canonical source. Preserve the DENY through writer->delivery.
+  return fail(error instanceof CatalogR2ContractError518
+    ?'DENY_RECOVERY_R2_CONTRACT':'RETRYABLE_RECOVERY_IO',fullReads,writes);
  }
 };

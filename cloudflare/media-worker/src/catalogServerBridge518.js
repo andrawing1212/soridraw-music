@@ -4,6 +4,7 @@
 // the exact latest Firebase source before any D1 enqueue or R2 write.
 // Existing 30s local-first save and all user-facing APIs are unchanged.
 import {verifyServerRequest518} from './catalogServerAuth518.js';
+import {parseFirestoreUpdateTimeNs518} from './catalogCanonicalFence518.js';
 import {createOwnerR2Provider518} from './catalogR2Provider518.js';
 import {enqueueVerifiedFavorite518} from './catalogD1Outbox518.js';
 import {deliverDueCanonicalFavorites518} from './catalogDelivery518.js';
@@ -48,7 +49,6 @@ export const createApp518ServerBridge=({
    return deny('HOLD_CANONICAL_UNVERIFIED');
   const fromVersion=payload.sourceVersionNs;
   const fromState=payload.desiredState;
-  const {parseFirestoreUpdateTimeNs518}=await import('./catalogCanonicalFence518.js');
   const currentVersion=parseFirestoreUpdateTimeNs518(canonical.updateTime);
   if(currentVersion!==fromVersion||canonical.state!==fromState)
    return {code:'STALE_SIGNED_EVENT_NO_WRITE',accepted:false};

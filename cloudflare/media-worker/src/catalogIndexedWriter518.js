@@ -7,6 +7,7 @@ import {appendCatalogJournalDelta,isValidCatalogJournal} from './catalogJournal.
 import {parseFirestoreUpdateTimeNs518} from './catalogCanonicalFence518.js';
 import {readIndexedMembership518} from './catalogFirstChangeIndex518.js';
 import {reconcileIndexedHead518} from './catalogIndexAdvance518.js';
+import {recoverCompactedOwnerIndex518} from './catalogCompactionRecovery518.js';
 
 const txt=x=>typeof x==='string'?x.trim():'';
 const valid=x=>txt(x).length>0&&txt(x).length<=240&&!/[\\/]/.test(txt(x));
@@ -21,7 +22,7 @@ const verifiedHead=(value,uid)=>{
 export const applyIndexedCanonicalR2Delta518=async({
  db,uid,documentId,sourceVersionNs,desiredState,
  readExactCanonical,readOwnerHead,storeHeadIfEtag,projectItem,
- nowMs,
+ loadCompleteFencedOwnerR2,nowMs,
 }={})=>{
  const deny=code=>({code,ownerVerified:false,versionVerified:false,casVerified:false});
  if(!db||typeof db.prepare!=='function'||typeof db.batch!=='function'
@@ -31,6 +32,19 @@ export const applyIndexedCanonicalR2Delta518=async({
       .every(x=>typeof x==='function')
    ||!Number.isSafeInteger(nowMs)||nowMs<0)return deny('DENY_ARGUMENTS');
  const source=()=>readExactCanonical(uid,documentId);
+ const reconcileOrRecover=async()=>{
+  const replay=await reconcileOrRecover();
+  if(replay.code!=='HOLD_COMPACTED_OR_DIVERGENT_HEAD'
+     ||typeof loadCompleteFencedOwnerR2!=='function')return replay;
+  // Expensive one-owner R2 materialization ONLY on a proved compaction gap.
+  // Never on app entry or normal per-song changes.
+  const recovered=await recoverCompactedOwnerIndex518({
+   db,uid,verifiedPendingMutation:true,loadCompleteFencedOwnerR2,
+   readR2HeadAgain:readOwnerHead,nowMs,
+  });
+  return recovered.code==='RECOVERY_PROMOTED'
+   ?{code:'INDEX_ADVANCED'}:{code:'RECOVERY_'+recovered.code};
+ };
  for(let attempt=0;attempt<3;attempt++){
   // A late or duplicate Firebase trigger must never be trusted as current.
   const canonical=await source();
@@ -53,9 +67,7 @@ export const applyIndexedCanonicalR2Delta518=async({
    },
   });
   if(membership.code==='DENY_INDEX_HEAD_DRIFT'){
-   const recovered=await reconcileIndexedHead518({
-    db,uid,nowMs,loadVerifiedHead:readOwnerHead,
-   });
+   const recovered=await reconcileOrRecover();
    if(!['INDEX_ADVANCED','ALREADY_INDEXED'].includes(recovered.code))
     return deny('RETRYABLE_INDEX_'+recovered.code);
    continue;

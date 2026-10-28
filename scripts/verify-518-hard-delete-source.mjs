@@ -2,12 +2,15 @@ import assert from 'node:assert/strict';
 import {
  readExactCanonicalWithReceipt518,receiveVerifiedHardDeleteEvent518,
 } from '../cloudflare/media-worker/src/catalogHardDeleteSource518.js';
+import {parseFirestoreUpdateTimeNs518} from '../cloudflare/media-worker/src/catalogCanonicalFence518.js';
 const uid='owner',documentId='song';
 const t1='2026-10-28T13:11:07.000000123Z';
 const t2='2026-10-28T13:11:08.000000001Z';
+const before='2026-10-28T13:11:06.000000111Z';
 let favorite={uid,documentId,verifiedByServer:true,exists:false};
 let receipt={uid,documentId,verifiedByServer:true,
- deleteEventId:'server-delete-1',updateTime:t1};
+ deleteEventId:'server-delete-1',updateTime:t1,
+ beforeSourceVersionNs:parseFirestoreUpdateTimeNs518(before)};
 let receiptReads=0;
 const read=()=>readExactCanonicalWithReceipt518({
  uid,documentId,readExactFavorite:async()=>favorite,
@@ -42,7 +45,7 @@ const db={prepare:()=>({bind(){return {async run(){
 }};}})};
 res=await receiveVerifiedHardDeleteEvent518({
  db,uid,documentId,deleteEventId:'server-event-a',
- beforeOwnerUid:uid,verifiedServerDeleteEvent:true,nowMs:1000,
+ beforeOwnerUid:uid,beforeUpdateTime:before,verifiedServerDeleteEvent:true,nowMs:1000,
  transactExactAbsentReceipt:async params=>{
   assert.equal(params.neverRecreateFavorite,true);
   assert.equal(params.requireServerCommitTimestamp,true);
@@ -50,7 +53,8 @@ res=await receiveVerifiedHardDeleteEvent518({
  },
  readExactAfterReceipt:async()=>({
   uid,documentId,verifiedByServer:true,favoriteExists:false,
-  receipt:{uid,documentId,deleteEventId:'server-event-a',updateTime:t1},
+  receipt:{uid,documentId,deleteEventId:'server-event-a',updateTime:t1,
+   beforeSourceVersionNs:parseFirestoreUpdateTimeNs518(before)},
  }),
 });
 assert.equal(res.code,'ENQUEUED');
@@ -59,7 +63,7 @@ assert.equal(res.d1Writes,1);
 assert.equal(w,1);
 res=await receiveVerifiedHardDeleteEvent518({
  db,uid,documentId,deleteEventId:'server-event-a',
- beforeOwnerUid:uid,verifiedServerDeleteEvent:false,nowMs:1000,
+ beforeOwnerUid:uid,beforeUpdateTime:before,verifiedServerDeleteEvent:false,nowMs:1000,
  transactExactAbsentReceipt:async()=>{throw Error('unreachable')},
  readExactAfterReceipt:async()=>{throw Error('unreachable')},
 });

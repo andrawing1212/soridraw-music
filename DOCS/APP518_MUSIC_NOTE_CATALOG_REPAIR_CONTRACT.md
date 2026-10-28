@@ -70,3 +70,43 @@
 - 실제 업데이트 경로에서 과거 앱/Worker가 `sourceLedger518` 검사 없이 같은 HEAD에 delta를 넣으면 보호를 우회할 수 있음. **PREVIEW, TEST, PRODUCTION의 shared Catalog writer 전체**, 앱 버전 혼합 및 release rollback을 감사하기 전 사용 금지.
 - 매번 Firestore를 읽는 방식이 가장 싸다는 뜻도 아님. source snapshot과 event 버전만으로 안전하게 공통 순서를 보증할 수 있으면 R1 절약 후보이지만, 초기 원장 없는 경우와 역순/동시 이벤트에서 잘못된 곡이 되살아날 위험이 없어야 함. 지금은 기능을 우선해 변경된 곡의 정확한 서버 R1을 가정.
 - 실제 함수 트리거, 서버 간 인증, 영속적인 실패 재시도, PR #528 재사용, 주간 비용/악성 반복 제한, 실기기 혼합 호환 등은 **여전히 미완료**. 확인된 누락곡 1건에 대해서도 현재 쓰기 0건.
+
+## 2026-10-28 독립 감사 FAIL 후 실제 위험 격리 / 변경 승인 대기
+
+**기준:** 감사 SHA 1cd2d9e5 FAIL (P1-1 legacy delta bypass, P1-2 rebuild reset, P1-3 768KiB head saturation, P1-4 retry not durable, P2-1 O(N) materialization). CI PASS는 실제 서버 연결 합격이 아님.
+
+### 수정 후보: 서버 경로 보호 (실서비스 OFF)
+- `catalogAuthorityPolicy518.js`: head 권한 상태 판별. migrated HEAD는 구형 browser delta, legacy MEDIA seed, canonical 전체 재구성 모두 fail-closed. 현재 Migration 전 HEAD는 이전 동작 허용.
+- `cloudflare/media-worker/src/index.js`에 실제 legacy /delta 및 /bootstrap 재구성 경로의 안전검사를 **후보 브랜치에만** 연결. `SORIDRAW_CANONICAL_CATALOG_518=ENABLED_AFTER_SHARED_ROLLOUT`가 있어야 신규 동작을 차단하되, 플래그 없어도 이미 펜스된 HEAD는 구형 delta/rebuild로 덮어쓰지 못하게 설계. `wrangler.jsonc`의 PREVIEW/TEST/PRODUCTION에는 **플래그가 없고** 기존 Worker는 미배포.
+- 3개 서버 Worker가 같은 **공유** R2 Catalog를 쓰므로, PR 병합만으로 플래그를 켜면 안 된다. 반드시 테스트·정식 환경의 구형 Writer까지 모두 업데이트한 다음, canonical delivery/retry 활성 상태와 혼합 환경 정합성 검증이 필요하다.
+- 위험 차단 정책은 **동기화 경로를 제공하지 않으므로 완성/배포 금지**. 오래된 클라이언트에 409만 주는 활성화는 사용자 저장은 Firestore에 되더라도 Catalog 동기화 실패를 일으킴.
+
+### 현재 R2 HEAD 방식은 P1-3/P2-1 기능 합격 불가
+- `sourceLedger518`를 한 HEAD 안에 무한히 늘리면 768KiB 도달 시 정상 저장을 거절한다. 영구 삭제 tombstone을 무단 제거하는 크기 절감은 기능 위반.
+- 현재 `catalogJournalReconcile518.js`는 `materializeCatalogJournal`로 전체 base+delta를 읽고 목록 Map을 구성하므로 곡 1건당 처리 비용이 사용자 총 곡 수에 비례함.
+- 이 모델은 삭제곡 부활 방지의 순서 실험용으로만 유지. **프로덕션 채택 후보에서 제외**. `verify-518-head-capacity-redteam.mjs`에서 실제 saturation 수치 표시.
+
+### 권장 구조 변경안: 작은 D1 행 + 기존 R2 Journal (아직 미승인)
+- **기존 Firestore favorites canonical W0/W1 및 30초 배치, RTDB 즉시 UI, 앱·Explore·Library·공개·다음곡 경로는 수정하지 않는다.**
+- 서버 Firestore 변경 이벤트는 목록 투영에 실제 차이가 있을 때만 R1 정확 조회 후 진행; 이벤트 함수 호출 자체는 빈 변화에서도 발생할 수 있다.
+- **전용 Cloudflare D1**에 `(uid,exactDocumentId)`별 최신 Firestore source version, saved/removed tombstone, 마지막 R2 ACK, retry state를 행 하나에 저장. 변경 감지 이벤트·outbox가 한 DB 트랜잭션 안에서 durable 해져야 한다. D1은 원본 Firestore 대체물이 아니라 Catalog 파생 복구용.
+- R2 Journal은 서버가 확인한 **변경곡 하나**만 delta/CAS. 기존 HEAD 전체 목록 materialize를 hot path에서 제거하고 D1 item membership으로 itemCount를 갱신. 충돌 시 항상 D1 최신 버전 + Firestore 원본 정본을 확인.
+- R2 성공 후 DB ACK 실패하면 pending을 유지하고 다시 처리; 중복이면 같은 mutationId/버전으로 안전하게 ACK. 인증 불명·다른 계정·서버 장애는 task 폐기 금지, 재시도/관리자 관찰 필요. 원본 없는 삭제 역시 tombstone 유지.
+- 정상 페이지 열기/탭 이동은 신규 DB read/write 0. 실제 canonical 변경 시 D1 행 쓰기 **예상 W1 접수 + W1 확인(2행/변경)**, 현행 Firestore favorites W1 외 **추가 Firestore W0 목표**. 함수를 쓴다는 이유만으로 기능당 0달러라고 단정하지 말 것.
+- 최종 복구 전에 계정 소유자의 기존 `먼 길을 돌아온 밤` Firestore exact 단건을 새로 확인한 뒤, D1 최신 버전/원장과 비교하여 해당 ID만 처리. 전체 favorites 스캔/캐시 초기화 금지.
+- 실제 운영 전 D1 DB 생성, Cloudflare Worker binding, 서버 인증·예약 재시도 및 shared 3환경 rollout은 **별도 명시 승인**. 기존 Explore D1과 무턱대고 합치지 않고 격리·마이그레이션 비용 비교.
+
+### 공식 단가/비용 비교 (확인 2026-10-28)
+- 공식: https://developers.cloudflare.com/d1/platform/pricing/ 와 https://developers.cloudflare.com/queues/platform/pricing/
+- Workers Paid D1: 월 5,000만 rows written, 250억 rows read, 5GB storage 포함. 초과시 $1/100만 rows written; $0.001/100만 rows read, $0.75/GB-month. Workers Free는 10만 rows written/일 등 일일 한도가 있으며 초과시 정상 처리 차단 가능. 실제 플랜·기존 사용량·저장 용량은 **미확인**.
+- 가정: 10만 사용자 × 일 1회 변경 × 30일=월 300만 확정 변경. D1 W2/변경은 약 600만 rows written; 유료 포함량 안일 가능성이 높지만 **사용량 전체를 합산해야** 하므로 추가 청구 0달러는 미확인. R2/Functions/Worker/Cloudflare Queues, 재시도, 계정 데이터 저장 비용 별도.
+- R2 단독 HEAD는 추가 D1 비용이 0이어도 기록 포화+O(N)+구형 Writer 복원 위험이 남아 **기능 기준 불합격**. 이 설계로 배포하지 않는다.
+- 더 싼 기존 D1 재사용이 실제 격리·권한·용량·트랜잭션 기준을 통과하는지 별도 평가. 신규 D1이라도 기록/용량/작동 비용을 재검증하고 변경 승인 필요.
+
+### 단계별 남은 합격 기준
+- [x] 구형 Writer/재구성 덮어쓰기 방지용 서버 후보의 기본 OFF 스위치와 검사
+- [x] 현재 HEAD 단독 방식 비용·용량 위험 노출 검사
+- [ ] **D1 기반 O(1) 행 원장+영속 outbox** 구현·실패/재시도·동시성 검증 (설계 변경 승인 필요)
+- [ ] 실제 shared PREVIEW/TEST/PROD 구형 Worker 경로 정리 및 구형 앱 호환
+- [ ] 관리자 정확한 곡 1건 복구, PC·모바일·새 PC 확인, 실비용 계측
+- [ ] 독립 감사 PASS, 코드 병합 및 별도 명시 배포 승인

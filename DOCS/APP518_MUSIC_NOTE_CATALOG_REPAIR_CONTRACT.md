@@ -110,3 +110,35 @@
 - [ ] 실제 shared PREVIEW/TEST/PROD 구형 Worker 경로 정리 및 구형 앱 호환
 - [ ] 관리자 정확한 곡 1건 복구, PC·모바일·새 PC 확인, 실비용 계측
 - [ ] 독립 감사 PASS, 코드 병합 및 별도 명시 배포 승인
+
+## 2026-10-28 디렉터 승인: D1 소규모 영속 원장 구현 — 코드 단계
+
+**승인 범위:** 기존 R2 HEAD 무제한 원장 방식에서 D1 곡별 행으로 전환. 코드/검사/GitHub PR까지, **Cloudflare D1 생성·마이그레이션 실행·Worker/Functions 배포·실제 사용자 곡 쓰기는 별도 승인**. 현 배포는 이전 app517 그대로.
+
+### 실제 추가된 코드 (미연결, inactive)
+- `cloudflare/media-worker/migrations/518_music_note_catalog_outbox.sql`: (owner_uid, favorite_id) PK의 단건 D1 행. 고정 21자리 Firestore UTC nanosecond version, saved/removed 상태, ACK version, 횟수/다음 재시도 시각. due 인덱스는 미완료 행만 포함. 개인 곡 제목·프롬프트·가사·미디어·본문 저장하지 않음. 실제 DB에 **한 번도 적용하지 않았음**.
+- `cloudflare/media-worker/src/catalogD1Outbox518.js`: 확인된 버전만 조건부 upsert, 오래된/동일 버전 W0, ACK은 동일 R2 verified source version에서만 확정, 실패는 백오프(5초~1시간)·시도횟수 조건으로 중복 재예약 W0, 배치 due 1~256, 관리자 단건 확인. 저장 상태가 변하지 않은 UI 조회에는 호출하지 않음.
+- `cloudflare/media-worker/src/catalogDelivery518.js`: D1 미완료 곡의 **Firestore 정확 단건 원본 재확인 → 구형 정보면 현재 버전 D1 재접수 → R2 CAS·소유·버전 증명 필요 → D1 ACK** 절차. 실패는 D1 retry_at에 보존. 이전 버전 응답의 ACK은 최신 미완료 변경을 지우지 못함. 이 코드는 아직 실제 Firestore Admin/R2 호출 공급자, 예약 실행, API에 연결되지 않았음.
+- `scripts/verify-518-d1-outbox-sql.py`: SQL을 직접 추출해 SQLite 메모리 DB에서 실제 UPSERT, 삭제 tombstone·늦은 저장·중복 ACK/재시도/소유자 격리/부분 인덱스 실행.
+- `scripts/verify-518-d1-outbox-adapter.mjs`, `verify-518-d1-delivery-drain.mjs`: 인증되지 않은 삭제/다른 사용자/뒤늦은 이벤트/불명확한 R2 응답/서버 재시도·중복 상황 검사. 기존 app204 다음곡, app203/356 공개 상태, app349 하트·Suno, app280 부활, app031 묶음 저장 회귀 유지.
+
+### 비용 목표 (실환경 비용 실측 아님)
+- 한 번 확정된 의미 있는 변경에 D1 **접수 W1 + R2 확인 후 ACK W1**, R2 CAS GET/PUT, Firestore 정본 R1, 서버 함수 실행 1회+후속 처리 요청. 실패시에만 추가 D1 재예약 W1. 동일/오래된 확정 변경 W0.
+- 미변경 앱 진입·탭 이동은 신규 D1 R0/W0. 그러나 기존 favorites 문서가 변경되기만 해도 Firestore 이벤트 Function 호출비가 생길 수 있으므로 호출비까지 0이라고 주장하지 않음.
+- 10만 계정 × 매일 1회 최종 변경 × 30일 = 월 300만 건 → **D1 정상성공 행 쓰기 약 600만**. 다른 D1 사용량과 포함 티어, R2·Firestore·Functions·Worker·재시도·저장량 비용 별도. 실제 10만 명 시 장애·파동 부하까지 미측정.
+
+### 독립 감사 FAIL 중 미해결 / 절대 배포 금지
+1. **DELETE의 정본 순서:** 문서가 완전히 삭제된 경우 Firestore exact read는 `updateTime`을 제공하지 않음. 삭제 이벤트의 실제 서버 커밋 순서를 인증할 수 있는 설계 또는 구형 앱과 호환되는 서버 soft tombstone 보증이 필요. 원본 없는 상황에 현재 시간이나 오래된 이벤트의 timestamp를 임의로 붙여 살려내면 FAIL. 현재 모듈은 안전하게 거부·재시도하지만 모든 구형 삭제에 대한 정상 동기화는 **아직 불완전**.
+2. **R2 단건 CAS provider:** 실제 shared R2 HEAD는 구형 source fence를 모르는 클라이언트와 여러 Worker가 기록 중. 배포용 공통 writer 검사·구형 단말 호환·수정된 단건 변화의 인덱스 기반 itemCount를 입증하지 못하면 서버 연결하지 않는다. 기존 R2 whole-base materialize O(N)도 아직 제거 안 됨.
+3. **영속 예약 실행:** D1 pending/next_attempt 기록은 구현했지만 scheduler/Function→Worker 인증·검증된 R2 적용자 미연결. 데이터 동기화 완료라고 보고하지 않음.
+4. **용량/마이그레이션:** 초기 기존 R2 Catalog 목록을 D1 membership에 어떤 비용/권한으로 인덱싱할지 결정 필요. 전 사용자 전체 favorites 조회·백필, 데이터 일괄 수정 금지. 기존 D1 Explore와 공용 사용 승인 없음.
+5. **실행형 검증:** Firestore hard-delete, 버전 충돌/중복·동시 서버 실행, D1 transaction 실패, Cloudflare Worker 요청 상한, 10만 사용자 성능/비용, PC·Android·새 PC 기존 캐시, TEST/PROD 구형 배포 검증이 필요.
+6. PR #528 Draft HOLD. **현재 성공한 테스트는 로컬/CI 모의 검사로 실제 운영 장애가 해결된 것이 아님.** P1 미완료 시 어떠한 DB 생성·공유 API 배포·실제 곡 재저장도 금지.
+
+### 남은 구현 순서
+- [x] D1 정확 행 원장/SQL, pending 재시도·버전·ACK 계약 및 자동검사
+- [ ] 서버 측 hard-delete와 soft-delete 최신 순서의 공통 인증 규칙
+- [ ] 기존 shared Catalog에서 1곡만 갱신하는 영속 R2 writer와 중복/구형 호환
+- [ ] 실제 변경 이벤트→서버 인증→D1→R2→ACK, 실패 시 예약 재실행 연결
+- [ ] 단건 복구를 위한 현재 원본 재확인/실사용 인증 흐름, 비용·PC/모바일 QA
+- [ ] PR 독립 재감사 PASS 후 디렉터 별도 인프라·배포·원본 1건 복구 승인

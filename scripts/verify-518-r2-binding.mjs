@@ -137,6 +137,44 @@ for(const corruptPart of ['HEAD','BASE']){
  await assert.rejects(read,/APP518_(R2_HEAD_UNKNOWN_OR_CORRUPT|BASE_INVALID_JSON)/);
 }
 assert.equal(puts,1,'reading failures must never commit R2');
+// The real owner-bound R2 provider must accept >20k existing BASE
+// memberships without truncating or changing the shared BASE schema.
+for(const n of [20001,50001]){
+ const key='catalog/v5/'+uid+'/musicNote/bases/100.json';
+ const bigItems=Array.from({length:n},(_,i)=>({id:'large-'+i,uid}));
+ const bigBase={schemaVersion:4,authority:'server',kind:'musicNote',
+  complete:true,revision:100,itemCount:n,items:bigItems};
+ const bigHead={...createEmptyCatalogJournal({
+  kind:'musicNote',baseKey:key,baseRevision:100,itemCount:n,now:1000,
+ }),canonicalAuthority518:true};
+ let headReads=0,baseReads=0,writesOnRead=0;
+ const bigProvider=createOwnerR2Provider518({env:{
+  ...env,CATALOG:{
+   async get(objectKey){
+    if(objectKey.endsWith('/journal.json')){
+     headReads++;return object(bigHead);
+    }
+    assert.equal(objectKey,key);
+    baseReads++;
+    return {etag:'"large-base"',size:Buffer.byteLength(JSON.stringify(bigBase)),
+     customMetadata:{uid,kind:'musicNote'},
+     async text(){return JSON.stringify(bigBase);}};
+   },
+   async put(){writesOnRead++;throw Error('read-only bootstrap');},
+  },
+ },sharedReleaseFencesVerified:true});
+ const fetched=await bigProvider.loadCompleteFencedOwnerR2({
+  uid,projectItem:item=>item,sortItems:items=>items,
+ });
+ assert.equal(fetched.items.length,n);
+ assert.equal(fetched.head.itemCount,n);
+ assert.equal(fetched.verifiedByServer,true);
+ assert.equal(fetched.fencedWritersVerified,true);
+ assert.equal(headReads,2,'authenticated HEAD before and after owner materialization');
+ assert.equal(baseReads,1,'no repeated BASE materialization for a first import');
+ assert.equal(writesOnRead,0);
+}
+console.log('APP518_REAL_R2_OWNER_PROVIDER_ACCEPTS_20001_AND_50001=PASS');
 console.log('APP518_HEAD_BASE_STREAM_FAILURE_RECOVERS_WITH_SAME_SOURCE=PASS');
 console.log('APP518_HEAD_BASE_BAD_JSON_STILL_CONTRACT_FAILURE=PASS');
 console.log('APP518_R2_RELEASE_FLAG_AND_SHARED_WRITER_FENCES_REQUIRED=PASS');

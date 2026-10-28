@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {deliverDueCanonicalFavorites518} from '../cloudflare/media-worker/src/catalogDelivery518.js';
 import {parseFirestoreUpdateTimeNs518} from '../cloudflare/media-worker/src/catalogCanonicalFence518.js';
+import {CatalogR2ContractError518} from '../cloudflare/media-worker/src/catalogR2Provider518.js';
 const time=n=>'2026-10-28T02:00:00.'+String(n).padStart(9,'0')+'Z';
 const ver=n=>parseFirestoreUpdateTimeNs518(time(n));
 const uid='own',documentId='song-a',nowMs=100000;
@@ -210,6 +211,24 @@ assert.equal(ctx.row.hold_reason,'RETRY_BUDGET_EXHAUSTED');
 assert.equal(ctx.row.ack_version_ns,null);
 assert.equal((await run(ctx.db,async()=>{throw Error('held');},
   async()=>{throw Error('held');})).attempted,0);
+// R2 errors that escape a READY-index provider are equally permanent.
+// Raw network I/O still uses bounded retry; never accept an unverified ACK.
+ctx=makeDb();
+result=await run(ctx.db,async()=>canonical(1),async()=>{
+ throw new CatalogR2ContractError518('APP518_R2_HEAD_UNKNOWN_OR_CORRUPT');
+});
+assert.equal(result.held,1);
+assert.equal(result.retry,0);
+assert.equal(ctx.row.hold_reason,'INDEX_CONTRACT');
+assert.equal(ctx.row.ack_version_ns,null);
+ctx=makeDb();
+result=await run(ctx.db,async()=>canonical(1),async()=>{
+ throw new Error('APP518_R2_IO_TIMEOUT');
+});
+assert.equal(result.held,0);
+assert.equal(result.retry,1);
+assert.equal(ctx.row.hold_reason,null);
+console.log('APP518_DIRECT_R2_OWNER_SCHEMA_EXCEPTION_HOLD_VS_NETWORK_RETRY=PASS');
 console.log('APP518_STAGE_AND_COMPACTION_HEAD_DRIFT_RETRY_NOT_PERMANENT_HOLD=PASS');
 console.log('APP518_TERMINAL_RECOVERY_CONTRACT_STILL_DURABLY_HELD=PASS');
 console.log('APP518_TRANSIENT_DRIFT_RETRY_BUDGET_BOUNDED=PASS');

@@ -16,7 +16,11 @@ CREATE TABLE IF NOT EXISTS music_note_catalog_index_meta_518 (
   recovery_generation INTEGER CHECK(recovery_generation > 0),
   recovery_revision INTEGER CHECK(recovery_revision > 0),
   recovery_etag TEXT CHECK(length(recovery_etag) BETWEEN 1 AND 256),
-  recovery_count INTEGER CHECK(recovery_count BETWEEN 0 AND 20000)
+  recovery_count INTEGER CHECK(recovery_count BETWEEN 0 AND 20000),
+  -- Incomplete compaction staging may switch to a newer proven R2 head
+  -- at most 3 times, once per 60s, without touching READY membership.
+  recovery_restart_count INTEGER NOT NULL DEFAULT 0 CHECK(recovery_restart_count BETWEEN 0 AND 3),
+  recovery_checked_at_ms INTEGER CHECK(recovery_checked_at_ms >= 0)
 ) WITHOUT ROWID;
 
 CREATE TABLE IF NOT EXISTS music_note_catalog_member_518 (

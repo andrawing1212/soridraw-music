@@ -6,6 +6,8 @@ on:
     paths:
       - 'cloudflare/media-worker/src/catalogCanonicalFence518.js'
       - 'scripts/verify-518-canonical-fence.mjs'
+      - 'cloudflare/media-worker/src/catalogEventGate518.js'
+      - 'scripts/verify-518-catalog-event-cost-gate.mjs'
       - '.github/workflows/verify-518-canonical-fence.yml'
       - 'DOCS/APP518_MUSIC_NOTE_CATALOG_REPAIR_CONTRACT.md'
   workflow_dispatch:
@@ -16,11 +18,41 @@ permissions:
 jobs:
   source-version-fence:
     runs-on: ubuntu-24.04
-    timeout-minutes: 6
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install existing test dependencies
+        run: npm ci --no-audit --no-fund
       - name: Verify exact source version, stale save rejection, tombstones and cross-user safety
-        run: node scripts/verify-518-canonical-fence.mjs
+        run: |
+          node scripts/verify-518-canonical-fence.mjs
+          node scripts/verify-518-catalog-event-cost-gate.mjs
+      - name: Protect existing next-song, publication, Music Note and local-first behaviors
+        run: |
+          node scripts/verify-204-explore-next-song-parity.mjs
+          node scripts/verify-203-explore-action-visual-publication.mjs
+          node scripts/verify-211-cross-device-publication-refresh.mjs
+          node scripts/verify-349-studio-heart-settlement-media.mjs
+          node scripts/verify-280-music-note-resurrection.mjs
+          node scripts/verify-081-page-exit-batch.mjs
+          node scripts/verify-277-music-note-sync-cost.mjs
+      - name: Verify app518 candidate changes ONLY isolated safety helpers, tests and docs
+        run: |
+          set -euo pipefail
+          git fetch origin preview --no-tags
+          git diff --name-only origin/preview...HEAD | while IFS= read -r file; do
+            case "$file" in
+              cloudflare/media-worker/src/catalogCanonicalFence518.js|cloudflare/media-worker/src/catalogEventGate518.js|scripts/verify-518-canonical-fence.mjs|scripts/verify-518-catalog-event-cost-gate.mjs|DOCS/APP518_MUSIC_NOTE_CATALOG_REPAIR_CONTRACT.md|.github/workflows/verify-518-canonical-fence.yml) ;;
+              *) echo "APP518_UNAPPROVED_PRODUCT_OR_BACKEND_CHANGE=$file"; exit 2 ;;
+            esac
+          done
+          echo APP518_EXISTING_PRODUCT_AND_DEPLOY_FILE_SCOPE=PASS
       - name: Verify no active app or Worker integration in the contract-only release
         shell: bash
         run: |

@@ -15,6 +15,9 @@ import {
 } from './catalogJournal.js';
 import { decideCatalogWriterAuthority518, classifyCatalogAuthority518 } from './catalogAuthorityPolicy518.js';
 import { FENCE_CONTRACT_518 } from './catalogSharedWriterRolloutGate518.js';
+import {createApp518ServerBridge} from './catalogServerBridge518.js';
+import {createExactFirebaseFetcher518} from './catalogFirebaseFetcher518.js';
+
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const AUTH_CERT_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
@@ -1253,10 +1256,56 @@ const handleMedia = async (request, env, origin, url) => {
   return new Response(object.body, { status, headers });
 };
 
+
+// app518 dormant server-only path. It cannot be opened by browser auth:
+// explicit 3-environment release attestation, canonical cutover, pinned
+// Firebase callback host and server secret are all required at runtime.
+const app518ServerConnector = (env) => {
+  if (!isCanonicalCatalogAuthority518(env)
+    || env?.SORIDRAW_APP518_RELEASE_FENCES_VERIFIED !== 'APPROVED_ALL_3_AND_NO_OLD_WRITERS')
+    return null;
+  const readExactCanonical = createExactFirebaseFetcher518({
+    sourceUrl:env?.CATALOG_FIREBASE_SOURCE_518_URL,
+    expectedHostname:env?.CATALOG_FIREBASE_SOURCE_518_HOST,
+    secret:env?.CATALOG_SERVER_HMAC_518,
+  });
+  if (!readExactCanonical) return null;
+  const bridge=createApp518ServerBridge({
+    env,sharedReleaseFencesVerified:true,readExactCanonical,
+    projectItem:(item,id)=>projectCatalogFields('musicNote',item,id),
+    sortItems:sortCatalogItems,
+  });
+  return bridge.enabled ? bridge : null;
+};
+const handleApp518ServerRoute=async(request,env,ctx)=>{
+  if(request.method!=='POST')return jsonResponse({code:'NOT_FOUND'},404);
+  const connector=app518ServerConnector(env);
+  if(!connector)return jsonResponse({code:'HOLD_APP518_RELEASE_OFF'},503);
+  try{
+    const reply=await connector.ingestSignedRequest({request,nowMs:Date.now()});
+    if(reply.code==='ENQUEUED'){
+      // R2 work is always a separate verified D1 read. A retry schedule
+      // (when explicitly provisioned) continues after transient failures.
+      const drain=connector.drainServerPending({nowMs:Date.now(),limit:1});
+      if(ctx?.waitUntil)ctx.waitUntil(drain);
+      else await drain;
+    }
+    const status=reply.code==='ENQUEUED'||reply.code==='STALE_OR_DUPLICATE'
+      ||reply.code==='STALE_SIGNED_EVENT_NO_WRITE'?200:409;
+    return jsonResponse({code:reply.code},status);
+  }catch{
+    return jsonResponse({code:'HOLD_APP518_SERVER_IO_RETRY'},503);
+  }
+};
+
 export default {
   async fetch(request, env, executionCtx) {
     const url = new URL(request.url);
     const origin = text(request.headers.get('Origin'));
+
+    // Server route runs before browser CORS; HMAC is its only credential.
+    if (url.pathname === '/v1/server/catalog518')
+      return handleApp518ServerRoute(request,env,executionCtx);
 
     if (request.method === 'OPTIONS') return handleOptions(request, env);
     if (!isAllowedOrigin(env, origin)) return new Response('Forbidden origin', { status: 403 });
@@ -1296,5 +1345,14 @@ export default {
     }
 
     return jsonResponse({ ok: false, code: 'NOT_FOUND' }, 404, origin);
+  },
+  // No cron is declared in wrangler.jsonc. This handler is inert until a
+  // separately approved scheduled trigger is provisioned on all releases.
+  async scheduled(_event,env,ctx) {
+    const connector=app518ServerConnector(env);
+    if(!connector)return;
+    const task=connector.drainServerPending({nowMs:Date.now(),limit:1});
+    if(ctx?.waitUntil)ctx.waitUntil(task);
+    else await task;
   },
 };

@@ -67,6 +67,78 @@ await assert.rejects(()=>createOwnerR2Provider518({
  env:foreign,sharedReleaseFencesVerified:true,
 }).readOwnerHead(uid),/UNKNOWN_OR_CORRUPT/);
 assert.equal(puts,1);
+// P1: HEAD and BASE stream errors are transient, whereas successfully read
+// invalid JSON (or foreign owner metadata) is a durable contract violation.
+const ownerBaseKey='catalog/v5/owner-1/musicNote/bases/100.json';
+const base={schemaVersion:4,authority:'server',kind:'musicNote',
+ complete:true,revision:100,itemCount:0,items:[]};
+const headAtBase={...createEmptyCatalogJournal({
+ kind:'musicNote',baseKey:ownerBaseKey,baseRevision:100,
+ itemCount:0,now:1000,
+}),canonicalAuthority518:true};
+for(const failPart of ['HEAD','BASE']){
+ let failOnce=true,readsOnRecovery=0;
+ const failureEnv={...env,CATALOG:{
+  ...CATALOG,async get(key){
+   readsOnRecovery++;
+   const isHead=key.endsWith('/journal.json');
+   const value=isHead?headAtBase:base;
+   const output=isHead?object(value):{
+    etag:'base-etag',size:Buffer.byteLength(JSON.stringify(base)),
+    customMetadata:{uid,kind:'musicNote'},
+    async text(){return JSON.stringify(base);},
+   };
+   if(failOnce && ((failPart==='HEAD'&&isHead)
+      ||(failPart==='BASE'&&!isHead))){
+    failOnce=false;
+    return {...output,async text(){throw Error('TEMP_R2_STREAM_FAILURE');}};
+   }
+   return output;
+  },
+ }};
+ const provider=createOwnerR2Provider518({
+  env:failureEnv,sharedReleaseFencesVerified:true,
+ });
+ if(failPart==='HEAD'){
+  await assert.rejects(()=>provider.readOwnerHead(uid),/TEMP_R2_STREAM_FAILURE/);
+  const good=await provider.readOwnerHead(uid);
+  assert.equal(good.ownerUid,uid);
+ }else{
+  await assert.rejects(()=>provider.loadCompleteFencedOwnerR2({
+   uid,projectItem:item=>item,sortItems:items=>items,
+  }),/TEMP_R2_STREAM_FAILURE/);
+  const good=await provider.loadCompleteFencedOwnerR2({
+   uid,projectItem:item=>item,sortItems:items=>items,
+  });
+  assert.equal(good.ownerUid,uid);
+  assert.equal(good.items.length,0);
+ }
+ assert.ok(readsOnRecovery>=2);
+}
+for(const corruptPart of ['HEAD','BASE']){
+ const brokenEnv={...env,CATALOG:{
+  ...CATALOG,async get(key){
+   const isHead=key.endsWith('/journal.json');
+   return isHead?{...object(headAtBase),async text(){
+    return corruptPart==='HEAD'?'{invalid':JSON.stringify(headAtBase);
+   }}:{
+    customMetadata:{uid,kind:'musicNote'},async text(){return '{invalid';},
+   };
+  },
+ }};
+ const provider=createOwnerR2Provider518({
+  env:brokenEnv,sharedReleaseFencesVerified:true,
+ });
+ const read=corruptPart==='HEAD'
+  ?()=>provider.readOwnerHead(uid)
+  :()=>provider.loadCompleteFencedOwnerR2({
+    uid,projectItem:item=>item,sortItems:items=>items,
+   });
+ await assert.rejects(read,/APP518_(R2_HEAD_UNKNOWN_OR_CORRUPT|BASE_INVALID_JSON)/);
+}
+assert.equal(puts,1,'reading failures must never commit R2');
+console.log('APP518_HEAD_BASE_STREAM_FAILURE_RECOVERS_WITH_SAME_SOURCE=PASS');
+console.log('APP518_HEAD_BASE_BAD_JSON_STILL_CONTRACT_FAILURE=PASS');
 console.log('APP518_R2_RELEASE_FLAG_AND_SHARED_WRITER_FENCES_REQUIRED=PASS');
 console.log('APP518_R2_OWNER_BOUND_HEAD_ETAG_CAS=PASS');
 console.log('APP518_R2_INVALID_OR_FOREIGN_HEAD_NO_PUT=PASS');

@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS music_note_catalog_index_meta_518 (
   owner_uid TEXT PRIMARY KEY NOT NULL CHECK(length(owner_uid) BETWEEN 1 AND 128),
   generation INTEGER NOT NULL CHECK(generation > 0),
   indexed_revision INTEGER NOT NULL CHECK(indexed_revision > 0),
-  expected_count INTEGER NOT NULL CHECK(expected_count BETWEEN 0 AND 20000),
+  expected_count INTEGER NOT NULL CHECK(expected_count >= 0),
   head_etag TEXT NOT NULL CHECK(length(head_etag) BETWEEN 1 AND 256),
   status TEXT NOT NULL CHECK(status IN ('building','ready')),
   checked_at_ms INTEGER NOT NULL,
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS music_note_catalog_index_meta_518 (
   recovery_generation INTEGER CHECK(recovery_generation > 0),
   recovery_revision INTEGER CHECK(recovery_revision > 0),
   recovery_etag TEXT CHECK(length(recovery_etag) BETWEEN 1 AND 256),
-  recovery_count INTEGER CHECK(recovery_count BETWEEN 0 AND 20000),
+  recovery_count INTEGER CHECK(recovery_count >= 0),
   -- Incomplete compaction staging may switch to a newer proven R2 head
   -- at most 3 times, once per 60s, without touching READY membership.
   recovery_restart_count INTEGER NOT NULL DEFAULT 0 CHECK(recovery_restart_count BETWEEN 0 AND 3),

@@ -250,7 +250,7 @@ console.log('APP517_MANUAL_ONLY_NO_CLIENT_CACHE_OR_R2_WRITES=PASS');
   assert.ok(workflow.indexOf(checked, deploy) > deploy,
     'retain post-deploy Catalog guard too');
   const legacyGuard = fs.readFileSync('scripts/verify-356-shared-private-catalog-authority.mjs','utf8');
-  assert.match(legacyGuard, /delta\\\\\|bootstrap\\\\\|inspect-exact/);
+  assert.ok(legacyGuard.includes('delta|bootstrap|inspect-exact'), 'known exact new route must remain whitelisted');
   assert.match(legacyGuard, /catalog bootstrap route missing/);
   console.log('APP517_LEGACY_CATALOG_PREDEPLOY_AND_POSTDEPLOY_GATES=PASS');
   console.log('APP517_NO_AUTODEPLOY_EXACT_SHA_MANUAL_NO_R2_SMOKE_WRITES=PASS');

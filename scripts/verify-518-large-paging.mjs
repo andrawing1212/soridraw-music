@@ -175,7 +175,7 @@ async function runComplete(count,config={}){
   if(r.complete){assert.equal(r.code,config.recovery?'RECOVERY_PROMOTED':'INDEX_READY');break;}
   assert.ok(++rounds<100,'no endless progress');
  }while(true);
- assert.ok(paged>0,'multiple Worker invocations required');
+ if(count>1024)assert.ok(paged>0,'large owner needs multiple invocations');
  assert.equal(store.meta.status,'ready');
  assert.equal(store.meta.expected_count,count);
  assert.equal(store.set(uid,f.root.headRevision).size,count);

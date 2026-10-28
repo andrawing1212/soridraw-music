@@ -173,10 +173,17 @@ for(let i=1;i<=3;i++){
  const nextHead={...head,headRevision:head.headRevision+i,
    itemCount:301,etag:'"new-'+i+'"'};
  const next={...snap,head:nextHead};
+ let headReadCount=0;
  assert.equal((await run(store.db,{nowMs:60010*i,
    loadMaterializedR2Once:async()=>next,
-   readR2HeadAgain:async()=>({...nextHead,etag:'"other-'+i+'"'})})).code,
-   'RETRYABLE_R2_HEAD_MOVED');
+   readR2HeadAgain:async()=>{
+     headReadCount++;
+     // Verified HEAD at preflight, then a different ETag arrives AFTER
+     // staging; only the final read is a transient move.
+     return headReadCount===1?nextHead:
+       {...nextHead,etag:'"other-'+i+'"'};
+   }})).code,'RETRYABLE_R2_HEAD_MOVED');
+ assert.equal(headReadCount,2);
  assert.equal(store.metas.get(owner).restart_count,i);
 }
 const lastHead={...head,headRevision:head.headRevision+4,etag:'"new-4"'};

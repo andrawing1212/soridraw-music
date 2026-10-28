@@ -142,3 +142,16 @@
 - [ ] 실제 변경 이벤트→서버 인증→D1→R2→ACK, 실패 시 예약 재실행 연결
 - [ ] 단건 복구를 위한 현재 원본 재확인/실사용 인증 흐름, 비용·PC/모바일 QA
 - [ ] PR 독립 재감사 PASS 후 디렉터 별도 인프라·배포·원본 1건 복구 승인
+
+## 2026-10-28 첫 저장 변경 시 R2→D1 색인 후보 — 코드/검사 승인 범위
+
+- 디렉터 승인 범위: 기존 R2 Catalog를 **계정의 첫 실제 확정 변경 시 한 번만** 읽어 D1 exact-song membership을 만든다는 방식의 소스·검사. 가입/진입/탭 이동/새로고침/전체 계정 배치 백필 금지. D1 생성·SQL 실제 적용·Firestore/R2 실제 쓰기·배포 모두 금지.
+- `cloudflare/media-worker/migrations/518_music_note_catalog_first_change_index.sql` (미적용): `owner_uid`별 `building/ready`, 처음 본 R2 HEAD revision/ETag/expectedCount, 곡별 `(uid,generation,favoriteId)` 색인. 곡 본문·가사·프롬프트·미디어는 D1에 복사 안 함.
+- `catalogFirstChangeIndex518.js`: **서버가 인증한 의미 있는 저장곡 변경**에서만 정확한 사용자의 R2 materialized Catalog 1회 + 최종 HEAD ETag·revision 재확인 1회. ID 누락/중복/용량 초과/다른 사용자/미완전 Catalog는 색인하지 않음. D1 128행씩 batch의 원자적 stage, 모든 행 개수가 일치하고 R2 HEAD가 변하지 않았을 때만 ready로 변경. 도중 충돌/탭 종료/프로세스 종료는 building 유지, 동일 HEAD 재시도로 idempotent 수렴. 다르게 바뀐 HEAD는 임의 초기화하지 않고 fail-closed.
+- 비용: 최초 성공한 실제 변경 1회에만 D1 기존 outbox 외 **색인 N곡 + metadata 2행 쓰기 (W=N+2)**. 예: N=301이면 약 W303, N=10,000이면 약 W10,002. R2 full snapshot GET 1, HEAD 검사 GET 1 및 D1 batch·결과 확인 추가. N이 20,000 초과인 계정은 **FAIL-CLOSED**(운영 전 페이지 단위 스트리밍/연속성 대안 필요). 실패/경합에서 재읽기·재시도 비용이 추가될 수 있으며 운영 실측 아님. 매 변경마다 O(N)이란 뜻은 아님.
+- `readIndexedMembership518`: D1 점 조회는 동일 R2 HEAD revision·ETag·itemCount와 일치할 때만 허용. 그 HEAD를 실제 R2 conditional CAS의 **그 순간**에 재확인하는 공통 서버 Writer는 **아직 없음**. D1 ready 이전 일부 stage를 membership false로 해석 금지.
+- **중요 미완료:** R2 성공 후 D1 membership/metadata 갱신을 서로 다른 저장소에서 원자적이라고 주장하면 안 됨. 이 재수렴·실패 복구 경로를 구현하지 않으면 첫 변경 이후 HEAD가 움직여 색인이 낡고 다음 변경이 막힐 수 있음. 구형 Writer 전체 차단·mixed-preview/test/prod·compaction 안전성도 남아 있음. 실제 배포 불가.
+- `catalogRemovalAuthority518.js`: 현재 Firestore exact 문서의 서버 updateTime이 있는 **soft-delete만** 원본 버전으로 허용. 구형 `deleteDoc`은 문서와 updateTime을 없애므로, event.before.updateTime이나 브라우저 시각을 삭제 커밋으로 위조하지 않음. **HOLD_HARD_DELETE_NO_COMMIT_VERSION**로 보호하며, 구형 영구 삭제를 끝까지 동기화하는 기능은 아직 미완료.
+- 검사: JS mock D1 batch/중단/다른 UID/HEAD 이동/정상 첫 색인/재진입 R0/W0 + Python SQLite 실제 D1 SQL 인덱스/중복/상태 전환/계정 격리 + soft/hard delete 권한. 기존 다음곡·공개·하트·Music Note·Library 제품 회귀/TypeScript 검사는 별개로 지속.
+
+**합격 상태:** 최초 색인 코드·가상 테스트 후보만 구현. D1 실제 연결, 구형 hard-delete 안전 처리, 증분 membership 동기화, 원장 재시도 스케줄러·R2 실제 정확 CAS, 배포·실사용·원본 1건 복구/확정 비용 **모두 미완료**. 기존 PR #528 Draft HOLD.

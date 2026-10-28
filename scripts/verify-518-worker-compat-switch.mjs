@@ -34,7 +34,7 @@ assert.ok(boot.indexOf('CATALOG_518_FENCED_REBUILD_DENIED')<boot.indexOf('create
 const seed=body('const seedSharedCatalogFromCurrentLegacy = async','const getCatalogState = async');
 assert.ok(seed.indexOf('CATALOG_518_LEGACY_SEED_DISABLED')<seed.indexOf('readCatalogStateFromBucket(env.MEDIA'),
  'no legacy MEDIA seeding after canonical cutover');
-assert.doesNotMatch(cfg,/"SORIDRAW_CANONICAL_CATALOG_518"\s*:\s*"ENABLED_AFTER_SHARED_ROLLOUT"/);
+assert.doesNotMatch(config,/"SORIDRAW_CANONICAL_CATALOG_518"\s*:\s*"ENABLED_AFTER_SHARED_ROLLOUT"/);
 // This verifies source guard wiring, not production safety until every old
 // Worker is updated and canonical retry is durable.
 console.log('APP518_REAL_WORKER_LEGACY_DELTA_WRITER_GUARD_WIRED=PASS');

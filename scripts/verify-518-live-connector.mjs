@@ -142,6 +142,25 @@ await assert.rejects(temporaryFetcher(uid,documentId),error=>
 const rulesSource=readFileSync('firestore.rules','utf8');
 assert.ok(/allow update: if isAuthenticated\(\)[\s\S]*?request\.resource\.data\.uid == resource\.data\.uid;/.test(rulesSource),
  'favorite uid must be immutable even under owner/admin update');
+// Audit P1-2 end to end: a Worker 409 contract HOLD must return as a
+// terminal result to the Firebase event rather than throw/retry endlessly.
+const {dispatchApp518VerifiedEnqueue}
+ =require('../functions/lib/app518ServerTransport.js');
+const signedSource={uid,documentId,verifiedByServer:true,
+ origin:'server-exact-read',state:'saved',updateTime:timestamp};
+const terminal=await dispatchApp518VerifiedEnqueue({
+ source:signedSource,secret,workerUrl:deps.workerUrl,
+ expectedHostname:deps.expectedHostname,nowMs,
+ post:async()=>Response.json({code:'HOLD_EXACT_SOURCE_CONTRACT'},{status:409}),
+});
+assert.equal(terminal.code,'HOLD_EXACT_SOURCE_CONTRACT');
+await assert.rejects(dispatchApp518VerifiedEnqueue({
+ source:signedSource,secret,workerUrl:deps.workerUrl,
+ expectedHostname:deps.expectedHostname,nowMs,
+ post:async()=>Response.json({code:'HOLD_APP518_SERVER_IO_RETRY'},{status:503}),
+}),/APP518_WORKER_ENQUEUE_RETRYABLE/);
+const deniedOwner=await event(base,{...base,uid:'foreign-owner'});
+assert.equal(deniedOwner.code,'DENY_OWNER_OR_ID');
 const off=await worker.fetch(new Request(
  'https://soridraw-media-preview.example.test/v1/server/catalog518',{method:'POST',
  headers:{'content-type':'application/json'},body:'{}'}),{

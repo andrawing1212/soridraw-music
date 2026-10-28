@@ -44,6 +44,8 @@ assert.equal(decide({ ...saved(time1), uid: 'other_user' }, null).code, 'DENY_UN
 assert.equal(decide({ ...saved(time1), item: { id: 'other_favorite' } }, null).code, 'DENY_INVALID_ITEM');
 assert.equal(decide({ ...saved(time1), item: { id, uid: 'other_user' } }, null).code, 'DENY_UNVERIFIED_SOURCE');
 assert.equal(decide({ ...saved(time1), updateTime: '' }, null).code, 'DENY_MISSING_SOURCE_VERSION');
+assert.equal(parseFirestoreUpdateTimeNs518('2026-02-30T02:00:00Z'), null,
+  'impossible dates must not be normalized to another source epoch');
 assert.equal(decide({ ...saved(time1), updateTime: '2026-10-28T02:00:00.0+00:00' }, null).code, 'DENY_MISSING_SOURCE_VERSION');
 assert.equal(decide(removed(time1, 'server-exact-read'), { ...initial.nextLedger, durable: false }).code, 'DENY_INVALID_LEDGER');
 assert.equal(decide(removed(time1, 'server-exact-read'), { ...initial.nextLedger, uid: 'other_user' }).code, 'DENY_INVALID_LEDGER');

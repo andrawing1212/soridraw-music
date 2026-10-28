@@ -58,25 +58,25 @@ export const PAGED_DELTA_DELETE_518=[
  'AND favorite_id IN (SELECT value FROM json_each(?))',
  'AND',cursorOwnerReady518('delta'),'AND p.delta_index=?)',
 ].join(' ');
-const ADVANCE_BASE_518=[
+export const ADVANCE_BASE_518=[
  'UPDATE music_note_catalog_paged_stage_518 SET',
  'base_offset=?,base_seen=?,phase=?,updated_at_ms=?',
  "WHERE owner_uid=? AND generation=? AND mode=? AND phase='base'",
  'AND base_offset=? AND base_seen=? AND head_etag=? AND base_etag=?',
  'AND EXISTS (SELECT 1 FROM music_note_catalog_index_meta_518 AS m',
  'WHERE m.owner_uid=? AND',
- "((mode='first' AND m.status='building' AND m.generation=generation AND m.head_etag=head_etag)",
- "OR (mode='recovery' AND m.status='ready' AND m.recovery_generation=generation AND m.recovery_etag=head_etag)))",
+ "((mode='first' AND m.status='building' AND m.generation=music_note_catalog_paged_stage_518.generation AND m.head_etag=music_note_catalog_paged_stage_518.head_etag)",
+ "OR (mode='recovery' AND m.status='ready' AND m.recovery_generation=music_note_catalog_paged_stage_518.generation AND m.recovery_etag=music_note_catalog_paged_stage_518.head_etag)))",
 ].join(' ');
-const ADVANCE_DELTA_518=[
+export const ADVANCE_DELTA_518=[
  'UPDATE music_note_catalog_paged_stage_518 SET',
  'delta_index=?,phase=?,updated_at_ms=?',
  "WHERE owner_uid=? AND generation=? AND mode=? AND phase='delta'",
  'AND delta_index=? AND head_etag=?',
  'AND EXISTS (SELECT 1 FROM music_note_catalog_index_meta_518 AS m',
  'WHERE m.owner_uid=? AND',
- "((mode='first' AND m.status='building' AND m.generation=generation AND m.head_etag=head_etag)",
- "OR (mode='recovery' AND m.status='ready' AND m.recovery_generation=generation AND m.recovery_etag=head_etag)))",
+ "((mode='first' AND m.status='building' AND m.generation=music_note_catalog_paged_stage_518.generation AND m.head_etag=music_note_catalog_paged_stage_518.head_etag)",
+ "OR (mode='recovery' AND m.status='ready' AND m.recovery_generation=music_note_catalog_paged_stage_518.generation AND m.recovery_etag=music_note_catalog_paged_stage_518.head_etag)))",
 ].join(' ');
 const sameHead=(a,b)=>a.headRevision===b.headRevision
  &&a.itemCount===b.itemCount&&a.etag===b.etag;

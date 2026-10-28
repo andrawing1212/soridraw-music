@@ -155,7 +155,7 @@ assert.equal((await go(ctx)).code,'DENY_NON_MONOTONIC_SOURCE_HISTORY');
 assert.equal(ctx.calls.writes,0);
 // Journal compacted before D1 caught up: recovery cannot guess missing IDs.
 ctx=makeDb();
-const compacted={...head,baseRevision:102,baseItemCount:1,deltas:[]};
+const compacted={...head,baseRevision:head.headRevision,baseItemCount:head.itemCount,deltas:[]};
 assert.equal((await go(ctx,{loadVerifiedHead:async()=>({
  verifiedByServer:true,ownerUid:uid,fencedWritersVerified:true,
  head:compacted,etag:'"compacted"'})})).code,

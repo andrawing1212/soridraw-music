@@ -1,0 +1,30 @@
+name: Verify app518 Canonical Music Note Catalog Fence (No Deploy)
+
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'cloudflare/media-worker/src/catalogCanonicalFence518.js'
+      - 'scripts/verify-518-canonical-fence.mjs'
+      - '.github/workflows/verify-518-canonical-fence.yml'
+      - 'DOCS/APP518_MUSIC_NOTE_CATALOG_REPAIR_CONTRACT.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-version-fence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact source version, stale save rejection, tombstones and cross-user safety
+        run: node scripts/verify-518-canonical-fence.mjs
+      - name: Verify no active app or Worker integration in the contract-only release
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -q 'catalogCanonicalFence518' cloudflare/media-worker/src/index.js
+          ! grep -q 'reconcile-exact' src/lib/userDataEngine.ts
+          echo 'APP518_NO_LIVE_R2_WRITES_OR_AUTOMATIC_RECOVERY=PASS'

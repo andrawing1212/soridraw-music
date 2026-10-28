@@ -312,6 +312,13 @@
 - `scripts/verify-518-live-media-writer-readonly.mjs --live`는 계정 권한이 있을 때만 Cloudflare **GET deployments/settings**와 Worker **GET /health** 각각 3개를 단발 수집하며, R2/D1/Firestore 객체·시크릿 값·전체 사용자 데이터 불조회. `--self-test`는 Cloudflare 연결 없이 mock GET만 검증. 수집 결과는 **관측 증거**일 뿐 자동 배포 허가가 아니고, 이를 승인된 immutable version 및 실제 구형 실행 종료 증거와 대조해야 함. 실행 시 GitHub 로그에 계정 토큰·개인정보 노출 금지.
 - `scripts/verify-518-shared-writer-rollout.mjs`: 단일 PREVIEW만 업그레이드, 구형 TEST/PROD, 100% 미달/분할 트래픽, R2 이름·플래그 불일치, 복수 버전, 불확실한 HEAD 마커, 구형 롤백, 관측 10분 미달/오래된 관측, in-flight 미증명, 변조된 버전 attestation 모두 FAIL. 아직 migration 없는 구형 브라우저의 정상 delta는 보호, protected owner의 구형 delta/seed/rebuild는 거부하는 소스 정책 회귀 포함.
 
-**중요한 해결 범위 한계:** 이 코드는 실제 Cloudflare Worker를 바꾸지 않음. `catalogSharedWriterRolloutGate518`는 **독립 사전 점검을 위한 소스 후보**이며 현재 기존 배포 워크플로에 자동 연결하지 않았음. 특히 과거 자동 rollback 명령이 이전 구형 version을 복원할 수 있으므로 **서버 전환 전에** 배포·롤백 제어를 별도 승인 범위에서 수정/검증하지 않으면 NO-GO. 위 코드만으로 현재 live 3환경 보호 P1이 해결됐다고 표현하지 말 것. 구형 브라우저의 canonical 전환 **이후** 저장·삭제는 서버 정본 전달·재시도가 실제 작동하고 실기기에서 보존될 때까지 중단 가능성이 있어, 사전 호환성 합격 전 전환 금지.
+**현재 연결 범위:** 실제 Cloudflare Worker를 배포하지 않았음. 3환경 완료/old flight 별도 증거를 다루는 `catalogSharedWriterRolloutGate518`은 여전히 독립 사전 점검용이지만, 기존 Media Worker 배포 제어 `.deploy/release-media-worker-runtime.mjs`의 구형 upload·activate·restore에는 Cloudflare 3환경 canonical 변수 검사와 안전 차단을 실제로 연결했음. 따라서 기존 기록의 미연결 문장은 이 수정본에서는 옛 내용이며 무효. 특히 과거 자동 rollback 명령이 이전 구형 version을 복원할 수 있으므로 **서버 전환 전에** 배포·롤백 제어를 별도 승인 범위에서 수정/검증하지 않으면 NO-GO. 위 코드만으로 현재 live 3환경 보호 P1이 해결됐다고 표현하지 말 것. 구형 브라우저의 canonical 전환 **이후** 저장·삭제는 서버 정본 전달·재시도가 실제 작동하고 실기기에서 보존될 때까지 중단 가능성이 있어, 사전 호환성 합격 전 전환 금지.
 
 **다음 단계 / 명확한 차단:** 새 SHA CI+별도 Work 독립 감사 → 인증된 Cloudflare 정확 version/바인딩/GET health read-only 증거 수집 → 세 Worker fenced-source 코드를 모두 먼저 설치(별도 명시 배포 승인 전 금지), 기존 정상 delta 사용 유지 → in-flight 종료/old rollback 차단 검증 → Firebase↔D1↔R2 정본 전달/구형 브라우저 보존 실검증 → 별도 사용자 승인을 받은 후에만 canonical 518 활성화. TEST·PRODUCTION 승격, 병합, 실데이터 수정, 버킷 변경 모두 현재 금지. **전체 RELEASE HOLD / NO-GO 유지.**
+
+### 2026-10-29 구형 Media Worker 배포 스크립트 차단 추가
+- 기존 Media Worker 배포 스크립트의 upload·activate·restore 전에 Cloudflare 세 Worker 모두의 /settings를 GET으로 조회한다. 어떤 환경에서든 SORIDRAW_CANONICAL_CATALOG_518 변수가 발견되거나 비밀/중복 값·조회 실패가 있으면 **기존 구형 버전 배포·복원 중단**. 전부 미설정인 현재 환경에서 기존 정상 배포 절차는 유지.
+- 자동 오류 롤백 직전에도 동일 3환경 상태를 다시 GET 검사한다. 그 사이 정본 전환이 시작되었다면 구형 버전 복원보다 데이터 보호를 우선해 중단한다.
+- 새 회귀 검사는 3환경 한 곳만 canonical ON/값 불명·비밀, 구형 restore/activate/upload, 자동 rollback 직전 재검사 조건을 포함한다. CI는 실제 Cloudflare 요청을 하지 않는다.
+- **중요:** 이 스크립트를 우회한 직접 Cloudflare UI·Wrangler·오래된 워크플로·이전에 시작한 요청은 막을 수 없다. 정본 전환을 실행하는 별도 fenced-only 배포 제어와 immutable version 승인·구형 실행 종료·실제 Firebase 배송 확인은 아직 미완료. 소스의 사전 보호가 실제 세 Worker 보호 설치를 의미하지 않는다.
+- 현재 PR #528 Draft·미병합·미배포, 실데이터 변경 0, 전체 RELEASE HOLD.

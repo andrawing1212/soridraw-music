@@ -88,6 +88,33 @@ export const assessSharedWriterCutover518=({
  * all old release paths, including emergency rollback. A separate audited
  * canonical-aware controller must handle post-cutover repairs.
  */
+// Cloudflare /settings can return HTTP 200/success:true with incomplete
+// bindings. Missing, duplicate or contradictory bindings are NOT proof that
+// the canonical switch is OFF. Reject before any legacy deployment mutation.
+export const assertLegacyMediaBindingsComplete518=(settings,target)=>{
+ const rows=settings?.bindings;
+ if(!Array.isArray(rows)||rows.length===0)
+  throw new Error('HOLD_518_INCOMPLETE_LIVE_BINDINGS');
+ const exactly=(name,type)=>{
+  const named=rows.filter(x=>x?.name===name);
+  if(named.length!==1||named[0]?.type!==type)
+   throw new Error('HOLD_518_INCOMPLETE_LIVE_BINDINGS_'+name);
+  return named[0];
+ };
+ const r2Name=r=>r.bucket_name??r.bucket;
+ if(r2Name(exactly('CATALOG','r2_bucket'))!==SHARED)
+  throw new Error('HOLD_518_LIVE_CATALOG_BUCKET_MISMATCH');
+ if(!target?.media||r2Name(exactly('MEDIA','r2_bucket'))!==target.media)
+  throw new Error('HOLD_518_LIVE_MEDIA_BUCKET_MISMATCH');
+ const shared=exactly('SORIDRAW_SHARED_CATALOG_V1','plain_text');
+ if((shared.text??shared.value)!=='1')
+  throw new Error('HOLD_518_LIVE_SHARED_FLAG_MISMATCH');
+ // Reject even blank, "OFF" or secret values. Never infer absence from the
+ // absence of plain-text rows alone.
+ if(rows.some(x=>x?.name==='SORIDRAW_CANONICAL_CATALOG_518'))
+  throw new Error('HOLD_518_CANONICAL_PRESENT');
+ return null;
+};
 export const assessLegacyMediaMutation518=({
  action,sourceCanonicalFlag,liveCanonicalFlags,
 }={})=>{

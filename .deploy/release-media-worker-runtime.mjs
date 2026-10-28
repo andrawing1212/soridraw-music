@@ -277,11 +277,10 @@ console.log(`${mode.toUpperCase()}_MEDIA_WORKER_DRY_RUN=PASS`);
 
 if (action === 'dry-run') process.exit(0);
 
-// Before ANY Worker mutation, recheck EVERY environment sharing the R2
-// bucket. One live canonical flag (including a secret or unknown value)
-// blocks this older release runner and its unsafe version rollback. This
-// runner is intentionally not authorized to enable or roll back canonical 518.
-if (['upload', 'activate', 'restore'].includes(action)) {
+// The same check is repeated immediately before an automatic rollback
+// because another environment could have started canonical cutover after
+// the original activation preflight. Never restore a pre-fence version then.
+async function verifyLegacyMediaMutationAllowed518(operation) {
   const canonicalFlags = await Promise.all(
     Object.values(TARGETS).map(async ({ worker }) => {
       const settings = await cfGet(`${apiBase}/workers/scripts/${worker}/settings`);
@@ -292,19 +291,21 @@ if (['upload', 'activate', 'restore'].includes(action)) {
         item?.name === 'SORIDRAW_CANONICAL_CATALOG_518'
       ));
       if (flags.length > 1) throw new Error('APP518_MEDIA_RELEASE_HOLD_DUPLICATE_FLAG');
-      // Even an opaque secret or an unfamiliar value must fail closed.
       if (!flags.length) return null;
       if (flags[0].type !== 'plain_text') return 'UNKNOWN_SECRET';
       return String(flags[0].text ?? flags[0].value ?? 'UNKNOWN');
     }),
   );
   const verdict = assessLegacyMediaMutation518({
-    action,
-    sourceCanonicalFlag: SOURCE_ENV.vars?.SORIDRAW_CANONICAL_CATALOG_518 ?? null,
-    liveCanonicalFlags: canonicalFlags,
+    action:operation,
+    sourceCanonicalFlag:SOURCE_ENV.vars?.SORIDRAW_CANONICAL_CATALOG_518 ?? null,
+    liveCanonicalFlags:canonicalFlags,
   });
   if (!verdict.pass) throw new Error(verdict.code);
   console.log(`${mode.toUpperCase()}_APP518_LEGACY_RELEASE_BOUNDARY=PASS_CANONICAL_OFF_ALL_THREE`);
+}
+if (['upload','activate','restore'].includes(action)) {
+  await verifyLegacyMediaMutationAllowed518(action);
 }
 if (action === 'restore') {
   await restore();
@@ -345,6 +346,7 @@ try {
 } catch (error) {
   if (deployed) {
     try {
+      await verifyLegacyMediaMutationAllowed518('restore');
       run(process.execPath, [WRANGLER, 'rollback', before, '--name', target.worker, '--config', CONFIG_PATH, '--message', `automatic ${mode} media rollback after release smoke failure`], WORKER_DIR);
       console.error(`${mode.toUpperCase()}_MEDIA_WORKER_ROLLBACK=ATTEMPTED`);
     } catch (rollbackError) {

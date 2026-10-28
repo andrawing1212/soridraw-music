@@ -243,3 +243,12 @@
 - READY 세대는 재시작·삭제하지 않고, 이전 불완전 generation의 ID들은 **보이지 않는 상태로 남겨** 향후 별도 감사된 소유자별 제한적 청소로 처리함. 이 복구 시도는 변경이 검증된 단일 owner의 실제 pending 처리에만 허용. 다른 계정/페이지 방문/권한 불명/동일 revision ETag 교체/동시 충돌은 FAIL-CLOSED.
 - **비용 위험을 숨기지 않음:** 처음 색인 W=N+2 외에 안전한 HEAD 변경 재시작 1회는 **추가 메타 W1 + 새 세대 N개 ID 쓰기**가 들 수 있음. 최악 3번 제한이므로 이번 소스 후보 자동 복구는 최대 3세대 추가 전체 작성, 기존 세대의 보관 용량은 별도. 재시도 횟수 소진 후 운영자 승인 없는 반복 전체조회/쓰기 금지. 기존 일반 확정 변경 D1 W3~W4 목표와는 **다른 예외 비용**.
 - 검사: JS 실제 첫 색인 실행형 mock + Python 실제 SQLite 구조 및 조건부 SQL. 기존 2만곡 초과 제한은 **해결 전까지 유지**, compaction 복구 자체의 다른 HEAD 세대 HOLD는 **아직 미해결**. 실제 3환경 D1 생성·migration·Worker/Functions/Hosting 배포·실데이터 복구 없음. 새 SHA GitHub Actions 확인 및 후속 독립 감사 필요.
+
+## 2026-10-28 P1 압축 복구 중 R2 HEAD 이동 대응 — 비활성 소스 후보
+
+- **원인:** `catalogCompactionRecovery518.js`는 이전 R2 HEAD 대상의 불완전 `recovery_generation`이 있으면 새 HEAD를 무조건 `HOLD_RECOVERY_TARGET_MOVED`로 끝냈다. 따라서 정상 R2 compaction/변경이 겹치면 다음 복구가 멈출 수 있었다.
+- **수정 범위:** `catalogCompactionRecovery518.js`, `catalogFirstChangeIndex518.js`의 owner meta 읽기, **아직 실행되지 않은** D1 SQL, 해당 Node/SQLite 검사만 수정. 이전 정상 READY generation·곡 원본/기존 클라이언트·다른 계정·배포 파일 불변.
+- **안전한 재시작:** 중단된 압축 복구가 있으면 먼저 인증된 R2 HEAD만 조회한다. 동일 HEAD/ETag이면 기존 staging을 이어 쓰고, 더 높은 HEAD revision이면 60초 이후 `recovery_restart_count < 3`에 한해 D1 `recovery_generation`을 정확 owner/기존 generation/ETag/CAS 조건으로 변경할 수 있다. 동일 revision의 ETag 교체, 구형/알 수 없는 버전, 권한 미검증·동시경쟁은 실패를 숨기지 않고 HOLD/RETRY. 새 staging 전체가 확인되고 실제 HEAD가 같을 때만 조건부 D1 READY 교체; 과거 세대는 삭제/노출하지 않는다.
+- **비용과 제한:** 새 압축 복구 첫 회 `D1 W=N+2`, 이후 HEAD 이동에 따른 회전 한 번에 최대 추가 `메타 W1+새 세대 회원 ID N건`. 자동 회전은 3회 초과 금지; 이동한 HEAD가 쿨다운 중이면 **HEAD 단건 읽기만, 전체 R2 materialization 0**. 정상 곡 변경 W3~W4 목표/앱 진입 R0/W0와 구분. 옛 staging/구 READY 세대의 장기 D1 보관·안전한 bounded GC 및 실제 비용 검증은 별도 미완료 항목이다.
+- **소스 검증:** `verify-518-compaction-recovery.mjs`(중단·HEAD 변경·같은 버전 변조·3회 한도·기존 세대 보호), `verify-518-compaction-recovery-sql.py`(정확한 SQL 소유권·쿨다운·회전 예산·동시 조건·READY 교체). 실제 GitHub Actions exact-SHA 결과를 별도로 확인한 후에만 코드 검사 PASS 보고.
+- **남은 P1:** >20,000곡 계정 처리, 공유 PREVIEW/TEST/PRODUCTION 구형 Writer 전체 fence, Firebase↔Cloudflare 실제 Functions/HMAC/D1/Worker/cron 연동, D1 미완성 세대 정리, 실제 사용자 1곡 단건 복구·PC/모바일 일치/월 비용 측정. **기존 독립 감사 전체 FAIL·RELEASE HOLD 유지**. PR #528 Draft, migration 실행·실데이터 변경·병합·배포 금지.

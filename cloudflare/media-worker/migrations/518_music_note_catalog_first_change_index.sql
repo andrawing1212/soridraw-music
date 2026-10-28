@@ -32,3 +32,25 @@ CREATE TABLE IF NOT EXISTS music_note_catalog_member_518 (
 
 CREATE INDEX IF NOT EXISTS idx_music_note_catalog_member_518_generation
  ON music_note_catalog_member_518(owner_uid,generation);
+
+-- INACTIVE app518 optional large-owner staging cursor. Stores no user song
+-- content; only authenticated HEAD/base version and byte position for a
+-- bounded source-owned R2 range scan. No table is created until approved
+-- deployment/migration. Crash-safe progress is committed with the page.
+CREATE TABLE IF NOT EXISTS music_note_catalog_paged_stage_518 (
+  owner_uid TEXT NOT NULL CHECK(length(owner_uid) BETWEEN 1 AND 128),
+  generation INTEGER NOT NULL CHECK(generation > 0),
+  mode TEXT NOT NULL CHECK(mode IN ('first','recovery')),
+  head_revision INTEGER NOT NULL CHECK(head_revision > 0),
+  head_etag TEXT NOT NULL CHECK(length(head_etag) BETWEEN 1 AND 256),
+  head_count INTEGER NOT NULL CHECK(head_count >= 0),
+  base_key TEXT NOT NULL CHECK(length(base_key) BETWEEN 1 AND 512),
+  base_etag TEXT NOT NULL CHECK(length(base_etag) BETWEEN 1 AND 256),
+  base_size INTEGER NOT NULL CHECK(base_size BETWEEN 1 AND 25165824),
+  base_offset INTEGER NOT NULL DEFAULT 0 CHECK(base_offset >= 0),
+  base_seen INTEGER NOT NULL DEFAULT 0 CHECK(base_seen >= 0),
+  phase TEXT NOT NULL DEFAULT 'base' CHECK(phase IN ('base','delta')),
+  delta_index INTEGER NOT NULL DEFAULT 0 CHECK(delta_index >= 0),
+  updated_at_ms INTEGER NOT NULL CHECK(updated_at_ms >= 0),
+  PRIMARY KEY(owner_uid,generation,mode)
+) WITHOUT ROWID;

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {
  FENCE_CONTRACT_518,MEDIA_TARGETS_518,assessSharedWriterCutover518,
- assessLegacyMediaMutation518,
+ assessLegacyMediaMutation518,assertLegacyMediaBindingsComplete518,
 } from '../cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js';
 import {
  classifyCatalogAuthority518,decideCatalogWriterAuthority518,
@@ -122,7 +122,7 @@ const rollback=releases.indexOf("run(process.execPath, [WRANGLER, 'rollback'");
 const rollbackGuard=releases.indexOf("await verifyLegacyMediaMutationAllowed518('restore');");
 assert.ok(rollback>rollbackGuard&&rollbackGuard>uploadDispatch,
  'automatic rollback must revalidate all three live canonical bindings');
-assert.match(releases,/Object.values\(TARGETS\)\.map/);
+assert.match(releases,/MEDIA_TARGETS_518\.map/);
 assert.match(releases,/workers\/scripts\/\$\{worker\}\/settings/);
 const valid={action:'restore',sourceCanonicalFlag:null,
  liveCanonicalFlags:[null,null,null]};
@@ -153,6 +153,41 @@ for(const liveCanonicalFlags of [
 assert.equal(assessLegacyMediaMutation518({
  ...valid,action:'dry-run',
 }).pass,false);
+const bindingFixture=(media='soridraw-media-preview')=>({
+ bindings:[
+  {type:'r2_bucket',name:'MEDIA',bucket_name:media},
+  {type:'r2_bucket',name:'CATALOG',bucket_name:'soridraw-user-catalog'},
+  {type:'plain_text',name:'SORIDRAW_SHARED_CATALOG_V1',text:'1'},
+  {type:'secret_text',name:'MEDIA_SIGNING_SECRET'},
+ ],
+});
+const target={media:'soridraw-media-preview'};
+assert.equal(assertLegacyMediaBindingsComplete518(bindingFixture(),target),null);
+const badBindings=[
+ {},{bindings:[]},{bindings:null},
+ ...[0,1,2].map(i=>{const x=bindingFixture();x.bindings.splice(i,1);return x;}),
+ ...[0,1,2].map(i=>{const x=bindingFixture();x.bindings.push({...x.bindings[i]});return x;}),
+ ...[0,1,2].map(i=>{const x=bindingFixture();x.bindings[i].type='secret_text';return x;}),
+ {bindings:[{type:'plain_text',name:'SORIDRAW_SHARED_CATALOG_V1',text:'1'}]},
+];
+for(const settings of badBindings){
+ assert.throws(()=>assertLegacyMediaBindingsComplete518(settings,target),/HOLD_518/);
+}
+for(const bad of ['other','',null]){
+ const x=bindingFixture();x.bindings[1].bucket_name=bad;
+ assert.throws(()=>assertLegacyMediaBindingsComplete518(x,target),/HOLD_518/);
+}
+for(const bad of ['0','OFF','',null]){
+ const x=bindingFixture();x.bindings[2].text=bad;
+ assert.throws(()=>assertLegacyMediaBindingsComplete518(x,target),/HOLD_518/);
+}
+for(const value of ['ENABLED_AFTER_SHARED_ROLLOUT','OFF','']){
+ const x=bindingFixture();x.bindings.push({
+  type:'plain_text',name:'SORIDRAW_CANONICAL_CATALOG_518',text:value,
+ });
+ assert.throws(()=>assertLegacyMediaBindingsComplete518(x,target),/HOLD_518/);
+}
+console.log('APP518_EMPTY_OR_PARTIAL_CLOUDFLARE_SETTINGS_FAIL_CLOSED=PASS');
 console.log('APP518_RELEASE_CONTROLLER_ALL_THREE_LIVE_FLAGS_BEFORE_MUTATION=PASS');
 console.log('APP518_LEGACY_UPLOAD_ACTIVATE_RESTORE_STOP_AFTER_CANONICAL=PASS');
 

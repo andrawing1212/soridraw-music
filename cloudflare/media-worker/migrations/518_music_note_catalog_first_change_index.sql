@@ -9,6 +9,9 @@ CREATE TABLE IF NOT EXISTS music_note_catalog_index_meta_518 (
   head_etag TEXT NOT NULL CHECK(length(head_etag) BETWEEN 1 AND 256),
   status TEXT NOT NULL CHECK(status IN ('building','ready')),
   checked_at_ms INTEGER NOT NULL,
+  -- Bounded, owner-local rebuild of an invisible first-index generation.
+  -- Never reset a READY index or retry indefinitely under a hot R2 head.
+  restart_count INTEGER NOT NULL DEFAULT 0 CHECK(restart_count BETWEEN 0 AND 3),
   -- Staging is invisible to readers until exact old-HEAD CAS promotes it.
   recovery_generation INTEGER CHECK(recovery_generation > 0),
   recovery_revision INTEGER CHECK(recovery_revision > 0),

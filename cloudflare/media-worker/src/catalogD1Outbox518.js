@@ -37,6 +37,7 @@ export const REQUEUE_EXACT_518=[
  'SET attempt_count=attempt_count+1,next_attempt_ms=?,updated_at_ms=?',
  'WHERE owner_uid=? AND favorite_id=? AND source_version_ns=?',
  'AND (ack_version_ns IS NULL OR ack_version_ns != source_version_ns)',
+ 'AND attempt_count=?',
 ].join('\n');
 export const READ_ONE_518=[
  'SELECT owner_uid,favorite_id,source_version_ns,desired_state,ack_version_ns,attempt_count,next_attempt_ms',
@@ -57,7 +58,7 @@ export const enqueueVerifiedFavorite518=async({
  return {code:writes===1?'ENQUEUED':'STALE_OR_DUPLICATE',
    d1Writes:writes,sourceVersionNs:version};
 };
-export const getDueFavoriteChanges518=async({db,nowMs,limit=32}={})=>{
+export const getDueFavoriteChanges518=async({db,nowMs,limit=128}={})=>{
  if(!database(db)||!epoch(nowMs)||!Number.isInteger(limit)||limit<1||limit>256)
    return {code:'DENY_ARGUMENTS',rows:[]};
  const result=await db.prepare(SELECT_DUE_518).bind(nowMs,limit).all();
@@ -93,7 +94,7 @@ export const scheduleFailedFavorite518=async({
    return {code:'DENY_ARGUMENTS',d1Writes:0};
  const next=nowMs+delay;
  const result=await db.prepare(REQUEUE_EXACT_518).bind(
-   next,nowMs,text(uid),text(documentId),sourceVersionNs).run();
+   next,nowMs,text(uid),text(documentId),sourceVersionNs,attemptCount).run();
  const writes=Math.max(0,Number(result?.meta?.changes||0));
  return {code:writes===1?'RETRY_SCHEDULED':'STALE_OR_ALREADY_ACKED',
    d1Writes:writes,retryAtMs:writes?next:undefined};

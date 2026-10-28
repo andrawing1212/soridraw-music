@@ -49,7 +49,7 @@ export const DEFER_PAGED_518=[
  'WHERE owner_uid=? AND favorite_id=? AND source_version_ns=?',
  'AND (ack_version_ns IS NULL OR ack_version_ns != source_version_ns)',
  'AND hold_reason IS NULL AND next_attempt_ms <= ?',
-].join('\\n');
+].join('\n');
 export const deferPagedFavorite518=async({
  db,uid,documentId,sourceVersionNs,nowMs,
 }={})=>{

@@ -10,6 +10,12 @@ on:
       - 'cloudflare/media-worker/src/catalogJournalReconcile518.js'
       - 'cloudflare/media-worker/src/catalogAuthorityPolicy518.js'
       - 'cloudflare/media-worker/src/catalogD1Outbox518.js'
+      - 'cloudflare/media-worker/src/catalogFirstChangeIndex518.js'
+      - 'cloudflare/media-worker/src/catalogRemovalAuthority518.js'
+      - 'cloudflare/media-worker/migrations/518_music_note_catalog_first_change_index.sql'
+      - 'scripts/verify-518-first-change-index.mjs'
+      - 'scripts/verify-518-first-change-index-sql.py'
+      - 'scripts/verify-518-removal-authority.mjs'
       - 'cloudflare/media-worker/src/catalogDelivery518.js'
       - 'cloudflare/media-worker/migrations/518_music_note_catalog_outbox.sql'
       - 'scripts/verify-518-d1-outbox-sql.py'
@@ -53,6 +59,9 @@ jobs:
           node scripts/verify-518-d1-outbox-adapter.mjs
           node scripts/verify-518-d1-delivery-drain.mjs
           python3 scripts/verify-518-d1-outbox-sql.py
+          node scripts/verify-518-first-change-index.mjs
+          python3 scripts/verify-518-first-change-index-sql.py
+          node scripts/verify-518-removal-authority.mjs
       - name: Protect existing next-song, publication, Music Note and local-first behaviors
         run: |
           node scripts/verify-204-explore-next-song-parity.mjs
@@ -72,7 +81,7 @@ jobs:
           git fetch origin preview --no-tags
           git diff --name-only origin/preview...HEAD | while IFS= read -r file; do
             case "$file" in
-              cloudflare/media-worker/src/catalogCanonicalFence518.js|cloudflare/media-worker/src/catalogEventGate518.js|cloudflare/media-worker/src/catalogJournalReconcile518.js|cloudflare/media-worker/src/catalogAuthorityPolicy518.js|cloudflare/media-worker/src/catalogD1Outbox518.js|cloudflare/media-worker/src/catalogDelivery518.js|cloudflare/media-worker/migrations/518_music_note_catalog_outbox.sql|scripts/verify-518-d1-outbox-sql.py|scripts/verify-518-d1-outbox-adapter.mjs|scripts/verify-518-d1-delivery-drain.mjs|cloudflare/media-worker/src/index.js|scripts/verify-518-worker-compat-switch.mjs|scripts/verify-518-canonical-fence.mjs|scripts/verify-518-catalog-event-cost-gate.mjs|scripts/verify-518-journal-cas-simulator.mjs|scripts/verify-518-legacy-rebuild-redteam.mjs|scripts/verify-518-head-capacity-redteam.mjs|DOCS/APP518_MUSIC_NOTE_CATALOG_REPAIR_CONTRACT.md|.github/workflows/verify-518-canonical-fence.yml) ;;
+              cloudflare/media-worker/src/catalogCanonicalFence518.js|cloudflare/media-worker/src/catalogEventGate518.js|cloudflare/media-worker/src/catalogJournalReconcile518.js|cloudflare/media-worker/src/catalogAuthorityPolicy518.js|cloudflare/media-worker/src/catalogD1Outbox518.js|cloudflare/media-worker/src/catalogFirstChangeIndex518.js|cloudflare/media-worker/src/catalogRemovalAuthority518.js|cloudflare/media-worker/migrations/518_music_note_catalog_first_change_index.sql|scripts/verify-518-first-change-index.mjs|scripts/verify-518-first-change-index-sql.py|scripts/verify-518-removal-authority.mjs|cloudflare/media-worker/src/catalogDelivery518.js|cloudflare/media-worker/migrations/518_music_note_catalog_outbox.sql|scripts/verify-518-d1-outbox-sql.py|scripts/verify-518-d1-outbox-adapter.mjs|scripts/verify-518-d1-delivery-drain.mjs|cloudflare/media-worker/src/index.js|scripts/verify-518-worker-compat-switch.mjs|scripts/verify-518-canonical-fence.mjs|scripts/verify-518-catalog-event-cost-gate.mjs|scripts/verify-518-journal-cas-simulator.mjs|scripts/verify-518-legacy-rebuild-redteam.mjs|scripts/verify-518-head-capacity-redteam.mjs|DOCS/APP518_MUSIC_NOTE_CATALOG_REPAIR_CONTRACT.md|.github/workflows/verify-518-canonical-fence.yml) ;;
               *) echo "APP518_UNAPPROVED_PRODUCT_OR_BACKEND_CHANGE=$file"; exit 2 ;;
             esac
           done
@@ -83,6 +92,8 @@ jobs:
           set -euo pipefail
           ! grep -q 'catalogJournalReconcile518' cloudflare/media-worker/src/index.js
           ! grep -q 'catalogD1Outbox518' cloudflare/media-worker/src/index.js
+          ! grep -q 'catalogFirstChangeIndex518' cloudflare/media-worker/src/index.js
+          ! grep -q 'catalogRemovalAuthority518' cloudflare/media-worker/src/index.js
           ! grep -q 'catalogDelivery518' cloudflare/media-worker/src/index.js
           ! grep -q 'catalogCanonicalFence518' cloudflare/media-worker/src/index.js
           ! grep -q 'SORIDRAW_CANONICAL_CATALOG_518' cloudflare/media-worker/wrangler.jsonc

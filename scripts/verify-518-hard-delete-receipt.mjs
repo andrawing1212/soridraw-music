@@ -2,13 +2,15 @@ import assert from 'node:assert/strict';
 import {settleVerifiedHardDelete518}
  from '../cloudflare/media-worker/src/catalogHardDeleteReceipt518.js';
 import {enqueueVerifiedFavorite518} from '../cloudflare/media-worker/src/catalogD1Outbox518.js';
+import {parseFirestoreUpdateTimeNs518} from '../cloudflare/media-worker/src/catalogCanonicalFence518.js';
 const uid='owner-1',documentId='favorite-1',event='server-event-delete-1';
 const receiptTime='2026-10-28T13:11:07.000000123Z';
 const savedTime='2026-10-28T13:11:08.000000001Z';
+const before='2026-10-28T13:11:06.000000111Z';
 const make=()=>{
  let favorite=null,receipt=null,transactions=0,receiptWrites=0;
  const transactExactAbsentReceipt=async({requireReadBeforeWrite,writeOnlyIfFavoriteAbsent,
-   requireServerCommitTimestamp,neverRecreateFavorite,deleteEventId})=>{
+   requireServerCommitTimestamp,neverRecreateFavorite,deleteEventId,beforeUpdateTime})=>{
   assert.equal(requireReadBeforeWrite,true);
   assert.equal(writeOnlyIfFavoriteAbsent,true);
   assert.equal(requireServerCommitTimestamp,true);
@@ -16,10 +18,18 @@ const make=()=>{
   transactions++;
   if(favorite!==null)return {code:'ACTIVE_FAVORITE',
    provenTransactional:true,ownerVerified:true};
-  if(receipt?.deleteEventId===deleteEventId)return {
-   code:'RECEIPT_ALREADY_EXISTS',provenTransactional:true,ownerVerified:true};
-  receipt={uid,documentId,deleteEventId,updateTime:receiptTime};
-  receiptWrites++;return {code:'RECEIPT_COMMITTED',
+  const gen=parseFirestoreUpdateTimeNs518(beforeUpdateTime);
+  if(receipt){
+   if(receipt.beforeSourceVersionNs>gen)return {
+    code:'STALE_OLDER_DELETE_EVENT',provenTransactional:true,ownerVerified:true};
+   if(receipt.beforeSourceVersionNs===gen)return {
+    code:receipt.deleteEventId===deleteEventId?'RECEIPT_ALREADY_EXISTS'
+      :'HOLD_CONFLICTING_SAME_DELETE_GENERATION',
+    provenTransactional:true,ownerVerified:true};
+  }
+  receipt={uid,documentId,deleteEventId,updateTime:receiptTime,
+   beforeSourceVersionNs:gen};
+  receiptWrites++;return {code:receiptWrites===1?'RECEIPT_COMMITTED':'RECEIPT_ADVANCED',
    provenTransactional:true,ownerVerified:true};
  };
  const readExactAfterReceipt=async()=>({
@@ -27,7 +37,7 @@ const make=()=>{
  });
  const run=(more={})=>settleVerifiedHardDelete518({
   uid,documentId,deleteEventId:event,verifiedServerDeleteEvent:true,
-  beforeOwnerUid:uid,transactExactAbsentReceipt,readExactAfterReceipt,...more,
+  beforeOwnerUid:uid,beforeUpdateTime:before,transactExactAbsentReceipt,readExactAfterReceipt,...more,
  });
  return {run,setFavorite:v=>favorite=v,setReceipt:v=>receipt=v,
   costs:()=>({transactions,receiptWrites})};
@@ -53,7 +63,8 @@ const original=t.run;
 r=await t.run({
  readExactAfterReceipt:async()=>({
   uid,documentId,verifiedByServer:true,favoriteExists:true,
-  receipt:{uid,documentId,deleteEventId:event,updateTime:receiptTime},
+  receipt:{uid,documentId,deleteEventId:event,updateTime:receiptTime,
+   beforeSourceVersionNs:parseFirestoreUpdateTimeNs518(before)},
  })
 });
 assert.equal(r.code,'HOLD_LATER_FAVORITE_WRITE');
@@ -76,6 +87,7 @@ assert.equal(binds[0][3],'removed');
 for(const over of [
  {verifiedServerDeleteEvent:false},
  {beforeOwnerUid:'another'},
+ {beforeUpdateTime:''},
  {deleteEventId:'../unsafe'},
  {transactExactAbsentReceipt:async()=>({
   code:'RECEIPT_COMMITTED',provenTransactional:false,ownerVerified:true,
@@ -90,6 +102,20 @@ for(const over of [
  assert.equal(r.allowD1Enqueue,false);
  assert.equal(r.allowR2Write,false);
 }
+// Second hard delete after a genuine newer re-save advances receipt W1.
+// A delayed first event cannot overwrite the latest deletion receipt.
+t=make();
+r=await t.run();
+const second=await t.run({deleteEventId:'server-event-delete-2',
+ beforeUpdateTime:savedTime});
+assert.equal(second.code,'VERIFIED_HARD_DELETE_RECEIPT');
+assert.equal(second.receiptWrites,1);
+assert.equal(t.costs().receiptWrites,2);
+const stale=await t.run();
+assert.equal(stale.allowD1Enqueue,false);
+assert.equal(stale.code,'DENY_UNPROVEN_TRANSACTION');
+assert.equal(t.costs().receiptWrites,2);
+console.log('APP518_SECOND_HARD_DELETE_W1_OLD_EVENT_W0=PASS');
 console.log('APP518_HARD_DELETE_PRIVATE_SERVER_COMMIT_RECEIPT=PASS');
 console.log('APP518_DUPLICATE_HARD_DELETE_RECEIPT_FIRESTORE_W0=PASS');
 console.log('APP518_LATER_SAVE_OVERRIDES_OLD_DELETE_EVENT=PASS');

@@ -286,3 +286,14 @@
 - **운영 위험 및 중단 조건:** 실제 Workers Free의 요청당 CPU 10ms, 메모리 128MB, R2 range subrequests/지연, 크기가 큰 개별 곡 JSON, D1 단일 DB 처리시간·행 수·일일 quota, scheduler cadence·실제로 처리 완료되는 시간은 **아직 미실측**. 특히 CPU Free 10ms 내 256곡 파싱+2문장 batch의 완료는 보장되지 않는다. 실행·비용 최적화는 실제 안전한 별도 QA 이후에만. 비정상·손상된 BASE가 존재하면 원본을 자르거나 READY를 강제하지 않고 HOLD.
 - **배포 차단 상태:** 공유 PREVIEW/TEST/PRODUCTION 구형 R2 writer fencing, 실제 Firebase↔Worker 인증·트리거/Secret/D1/예약 실행, Workers Free 실행 한도 실측, 소스 수정의 Work 독립 감사, 구형 클라이언트 혼합 실기기 QA·이전 D1 generation 안전 GC가 모두 미완료. **PR Draft / RELEASE HOLD / NO-GO 유지.**
 
+
+## 2026-10-29 독립 감사 FAIL 3건 최소 수정 (P1 1, P2 2)
+
+**감사 대상:** PR #528 `163e15c9a7dd836687fac336e2ddddbbbfa18761`. 기존 CI 3/3 PASS에도 불구하고 별도 감사방의 **실제 SQLite 경쟁 재현으로 신규 P1(삭제곡 부활·최신곡 소실)** 및 P2 2건(손상 JSON 마지막 쉼표 허용, 128KiB 제한 초과) 판정. 이번 수정 전의 코드에서 발견된 결함이며 PASS로 소급 표시하지 않음.
+
+- **P1 동시 실행 조건부 회원 변경:** `catalogOwnerPagedIndex518.js`의 BASE INSERT 및 delta INSERT/DELETE SQL *자체*가 기존 페이지 커서(소유자·세대·모드·phase·head ETag·BASE offset/seen 또는 delta index·BASE ETag)와 D1 메타의 미공개 generation 상태를 `EXISTS`로 증명해야 실행됨. 후행 커서 UPDATE에도 동일 D1 메타 조건 추가. 따라서 늦게 온 이전 작업은 DB 배치 안에서 **membership W0와 cursor W0**, READY 승격 이후에는 해당 세대 쓰기 W0. `db.batch()`의 원자성만으로 선행 SQL을 되돌릴 수 있다고 가정하지 않음.
+- **P2 malformed BASE:** R2 range JSON items 파싱에서 쉼표 뒤 즉시 `]`를 만나면 `APP518_PAGED_TRAILING_COMMA` 계약 오류로 거절. JSON 후미를 재구성할 때 구분자를 빠뜨려 오류를 숨기지 않음. 손상된 R2는 새 색인 READY/ACK/R2 PUT 금지.
+- **P2 엄격 소스 페이지:** `byte()`가 페이지당 원본 입력 소스 **128KiB 바이트 소비 전에 중단**하고, 다음 곡이 중간에서 잘리면 마지막으로 온전히 검증한 곡 경계까지 진행 커서를 롤백. 첫 페이지의 검증된 JSON prefix만 먼저 저장하는 0곡 단계도 허용하고, 큰 유효한 단일 곡은 다음 페이지에서 읽음. 개별 곡마저 128KiB를 초과하면 계약 오류로 HOLD(원본을 자르지 않음). R2의 64KiB 이하 range GET 및 후미 메타 prefix 확인 재읽기는 별도 요청이며 실제 Worker CPU/subrequest 실측은 여전히 없음.
+- **새 CI 근거:** `verify-518-large-paging-concurrency-sql.py`는 실제 SQLite 파일에 두 연결을 열어 stale BASE 재삽입 → 삭제곡 부활, stale delta 삭제 → 최신 저장곡 누락, READY 승격 후 회원 SQL, recovery promotion 후 늦은 쓰기를 모두 **변경 행 0**으로 검증. `verify-518-r2-page-contract.mjs`는 가짜 R2 range에서 80KiB 곡 2개, 큰 UTF-8 단일 곡, trailing comma malformed JSON, 다른 UID 소스를 검사. 기존 첫 색인·복구·서버 Bridge·앱 회귀는 원래 CI에서 별도 재실행.
+- **미완료/릴리스 차단:** 새 수정 SHA의 별도 **Work 독립 재감사 미완료**. Cloudflare Free 실제 10ms CPU·128MB 메모리/D1·R2 실비용, PC↔모바일 검증, 공유 구형 Writer fencing, Firebase↔Cloudflare 서버 인증·trigger/Secret/D1/cron 실연결 미완료. **전체 RELEASE HOLD / NO-GO**, PR Draft 미병합·미배포·실데이터 변경 없음.
+

@@ -12,8 +12,8 @@ const saved='2026-10-28T13:11:08.000000001Z';
 const laterReceipt='2026-10-28T13:11:09.000000222Z';
 let receiptCommitTime='2026-10-28T13:11:07.000000123Z';
 let favorite=null,receipt=null,writes=0,transactions=0;
-const favoriteRef={kind:'favorite'};
-const receiptRef={kind:'receipt'};
+const favoriteRef={kind:'favorite',async get(){return snap('favorite');}};
+const receiptRef={kind:'receipt',async get(){return snap('receipt');}};
 const snap=(kind)=>{
  const data=kind==='favorite'?favorite:receipt;
  return {exists:!!data,updateTime:data?.updateTime?at(data.updateTime):undefined,

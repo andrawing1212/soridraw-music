@@ -24,24 +24,60 @@ const BEGIN_PAGE_518=[
  '(owner_uid,generation,mode,head_revision,head_etag,head_count,base_key,base_etag,base_size,base_offset,base_seen,phase,delta_index,updated_at_ms)',
  "VALUES (?,?,?,?,?,?,?,?,?,0,0,'base',0,?)",
 ].join(' ');
+// Every membership mutation must independently check the same page cursor
+// AND the unpublished generation. A D1 batch transaction does NOT undo
+// earlier statements when its final cursor CAS returns changes=0.
+const cursorOwnerReady518=mode=>`EXISTS (
+ SELECT 1 FROM music_note_catalog_paged_stage_518 AS p
+ JOIN music_note_catalog_index_meta_518 AS m ON m.owner_uid=p.owner_uid
+ WHERE p.owner_uid=? AND p.generation=? AND p.mode=? AND p.phase='${mode}'
+ AND p.head_etag=?
+ AND ((p.mode='first' AND m.status='building'
+       AND m.generation=p.generation AND m.head_etag=p.head_etag)
+   OR (p.mode='recovery' AND m.status='ready'
+       AND m.recovery_generation=p.generation
+       AND m.recovery_etag=p.head_etag))
+`;
+export const PAGED_BASE_INSERT_518=[
+ 'INSERT OR IGNORE INTO music_note_catalog_member_518',
+ '(owner_uid,generation,favorite_id)',
+ 'SELECT ?,?,j.value FROM json_each(?) AS j WHERE',
+ cursorOwnerReady518('base'),
+ 'AND p.base_offset=? AND p.base_seen=? AND p.base_etag=?)',
+].join(' ');
+export const PAGED_DELTA_INSERT_518=[
+ 'INSERT OR IGNORE INTO music_note_catalog_member_518',
+ '(owner_uid,generation,favorite_id)',
+ 'SELECT ?,?,j.value FROM json_each(?) AS j WHERE',
+ cursorOwnerReady518('delta'),
+ 'AND p.delta_index=?)',
+].join(' ');
+export const PAGED_DELTA_DELETE_518=[
+ 'DELETE FROM music_note_catalog_member_518',
+ 'WHERE owner_uid=? AND generation=?',
+ 'AND favorite_id IN (SELECT value FROM json_each(?))',
+ 'AND',cursorOwnerReady518('delta'),'AND p.delta_index=?)',
+].join(' ');
 const ADVANCE_BASE_518=[
  'UPDATE music_note_catalog_paged_stage_518 SET',
  'base_offset=?,base_seen=?,phase=?,updated_at_ms=?',
  "WHERE owner_uid=? AND generation=? AND mode=? AND phase='base'",
  'AND base_offset=? AND base_seen=? AND head_etag=? AND base_etag=?',
+ 'AND EXISTS (SELECT 1 FROM music_note_catalog_index_meta_518 AS m',
+ 'WHERE m.owner_uid=? AND',
+ "((mode='first' AND m.status='building' AND m.generation=generation AND m.head_etag=head_etag)",
+ "OR (mode='recovery' AND m.status='ready' AND m.recovery_generation=generation AND m.recovery_etag=head_etag)))",
 ].join(' ');
 const ADVANCE_DELTA_518=[
  'UPDATE music_note_catalog_paged_stage_518 SET',
  'delta_index=?,phase=?,updated_at_ms=?',
  "WHERE owner_uid=? AND generation=? AND mode=? AND phase='delta'",
  'AND delta_index=? AND head_etag=?',
+ 'AND EXISTS (SELECT 1 FROM music_note_catalog_index_meta_518 AS m',
+ 'WHERE m.owner_uid=? AND',
+ "((mode='first' AND m.status='building' AND m.generation=generation AND m.head_etag=head_etag)",
+ "OR (mode='recovery' AND m.status='ready' AND m.recovery_generation=generation AND m.recovery_etag=head_etag)))",
 ].join(' ');
-const DELETE_PAGE_518=[
- 'DELETE FROM music_note_catalog_member_518',
- 'WHERE owner_uid=? AND generation=?',
- 'AND favorite_id IN (SELECT value FROM json_each(?))',
-].join(' ');
-
 const sameHead=(a,b)=>a.headRevision===b.headRevision
  &&a.itemCount===b.itemCount&&a.etag===b.etag;
 const trusted=(s,uid)=>s?.verifiedByServer===true&&s.ownerUid===uid
@@ -146,11 +182,12 @@ export const advancePagedOwnerIndex518=async({
     return failure('HOLD_PAGED_CURSOR_INVALID');
    const phase=next.done?'delta':'base';
    const stmts=[
-    db.prepare(INDEX_MEMBER_BULK_STAGE_518)
-      .bind(uid,gen,JSON.stringify(next.ids)),
+    db.prepare(PAGED_BASE_INSERT_518)
+      .bind(uid,gen,JSON.stringify(next.ids),uid,gen,mode,etag,
+        progress.base_offset,progress.base_seen,meta.baseEtag),
     db.prepare(ADVANCE_BASE_518).bind(next.offset,next.seen,phase,
       nowMs,uid,gen,mode,progress.base_offset,progress.base_seen,
-      etag,meta.baseEtag),
+      etag,meta.baseEtag,uid),
    ];
    const batch=await db.batch(stmts);
    if(!Array.isArray(batch)||batch.some(x=>x?.success===false)
@@ -182,11 +219,12 @@ export const advancePagedOwnerIndex518=async({
    if(Number(count?.n)!==delta.baseItemCount)
     return failure('HOLD_PAGED_DELTA_BASE_COUNT');
    const batch=await db.batch([
-    db.prepare(DELETE_PAGE_518).bind(uid,gen,JSON.stringify(deleted)),
-    db.prepare(INDEX_MEMBER_BULK_STAGE_518)
-     .bind(uid,gen,JSON.stringify(added)),
+    db.prepare(PAGED_DELTA_DELETE_518)
+     .bind(uid,gen,JSON.stringify(deleted),uid,gen,mode,etag,idx),
+    db.prepare(PAGED_DELTA_INSERT_518)
+     .bind(uid,gen,JSON.stringify(added),uid,gen,mode,etag,idx),
     db.prepare(ADVANCE_DELTA_518).bind(idx+1,'delta',nowMs,
-     uid,gen,mode,idx,etag),
+     uid,gen,mode,idx,etag,uid),
    ]);
    if(!Array.isArray(batch)||batch.some(x=>x?.success===false)
      ||changed(batch[2])!==1)return failure('RETRYABLE_PAGED_DELTA_RACE');

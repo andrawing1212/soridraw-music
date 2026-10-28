@@ -24,7 +24,7 @@ db.execute("INSERT INTO music_note_catalog_member_518 VALUES (?,?,?)",(uid,90,"b
 assert changes(claim,(110,110,'"new"',2,1000,"attacker",90,100,'"old"'))==0
 assert changes(claim,(110,110,'"new"',2,1000,uid,90,100,'"stale"'))==0
 assert changes(claim,(110,110,'"new"',2,1000,uid,90,100,'"old"'))==1
-assert changes(claim,(110,110,'"new"',2,uid,90,100,'"old"'))==0
+assert changes(claim,(110,110,'"new"',2,1000,uid,90,100,'"old"'))==0
 assert db.execute("SELECT generation,status FROM music_note_catalog_index_meta_518 WHERE owner_uid=?",(uid,)).fetchone()==(90,'ready')
 # The new HEAD may rotate only the uncommitted generation, once per
 # cooldown window and at most 3 times. All predicates are owner+old-HEAD CAS.
@@ -53,7 +53,7 @@ assert db.execute("SELECT count(*) FROM music_note_catalog_member_518 WHERE owne
 assert db.execute("SELECT count(*) FROM music_note_catalog_member_518 WHERE owner_uid=? AND generation=?",(uid,90)).fetchone()[0]==1
 # The old generation is preserved, but is no longer visible through meta.
 assert db.execute("SELECT favorite_id FROM music_note_catalog_member_518 WHERE owner_uid=? AND generation=?",(uid,meta[0])).fetchall()==[("fresh-a",),("fresh-b",)]
-print("APP518_COMPATION_ROTATE_SQL_OWNER_COOLDOWN_AND_BUDGET=PASS")
+print("APP518_COMPACTION_ROTATE_SQL_OWNER_COOLDOWN_AND_BUDGET=PASS")
 print("APP518_RECOVERY_SQL_OWNER_AND_OLD_HEAD_CAS=PASS")
 print("APP518_RECOVERY_STAGE_INVISIBLE_UNTIL_GUARDED_PROMOTION=PASS")
 print("APP518_RECOVERY_NO_USER_DATA_OR_LIVE_D1_IO=PASS")

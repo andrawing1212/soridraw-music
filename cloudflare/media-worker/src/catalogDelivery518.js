@@ -13,6 +13,11 @@ const isState=x=>x==='saved'||x==='removed';
 // first failure. Unknown IO/timeout errors use bounded retries before HOLD.
 export const permanentDeliveryHoldReason518=code=>{
  if(typeof code!=='string')return null;
+ // Compaction's HOLD_RECOVERY_HEAD_MOVED means "do not publish this
+ // snapshot", NOT "permanently stop this exact outbox version".
+ // The next bounded attempt may rotate staging to a verified newer HEAD.
+ if(code==='RETRYABLE_INDEX_RECOVERY_HOLD_RECOVERY_HEAD_MOVED')
+  return null;
  if(code.startsWith('DENY_')||code.startsWith('HOLD_')
    ||code.startsWith('RETRYABLE_INDEX_DENY_')
    ||code.startsWith('RETRYABLE_INDEX_HOLD_')

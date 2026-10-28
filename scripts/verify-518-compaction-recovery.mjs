@@ -27,6 +27,17 @@ function make(){
     throw Error('unknown read '+sql);
    },
    async run(){
+    if(sql.includes('SELECT ?, ?, value FROM json_each(?)')){
+     if(failStage){failStage=false;throw Error('crash');}
+     const [owner,gen,serialized]=args;assert.equal(owner,uid);
+     const ids=JSON.parse(serialized);
+     assert.ok(ids.length>0&&ids.length<=512);
+     batches++;
+     let set=members.get(gen);if(!set){set=new Set();members.set(gen,set);}
+     let changes=0;
+     for(const id of ids)if(!set.has(id)){set.add(id);writes++;changes++;}
+     return {meta:{changes}};
+    }
     if(sql.startsWith('UPDATE music_note_catalog_index_meta_518 SET recovery_generation')
        &&!sql.includes('recovery_restart_count=recovery_restart_count+1')){
      const [gen,rev,targetEtag,count,now,owner,oldGeneration,oldRev,oldEtag]=args;
@@ -106,7 +117,7 @@ assert.equal(t.meta.head_etag,etag);
 assert.equal(t.members.get(head.headRevision).size,301);
 assert.deepEqual([...t.members.get(oldGen)],['old-song'],'old generation preserved');
 assert.equal(t.counters().writes,303,'N member writes + claim + promotion');
-assert.equal(t.counters().batches,3);
+assert.equal(t.counters().batches,1);
 const before=t.counters().writes;
 assert.equal((await t.run()).code,'DENY_NOT_A_COMPACTION_GAP');
 assert.equal(t.counters().writes,before,'repeating recovery must be W0');
@@ -232,6 +243,32 @@ r=await t.run({loadCompleteFencedOwnerR2:async()=>{
 assert.equal(r.code,'RETRYABLE_RECOVERY_IO');
 assert.equal(r.d1Writes,0);assert.equal(t.counters().writes,0);
 assert.equal(t.meta.generation,oldGen);
+// Recovery at 20,001+ never trims songs or rebuilds the visible old READY
+// generation; count equality and HEAD proof still gate the final swap.
+for(const n of [20001,50001]){
+ t=make();
+ const largeItems=Array.from({length:n},(_,i)=>({id:'large-'+i}));
+ const largeHead={...createEmptyCatalogJournal({
+  kind:'musicNote',baseKey:'owner-large-base',baseRevision:109,
+  itemCount:n,now:5000,
+ }),canonicalAuthority518:true};
+ const largeSnapshot={...snap,head:largeHead,etag:'"large-owner"',
+  items:largeItems};
+ r=await t.run({
+  loadCompleteFencedOwnerR2:async()=>largeSnapshot,
+  readR2HeadAgain:async()=>({
+   verifiedByServer:true,ownerUid:uid,fencedWritersVerified:true,
+   head:largeHead,etag:largeSnapshot.etag,
+  }),
+ });
+ assert.equal(r.code,'RECOVERY_PROMOTED');
+ assert.equal(r.memberCount,n);
+ assert.equal(t.members.get(largeHead.headRevision).size,n);
+ assert.equal(t.members.get(oldGen).has('old-song'),true);
+ assert.equal(t.counters().writes,n+2);
+ assert.equal(t.counters().batches,Math.ceil(n/512));
+}
+console.log('APP518_RECOVERY_OVER_20K_50K_OWNER_PROTECTS_OLD_READY=PASS');
 console.log('APP518_RECOVERY_FOREIGN_R2_CONTRACT_DENY_VS_TRANSIENT_IO_RETRY=PASS');
 console.log('APP518_COMPACTION_MOVED_HEAD_ROTATE_WITH_COOLDOWN_AND_3_RETRY_LIMIT=PASS');
 console.log('APP518_COMPACTION_OWNER_STAGE_AND_ATOMIC_GENERATION_SWAP=PASS');

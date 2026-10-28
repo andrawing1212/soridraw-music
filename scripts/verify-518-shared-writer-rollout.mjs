@@ -123,7 +123,7 @@ const rollbackGuard=releases.indexOf("await verifyLegacyMediaMutationAllowed518(
 assert.ok(rollback>rollbackGuard&&rollbackGuard>uploadDispatch,
  'automatic rollback must revalidate all three live canonical bindings');
 assert.match(releases,/MEDIA_TARGETS_518\.map/);
-assert.match(releases,/workers\/scripts\/\$\{worker\}\/settings/);
+assert.match(releases,/workers\/scripts\/\$\{script\}\/settings/);
 const valid={action:'restore',sourceCanonicalFlag:null,
  liveCanonicalFlags:[null,null,null]};
 for(const action of ['upload','activate','restore']){

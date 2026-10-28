@@ -38,8 +38,7 @@ function makeDb(){
  const calls={reads:0,writes:0,batches:0};
  let failBatch=false, concurrent=false;
  const row={};
- function allowed(args,offset){
-  const [owner,generation,revision,headEtag,count]=args.slice(offset);
+ function allowed(owner,generation,revision,headEtag,count){
   return owner===uid&&generation===meta.generation
    &&revision===meta.indexed_revision&&headEtag===meta.head_etag
    &&count===meta.expected_count&&meta.status==='ready';
@@ -64,11 +63,11 @@ function makeDb(){
    for(const {sql,args} of stmts){
     let changed=0;
     if(sql.startsWith('INSERT OR IGNORE INTO music_note_catalog_member_518')){
-     if(allowed(args,3)&&!members.has(args[2])){members.add(args[2]);changed=1;}
+     if(allowed(...args.slice(1))&&!members.has(args[0])){members.add(args[0]);changed=1;}
     }else if(sql.startsWith('DELETE FROM music_note_catalog_member_518')){
-     if(allowed(args,3)&&members.delete(args[2]))changed=1;
+     if(allowed(args[0],args[1],...args.slice(3))&&members.delete(args[2]))changed=1;
     }else if(sql.startsWith('UPDATE music_note_catalog_index_meta_518')){
-     if(allowed(args,4)){
+     if(allowed(...args.slice(4))){
       const [rev,newEtag,nextCount]=args;
       meta.indexed_revision=rev;meta.head_etag=newEtag;
       meta.expected_count=nextCount;changed=1;

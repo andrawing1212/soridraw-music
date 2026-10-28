@@ -51,6 +51,11 @@ assert.equal(decide(removed(time1, 'server-exact-read'), { ...initial.nextLedger
 assert.equal(decide(removed(time1, 'server-exact-read'), { ...initial.nextLedger, uid: 'other_user' }).code, 'DENY_INVALID_LEDGER');
 assert.equal(decide(removed(time1, 'server-exact-read'), initial.nextLedger).code, 'DENY_CONFLICTING_SAME_VERSION');
 assert.ok(BigInt(parseFirestoreUpdateTimeNs518(time3)) > BigInt(parseFirestoreUpdateTimeNs518(time2)));
+const olderVersion = parseFirestoreUpdateTimeNs518('1970-01-01T00:00:01Z');
+const currentVersion = parseFirestoreUpdateTimeNs518('2026-10-28T02:00:00Z');
+assert.equal(olderVersion.length, 21);
+assert.equal(currentVersion.length, 21);
+assert.ok(olderVersion < currentVersion, 'D1 fixed-width lexical order must match chronological order');
 assert.equal(decideCanonicalCatalogMutation518({
   expectedUid: uid, expectedDocumentId: '../bad', canonical: saved(time1),
 }).code, 'DENY_INVALID_ID');

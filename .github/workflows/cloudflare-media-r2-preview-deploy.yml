@@ -18,7 +18,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: cloudflare-media-r2-preview-deploy
+  # Shared across preview deployment and all-three-worker cutover. Never
+  # overlap a legacy preview rollback with TEST/PRODUCTION activation.
+  group: soridraw-media-shared-r2-mutation
   cancel-in-progress: false
 
 jobs:
@@ -28,6 +30,7 @@ jobs:
     timeout-minutes: 25
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
       BUCKET: soridraw-media-preview
       CATALOG_BUCKET: soridraw-user-catalog
       WORKER_URL: https://soridraw-media-preview.andrawing1212.workers.dev
@@ -103,9 +106,26 @@ jobs:
           console.log('EXISTING_MEDIA_SIGNING_SECRET=PASS');
           NODE
 
-      - name: Deploy preview media Worker with R2 binding
-        working-directory: cloudflare/media-worker
-        run: npm run deploy
+      - name: Enforce source-installed legacy release guard (before any Worker mutation)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # An older SHA that lacks the audited controller must never deploy.
+          test -f cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js
+          test -f .deploy/release-media-worker-runtime.mjs
+          grep -q 'verifyLegacyMediaMutationAllowed518' .deploy/release-media-worker-runtime.mjs
+          node scripts/verify-518-shared-writer-rollout.mjs
+          echo 'PREVIEW_MEDIA_518_FENCE_SOURCE=PASS'
+
+      - name: Deploy preview media Worker via common guarded release controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .deploy/release-media-worker-runtime.mjs preview upload | tee "$RUNNER_TEMP/preview-media-upload.log"
+          uploaded="$(sed -n 's/^PREVIEW_MEDIA_WORKER_UPLOADED_VERSION=//p' "$RUNNER_TEMP/preview-media-upload.log" | tail -1)"
+          [[ "$uploaded" =~ ^[0-9a-fA-F-]{36}$ ]] || { echo 'No immutable uploaded Worker version'; exit 2; }
+          RELEASE_MEDIA_WORKER_VERSION="$uploaded" node .deploy/release-media-worker-runtime.mjs preview activate
+          echo 'PREVIEW_MEDIA_DEPLOY_GUARDED=PASS'
 
       - name: Smoke Worker health and Preview CORS
         shell: bash

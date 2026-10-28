@@ -8,7 +8,9 @@ import {parseFirestoreUpdateTimeNs518} from './catalogCanonicalFence518.js';
 import {createOwnerR2Provider518} from './catalogR2Provider518.js';
 import {enqueueVerifiedFavorite518} from './catalogD1Outbox518.js';
 import {deliverDueCanonicalFavorites518} from './catalogDelivery518.js';
-import {stageFirstChangedOwnerIndex518} from './catalogFirstChangeIndex518.js';
+import {stageFirstChangedOwnerIndex518,INDEX_META_READ_518} from './catalogFirstChangeIndex518.js';
+import {createR2BasePageReader518} from './catalogR2BasePages518.js';
+import {advancePagedOwnerIndex518} from './catalogOwnerPagedIndex518.js';
 import {applyIndexedCanonicalR2Delta518} from './catalogIndexedWriter518.js';
 
 const deny=code=>({code,accepted:false});
@@ -22,6 +24,9 @@ export const createApp518ServerBridge=({
 }={})=>{
  const db=env?.CATALOG_OUTBOX_518;
  const r2=createOwnerR2Provider518({env,sharedReleaseFencesVerified});
+ const baseReader=createR2BasePageReader518({
+  env,readOwnerHead:r2.readOwnerHead,sharedReleaseFencesVerified,projectItem,
+ });
  const enabled=Boolean(r2.enabled&&db?.prepare&&db?.batch
    &&typeof readExactCanonical==='function'
    &&typeof projectItem==='function'&&typeof sortItems==='function'
@@ -70,7 +75,17 @@ export const createApp518ServerBridge=({
      desiredState,canonical})=>{
     // First confirmed mutation owner index; one-off full R2 read only when
     // D1 has no ready index. A ready index needs no R2 full list read.
-    const staged=await stageFirstChangedOwnerIndex518({
+    // A READY account never triggers an owner-wide R2 range scan. A new
+    // owner above 20k (or its suspended paging stage) uses durable paging.
+    const prior=await db.prepare(INDEX_META_READ_518).bind(uid).first();
+    const ownerHead=prior?.status==='ready'?null:
+      await r2.readOwnerHead(uid);
+    const usePaging=prior?.status!=='ready'&&(
+      prior?.expected_count>20000||ownerHead?.head?.itemCount>20000);
+    const staged=usePaging?await advancePagedOwnerIndex518({
+     db,uid,mode:'first',verifiedPendingMutation:true,nowMs,
+     readOwnerHead:r2.readOwnerHead,baseReader,projectItem,
+    }):await stageFirstChangedOwnerIndex518({
      db,uid,verifiedMutation:true,nowMs,
      loadMaterializedR2Once:async account=>
       r2.loadCompleteFencedOwnerR2({uid:account,projectItem,sortItems}),
@@ -93,6 +108,10 @@ export const createApp518ServerBridge=({
      loadCompleteFencedOwnerR2:async account=>
       r2.loadCompleteFencedOwnerR2({uid:account,projectItem,sortItems}),
      projectItem,nowMs,
+     pagedRecovery:async()=>advancePagedOwnerIndex518({
+      db,uid,mode:'recovery',verifiedPendingMutation:true,nowMs,
+      readOwnerHead:r2.readOwnerHead,baseReader,projectItem,
+     }),
     });
    },
   });

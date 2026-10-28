@@ -40,6 +40,30 @@ export const REQUEUE_EXACT_518=[
  'AND (ack_version_ns IS NULL OR ack_version_ns != source_version_ns)',
  'AND attempt_count=? AND hold_reason IS NULL',
 ].join('\n');
+// A successfully advancing multi-invocation owner import is NOT a network
+// failure; schedule the next page without incrementing the eight-attempt
+// IO failure budget. The cursor's atomic progress is already durable in D1.
+export const DEFER_PAGED_518=[
+ 'UPDATE music_note_catalog_outbox_518',
+ 'SET next_attempt_ms=?,updated_at_ms=?',
+ 'WHERE owner_uid=? AND favorite_id=? AND source_version_ns=?',
+ 'AND (ack_version_ns IS NULL OR ack_version_ns != source_version_ns)',
+ 'AND hold_reason IS NULL AND next_attempt_ms <= ?',
+].join('\\n');
+export const deferPagedFavorite518=async({
+ db,uid,documentId,sourceVersionNs,nowMs,
+}={})=>{
+ if(!database(db)||!okUid(uid)||!okId(documentId)||!epoch(nowMs)
+   ||!/^[0-9]{21}$/.test(text(sourceVersionNs)))
+  return {code:'DENY_PAGED_DEFER_ARGUMENTS',d1Writes:0};
+ // 10 seconds ensures a real scheduler boundary: no hot retry loop.
+ const next=nowMs+10000;
+ const result=await db.prepare(DEFER_PAGED_518)
+  .bind(next,nowMs,text(uid),text(documentId),sourceVersionNs,nowMs).run();
+ const writes=Math.max(0,Number(result?.meta?.changes||0));
+ return {code:writes===1?'PAGE_CONTINUATION_SCHEDULED':'STALE_OR_ALREADY_DEFERRED',
+  d1Writes:writes,retryAtMs:writes?next:undefined};
+};
 export const HOLD_EXACT_518=[
  'UPDATE music_note_catalog_outbox_518',
  'SET hold_reason=?,updated_at_ms=?',

@@ -50,6 +50,22 @@ jobs:
           git merge-base --is-ancestor "$APPROVED_SHA" FETCH_HEAD
           test -f cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js
           grep -q 'verifyLegacyMediaMutationAllowed518' .deploy/release-media-worker-runtime.mjs
+          # Version authority belongs to this workflow, not the source SHA.
+          SAFE_MEDIA_BASE_518=430d64e5d7f3f573a8ca1c7c7c4d23561408624e
+          git cat-file -e "${SAFE_MEDIA_BASE_518}^{commit}" || { echo 'HOLD_518_SAFE_BASE_UNAVAILABLE'; exit 2; }
+          git merge-base --is-ancestor "$SAFE_MEDIA_BASE_518" HEAD || { echo 'HOLD_518_RELEASE_SHA_PREDATES_SAFE_BASE'; exit 2; }
+          while read -r expected file; do
+            actual="$(git hash-object "$file" 2>/dev/null)" || { echo "HOLD_518_MISSING_SAFE_SOURCE:$file"; exit 2; }
+            test "$actual" = "$expected" || { echo "HOLD_518_UNAUDITED_SOURCE_HASH:$file"; exit 2; }
+          done <<'AUDITED_MEDIA_GIT_BLOBS_518'
+          5baa599744aecf67a90d2f2ee6dcdf614b4b7f7b cloudflare/media-worker/src/index.js
+          be1a5f2cfa94a0c62130ff7ed5fe4f1f6f043889 cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js
+          89c55674adcd4e9ec5fb909a04e818333117d1a1 .deploy/release-media-worker-runtime.mjs
+          81f2a797c30dfd1d7e700e542bbd29c88987198f cloudflare/media-worker/package.json
+          01e6d7a6f280d421cf982552a3c9f2e824f60264 scripts/verify-518-shared-writer-rollout.mjs
+          AUDITED_MEDIA_GIT_BLOBS_518
+          node scripts/verify-518-shared-writer-rollout.mjs
+          echo 'SHARED_MEDIA_MUTATION_SAFE_BASE_AND_BLOBS=PASS'
           echo 'SHARED_MEDIA_MUTATION_SOURCE_GUARD=PASS'
 
       - name: Set up Node.js 22

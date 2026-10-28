@@ -122,10 +122,36 @@ assert.equal((await go(ctx,{loadVerifiedHead:async()=>({
  fencedWritersVerified:false,head,etag})})).code,
  'DENY_UNTRUSTED_OR_UNFENCED_HEAD');
 assert.equal(ctx.calls.writes,0);
-// A new (unACKed) Firestore version supersedes R2 journal tail: hold, do
-// not replay or ACK a stale R2 result.
-ctx=makeDb();ctx.outbox.get('b').source_version_ns=version2;
+// P1: R2 saved v1, D1 index write crashed, latest Firestore/D1 now
+// removed v2. Replay the server-committed v1 journal into the D1 index;
+// v2 remains pending and can then be published without permanent HOLD.
+ctx=makeDb();
+ctx.outbox.get('b').source_version_ns=version2;
+ctx.outbox.get('b').desired_state='removed';
+assert.equal((await go(ctx)).code,'INDEX_ADVANCED');
+assert.equal(ctx.meta.indexed_revision,102);
+assert.equal(ctx.members.has('b'),true,'historical v1 matches current R2, not final Firestore');
+assert.equal(ctx.outbox.get('b').source_version_ns,version2);
+assert.equal(ctx.outbox.get('b').desired_state,'removed');
+assert.equal((await go(ctx)).code,'ALREADY_INDEXED');
+// Current D1 outbox older than a verified R2 change is untrusted.
+ctx=makeDb();ctx.outbox.get('b').source_version_ns='001793152800000000000';
 assert.equal((await go(ctx)).code,'HOLD_OUTBOX_VERSION_DRIFT');
+assert.equal(ctx.calls.writes,0);
+// Same song saved v1 -> removed v2, both R2-confirmed before a D1 replay:
+// final index has no 'b', preserving its final state without N-row rebuild.
+addDelta({id:'b',version:version2,state:'removed'});
+ctx=makeDb();ctx.outbox.get('b').source_version_ns=version2;
+ctx.outbox.get('b').desired_state='removed';
+assert.equal((await go(ctx)).code,'INDEX_ADVANCED');
+assert.equal(ctx.meta.indexed_revision,103);
+assert.equal(ctx.members.has('b'),false);
+assert.equal(ctx.members.has('a'),false);
+// Historical server journal itself must be monotonic per document.
+addDelta({id:'b',version:'001793152800000000000',state:'saved'});
+ctx=makeDb();ctx.outbox.get('b').source_version_ns=version2;
+ctx.outbox.get('b').desired_state='removed';
+assert.equal((await go(ctx)).code,'DENY_NON_MONOTONIC_SOURCE_HISTORY');
 assert.equal(ctx.calls.writes,0);
 // Journal compacted before D1 caught up: recovery cannot guess missing IDs.
 ctx=makeDb();
@@ -135,6 +161,8 @@ assert.equal((await go(ctx,{loadVerifiedHead:async()=>({
  head:compacted,etag:'"compacted"'})})).code,
  'HOLD_COMPACTED_OR_DIVERGENT_HEAD');
 console.log('APP518_BOUNDED_JOURNAL_TAIL_TO_D1_INDEX=PASS');
+console.log('APP518_R2_V1_D1_LATEST_V2_CRASH_REPLAY_AND_FINAL_DELETE=PASS');
+console.log('APP518_OLDER_AND_NON_MONOTONIC_R2_EVENT_NO_D1_WRITE=PASS');
 console.log('APP518_R2_SUCCESS_D1_CRASH_EXACT_REPLAY=PASS');
 console.log('APP518_D1_CONCURRENT_INDEX_STALE_BATCH_W0=PASS');
 console.log('APP518_REPLAY_DUPLICATE_D1_W0=PASS');

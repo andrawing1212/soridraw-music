@@ -58,7 +58,7 @@ export const enqueueVerifiedFavorite518=async({
    d1Writes:writes,sourceVersionNs:version};
 };
 export const getDueFavoriteChanges518=async({db,nowMs,limit=32}={})=>{
- if(!database(db)||!epoch(nowMs)||!Number.isInteger(limit)||limit<1||limit>64)
+ if(!database(db)||!epoch(nowMs)||!Number.isInteger(limit)||limit<1||limit>256)
    return {code:'DENY_ARGUMENTS',rows:[]};
  const result=await db.prepare(SELECT_DUE_518).bind(nowMs,limit).all();
  return {code:'OK',rows:Array.isArray(result?.results)?result.results:[]};

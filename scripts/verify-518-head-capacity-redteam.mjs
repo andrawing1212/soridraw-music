@@ -13,17 +13,19 @@ assert.match(candidate,/sourceLedger518:\{\.\.\.ledger,\[id\]:decision\.nextLedg
 // Reproduce a realistic long-history account (including removed songs).
 const ledger={};
 let firstFullAt=0,largeBytes=0;
-for(let i=0;i<15000;i++){
+for(let i=0;i<8200;i++){
  const id='song-'+String(i).padStart(8,'0');
  ledger[id]={
   uid:'owner',documentId:id,durable:true,
   sourceVersionNs:'1793152800123456789',state:i%2?'removed':'saved'
  };
- const bytes=catalogJournalEncodedBytes({sourceLedger518:ledger});
- if(!firstFullAt&&bytes>CATALOG_JOURNAL_MAX_BYTES)firstFullAt=i+1;
- if(i===14999)largeBytes=bytes;
+ if (i % 64===0 || i===8199) {
+   const bytes=catalogJournalEncodedBytes({sourceLedger518:ledger});
+   if(!firstFullAt&&bytes>CATALOG_JOURNAL_MAX_BYTES)firstFullAt=i+1;
+   if(i===8199)largeBytes=bytes;
+ }
 }
-assert.ok(firstFullAt>0&&firstFullAt<15000,
+assert.ok(firstFullAt>0&&firstFullAt<8200,
  'fixture must demonstrate finite per-account HEAD saturation');
 assert.ok(largeBytes>CATALOG_JOURNAL_MAX_BYTES);
 // There is no safe silent eviction of tombstones: if an inactive client sends

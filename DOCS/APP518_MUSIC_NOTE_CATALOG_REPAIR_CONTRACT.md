@@ -260,3 +260,16 @@
 - 실제 큐에서는 기존 `scheduleFailedFavorite518`의 **최대 8회·지수 백오프·초과 시 영구 HOLD W1**을 그대로 사용. 처음 1회 재시도 예약 외 R2 영구 실패 호출을 무제한 허용하지 않음. 정상 원본이 없거나 이전 삭제 세대가 다른 경우 R2 mutation 및 ACK 금지.
 - 새 테스트는 첫 색인 HEAD 변경과 압축 HEAD 변경 오류가 **ACK 금지→예약 재시도→정확 원본 재확인→ACK** 되는지 확인한다. 진짜 불가한 원본/HEAD/예산 오류가 즉시 HOLD하고 반복 호출 0인지도 검증한다. 서버 브리지 실제 모듈 → D1 due → 첫 색인 예외 → 예약 재시도 경로도 실행형 mock으로 확인한다.
 - 이 코드는 여전히 **미연결 후보**. 실제 D1 생성·마이그레이션·Firebase↔Cloudflare Secret/HTTPS/Cron/3환경 Worker 차단·기기 실제 검증 미완료. 사용자 원본·기존 PC↔모바일 동기화·캐시·PREVIEW/TEST/PRODUCTION 배포는 건드리지 않는다. **PR #528 Draft / 전체 RELEASE HOLD 유지**, 새 SHA의 CI 및 독립 감사가 별도로 필요하다.
+
+## 2026-10-29 2만 곡 초과 계정 색인 제한 제거 후보 — 정확 R2 원본 보호
+
+**이번 승인 범위:** PR #528 비활성 서버 후보에서 첫 색인·압축 복구의 20,000개 고정 상한 제거와 필요한 D1 원자적 페이지 기록·오프라인 실행 검사. 실제 Worker·D1·R2·Firestore 배포/원본 데이터 변경 0.
+
+- 기존 제한은 `catalogFirstChangeIndex518.js`, `catalogR2Provider518.js`, `catalogCompactionRecovery518.js`, 아직 미적용된 `518_music_note_catalog_first_change_index.sql`의 `expected_count/recovery_count`에 분산돼 있었음. 하나만 바꾸면 20,001번째 계정이 다른 경로에서 거절됨. 이제 인증된 HEAD의 안전한 정수 count와 **완전한 R2 목록 개수 일치**를 유지하되 인위적인 개수 상한으로 거절하지 않음.
+- 첫 색인·압축 복구에서 ID 전체의 유효성/중복 및 소유자 검증 후 `json_each(?)`와 **512개 이하 ID 페이지당 하나의 SQLite 문장**으로 D1 membership을 원자적·멱등 기록. 한 행씩 SQL 쿼리하는 방식보다 호출 수를 줄이고, 변경 없는 계정·앱 진입 시 작업하지 않음.
+- D1 상태는 기존 `building` 또는 복구용 보이지 않는 generation에서만 진행. **모든 ID 수량과 최신 R2 HEAD revision·ETag가 일치해야 READY 승격**; 도중 실패/HEAD 이동/경합에서 이전 READY 원본은 보존. 같은 정확 HEAD 재시도에서 이미 기록된 ID는 쓰기 W0.
+- 소스 실행형 모의 검사: 20,001·50,001 ID 온전한 완료, 재시도 후 기록 중복 W0, 512개 단위 SQL query, 기존 READY 보호. 실제 SQLite JSON1로 20,001 ID 삽입·HEAD CAS·다른 소유자 격리. R2 실제 어댑터에서 >20k BASE 읽기/HEAD 재확인과 미PUT 검증.
+- **비용 계약:** 첫 색인/압축 복구 성공 1회는 여전히 **D1 논리 행 쓰기 N+2**; 쿼리 수는 `ceil(N/512)`개의 bulk membership 문장 + 메타/검증용 조회·갱신. 이것은 공짜가 아니며 기존의 전체 R2 materialization 1회가 필요한 초기/압축 복구 작업만 해당. 일반 단건 변경 D1 W3~W4 목표/페이지 진입 R0/W0 변경 없음.
+- **중요한 미검증:** 기존 공유 R2 BASE는 JSON 전체 자료화 구조라 실제 20,001곡 이상의 payload 크기·Cloudflare Worker 메모리/CPU/시간 한도에서 **무한 규모를 보장하지 않음**. 이 단계의 >20k는 계정 개수에 의한 소스 차단을 제거한 것이며 실서버 부하 시험·실제 비용과 모든 크기의 라이브 Catalog 정상 복구는 검증되지 않음. 적합하지 않은 매우 큰 BASE를 임의로 자르거나 원본을 덮어쓰는 우회 금지. 필요 시 스트리밍 기반 자료화는 별도 설계 검증 후 승인.
+- 기존 미해결 릴리스 P1 두 건(공유 PREVIEW/TEST/PRODUCTION 구형 Writer 전면 차단, Firebase↔Cloudflare 실연결)과 D1 이전 세대 안전 정리, 실기기/실청구 비용 검증, 본 SHA의 **Work 독립 감사 미실시**. **전체 RELEASE HOLD / NO-GO 유지**.
+

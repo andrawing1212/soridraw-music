@@ -22,7 +22,7 @@ const verifiedHead=(value,uid)=>{
 export const applyIndexedCanonicalR2Delta518=async({
  db,uid,documentId,sourceVersionNs,desiredState,
  readExactCanonical,readOwnerHead,storeHeadIfEtag,projectItem,
- loadCompleteFencedOwnerR2,nowMs,
+ loadCompleteFencedOwnerR2,pagedRecovery,nowMs,
 }={})=>{
  const deny=code=>({code,ownerVerified:false,versionVerified:false,casVerified:false});
  if(!db||typeof db.prepare!=='function'||typeof db.batch!=='function'
@@ -40,10 +40,16 @@ export const applyIndexedCanonicalR2Delta518=async({
      ||typeof loadCompleteFencedOwnerR2!=='function')return replay;
   // Expensive one-owner R2 materialization ONLY on a proved compaction gap.
   // Never on app entry or normal per-song changes.
-  const recovered=await recoverCompactedOwnerIndex518({
-   db,uid,verifiedPendingMutation:true,loadCompleteFencedOwnerR2,
-   readR2HeadAgain:readOwnerHead,nowMs,
-  });
+  const actualHead=await readOwnerHead(uid);
+  if(!verifiedHead(actualHead,uid))
+   return {code:'DENY_RECOVERY_UNVERIFIED_HEAD'};
+  const recovered=actualHead.head.itemCount>20000
+   &&typeof pagedRecovery==='function'
+   ?await pagedRecovery()
+   :await recoverCompactedOwnerIndex518({
+      db,uid,verifiedPendingMutation:true,loadCompleteFencedOwnerR2,
+      readR2HeadAgain:readOwnerHead,nowMs,
+     });
   return recovered.code==='RECOVERY_PROMOTED'
    ?{code:'INDEX_ADVANCED'}:{code:'RECOVERY_'+recovered.code};
  };

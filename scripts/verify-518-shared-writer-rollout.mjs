@@ -41,7 +41,7 @@ const retiredOldFlights=MEDIA_TARGETS_518.map(x=>({
  checkedAtMs:beforeMs+600_000,
 }));
 const input=()=>structuredClone({snapshots,approvedVersions:approved,
- rollbackVersions:approved,retiredOldFlights,nowMs:beforeMs+600_000});
+ rollbackVersions:{...approved},retiredOldFlights,nowMs:beforeMs+600_000});
 const check=(modify,expected)=>{
  const sample=input();
  modify(sample);

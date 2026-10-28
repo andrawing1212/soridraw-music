@@ -262,6 +262,31 @@ for(const [mode,ready,terminal] of [
   assert.equal(row.hold_reason,null,mode);
  }
 }
+// Audit P1-2: the actual delivery loop must hold a permanent Firebase
+// 409 owner/receipt violation once, but retry a temporary callback outage.
+// No authenticated source => no R2 HEAD read or PUT.
+const {CatalogFirebaseSourceHold518}
+ =await import('../cloudflare/media-worker/src/catalogFirebaseFetcher518.js');
+for(const isPermanent of [true,false]){
+ const {row,counter,database}=deliveryFixture(false);
+ const faultBridge=build({
+  env:{...env,CATALOG_OUTBOX_518:database,
+   CATALOG:{async get(){throw Error('FORBIDDEN_R2_GET');},
+    async put(){throw Error('FORBIDDEN_R2_PUT');}}},
+  readExactCanonical:async()=>{
+   if(isPermanent)throw new CatalogFirebaseSourceHold518('DENY_OWNER_OR_ABSENT');
+   throw Error('APP518_EXACT_SOURCE_UNAVAILABLE');
+  },
+ });
+ const receipt=await faultBridge.drainServerPending({nowMs,limit:1});
+ assert.equal(receipt.attempted,1);
+ assert.equal(receipt.acked,0);
+ assert.equal(receipt.held,isPermanent?1:0);
+ assert.equal(receipt.retry,isPermanent?0:1);
+ assert.equal(row.hold_reason,isPermanent?'SOURCE_CONTRACT':null);
+ assert.equal(counter.puts,0);
+}
+console.log('APP518_FIREBASE_409_SOURCE_HOLD_VS_5XX_BOUNDED_DELIVERY_RETRY=PASS');
 console.log('APP518_BRIDGE_HEAD_BASE_STREAM_IO_RETRY_JSON_CONTRACT_HOLD=PASS');
 console.log('APP518_BRIDGE_READY_COMPACTION_FOREIGN_BASE_HOLD_IO_RETRY=PASS');
 console.log('APP518_BRIDGE_FOREIGN_OWNER_AND_BAD_JSON_TERMINAL_HOLD=PASS');

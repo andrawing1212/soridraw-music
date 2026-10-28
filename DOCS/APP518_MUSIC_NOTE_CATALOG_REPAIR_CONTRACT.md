@@ -191,3 +191,21 @@
 - 신규 `verify-518-hard-delete-receipt.mjs`, `verify-518-hard-delete-source.mjs`: 삭제 이벤트 위조/중복·영구삭제 후 재저장, receipt 발급 시각과 이전 updateTime 구분, 새 저장이 나중에 오면 old delete 미적용, 개인정보 무기록.
 - 기존 다음곡 적용/공개·비공개/하트·Recent/Library·app517 및 전체 제품 검사를 계속 적용. 실제 PC↔모바일 테스트, 10만 사용자 peak와 실제 서버 요금 검증은 별도.
 - CI PASS라도 전체 app518 서버 동기화·확정 누락곡 단건 복구는 **미완료**. 특히 모든 환경 구형 Writer fencing, >20K/다른 HEAD 세대 복구, old index 안전 정리, 실제 Cloudflare/Firebase 서버 연결 및 독립 감사 PASS가 남아 있으면 PR #528은 Draft HOLD.
+
+## 2026-10-28 Firebase Admin + Cloudflare 서버 연결 후보 (런타임 미연결)
+
+### 작성·저장된 경로
+- `functions/src/app518CanonicalSourceProvider.ts`: 실제 Firebase Admin SDK의 `favorites/{exactDocId}` 서버 정본 조회 R1. 서버 `updateTime`을 nanosecond 문자열로 보존. 구형 hard-delete는 트랜잭션 내 exact favorite 부재 확인 후 서버 전용 `server_music_note_delete_receipts_518`에 1건 기록; 중복 eventId W0, 재저장 감지 시 거절. `functions/src/index.ts` 또는 배포 엔트리에는 import/trigger 추가 **없음**.
+- `functions/src/app518ServerTransport.ts`: Node HMAC SHA-256 서비스 요청 서명과 정확한 Firestore 단건 조회용 수신기 함수. 5분 서명 유효기간, HTTPS 요청은 실제 서버의 라우팅 계층에서만 허용. 아직 `onRequest` export, Functions Secret 설정 및 배포 없음.
+- `cloudflare/media-worker/src/catalogServerAuth518.js`: 서명 원문·타임스탬프·크기·요청 형식 검증. Firebase user token이나 브라우저 입력을 서버 권한으로 대체하지 않음. 5분 내 재전송은 **서명만으로 완전히 차단할 수 없으므로** 뒤의 D1 단건 버전 멱등성 W0가 필요.
+- `cloudflare/media-worker/src/catalogFirebaseFetcher518.js`: 설정된 정확 HTTPS 호스트 1개에 서버 키 서명 후 Firebase 단건 조회만 수행. URL 사용자가 지정하거나 HTTP/redirect로 전송하지 않음.
+- `cloudflare/media-worker/src/catalogR2Provider518.js`: 기존 공유 `CATALOG` 버킷의 실제 Music Note `catalog/v5/<uid>/musicNote/journal.json` 키·메타데이터·ETag만 사용. 전체 환경 구형 Writer 차단에 대한 별도 서버 증거와 `SORIDRAW_CANONICAL_CATALOG_518=ENABLED_AFTER_SHARED_ROLLOUT`가 **동시에 충족**돼야 GET/ETag 조건부 PUT 허용. 인증된 1계정 Compaction 재색인은 정확한 HEAD→base→HEAD 재검증, 기타 페이지 전환 시 실행 금지.
+- `cloudflare/media-worker/src/catalogServerBridge518.js`: 서명된 enqueue 요청에도 최신 Firebase 정본 버전/소유자를 재검증한 후 D1 접수; 별도 서버 호출의 pending 배치 처리 시 최초 1회 색인 → 실제 R2 CAS → D1 증분 반영/완료를 시도하는 **비활성 조립 코드**. D1 신규 binding `CATALOG_OUTBOX_518`과 HMAC Secret은 모든 환경에서 미설정.
+- 신규 `verify-518-server-transport.mjs`, `verify-518-r2-binding.mjs`, `verify-518-server-bridge.mjs`: HMAC 서명 변조/만료/위조 차단, URL host pinning, R2 object 소유·ETag/조건부 PUT, 구형 Worker release gate OFF, D1 enqueue 전에 exact Firestore 판정. GitHub 검사에는 기존 Functions 패키지 의존성 설치를 명시해 신규 TS provider 컴파일 검증.
+
+### 새 코드의 동작 비용 / 미완성
+- 일반 앱 사용·진입 시 이 경로는 **호출 0, 신규 R0/W0**. 이벤트가 실제 변경을 확정해 서버에 들어올 때 Firestore exact R1, D1 변화 접수 W1, 이후 조건부 R2 HEAD·D1 증분·ACK 작업. D1 W3~W4 및 특별 hard-delete Firestore receipt W1은 전 단계의 목표치이며 실제 Billing/트래픽 미실측. 단, 회원 10만 명을 대상으로 실행 이벤트가 많아지면 Firebase Function 호출비와 R2 ETag 경합/조회비가 추가 발생할 수 있음.
+- 새 사설 receipt 컬렉션은 **Firestore Rules 명시적인 client write 금지 확인, Firebase Admin 트리거 이벤트 ID·소유자 검증, 중복/역순 hard delete 처리 보완** 전까지 접근 불가. 저장 후 다시 삭제한 두 번째 영구 삭제 이벤트가 과거 receipt와 충돌하는 경우 현재 Provider는 `HOLD_OTHER_EVENT_RECEIPT`로 안전 차단한다. 정상 작동 완료라고 주장 금지.
+- Firebase `onDocumentWritten/onDelete` 실행 export, Firebase↔Worker 실제 HTTP 경로, Firebase·Cloudflare Secret/환경 변수, Cloudflare D1 생성/마이그레이션, Worker cron/queue, 모든 PREVIEW·TEST·PRODUCTION 구형 shared R2 Writer 공통 fencing은 **아직 모두 미연결/미승인**. 현재 환경에 이 소스가 자동으로 활성화되는 경로 0개.
+- Cloudflare R2 provider는 기존 `catalogJournal.js` 실제 스키마를 사용하지만 전체 서버 검증 전 shared 캐시/HEAD에 write 금지. 특히 D1에 ACK만 쓰고 클라이언트 표시가 자동으로 최신이 된다고 가정하지 않는다. PC↔모바일 실인증, 캐시 freshness, 삭제곡 복구·누락곡 1건도 QA 미실시.
+- 사용자 승인 범위는 **코드·GitHub 검사만**. 다음은 이 정확 SHA의 독립 감사 FAIL/PASS와 배포 전 구형 Writer·인증된 실제 Firebase 이벤트 순서·실제 D1/원본 데이터 분리 등 보류 항목 검증.

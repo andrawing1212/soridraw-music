@@ -41,6 +41,7 @@ export const readExactCanonicalWithReceipt518=async({
   const receipt=await readExactPrivateReceipt(uid,documentId);
   if(receipt?.verifiedByServer!==true||receipt.uid!==uid
     ||receipt.documentId!==documentId||!txt(receipt.deleteEventId)
+    ||!/^\d{21}$/.test(txt(receipt.beforeSourceVersionNs))
     ||!parseFirestoreUpdateTimeNs518(receipt.updateTime))
    return {code:'HOLD_NO_VERIFIED_HARD_DELETE_RECEIPT'};
   return {code:'VERIFIED_HARD_DELETE',canonical:{
@@ -54,12 +55,12 @@ export const readExactCanonicalWithReceipt518=async({
 // MUST check exact favorite absence and the event dedupe in Firestore.
 // The returned source is queued, not applied directly to R2.
 export const receiveVerifiedHardDeleteEvent518=async({
- db,uid,documentId,deleteEventId,beforeOwnerUid,
+ db,uid,documentId,deleteEventId,beforeOwnerUid,beforeUpdateTime,
  verifiedServerDeleteEvent,transactExactAbsentReceipt,
  readExactAfterReceipt,nowMs,
 }={})=>{
  const proof=await settleVerifiedHardDelete518({
-  uid,documentId,deleteEventId,beforeOwnerUid,verifiedServerDeleteEvent,
+  uid,documentId,deleteEventId,beforeOwnerUid,beforeUpdateTime,verifiedServerDeleteEvent,
   transactExactAbsentReceipt,readExactAfterReceipt,
  });
  if(proof.allowD1Enqueue!==true)

@@ -10,6 +10,7 @@ const validId=x=>text(x).length>0&&text(x).length<=240&&
 // 256 unusually large entries could exceed Workers Free subrequest/CPU limits.
 const RANGE_BYTES=65536,MAX_ITEM_BYTES=131072,MAX_META_BYTES=8192;
 const MAX_PAGE_SOURCE_BYTES=131072;
+class PageByteBudget518 extends Error {}
 const contract=code=>{throw new CatalogR2ContractError518(code);};
 const prefix=uid=>'catalog/v5/'+encodeURIComponent(uid)+'/musicNote/';
 const decoder=new TextDecoder('utf-8',{fatal:true});
@@ -47,9 +48,11 @@ export const createR2BasePageReader518=({
    contract('APP518_PAGED_BASE_CHANGED');
   let at=offset,buffer=new Uint8Array(),start=-1;
   const byte=async()=>{
+   if(at-offset>=MAX_PAGE_SOURCE_BYTES)throw new PageByteBudget518();
    if(at>=baseSize)return -1;
    if(at<start||at>=start+buffer.length){
-    const length=Math.min(RANGE_BYTES,baseSize-at);
+    const length=Math.min(RANGE_BYTES,baseSize-at,
+      MAX_PAGE_SOURCE_BYTES-(at-offset));
     const obj=await env.CATALOG.get(meta.baseKey,{
      range:{offset:at,length},onlyIf:{etagMatches:baseEtag},
     });
@@ -90,11 +93,21 @@ export const createR2BasePageReader518=({
     contract('APP518_PAGED_PREFIX_TOO_LARGE');
   }
   const ids=[];
+  // A byte budget can be exhausted halfway through the next item. Discard
+  // the unfinished item and persist ONLY the last complete JSON boundary.
+  // The next invocation re-reads that item from the pinned BASE version.
+  let lastCompleteOffset=at;
+  try{
   while(ids.length<pageSize){
    let b=await byte();
    while(white(b))b=await byte();
    if(seen>0){
-    if(b===44){b=await byte();while(white(b))b=await byte();}
+    if(b===44){
+     b=await byte();while(white(b))b=await byte();
+     // A comma immediately before closing ] is invalid JSON and must
+     // remain invalid even when the item list is replaced for footer check.
+     if(b===93)contract('APP518_PAGED_TRAILING_COMMA');
+    }
     else if(b!==93)contract('APP518_PAGED_MISSING_COMMA');
    }
    if(b===93){
@@ -156,9 +169,20 @@ export const createR2BasePageReader518=({
    ids.push(text(item.id));
    seen++;
    if(seen>head.baseItemCount)contract('APP518_PAGED_TOO_MANY_ITEMS');
-   if(at-offset>=MAX_PAGE_SOURCE_BYTES)break;
+   lastCompleteOffset=at;
   }
-  return {ids,offset:at,seen,done:false,baseEtag,baseSize};
+  }catch(error){
+   if(!(error instanceof PageByteBudget518))throw error;
+   // First page may advance just past the verified JSON prefix with zero
+   // IDs. Later calls must either complete at least one item, or HOLD
+   // a single item that cannot fit in the strict 128KiB page budget.
+   if(lastCompleteOffset<=offset)
+    contract('APP518_PAGED_ITEM_EXCEEDS_PAGE_LIMIT');
+   return {ids,offset:lastCompleteOffset,seen,done:false,
+     baseEtag,baseSize,readBytes:MAX_PAGE_SOURCE_BYTES};
+  }
+  return {ids,offset:at,seen,done:false,baseEtag,baseSize,
+    readBytes:at-offset};
  };
  return {enabled,inspect,page};
 };

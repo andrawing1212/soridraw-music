@@ -68,7 +68,7 @@ function makeDb(){
     }else if(sql.startsWith('DELETE FROM music_note_catalog_member_518')){
      if(allowed(args,3)&&members.delete(args[2]))changed=1;
     }else if(sql.startsWith('UPDATE music_note_catalog_index_meta_518')){
-     if(allowed(args,5)){
+     if(allowed(args,4)){
       const [rev,newEtag,nextCount]=args;
       meta.indexed_revision=rev;meta.head_etag=newEtag;
       meta.expected_count=nextCount;changed=1;

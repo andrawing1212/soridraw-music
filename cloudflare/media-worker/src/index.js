@@ -794,6 +794,51 @@ const putCatalogJournalHead = async (env, uid, kind, head, currentObject = null)
   return catalogBucket(env).put(catalogJournalKey(uid, kind), encoded, options);
 };
 
+// app517: inspection alone must distinguish a truly absent R2 object from
+// a network failure, malformed body, invalid journal, missing referenced base,
+// or a corrupt catalog. Do NOT weaken the ordinary Catalog read behavior.
+const readStrictCatalogObjectForInspection = async (bucket, key, kind, journal = false) => {
+  const object = await bucket.get(key); // GET errors propagate; no fallback.
+  if (!object) return null;
+  let payload;
+  try { payload = JSON.parse(await object.text()); }
+  catch { throw new Error('CATALOG_INSPECT_READ_INVALID'); }
+  if (journal ? !isValidCatalogJournal(payload, kind) : !validateCatalogPayload(payload, kind)) {
+    throw new Error('CATALOG_INSPECT_READ_INVALID');
+  }
+  return { object, payload };
+};
+
+const readStrictCatalogStateForInspection = async (bucket, uid, kind) => {
+  // Never issue an R2 LIST, legacy-media read, Firestore scan, seed or write.
+  const journal = await readStrictCatalogObjectForInspection(
+    bucket, catalogJournalKey(uid, kind), kind, true,
+  );
+  if (journal) {
+    const base = await readStrictCatalogObjectForInspection(
+      bucket, journal.payload.baseKey, kind,
+    );
+    if (!base || base.payload.revision !== journal.payload.baseRevision
+      || base.payload.itemCount !== journal.payload.baseItemCount) {
+      throw new Error('CATALOG_INSPECT_READ_INVALID');
+    }
+    return { base: base.payload, head: journal.payload, journalObject: journal.object };
+  }
+  const legacyBase = await readStrictCatalogObjectForInspection(
+    bucket, catalogObjectKey(uid, kind), kind,
+  );
+  if (!legacyBase) return null; // Both keys genuinely absent.
+  return {
+    base: legacyBase.payload,
+    head: createEmptyCatalogJournal({
+      kind, baseKey: catalogObjectKey(uid, kind),
+      baseRevision: legacyBase.payload.revision,
+      itemCount: legacyBase.payload.itemCount,
+    }),
+    journalObject: null,
+  };
+};
+
 const readCatalogStateFromBucket = async (bucket, uid, kind) => {
   const journalRecord = await readCatalogJournalObjectFromBucket(bucket, uid, kind);
   if (journalRecord) {
@@ -1038,7 +1083,7 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
         || /[\\/]/.test(exactId)) {
         return jsonResponse({ ok: false, code: 'INVALID_EXACT_ID' }, 400, origin);
       }
-      const current = await readCatalogStateFromBucket(env.CATALOG, identity.uid, 'musicNote');
+      const current = await readStrictCatalogStateForInspection(env.CATALOG, identity.uid, 'musicNote');
       if (!current) {
         return jsonResponse({ ok: true, materialized: false, membership: null,
           revision: 0, itemCount: null }, 200, origin);
@@ -1102,6 +1147,10 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
   } catch (error) {
     const code = text(error?.message) || 'CATALOG_FAILED';
     console.error('catalog request failed', { kind: route.kind, action: route.action, error: code });
+    if (route.action === 'inspect-exact') {
+      // Never report "not materialized" on malformed or unreadable R2.
+      return jsonResponse({ ok: false, code: 'CATALOG_INSPECT_UNDETERMINED' }, 503, origin);
+    }
     if (isSharedCatalogEnabled(env) && code === 'CATALOG_REPAIR_REQUIRED') {
       return jsonResponse({
         ok: false,

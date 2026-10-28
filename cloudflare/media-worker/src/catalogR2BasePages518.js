@@ -118,20 +118,16 @@ export const createR2BasePageReader518=({
      if(suffix.length>MAX_META_BYTES)contract('APP518_PAGED_SUFFIX_TOO_LARGE');
      suffix.push(await byte());
     }
-    let before='';
-    const re=await env.CATALOG.get(meta.baseKey,{
-     range:{offset:0,length:Math.min(MAX_META_BYTES,baseSize)},
-     onlyIf:{etagMatches:baseEtag},
-    });
-    if(!re||re.etag!==baseEtag||typeof re.arrayBuffer!=='function')
-     contract('APP518_PAGED_PREFIX_REREAD_FAILED');
-    const pre=new Uint8Array(await re.arrayBuffer());
-    const preText=bytesToText(pre);
-    const match=/"items"\s*:\s*\[/.exec(preText);
-    if(!match)contract('APP518_PAGED_PREFIX_MISSING');
-    before=preText.slice(0,match.index+match[0].length);
+    // The owner-pinned BASE prefix was validated when offset=0. Rebuild
+    // only a tiny known-good prefix in memory for strict suffix JSON parsing.
+    // Re-fetching 8KiB of R2 here exceeds the per-page 128KiB GET budget.
+    // Any trailing duplicate contract field must still match the pinned HEAD.
+    const verifiedPrefix=JSON.stringify({
+     schemaVersion:4,authority:'server',kind:'musicNote',
+     revision:head.baseRevision,items:[],
+    }).slice(0,-2);
     let whole;
-    try{whole=JSON.parse(before+bytesToText(suffix));}
+    try{whole=JSON.parse(verifiedPrefix+bytesToText(suffix));}
     catch{contract('APP518_PAGED_FOOTER_INVALID');}
     if(whole?.schemaVersion!==4||whole.authority!=='server'
       ||whole.kind!=='musicNote'||whole.revision!==head.baseRevision

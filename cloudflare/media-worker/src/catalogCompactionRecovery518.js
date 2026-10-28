@@ -5,7 +5,7 @@
 // small D1 batches; readers cannot see it until the guarded meta swap.
 // Never change Firestore originals and never treat R2 materialization as
 // evidence that a newer pending canonical change was acknowledged.
-import {INDEX_META_READ_518,INDEX_MEMBER_STAGE_518,INDEX_COUNT_518} from './catalogFirstChangeIndex518.js';
+import {INDEX_META_READ_518,INDEX_MEMBER_BULK_STAGE_518,INDEX_COUNT_518} from './catalogFirstChangeIndex518.js';
 import {isValidCatalogJournal} from './catalogJournal.js';
 import {CatalogR2ContractError518} from './catalogR2Provider518.js';
 const txt=x=>typeof x==='string'?x.trim():'';
@@ -13,7 +13,7 @@ const validUid=x=>txt(x).length>0&&txt(x).length<=128&&!/[\\/]/.test(txt(x));
 const validId=x=>txt(x).length>0&&txt(x).length<=240&&txt(x)!=='.'&&txt(x)!=='..'&&!/[\\/]/.test(txt(x));
 const validHead=h=>h&&isValidCatalogJournal(h,'musicNote')&&h.canonicalAuthority518===true
  &&Number.isSafeInteger(h.headRevision)&&h.headRevision>0
- &&Number.isSafeInteger(h.itemCount)&&h.itemCount>=0&&h.itemCount<=20000;
+ &&Number.isSafeInteger(h.itemCount)&&h.itemCount>=0;
 const same=(a,b)=>a&&b&&a.headRevision===b.headRevision&&a.itemCount===b.itemCount
  &&a.etag===b.etag;
 
@@ -140,15 +140,16 @@ export const recoverCompactedOwnerIndex518=async({
   // The previous incomplete generation is invisible; restarting creates a
   // distinct, greater generation under a bounded claim. No row is deleted.
   // Same-HEAD crash retries remain idempotent through INSERT OR IGNORE.
-  const ids=[...seen];
-  for(let i=0;i<ids.length;i+=128){
-   const batch=ids.slice(i,i+128).map(id=>db.prepare(INDEX_MEMBER_STAGE_518)
-    .bind(uid,nextGen,id));
-   const result=await db.batch(batch);
-   if(!Array.isArray(result)||result.length!==batch.length
-      ||result.some(x=>x?.success!==true))
+  const ids=[...seen],chunkSize=512;
+  // Rebuild a new invisible generation with bounded, atomic SQL pages;
+  // a failed retry never edits the previously published READY generation.
+  for(let i=0;i<ids.length;i+=chunkSize){
+   const result=await db.prepare(INDEX_MEMBER_BULK_STAGE_518)
+    .bind(uid,nextGen,JSON.stringify(ids.slice(i,i+chunkSize))).run();
+   const changed=Number(result?.meta?.changes);
+   if(!Number.isSafeInteger(changed)||changed<0||changed>Math.min(chunkSize,ids.length-i))
     return fail('RETRYABLE_RECOVERY_STAGE',fullReads,writes);
-   writes+=result.reduce((n,x)=>n+Number(x?.meta?.changes||0),0);
+   writes+=changed;
   }
   const tally=await db.prepare(INDEX_COUNT_518).bind(uid,nextGen).first();
   if(Number(tally?.n)!==ids.length)

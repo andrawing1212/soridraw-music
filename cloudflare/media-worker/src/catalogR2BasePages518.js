@@ -37,7 +37,7 @@ export const createR2BasePageReader518=({
    contract('APP518_PAGED_BASE_HEADER_INVALID');
   return {baseKey,baseEtag:obj.etag,baseSize:obj.size};
  };
- const page=async({uid,head,baseEtag,baseSize,offset=0,seen=0,pageSize=256}={})=>{
+ const page=async({uid,head,baseEtag,baseSize,offset=0,seen=0,pageSize=256,includeItems=false}={})=>{
   if(!enabled||!Number.isSafeInteger(offset)||offset<0
     ||!Number.isSafeInteger(seen)||seen<0||seen>head?.baseItemCount
     ||!Number.isSafeInteger(pageSize)||pageSize<1||pageSize>256)
@@ -93,6 +93,9 @@ export const createR2BasePageReader518=({
     contract('APP518_PAGED_PREFIX_TOO_LARGE');
   }
   const ids=[];
+  // For dormant paged canonical compaction only. Normal index paging
+  // remains IDs-only, avoiding extra object retention per invocation.
+  const pageItems=includeItems?[]:null;
   // A byte budget can be exhausted halfway through the next item. Discard
   // the unfinished item and persist ONLY the last complete JSON boundary.
   // The next invocation re-reads that item from the pinned BASE version.
@@ -137,7 +140,7 @@ export const createR2BasePageReader518=({
      contract('APP518_PAGED_FOOTER_CONTRACT');
     if(seen!==head.baseItemCount)
      contract('APP518_PAGED_COUNT_MISMATCH');
-    return {ids,offset:at,seen,done:true,baseEtag,baseSize};
+    return {ids,...(pageItems?{items:pageItems}:{}),offset:at,seen,done:true,baseEtag,baseSize};
    }
    if(b!==123)contract('APP518_PAGED_EXPECT_OBJECT');
    const bytes=[b];
@@ -163,6 +166,7 @@ export const createR2BasePageReader518=({
    // projectItem is only applied to later HEAD delta upserts. Do not drop
    // valid legacy BASE rows based on a second projection.
    ids.push(text(item.id));
+   if(pageItems)pageItems.push(item);
    seen++;
    if(seen>head.baseItemCount)contract('APP518_PAGED_TOO_MANY_ITEMS');
    lastCompleteOffset=at;
@@ -174,10 +178,10 @@ export const createR2BasePageReader518=({
    // a single item that cannot fit in the strict 128KiB page budget.
    if(lastCompleteOffset<=offset)
     contract('APP518_PAGED_ITEM_EXCEEDS_PAGE_LIMIT');
-   return {ids,offset:lastCompleteOffset,seen,done:false,
+   return {ids,...(pageItems?{items:pageItems}:{}),offset:lastCompleteOffset,seen,done:false,
      baseEtag,baseSize,readBytes:MAX_PAGE_SOURCE_BYTES};
   }
-  return {ids,offset:at,seen,done:false,baseEtag,baseSize,
+  return {ids,...(pageItems?{items:pageItems}:{}),offset:at,seen,done:false,baseEtag,baseSize,
     readBytes:at-offset};
  };
  return {enabled,inspect,page};

@@ -3,6 +3,7 @@
 // No browser/scheduler activation in this module. A complete stage is NOT
 // a publishable BASE: HEAD must remain unchanged until a separately verified
 // bounded assembly and conditional publish path exists.
+import {advanceMultipartBase518} from './catalogR2MultipartAssembly518.js';
 import {isValidCatalogJournal,shouldCompactCatalogJournal,createCompactedCatalogJournal,CATALOG_JOURNAL_MAX_BYTES} from './catalogJournal.js';
 
 const validUid=v=>typeof v==='string'&&v.length>0&&v.length<=128&&!/[\\/]/.test(v);
@@ -93,7 +94,7 @@ export const stagePagedCanonicalCompaction518=async({
    // owners exceeding 8 MiB remain HOLD until multipart assembly is audited.
    // A HOLD never changes BASE/HEAD or sends a false D1 ACK.
    const parts=[];
-   let totalBytes=bytes(prefixJSON)+bytes(suffixJSON);
+   let totalBytes=bytes(prefixJSON)+bytes(suffixJSON),oversized=false;
    for(let step=0;step<state.parts;step++){
     const partKey=dir+'chunk-'+String(step).padStart(5,'0')+'.json';
     const part=await env.CATALOG.get(partKey);
@@ -107,25 +108,36 @@ export const stagePagedCanonicalCompaction518=async({
     const list=raw.slice(start+9,-2);
     if(list){
      totalBytes+=bytes(list)+(parts.length?1:0);
-     if(totalBytes>8*1024*1024)
-      return {code:'HOLD_PAGED_ASSEMBLY_OVER_8MIB',d1Writes:0,published:false};
+     if(totalBytes>8*1024*1024){oversized=true;break;}
      parts.push(list);
     }
    }
-   const assembled=prefixJSON+parts.join(',')+suffixJSON;
-   if(bytes(assembled)>8*1024*1024)
-    return {code:'HOLD_PAGED_ASSEMBLY_OVER_8MIB',d1Writes:0,published:false};
-   const put=await env.CATALOG.put(baseKey,assembled,{
-    onlyIf:{etagDoesNotMatch:'*'},
-    httpMetadata:{contentType:'application/json; charset=utf-8',
-     cacheControl:'private, no-store'},
-    customMetadata:{uid,kind:'musicNote',revision:String(expectedRevision),
-     itemCount:String(head.itemCount),sourceEtag:expectedEtag},
-   });
-   if(!put?.etag){
-    dest=await env.CATALOG.head(baseKey);
-    if(!dest)return {code:'RETRYABLE_PAGED_ASSEMBLY_BASE_RACE'};
-   }else dest=put;
+   if(oversized){
+    // R2 rejects unknown-length stream PUTs. A strict uniform 6MiB
+    // multipart upload persists one part per invocation and resumes at
+    // the byte cursor after a crash; publication still requires HEAD CAS.
+    const next=await advanceMultipartBase518({
+     env,uid,dir,revision:expectedRevision,etag:expectedEtag,
+     head,progress:state,readOwnerHead,
+    });
+    if(next.code!=='MULTIPART_BASE_READY')return next;
+    dest=next.dest;
+   }else{
+    const assembled=prefixJSON+parts.join(',')+suffixJSON;
+    if(bytes(assembled)>8*1024*1024)
+     return {code:'HOLD_PAGED_ASSEMBLY_LENGTH',d1Writes:0,published:false};
+    const put=await env.CATALOG.put(baseKey,assembled,{
+     onlyIf:{etagDoesNotMatch:'*'},
+     httpMetadata:{contentType:'application/json; charset=utf-8',
+      cacheControl:'private, no-store'},
+     customMetadata:{uid,kind:'musicNote',revision:String(expectedRevision),
+      itemCount:String(head.itemCount),sourceEtag:expectedEtag},
+    });
+    if(!put?.etag){
+     dest=await env.CATALOG.head(baseKey);
+     if(!dest)return {code:'RETRYABLE_PAGED_ASSEMBLY_BASE_RACE'};
+    }else dest=put;
+   }
   }
   if(dest.customMetadata?.uid!==uid
     ||dest.customMetadata?.kind!=='musicNote'

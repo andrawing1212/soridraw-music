@@ -64,7 +64,10 @@ for(;owner<6;owner++){
 }
 assert.equal(stopped,true,'six 20k owners must not exceed shared account cap');
 assert.ok(owner<6);
-assert.ok(mutated<=80000&&ledger.get(day(time))<=80000);
+assert.ok(mutated*2<=80000&&ledger.get(day(time))<=80000);
+assert.ok(ledger.get(day(time))>=mutated*2,
+ 'membership + idx_music_note_catalog_member_518_generation must be metered');
+assert.ok(mutated<=40000,'one UTC day may not insert 80k indexed members');
 const before=mutated;
 const invalid=createD1BudgetGate518({db:raw});
 const off=createMeteredD1Database518({rawDb:raw,reserveWriteBudget:invalid,clock:()=>time});
@@ -101,5 +104,6 @@ assert.equal(next.acked,1);assert.equal(next.held,0);
 assert.equal(r2Count,1);assert.equal(pending.ack_version_ns,pending.source_version_ns);
 assert.ok((ledger.get(day(time))||0)>0,'new UTC day has fresh budget');
 console.log('APP518_P1_SIX_20K_OWNERS_SHARED_D1_CAP=PASS');
+console.log('APP518_P1_D1_SECONDARY_MEMBER_INDEX_AND_OUTBOX_DUE_INDEX_BUDGETED=PASS');
 console.log('APP518_P1_UNATTESTED_GLOBAL_WRITERS_WRITE_ZERO=PASS');
 console.log('APP518_P1_DAILY_QUOTA_UTC_RETRY_NO_PERMANENT_HOLD=PASS');

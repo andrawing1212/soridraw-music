@@ -44,6 +44,17 @@ export const captureMediaWriterSnapshot518=async({
     versionId:String(x.version_id||''),percentage:Number(x.percentage),
    }));
   const bindings=Array.isArray(settings?.bindings)?settings.bindings:[];
+  // No duplicate/missing/secret-shaped bindings can masquerade as the
+  // canonical switch being absent or as the correct shared R2 bucket.
+  for(const [name,type] of [
+   ['MEDIA','r2_bucket'],['CATALOG','r2_bucket'],
+   ['SORIDRAW_SHARED_CATALOG_V1','plain_text'],
+  ]){
+   const matches=bindings.filter(x=>x?.name===name);
+   if(matches.length!==1||matches[0]?.type!==type)
+    throw Error('HOLD_CLOUDFLARE_AMBIGUOUS_BINDING_'+name);
+  }
+  const canonicalPresent=bindings.some(x=>x?.name==='SORIDRAW_CANONICAL_CATALOG_518');
   const base='https://'+target.script+'.andrawing1212.workers.dev';
   const origin=target.stage==='preview'?'https://preview.soridraw.com'
     :target.stage==='test'?'https://test.soridraw.com'
@@ -57,7 +68,7 @@ export const captureMediaWriterSnapshot518=async({
    stage:target.stage,script:target.script,
    mediaBucket:bucket(bindings,'MEDIA'),catalogBucket:bucket(bindings,'CATALOG'),
    sharedFlag:getValue(bindings,'SORIDRAW_SHARED_CATALOG_V1','plain_text'),
-   canonicalFlag:getValue(bindings,'SORIDRAW_CANONICAL_CATALOG_518','plain_text'),
+   canonicalFlag:canonicalPresent?'PRESENT':null,
    activeVersions:versions,
    health:health?.catalogWriterFence518??null,
   });

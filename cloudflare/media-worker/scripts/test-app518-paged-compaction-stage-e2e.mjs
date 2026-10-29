@@ -63,7 +63,8 @@ const runOwner=async(count)=>{
    baseRevision:String(head.baseRevision),itemCount:String(head.itemCount),
   },
  });
- const input={uid,expectedEtag:obj.etag,expectedRevision:head.headRevision,
+ const initialEtag=obj.etag; // Keep the scalar; Miniflare invalidates old stubs on restart.
+ const input={uid,expectedEtag:initialEtag,expectedRevision:head.headRevision,
   nowMs:20000,readOwnerHead:provider.readOwnerHead,baseReader,env};
  let runs=0,r;
  do{
@@ -81,7 +82,7 @@ const runOwner=async(count)=>{
  assert.equal(r.outputCount,count);
  assert.ok(r.partCount>=Math.floor(count/2048));
  const manifestKey=pre+'compaction518/'+head.headRevision+'-'+
-  obj.etag.replace(/[^A-Za-z0-9]/g,'')+'/progress.json';
+  initialEtag.replace(/[^A-Za-z0-9]/g,'')+'/progress.json';
  const manifest=JSON.parse(await (await bucket.get(manifestKey)).text());
  assert.equal(manifest.outputCount,count);
  assert.equal(manifest.seen,count);
@@ -99,12 +100,12 @@ const runOwner=async(count)=>{
  }
  assert.equal(found.size,count);
  const pub=await provider.readOwnerHead(uid);
- assert.equal(pub.etag,obj.etag,'stage never publishes HEAD');
+ assert.equal(pub.etag,initialEtag,'stage never publishes HEAD');
  assert.equal(pub.head.baseKey,baseKey,'original BASE remains current');
  const published=await stagePagedCanonicalCompaction518(input);
  assert.equal(published.code,'COMPACTED','verified immutable pages must publish via owner HEAD CAS');
  const after=await provider.readOwnerHead(uid);
- assert.notEqual(after.etag,obj.etag);
+ assert.notEqual(after.etag,initialEtag);
  assert.equal(after.head.baseRevision,head.headRevision);
  assert.equal(after.head.itemCount,count);
  const complete=await provider.loadCompleteFencedOwnerR2({

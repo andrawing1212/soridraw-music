@@ -36,7 +36,7 @@ const db={
  },
 };
 const request={db,authenticatedUid:'uid-A',uid:'uid-A',
- mutationId:'mutation-one',intent:'create',favorite:{title:'Song A'},
+ mutationId:'mutation-one',intent:'create',favorite:{title:'Song A',genre:'Indie'},
  serverTimestamp:()=>({firestoreServerTimestamp:true}),releaseApproved:true};
 (async()=>{
  let x=await commit({...request,releaseApproved:false});
@@ -63,6 +63,7 @@ const request={db,authenticatedUid:'uid-A',uid:'uid-A',
  favorite:{title:'Edited'}});
  assert.equal(x.code,'SOURCE_AND_OUTBOX_COMMITTED');assert.equal(writes,6);
  assert.equal(docs.get('favorites/'+id).data.title,'Edited');
+ assert.equal(docs.get('favorites/'+id).data.genre,'Indie','partial edit preserves unrelated song fields');
  x=await commit(request);assert.equal(x.code,'ALREADY_RECORDED_SUPERSEDED');
  x=await commit({...request,intent:'delete',mutationId:'mutation-three',
  documentId:id,favorite:undefined});

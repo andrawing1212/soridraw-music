@@ -216,6 +216,27 @@ export const stagePagedCanonicalCompaction518=async({
  if(finished&&outputCount!==head.itemCount)
   return {code:'HOLD_PAGED_COMPACTION_COUNT_DIVERGENCE',
    expected:head.itemCount,actual:outputCount};
+ // A BASE may terminate exactly at a page boundary. Reading its closing
+ // ']' returns done=true with zero rows. This is an EOF checkpoint, NOT a
+ // new immutable chunk: multipart assembly rejects empty chunks.
+ if(finished&&rows.length===0){
+  if(progress.parts<1||outputCount!==head.itemCount)
+   return {code:'HOLD_PAGED_COMPACTION_EMPTY_FINAL_COUNT',published:false,d1Writes:0};
+  const current=await readOwnerHead(uid);
+  if(current?.etag!==expectedEtag||current.ownerUid!==uid
+    ||current.head?.headRevision!==expectedRevision)
+   return {code:'RETRYABLE_PAGED_COMPACTION_HEAD_MOVED',published:false};
+  const endState={...progress,offset,seen,phase:'staged'};
+  const closed=await env.CATALOG.put(stateKey,JSON.stringify(endState),{
+   onlyIf:obj?{etagMatches:obj.etag}:{etagDoesNotMatch:'*'},
+   customMetadata:{uid,kind:'musicNote',revision:String(expectedRevision)},
+  });
+  return closed?.etag
+   ?{code:'PAGED_COMPACTION_STAGED_AWAIT_ASSEMBLY',
+      inputSeen:seen,outputCount,partCount:progress.parts,
+      d1Writes:0,published:false,pages}
+   :{code:'RETRYABLE_PAGED_COMPACTION_CURSOR_RACE',published:false,d1Writes:0};
+ }
  const chunkKey=dir+'chunk-'+String(progress.parts).padStart(5,'0')+'.json';
  const chunk=JSON.stringify({
   schemaVersion:1,uid,revision:expectedRevision,

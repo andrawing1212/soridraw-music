@@ -9,6 +9,10 @@ import {createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
 import {Miniflare} from 'miniflare';
 import {createApp518ServerBridge} from '../src/catalogServerBridge518.js';
+import {createOwnerR2Provider518} from '../src/catalogR2Provider518.js';
+import {createR2BasePageReader518} from '../src/catalogR2BasePages518.js';
+import {advancePagedOwnerIndex518} from '../src/catalogOwnerPagedIndex518.js';
+import {createD1BudgetGate518} from '../src/catalogD1DailyWriteBudget518.js';
 import {createEmptyCatalogJournal,appendCatalogJournalDelta}
  from '../src/catalogJournal.js';
 import {INDEX_META_READ_518,INDEX_MEMBER_LOOKUP_518}
@@ -148,6 +152,19 @@ const run=async()=>{
   if(out.held){
    const m=await meta();
    const b=await db.prepare('SELECT reserved_rows FROM music_note_catalog_daily_budget_518').first();
+   const probeEnv={CATALOG:bucket,
+    SORIDRAW_CANONICAL_CATALOG_518:'ENABLED_AFTER_SHARED_ROLLOUT'};
+   const provider=createOwnerR2Provider518({env:probeEnv,sharedReleaseFencesVerified:true});
+   const baseReader=createR2BasePageReader518({env:probeEnv,
+    readOwnerHead:provider.readOwnerHead,sharedReleaseFencesVerified:true,
+    projectItem:x=>x});
+   const probe=await advancePagedOwnerIndex518({
+    db,uid,mode:'first',verifiedPendingMutation:true,nowMs:now+tick*60000,
+    readOwnerHead:provider.readOwnerHead,baseReader,projectItem:x=>x,
+    reserveWriteBudget:createD1BudgetGate518({
+     db,allAccountWritersVerified:true,sharedAccountLedgerVerified:true}),
+   });
+   console.error('APP518_LARGE_PAGED_PROBE',JSON.stringify(probe));
    console.error('APP518_LARGE_DIAGNOSTIC',JSON.stringify({
     tick,metaStatus:m?.status,headRevision:m?.indexed_revision,
     dayReserved:b?.reserved_rows,code:out.code,

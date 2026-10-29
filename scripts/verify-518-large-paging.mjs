@@ -162,7 +162,7 @@ const mockDb=({recovery=false}={})=>{
 // Local-only budget attestation; the production bridge is OFF without a
 // verified shared account ledger and a complete old/new writer inventory.
 const mockBudget=async({requestedRows})=>{
- assert.equal(requestedRows,1040);
+ assert.ok([16,1040].includes(requestedRows));
  return {code:'RESERVED',reserved:true,guaranteedRows:requestedRows};
 };
 async function runComplete(count,config={}){

@@ -26,7 +26,7 @@ jobs:
         run: |
           set -euo pipefail
           node <<'NODE'
-          const {createHash}=require('node:crypto');
+          const {createHash}=await import('node:crypto');
           const token=process.env.CF_TOKEN||'';
           const account=process.env.CF_ACCOUNT||'';
           const workers=[

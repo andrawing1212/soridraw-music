@@ -84,6 +84,8 @@ const pendingDb={prepare(sql){return {bind(...args){return {
  async all(){return {results:queuedRow.hold_reason===null&&
    queuedRow.next_attempt_ms<=args[0]?[{...queuedRow}]:[]};},
  async run(){
+  if(sql.includes('music_note_catalog_daily_budget_518'))
+   return {success:true,meta:{changes:1}};
   if(sql.includes('SET hold_reason=?')){
    assert.equal(args[2],uid);
    assert.equal(args[3],documentId);
@@ -204,6 +206,8 @@ function deliveryFixture(ready){
     throw Error('unexpected D1 select: '+sql);
    },
    async run(){
+  if(sql.includes('music_note_catalog_daily_budget_518'))
+   return {success:true,meta:{changes:1}};
     if(sql.includes('SET hold_reason=?')){
      assert.equal(args[2],uid);
      assert.equal(args[3],documentId);

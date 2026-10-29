@@ -60,6 +60,7 @@ export const readApp518EventGuard=async({
   ownerRef(db,documentId).get(),eventRef(db,documentId,eventId).get(),
  ]);
  if(owner.exists)return "HOLD_OWNER_QUARANTINED";
+ let hadRetry=false;
  if(event.exists){
   // Unknown/corrupted status MUST fail closed, never re-enable delivery.
   const data=event.data();
@@ -67,11 +68,12 @@ export const readApp518EventGuard=async({
   if(!Number.isInteger(data.attempts)
     ||data.attempts>=APP518_FIREBASE_RETRY_LIMIT)
     return "HOLD_EVENT_RETRY_LIMIT";
+  hadRetry=true;
  }
  if(nowMs<eventTimeMs-300000
    ||nowMs-eventTimeMs>=APP518_FIREBASE_RETRY_WINDOW_MS)
   return "HOLD_EVENT_RETRY_WINDOW";
- return "EVENT_DELIVERY_ALLOWED";
+ return hadRetry?"EVENT_RETRY_ALLOWED":"EVENT_DELIVERY_ALLOWED";
 };
 
 export const recordApp518EventFailure=async({

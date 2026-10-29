@@ -3,13 +3,14 @@
 // No browser/scheduler activation in this module. A complete stage is NOT
 // a publishable BASE: HEAD must remain unchanged until a separately verified
 // bounded assembly and conditional publish path exists.
-import {isValidCatalogJournal,shouldCompactCatalogJournal} from './catalogJournal.js';
+import {isValidCatalogJournal,shouldCompactCatalogJournal,createCompactedCatalogJournal,CATALOG_JOURNAL_MAX_BYTES} from './catalogJournal.js';
 
 const validUid=v=>typeof v==='string'&&v.length>0&&v.length<=128&&!/[\\/]/.test(v);
 const bytes=v=>new TextEncoder().encode(v).byteLength;
 const safeEt=v=>typeof v==='string'&&/^[A-Za-z0-9"-]{8,128}$/.test(v);
 const changedCount=r=>Number(r?.meta?.changes||0);
-const pageLimit=4;
+const pageLimit=8;
+const maxAssemblyChunks=36; // keeps R2 reads/HEAD CAS inside 50 Free subrequests
 const compactPrefix=(uid,revision,etag)=>
  'catalog/v5/'+encodeURIComponent(uid)+'/musicNote/compaction518/'+
  revision+'-'+etag.replace(/[^A-Za-z0-9]/g,'')+'/';
@@ -75,10 +76,98 @@ export const stagePagedCanonicalCompaction518=async({
   ||!Array.isArray(state.seenChanges)||state.seenChanges.length>400
   ||!['pages','staged'].includes(state.phase)))
   return {code:'HOLD_PAGED_COMPACTION_INVALID_PROGRESS'};
- if(state?.phase==='staged')
-  return {code:'PAGED_COMPACTION_STAGED_AWAIT_ASSEMBLY',
-   partCount:state.parts,itemCount:state.outputCount,d1Writes:0,
-   published:false};
+ if(state?.phase==='staged'){
+  if(state.outputCount!==head.itemCount||state.parts>maxAssemblyChunks
+    ||state.parts<1||state.seen!==head.baseItemCount)
+   return {code:'HOLD_PAGED_COMPACTION_ASSEMBLY_BUDGET',published:false,d1Writes:0};
+  const baseKey=dir+'base-complete.json';
+  // Multipart staging already exists as immutable R2 chunks. Assemble one
+  // bounded streaming PUT (<=36 R2 reads); no 50k-song JS array or D1 scan.
+  let dest=await env.CATALOG.head(baseKey);
+  if(!dest){
+   const encoder=new TextEncoder();
+   const prefixJSON='{"schemaVersion":4,"authority":"server","kind":"musicNote","revision":'+
+    expectedRevision+',"items":[';
+   const suffixJSON='],"itemCount":'+head.itemCount+
+    ',"complete":true,"generatedAtMs":'+head.updatedAtMs+'}';
+   let step=-1,first=true;
+   const stream=new ReadableStream({
+    async pull(controller){
+     if(step===-1){
+      step=0;controller.enqueue(encoder.encode(prefixJSON));return;
+     }
+     if(step===state.parts){
+      step++;controller.enqueue(encoder.encode(suffixJSON));
+      controller.close();return;
+     }
+     const partKey=dir+'chunk-'+String(step).padStart(5,'0')+'.json';
+     const part=await env.CATALOG.get(partKey);
+     if(!part||part.customMetadata?.uid!==uid
+       ||part.customMetadata?.kind!=='musicNote'
+       ||part.customMetadata?.revision!==String(expectedRevision))
+      throw new Error('APP518_PAGED_ASSEMBLY_CHUNK_MISSING_OR_FOREIGN');
+     const raw=await part.text();
+     const start=raw.indexOf('"items":[');
+     if(start<0||!raw.endsWith(']}'))
+      throw new Error('APP518_PAGED_ASSEMBLY_CHUNK_INVALID');
+     const list=raw.slice(start+9,-2);
+     if(list.length){
+      const value=(first?'':',')+list;
+      controller.enqueue(encoder.encode(value));
+      first=false;
+     }
+     step++;
+    },
+   });
+   const put=await env.CATALOG.put(baseKey,stream,{
+    onlyIf:{etagDoesNotMatch:'*'},
+    httpMetadata:{contentType:'application/json; charset=utf-8',
+     cacheControl:'private, no-store'},
+    customMetadata:{uid,kind:'musicNote',revision:String(expectedRevision),
+     itemCount:String(head.itemCount),sourceEtag:expectedEtag},
+   });
+   if(!put?.etag){
+    dest=await env.CATALOG.head(baseKey);
+    if(!dest)return {code:'RETRYABLE_PAGED_ASSEMBLY_BASE_RACE'};
+   }else dest=put;
+  }
+  if(dest.customMetadata?.uid!==uid
+    ||dest.customMetadata?.kind!=='musicNote'
+    ||dest.customMetadata?.sourceEtag!==expectedEtag
+    ||dest.customMetadata?.itemCount!==String(head.itemCount)
+    ||dest.customMetadata?.revision!==String(expectedRevision))
+   return {code:'HOLD_PAGED_ASSEMBLY_BASE_CONTRACT'};
+  const current=await readOwnerHead(uid);
+  if(current?.etag!==expectedEtag||current.ownerUid!==uid
+    ||current.head?.headRevision!==expectedRevision)
+   return {code:'RETRYABLE_PAGED_COMPACTION_HEAD_MOVED'};
+  const nextHead={
+   ...createCompactedCatalogJournal({head,baseKey,now:nowMs}),
+   canonicalCompaction518:{
+    fromEtag:expectedEtag,revision:expectedRevision,
+    itemCount:head.itemCount,
+   },
+  };
+  if(!isValidCatalogJournal(nextHead,'musicNote')
+    ||nextHead.canonicalAuthority518!==true
+    ||bytes(JSON.stringify(nextHead))>CATALOG_JOURNAL_MAX_BYTES)
+   return {code:'DENY_PAGED_COMPACTION_HEAD_CONTRACT'};
+  const saved=await env.CATALOG.put(
+   'catalog/v5/'+encodeURIComponent(uid)+'/musicNote/journal.json',
+   JSON.stringify(nextHead),{
+    onlyIf:{etagMatches:expectedEtag},
+    httpMetadata:{contentType:'application/json; charset=utf-8',
+     cacheControl:'private, no-store'},
+    customMetadata:{uid,kind:'musicNote',
+     baseRevision:String(nextHead.baseRevision),
+     revision:String(nextHead.headRevision),
+     itemCount:String(nextHead.itemCount),deltaCount:'0',
+     authority:'server'},
+   });
+  return saved?.etag
+   ?{code:'COMPACTED',itemCount:head.itemCount,published:true,d1Writes:0}
+   :{code:'RETRYABLE_PAGED_COMPACTION_HEAD_MOVED',published:false};
+ }
  const progress=state||{
   schemaVersion:1,uid,fingerprint:fp,baseKey:base.baseKey,
   baseSize:base.baseSize,offset:0,seen:0,parts:0,
@@ -126,7 +215,7 @@ export const stagePagedCanonicalCompaction518=async({
   outputCount:rows.length,items:rows,
  });
  // A bounded chunk per invocation; never hold a large account in memory.
- if(bytes(chunk)>4*131072+32768)
+ if(bytes(chunk)>8*131072+32768)
   return {code:'HOLD_PAGED_COMPACTION_CHUNK_BYTES'};
  const previous=await env.CATALOG.get(chunkKey);
  if(previous){
@@ -136,7 +225,8 @@ export const stagePagedCanonicalCompaction518=async({
  }else{
   const stored=await env.CATALOG.put(chunkKey,chunk,{
    onlyIf:{etagDoesNotMatch:'*'},
-   customMetadata:{uid,kind:'musicNote',revision:String(expectedRevision)},
+   customMetadata:{uid,kind:'musicNote',revision:String(expectedRevision),
+    count:String(rows.length)},
   });
   if(!stored?.etag){
    const reread=await env.CATALOG.get(chunkKey);

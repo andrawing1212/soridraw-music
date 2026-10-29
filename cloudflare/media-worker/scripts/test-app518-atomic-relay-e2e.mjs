@@ -228,7 +228,9 @@ const run=async()=>{
  assert.equal(compressed.itemCount,0);
  assert.ok(compressed.baseRevision>beforeDeleteIndex.indexed_revision);
  await mf.dispose();await init();
- queued=await refOutbox();assert.equal(queued.ack_version_ns,null);
+ queued=await refOutbox();
+ assert.notEqual(queued.ack_version_ns,queued.source_version_ns,
+  'new delete must remain pending even with old saved-version ACK');
  const removed=await drain(now+120000);
  assert.equal(removed.acked,1);
  assert.equal(casPuts,2,'compaction+replay must not repeat the R2 mutation');

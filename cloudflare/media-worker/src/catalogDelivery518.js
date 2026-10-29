@@ -8,13 +8,14 @@ import {CatalogFirebaseSourceHold518} from './catalogFirebaseFetcher518.js';
 import {
  getDueFavoriteChanges518,enqueueVerifiedFavorite518,
  acknowledgeExactFavorite518,scheduleFailedFavorite518,holdExactFavorite518,
- deferPagedFavorite518,
+ deferPagedFavorite518,deferDailyBudgetFavorite518,
 } from './catalogD1Outbox518.js';
 const text=x=>typeof x==='string'?x.trim():'';
 const isState=x=>x==='saved'||x==='removed';
 // Only demonstrably non-retryable contract errors get a durable HOLD at
 // first failure. Unknown IO/timeout errors use bounded retries before HOLD.
 export const permanentDeliveryHoldReason518=code=>{
+ if(code?.includes('HOLD_D1_DAILY_QUOTA'))return null;
  if(typeof code!=='string')return null;
  // Compaction's HOLD_RECOVERY_HEAD_MOVED means "do not publish this
  // snapshot", NOT "permanently stop this exact outbox version".
@@ -46,6 +47,17 @@ export const deliverDueCanonicalFavorites518=async({
  const fetched=await getDueFavoriteChanges518({db,nowMs,limit:maxItems});
  if(fetched.code!=='OK')return {code:'DENY_DUE_QUEUE',attempted:0,acked:0,retry:0,drift:0};
  const result={code:'OK',attempted:0,acked:0,retry:0,held:0,drift:0};
+ const pauseForTomorrow=async({uid,id,version})=>{
+  // No permanent HOLD/attempt increment for a daily quota. The tagged
+  // control-lane UPDATE retains exact pending version until tomorrow UTC.
+  try{
+   const out=await deferDailyBudgetFavorite518({
+    db,uid,documentId:id,sourceVersionNs:version,nowMs,
+   });
+   if(out.code==='DAILY_BUDGET_DEFERRED'){result.retry++;return true;}
+   return out.code==='STALE_BUDGET_DEFER';
+  }catch{return false;}
+ };
  // Sequential by design in source prototype; final scheduler can apply
  // bounded concurrency once actual subrequest/CPU costs are measured.
  for(const row of fetched.rows){
@@ -106,6 +118,11 @@ export const deliverDueCanonicalFavorites518=async({
        ||delivered.casVerified!==true
        ||delivered.sourceVersionNs!==version
        ||!['APPLIED','ALREADY_APPLIED'].includes(delivered.code)){
+       if(String(delivered?.code||'').includes('HOLD_D1_DAILY_QUOTA')){
+        if(!await pauseForTomorrow({uid,id,version}))
+         result.code='RETRYABLE_D1_BUDGET_PAUSE_UNSAVED';
+        continue;
+       }
        const permanent=permanentDeliveryHoldReason518(delivered?.code);
        if(permanent){
          const held=await holdExactFavorite518({
@@ -126,6 +143,11 @@ export const deliverDueCanonicalFavorites518=async({
      if(ack.code==='ACKED')result.acked++;
      // If a newer D1 row superseded the ACK, its task stays pending.
    }catch(error){
+     if(String(error?.code||'').includes('HOLD_D1_DAILY_QUOTA')){
+      if(!await pauseForTomorrow({uid,id,version}))
+       result.code='RETRYABLE_D1_BUDGET_PAUSE_UNSAVED';
+      continue;
+     }
      // Also protect direct R2 provider calls (e.g. a READY index writer)
      // from downgrading foreign-owner/corrupt R2 authority to transient IO.
      if(error instanceof CatalogFirebaseSourceHold518){

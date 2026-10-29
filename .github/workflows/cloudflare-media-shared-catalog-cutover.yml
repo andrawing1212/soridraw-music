@@ -212,16 +212,23 @@ jobs:
             check_legacy() {
               worker="$1"; base="$2"; stage="$3"
               settled=false
+              approved_var="${stage}_AUDITED_BEFORE"
+              expected_version="${!approved_var:-}"
               for attempt in $(seq 1 12); do
                 settings="$(curl -fsS "${auth[@]}" "$API/workers/scripts/$worker/settings" 2>/dev/null || true)"
-                flag="$(printf '%s' "$settings" | jq -r '.result.bindings[]? | select(.type=="plain_text" and .name=="SORIDRAW_SHARED_CATALOG_V1") | (.text // .value)' 2>/dev/null)"
+                deployments="$(curl -fsS "${auth[@]}" "$API/workers/scripts/$worker/deployments" 2>/dev/null || true)"
                 health="$(curl -fsS --max-time 15 -H 'Cache-Control: no-cache, no-store' "$base/health?cutover_rollback=$attempt" 2>/dev/null || true)"
-                mode="$(printf '%s' "$health" | jq -r '.catalogAuthorityMode // empty' 2>/dev/null)"
-                canonical="$(printf '%s' "$settings" | jq -r '[.result.bindings[]? | select(.name=="SORIDRAW_CANONICAL_CATALOG_518")] | length' 2>/dev/null)"
-                marker="$(printf '%s' "$health" | jq -r '.catalogWriterFence518.sourceInstalled // false' 2>/dev/null)"
-                active="$(curl -fsS "${auth[@]}" "$API/workers/scripts/$worker/deployments" 2>/dev/null | jq -r '.result.deployments[0].versions | max_by(.percentage) | select(.percentage>=99.99) | .version_id' 2>/dev/null)"
-                approved_var="${stage}_AUDITED_BEFORE"
-                if [ "$flag" = '1' ] && [ "$mode" = 'shared-catalog' ] && [ "$canonical" = '0' ] && [ "$marker" = 'true' ] && [ "$active" = "${!approved_var}" ]; then settled=true; break; fi
+                # Check the complete Cloudflare contract for the restored
+                # immutable version: exactly one 100% deployment, unique
+                # MEDIA/CATALOG/shared bindings, canonical absent by ANY
+                # binding type, health R2 + the full app518 fence contract.
+                # Malformed/missing API responses never count as PASS.
+                if jq -nc --argjson settings "$settings" --argjson deployments "$deployments" --argjson health "$health" \
+                  '{settings:$settings,deployments:$deployments,health:$health}' |
+                  node scripts/verify-518-cutover-signed-evidence.mjs --rollback-check "$stage" "$expected_version"; then
+                  settled=true
+                  break
+                fi
                 sleep 2
               done
               [ "$settled" = true ] || rollback_failed=1

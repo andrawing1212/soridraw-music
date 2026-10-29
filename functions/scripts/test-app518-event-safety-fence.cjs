@@ -46,7 +46,7 @@ for(let n=1;n<=APP518_FIREBASE_RETRY_LIMIT;n++){
  assert.equal(failed.attempts,n);
  assert.equal(failed.retry,n<APP518_FIREBASE_RETRY_LIMIT);
  if(n<APP518_FIREBASE_RETRY_LIMIT)
-  assert.equal(await readApp518EventGuard(args),'EVENT_DELIVERY_ALLOWED');
+  assert.equal(await readApp518EventGuard(args),'EVENT_RETRY_ALLOWED');
 }
 assert.equal(stats.writes,8);
 assert.equal(await readApp518EventGuard(args),'HOLD_EVENT_ALREADY_TERMINAL');

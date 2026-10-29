@@ -4516,11 +4516,17 @@ export const app518FavoriteCatalogChanged=functions
       if(before?.uid&&after?.uid&&before.uid!==after.uid){
         // Persist a document-ID fence before acknowledging this conflict.
         // Future same-UID updates and exact Worker reads cannot bypass it.
-        await recordApp518OwnerCollision({
-          db,documentId:id,beforeUid:String(before.uid),
-          afterUid:String(after.uid),eventId,nowMs,
-        });
-        console.error("APP518_OWNER_UID_CHANGE_QUARANTINED");
+        try{
+          await recordApp518OwnerCollision({
+            db,documentId:id,beforeUid:String(before.uid),
+            afterUid:String(after.uid),eventId,nowMs,
+          });
+          console.error("APP518_OWNER_UID_CHANGE_QUARANTINED");
+        }catch{
+          // Firestore unavailable: no remote mutation or seven-day retries.
+          // This needs an operator check before any release activation.
+          console.error("APP518_OWNER_QUARANTINE_WRITE_FAILED_STOPPED");
+        }
       }else console.warn("APP518_EVENT_DENIED_OWNER_OR_ID");
       return;
     }
@@ -4537,7 +4543,7 @@ export const app518FavoriteCatalogChanged=functions
       console.error("APP518_SAFETY_FENCE_UNAVAILABLE_STOPPED");
       return;
     }
-    if(gate!=="EVENT_DELIVERY_ALLOWED"){
+    if(gate!=="EVENT_DELIVERY_ALLOWED"&&gate!=="EVENT_RETRY_ALLOWED"){
       if(gate==="HOLD_EVENT_RETRY_WINDOW"){
         try{
           await recordApp518EventFailure({
@@ -4567,8 +4573,9 @@ export const app518FavoriteCatalogChanged=functions
         console.warn("APP518_EVENT_PERSISTENT_TERMINAL_HOLD",result.code);
         return;
       }
-      // Only a previously failed delivery needs a settlement W1.
-      await resolveApp518EventFailure({db,documentId:id,eventId,nowMs});
+      // Fresh success: no failure-ledger settlement read or write.
+      if(gate==="EVENT_RETRY_ALLOWED")
+        await resolveApp518EventFailure({db,documentId:id,eventId,nowMs});
     }catch(error){
       // Firebase's failurePolicy retries for up to seven days. Persist a
       // per-event limit of eight total failed attempts AND a one-hour cap;

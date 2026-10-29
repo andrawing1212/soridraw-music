@@ -41,6 +41,16 @@ export const INDEX_META_ADVANCE_GUARDED_518=[
  " AND head_etag=? AND expected_count=? AND status='ready'",
 ].join(' ');
 
+// Same-revision compaction changes only the HEAD ETag, not membership.
+ // Only a verified R2 HEAD with a matching immutable previous ETag may
+ // advance D1; a legacy same-revision overwrite must remain HOLD.
+export const INDEX_META_ACCEPT_CANONICAL_COMPACTION_518=[
+ 'UPDATE music_note_catalog_index_meta_518',
+ 'SET head_etag=?,checked_at_ms=?',
+ "WHERE owner_uid=? AND generation=? AND indexed_revision=?",
+ "AND expected_count=? AND head_etag=? AND status='ready'",
+].join(' ');
+
 const parseMutation=delta=>{
  const m=txt(delta?.mutationId);
  if(!m.startsWith(marker))return null;
@@ -82,6 +92,26 @@ export const reconcileIndexedHead518=async({
   if(head.headRevision===meta.indexed_revision
    &&head.itemCount===meta.expected_count&&etag===meta.head_etag)
    return reject('ALREADY_INDEXED',headReads);
+  // A completed canonical BASE compaction preserves the exact membership,
+  // but changes ETag without changing revision. Recover after an ACK loss
+  // by accepting only its R2-signed old ETag and identical item count.
+  if(head.headRevision===meta.indexed_revision
+    &&head.itemCount===meta.expected_count
+    &&etag!==meta.head_etag
+    &&head.baseRevision===head.headRevision
+    &&Array.isArray(head.deltas)&&head.deltas.length===0
+    &&head.canonicalCompaction518?.fromEtag===meta.head_etag
+    &&head.canonicalCompaction518?.revision===meta.indexed_revision
+    &&head.canonicalCompaction518?.itemCount===meta.expected_count){
+   const updated=await db.prepare(INDEX_META_ACCEPT_CANONICAL_COMPACTION_518)
+    .bind(etag,nowMs,uid,meta.generation,meta.indexed_revision,
+      meta.expected_count,meta.head_etag).run();
+   return Number(updated?.meta?.changes||0)===1
+    ?{code:'INDEX_ADVANCED',headReads,d1Writes:1,
+      itemCount:head.itemCount,revision:head.headRevision,
+      changedMembershipRows:0,deltaCount:0}
+    :reject('RETRYABLE_CONCURRENT_INDEX_ADVANCE',headReads);
+  }
   if(head.headRevision<=meta.indexed_revision
    ||head.baseRevision>meta.indexed_revision
    ||!Array.isArray(head.deltas)

@@ -12,6 +12,7 @@ import {stageFirstChangedOwnerIndex518,INDEX_META_READ_518} from './catalogFirst
 import {createR2BasePageReader518} from './catalogR2BasePages518.js';
 import {advancePagedOwnerIndex518} from './catalogOwnerPagedIndex518.js';
 import {applyIndexedCanonicalR2Delta518} from './catalogIndexedWriter518.js';
+import {createD1BudgetGate518} from './catalogD1DailyWriteBudget518.js';
 
 const deny=code=>({code,accepted:false});
 const validItem=source=>source&&source.verifiedByServer===true
@@ -26,6 +27,16 @@ export const createApp518ServerBridge=({
  const r2=createOwnerR2Provider518({env,sharedReleaseFencesVerified});
  const baseReader=createR2BasePageReader518({
   env,readOwnerHead:r2.readOwnerHead,sharedReleaseFencesVerified,projectItem,
+ });
+ // A shared R2 fence alone cannot prove a shared *account-wide* D1
+ // meter. All old/new writers across PREVIEW/TEST/PRODUCTION and other D1
+ // databases must be certified in the release manifest before paging.
+ const reserveWriteBudget=createD1BudgetGate518({
+  db,
+  allAccountWritersVerified:sharedReleaseFencesVerified===true&&
+   env?.SORIDRAW_D1_ALL_ACCOUNT_WRITERS_518==='VERIFIED',
+  sharedAccountLedgerVerified:sharedReleaseFencesVerified===true&&
+   env?.SORIDRAW_D1_SHARED_ACCOUNT_LEDGER_518==='VERIFIED',
  });
  const enabled=Boolean(r2.enabled&&db?.prepare&&db?.batch
    &&typeof readExactCanonical==='function'
@@ -97,6 +108,7 @@ export const createApp518ServerBridge=({
     const staged=usePaging?await advancePagedOwnerIndex518({
      db,uid,mode:'first',verifiedPendingMutation:true,nowMs,
      readOwnerHead:r2.readOwnerHead,baseReader,projectItem,
+     reserveWriteBudget,
     }):await stageFirstChangedOwnerIndex518({
      db,uid,verifiedMutation:true,nowMs,
      loadMaterializedR2Once:async account=>
@@ -126,6 +138,7 @@ export const createApp518ServerBridge=({
      pagedRecovery:async()=>advancePagedOwnerIndex518({
       db,uid,mode:'recovery',verifiedPendingMutation:true,nowMs,
       readOwnerHead:r2.readOwnerHead,baseReader,projectItem,
+      reserveWriteBudget,
      }),
     });
    },

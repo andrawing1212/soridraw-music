@@ -35,7 +35,7 @@ const runOwner=async(count)=>{
  const uid='local-'+count,pre=path(uid),baseKey=pre+'base-1.json';
  const rows=Array.from({length:count},(_,i)=>({
   id:'song-'+i,uid,title:'Preserve '+i,
-  ...(count===50001?{largeMetadata:'한글-'.repeat(30)}:{}),
+  ...(count>=49152?{largeMetadata:'한글-'.repeat(30)}:{}),
  }));
  const original=JSON.stringify({
   schemaVersion:4,authority:'server',kind:'musicNote',
@@ -43,7 +43,7 @@ const runOwner=async(count)=>{
  });
  const originalBytes=new TextEncoder().encode(original).byteLength;
  assert.ok(originalBytes<24*1024*1024);
- if(count===50001)assert.ok(originalBytes>8*1024*1024,'exercise genuine multipart');
+ if(count>=49152)assert.ok(originalBytes>8*1024*1024,'exercise genuine multipart');
  await bucket.put(baseKey,original,{customMetadata:{uid,kind:'musicNote'}});
  let head={...createEmptyCatalogJournal({
   kind:'musicNote',baseKey,baseRevision:1,itemCount:count,now:1000,
@@ -116,13 +116,13 @@ const runOwner=async(count)=>{
   assert.equal(published.d1Writes,0);
   multipartTicks++;
   assert.ok(multipartTicks<20,'bounded multipart must finish');
-  if(count===50001&&multipartTicks===2){
+  if(count>=49152&&multipartTicks===2){
    await mf.dispose();env=await setup();
    input.env=env;input.readOwnerHead=provider.readOwnerHead;
    input.baseReader=baseReader;
   }
  }while(true);
- if(count===50001)assert.ok(multipartTicks>=3,'multipart was actually used');
+ if(count>=49152)assert.ok(multipartTicks>=3,'multipart was actually used');
  const after=await provider.readOwnerHead(uid);
  assert.notEqual(after.etag,initialEtag);
  assert.equal(after.head.baseRevision,head.headRevision);
@@ -137,11 +137,11 @@ const runOwner=async(count)=>{
  console.log('APP518_PAGED_R2_'+count+'_PUBLISHED_ETAG_CAS_AND_FULL_DATA=PASS');
  console.log('APP518_PAGED_R2_'+count+'_ALL_IDS_PRESERVED_NO_DUPLICATES=PASS');
  console.log('APP518_PAGED_R2_'+count+'_RESTART_AND_IMMUTABLE_STAGE=PASS');
- if(count===50001)console.log('APP518_R2_MULTIPART_OVER_8MIB_RESTART_AND_CAS=PASS');
+ if(count>=49152)console.log('APP518_R2_MULTIPART_'+count+'_OVER_8MIB_RESTART_AND_CAS=PASS');
  await mf.dispose();mf=null;
 };
 (async()=>{
- for(const count of [20001,50001])await runOwner(count);
+ for(const count of [20001,49152,50001])await runOwner(count);
  console.log('APP518_PAGED_R2_20001_50001_NO_D1_WRITES_NO_HEAD_CHANGE=PASS');
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(async()=>{
  try{await mf?.dispose()}catch{}

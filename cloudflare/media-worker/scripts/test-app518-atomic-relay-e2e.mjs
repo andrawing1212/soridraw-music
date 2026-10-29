@@ -244,6 +244,40 @@ const run=async()=>{
  assert.equal((await fs.collection('favorites').doc(id).get()).exists,false);
  const already=await drain();
  assert.equal(already.attempted,0);
+ // 403 real Firebase Admin transactions + actual HMAC/D1/R2 Indexed Writer
+ // changes. No test-created compaction here: the writer must trigger it.
+ let prevMutation='e2e-delete-2',compactions=0;
+ for(let n=0;n<403;n++){
+  const mutationId='e2e-auto-'+n;
+  const intent=n===0?'restore':'save';
+  const saved=await commit(sourceFields(intent,mutationId,prevMutation,
+    {title:'Auto compaction '+n,saved:true}));
+  assert.equal(saved.code,'SOURCE_AND_OUTBOX_COMMITTED','atomic stress source '+n);
+  const queued=await producer(mutationId);
+  assert.equal(queued.code,'ENQUEUED_NOT_R2_ACK','stress relay '+n);
+  const result=await drain(now+120000+n);
+  assert.equal(result.acked,1,'stress write '+n+' '+JSON.stringify(result));
+  const pending=await refOutbox();
+  assert.equal(pending.ack_version_ns,pending.source_version_ns);
+  prevMutation=mutationId;
+ }
+ const autoHead=JSON.parse(await (await r2.get(journalKey)).text());
+ assert.ok(autoHead.baseRevision>compressed.headRevision,
+  'real Indexed Writer must compact automatically, no manual compression');
+ assert.ok(autoHead.deltas.length<200,'journal has not stalled at 400');
+ assert.equal(autoHead.itemCount,1);
+ assert.equal(await indexedPresent(),true);
+ const finalMutation='e2e-auto-delete-404';
+ const finalDelete=await commit(sourceFields('delete',finalMutation,prevMutation));
+ assert.equal(finalDelete.code,'SOURCE_AND_OUTBOX_COMMITTED');
+ assert.equal((await producer(finalMutation)).code,'ENQUEUED_NOT_R2_ACK');
+ const last=await drain(now+140000);
+ assert.equal(last.acked,1,'final hard delete after 403 mutations');
+ assert.equal(await indexedPresent(),false);
+ const finalHead=JSON.parse(await (await r2.get(journalKey)).text());
+ assert.equal(finalHead.itemCount,0);
+ assert.equal((await fs.collection('favorites').doc(id).get()).exists,false);
+ console.log('APP518_LOCAL_E2E_AUTOMATIC_COMPACTION_403_CHANGES_AND_FINAL_DELETE=PASS');
  console.log('APP518_LOCAL_E2E_REAL_FIRESTORE_ADMIN_ATOMIC_SOURCE=PASS');
  console.log('APP518_LOCAL_E2E_REAL_MINIFLARE_D1_HMAC_INGEST=PASS');
  console.log('APP518_LOCAL_E2E_ACTUAL_INDEXED_WRITER_R2_ETAG_CAS=PASS');

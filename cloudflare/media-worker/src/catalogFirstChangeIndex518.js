@@ -234,7 +234,8 @@ export const stageFirstChangedOwnerIndex518=async({
      indexedRevision:head.headRevision,expectedCount:head.itemCount,
      headEtag:head.etag,r2FullReads:fullReads,d1RowsWritten:writes};
  }catch(error){
-   return {code:error instanceof CatalogR2ContractError518
+   return {code:error?.code?.startsWith('HOLD_D1_')?error.code:
+   error instanceof CatalogR2ContractError518
      ?'DENY_R2_OWNER_OR_SCHEMA_CONTRACT':'RETRYABLE_INDEX_IO_ERROR',
      complete:false,r2FullReads:fullReads,d1RowsWritten:writes};
  }

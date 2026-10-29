@@ -112,6 +112,15 @@ assert.equal(result.code,'RETRYABLE_INDEX_RECOVERY_IO');
 assert.equal(ctx.meta.indexed_revision,100);
 assert.equal(ctx.calls.writes,0);
 result=await go(ctx);assert.equal(result.code,'INDEX_ADVANCED');
+// Independent R2 tail exists, but D1's metered batch rejects the day.
+// Preserve the exact quota code instead of retrying R2 on every drain.
+ctx=makeDb();
+const quotaError=Object.assign(new Error('DAILY_QUOTA'),{code:'HOLD_D1_DAILY_QUOTA'});
+result=await go(ctx,{db:{...ctx.db,batch:async()=>{throw quotaError;}}});
+assert.equal(result.code,'HOLD_D1_DAILY_QUOTA');
+assert.equal(ctx.meta.indexed_revision,100);
+assert.equal(ctx.calls.writes,0);
+console.log('APP518_INDEX_REPLAY_DAILY_QUOTA_PRESERVED_NO_FALSE_ACK=PASS');
 ctx=makeDb();ctx.setConcurrent();
 result=await go(ctx);
 assert.equal(result.code,'RETRYABLE_CONCURRENT_INDEX_ADVANCE');

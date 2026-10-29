@@ -112,7 +112,7 @@ const run=async()=>{
  }));
  const base=JSON.stringify({
   schemaVersion:4,authority:'server',kind:'musicNote',revision:1,
-  itemCount:rows.length,items:rows,complete:true,generatedAtMs:1000,
+  items:rows,itemCount:rows.length,complete:true,generatedAtMs:1000,
  });
  assert.ok(new TextEncoder().encode(base).length>8*1024*1024);
  assert.ok(new TextEncoder().encode(base).length<24*1024*1024);

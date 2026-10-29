@@ -187,8 +187,20 @@ jobs:
             for stage in production test preview; do
               prefix="$(printf '%s' "$stage" | tr '[:lower:]' '[:upper:]')"
               before_var="${prefix}_BEFORE"
+              uploaded_var="${prefix}_UPLOADED"
               before="${!before_var:-}"
-              [ -n "$before" ] || { rollback_failed=1; continue; }
+              uploaded="${!uploaded_var:-}"
+              [ -n "$before" ] && [ -n "$uploaded" ] || { rollback_failed=1; continue; }
+              case "$stage" in preview) worker=soridraw-media-preview;; test) worker=soridraw-media-test;; production) worker=soridraw-media;; esac
+              # Never overwrite an unrelated active version installed by an
+              # external actor during partial cutover. No optimistic rollback.
+              live="$(curl -fsS "${auth[@]}" "$API/workers/scripts/$worker/deployments" 2>/dev/null | jq -r '.result.deployments[0].versions | max_by(.percentage) | select(.percentage>=99.99) | .version_id' 2>/dev/null)"
+              if [ "$live" = "$before" ]; then continue; fi
+              if [ "$live" != "$uploaded" ]; then
+                echo "::error::CUTOVER_UNKNOWN_ACTIVE_VERSION_${stage}_MANUAL_HOLD"
+                rollback_failed=1
+                continue
+              fi
               RELEASE_MEDIA_WORKER_VERSION="$before" node .deploy/release-media-worker-runtime.mjs "$stage" restore || rollback_failed=1
             done
 

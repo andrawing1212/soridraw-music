@@ -171,7 +171,7 @@ jobs:
             --project demo-app518-atomic \
             --config "$RUNNER_TEMP/app518-emulator.json" \
             --only firestore \
-            "node functions/scripts/test-app518-firestore-emulator.cjs write && node functions/scripts/test-app518-firestore-emulator.cjs verify && node cloudflare/media-worker/scripts/test-app518-atomic-relay-e2e.mjs && node cloudflare/media-worker/scripts/test-app518-large-owner-atomic-e2e.mjs"
+            "node functions/scripts/test-app518-firestore-emulator.cjs write && node functions/scripts/test-app518-firestore-emulator.cjs verify && node cloudflare/media-worker/scripts/test-app518-large-owner-atomic-e2e.mjs && node cloudflare/media-worker/scripts/test-app518-atomic-relay-e2e.mjs"
       - name: Protect existing next-song, publication, Music Note and local-first behaviors
         run: |
           node scripts/verify-204-explore-next-song-parity.mjs

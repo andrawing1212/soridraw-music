@@ -8,6 +8,12 @@ export class CatalogD1BudgetError518 extends Error {
  constructor(code){super(code);this.code=code;this.name='CatalogD1BudgetError518';}
 }
 const mutation=sql=>/^(?:\s*\/\*[^]*?\*\/\s*)*(INSERT|UPDATE|DELETE|REPLACE)\b/i.test(sql);
+// D1 rows_written counts secondary index changes too. Member has one
+// generation index (base row + index = 2); outbox has a partial due index,
+// whose UPDATE can remove and insert entries (base + 2 = 3).
+// Unknown app518 mutation targets use 3 rows per logical change.
+const billedPerRow=sql=>
+ /\\bmusic_note_catalog_member_518\\b/i.test(sql)?2:3;
 const quantity=(sql,args)=>{
  if(!mutation(sql))return 0;
  // In-app JSON1 bulk member INSERT/DELETE is charged by affected rows,
@@ -24,7 +30,7 @@ const quantity=(sql,args)=>{
   }
   return Math.max(1,max)*billedPerRow(sql);
  }
- return 1;
+ return billedPerRow(sql);
 };
 export const createMeteredD1Database518=({rawDb,reserveWriteBudget,clock=()=>Date.now()}={})=>{
  if(!rawDb?.prepare||!rawDb?.batch||typeof reserveWriteBudget!=='function')

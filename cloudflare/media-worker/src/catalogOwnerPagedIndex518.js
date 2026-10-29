@@ -87,6 +87,7 @@ const trusted=(s,uid)=>s?.verifiedByServer===true&&s.ownerUid===uid
 const changed=r=>Number(r?.meta?.changes||0);
 export const advancePagedOwnerIndex518=async({
  db,uid,mode,verifiedPendingMutation,nowMs,readOwnerHead,baseReader,projectItem,
+ reserveWriteBudget,
 }={})=>{
  if(!db?.prepare||!db?.batch||!uidValid(uid)||!modeValid(mode)
   ||verifiedPendingMutation!==true||!Number.isSafeInteger(nowMs)||nowMs<0
@@ -156,6 +157,14 @@ export const advancePagedOwnerIndex518=async({
     writes++;
    }
   }
+  // 4*256 inserts plus cursor/meta/delta writes per bounded invocation.
+  // Reserve BEFORE the first actual D1 write, across all owners, in the
+  // account-wide budget. Old/unmetered writers invalidate attestation.
+  if(typeof reserveWriteBudget!=='function')
+   return failure('HOLD_D1_DAILY_BUDGET_UNVERIFIED');
+  const budget=await reserveWriteBudget({nowMs,requestedRows:1040});
+  if(budget?.reserved!==true)
+   return failure(budget?.code||'HOLD_D1_DAILY_BUDGET_UNVERIFIED');
   previous=await db.prepare(INDEX_META_READ_518).bind(uid).first();
   if(mode==='first'&&(previous?.status!=='building'
     ||previous.generation!==gen||previous.head_etag!==etag))

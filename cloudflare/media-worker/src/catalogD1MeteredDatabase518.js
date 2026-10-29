@@ -26,14 +26,14 @@ const quantity=(sql,args)=>{
  }
  return 1;
 };
-export const createMeteredD1Database518=({rawDb,reserveWriteBudget}={})=>{
+export const createMeteredD1Database518=({rawDb,reserveWriteBudget,clock=()=>Date.now()}={})=>{
  if(!rawDb?.prepare||!rawDb?.batch||typeof reserveWriteBudget!=='function')
   return null;
  const reserve=async(n,purpose='normal')=>{
   if(!n)return;
   if(!Number.isSafeInteger(n)||n<0||n>2048)
    throw new CatalogD1BudgetError518('HOLD_D1_INVOCATION_WRITE_LIMIT');
-  const receipt=await reserveWriteBudget({requestedRows:n,purpose});
+  const receipt=await reserveWriteBudget({nowMs:clock(),requestedRows:n,purpose});
   if(receipt?.reserved!==true)
    throw new CatalogD1BudgetError518(receipt?.code||'HOLD_D1_GLOBAL_WRITERS_UNVERIFIED');
  };

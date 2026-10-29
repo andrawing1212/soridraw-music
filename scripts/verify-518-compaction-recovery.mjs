@@ -122,6 +122,19 @@ const before=t.counters().writes;
 assert.equal((await t.run()).code,'DENY_NOT_A_COMPACTION_GAP');
 assert.equal(t.counters().writes,before,'repeating recovery must be W0');
 
+// A D1 limit after the R2 compaction snapshot was read must preserve
+// the quota code so delivery can defer the exact source to tomorrow UTC.
+t=make();
+const originalPrepare=t.db.prepare.bind(t.db);
+const exceeded=Object.assign(new Error('DAILY_QUOTA'),{code:'HOLD_D1_DAILY_QUOTA'});
+r=await t.run({db:{...t.db,prepare(sql){
+ if(sql.includes('SELECT ?, ?, value FROM json_each(?)'))
+  return {bind(){return {run:async()=>{throw exceeded;}}}};
+ return originalPrepare(sql);
+}}});
+assert.equal(r.code,'HOLD_D1_DAILY_QUOTA');
+assert.equal(t.meta.generation,oldGen,'old READY index remains untouched');
+console.log('APP518_COMPACTION_RECOVERY_DAILY_QUOTA_PRESERVED=PASS');
 t=make();t.failOnce();
 assert.equal((await t.run()).code,'RETRYABLE_RECOVERY_IO');
 assert.equal(t.meta.generation,oldGen,'old ready still visible');

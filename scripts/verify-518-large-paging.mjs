@@ -159,6 +159,12 @@ const mockDb=({recovery=false}={})=>{
   markOutage(){failBatch=true;},resetCalls(){maxCalls=Math.max(maxCalls,calls);calls=0;},
   calls:()=>calls,maxCalls:()=>Math.max(maxCalls,calls),set};
 };
+// Local-only budget attestation; the production bridge is OFF without a
+// verified shared account ledger and a complete old/new writer inventory.
+const mockBudget=async({requestedRows})=>{
+ assert.equal(requestedRows,1040);
+ return {code:'RESERVED',reserved:true,guaranteedRows:requestedRows};
+};
 async function runComplete(count,config={}){
  const f=mkFixture(count,config),store=mockDb({recovery:config.recovery});
  let rounds=0,paged=0;
@@ -168,6 +174,7 @@ async function runComplete(count,config={}){
    db:store.db,uid,mode:config.recovery?'recovery':'first',
    verifiedPendingMutation:true,nowMs:100000+rounds*10000,
    readOwnerHead:f.state,baseReader:f.reader,projectItem:item=>item,
+   reserveWriteBudget:mockBudget,
   });
   assert.ok(store.calls()<=50,'Free D1 invocation budget');
   assert.ok(!r.code.startsWith('DENY_')&&!r.code.startsWith('HOLD_'),r.code);
@@ -194,6 +201,7 @@ async function runComplete(count,config={}){
   db:store.db,uid,mode:config.recovery?'first':'first',
   verifiedPendingMutation:true,nowMs:900000,
   readOwnerHead:f.state,baseReader:f.reader,projectItem:item=>item,
+   reserveWriteBudget:mockBudget,
  });
  assert.equal(repeat.code,'READY_REQUIRES_HEAD_CAS');
  return {rounds,store,f};
@@ -210,12 +218,14 @@ const interrupted=mkFixture(20001),db=mockDb();
 let first=await advancePagedOwnerIndex518({
  db:db.db,uid,mode:'first',verifiedPendingMutation:true,nowMs:100,
  readOwnerHead:interrupted.state,baseReader:interrupted.reader,projectItem:x=>x,
+ reserveWriteBudget:mockBudget,
 });
 assert.equal(first.code,'PAGING_IN_PROGRESS');
 db.markOutage();
 let fail=await advancePagedOwnerIndex518({
  db:db.db,uid,mode:'first',verifiedPendingMutation:true,nowMs:200,
  readOwnerHead:interrupted.state,baseReader:interrupted.reader,projectItem:x=>x,
+ reserveWriteBudget:mockBudget,
 });
 assert.equal(fail.code,'RETRYABLE_PAGED_IO');
 assert.equal(db.meta.status,'building');
@@ -223,6 +233,7 @@ const countBefore=db.set(uid,100).size;
 first=await advancePagedOwnerIndex518({
  db:db.db,uid,mode:'first',verifiedPendingMutation:true,nowMs:300,
  readOwnerHead:interrupted.state,baseReader:interrupted.reader,projectItem:x=>x,
+ reserveWriteBudget:mockBudget,
 });
 assert.equal(first.code,'PAGING_IN_PROGRESS');
 assert.ok(db.set(uid,100).size>countBefore);
@@ -230,6 +241,7 @@ interrupted.swapBase();
 const altered=await advancePagedOwnerIndex518({
  db:db.db,uid,mode:'first',verifiedPendingMutation:true,nowMs:400,
  readOwnerHead:interrupted.state,baseReader:interrupted.reader,projectItem:x=>x,
+ reserveWriteBudget:mockBudget,
 });
 assert.equal(altered.code,'HOLD_PAGED_PROGRESS_CONTRACT');
 assert.equal(db.meta.status,'building');

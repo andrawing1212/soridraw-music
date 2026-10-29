@@ -13,13 +13,13 @@ const db={prepare(sql){
    const [day,amount,now,amount2,cap,cap2]=args;
    assert.equal(day,'2026-10-30');
    assert.equal(amount,amount2);assert.equal(cap,cap2);
-   assert.equal(now,1793311200000);
+   assert.equal(now,1793354400000);
    if(used+amount>cap)return {success:true,meta:{changes:0}};
    used+=amount;return {success:true,meta:{changes:1}};
   }};
  }};
 }};
-const at=1793311200000;
+const at=1793354400000;
 for(const flags of [
  {},{allAccountWritersVerified:true},
  {sharedAccountLedgerVerified:true},

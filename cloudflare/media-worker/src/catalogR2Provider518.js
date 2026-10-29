@@ -7,6 +7,7 @@ import {
  isValidCatalogJournal,materializeCatalogJournal,createCompactedCatalogJournal,
  shouldCompactCatalogJournal,CATALOG_JOURNAL_MAX_BYTES,
 } from './catalogJournal.js';
+import {stagePagedCanonicalCompaction518} from './catalogR2PagedCompaction518.js';
 // Only verified owner/schema/authority failures are permanent. Ordinary
 // get()/put() network failures remain retryable; never infer from messages.
 export class CatalogR2ContractError518 extends Error {
@@ -85,7 +86,7 @@ export const createOwnerR2Provider518=({
  // For larger owners refuse in Workers Free until paged compaction is
  // separately validated. Original BASE/HEAD are never removed.
  const compactVerifiedOwnerHead=async({uid,expectedEtag,expectedRevision,
-   projectItem,sortItems,nowMs}={})=>{
+   projectItem,sortItems,baseReader,nowMs}={})=>{
   if(!enabled||!validUid(uid)||!txt(expectedEtag)
     ||!Number.isSafeInteger(expectedRevision)||expectedRevision<=0
     ||typeof projectItem!=='function'||typeof sortItems!=='function'
@@ -98,7 +99,10 @@ export const createOwnerR2Provider518=({
   // A CPU/heap/cost guard: never try to materialize a huge owner in a
   // Workers Free request. No D1 rows or user data are changed on HOLD.
   if(before.head.itemCount>256)
-   return {code:'HOLD_COMPACTION_REQUIRES_BOUNDED_PAGES'};
+   return stagePagedCanonicalCompaction518({
+    env,uid,expectedEtag,expectedRevision,nowMs,
+    readOwnerHead,baseReader,
+   });
   const materialized=await loadCompleteFencedOwnerR2({
    uid,projectItem,sortItems,
   });

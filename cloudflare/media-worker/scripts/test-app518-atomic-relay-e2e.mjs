@@ -36,7 +36,9 @@ const now=Date.now();
 const journalKey='catalog/v5/'+encodeURIComponent(uid)+'/musicNote/journal.json';
 const baseKey='catalog/v5/'+encodeURIComponent(uid)+'/musicNote/base-1.json';
 const options={
- modules:true,script:"export default {fetch(){return new Response('local only')}}",
+ modules:true,name:'app518-atomic-local-worker',
+ script:"export default {fetch(){return new Response('local only')}}",
+ d1Persist:join(folder,'d1'),r2Persist:join(folder,'r2'),
  d1Databases:{CATALOG_OUTBOX_518:'00000000-0000-4000-8000-000000000518'},
  r2Buckets:{CATALOG:'app518-local-r2'},
  resourcePersistencePath:folder,

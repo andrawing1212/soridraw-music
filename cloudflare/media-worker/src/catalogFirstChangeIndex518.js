@@ -48,10 +48,15 @@ export const INDEX_MEMBER_STAGE_518=[
  'INSERT OR IGNORE INTO music_note_catalog_member_518',
  '(owner_uid,generation,favorite_id) VALUES (?, ?, ?)',
 ].join(' ');
+// One atomic SQLite statement: a stale stage cannot insert AFTER a
+// concurrent READY promotion or after its generation/HEAD was replaced.
 export const INDEX_MEMBER_BULK_STAGE_518=[
  'INSERT OR IGNORE INTO music_note_catalog_member_518',
  '(owner_uid,generation,favorite_id)',
  'SELECT ?, ?, value FROM json_each(?)',
+ 'WHERE EXISTS (SELECT 1 FROM music_note_catalog_index_meta_518',
+ "WHERE owner_uid=? AND generation=? AND indexed_revision=?",
+ "AND head_etag=? AND expected_count=? AND status='building')",
 ].join(' ');
 export const INDEX_COUNT_518=[
  'SELECT COUNT(*) AS n FROM music_note_catalog_member_518',
@@ -197,7 +202,8 @@ export const stageFirstChangedOwnerIndex518=async({
    // idempotent and inserts only missing IDs.
    for(let i=0;i<ids.length;i+=chunkSize){
      const result=await db.prepare(INDEX_MEMBER_BULK_STAGE_518)
-       .bind(uid,head.headRevision,JSON.stringify(ids.slice(i,i+chunkSize))).run();
+       .bind(uid,head.headRevision,JSON.stringify(ids.slice(i,i+chunkSize)),
+         uid,head.headRevision,head.headRevision,head.etag,head.itemCount).run();
      const changed=Number(result?.meta?.changes);
      if(!Number.isSafeInteger(changed)||changed<0||changed>Math.min(chunkSize,ids.length-i))
        return {code:'RETRYABLE_STAGE_INCOMPLETE',complete:false,

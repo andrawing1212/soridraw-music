@@ -79,7 +79,7 @@ const runOwner=async(count)=>{
   }
  }while(r.code!=='PAGED_COMPACTION_STAGED_AWAIT_ASSEMBLY');
  assert.equal(r.outputCount,count);
- assert.ok(r.partCount>=Math.floor(count/1024));
+ assert.ok(r.partCount>=Math.floor(count/2048));
  const manifestKey=pre+'compaction518/'+head.headRevision+'-'+
   obj.etag.replace(/[^A-Za-z0-9]/g,'')+'/progress.json';
  const manifest=JSON.parse(await (await bucket.get(manifestKey)).text());

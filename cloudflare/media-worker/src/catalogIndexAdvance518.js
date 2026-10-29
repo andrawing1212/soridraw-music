@@ -201,7 +201,10 @@ export const reconcileIndexedHead518=async({
   return {code:'INDEX_ADVANCED',headReads,d1Writes:writes,
    itemCount:head.itemCount,revision:head.headRevision,
    changedMembershipRows:writes-1,deltaCount:tail.length};
- }catch{
-  return reject('RETRYABLE_INDEX_RECOVERY_IO',headReads,writes);
+ }catch(error){
+  // Daily quota is a temporary, durable outbox pause. Never erase this
+  // code into a generic IO retry after R2 was already committed.
+  return reject(error?.code==='HOLD_D1_DAILY_QUOTA'
+   ?error.code:'RETRYABLE_INDEX_RECOVERY_IO',headReads,writes);
  }
 };

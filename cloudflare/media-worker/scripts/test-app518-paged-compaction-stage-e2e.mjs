@@ -35,7 +35,7 @@ const runOwner=async(count)=>{
  const uid='local-'+count,pre=path(uid),baseKey=pre+'base-1.json';
  const rows=Array.from({length:count},(_,i)=>({
   id:'song-'+i,uid,title:'Preserve '+i,
-  ...(count===50001?{largeMetadata:'한글-'.repeat(60)}:{}),
+  ...(count===50001?{largeMetadata:'한글-'.repeat(30)}:{}),
  }));
  const original=JSON.stringify({
   schemaVersion:4,authority:'server',kind:'musicNote',

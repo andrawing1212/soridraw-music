@@ -4452,6 +4452,12 @@ export {
 } from "./explorePublicationReleaseEndpoint431";
 
 
+import {
+  readApp518OwnerQuarantine,recordApp518OwnerCollision,
+  readApp518EventGuard,recordApp518EventFailure,
+  resolveApp518EventFailure,
+} from "./app518EventSafetyFence";
+
 // app518 source-only staged connection: no deployed Function/secret/trigger is
 // changed by a GitHub commit. Both handlers are runtime OFF by default.
 // Cloudflare, Firebase and D1 must be configured under separate release approval.
@@ -4502,29 +4508,82 @@ export const app518FavoriteCatalogChanged=functions
     // if a future operational secret or Worker hostname is unavailable.
     const plan=planApp518FavoriteChange({uid,documentId:id,before,after});
     if(plan==="IGNORE")return;
+    const db=admin.firestore();
+    const nowMs=Date.now();
+    const eventId=String(context.eventId||"");
+    const eventTimeMs=Date.parse(String(context.timestamp||""));
     if(plan==="DENY"){
-      // Old existing documents may have crossed owner UIDs before Rules
-      // enforce immutability. Do not guess an owner or forge a removal.
-      // Keep an explicit privacy-safe operational reconciliation alert.
-      if(before?.uid&&after?.uid&&before.uid!==after.uid)
-        console.error("APP518_OWNER_UID_CHANGE_MANUAL_RECONCILIATION_REQUIRED");
-      else console.warn("APP518_EVENT_DENIED_OWNER_OR_ID");
+      if(before?.uid&&after?.uid&&before.uid!==after.uid){
+        // Persist a document-ID fence before acknowledging this conflict.
+        // Future same-UID updates and exact Worker reads cannot bypass it.
+        await recordApp518OwnerCollision({
+          db,documentId:id,beforeUid:String(before.uid),
+          afterUid:String(after.uid),eventId,nowMs,
+        });
+        console.error("APP518_OWNER_UID_CHANGE_QUARANTINED");
+      }else console.warn("APP518_EVENT_DENIED_OWNER_OR_ID");
       return;
     }
-    const hostname=String(process.env.SORIDRAW_APP518_WORKER_HOST||"");
-    const workerUrl=String(process.env.SORIDRAW_APP518_WORKER_URL||"");
-    if(!hostname||!workerUrl)throw new Error("APP518_WORKER_UNPROVISIONED");
-    const result=await handleApp518FavoriteEvent({
-      uid,documentId:id,before,after,
-      deleteEventId:context.eventId,
-      beforeUpdateTime:app518Timestamp(change.before.updateTime),
-      dependencies:{db:admin.firestore(),
-        secret:process.env.SORIDRAW_CATALOG_SERVER_HMAC_518||"",
-        workerUrl,expectedHostname:hostname,nowMs:Date.now()},
-    });
-    // Invalid source/receipt is a permanent fail-closed HOLD: never create
-    // an unbounded paid retry storm for an event that cannot be repaired.
-    // Transient transport/Firestore failures still throw for event retry.
-    if(result.code.startsWith("DENY_")||result.code.startsWith("HOLD_"))
-      console.warn("APP518_EVENT_TERMINAL_HOLD",result.code);
+    // One bounded guard read per meaningful event. Metadata-only events
+    // remain R0/W0; normal successful events create no safety-ledger writes.
+    let gate:string;
+    try{
+      gate=await readApp518EventGuard({
+        db,documentId:id,eventId,nowMs,eventTimeMs,
+      });
+    }catch{
+      // Fail closed if Firestore cannot verify the safety fence. Throwing
+      // here would re-enter the 1st-gen seven-day retry loop indefinitely.
+      console.error("APP518_SAFETY_FENCE_UNAVAILABLE_STOPPED");
+      return;
+    }
+    if(gate!=="EVENT_DELIVERY_ALLOWED"){
+      if(gate==="HOLD_EVENT_RETRY_WINDOW"){
+        try{
+          await recordApp518EventFailure({
+            db,documentId:id,eventId,nowMs,eventTimeMs,
+            code:"APP518_RETRY_WINDOW_EXPIRED",terminal:true,
+          });
+        }catch{console.error("APP518_EXPIRY_LEDGER_UNAVAILABLE_STOPPED");}
+      }
+      console.warn("APP518_EVENT_FENCED",gate);return;
+    }
+    try{
+      const hostname=String(process.env.SORIDRAW_APP518_WORKER_HOST||"");
+      const workerUrl=String(process.env.SORIDRAW_APP518_WORKER_URL||"");
+      if(!hostname||!workerUrl)throw new Error("APP518_WORKER_UNPROVISIONED");
+      const result=await handleApp518FavoriteEvent({
+        uid,documentId:id,before,after,
+        deleteEventId:eventId,
+        beforeUpdateTime:app518Timestamp(change.before.updateTime),
+        dependencies:{db,secret:process.env.SORIDRAW_CATALOG_SERVER_HMAC_518||"",
+          workerUrl,expectedHostname:hostname,nowMs},
+      });
+      if(result.code.startsWith("DENY_")||result.code.startsWith("HOLD_")){
+        await recordApp518EventFailure({
+          db,documentId:id,eventId,nowMs,eventTimeMs,
+          code:result.code,terminal:true,
+        });
+        console.warn("APP518_EVENT_PERSISTENT_TERMINAL_HOLD",result.code);
+        return;
+      }
+      // Only a previously failed delivery needs a settlement W1.
+      await resolveApp518EventFailure({db,documentId:id,eventId,nowMs});
+    }catch(error){
+      // Firebase's failurePolicy retries for up to seven days. Persist a
+      // per-event limit of eight total failed attempts AND a one-hour cap;
+      // never let a transient Worker/Firestore outage spin indefinitely.
+      let result:{code:string;attempts:number;retry:boolean};
+      try{
+        result=await recordApp518EventFailure({
+          db,documentId:id,eventId,nowMs,eventTimeMs,
+          code:"APP518_DELIVERY_IO_FAILURE",terminal:false,
+        });
+      }catch{
+        // No durable budget proof => stop, never claim ACK or retry forever.
+        console.error("APP518_FAILURE_LEDGER_UNAVAILABLE_STOPPED");return;
+      }
+      if(result.retry)throw new Error("APP518_BOUNDED_EVENT_RETRY");
+      console.error("APP518_EVENT_RETRY_BUDGET_HELD",result.code);
+    }
   });

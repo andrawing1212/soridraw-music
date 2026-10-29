@@ -366,3 +366,10 @@
 - P1: favorites uid 변경을 Firestore Rules 소스에서 거부. 이전에 발생했을 수 있는 uid 이동은 감사 기록으로 명확히 경고하고 소유자를 추정해 R2를 자동 수정하지 않음. 실제 공유 Rules 미배포, 과거 원본 보정 미실시.
 - P2: D1 outbox 재시도 8회 소진 시 영구 자동 HOLD 유지. 명시적 HMAC 서명 서버 단건 retry에 한하여 최신 정확한 UID·documentId·source-version·state를 확인한 후 60초 지연 일회성 재개. 같은 source-version에서 두 번째 재개 불가, INDEX_CONTRACT/SOURCE_CONTRACT 자동 해제 불가. 스키마 변경·실환경 migration 미실행.
 - 세 환경 Cloudflare/Firebase·Secrets·cron·user data 변경, 실제 배포·병합 없음. 실제 ACK/PC↔mobile/구형 Worker 전면 보호/월비용 검증 전 NO-GO. 새로운 SHA 독립 재감사 필요.
+
+
+## 2026-10-29 감사 미해결 P1 2건 소스 수정 — RELEASE HOLD
+- Firebase 1세대 `failurePolicy:true`는 플랫폼에서 최대 7일 재배달 가능. 신규 서버 전용 `server_music_note_event_failures_518` 이벤트-ID 해시 문서에 **실패 시에만** 상태·횟수·오류 종류 기록(초기 정상 이벤트 추가 안전 ledger W0). 이벤트당 최대 8회 실패, 서버 이벤트 시각부터 60분 경계. 나중 정상 복구는 RESOLVED로 1회 기록. 영구 409/HOLD는 최초 W1 기록 후 무재시도. 기록 불가능한 Firestore 장애는 fail-closed로 재시도 중단, 동기화 지연은 별도 관리자 진단 대상. 실제 Functions 미배포·DB 실데이터 기록 없음.
+- 역사적인 favorites UID A→B 이벤트에서 서버 전용 `server_music_note_owner_quarantine_518`에 곡 문서 ID 해시별 영구 격리(기존 기록 재작성 W0). 이후 의미 있는 onWrite와 HMAC 정확 조회 모두 격리 확인; B가 정상 편집해도 기존 A의 카탈로그를 덮거나 B 카탈로그에 신규 등록하지 않음. 자동 owner 복원·R2 삭제·데이터 수정 금지. 최초 충돌 이벤트가 도착하기 전에 이미 발생한, 또는 과거 로그가 완전히 빠진 소유권 변조를 이 장치만으로 소급 판별하지는 못함. 실제 최초 배포 전 기존 소유권 증거와 순서 보장에 대한 독립 검증 필요.
+- 의미 없는 metadata-only 변경은 조기 IGNORE로 추가 Firestore R0/W0. 의미 있는 변경 시 서버 격리+실패 기록 읽기 최대 R2, Worker exact-source에서 격리 1회 추가 R1. 실패마다 서버 W1 / 회복시 W1 / 진짜 충돌 최초 W1이므로 무조건 D1 W2 또는 Firestore W0라고 주장하지 않음. 실패 시 함수 재호출 비용 상한/비용 실측은 별개.
+- 실환경 Firebase/Cloudflare/Rules/Secrets/D1/R2/데이터 미변경. 기존 삭제 기준, D1 재개 1회, R2 ACK/CAS, Music Note/Studio/Explore/Library UI 미변경. PR #528 Draft, 전체 RELEASE HOLD/NO-GO 유지.

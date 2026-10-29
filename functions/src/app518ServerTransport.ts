@@ -8,6 +8,7 @@
 import {createHmac,timingSafeEqual} from "node:crypto";
 import * as admin from "firebase-admin";
 import {readExactApp518Source, type App518Source} from "./app518CanonicalSourceProvider";
+import {readApp518OwnerQuarantine} from "./app518EventSafetyFence";
 const valid=(s:string,n=240)=>s.length>0&&s.length<=n&&!/[\\/]/.test(s);
 export type App518ServicePayload={
  action:"enqueue"|"exact-source"|"retry";
@@ -66,6 +67,10 @@ export const handleVerifiedApp518ExactSource=async({
    typeof body.uid!=="string"||typeof body.documentId!=="string"||
    !valid(body.uid,128)||!valid(body.documentId))
   return {status:400,code:"DENY_REQUEST_SHAPE"};
+ // A previously observed cross-owner change must fence ALL later D1/R2
+ // deliveries, even after a new ordinary event from owner B arrives.
+ if(await readApp518OwnerQuarantine(db,body.documentId))
+  return {status:409,code:"DENY_OWNER_QUARANTINED"};
  // One server-only exact Firestore read, never an entire favorites collection.
  const result=await readExactApp518Source(db,body.uid,body.documentId);
  if(result.code!=="SOURCE_VERIFIED")

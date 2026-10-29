@@ -11,6 +11,7 @@ def extract(name):
 claim=extract("RECOVERY_CLAIM_518")
 rotate=extract("RECOVERY_ROTATE_518")
 promote=extract("RECOVERY_PROMOTE_518")
+recovery_bulk=extract("RECOVERY_MEMBER_BULK_STAGE_GUARDED_518")
 db=sqlite3.connect(":memory:")
 db.executescript(sql)
 uid="only-owner"
@@ -38,15 +39,17 @@ assert changes(rotate,(113,113,'"new3"',2,181003,uid,90,100,'"old"',112,112,'"ne
 assert changes(rotate,(114,114,'"new4"',2,241004,uid,90,100,'"old"',113,113,'"new3"',2,181003))==0
 assert db.execute("SELECT recovery_restart_count,generation,status FROM music_note_catalog_index_meta_518 WHERE owner_uid=?",(uid,)).fetchone()==(3,90,'ready')
 
-for id in ("fresh-a","fresh-b"):
- assert changes("INSERT OR IGNORE INTO music_note_catalog_member_518 VALUES (?,?,?)",(uid,113,id))==1
-assert changes("INSERT OR IGNORE INTO music_note_catalog_member_518 VALUES (?,?,?)",(uid,113,"fresh-a"))==0
+for song_id in ("fresh-a","fresh-b"):
+ assert changes(recovery_bulk,(uid,113,json.dumps([song_id]),uid,113,113,'"new3"',2))==1
+assert changes(recovery_bulk,(uid,113,json.dumps(["fresh-a"]),uid,113,113,'"new3"',2))==0
 # The app's existing D1 membership lookup still sees the old generation while staging.
 assert db.execute("SELECT favorite_id FROM music_note_catalog_member_518 WHERE owner_uid=? AND generation=?",(uid,90)).fetchall()==[("before",)]
 assert changes(promote,(2000,uid,90,100,'"old"',113,113,'"stale"',2))==0
 assert changes(promote,(2000,"attacker",90,100,'"old"',113,113,'"new3"',2))==0
 assert changes(promote,(2000,uid,90,100,'"old"',113,113,'"new3"',2))==1
 assert changes(promote,(2001,uid,90,100,'"old"',113,113,'"new3"',2))==0
+assert changes(recovery_bulk,(uid,113,json.dumps(["stale-resurrect"]),uid,113,113,'"new3"',2))==0
+assert db.execute("SELECT 1 FROM music_note_catalog_member_518 WHERE owner_uid=? AND generation=? AND favorite_id=?",(uid,113,"stale-resurrect")).fetchone() is None
 meta=db.execute("SELECT generation,indexed_revision,expected_count,head_etag,recovery_generation,status FROM music_note_catalog_index_meta_518 WHERE owner_uid=?",(uid,)).fetchone()
 assert meta==(113,113,2,'"new3"',None,'ready')
 assert db.execute("SELECT count(*) FROM music_note_catalog_member_518 WHERE owner_uid=? AND generation=?",(uid,113)).fetchone()[0]==2
@@ -72,16 +75,20 @@ db.execute("INSERT INTO music_note_catalog_index_meta_518(owner_uid,generation,i
 sql_calls=0
 for start in range(0,large_size,512):
  ids=["song-"+str(i) for i in range(start,min(start+512,large_size))]
- assert changes(bulk,(large_uid,300,json.dumps(ids)))==len(ids)
+ assert changes(bulk,(large_uid,300,json.dumps(ids),large_uid,300,300,'"large-head"',large_size))==len(ids)
  sql_calls+=1
 assert sql_calls==40
-assert changes(bulk,(large_uid,300,json.dumps(["song-0","song-511"])))==0
+assert changes(bulk,(large_uid,300,json.dumps(["song-0","song-511"]),large_uid,300,300,'"large-head"',large_size))==0
 assert db.execute("SELECT expected_count,status FROM music_note_catalog_index_meta_518 WHERE owner_uid=?",(large_uid,)).fetchone()==(large_size,'building')
 assert db.execute("SELECT count(*) FROM music_note_catalog_member_518 WHERE owner_uid=? AND generation=?",(large_uid,300)).fetchone()[0]==large_size
 assert changes(mark_ready,(1100,large_uid,300,large_size,'"wrong-head"'))==0
 assert changes(mark_ready,(1100,"attacker",300,large_size,'"large-head"'))==0
 assert changes(mark_ready,(1100,large_uid,300,large_size,'"large-head"'))==1
 assert changes(mark_ready,(1101,large_uid,300,large_size,'"large-head"'))==0
+assert changes(bulk,(large_uid,300,json.dumps(["stale-after-READY"]),large_uid,300,300,'"large-head"',large_size))==0
+assert db.execute("SELECT 1 FROM music_note_catalog_member_518 WHERE owner_uid=? AND favorite_id=?",(large_uid,"stale-after-READY")).fetchone() is None
 assert db.execute("SELECT status FROM music_note_catalog_index_meta_518 WHERE owner_uid=?",(large_uid,)).fetchone()==('ready',)
 assert db.execute("SELECT count(*) FROM music_note_catalog_member_518 WHERE owner_uid=? AND generation=?",(uid,113)).fetchone()[0]==2
 print("APP518_20001_SQLITE_JSON1_IMPORT_COUNT_CAS_AND_IDEMPOTENCE=PASS")
+
+print('APP518_REAL_SQLITE_LATE_FIRST_AND_RECOVERY_INSERT_W0=PASS')

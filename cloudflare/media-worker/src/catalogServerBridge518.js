@@ -22,7 +22,7 @@ const validItem=source=>source&&source.verifiedByServer===true
  &&typeof source.updateTime==='string';
 export const createApp518ServerBridge=({
  env,sharedReleaseFencesVerified=false,
- readExactCanonical,projectItem,sortItems,
+ readExactCanonical,projectItem,sortItems,budgetClock=()=>Date.now(),
 }={})=>{
  const rawDb=env?.CATALOG_OUTBOX_518;
  const r2=createOwnerR2Provider518({env,sharedReleaseFencesVerified});
@@ -43,7 +43,7 @@ export const createApp518ServerBridge=({
  // crosses this shared account daily budget. Index, outbox, ACK and
  // recovery share the same metered db. Existing unverified writers still
  // keep the release OFF.
- const db=createMeteredD1Database518({rawDb,reserveWriteBudget});
+ const db=createMeteredD1Database518({rawDb,reserveWriteBudget,clock:budgetClock});
  const stageBudget=async({nowMs,requestedRows})=>db?.__budgeted518===true
   ?{reserved:true,code:'METERED_AT_SQL_BOUNDARY'}
   :reserveWriteBudget({nowMs,requestedRows});

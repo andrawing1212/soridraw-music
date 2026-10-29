@@ -271,7 +271,8 @@ export const advancePagedOwnerIndex518=async({
   return {code:'PAGING_IN_PROGRESS',complete:false,
    memberCount:progress.base_seen,d1Writes:writes,pages};
  }catch(error){
-  return failure(error instanceof CatalogR2ContractError518
+  return failure(error?.code?.startsWith('HOLD_D1_')?error.code:
+   error instanceof CatalogR2ContractError518
    ?'DENY_PAGED_R2_CONTRACT':'RETRYABLE_PAGED_IO');
  }
 };

@@ -5,7 +5,7 @@
 // small D1 batches; readers cannot see it until the guarded meta swap.
 // Never change Firestore originals and never treat R2 materialization as
 // evidence that a newer pending canonical change was acknowledged.
-import {INDEX_META_READ_518,INDEX_MEMBER_BULK_STAGE_518,INDEX_COUNT_518} from './catalogFirstChangeIndex518.js';
+import {INDEX_META_READ_518,INDEX_COUNT_518} from './catalogFirstChangeIndex518.js';
 import {isValidCatalogJournal} from './catalogJournal.js';
 import {CatalogR2ContractError518} from './catalogR2Provider518.js';
 const txt=x=>typeof x==='string'?x.trim():'';
@@ -35,6 +35,15 @@ export const RECOVERY_ROTATE_518=[
  "AND status='ready' AND recovery_generation=? AND recovery_revision=?",
  'AND recovery_etag=? AND recovery_count=?',
  'AND recovery_restart_count<3 AND recovery_checked_at_ms<=?',
+].join(' ');
+// Old recovery pages are barred atomically after claim promotion/replacement.
+export const RECOVERY_MEMBER_BULK_STAGE_GUARDED_518=[
+ 'INSERT OR IGNORE INTO music_note_catalog_member_518',
+ '(owner_uid,generation,favorite_id)',
+ 'SELECT ?, ?, value FROM json_each(?)',
+ 'WHERE EXISTS (SELECT 1 FROM music_note_catalog_index_meta_518',
+ "WHERE owner_uid=? AND status='ready' AND recovery_generation=?",
+ 'AND recovery_revision=? AND recovery_etag=? AND recovery_count=?)',
 ].join(' ');
 export const RECOVERY_PROMOTE_518=[
  'UPDATE music_note_catalog_index_meta_518',
@@ -144,8 +153,9 @@ export const recoverCompactedOwnerIndex518=async({
   // Rebuild a new invisible generation with bounded, atomic SQL pages;
   // a failed retry never edits the previously published READY generation.
   for(let i=0;i<ids.length;i+=chunkSize){
-   const result=await db.prepare(INDEX_MEMBER_BULK_STAGE_518)
-    .bind(uid,nextGen,JSON.stringify(ids.slice(i,i+chunkSize))).run();
+   const result=await db.prepare(RECOVERY_MEMBER_BULK_STAGE_GUARDED_518)
+     .bind(uid,nextGen,JSON.stringify(ids.slice(i,i+chunkSize)),
+       uid,nextGen,target.headRevision,snapshot.etag,target.itemCount).run();
    const changed=Number(result?.meta?.changes);
    if(!Number.isSafeInteger(changed)||changed<0||changed>Math.min(chunkSize,ids.length-i))
     return fail('RETRYABLE_RECOVERY_STAGE',fullReads,writes);

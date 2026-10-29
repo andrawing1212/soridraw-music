@@ -176,6 +176,11 @@ jobs:
 
       - name: Activate all three or roll all three back
         shell: bash
+        env:
+          APP518_RELEASE_SHA_518: ${{ inputs.commit_sha }}
+          APP518_SIGNED_AUDIT_REPORT_JSON_518: ${{ secrets.APP518_SIGNED_AUDIT_REPORT_JSON_518 }}
+          APP518_AUDITOR_PUBLIC_KEY_PEM_518: ${{ secrets.APP518_AUDITOR_PUBLIC_KEY_PEM_518 }}
+          APP518_AUDITOR_KEY_SHA256_518: ${{ vars.APP518_AUDITOR_KEY_SHA256_518 }}
         run: |
           set -euo pipefail
           API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID"
@@ -244,11 +249,7 @@ jobs:
 
           # Revalidate fresh independent proof immediately before traffic
           # mutation; expired proof must not trigger an unnecessary rollback.
-          APP518_RELEASE_SHA_518="${{ inputs.commit_sha }}" \
-          APP518_SIGNED_AUDIT_REPORT_JSON_518="${{ secrets.APP518_SIGNED_AUDIT_REPORT_JSON_518 }}" \
-          APP518_AUDITOR_PUBLIC_KEY_PEM_518="${{ secrets.APP518_AUDITOR_PUBLIC_KEY_PEM_518 }}" \
-          APP518_AUDITOR_KEY_SHA256_518="${{ vars.APP518_AUDITOR_KEY_SHA256_518 }}" \
-            node scripts/verify-518-cutover-signed-evidence.mjs --live > "$RUNNER_TEMP/app518-cutover-before-activate"
+          node scripts/verify-518-cutover-signed-evidence.mjs --live > "$RUNNER_TEMP/app518-cutover-before-activate"
           grep -q '^APP518_CUTOVER_THREE_WORKER_SIGNED_PROOF_LIVE=PASS$' "$RUNNER_TEMP/app518-cutover-before-activate"
           for stage in preview test production; do
             prefix="$(printf '%s' "$stage" | tr '[:lower:]' '[:upper:]')"

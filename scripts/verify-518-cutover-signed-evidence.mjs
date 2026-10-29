@@ -80,6 +80,15 @@ export const verifySignedCutoverEvidence518=({
   ||payload?.purpose!=='APP518_THREE_MEDIA_FENCED_CUTOVER'
   ||!Array.isArray(payload.snapshots)||payload.snapshots.length!==2)
   return {pass:false,code:'HOLD_INDEPENDENT_CUTOVER_RELEASE_DRIFT'};
+ // No trust inferred from the current GET: the signer's independent proof
+ // must cover immutable IDs, drained flights, and safe rollback versions.
+ const result=assessSharedWriterCutover518({
+  snapshots:payload.snapshots,
+  approvedVersions:payload.approvedVersions,
+  rollbackVersions:payload.rollbackVersions,
+  retiredOldFlights:payload.retiredOldFlights,nowMs,
+ });
+ if(!result.pass)return result;
  // The retired pre-fence Worker must be a different, specifically audited
  // immutable Cloudflare version, not the new fenced version whose traffic is
  // already 100%. The independent signer MUST inspect real deployment history
@@ -111,15 +120,6 @@ export const verifySignedCutoverEvidence518=({
    ||flight.checkedAtMs<beforeMs+600000||flight.checkedAtMs>afterMs)
    return {pass:false,code:'HOLD_OLD_INFLIGHT_VERSION_UNBOUND_'+t.stage.toUpperCase()};
  }
- // No trust inferred from the current GET: the signer's independent proof
- // must cover immutable IDs, drained flights, and safe rollback versions.
- const result=assessSharedWriterCutover518({
-  snapshots:payload.snapshots,
-  approvedVersions:payload.approvedVersions,
-  rollbackVersions:payload.rollbackVersions,
-  retiredOldFlights:payload.retiredOldFlights,nowMs,
- });
- if(!result.pass)return result;
  if(!Array.isArray(current?.workers)||current.workers.length!==3)
   return {pass:false,code:'HOLD_CUTOVER_CURRENT_LIVE_MISSING'};
  for(const target of MEDIA_TARGETS_518){
@@ -176,7 +176,7 @@ const test=()=>{
  let p=payload();p.snapshots[0].atMs=after-599999;
  assert.match(go(p).code,/HOLD_OLD_WORKER_DRAIN_WINDOW/);
  p=payload();p.retiredOldFlights=[];
- assert.match(go(p).code,/HOLD_PREDECESSOR_VERSION_AUDIT_MISSING/);
+ assert.equal(go(p).code,'HOLD_OLD_INFLIGHT_UNVERIFIED');
  p=payload();delete p.predecessorWriters518;
  assert.match(go(p).code,/HOLD_PREDECESSOR_VERSION_AUDIT_MISSING/);
  p=payload();p.predecessorWriters518[0].versionId=approvedVersions.preview;

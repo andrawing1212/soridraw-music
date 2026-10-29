@@ -49,6 +49,7 @@ export const createMeteredD1Database518=({rawDb,reserveWriteBudget,clock=()=>Dat
   },
  });
  return {
+  __budgeted518:true,
   prepare(sql){return wrap(rawDb.prepare(sql),sql);},
   async batch(statements){
    if(!Array.isArray(statements)||statements.some(s=>s?.__budgeted518!==true))

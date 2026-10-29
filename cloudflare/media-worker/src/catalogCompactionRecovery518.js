@@ -183,7 +183,9 @@ export const recoverCompactedOwnerIndex518=async({
  }catch(error){
   // A verified foreign-owner/schema failure cannot be healed by retrying
   // the same canonical source. Preserve the DENY through writer->delivery.
-  return fail(error instanceof CatalogR2ContractError518
+  return fail(error?.code==='HOLD_D1_DAILY_QUOTA'
+    ?error.code
+    :error instanceof CatalogR2ContractError518
     ?'DENY_RECOVERY_R2_CONTRACT':'RETRYABLE_RECOVERY_IO',fullReads,writes);
  }
 };

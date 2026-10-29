@@ -76,6 +76,7 @@ export const INDEX_MEMBER_LOOKUP_518=[
 // already SERVER-VERIFIED exact favorite canonical mutation.
 export const stageFirstChangedOwnerIndex518=async({
  db,uid,verifiedMutation,loadMaterializedR2Once,readR2HeadAgain,nowMs,
+ reserveWriteBudget,
 }={})=>{
  const deny=code=>({code,complete:false,r2FullReads:0,d1RowsWritten:0});
  if(!db||typeof db.prepare!=='function'||typeof db.batch!=='function'
@@ -83,6 +84,8 @@ export const stageFirstChangedOwnerIndex518=async({
    ||typeof loadMaterializedR2Once!=='function'
    ||typeof readR2HeadAgain!=='function'
    ||!Number.isSafeInteger(nowMs)||nowMs<0)return deny('DENY_UNVERIFIED_OR_INVALID');
+ if(typeof reserveWriteBudget!=='function')
+  return deny('HOLD_D1_GLOBAL_WRITERS_UNVERIFIED');
  let fullReads=0,writes=0;
  try{
    let previous=await db.prepare(INDEX_META_READ_518).bind(uid).first();
@@ -185,6 +188,14 @@ export const stageFirstChangedOwnerIndex518=async({
        complete:false,r2FullReads:fullReads,d1RowsWritten:0};
      seen.add(id);ids.push(id);
    }
+   // Direct first-index callers cannot bypass the shared daily budget.
+   // Owners >256 take the bounded paged path in the server bridge.
+   if(ids.length>256)return deny('HOLD_D1_FIRST_INDEX_REQUIRES_PAGING');
+   const reservation=await reserveWriteBudget({
+    nowMs,requestedRows:ids.length+4,
+   });
+   if(reservation?.reserved!==true)
+    return deny(reservation?.code||'HOLD_D1_GLOBAL_WRITERS_UNVERIFIED');
    if(!previous){
      const result=await db.prepare(INDEX_META_BEGIN_518)
        .bind(uid,head.headRevision,head.headRevision,head.itemCount,head.etag,nowMs).run();

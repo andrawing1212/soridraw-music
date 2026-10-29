@@ -119,7 +119,7 @@ const run=async()=>{
   projectItem:item=>item,sortItems:items=>items,
   nowMs:1000100,
  });
- assert.equal(outcome.code,'HOLD_COMPACTION_REQUIRES_BOUNDED_PAGES');
+ assert.equal(outcome.code,'DENY_PAGED_COMPACTION_DEPENDENCIES');
  assert.equal(baseReads,readsBefore,'oversized owner must avoid BASE read');
  assert.equal(guardedPuts,putsBefore,'oversized owner must not write HEAD');
  console.log('APP518_REAL_MINIFLARE_COMPACTION_ETAG_CAS_CONFLICT_W0=PASS');

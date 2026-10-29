@@ -1,0 +1,178 @@
+name: SORIDRAW app528 LIVE Metadata Readonly (Manual Only)
+
+# Manual-only: this file is intentionally not triggered by push, PR, cron or tags.
+# No GitHub write token, no checkout, no database/user-document queries, no deployment.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-app528-live-metadata-readonly
+  cancel-in-progress: false
+
+jobs:
+  cloudflare_media:
+    name: Read deployed Media Worker identity and bindings
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - name: Fetch active 3-environment metadata by GET only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const {createHash}=require('node:crypto');
+          const token=process.env.CF_TOKEN||'';
+          const account=process.env.CF_ACCOUNT||'';
+          const workers=[
+            ['PREVIEW','soridraw-media-preview'],
+            ['TEST','soridraw-media-test'],
+            ['PRODUCTION','soridraw-media'],
+          ];
+          if(!token||!account){
+            console.error('APP528_CF_AUTH=UNAVAILABLE');
+            process.exitCode=2;
+          }else{
+            const api='https://api.cloudflare.com/client/v4/accounts/'+account;
+            const headers={Authorization:'Bearer '+token,Accept:'application/json'};
+            const get=async(path)=>{
+              const resp=await fetch(api+path,{method:'GET',headers,redirect:'error'});
+              if(!resp.ok)throw Error('HTTP_'+resp.status);
+              const data=await resp.json();
+              if(data?.success===false)throw Error('API_REJECTED');
+              return data.result||data;
+            };
+            const getCode=async(path)=>{
+              const resp=await fetch(api+path,{method:'GET',headers,redirect:'error'});
+              if(!resp.ok)throw Error('HTTP_'+resp.status);
+              const bytes=Buffer.from(await resp.arrayBuffer());
+              return {sha256:createHash('sha256').update(bytes).digest('hex'),
+                source:bytes.toString('utf8')};
+            };
+            for(const [stage,name] of workers){
+              try{
+                const base='/workers/scripts/'+name;
+                const dep=await get(base+'/deployments');
+                const deployment=(Array.isArray(dep?.deployments)?dep.deployments:
+                  Array.isArray(dep)?dep:[])[0];
+                const active=(deployment?.versions||[])
+                  .filter(v=>Number(v.percentage)>0);
+                // Weighted deployments must be reported as mixed; do not claim a single version.
+                const v=active.length===1&&Number(active[0].percentage)>=99.99
+                  ? active[0]:null;
+                const settings=await get(base+'/settings');
+                const bindings=Array.isArray(settings?.bindings)?settings.bindings:[];
+                const cat=bindings.find(b=>b.name==='CATALOG'&&b.type==='r2_bucket');
+                const flag=bindings.find(b=>b.name==='SORIDRAW_SHARED_CATALOG_V1'&&b.type==='plain_text');
+                const bucket=cat?.bucket_name||cat?.bucket||'UNAVAILABLE';
+                const shared=flag?.text??flag?.value??'UNAVAILABLE';
+                let code='UNAVAILABLE', delta='UNVERIFIED';
+                if(v?.version_id){
+                  try{
+                    const source=await getCode(base+'/content/v2');
+                    code=source.sha256;
+                    // This is a code-signature observation, not proof a route is enabled.
+                    delta=source.source.includes('catalogRouteFromPath')
+                      &&source.source.includes('delta')
+                      ?'SOURCE_MARKERS_PRESENT_NOT_ACTIVE_PROOF':'UNVERIFIED';
+                  }catch{
+                    code='UNAVAILABLE';
+                  }
+                }
+                console.log(JSON.stringify({
+                  stage,worker:name,active_version_id:v?.version_id||'UNVERIFIED',
+                  active_percent:v?.percentage??'UNVERIFIED',
+                  deployment_created_on:deployment?.created_on||'UNVERIFIED',
+                  active_version_created_on:v?.created_on||'UNVERIFIED',
+                  active_versions:active.map(x=>({id:x.version_id,percentage:x.percentage})),
+                  live_code_content_sha256:code,CATALOG:bucket,
+                  SORIDRAW_SHARED_CATALOG_V1:shared,
+                  legacy_delta_writer:delta,
+                  source_binding_match:bucket==='soridraw-user-catalog'&&shared==='1'
+                    ?'CONFIG_MATCH_NOT_AUTHORITY_PROOF':'FAIL_OR_UNVERIFIED',
+                }));
+              }catch(error){
+                console.error(stage+'_LIVE_METADATA=UNVERIFIED ('+
+                  String(error?.message||'READ_FAILED').replace(/[^A-Z0-9_]/gi,'_').slice(0,45)+')');
+                process.exitCode=2;
+              }
+            }
+          }
+          NODE
+
+  firebase_rules:
+    name: Read active shared Firestore rules release only
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Authenticate existing Firebase service account (no user data)
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          create_credentials_file: true
+          export_environment_variables: true
+      - name: Read deployed cloud.firestore ruleset via Rules API GET
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check google-auth==2.35.0 requests==2.32.3
+          python3 <<'PY'
+          import hashlib,json,re
+          import google.auth
+          from google.auth.transport.requests import AuthorizedSession
+          project='soridraw-app-866a5'
+          try:
+              credentials,_=google.auth.default(
+                  scopes=['https://www.googleapis.com/auth/cloud-platform'])
+              session=AuthorizedSession(credentials)
+              root='https://firebaserules.googleapis.com/v1/'
+              def get(path):
+                  response=session.get(root+path,timeout=25,allow_redirects=False)
+                  if not response.ok: raise RuntimeError('RULES_GET_HTTP_'+str(response.status_code))
+                  return response.json()
+              release=get('projects/'+project+'/releases/cloud.firestore')
+              ruleset_name=str(release.get('rulesetName') or '')
+              if not re.fullmatch(r'projects/[^/]+/rulesets/[^/]+',ruleset_name):
+                  raise RuntimeError('RULESET_NAME_UNVERIFIED')
+              ruleset=get(ruleset_name)
+              source=ruleset.get('source') or {}
+              files=source.get('files') or []
+              contents='\n'.join(str(f.get('content') or '') for f in files)
+              if not contents: raise RuntimeError('RULESET_CONTENT_UNAVAILABLE')
+              marker=re.search(r'match\s+/favorites/\{favoriteId\}\s*\{',contents)
+              if not marker: raise RuntimeError('FAVORITES_RULE_MISSING')
+              start=marker.end();depth=1;end=start
+              while end<len(contents) and depth:
+                  if contents[end]=='{':depth+=1
+                  elif contents[end]=='}':depth-=1
+                  end+=1
+              if depth: raise RuntimeError('FAVORITES_RULE_UNBALANCED')
+              body=contents[start:end-1]
+              clauses=re.findall(
+                  r'allow\s+([a-zA-Z,\s]+?)\s*:\s*if\s+([^;]+);',body)
+              normalized=[{'verbs':re.sub(r'\s+','',v),
+                'condition':re.sub(r'\s+',' ',expr.strip())[:300]} for v,expr in clauses]
+              print(json.dumps({
+                  'project':project,
+                  'applied_release_name':release.get('name','UNVERIFIED'),
+                  'ruleset_name':ruleset_name,
+                  'release_update_time':release.get('updateTime','UNVERIFIED'),
+                  'rules_sha256':hashlib.sha256(contents.encode()).hexdigest(),
+                  'favorites_clauses':normalized,
+                  'uid_immutability_explicit_in_favorites_block':bool(re.search(
+                    r'request\.resource\.data\.uid\s*==\s*resource\.data\.uid',body)),
+                  'limit':'RULES_STATIC_EVIDENCE_ONLY_NOT_ADMIN_SDK_GUARANTEE',
+              },ensure_ascii=False))
+          except Exception as error:
+              # No request bodies, access tokens, ruleset contents, or credentials in error logs.
+              label=str(error)
+              if not label.startswith(('RULES_GET_HTTP_','RULESET_','FAVORITES_')):
+                  label='RULES_AUTH_OR_PARSE_UNAVAILABLE'
+              print('APP528_FIRESTORE_RULES=UNVERIFIED ('+label+')')
+              raise SystemExit(2)
+          PY

@@ -37,7 +37,7 @@ export const reserveD1WriteRows518=async({
  // Reserve *before* D1 writes. Count this reservation write, every
  // potential inserted membership row, cursor/meta and retry headroom.
  // A crash wastes a reservation but cannot silently overrun the quota.
- if(purpose==='control'&&requestedRows!==1)
+ if(purpose==='control'&&requestedRows!==3)
   return {code:'DENY_D1_CONTROL_BUDGET_ARGUMENTS',reserved:false,d1Writes:0};
  const cap=purpose==='control'?D1_CONTROL_RESERVED_ROWS_518:dailyCap;
  const amount=requestedRows+1,utc=day(nowMs);

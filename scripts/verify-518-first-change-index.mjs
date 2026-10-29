@@ -83,6 +83,7 @@ const snap={verifiedByServer:true,ownerUid:owner,kind:'musicNote',
  complete:true,head,items};
 let store=mkdb(),fullReads=0,headChecks=0;
 const args={db:store.db,uid:owner,verifiedMutation:true,nowMs:10,
+ reserveWriteBudget:async()=>({reserved:true}),
  loadMaterializedR2Once:async()=>{fullReads++;return snap;},
  readR2HeadAgain:async()=>{headChecks++;return head;}};
 const run=(db,opts={})=>stageFirstChangedOwnerIndex518({...args,db,...opts});

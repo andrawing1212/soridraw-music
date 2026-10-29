@@ -25,7 +25,7 @@ type Store={
  collection(name:string):{doc(id:string):DocRef};
  runTransaction<T>(callback:(tx:Transaction)=>Promise<T>):Promise<T>;
 };
-export type App518AtomicIntent='create'|'save'|'delete';
+export type App518AtomicIntent='create'|'save'|'restore'|'delete';
 export type App518AtomicCandidateResult={
  code:string;documentId?:string;outboxId?:string;
  sourceWrites:number;outboxWrites:number;ownerWrites:number;
@@ -42,6 +42,31 @@ const stable=(value:unknown):unknown=>{
  }
  return value;
 };
+// Only the Music Note's known nested partial-edit documents are merged.
+ // Arrays and explicit null replace; omitted keys preserve prior languages.
+const plain=(x:unknown):x is RecordValue=>Boolean(x)&&typeof x==='object'
+ &&!Array.isArray(x)&&Object.getPrototypeOf(x)===Object.prototype;
+const deepPatch=(before:RecordValue,patch:RecordValue):RecordValue=>{
+ const next:RecordValue={...before};
+ for(const [key,value] of Object.entries(patch)){
+  if(key==='__proto__'||key==='constructor'||key==='prototype')
+   throw new Error('DENY_UNSAFE_NESTED_KEY');
+  next[key]=plain(value)&&plain(before[key])
+   ?deepPatch(before[key] as RecordValue,value):value;
+ }
+ return next;
+};
+const mergedFavorite=(before:RecordValue,patch:RecordValue):RecordValue=>{
+ const next:RecordValue={...before,...patch};
+ for(const key of ['lyrics','appliedKeywords']){
+  if(plain(before[key])&&plain(patch[key]))
+   next[key]=deepPatch(before[key] as RecordValue,patch[key] as RecordValue);
+ }
+ return next;
+};
+const isRemoved=(row:RecordValue)=>row.favoriteRemoved===true
+ ||row.saved===false||row.hidden===true||row.favoriteHidden===true
+ ||Boolean(row.deletedAt)||Boolean(row.trashedAt);
 const result=(code:string,documentId?:string,outboxId?:string,
  sourceWrites=0,outboxWrites=0,ownerWrites=0):App518AtomicCandidateResult=>({
  code,...(documentId?{documentId}:{}),...(outboxId?{outboxId}:{}),
@@ -52,10 +77,12 @@ export const app518CandidateDocumentId=(uid:string,mutationId:string)=>
 
 export const commitApp518AtomicFavoriteCandidate=async({
  db,authenticatedUid,uid,documentId,mutationId,intent,favorite,
- serverTimestamp,releaseApproved=false,
+ expectedLastMutationId,serverTimestamp,releaseApproved=false,
 }:{
  db:Store;authenticatedUid:string;uid:string;documentId?:string;
  mutationId:string;intent:App518AtomicIntent;favorite?:RecordValue;
+ /** Previous server-committed mutation ID; required for all non-create writes. */
+ expectedLastMutationId?:string;
  /** Trusted Firestore FieldValue.serverTimestamp(), supplied by server adapter. */
  serverTimestamp:()=>unknown;
  /** Must come from server-controlled, separately approved rollout gate. */
@@ -64,7 +91,7 @@ export const commitApp518AtomicFavoriteCandidate=async({
  if(releaseApproved!==true)return result('HOLD_APP518_ATOMIC_SOURCE_UNWIRED');
  if(!valid(uid,128)||authenticatedUid!==uid||!valid(mutationId,128)
    ||typeof serverTimestamp!=='function'
-   ||!['create','save','delete'].includes(intent))return result('DENY_ARGUMENTS');
+   ||!['create','save','restore','delete'].includes(intent))return result('DENY_ARGUMENTS');
  if(intent==='create'&&documentId!==undefined)return result('DENY_CLIENT_SELECTED_NEW_ID');
  const id=intent==='create'?app518CandidateDocumentId(uid,mutationId):documentId;
  if(!valid(id))return result('DENY_DOCUMENT_ID');
@@ -114,8 +141,31 @@ export const commitApp518AtomicFavoriteCandidate=async({
   }
   if(intent==='create'&&(sourceDoc.exists||ownerDoc.exists))
    return result('HOLD_CREATE_ID_ALREADY_ALLOCATED',id,outboxId);
-  if(intent==='delete'&&!sourceDoc.exists)
-   return result('NOOP_ALREADY_ABSENT',id,outboxId);
+  if(intent!=='create'){
+   // Compare inside the transaction, not against the client snapshot.
+   // Another mutation ID, even if delivered first, may not cross generations.
+   if(!valid(expectedLastMutationId,128)
+     ||!ownerDoc.exists||!valid(owner?.latestMutationId,128)
+     ||owner?.latestMutationId!==expectedLastMutationId)
+     return result('HOLD_STALE_SOURCE_GENERATION',id,outboxId);
+   if(intent==='restore'){
+    if(sourceDoc.exists||owner?.latestIntent!=='delete')
+     return result('HOLD_RESTORE_REQUIRES_DELETED_GENERATION',id,outboxId);
+   }else if(!sourceDoc.exists){
+    return result(intent==='save'
+     ?'HOLD_EXPLICIT_RESTORE_REQUIRED':'NOOP_ALREADY_ABSENT',id,outboxId);
+   }
+  }
+  // An explicit restore is a new generation, not a late ordinary save.
+  // The caller must provide a complete restore payload; this is not yet
+  // established as a live client/server contract, so candidate remains OFF.
+  const finalFavorite=intent==='delete'?null:mergedFavorite(
+   sourceDoc.exists?(sourceDoc.data()||{}):{},favorite||{},
+  );
+  if(intent==='restore'&&isRemoved(finalFavorite||{}))
+   return result('DENY_RESTORE_REMOVED_STATE',id,outboxId);
+  const desiredState=intent==='delete'||isRemoved(finalFavorite||{})
+   ?'removed':'saved';
   const stamp=serverTimestamp();
   if(stamp==null)return result('DENY_SERVER_TIMESTAMP',id,outboxId);
   // One Firestore commit: a failed or conflicting transaction writes nothing.
@@ -130,13 +180,12 @@ export const commitApp518AtomicFavoriteCandidate=async({
   });
   if(intent==='delete')tx.delete(favoriteRef);
   else tx.set(favoriteRef,{
-   ...(sourceDoc.exists?sourceDoc.data():{}),
-   ...favorite,uid,id,app518SourceMutationId:mutationId,
+   ...finalFavorite,uid,id,app518SourceMutationId:mutationId,
    app518SourceCommittedAt:stamp,
   });
   tx.create(outboxRef,{
    uid,documentId:id,mutationId,intent,
-   desiredState:intent==='delete'?'removed':'saved',
+   desiredState,
    payloadFingerprint:fingerprint,
    ownerDocumentId:ownerKey,sourceCommitAt:stamp,
    deliveryState:'PENDING',

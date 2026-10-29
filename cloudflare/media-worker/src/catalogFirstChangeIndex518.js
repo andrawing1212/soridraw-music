@@ -163,6 +163,9 @@ export const stageFirstChangedOwnerIndex518=async({
        ||nowMs-previous.checked_at_ms<60000)
        return {code:'RETRYABLE_STAGE_RESTART_COOLDOWN',complete:false,
          r2FullReads:fullReads,d1RowsWritten:writes};
+     const rotationBudget=await reserveWriteBudget({nowMs,requestedRows:1});
+     if(rotationBudget?.reserved!==true)
+      return deny(rotationBudget?.code||'HOLD_D1_GLOBAL_WRITERS_UNVERIFIED');
      const rotated=await db.prepare(INDEX_ROTATE_BUILDING_518).bind(
        head.headRevision,head.headRevision,head.itemCount,head.etag,nowMs,
        uid,previous.generation,previous.indexed_revision,

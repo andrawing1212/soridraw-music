@@ -145,6 +145,14 @@ const run=async()=>{
   }
   if(out.retry||out.attempted)progressTicks++;
   if((await meta())?.status==='building')stageObserved=true;
+  if(out.held){
+   const m=await meta();
+   const b=await db.prepare('SELECT reserved_rows FROM music_note_catalog_daily_budget_518').first();
+   console.error('APP518_LARGE_DIAGNOSTIC',JSON.stringify({
+    tick,metaStatus:m?.status,headRevision:m?.indexed_revision,
+    dayReserved:b?.reserved_rows,code:out.code,
+   }));
+  }
   assert.equal(out.held,0,'valid local large owner must not permanent-HOLD: '+JSON.stringify(out));
   if(tick===4){await mf.dispose();await open();}
  }

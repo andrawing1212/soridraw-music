@@ -35,12 +35,15 @@ const runOwner=async(count)=>{
  const uid='local-'+count,pre=path(uid),baseKey=pre+'base-1.json';
  const rows=Array.from({length:count},(_,i)=>({
   id:'song-'+i,uid,title:'Preserve '+i,
+  ...(count===50001?{largeMetadata:'한글-'.repeat(60)}:{}),
  }));
  const original=JSON.stringify({
   schemaVersion:4,authority:'server',kind:'musicNote',
   revision:1,items:rows,itemCount:count,complete:true,generatedAtMs:1000,
  });
- assert.ok(new TextEncoder().encode(original).byteLength<24*1024*1024);
+ const originalBytes=new TextEncoder().encode(original).byteLength;
+ assert.ok(originalBytes<24*1024*1024);
+ if(count===50001)assert.ok(originalBytes>8*1024*1024,'exercise genuine multipart');
  await bucket.put(baseKey,original,{customMetadata:{uid,kind:'musicNote'}});
  let head={...createEmptyCatalogJournal({
   kind:'musicNote',baseKey,baseRevision:1,itemCount:count,now:1000,
@@ -102,8 +105,24 @@ const runOwner=async(count)=>{
  const pub=await provider.readOwnerHead(uid);
  assert.equal(pub.etag,initialEtag,'stage never publishes HEAD');
  assert.equal(pub.head.baseKey,baseKey,'original BASE remains current');
- const published=await stagePagedCanonicalCompaction518(input);
- assert.equal(published.code,'COMPACTED','verified immutable pages must publish via owner HEAD CAS');
+ let published,multipartTicks=0;
+ do{
+  published=await stagePagedCanonicalCompaction518(input);
+  if(published.code==='COMPACTED')break;
+  assert.equal(published.code,'PAGED_COMPACTION_IN_PROGRESS',
+   'large BASE must stage bounded uniform R2 multipart pieces');
+  assert.equal((await provider.readOwnerHead(uid)).etag,initialEtag,
+   'multipart in progress must not publish old/new BASE prematurely');
+  assert.equal(published.d1Writes,0);
+  multipartTicks++;
+  assert.ok(multipartTicks<20,'bounded multipart must finish');
+  if(count===50001&&multipartTicks===2){
+   await mf.dispose();env=await setup();
+   input.env=env;input.readOwnerHead=provider.readOwnerHead;
+   input.baseReader=baseReader;
+  }
+ }while(true);
+ if(count===50001)assert.ok(multipartTicks>=3,'multipart was actually used');
  const after=await provider.readOwnerHead(uid);
  assert.notEqual(after.etag,initialEtag);
  assert.equal(after.head.baseRevision,head.headRevision);
@@ -118,6 +137,7 @@ const runOwner=async(count)=>{
  console.log('APP518_PAGED_R2_'+count+'_PUBLISHED_ETAG_CAS_AND_FULL_DATA=PASS');
  console.log('APP518_PAGED_R2_'+count+'_ALL_IDS_PRESERVED_NO_DUPLICATES=PASS');
  console.log('APP518_PAGED_R2_'+count+'_RESTART_AND_IMMUTABLE_STAGE=PASS');
+ if(count===50001)console.log('APP518_R2_MULTIPART_OVER_8MIB_RESTART_AND_CAS=PASS');
  await mf.dispose();mf=null;
 };
 (async()=>{

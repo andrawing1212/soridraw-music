@@ -118,7 +118,7 @@ export const createApp518ServerBridge=({
      readExactCanonical,readOwnerHead:r2.readOwnerHead,
      storeHeadIfEtag:r2.storeHeadIfEtag,
      compactVerifiedOwnerHead:args=>r2.compactVerifiedOwnerHead({
-      ...args,projectItem,sortItems,
+      ...args,projectItem,sortItems,baseReader,
      }),
      loadCompleteFencedOwnerR2:async account=>
       r2.loadCompleteFencedOwnerR2({uid:account,projectItem,sortItems}),

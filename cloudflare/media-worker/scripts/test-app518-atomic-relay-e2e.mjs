@@ -79,7 +79,9 @@ const init=async()=>{
  };
  const env={CATALOG_OUTBOX_518:d1,CATALOG:instrumentedR2,
   CATALOG_SERVER_HMAC_518:secret,
-  SORIDRAW_CANONICAL_CATALOG_518:'ENABLED_AFTER_SHARED_ROLLOUT'};
+  SORIDRAW_CANONICAL_CATALOG_518:'ENABLED_AFTER_SHARED_ROLLOUT',
+  SORIDRAW_D1_ALL_ACCOUNT_WRITERS_518:'VERIFIED',
+  SORIDRAW_D1_SHARED_ACCOUNT_LEDGER_518:'VERIFIED'};
  bridge=createApp518ServerBridge({env,
   sharedReleaseFencesVerified:true,readExactCanonical:readCurrent,
   projectItem:item=>item,sortItems:items=>items,
@@ -159,6 +161,7 @@ const run=async()=>{
  const sql=[
   'cloudflare/media-worker/migrations/518_music_note_catalog_outbox.sql',
   'cloudflare/media-worker/migrations/518_music_note_catalog_first_change_index.sql',
+  'cloudflare/media-worker/migrations/518_music_note_catalog_daily_write_budget.sql',
  ].map(p=>readFileSync(p,'utf8')).join('\n');
  // Miniflare D1 exec treats standalone SQL comments as statements.
  // Remove only comment lines; execute every actual DDL statement unchanged.

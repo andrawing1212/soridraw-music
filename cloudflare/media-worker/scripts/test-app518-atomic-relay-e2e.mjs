@@ -144,7 +144,11 @@ const signedStale=async(staleVersion)=>{
 const run=async()=>{
  await init();
  const sql=readFileSync('cloudflare/media-worker/migrations/518_music_note_catalog_outbox.sql','utf8');
- await d1.exec(sql); // Execute the real migration as a whole; comments contain semicolons.
+ // Miniflare D1 exec treats standalone SQL comments as statements.
+ // Remove only comment lines; execute every actual DDL statement unchanged.
+ const ddl=sql.split('\n').filter(line=>!line.trimStart().startsWith('--')).join('\n');
+ for(const stmt of ddl.split(';').map(s=>s.trim()).filter(Boolean))
+  await d1.prepare(stmt).run();
  await r2.put(baseKey,JSON.stringify({schemaVersion:4,authority:'server',kind:'musicNote',revision:1,
   itemCount:0,items:[]}));
  const head={...createEmptyCatalogJournal({kind:'musicNote',baseKey,baseRevision:1,itemCount:0,now}),

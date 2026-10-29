@@ -84,6 +84,58 @@ jobs:
                     code='UNAVAILABLE';
                   }
                 }
+                // Only a module from the immutable 100%-active version is admissible.
+                // No source, credentials, module content or user records are logged.
+                let sourceInspection={version_bound:false,verdict:'UNVERIFIED'};
+                if(v?.version_id){
+                  try{
+                    const version=await get('/workers/workers/'+name+'/versions/'+v.version_id+'?include=modules');
+                    if(String(version?.id||'')!==v.version_id) throw Error('VERSION_MISMATCH');
+                    const modules=Array.isArray(version.modules)?version.modules:[];
+                    const entry=modules.find(m=>m.name===version.main_module&&m.content_base64)||
+                      (modules.length===1&&modules[0].content_base64?modules[0]:null);
+                    if(!entry) throw Error('MAIN_MODULE_UNAVAILABLE');
+                    const bytes=Buffer.from(entry.content_base64,'base64');
+                    if(!bytes.length||bytes.length>20*1024*1024) throw Error('MODULE_BYTES_UNAVAILABLE');
+                    const src=bytes.toString('utf8');
+                    const deltaRoute=src.includes('catalogRouteFromPath(url.pathname)')&&
+                      /request\.method\s*===\s*['"]POST['"]\s*&&\s*route\.action\s*===\s*['"]delta['"]/.test(src)&&
+                      src.includes('applyCatalogDelta(identity, route.kind, delta, env, executionCtx)');
+                    const authGate=src.includes('requireClientIdentity(request, env)')&&
+                      src.includes('verifyFirebaseIdToken(idToken, env)')&&
+                      src.includes('verifyAppCheckToken(appCheckToken, env)');
+                    const r2Write=src.includes('putCatalogJournalHead(env, identity.uid, kind, appended.head, state.journalObject)')&&
+                      src.includes('catalogBucket(env).put(');
+                    const canonicalFence=src.includes('CATALOG_518_CANONICAL_WRITER_REQUIRED')&&
+                      src.includes('isCanonicalCatalogAuthority518(env)');
+                    const headFence=src.includes('decideCatalogWriterAuthority518(')&&
+                      src.includes('CATALOG_518_LEGACY_WRITER_DENIED');
+                    // A concurrent redeploy invalidates the source-to-live attribution.
+                    const confirmation=await get(base+'/deployments');
+                    const checked=(Array.isArray(confirmation?.deployments)?confirmation.deployments:
+                      Array.isArray(confirmation)?confirmation:[])[0]?.versions||[];
+                    if(checked.length!==1||checked[0].version_id!==v.version_id||
+                      Number(checked[0].percentage)<99.99)throw Error('ACTIVE_DEPLOYMENT_CHANGED');
+                    sourceInspection={
+                      version_bound:true,
+                      version_id:v.version_id,
+                      main_module_sha256:createHash('sha256').update(bytes).digest('hex'),
+                      delta_route_in_source:deltaRoute,
+                      firebase_auth_appcheck_in_source:authGate,
+                      r2_journal_write_in_source:r2Write,
+                      app518_canonical_deny_in_source:canonicalFence,
+                      app518_head_fence_in_source:headFence,
+                      verdict:deltaRoute&&authGate&&r2Write&&!canonicalFence&&!headFence
+                        ?'LEGACY_DELTA_WRITE_PATH_IN_SOURCE_NO_518_FENCE'
+                        :deltaRoute&&authGate&&r2Write&&canonicalFence&&headFence
+                          ?'APP518_FENCE_IN_SOURCE_RUNTIME_UNVERIFIED'
+                          :'UNVERIFIED_SOURCE_STRUCTURE',
+                    };
+                  }catch{
+                    sourceInspection={version_bound:false,verdict:'UNVERIFIED_VERSION_SOURCE_OR_DEPLOYMENT'};
+                    process.exitCode=2;
+                  }
+                }
                 console.log(JSON.stringify({
                   stage,worker:name,active_version_id:v?.version_id||'UNVERIFIED',
                   active_percent:v?.percentage??'UNVERIFIED',
@@ -93,6 +145,7 @@ jobs:
                   live_code_content_sha256:code,CATALOG:bucket,
                   SORIDRAW_SHARED_CATALOG_V1:shared,
                   legacy_delta_writer:delta,
+                  active_version_source_inspection:sourceInspection,
                   source_binding_match:bucket==='soridraw-user-catalog'&&shared==='1'
                     ?'CONFIG_MATCH_NOT_AUTHORITY_PROOF':'FAIL_OR_UNVERIFIED',
                 }));

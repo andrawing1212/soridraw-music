@@ -83,7 +83,11 @@ export const applyIndexedCanonicalR2Delta518=async({
     uid,expectedEtag:etag,expectedRevision:head.headRevision,
     nowMs,
    });
-   if(['COMPACTED','RETRYABLE_COMPACTION_HEAD_MOVED'].includes(compacted?.code))
+   if(['PAGED_COMPACTION_IN_PROGRESS',
+     'PAGED_COMPACTION_STAGED_AWAIT_ASSEMBLY'].includes(compacted?.code))
+    return deny('RETRYABLE_INDEX_PAGING_IN_PROGRESS');
+   if(['COMPACTED','RETRYABLE_COMPACTION_HEAD_MOVED',
+     'RETRYABLE_PAGED_COMPACTION_HEAD_MOVED'].includes(compacted?.code))
     continue;
    return deny('RETRYABLE_CANONICAL_COMPACTION_'+(compacted?.code||'UNKNOWN'));
   }

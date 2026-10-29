@@ -36,7 +36,7 @@ const db={
  },
 };
 const request={db,authenticatedUid:'uid-A',uid:'uid-A',
- mutationId:'mutation-one',intent:'create',favorite:{title:'Song A',genre:'Indie'},
+ mutationId:'mutation-one',intent:'create',favorite:{title:'Song A',genre:'Indie',lyrics:{korean:'기존 한글',english:'original English'},appliedKeywords:{lyricsByLanguage:{ko:'원본',en:'English'},mood:'calm'}},
  serverTimestamp:()=>({firestoreServerTimestamp:true}),releaseApproved:true};
 (async()=>{
  let x=await commit({...request,releaseApproved:false});
@@ -60,25 +60,43 @@ const request={db,authenticatedUid:'uid-A',uid:'uid-A',
  x=await commit({...request,favorite:{title:'DIFFERENT'}});
  assert.equal(x.code,'DENY_MUTATION_ID_REUSE');assert.equal(writes,3);
  x=await commit({...request,intent:'save',mutationId:'mutation-two',documentId:id,
- favorite:{title:'Edited'}});
+ expectedLastMutationId:'mutation-one',
+ favorite:{title:'Edited',lyrics:{english:'edited English'},appliedKeywords:{lyricsByLanguage:{en:'edited'}}}});
  assert.equal(x.code,'SOURCE_AND_OUTBOX_COMMITTED');assert.equal(writes,6);
  assert.equal(docs.get('favorites/'+id).data.title,'Edited');
- assert.equal(docs.get('favorites/'+id).data.genre,'Indie','partial edit preserves unrelated song fields');
+ assert.equal(docs.get('favorites/'+id).data.genre,'Indie');
+ assert.deepEqual(docs.get('favorites/'+id).data.lyrics,
+  {korean:'기존 한글',english:'edited English'});
+ assert.deepEqual(docs.get('favorites/'+id).data.appliedKeywords,
+  {lyricsByLanguage:{ko:'원본',en:'edited'},mood:'calm'});
+ x=await commit({...request,intent:'save',mutationId:'unseen-old-title',
+  documentId:id,expectedLastMutationId:'mutation-one',favorite:{title:'Stale'}});
+ assert.equal(x.code,'HOLD_STALE_SOURCE_GENERATION');assert.equal(writes,6);
  x=await commit(request);assert.equal(x.code,'ALREADY_RECORDED_SUPERSEDED');
  x=await commit({...request,intent:'delete',mutationId:'mutation-three',
- documentId:id,favorite:undefined});
+ documentId:id,favorite:undefined,expectedLastMutationId:'mutation-two'});
  assert.equal(x.code,'SOURCE_AND_OUTBOX_COMMITTED');assert.equal(writes,9);
  assert.ok(!docs.has('favorites/'+id));
  assert.equal(docs.get(ownerPath).data.latestMutationId,'mutation-three');
  const staleDelete={...request,intent:'delete',mutationId:'mutation-three',
- documentId:id,favorite:undefined};
+ documentId:id,favorite:undefined,expectedLastMutationId:'mutation-two'};
  x=await commit(staleDelete);assert.equal(x.code,'ALREADY_RECORDED');assert.equal(writes,9);
+ x=await commit({...request,intent:'save',mutationId:'never-sent-old-save',
+  documentId:id,expectedLastMutationId:'mutation-two',favorite:{title:'Zombie'}});
+ assert.equal(x.code,'HOLD_STALE_SOURCE_GENERATION');assert.equal(writes,9);
  x=await commit({...request,intent:'save',mutationId:'mutation-four',
- documentId:id,favorite:{title:'Resaved'}});
+ documentId:id,expectedLastMutationId:'mutation-three',favorite:{title:'No implicit restore'}});
+ assert.equal(x.code,'HOLD_EXPLICIT_RESTORE_REQUIRED');assert.equal(writes,9);
+ x=await commit({...request,intent:'restore',mutationId:'mutation-four',
+ documentId:id,expectedLastMutationId:'mutation-three',
+ favorite:{title:'Resaved',lyrics:{korean:'restore ko',english:'restore en'},saved:true}});
  assert.equal(x.code,'SOURCE_AND_OUTBOX_COMMITTED');assert.equal(writes,12);
  x=await commit(staleDelete);assert.equal(x.code,'ALREADY_RECORDED_SUPERSEDED');
+ x=await commit({...request,intent:'delete',mutationId:'unseen-old-delete',
+  documentId:id,expectedLastMutationId:'mutation-three',favorite:undefined});
+ assert.equal(x.code,'HOLD_STALE_SOURCE_GENERATION');assert.equal(writes,12);
  x=await commit({...request,intent:'delete',mutationId:'mutation-five',
- documentId:id,favorite:undefined});
+ documentId:id,favorite:undefined,expectedLastMutationId:'mutation-four'});
  assert.equal(x.code,'SOURCE_AND_OUTBOX_COMMITTED');assert.equal(writes,15);
  x=await commit(staleDelete);assert.equal(x.code,'ALREADY_RECORDED_SUPERSEDED');
  x=await commit({...request,authenticatedUid:'uid-B',uid:'uid-B',
@@ -95,12 +113,19 @@ const request={db,authenticatedUid:'uid-A',uid:'uid-A',
  assert.ok(!docs.has('favorites/'+idFor('uid-A','new-on-failure')));
  x=await commit(fresh);assert.equal(x.code,'SOURCE_AND_OUTBOX_COMMITTED');
  assert.equal(writes,18);
+ // Soft-removal state in the canonical row must match its durable outbox.
+ const freshId=idFor('uid-A','new-on-failure');
+ const soft=await commit({...request,intent:'save',mutationId:'soft-remove',documentId:freshId,
+  expectedLastMutationId:'new-on-failure',favorite:{saved:false}});
+ assert.equal(soft.code,'SOURCE_AND_OUTBOX_COMMITTED');assert.equal(writes,21);
+ assert.equal(docs.get('favorites/'+freshId).data.saved,false);
+ assert.equal(docs.get('server_music_note_source_outbox_518/'+soft.outboxId).data.desiredState,'removed');
  // Parallel attempts with identical ID: only one transaction commits.
  const next={...request,mutationId:'parallel-unique'};
  const values=await Promise.all([commit(next),commit(next)]);
  assert.deepEqual(values.map(y=>y.code).sort(),
   ['ALREADY_RECORDED','SOURCE_AND_OUTBOX_COMMITTED'].sort());
- assert.equal(writes,21);
+ assert.equal(writes,24);
  assert.equal(docs.get(ownerPath).data.uid,'uid-A');
  assert.ok([...docs.values()].every(x=>typeof x.commitNs==='string'));
  console.log('APP518_SERVER_ATOMIC_FAVORITE_OWNER_OUTBOX_OFF_W0=PASS');

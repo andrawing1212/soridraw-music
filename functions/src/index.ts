@@ -4453,7 +4453,7 @@ export {
 
 
 import {
-  readApp518OwnerQuarantine,recordApp518OwnerCollision,
+  recordApp518OwnerCollision,
   readApp518EventGuard,recordApp518EventFailure,
   resolveApp518EventFailure,
 } from "./app518EventSafetyFence";

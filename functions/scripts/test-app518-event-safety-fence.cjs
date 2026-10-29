@@ -36,6 +36,7 @@ const db={
 const owner='ownerA',other='ownerB',id='one-song',eventId='event-1',
  nowMs=1793232000000,eventTimeMs=nowMs-1000;
 const args={db,documentId:id,eventId,nowMs,eventTimeMs};
+(async()=>{
 let gate=await readApp518EventGuard(args);
 assert.equal(gate,'EVENT_DELIVERY_ALLOWED');assert.equal(stats.writes,0);
 assert.equal((await resolveApp518EventFailure({db,documentId:id,eventId,nowMs})),
@@ -109,3 +110,5 @@ console.log('APP518_FIREBASE_409_TERMINAL_W1_DUPLICATE_W0=PASS');
 console.log('APP518_OWNER_UID_CHANGE_PERSISTENT_QUARANTINE_REPLAY_W0=PASS');
 console.log('APP518_OWNER_QUARANTINE_BLOCKS_LATER_B_AND_EXACT_CALLBACK=PASS');
 console.log('APP518_FIREBASE_EVENT_SAFETY_TEST_LIVE_IO=ZERO');
+
+})().catch(error=>{console.error(error);process.exitCode=1;});

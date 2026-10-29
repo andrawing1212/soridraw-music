@@ -107,7 +107,12 @@ export const advancePagedOwnerIndex518=async({
   // account-wide budget. Old/unmetered writers invalidate attestation.
   if(typeof reserveWriteBudget!=='function')
    return failure('HOLD_D1_DAILY_BUDGET_UNVERIFIED');
-  const budget=await reserveWriteBudget({nowMs,requestedRows:1040});
+  // Delta continuation performs <=3 bounded delta changes, not 1,024
+  // membership inserts. Reserving 1,040 on every delta tick would strand
+  // 50k owners under the Free daily cap without actually using rows.
+  const priorCursor=await db.prepare(READ_PAGE_518).bind(uid,gen,mode).first();
+  const requestedRows=priorCursor?.phase==='delta'?16:1040;
+  const budget=await reserveWriteBudget({nowMs,requestedRows});
   if(budget?.reserved!==true)
    return failure(budget?.code||'HOLD_D1_DAILY_BUDGET_UNVERIFIED');
   if(mode==='first'){

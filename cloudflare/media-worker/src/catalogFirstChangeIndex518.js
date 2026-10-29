@@ -190,7 +190,7 @@ export const stageFirstChangedOwnerIndex518=async({
    }
    // Direct first-index callers cannot bypass the shared daily budget.
    // Owners >256 take the bounded paged path in the server bridge.
-   if(ids.length>256)return deny('HOLD_D1_FIRST_INDEX_REQUIRES_PAGING');
+   if(ids.length>2044)return deny('HOLD_D1_FIRST_INDEX_REQUIRES_PAGING');
    const reservation=await reserveWriteBudget({
     nowMs,requestedRows:ids.length+4,
    });

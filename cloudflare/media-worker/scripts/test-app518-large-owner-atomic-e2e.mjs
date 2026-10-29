@@ -32,7 +32,9 @@ if(!/^(127\.0\.0\.1|localhost):[0-9]+$/.test(process.env.FIRESTORE_EMULATOR_HOST
 const app=admin.initializeApp({projectId:'demo-app518-atomic'},'app518-large-local');
 const fs=admin.firestore(app);
 const dir=mkdtempSync(join(tmpdir(),'app518-50k-local-'));
-const uid='large-local-50001',createId='large-create-1',removeId='large-remove-2';
+const accountCount=Number(process.env.APP518_E2E_OWNER_COUNT||50001);
+if(![49152,50001].includes(accountCount))throw Error('INVALID_E2E_LOCAL_COUNT');
+const uid='large-local-'+accountCount,createId='large-create-1',removeId='large-remove-2';
 const id=idFor(uid,createId),now=Date.now(),secret='local-only-large-secret-long-enough';
 const pre='catalog/v5/'+encodeURIComponent(uid)+'/musicNote/';
 const options={modules:true,name:'app518-50k-local',
@@ -107,7 +109,7 @@ const run=async()=>{
   .split('\n').filter(line=>!line.trimStart().startsWith('--')).join('\n');
  for(const stmt of ddl.split(';').map(s=>s.trim()).filter(Boolean))
   await db.prepare(stmt).run();
- const rows=Array.from({length:50001},(_,i)=>({
+ const rows=Array.from({length:accountCount},(_,i)=>({
   id:'original-'+i,uid,title:'Retain '+i,description:'한글-'.repeat(30),
  }));
  const base=JSON.stringify({
@@ -119,13 +121,13 @@ const run=async()=>{
  const baseKey=pre+'base-1.json';
  await bucket.put(baseKey,base,{customMetadata:{uid,kind:'musicNote'}});
  let head={...createEmptyCatalogJournal({
-  kind:'musicNote',baseKey,baseRevision:1,itemCount:50001,now:1000,
+  kind:'musicNote',baseKey,baseRevision:1,itemCount:accountCount,now:1000,
  }),canonicalAuthority518:true};
  for(let n=0;n<200;n++){
   const patched=appendCatalogJournalDelta({
    head,delta:{
     mutationId:'canonical518:original-0:'+String(n+1).padStart(21,'0'),
-    baseRevision:head.headRevision,baseItemCount:50001,nextItemCount:50001,
+    baseRevision:head.headRevision,baseItemCount:accountCount,nextItemCount:accountCount,
     upserts:[{id:'original-0',uid,title:'Updated '+n}],deletedIds:[],
    },serverRevision:head.headRevision+1,now:1000+n,
   });
@@ -178,7 +180,7 @@ const run=async()=>{
  assert.ok(progressTicks>10,'multiple bounded invocations required');
  assert.equal(await member(),true);
  let after=await headRead();
- assert.equal(after.itemCount,50002);
+ assert.equal(after.itemCount,accountCount+1);
  assert.equal(after.deltas.length<200,true,'pinned paged compaction actually ran');
  const gone=await mutate('delete',removeId,createId);
  assert.equal(gone.code,'SOURCE_AND_OUTBOX_COMMITTED');
@@ -196,7 +198,7 @@ const run=async()=>{
  assert.equal(removed.acked,1,'50k final delete must reach R2/D1 ACK');
  assert.equal(await member(),false);
  after=await headRead();
- assert.equal(after.itemCount,50001);
+ assert.equal(after.itemCount,accountCount);
  assert.equal((await fs.collection('favorites').doc(id).get()).exists,false);
  const d1row=await queued();
  assert.equal(d1row.ack_version_ns,d1row.source_version_ns);
@@ -204,10 +206,10 @@ const run=async()=>{
  const quota=await db.prepare(
   'SELECT reserved_rows FROM music_note_catalog_daily_budget_518 WHERE day_utc=?'
  ).bind(new Date(now).toISOString().slice(0,10)).first();
- assert.ok(quota?.reserved_rows>50001&&quota.reserved_rows<=80000);
- console.log('APP518_LOCAL_REAL_FIRESTORE_D1_R2_50001_SAVE_DELETE_ACK=PASS');
- console.log('APP518_LOCAL_50001_PAGED_IMPORT_MULTIPART_COMPACT=PASS');
- console.log('APP518_LOCAL_50001_CRASH_RESTART_STALE_SAVE_TOMBSTONE=PASS');
+ assert.ok(quota?.reserved_rows>accountCount&&quota.reserved_rows<=80000);
+ console.log('APP518_LOCAL_REAL_FIRESTORE_D1_R2_'+accountCount+'_SAVE_DELETE_ACK=PASS');
+ console.log('APP518_LOCAL_'+accountCount+'_PAGED_IMPORT_MULTIPART_COMPACT=PASS');
+ console.log('APP518_LOCAL_'+accountCount+'_CRASH_RESTART_STALE_SAVE_TOMBSTONE=PASS');
  console.log('APP518_LOCAL_D1_DAILY_RESERVATION_BELOW_FREE_LIMIT=PASS');
 };
 run().catch(e=>{console.error(e);process.exitCode=1}).finally(async()=>{

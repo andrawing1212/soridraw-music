@@ -9,7 +9,7 @@ let time=t0,mutated=0,ledger=new Map(),pending={
  desired_state:'saved',attempt_count:0,next_attempt_ms:0,hold_reason:null,ack_version_ns:null,
 };
 let r2Count=0,controlCount=0;
-const raw={prepare(sql){
+const raw={async batch(){throw Error('mock batch not used');},prepare(sql){
  return {bind(...args){
   return {
    async first(){return null;},

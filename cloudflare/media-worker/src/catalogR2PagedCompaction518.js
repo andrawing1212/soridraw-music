@@ -85,41 +85,37 @@ export const stagePagedCanonicalCompaction518=async({
   // bounded streaming PUT (<=36 R2 reads); no 50k-song JS array or D1 scan.
   let dest=await env.CATALOG.head(baseKey);
   if(!dest){
-   const encoder=new TextEncoder();
    const prefixJSON='{"schemaVersion":4,"authority":"server","kind":"musicNote","revision":'+
     expectedRevision+',"items":[';
    const suffixJSON='],"itemCount":'+head.itemCount+
     ',"complete":true,"generatedAtMs":'+head.updatedAtMs+'}';
-   let step=-1,first=true;
-   const stream=new ReadableStream({
-    async pull(controller){
-     if(step===-1){
-      step=0;controller.enqueue(encoder.encode(prefixJSON));return;
-     }
-     if(step===state.parts){
-      step++;controller.enqueue(encoder.encode(suffixJSON));
-      controller.close();return;
-     }
-     const partKey=dir+'chunk-'+String(step).padStart(5,'0')+'.json';
-     const part=await env.CATALOG.get(partKey);
-     if(!part||part.customMetadata?.uid!==uid
-       ||part.customMetadata?.kind!=='musicNote'
-       ||part.customMetadata?.revision!==String(expectedRevision))
-      throw new Error('APP518_PAGED_ASSEMBLY_CHUNK_MISSING_OR_FOREIGN');
-     const raw=await part.text();
-     const start=raw.indexOf('"items":[');
-     if(start<0||!raw.endsWith(']}'))
-      throw new Error('APP518_PAGED_ASSEMBLY_CHUNK_INVALID');
-     const list=raw.slice(start+9,-2);
-     if(list.length){
-      const value=(first?'':',')+list;
-      controller.enqueue(encoder.encode(value));
-      first=false;
-     }
-     step++;
-    },
-   });
-   const put=await env.CATALOG.put(baseKey,stream,{
+   // R2 refuses unknown-length ReadableStreams. Bound memory and CPU:
+   // owners exceeding 8 MiB remain HOLD until multipart assembly is audited.
+   // A HOLD never changes BASE/HEAD or sends a false D1 ACK.
+   const parts=[];
+   let totalBytes=bytes(prefixJSON)+bytes(suffixJSON);
+   for(let step=0;step<state.parts;step++){
+    const partKey=dir+'chunk-'+String(step).padStart(5,'0')+'.json';
+    const part=await env.CATALOG.get(partKey);
+    if(!part||part.customMetadata?.uid!==uid
+      ||part.customMetadata?.kind!=='musicNote'
+      ||part.customMetadata?.revision!==String(expectedRevision))
+     return {code:'HOLD_PAGED_ASSEMBLY_CHUNK_MISSING_OR_FOREIGN'};
+    const raw=await part.text(),start=raw.indexOf('"items":[');
+    if(start<0||!raw.endsWith(']}'))
+     return {code:'HOLD_PAGED_ASSEMBLY_CHUNK_INVALID'};
+    const list=raw.slice(start+9,-2);
+    if(list){
+     totalBytes+=bytes(list)+(parts.length?1:0);
+     if(totalBytes>8*1024*1024)
+      return {code:'HOLD_PAGED_ASSEMBLY_OVER_8MIB',d1Writes:0,published:false};
+     parts.push(list);
+    }
+   }
+   const assembled=prefixJSON+parts.join(',')+suffixJSON;
+   if(bytes(assembled)>8*1024*1024)
+    return {code:'HOLD_PAGED_ASSEMBLY_OVER_8MIB',d1Writes:0,published:false};
+   const put=await env.CATALOG.put(baseKey,assembled,{
     onlyIf:{etagDoesNotMatch:'*'},
     httpMetadata:{contentType:'application/json; charset=utf-8',
      cacheControl:'private, no-store'},

@@ -22,7 +22,7 @@ const quantity=(sql,args)=>{
    if(!Array.isArray(arr))throw new CatalogD1BudgetError518('HOLD_D1_BULK_UNMEASURED');
    max+=arr.length;
   }
-  return Math.max(1,max);
+  return Math.max(1,max)*billedPerRow(sql);
  }
  return 1;
 };

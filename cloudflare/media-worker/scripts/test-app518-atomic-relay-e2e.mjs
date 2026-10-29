@@ -1,7 +1,7 @@
 /**
  * LOCAL ONLY: real Firebase Admin SDK + Firestore emulator + Miniflare D1/R2.
- * Uses the actual app518 HMAC ingest + D1 delivery queue and R2 journal CAS.
- * The test's small R2 adapter is NOT the production indexed R2 writer.
+ * Uses actual app518 HMAC ingest, D1 index/recovery and Indexed Writer.
+ * Never substitutes a custom R2 writer for the production candidate.
  * No network, no Cloudflare account, no real Firebase project.
  */
 import assert from 'node:assert/strict';
@@ -11,9 +11,9 @@ import {join} from 'node:path';
 import {createRequire} from 'node:module';
 import {Miniflare} from 'miniflare';
 import {createApp518ServerBridge} from '../src/catalogServerBridge518.js';
-import {deliverDueCanonicalFavorites518} from '../src/catalogDelivery518.js';
-import {parseFirestoreUpdateTimeNs518} from '../src/catalogCanonicalFence518.js';
-import {createEmptyCatalogJournal,appendCatalogJournalDelta,isValidCatalogJournal,materializeCatalogJournal} from '../src/catalogJournal.js';
+import {createEmptyCatalogJournal,createCompactedCatalogJournal,isValidCatalogJournal,materializeCatalogJournal} from '../src/catalogJournal.js';
+import {applyIndexedCanonicalR2Delta518} from '../src/catalogIndexedWriter518.js';
+import {INDEX_META_READ_518,INDEX_MEMBER_LOOKUP_518} from '../src/catalogFirstChangeIndex518.js';
 const require=createRequire(import.meta.url);
 const admin=require('../../../functions/node_modules/firebase-admin');
 const {commitApp518AtomicFavoriteCandidate:commit,app518CandidateDocumentId:idFor}
@@ -44,6 +44,8 @@ const options={
  resourcePersistencePath:folder,
 };
 let mf,d1,r2,bridge,readCurrent;
+let loseAfterR2=false,casPuts=0;
+assert.equal(typeof applyIndexedCanonicalR2Delta518,'function');
 const init=async()=>{
  mf=new Miniflare(options);
  d1=await mf.getD1Database('CATALOG_OUTBOX_518');
@@ -59,7 +61,23 @@ const init=async()=>{
   });
   return exact.source||null;
  };
- const env={CATALOG_OUTBOX_518:d1,CATALOG:r2,
+ // Fault injection is AFTER a real Miniflare R2 conditional PUT.
+ // The real R2 provider/Indexed Writer remain unchanged.
+ const instrumentedR2={
+  get:(...a)=>r2.get(...a),
+  put:async(...a)=>{
+   const out=await r2.put(...a);
+   if(a[0]===journalKey&&a[2]?.onlyIf){
+    if(out?.etag)casPuts++;
+    if(out?.etag&&loseAfterR2){
+     loseAfterR2=false;
+     throw Error('R2_COMMITTED_RESPONSE_LOST');
+    }
+   }
+   return out;
+  },
+ };
+ const env={CATALOG_OUTBOX_518:d1,CATALOG:instrumentedR2,
   CATALOG_SERVER_HMAC_518:secret,
   SORIDRAW_CANONICAL_CATALOG_518:'ENABLED_AFTER_SHARED_ROLLOUT'};
  bridge=createApp518ServerBridge({env,
@@ -87,56 +105,49 @@ const sourceFields=(intent,mutationId,expectedLastMutationId,favorite)=>
   ...(favorite?{favorite}:{}),serverTimestamp:()=>admin.firestore.FieldValue.serverTimestamp(),
   releaseApproved:true});
 const refOutbox=async()=>d1.prepare('SELECT source_version_ns,desired_state,ack_version_ns,attempt_count,next_attempt_ms FROM music_note_catalog_outbox_518 WHERE owner_uid=? AND favorite_id=?').bind(uid,id).first();
-let loseAfterR2=false,casPuts=0;
-const casProvider=async({uid:owner,documentId,sourceVersionNs,desiredState,canonical})=>{
- const obj=await r2.get(journalKey);
- assert.ok(obj);
- const head=JSON.parse(await obj.text());
- assert.equal(isValidCatalogJournal(head,'musicNote'),true);
- assert.equal(head.canonicalAuthority518,true);
- const marker='canonical518:'+documentId+':'+sourceVersionNs;
- if(head.recentMutations.some(x=>x.id===marker)){
-  return {code:'ALREADY_APPLIED',ownerVerified:true,versionVerified:true,
-   casVerified:true,sourceVersionNs};
- }
- const exact=await readCurrent(owner,documentId);
- if(!exact||exact.state!==desiredState||
-  parseFirestoreUpdateTimeNs518(exact.updateTime)!==sourceVersionNs)
-  return {code:'HOLD_STALE_SOURCE_BEFORE_R2_CAS'};
- const snapshot={schemaVersion:4,authority:'server',kind:'musicNote',
-  revision:head.baseRevision,itemCount:0,items:[]};
- const current=materializeCatalogJournal({
-  baseSnapshot:snapshot,head,projectItem:item=>item,sortItems:items=>items});
- assert.ok(current);
- const old=current.items.some(x=>x.id===documentId);
- const nextCount=current.itemCount+(desiredState==='saved'&&!old?1:0)
-  -(desiredState==='removed'&&old?1:0);
- const applied=appendCatalogJournalDelta({
-  head,delta:{mutationId:marker,baseRevision:head.headRevision,
-   baseItemCount:head.itemCount,nextItemCount:nextCount,
-   upserts:desiredState==='saved'?[{...canonical.item,id:documentId}]:[],
-   deletedIds:desiredState==='removed'?[documentId]:[]},
-  serverRevision:head.headRevision+1,now,
- });
- assert.equal(applied.ok,true);
- const stored=await r2.put(journalKey,JSON.stringify(applied.head),{
-  onlyIf:{etagMatches:obj.etag},
-  customMetadata:{uid:owner,kind:'musicNote',
-   baseRevision:String(applied.head.baseRevision),
-   revision:String(applied.head.headRevision),
-   itemCount:String(applied.head.itemCount),
-   deltaCount:String(applied.head.deltas.length),authority:'server'},
- });
- if(!stored?.etag)throw Error('CAS_CONFLICT_NO_ACK');
- casPuts++;
- if(loseAfterR2){loseAfterR2=false;throw Error('R2_SUCCEEDED_ACK_NETWORK_LOST');}
- return {code:'APPLIED',ownerVerified:true,versionVerified:true,
-  casVerified:true,sourceVersionNs};
+// Full candidate pipeline: first owner staging, real indexed R2 CAS,
+ // D1 journal replay, compaction-gap recovery and exact ACK.
+const drain=async(t=now)=>bridge.drainServerPending({nowMs:t,limit:1});
+const indexMeta=()=>d1.prepare(INDEX_META_READ_518).bind(uid).first();
+const indexedPresent=async()=>{
+ const m=await indexMeta();
+ if(!m||m.status!=='ready')return null;
+ return !!(await d1.prepare(INDEX_MEMBER_LOOKUP_518)
+  .bind(uid,m.generation,id).first());
 };
-const drain=async(t=now)=>deliverDueCanonicalFavorites518({
- db:d1,nowMs:t,maxItems:1,readExactCanonical:readCurrent,
- applyVersionedR2:casProvider,
-});
+const compactUnreconciledHead=async()=>{
+ // Simulate trusted R2 compaction BETWEEN R2 CAS and delayed D1 replay.
+ // The recovery is NOT simulated: bridge calls actual catalogCompactionRecovery518.
+ const oldObj=await r2.get(journalKey);
+ const oldHead=JSON.parse(await oldObj.text());
+ assert.equal(isValidCatalogJournal(oldHead,'musicNote'),true);
+ assert.ok(oldHead.deltas.length>=1);
+ const base=JSON.parse(await (await r2.get(baseKey)).text());
+ const materialized=materializeCatalogJournal({
+  baseSnapshot:base,head:oldHead,projectItem:item=>item,sortItems:items=>items});
+ assert.ok(materialized);
+ const newKey='catalog/v5/'+encodeURIComponent(uid)+
+  '/musicNote/base-compacted-'+oldHead.headRevision+'.json';
+ await r2.put(newKey,JSON.stringify({
+  schemaVersion:4,authority:'server',kind:'musicNote',complete:true,
+  ownerUid:uid,revision:oldHead.headRevision,
+  itemCount:materialized.itemCount,items:materialized.items,
+ }),{customMetadata:{uid,kind:'musicNote'}});
+ const compressed=createCompactedCatalogJournal({head:oldHead,baseKey:newKey,now:now+11});
+ assert.equal(compressed.baseRevision,oldHead.headRevision);
+ assert.equal(compressed.deltas.length,0);
+ const updated=await r2.put(journalKey,JSON.stringify(compressed),{
+  onlyIf:{etagMatches:oldObj.etag},
+  customMetadata:{
+   uid,kind:'musicNote',baseRevision:String(compressed.baseRevision),
+   revision:String(compressed.headRevision),
+   itemCount:String(compressed.itemCount),
+   deltaCount:'0',authority:'server',
+  },
+ });
+ assert.ok(updated?.etag);
+ return compressed;
+};
 const signedStale=async(staleVersion)=>{
  const body={action:'enqueue',uid,documentId:id,sourceVersionNs:staleVersion,desiredState:'saved'};
  const signed=signApp518ServiceRequest({secret,body,nowMs:now});
@@ -145,14 +156,19 @@ const signedStale=async(staleVersion)=>{
 };
 const run=async()=>{
  await init();
- const sql=readFileSync('cloudflare/media-worker/migrations/518_music_note_catalog_outbox.sql','utf8');
+ const sql=[
+  'cloudflare/media-worker/migrations/518_music_note_catalog_outbox.sql',
+  'cloudflare/media-worker/migrations/518_music_note_catalog_first_change_index.sql',
+ ].map(p=>readFileSync(p,'utf8')).join('\n');
  // Miniflare D1 exec treats standalone SQL comments as statements.
  // Remove only comment lines; execute every actual DDL statement unchanged.
  const ddl=sql.split('\n').filter(line=>!line.trimStart().startsWith('--')).join('\n');
  for(const stmt of ddl.split(';').map(s=>s.trim()).filter(Boolean))
   await d1.prepare(stmt).run();
- await r2.put(baseKey,JSON.stringify({schemaVersion:4,authority:'server',kind:'musicNote',revision:1,
-  itemCount:0,items:[]}));
+ await r2.put(baseKey,JSON.stringify({
+  schemaVersion:4,authority:'server',kind:'musicNote',complete:true,
+  ownerUid:uid,revision:1,itemCount:0,items:[],
+ }),{customMetadata:{uid,kind:'musicNote'}});
  const head={...createEmptyCatalogJournal({kind:'musicNote',baseKey,baseRevision:1,itemCount:0,now}),
   canonicalAuthority518:true};
  await r2.put(journalKey,JSON.stringify(head),{
@@ -188,6 +204,7 @@ const run=async()=>{
  assert.equal(queued.ack_version_ns,null);
  const replay=await drain(now+60000);
  assert.equal(replay.acked,1);assert.equal(casPuts,1);
+ assert.equal(await indexedPresent(),true);
  queued=await refOutbox();
  assert.equal(queued.ack_version_ns,queued.source_version_ns);
  const savedVersion=queued.source_version_ns;
@@ -198,21 +215,41 @@ const run=async()=>{
  const stale=await signedStale(savedVersion);
  assert.equal(stale.code,'STALE_SIGNED_EVENT_NO_WRITE');
  queued=await refOutbox();assert.equal(queued.desired_state,'removed');
- const removed=await drain();
- assert.equal(removed.acked,1);
+ const beforeDeleteIndex=await indexMeta();
+ assert.equal(beforeDeleteIndex.status,'ready');
+ // Force a committed R2 delete while D1 is still indexed at the old save.
+ loseAfterR2=true;
+ const lostDelete=await drain();
+ assert.equal(lostDelete.acked,0);assert.equal(lostDelete.retry,1);
  assert.equal(casPuts,2);
+ assert.equal(await indexedPresent(),true,
+  'ACK loss must leave old D1 membership until recovery');
+ const compressed=await compactUnreconciledHead();
+ assert.equal(compressed.itemCount,0);
+ assert.ok(compressed.baseRevision>beforeDeleteIndex.indexed_revision);
+ await mf.dispose();await init();
+ queued=await refOutbox();assert.equal(queued.ack_version_ns,null);
+ const removed=await drain(now+120000);
+ assert.equal(removed.acked,1);
+ assert.equal(casPuts,2,'compaction+replay must not repeat the R2 mutation');
+ assert.equal(await indexedPresent(),false);
+ const afterRecoveryIndex=await indexMeta();
+ assert.equal(afterRecoveryIndex.indexed_revision,compressed.headRevision);
+ assert.equal(afterRecoveryIndex.generation,compressed.headRevision);
  const lastHead=JSON.parse(await (await r2.get(journalKey)).text());
  assert.equal(lastHead.itemCount,0);
- assert.equal(lastHead.deltas.length,2);
+ assert.equal(lastHead.deltas.length,0);
  assert.equal((await fs.collection('favorites').doc(id).get()).exists,false);
  const already=await drain();
  assert.equal(already.attempted,0);
  console.log('APP518_LOCAL_E2E_REAL_FIRESTORE_ADMIN_ATOMIC_SOURCE=PASS');
  console.log('APP518_LOCAL_E2E_REAL_MINIFLARE_D1_HMAC_INGEST=PASS');
- console.log('APP518_LOCAL_E2E_REAL_MINIFLARE_R2_JOURNAL_ETAG_CAS=PASS');
+ console.log('APP518_LOCAL_E2E_ACTUAL_INDEXED_WRITER_R2_ETAG_CAS=PASS');
  console.log('APP518_LOCAL_E2E_NETWORK_FAILURE_WITHOUT_LOSS=PASS');
  console.log('APP518_LOCAL_E2E_ACK_LOSS_R2_IDEMPOTENT_RESTART=PASS');
  console.log('APP518_LOCAL_E2E_STALE_REVERSED_AND_DELETE_TOMBSTONE=PASS');
+ console.log('APP518_LOCAL_E2E_REAL_INDEXED_WRITER_AND_D1_REPLAY=PASS');
+ console.log('APP518_LOCAL_E2E_REAL_COMPACTION_GAP_RECOVERY=PASS');
  console.log('APP518_LOCAL_E2E_NO_EXTERNAL_CLOUDFLARE_OR_FIREBASE=PASS');
 };
 run().catch(e=>{console.error(e);process.exitCode=1}).finally(async()=>{

@@ -4,8 +4,8 @@
 // All three deployed media Workers MUST have the canonical cutover installed
 // before SORIDRAW_CANONICAL_CATALOG_518 may be enabled in ANY environment.
 import {
- isValidCatalogJournal,materializeCatalogJournal,
- CATALOG_JOURNAL_MAX_BYTES,
+ isValidCatalogJournal,materializeCatalogJournal,createCompactedCatalogJournal,
+ shouldCompactCatalogJournal,CATALOG_JOURNAL_MAX_BYTES,
 } from './catalogJournal.js';
 // Only verified owner/schema/authority failures are permanent. Ordinary
 // get()/put() network failures remain retryable; never infer from messages.
@@ -80,6 +80,89 @@ export const createOwnerR2Provider518=({
   return {casCommitted:Boolean(stored?.etag),
     ownerVerified:Boolean(stored?.etag)};
  };
+ // Canonical-only, no legacy writer. One bounded owner snapshot at the
+ // confirmed journal threshold, NOT on page entry or each song change.
+ // For larger owners refuse in Workers Free until paged compaction is
+ // separately validated. Original BASE/HEAD are never removed.
+ const compactVerifiedOwnerHead=async({uid,expectedEtag,expectedRevision,
+   projectItem,sortItems,nowMs}={})=>{
+  if(!enabled||!validUid(uid)||!txt(expectedEtag)
+    ||!Number.isSafeInteger(expectedRevision)||expectedRevision<=0
+    ||typeof projectItem!=='function'||typeof sortItems!=='function'
+    ||!Number.isSafeInteger(nowMs)||nowMs<0)blocked();
+  const before=await readOwnerHead(uid);
+  if(before.etag!==expectedEtag||before.head.headRevision!==expectedRevision)
+   return {code:'RETRYABLE_COMPACTION_HEAD_MOVED'};
+  if(!shouldCompactCatalogJournal(before.head))
+   return {code:'COMPACTION_NOT_NEEDED'};
+  // A CPU/heap/cost guard: never try to materialize a huge owner in a
+  // Workers Free request. No D1 rows or user data are changed on HOLD.
+  if(before.head.itemCount>256)
+   return {code:'HOLD_COMPACTION_REQUIRES_BOUNDED_PAGES'};
+  const materialized=await loadCompleteFencedOwnerR2({
+   uid,projectItem,sortItems,
+  });
+  if(materialized.etag!==expectedEtag
+    ||materialized.head.headRevision!==expectedRevision)
+   return {code:'RETRYABLE_COMPACTION_HEAD_MOVED'};
+  const base={
+   schemaVersion:4,authority:'server',kind:'musicNote',complete:true,
+   ownerUid:uid,revision:expectedRevision,
+   itemCount:materialized.items.length,items:materialized.items,
+  };
+  const encoded=JSON.stringify(base);
+  if(new TextEncoder().encode(encoded).length>1024*1024)
+   return {code:'HOLD_COMPACTION_BASE_TOO_LARGE'};
+  // Deterministic, owner-bound immutable base. A repeated attempt after
+  // a lost response reuses the exact same snapshot, never another owner.
+  const etagId=expectedEtag.replace(/[^a-zA-Z0-9]/g,'').slice(0,80);
+  if(!etagId)return {code:'DENY_UNSAFE_COMPACTION_ETAG'};
+  const baseKey=prefix(uid)+'base-canonical518-'+expectedRevision+'-'+etagId+'.json';
+  const existing=await env.CATALOG.get(baseKey);
+  if(existing){
+   if(existing.customMetadata?.uid!==uid||existing.customMetadata?.kind!=='musicNote'
+     ||(await existing.text())!==encoded)
+    throw new CatalogR2ContractError518('APP518_COMPACTION_BASE_COLLISION');
+  }else{
+   const written=await env.CATALOG.put(baseKey,encoded,{
+    onlyIf:{etagDoesNotMatch:'*'},
+    httpMetadata:{contentType:'application/json; charset=utf-8',
+      cacheControl:'private, no-store'},
+    customMetadata:{uid,kind:'musicNote'},
+   });
+   if(!written?.etag){
+    const other=await env.CATALOG.get(baseKey);
+    if(!other||other.customMetadata?.uid!==uid
+      ||(await other.text())!==encoded)
+     return {code:'RETRYABLE_COMPACTION_BASE_RACE'};
+   }
+  }
+  const nextHead={
+   ...createCompactedCatalogJournal({head:before.head,baseKey,now:nowMs}),
+   canonicalCompaction518:{
+    fromEtag:expectedEtag,revision:expectedRevision,
+    itemCount:before.head.itemCount,
+   },
+  };
+  const packed=JSON.stringify(nextHead);
+  if(!isValidCatalogJournal(nextHead,'musicNote')
+    ||nextHead.canonicalAuthority518!==true
+    ||new TextEncoder().encode(packed).length>CATALOG_JOURNAL_MAX_BYTES)
+   return {code:'DENY_COMPACTION_HEAD_CONTRACT'};
+  const stored=await env.CATALOG.put(key(uid),packed,{
+   onlyIf:{etagMatches:expectedEtag},
+   httpMetadata:{contentType:'application/json; charset=utf-8',
+      cacheControl:'private, no-store'},
+   customMetadata:{
+    uid,kind:'musicNote',baseRevision:String(nextHead.baseRevision),
+    revision:String(nextHead.headRevision),
+    itemCount:String(nextHead.itemCount),deltaCount:'0',authority:'server',
+   },
+  });
+  return stored?.etag
+   ?{code:'COMPACTED',revision:expectedRevision}
+   :{code:'RETRYABLE_COMPACTION_HEAD_MOVED'};
+ };
  const loadCompleteFencedOwnerR2=async({
   uid,projectItem,sortItems,
  }={})=>{
@@ -120,5 +203,5 @@ export const createOwnerR2Provider518=({
     items:materialized.items};
  };
  return {enabled,readOwnerHead,storeHeadIfEtag,
-   loadCompleteFencedOwnerR2};
+   loadCompleteFencedOwnerR2,compactVerifiedOwnerHead};
 };

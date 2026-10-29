@@ -109,6 +109,43 @@ console.log('APP518_FIREBASE_EXPIRED_EVENT_NEVER_RETRIES=PASS');
 console.log('APP518_FIREBASE_409_TERMINAL_W1_DUPLICATE_W0=PASS');
 console.log('APP518_OWNER_UID_CHANGE_PERSISTENT_QUARANTINE_REPLAY_W0=PASS');
 console.log('APP518_OWNER_QUARANTINE_BLOCKS_LATER_B_AND_EXACT_CALLBACK=PASS');
+// Audit 2026-10-29: broken ledger/owner transactions MUST reject, never
+// quietly succeed and accept a lost event. This is a focused static wiring
+// guard alongside the executed Firestore transaction simulation above.
+const {readFileSync}=require('node:fs');
+const sourceCode=readFileSync('functions/src/index.ts','utf8');
+const trigger=sourceCode.slice(sourceCode.indexOf('export const app518FavoriteCatalogChanged='));
+for(const code of [
+ 'APP518_OWNER_QUARANTINE_PERSIST_RETRY',
+ 'APP518_SAFETY_FENCE_READ_RETRY',
+ 'APP518_EXPIRY_LEDGER_PERSIST_RETRY',
+ 'APP518_FAILURE_LEDGER_PERSIST_RETRY',
+ 'APP518_EVENT_ID_OR_TIME_UNVERIFIED',
+ 'APP518_TERMINAL_LEDGER_NOT_DURABLE',
+])assert.ok(trigger.includes('throw new Error("'+code+'")'),code);
+for(const code of [
+ 'APP518_OWNER_QUARANTINE_WRITE_FAILED_STOPPED',
+ 'APP518_SAFETY_FENCE_UNAVAILABLE_STOPPED',
+ 'APP518_FAILURE_LEDGER_UNAVAILABLE_STOPPED',
+])assert.ok(!trigger.includes(code),'must never swallow '+code);
+// A mocked Firestore outage rejects both the exact-owner writer and the
+// event read guard. No other-owner update may pass while a fence is unreadable.
+const outage={
+ collection(){return{doc(){return{
+  async get(){throw Error('FIRESTORE_OUTAGE');},
+ };}};},
+ async runTransaction(){throw Error('FIRESTORE_OUTAGE');},
+};
+await assert.rejects(readApp518EventGuard({...args,db:outage}),/FIRESTORE_OUTAGE/);
+await assert.rejects(recordApp518OwnerCollision({
+ db:outage,documentId:'outage-song',beforeUid:owner,
+ afterUid:other,eventId:'conflict-io',nowMs,
+}),/FIRESTORE_OUTAGE/);
+await assert.rejects(recordApp518EventFailure({
+ ...args,db:outage,code:'APP518_DELIVERY_IO_FAILURE',terminal:false,
+}),/FIRESTORE_OUTAGE/);
+console.log('APP518_LEDGER_OUTAGE_FAILS_TRIGGER_CLOSED_NOT_SUCCESS=PASS');
+console.log('APP518_UID_QUARANTINE_OUTAGE_NO_SILENT_DROP=PASS');
 console.log('APP518_FIREBASE_EVENT_SAFETY_TEST_LIVE_IO=ZERO');
 
 })().catch(error=>{console.error(error);process.exitCode=1;});

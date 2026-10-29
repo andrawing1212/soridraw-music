@@ -4517,15 +4517,19 @@ export const app518FavoriteCatalogChanged=functions
         // Persist a document-ID fence before acknowledging this conflict.
         // Future same-UID updates and exact Worker reads cannot bypass it.
         try{
-          await recordApp518OwnerCollision({
+          const recorded=await recordApp518OwnerCollision({
             db,documentId:id,beforeUid:String(before.uid),
             afterUid:String(after.uid),eventId,nowMs,
           });
+          if(recorded!=="OWNER_QUARANTINE_CREATED"
+            &&recorded!=="HOLD_OWNER_QUARANTINED")
+            throw new Error("APP518_OWNER_QUARANTINE_NOT_DURABLE");
           console.error("APP518_OWNER_UID_CHANGE_QUARANTINED");
         }catch{
-          // Firestore unavailable: no remote mutation or seven-day retries.
-          // This needs an operator check before any release activation.
-          console.error("APP518_OWNER_QUARANTINE_WRITE_FAILED_STOPPED");
+          // The conflicting write is never acknowledged until its owner
+          // fence is durable. Firebase retries; an independent durable
+          // outbox is required before declaring prolonged outage safe.
+          throw new Error("APP518_OWNER_QUARANTINE_PERSIST_RETRY");
         }
       }else console.warn("APP518_EVENT_DENIED_OWNER_OR_ID");
       return;
@@ -4538,20 +4542,27 @@ export const app518FavoriteCatalogChanged=functions
         db,documentId:id,eventId,nowMs,eventTimeMs,
       });
     }catch{
-      // Fail closed if Firestore cannot verify the safety fence. Throwing
-      // here would re-enter the 1st-gen seven-day retry loop indefinitely.
-      console.error("APP518_SAFETY_FENCE_UNAVAILABLE_STOPPED");
-      return;
+      // A failed guard read is not proof of no owner conflict or completed
+      // delivery. Do not acknowledge this trigger as successful.
+      throw new Error("APP518_SAFETY_FENCE_READ_RETRY");
     }
     if(gate!=="EVENT_DELIVERY_ALLOWED"&&gate!=="EVENT_RETRY_ALLOWED"){
       if(gate==="HOLD_EVENT_RETRY_WINDOW"){
         try{
-          await recordApp518EventFailure({
+          const recorded=await recordApp518EventFailure({
             db,documentId:id,eventId,nowMs,eventTimeMs,
             code:"APP518_RETRY_WINDOW_EXPIRED",terminal:true,
           });
-        }catch{console.error("APP518_EXPIRY_LEDGER_UNAVAILABLE_STOPPED");}
+          if(recorded.code!=="HOLD_TERMINAL"
+            &&recorded.code!=="HOLD_EVENT_ALREADY_TERMINAL")
+            throw new Error("APP518_EXPIRY_LEDGER_NOT_DURABLE");
+        }catch{
+          // No terminal record means no successful ACK of the event.
+          throw new Error("APP518_EXPIRY_LEDGER_PERSIST_RETRY");
+        }
       }
+      if(gate==="HOLD_BAD_EVENT_ID_OR_TIME")
+        throw new Error("APP518_EVENT_ID_OR_TIME_UNVERIFIED");
       console.warn("APP518_EVENT_FENCED",gate);return;
     }
     try{
@@ -4566,10 +4577,13 @@ export const app518FavoriteCatalogChanged=functions
           workerUrl,expectedHostname:hostname,nowMs},
       });
       if(result.code.startsWith("DENY_")||result.code.startsWith("HOLD_")){
-        await recordApp518EventFailure({
+        const recorded=await recordApp518EventFailure({
           db,documentId:id,eventId,nowMs,eventTimeMs,
           code:result.code,terminal:true,
         });
+        if(recorded.code!=="HOLD_TERMINAL"
+          &&recorded.code!=="HOLD_EVENT_ALREADY_TERMINAL")
+          throw new Error("APP518_TERMINAL_LEDGER_NOT_DURABLE");
         console.warn("APP518_EVENT_PERSISTENT_TERMINAL_HOLD",result.code);
         return;
       }
@@ -4587,10 +4601,16 @@ export const app518FavoriteCatalogChanged=functions
           code:"APP518_DELIVERY_IO_FAILURE",terminal:false,
         });
       }catch{
-        // No durable budget proof => stop, never claim ACK or retry forever.
-        console.error("APP518_FAILURE_LEDGER_UNAVAILABLE_STOPPED");return;
+        // If Firestore cannot persist the attempt count, ending the trigger
+        // would permanently lose the change. Retry the original event rather
+        // than acknowledge a receipt that does not exist. This path cannot
+        // enforce its 8-attempt cap during a total ledger outage.
+        throw new Error("APP518_FAILURE_LEDGER_PERSIST_RETRY");
       }
       if(result.retry)throw new Error("APP518_BOUNDED_EVENT_RETRY");
+      if(result.code!=="HOLD_TERMINAL"
+        &&result.code!=="HOLD_EVENT_ALREADY_TERMINAL")
+        throw new Error("APP518_FAILURE_LEDGER_NOT_DURABLE");
       console.error("APP518_EVENT_RETRY_BUDGET_HELD",result.code);
     }
   });

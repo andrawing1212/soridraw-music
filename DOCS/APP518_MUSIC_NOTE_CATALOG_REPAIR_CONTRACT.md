@@ -373,3 +373,11 @@
 - 역사적인 favorites UID A→B 이벤트에서 서버 전용 `server_music_note_owner_quarantine_518`에 곡 문서 ID 해시별 영구 격리(기존 기록 재작성 W0). 이후 의미 있는 onWrite와 HMAC 정확 조회 모두 격리 확인; B가 정상 편집해도 기존 A의 카탈로그를 덮거나 B 카탈로그에 신규 등록하지 않음. 자동 owner 복원·R2 삭제·데이터 수정 금지. 최초 충돌 이벤트가 도착하기 전에 이미 발생한, 또는 과거 로그가 완전히 빠진 소유권 변조를 이 장치만으로 소급 판별하지는 못함. 실제 최초 배포 전 기존 소유권 증거와 순서 보장에 대한 독립 검증 필요.
 - 의미 없는 metadata-only 변경은 조기 IGNORE로 추가 Firestore R0/W0. 의미 있는 변경 시 서버 격리+실패 기록 읽기 최대 R2, Worker exact-source에서 격리 1회 추가 R1. 실패마다 서버 W1 / 회복시 W1 / 진짜 충돌 최초 W1이므로 무조건 D1 W2 또는 Firestore W0라고 주장하지 않음. 실패 시 함수 재호출 비용 상한/비용 실측은 별개.
 - 실환경 Firebase/Cloudflare/Rules/Secrets/D1/R2/데이터 미변경. 기존 삭제 기준, D1 재개 1회, R2 ACK/CAS, Music Note/Studio/Explore/Library UI 미변경. PR #528 Draft, 전체 RELEASE HOLD/NO-GO 유지.
+
+
+## 2026-10-29 P1 누락 이벤트·UID 격리 실패 후속 보정 (코드 전용, RELEASE HOLD)
+
+- Firestore guard 읽기 실패, UID 충돌 격리 transaction 실패, HOLD/실패 기록 transaction 실패 시 **성공 종료하지 않고 오류 재전파**. 유효한 이벤트·소유자 보호 증거 없이 `return`으로 Firebase ACK하는 오류를 제거한다. record 함수의 `DENY_...` 등 비영속 결과도 성공으로 오인하지 않는다. 
+- 기록 시스템이 정상인 경우 기존 이벤트별 최대 8회·60분과 영구 HOLD 저장은 그대로 유지. 장애 시에는 이벤트를 잃는 대신 Firebase 1세대 플랫폼 재시도에 맡기는 보수적 경로다. **총 Firestore 장애 동안 자체 8회 제한을 증명할 수 없으며 Firebase 기본 최대 7일 재시도 이후 영구 보존도 증명하지 못한다.** 이를 P1 잔여 운영 인프라 차단으로 유지한다. 운영시에는 독립적 영속 전달/격리 및 상태 모니터링 승인 필요.
+- A→B 소유권 충돌 경계에서도 영수증을 성공적으로 쓴 뒤에만 정상 종료. HTTP exact source는 격리 읽기 실패 시 503, Worker가 D1/R2에 영구 ACK하지 못한다. 다만 **A→B 이벤트가 도착하기 전 B가 먼저 실행되는 역순 도착**은 기존 데이터에 불변 생성시점 소유권 증거가 없으면 완전히 막을 수 없다. 기존 사용자 데이터/구형 단말 보호 검증 전 RELEASE NO-GO.
+- 별도 인프라, Firestore/D1/R2 데이터, Functions/Worker/Rules 배포·병합 없음. 기존 Music Note·Studio/Library/Explore·D1·R2 경로 수정 없음.

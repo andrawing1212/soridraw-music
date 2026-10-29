@@ -17,7 +17,7 @@ const sign=(value,when=nowMs)=>new Request('https://trusted.internal.test/app518
 let d1Writes=0,reads=0;
 const db={
  prepare(sql){return {bind(...args){return {
-  async run(){d1Writes++;return {meta:{changes:1}};},
+  async run(){if(!sql.includes('music_note_catalog_daily_budget_518'))d1Writes++;return {meta:{changes:1}};},
   async all(){reads++;return {results:[]};},
   async first(){reads++;return null;},
  };}};},
@@ -26,6 +26,8 @@ const db={
 const env={CATALOG_OUTBOX_518:db,
  CATALOG_SERVER_HMAC_518:secret,
  SORIDRAW_CANONICAL_CATALOG_518:'ENABLED_AFTER_SHARED_ROLLOUT',
+ SORIDRAW_D1_ALL_ACCOUNT_WRITERS_518:'VERIFIED',
+ SORIDRAW_D1_SHARED_ACCOUNT_LEDGER_518:'VERIFIED',
  CATALOG:{async get(){throw Error('unused in ingest');},
   async put(){throw Error('unused in ingest');}},
 };

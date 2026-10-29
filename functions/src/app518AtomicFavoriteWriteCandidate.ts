@@ -130,6 +130,7 @@ export const commitApp518AtomicFavoriteCandidate=async({
   });
   if(intent==='delete')tx.delete(favoriteRef);
   else tx.set(favoriteRef,{
+   ...(sourceDoc.exists?sourceDoc.data():{}),
    ...favorite,uid,id,app518SourceMutationId:mutationId,
    app518SourceCommittedAt:stamp,
   });

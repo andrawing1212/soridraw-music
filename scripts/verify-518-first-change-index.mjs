@@ -212,28 +212,21 @@ assert.equal(store.metas.get(owner).status,'building');
 
 // 20k+ owners have no arbitrary 20k rejection, truncated membership, or
 // hundreds of thousands of one-row SQL statements.
+// Large owners must not enter the old synchronous, unmetered O(N)
+// importer. They use the 257+ bounded R2/D1 paged server bridge.
 for(const n of [20001,50001]){
  store=mkdb();
- const largeIds=Array.from({length:n},(_,i)=>({id:'large-'+i}));
- const largeHead={...head,itemCount:n};
- const largeSnap={...snap,head:largeHead,items:largeIds};
- const large=await run(store.db,{loadMaterializedR2Once:async()=>largeSnap,
-  readR2HeadAgain:async()=>largeHead});
- assert.equal(large.code,'INDEX_READY');
- assert.equal(store.metas.get(owner).status,'ready');
- assert.equal(store.members.size,n,'no song lost above old 20k bound');
- assert.equal(store.stats.writes,n+2);
- assert.equal(store.stats.batches,Math.ceil(n/512),'bounded D1 SQL queries');
- assert.ok(store.stats.maxChunk<=512);
- assert.equal((await run(store.db,{loadMaterializedR2Once:async()=>{
-  throw Error('repeat full owner scan forbidden');
- }})).code,'READY_REQUIRES_HEAD_CAS');
- assert.equal(store.stats.writes,n+2,'unchanged owner D1 W0');
+ const large=await run(store.db,{loadMaterializedR2Once:async()=>({
+  ...snap,head:{...head,itemCount:n},
+  items:Array.from({length:n},(_,i)=>({id:'large-'+i})),
+ })});
+ assert.equal(large.code,'HOLD_D1_FIRST_INDEX_REQUIRES_PAGING');
+ assert.equal(store.stats.writes,0);
 }
 // A failed page is invisible until same exact HEAD retry completes; successful
 // SQL pages are idempotent, and other owners remain untouched.
 store=mkdb();
-const bigN=20001,bigIds=Array.from({length:bigN},(_,i)=>({id:'f-'+i}));
+const bigN=1537,bigIds=Array.from({length:bigN},(_,i)=>({id:'f-'+i}));
 const bigHead={...head,itemCount:bigN};
 const bigSnap={...snap,head:bigHead,items:bigIds};
 const normalDb=store.db,originalPrepare=normalDb.prepare;
@@ -261,8 +254,8 @@ const done=await run(normalDb,{loadMaterializedR2Once:async()=>bigSnap,
 assert.equal(done.code,'INDEX_READY');
 assert.equal(store.members.size,bigN);
 assert.equal(store.stats.writes,bigN+2,'resume did not rewrite staged songs');
-console.log('APP518_OVER_20K_50K_OWNER_COMPLETE_SQL_PAGED=PASS');
-console.log('APP518_20K_PLUS_CRASH_RESUME_NO_DUPLICATE_WRITES=PASS');
+console.log('APP518_OVER_20K_50K_DIRECT_INDEX_REJECTS_UNBOUNDED_WRITE=PASS');
+console.log('APP518_SMALL_DIRECT_INDEX_CRASH_RESUME_NO_DUPLICATE_WRITES=PASS');
 
 // A changed HEAD without owner/fence proof must never bypass cooldown.
 store=mkdb();

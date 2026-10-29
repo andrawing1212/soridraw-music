@@ -42,7 +42,8 @@ const options={modules:true,name:'app518-50k-local',
  d1Persist:join(dir,'d1'),r2Persist:join(dir,'r2'),
  d1Databases:{CATALOG_OUTBOX_518:'00000000-0000-4000-8000-000000000519'},
  r2Buckets:{CATALOG:'local-50k-r2'},resourcePersistencePath:dir};
-let mf,db,bucket,bridge;
+let mf,db,bucket,bridge,clockNow=now;
+const TEST_TICK_MS=60*60000; // Local-only virtual UTC rollover; no real Cloudflare time or writes.
 const source=async(owner,doc)=>{
  const hash=createHash('sha256').update(JSON.stringify(['owner',doc])).digest('hex');
  const snap=await fs.collection('server_music_note_owners_518').doc(hash).get();
@@ -64,6 +65,7 @@ const open=async()=>{
   SORIDRAW_D1_ALL_ACCOUNT_WRITERS_518:'VERIFIED',
   SORIDRAW_D1_SHARED_ACCOUNT_LEDGER_518:'VERIFIED'};
  bridge=createApp518ServerBridge({env,sharedReleaseFencesVerified:true,
+  budgetClock:()=>clockNow,
   readExactCanonical:source,projectItem:x=>x,sortItems:x=>x});
  assert.equal(bridge.enabled,true);
 };
@@ -144,7 +146,8 @@ const run=async()=>{
  assert.equal((await relay(createId)).code,'ENQUEUED_NOT_R2_ACK');
  let acked=false,progressTicks=0,stageObserved=false;
  for(let tick=0;tick<240;tick++){
-  const out=await bridge.drainServerPending({nowMs:now+tick*60000,limit:1});
+  clockNow=now+tick*TEST_TICK_MS;
+  const out=await bridge.drainServerPending({nowMs:clockNow,limit:1});
   const row=await queued();
   if(row?.ack_version_ns===row?.source_version_ns){
    assert.equal(out.acked,1);acked=true;break;
@@ -161,7 +164,7 @@ const run=async()=>{
     readOwnerHead:provider.readOwnerHead,sharedReleaseFencesVerified:true,
     projectItem:x=>x});
    const probe=await advancePagedOwnerIndex518({
-    db,uid,mode:'first',verifiedPendingMutation:true,nowMs:now+tick*60000,
+    db,uid,mode:'first',verifiedPendingMutation:true,nowMs:clockNow,
     readOwnerHead:provider.readOwnerHead,baseReader,projectItem:x=>x,
     reserveWriteBudget:createD1BudgetGate518({
      db,allAccountWritersVerified:true,sharedAccountLedgerVerified:true}),
@@ -194,7 +197,8 @@ const run=async()=>{
   request:new Request('https://unit.local/v1/server/catalog518',{
    method:'POST',headers:stale.headers,body:stale.body}),nowMs:now});
  assert.equal(staleResult.code,'STALE_SIGNED_EVENT_NO_WRITE');
- const removed=await bridge.drainServerPending({nowMs:now+250*60000,limit:1});
+ clockNow=now+250*TEST_TICK_MS;
+ const removed=await bridge.drainServerPending({nowMs:clockNow,limit:1});
  assert.equal(removed.acked,1,'50k final delete must reach R2/D1 ACK');
  assert.equal(await member(),false);
  after=await headRead();
@@ -203,10 +207,16 @@ const run=async()=>{
  const d1row=await queued();
  assert.equal(d1row.ack_version_ns,d1row.source_version_ns);
  assert.equal(d1row.desired_state,'removed');
- const quota=await db.prepare(
-  'SELECT reserved_rows FROM music_note_catalog_daily_budget_518 WHERE day_utc=?'
- ).bind(new Date(now).toISOString().slice(0,10)).first();
- assert.ok(quota?.reserved_rows>accountCount&&quota.reserved_rows<=80000);
+ const quotas=(await db.prepare(
+  'SELECT day_utc,reserved_rows FROM music_note_catalog_daily_budget_518 ORDER BY day_utc'
+ ).all()).results;
+ // A 50k owner with a membership secondary index MUST span UTC days:
+ // one-day W80k would be exceeded by the >=100k minimum row+index cost.
+ assert.ok(quotas.length>=2,'secondary-index cost requires a UTC-day pause');
+ assert.ok(quotas.every(q=>q.reserved_rows<=80000),
+  'each UTC day must stay under D1 Free safety cap');
+ assert.ok(quotas.reduce((n,q)=>n+q.reserved_rows,0)>=accountCount*2);
+ console.log('APP518_LOCAL_UTC_ROLLOVER_SECONDARY_INDEX_BUDGET=PASS');
  console.log('APP518_LOCAL_REAL_FIRESTORE_D1_R2_'+accountCount+'_SAVE_DELETE_ACK=PASS');
  console.log('APP518_LOCAL_'+accountCount+'_PAGED_IMPORT_MULTIPART_COMPACT=PASS');
  console.log('APP518_LOCAL_'+accountCount+'_CRASH_RESTART_STALE_SAVE_TOMBSTONE=PASS');

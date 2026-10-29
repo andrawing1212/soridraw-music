@@ -64,6 +64,30 @@ export const deferPagedFavorite518=async({
  return {code:writes===1?'PAGE_CONTINUATION_SCHEDULED':'STALE_OR_ALREADY_DEFERRED',
   d1Writes:writes,retryAtMs:writes?next:undefined};
 };
+// Daily bulk-budget exhaustion is NOT a permanent source-contract HOLD.
+// Only an exact pending version is deferred to next UTC day. The metered
+// DB allows this tagged UPDATE using its separate bounded control reserve.
+export const DEFER_DAILY_BUDGET_518=[
+ '/* APP518_DAILY_PAUSE_CONTROL_518 */',
+ 'UPDATE music_note_catalog_outbox_518',
+ 'SET next_attempt_ms=?,updated_at_ms=?',
+ 'WHERE owner_uid=? AND favorite_id=? AND source_version_ns=?',
+ 'AND (ack_version_ns IS NULL OR ack_version_ns != source_version_ns)',
+ 'AND hold_reason IS NULL AND next_attempt_ms <= ?',
+].join(' ');
+export const deferDailyBudgetFavorite518=async({
+ db,uid,documentId,sourceVersionNs,nowMs,
+}={})=>{
+ if(!database(db)||!okUid(uid)||!okId(documentId)||!epoch(nowMs)
+   ||!/^[0-9]{21}$/.test(text(sourceVersionNs)))
+  return {code:'DENY_BUDGET_DEFER_ARGUMENTS',d1Writes:0};
+ const next=(Math.floor(nowMs/86400000)+1)*86400000+60000;
+ const result=await db.prepare(DEFER_DAILY_BUDGET_518)
+  .bind(next,nowMs,text(uid),text(documentId),sourceVersionNs,nowMs).run();
+ const writes=Number(result?.meta?.changes||0);
+ return {code:writes===1?'DAILY_BUDGET_DEFERRED':'STALE_BUDGET_DEFER',
+  d1Writes:writes===1?1:0,retryAtMs:writes===1?next:undefined};
+};
 export const HOLD_EXACT_518=[
  'UPDATE music_note_catalog_outbox_518',
  'SET hold_reason=?,updated_at_ms=?',

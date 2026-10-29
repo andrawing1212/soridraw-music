@@ -19,7 +19,8 @@ const rollbackHold=code=>({pass:false,code});
 // This validates REAL Cloudflare GET responses after rollback; no health
 // marker or single-version label alone may assert full rollback safety.
 export const verifyRollbackState518=({stage,approvedVersion,settings,deployments,health}={})=>{
- const t=MEDIA_TARGETS_518.find(x=>x.stage===stage);
+ const stageKey=typeof stage==='string'?stage.toLowerCase():'';
+ const t=MEDIA_TARGETS_518.find(x=>x.stage===stageKey);
  if(!t||!id.test(approvedVersion))return rollbackHold('HOLD_ROLLBACK_TARGET_INVALID');
  if(settings?.success!==true||deployments?.success!==true||!Array.isArray(settings.result?.bindings))
   return rollbackHold('HOLD_ROLLBACK_CONTROL_PLANE_UNVERIFIED');
@@ -218,6 +219,15 @@ const test=()=>{
     fenceContract:'app518-music-note-fence-v1',sourceInstalled:true,canonicalEnabled:false}}});
  const checkRollback=fn=>{const r=goodRollback();fn(r);assert.equal(verifyRollbackState518(r).pass,false);};
  assert.equal(verifyRollbackState518(goodRollback()).pass,true);
+ for(const upper of ['PREVIEW','TEST','PRODUCTION']){
+  const rollback=goodRollback();
+  rollback.stage=upper;
+  const target=MEDIA_TARGETS_518.find(x=>x.stage===upper.toLowerCase());
+  rollback.approvedVersion=approvedVersions[target.stage];
+  rollback.settings.result.bindings[0].bucket_name=target.media;
+  rollback.deployments.result.deployments[0].versions[0].version_id=rollback.approvedVersion;
+  assert.equal(verifyRollbackState518(rollback).pass,true);
+ }
  checkRollback(r=>{r.settings.result.bindings[0].bucket_name='other';});
  checkRollback(r=>{r.settings.result.bindings[1].bucket_name='wrong';});
  checkRollback(r=>{r.settings.result.bindings[2].text='0';});
@@ -230,6 +240,12 @@ const test=()=>{
  checkRollback(r=>{r.health.catalogWriterFence518.fenceContract='unverified';});
  checkRollback(r=>{r.health.catalogAuthorityMode='legacy-media';});
  checkRollback(r=>{r.health.catalogBinding=false;});
+ const workflow=readFileSync(new URL('../.github/workflows/cloudflare-media-shared-catalog-cutover.yml',import.meta.url),'utf8');
+ assert.match(workflow,/verify-518-cutover-signed-evidence\.mjs --rollback-check "\$stage" "\$expected_version"/);
+ assert.match(workflow,/--argjson settings "\$settings" --argjson deployments "\$deployments" --argjson health "\$health"/);
+ for(const [worker,stage] of [['soridraw-media-preview','PREVIEW'],['soridraw-media-test','TEST'],['soridraw-media','PRODUCTION']]){
+  assert.ok(workflow.includes('check_legacy '+worker+' https://'+worker+'.andrawing1212.workers.dev '+stage));
+ }
  console.log('APP518_OLD_PREDECESSOR_VERSION_BOUND_TO_DRAIN_PROOF=PASS');
  console.log('APP518_ROLLBACK_BINDINGS_R2_CANONICAL_FULL_FENCE_DENY=PASS');
  console.log('APP518_CUTOVER_10MIN_OLD_FLIGHTS_ROLLBACK_AND_LIVE_DRIFT_DENY=PASS');

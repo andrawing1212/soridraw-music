@@ -1,3 +1,5 @@
+import {resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
 // app518 explicit one-shot READ-ONLY evidence collector.
 // Cloudflare API GET deployments/settings and media GET /health ONLY.
 // Never requests R2 keys, Firestore/D1, secrets, deployments or mutations.
@@ -102,6 +104,7 @@ const selfTest=async()=>{
  console.log('APP518_LIVE_COLLECTOR_GET_ONLY_THREE_WORKERS=PASS');
  console.log('APP518_LIVE_COLLECTOR_NO_SECRETS_NO_R2_DATA=PASS');
 };
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
 if(process.argv.includes('--self-test')){
  await selfTest();
 }else if(process.argv.includes('--live')){
@@ -116,4 +119,6 @@ if(process.argv.includes('--self-test')){
 }else{
  console.error('Use --self-test (offline) or --live (GET-only)');
  process.exitCode=2;
+}
+
 }

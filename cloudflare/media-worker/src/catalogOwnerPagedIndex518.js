@@ -102,6 +102,14 @@ export const advancePagedOwnerIndex518=async({
   let previous=await db.prepare(INDEX_META_READ_518).bind(uid).first();
   if(mode==='first'&&previous?.status==='ready')
    return {code:'READY_REQUIRES_HEAD_CAS',complete:true};
+  // 4*256 inserts plus cursor/meta/delta writes per bounded invocation.
+  // Reserve BEFORE the first actual D1 write, across all owners, in the
+  // account-wide budget. Old/unmetered writers invalidate attestation.
+  if(typeof reserveWriteBudget!=='function')
+   return failure('HOLD_D1_DAILY_BUDGET_UNVERIFIED');
+  const budget=await reserveWriteBudget({nowMs,requestedRows:1040});
+  if(budget?.reserved!==true)
+   return failure(budget?.code||'HOLD_D1_DAILY_BUDGET_UNVERIFIED');
   if(mode==='first'){
    if(previous?.status&&previous.status!=='building')
     return failure('DENY_PAGED_INDEX_STATUS');
@@ -157,14 +165,6 @@ export const advancePagedOwnerIndex518=async({
     writes++;
    }
   }
-  // 4*256 inserts plus cursor/meta/delta writes per bounded invocation.
-  // Reserve BEFORE the first actual D1 write, across all owners, in the
-  // account-wide budget. Old/unmetered writers invalidate attestation.
-  if(typeof reserveWriteBudget!=='function')
-   return failure('HOLD_D1_DAILY_BUDGET_UNVERIFIED');
-  const budget=await reserveWriteBudget({nowMs,requestedRows:1040});
-  if(budget?.reserved!==true)
-   return failure(budget?.code||'HOLD_D1_DAILY_BUDGET_UNVERIFIED');
   previous=await db.prepare(INDEX_META_READ_518).bind(uid).first();
   if(mode==='first'&&(previous?.status!=='building'
     ||previous.generation!==gen||previous.head_etag!==etag))

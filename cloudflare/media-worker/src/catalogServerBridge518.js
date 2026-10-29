@@ -13,6 +13,7 @@ import {createR2BasePageReader518} from './catalogR2BasePages518.js';
 import {advancePagedOwnerIndex518} from './catalogOwnerPagedIndex518.js';
 import {applyIndexedCanonicalR2Delta518} from './catalogIndexedWriter518.js';
 import {createD1BudgetGate518} from './catalogD1DailyWriteBudget518.js';
+import {createMeteredD1Database518} from './catalogD1MeteredDatabase518.js';
 
 const deny=code=>({code,accepted:false});
 const validItem=source=>source&&source.verifiedByServer===true
@@ -23,7 +24,7 @@ export const createApp518ServerBridge=({
  env,sharedReleaseFencesVerified=false,
  readExactCanonical,projectItem,sortItems,
 }={})=>{
- const db=env?.CATALOG_OUTBOX_518;
+ const rawDb=env?.CATALOG_OUTBOX_518;
  const r2=createOwnerR2Provider518({env,sharedReleaseFencesVerified});
  const baseReader=createR2BasePageReader518({
   env,readOwnerHead:r2.readOwnerHead,sharedReleaseFencesVerified,projectItem,
@@ -32,12 +33,20 @@ export const createApp518ServerBridge=({
  // meter. All old/new writers across PREVIEW/TEST/PRODUCTION and other D1
  // databases must be certified in the release manifest before paging.
  const reserveWriteBudget=createD1BudgetGate518({
-  db,
+  db:rawDb,
   allAccountWritersVerified:sharedReleaseFencesVerified===true&&
    env?.SORIDRAW_D1_ALL_ACCOUNT_WRITERS_518==='VERIFIED',
   sharedAccountLedgerVerified:sharedReleaseFencesVerified===true&&
    env?.SORIDRAW_D1_SHARED_ACCOUNT_LEDGER_518==='VERIFIED',
  });
+ // Every app518 D1 mutation, not only >20k paged-index writes,
+ // crosses this shared account daily budget. Index, outbox, ACK and
+ // recovery share the same metered db. Existing unverified writers still
+ // keep the release OFF.
+ const db=createMeteredD1Database518({rawDb,reserveWriteBudget});
+ const stageBudget=async({nowMs,requestedRows})=>db?.__budgeted518===true
+  ?{reserved:true,code:'METERED_AT_SQL_BOUNDARY'}
+  :reserveWriteBudget({nowMs,requestedRows});
  const enabled=Boolean(r2.enabled&&db?.prepare&&db?.batch
    &&typeof readExactCanonical==='function'
    &&typeof projectItem==='function'&&typeof sortItems==='function'
@@ -104,15 +113,16 @@ export const createApp518ServerBridge=({
     const ownerHead=prior?.status==='ready'?null:
       await r2.readOwnerHead(uid);
     const usePaging=prior?.status!=='ready'&&(
-      prior?.expected_count>20000||ownerHead?.head?.itemCount>20000);
+      prior?.expected_count>256||ownerHead?.head?.itemCount>256);
     const staged=usePaging?await advancePagedOwnerIndex518({
      db,uid,mode:'first',verifiedPendingMutation:true,nowMs,
      readOwnerHead:r2.readOwnerHead,baseReader,projectItem,
-     reserveWriteBudget,
+     reserveWriteBudget:stageBudget,
     }):await stageFirstChangedOwnerIndex518({
      db,uid,verifiedMutation:true,nowMs,
      loadMaterializedR2Once:async account=>
       r2.loadCompleteFencedOwnerR2({uid:account,projectItem,sortItems}),
+     reserveWriteBudget:stageBudget,
      readR2HeadAgain:async account=>{
       const value=await r2.readOwnerHead(account);
       return {...value.head,etag:value.etag,
@@ -138,7 +148,7 @@ export const createApp518ServerBridge=({
      pagedRecovery:async()=>advancePagedOwnerIndex518({
       db,uid,mode:'recovery',verifiedPendingMutation:true,nowMs,
       readOwnerHead:r2.readOwnerHead,baseReader,projectItem,
-      reserveWriteBudget,
+      reserveWriteBudget:stageBudget,
      }),
     });
    },

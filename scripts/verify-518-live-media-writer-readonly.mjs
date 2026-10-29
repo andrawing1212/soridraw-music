@@ -112,6 +112,26 @@ const selfTest=async()=>{
   &&x.canonicalFlag===null));
  assert.ok(!JSON.stringify(snapshot).includes('NEVER_SHOW'));
  assert.ok(!JSON.stringify(snapshot).includes('test-token'));
+ // A secret-shaped canonical flag must not be hidden by plain-text-only
+ // lookup; a duplicate bucket must not be allowed to spoof good settings.
+ const spoof=extra=>async(url,opts)=>{
+  const response=await fake(url,opts);
+  if(!url.endsWith('/settings')||!url.includes('soridraw-media-preview'))
+   return response;
+  const result=await response.json();
+  result.result.bindings.push(extra);
+  return {ok:true,async json(){return result;}};
+ };
+ const hidden=await captureMediaWriterSnapshot518({
+  request:spoof({type:'secret_text',name:'SORIDRAW_CANONICAL_CATALOG_518'}),
+  accountId:'test-account',token:'test-token',atMs:101,
+ });
+ assert.equal(hidden.workers[0].canonicalFlag,'PRESENT');
+ await assert.rejects(captureMediaWriterSnapshot518({
+  request:spoof({type:'r2_bucket',name:'CATALOG',bucket_name:'soridraw-user-catalog'}),
+  accountId:'test-account',token:'test-token',atMs:102,
+ }),/HOLD_CLOUDFLARE_AMBIGUOUS_BINDING/);
+ console.log('APP518_CANONICAL_SECRET_AND_DUPLICATE_BINDINGS_DENIED=PASS');
  console.log('APP518_LIVE_COLLECTOR_GET_ONLY_THREE_WORKERS=PASS');
  console.log('APP518_LIVE_COLLECTOR_NO_SECRETS_NO_R2_DATA=PASS');
 };

@@ -78,7 +78,7 @@ const runOwner=async(count)=>{
    input.env=env;input.readOwnerHead=provider.readOwnerHead;input.baseReader=baseReader;
   }
  }while(r.code!=='PAGED_COMPACTION_STAGED_AWAIT_ASSEMBLY');
- assert.equal(r.itemCount,count);
+ assert.equal(r.outputCount,count);
  assert.ok(r.partCount>=Math.floor(count/1024));
  const manifestKey=pre+'compaction518/'+head.headRevision+'-'+
   obj.etag.replace(/[^A-Za-z0-9]/g,'')+'/progress.json';
@@ -101,8 +101,20 @@ const runOwner=async(count)=>{
  const pub=await provider.readOwnerHead(uid);
  assert.equal(pub.etag,obj.etag,'stage never publishes HEAD');
  assert.equal(pub.head.baseKey,baseKey,'original BASE remains current');
+ const published=await stagePagedCanonicalCompaction518(input);
+ assert.equal(published.code,'COMPACTED','verified immutable pages must publish via owner HEAD CAS');
+ const after=await provider.readOwnerHead(uid);
+ assert.notEqual(after.etag,obj.etag);
+ assert.equal(after.head.baseRevision,head.headRevision);
+ assert.equal(after.head.itemCount,count);
+ const complete=await provider.loadCompleteFencedOwnerR2({
+  uid,projectItem:item=>item,sortItems:items=>items,
+ });
+ assert.equal(complete.items.length,count);
+ assert.equal(complete.items.find(x=>x.id==='song-0').title,'Edited 199');
  assert.equal((await stagePagedCanonicalCompaction518(input)).code,
-  'PAGED_COMPACTION_STAGED_AWAIT_ASSEMBLY');
+  'RETRYABLE_PAGED_COMPACTION_HEAD_MOVED');
+ console.log('APP518_PAGED_R2_'+count+'_PUBLISHED_ETAG_CAS_AND_FULL_DATA=PASS');
  console.log('APP518_PAGED_R2_'+count+'_ALL_IDS_PRESERVED_NO_DUPLICATES=PASS');
  console.log('APP518_PAGED_R2_'+count+'_RESTART_AND_IMMUTABLE_STAGE=PASS');
  await mf.dispose();mf=null;

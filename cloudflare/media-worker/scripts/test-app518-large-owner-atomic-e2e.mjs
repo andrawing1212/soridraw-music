@@ -137,7 +137,7 @@ const run=async()=>{
  await bucket.put(pre+'journal.json',JSON.stringify(head),{
   customMetadata:{uid,kind:'musicNote',
    baseRevision:String(head.baseRevision),revision:String(head.headRevision),
-   itemCount:'50001',deltaCount:String(head.deltas.length),authority:'server'},
+   itemCount:String(accountCount),deltaCount:String(head.deltas.length),authority:'server'},
  });
  const created=await mutate('create',createId);
  assert.equal(created.code,'SOURCE_AND_OUTBOX_COMMITTED');

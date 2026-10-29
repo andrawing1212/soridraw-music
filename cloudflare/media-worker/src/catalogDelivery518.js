@@ -168,10 +168,22 @@ export const deliverDueCanonicalFavorites518=async({
      }
      // Persist and retry; do not drop the last confirmed tombstone, and don't
      // send user content or secret tokens to logs.
-     const scheduled=await scheduleFailedFavorite518({
+     let scheduled;
+     try{
+      scheduled=await scheduleFailedFavorite518({
        db,uid,documentId:id,sourceVersionNs:version,nowMs,
        attemptCount:Number(row.attempt_count),
-     });
+      });
+     }catch(scheduleError){
+      // An R2 success can precede a D1 quota failure. Do not escape
+      // the drain with next_attempt_ms still due on each scheduler tick.
+      if(scheduleError?.code==='HOLD_D1_DAILY_QUOTA'){
+       if(!await pauseForTomorrow({uid,id,version}))
+        result.code='RETRYABLE_D1_BUDGET_PAUSE_UNSAVED';
+       continue;
+      }
+      throw scheduleError;
+     }
      if(scheduled.code==='RETRY_SCHEDULED')result.retry++;
      if(scheduled.code==='HELD')result.held++;
    }

@@ -3,7 +3,7 @@
 // owner-verified R2 HEAD provider, D1 exact per-item index and outbox.
 // No D1 binding, Cron, Function, endpoint or live R2 writes in this PR.
 // D1 ACK is permitted only after R2 HEAD CAS AND D1 index replay both succeed.
-import {appendCatalogJournalDelta,isValidCatalogJournal} from './catalogJournal.js';
+import {appendCatalogJournalDelta,isValidCatalogJournal,shouldCompactCatalogJournal} from './catalogJournal.js';
 import {parseFirestoreUpdateTimeNs518} from './catalogCanonicalFence518.js';
 import {readIndexedMembership518} from './catalogFirstChangeIndex518.js';
 import {reconcileIndexedHead518} from './catalogIndexAdvance518.js';
@@ -22,7 +22,7 @@ const verifiedHead=(value,uid)=>{
 export const applyIndexedCanonicalR2Delta518=async({
  db,uid,documentId,sourceVersionNs,desiredState,
  readExactCanonical,readOwnerHead,storeHeadIfEtag,projectItem,
- loadCompleteFencedOwnerR2,pagedRecovery,nowMs,
+ loadCompleteFencedOwnerR2,pagedRecovery,compactVerifiedOwnerHead,nowMs,
 }={})=>{
  const deny=code=>({code,ownerVerified:false,versionVerified:false,casVerified:false});
  if(!db||typeof db.prepare!=='function'||typeof db.batch!=='function'
@@ -73,6 +73,20 @@ export const applyIndexedCanonicalR2Delta518=async({
   if(queued?.source_version_ns!==sourceVersionNs
     ||queued?.desired_state!==desiredState)
     return deny('HOLD_OUTBOX_SUPERSEDED');
+  // Only a pending, exact-source-confirmed mutation may trigger the
+  // threshold. The provider must verify owner, immutable BASE and ETag CAS.
+  // No full-user scan on ordinary reads or every per-song write.
+  if(shouldCompactCatalogJournal(head)){
+   if(typeof compactVerifiedOwnerHead!=='function')
+    return deny('RETRYABLE_CANONICAL_COMPACTION_UNAVAILABLE');
+   const compacted=await compactVerifiedOwnerHead({
+    uid,expectedEtag:etag,expectedRevision:head.headRevision,
+    nowMs,
+   });
+   if(['COMPACTED','RETRYABLE_COMPACTION_HEAD_MOVED'].includes(compacted?.code))
+    continue;
+   return deny('RETRYABLE_CANONICAL_COMPACTION_'+(compacted?.code||'UNKNOWN'));
+  }
   const membership=await readIndexedMembership518({
    db,uid,documentId,r2Head:{
     headRevision:head.headRevision,itemCount:head.itemCount,etag,

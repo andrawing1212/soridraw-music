@@ -1,10 +1,9 @@
-## CURRENT — app518 PREVIEW one-song server-sync pilot source, RELEASE HOLD (2026-10-31 KST)
-- PR #528 `fix/app518-canonical-catalog-fence-candidate` source HEAD `5180ad1e07d940ad6156d39a91ed974de7113796` (development checkpoint before final CI); Draft/unmerged/undeployed. Existing PREVIEW/TEST/PRODUCTION shared user records, Cloudflare R2/D1, Secrets, Firebase Rules/Functions and browser state unchanged.
-- Director-approved switch from repeated rollback reviews to **one saved Music Note favorite exact-server delivery for PREVIEW QA**. Source connects the existing Firebase `favorites/{favoriteId}` event -> HMAC exact-source -> Worker D1 outbox -> R2 CAS, but ALL runtime release switches remain OFF. Newly added mandatory pilot UID+favorite ID on Firebase event / source callback / Worker and exact D1 due selector, so unrelated users/events cause no additional read/write. Pilot A->B owner collision still reaches durable quarantine.
-- **Not yet live-testable:** signed all-account D1 cutover authorization is deliberately not passed into `createApp518ServerBridge` (otherwise any env string could falsely authorize), Workers/D1 daily budget schema+binding and HMAC secrets have not been deployed/provisioned, Firebase Functions trigger and HTTPS source endpoint have not been deployed, PREVIEW/TEST/PRODUCTION old shared R2 Writers and old flights are not independently fenced. Do NOT set canonical flag, fake signed approval, write shared R2 or claim PC/mobile pass. Online canary only after those proofs, code audit and separate explicit deployment approval.
-- One-song complete feature contract remains OPEN: actual Firestore event->R2 exact CAS/ACK, retries after outages, old/new client PC↔mobile immediate consistency, 100k-user estimated + measured costs, one-owner saved/removed/stale-delete and video/lyric/media protection. Local source regression is not live proof.
-- TEST/PRODUCTION Explore Worker `activate` and `restore` remain disabled under app518 safety code until separate safe rollback design; no release eligibility solely from CI.
-- Following step without introducing new changes: confirm exact source CI, preserve GitHub SHA and complete read-only actual Cloudflare/Firebase provisioning and all-Writer coverage evidence. Deployment separately approved.
+## CURRENT — PR #528 실동기화 1곡 중심으로 작업 방식 재편 (2026-10-31 KST)
+- GitHub Draft PR #528 브랜치 `fix/app518-canonical-catalog-fence-candidate`. **최신 SHA는 실제 GitHub PR HEAD를 확인**하며, 이 문서의 오래된 커밋 번호나 과거 NEXT 지시는 새 작업 승인으로 사용하지 않는다.
+- 디렉터 승인으로 기존 D1 outbox·R2 CAS/ACK·삭제 tombstone·구형 Writer 보호 소스와 과거 테스트를 보존하면서, 정기 PR CI는 1곡 전달/삭제/재시도·구형 앱 보호·실제 Firestore Emulator + Miniflare D1/R2 연동 시험을 우선한다. 49k/50k 스트레스와 전체 소스 체크는 별도 수동 진단으로 이동했다. **CI 또는 에뮬레이터 PASS는 실제 클라우드/PC·모바일 PASS가 아니다.**
+- 최신 실행 기준과 1건 실검증 절차: `DOCS/APP518_MUSIC_NOTE_CATALOG_REPAIR_CONTRACT.md` 최상단 '현재 개발 기준'을 따른다. 필수 순서: 격리된 QA 계정/Cloudflare/Firebase 권한 읽기 전용 증명 → 별도 인프라/배포/데이터 변경 승인 → 실제 1곡 Firestore→D1→R2 ACK·재시도·해제/재저장 실측 → PC/모바일/새 PC와 청구량 실확인.
+- **현재 차단:** 운영과 완전히 분리된 클라우드 시험 계정·프로젝트 및 권한 미입증, 3환경 공유 R2 구형 Writer 불확실, D1/Secrets/Functions/cron 미배포. 직접 배포·정본 활성화·사용자 곡 복구 금지. UI 정상 기능, 공유 원본, local-first, RELEASE HOLD 유지.
+- **외부 작업 정지:** Work·Codex·별도 감사방의 새로운 독립 작업은 각각 디렉터 승인 전 의뢰하거나 자동 실행하지 않는다. 이번 정리는 GitHub 소스/계획만 변경하며 실제 배포·사용자 데이터 변경 없음. 현 코드의 안전 검증 규칙을 임의로 무력화하지 않는다.
 
 ---
 

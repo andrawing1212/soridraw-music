@@ -58,12 +58,12 @@ assert.ok(folderFlush.indexOf('flushLibraryPlaylistOrderBatch(uid)') < folderFlu
 assert.match(libraryExit, /window\.removeEventListener\('pagehide', flushOnPageHide\)/);
 
 // Protected paths are intentionally still independent of this lifecycle patch.
-assert.match(app, /const STUDIO_HEART_BATCH_MS = 30_000/);
+assert.match(app, /const STUDIO_HEART_BATCH_MS = 1_000/);
 assert.ok(read('src/services/exploreLikeService.ts').includes('EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000'));
 
 console.log('STAGE414_RECENT_PENDING_PAGEHIDE_SINGLE_FLIGHT_STATIC=PASS');
 console.log('STAGE414_MUSIC_NOTE_DETAIL_AND_FOLDER_60S_BACKGROUND_COST_PROTECTION=PASS');
 console.log('STAGE414_LIBRARY_FOLDER_60S_BACKGROUND_COST_PROTECTION=PASS');
-console.log('STAGE414_EXPLORE_AND_STUDIO_TIMING_PRESERVED_STATIC=PASS');
+console.log('STAGE414_EXPLORE_TIMING_AND_APP522_STUDIO_1S_STATIC=PASS');
 console.log('STAGE414_STUDIO_HEART_AND_FAVORITE_COUNT_EXIT=NOT_IMPLEMENTED');
 console.log('STAGE414_OS_CLOSE_DELIVERY_AND_FIRESTORE_BILLING=NOT_TESTED');

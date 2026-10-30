@@ -100,7 +100,7 @@ const open = page.slice(openStart, openEnd);
 assert.match(open, /const mediaVersionCompatible/);
 assert.match(open, /compatible \|\| mediaVersionCompatible/);
 
-assert.match(app, /const STUDIO_HEART_BATCH_MS = 30_000;/);
+assert.match(app, /const STUDIO_HEART_BATCH_MS = 1_000;/);
 assert.match(app, /publishMusicNoteHeartPreviewDelta\(uid, safeDocumentId, intent\.song, desiredSaved\)/);
 
 console.log('APP349_A_CANONICAL_SETTLEMENT_NO_DISAPPEAR=PASS');

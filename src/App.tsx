@@ -1,4 +1,5 @@
 import { runV1MutationBoundary, type V1MutationMirrorTarget } from './data/v1MutationBoundary';
+import { commitStudioHeartCanonical523 } from './lib/studioHeartCanonical523';
 import { readNextSongKeywords, clearNextSongKeywords } from './lib/nextSongPendingBridge';
 import {
   acknowledgeRecentSongsSignalVersion,
@@ -47,7 +48,7 @@ const ensureLiveSoridrawSongId = <T extends Record<string, any>>(song: T): T => 
   catch { return { ...song, soridrawSongId }; }
 };
 
-const STUDIO_HEART_BATCH_MS = 30_000;
+const STUDIO_HEART_BATCH_MS = 1_000;
 const STUDIO_HEART_RETRY_MS = 60_000;
 const buildBatchedRecentFavoriteDocumentId = (uid: string, stableIdentity: string): string => {
   const raw = `${uid}|${stableIdentity}`;
@@ -5852,6 +5853,13 @@ function App() {
   const recentHeartAuthorityRef = useRef<Map<string, RecentHeartAuthorityEntry>>(new Map());
   const recentHeartAuthorityUidRef = useRef('');
   const studioHeartIntentTimersRef = useRef<Map<string, number>>(new Map());
+  // app522: serialize canonical writes per UID/song. A second click can occur
+  // while the previous 1s settlement is still in flight; newest intent must win.
+  const studioHeartCommitInFlightRef = useRef<Map<string, {
+    updatedAtMs: number;
+    desiredSaved: boolean;
+    promise: Promise<void>;
+  }>>(new Map());
   const studioHeartRemotePreviewRef = useRef<Map<string, {
     documentId: string;
     identityKey: string;
@@ -5948,6 +5956,7 @@ function App() {
     remoteItem: any,
     remoteFavoriteId: string,
     remoteSaved: boolean,
+    canonicalPreviewVersion = 0,
   ) => {
     const safeUid = String(uid || '').trim();
     const safeRemoteId = String(remoteFavoriteId || '').trim();
@@ -5961,6 +5970,9 @@ function App() {
       const sameIdentity = Boolean(remoteIdentityKey && pending.identityKey === remoteIdentityKey);
       if (!sameDocument && !sameIdentity) continue;
       if (pending.desiredSaved !== remoteSaved) continue;
+      // An older canonical event may arrive AFTER the latest preview.
+      // Only its originating confirmed click version can settle pending.
+      if (pending.signalVersion > 0 && canonicalPreviewVersion < pending.signalVersion) continue;
       removeStudioHeartIntentLocal(safeUid, pending.documentId);
     }
   };
@@ -5973,37 +5985,22 @@ function App() {
     expectedUpdatedAtMs?: number,
   ) => {
     if (!uid || !documentId || !Number.isFinite(version) || version <= 0) return;
-    const updated = updateStudioHeartPendingIntent(uid, documentId, (current) => {
-      if (typeof desiredSaved === 'boolean' && current.desiredSaved !== desiredSaved) return current;
-      if (Number.isFinite(expectedUpdatedAtMs) && Number(expectedUpdatedAtMs) > 0 && current.updatedAtMs !== Number(expectedUpdatedAtMs)) return current;
-      return {
-        ...current,
-        signalVersion: Math.max(current.signalVersion || 0, Math.floor(version)),
-      };
-    });
-    if (!updated) return;
-    if (typeof desiredSaved === 'boolean' && updated.desiredSaved !== desiredSaved) return;
-    if (Number.isFinite(expectedUpdatedAtMs) && Number(expectedUpdatedAtMs) > 0 && updated.updatedAtMs !== Number(expectedUpdatedAtMs)) return;
-    if (
-      updated.pendingRemotePreviewVersion > 0
-      && updated.pendingRemotePreviewVersion > updated.signalVersion
-    ) {
-      removeStudioHeartIntentLocal(uid, documentId);
+    const current = readStudioHeartPendingIntent(uid, documentId);
+    if (!current) return;
+    if (typeof desiredSaved === 'boolean' && current.desiredSaved !== desiredSaved) return;
+    if (Number.isFinite(expectedUpdatedAtMs) && Number(expectedUpdatedAtMs) > 0 && current.updatedAtMs !== Number(expectedUpdatedAtMs)) return;
+    const updated = { ...current, signalVersion: Math.max(current.signalVersion || 0, Math.floor(version)) };
+    // The RTDB receipt is the ordering authority. Never act on an unverified
+    // localStorage write when quota is exhausted.
+    if (writeStudioHeartPendingIntentChecked(updated) !== 'stored') return;
+    // If RTDB confirmation arrives after the 1s flush has already deferred,
+    // replace its 60s failure retry with a bounded near-immediate settlement.
+    if (current.signalVersion <= 0 && updated.signalVersion > 0
+      && Date.now() - updated.updatedAtMs >= STUDIO_HEART_BATCH_MS
+      && !studioHeartCommitInFlightRef.current.has(`${uid}:${documentId}`)) {
+      scheduleStudioHeartPendingIntent(documentId, STUDIO_HEART_BATCH_MS);
     }
-  };
-
-  const supersedeStudioHeartIntentFromRemotePreview = (uid: string, documentId: string, remoteVersion: number) => {
-    if (!uid || !documentId || !Number.isFinite(remoteVersion) || remoteVersion <= 0) return;
-    const pending = readStudioHeartPendingIntent(uid, documentId);
-    if (!pending) return;
-    if (pending.signalVersion > 0) {
-      if (remoteVersion > pending.signalVersion) removeStudioHeartIntentLocal(uid, documentId);
-      return;
-    }
-    updateStudioHeartPendingIntent(uid, documentId, (current) => ({
-      ...current,
-      pendingRemotePreviewVersion: Math.max(current.pendingRemotePreviewVersion || 0, Math.floor(remoteVersion)),
-    }));
+    // RTDB preview never removes the pending canonical intent.
   };
 
   const persistRecentHeartAuthority = (uid: string) => {
@@ -10778,10 +10775,29 @@ const toggleCycleVariantSelection = (
     const isHeartPreviewSave = normalizedOperation === 'heart-preview-save';
     const isHeartPreviewUnsave = normalizedOperation === 'heart-preview-unsave';
     const isHeartPreview = isHeartPreviewSave || isHeartPreviewUnsave;
+    // app523: RTDB canonical delivery order does not prove the Firestore
+    // mutation's original click order. Protect newer preview UI from an old
+    // save/unsave ACK arriving later.
+    const canonicalItem523 = !isHeartPreview && itemJson && ['save', 'unsave', 'restore'].includes(normalizedOperation)
+      ? (() => { try { const parsed = JSON.parse(itemJson); return Array.isArray(parsed) ? parsed[0] : parsed; } catch { return null; } })()
+      : null;
+    const canonicalPreviewVersion523 = Math.floor(Number(canonicalItem523?.studioHeartPreviewVersion || 0));
+    const canonicalFavoriteId523 = String(
+      (Array.isArray(documentIds) ? documentIds[0] : '') || canonicalItem523?.id || '',
+    ).trim();
+    const latestRemotePreview523 = canonicalFavoriteId523
+      ? studioHeartRemotePreviewRef.current.get(canonicalFavoriteId523) : null;
+    if (canonicalPreviewVersion523 > 0 && latestRemotePreview523
+      && latestRemotePreview523.version > canonicalPreviewVersion523) {
+      // Receiver keeps the later user's optimistic heart. The newer
+      // canonical transaction must settle before that preview is removed.
+      writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
+      return;
+    }
 
     // 1010 — own-device canonical invalidation does not need a server delta query.
     // app290 heart preview is different: it is only a live UI signal and must not
-    // advance the Firestore/catalog document version before the 30s batch commits.
+    // advance the Firestore/catalog document version before canonical commit.
     if (originDeviceId && originDeviceId === getMusicNoteDeviceId()) {
       if (isHeartPreview) {
         const previewDocumentId = String((Array.isArray(documentIds) ? documentIds[0] : '') || '').trim();
@@ -10959,11 +10975,8 @@ const toggleCycleVariantSelection = (
         isHeartPreviewSave,
         remoteVersion,
       );
-      if (remoteFavoriteId) {
-        supersedeStudioHeartIntentFromRemotePreview(uid, remoteFavoriteId, remoteVersion);
-      }
-      // app348: every signed-in device updates immediately; only the
-      // canonical favorite write waits for the per-song 30s final state.
+      // app522: a remote RTDB preview updates the display only, never drops
+      // this device's pending Firestore write. Canonical follows the 1s batch.
       writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
       markCacheDiagnostic('musicNote', 'SYNC', 0, 0);
       return;
@@ -10985,6 +10998,7 @@ const toggleCycleVariantSelection = (
             remoteItem,
             remoteFavoriteId || exactDocumentIds[0] || '',
             canonicalRemoteSaved,
+            canonicalPreviewVersion523,
           );
           clearRemoteStudioHeartPreviewFromCanonical(uid, exactDocumentIds, remoteItem);
         }
@@ -11870,14 +11884,15 @@ const toggleCycleVariantSelection = (
     if (!uid || !safeDocumentId) return;
 
     clearStudioHeartIntentTimer(safeDocumentId);
+    const commitKey = `${uid}:${safeDocumentId}`;
+    // A previous canonical request may still be settling when a new 1s timer
+    // fires. Its finally block reschedules any newer pending intent; never send
+    // a competing write that can finish out of order.
+    if (studioHeartCommitInFlightRef.current.has(commitKey)) return;
     const intent = readStudioHeartPendingIntent(uid, safeDocumentId);
     if (!intent) return;
 
-    if (intent.signalVersion <= 0 && intent.pendingRemotePreviewVersion > 0) {
-      removeStudioHeartPendingIntent(uid, safeDocumentId);
-      return;
-    }
-
+    // Even a newer RTDB preview is not evidence that Firestore saved this intent.
     // Multiple toggles inside the trailing window collapse to their final state.
     // If the final state equals the canonical baseline, there is nothing to write.
     if (intent.desiredSaved === intent.baselineSaved) {
@@ -11885,27 +11900,100 @@ const toggleCycleVariantSelection = (
       return;
     }
 
+    let deferredForOrdering523 = false;
+    const committing = (async () => {
     try {
       const commitSong = normalizeFavoriteTitleFields({
         ...(intent.song || {}),
         favoriteFirestoreId: safeDocumentId,
         musicNoteFavoriteId: safeDocumentId,
       } as SongResult) as SongResult;
-      await toggleFavorite(commitSong, {
-        trustedRecentStudio: true,
-        intendedAction: intent.desiredSaved ? 'save' : 'unsave',
-        canonicalBaseline: {
-          saved: intent.baselineSaved,
-          favorite: intent.baselineFavorite,
-        },
-        suppressSuccessToast: true,
+      const creationTime = Date.now();
+      const mediaKeys = [
+        'audioUrl', 'audio_url', 'streamAudioUrl', 'stream_audio_url', 'sourceAudioUrl', 'sourceStreamAudioUrl',
+        'imageUrl', 'image_url', 'coverUrl', 'thumbnailUrl', 'audioUrls',
+        'sunoAudioUrl', 'sunoCoverUrl', 'sunoImageUrl', 'sunoArtworkUrl',
+        'sunoLinks', 'sunoShareLinks', 'mainSunoIndex',
+        'sunoShareUrl', 'sunoUrl', 'sunoSongUrl', 'sunoTitle',
+        'sunoDurationSeconds', 'sunoDurationText', 'sunoShareUrlUpdatedAt', 'sunoCoverFetchedAt',
+      ] as const;
+      const mediaPayload = Object.fromEntries(mediaKeys
+        .filter((key) => (commitSong as any)?.[key] !== undefined && (commitSong as any)?.[key] !== null && (commitSong as any)?.[key] !== '')
+        .map((key) => [key, (commitSong as any)[key]]));
+      const creationPayload = sanitizeForFirestore({
+        uid,
+        soridrawSongId: getLiveSoridrawSongId(commitSong),
+        recentSongSyncKey: buildRecentSongSyncKey(commitSong),
+        ...buildLegacyRecentFavoriteBridge(commitSong),
+        title: commitSong.title,
+        koreanTitle: commitSong.koreanTitle ?? '',
+        englishTitle: commitSong.englishTitle ?? '',
+        genre: getResolvedGenre(commitSong),
+        lyrics: commitSong.lyrics,
+        prompt: commitSong.prompt,
+        appliedKeywords: commitSong.appliedKeywords,
+        userInput: commitSong.userInput ?? (commitSong.appliedKeywords as any)?.userInput ?? '',
+        situationSummary: commitSong.situationSummary || (commitSong.appliedKeywords as any)?.situationSummary || '',
+        ...mediaPayload,
+        isLocked: false,
+        isPublic: false,
+        createdAtMs: creationTime,
+        createdAt: serverTimestamp(),
+        favoriteKey: buildFavoriteIdentityKey(commitSong),
+        searchTokens: buildFavoriteSearchTokens(commitSong),
       });
-
+      // RTDB ordering is established at the click, never at write completion.
+      // Missing version defers the canonical mutation without discarding outbox.
+      const canonical = await commitStudioHeartCanonical523({
+        uid,
+        documentId: safeDocumentId,
+        previewVersion: intent.signalVersion,
+        desiredSaved: intent.desiredSaved,
+        creationPayload,
+        baselineSaved: intent.baselineSaved,
+        knownExistingFavorite: intent.song?.__studioHeartHadCanonicalLinkBeforeQueue === true,
+      });
+      if (canonical.outcome === 'superseded') {
+        const current = readStudioHeartPendingIntent(uid, safeDocumentId);
+        if (current?.updatedAtMs === intent.updatedAtMs && current.desiredSaved === intent.desiredSaved) {
+          removeStudioHeartPendingIntent(uid, safeDocumentId);
+          setFavorites((previous) => previous);
+        }
+        return;
+      }
+      const changedAt = Date.now();
+      const syncItem = sanitizeForFirestore({
+        ...commitSong,
+        id: safeDocumentId,
+        firestoreId: safeDocumentId,
+        uid,
+        studioHeartPreviewVersion: intent.signalVersion,
+        saved: intent.desiredSaved,
+        favoriteRemoved: !intent.desiredSaved,
+        favoriteRemovedAt: intent.desiredSaved ? null : changedAt,
+        unsavedAt: intent.desiredSaved ? null : changedAt,
+        unlikedAt: intent.desiredSaved ? null : changedAt,
+        updatedAtMs: changedAt,
+      });
+      await runV1MutationBoundary({
+        domain: 'musicNote',
+        operation: intent.desiredSaved ? 'save' : 'unsave',
+        uid,
+        documentIds: [safeDocumentId],
+        affectedCount: 1,
+        syncItem,
+      }, Promise.resolve(canonical));
+      if (intent.desiredSaved) forgetFavoriteDeletedTombstones(uid, [safeDocumentId]);
+      else rememberFavoriteDeletedTombstones(uid, [safeDocumentId]);
+      if (canonical.membershipChanged) {
+        queueMusicNoteFavoriteCountDelta(uid, intent.desiredSaved ? 1 : -1);
+      }
       const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
       if (latest && latest.updatedAtMs === intent.updatedAtMs && latest.desiredSaved === intent.desiredSaved) {
         removeStudioHeartIntentLocal(uid, safeDocumentId);
       }
     } catch (error) {
+      deferredForOrdering523 = String((error as any)?.message || error || '').includes('STUDIO_HEART_PREVIEW_ORDER_NOT_READY');
       console.warn('Studio heart canonical batch commit failed.', error);
       const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
       if (!latest || latest.updatedAtMs !== intent.updatedAtMs) return;
@@ -11918,6 +12006,31 @@ const toggleCycleVariantSelection = (
           void flushStudioHeartPendingIntent(safeDocumentId);
         }, STUDIO_HEART_RETRY_MS);
         studioHeartIntentTimersRef.current.set(safeDocumentId, retryTimer);
+      }
+    }
+    })();
+    studioHeartCommitInFlightRef.current.set(commitKey, {
+      updatedAtMs: intent.updatedAtMs,
+      desiredSaved: intent.desiredSaved,
+      promise: committing,
+    });
+    try {
+      await committing;
+    } finally {
+      if (studioHeartCommitInFlightRef.current.get(commitKey)?.promise === committing) {
+        studioHeartCommitInFlightRef.current.delete(commitKey);
+      }
+      const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
+      if (latest && (latest.updatedAtMs !== intent.updatedAtMs || latest.desiredSaved !== intent.desiredSaved)
+        && !studioHeartIntentTimersRef.current.has(safeDocumentId)) {
+        // The newer click was persisted before the first ACK. Never risk a
+        // quota-failed after-the-fact rebase; just schedule its exact action.
+        scheduleStudioHeartPendingIntent(safeDocumentId, STUDIO_HEART_BATCH_MS);
+      } else if (deferredForOrdering523 && latest && latest.updatedAtMs === intent.updatedAtMs
+        && intent.signalVersion <= 0 && latest.signalVersion > 0) {
+        // RTDB may ACK while the not-yet-ordered 1s attempt is in flight.
+        // Do not keep that request on an obsolete 60s retry timer.
+        scheduleStudioHeartPendingIntent(safeDocumentId, STUDIO_HEART_BATCH_MS);
       }
     }
   };
@@ -11946,15 +12059,20 @@ const toggleCycleVariantSelection = (
     if (!uid || !safeDocumentId || !identityKey) return false;
 
     const existing = readStudioHeartPendingIntent(uid, safeDocumentId);
-    const now = Date.now();
+    const now = Math.max(Date.now(), (existing?.updatedAtMs || 0) + 1);
     const intent: StudioHeartPendingIntent = {
       schemaVersion: 1,
       uid,
       documentId: safeDocumentId,
       identityKey,
-      baselineSaved: existing ? existing.baselineSaved : baselineSaved,
+      // During an in-flight write the old canonical baseline is no longer
+      // reliable. Persist the opposite of the latest click, so a reload cannot
+      // discard the new command as false net-zero before it is applied.
+      baselineSaved: studioHeartCommitInFlightRef.current.has(`${uid}:${safeDocumentId}`)
+        ? !desiredSaved : (existing ? existing.baselineSaved : baselineSaved),
       desiredSaved,
-      baselineFavorite: existing ? existing.baselineFavorite : baselineFavorite,
+      baselineFavorite: studioHeartCommitInFlightRef.current.has(`${uid}:${safeDocumentId}`)
+        ? null : (existing ? existing.baselineFavorite : baselineFavorite),
       song: {
         ...(song as any),
         favoriteFirestoreId: safeDocumentId,
@@ -11980,8 +12098,8 @@ const toggleCycleVariantSelection = (
     scheduleStudioHeartPendingIntent(safeDocumentId);
 
     // app302 option-2:
-    // this device gets immediate local Music Note visibility, while another
-    // device waits for the successful canonical mutation after latest click +30s.
+    // this device and other devices get immediate Music Note preview visibility,
+    // while the durable Firestore mutation follows the latest click by 1s.
     // Same-song clicks keep the original canonical baseline and replace only
     // desiredSaved, so final == baseline still settles at W0.
     rememberRecentHeartAuthority(uid, intent.song, desiredSaved, safeDocumentId, now);
@@ -16629,6 +16747,13 @@ ${normalizePromptForDisplay(result.prompt)}
             ...heartSnapshot,
             favoriteFirestoreId: batchDocumentId,
             musicNoteFavoriteId: batchDocumentId,
+            // A previously linked legacy favorite can have a soft-removed
+            // canonical row but no app524 ordering marker. Never overwrite
+            // its title/lyrics/media with the newer Studio snapshot.
+            __studioHeartHadCanonicalLinkBeforeQueue:
+              existingIntent
+                ? existingIntent.song?.__studioHeartHadCanonicalLinkBeforeQueue === true
+                : Boolean(favoriteLinkBeforeToggle),
           } as SongResult) as SongResult;
 
           if (queueStudioHeartPendingIntent(

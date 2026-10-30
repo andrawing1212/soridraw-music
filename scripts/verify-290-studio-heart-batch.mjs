@@ -5,16 +5,16 @@ const app = fs.readFileSync('src/App.tsx', 'utf8');
 const sync = fs.readFileSync('src/services/userDomainSyncService.ts', 'utf8');
 const batch = fs.readFileSync('src/lib/studioHeartBatch.ts', 'utf8');
 
-assert.match(app, /const STUDIO_HEART_BATCH_MS = 30_000;/);
+assert.match(app, /const STUDIO_HEART_BATCH_MS = 1_000;/);
 assert.match(app, /const STUDIO_HEART_RETRY_MS = 60_000;/);
 assert.match(app, /queueStudioHeartPendingIntent/);
 assert.match(app, /flushStudioHeartPendingIntent/);
 assert.match(app, /listStudioHeartPendingIntents\(uid\)/);
-assert.match(app, /canonicalBaseline: \{/);
-assert.match(app, /suppressSuccessToast: true/);
+assert.match(app, /commitStudioHeartCanonical523\(\{/);
+assert.match(app, /previewVersion: intent\.signalVersion/);
 assert.match(app, /const batchBlockedByLock = Boolean\(baselineFavorite\?\.isLocked\)/);
 assert.match(app, /if \(previousRetryCount < 2\)/);
-assert.match(app, /if \(intent\.desiredSaved === intent\.baselineSaved\) \{\s*removeStudioHeartPendingIntent/s);
+assert.match(app, /if \(intent\.desiredSaved === intent\.baselineSaved\) \{\s*removeStudioHeartIntentLocal/s);
 assert.match(app, /publishMusicNoteHeartPreviewDelta\(uid, safeDocumentId, intent\.song, desiredSaved\)/);
 assert.match(app, /normalizedOperation === 'heart-preview-save'/);
 assert.match(app, /normalizedOperation === 'heart-preview-unsave'/);
@@ -39,9 +39,12 @@ const publishEnd = sync.indexOf('// app287', publishStart);
 assert.ok(publishStart >= 0 && publishEnd > publishStart);
 const publishBlock = sync.slice(publishStart, publishEnd);
 assert.match(publishBlock, /operation: desiredSaved \? 'heart-preview-save' : 'heart-preview-unsave'/);
-assert.match(publishBlock, /const identityOnly: Record<string, unknown> = \{/);
-assert.match(publishBlock, /generationBatchId/);
-assert.match(publishBlock, /generationIndex/);
+// Current publisher uses a bounded projected catalog summary, not the
+// obsolete identityOnly shape. Preserve the preview-only/PII-safe contract.
+assert.match(publishBlock, /projectMusicNoteItemForSignal\(source, safeDocumentId\)/);
+assert.match(publishBlock, /__catalogSummary: true/);
+assert.match(publishBlock, /__studioHeartRemotePreview: true/);
+assert.match(publishBlock, /recentSongSyncKey/);
 assert.doesNotMatch(publishBlock, /\.\.\.\(syncItem as Record<string, unknown>\)/);
 assert.match(publishBlock, /return publishSignal/);
 assert.doesNotMatch(publishBlock, /\b(?:getDoc|getDocs|setDoc|updateDoc|addDoc|deleteDoc)\s*\(/);
@@ -59,7 +62,7 @@ assert.match(batch, /signalVersion: number/);
 assert.match(batch, /pendingRemotePreviewVersion: number/);
 
 console.log('APP290_STUDIO_HEART_LOCAL_FIRST_PREVIEW=PASS');
-console.log('APP290_STUDIO_HEART_CANONICAL_30S_BATCH=PASS');
+console.log('APP522_STUDIO_HEART_CANONICAL_1S_BATCH=PASS');
 console.log('APP290_STUDIO_HEART_NET_ZERO_W0_GUARD=PASS');
 console.log('APP290_STUDIO_HEART_DURABLE_OUTBOX=PASS');
 console.log('APP290_STUDIO_HEART_PREVIEW_NO_FIRESTORE_IO=PASS');

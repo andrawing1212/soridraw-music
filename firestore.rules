@@ -156,6 +156,28 @@ service cloud.firestore {
       // an admin-dependent users/{uid} rules lookup. Admin semantics stay intact.
       allow update: if (isOwner(uid) && isValidSelfUpdate()) || isMaster() || validUserManagerUpdate();
 
+      // app524 — exact-song Studio heart ordering marker. A first SAVE may
+      // read an *absent* marker via the owner path. The existing favorites
+      // owner-only read rule is intentionally unchanged.
+      match /studio_heart_orders/{favoriteId} {
+        function validHeartOrder() {
+          return request.resource.data.keys().hasOnly(['uid', 'favoriteId', 'previewVersion', 'saved']) &&
+            request.resource.data.keys().hasAll(['uid', 'favoriteId', 'previewVersion', 'saved']) &&
+            request.resource.data.uid == uid &&
+            request.resource.data.favoriteId == favoriteId &&
+            request.resource.data.previewVersion is int &&
+            request.resource.data.previewVersion > 0 &&
+            request.resource.data.saved is bool;
+        }
+
+        allow get: if isOwner(uid);
+        allow list: if false;
+        allow create: if isOwner(uid) && validHeartOrder();
+        allow update: if isOwner(uid) && validHeartOrder() &&
+          request.resource.data.previewVersion > resource.data.previewVersion;
+        allow delete: if false;
+      }
+
       // SORIDRAW_BACKEND_V2_STEP2B_ADDITIVE_RULES
       // Additive V2 private-data rules only. Existing V1 rules remain unchanged.
       // Historical migration provenance is server/Admin-SDK controlled; normal

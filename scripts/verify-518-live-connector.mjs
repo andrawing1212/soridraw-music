@@ -5,7 +5,8 @@ import worker from '../cloudflare/media-worker/src/index.js';
 import {createHmac} from 'node:crypto';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
-const {planApp518FavoriteChange,handleApp518FavoriteEvent,APP518_MUSIC_NOTE_FIELDS}
+const {planApp518FavoriteChange,handleApp518FavoriteEvent,APP518_MUSIC_NOTE_FIELDS,
+ matchesApp518PilotSong}
  =require('../functions/lib/app518LiveConnector.js');
 const source=readFileSync('cloudflare/media-worker/src/index.js','utf8');
 const match=source.match(/const MUSIC_NOTE_CATALOG_FIELDS = \[([\s\S]*?)\];/);
@@ -39,6 +40,15 @@ assert.equal(plan(null,{uid,saved:false,favoriteRemoved:true}),'RECHECK',
  'newly created server tombstone must not be suppressed by a null projection');
 assert.equal(plan(base,{...base,uid:'intruder'}),'DENY');
 assert.equal(plan(null,null),'IGNORE');
+const pilot={pilotUid:uid,pilotDocumentId:documentId};
+assert.equal(matchesApp518PilotSong({uid,documentId,...pilot}),true);
+for(const candidate of [
+ {uid:'other-owner',documentId},
+ {uid,documentId:'different-song'},
+ {uid,documentId,pilotUid:'',pilotDocumentId:documentId},
+ {uid,documentId,pilotUid:uid,pilotDocumentId:''},
+])assert.equal(matchesApp518PilotSong({...pilot,...candidate}),false,
+ 'one-song pilot must not process another user or absent scope');
 for(let n=0;n<1000;n++)assert.equal(plan(base,{...base,ephemeral:n}),'IGNORE');
 const at=iso=>({seconds:Math.floor(Date.parse(iso.slice(0,19)+'Z')/1000),
  nanoseconds:Number(iso.match(/\.(\d+)Z$/)?.[1]||'0')});
@@ -173,6 +183,14 @@ const offSchedule=await worker.scheduled({scheduledTime:nowMs},
  {SORIDRAW_CANONICAL_CATALOG_518:'0'},
  {waitUntil(){throw Error('No scheduler work while OFF');}});
 assert.equal(offSchedule,undefined);
+const entry=readFileSync('functions/src/index.ts','utf8');
+assert.ok(entry.includes('matchesApp518PilotSong({uid,documentId:id,...app518PilotScope()})'),
+ 'Firestore trigger must reject outside pilot BEFORE even a guard read');
+assert.ok(entry.includes('...app518PilotScope(),'),
+ 'signed callback must enforce same exact preview pilot');
+const workerCode=readFileSync('cloudflare/media-worker/src/index.js','utf8');
+assert.ok(workerCode.includes('pilotScope:{uid:pilotUid,documentId:pilotDocumentId}'),
+ 'Worker signed bridge must get same exact pilot UID+favorite');
 const rules=readFileSync('firestore.rules','utf8');
 assert.ok(/match \/\{document=\*\*\} \{[\s\S]*?allow read, write: if false;/.test(rules),
   'private server receipt collection must be denied by the default rule');

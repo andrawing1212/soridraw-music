@@ -5985,19 +5985,22 @@ function App() {
     expectedUpdatedAtMs?: number,
   ) => {
     if (!uid || !documentId || !Number.isFinite(version) || version <= 0) return;
-    const updated = updateStudioHeartPendingIntent(uid, documentId, (current) => {
-      if (typeof desiredSaved === 'boolean' && current.desiredSaved !== desiredSaved) return current;
-      if (Number.isFinite(expectedUpdatedAtMs) && Number(expectedUpdatedAtMs) > 0 && current.updatedAtMs !== Number(expectedUpdatedAtMs)) return current;
-      return {
-        ...current,
-        signalVersion: Math.max(current.signalVersion || 0, Math.floor(version)),
-      };
-    });
-    if (!updated) return;
-    if (typeof desiredSaved === 'boolean' && updated.desiredSaved !== desiredSaved) return;
-    if (Number.isFinite(expectedUpdatedAtMs) && Number(expectedUpdatedAtMs) > 0 && updated.updatedAtMs !== Number(expectedUpdatedAtMs)) return;
-    // RTDB heart-preview versions describe UI signals, not Firestore commits.
-    // Never use them to drop an unsaved durable canonical intent.
+    const current = readStudioHeartPendingIntent(uid, documentId);
+    if (!current) return;
+    if (typeof desiredSaved === 'boolean' && current.desiredSaved !== desiredSaved) return;
+    if (Number.isFinite(expectedUpdatedAtMs) && Number(expectedUpdatedAtMs) > 0 && current.updatedAtMs !== Number(expectedUpdatedAtMs)) return;
+    const updated = { ...current, signalVersion: Math.max(current.signalVersion || 0, Math.floor(version)) };
+    // The RTDB receipt is the ordering authority. Never act on an unverified
+    // localStorage write when quota is exhausted.
+    if (writeStudioHeartPendingIntentChecked(updated) !== 'stored') return;
+    // If RTDB confirmation arrives after the 1s flush has already deferred,
+    // replace its 60s failure retry with a bounded near-immediate settlement.
+    if (current.signalVersion <= 0 && updated.signalVersion > 0
+      && Date.now() - updated.updatedAtMs >= STUDIO_HEART_BATCH_MS
+      && !studioHeartCommitInFlightRef.current.has(`${uid}:${documentId}`)) {
+      scheduleStudioHeartPendingIntent(documentId, STUDIO_HEART_BATCH_MS);
+    }
+    // RTDB preview never removes the pending canonical intent.
   };
 
   const persistRecentHeartAuthority = (uid: string) => {
@@ -12020,6 +12023,11 @@ const toggleCycleVariantSelection = (
         && !studioHeartIntentTimersRef.current.has(safeDocumentId)) {
         // The newer click was persisted before the first ACK. Never risk a
         // quota-failed after-the-fact rebase; just schedule its exact action.
+        scheduleStudioHeartPendingIntent(safeDocumentId, STUDIO_HEART_BATCH_MS);
+      } else if (latest && latest.updatedAtMs === intent.updatedAtMs
+        && intent.signalVersion <= 0 && latest.signalVersion > 0) {
+        // RTDB may ACK while the not-yet-ordered 1s attempt is in flight.
+        // Do not keep that request on an obsolete 60s retry timer.
         scheduleStudioHeartPendingIntent(safeDocumentId, STUDIO_HEART_BATCH_MS);
       }
     }

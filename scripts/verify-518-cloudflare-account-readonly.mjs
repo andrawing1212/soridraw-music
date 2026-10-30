@@ -23,14 +23,28 @@ const value=r=>r?.text??r?.value??null;
 const code=e=>String(e?.message||e).replace(/[^A-Z0-9_\-]/gi,'_').slice(0,90);
 const metric=n=>{if(!Number.isSafeInteger(n)||n<0)throw Error('METRIC_INVALID');return n;};
 const sum=(a,b)=>metric(a+b);
+const validScriptName=s=>typeof s==='string'&&/^[a-z0-9][a-z0-9_-]{0,99}$/i.test(s);
+const validVersion=s=>typeof s==='string'&&/^[a-f0-9-]{36}$/i.test(s);
+const extractD1Bindings=bindings=>{
+ if(!Array.isArray(bindings))return null;
+ const d1=bindings.filter(x=>x?.type==='d1'||x?.type==='d1_database')
+  .map(x=>({binding:String(x.name||''),
+   databaseId:String(x.database_id||x.id||'')}));
+ if(d1.some(x=>!x.binding||!x.databaseId))return null;
+ const indirect=bindings.filter(x=>['service','dispatch_namespace','durable_object_namespace']
+  .includes(x?.type)).map(x=>({name:String(x.name||''),type:String(x.type||''),
+   service:x.type==='service'?String(x.service||''):undefined}));
+ return {d1,indirect,ledgerNamePresent:bindings.some(x=>x?.name==='SORIDRAW_D1_SHARED_ACCOUNT_LEDGER_518'),
+  writersFlagNamePresent:bindings.some(x=>x?.name==='SORIDRAW_D1_ALL_ACCOUNT_WRITERS_518')};
+};
 export const collect518=async({request,token,at=new Date()}={})=>{
  if(typeof request!=='function'||typeof token!=='string'||token.length<8)throw Error('MISSING_READONLY_TOKEN');
  const result={timestampUtc:at.toISOString(),liveWorkers:[],
   d1:{status:'NOT_CHECKED'},security:{mutation:'NEVER_REQUESTED',
-  inflightDrain:'NOT_PROVEN',rollbackAttestation:'NOT_PROVEN'},errors:[]};
+  inflightDrain:'NOT_PROVEN',rollbackAttestation:'NOT_PROVEN'},errors:[],writerInventory:{status:'NOT_CHECKED',workers:[],accountLedgerVerified:false}};
  const fetchSafe=async(url,method='GET',body=null)=>{
   const worker=TARGETS.some(t=>url===`https://${t.script}.andrawing1212.workers.dev/health?read_only_probe=518`);
-  const api=url.startsWith(API+'/workers/scripts/')||url.startsWith(API+'/d1/database?');
+  const api=url===API+'/workers/scripts'||url.startsWith(API+'/workers/scripts/')||url.startsWith(API+'/d1/database?');
   if(!((method==='GET'&&(worker||api))||(method==='POST'&&url===GRAPH&&body?.query===QUERY)))
    throw Error('DISALLOWED_READONLY_REQUEST');
   const headers=worker?{'Cache-Control':'no-cache'}:{Authorization:'Bearer '+token,Accept:'application/json'};
@@ -77,6 +91,86 @@ export const collect518=async({request,token,at=new Date()}={})=>{
   }catch(e){out.status='HOLD_READ_ERROR';out.errorCode=code(e);result.errors.push(t.env+':'+out.errorCode);}
   result.liveWorkers.push(out);
  }
+ // Inventory all account Worker scripts, not just three named Media Workers.
+ // GET only. Settings and active-version resources can expose secrets:
+ // retain ONLY sanitized D1 binding identifiers and service-binding names.
+ // No token, source content, plain_text/secret_text value or full API body in logs.
+ try{
+  const list=await fetchSafe(API+'/workers/scripts');
+  if(!Array.isArray(list.result)||list.result.length>100||list.result.length===0)
+   throw Error('WORKER_LIST_INVALID_OR_TOO_LARGE');
+  const names=list.result.map(x=>x?.id);
+  if(names.some(x=>!validScriptName(x))||new Set(names).size!==names.length)
+   throw Error('WORKER_LIST_NAMES_INVALID');
+  result.writerInventory.listedScripts=names.length;
+  for(const name of names){
+   const out={name,status:'UNVERIFIED',active:[],d1Bindings:[],
+    indirectBindings:[],budgetLedger:'NOT_PROVEN',versionBindingProof:'NOT_CHECKED'};
+   try{
+    const [dep,settings]=await Promise.all([
+     fetchSafe(`${API}/workers/scripts/${name}/deployments`),
+     fetchSafe(`${API}/workers/scripts/${name}/settings`),
+    ]);
+    const versions=dep.result?.deployments?.[0]?.versions;
+    if(!Array.isArray(versions)||!versions.length)
+     throw Error('INVENTORY_ACTIVE_VERSIONS_UNKNOWN');
+    out.active=versions.filter(x=>Number(x.percentage)>0).map(x=>({
+     versionId:String(x.version_id||''),trafficPercent:Number(x.percentage),
+    }));
+    if(!out.active.length||out.active.some(x=>!validVersion(x.versionId)
+       ||!(x.trafficPercent>0&&x.trafficPercent<=100)))
+     throw Error('INVENTORY_ACTIVE_VERSIONS_INVALID');
+    const seenSettings=extractD1Bindings(settings.result?.bindings);
+    if(!seenSettings)throw Error('INVENTORY_SCRIPT_SETTINGS_UNKNOWN');
+    out.d1Bindings=seenSettings.d1;
+    out.indirectBindings=seenSettings.indirect;
+    out.ledgerNamePresent=seenSettings.ledgerNamePresent;
+    out.writersFlagNamePresent=seenSettings.writersFlagNamePresent;
+    // Bindings in script settings alone cannot prove the active deployment.
+    // Verify each traffic-serving immutable Worker version separately.
+    let exact=true;
+    const combined=new Map();
+    for(const v of out.active){
+     try{
+      const version=await fetchSafe(`${API}/workers/scripts/${name}/versions/${v.versionId}`);
+      const resources=version.result?.resources?.bindings;
+      const snapshot=extractD1Bindings(resources);
+      if(!snapshot){exact=false;break;}
+      combined.set(v.versionId,snapshot);
+     }catch{exact=false;break;}
+    }
+    if(exact){
+     out.versionBindingProof='ACTIVE_VERSION_BINDINGS_OBSERVED';
+     out.versions=out.active.map(v=>({
+      versionId:v.versionId,trafficPercent:v.trafficPercent,
+      d1Bindings:combined.get(v.versionId).d1,
+      indirectBindings:combined.get(v.versionId).indirect,
+      ledgerNamePresent:combined.get(v.versionId).ledgerNamePresent,
+      writersFlagNamePresent:combined.get(v.versionId).writersFlagNamePresent,
+     }));
+     out.status='METADATA_OBSERVED_NOT_WRITE_COVERAGE_PROOF';
+    }else{
+     out.versionBindingProof='UNVERIFIED_PERMISSION_OR_SCHEMA';
+     out.status='PARTIAL_VERSION_BINDINGS_UNVERIFIED';
+     result.errors.push('INVENTORY_VERSION:'+name);
+    }
+   }catch(e){out.status='HOLD_INVENTORY_READ_ERROR';out.errorCode=code(e);
+    result.errors.push('INVENTORY:'+name+':'+out.errorCode);}
+   result.writerInventory.workers.push(out);
+  }
+  result.writerInventory.status=result.writerInventory.workers.every(x=>
+   x.status==='METADATA_OBSERVED_NOT_WRITE_COVERAGE_PROOF')
+    ?'ACCOUNT_WORKER_METADATA_OBSERVED':'PARTIAL_WORKER_METADATA';
+ }catch(e){
+  result.writerInventory.status='HOLD_ACCOUNT_WORKER_LIST_UNVERIFIED';
+  result.writerInventory.errorCode=code(e);
+  result.errors.push('INVENTORY_LIST:'+result.writerInventory.errorCode);
+ }
+ // REST API tokens and external clients may write D1 without a Worker D1
+ // binding. This cannot prove all account writes hit a shared ledger.
+ result.writerInventory.accountLedgerVerified=false;
+ result.writerInventory.unmeteredExternalD1Writes='NOT_EXCLUDABLE_WITH_METADATA';
+ result.writerInventory.sourceInspection='NOT_PERFORMED_IN_READONLY_METADATA_TOKEN';
  const end=new Date(Date.UTC(at.getUTCFullYear(),at.getUTCMonth(),at.getUTCDate()));
  const start=new Date(end.getTime()-6*86400000);
  result.d1.windowUtc={start:day(start),end:day(end),
@@ -151,13 +245,22 @@ const selfTest=async()=>{
   if(url===GRAPH)return {ok:true,json:async()=>({data:{viewer:{accounts:[
    {d1AnalyticsAdaptiveGroups:[{dimensions:{date:'2026-10-28',databaseId:'db1'},
      sum:{rowsWritten:4}}]}]}}})};
+  if(url===API+'/workers/scripts')return {ok:true,json:async()=>({success:true,result:[
+   {id:'soridraw-media-preview'},{id:'soridraw-media-test'},
+   {id:'soridraw-media'},{id:'soridraw-explore-api'}]})};
+  if(url.includes('/versions/'))return {ok:true,json:async()=>({success:true,result:{
+   resources:{bindings:url.includes('soridraw-explore-api')
+    ?[{type:'d1',name:'DB',database_id:'db1'},
+      {type:'secret_text',name:'API_TOKEN',text:'DO_NOT_PRINT'}]
+    :[{type:'r2_bucket',name:'MEDIA',bucket_name:'some-bucket'}]},
+  }})};
   if(url.includes('/d1/database'))return {ok:true,json:async()=>({
    success:true,result:[{uuid:'db1',name:'soridraw-explore-db'}],result_info:{total_count:1}})};
   if(url.endsWith('/deployments'))return {ok:true,json:async()=>({
    success:true,result:{deployments:[{versions:[
     {version_id:'11111111-1111-4111-8111-111111111111',percentage:100}]}]}})};
   if(url.endsWith('/settings'))return {ok:true,json:async()=>({success:true,result:{
-   bindings:[{name:'MEDIA',bucket_name:TARGETS.find(t=>url.includes(t.script))?.media},
+   bindings:[...(url.includes('soridraw-explore-api')?[{type:'d1',name:'DB',database_id:'db1'}]:[]),{name:'MEDIA',bucket_name:TARGETS.find(t=>url.includes(t.script))?.media},
     {name:'CATALOG',bucket_name:'soridraw-user-catalog'},
     {name:'SORIDRAW_SHARED_CATALOG_V1',text:'1'}]}})};
   return {ok:true,json:async()=>({catalogAuthorityMode:'shared-catalog',
@@ -166,6 +269,16 @@ const selfTest=async()=>{
  };
  const snap=await collect518({request,token,at:new Date('2026-10-30T01:00:00Z')});
  assert.equal(snap.liveWorkers.length,3);
+ assert.equal(snap.writerInventory.status,'ACCOUNT_WORKER_METADATA_OBSERVED');
+ assert.equal(snap.writerInventory.listedScripts,4);
+ assert.equal(snap.writerInventory.accountLedgerVerified,false);
+ assert.deepEqual(snap.writerInventory.workers.find(x=>x.name==='soridraw-explore-api').d1Bindings,
+  [{binding:'DB',databaseId:'db1'}]);
+ assert.equal(snap.writerInventory.workers.find(x=>x.name==='soridraw-explore-api')
+  .versionBindingProof,'ACTIVE_VERSION_BINDINGS_OBSERVED');
+ assert.equal(JSON.stringify(snap).includes('DO_NOT_PRINT'),false);
+ assert.ok(calls.some(x=>x.url===API+'/workers/scripts'));
+ assert.ok(calls.some(x=>x.url.includes('/versions/')&&x.method==='GET'));
  assert.equal(snap.d1.status,'OBSERVED_ACCOUNT_WIDE');
  assert.equal(snap.d1.days.find(x=>x.utcDate==='2026-10-28').rowsWrittenObserved,4);
  assert.ok(calls.every(x=>x.method==='GET'||x.method==='POST'&&x.url===GRAPH));
@@ -176,6 +289,8 @@ const selfTest=async()=>{
  assert.equal(denied.overall,'PARTIAL_OR_DENIED');
  console.log('APP518_CLOUDFLARE_READONLY_REQUEST_ALLOWLIST=PASS');
  console.log('APP518_CLOUDFLARE_READONLY_SECRET_REDACTION_AND_FAIL_CLOSED=PASS');
+ console.log('APP518_CLOUDFLARE_ALL_SCRIPT_D1_ACTIVE_VERSION_METADATA=PASS');
+ console.log('APP518_CLOUDFLARE_UNATTESTED_ACCOUNT_LEDGER_REMAINS_HOLD=PASS');
 };
 if(process.argv.includes('--self-test'))await selfTest();
 else if(process.argv.includes('--live')){

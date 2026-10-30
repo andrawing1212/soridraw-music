@@ -125,13 +125,18 @@ export const enqueueVerifiedFavorite518=async({
  // reserve+write the shared budget ledger despite changing no outbox row.
  // Use one exact owner+ID indexed SELECT to return W0 for replay/duplicate.
  // The conditional versioned UPSERT still protects any concurrent race.
- const prior=await db.prepare(READ_ONE_518).bind(text(uid),text(documentId)).first();
- if(prior){
-  const known=text(prior.source_version_ns);
-  if(!/^[0-9]{21}$/.test(known))
-   return {code:'DENY_OUTBOX_SOURCE_VERSION_CORRUPT',d1Writes:0};
-  if(known>=version)return {code:'STALE_OR_DUPLICATE',
-   d1Writes:0,sourceVersionNs:version};
+ // The extra indexed lookup is needed only when the shared metered D1
+ // wrapper would otherwise reserve/write budget for a duplicate UPSERT.
+ // Legacy in-memory adapters keep their historical SQL contract.
+ if(db.__budgeted518===true){
+  const prior=await db.prepare(READ_ONE_518).bind(text(uid),text(documentId)).first();
+  if(prior){
+   const known=text(prior.source_version_ns);
+   if(!/^[0-9]{21}$/.test(known))
+    return {code:'DENY_OUTBOX_SOURCE_VERSION_CORRUPT',d1Writes:0};
+   if(known>=version)return {code:'STALE_OR_DUPLICATE',
+    d1Writes:0,sourceVersionNs:version};
+  }
  }
  const q=await db.prepare(UPSERT_CANONICAL_518)
    .bind(text(uid),text(documentId),version,state,nowMs).run();

@@ -47,7 +47,7 @@ const ensureLiveSoridrawSongId = <T extends Record<string, any>>(song: T): T => 
   catch { return { ...song, soridrawSongId }; }
 };
 
-const STUDIO_HEART_BATCH_MS = 30_000;
+const STUDIO_HEART_BATCH_MS = 1_000;
 const STUDIO_HEART_RETRY_MS = 60_000;
 const buildBatchedRecentFavoriteDocumentId = (uid: string, stableIdentity: string): string => {
   const raw = `${uid}|${stableIdentity}`;
@@ -5852,6 +5852,13 @@ function App() {
   const recentHeartAuthorityRef = useRef<Map<string, RecentHeartAuthorityEntry>>(new Map());
   const recentHeartAuthorityUidRef = useRef('');
   const studioHeartIntentTimersRef = useRef<Map<string, number>>(new Map());
+  // app522: serialize canonical writes per UID/song. A second click can occur
+  // while the previous 1s settlement is still in flight; newest intent must win.
+  const studioHeartCommitInFlightRef = useRef<Map<string, {
+    updatedAtMs: number;
+    desiredSaved: boolean;
+    promise: Promise<void>;
+  }>>(new Map());
   const studioHeartRemotePreviewRef = useRef<Map<string, {
     documentId: string;
     identityKey: string;
@@ -5984,26 +5991,8 @@ function App() {
     if (!updated) return;
     if (typeof desiredSaved === 'boolean' && updated.desiredSaved !== desiredSaved) return;
     if (Number.isFinite(expectedUpdatedAtMs) && Number(expectedUpdatedAtMs) > 0 && updated.updatedAtMs !== Number(expectedUpdatedAtMs)) return;
-    if (
-      updated.pendingRemotePreviewVersion > 0
-      && updated.pendingRemotePreviewVersion > updated.signalVersion
-    ) {
-      removeStudioHeartIntentLocal(uid, documentId);
-    }
-  };
-
-  const supersedeStudioHeartIntentFromRemotePreview = (uid: string, documentId: string, remoteVersion: number) => {
-    if (!uid || !documentId || !Number.isFinite(remoteVersion) || remoteVersion <= 0) return;
-    const pending = readStudioHeartPendingIntent(uid, documentId);
-    if (!pending) return;
-    if (pending.signalVersion > 0) {
-      if (remoteVersion > pending.signalVersion) removeStudioHeartIntentLocal(uid, documentId);
-      return;
-    }
-    updateStudioHeartPendingIntent(uid, documentId, (current) => ({
-      ...current,
-      pendingRemotePreviewVersion: Math.max(current.pendingRemotePreviewVersion || 0, Math.floor(remoteVersion)),
-    }));
+    // RTDB heart-preview versions describe UI signals, not Firestore commits.
+    // Never use them to drop an unsaved durable canonical intent.
   };
 
   const persistRecentHeartAuthority = (uid: string) => {
@@ -10781,7 +10770,7 @@ const toggleCycleVariantSelection = (
 
     // 1010 — own-device canonical invalidation does not need a server delta query.
     // app290 heart preview is different: it is only a live UI signal and must not
-    // advance the Firestore/catalog document version before the 30s batch commits.
+    // advance the Firestore/catalog document version before canonical commit.
     if (originDeviceId && originDeviceId === getMusicNoteDeviceId()) {
       if (isHeartPreview) {
         const previewDocumentId = String((Array.isArray(documentIds) ? documentIds[0] : '') || '').trim();
@@ -10959,11 +10948,8 @@ const toggleCycleVariantSelection = (
         isHeartPreviewSave,
         remoteVersion,
       );
-      if (remoteFavoriteId) {
-        supersedeStudioHeartIntentFromRemotePreview(uid, remoteFavoriteId, remoteVersion);
-      }
-      // app348: every signed-in device updates immediately; only the
-      // canonical favorite write waits for the per-song 30s final state.
+      // app522: a remote RTDB preview updates the display only, never drops
+      // this device's pending Firestore write. Canonical follows the 1s batch.
       writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
       markCacheDiagnostic('musicNote', 'SYNC', 0, 0);
       return;
@@ -11870,14 +11856,15 @@ const toggleCycleVariantSelection = (
     if (!uid || !safeDocumentId) return;
 
     clearStudioHeartIntentTimer(safeDocumentId);
+    const commitKey = `${uid}:${safeDocumentId}`;
+    // A previous canonical request may still be settling when a new 1s timer
+    // fires. Its finally block reschedules any newer pending intent; never send
+    // a competing write that can finish out of order.
+    if (studioHeartCommitInFlightRef.current.has(commitKey)) return;
     const intent = readStudioHeartPendingIntent(uid, safeDocumentId);
     if (!intent) return;
 
-    if (intent.signalVersion <= 0 && intent.pendingRemotePreviewVersion > 0) {
-      removeStudioHeartPendingIntent(uid, safeDocumentId);
-      return;
-    }
-
+    // Even a newer RTDB preview is not evidence that Firestore saved this intent.
     // Multiple toggles inside the trailing window collapse to their final state.
     // If the final state equals the canonical baseline, there is nothing to write.
     if (intent.desiredSaved === intent.baselineSaved) {
@@ -11885,6 +11872,7 @@ const toggleCycleVariantSelection = (
       return;
     }
 
+    const committing = (async () => {
     try {
       const commitSong = normalizeFavoriteTitleFields({
         ...(intent.song || {}),
@@ -11918,6 +11906,27 @@ const toggleCycleVariantSelection = (
           void flushStudioHeartPendingIntent(safeDocumentId);
         }, STUDIO_HEART_RETRY_MS);
         studioHeartIntentTimersRef.current.set(safeDocumentId, retryTimer);
+      }
+    }
+    })();
+    studioHeartCommitInFlightRef.current.set(commitKey, {
+      updatedAtMs: intent.updatedAtMs,
+      desiredSaved: intent.desiredSaved,
+      promise: committing,
+    });
+    try {
+      await committing;
+    } finally {
+      if (studioHeartCommitInFlightRef.current.get(commitKey)?.promise === committing) {
+        studioHeartCommitInFlightRef.current.delete(commitKey);
+      }
+      const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
+      if (
+        latest
+        && (latest.updatedAtMs !== intent.updatedAtMs || latest.desiredSaved !== intent.desiredSaved)
+        && !studioHeartIntentTimersRef.current.has(safeDocumentId)
+      ) {
+        scheduleStudioHeartPendingIntent(safeDocumentId, STUDIO_HEART_BATCH_MS);
       }
     }
   };
@@ -11980,8 +11989,8 @@ const toggleCycleVariantSelection = (
     scheduleStudioHeartPendingIntent(safeDocumentId);
 
     // app302 option-2:
-    // this device gets immediate local Music Note visibility, while another
-    // device waits for the successful canonical mutation after latest click +30s.
+    // this device and other devices get immediate Music Note preview visibility,
+    // while the durable Firestore mutation follows the latest click by 1s.
     // Same-song clicks keep the original canonical baseline and replace only
     // desiredSaved, so final == baseline still settles at W0.
     rememberRecentHeartAuthority(uid, intent.song, desiredSaved, safeDocumentId, now);

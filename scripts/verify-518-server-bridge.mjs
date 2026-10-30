@@ -73,7 +73,8 @@ assert.equal(d1Writes,1);
 const retry=await bridge.drainServerPending({nowMs,limit:4});
 assert.equal(retry.code,'OK');
 assert.equal(retry.attempted,0);
-assert.equal(reads,1);assert.equal(d1Writes,1);
+// One extra indexed D1 lookup protects the account-wide reservation from duplicate writes.
+assert.equal(reads,2);assert.equal(d1Writes,1);
 const signedRetry=await bridge.ingestSignedRequest({
  request:sign({action:'retry',uid,documentId}),nowMs,
 });

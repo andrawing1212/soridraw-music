@@ -1,7 +1,7 @@
 // Offline app518 wiring test: no Firebase project, Worker deployment or R2.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import worker from '../cloudflare/media-worker/src/index.js';
+import worker, {drainApp518AcceptedPilot518} from '../cloudflare/media-worker/src/index.js';
 import {createHmac} from 'node:crypto';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
@@ -183,6 +183,28 @@ const offSchedule=await worker.scheduled({scheduledTime:nowMs},
  {SORIDRAW_CANONICAL_CATALOG_518:'0'},
  {waitUntil(){throw Error('No scheduler work while OFF');}});
 assert.equal(offSchedule,undefined);
+// The real Worker one-song entrypoint must await the D1/R2 attempt, not
+// ACK a signed enqueue while a best-effort waitUntil is still in flight.
+const calls=[];
+const fakeConnector={drainServerPending:async args=>{
+ calls.push(args);return {code:'OK',attempted:1,acked:1};
+}};
+assert.equal((await drainApp518AcceptedPilot518({connector:fakeConnector,
+ code:'ENQUEUED',nowMs})).acked,1);
+assert.equal((await drainApp518AcceptedPilot518({connector:fakeConnector,
+ code:'STALE_OR_DUPLICATE',nowMs})).acked,1,
+ 'duplicate signed enqueue must retry a durable pending one-song row');
+assert.deepEqual(calls,[{nowMs,limit:1},{nowMs,limit:1}]);
+assert.equal(await drainApp518AcceptedPilot518({connector:fakeConnector,
+ code:'STALE_SIGNED_EVENT_NO_WRITE',nowMs}),null);
+assert.equal(calls.length,2,'stale signed source must not drain or write');
+await assert.rejects(drainApp518AcceptedPilot518({connector:{
+ drainServerPending:async()=>{throw Error('R2_OFFLINE');},
+},code:'ENQUEUED',nowMs}),/R2_OFFLINE/);
+await assert.rejects(drainApp518AcceptedPilot518({connector:{
+ drainServerPending:async()=>({code:'RETRYABLE_D1_BUDGET_PAUSE_UNSAVED'}),
+},code:'STALE_OR_DUPLICATE',nowMs}),/APP518_PILOT_DRAIN_UNCONFIRMED/);
+console.log('APP518_ONE_SONG_AWAITED_R2_ATTEMPT_AND_DUPLICATE_RETRY=PASS');
 const entry=readFileSync('functions/src/index.ts','utf8');
 assert.ok(entry.includes('matchesApp518PilotSong({uid,documentId:id,...pilot})')
  &&entry.includes('matchesApp518PilotSong({uid:String(before?.uid||""),documentId:id,...pilot})'),

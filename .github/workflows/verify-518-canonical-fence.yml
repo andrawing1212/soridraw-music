@@ -169,6 +169,7 @@ jobs:
           node functions/scripts/test-app518-event-safety-fence.cjs
           node functions/scripts/test-app518-atomic-favorite-write.cjs
           node scripts/verify-518-live-connector.mjs
+          node scripts/verify-518-preview-pilot-readiness.mjs
       - name: Install isolated Java runtime for Firestore emulator
         uses: actions/setup-java@v4
         with:

@@ -1,7 +1,7 @@
 // Offline app518 wiring test: no Firebase project, Worker deployment or R2.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import worker, {drainApp518AcceptedPilot518} from '../cloudflare/media-worker/src/index.js';
+import worker, {drainApp518AcceptedPilot518,drainApp518ScheduledRetry518} from '../cloudflare/media-worker/src/index.js';
 import {createHmac} from 'node:crypto';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
@@ -183,6 +183,44 @@ const offSchedule=await worker.scheduled({scheduledTime:nowMs},
  {SORIDRAW_CANONICAL_CATALOG_518:'0'},
  {waitUntil(){throw Error('No scheduler work while OFF');}});
 assert.equal(offSchedule,undefined);
+// Scheduled recovery reuses the exact pilot due selector; the call completes
+// only after one D1-to-R2 attempt and exposes an unpersisted retry failure.
+let drainCalls=0;
+let settleScheduled;
+const heldScheduled=await drainApp518ScheduledRetry518({connector:{
+ enabled:false,drainServerPending:()=>{throw Error('MUST_STAY_OFF');},
+},nowMs});
+assert.equal(heldScheduled.code,'HOLD_APP518_RELEASE_OFF');
+const scheduledConnector={enabled:true,drainServerPending:async ({nowMs:at,limit})=>{
+ drainCalls++;
+ assert.equal(at,nowMs);
+ assert.equal(limit,1,'scheduler may only process one exact pilot song');
+ return await new Promise(resolve=>{settleScheduled=resolve;});
+}};
+let scheduledComplete=false;
+const scheduledTask=drainApp518ScheduledRetry518({connector:scheduledConnector,nowMs})
+ .then(result=>{scheduledComplete=true;return result;});
+assert.equal(scheduledComplete,false,'scheduler may not ACK before D1/R2 settle');
+settleScheduled({code:'OK',attempted:1,acked:1});
+assert.equal((await scheduledTask).acked,1);
+assert.equal(scheduledComplete,true);
+assert.equal(drainCalls,1);
+const noDue=await drainApp518ScheduledRetry518({connector:{
+ enabled:true,drainServerPending:async()=>({code:'OK',attempted:0,acked:0}),
+},nowMs});
+assert.equal(noDue.attempted,0,'not-due/backoff rows stay untouched');
+await assert.rejects(drainApp518ScheduledRetry518({connector:{
+ enabled:true,drainServerPending:async()=>({code:'RETRYABLE_D1_BUDGET_PAUSE_UNSAVED'}),
+},nowMs}),/APP518_SCHEDULED_DRAIN_UNCONFIRMED/);
+await assert.rejects(drainApp518ScheduledRetry518({connector:{
+ enabled:true,drainServerPending:async()=>{throw Error('D1_UNAVAILABLE');},
+},nowMs}),/D1_UNAVAILABLE/);
+const schedulerSource=readFileSync('cloudflare/media-worker/src/index.js','utf8');
+assert.ok(schedulerSource.includes('const task=drainApp518ScheduledRetry518({connector,nowMs:Date.now()})')
+ &&schedulerSource.includes('return await task;'),
+ 'Worker scheduled entry must await exact retry and propagate failure');
+console.log('APP518_SCHEDULED_D1_ONE_SONG_DUE_AND_BACKOFF=PASS');
+console.log('APP518_SCHEDULED_D1_RETRY_FAILURE_NOT_SILENT=PASS');
 // The real Worker one-song entrypoint must await the D1/R2 attempt, not
 // ACK a signed enqueue while a best-effort waitUntil is still in flight.
 const calls=[];

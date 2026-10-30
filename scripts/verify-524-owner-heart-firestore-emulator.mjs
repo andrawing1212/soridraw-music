@@ -26,13 +26,20 @@ const output = ts.transpileModule(source, {
 const createClient = uid => {
   const db = tests.authenticatedContext(uid).firestore();
   const exports = {};
-  vm.runInNewContext(output, {
-    exports, console, Promise, Date, Math, Number, Error,
-    require: name => name === 'firebase/firestore'
+  // The real Firebase SDK rejects plain data objects created in another
+  // VM realm. Compile the module in this same Node realm for a valid emulator
+  // transaction test, while injecting only the isolated emulator Firestore.
+  const moduleFactory = vm.runInThisContext(
+    '(function(require, exports) {\\n' + output + '\\n})',
+    { filename: 'studioHeartCanonical523.ts' },
+  );
+  moduleFactory(
+    name => name === 'firebase/firestore'
       ? { doc, runTransaction, serverTimestamp }
       : name === '../firebase' ? { db }
       : (() => { throw new Error('Unexpected dependency: ' + name); })(),
-  }, { filename: 'studioHeartCanonical523.ts' });
+    exports,
+  );
   return { db, commit: exports.commitStudioHeartCanonical523 };
 };
 const aliceA = createClient('alice');

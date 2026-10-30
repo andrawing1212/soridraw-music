@@ -1,0 +1,27 @@
+{
+  "purpose": "APP518_ISOLATED_ONE_SONG_QA",
+  "note": "SOURCE TEMPLATE ONLY. Do not put credentials or real user IDs in Git. Not a Cloudflare/Firebase deployment configuration.",
+  "cloudflare": {
+    "accountId": "REPLACE_WITH_SEPARATE_CLOUDFLARE_ACCOUNT_ID",
+    "workerName": "soridraw-app518-qa",
+    "catalogR2Bucket": "REPLACE_WITH_NEW_QA_R2_BUCKET",
+    "outboxD1DatabaseId": "REPLACE_WITH_NEW_QA_D1_UUID",
+    "budgetD1DatabaseId": "REPLACE_WITH_NEW_QA_BUDGET_D1_UUID",
+    "workerHostname": "REPLACE_WITH_QA_WORKER_HOSTNAME"
+  },
+  "firebase": {
+    "projectId": "REPLACE_WITH_SEPARATE_FIREBASE_PROJECT_ID",
+    "projectNumber": "REPLACE_WITH_SEPARATE_FIREBASE_PROJECT_NUMBER",
+    "exactSourceHostname": "REPLACE_WITH_QA_EXACT_SOURCE_HOSTNAME"
+  },
+  "pilot": {
+    "uid": "REPLACE_WITH_QA_ONLY_USER_ID",
+    "favoriteId": "REPLACE_WITH_QA_ONLY_FAVORITE_ID"
+  },
+  "deployment": {
+    "authorized": false,
+    "canonicalEnabled": false,
+    "scheduledTriggerEnabled": false
+  },
+  "evidence": "UNVERIFIED_ISOLATED_ACCOUNT_PERMISSION_BILLING_DATA_BINDINGS"
+}

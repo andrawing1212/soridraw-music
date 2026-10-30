@@ -105,7 +105,7 @@ const expectedEnv=[
  'SORIDRAW_APP518_WORKER_URL=https://'+template.cloudflare.workerHostname+'/v1/server/catalog518',
 ];
 for(const assignment of expectedEnv)
- assert.ok(qaFirebaseEnv.split('\\n').includes(assignment),
+ assert.ok(qaFirebaseEnv.split('\n').includes(assignment),
   'QA Firebase template must match the exact one-song manifest');
 assert.ok(!/^(?:SORIDRAW_CATALOG_SERVER_HMAC_518|GOOGLE_APPLICATION_CREDENTIALS|FIREBASE_TOKEN)=/m.test(qaFirebaseEnv),
  'QA Firebase template must not contain secret or operational login');

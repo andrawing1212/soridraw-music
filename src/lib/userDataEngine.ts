@@ -272,7 +272,14 @@ const cleanValue = (value: any, depth = 0): any => {
   return next;
 };
 
-const isMusicNoteCatalogItem = (item: any) => !isMusicNoteItemRemoved(item);
+const isMusicNoteCatalogItem = (item: any) => (
+  !isMusicNoteItemRemoved(item)
+  // Live heart overlays are *not* Firestore-confirmed favorites. A different
+  // canonical mutation may be dirty while these temporary rows are visible.
+  && item?.__studioHeartPendingLocal !== true
+  && item?.__studioHeartRemotePreviewLocal !== true
+  && item?.__studioHeartRemotePreview !== true
+);
 
 export const projectCatalogItemForSync = (kind: SoridrawCatalogKind, sourceItem: any): any | null => {
   if (!sourceItem || typeof sourceItem !== 'object' || Array.isArray(sourceItem)) return null;

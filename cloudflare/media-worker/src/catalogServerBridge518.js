@@ -25,6 +25,11 @@ export const createApp518ServerBridge=({
  readExactCanonical,projectItem,sortItems,budgetClock=()=>Date.now(),
 }={})=>{
  const rawDb=env?.CATALOG_OUTBOX_518;
+ // Cloudflare D1 Free daily rowsWritten is shared by the WHOLE account.
+ // Outbox may use its own D1; its private budget ledger would not protect
+ // old Explore DB/RATE_DB writers. No implicit fallback to rawDb is safe.
+ // The account ledger binding must be independently audited for this release.
+ const accountBudgetDb=env?.ACCOUNT_D1_BUDGET_518;
  const r2=createOwnerR2Provider518({env,sharedReleaseFencesVerified});
  const baseReader=createR2BasePageReader518({
   env,readOwnerHead:r2.readOwnerHead,sharedReleaseFencesVerified,projectItem,
@@ -33,7 +38,7 @@ export const createApp518ServerBridge=({
  // meter. All old/new writers across PREVIEW/TEST/PRODUCTION and other D1
  // databases must be certified in the release manifest before paging.
  const reserveWriteBudget=createD1BudgetGate518({
-  db:rawDb,
+  db:accountBudgetDb,
   allAccountWritersVerified:sharedReleaseFencesVerified===true&&
    env?.SORIDRAW_D1_ALL_ACCOUNT_WRITERS_518==='VERIFIED',
   sharedAccountLedgerVerified:sharedReleaseFencesVerified===true&&
@@ -47,7 +52,8 @@ export const createApp518ServerBridge=({
  const stageBudget=async({nowMs,requestedRows})=>db?.__budgeted518===true
   ?{reserved:true,code:'METERED_AT_SQL_BOUNDARY'}
   :reserveWriteBudget({nowMs,requestedRows});
- const enabled=Boolean(r2.enabled&&db?.prepare&&db?.batch
+ const enabled=Boolean(accountBudgetDb?.prepare&&accountBudgetDb?.batch
+  &&r2.enabled&&db?.prepare&&db?.batch
    &&typeof readExactCanonical==='function'
    &&typeof projectItem==='function'&&typeof sortItems==='function'
    &&typeof env?.CATALOG_SERVER_HMAC_518==='string'

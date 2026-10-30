@@ -577,7 +577,7 @@ const catalogCreatedAtMs = (item, document = null) => {
   return Math.max(1, Math.floor(Number(value) || 1));
 };
 
-const projectCatalogFields = (kind, source, id, document = null) => {
+export const projectCatalogFields = (kind, source, id, document = null) => {
   if (!source || typeof source !== 'object' || Array.isArray(source) || !id) return null;
   if (kind === 'musicNote' && !isActiveMusicNoteCatalogItem(source)) return null;
   const projected = {
@@ -593,7 +593,7 @@ const projectCatalogFields = (kind, source, id, document = null) => {
   return projected;
 };
 
-const sortCatalogItems = (items) => items.sort((left, right) => {
+export const sortCatalogItems = (items) => items.sort((left, right) => {
   const diff = Number(right?.createdAtMs || 1) - Number(left?.createdAtMs || 1);
   if (diff !== 0) return diff;
   return String(left?.id || '').localeCompare(String(right?.id || ''));

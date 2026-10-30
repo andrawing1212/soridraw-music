@@ -1285,22 +1285,33 @@ const app518ServerConnector = (env) => {
   });
   return bridge.enabled ? bridge : null;
 };
+// One-song pilot: do not let waitUntil hide a failed R2 attempt when no
+// scheduled retry trigger has been deployed. Authenticated duplicates may
+// still have an unacked D1 row, so give that same exact song one more try.
+// The D1 queue and existing bounded retry/backoff remain authoritative.
+export const drainApp518AcceptedPilot518=async({connector,code,nowMs})=>{
+  if(code!=='ENQUEUED'&&code!=='STALE_OR_DUPLICATE')return null;
+  const delivery=await connector.drainServerPending({nowMs,limit:1});
+  if(delivery?.code!=='OK')throw new Error('APP518_PILOT_DRAIN_UNCONFIRMED');
+  return delivery;
+};
 const handleApp518ServerRoute=async(request,env,ctx)=>{
   if(request.method!=='POST')return jsonResponse({code:'NOT_FOUND'},404);
   const connector=app518ServerConnector(env);
   if(!connector)return jsonResponse({code:'HOLD_APP518_RELEASE_OFF'},503);
   try{
     const reply=await connector.ingestSignedRequest({request,nowMs:Date.now()});
-    if(reply.code==='ENQUEUED'){
-      // R2 work is always a separate verified D1 read. A retry schedule
-      // (when explicitly provisioned) continues after transient failures.
-      const drain=connector.drainServerPending({nowMs:Date.now(),limit:1});
-      if(ctx?.waitUntil)ctx.waitUntil(drain);
-      else await drain;
-    }
+    // The HTTP request waits for one verified D1-to-R2 attempt, even when
+    // waitUntil exists. ENQUEUED only means D1 durable, never R2 ACK.
+    // A signed retry of the same version can now resume a pending song.
+    const delivery=await drainApp518AcceptedPilot518({
+      connector,code:reply.code,nowMs:Date.now(),
+    });
     const status=reply.code==='ENQUEUED'||reply.code==='STALE_OR_DUPLICATE'
       ||reply.code==='STALE_SIGNED_EVENT_NO_WRITE'||reply.code==='RETRY_ARMED'?200:409;
-    return jsonResponse({code:reply.code},status);
+    return jsonResponse({code:reply.code,
+      ...(delivery?{r2Acked:delivery.acked===1}:{}),
+    },status);
   }catch(error){
     if(error instanceof CatalogFirebaseSourceHold518)
       return jsonResponse({code:'HOLD_EXACT_SOURCE_CONTRACT'},409);

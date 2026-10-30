@@ -20,7 +20,7 @@ const flushStart = app.indexOf('const flushStudioHeartPendingIntent = async');
 const flushEnd = app.indexOf('  const scheduleStudioHeartPendingIntent', flushStart);
 const flush = app.slice(flushStart, flushEnd);
 assert.ok(flush.includes('if (intent.desiredSaved === intent.baselineSaved)'), 'net-zero W0 guard missing');
-assert.ok(flush.includes('await toggleFavorite(commitSong'), 'canonical settlement missing');
+assert.ok(flush.includes('commitStudioHeartCanonical523({'), 'versioned canonical settlement missing');
 
 assert.ok(app.includes('function stripStudioHeartRemotePreviewLayerFromFavorites'), 'remote preview strip missing');
 assert.ok(app.includes('function overlayStudioHeartRemotePreviewsOnFavorites'), 'remote Music Note overlay missing');

@@ -591,6 +591,10 @@ async function restore() {
   await sleep(2_500);
   const active = await activeVersion();
   if (active !== version) throw new Error(`${mode} Worker restore active version mismatch expected=${version} actual=${active}`);
+  if (protectedRestorePreflight518) {
+    run(process.execPath,['scripts/verify-518-account-release-preflight.mjs',
+      '--post-restore',target.worker,version],ROOT);
+  }
   const restoredSchedules = await readSchedules();
   if (JSON.stringify(restoredSchedules) !== JSON.stringify(schedules)) throw new Error(`${mode} Worker restore schedules mismatch`);
   console.log(`${mode.toUpperCase()}_WORKER_RESTORE=PASS version=${active}`);
@@ -600,6 +604,7 @@ async function restore() {
 // replace a protected account-wide D1 Writer (even in another environment).
 // GET-only Cloudflare control-plane preflight; no periodic app traffic.
 // Not a cutover authorization: approved new releases require another runner.
+let protectedRestorePreflight518 = false;
 async function assertNoLegacyExploreBudgetDowngrade518() {
   if (!['upload','activate','restore'].includes(action)) return;
   for (const name of ['soridraw-explore-api','soridraw-explore-test',
@@ -609,8 +614,21 @@ async function assertNoLegacyExploreBudgetDowngrade518() {
     if (!Array.isArray(bindings)||!bindings.length)
       throw new Error('HOLD_518_LEGACY_DOWNGRADE_LIVE_SETTINGS_UNVERIFIED_'+name);
     if (bindings.some(b=>b?.name==='SORIDRAW_D1_ACCOUNT_BUDGET_ENFORCEMENT_518'
-      ||b?.name==='SORIDRAW_APP518_RELEASE_FENCES_VERIFIED'))
-      throw new Error('HOLD_518_LEGACY_EXPLORE_ROLLBACK_REOPENS_D1_BYPASS_'+name);
+      ||b?.name==='SORIDRAW_APP518_RELEASE_FENCES_VERIFIED')) {
+      if (action!=='restore')
+        throw new Error('HOLD_518_LEGACY_EXPLORE_ROLLBACK_REOPENS_D1_BYPASS_'+name);
+      protectedRestorePreflight518 = true;
+    }
+  }
+  if (protectedRestorePreflight518) {
+    const approvedVersion=String(process.env.RELEASE_WORKER_VERSION||'').trim();
+    if (!/^[0-9a-f-]{36}$/i.test(approvedVersion))
+      throw new Error('HOLD_518_PROTECTED_ROLLBACK_TARGET_MISSING');
+    // Only the signed independent-audit proof, pinned by the release
+    // controller's protected secret, can authorize restoring a budget-aware
+    // immutable version. This CLI performs authenticated Cloudflare GETs.
+    run(process.execPath,['scripts/verify-518-account-release-preflight.mjs',
+      '--pre-restore',target.worker,approvedVersion],ROOT);
   }
 }
 await assertNoLegacyExploreBudgetDowngrade518();

@@ -26,6 +26,7 @@ export const createApp518ServerBridge=({
  // env VERIFIED strings alone MUST NOT activate the global budget writer.
  signedAccountD1CutoverVerified=false,
  readExactCanonical,projectItem,sortItems,budgetClock=()=>Date.now(),
+ pilotScope,
 }={})=>{
  const rawDb=env?.CATALOG_OUTBOX_518;
  // Cloudflare D1 Free daily rowsWritten is shared by the WHOLE account.
@@ -55,7 +56,12 @@ export const createApp518ServerBridge=({
  const stageBudget=async({nowMs,requestedRows})=>db?.__budgeted518===true
   ?{reserved:true,code:'METERED_AT_SQL_BOUNDARY'}
   :reserveWriteBudget({nowMs,requestedRows});
- const enabled=Boolean(signedAccountD1CutoverVerified===true
+ const validPilot=pilotScope===undefined||(
+   typeof pilotScope?.uid==='string'&&pilotScope.uid.length>0
+   &&pilotScope.uid.length<=128&&!/[\\/]/.test(pilotScope.uid)
+   &&typeof pilotScope?.documentId==='string'&&pilotScope.documentId.length>0
+   &&pilotScope.documentId.length<=240&&!/[\\/]/.test(pilotScope.documentId));
+ const enabled=Boolean(validPilot&&signedAccountD1CutoverVerified===true
   &&accountBudgetDb?.prepare&&accountBudgetDb?.batch
   &&r2.enabled&&db?.prepare&&db?.batch
    &&typeof readExactCanonical==='function'
@@ -72,6 +78,8 @@ export const createApp518ServerBridge=({
   });
   if(verified.code!=='VERIFIED_SERVER_REQUEST')return deny(verified.code);
   const payload=verified.payload;
+  if(pilotScope&&(payload.uid!==pilotScope.uid||payload.documentId!==pilotScope.documentId))
+   return deny('DENY_OUTSIDE_PREVIEW_PILOT');
   if(payload.action==='retry'){
    // Only an explicitly signed server request may manually resume one
    // exhausted generation. Verify owner/source before the conditional D1 W1.
@@ -112,7 +120,7 @@ export const createApp518ServerBridge=({
   // One due batch only. Caller must be an authenticated server scheduler,
   // never the same public URL as browser GET/POST.
   return deliverDueCanonicalFavorites518({
-   db,nowMs,maxItems:1,readExactCanonical,
+   db,nowMs,maxItems:1,readExactCanonical,pilotScope,
    applyVersionedR2:async({uid,documentId,sourceVersionNs,
      desiredState,canonical})=>{
     // First confirmed mutation owner index; one-off full R2 read only when

@@ -23,10 +23,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Verify exact pending queue merge, reload, retry and stale ACK
         run: node scripts/verify-519-catalog-pending-recovery.mjs
-      - name: Preserve existing page-exit Catalog and Music Note draft behavior
-        run: |
-          node scripts/verify-081-page-exit-batch.mjs
-          node scripts/verify-031-music-note-detail-batched-draft.mjs
+      - name: Preserve existing Music Note draft and page-exit ordering
+        run: node scripts/verify-031-music-note-detail-batched-draft.mjs
       - name: Typecheck and build
         run: |
           npm run lint

@@ -65,6 +65,7 @@ const open=async()=>{
   SORIDRAW_D1_ALL_ACCOUNT_WRITERS_518:'VERIFIED',
   SORIDRAW_D1_SHARED_ACCOUNT_LEDGER_518:'VERIFIED'};
  bridge=createApp518ServerBridge({env,sharedReleaseFencesVerified:true,
+   signedAccountD1CutoverVerified:true,
   budgetClock:()=>clockNow,
   readExactCanonical:source,projectItem:x=>x,sortItems:x=>x});
  assert.equal(bridge.enabled,true);

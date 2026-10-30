@@ -7645,6 +7645,10 @@ function App() {
         }
       }
 
+      // app520: clearing the visible Studio on logout must never persist an
+      // empty recent-song list while Firebase still reports the old user.
+      recentSongsReadyToCacheRef.current = false;
+      if (currentUser?.uid) recentSongsSessionVerifiedUids.delete(currentUser.uid);
       setHistory([]);
       setResult(null);
       setHistoryIndex(-1);
@@ -7662,6 +7666,9 @@ function App() {
   };
 
   const performForcedLogout = async ({ silent }: { silent: boolean }) => {
+    // Invalidate session-only empty-list verification before any auth transition.
+    recentSongsReadyToCacheRef.current = false;
+    if (auth.currentUser?.uid) recentSongsSessionVerifiedUids.delete(auth.currentUser.uid);
     try {
       if (!silent) {
         setIsForcedLogoutModalOpen(true);
@@ -12913,8 +12920,14 @@ const unlockAllFavorites = async () => {
         retainedGapVersion,
         readRecentSongsVerifiedRetainedDraftGap460(user.uid),
       );
+      // An empty local snapshot after logout is NOT proof the account's
+      // canonical recent-song collection is empty. Validate it exactly once
+      // after fresh authentication; avoid repeated reads for a server-verified
+      // legitimately empty account in the same signed-in session.
+      const hasVerifiedVisibleCache = Boolean(latestCache?.history?.length)
+        || Boolean(latestCache && recentSongsSessionVerifiedUids.has(user.uid));
       const needsServerRead = unverifiedRetainedGap || needsRecentSongsServerRead({
-        hasLocalCache: Boolean(latestCache),
+        hasLocalCache: hasVerifiedVisibleCache,
         profileVersion: remoteVersion,
         localDocumentVersion: localVersion,
         pendingSignalVersion,
@@ -13324,7 +13337,7 @@ const unlockAllFavorites = async () => {
   }, [user?.uid, location.pathname]);
 
   useEffect(() => {
-    if (!user || !recentSongsReadyToCacheRef.current) return;
+    if (!user || !recentSongsReadyToCacheRef.current || auth.currentUser?.uid !== user.uid) return;
     saveRecentSongsCache(user.uid, {
       history,
       historyIndex,

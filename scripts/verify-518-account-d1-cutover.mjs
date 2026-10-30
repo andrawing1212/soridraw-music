@@ -94,8 +94,10 @@ export const assessAccountD1Cutover518=({
    ||!sha64(audited?.bundleSha256)
    ||!ref(audited?.sourceAuditRef)||!ref(audited?.drainedOldFlightsRef)
    ||!uuid(audited?.rollbackVersionId)
-   ||audited.rollbackVersionId!==audited.activeVersionId
-   ||audited?.rollbackBudgetAware!==true)
+   ||audited?.rollbackBudgetAware!==true
+   ||!sha64(audited?.rollbackCodeSha256)
+   ||!ref(audited?.rollbackSourceAuditRef)
+   ||!ref(audited?.rollbackDrainProofRef))
    return deny('HOLD_518_LEGACY_VERSION_OR_ROLLBACK_UNVERIFIED_'+name);
   const d1=current?.d1Bindings;
   if(!Array.isArray(d1)||d1.some(b=>!allowedDbIds.has(b.databaseId))
@@ -113,6 +115,16 @@ export const assessAccountD1Cutover518=({
     ||audited?.sourceApprovedAfterIndependentAudit!==true)
     return deny('HOLD_518_LEGACY_WRITER_NOT_ON_SHARED_LEDGER_'+name);
   }
+  // Alternate previous rollback is accepted only if independent auditor
+  // signed its exact immutable version, bytes, D1 bindings and drain proof.
+  const rollback=live.rollbackVersions?.find(x=>x.name===name);
+  const normalize=rows=>JSON.stringify([...rows].sort((a,b)=>a.binding.localeCompare(b.binding)));
+  if(!rollback||rollback.versionId!==audited.rollbackVersionId
+   ||rollback.codeSha256!==audited.rollbackCodeSha256
+   ||!Array.isArray(rollback.d1Bindings)||!Array.isArray(audited.rollbackD1Bindings)
+   ||normalize(rollback.d1Bindings)!==normalize(audited.rollbackD1Bindings)
+   ||(name===MIGRATION&&rollback.d1Bindings.length!==0))
+   return deny('HOLD_518_ROLLBACK_IMMUTABLE_PROOF_MISSING_'+name);
   const approvedD1=audited?.d1Bindings;
   if(!Array.isArray(approvedD1)
     ||JSON.stringify([...approvedD1].sort((a,b)=>a.binding.localeCompare(b.binding)))!==
@@ -136,7 +148,11 @@ const selfTest=()=>{
   name,active:[{versionId:versions[i],trafficPercent:100}],
   codeSha256:'b'.repeat(64),
   d1Bindings:ids[name]||[],indirectBindings:[],
- }))};
+ })),
+ rollbackVersions:NAMES.map((name,i)=>({name,
+  versionId:versions[i],codeSha256:'b'.repeat(64),d1Bindings:ids[name]||[],
+ })),
+ };
  const evidence={purpose:'APP518_ACCOUNT_D1_ALL_WRITER_CUTOVER',releaseSha,
   checkedAtMs:nowMs-1200,
   ledger:{dbId:SHARED_DB,table:'music_note_catalog_daily_budget_518',
@@ -148,6 +164,10 @@ const selfTest=()=>{
   workers:live.workers.map(w=>({
    name:w.name,activeVersionId:w.active[0].versionId,
    rollbackVersionId:w.active[0].versionId,rollbackBudgetAware:true,
+   rollbackCodeSha256:'b'.repeat(64),
+   rollbackSourceAuditRef:'independent-rollback-source-proof-001',
+   rollbackDrainProofRef:'independent-rollback-drain-proof-001',
+   rollbackD1Bindings:w.d1Bindings,
    bundleSha256:'b'.repeat(64),budgetAware:w.name!==MIGRATION,
    state:w.name===MIGRATION?'RETIRED_NO_D1_BINDING':'BUDGET_AWARE',
    accountLedgerDbId:SHARED_DB,sourceApprovedAfterIndependentAudit:true,
@@ -179,6 +199,18 @@ const selfTest=()=>{
  fail('unfenced old rollback',()=>evidence.workers[1].rollbackBudgetAware=false,
   'HOLD_518_LEGACY_VERSION_OR_ROLLBACK_UNVERIFIED_'+NAMES[1]);
  evidence.workers[1].rollbackBudgetAware=true;
+ const oldRollback=evidence.workers[1].rollbackVersionId;
+ const alternate='deadbeef-1111-4111-8111-123456789abc';
+ evidence.workers[1].rollbackVersionId=alternate;
+ live.rollbackVersions[1].versionId=alternate;
+ assert.equal(assessAccountD1Cutover518(args()).pass,true,
+  'separately audited immutable previous version is eligible for rollback');
+ live.rollbackVersions[1].codeSha256='c'.repeat(64);
+ assert.equal(assessAccountD1Cutover518(args()).code,
+  'HOLD_518_ROLLBACK_IMMUTABLE_PROOF_MISSING_'+NAMES[1]);
+ live.rollbackVersions[1].codeSha256='b'.repeat(64);
+ live.rollbackVersions[1].versionId=oldRollback;
+ evidence.workers[1].rollbackVersionId=oldRollback;
  fail('budget omission',()=>evidence.workers[0].budgetAware=false,
   'HOLD_518_LEGACY_WRITER_NOT_ON_SHARED_LEDGER_'+NAMES[0]);
  evidence.workers[0].budgetAware=true;

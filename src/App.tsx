@@ -11872,6 +11872,7 @@ const toggleCycleVariantSelection = (
       return;
     }
 
+    let committed = false;
     const committing = (async () => {
     try {
       const commitSong = normalizeFavoriteTitleFields({
@@ -11888,6 +11889,7 @@ const toggleCycleVariantSelection = (
         },
         suppressSuccessToast: true,
       });
+      committed = true;
 
       const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
       if (latest && latest.updatedAtMs === intent.updatedAtMs && latest.desiredSaved === intent.desiredSaved) {
@@ -11921,12 +11923,29 @@ const toggleCycleVariantSelection = (
         studioHeartCommitInFlightRef.current.delete(commitKey);
       }
       const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
-      if (
-        latest
-        && (latest.updatedAtMs !== intent.updatedAtMs || latest.desiredSaved !== intent.desiredSaved)
-        && !studioHeartIntentTimersRef.current.has(safeDocumentId)
-      ) {
-        scheduleStudioHeartPendingIntent(safeDocumentId, STUDIO_HEART_BATCH_MS);
+      if (latest && (latest.updatedAtMs !== intent.updatedAtMs || latest.desiredSaved !== intent.desiredSaved)) {
+        // The first in-flight write may already have changed Firestore even
+        // though the next click was entered before its ACK. Rebase the queued
+        // intent on the settled outcome before its net-zero W0 decision.
+        // On an ambiguous failure, force the final exact-ID action instead
+        // of incorrectly declaring net zero and losing the latest click.
+        updateStudioHeartPendingIntent(uid, safeDocumentId, (current) => {
+          if (current.updatedAtMs !== latest.updatedAtMs || current.desiredSaved !== latest.desiredSaved) return current;
+          return {
+            ...current,
+            baselineSaved: committed ? intent.desiredSaved : !current.desiredSaved,
+            baselineFavorite: committed && intent.desiredSaved ? {
+              ...(intent.song || {}),
+              id: safeDocumentId,
+              firestoreId: safeDocumentId,
+              uid,
+              saved: true,
+            } : null,
+          };
+        });
+        if (!studioHeartIntentTimersRef.current.has(safeDocumentId)) {
+          scheduleStudioHeartPendingIntent(safeDocumentId, STUDIO_HEART_BATCH_MS);
+        }
       }
     }
   };
@@ -11955,7 +11974,7 @@ const toggleCycleVariantSelection = (
     if (!uid || !safeDocumentId || !identityKey) return false;
 
     const existing = readStudioHeartPendingIntent(uid, safeDocumentId);
-    const now = Date.now();
+    const now = Math.max(Date.now(), (existing?.updatedAtMs || 0) + 1);
     const intent: StudioHeartPendingIntent = {
       schemaVersion: 1,
       uid,

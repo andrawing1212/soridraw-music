@@ -1,0 +1,42 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "soridraw-app518-qa",
+  "main": "./src/index.js",
+  "account_id": "REPLACE_WITH_SEPARATE_CLOUDFLARE_ACCOUNT_ID",
+  "compatibility_date": "2026-09-01",
+  "keep_vars": false,
+  "workers_dev": false,
+  "vars": {
+    "FIREBASE_PROJECT_ID": "REPLACE_WITH_SEPARATE_FIREBASE_PROJECT_ID",
+    "FIREBASE_PROJECT_NUMBER": "REPLACE_WITH_SEPARATE_FIREBASE_PROJECT_NUMBER",
+    "ALLOWED_ORIGINS": "https://not-configured.invalid",
+    "ARCHIVE_MIN_AGE_DAYS": "14",
+    "SIGNED_URL_TTL_SECONDS": "1800",
+    "SORIDRAW_APP518_PILOT_UID": "REPLACE_WITH_QA_ONLY_USER_ID",
+    "SORIDRAW_APP518_PILOT_FAVORITE_ID": "REPLACE_WITH_QA_ONLY_FAVORITE_ID",
+    "CATALOG_FIREBASE_SOURCE_518_URL": "https://not-configured.invalid/exact",
+    "CATALOG_FIREBASE_SOURCE_518_HOST": "not-configured.invalid",
+    "SORIDRAW_CANONICAL_CATALOG_518": "0",
+    "SORIDRAW_APP518_RELEASE_FENCES_VERIFIED": "0",
+    "SORIDRAW_D1_ALL_ACCOUNT_WRITERS_518": "0",
+    "SORIDRAW_D1_SHARED_ACCOUNT_LEDGER_518": "0"
+  },
+  "r2_buckets": [
+    {
+      "binding": "CATALOG",
+      "bucket_name": "REPLACE_WITH_NEW_QA_R2_BUCKET"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "CATALOG_OUTBOX_518",
+      "database_name": "REPLACE_WITH_NEW_QA_D1_NAME",
+      "database_id": "REPLACE_WITH_NEW_QA_D1_UUID"
+    },
+    {
+      "binding": "ACCOUNT_D1_BUDGET_518",
+      "database_name": "REPLACE_WITH_NEW_QA_BUDGET_D1_NAME",
+      "database_id": "REPLACE_WITH_NEW_QA_BUDGET_D1_UUID"
+    }
+  ]
+}

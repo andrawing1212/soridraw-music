@@ -162,7 +162,7 @@ await rejects(()=>boundary.prepare('INSERT INTO '+member+
  ' (owner_uid,generation,favorite_id) VALUES (?,?,?); DELETE FROM '+member)
  .bind('u',1,'song').run());
 await rejects(()=>boundary.batch([
- boundary.prepare('UPDATE '+outbox+' SET attempt_count=? WHERE owner_uid=?').bind(1,'u'),
+ boundary.prepare('UPDATE '+outbox+' SET attempt_count=? WHERE owner_uid=? AND favorite_id=?').bind(1,'u','song'),
  boundary.prepare('CREATE TABLE bypass (id INTEGER)'),
 ]));
 assert.equal(reservedBoundary.length,0);
@@ -170,8 +170,8 @@ await boundary.prepare('SELECT * FROM '+outbox+' WHERE owner_uid=?').bind('u').f
 await boundary.prepare('SELECT * FROM '+outbox+' WHERE owner_uid=?').bind('u').all();
 assert.equal(boundaryCalls,2);
 assert.equal(reservedBoundary.length,0,'read-only SQL must not write budget rows');
-await boundary.prepare('UPDATE '+outbox+' SET attempt_count=? WHERE owner_uid=?')
- .bind(1,'u').run();
+await boundary.prepare('UPDATE '+outbox+' SET attempt_count=? WHERE owner_uid=? AND favorite_id=?')
+ .bind(1,'u','song').run();
 assert.equal(reservedBoundary.length,1,'recognized scoped update must reserve');
 assert.equal(boundaryCalls,3);
 const insert=boundary.prepare('INSERT OR IGNORE INTO '+member+

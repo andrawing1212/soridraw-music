@@ -586,18 +586,59 @@ async function restore() {
   if (!schedulesJson) throw new Error('RELEASE_WORKER_SCHEDULES_JSON is required for restore');
   const schedules = JSON.parse(schedulesJson);
   if (!Array.isArray(schedules)) throw new Error('restore schedules must be an array');
-  run(process.execPath, [WRANGLER, 'versions', 'deploy', `${version}@100%`, '--config', CONFIG_PATH, '--yes'], WORKER_DIR);
-  await cfPut(`${apiBase}/workers/scripts/${target.worker}/schedules`, schedules);
-  await sleep(2_500);
-  const active = await activeVersion();
-  if (active !== version) throw new Error(`${mode} Worker restore active version mismatch expected=${version} actual=${active}`);
-  if (protectedRestorePreflight518) {
-    run(process.execPath,['scripts/verify-518-account-release-preflight.mjs',
-      '--post-restore',target.worker,version],ROOT);
+  // The independently signed original is a separately verified, budget-aware
+  // Worker version. Capture it and the schedules BEFORE the first mutation.
+  const guarded=protectedRestorePreflight518;
+  const before=guarded?await activeVersion():null;
+  const schedulesBefore=guarded?await readSchedules():null;
+  if(guarded&&(!protectedOriginalVersion518||before!==protectedOriginalVersion518))
+    throw new Error('HOLD_518_PROTECTED_ORIGINAL_VERSION_CHANGED');
+  let mutationStarted=false;
+  try {
+    mutationStarted=true; // Wrangler may have switched traffic before throwing.
+    run(process.execPath, [WRANGLER, 'versions', 'deploy', `${version}@100%`, '--config', CONFIG_PATH, '--yes'], WORKER_DIR);
+    await cfPut(`${apiBase}/workers/scripts/${target.worker}/schedules`, schedules);
+    await sleep(2_500);
+    const active = await activeVersion();
+    if (active !== version) throw new Error(`${mode} Worker restore active version mismatch expected=${version} actual=${active}`);
+    if (guarded) {
+      run(process.execPath,['scripts/verify-518-account-release-preflight.mjs',
+        '--post-restore',target.worker,version],ROOT);
+    }
+    const restoredSchedules = await readSchedules();
+    if (JSON.stringify(restoredSchedules) !== JSON.stringify(schedules)) throw new Error(`${mode} Worker restore schedules mismatch`);
+    console.log(`${mode.toUpperCase()}_WORKER_RESTORE=PASS version=${active}`);
+  }catch(error){
+    if(!guarded||!mutationStarted)throw error;
+    // Never leave a post-check-failed candidate at 100% traffic. We only
+    // compensate to the SAME immutable original version attested before the
+    // mutation; do not blindly overwrite an unrelated concurrent deployment.
+    try{
+      const current=await activeVersion();
+      if(current!==version&&current!==before)
+        throw new Error('HOLD_518_UNEXPECTED_CONCURRENT_DEPLOYMENT_MANUAL_HOLD');
+      if(current===version&&before!==version)
+        run(process.execPath,[WRANGLER,'versions','deploy',
+          `${before}@100%`,'--config',CONFIG_PATH,'--yes'],WORKER_DIR);
+      await cfPut(`${apiBase}/workers/scripts/${target.worker}/schedules`,schedulesBefore);
+      await sleep(2_500);
+      if(await activeVersion()!==before)
+        throw new Error('HOLD_518_ORIGINAL_100_PERCENT_TRAFFIC_NOT_RESTORED');
+      if(JSON.stringify(await readSchedules())!==JSON.stringify(schedulesBefore))
+        throw new Error('HOLD_518_ORIGINAL_SCHEDULES_NOT_RESTORED');
+      // Re-read exact original code digest, account D1 bindings and traffic
+      // against the same independently signed original snapshot. No write.
+      run(process.execPath,['scripts/verify-518-account-release-preflight.mjs',
+        '--post-compensate',target.worker,version,before],ROOT);
+      console.error('APP518_PROTECTED_RESTORE_COMPENSATED_ORIGINAL_VERIFIED=PASS');
+    }catch(compensationError){
+      console.error('APP518_PROTECTED_RESTORE_COMPENSATION=FAILED_MANUAL_RELEASE_HOLD');
+      throw new Error('HOLD_518_COMPENSATION_UNVERIFIED_MANUAL_RELEASE_HOLD: '+
+        String(compensationError?.message||compensationError));
+    }
+    throw new Error('HOLD_518_PROTECTED_RESTORE_FAILED_ORIGINAL_SAFELY_REINSTATED: '+
+      String(error?.message||error));
   }
-  const restoredSchedules = await readSchedules();
-  if (JSON.stringify(restoredSchedules) !== JSON.stringify(schedules)) throw new Error(`${mode} Worker restore schedules mismatch`);
-  console.log(`${mode.toUpperCase()}_WORKER_RESTORE=PASS version=${active}`);
 }
 
 // app518: a legacy Explore upload/activate/restore must NEVER silently
@@ -605,6 +646,7 @@ async function restore() {
 // GET-only Cloudflare control-plane preflight; no periodic app traffic.
 // Not a cutover authorization: approved new releases require another runner.
 let protectedRestorePreflight518 = false;
+let protectedOriginalVersion518 = null;
 async function assertNoLegacyExploreBudgetDowngrade518() {
   if (!['upload','activate','restore'].includes(action)) return;
   for (const name of ['soridraw-explore-api','soridraw-explore-test',
@@ -627,8 +669,11 @@ async function assertNoLegacyExploreBudgetDowngrade518() {
     // Only the signed independent-audit proof, pinned by the release
     // controller's protected secret, can authorize restoring a budget-aware
     // immutable version. This CLI performs authenticated Cloudflare GETs.
-    run(process.execPath,['scripts/verify-518-account-release-preflight.mjs',
+    const output=run(process.execPath,['scripts/verify-518-account-release-preflight.mjs',
       '--pre-restore',target.worker,approvedVersion],ROOT);
+    const match=String(output).match(/(?:^|\n)APP518_PROTECTED_ORIGINAL_VERSION=([a-f0-9-]{36})(?:\n|$)/i);
+    if(!match)throw new Error('HOLD_518_PROTECTED_ORIGINAL_IDENTITY_UNVERIFIED');
+    protectedOriginalVersion518=match[1];
   }
 }
 await assertNoLegacyExploreBudgetDowngrade518();

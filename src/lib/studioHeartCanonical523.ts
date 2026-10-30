@@ -21,8 +21,9 @@ export async function commitStudioHeartCanonical523(args: {
   desiredSaved: boolean;
   creationPayload: Record<string, unknown>;
   baselineSaved: boolean;
+  knownExistingFavorite: boolean;
 }): Promise<StudioHeartCanonicalResult523> {
-  const { uid, documentId, previewVersion, desiredSaved, creationPayload, baselineSaved } = args;
+  const { uid, documentId, previewVersion, desiredSaved, creationPayload, baselineSaved, knownExistingFavorite } = args;
   if (!uid || !documentId || !Number.isSafeInteger(previewVersion) || previewVersion <= 0) {
     throw new Error('STUDIO_HEART_PREVIEW_ORDER_NOT_READY');
   }
@@ -57,7 +58,7 @@ export async function commitStudioHeartCanonical523(args: {
     // favorites are preserved by the ordinary merge mutation below.
     if (desiredSaved) {
       tx.set(favoriteRef, {
-        ...(previous || baselineSaved ? {} : creationPayload),
+        ...(previous || baselineSaved || knownExistingFavorite ? {} : creationPayload),
         uid,
         studioHeartPreviewVersion: previewVersion,
         saved: true,

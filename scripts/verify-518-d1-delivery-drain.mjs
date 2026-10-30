@@ -13,6 +13,14 @@ function makeDb(state){
  const db={prepare(sql){
   return {bind(...args){
    return {
+    async first(){
+     // app518 indexed outbox fast-path: exact owner+song read before a
+     // potential global D1 reservation; source drift must still enqueue.
+     if(!sql.startsWith('SELECT owner_uid,favorite_id,source_version_ns')
+       ||args[0]!==uid||args[1]!==documentId)throw Error('wrong exact lookup');
+     counts.reads++;
+     return {source_version_ns:row.source_version_ns};
+    },
     async all(){
      counts.reads++;
      if(!sql.includes('SELECT owner_uid'))throw Error('wrong due query');

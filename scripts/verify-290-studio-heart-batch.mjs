@@ -39,9 +39,12 @@ const publishEnd = sync.indexOf('// app287', publishStart);
 assert.ok(publishStart >= 0 && publishEnd > publishStart);
 const publishBlock = sync.slice(publishStart, publishEnd);
 assert.match(publishBlock, /operation: desiredSaved \? 'heart-preview-save' : 'heart-preview-unsave'/);
-assert.match(publishBlock, /const identityOnly: Record<string, unknown> = \{/);
-assert.match(publishBlock, /generationBatchId/);
-assert.match(publishBlock, /generationIndex/);
+// Current publisher uses a bounded projected catalog summary, not the
+// obsolete identityOnly shape. Preserve the preview-only/PII-safe contract.
+assert.match(publishBlock, /projectMusicNoteItemForSignal\(source, safeDocumentId\)/);
+assert.match(publishBlock, /__catalogSummary: true/);
+assert.match(publishBlock, /__studioHeartRemotePreview: true/);
+assert.match(publishBlock, /recentSongSyncKey/);
 assert.doesNotMatch(publishBlock, /\.\.\.\(syncItem as Record<string, unknown>\)/);
 assert.match(publishBlock, /return publishSignal/);
 assert.doesNotMatch(publishBlock, /\b(?:getDoc|getDocs|setDoc|updateDoc|addDoc|deleteDoc)\s*\(/);

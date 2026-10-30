@@ -1,5 +1,5 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
-import {handleApp518FavoriteEvent,planApp518FavoriteChange} from "./app518LiveConnector";
+import {handleApp518FavoriteEvent,planApp518FavoriteChange,matchesApp518PilotSong} from "./app518LiveConnector";
 import {handleVerifiedApp518ExactSource} from "./app518ServerTransport";
 
 import { defineSecret } from "firebase-functions/params";
@@ -4461,8 +4461,17 @@ import {
 // app518 source-only staged connection: no deployed Function/secret/trigger is
 // changed by a GitHub commit. Both handlers are runtime OFF by default.
 // Cloudflare, Firebase and D1 must be configured under separate release approval.
-const app518BridgeActive=()=>process.env.SORIDRAW_APP518_BRIDGE_ACTIVE
-  ==="ENABLED_AFTER_SHARED_ROLLOUT";
+const app518PilotScope=()=>({
+  pilotUid:String(process.env.SORIDRAW_APP518_PILOT_UID||""),
+  pilotDocumentId:String(process.env.SORIDRAW_APP518_PILOT_FAVORITE_ID||""),
+});
+const app518BridgeActive=()=>{
+  const pilot=app518PilotScope();
+  return process.env.SORIDRAW_APP518_BRIDGE_ACTIVE
+    ==="ENABLED_AFTER_SHARED_ROLLOUT"
+    &&matchesApp518PilotSong({uid:pilot.pilotUid,
+      documentId:pilot.pilotDocumentId,...pilot});
+};
 const stage518ServerSecret=defineSecret("SORIDRAW_CATALOG_SERVER_HMAC_518");
 const app518Timestamp=(ts:admin.firestore.Timestamp|undefined):string=>{
   if(!ts)return "";
@@ -4486,6 +4495,7 @@ export const app518ExactFavoriteSource=onRequest({
       request:{method:req.method,headers:req.headers,
         rawBody:req.rawBody as Buffer},
       db:admin.firestore(),secret,nowMs:Date.now(),
+      ...app518PilotScope(),
     });
     res.status(result.status).json(result);
   }catch{
@@ -4504,6 +4514,8 @@ export const app518FavoriteCatalogChanged=functions
     const after=change.after.exists?change.after.data()||null:null;
     const uid=String(after?.uid||before?.uid||"");
     const id=String(context.params.favoriteId||"");
+    if(!matchesApp518PilotSong({uid,documentId:id,...app518PilotScope()}))
+      return; // Unselected songs and users: additional R0/W0.
     // Keep metadata-only saves at Firestore R0 / Cloudflare R0/W0 even
     // if a future operational secret or Worker hostname is unavailable.
     const plan=planApp518FavoriteChange({uid,documentId:id,before,after});

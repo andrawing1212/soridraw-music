@@ -8,22 +8,24 @@ const SELECT='SELECT id FROM curated_picks WHERE track_id=? LIMIT 1';
 const holds=fn=>assert.throws(fn,e=>e instanceof ExploreD1BudgetHold518);
 const rejects=async promise=>assert.rejects(promise,e=>e instanceof ExploreD1BudgetHold518);
 let direct=0,book=0,reads=0,reserved=0,ledgerReady=true;
-const raw={prepare(statement){
- return {bind(...args){
-  return {
-   async first(){reads++;return {id:'x'}},
-   async all(){reads++;return {results:[]}},
-   async run(){
-    if(statement.includes('music_note_catalog_daily_budget_518')){
-     if(!ledgerReady)return {success:false,meta:{changes:0}};
-     reserved+=Number(args[1]);book++;return {success:true,meta:{changes:1}};
-    }
-    direct++;return {success:true,meta:{changes:1}};
-   },
-  };
- }},
+const raw={
+ prepare(statement){
+  return {bind(...args){
+   return {
+    async first(){reads++;return {id:'x'}},
+    async all(){reads++;return {results:[]}},
+    async run(){
+     if(statement.includes('music_note_catalog_daily_budget_518')){
+      if(!ledgerReady)return {success:false,meta:{changes:0}};
+      reserved+=Number(args[1]);book++;return {success:true,meta:{changes:1}};
+     }
+     direct++;return {success:true,meta:{changes:1}};
+    },
+   };
+  }};
+ },
  async batch(){direct++;return [{success:true,meta:{changes:1}}]},
-}};
+};
 const base={DB:raw,other:'preserved'};
 assert.equal(protectExploreEnv518(base),base,'OFF is exact original env');
 assert.equal(book,0);assert.equal(direct,0);

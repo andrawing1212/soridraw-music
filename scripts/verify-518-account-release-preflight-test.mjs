@@ -47,8 +47,9 @@ for(const secret of ['APP518_TRUSTED_AUDITOR_KEY_SHA256_518',
  'APP518_AUDITOR_PUBLIC_KEY_PEM_518','APP518_SIGNED_ACCOUNT_PROOF_518'])
  assert.ok(controller.includes(secret+': ${{ secrets.'+secret+' }}'),
   'release controller must source trust ONLY from GitHub secret');
-assert.match(release,/--pre-restore',target.worker,approvedVersion/);
-assert.match(release,/--post-restore',target.worker,version/);
+assert.match(release,/HOLD_518_PROTECTED_RESTORE_ATOMIC_DEPLOY_FENCE_UNVERIFIED/);
+assert.doesNotMatch(release,/--pre-restore',target.worker,approvedVersion/);
+assert.doesNotMatch(release,/--post-compensate',target.worker/);
 let attempted=0;
 await assert.rejects(observeLiveAccount518({request:async()=>{attempted++},
  token:'short'}),/HOLD_518_READONLY_CREDENTIALS_MISSING/);

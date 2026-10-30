@@ -16,7 +16,7 @@ const within = (start, end) => {
 const logoutBlock = within('  const handleLogout = async () => {', '  const performForcedLogout = async');
 const forcedLogoutBlock = within('  const performForcedLogout = async', '  useEffect(() => {');
 const syncBlock = within('    const runRecentSongsServerSyncIfNeeded = () => {', '    const applyRecentSongSignalItem =');
-const effectBlock = within('  useEffect(() => {\n    if (!user || !recentSongsReadyToCacheRef.current)', '  const toggleSelection =');
+const effectBlock = within('  useEffect(() => {\n    if (!user || !recentSongsReadyToCacheRef.current', '  const toggleSelection =');
 
 assert.ok(logoutBlock.indexOf('recentSongsReadyToCacheRef.current = false;') >= 0);
 assert.ok(

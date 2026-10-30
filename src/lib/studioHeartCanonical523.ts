@@ -20,35 +20,44 @@ export async function commitStudioHeartCanonical523(args: {
   previewVersion: number;
   desiredSaved: boolean;
   creationPayload: Record<string, unknown>;
+  baselineSaved: boolean;
 }): Promise<StudioHeartCanonicalResult523> {
-  const { uid, documentId, previewVersion, desiredSaved, creationPayload } = args;
+  const { uid, documentId, previewVersion, desiredSaved, creationPayload, baselineSaved } = args;
   if (!uid || !documentId || !Number.isSafeInteger(previewVersion) || previewVersion <= 0) {
     throw new Error('STUDIO_HEART_PREVIEW_ORDER_NOT_READY');
   }
+
   const favoriteRef = doc(db, 'favorites', documentId);
+  // app524: every owner can read an absent order document on their *own* path.
+  // The old favorites owner-field rule remains untouched, so never get() an
+  // absent favorites document. Both records are written in one transaction.
+  const orderRef = doc(db, 'users', uid, 'studio_heart_orders', documentId);
   return runTransaction(db, async (tx) => {
-    const snapshot = await tx.get(favoriteRef);
-    const existing = snapshot.exists() ? snapshot.data() : null;
-    if (existing?.uid && existing.uid !== uid) {
-      throw new Error('STUDIO_HEART_FOREIGN_FAVORITE_ID');
-    }
-    const latestVersion = Math.max(0, Math.floor(Number(existing?.studioHeartPreviewVersion || 0)));
+    const orderSnapshot = await tx.get(orderRef);
+    const previous = orderSnapshot.exists() ? orderSnapshot.data() : null;
+    const latestVersion = Math.max(0, Math.floor(Number(previous?.previewVersion || 0)));
     if (latestVersion >= previewVersion) {
-      return { outcome: 'superseded', membershipChanged: false, saved: Boolean(existing?.saved) };
+      return {
+        outcome: 'superseded',
+        membershipChanged: false,
+        saved: previous?.saved === true,
+      };
     }
-    const wasSaved = Boolean(existing
-      && existing.saved !== false
-      && existing.favoriteRemoved !== true
-      && existing.hidden !== true
-      && existing.favoriteHidden !== true
-      && !existing.deletedAt && !existing.trashedAt && !existing.unsavedAt);
-    if (!desiredSaved && existing?.isLocked === true) {
-      throw new Error('STUDIO_HEART_FAVORITE_LOCKED');
-    }
+    const wasSaved = previous ? previous.saved === true : baselineSaved;
     const changedAt = Date.now();
+    tx.set(orderRef, {
+      uid,
+      favoriteId: documentId,
+      previewVersion,
+      saved: desiredSaved,
+    });
+    // Never overwrite an existing favorite's creative/media fields after
+    // first marker creation. A first-save payload is needed only if there is
+    // no prior local canonical baseline/order, while fields of all legacy
+    // favorites are preserved by the ordinary merge mutation below.
     if (desiredSaved) {
       tx.set(favoriteRef, {
-        ...(existing ? {} : creationPayload),
+        ...(previous || baselineSaved ? {} : creationPayload),
         uid,
         studioHeartPreviewVersion: previewVersion,
         saved: true,
@@ -64,8 +73,7 @@ export async function commitStudioHeartCanonical523(args: {
         updatedAt: serverTimestamp(),
       }, { merge: true });
     } else {
-      // Even an absent document needs an exact-id tombstone: otherwise an
-      // earlier SAVE could later recreate a song after this newer UNSAVE.
+      // Even an absent favorite must be fenced from an old delayed SAVE.
       tx.set(favoriteRef, {
         uid,
         studioHeartPreviewVersion: previewVersion,

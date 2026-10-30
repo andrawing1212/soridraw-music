@@ -11947,6 +11947,7 @@ const toggleCycleVariantSelection = (
         desiredSaved: intent.desiredSaved,
         creationPayload,
         baselineSaved: intent.baselineSaved,
+        knownExistingFavorite: intent.song?.__studioHeartHadCanonicalLinkBeforeQueue === true,
       });
       if (canonical.outcome === 'superseded') {
         const current = readStudioHeartPendingIntent(uid, safeDocumentId);
@@ -16736,6 +16737,13 @@ ${normalizePromptForDisplay(result.prompt)}
             ...heartSnapshot,
             favoriteFirestoreId: batchDocumentId,
             musicNoteFavoriteId: batchDocumentId,
+            // A previously linked legacy favorite can have a soft-removed
+            // canonical row but no app524 ordering marker. Never overwrite
+            // its title/lyrics/media with the newer Studio snapshot.
+            __studioHeartHadCanonicalLinkBeforeQueue:
+              existingIntent
+                ? existingIntent.song?.__studioHeartHadCanonicalLinkBeforeQueue === true
+                : Boolean(favoriteLinkBeforeToggle),
           } as SongResult) as SongResult;
 
           if (queueStudioHeartPendingIntent(

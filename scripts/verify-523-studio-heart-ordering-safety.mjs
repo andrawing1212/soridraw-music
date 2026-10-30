@@ -84,6 +84,7 @@ const args = (version, saved, id = 'song-1') => ({
   uid: 'user-1', documentId: id, previewVersion: version,
   desiredSaved: saved,
   baselineSaved: false,
+  knownExistingFavorite: false,
   creationPayload: { uid: 'user-1', title: 'untouched title',
     prompt: 'untouched prompt', lyrics: { ko: 'untouched lyrics' }, sunoCoverUrl: 'old-cover',
     createdAtMs: 55 },
@@ -133,7 +134,7 @@ rows.set('favorites/existing', {
 });
 versions.set('favorites/existing', 1);
 const existingArgs = args(300, true, 'existing');
-existingArgs.baselineSaved = true;
+existingArgs.knownExistingFavorite = true;
 const restored = await commit(existingArgs);
 assert.equal(restored.outcome, 'written');
 assert.equal(rows.get('favorites/existing').title, 'original title');

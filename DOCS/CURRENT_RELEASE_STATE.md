@@ -1,3 +1,12 @@
+## CURRENT — app520 PREVIEW 배포 승인·검사 PASS, 배포 실행 대기 (2026-10-31 KST)
+- 디렉터 승인: PR #536의 로그인 후 최근 생성곡 복구를 `preview`에 병합하고 Firebase PREVIEW Hosting에만 배포. 코드 SHA `2be61304a05076c13ad95e9a9fea67c7a235670f`, 병합 SHA `53fecbab864c59d23c90f0a2cd002adf94b256d6`.
+- 검사 PASS: 최근 생성곡 로그아웃 캐시 보호·재로그인 빈 캐시 재조회·기존 RTDB 동기화·TS/빌드 #41130751834, 로그인 저장소 #41130751800, 좋아요 #41130751801. 기존 오래된 단언 검사 app290/app116은 현재 소스의 변경된 문자열과 호환되지 않아 이번 CI에서 제외(숨겨진 PASS 아님).
+- 배포 범위: 기존 Firebase PREVIEW Hosting 전용 워크플로 트리거. 공유 Rules·Functions·Worker·D1·사용자 데이터 변경 금지, TEST·PRODUCTION 불변 확인. 실제 배포 성공 SHA와 원격 빌드 확인은 릴리스 워크플로 결과로 별도 판정.
+- PC Chrome·Edge 두 브라우저 로그아웃→재로그인 최근 생성곡 0곡 증상은 사용자가 실제 재현. 본 코드는 소스/가상 검사 PASS이며 인증된 실기기 재확인 전까지 기능 PASS로 간주하지 않음. 원본 곡이 Firestore에 존재하는지 직접 미확인. 기존 곡·캐시·하트·Library 복구/삭제/재저장 금지.
+- 해당 사용자 증상이 해결됐는지 확인 전 TEST/PRODUCTION RELEASE HOLD. 독립 감사 미실시.
+
+---
+
 ## CURRENT — app515 Music Note V2 릴리스 HOLD (2026-10-28 KST)
 - 현재 GitHub: `preview` 확인 HEAD `d983f4a68f18050c21294f691efe455fcd3b34a0`; app515 제품 Draft PR #512 HEAD `357686900da3abcbddb6a691d9a5c96f2f36e483`, 미병합·미배포, 최신 관련 CI 5/5 PASS(소스/가상 검사). 실서버·실기기 PASS 아님.
 - 릴리스 안전 PR #521은 별도 감사 PASS 후 `main` 병합 완료, 실제 `main` HEAD `b33fb67aeffebe9e09104175eb3fbab7cd15874b`. PREVIEW 수동 배포 및 TEST/PRODUCTION 구버전 자동 롤백 차단 소스 설치됨. 실제 배포 차단 실행은 미검증.

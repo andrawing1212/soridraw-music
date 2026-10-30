@@ -89,7 +89,7 @@ export const protectExploreEnv518=(env,{clock=()=>Date.now()}={})=>{
   bind(...values){return wrap(statement.bind(...values),sql,values)},
   async first(...rest){if(plan(sql,args)!==0)deny('HOLD_518_WRITE_VIA_FIRST');return statement.first(...rest)},
   async all(...rest){if(plan(sql,args)!==0)deny('HOLD_518_WRITE_VIA_ALL');return statement.all(...rest)},
-  async run(){await charge(plan(sql,args));return statement.run()},
+  async run(){const n=plan(sql,args);if(n)await charge(n);return statement.run()},
  });
  const budgeted={
   prepare(sql){return wrap(raw.prepare(sql),sql)},

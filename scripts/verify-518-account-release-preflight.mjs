@@ -55,9 +55,10 @@ export const observeLiveAccount518=async({request,token,rollbackVersionIds=[]}={
  if(typeof request!=='function'||typeof token!=='string'||token.length<8)
   deny('HOLD_518_READONLY_CREDENTIALS_MISSING');
  const get=async path=>{
-  if(!(/^\\/workers\\/scripts(?:\\/|$)/.test(path)||
-    /^\\/workers\\/workers\\//.test(path)||
-    /^\\/d1\\/database\\?per_page=100&page=/.test(path)))
+  if(!(path==='/workers/scripts'
+   ||path.startsWith('/workers/scripts/')
+   ||path.startsWith('/workers/workers/')
+   ||path.startsWith('/d1/database?per_page=100&page=')))
    deny('HOLD_518_DISALLOWED_READONLY_URL');
   const response=await request(API+path,{method:'GET',
    headers:{Authorization:'Bearer '+token,Accept:'application/json'},

@@ -3,6 +3,7 @@
 // A successful signature NEVER substitutes for current live version/binding
 // inspection. Legacy migration-inspect must actually lose SOURCE_DB first.
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {createHash,createPublicKey,verify,generateKeyPairSync,sign} from 'node:crypto';
 
 const NAMES=Object.freeze([
@@ -79,6 +80,8 @@ export const assessAccountD1Cutover518=({
   if(!Array.isArray(active)||active.length!==1
    ||!uuid(active[0]?.versionId)||Number(active[0]?.trafficPercent)!==100
    ||audited?.activeVersionId!==active[0].versionId
+   ||!sha64(current?.codeSha256)
+   ||audited?.bundleSha256!==current.codeSha256
    ||!sha64(audited?.bundleSha256)
    ||!ref(audited?.sourceAuditRef)||!ref(audited?.drainedOldFlightsRef)
    ||!uuid(audited?.rollbackVersionId)
@@ -122,6 +125,7 @@ const selfTest=()=>{
   'soridraw-explore-test':[{binding:'DB',databaseId:SHARED_DB},{binding:'RATE_DB',databaseId:RATE_TEST}]};
  const live={databaseIds:[...KNOWN_DBS],workers:NAMES.map((name,i)=>({
   name,active:[{versionId:versions[i],trafficPercent:100}],
+  codeSha256:'b'.repeat(64),
   d1Bindings:ids[name]||[],indirectBindings:[],
  }))};
  const evidence={purpose:'APP518_ACCOUNT_D1_ALL_WRITER_CUTOVER',releaseSha,
@@ -160,6 +164,9 @@ const selfTest=()=>{
  fail('unknown worker',()=>live.workers[6].name='unrecognized-worker',
   'HOLD_518_UNKNOWN_OR_DUPLICATE_WORKER');
  live.workers[6].name=NAMES[6];
+ fail('live code SHA drift',()=>live.workers[0].codeSha256='c'.repeat(64),
+  'HOLD_518_LEGACY_VERSION_OR_ROLLBACK_UNVERIFIED_'+NAMES[0]);
+ live.workers[0].codeSha256='b'.repeat(64);
  fail('unfenced old rollback',()=>evidence.workers[1].rollbackBudgetAware=false,
   'HOLD_518_LEGACY_VERSION_OR_ROLLBACK_UNVERIFIED_'+NAMES[1]);
  evidence.workers[1].rollbackBudgetAware=true;
@@ -171,6 +178,19 @@ const selfTest=()=>{
  const missing={...args(),live:null};
  assert.equal(assessAccountD1Cutover518(missing).pass,false);
  assert.equal(assessAccountD1Cutover518({...args(),nowMs:nowMs+200000}).pass,false);
+ const config=JSON.parse(readFileSync(
+  'cloudflare/explore-worker/wrangler.migration-inspect-retire-518.jsonc','utf8'));
+ const retired=readFileSync('cloudflare/explore-worker/migration-inspect-retire-518.mjs','utf8');
+ assert.equal(config.name,MIGRATION);
+ assert.equal(config.keep_vars,false);
+ assert.deepEqual(config.d1_databases,[]);
+ assert.deepEqual(config.r2_buckets,[]);
+ assert.deepEqual(config.services,[]);
+ assert.deepEqual(config.durable_objects.bindings,[]);
+ assert.deepEqual(config.triggers.crons,[]);
+ assert.doesNotMatch(retired,/env[.[]|\\.prepare\\s*\\(|\\.batch\\s*\\(/);
+ assert.match(retired,/status:410/);
+ console.log('APP518_MIGRATION_RETIRE_SOURCE_NO_D1_BINDING=PASS');
  console.log('APP518_MIGRATION_D1_BINDING_RETIREMENT_REQUIRED=PASS');
  console.log('APP518_EXTERNAL_D1_API_TOKENS_FAIL_CLOSED=PASS');
  console.log('APP518_ALL_SEVEN_WORKER_VERSIONS_D1_DATABASES_ROLLBACK=PASS');

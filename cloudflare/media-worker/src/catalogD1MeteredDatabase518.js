@@ -7,7 +7,28 @@
 export class CatalogD1BudgetError518 extends Error {
  constructor(code){super(code);this.code=code;this.name='CatalogD1BudgetError518';}
 }
-const mutation=sql=>/^(?:\s*\/\*[^]*?\*\/\s*)*(INSERT|UPDATE|DELETE|REPLACE)\b/i.test(sql);
+// D1 .first()/.all() execute prepared statements as well. They must NEVER
+// run INSERT/UPDATE/DELETE ... RETURNING without the daily reservation.
+const clean=sql=>typeof sql==='string'
+ ?sql.replace(/^(?:\\s*\\/\\*[\\s\\S]*?\\*\\/\\s*)*/,'').trim():'';
+const readOnly=sql=>/^SELECT\\b/i.test(clean(sql))&&!/[;]|--|\\/\\*/.test(clean(sql));
+const mutate=sql=>{
+ const value=clean(sql);
+ // Only known per-owner app518 tables and direct bounded SQL are allowed.
+ // Reject WITH/PRAGMA/DDL/unknown target/multi-statements closed, not W0.
+ if(/[;]|--|\\/\\*/.test(value))return false;
+ const match=value.match(/^(INSERT(?:\\s+OR\\s+(?:IGNORE|REPLACE|ABORT|FAIL|ROLLBACK))?\\s+INTO|UPDATE|DELETE\\s+FROM|REPLACE\\s+INTO)\\s+(music_note_catalog_(?:member|index_meta|outbox|paged_stage)_518)\\b/i);
+ if(!match)return false;
+ // UPDATE/DELETE can affect whole tables: only a scoped WHERE is admissible.
+ if(/^(UPDATE|DELETE)/i.test(match[1])&&(!/\\bWHERE\\b/i.test(value)
+    ||!/\\bowner_uid\\b/i.test(value)))return false;
+ return true;
+};
+const safeSql=sql=>{
+ if(readOnly(sql))return 'read';
+ if(mutate(sql))return 'write';
+ throw new CatalogD1BudgetError518('HOLD_D1_UNMETERED_SQL');
+};
 // D1 rows_written counts secondary index changes too. Member has one
 // generation index (base row + index = 2); outbox has a partial due index,
 // whose UPDATE can remove and insert entries (base + 2 = 3).
@@ -15,7 +36,7 @@ const mutation=sql=>/^(?:\s*\/\*[^]*?\*\/\s*)*(INSERT|UPDATE|DELETE|REPLACE)\b/i
 const billedPerRow=sql=>
  /\\bmusic_note_catalog_member_518\\b/i.test(sql)?2:3;
 const quantity=(sql,args)=>{
- if(!mutation(sql))return 0;
+ if(safeSql(sql)==='read')return 0;
  // In-app JSON1 bulk member INSERT/DELETE is charged by affected rows,
  // not one SQL statement. Reserve the full upper bound, including repeats.
  if(/json_each\s*\(/i.test(sql)){
@@ -46,11 +67,19 @@ export const createMeteredD1Database518=({rawDb,reserveWriteBudget,clock=()=>Dat
  const wrap=(statement,sql,args=[])=>({
   __budgeted518:true,raw:statement,sql,args,
   bind(...values){return wrap(statement.bind(...values),sql,values);},
-  first:(...p)=>statement.first(...p),
-  all:(...p)=>statement.all(...p),
+  async first(...p){
+   if(safeSql(sql)!=='read')throw new CatalogD1BudgetError518('HOLD_D1_WRITE_THROUGH_READ');
+   return statement.first(...p);
+  },
+  async all(...p){
+   if(safeSql(sql)!=='read')throw new CatalogD1BudgetError518('HOLD_D1_WRITE_THROUGH_READ');
+   return statement.all(...p);
+  },
   async run(){
    await reserve(quantity(sql,args),
-    sql.includes('APP518_DAILY_PAUSE_CONTROL_518')?'control':'normal');
+    sql.includes('APP518_DAILY_PAUSE_CONTROL_518')
+     &&/^UPDATE\\s+music_note_catalog_outbox_518\\s+SET\\s+next_attempt_ms=/i.test(clean(sql))
+     ?'control':'normal');
    return statement.run();
   },
  });

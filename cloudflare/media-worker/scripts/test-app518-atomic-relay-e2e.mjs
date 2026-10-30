@@ -82,7 +82,7 @@ const init=async()=>{
   SORIDRAW_CANONICAL_CATALOG_518:'ENABLED_AFTER_SHARED_ROLLOUT',
   SORIDRAW_D1_ALL_ACCOUNT_WRITERS_518:'VERIFIED',
   SORIDRAW_D1_SHARED_ACCOUNT_LEDGER_518:'VERIFIED'};
- bridge=createApp518ServerBridge({env,
+ bridge=createApp518ServerBridge({env,signedAccountD1CutoverVerified:true,
   sharedReleaseFencesVerified:true,readExactCanonical:readCurrent,
   projectItem:item=>item,sortItems:items=>items,
  });

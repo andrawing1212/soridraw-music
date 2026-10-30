@@ -38,17 +38,24 @@ const digestModules=data=>{
  }
  return hash.digest('hex');
 };
-const bindings=raw=>{
+// Version metadata may spell the same D1 binding 'd1' or 'd1_database'.
+// Unknown future D1-like types must HOLD, never appear to be absent.
+export const normalizeLiveD1Bindings518=raw=>{
  if(!Array.isArray(raw))deny('HOLD_518_LIVE_VERSION_BINDINGS_UNKNOWN');
- const d1=raw.filter(x=>x?.type==='d1').map(x=>({
-  binding:x.name,databaseId:x.database_id,
- }));
- if(d1.some(x=>!x.binding||!validId(x.databaseId)))
+ if(raw.some(x=>typeof x?.type==='string'
+   &&/(?:^|_)d1(?:_|$)/i.test(x.type)
+   &&!['d1','d1_database'].includes(x.type)))
+  deny('HOLD_518_UNKNOWN_D1_BINDING_TYPE');
+ const d1=raw.filter(x=>['d1','d1_database'].includes(x?.type))
+  .map(x=>({binding:x.name,databaseId:x.database_id??x.id}));
+ if(d1.some(x=>!x.binding||!validId(x.databaseId))
+  ||new Set(d1.map(x=>x.binding)).size!==d1.length)
   deny('HOLD_518_BAD_D1_ID');
  const indirect=raw.filter(x=>['durable_object_namespace','dispatch_namespace','service']
   .includes(x.type)).map(x=>({name:x.name,type:x.type}));
  return {d1,indirect};
 };
+const bindings=normalizeLiveD1Bindings518;
 // Every GET is restricted to known account and scripts, with no request body.
 // No tokens, module content, worker settings or raw responses in stdout.
 export const observeLiveAccount518=async({request,token,rollbackVersionIds=[]}={})=>{
@@ -198,6 +205,22 @@ const live=async()=>{
    releaseSha,live:liveSnapshot,nowMs,restoreWorker,restoreVersion});
   if(!result.pass)deny(result.code);
   console.log('APP518_PROTECTED_RESTORE_INDEPENDENT_TRUST_AND_LIVE_PROOF=PASS');
+  const currentVersion=liveSnapshot.workers.find(w=>w.name===restoreWorker)?.active?.[0]?.versionId;
+  if(!validId(currentVersion))deny('HOLD_518_ORIGINAL_VERSION_NOT_VERIFIED');
+  console.log('APP518_PROTECTED_ORIGINAL_VERSION='+currentVersion);
+ }else if(mode==='--post-compensate'){
+  // No new mutable release evidence can be substituted for the original
+  // trusted signed account snapshot. The original active version must be
+  // exactly restored and fully validated against all seven signed Writers.
+  const original=process.argv[5];
+  if(!validId(original))deny('HOLD_518_COMPENSATION_TARGET_MISSING');
+  const snapshot=await observeLiveAccount518({request:fetch,token,rollbackVersionIds});
+  const verified=assessAccountD1Cutover518({signed,publicKeyPem,
+   pinnedPublicKeySha256:trustedHash,releaseSha,live:snapshot,nowMs});
+  if(!verified.pass)deny(verified.code);
+  if(snapshot.workers.find(w=>w.name===restoreWorker)?.active?.[0]?.versionId!==original)
+   deny('HOLD_518_COMPENSATION_ACTIVE_VERSION_MISMATCH');
+  console.log('APP518_PROTECTED_ORIGINAL_RESTORE_VERIFIED=PASS');
  }else if(mode==='--post-restore'){
   // The signature has been checked against a separately pinned trust hash.
   // Query the exact restored immutable worker content and serving deployment.
@@ -211,7 +234,7 @@ const live=async()=>{
   console.log('APP518_PROTECTED_RESTORE_POSTCHECK=PASS');
  }else deny('HOLD_518_UNSUPPORTED_RELEASE_AUDIT_ACTION');
 };
-if(['--pre-restore','--post-restore'].includes(process.argv[2])){
+if(['--pre-restore','--post-restore','--post-compensate'].includes(process.argv[2])){
  try{await live()}catch(e){
   console.error(String(e?.message||e).replace(/[^A-Za-z0-9_-]/g,'_').slice(0,90));
   process.exitCode=2;

@@ -48,7 +48,7 @@ const plan=(sql,args=[])=>{
   // Per-owner WHERE alone is not bounded for a member/batch table.
   // Require the actual unique composite key for each audited table.
   if(/\bOR\b/i.test(where))deny('HOLD_518_AMBIGUOUS_UPDATE_OR_DELETE');
-  const key=(column)=>new RegExp('\\\\b'+column+'\\\\s*=\\\\s*\\\\?','i').test(where);
+  const scopedKeys=new Set([...where.matchAll(/\b([a-z_]+)\s*=\s*\?/gi)].map(m=>m[1].toLowerCase()));
   const unique={
    explore_curators:['uid'],
    curated_picks:['collection_key','track_id'],
@@ -58,7 +58,7 @@ const plan=(sql,args=[])=>{
    explore_like_private_operations_416:['user_uid','operation_id'],
    explore_like_batches_069:['batch_id'],
   }[table];
-  if(!unique||!unique.every(key))
+  if(!unique||!unique.every(column=>scopedKeys.has(column)))
    deny('HOLD_518_UNBOUNDED_UPDATE_OR_DELETE');
  }
  if(!Array.isArray(args)||args.length>128)

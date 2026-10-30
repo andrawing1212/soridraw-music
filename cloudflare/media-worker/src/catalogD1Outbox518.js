@@ -26,6 +26,10 @@ export const SELECT_DUE_518=[
  'AND hold_reason IS NULL AND next_attempt_ms <= ?',
  'ORDER BY next_attempt_ms,owner_uid,favorite_id LIMIT ?',
 ].join('\n');
+export const SELECT_DUE_PILOT_518=SELECT_DUE_518.replace(
+ 'ORDER BY next_attempt_ms,owner_uid,favorite_id LIMIT ?',
+ 'AND owner_uid=? AND favorite_id=? ORDER BY next_attempt_ms,owner_uid,favorite_id LIMIT ?'
+);
 export const ACK_EXACT_518=[
  'UPDATE music_note_catalog_outbox_518',
  'SET ack_version_ns=source_version_ns,acked_at_ms=?,attempt_count=0',
@@ -122,10 +126,18 @@ export const enqueueVerifiedFavorite518=async({
  return {code:writes===1?'ENQUEUED':'STALE_OR_DUPLICATE',
    d1Writes:writes,sourceVersionNs:version};
 };
-export const getDueFavoriteChanges518=async({db,nowMs,limit=128}={})=>{
+// Exact pilot owner/song restriction uses the indexed primary key only.
+export const getDueFavoriteChanges518=async({
+ db,nowMs,limit=128,pilotUid,pilotDocumentId,
+}={})=>{
  if(!database(db)||!epoch(nowMs)||!Number.isInteger(limit)||limit<1||limit>256)
    return {code:'DENY_ARGUMENTS',rows:[]};
- const result=await db.prepare(SELECT_DUE_518).bind(nowMs,limit).all();
+ const pilot=pilotUid!==undefined||pilotDocumentId!==undefined;
+ if(pilot&&(!okUid(pilotUid)||!okId(pilotDocumentId)))
+   return {code:'DENY_PILOT_SCOPE',rows:[]};
+ const result=pilot
+   ?await db.prepare(SELECT_DUE_PILOT_518).bind(nowMs,text(pilotUid),text(pilotDocumentId),limit).all()
+   :await db.prepare(SELECT_DUE_518).bind(nowMs,limit).all();
  return {code:'OK',rows:Array.isArray(result?.results)?result.results:[]};
 };
 // Success path D1 W1 enqueue + W1 ACK; no claim write.

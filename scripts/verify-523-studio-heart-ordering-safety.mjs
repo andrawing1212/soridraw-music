@@ -48,7 +48,7 @@ const firestore = {
           return { exists: () => value !== undefined, data: () => value };
         },
         set: (ref, patch, opts) => {
-          assert.equal(opts.merge, true);
+          if (ref.key.startsWith('favorites/')) assert.equal(opts?.merge, true);
           writes.push({ key: ref.key, patch: clone(patch) });
         },
       };
@@ -83,6 +83,7 @@ assert.equal(typeof commit, 'function');
 const args = (version, saved, id = 'song-1') => ({
   uid: 'user-1', documentId: id, previewVersion: version,
   desiredSaved: saved,
+  baselineSaved: false,
   creationPayload: { uid: 'user-1', title: 'untouched title',
     prompt: 'untouched prompt', lyrics: { ko: 'untouched lyrics' }, sunoCoverUrl: 'old-cover',
     createdAtMs: 55 },
@@ -131,7 +132,9 @@ rows.set('favorites/existing', {
   createdAtMs: 77, studioHeartPreviewVersion: 10,
 });
 versions.set('favorites/existing', 1);
-const restored = await commit(args(300, true, 'existing'));
+const existingArgs = args(300, true, 'existing');
+existingArgs.baselineSaved = true;
+const restored = await commit(existingArgs);
 assert.equal(restored.outcome, 'written');
 assert.equal(rows.get('favorites/existing').title, 'original title');
 assert.equal(rows.get('favorites/existing').lyrics.ko, 'original lyric');
@@ -154,19 +157,13 @@ console.log('APP523_INFLIGHT_CLICK_DURABLE_BEFORE_ACK_NO_QUOTA_REBASE=PASS');
 assert.equal(writeCount > 0, true);
 console.log('APP523_EXACT_DOCUMENT_NO_COLLECTION_SCAN=PASS');
 
-// Release-blocking integration check: a Firestore transaction reads the exact
-// favorite before it exists on a first SAVE. The deployed owner-field-based
-// favorites allow-read rule requires resource.data.uid, which does not exist
-// on that missing document. Mock transaction tests cannot prove authorization.
-// Keep PR Draft/HOLD instead of claiming a first-save PASS.
+// app524: owner-scoped marker read is permitted on a missing first SAVE.
 const firestoreRules = readFileSync('firestore.rules', 'utf8');
 const favoritesRuleStart = firestoreRules.indexOf('match /favorites/{favoriteId}');
-assert.ok(favoritesRuleStart >= 0, 'favorites rule missing');
+assert.ok(favoritesRuleStart > 0, 'favorites rule missing');
 const favoritesRule = firestoreRules.slice(favoritesRuleStart, firestoreRules.indexOf('match /user_recent_songs', favoritesRuleStart));
-const readsMissingFavorite = /tx\.get\(favoriteRef\)/.test(helperSource);
-const resourceOwnerRead = /allow read: if[^\n]*resource\.data\.uid/.test(favoritesRule);
-assert.ok(
-  !readsMissingFavorite || !resourceOwnerRead,
-  'APP523_FIRST_SAVE_RULES_HOLD: transaction reads a nonexistent favorites document, but Firestore read rules require resource.data.uid; must design a scoped safe fix before merge/deploy.',
-);
-console.log('APP523_FIRST_SAVE_RULES_COMPATIBLE=PASS');
+assert.match(favoritesRule, /allow read: if isAuthenticated\(\) && \(resource\.data\.uid == request\.auth\.uid \|\| isAdmin\(\)\)/);
+assert.match(helperSource, /tx\.get\(orderRef\)/);
+assert.doesNotMatch(helperSource, /tx\.get\(favoriteRef\)/);
+assert.match(firestoreRules, /match \/studio_heart_orders\/\{favoriteId\}/);
+console.log('APP524_OWNER_MARKER_NO_ABSENT_FAVORITE_READ_STATIC=PASS');

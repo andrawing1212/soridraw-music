@@ -29,16 +29,16 @@ for(const marker of [
 // The bridge requires an independently verified account-wide D1 cutover.
 // Worker currently supplies no such proof, deliberately failing closed.
 // Never replace this with an env VERIFIED string or unconditional true.
-assert.match(serverBridge,/signedAccountD1CutoverVerified\\s*=\\s*false/,
+assert.match(serverBridge,/signedAccountD1CutoverVerified\s*=\s*false/,
  'missing independently verified D1 cutover gate');
-assert.match(serverBridge,/signedAccountD1CutoverVerified\\s*===\\s*true/,
+assert.match(serverBridge,/signedAccountD1CutoverVerified\s*===\s*true/,
  'D1 cutover proof must be mandatory for activation');
 const connector=worker.split('const app518ServerConnector = (env) => {')[1]
  ?.split('const handleApp518ServerRoute=')[0];
 assert.ok(connector,'actual Worker bridge entrypoint missing');
 assert.ok(connector.includes('createApp518ServerBridge({'),
  'Worker entrypoint must reach the gated bridge');
-assert.doesNotMatch(connector,/signedAccountD1CutoverVerified\\s*:\\s*(?:true|env\\b)/,
+assert.doesNotMatch(connector,/signedAccountD1CutoverVerified\s*:\s*(?:true|env\b)/,
  'do not bypass a signed account-wide cutover with a constant or env flag');
 assert.ok(r2.includes("ENABLED_AFTER_SHARED_ROLLOUT"),'no explicit shared-catalog fence');
 assert.ok(worker.includes('async scheduled(_event,env,ctx)'),'no bounded drain source');

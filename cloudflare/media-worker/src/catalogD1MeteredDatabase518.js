@@ -19,10 +19,34 @@ const mutate=sql=>{
  if(/[;]|--|\/\*/.test(value))return false;
  const match=value.match(/^(INSERT(?:\s+OR\s+(?:IGNORE|REPLACE|ABORT|FAIL|ROLLBACK))?\s+INTO|UPDATE|DELETE\s+FROM|REPLACE\s+INTO)\s+(music_note_catalog_(?:member|index_meta|outbox|paged_stage)_518)\b/i);
  if(!match)return false;
- // UPDATE/DELETE can affect whole tables: only a scoped WHERE is admissible.
- if(/^(UPDATE|DELETE)/i.test(match[1])&&(!/\bWHERE\b/i.test(value)
-    ||!/\bowner_uid\b/i.test(value)))return false;
- return true;
+ const verb=match[1].toUpperCase(),table=match[2].toLowerCase();
+ const isInsert=/^(INSERT|REPLACE)/.test(verb);
+ if(isInsert){
+  // Without JSON1 bounds, INSERT ... SELECT could copy an entire DB table
+  // while reserving just one row. Only the existing single-owner index-meta
+  // projection is bounded without json_each.
+  if(/\bSELECT\b/i.test(value)&&!/json_each\s*\(/i.test(value)
+    &&!(table==='music_note_catalog_member_518'
+      &&/\bFROM\s+music_note_catalog_index_meta_518\b/i.test(value)
+      &&/\bWHERE\s+owner_uid\s*=\s*\?/i.test(value)))return false;
+  if(!/\bSELECT\b/i.test(value)&&!/\bVALUES\s*\(/i.test(value))return false;
+  if(/\bVALUES\s*\([^)]*\)\s*,\s*\(/i.test(value))return false;
+  return true;
+ }
+ // UPDATE/DELETE may affect thousands of rows; the following audited
+ // per-owner/row keys must be present before charging a fixed upper bound.
+ const where=value.match(/\bWHERE\b([\s\S]*)/i)?.[1]||'';
+ if(!/\bowner_uid\s*=\s*\?/i.test(where))return false;
+ if(table==='music_note_catalog_outbox_518')
+  return /\bfavorite_id\s*=\s*\?/i.test(where);
+ if(table==='music_note_catalog_index_meta_518')return true;
+ if(table==='music_note_catalog_paged_stage_518')
+  return /\bgeneration\s*=\s*\?/i.test(where)&&/\bmode\s*=\s*\?/i.test(where);
+ if(table==='music_note_catalog_member_518')
+  return /^DELETE/.test(verb)&&/\bgeneration\s*=\s*\?/i.test(where)
+   &&(/favorite_id\s*=\s*\?/i.test(where)
+     ||/favorite_id\s+IN\s*\(\s*SELECT\s+value\s+FROM\s+json_each\s*\(/i.test(where));
+ return false;
 };
 const safeSql=sql=>{
  if(readOnly(sql))return 'read';

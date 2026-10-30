@@ -1,9 +1,65 @@
 // app518 one-shot operator read-only evidence. No deployment, SQL, storage,
 // or user-data mutation. Network calls restricted to GET and analytics POST.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 const ACCOUNT='e1a30fc9ef497fda1d34f4ab3dc1da45';
 const API='https://api.cloudflare.com/client/v4/accounts/'+ACCOUNT;
 const GRAPH='https://api.cloudflare.com/client/v4/graphql';
+// Only these four existing Explore scripts are authorized for exact-version source inspection.
+// Version-specific modules are hashed in memory; raw code, maps, secrets and API bodies
+// must never appear in Actions logs or committed artifacts.
+const EXPLORE_CODE_NAMES=new Set([
+ 'soridraw-explore-api','soridraw-explore-preview',
+ 'soridraw-explore-test','soridraw-explore-migration-inspect',
+]);
+const GITHUB_EXPLORE_SOURCE='cloudflare/explore-worker/canonical/preview-entry.js';
+const sha256=buf=>createHash('sha256').update(buf).digest('hex');
+const validCodeUrl=url=>{
+ const prefix=API+'/workers/workers/';
+ if(!url.startsWith(prefix))return false;
+ const match=url.slice(prefix.length).match(/^([a-z0-9_-]+)\/versions\/([a-f0-9-]{36})\?include=modules$/i);
+ return !!match&&EXPLORE_CODE_NAMES.has(match[1])&&validVersion(match[2]);
+};
+// This is a hash of deployed bytes, NOT a Git blob hash. A bundle can differ
+// from unbundled GitHub source without implying a semantic difference.
+export const digestExactVersionModules518=(payload,versionId,candidateBytes=null)=>{
+ const raw=payload?.result;
+ if(raw?.id!==versionId||!validVersion(versionId))
+  throw Error('CONTENT_VERSION_IDENTITY_MISMATCH');
+ if(!Array.isArray(raw.modules)||!raw.modules.length||raw.modules.length>128)
+  throw Error('CONTENT_MODULES_MISSING_OR_UNBOUNDED');
+ const names=new Set(),modules=[];
+ let totalBytes=0;
+ for(const m of raw.modules){
+  if(typeof m?.name!=='string'||!m.name||m.name.length>512||names.has(m.name)
+    ||typeof m.content_type!=='string'||m.content_type.length>128
+    ||typeof m.content_base64!=='string'||!m.content_base64
+    ||m.content_base64.length>24*1024*1024
+    ||!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(m.content_base64))
+   throw Error('CONTENT_MODULE_INVALID');
+  names.add(m.name);
+  const bytes=Buffer.from(m.content_base64,'base64');
+  if(!bytes.length||bytes.toString('base64')!==m.content_base64)
+   throw Error('CONTENT_MODULE_BASE64_INVALID');
+  totalBytes+=bytes.byteLength;
+  if(totalBytes>32*1024*1024)throw Error('CONTENT_MODULES_TOO_LARGE');
+  modules.push({name:m.name,type:m.content_type,bytes});
+ }
+ const hash=createHash('sha256').update('soridraw-worker-version-modules-v1\0');
+ for(const m of modules.sort((a,b)=>a.name.localeCompare(b.name,'en'))){
+  hash.update(m.name+'\0'+m.type+'\0'+m.bytes.byteLength+'\0');
+  hash.update(m.bytes);hash.update('\0');
+ }
+ const code=modules.filter(m=>/javascript|ecmascript/i.test(m.type));
+ const exact=candidateBytes===null?null:code.some(m=>m.bytes.equals(candidateBytes));
+ return {moduleSetSha256:hash.digest('hex'),moduleCount:modules.length,
+  codeModuleCount:code.length,codeBytes:code.reduce((n,m)=>n+m.bytes.length,0),
+  candidateSourceSha256:candidateBytes===null?null:sha256(candidateBytes),
+  comparison:candidateBytes===null?'NO_GITHUB_CANDIDATE_MAPPING':
+   exact?'EXACT_MODULE_BYTES_MATCH':
+    'NO_EXACT_MODULE_MATCH_BUILD_ARTIFACT_REQUIRED'};
+};
 const TARGETS=[
  {env:'PREVIEW',script:'soridraw-media-preview',media:'soridraw-media-preview'},
  {env:'TEST',script:'soridraw-media-test',media:'soridraw-media-test'},
@@ -44,7 +100,7 @@ export const collect518=async({request,token,at=new Date()}={})=>{
   inflightDrain:'NOT_PROVEN',rollbackAttestation:'NOT_PROVEN'},errors:[],writerInventory:{status:'NOT_CHECKED',workers:[],accountLedgerVerified:false}};
  const fetchSafe=async(url,method='GET',body=null)=>{
   const worker=TARGETS.some(t=>url===`https://${t.script}.andrawing1212.workers.dev/health?read_only_probe=518`);
-  const api=url===API+'/workers/scripts'||url.startsWith(API+'/workers/scripts/')||url.startsWith(API+'/d1/database?');
+  const api=url===API+'/workers/scripts'||url.startsWith(API+'/workers/scripts/')||url.startsWith(API+'/d1/database?')||validCodeUrl(url);
   if(!((method==='GET'&&(worker||api))||(method==='POST'&&url===GRAPH&&body?.query===QUERY)))
    throw Error('DISALLOWED_READONLY_REQUEST');
   const headers=worker?{'Cache-Control':'no-cache'}:{Authorization:'Bearer '+token,Accept:'application/json'};
@@ -103,6 +159,8 @@ export const collect518=async({request,token,at=new Date()}={})=>{
   if(names.some(x=>!validScriptName(x))||new Set(names).size!==names.length)
    throw Error('WORKER_LIST_NAMES_INVALID');
   result.writerInventory.listedScripts=names.length;
+  result.writerInventory.sourceInspection={status:'NOT_CHECKED',workers:[],liveSourceIdentityProven:false};
+  const candidate=readFileSync(GITHUB_EXPLORE_SOURCE);
   for(const name of names){
    const out={name,status:'UNVERIFIED',active:[],d1Bindings:[],
     indirectBindings:[],budgetLedger:'NOT_PROVEN',versionBindingProof:'NOT_CHECKED'};
@@ -161,6 +219,47 @@ export const collect518=async({request,token,at=new Date()}={})=>{
   result.writerInventory.status=result.writerInventory.workers.every(x=>
    x.status==='METADATA_OBSERVED_NOT_WRITE_COVERAGE_PROOF')
     ?'ACCOUNT_WORKER_METADATA_OBSERVED':'PARTIAL_WORKER_METADATA';
+  // Unlike /scripts/{name}/content/v2 (latest, not a pinned deployment),
+  // this GET names the immutable exact active UUID. Verify deployment
+  // percentages again after reading modules to detect cutover races.
+  const inspection=result.writerInventory.sourceInspection;
+  for(const name of EXPLORE_CODE_NAMES){
+   const observed=result.writerInventory.workers.find(w=>w.name===name);
+   const record={name,status:'HOLD_UNVERIFIED',active:[]};
+   try{
+    if(!observed||observed.versionBindingProof!=='ACTIVE_VERSION_BINDINGS_OBSERVED')
+     throw Error('CONTENT_VERSION_METADATA_MISSING');
+    if(!observed.active.length)throw Error('CONTENT_NO_ACTIVE_VERSION');
+    for(const v of observed.active){
+     const url=`${API}/workers/workers/${name}/versions/${v.versionId}?include=modules`;
+     const codeResponse=await fetchSafe(url);
+     const sig=digestExactVersionModules518(codeResponse,v.versionId,
+      name==='soridraw-explore-migration-inspect'?null:candidate);
+     record.active.push({versionId:v.versionId,trafficPercent:v.trafficPercent,...sig});
+    }
+    const after=await fetchSafe(`${API}/workers/scripts/${name}/deployments`);
+    const fresh=after.result?.deployments?.[0]?.versions;
+    const sorted=rows=>JSON.stringify(rows.map(x=>({
+     id:String(x.version_id??x.versionId),percentage:Number(x.percentage??x.trafficPercent)
+    })).sort((a,b)=>a.id.localeCompare(b.id)));
+    if(!Array.isArray(fresh)||sorted(fresh)!==sorted(observed.active))
+     throw Error('CONTENT_DEPLOYMENT_DRIFT');
+    record.status='EXACT_ACTIVE_VERSION_MODULE_DIGESTS_OBSERVED';
+   }catch(e){
+    record.status='HOLD_CONTENT_UNVERIFIED';
+    record.errorCode=code(e);
+    record.active=[]; // Do not report a digest if the active deployment drifted.
+    result.errors.push('CODE_CONTENT:'+name+':'+record.errorCode);
+   }
+   inspection.workers.push(record);
+  }
+  inspection.status=inspection.workers.every(w=>
+   w.status==='EXACT_ACTIVE_VERSION_MODULE_DIGESTS_OBSERVED')
+    ?'MODULE_DIGESTS_OBSERVED_SOURCE_IDENTITY_NOT_PROVEN':
+     'PARTIAL_OR_DENIED_NO_SOURCE_IDENTITY';
+  // A GitHub source file is not the exact Wrangler/esbuild artifact, and
+  // migration-inspect has no reviewed candidate mapping. Never call this PASS.
+  inspection.liveSourceIdentityProven=false;
  }catch(e){
   result.writerInventory.status='HOLD_ACCOUNT_WORKER_LIST_UNVERIFIED';
   result.writerInventory.errorCode=code(e);
@@ -170,7 +269,9 @@ export const collect518=async({request,token,at=new Date()}={})=>{
  // binding. This cannot prove all account writes hit a shared ledger.
  result.writerInventory.accountLedgerVerified=false;
  result.writerInventory.unmeteredExternalD1Writes='NOT_EXCLUDABLE_WITH_METADATA';
- result.writerInventory.sourceInspection='NOT_PERFORMED_IN_READONLY_METADATA_TOKEN';
+ // sourceInspection is a separate code-content proof, not a budget ledger proof.
+ if(!result.writerInventory.sourceInspection)
+  result.writerInventory.sourceInspection={status:'HOLD_NOT_CHECKED',workers:[],liveSourceIdentityProven:false};
  const end=new Date(Date.UTC(at.getUTCFullYear(),at.getUTCMonth(),at.getUTCDate()));
  const start=new Date(end.getTime()-6*86400000);
  result.d1.windowUtc={start:day(start),end:day(end),
@@ -248,6 +349,13 @@ const selfTest=async()=>{
   if(url===API+'/workers/scripts')return {ok:true,json:async()=>({success:true,result:[
    {id:'soridraw-media-preview'},{id:'soridraw-media-test'},
    {id:'soridraw-media'},{id:'soridraw-explore-api'}]})};
+  if(url.includes('/workers/workers/')&&url.includes('?include=modules'))
+   return {ok:true,json:async()=>({success:true,result:{
+    id:'11111111-1111-4111-8111-111111111111',
+    modules:[{name:'index.js',content_type:'application/javascript',
+      content_base64:Buffer.from('export default {fetch(){return new Response("OK")}}').toString('base64')}],
+    bindings:[{name:'SECRET',type:'secret_text',text:'NEVER_EMIT'}],
+   }})};
   if(url.includes('/versions/'))return {ok:true,json:async()=>({success:true,result:{
    resources:{bindings:url.includes('soridraw-explore-api')
     ?[{type:'d1',name:'DB',database_id:'db1'},
@@ -272,6 +380,17 @@ const selfTest=async()=>{
  assert.equal(snap.writerInventory.status,'ACCOUNT_WORKER_METADATA_OBSERVED');
  assert.equal(snap.writerInventory.listedScripts,4);
  assert.equal(snap.writerInventory.accountLedgerVerified,false);
+ assert.equal(snap.writerInventory.sourceInspection.workers.length,4);
+ assert.equal(snap.writerInventory.sourceInspection.liveSourceIdentityProven,false);
+ assert.equal(snap.writerInventory.sourceInspection.status,
+  'MODULE_DIGESTS_OBSERVED_SOURCE_IDENTITY_NOT_PROVEN');
+ assert.equal(snap.writerInventory.sourceInspection.workers.find(w=>
+  w.name==='soridraw-explore-migration-inspect').active[0].comparison,
+  'NO_GITHUB_CANDIDATE_MAPPING');
+ assert.ok(snap.writerInventory.sourceInspection.workers.every(w=>
+  w.status==='EXACT_ACTIVE_VERSION_MODULE_DIGESTS_OBSERVED'));
+ assert.ok(!JSON.stringify(snap).includes('NEVER_EMIT'));
+ assert.ok(calls.some(x=>validCodeUrl(x.url)));
  assert.deepEqual(snap.writerInventory.workers.find(x=>x.name==='soridraw-explore-api').d1Bindings,
   [{binding:'DB',databaseId:'db1'}]);
  assert.equal(snap.writerInventory.workers.find(x=>x.name==='soridraw-explore-api')
@@ -284,6 +403,26 @@ const selfTest=async()=>{
  assert.ok(calls.every(x=>x.method==='GET'||x.method==='POST'&&x.url===GRAPH));
  assert.ok(!JSON.stringify(snap).includes(token));
  assert.equal(snap.security.inflightDrain,'NOT_PROVEN');
+ const id='11111111-1111-4111-8111-111111111111';
+ const exactBytes=Buffer.from('same source');
+ const exactPayload={result:{id,modules:[{name:'index.js',
+  content_type:'application/javascript',content_base64:exactBytes.toString('base64')}]}};
+ const exact=digestExactVersionModules518(exactPayload,id,exactBytes);
+ assert.equal(exact.comparison,'EXACT_MODULE_BYTES_MATCH');
+ assert.equal(digestExactVersionModules518(exactPayload,id,Buffer.from('different')).comparison,
+  'NO_EXACT_MODULE_MATCH_BUILD_ARTIFACT_REQUIRED');
+ assert.throws(()=>digestExactVersionModules518(exactPayload,'22222222-2222-4222-8222-222222222222',null),
+  /CONTENT_VERSION_IDENTITY_MISMATCH/);
+ assert.throws(()=>digestExactVersionModules518({result:{id,modules:[
+  exactPayload.result.modules[0],exactPayload.result.modules[0]]}},id),
+  /CONTENT_MODULE_INVALID/);
+ const deniedContent=await collect518({request:async(url,opts)=>{
+  if(validCodeUrl(url))return {ok:false,status:403};
+  return request(url,opts);
+ },token,at:new Date('2026-10-30T01:00:00Z')});
+ assert.equal(deniedContent.writerInventory.sourceInspection.status,
+  'PARTIAL_OR_DENIED_NO_SOURCE_IDENTITY');
+ assert.equal(deniedContent.overall,'PARTIAL_OR_DENIED');
  const denied=await collect518({request:async()=>({ok:false,status:403}),token,
   at:new Date('2026-10-30T01:00:00Z')});
  assert.equal(denied.overall,'PARTIAL_OR_DENIED');
@@ -291,6 +430,9 @@ const selfTest=async()=>{
  console.log('APP518_CLOUDFLARE_READONLY_SECRET_REDACTION_AND_FAIL_CLOSED=PASS');
  console.log('APP518_CLOUDFLARE_ALL_SCRIPT_D1_ACTIVE_VERSION_METADATA=PASS');
  console.log('APP518_CLOUDFLARE_UNATTESTED_ACCOUNT_LEDGER_REMAINS_HOLD=PASS');
+ console.log('APP518_CLOUDFLARE_EXACT_VERSION_CODE_HASH_NO_SOURCE_LEAK=PASS');
+ console.log('APP518_CLOUDFLARE_VERSION_DRIFT_AND_PERMISSION_FAIL_CLOSED=PASS');
+ console.log('APP518_CLOUDFLARE_GITHUB_SOURCE_VS_BUNDLE_NOT_FALSE_PASS=PASS');
 };
 if(process.argv.includes('--self-test'))await selfTest();
 else if(process.argv.includes('--live')){

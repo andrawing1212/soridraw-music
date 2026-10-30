@@ -5956,6 +5956,7 @@ function App() {
     remoteItem: any,
     remoteFavoriteId: string,
     remoteSaved: boolean,
+    canonicalPreviewVersion = 0,
   ) => {
     const safeUid = String(uid || '').trim();
     const safeRemoteId = String(remoteFavoriteId || '').trim();
@@ -5969,6 +5970,9 @@ function App() {
       const sameIdentity = Boolean(remoteIdentityKey && pending.identityKey === remoteIdentityKey);
       if (!sameDocument && !sameIdentity) continue;
       if (pending.desiredSaved !== remoteSaved) continue;
+      // An older canonical event may arrive AFTER the latest preview.
+      // Only its originating confirmed click version can settle pending.
+      if (pending.signalVersion > 0 && canonicalPreviewVersion < pending.signalVersion) continue;
       removeStudioHeartIntentLocal(safeUid, pending.documentId);
     }
   };
@@ -10768,6 +10772,25 @@ const toggleCycleVariantSelection = (
     const isHeartPreviewSave = normalizedOperation === 'heart-preview-save';
     const isHeartPreviewUnsave = normalizedOperation === 'heart-preview-unsave';
     const isHeartPreview = isHeartPreviewSave || isHeartPreviewUnsave;
+    // app523: RTDB canonical delivery order does not prove the Firestore
+    // mutation's original click order. Protect newer preview UI from an old
+    // save/unsave ACK arriving later.
+    const canonicalItem523 = !isHeartPreview && itemJson && ['save', 'unsave', 'restore'].includes(normalizedOperation)
+      ? (() => { try { const parsed = JSON.parse(itemJson); return Array.isArray(parsed) ? parsed[0] : parsed; } catch { return null; } })()
+      : null;
+    const canonicalPreviewVersion523 = Math.floor(Number(canonicalItem523?.studioHeartPreviewVersion || 0));
+    const canonicalFavoriteId523 = String(
+      (Array.isArray(documentIds) ? documentIds[0] : '') || canonicalItem523?.id || '',
+    ).trim();
+    const latestRemotePreview523 = canonicalFavoriteId523
+      ? studioHeartRemotePreviewRef.current.get(canonicalFavoriteId523) : null;
+    if (canonicalPreviewVersion523 > 0 && latestRemotePreview523
+      && latestRemotePreview523.version > canonicalPreviewVersion523) {
+      // Receiver keeps the later user's optimistic heart. The newer
+      // canonical transaction must settle before that preview is removed.
+      writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
+      return;
+    }
 
     // 1010 — own-device canonical invalidation does not need a server delta query.
     // app290 heart preview is different: it is only a live UI signal and must not
@@ -10972,6 +10995,7 @@ const toggleCycleVariantSelection = (
             remoteItem,
             remoteFavoriteId || exactDocumentIds[0] || '',
             canonicalRemoteSaved,
+            canonicalPreviewVersion523,
           );
           clearRemoteStudioHeartPreviewFromCanonical(uid, exactDocumentIds, remoteItem);
         }

@@ -151,6 +151,11 @@ export const readLastCatalogReadSource = (
 // received a server-authoritative Catalog response for the UID/kind.
 const catalogRemoteValidatedSessionKeys = new Set<string>();
 const catalogPublishTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const catalogPublishInFlight521 = new Map<string, Promise<void>>();
+const catalogPublishRetryCount521 = new Map<string, number>();
+// 30s Studio heart Firestore settlement precedes this; it does not replace it.
+const MUSIC_NOTE_CATALOG_AFTER_COMMIT_MS_521 = 1_200;
+const MUSIC_NOTE_CATALOG_RETRY_DELAYS_521 = [3_000, 12_000] as const;
 type CatalogPendingPublish519 = {
   kind: SoridrawCatalogKind;
   uid: string;
@@ -1055,7 +1060,7 @@ const publishRemoteCatalogDelta = async (
   }
 };
 
-const flushCatalogPendingPublish = async (key: string): Promise<void> => {
+const flushCatalogPendingPublishOnce521 = async (key: string): Promise<void> => {
   const pending = catalogPendingPublishes.get(key);
   if (!pending) return;
   const { kind, uid, sourceItems, options } = pending;
@@ -1121,6 +1126,61 @@ const flushCatalogPendingPublish = async (key: string): Promise<void> => {
   clearCatalogPending519(key, pending, pending.dirtyRevision);
 };
 
+// app521: one publish per committed changed-item batch. No worker/read on heart
+// preview, page visit or refresh, and no full favorites collection scan.
+// A failed attempt stays in the existing durable pending queue for startup/manual
+// recovery; only two bounded retries are scheduled in the active browser.
+const flushCatalogPendingPublish = (key: string): Promise<void> => {
+  const active = catalogPublishInFlight521.get(key);
+  if (active) return active;
+  const job = flushCatalogPendingPublishOnce521(key).finally(() => {
+    catalogPublishInFlight521.delete(key);
+  });
+  catalogPublishInFlight521.set(key, job);
+  return job;
+};
+
+const scheduleCommittedMusicNoteCatalogFlush521 = (key: string, delayMs = MUSIC_NOTE_CATALOG_AFTER_COMMIT_MS_521): void => {
+  const existing = catalogPublishTimers.get(key);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(() => {
+    catalogPublishTimers.delete(key);
+    const active = catalogPublishInFlight521.get(key);
+    if (active) {
+      // A newer write arrived during an older ACK. Retry only after the old
+      // in-flight request settles; never send competing R2 CAS deltas.
+      void active.then(
+        () => { if (catalogPendingPublishes.has(key)) scheduleCommittedMusicNoteCatalogFlush521(key); },
+        () => { if (catalogPendingPublishes.has(key)) scheduleCommittedMusicNoteCatalogFlush521(key); },
+      );
+      return;
+    }
+    if (!catalogPendingPublishes.has(key)) return;
+    const before = catalogPendingPublishes.get(key);
+    void flushCatalogPendingPublish(key).catch((error) => {
+      console.warn('[userDataEngine] committed Music Note Catalog auto publish deferred.', error);
+    }).finally(() => {
+      const stillPending = catalogPendingPublishes.get(key);
+      if (!stillPending) {
+        catalogPublishRetryCount521.delete(key);
+        return;
+      }
+      if (stillPending !== before) {
+        // A new Firestore mutation was staged while the old delta was in flight.
+        catalogPublishRetryCount521.delete(key);
+        scheduleCommittedMusicNoteCatalogFlush521(key);
+        return;
+      }
+      const attempt = catalogPublishRetryCount521.get(key) || 0;
+      if (attempt < MUSIC_NOTE_CATALOG_RETRY_DELAYS_521.length) {
+        catalogPublishRetryCount521.set(key, attempt + 1);
+        scheduleCommittedMusicNoteCatalogFlush521(key, MUSIC_NOTE_CATALOG_RETRY_DELAYS_521[attempt]);
+      }
+    });
+  }, delayMs);
+  catalogPublishTimers.set(key, timer);
+};
+
 export const scheduleCatalogSnapshotPublishIfDirty = (
   kind: SoridrawCatalogKind,
   uid: string,
@@ -1158,6 +1218,12 @@ export const scheduleCatalogSnapshotPublishIfDirty = (
   // the local recovery marker; unchanged page visits are R0/W0.
   if (!persistCatalogPending519(pending)) {
     console.warn('[userDataEngine] pending Catalog mutation retained in memory only.');
+  }
+  // Only Music Note's successful Firestore dirty marker can enter this path.
+  // Library's existing batching cadence and page-exit behavior stay untouched.
+  if (kind === 'musicNote') {
+    catalogPublishRetryCount521.delete(key);
+    scheduleCommittedMusicNoteCatalogFlush521(key);
   }
 };
 

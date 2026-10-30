@@ -30,7 +30,7 @@ const createClient = uid => {
   // VM realm. Compile the module in this same Node realm for a valid emulator
   // transaction test, while injecting only the isolated emulator Firestore.
   const moduleFactory = vm.runInThisContext(
-    '(function(require, exports) {\\n' + output + '\\n})',
+    '(function(require, exports) {\n' + output + '\n})',
     { filename: 'studioHeartCanonical523.ts' },
   );
   moduleFactory(

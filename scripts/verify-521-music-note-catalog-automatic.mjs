@@ -60,6 +60,12 @@ const ctx={
 };
 vm.runInNewContext(compiled,ctx,{filename:'userDataEngine.ts'});
 const api=exports;
+for (const marker of ['__studioHeartPendingLocal','__studioHeartRemotePreviewLocal','__studioHeartRemotePreview']) {
+ const speculative={id:'phantom',uid:'owner-A',title:'not canon',saved:true,[marker]:true};
+ assert.equal(api.projectCatalogItemForSync('musicNote',speculative),null,
+  'speculative heart must not publish to canonical Catalog: '+marker);
+}
+console.log('APP521_SPECULATIVE_HEART_CANNOT_PUBLISH_TO_R2=PASS');
 const pendingKey='soridraw_catalog_pending_v1:owner-A:musicNote';
 const seed={schemaVersion:4,authority:'server',kind:'musicNote',revision:1,
  complete:true,items:[],itemCount:0,generatedAtMs:1000};

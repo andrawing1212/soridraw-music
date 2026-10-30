@@ -10,7 +10,7 @@ const queueStart = app.indexOf('const queueStudioHeartPendingIntent = (');
 const queueEnd = app.indexOf('  useEffect(() => {', queueStart);
 assert.ok(queueStart >= 0 && queueEnd > queueStart, 'Studio heart queue missing');
 const queue = app.slice(queueStart, queueEnd);
-assert.ok(queue.includes('writeStudioHeartPendingIntent(intent);'), 'durable pending missing');
+assert.ok(queue.includes('writeStudioHeartPendingIntentChecked(intent);'), 'durable pending missing');
 assert.ok(queue.includes('scheduleStudioHeartPendingIntent(safeDocumentId);'), '1s trailing scheduler missing');
 assert.ok(queue.includes('setFavorites((previous) => previous);'), 'same-device immediate Music Note missing');
 assert.ok(queue.includes('publishMusicNoteHeartPreviewDelta(uid, safeDocumentId, intent.song, desiredSaved)'), 'PC-mobile immediate preview missing');

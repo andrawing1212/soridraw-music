@@ -300,6 +300,33 @@ for(const isPermanent of [true,false]){
  assert.equal(row.hold_reason,isPermanent?'SOURCE_CONTRACT':null);
  assert.equal(counter.puts,0);
 }
+// PREVIEW one-song trial: valid HMAC is NOT authorization to enqueue a
+// different owner/song. Delivery cursor must also be exact-owner scoped.
+const pilot=build({pilotScope:{uid,documentId}});
+const prevWrites=d1Writes;
+const deniedPilot=await pilot.ingestSignedRequest({
+ request:sign({...payload,documentId:'unrelated-song'}),nowMs,
+});
+assert.equal(deniedPilot.code,'DENY_OUTSIDE_PREVIEW_PILOT');
+assert.equal(d1Writes,prevWrites,'other song must have D1 W0');
+const {getDueFavoriteChanges518,SELECT_DUE_PILOT_518}
+ =await import('../cloudflare/media-worker/src/catalogD1Outbox518.js');
+let selected=0;
+const exactDb={prepare(sql){
+ assert.equal(sql,SELECT_DUE_PILOT_518,'never select all pending owners');
+ return {bind(...args){
+ assert.deepEqual(args,[nowMs,uid,documentId,1]);
+ return {async all(){selected++;return {results:[]};}};
+ }};
+}};
+const scopedDue=await getDueFavoriteChanges518({
+ db:exactDb,nowMs,limit:1,pilotUid:uid,pilotDocumentId:documentId,
+});
+assert.equal(scopedDue.code,'OK');assert.equal(selected,1);
+assert.equal((await getDueFavoriteChanges518({
+ db:exactDb,nowMs,limit:1,pilotUid:uid,
+})).code,'DENY_PILOT_SCOPE');
+console.log('APP518_PREVIEW_PILOT_HMAC_AND_D1_EXACT_SONG_ONLY=PASS');
 console.log('APP518_FIREBASE_409_SOURCE_HOLD_VS_5XX_BOUNDED_DELIVERY_RETRY=PASS');
 console.log('APP518_BRIDGE_HEAD_BASE_STREAM_IO_RETRY_JSON_CONTRACT_HOLD=PASS');
 console.log('APP518_BRIDGE_READY_COMPACTION_FOREIGN_BASE_HOLD_IO_RETRY=PASS');

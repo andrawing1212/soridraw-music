@@ -37,7 +37,9 @@ const enabled={...base,SORIDRAW_D1_ACCOUNT_BUDGET_ENFORCEMENT_518:'ENFORCE_AFTER
 holds(()=>protectExploreEnv518({...enabled,SORIDRAW_D1_ALL_ACCOUNT_WRITERS_518:'OFF'}));
 holds(()=>protectExploreEnv518({...enabled,DB:null}));
 let now=Date.UTC(2026,9,30,12);
-const env=protectExploreEnv518(enabled,{clock:()=>now});
+holds(()=>protectExploreEnv518(enabled,{clock:()=>now}));
+const env=protectExploreEnv518(enabled,{clock:()=>now,
+ signedAccountD1CutoverVerified:true});
 assert.equal(env.other,'preserved');
 assert.equal(env.DB===raw,false);
 assert.equal(env.RATE_DB===raw,false,'RATE_DB must not bypass account-wide budget');

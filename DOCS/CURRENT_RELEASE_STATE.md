@@ -1,7 +1,7 @@
-## CURRENT — app520 PREVIEW 배포 승인·검사 PASS, 배포 실행 대기 (2026-10-31 KST)
+## CURRENT — app520 PREVIEW Hosting 배포 PASS, 실제 Chrome·Edge 재확인 대기 (2026-10-31 KST)
 - 디렉터 승인: PR #536의 로그인 후 최근 생성곡 복구를 `preview`에 병합하고 Firebase PREVIEW Hosting에만 배포. 코드 SHA `2be61304a05076c13ad95e9a9fea67c7a235670f`, 병합 SHA `53fecbab864c59d23c90f0a2cd002adf94b256d6`.
 - 검사 PASS: 최근 생성곡 로그아웃 캐시 보호·재로그인 빈 캐시 재조회·기존 RTDB 동기화·TS/빌드 #41130751834, 로그인 저장소 #41130751800, 좋아요 #41130751801. 기존 오래된 단언 검사 app290/app116은 현재 소스의 변경된 문자열과 호환되지 않아 이번 CI에서 제외(숨겨진 PASS 아님).
-- 배포 범위: 기존 Firebase PREVIEW Hosting 전용 워크플로 트리거. 공유 Rules·Functions·Worker·D1·사용자 데이터 변경 금지, TEST·PRODUCTION 불변 확인. 실제 배포 성공 SHA와 원격 빌드 확인은 릴리스 워크플로 결과로 별도 판정.
+- 배포 완료: 보호된 트리거 PR #537 병합 SHA `8b609c09ab2fb9a8df09dfab2c9ed6051d146aae`, 기존 Firebase PREVIEW Hosting 전용 워크플로 run #41132051323 SUCCESS. `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`. 공유 Rules·Functions·Worker·D1·사용자 데이터 변경 없음. PREVIEW 웹앱 `https://preview.soridraw.com`.
 - PC Chrome·Edge 두 브라우저 로그아웃→재로그인 최근 생성곡 0곡 증상은 사용자가 실제 재현. 본 코드는 소스/가상 검사 PASS이며 인증된 실기기 재확인 전까지 기능 PASS로 간주하지 않음. 원본 곡이 Firestore에 존재하는지 직접 미확인. 기존 곡·캐시·하트·Library 복구/삭제/재저장 금지.
 - 해당 사용자 증상이 해결됐는지 확인 전 TEST/PRODUCTION RELEASE HOLD. 독립 감사 미실시.
 

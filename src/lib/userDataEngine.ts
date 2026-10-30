@@ -151,12 +151,65 @@ export const readLastCatalogReadSource = (
 // received a server-authoritative Catalog response for the UID/kind.
 const catalogRemoteValidatedSessionKeys = new Set<string>();
 const catalogPublishTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const catalogPendingPublishes = new Map<string, {
+type CatalogPendingPublish519 = {
   kind: SoridrawCatalogKind;
   uid: string;
   sourceItems: any[];
   options: CatalogPublishOptions;
-}>();
+  dirtyRevision: number;
+};
+const catalogPendingPublishes = new Map<string, CatalogPendingPublish519>();
+// app519: A completed Firestore favorite write must not lose its derived R2
+// publish intent when the browser reloads before page-exit delivery.
+// Only changed Catalog summaries/tombstones are persisted, never raw songs.
+const CATALOG_PENDING_KEY_519 = 'soridraw_catalog_pending_v1:';
+const CATALOG_PENDING_MAX_BYTES_519 = 1024 * 1024;
+const pendingStorageKey519 = (kind: SoridrawCatalogKind, uid: string) =>
+  CATALOG_PENDING_KEY_519 + encodeURIComponent(uid) + ':' + kind;
+const persistCatalogPending519 = (pending: CatalogPendingPublish519): boolean => {
+  if (typeof localStorage === 'undefined') return false;
+  try {
+    const payload = JSON.stringify(pending);
+    if (utf8Size(payload) > CATALOG_PENDING_MAX_BYTES_519) return false;
+    localStorage.setItem(pendingStorageKey519(pending.kind, pending.uid), payload);
+    return true;
+  } catch { return false; }
+};
+const restoreCatalogPending519 = (kind: SoridrawCatalogKind, uid: string): CatalogPendingPublish519 | null => {
+  const key = catalogKey(kind, uid);
+  const existing = catalogPendingPublishes.get(key);
+  if (existing) return existing;
+  if (typeof localStorage === 'undefined' || !uid || !isPreviewCatalogEnabled()) return null;
+  try {
+    const raw = localStorage.getItem(pendingStorageKey519(kind, uid));
+    if (!raw || utf8Size(raw) > CATALOG_PENDING_MAX_BYTES_519) return null;
+    const stored = JSON.parse(raw);
+    if (stored?.kind !== kind || stored.uid !== uid
+      || !Number.isSafeInteger(stored.dirtyRevision) || stored.dirtyRevision <= 0
+      || !Array.isArray(stored.sourceItems) || stored.sourceItems.length > CATALOG_DELTA_MAX_CHANGES
+      || !Array.isArray(stored.options?.deletedIds)) return null;
+    const sourceItems = normalizeCatalogItems(kind, stored.sourceItems);
+    if (sourceItems.length !== stored.sourceItems.length) return null;
+    const deletedIds = stored.options.deletedIds;
+    if (deletedIds.length > CATALOG_DELTA_MAX_CHANGES
+      || deletedIds.some((id: unknown) => typeof id !== 'string' || !id || id.length > 240)) return null;
+    const pending: CatalogPendingPublish519 = {
+      kind, uid, sourceItems,
+      options: { deletedIds: [...deletedIds] },
+      dirtyRevision: stored.dirtyRevision,
+    };
+    catalogPendingPublishes.set(key, pending);
+    return pending;
+  } catch { return null; }
+};
+const clearCatalogPending519 = (key: string, pending: CatalogPendingPublish519): void => {
+  // An older HTTP ACK may never erase an updated local mutation.
+  if (catalogPendingPublishes.get(key) !== pending) return;
+  catalogPendingPublishes.delete(key);
+  if (typeof localStorage !== 'undefined') {
+    try { localStorage.removeItem(pendingStorageKey519(pending.kind, pending.uid)); } catch {}
+  }
+};
 let catalogDbPromise: Promise<IDBDatabase | null> | null = null;
 let legacyDbCleanupRequested = false;
 
@@ -1003,10 +1056,9 @@ const flushCatalogPendingPublish = async (key: string): Promise<void> => {
   if (!pending) return;
   const { kind, uid, sourceItems, options } = pending;
   const currentDirtyRevision = readAdaptiveListIndexDirtyRevision(kind);
-  if (currentDirtyRevision <= 0) {
-    catalogPendingPublishes.delete(key);
-    return;
-  }
+  // In-memory Firestore dirty counters reset on refresh. The exact saved
+  // pending intent remains valid even when that counter restarts at zero.
+  const pendingRevision = Math.max(currentDirtyRevision, pending.dirtyRevision);
 
   let previous = await readCatalogSnapshotFromLocalCache(kind, uid);
 
@@ -1033,7 +1085,7 @@ const flushCatalogPendingPublish = async (key: string): Promise<void> => {
     kind,
     previous,
     sourceItems,
-    currentDirtyRevision,
+    pendingRevision,
     explicitDeletedIds,
   );
   if (!built) {
@@ -1043,7 +1095,7 @@ const flushCatalogPendingPublish = async (key: string): Promise<void> => {
 
   if (built.delta.upserts.length === 0 && built.delta.deletedIds.length === 0) {
     clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
-    catalogPendingPublishes.delete(key);
+    clearCatalogPending519(key, pending);
     return;
   }
 
@@ -1064,7 +1116,7 @@ const flushCatalogPendingPublish = async (key: string): Promise<void> => {
   };
   await writeCatalogSnapshotToLocalCache(kind, uid, confirmedSnapshot);
   clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
-  catalogPendingPublishes.delete(key);
+  clearCatalogPending519(key, pending);
 };
 
 export const scheduleCatalogSnapshotPublishIfDirty = (
@@ -1077,22 +1129,49 @@ export const scheduleCatalogSnapshotPublishIfDirty = (
   const dirtyRevision = readAdaptiveListIndexDirtyRevision(kind);
   if (dirtyRevision <= 0) return;
   const key = catalogKey(kind, uid);
-  const existingTimer = catalogPublishTimers.get(key);
-  if (existingTimer) clearTimeout(existingTimer);
-  catalogPublishTimers.delete(key);
-  catalogPendingPublishes.set(key, {
-    kind,
-    uid,
-    sourceItems: [...sourceItems],
-    options: { ...options },
-  });
+  const previous = restoreCatalogPending519(kind, uid);
+  const byId = new Map<string, any>(
+    (previous?.sourceItems || []).map((item) => [String(item.id), item])
+  );
+  const deleted = new Set<string>(previous?.options.deletedIds || []);
+  // Consecutive successful favorite writes may each report only one item.
+  // Merge the pending items instead of overwriting song A with song B.
+  for (const item of normalizeCatalogItems(kind, sourceItems)) {
+    byId.set(String(item.id), item);
+    deleted.delete(String(item.id));
+  }
+  for (const id of options.deletedIds || []) {
+    const safeId = String(id || '').trim();
+    if (!safeId) continue;
+    deleted.add(safeId);
+    byId.delete(safeId);
+  }
+  const pending: CatalogPendingPublish519 = {
+    kind, uid, sourceItems: Array.from(byId.values()),
+    options: { ...options, deletedIds: Array.from(deleted) },
+    dirtyRevision: Math.max(dirtyRevision, previous?.dirtyRevision || 0),
+  };
+  catalogPendingPublishes.set(key, pending);
+  // No timer, Worker call or Firestore read here. Only real mutations write
+  // the local recovery marker; unchanged page visits are R0/W0.
+  if (!persistCatalogPending519(pending)) {
+    console.warn('[userDataEngine] pending Catalog mutation retained in memory only.');
+  }
 };
 
-export const getPendingCatalogPublishCount = (uid: string): number => [...catalogPendingPublishes.values()]
-  .filter((pending) => pending.uid === uid && readAdaptiveListIndexDirtyRevision(pending.kind) > 0)
-  .length;
+export const getPendingCatalogPublishCount = (uid: string): number => {
+  if (!uid) return 0;
+  restoreCatalogPending519('musicNote', uid);
+  restoreCatalogPending519('library', uid);
+  return [...catalogPendingPublishes.values()]
+    .filter((pending) => pending.uid === uid && pending.dirtyRevision > 0)
+    .length;
+};
 
 export const flushPendingCatalogPublishes = async (uid: string): Promise<void> => {
+  if (!uid) return;
+  restoreCatalogPending519('musicNote', uid);
+  restoreCatalogPending519('library', uid);
   const keys = [...catalogPendingPublishes.entries()]
     .filter(([, pending]) => pending.uid === uid)
     .map(([key]) => key);

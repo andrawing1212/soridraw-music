@@ -1,3 +1,13 @@
+## CURRENT — app518 PREVIEW one-song server-sync pilot source, RELEASE HOLD (2026-10-31 KST)
+- PR #528 `fix/app518-canonical-catalog-fence-candidate` source HEAD `5180ad1e07d940ad6156d39a91ed974de7113796` (development checkpoint before final CI); Draft/unmerged/undeployed. Existing PREVIEW/TEST/PRODUCTION shared user records, Cloudflare R2/D1, Secrets, Firebase Rules/Functions and browser state unchanged.
+- Director-approved switch from repeated rollback reviews to **one saved Music Note favorite exact-server delivery for PREVIEW QA**. Source connects the existing Firebase `favorites/{favoriteId}` event -> HMAC exact-source -> Worker D1 outbox -> R2 CAS, but ALL runtime release switches remain OFF. Newly added mandatory pilot UID+favorite ID on Firebase event / source callback / Worker and exact D1 due selector, so unrelated users/events cause no additional read/write. Pilot A->B owner collision still reaches durable quarantine.
+- **Not yet live-testable:** signed all-account D1 cutover authorization is deliberately not passed into `createApp518ServerBridge` (otherwise any env string could falsely authorize), Workers/D1 daily budget schema+binding and HMAC secrets have not been deployed/provisioned, Firebase Functions trigger and HTTPS source endpoint have not been deployed, PREVIEW/TEST/PRODUCTION old shared R2 Writers and old flights are not independently fenced. Do NOT set canonical flag, fake signed approval, write shared R2 or claim PC/mobile pass. Online canary only after those proofs, code audit and separate explicit deployment approval.
+- One-song complete feature contract remains OPEN: actual Firestore event->R2 exact CAS/ACK, retries after outages, old/new client PC↔mobile immediate consistency, 100k-user estimated + measured costs, one-owner saved/removed/stale-delete and video/lyric/media protection. Local source regression is not live proof.
+- TEST/PRODUCTION Explore Worker `activate` and `restore` remain disabled under app518 safety code until separate safe rollback design; no release eligibility solely from CI.
+- Following step without introducing new changes: confirm exact source CI, preserve GitHub SHA and complete read-only actual Cloudflare/Firebase provisioning and all-Writer coverage evidence. Deployment separately approved.
+
+---
+
 ## CURRENT — app515 Music Note V2 릴리스 HOLD (2026-10-28 KST)
 - 현재 GitHub: `preview` 확인 HEAD `d983f4a68f18050c21294f691efe455fcd3b34a0`; app515 제품 Draft PR #512 HEAD `357686900da3abcbddb6a691d9a5c96f2f36e483`, 미병합·미배포, 최신 관련 CI 5/5 PASS(소스/가상 검사). 실서버·실기기 PASS 아님.
 - 릴리스 안전 PR #521은 별도 감사 PASS 후 `main` 병합 완료, 실제 `main` HEAD `b33fb67aeffebe9e09104175eb3fbab7cd15874b`. PREVIEW 수동 배포 및 TEST/PRODUCTION 구버전 자동 롤백 차단 소스 설치됨. 실제 배포 차단 실행은 미검증.

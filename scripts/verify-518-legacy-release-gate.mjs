@@ -27,7 +27,7 @@ const prepare=({action='upload',flags={},deny=null}={})=>{
   cfGet,'https://api.cloudflare.com/client/v4/accounts/account',action,run);
  return {fn,calls,commands};
 };
-for(const action of ['upload','activate']){
+for(const action of ['upload']){
  const normal=prepare({action});
  await normal.fn();
  assert.deepEqual(normal.calls.map(url=>url.split('/').at(-2)),expected);
@@ -53,24 +53,27 @@ for(const action of ['upload','activate','restore']){
  await assert.rejects(failed.fn(),/HTTP_403/);
  assert.equal(failed.commands.length,0,'read-denied must fail closed');
 }
-// The actual entrypoint must refuse restore before credentials or any
-// GET/PUT/CLI operation: BOTH TEST and PRODUCTION, protection flag or not.
-const hold='HOLD_518_TEST_PRODUCTION_RESTORE_DISABLED_NO_ATOMIC_FENCE';
-const entryGuard=source.indexOf("if (action === 'restore') {");
+// The actual entrypoint must refuse both traffic mutation actions before
+// token checks, GET/PUT, Wrangler or schedules updates in TEST/PRODUCTION.
+const holdRestore='HOLD_518_TEST_PRODUCTION_RESTORE_DISABLED_NO_ATOMIC_FENCE';
+const holdActivate='HOLD_518_TEST_PRODUCTION_ACTIVATE_DISABLED_NO_ATOMIC_RECOVERY';
+const entryGuard=source.indexOf("if (action === 'restore' || action === 'activate') {");
 const credentialGate=source.indexOf("if (!TOKEN) throw new Error");
 const firstRemoteCall=source.indexOf("async function cfGet(url)");
 assert.ok(entryGuard>0&&entryGuard<credentialGate&&entryGuard<firstRemoteCall,
  'restore freeze must run BEFORE token and remote reads');
-for(const stage of ['test','production']){
+for(const stage of ['test','production'])for(const action of ['restore','activate']){
  const result=spawnSync(process.execPath,
-  ['.deploy/release-worker-runtime.mjs',stage,'restore'],
+  ['.deploy/release-worker-runtime.mjs',stage,action],
   {encoding:'utf8',env:{...process.env,CLOUDFLARE_API_TOKEN:''}});
- assert.notEqual(result.status,0,'restore entrypoint must exit nonzero');
- assert.match(result.stderr, new RegExp(hold));
+ assert.notEqual(result.status,0,action+' entrypoint must exit nonzero');
+ assert.match(result.stderr, new RegExp(action==='restore'?holdRestore:holdActivate));
  assert.doesNotMatch(result.stderr,/CLOUDFLARE_API_TOKEN is required/,
   'early freeze is not dependent on credential validity');
 }
-console.log('APP518_ALL_TEST_PRODUCTION_RESTORE_ENTRYPOINT_DENIED_PRE_READ_W0=PASS');
+assert.doesNotMatch(source,/\[WRANGLER, 'rollback', before/,
+ 'unsafe activate fallback must not be reachable through source');
+console.log('APP518_ALL_TEST_PRODUCTION_ACTIVATE_RESTORE_DENIED_PRE_READ_W0=PASS');
 assert.match(source,/await assertNoLegacyExploreBudgetDowngrade518\(\);\s*await makeConfig\(\)/);
 assert.doesNotMatch(source,/APP518_PROTECTED_RESTORE_COMPENSATED_ORIGINAL_VERIFIED/);
 console.log('APP518_PROTECTED_RESTORE_BLOCKS_BEFORE_WRANGLER_AND_SCHEDULES=PASS');

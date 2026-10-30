@@ -195,3 +195,24 @@ assert.equal(pending.has('E'), true);
 assert.equal(pending.get('E').retryCount, 1);
 assert.equal(nextDelay('E'), 60_000);
 console.log('APP522_FAILURE_PRESERVES_DURABLE_PENDING_AND_RETRY=PASS');
+
+// A late RTDB click-order ACK must replace a deferred 60s timer, without
+// issuing extra canonical writes before the one-second retry.
+clock += 20;
+pending.set('F', {
+  ...pending.get('E'),
+  documentId: 'F', identityKey: 'F', desiredSaved: true,
+  baselineSaved: false, song: { id: 'F', title: 'F' },
+  signalVersion: 0, pendingRemotePreviewVersion: 0,
+  retryCount: 0, updatedAtMs: clock,
+});
+api.scheduleStudioHeartPendingIntent('F');
+failNext = true;
+await api.flushStudioHeartPendingIntent('F');
+assert.equal(nextDelay('F'), 60_000);
+const expectedAckTime = pending.get('F').updatedAtMs;
+clock += 1_500;
+api.rememberStudioHeartPreviewVersion(uid, 'F', 999, true, expectedAckTime);
+assert.equal(pending.get('F').signalVersion, 999);
+assert.equal(nextDelay('F'), 1_000);
+console.log('APP524_LATE_RTDB_ACK_RESCHEDULES_1S_NOT_60S=PASS');

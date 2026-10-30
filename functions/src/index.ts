@@ -4514,8 +4514,12 @@ export const app518FavoriteCatalogChanged=functions
     const after=change.after.exists?change.after.data()||null:null;
     const uid=String(after?.uid||before?.uid||"");
     const id=String(context.params.favoriteId||"");
-    if(!matchesApp518PilotSong({uid,documentId:id,...app518PilotScope()}))
-      return; // Unselected songs and users: additional R0/W0.
+    const pilot=app518PilotScope();
+    // A stolen/reassigned pilot document must still be quarantined even
+    // when the AFTER owner changed from the selected UID to someone else.
+    if(!matchesApp518PilotSong({uid,documentId:id,...pilot})
+      &&!matchesApp518PilotSong({uid:String(before?.uid||""),documentId:id,...pilot}))
+      return; // Unrelated songs and users: additional R0/W0.
     // Keep metadata-only saves at Firestore R0 / Cloudflare R0/W0 even
     // if a future operational secret or Worker hostname is unavailable.
     const plan=planApp518FavoriteChange({uid,documentId:id,before,after});

@@ -1,0 +1,14 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "soridraw-explore-migration-inspect",
+  "main": "./migration-inspect-retire-518.mjs",
+  "compatibility_date": "2026-08-28",
+  "workers_dev": true,
+  "keep_vars": false,
+  "vars": {},
+  "d1_databases": [],
+  "r2_buckets": [],
+  "services": [],
+  "durable_objects": {"bindings": []},
+  "triggers": {"crons": []}
+}

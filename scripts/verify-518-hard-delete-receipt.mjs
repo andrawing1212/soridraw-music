@@ -70,10 +70,14 @@ r=await t.run({
 assert.equal(r.code,'HOLD_LATER_FAVORITE_WRITE');
 assert.equal(r.allowD1Enqueue,false);
 // Source can be converted to current D1 outbox version, never before.updateTime
-let binds=[];
-const db={prepare:()=>({bind(...values){binds.push(values);return {
- async run(){return {meta:{changes:1}};}
-}}})};
+let binds=[],exactReads=0;
+const db={prepare:sql=>({bind(...values){
+ if(sql.startsWith('SELECT owner_uid,favorite_id,source_version_ns')){
+  exactReads++;assert.deepEqual(values,[uid,documentId]);
+  return {async first(){return null;}};
+ }
+ binds.push(values);return {async run(){return {meta:{changes:1}};}};
+}})};
 t=make();
 r=await t.run();
 const queued=await enqueueVerifiedFavorite518({
@@ -81,6 +85,7 @@ const queued=await enqueueVerifiedFavorite518({
  state:'removed',verifiedByServer:true,nowMs:2000,
 });
 assert.equal(queued.code,'ENQUEUED');
+assert.equal(exactReads,1,'one exact version read before D1 budget write');
 assert.equal(binds.length,1);
 assert.equal(binds[0][3],'removed');
 // Rejected source/owner/event and unverifiable transaction cost zero.

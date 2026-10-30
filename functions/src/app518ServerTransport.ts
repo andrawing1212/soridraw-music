@@ -43,9 +43,10 @@ const header=(req:ServerRequest,k:string)=>{
 
 /** Call only from an explicitly approved internal HTTPS function endpoint. */
 export const handleVerifiedApp518ExactSource=async({
- request,db,secret,nowMs,
+ request,db,secret,nowMs,pilotUid="",pilotDocumentId="",
 }:{
  request:ServerRequest;db:admin.firestore.Firestore;secret:string;nowMs:number;
+ pilotUid?:string;pilotDocumentId?:string;
 }):Promise<{status:number;code:string;source?:unknown}>=>{
  if(request?.method!=="POST"||Buffer.byteLength(secret)<32
    ||!Number.isSafeInteger(nowMs)||!Buffer.isBuffer(request.rawBody)
@@ -67,6 +68,11 @@ export const handleVerifiedApp518ExactSource=async({
    typeof body.uid!=="string"||typeof body.documentId!=="string"||
    !valid(body.uid,128)||!valid(body.documentId))
   return {status:400,code:"DENY_REQUEST_SHAPE"};
+ // The one-song preview canary must not read any other owner's Firestore
+ // document even when presented with a valid server HMAC.
+ if(!valid(pilotUid,128)||!valid(pilotDocumentId)
+   ||body.uid!==pilotUid||body.documentId!==pilotDocumentId)
+  return {status:409,code:"DENY_NOT_PREVIEW_PILOT_SONG"};
  // A previously observed cross-owner change must fence ALL later D1/R2
  // deliveries, even after a new ordinary event from owner B arrives.
  if(await readApp518OwnerQuarantine(db,body.documentId))

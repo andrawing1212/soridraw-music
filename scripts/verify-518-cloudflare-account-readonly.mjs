@@ -52,6 +52,7 @@ export const digestExactVersionModules518=(payload,versionId,candidateBytes=null
   hash.update(m.bytes);hash.update('\0');
  }
  const code=modules.filter(m=>/javascript|ecmascript/i.test(m.type));
+ if(!code.length)throw Error('CONTENT_CODE_MODULES_MISSING');
  const exact=candidateBytes===null?null:code.some(m=>m.bytes.equals(candidateBytes));
  return {moduleSetSha256:hash.digest('hex'),moduleCount:modules.length,
   codeModuleCount:code.length,codeBytes:code.reduce((n,m)=>n+m.bytes.length,0),
@@ -348,7 +349,9 @@ const selfTest=async()=>{
      sum:{rowsWritten:4}}]}]}}})};
   if(url===API+'/workers/scripts')return {ok:true,json:async()=>({success:true,result:[
    {id:'soridraw-media-preview'},{id:'soridraw-media-test'},
-   {id:'soridraw-media'},{id:'soridraw-explore-api'}]})};
+   {id:'soridraw-media'},{id:'soridraw-explore-api'},
+   {id:'soridraw-explore-preview'},{id:'soridraw-explore-test'},
+   {id:'soridraw-explore-migration-inspect'}]})};
   if(url.includes('/workers/workers/')&&url.includes('?include=modules'))
    return {ok:true,json:async()=>({success:true,result:{
     id:'11111111-1111-4111-8111-111111111111',
@@ -378,7 +381,7 @@ const selfTest=async()=>{
  const snap=await collect518({request,token,at:new Date('2026-10-30T01:00:00Z')});
  assert.equal(snap.liveWorkers.length,3);
  assert.equal(snap.writerInventory.status,'ACCOUNT_WORKER_METADATA_OBSERVED');
- assert.equal(snap.writerInventory.listedScripts,4);
+ assert.equal(snap.writerInventory.listedScripts,7);
  assert.equal(snap.writerInventory.accountLedgerVerified,false);
  assert.equal(snap.writerInventory.sourceInspection.workers.length,4);
  assert.equal(snap.writerInventory.sourceInspection.liveSourceIdentityProven,false);

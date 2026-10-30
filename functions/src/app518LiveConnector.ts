@@ -117,6 +117,15 @@ const projection=(record:Favorite)=>{
     if(record[field]!==undefined)view[field]=record[field];
   return normalize(view);
 };
+// PREVIEW one-song canary: a global Firebase trigger must NOT process
+// everybody's shared data when an operator first turns on app518.
+// Missing/partial pilot identity fails closed; no Firestore/API read needed.
+export const matchesApp518PilotSong=({
+ uid,documentId,pilotUid,pilotDocumentId,
+}:{uid:string;documentId:string;pilotUid:string;pilotDocumentId:string}):boolean=>
+ valid(uid,128)&&valid(documentId)&&valid(pilotUid,128)
+ &&valid(pilotDocumentId)&&uid===pilotUid&&documentId===pilotDocumentId;
+
 export const planApp518FavoriteChange=({uid,documentId,before,after}:{
  uid:string;documentId:string;before:Favorite;after:Favorite;
 }):"DENY"|"IGNORE"|"RECHECK"|"DELETE_RECEIPT"=>{

@@ -31,10 +31,10 @@ const digestModules=data=>{
    deny('HOLD_518_LIVE_CODE_BYTES_INVALID');
   sorted.push({name:m.name,type:m.content_type,bytes});
  }
- hash.update('soridraw-worker-version-modules-v1\\0');
+ hash.update('soridraw-worker-version-modules-v1\0');
  for(const m of sorted.sort((a,b)=>a.name.localeCompare(b.name,'en'))){
-  hash.update(m.name+'\\0'+m.type+'\\0'+m.bytes.length+'\\0');
-  hash.update(m.bytes);hash.update('\\0');
+  hash.update(m.name+'\0'+m.type+'\0'+m.bytes.length+'\0');
+  hash.update(m.bytes);hash.update('\0');
  }
  return hash.digest('hex');
 };

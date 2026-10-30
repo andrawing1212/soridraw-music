@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { assessLegacyMediaMutation518, assertLegacyMediaBindingsComplete518, MEDIA_TARGETS_518 } from '../cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js';
 
 const mode = String(process.argv[2] || '').trim();
 const action = String(process.argv[3] || 'dry-run').trim();
@@ -275,6 +276,28 @@ console.log(`${mode.toUpperCase()}_MEDIA_WORKER_CODE_SHA256=${bundleCodeSha256}`
 console.log(`${mode.toUpperCase()}_MEDIA_WORKER_DRY_RUN=PASS`);
 
 if (action === 'dry-run') process.exit(0);
+
+// The same check is repeated immediately before an automatic rollback
+// because another environment could have started canonical cutover after
+// the original activation preflight. Never restore a pre-fence version then.
+async function verifyLegacyMediaMutationAllowed518(operation) {
+  const canonicalFlags = await Promise.all(
+    MEDIA_TARGETS_518.map(async ({ script, media }) => {
+      const settings = await cfGet(`${apiBase}/workers/scripts/${script}/settings`);
+      return assertLegacyMediaBindingsComplete518(settings, { media });
+    }),
+  );
+  const verdict = assessLegacyMediaMutation518({
+    action:operation,
+    sourceCanonicalFlag:SOURCE_ENV.vars?.SORIDRAW_CANONICAL_CATALOG_518 ?? null,
+    liveCanonicalFlags:canonicalFlags,
+  });
+  if (!verdict.pass) throw new Error(verdict.code);
+  console.log(`${mode.toUpperCase()}_APP518_LEGACY_RELEASE_BOUNDARY=PASS_CANONICAL_OFF_ALL_THREE`);
+}
+if (['upload','activate','restore'].includes(action)) {
+  await verifyLegacyMediaMutationAllowed518(action);
+}
 if (action === 'restore') {
   await restore();
   process.exit(0);
@@ -314,6 +337,7 @@ try {
 } catch (error) {
   if (deployed) {
     try {
+      await verifyLegacyMediaMutationAllowed518('restore');
       run(process.execPath, [WRANGLER, 'rollback', before, '--name', target.worker, '--config', CONFIG_PATH, '--message', `automatic ${mode} media rollback after release smoke failure`], WORKER_DIR);
       console.error(`${mode.toUpperCase()}_MEDIA_WORKER_ROLLBACK=ATTEMPTED`);
     } catch (rollbackError) {

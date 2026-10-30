@@ -1,3 +1,12 @@
+## CURRENT — PR #528 실동기화 1곡 중심으로 작업 방식 재편 (2026-10-31 KST)
+- GitHub Draft PR #528 브랜치 `fix/app518-canonical-catalog-fence-candidate`. **최신 SHA는 실제 GitHub PR HEAD를 확인**하며, 이 문서의 오래된 커밋 번호나 과거 NEXT 지시는 새 작업 승인으로 사용하지 않는다.
+- 디렉터 승인으로 기존 D1 outbox·R2 CAS/ACK·삭제 tombstone·구형 Writer 보호 소스와 과거 테스트를 보존하면서, 정기 PR CI는 1곡 전달/삭제/재시도·구형 앱 보호·실제 Firestore Emulator + Miniflare D1/R2 연동 시험을 우선한다. 49k/50k 스트레스와 전체 소스 체크는 별도 수동 진단으로 이동했다. **CI 또는 에뮬레이터 PASS는 실제 클라우드/PC·모바일 PASS가 아니다.**
+- 최신 실행 기준과 1건 실검증 절차: `DOCS/APP518_MUSIC_NOTE_CATALOG_REPAIR_CONTRACT.md` 최상단 '현재 개발 기준'을 따른다. 필수 순서: 격리된 QA 계정/Cloudflare/Firebase 권한 읽기 전용 증명 → 별도 인프라/배포/데이터 변경 승인 → 실제 1곡 Firestore→D1→R2 ACK·재시도·해제/재저장 실측 → PC/모바일/새 PC와 청구량 실확인.
+- **현재 차단:** 운영과 완전히 분리된 클라우드 시험 계정·프로젝트 및 권한 미입증, 3환경 공유 R2 구형 Writer 불확실, D1/Secrets/Functions/cron 미배포. 직접 배포·정본 활성화·사용자 곡 복구 금지. UI 정상 기능, 공유 원본, local-first, RELEASE HOLD 유지.
+- **외부 작업 정지:** Work·Codex·별도 감사방의 새로운 독립 작업은 각각 디렉터 승인 전 의뢰하거나 자동 실행하지 않는다. 이번 정리는 GitHub 소스/계획만 변경하며 실제 배포·사용자 데이터 변경 없음. 현 코드의 안전 검증 규칙을 임의로 무력화하지 않는다.
+
+---
+
 ## CURRENT — app515 Music Note V2 릴리스 HOLD (2026-10-28 KST)
 - 현재 GitHub: `preview` 확인 HEAD `d983f4a68f18050c21294f691efe455fcd3b34a0`; app515 제품 Draft PR #512 HEAD `357686900da3abcbddb6a691d9a5c96f2f36e483`, 미병합·미배포, 최신 관련 CI 5/5 PASS(소스/가상 검사). 실서버·실기기 PASS 아님.
 - 릴리스 안전 PR #521은 별도 감사 PASS 후 `main` 병합 완료, 실제 `main` HEAD `b33fb67aeffebe9e09104175eb3fbab7cd15874b`. PREVIEW 수동 배포 및 TEST/PRODUCTION 구버전 자동 롤백 차단 소스 설치됨. 실제 배포 차단 실행은 미검증.

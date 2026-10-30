@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "check": "wrangler deploy --dry-run --outdir .dry-run",
-    "deploy": "wrangler deploy"
+    "deploy": "node -e \"throw new Error('MEDIA_DIRECT_DEPLOY_BLOCKED_USE_APPROVED_SHARED_RELEASE_CONTROLLER')\""
   },
   "dependencies": {
     "jose": "^6.0.0"

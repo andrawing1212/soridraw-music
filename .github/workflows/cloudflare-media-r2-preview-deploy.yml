@@ -18,7 +18,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: cloudflare-media-r2-preview-deploy
+  # Shared across preview deployment and all-three-worker cutover. Never
+  # overlap a legacy preview rollback with TEST/PRODUCTION activation.
+  group: soridraw-media-shared-r2-mutation
   cancel-in-progress: false
 
 jobs:
@@ -28,6 +30,7 @@ jobs:
     timeout-minutes: 25
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
       BUCKET: soridraw-media-preview
       CATALOG_BUCKET: soridraw-user-catalog
       WORKER_URL: https://soridraw-media-preview.andrawing1212.workers.dev
@@ -103,9 +106,42 @@ jobs:
           console.log('EXISTING_MEDIA_SIGNING_SECRET=PASS');
           NODE
 
-      - name: Deploy preview media Worker with R2 binding
-        working-directory: cloudflare/media-worker
-        run: npm run deploy
+      - name: Enforce source-installed legacy release guard (before any Worker mutation)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # An older SHA that lacks the audited controller must never deploy.
+          test -f cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js
+          test -f .deploy/release-media-worker-runtime.mjs
+          grep -q 'verifyLegacyMediaMutationAllowed518' .deploy/release-media-worker-runtime.mjs
+          node scripts/verify-518-shared-writer-rollout.mjs
+          # AUTHORITY: immutable hashes are in this workflow, not in the
+          # untrusted pinned deployment source being checked out.
+          SAFE_MEDIA_BASE_518=430d64e5d7f3f573a8ca1c7c7c4d23561408624e
+          git cat-file -e "${SAFE_MEDIA_BASE_518}^{commit}" || { echo 'HOLD_518_SAFE_BASE_UNAVAILABLE'; exit 2; }
+          git merge-base --is-ancestor "$SAFE_MEDIA_BASE_518" HEAD || { echo 'HOLD_518_RELEASE_SHA_PREDATES_SAFE_BASE'; exit 2; }
+          while read -r expected file; do
+            actual="$(git hash-object "$file" 2>/dev/null)" || { echo "HOLD_518_MISSING_SAFE_SOURCE:$file"; exit 2; }
+            test "$actual" = "$expected" || { echo "HOLD_518_UNAUDITED_SOURCE_HASH:$file"; exit 2; }
+          done <<'AUDITED_MEDIA_GIT_BLOBS_518'
+          5baa599744aecf67a90d2f2ee6dcdf614b4b7f7b cloudflare/media-worker/src/index.js
+          be1a5f2cfa94a0c62130ff7ed5fe4f1f6f043889 cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js
+          89c55674adcd4e9ec5fb909a04e818333117d1a1 .deploy/release-media-worker-runtime.mjs
+          81f2a797c30dfd1d7e700e542bbd29c88987198f cloudflare/media-worker/package.json
+          01e6d7a6f280d421cf982552a3c9f2e824f60264 scripts/verify-518-shared-writer-rollout.mjs
+          AUDITED_MEDIA_GIT_BLOBS_518
+          echo 'PREVIEW_MEDIA_518_SAFE_BASE_AND_BLOBS=PASS'
+          echo 'PREVIEW_MEDIA_518_FENCE_SOURCE=PASS'
+
+      - name: Deploy preview media Worker via common guarded release controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .deploy/release-media-worker-runtime.mjs preview upload | tee "$RUNNER_TEMP/preview-media-upload.log"
+          uploaded="$(sed -n 's/^PREVIEW_MEDIA_WORKER_UPLOADED_VERSION=//p' "$RUNNER_TEMP/preview-media-upload.log" | tail -1)"
+          [[ "$uploaded" =~ ^[0-9a-fA-F-]{36}$ ]] || { echo 'No immutable uploaded Worker version'; exit 2; }
+          RELEASE_MEDIA_WORKER_VERSION="$uploaded" node .deploy/release-media-worker-runtime.mjs preview activate
+          echo 'PREVIEW_MEDIA_DEPLOY_GUARDED=PASS'
 
       - name: Smoke Worker health and Preview CORS
         shell: bash

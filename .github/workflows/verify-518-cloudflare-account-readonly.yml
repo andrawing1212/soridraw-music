@@ -1,0 +1,47 @@
+name: APP518 Cloudflare Account Readonly Diagnosis (No Deploy)
+
+# Kept on PR #528: no protected main/preview workflow modification.
+# Same-repository PR only, exact PR and branch; no fork secrets.
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - '.github/workflows/verify-518-cloudflare-account-readonly.yml'
+      - 'scripts/verify-518-cloudflare-account-readonly.mjs'
+
+permissions:
+  contents: read
+
+jobs:
+  account-readonly:
+    if: ${{ github.event.pull_request.number == 528 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/app518-canonical-catalog-fence-candidate' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout only the exact PR revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate strict readonly network allowlist and failure behavior
+        run: |
+          node --check scripts/verify-518-cloudflare-account-readonly.mjs
+          node scripts/verify-518-cloudflare-account-readonly.mjs --self-test
+      - name: Observe Cloudflare 3 Workers and all-account D1 analytics
+        env:
+          CLOUDFLARE_READONLY_API_TOKEN: ${{ secrets.CLOUDFLARE_READONLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_READONLY_API_TOKEN" || { echo 'HOLD_READONLY_SECRET_NOT_AVAILABLE'; exit 2; }
+          # Only GET settings/deployments/health/list and read-only
+          # GraphQL analytics POST. Never use wrangler or deployment keys.
+          node scripts/verify-518-cloudflare-account-readonly.mjs --live
+      - name: Never authorize release
+        if: always()
+        run: |
+          echo 'APP518_READONLY_ONLY=TRUE'
+          echo 'APP518_LIVE_RELEASE_APPROVAL=FALSE'
+          echo 'RELEASE_HOLD=TRUE'

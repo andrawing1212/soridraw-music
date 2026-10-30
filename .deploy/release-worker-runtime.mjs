@@ -8,6 +8,15 @@ const mode = String(process.argv[2] || '').trim();
 const action = String(process.argv[3] || 'dry-run').trim();
 if (!['test', 'production'].includes(mode)) throw new Error('usage: node .deploy/release-worker-runtime.mjs <test|production> <dry-run|upload|activate|verify|restore>');
 if (!['dry-run', 'upload', 'activate', 'verify', 'restore'].includes(action)) throw new Error(`unsupported action: ${action}`);
+// app518: TEST/PRODUCTION Explore Worker traffic mutations have no verified
+// Cloudflare cross-actor atomic fence. Reject BOTH activation and restore,
+// independent of live markers and before credentials/GET/PUT/Wrangler calls.
+// Retain upload, verify and dry-run; release promotion stays HOLD.
+if (action === 'restore' || action === 'activate') {
+  throw new Error(action === 'restore'
+    ? 'HOLD_518_TEST_PRODUCTION_RESTORE_DISABLED_NO_ATOMIC_FENCE'
+    : 'HOLD_518_TEST_PRODUCTION_ACTIVATE_DISABLED_NO_ATOMIC_RECOVERY');
+}
 
 // SORIDRAW_RELEASE_ENVIRONMENT_PARITY_INVARIANT_117_20260917
 // A promoted release is successful only when the target environment serves the
@@ -586,6 +595,9 @@ async function restore() {
   if (!schedulesJson) throw new Error('RELEASE_WORKER_SCHEDULES_JSON is required for restore');
   const schedules = JSON.parse(schedulesJson);
   if (!Array.isArray(schedules)) throw new Error('restore schedules must be an array');
+  // app518 protected restore is rejected BEFORE makeConfig / Wrangler by
+  // assertNoLegacyExploreBudgetDowngrade518. This is the existing legacy
+  // restore body; do not attempt unsafe read-then-compensate concurrency.
   run(process.execPath, [WRANGLER, 'versions', 'deploy', `${version}@100%`, '--config', CONFIG_PATH, '--yes'], WORKER_DIR);
   await cfPut(`${apiBase}/workers/scripts/${target.worker}/schedules`, schedules);
   await sleep(2_500);
@@ -596,6 +608,32 @@ async function restore() {
   console.log(`${mode.toUpperCase()}_WORKER_RESTORE=PASS version=${active}`);
 }
 
+// app518: a legacy Explore upload/activate/restore must NEVER silently
+// replace a protected account-wide D1 Writer (even in another environment).
+// GET-only Cloudflare control-plane preflight; no periodic app traffic.
+// Not a cutover authorization: approved new releases require another runner.
+async function assertNoLegacyExploreBudgetDowngrade518() {
+  if (!['upload','activate','restore'].includes(action)) return;
+  for (const name of ['soridraw-explore-api','soridraw-explore-test',
+    'soridraw-explore-preview']) {
+    const details=await cfGet(`${apiBase}/workers/scripts/${name}/settings`);
+    const bindings=details?.bindings;
+    if (!Array.isArray(bindings)||!bindings.length)
+      throw new Error('HOLD_518_LEGACY_DOWNGRADE_LIVE_SETTINGS_UNVERIFIED_'+name);
+    if (bindings.some(b=>b?.name==='SORIDRAW_D1_ACCOUNT_BUDGET_ENFORCEMENT_518'
+      ||b?.name==='SORIDRAW_APP518_RELEASE_FENCES_VERIFIED')) {
+      // Cloudflare does not provide a verified atomic compare-and-deploy
+      // fence across dashboard/API/Wrangler actors. A GET, mutex and
+      // postcheck cannot make a traffic + schedules rollback race-safe.
+      // Reject BEFORE makeConfig, Wrangler, any deploy, or schedules PUT.
+      if (action==='restore')
+        throw new Error('HOLD_518_PROTECTED_RESTORE_ATOMIC_DEPLOY_FENCE_UNVERIFIED_'+name);
+      throw new Error('HOLD_518_LEGACY_EXPLORE_ROLLBACK_REOPENS_D1_BYPASS_'+name);
+    }
+  }
+
+}
+await assertNoLegacyExploreBudgetDowngrade518();
 await makeConfig();
 if (action !== 'restore') {
   verifySocialConfig380(JSON.parse(readFileSync(CONFIG_PATH, 'utf8')), mode);
@@ -661,14 +699,10 @@ try {
   console.log(`${mode.toUpperCase()}_WORKER_AFTER=${after}`);
   console.log(`${mode.toUpperCase()}_WORKER_SCHEDULES_PRESERVED=${JSON.stringify(schedulesBefore)}`);
 } catch (error) {
-  if (deployed) {
-    try {
-      run(process.execPath, [WRANGLER, 'rollback', before, '--name', target.worker, '--config', CONFIG_PATH, '--message', `automatic ${mode} rollback after release smoke failure`], WORKER_DIR);
-      await cfPut(`${apiBase}/workers/scripts/${target.worker}/schedules`, schedulesBefore);
-      console.error(`${mode.toUpperCase()}_WORKER_ROLLBACK=ATTEMPTED`);
-    } catch (rollbackError) {
-      console.error(`${mode.toUpperCase()}_WORKER_ROLLBACK_FAILED=${String(rollbackError?.message || rollbackError)}`);
-    }
-  }
+  // Defense in depth if activation is re-enabled in a future approved change:
+  // never run a non-atomic rollback that can overwrite an external C deployment
+  // or its schedules. Failure needs separate controlled recovery, not success.
+  if (deployed)
+    console.error(`${mode.toUpperCase()}_WORKER_ACTIVATE_FAILED_NO_UNSAFE_AUTO_ROLLBACK_MANUAL_HOLD`);
   throw error;
 }

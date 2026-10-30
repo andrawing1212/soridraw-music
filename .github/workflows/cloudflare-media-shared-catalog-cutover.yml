@@ -1,20 +1,30 @@
 name: Cloudflare Media Shared Catalog Coordinated Cutover
 
+# Shared R2 writes cannot be triggered by a source push. Require a
+# director-authorized manual release with an immutable checked-out SHA.
 on:
-  push:
-    branches: [preview]
-    paths:
-      - '.deploy/shared-catalog-cutover.trigger'
+  workflow_dispatch:
+    inputs:
+      approve_shared_media_cutover:
+        description: 'Type CUTOVER_SHARED_MEDIA to approve this three-Worker mutation'
+        required: true
+        type: string
+      commit_sha:
+        description: 'Approved SHA on preview containing the fenced controller'
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: cloudflare-media-shared-catalog-cutover
+  # Same group as the PREVIEW Media deploy workflow.
+  group: soridraw-media-shared-r2-mutation
   cancel-in-progress: false
 
 jobs:
   cutover:
+    if: ${{ inputs.approve_shared_media_cutover == 'CUTOVER_SHARED_MEDIA' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -25,8 +35,38 @@ jobs:
       - name: Checkout exact cutover source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.commit_sha }}
           fetch-depth: 0
+
+      - name: Verify exact SHA approved on preview and guarded controller present
+        shell: bash
+        env:
+          APPROVED_SHA: ${{ inputs.commit_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$APPROVED_SHA" =~ ^[a-fA-F0-9]{40}$ ]] || exit 2
+          test "$(git rev-parse HEAD)" = "${APPROVED_SHA,,}"
+          git fetch origin preview --no-tags --quiet
+          git merge-base --is-ancestor "$APPROVED_SHA" FETCH_HEAD
+          test -f cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js
+          grep -q 'verifyLegacyMediaMutationAllowed518' .deploy/release-media-worker-runtime.mjs
+          # Version authority belongs to this workflow, not the source SHA.
+          SAFE_MEDIA_BASE_518=430d64e5d7f3f573a8ca1c7c7c4d23561408624e
+          git cat-file -e "${SAFE_MEDIA_BASE_518}^{commit}" || { echo 'HOLD_518_SAFE_BASE_UNAVAILABLE'; exit 2; }
+          git merge-base --is-ancestor "$SAFE_MEDIA_BASE_518" HEAD || { echo 'HOLD_518_RELEASE_SHA_PREDATES_SAFE_BASE'; exit 2; }
+          while read -r expected file; do
+            actual="$(git hash-object "$file" 2>/dev/null)" || { echo "HOLD_518_MISSING_SAFE_SOURCE:$file"; exit 2; }
+            test "$actual" = "$expected" || { echo "HOLD_518_UNAUDITED_SOURCE_HASH:$file"; exit 2; }
+          done <<'AUDITED_MEDIA_GIT_BLOBS_518'
+          5baa599744aecf67a90d2f2ee6dcdf614b4b7f7b cloudflare/media-worker/src/index.js
+          be1a5f2cfa94a0c62130ff7ed5fe4f1f6f043889 cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js
+          89c55674adcd4e9ec5fb909a04e818333117d1a1 .deploy/release-media-worker-runtime.mjs
+          81f2a797c30dfd1d7e700e542bbd29c88987198f cloudflare/media-worker/package.json
+          01e6d7a6f280d421cf982552a3c9f2e824f60264 scripts/verify-518-shared-writer-rollout.mjs
+          AUDITED_MEDIA_GIT_BLOBS_518
+          node scripts/verify-518-shared-writer-rollout.mjs
+          echo 'SHARED_MEDIA_MUTATION_SAFE_BASE_AND_BLOBS=PASS'
+          echo 'SHARED_MEDIA_MUTATION_SOURCE_GUARD=PASS'
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
@@ -58,7 +98,7 @@ jobs:
           console.log('CUTOVER_SHARED_CATALOG_BINDINGS=PASS');
           NODE
 
-      - name: Confirm all live environments are still dormant
+      - name: Confirm all live environments share R2 with canonical OFF
         shell: bash
         run: |
           set -euo pipefail
@@ -70,17 +110,39 @@ jobs:
             flag="$(printf '%s' "$settings" | jq -er '.result.bindings[] | select(.type=="plain_text" and .name=="SORIDRAW_SHARED_CATALOG_V1") | (.text // .value)')"
             catalog="$(printf '%s' "$settings" | jq -er '.result.bindings[] | select(.type=="r2_bucket" and .name=="CATALOG") | (.bucket_name // .bucket)')"
             media="$(printf '%s' "$settings" | jq -er '.result.bindings[] | select(.type=="r2_bucket" and .name=="MEDIA") | (.bucket_name // .bucket)')"
-            test "$flag" = '0'
+            test "$flag" = '1'
             test "$catalog" = 'soridraw-user-catalog'
             test "$media" = "$media_bucket"
             health="$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache, no-store' "$base/health?cutover_preflight=$GITHUB_RUN_ID")"
-            printf '%s' "$health" | jq -e '.ok==true and .catalogBinding==true and .catalogAuthorityMode=="legacy-media"' >/dev/null
-            echo "${stage^^}_CUTOVER_LIVE_DORMANT=PASS"
+            printf '%s' "$settings" | jq -e '[.result.bindings[] | select(.name=="SORIDRAW_CANONICAL_CATALOG_518")] | length==0' >/dev/null
+            printf '%s' "$health" | jq -e '.ok==true and .catalogBinding==true and .catalogAuthorityMode=="shared-catalog" and .catalogWriterFence518.fenceContract=="app518-music-note-fence-v1" and .catalogWriterFence518.sourceInstalled==true and .catalogWriterFence518.canonicalEnabled==false' >/dev/null
+            echo "${stage^^}_CUTOVER_SHARED_1_CANONICAL_OFF=PASS"
           }
           check_live preview soridraw-media-preview https://soridraw-media-preview.andrawing1212.workers.dev soridraw-media-preview
           check_live test soridraw-media-test https://soridraw-media-test.andrawing1212.workers.dev soridraw-media-test
           check_live production soridraw-media https://soridraw-media.andrawing1212.workers.dev soridraw-media
           echo 'CUTOVER_PREMUTATION_LIVE_PARITY=PASS'
+
+      - name: Verify signed independent 10-minute Writer and in-flight proof against current Cloudflare
+        shell: bash
+        env:
+          APP518_RELEASE_SHA_518: ${{ inputs.commit_sha }}
+          APP518_SIGNED_AUDIT_REPORT_JSON_518: ${{ secrets.APP518_SIGNED_AUDIT_REPORT_JSON_518 }}
+          APP518_AUDITOR_PUBLIC_KEY_PEM_518: ${{ secrets.APP518_AUDITOR_PUBLIC_KEY_PEM_518 }}
+          APP518_AUDITOR_KEY_SHA256_518: ${{ vars.APP518_AUDITOR_KEY_SHA256_518 }}
+        run: |
+          set -euo pipefail
+          # The separate auditor must sign actual >=10 minute snapshots,
+          # verified old-flight drain and safe rollback IDs. No report => HOLD.
+          node scripts/verify-518-cutover-signed-evidence.mjs --live |
+            tee "$RUNNER_TEMP/app518-cutover-evidence.log"
+          grep -q '^APP518_CUTOVER_THREE_WORKER_SIGNED_PROOF_LIVE=PASS$' "$RUNNER_TEMP/app518-cutover-evidence.log"
+          for stage in PREVIEW TEST PRODUCTION; do
+            version="$(sed -n "s/^${stage}_AUDITED_BEFORE=//p" "$RUNNER_TEMP/app518-cutover-evidence.log" | tail -1)"
+            [[ "$version" =~ ^[0-9a-fA-F-]{36}$ ]] || { echo "HOLD_MISSING_SIGNED_${stage}_VERSION"; exit 2; }
+            echo "${stage}_AUDITED_BEFORE=$version" >> "$GITHUB_ENV"
+          done
+          echo 'APP518_CUTOVER_SIGNED_INFLIGHT_AND_ROLLBACK_PROOF=PASS'
 
       - name: Dry-run all three shared Catalog variants
         shell: bash
@@ -104,7 +166,9 @@ jobs:
             node .deploy/release-media-worker-runtime.mjs "$stage" upload | tee "$RUNNER_TEMP/$stage-upload"
             before="$(sed -n "s/^${prefix}_MEDIA_WORKER_BEFORE=//p" "$RUNNER_TEMP/$stage-upload" | tail -1)"
             uploaded="$(sed -n "s/^${prefix}_MEDIA_WORKER_UPLOADED_VERSION=//p" "$RUNNER_TEMP/$stage-upload" | tail -1)"
+            approved_var="${prefix}_AUDITED_BEFORE"
             test -n "$before" && test -n "$uploaded" && test "$before" != "$uploaded"
+            test "$before" = "${!approved_var}" || { echo "HOLD_UNAUDITED_ACTIVE_VERSION_$stage"; exit 2; }
             echo "${prefix}_BEFORE=$before" >> "$GITHUB_ENV"
             echo "${prefix}_UPLOADED=$uploaded" >> "$GITHUB_ENV"
           done
@@ -112,6 +176,11 @@ jobs:
 
       - name: Activate all three or roll all three back
         shell: bash
+        env:
+          APP518_RELEASE_SHA_518: ${{ inputs.commit_sha }}
+          APP518_SIGNED_AUDIT_REPORT_JSON_518: ${{ secrets.APP518_SIGNED_AUDIT_REPORT_JSON_518 }}
+          APP518_AUDITOR_PUBLIC_KEY_PEM_518: ${{ secrets.APP518_AUDITOR_PUBLIC_KEY_PEM_518 }}
+          APP518_AUDITOR_KEY_SHA256_518: ${{ vars.APP518_AUDITOR_KEY_SHA256_518 }}
         run: |
           set -euo pipefail
           API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID"
@@ -123,44 +192,81 @@ jobs:
             for stage in production test preview; do
               prefix="$(printf '%s' "$stage" | tr '[:lower:]' '[:upper:]')"
               before_var="${prefix}_BEFORE"
+              uploaded_var="${prefix}_UPLOADED"
               before="${!before_var:-}"
-              [ -n "$before" ] || { rollback_failed=1; continue; }
+              uploaded="${!uploaded_var:-}"
+              [ -n "$before" ] && [ -n "$uploaded" ] || { rollback_failed=1; continue; }
+              case "$stage" in preview) worker=soridraw-media-preview;; test) worker=soridraw-media-test;; production) worker=soridraw-media;; esac
+              # Never overwrite an unrelated active version installed by an
+              # external actor during partial cutover. No optimistic rollback.
+              live="$(curl -fsS "${auth[@]}" "$API/workers/scripts/$worker/deployments" 2>/dev/null | jq -r '.result.deployments[0].versions | max_by(.percentage) | select(.percentage>=99.99) | .version_id' 2>/dev/null)"
+              if [ "$live" = "$before" ]; then continue; fi
+              if [ "$live" != "$uploaded" ]; then
+                echo "::error::CUTOVER_UNKNOWN_ACTIVE_VERSION_${stage}_MANUAL_HOLD"
+                rollback_failed=1
+                continue
+              fi
               RELEASE_MEDIA_WORKER_VERSION="$before" node .deploy/release-media-worker-runtime.mjs "$stage" restore || rollback_failed=1
             done
 
             check_legacy() {
-              worker="$1"; base="$2"
+              worker="$1"; base="$2"; stage="$3"
               settled=false
+              approved_var="${stage}_AUDITED_BEFORE"
+              expected_version="${!approved_var:-}"
               for attempt in $(seq 1 12); do
                 settings="$(curl -fsS "${auth[@]}" "$API/workers/scripts/$worker/settings" 2>/dev/null || true)"
-                flag="$(printf '%s' "$settings" | jq -r '.result.bindings[]? | select(.type=="plain_text" and .name=="SORIDRAW_SHARED_CATALOG_V1") | (.text // .value)' 2>/dev/null)"
-                mode="$(curl -fsS --max-time 15 -H 'Cache-Control: no-cache, no-store' "$base/health?cutover_rollback=$attempt" 2>/dev/null | jq -r '.catalogAuthorityMode // empty' 2>/dev/null)"
-                if [ "$flag" = '0' ] && [ "$mode" = 'legacy-media' ]; then settled=true; break; fi
+                deployments="$(curl -fsS "${auth[@]}" "$API/workers/scripts/$worker/deployments" 2>/dev/null || true)"
+                health="$(curl -fsS --max-time 15 -H 'Cache-Control: no-cache, no-store' "$base/health?cutover_rollback=$attempt" 2>/dev/null || true)"
+                # Check the complete Cloudflare contract for the restored
+                # immutable version: exactly one 100% deployment, unique
+                # MEDIA/CATALOG/shared bindings, canonical absent by ANY
+                # binding type, health R2 + the full app518 fence contract.
+                # Malformed/missing API responses never count as PASS.
+                if jq -nc --argjson settings "$settings" --argjson deployments "$deployments" --argjson health "$health" \
+                  '{settings:$settings,deployments:$deployments,health:$health}' |
+                  node scripts/verify-518-cutover-signed-evidence.mjs --rollback-check "$stage" "$expected_version"; then
+                  settled=true
+                  break
+                fi
                 sleep 2
               done
               [ "$settled" = true ] || rollback_failed=1
             }
-            check_legacy soridraw-media-preview https://soridraw-media-preview.andrawing1212.workers.dev
-            check_legacy soridraw-media-test https://soridraw-media-test.andrawing1212.workers.dev
-            check_legacy soridraw-media https://soridraw-media.andrawing1212.workers.dev
-            [ "$rollback_failed" -eq 0 ] && echo 'CUTOVER_GLOBAL_ROLLBACK=PASS' || echo 'CUTOVER_GLOBAL_ROLLBACK=FAILED'
+            check_legacy soridraw-media-preview https://soridraw-media-preview.andrawing1212.workers.dev PREVIEW
+            check_legacy soridraw-media-test https://soridraw-media-test.andrawing1212.workers.dev TEST
+            check_legacy soridraw-media https://soridraw-media.andrawing1212.workers.dev PRODUCTION
+            [ "$rollback_failed" -eq 0 ] && echo 'CUTOVER_GLOBAL_ROLLBACK=PASS' || echo '::error::CUTOVER_GLOBAL_ROLLBACK=FAILED_RELEASE_HOLD'
             return "$rollback_failed"
           }
 
+          traffic_mutation_attempted=0
           on_exit() {
             status=$?
             trap - EXIT
-            if [ "$status" -ne 0 ]; then
-              restore_all || true
+            if [ "$status" -ne 0 ] && [ "$traffic_mutation_attempted" = 1 ]; then
+              if ! restore_all; then
+                echo '::error::CUTOVER_ROLLBACK_FAILED_MANUAL_RECOVERY_REQUIRED_RELEASE_HOLD'
+                exit 86
+              fi
             fi
             exit "$status"
           }
           trap on_exit EXIT
 
+          # Revalidate fresh independent proof immediately before traffic
+          # mutation; expired proof must not trigger an unnecessary rollback.
+          node scripts/verify-518-cutover-signed-evidence.mjs --live > "$RUNNER_TEMP/app518-cutover-before-activate"
+          grep -q '^APP518_CUTOVER_THREE_WORKER_SIGNED_PROOF_LIVE=PASS$' "$RUNNER_TEMP/app518-cutover-before-activate"
           for stage in preview test production; do
             prefix="$(printf '%s' "$stage" | tr '[:lower:]' '[:upper:]')"
             uploaded_var="${prefix}_UPLOADED"
             uploaded="${!uploaded_var}"
+            before_var="${prefix}_AUDITED_BEFORE"
+            case "$stage" in preview) worker=soridraw-media-preview;; test) worker=soridraw-media-test;; production) worker=soridraw-media;; esac
+            live="$(curl -fsS "${auth[@]}" "$API/workers/scripts/$worker/deployments" | jq -er '.result.deployments[0].versions | max_by(.percentage) | select(.percentage>=99.99) | .version_id')"
+            test "$live" = "${!before_var}" || { echo "HOLD_CUTOVER_PREACTIVATE_VERSION_DRIFT_$stage"; exit 2; }
+            traffic_mutation_attempted=1
             RELEASE_MEDIA_WORKER_VERSION="$uploaded" node .deploy/release-media-worker-runtime.mjs "$stage" activate
           done
 

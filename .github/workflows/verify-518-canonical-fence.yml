@@ -1,0 +1,289 @@
+name: Verify app518 Canonical Music Note Catalog Fence (No Deploy)
+
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'cloudflare/media-worker/src/catalogCanonicalFence518.js'
+      - 'scripts/verify-518-canonical-fence.mjs'
+      - 'cloudflare/media-worker/src/catalogEventGate518.js'
+      - 'cloudflare/media-worker/src/catalogJournalReconcile518.js'
+      - 'cloudflare/media-worker/src/catalogAuthorityPolicy518.js'
+      - 'cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js'
+      - '.deploy/release-media-worker-runtime.mjs'
+      - 'cloudflare/media-worker/package.json'
+      - '.github/workflows/cloudflare-media-r2-preview-deploy.yml'
+      - '.github/workflows/cloudflare-media-shared-catalog-cutover.yml'
+      - '.github/workflows/soridraw-release-promotion.yml'
+      - 'cloudflare/media-worker/src/catalogD1Outbox518.js'
+      - 'cloudflare/media-worker/src/catalogFirstChangeIndex518.js'
+      - 'cloudflare/media-worker/src/catalogRemovalAuthority518.js'
+      - 'cloudflare/media-worker/migrations/518_music_note_catalog_first_change_index.sql'
+      - 'scripts/verify-518-first-change-index.mjs'
+      - 'scripts/verify-518-first-change-index-sql.py'
+      - 'scripts/verify-518-removal-authority.mjs'
+      - 'cloudflare/media-worker/src/catalogDelivery518.js'
+      - 'cloudflare/media-worker/src/catalogIndexAdvance518.js'
+      - 'cloudflare/media-worker/src/catalogIndexedWriter518.js'
+      - 'cloudflare/media-worker/src/catalogCompactionRecovery518.js'
+      - 'cloudflare/media-worker/src/catalogHardDeleteReceipt518.js'
+      - 'cloudflare/media-worker/src/catalogHardDeleteSource518.js'
+      - 'functions/src/app518CanonicalSourceProvider.ts'
+      - 'firestore.rules'
+      - 'functions/scripts/test-app518-delete-event-epochs.cjs'
+      - 'functions/src/app518ServerTransport.ts'
+      - 'functions/src/app518LiveConnector.ts'
+      - 'functions/src/app518EventSafetyFence.ts'
+      - 'functions/src/app518AtomicFavoriteWriteCandidate.ts'
+      - 'functions/src/app518AtomicOutboxRelayCandidate.ts'
+      - 'cloudflare/media-worker/scripts/test-app518-atomic-relay-e2e.mjs'
+      - 'cloudflare/media-worker/scripts/test-app518-large-owner-atomic-e2e.mjs'
+      - 'cloudflare/media-worker/scripts/test-app518-canonical-compaction-conflict.mjs'
+      - 'cloudflare/media-worker/scripts/test-app518-paged-compaction-stage-e2e.mjs'
+      - 'cloudflare/media-worker/src/catalogR2PagedCompaction518.js'
+      - 'cloudflare/media-worker/src/catalogR2MultipartAssembly518.js'
+      - 'cloudflare/media-worker/src/catalogD1DailyWriteBudget518.js'
+      - 'cloudflare/media-worker/src/catalogD1MeteredDatabase518.js'
+      - 'scripts/verify-518-global-budget-p1.mjs'
+      - 'scripts/verify-518-explore-account-budget.mjs'
+      - 'scripts/verify-518-account-d1-cutover.mjs'
+      - 'scripts/verify-518-legacy-release-gate.mjs'
+      - 'scripts/verify-518-account-release-preflight.mjs'
+      - 'scripts/verify-518-account-release-preflight-test.mjs'
+      - 'scripts/verify-518-protected-restore-compensation.mjs'
+      - '.deploy/release-worker-runtime.mjs'
+      - 'cloudflare/explore-worker/migration-inspect-retire-518.mjs'
+      - 'cloudflare/explore-worker/wrangler.migration-inspect-retire-518.jsonc'
+      - 'scripts/verify-417-bounded-like-proof.mjs'
+      - 'cloudflare/explore-worker/runtime/account-d1-budget-518.mjs'
+      - 'cloudflare/explore-worker/canonical/preview-entry.js'
+      - 'cloudflare/media-worker/migrations/518_music_note_catalog_daily_write_budget.sql'
+      - 'scripts/verify-518-d1-daily-budget.mjs'
+      - 'scripts/verify-518-d1-daily-budget-sql.py'
+      - 'functions/scripts/test-app518-atomic-favorite-write.cjs'
+      - 'functions/scripts/test-app518-firestore-emulator.cjs'
+      - 'functions/scripts/test-app518-event-safety-fence.cjs'
+      - 'functions/src/index.ts'
+      - 'scripts/verify-518-live-connector.mjs'
+      - 'scripts/verify-518-preview-pilot-readiness.mjs'
+      - 'scripts/verify-518-isolated-qa-setup.mjs'
+      - 'DOCS/APP518_ISOLATED_QA_MANIFEST.template.json'
+      - 'cloudflare/media-worker/wrangler.app518-isolated-qa.jsonc.template'
+      - 'cloudflare/media-worker/src/app518IsolatedQaWorker518.js'
+      - 'cloudflare/media-worker/scripts/test-app518-isolated-qa-link-e2e.mjs'
+      - 'functions/.env.app518-isolated-qa.template'
+      - 'cloudflare/media-worker/src/catalogR2Provider518.js'
+      - 'cloudflare/media-worker/src/catalogOwnerPagedIndex518.js'
+      - 'cloudflare/media-worker/src/catalogR2BasePages518.js'
+      - 'cloudflare/media-worker/src/catalogServerAuth518.js'
+      - 'cloudflare/media-worker/src/catalogServerBridge518.js'
+      - 'cloudflare/media-worker/src/catalogFirebaseFetcher518.js'
+      - 'scripts/verify-518-r2-binding.mjs'
+      - 'scripts/verify-518-large-paging.mjs'
+      - 'scripts/verify-518-large-paging-concurrency-sql.py'
+      - 'scripts/verify-518-r2-page-contract.mjs'
+      - 'scripts/verify-518-server-transport.mjs'
+      - 'scripts/verify-518-server-bridge.mjs'
+      - 'scripts/verify-518-compaction-recovery.mjs'
+      - 'scripts/verify-518-compaction-recovery-sql.py'
+      - 'scripts/verify-518-hard-delete-receipt.mjs'
+      - 'scripts/verify-518-hard-delete-source.mjs'
+      - 'scripts/verify-518-indexed-writer.mjs'
+      - 'scripts/verify-518-stale-save-delete-race.mjs'
+      - 'scripts/verify-518-index-advance-sql.py'
+      - 'scripts/verify-518-index-delta-recovery.mjs'
+      - 'cloudflare/media-worker/migrations/518_music_note_catalog_outbox.sql'
+      - 'scripts/verify-518-d1-outbox-sql.py'
+      - 'scripts/verify-518-d1-outbox-adapter.mjs'
+      - 'scripts/verify-518-d1-delivery-drain.mjs'
+      - 'cloudflare/media-worker/src/index.js'
+      - 'scripts/verify-518-worker-compat-switch.mjs'
+      - 'scripts/verify-518-shared-writer-rollout.mjs'
+      - 'scripts/verify-518-media-workflow-mutex.mjs'
+      - 'scripts/verify-517-exact-catalog-authority-diagnosis.mjs'
+      - 'scripts/verify-518-live-media-writer-readonly.mjs'
+      - 'scripts/verify-518-cutover-signed-evidence.mjs'
+      - 'scripts/verify-518-catalog-event-cost-gate.mjs'
+      - 'scripts/verify-518-journal-cas-simulator.mjs'
+      - 'scripts/verify-518-legacy-rebuild-redteam.mjs'
+      - 'scripts/verify-518-head-capacity-redteam.mjs'
+      - '.github/workflows/verify-518-canonical-fence.yml'
+      - 'DOCS/APP518_MUSIC_NOTE_CATALOG_REPAIR_CONTRACT.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-version-fence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install existing test dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify one-song delivery, deletion safety, and existing-client compatibility
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          node scripts/verify-518-canonical-fence.mjs
+          node scripts/verify-518-stale-save-delete-race.mjs
+          node scripts/verify-518-worker-compat-switch.mjs
+          node scripts/verify-518-shared-writer-rollout.mjs
+          node scripts/verify-518-media-workflow-mutex.mjs
+          node scripts/verify-518-d1-delivery-drain.mjs
+          node scripts/verify-518-server-bridge.mjs
+          node scripts/verify-518-account-d1-cutover.mjs --self-test
+          python3 scripts/verify-518-d1-outbox-sql.py
+          python3 scripts/verify-518-large-paging-concurrency-sql.py
+          npm --prefix functions ci --no-audit --no-fund
+          npm --prefix functions run build
+          node functions/scripts/test-app518-event-safety-fence.cjs
+          node functions/scripts/test-app518-atomic-favorite-write.cjs
+          node scripts/verify-518-live-connector.mjs
+          node scripts/verify-518-preview-pilot-readiness.mjs
+          node scripts/verify-518-isolated-qa-setup.mjs --self-test
+      # Preserve the full historical battery for explicit diagnostic runs.
+      # Routine PRs prioritize the executable Firestore + Miniflare one-song test.
+      - name: Verify full app518 source and infrastructure guard battery (manual)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          node scripts/verify-518-canonical-fence.mjs
+          node scripts/verify-518-catalog-event-cost-gate.mjs
+          node scripts/verify-518-journal-cas-simulator.mjs
+          node scripts/verify-518-legacy-rebuild-redteam.mjs
+          node scripts/verify-518-head-capacity-redteam.mjs
+          node scripts/verify-518-worker-compat-switch.mjs
+          node scripts/verify-518-shared-writer-rollout.mjs
+          node scripts/verify-518-media-workflow-mutex.mjs
+          node scripts/verify-518-live-media-writer-readonly.mjs --self-test
+          node scripts/verify-518-cutover-signed-evidence.mjs --self-test
+          node scripts/verify-518-d1-outbox-adapter.mjs
+          node scripts/verify-518-d1-delivery-drain.mjs
+          python3 scripts/verify-518-d1-outbox-sql.py
+          node scripts/verify-518-first-change-index.mjs
+          python3 scripts/verify-518-first-change-index-sql.py
+          node scripts/verify-518-removal-authority.mjs
+          node scripts/verify-518-index-delta-recovery.mjs
+          node scripts/verify-518-indexed-writer.mjs
+          node scripts/verify-518-stale-save-delete-race.mjs
+          python3 scripts/verify-518-index-advance-sql.py
+          node scripts/verify-518-compaction-recovery.mjs
+          python3 scripts/verify-518-compaction-recovery-sql.py
+          node scripts/verify-518-hard-delete-receipt.mjs
+          node scripts/verify-518-hard-delete-source.mjs
+          node scripts/verify-518-r2-binding.mjs
+          node scripts/verify-518-large-paging.mjs
+          node scripts/verify-518-d1-daily-budget.mjs
+          node scripts/verify-518-global-budget-p1.mjs
+          node scripts/verify-518-explore-account-budget.mjs
+          node scripts/verify-518-account-d1-cutover.mjs --self-test
+          node scripts/verify-518-legacy-release-gate.mjs
+          node scripts/verify-518-account-release-preflight-test.mjs
+          node scripts/verify-518-protected-restore-compensation.mjs
+          node --check scripts/verify-518-account-release-preflight.mjs
+          node --check cloudflare/explore-worker/migration-inspect-retire-518.mjs
+          python3 scripts/verify-518-d1-daily-budget-sql.py
+          python3 scripts/verify-518-large-paging-concurrency-sql.py
+          node scripts/verify-518-r2-page-contract.mjs
+          node scripts/verify-518-server-transport.mjs
+          node scripts/verify-518-server-bridge.mjs
+          npm --prefix functions ci --no-audit --no-fund
+          npm --prefix functions run build
+          node functions/scripts/test-app518-delete-event-epochs.cjs
+          node functions/scripts/test-app518-event-safety-fence.cjs
+          node functions/scripts/test-app518-atomic-favorite-write.cjs
+          node scripts/verify-518-live-connector.mjs
+          node scripts/verify-518-preview-pilot-readiness.mjs
+      - name: Install isolated Java runtime for Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install local-only Miniflare D1 and R2 simulator
+        run: npm --prefix cloudflare/media-worker install --no-save --no-package-lock --no-audit --no-fund miniflare@4
+      - name: Verify local canonical compaction CAS, crash resume and Workers Free bound
+        if: github.event_name == 'workflow_dispatch'
+        run: node cloudflare/media-worker/scripts/test-app518-canonical-compaction-conflict.mjs
+      - name: Verify local 20k/50k paged compaction stage and crash resume
+        if: github.event_name == 'workflow_dispatch'
+        run: node cloudflare/media-worker/scripts/test-app518-paged-compaction-stage-e2e.mjs
+      - name: Verify real Admin SDK against isolated local Firestore emulator
+        shell: bash
+        env:
+          GOOGLE_CLOUD_PROJECT: demo-app518-atomic
+          GCLOUD_PROJECT: demo-app518-atomic
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/app518-emulator.json" <<'JSON'
+          {"emulators":{"firestore":{"host":"127.0.0.1","port":8089},"ui":{"enabled":false}}}
+          JSON
+          npx --yes firebase-tools@14 emulators:exec \
+            --non-interactive \
+            --project demo-app518-atomic \
+            --config "$RUNNER_TEMP/app518-emulator.json" \
+            --only firestore \
+            "node functions/scripts/test-app518-firestore-emulator.cjs write && node functions/scripts/test-app518-firestore-emulator.cjs verify && node cloudflare/media-worker/scripts/test-app518-atomic-relay-e2e.mjs && node cloudflare/media-worker/scripts/test-app518-isolated-qa-link-e2e.mjs"
+      # Large-owner stress belongs to explicit diagnostics, never routine
+      # single-song PR verification. Both modes use local demo Firestore only.
+      - name: Verify 49k and 50k owner Miniflare E2E (manual)
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          GOOGLE_CLOUD_PROJECT: demo-app518-atomic
+          GCLOUD_PROJECT: demo-app518-atomic
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@14 emulators:exec \
+            --non-interactive \
+            --project demo-app518-atomic \
+            --config "$RUNNER_TEMP/app518-emulator.json" \
+            --only firestore \
+            "APP518_E2E_OWNER_COUNT=49152 node cloudflare/media-worker/scripts/test-app518-large-owner-atomic-e2e.mjs && node cloudflare/media-worker/scripts/test-app518-large-owner-atomic-e2e.mjs"
+      - name: Protect existing next-song, publication, Music Note and local-first behaviors
+        run: |
+          node scripts/verify-204-explore-next-song-parity.mjs
+          node scripts/verify-203-explore-action-visual-publication.mjs
+          # Existing verify-211 has a PREVIEW baseline source-pattern mismatch.
+          # Do not change working production code to satisfy that stale assertion.
+          node scripts/verify-356-explore-immediate-social-ux.mjs
+          node scripts/verify-349-studio-heart-settlement-media.mjs
+          node scripts/verify-280-music-note-resurrection.mjs
+          # Legacy verify-081 assumes synchronous publication mutation semantics
+          # and fails on current PREVIEW too; protect Music Note batch via app031.
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-277-music-note-sync-cost.mjs
+      - name: Verify app518 candidate changes ONLY isolated safety helpers, tests and docs
+        run: |
+          set -euo pipefail
+          git fetch origin preview --no-tags
+          git diff --name-only origin/preview...HEAD | while IFS= read -r file; do
+            case "$file" in
+              cloudflare/media-worker/src/catalogCanonicalFence518.js|cloudflare/media-worker/src/catalogEventGate518.js|cloudflare/media-worker/src/catalogJournalReconcile518.js|cloudflare/media-worker/src/catalogAuthorityPolicy518.js|cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js|.deploy/release-media-worker-runtime.mjs|cloudflare/media-worker/package.json|.github/workflows/cloudflare-media-r2-preview-deploy.yml|.github/workflows/cloudflare-media-shared-catalog-cutover.yml|.github/workflows/soridraw-release-promotion.yml|cloudflare/media-worker/src/catalogD1Outbox518.js|cloudflare/media-worker/src/catalogFirstChangeIndex518.js|cloudflare/media-worker/src/catalogRemovalAuthority518.js|cloudflare/media-worker/migrations/518_music_note_catalog_first_change_index.sql|scripts/verify-518-first-change-index.mjs|scripts/verify-518-first-change-index-sql.py|scripts/verify-518-removal-authority.mjs|cloudflare/media-worker/src/catalogDelivery518.js|cloudflare/media-worker/src/catalogIndexAdvance518.js|cloudflare/media-worker/src/catalogIndexedWriter518.js|cloudflare/media-worker/src/catalogCompactionRecovery518.js|cloudflare/media-worker/src/catalogHardDeleteReceipt518.js|cloudflare/media-worker/src/catalogHardDeleteSource518.js|functions/src/app518CanonicalSourceProvider.ts|firestore.rules|functions/scripts/test-app518-delete-event-epochs.cjs|functions/src/app518ServerTransport.ts|functions/src/app518LiveConnector.ts|functions/src/app518EventSafetyFence.ts|functions/scripts/test-app518-event-safety-fence.cjs|functions/src/app518AtomicFavoriteWriteCandidate.ts|functions/src/app518AtomicOutboxRelayCandidate.ts|cloudflare/media-worker/scripts/test-app518-atomic-relay-e2e.mjs|cloudflare/media-worker/scripts/test-app518-large-owner-atomic-e2e.mjs|cloudflare/media-worker/scripts/test-app518-canonical-compaction-conflict.mjs|cloudflare/media-worker/scripts/test-app518-paged-compaction-stage-e2e.mjs|cloudflare/media-worker/src/catalogR2PagedCompaction518.js|cloudflare/media-worker/src/catalogR2MultipartAssembly518.js|cloudflare/media-worker/src/catalogD1DailyWriteBudget518.js|cloudflare/media-worker/src/catalogD1MeteredDatabase518.js|scripts/verify-518-global-budget-p1.mjs|scripts/verify-518-explore-account-budget.mjs|scripts/verify-518-account-d1-cutover.mjs|scripts/verify-518-legacy-release-gate.mjs|scripts/verify-518-account-release-preflight.mjs|scripts/verify-518-account-release-preflight-test.mjs|scripts/verify-518-protected-restore-compensation.mjs|.deploy/release-worker-runtime.mjs|cloudflare/explore-worker/migration-inspect-retire-518.mjs|cloudflare/explore-worker/wrangler.migration-inspect-retire-518.jsonc|scripts/verify-417-bounded-like-proof.mjs|cloudflare/explore-worker/runtime/account-d1-budget-518.mjs|cloudflare/explore-worker/canonical/preview-entry.js|cloudflare/media-worker/migrations/518_music_note_catalog_daily_write_budget.sql|scripts/verify-518-d1-daily-budget.mjs|scripts/verify-518-d1-daily-budget-sql.py|functions/scripts/test-app518-atomic-favorite-write.cjs|functions/scripts/test-app518-firestore-emulator.cjs|functions/src/index.ts|scripts/verify-518-live-connector.mjs|scripts/verify-518-preview-pilot-readiness.mjs|cloudflare/media-worker/src/catalogR2Provider518.js|cloudflare/media-worker/src/catalogServerAuth518.js|cloudflare/media-worker/src/catalogServerBridge518.js|cloudflare/media-worker/src/catalogFirebaseFetcher518.js|scripts/verify-518-large-paging-concurrency-sql.py|scripts/verify-518-r2-page-contract.mjs|scripts/verify-518-large-paging.mjs|cloudflare/media-worker/src/catalogR2BasePages518.js|cloudflare/media-worker/src/catalogOwnerPagedIndex518.js|scripts/verify-518-r2-binding.mjs|scripts/verify-518-server-transport.mjs|scripts/verify-518-server-bridge.mjs|scripts/verify-518-compaction-recovery.mjs|scripts/verify-518-compaction-recovery-sql.py|scripts/verify-518-hard-delete-receipt.mjs|scripts/verify-518-hard-delete-source.mjs|scripts/verify-518-indexed-writer.mjs|scripts/verify-518-stale-save-delete-race.mjs|scripts/verify-518-index-advance-sql.py|scripts/verify-518-index-delta-recovery.mjs|cloudflare/media-worker/migrations/518_music_note_catalog_outbox.sql|scripts/verify-518-d1-outbox-sql.py|scripts/verify-518-d1-outbox-adapter.mjs|scripts/verify-518-d1-delivery-drain.mjs|cloudflare/media-worker/src/index.js|scripts/verify-518-worker-compat-switch.mjs|scripts/verify-518-shared-writer-rollout.mjs|scripts/verify-518-media-workflow-mutex.mjs|scripts/verify-517-exact-catalog-authority-diagnosis.mjs|scripts/verify-518-live-media-writer-readonly.mjs|scripts/verify-518-cutover-signed-evidence.mjs|.github/workflows/verify-518-cloudflare-account-readonly.yml|scripts/verify-518-cloudflare-account-readonly.mjs|scripts/verify-518-canonical-fence.mjs|scripts/verify-518-catalog-event-cost-gate.mjs|scripts/verify-518-journal-cas-simulator.mjs|scripts/verify-518-legacy-rebuild-redteam.mjs|scripts/verify-518-head-capacity-redteam.mjs|DOCS/APP518_MUSIC_NOTE_CATALOG_REPAIR_CONTRACT.md|DOCS/CURRENT_RELEASE_STATE.md|scripts/verify-518-preview-pilot-readiness.mjs|scripts/verify-518-isolated-qa-setup.mjs|DOCS/APP518_ISOLATED_QA_MANIFEST.template.json|cloudflare/media-worker/wrangler.app518-isolated-qa.jsonc.template|cloudflare/media-worker/src/app518IsolatedQaWorker518.js|cloudflare/media-worker/scripts/test-app518-isolated-qa-link-e2e.mjs|functions/.env.app518-isolated-qa.template|.github/workflows/verify-518-canonical-fence.yml) ;;
+              *) echo "APP518_UNAPPROVED_PRODUCT_OR_BACKEND_CHANGE=$file"; exit 2 ;;
+            esac
+          done
+          echo APP518_EXISTING_PRODUCT_AND_DEPLOY_FILE_SCOPE=PASS
+      - name: Verify app518 server connector is OFF without approved infrastructure
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Source code may now import staged handlers, but no runtime binding,
+          # secret, cron or direct R2/Worker change has been configured.
+          grep -q 'app518ServerConnector' cloudflare/media-worker/src/index.js
+          grep -q 'app518FavoriteCatalogChanged' functions/src/index.ts
+          grep -q 'app518BridgeActive()' functions/src/index.ts
+          grep -q 'APPROVED_ALL_3_AND_NO_OLD_WRITERS' cloudflare/media-worker/src/index.js
+          ! grep -q 'CATALOG_SERVER_HMAC_518' cloudflare/media-worker/wrangler.jsonc
+          ! grep -q 'SORIDRAW_CANONICAL_CATALOG_518' cloudflare/media-worker/wrangler.jsonc
+          ! grep -q 'CATALOG_OUTBOX_518' cloudflare/media-worker/wrangler.jsonc
+          ! grep -q 'SORIDRAW_D1_ACCOUNT_BUDGET_ENFORCEMENT_518' cloudflare/explore-worker/canonical/wrangler.preview.jsonc
+          grep -q 'protectExploreEnv518(env)' cloudflare/explore-worker/canonical/preview-entry.js
+          ! grep -q 'reconcile-exact' src/lib/userDataEngine.ts
+          echo 'APP518_SERVER_CONNECTED_IN_SOURCE_RUNTIME_OFF=PASS'

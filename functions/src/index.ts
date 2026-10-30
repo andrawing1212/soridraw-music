@@ -1,4 +1,7 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
+import {handleApp518FavoriteEvent,planApp518FavoriteChange,matchesApp518PilotSong} from "./app518LiveConnector";
+import {handleVerifiedApp518ExactSource} from "./app518ServerTransport";
+
 import { defineSecret } from "firebase-functions/params";
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
@@ -4447,3 +4450,183 @@ export {
   publicationRelease431Test,
   publicationRelease431Production,
 } from "./explorePublicationReleaseEndpoint431";
+
+
+import {
+  recordApp518OwnerCollision,
+  readApp518EventGuard,recordApp518EventFailure,
+  resolveApp518EventFailure,
+} from "./app518EventSafetyFence";
+
+// app518 source-only staged connection: no deployed Function/secret/trigger is
+// changed by a GitHub commit. Both handlers are runtime OFF by default.
+// Cloudflare, Firebase and D1 must be configured under separate release approval.
+const app518PilotScope=()=>({
+  pilotUid:String(process.env.SORIDRAW_APP518_PILOT_UID||""),
+  pilotDocumentId:String(process.env.SORIDRAW_APP518_PILOT_FAVORITE_ID||""),
+});
+const app518BridgeActive=()=>{
+  const pilot=app518PilotScope();
+  return process.env.SORIDRAW_APP518_BRIDGE_ACTIVE
+    ==="ENABLED_AFTER_SHARED_ROLLOUT"
+    &&matchesApp518PilotSong({uid:pilot.pilotUid,
+      documentId:pilot.pilotDocumentId,...pilot});
+};
+const stage518ServerSecret=defineSecret("SORIDRAW_CATALOG_SERVER_HMAC_518");
+const app518Timestamp=(ts:admin.firestore.Timestamp|undefined):string=>{
+  if(!ts)return "";
+  const d=new Date(ts.seconds*1000);
+  return Number.isFinite(d.getTime())?
+    d.toISOString().slice(0,19)+"."+String(ts.nanoseconds).padStart(9,"0")+"Z":"";
+};
+// Server-to-server callback, signed on raw bytes, exact Firestore R1 only.
+// No browser auth, UID headers or IP allowlists can bypass the HMAC.
+export const app518ExactFavoriteSource=onRequest({
+  region:"asia-northeast3",secrets:[stage518ServerSecret],
+  memory:"256MiB",timeoutSeconds:30,
+},async(req,res)=>{
+  res.setHeader("Cache-Control","no-store");
+  if(!app518BridgeActive()){
+    res.status(503).json({code:"HOLD_APP518_RELEASE_OFF"});return;
+  }
+  try{
+    const secret=stage518ServerSecret.value();
+    const result=await handleVerifiedApp518ExactSource({
+      request:{method:req.method,headers:req.headers,
+        rawBody:req.rawBody as Buffer},
+      db:admin.firestore(),secret,nowMs:Date.now(),
+      ...app518PilotScope(),
+    });
+    res.status(result.status).json(result);
+  }catch{
+    res.status(503).json({code:"HOLD_APP518_SOURCE_UNAVAILABLE"});
+  }
+});
+// Only source-significant favorite changes request one exact server read.
+// Hard-delete receipts are transactionally versioned; duplicate/stale events
+// cannot recreate deleted songs. No scan, browser polling or periodic write.
+export const app518FavoriteCatalogChanged=functions
+  .runWith({secrets:["SORIDRAW_CATALOG_SERVER_HMAC_518"],failurePolicy:true})
+  .region("asia-northeast3").firestore.document("favorites/{favoriteId}")
+  .onWrite(async(change,context)=>{
+    if(!app518BridgeActive())return;
+    const before=change.before.exists?change.before.data()||null:null;
+    const after=change.after.exists?change.after.data()||null:null;
+    const uid=String(after?.uid||before?.uid||"");
+    const id=String(context.params.favoriteId||"");
+    const pilot=app518PilotScope();
+    // A stolen/reassigned pilot document must still be quarantined even
+    // when the AFTER owner changed from the selected UID to someone else.
+    if(!matchesApp518PilotSong({uid,documentId:id,...pilot})
+      &&!matchesApp518PilotSong({uid:String(before?.uid||""),documentId:id,...pilot}))
+      return; // Unrelated songs and users: additional R0/W0.
+    // Keep metadata-only saves at Firestore R0 / Cloudflare R0/W0 even
+    // if a future operational secret or Worker hostname is unavailable.
+    const plan=planApp518FavoriteChange({uid,documentId:id,before,after});
+    if(plan==="IGNORE")return;
+    const db=admin.firestore();
+    const nowMs=Date.now();
+    const eventId=String(context.eventId||"");
+    const eventTimeMs=Date.parse(String(context.timestamp||""));
+    if(plan==="DENY"){
+      if(before?.uid&&after?.uid&&before.uid!==after.uid){
+        // Persist a document-ID fence before acknowledging this conflict.
+        // Future same-UID updates and exact Worker reads cannot bypass it.
+        try{
+          const recorded=await recordApp518OwnerCollision({
+            db,documentId:id,beforeUid:String(before.uid),
+            afterUid:String(after.uid),eventId,nowMs,
+          });
+          if(recorded!=="OWNER_QUARANTINE_CREATED"
+            &&recorded!=="HOLD_OWNER_QUARANTINED")
+            throw new Error("APP518_OWNER_QUARANTINE_NOT_DURABLE");
+          console.error("APP518_OWNER_UID_CHANGE_QUARANTINED");
+        }catch{
+          // The conflicting write is never acknowledged until its owner
+          // fence is durable. Firebase retries; an independent durable
+          // outbox is required before declaring prolonged outage safe.
+          throw new Error("APP518_OWNER_QUARANTINE_PERSIST_RETRY");
+        }
+      }else console.warn("APP518_EVENT_DENIED_OWNER_OR_ID");
+      return;
+    }
+    // One bounded guard read per meaningful event. Metadata-only events
+    // remain R0/W0; normal successful events create no safety-ledger writes.
+    let gate:string;
+    try{
+      gate=await readApp518EventGuard({
+        db,documentId:id,eventId,nowMs,eventTimeMs,
+      });
+    }catch{
+      // A failed guard read is not proof of no owner conflict or completed
+      // delivery. Do not acknowledge this trigger as successful.
+      throw new Error("APP518_SAFETY_FENCE_READ_RETRY");
+    }
+    if(gate!=="EVENT_DELIVERY_ALLOWED"&&gate!=="EVENT_RETRY_ALLOWED"){
+      if(gate==="HOLD_EVENT_RETRY_WINDOW"){
+        try{
+          const recorded=await recordApp518EventFailure({
+            db,documentId:id,eventId,nowMs,eventTimeMs,
+            code:"APP518_RETRY_WINDOW_EXPIRED",terminal:true,
+          });
+          if(recorded.code!=="HOLD_TERMINAL"
+            &&recorded.code!=="HOLD_EVENT_ALREADY_TERMINAL")
+            throw new Error("APP518_EXPIRY_LEDGER_NOT_DURABLE");
+        }catch{
+          // No terminal record means no successful ACK of the event.
+          throw new Error("APP518_EXPIRY_LEDGER_PERSIST_RETRY");
+        }
+      }
+      if(gate==="HOLD_BAD_EVENT_ID_OR_TIME")
+        throw new Error("APP518_EVENT_ID_OR_TIME_UNVERIFIED");
+      console.warn("APP518_EVENT_FENCED",gate);return;
+    }
+    try{
+      const hostname=String(process.env.SORIDRAW_APP518_WORKER_HOST||"");
+      const workerUrl=String(process.env.SORIDRAW_APP518_WORKER_URL||"");
+      if(!hostname||!workerUrl)throw new Error("APP518_WORKER_UNPROVISIONED");
+      const result=await handleApp518FavoriteEvent({
+        uid,documentId:id,before,after,
+        deleteEventId:eventId,
+        beforeUpdateTime:app518Timestamp(change.before.updateTime),
+        dependencies:{db,secret:process.env.SORIDRAW_CATALOG_SERVER_HMAC_518||"",
+          workerUrl,expectedHostname:hostname,nowMs},
+      });
+      if(result.code.startsWith("DENY_")||result.code.startsWith("HOLD_")){
+        const recorded=await recordApp518EventFailure({
+          db,documentId:id,eventId,nowMs,eventTimeMs,
+          code:result.code,terminal:true,
+        });
+        if(recorded.code!=="HOLD_TERMINAL"
+          &&recorded.code!=="HOLD_EVENT_ALREADY_TERMINAL")
+          throw new Error("APP518_TERMINAL_LEDGER_NOT_DURABLE");
+        console.warn("APP518_EVENT_PERSISTENT_TERMINAL_HOLD",result.code);
+        return;
+      }
+      // Fresh success: no failure-ledger settlement read or write.
+      if(gate==="EVENT_RETRY_ALLOWED")
+        await resolveApp518EventFailure({db,documentId:id,eventId,nowMs});
+    }catch(error){
+      // Firebase's failurePolicy retries for up to seven days. Persist a
+      // per-event limit of eight total failed attempts AND a one-hour cap;
+      // never let a transient Worker/Firestore outage spin indefinitely.
+      let result:{code:string;attempts:number;retry:boolean};
+      try{
+        result=await recordApp518EventFailure({
+          db,documentId:id,eventId,nowMs,eventTimeMs,
+          code:"APP518_DELIVERY_IO_FAILURE",terminal:false,
+        });
+      }catch{
+        // If Firestore cannot persist the attempt count, ending the trigger
+        // would permanently lose the change. Retry the original event rather
+        // than acknowledge a receipt that does not exist. This path cannot
+        // enforce its 8-attempt cap during a total ledger outage.
+        throw new Error("APP518_FAILURE_LEDGER_PERSIST_RETRY");
+      }
+      if(result.retry)throw new Error("APP518_BOUNDED_EVENT_RETRY");
+      if(result.code!=="HOLD_TERMINAL"
+        &&result.code!=="HOLD_EVENT_ALREADY_TERMINAL")
+        throw new Error("APP518_FAILURE_LEDGER_NOT_DURABLE");
+      console.error("APP518_EVENT_RETRY_BUDGET_HELD",result.code);
+    }
+  });

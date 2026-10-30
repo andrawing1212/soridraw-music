@@ -1,0 +1,183 @@
+import assert from 'node:assert/strict';
+import {createEmptyCatalogJournal} from '../cloudflare/media-worker/src/catalogJournal.js';
+import {createOwnerR2Provider518} from '../cloudflare/media-worker/src/catalogR2Provider518.js';
+const uid='owner-1';
+let head={...createEmptyCatalogJournal({
+ kind:'musicNote',baseKey:'catalog/v5/owner-1/musicNote/bases/100.json',
+ baseRevision:100,itemCount:0,now:1000,
+}),canonicalAuthority518:true};
+let etag='E1',puts=0,reads=0;
+const meta=payload=>({
+ uid,kind:'musicNote',revision:String(payload.headRevision),
+ baseRevision:String(payload.baseRevision),itemCount:String(payload.itemCount),
+});
+const object=(value,keyUid=uid,kind='musicNote')=>({
+ etag,size:Buffer.byteLength(JSON.stringify(value)),
+ customMetadata:{...meta(value),uid:keyUid,kind},
+ async text(){return JSON.stringify(value);},
+});
+const CATALOG={
+ async get(key){reads++;
+  assert.equal(key,'catalog/v5/owner-1/musicNote/journal.json');
+  return object(head);
+ },
+ async put(key,body,options){
+  assert.equal(key,'catalog/v5/owner-1/musicNote/journal.json');
+  assert.equal(options.onlyIf.etagMatches,etag);
+  const value=JSON.parse(body);
+  if(!value.canonicalAuthority518)return null;
+  head=value;etag='E'+(puts+2);puts++;
+  return {etag};
+ }
+};
+const off=createOwnerR2Provider518({env:{CATALOG}});
+assert.equal(off.enabled,false);
+await assert.rejects(()=>off.readOwnerHead(uid),/CUTOVER_NOT_APPROVED/);
+const env={CATALOG,SORIDRAW_CANONICAL_CATALOG_518:'ENABLED_AFTER_SHARED_ROLLOUT'};
+const noRollout=createOwnerR2Provider518({env});
+assert.equal(noRollout.enabled,false);
+await assert.rejects(()=>noRollout.readOwnerHead(uid),/CUTOVER_NOT_APPROVED/);
+const backend=createOwnerR2Provider518({env,sharedReleaseFencesVerified:true});
+assert.equal(backend.enabled,true);
+let current=await backend.readOwnerHead(uid);
+assert.equal(current.head.headRevision,100);
+assert.equal(current.ownerUid,uid);
+const version='001793152800000000001';
+const next={...head,headRevision:200,updatedAtMs:2000,
+ deltas:[{mutationId:'canonical518:song:'+version,
+  baseRevision:100,revision:200,baseItemCount:0,nextItemCount:1,
+  upserts:[{id:'song',uid}],deletedIds:[],createdAtMs:2000}],
+ itemCount:1,recentMutations:[{id:'canonical518:song:'+version,
+  revision:200,itemCount:1}]};
+assert.equal((await backend.storeHeadIfEtag({
+ uid,expectedEtag:current.etag,nextHead:next,
+ sourceVersionNs:version,documentId:'song',
+})).casCommitted,true);
+assert.equal(puts,1);
+current=await backend.readOwnerHead(uid);
+assert.equal(current.head.headRevision,200);
+assert.equal(current.etag,'E2');
+await assert.rejects(()=>backend.storeHeadIfEtag({
+ uid,expectedEtag:current.etag,nextHead:{...next,canonicalAuthority518:false},
+ sourceVersionNs:version,documentId:'song',
+}),/CUTOVER_NOT_APPROVED/);
+assert.equal(puts,1);
+const foreign={...env,CATALOG:{...CATALOG,async get(){return object(head,'other-owner');}}};
+await assert.rejects(()=>createOwnerR2Provider518({
+ env:foreign,sharedReleaseFencesVerified:true,
+}).readOwnerHead(uid),/UNKNOWN_OR_CORRUPT/);
+assert.equal(puts,1);
+// P1: HEAD and BASE stream errors are transient, whereas successfully read
+// invalid JSON (or foreign owner metadata) is a durable contract violation.
+const ownerBaseKey='catalog/v5/owner-1/musicNote/bases/100.json';
+const base={schemaVersion:4,authority:'server',kind:'musicNote',
+ complete:true,revision:100,itemCount:0,items:[]};
+const headAtBase={...createEmptyCatalogJournal({
+ kind:'musicNote',baseKey:ownerBaseKey,baseRevision:100,
+ itemCount:0,now:1000,
+}),canonicalAuthority518:true};
+for(const failPart of ['HEAD','BASE']){
+ let failOnce=true,readsOnRecovery=0;
+ const failureEnv={...env,CATALOG:{
+  ...CATALOG,async get(key){
+   readsOnRecovery++;
+   const isHead=key.endsWith('/journal.json');
+   const value=isHead?headAtBase:base;
+   const output=isHead?object(value):{
+    etag:'base-etag',size:Buffer.byteLength(JSON.stringify(base)),
+    customMetadata:{uid,kind:'musicNote'},
+    async text(){return JSON.stringify(base);},
+   };
+   if(failOnce && ((failPart==='HEAD'&&isHead)
+      ||(failPart==='BASE'&&!isHead))){
+    failOnce=false;
+    return {...output,async text(){throw Error('TEMP_R2_STREAM_FAILURE');}};
+   }
+   return output;
+  },
+ }};
+ const provider=createOwnerR2Provider518({
+  env:failureEnv,sharedReleaseFencesVerified:true,
+ });
+ if(failPart==='HEAD'){
+  await assert.rejects(()=>provider.readOwnerHead(uid),/TEMP_R2_STREAM_FAILURE/);
+  const good=await provider.readOwnerHead(uid);
+  assert.equal(good.ownerUid,uid);
+ }else{
+  await assert.rejects(()=>provider.loadCompleteFencedOwnerR2({
+   uid,projectItem:item=>item,sortItems:items=>items,
+  }),/TEMP_R2_STREAM_FAILURE/);
+  const good=await provider.loadCompleteFencedOwnerR2({
+   uid,projectItem:item=>item,sortItems:items=>items,
+  });
+  assert.equal(good.ownerUid,uid);
+  assert.equal(good.items.length,0);
+ }
+ assert.ok(readsOnRecovery>=2);
+}
+for(const corruptPart of ['HEAD','BASE']){
+ const brokenEnv={...env,CATALOG:{
+  ...CATALOG,async get(key){
+   const isHead=key.endsWith('/journal.json');
+   return isHead?{...object(headAtBase),async text(){
+    return corruptPart==='HEAD'?'{invalid':JSON.stringify(headAtBase);
+   }}:{
+    customMetadata:{uid,kind:'musicNote'},async text(){return '{invalid';},
+   };
+  },
+ }};
+ const provider=createOwnerR2Provider518({
+  env:brokenEnv,sharedReleaseFencesVerified:true,
+ });
+ const read=corruptPart==='HEAD'
+  ?()=>provider.readOwnerHead(uid)
+  :()=>provider.loadCompleteFencedOwnerR2({
+    uid,projectItem:item=>item,sortItems:items=>items,
+   });
+ await assert.rejects(read,/APP518_(R2_HEAD_UNKNOWN_OR_CORRUPT|BASE_INVALID_JSON)/);
+}
+assert.equal(puts,1,'reading failures must never commit R2');
+// The real owner-bound R2 provider must accept >20k existing BASE
+// memberships without truncating or changing the shared BASE schema.
+for(const n of [20001,50001]){
+ const key='catalog/v5/'+uid+'/musicNote/bases/100.json';
+ const bigItems=Array.from({length:n},(_,i)=>({id:'large-'+i,uid}));
+ const bigBase={schemaVersion:4,authority:'server',kind:'musicNote',
+  complete:true,revision:100,itemCount:n,items:bigItems};
+ const bigHead={...createEmptyCatalogJournal({
+  kind:'musicNote',baseKey:key,baseRevision:100,itemCount:n,now:1000,
+ }),canonicalAuthority518:true};
+ let headReads=0,baseReads=0,writesOnRead=0;
+ const bigProvider=createOwnerR2Provider518({env:{
+  ...env,CATALOG:{
+   async get(objectKey){
+    if(objectKey.endsWith('/journal.json')){
+     headReads++;return object(bigHead);
+    }
+    assert.equal(objectKey,key);
+    baseReads++;
+    return {etag:'"large-base"',size:Buffer.byteLength(JSON.stringify(bigBase)),
+     customMetadata:{uid,kind:'musicNote'},
+     async text(){return JSON.stringify(bigBase);}};
+   },
+   async put(){writesOnRead++;throw Error('read-only bootstrap');},
+  },
+ },sharedReleaseFencesVerified:true});
+ const fetched=await bigProvider.loadCompleteFencedOwnerR2({
+  uid,projectItem:item=>item,sortItems:items=>items,
+ });
+ assert.equal(fetched.items.length,n);
+ assert.equal(fetched.head.itemCount,n);
+ assert.equal(fetched.verifiedByServer,true);
+ assert.equal(fetched.fencedWritersVerified,true);
+ assert.equal(headReads,2,'authenticated HEAD before and after owner materialization');
+ assert.equal(baseReads,1,'no repeated BASE materialization for a first import');
+ assert.equal(writesOnRead,0);
+}
+console.log('APP518_REAL_R2_OWNER_PROVIDER_ACCEPTS_20001_AND_50001=PASS');
+console.log('APP518_HEAD_BASE_STREAM_FAILURE_RECOVERS_WITH_SAME_SOURCE=PASS');
+console.log('APP518_HEAD_BASE_BAD_JSON_STILL_CONTRACT_FAILURE=PASS');
+console.log('APP518_R2_RELEASE_FLAG_AND_SHARED_WRITER_FENCES_REQUIRED=PASS');
+console.log('APP518_R2_OWNER_BOUND_HEAD_ETAG_CAS=PASS');
+console.log('APP518_R2_INVALID_OR_FOREIGN_HEAD_NO_PUT=PASS');
+console.log('APP518_R2_PROVIDER_ONLY_MOCK_IO=PASS');

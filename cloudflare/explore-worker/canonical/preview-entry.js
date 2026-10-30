@@ -1,4 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
+import {protectExploreEnv518} from '../runtime/account-d1-budget-518.mjs';
 import {
   CURATED_SHARED_KEY_466, sharedCuratedEnabled466 as curatedFlagEnabled466, curatedAllWritersReady466, curatedSnapshotRevision466,
   readCanonicalCurated466, canonicalCuratedIds466, visibleCuratedIds466,
@@ -1619,6 +1620,7 @@ const EXPLORE_LIKE_ALARM_FALLBACK_MS_194 = 15 * 1000;
 const waitExploreLikeDelay194 = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 
 export class ExploreLikeBatchScheduler103 extends DurableObject {
+  constructor(ctx,env){super(ctx,protectExploreEnv518(env));}
   // One global durable curated repair journal for this Worker environment.
   // No periodic polling. The alarm is armed only by a real relevant mutation.
   async runCuratedRepair468() {
@@ -3291,6 +3293,7 @@ async function handleSignedPublicLikeWindowAck416(request,env){
 
 export default {
   async scheduled(controller, env, ctx) {
+    env=protectExploreEnv518(env);
     // SORIDRAW_PREDEPLOY_PENDING_LIKE_DRAIN_192_20260924
     // Release-only escape hatch for a queue row accepted by the previous Worker
     // but left without a live alarm. No production cron uses this label.
@@ -3323,6 +3326,7 @@ export default {
   },
 
   async fetch(request, env, ctx) {
+    env=protectExploreEnv518(env);
     const url = new URL(request.url);
     if(STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE&&
        url.pathname===PUBLIC_LIKE_MANIFEST_ROUTE_416){

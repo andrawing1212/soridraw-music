@@ -13,6 +13,11 @@ import {
   materializeCatalogJournal,
   shouldCompactCatalogJournal,
 } from './catalogJournal.js';
+import { decideCatalogWriterAuthority518, classifyCatalogAuthority518 } from './catalogAuthorityPolicy518.js';
+import { FENCE_CONTRACT_518 } from './catalogSharedWriterRolloutGate518.js';
+import {createApp518ServerBridge} from './catalogServerBridge518.js';
+import {createExactFirebaseFetcher518,CatalogFirebaseSourceHold518} from './catalogFirebaseFetcher518.js';
+
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const AUTH_CERT_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
@@ -470,6 +475,12 @@ const CATALOG_JOURNAL_ENGINE_1053 = true;
 // SORIDRAW_SHARED_PRIVATE_CATALOG_AUTHORITY_356
 // Dormant until every release environment is wired to the same private CATALOG
 // bucket. MEDIA remains environment-local for media/archive objects.
+// app518: rollout switch intentionally OFF in all existing environments.
+// Full shared PREVIEW/TEST/PRODUCTION rollout + durable canonical delivery
+// MUST complete before this server authority cutover can be enabled.
+const isCanonicalCatalogAuthority518 = (env) =>
+  text(env?.SORIDRAW_CANONICAL_CATALOG_518) === 'ENABLED_AFTER_SHARED_ROLLOUT';
+
 const isSharedCatalogEnabled = (env) => text(env?.SORIDRAW_SHARED_CATALOG_V1) === '1';
 const catalogBucket = (env) => (
   isSharedCatalogEnabled(env) && env?.CATALOG ? env.CATALOG : env.MEDIA
@@ -566,7 +577,7 @@ const catalogCreatedAtMs = (item, document = null) => {
   return Math.max(1, Math.floor(Number(value) || 1));
 };
 
-const projectCatalogFields = (kind, source, id, document = null) => {
+export const projectCatalogFields = (kind, source, id, document = null) => {
   if (!source || typeof source !== 'object' || Array.isArray(source) || !id) return null;
   if (kind === 'musicNote' && !isActiveMusicNoteCatalogItem(source)) return null;
   const projected = {
@@ -582,7 +593,7 @@ const projectCatalogFields = (kind, source, id, document = null) => {
   return projected;
 };
 
-const sortCatalogItems = (items) => items.sort((left, right) => {
+export const sortCatalogItems = (items) => items.sort((left, right) => {
   const diff = Number(right?.createdAtMs || 1) - Number(left?.createdAtMs || 1);
   if (diff !== 0) return diff;
   return String(left?.id || '').localeCompare(String(right?.id || ''));
@@ -866,6 +877,9 @@ const readCatalogStateFromBucket = async (bucket, uid, kind) => {
 
 const seedSharedCatalogFromCurrentLegacy = async (identity, kind, requiredRevision, env) => {
   if (!isSharedCatalogEnabled(env) || !env?.CATALOG || !env?.MEDIA) return null;
+  if (kind === 'musicNote' && isCanonicalCatalogAuthority518(env)) {
+    throw new Error('CATALOG_518_LEGACY_SEED_DISABLED');
+  }
   const existingShared = await readCatalogStateFromBucket(env.CATALOG, identity.uid, kind);
   if (existingShared) return existingShared;
 
@@ -937,6 +951,15 @@ const bootstrapSharedCatalogFromCanonical = async (identity, kind, requiredRevis
   }
   const required = Math.max(0, Math.floor(Number(requiredRevision || 0)));
   const current = await readCatalogStateFromBucket(env.CATALOG, identity.uid, kind);
+  if (kind === 'musicNote' && isCanonicalCatalogAuthority518(env)) {
+    // Do not run an entire Firestore scan or replace a fenced journal HEAD.
+    throw new Error('CATALOG_518_BOOTSTRAP_MUST_RECONCILE_EXACT');
+  }
+  if (kind === 'musicNote' && current &&
+      classifyCatalogAuthority518(current.head, kind).code !== 'LEGACY_UNFENCED') {
+    // Disabled flag does not permit resetting an already fenced HEAD.
+    throw new Error('CATALOG_518_FENCED_REBUILD_DENIED');
+  }
   if (current && (required <= 0 || Number(current.head?.headRevision || 0) >= required)) {
     return materializeCatalogState(current, kind);
   }
@@ -1011,6 +1034,16 @@ const applyCatalogDelta = async (identity, kind, delta, env, executionCtx = null
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const state = await getCatalogState(identity, kind, delta.baseRevision, env);
     const head = state.head;
+    if (kind === 'musicNote') {
+      const authority = decideCatalogWriterAuthority518({
+        kind, head, operation: 'legacy-delta',
+      });
+      if (authority.code !== 'LEGACY_ALLOWED_WHILE_NOT_MIGRATED') {
+        throw new Error('CATALOG_518_LEGACY_WRITER_DENIED');
+      }
+      // This check is repeated after each ETag conflict when the HEAD
+      // is reloaded; no stale preflight may grant a later R2 PUT.
+    }
     const sanitizedDeletedIds = new Set(delta.deletedIds.map((id) => text(id)).filter(Boolean));
     const sanitizedUpserts = [];
     for (const rawItem of delta.upserts) {
@@ -1127,6 +1160,12 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
     }
 
     if (request.method === 'POST' && route.action === 'delta') {
+      if (route.kind === 'musicNote' && isCanonicalCatalogAuthority518(env)) {
+        // A canonical server writer is required after all environments cut over.
+        // Old browsers cannot self-publish stale snapshots into the shared R2.
+        // Do NOT enable until canonical source + retry are durable.
+        return jsonResponse({ok:false,code:'CATALOG_518_CANONICAL_WRITER_REQUIRED'},409,origin);
+      }
       const declaredLength = Number(request.headers.get('content-length') || 0);
       if (declaredLength > 2 * 1024 * 1024) return jsonResponse({ ok: false, code: 'CATALOG_DELTA_TOO_LARGE' }, 413, origin);
       const delta = await request.json();
@@ -1217,10 +1256,87 @@ const handleMedia = async (request, env, origin, url) => {
   return new Response(object.body, { status, headers });
 };
 
+
+// app518 dormant server-only path. It cannot be opened by browser auth:
+// explicit 3-environment release attestation, canonical cutover, pinned
+// Firebase callback host and server secret are all required at runtime.
+const app518ServerConnector = (env) => {
+  // Shared user data across all stages: never enable app518 for the whole
+  // Firebase project during a PREVIEW single-song trial.
+  const pilotUid=text(env?.SORIDRAW_APP518_PILOT_UID);
+  const pilotDocumentId=text(env?.SORIDRAW_APP518_PILOT_FAVORITE_ID);
+  if (!pilotUid || pilotUid.length>128 || /[\\/]/.test(pilotUid)
+    || !pilotDocumentId || pilotDocumentId.length>240
+    || /[\\/]/.test(pilotDocumentId)) return null;
+  if (!isCanonicalCatalogAuthority518(env)
+    || env?.SORIDRAW_APP518_RELEASE_FENCES_VERIFIED !== 'APPROVED_ALL_3_AND_NO_OLD_WRITERS')
+    return null;
+  const readExactCanonical = createExactFirebaseFetcher518({
+    sourceUrl:env?.CATALOG_FIREBASE_SOURCE_518_URL,
+    expectedHostname:env?.CATALOG_FIREBASE_SOURCE_518_HOST,
+    secret:env?.CATALOG_SERVER_HMAC_518,
+  });
+  if (!readExactCanonical) return null;
+  const bridge=createApp518ServerBridge({
+    env,sharedReleaseFencesVerified:true,readExactCanonical,
+    pilotScope:{uid:pilotUid,documentId:pilotDocumentId},
+    projectItem:(item,id)=>projectCatalogFields('musicNote',item,id),
+    sortItems:sortCatalogItems,
+  });
+  return bridge.enabled ? bridge : null;
+};
+// One-song pilot: do not let waitUntil hide a failed R2 attempt when no
+// scheduled retry trigger has been deployed. Authenticated duplicates may
+// still have an unacked D1 row, so give that same exact song one more try.
+// The D1 queue and existing bounded retry/backoff remain authoritative.
+export const drainApp518AcceptedPilot518=async({connector,code,nowMs})=>{
+  if(code!=='ENQUEUED'&&code!=='STALE_OR_DUPLICATE')return null;
+  const delivery=await connector.drainServerPending({nowMs,limit:1});
+  if(delivery?.code!=='OK')throw new Error('APP518_PILOT_DRAIN_UNCONFIRMED');
+  return delivery;
+};
+// The future cron only drains the exact pilot song through the existing
+// versioned D1 due selector. Do not report success if D1 could not persist
+// its backoff/hold state; the scheduled invocation must reject visibly.
+export const drainApp518ScheduledRetry518=async({connector,nowMs}={})=>{
+  if(connector?.enabled!==true||!Number.isSafeInteger(nowMs)||nowMs<0)
+    return {code:'HOLD_APP518_RELEASE_OFF'};
+  const result=await connector.drainServerPending({nowMs,limit:1});
+  if(result?.code!=='OK')throw new Error('APP518_SCHEDULED_DRAIN_UNCONFIRMED');
+  return result;
+};
+const handleApp518ServerRoute=async(request,env,ctx)=>{
+  if(request.method!=='POST')return jsonResponse({code:'NOT_FOUND'},404);
+  const connector=app518ServerConnector(env);
+  if(!connector)return jsonResponse({code:'HOLD_APP518_RELEASE_OFF'},503);
+  try{
+    const reply=await connector.ingestSignedRequest({request,nowMs:Date.now()});
+    // The HTTP request waits for one verified D1-to-R2 attempt, even when
+    // waitUntil exists. ENQUEUED only means D1 durable, never R2 ACK.
+    // A signed retry of the same version can now resume a pending song.
+    const delivery=await drainApp518AcceptedPilot518({
+      connector,code:reply.code,nowMs:Date.now(),
+    });
+    const status=reply.code==='ENQUEUED'||reply.code==='STALE_OR_DUPLICATE'
+      ||reply.code==='STALE_SIGNED_EVENT_NO_WRITE'||reply.code==='RETRY_ARMED'?200:409;
+    return jsonResponse({code:reply.code,
+      ...(delivery?{r2Acked:delivery.acked===1}:{}),
+    },status);
+  }catch(error){
+    if(error instanceof CatalogFirebaseSourceHold518)
+      return jsonResponse({code:'HOLD_EXACT_SOURCE_CONTRACT'},409);
+    return jsonResponse({code:'HOLD_APP518_SERVER_IO_RETRY'},503);
+  }
+};
+
 export default {
   async fetch(request, env, executionCtx) {
     const url = new URL(request.url);
     const origin = text(request.headers.get('Origin'));
+
+    // Server route runs before browser CORS; HMAC is its only credential.
+    if (url.pathname === '/v1/server/catalog518')
+      return handleApp518ServerRoute(request,env,executionCtx);
 
     if (request.method === 'OPTIONS') return handleOptions(request, env);
     if (!isAllowedOrigin(env, origin)) return new Response('Forbidden origin', { status: 403 });
@@ -1237,6 +1353,13 @@ export default {
         catalogCompactionAfter: 200,
         catalogBinding: Boolean(env.CATALOG),
         catalogAuthorityMode: catalogAuthorityMode(env),
+        // Read-only code-identity marker. NOT rollout approval and NOT proof
+        // that any other environment has been upgraded or old flights drained.
+        catalogWriterFence518: {
+          fenceContract: FENCE_CONTRACT_518,
+          sourceInstalled: true,
+          canonicalEnabled: isCanonicalCatalogAuthority518(env),
+        },
       }, 200, origin);
     }
 
@@ -1253,5 +1376,14 @@ export default {
     }
 
     return jsonResponse({ ok: false, code: 'NOT_FOUND' }, 404, origin);
+  },
+  // No cron is declared in wrangler.jsonc. This handler is inert until a
+  // separately approved scheduled trigger is provisioned on all releases.
+  async scheduled(_event,env,ctx) {
+    const connector=app518ServerConnector(env);
+    if(!connector)return;
+    const task=drainApp518ScheduledRetry518({connector,nowMs:Date.now()});
+    if(ctx?.waitUntil)ctx.waitUntil(task);
+    return await task;
   },
 };

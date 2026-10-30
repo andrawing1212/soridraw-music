@@ -104,18 +104,23 @@ export const protectExploreEnv518=(env,{clock=()=>Date.now()}={})=>{
   async all(...rest){if(plan(sql,args)!==0)deny('HOLD_518_WRITE_VIA_ALL');return statement.all(...rest)},
   async run(){const n=plan(sql,args);if(n)await charge(n);return statement.run()},
  });
- const budgeted={
-  prepare(sql){return wrap(raw.prepare(sql),sql)},
+ // PREVIEW and TEST have a second D1 binding. Never guard DB while
+ // accidentally leaving a distinct RATE_DB as an unmetered write bypass.
+ if(env.RATE_DB!==undefined&&(!env.RATE_DB?.prepare||!env.RATE_DB?.batch))
+  deny('HOLD_518_RATE_DB_BINDING_INVALID');
+ const guardDb=target=>({
+  prepare(sql){return wrap(target.prepare(sql),sql)},
   async batch(statements){
    if(!Array.isArray(statements)||!statements.length
      ||statements.some(s=>s?.__guard518!==true))
     deny('HOLD_518_RAW_OR_EMPTY_BATCH');
    const n=statements.reduce((sum,s)=>sum+plan(s.sql,s.args),0);
    if(n>0)await charge(n);
-   return raw.batch(statements.map(s=>s.raw));
+   return target.batch(statements.map(s=>s.raw));
   },
   exec(){deny('HOLD_518_UNMETERED_EXEC')},
   withSession(){deny('HOLD_518_UNMETERED_SESSION')},
- };
- return {...env,DB:budgeted};
+ });
+ return {...env,DB:guardDb(raw),
+  ...(env.RATE_DB===undefined?{}:{RATE_DB:guardDb(env.RATE_DB)})};
 };

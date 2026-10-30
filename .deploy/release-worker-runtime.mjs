@@ -8,6 +8,14 @@ const mode = String(process.argv[2] || '').trim();
 const action = String(process.argv[3] || 'dry-run').trim();
 if (!['test', 'production'].includes(mode)) throw new Error('usage: node .deploy/release-worker-runtime.mjs <test|production> <dry-run|upload|activate|verify|restore>');
 if (!['dry-run', 'upload', 'activate', 'verify', 'restore'].includes(action)) throw new Error(`unsupported action: ${action}`);
+// app518: temporary TEST/PRODUCTION Explore Worker restore freeze.
+// A settings GET cannot atomically fence a concurrent Cloudflare Dashboard/API
+// deploy. Reject every restore (even when protection flags are absent) before
+// credentials, remote GETs, Wrangler traffic changes, or schedules PUTs.
+// Re-enabling this route requires separately approved atomic cross-actor safety.
+if (action === 'restore') {
+  throw new Error('HOLD_518_TEST_PRODUCTION_RESTORE_DISABLED_NO_ATOMIC_FENCE');
+}
 
 // SORIDRAW_RELEASE_ENVIRONMENT_PARITY_INVARIANT_117_20260917
 // A promoted release is successful only when the target environment serves the

@@ -69,9 +69,18 @@ export const assessAccountD1Cutover518=({
   ||evidence.ledger?.atomicReservationVerified!==true
   ||!ref(evidence.ledger?.schemaEvidenceRef))
   return deny('HOLD_518_SHARED_LEDGER_NOT_PROVEN');
+ // Future app518 outbox may be a new, independent D1 database. Do not hardcode
+ // an impossible three-DB maximum; require EVERY additional UUID in the
+ // independently signed inventory and compare with live account enumeration.
+ const additions=evidence.additionalD1Databases??[];
+ if(!Array.isArray(additions)||additions.length>4
+  ||additions.some(d=>!uuid(d?.id)||KNOWN_DBS.has(d.id)||!ref(d?.schemaEvidenceRef))
+  ||new Set(additions.map(d=>d.id)).size!==additions.length)
+  return deny('HOLD_518_EXTRA_D1_DATABASES_UNATTESTED');
+ const allowedDbIds=new Set([...KNOWN_DBS,...additions.map(x=>x.id)]);
  const expectedDbIds=new Set(live.databaseIds||[]);
- if(expectedDbIds.size!==KNOWN_DBS.size
-  ||[...expectedDbIds].some(id=>!KNOWN_DBS.has(id)))
+ if(expectedDbIds.size!==allowedDbIds.size
+  ||[...expectedDbIds].some(id=>!allowedDbIds.has(id)))
   return deny('HOLD_518_ACCOUNT_D1_DATABASE_INVENTORY_CHANGED');
  for(const name of NAMES){
   const current=live.workers.find(x=>x.name===name);
@@ -89,7 +98,7 @@ export const assessAccountD1Cutover518=({
    ||audited?.rollbackBudgetAware!==true)
    return deny('HOLD_518_LEGACY_VERSION_OR_ROLLBACK_UNVERIFIED_'+name);
   const d1=current?.d1Bindings;
-  if(!Array.isArray(d1)||d1.some(b=>!KNOWN_DBS.has(b.databaseId))
+  if(!Array.isArray(d1)||d1.some(b=>!allowedDbIds.has(b.databaseId))
    ||new Set(d1.map(b=>b.binding)).size!==d1.length)
    return deny('HOLD_518_D1_BINDINGS_UNKNOWN_'+name);
   if(name===MIGRATION){
@@ -173,7 +182,7 @@ const selfTest=()=>{
  fail('budget omission',()=>evidence.workers[0].budgetAware=false,
   'HOLD_518_LEGACY_WRITER_NOT_ON_SHARED_LEDGER_'+NAMES[0]);
  evidence.workers[0].budgetAware=true;
- const tampered=args();tampered.signed.signature='A'+tampered.signed.signature.slice(1);
+ const tampered=args();tampered.signed.signature='!'+tampered.signed.signature.slice(1);
  assert.equal(assessAccountD1Cutover518(tampered).pass,false);
  const missing={...args(),live:null};
  assert.equal(assessAccountD1Cutover518(missing).pass,false);

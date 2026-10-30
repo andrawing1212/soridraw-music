@@ -107,6 +107,10 @@ const sourceFields=(intent,mutationId,expectedLastMutationId,favorite)=>
   ...(favorite?{favorite}:{}),serverTimestamp:()=>admin.firestore.FieldValue.serverTimestamp(),
   releaseApproved:true});
 const refOutbox=async()=>d1.prepare('SELECT source_version_ns,desired_state,ack_version_ns,attempt_count,next_attempt_ms FROM music_note_catalog_outbox_518 WHERE owner_uid=? AND favorite_id=?').bind(uid,id).first();
+// Only conservative LOCAL D1 reservations; never claim these are billed rows.
+const reservedD1Rows=async()=>Number((await d1.prepare(
+ 'SELECT COALESCE(SUM(reserved_rows),0) AS total FROM music_note_catalog_daily_budget_518'
+).first())?.total||0);
 // Full candidate pipeline: first owner staging, real indexed R2 CAS,
  // D1 journal replay, compaction-gap recovery and exact ACK.
 const drain=async(t=now)=>bridge.drainServerPending({nowMs:t,limit:1});
@@ -178,6 +182,7 @@ const run=async()=>{
   customMetadata:{uid,kind:'musicNote',baseRevision:'1',revision:'1',
    itemCount:'0',deltaCount:'0',authority:'server'},
  });
+ const initialReserved=await reservedD1Rows();
  const create=await commit(sourceFields('create',mutation,undefined,
   {title:'Local song',saved:true,lyrics:{korean:'원본'}}));
  assert.equal(create.code,'SOURCE_AND_OUTBOX_COMMITTED');
@@ -262,6 +267,33 @@ const run=async()=>{
   assert.equal(result.acked,1,'stress write '+n+' '+JSON.stringify(result));
   const pending=await refOutbox();
   assert.equal(pending.ack_version_ns,pending.source_version_ns);
+  if(n===0){
+   // The first post-delete restore is the single-song RESAVE.
+   const restored=await refOutbox();
+   assert.equal(restored.desired_state,'saved');
+   assert.equal(restored.ack_version_ns,restored.source_version_ns);
+   assert.equal(await indexedPresent(),true);
+   assert.equal((await fs.collection('favorites').doc(id).get()).exists,true);
+   const latest=JSON.parse(await (await r2.get(journalKey)).text());
+   assert.equal(latest.itemCount,1,'one exact song must reappear');
+   assert.equal(casPuts,3,'save/remove/resave must be three R2 CAS commits');
+   const priorReservations=await reservedD1Rows(),priorCas=casPuts;
+   assert.equal((await producer('e2e-delete-2')).code,
+     'STALE_ATOMIC_OUTBOX_NOT_CURRENT','old removal must not erase resave');
+   assert.equal((await producer(mutationId)).code,
+     'DUPLICATE_NOT_R2_ACK','duplicate resave must not add R2 writes');
+   assert.equal((await drain(now+120000)).attempted,0);
+   assert.equal(await reservedD1Rows(),priorReservations,
+     'stale/duplicate/idle must reserve zero extra D1 rows');
+   assert.equal(casPuts,priorCas,
+     'stale/duplicate/idle must commit zero extra R2 writes');
+   assert.ok(priorReservations>initialReserved,
+     'meaningful changes must reserve local D1 budget');
+   console.log('APP518_LOCAL_ONE_SONG_SAVE_UNSAVE_RESAVE_EXACT_R2_D1_ACK=PASS');
+   console.log('APP518_LOCAL_DUPLICATE_STALE_AND_IDLE_D1_R2_W0=PASS');
+   console.log('APP518_LOCAL_D1_RESERVED_ROWS_THREE_CHANGES='+ (priorReservations-initialReserved));
+   console.log('APP518_LOCAL_R2_CAS_WRITES_THREE_CHANGES='+priorCas);
+  }
   prevMutation=mutationId;
  }
  const autoHead=JSON.parse(await (await r2.get(journalKey)).text());

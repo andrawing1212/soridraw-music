@@ -34,7 +34,7 @@ let olderBlocked = Promise.resolve();
 let didPauseOlder = false;
 const clone = x => x == null ? x : JSON.parse(JSON.stringify(x));
 const firestore = {
-  doc: (_db, col, id) => ({ key: col + '/' + id }),
+  doc: (_db, ...segments) => ({ key: segments.join('/') }),
   serverTimestamp: () => ({ server: true }),
   runTransaction: async (_db, callback) => {
     for (let attempt = 0; attempt < 7; attempt++) {

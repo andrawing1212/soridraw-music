@@ -98,10 +98,18 @@ const signed=signApp518ServiceRequest({
 const handler=await handleVerifiedApp518ExactSource({
  request:{method:'POST',headers:signed.headers,
   rawBody:Buffer.from(signed.body)},
- db,secret,nowMs,
+ db,secret,nowMs,pilotUid:other,pilotDocumentId:id,
 });
 assert.equal(handler.status,409);
 assert.equal(handler.code,'DENY_OWNER_QUARANTINED');
+// A valid HMAC for a different song must not read even the owner-fence
+// document, nor scan favorites outside the exact PREVIEW pilot.
+const foreign=await handleVerifiedApp518ExactSource({
+ request:{method:'POST',headers:signed.headers,rawBody:Buffer.from(signed.body)},
+ db,secret,nowMs,pilotUid:other,pilotDocumentId:'different-pilot-song',
+});
+assert.equal(foreign.status,409);
+assert.equal(foreign.code,'DENY_NOT_PREVIEW_PILOT_SONG');
 assert.equal(stats.writes,after,'quarantine callback W0');
 assert.equal(docs.size,4,'one event failure + one terminal + one recovered + one owner fence');
 console.log('APP518_FIREBASE_TRANSIENT_FAIL_MAX_8_WITH_DURABLE_TERMINAL=PASS');

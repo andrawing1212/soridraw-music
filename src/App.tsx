@@ -11900,6 +11900,7 @@ const toggleCycleVariantSelection = (
       return;
     }
 
+    let deferredForOrdering523 = false;
     const committing = (async () => {
     try {
       const commitSong = normalizeFavoriteTitleFields({
@@ -11992,6 +11993,7 @@ const toggleCycleVariantSelection = (
         removeStudioHeartIntentLocal(uid, safeDocumentId);
       }
     } catch (error) {
+      deferredForOrdering523 = String((error as any)?.message || error || '').includes('STUDIO_HEART_PREVIEW_ORDER_NOT_READY');
       console.warn('Studio heart canonical batch commit failed.', error);
       const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
       if (!latest || latest.updatedAtMs !== intent.updatedAtMs) return;
@@ -12024,7 +12026,7 @@ const toggleCycleVariantSelection = (
         // The newer click was persisted before the first ACK. Never risk a
         // quota-failed after-the-fact rebase; just schedule its exact action.
         scheduleStudioHeartPendingIntent(safeDocumentId, STUDIO_HEART_BATCH_MS);
-      } else if (latest && latest.updatedAtMs === intent.updatedAtMs
+      } else if (deferredForOrdering523 && latest && latest.updatedAtMs === intent.updatedAtMs
         && intent.signalVersion <= 0 && latest.signalVersion > 0) {
         // RTDB may ACK while the not-yet-ordered 1s attempt is in flight.
         // Do not keep that request on an obsolete 60s retry timer.

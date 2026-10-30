@@ -184,8 +184,9 @@ const offSchedule=await worker.scheduled({scheduledTime:nowMs},
  {waitUntil(){throw Error('No scheduler work while OFF');}});
 assert.equal(offSchedule,undefined);
 const entry=readFileSync('functions/src/index.ts','utf8');
-assert.ok(entry.includes('matchesApp518PilotSong({uid,documentId:id,...app518PilotScope()})'),
- 'Firestore trigger must reject outside pilot BEFORE even a guard read');
+assert.ok(entry.includes('matchesApp518PilotSong({uid,documentId:id,...pilot})')
+ &&entry.includes('matchesApp518PilotSong({uid:String(before?.uid||""),documentId:id,...pilot})'),
+ 'Firestore trigger must reject unrelated songs while still quarantining pilot A-to-B ownership changes before any canonical write');
 assert.ok(entry.includes('...app518PilotScope(),'),
  'signed callback must enforce same exact preview pilot');
 const workerCode=readFileSync('cloudflare/media-worker/src/index.js','utf8');

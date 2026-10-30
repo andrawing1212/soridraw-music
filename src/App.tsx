@@ -1,4 +1,5 @@
 import { runV1MutationBoundary, type V1MutationMirrorTarget } from './data/v1MutationBoundary';
+import { commitStudioHeartCanonical523 } from './lib/studioHeartCanonical523';
 import { readNextSongKeywords, clearNextSongKeywords } from './lib/nextSongPendingBridge';
 import {
   acknowledgeRecentSongsSignalVersion,
@@ -11879,15 +11880,84 @@ const toggleCycleVariantSelection = (
         favoriteFirestoreId: safeDocumentId,
         musicNoteFavoriteId: safeDocumentId,
       } as SongResult) as SongResult;
-      await toggleFavorite(commitSong, {
-        trustedRecentStudio: true,
-        intendedAction: intent.desiredSaved ? 'save' : 'unsave',
-        canonicalBaseline: {
-          saved: intent.baselineSaved,
-          favorite: intent.baselineFavorite,
-        },
-        suppressSuccessToast: true,
+      const creationTime = Date.now();
+      const mediaKeys = [
+        'audioUrl', 'audio_url', 'streamAudioUrl', 'stream_audio_url', 'sourceAudioUrl', 'sourceStreamAudioUrl',
+        'imageUrl', 'image_url', 'coverUrl', 'thumbnailUrl', 'audioUrls',
+        'sunoAudioUrl', 'sunoCoverUrl', 'sunoImageUrl', 'sunoArtworkUrl',
+        'sunoLinks', 'sunoShareLinks', 'mainSunoIndex',
+        'sunoShareUrl', 'sunoUrl', 'sunoSongUrl', 'sunoTitle',
+        'sunoDurationSeconds', 'sunoDurationText', 'sunoShareUrlUpdatedAt', 'sunoCoverFetchedAt',
+      ] as const;
+      const mediaPayload = Object.fromEntries(mediaKeys
+        .filter((key) => (commitSong as any)?.[key] !== undefined && (commitSong as any)?.[key] !== null && (commitSong as any)?.[key] !== '')
+        .map((key) => [key, (commitSong as any)[key]]));
+      const creationPayload = sanitizeForFirestore({
+        uid,
+        soridrawSongId: getLiveSoridrawSongId(commitSong),
+        recentSongSyncKey: buildRecentSongSyncKey(commitSong),
+        ...buildLegacyRecentFavoriteBridge(commitSong),
+        title: commitSong.title,
+        koreanTitle: commitSong.koreanTitle ?? '',
+        englishTitle: commitSong.englishTitle ?? '',
+        genre: getResolvedGenre(commitSong),
+        lyrics: commitSong.lyrics,
+        prompt: commitSong.prompt,
+        appliedKeywords: commitSong.appliedKeywords,
+        userInput: commitSong.userInput ?? (commitSong.appliedKeywords as any)?.userInput ?? '',
+        situationSummary: commitSong.situationSummary || (commitSong.appliedKeywords as any)?.situationSummary || '',
+        ...mediaPayload,
+        isLocked: false,
+        isPublic: false,
+        createdAtMs: creationTime,
+        createdAt: serverTimestamp(),
+        favoriteKey: buildFavoriteIdentityKey(commitSong),
+        searchTokens: buildFavoriteSearchTokens(commitSong),
       });
+      // RTDB ordering is established at the click, never at write completion.
+      // Missing version defers the canonical mutation without discarding outbox.
+      const canonical = await commitStudioHeartCanonical523({
+        uid,
+        documentId: safeDocumentId,
+        previewVersion: intent.signalVersion,
+        desiredSaved: intent.desiredSaved,
+        creationPayload,
+      });
+      if (canonical.outcome === 'superseded') {
+        const current = readStudioHeartPendingIntent(uid, safeDocumentId);
+        if (current?.updatedAtMs === intent.updatedAtMs && current.desiredSaved === intent.desiredSaved) {
+          removeStudioHeartPendingIntent(uid, safeDocumentId);
+          setFavorites((previous) => previous);
+        }
+        return;
+      }
+      const changedAt = Date.now();
+      const syncItem = sanitizeForFirestore({
+        ...commitSong,
+        id: safeDocumentId,
+        firestoreId: safeDocumentId,
+        uid,
+        studioHeartPreviewVersion: intent.signalVersion,
+        saved: intent.desiredSaved,
+        favoriteRemoved: !intent.desiredSaved,
+        favoriteRemovedAt: intent.desiredSaved ? null : changedAt,
+        unsavedAt: intent.desiredSaved ? null : changedAt,
+        unlikedAt: intent.desiredSaved ? null : changedAt,
+        updatedAtMs: changedAt,
+      });
+      await runV1MutationBoundary({
+        domain: 'musicNote',
+        operation: intent.desiredSaved ? 'save' : 'unsave',
+        uid,
+        documentIds: [safeDocumentId],
+        affectedCount: 1,
+        syncItem,
+      }, Promise.resolve(canonical));
+      if (intent.desiredSaved) forgetFavoriteDeletedTombstones(uid, [safeDocumentId]);
+      else rememberFavoriteDeletedTombstones(uid, [safeDocumentId]);
+      if (canonical.membershipChanged) {
+        queueMusicNoteFavoriteCountDelta(uid, intent.desiredSaved ? 1 : -1);
+      }
       const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
       if (latest && latest.updatedAtMs === intent.updatedAtMs && latest.desiredSaved === intent.desiredSaved) {
         removeStudioHeartIntentLocal(uid, safeDocumentId);

@@ -11946,6 +11946,7 @@ const toggleCycleVariantSelection = (
         previewVersion: intent.signalVersion,
         desiredSaved: intent.desiredSaved,
         creationPayload,
+        baselineSaved: intent.baselineSaved,
       });
       if (canonical.outcome === 'superseded') {
         const current = readStudioHeartPendingIntent(uid, safeDocumentId);

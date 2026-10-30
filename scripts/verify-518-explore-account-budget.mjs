@@ -26,7 +26,7 @@ const raw={
  },
  async batch(){direct++;return [{success:true,meta:{changes:1}}]},
 };
-const base={DB:raw,other:'preserved'};
+const base={DB:raw,RATE_DB:raw,other:'preserved'};
 assert.equal(protectExploreEnv518(base),base,'OFF is exact original env');
 assert.equal(book,0);assert.equal(direct,0);
 holds(()=>protectExploreEnv518({...base,SORIDRAW_D1_ACCOUNT_BUDGET_ENFORCEMENT_518:'WRONG'}));
@@ -40,6 +40,7 @@ let now=Date.UTC(2026,9,30,12);
 const env=protectExploreEnv518(enabled,{clock:()=>now});
 assert.equal(env.other,'preserved');
 assert.equal(env.DB===raw,false);
+assert.equal(env.RATE_DB===raw,false,'RATE_DB must not bypass account-wide budget');
 assert.equal((await env.DB.prepare(SELECT).bind('a').first()).id,'x');
 assert.equal((await env.DB.prepare(SELECT).bind('a').all()).results.length,0);
 assert.equal(book,0);
@@ -58,6 +59,7 @@ await rejects(env.DB.prepare('DELETE FROM curated_picks WHERE track_id=?').bind(
 await rejects(env.DB.prepare('UPDATE explore_like_overrides_171 SET liked=0 WHERE user_uid=?').bind('owner').run());
 await rejects(env.DB.prepare('INSERT INTO curated_picks SELECT * FROM other').bind().run());
 await rejects(env.DB.prepare('INSERT INTO unknown_table(id) VALUES (?)').bind('x').run());
+await rejects(env.RATE_DB.prepare('INSERT INTO api_rate_limits(key) VALUES (?)').bind('k').run());
 await rejects(env.DB.prepare('WITH e AS (SELECT 1) INSERT INTO curated_picks VALUES (?)').run());
 await rejects(env.DB.prepare('CREATE TABLE unexpected(x INT)').run());
 await rejects(env.DB.prepare('PRAGMA writable_schema=ON').run());

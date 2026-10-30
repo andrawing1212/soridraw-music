@@ -74,6 +74,28 @@ export const assessIsolatedQa518=m=>{
 };
 
 const template=JSON.parse(read('DOCS/APP518_ISOLATED_QA_MANIFEST.template.json'));
+// This template is a non-deployable starting point, never the live config.
+const qaWrangler=JSON.parse(read('cloudflare/media-worker/wrangler.app518-isolated-qa.jsonc.template'));
+assert.equal(qaWrangler.account_id,template.cloudflare.accountId);
+assert.equal(qaWrangler.name,template.cloudflare.workerName);
+assert.equal(qaWrangler.vars.FIREBASE_PROJECT_ID,template.firebase.projectId);
+assert.equal(qaWrangler.vars.FIREBASE_PROJECT_NUMBER,template.firebase.projectNumber);
+assert.equal(qaWrangler.vars.SORIDRAW_APP518_PILOT_UID,template.pilot.uid);
+assert.equal(qaWrangler.vars.SORIDRAW_APP518_PILOT_FAVORITE_ID,template.pilot.favoriteId);
+assert.equal(qaWrangler.r2_buckets?.find(x=>x.binding==='CATALOG')?.bucket_name,
+ template.cloudflare.catalogR2Bucket);
+assert.equal(qaWrangler.d1_databases?.find(x=>x.binding==='CATALOG_OUTBOX_518')?.database_id,
+ template.cloudflare.outboxD1DatabaseId);
+assert.equal(qaWrangler.d1_databases?.find(x=>x.binding==='ACCOUNT_D1_BUDGET_518')?.database_id,
+ template.cloudflare.budgetD1DatabaseId);
+assert.equal(qaWrangler.keep_vars,false);
+assert.equal(qaWrangler.workers_dev,false);
+assert.equal(qaWrangler.triggers,undefined);
+for(const name of ['SORIDRAW_CANONICAL_CATALOG_518',
+ 'SORIDRAW_APP518_RELEASE_FENCES_VERIFIED',
+ 'SORIDRAW_D1_ALL_ACCOUNT_WRITERS_518',
+ 'SORIDRAW_D1_SHARED_ACCOUNT_LEDGER_518'])assert.equal(qaWrangler.vars[name],'0');
+assert.equal(hasSensitiveKeys(qaWrangler),false);
 const templateOutcome=assessIsolatedQa518(template);
 assert.equal(templateOutcome.code,'HOLD_ISOLATED_QA_RESOURCES_NOT_FILLED');
 if(process.argv.includes('--self-test')){

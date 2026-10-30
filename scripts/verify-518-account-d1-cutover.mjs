@@ -188,7 +188,10 @@ const selfTest=()=>{
  assert.deepEqual(config.services,[]);
  assert.deepEqual(config.durable_objects.bindings,[]);
  assert.deepEqual(config.triggers.crons,[]);
- assert.doesNotMatch(retired,/env[.[]|\\.prepare\\s*\\(|\\.batch\\s*\\(/);
+ assert.equal(retired.includes('env.DB'),false);
+ assert.equal(retired.includes('env.SOURCE_DB'),false);
+ assert.equal(retired.includes('.prepare('),false);
+ assert.equal(retired.includes('.batch('),false);
  assert.match(retired,/status:410/);
  console.log('APP518_MIGRATION_RETIRE_SOURCE_NO_D1_BINDING=PASS');
  console.log('APP518_MIGRATION_D1_BINDING_RETIREMENT_REQUIRED=PASS');

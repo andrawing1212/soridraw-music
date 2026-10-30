@@ -11934,13 +11934,10 @@ const toggleCycleVariantSelection = (
           return {
             ...current,
             baselineSaved: committed ? intent.desiredSaved : !current.desiredSaved,
-            baselineFavorite: committed && intent.desiredSaved ? {
-              ...(intent.song || {}),
-              id: safeDocumentId,
-              firestoreId: safeDocumentId,
-              uid,
-              saved: true,
-            } : null,
+            // Keep the outbox small: the exact linked document ID is already
+            // on current.song, so a subsequent UNSAVE can target it directly.
+            // Duplicating the entire song into baselineFavorite risks quota loss.
+            baselineFavorite: committed && intent.desiredSaved ? intent.baselineFavorite : null,
           };
         });
         if (!studioHeartIntentTimersRef.current.has(safeDocumentId)) {

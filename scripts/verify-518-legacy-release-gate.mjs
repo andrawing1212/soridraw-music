@@ -2,6 +2,7 @@
 // No Cloudflare writes, deploys, secrets, user data or network.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
 const source=readFileSync('.deploy/release-worker-runtime.mjs','utf8');
 const start=source.indexOf('async function assertNoLegacyExploreBudgetDowngrade518()');
 const end=source.indexOf('\nawait assertNoLegacyExploreBudgetDowngrade518();',start);
@@ -26,7 +27,7 @@ const prepare=({action='upload',flags={},deny=null}={})=>{
   cfGet,'https://api.cloudflare.com/client/v4/accounts/account',action,run);
  return {fn,calls,commands};
 };
-for(const action of ['upload','activate','restore']){
+for(const action of ['upload','activate']){
  const normal=prepare({action});
  await normal.fn();
  assert.deepEqual(normal.calls.map(url=>url.split('/').at(-2)),expected);
@@ -52,8 +53,26 @@ for(const action of ['upload','activate','restore']){
  await assert.rejects(failed.fn(),/HTTP_403/);
  assert.equal(failed.commands.length,0,'read-denied must fail closed');
 }
+// The actual entrypoint must refuse restore before credentials or any
+// GET/PUT/CLI operation: BOTH TEST and PRODUCTION, protection flag or not.
+const hold='HOLD_518_TEST_PRODUCTION_RESTORE_DISABLED_NO_ATOMIC_FENCE';
+const entryGuard=source.indexOf("if (action === 'restore') {");
+const credentialGate=source.indexOf("if (!TOKEN) throw new Error");
+const firstRemoteCall=source.indexOf("async function cfGet(url)");
+assert.ok(entryGuard>0&&entryGuard<credentialGate&&entryGuard<firstRemoteCall,
+ 'restore freeze must run BEFORE token and remote reads');
+for(const stage of ['test','production']){
+ const result=spawnSync(process.execPath,
+  ['.deploy/release-worker-runtime.mjs',stage,'restore'],
+  {encoding:'utf8',env:{...process.env,CLOUDFLARE_API_TOKEN:''}});
+ assert.notEqual(result.status,0,'restore entrypoint must exit nonzero');
+ assert.match(result.stderr, new RegExp(hold));
+ assert.doesNotMatch(result.stderr,/CLOUDFLARE_API_TOKEN is required/,
+  'early freeze is not dependent on credential validity');
+}
+console.log('APP518_ALL_TEST_PRODUCTION_RESTORE_ENTRYPOINT_DENIED_PRE_READ_W0=PASS');
 assert.match(source,/await assertNoLegacyExploreBudgetDowngrade518\(\);\s*await makeConfig\(\)/);
 assert.doesNotMatch(source,/APP518_PROTECTED_RESTORE_COMPENSATED_ORIGINAL_VERIFIED/);
 console.log('APP518_PROTECTED_RESTORE_BLOCKS_BEFORE_WRANGLER_AND_SCHEDULES=PASS');
-console.log('APP518_UNPROTECTED_UPLOAD_ACTIVATE_RESTORE_UNCHANGED=PASS');
+console.log('APP518_UNPROTECTED_UPLOAD_ACTIVATE_UNCHANGED_RESTORE_TEMPORARILY_BLOCKED=PASS');
 console.log('APP518_PROTECTED_UPLOAD_ACTIVATE_DOWNGRADE_AND_READ_DENY_HOLD=PASS');

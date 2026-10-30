@@ -8,13 +8,14 @@ const mode = String(process.argv[2] || '').trim();
 const action = String(process.argv[3] || 'dry-run').trim();
 if (!['test', 'production'].includes(mode)) throw new Error('usage: node .deploy/release-worker-runtime.mjs <test|production> <dry-run|upload|activate|verify|restore>');
 if (!['dry-run', 'upload', 'activate', 'verify', 'restore'].includes(action)) throw new Error(`unsupported action: ${action}`);
-// app518: temporary TEST/PRODUCTION Explore Worker restore freeze.
-// A settings GET cannot atomically fence a concurrent Cloudflare Dashboard/API
-// deploy. Reject every restore (even when protection flags are absent) before
-// credentials, remote GETs, Wrangler traffic changes, or schedules PUTs.
-// Re-enabling this route requires separately approved atomic cross-actor safety.
-if (action === 'restore') {
-  throw new Error('HOLD_518_TEST_PRODUCTION_RESTORE_DISABLED_NO_ATOMIC_FENCE');
+// app518: TEST/PRODUCTION Explore Worker traffic mutations have no verified
+// Cloudflare cross-actor atomic fence. Reject BOTH activation and restore,
+// independent of live markers and before credentials/GET/PUT/Wrangler calls.
+// Retain upload, verify and dry-run; release promotion stays HOLD.
+if (action === 'restore' || action === 'activate') {
+  throw new Error(action === 'restore'
+    ? 'HOLD_518_TEST_PRODUCTION_RESTORE_DISABLED_NO_ATOMIC_FENCE'
+    : 'HOLD_518_TEST_PRODUCTION_ACTIVATE_DISABLED_NO_ATOMIC_RECOVERY');
 }
 
 // SORIDRAW_RELEASE_ENVIRONMENT_PARITY_INVARIANT_117_20260917
@@ -698,14 +699,10 @@ try {
   console.log(`${mode.toUpperCase()}_WORKER_AFTER=${after}`);
   console.log(`${mode.toUpperCase()}_WORKER_SCHEDULES_PRESERVED=${JSON.stringify(schedulesBefore)}`);
 } catch (error) {
-  if (deployed) {
-    try {
-      run(process.execPath, [WRANGLER, 'rollback', before, '--name', target.worker, '--config', CONFIG_PATH, '--message', `automatic ${mode} rollback after release smoke failure`], WORKER_DIR);
-      await cfPut(`${apiBase}/workers/scripts/${target.worker}/schedules`, schedulesBefore);
-      console.error(`${mode.toUpperCase()}_WORKER_ROLLBACK=ATTEMPTED`);
-    } catch (rollbackError) {
-      console.error(`${mode.toUpperCase()}_WORKER_ROLLBACK_FAILED=${String(rollbackError?.message || rollbackError)}`);
-    }
-  }
+  // Defense in depth if activation is re-enabled in a future approved change:
+  // never run a non-atomic rollback that can overwrite an external C deployment
+  // or its schedules. Failure needs separate controlled recovery, not success.
+  if (deployed)
+    console.error(`${mode.toUpperCase()}_WORKER_ACTIVATE_FAILED_NO_UNSAFE_AUTO_ROLLBACK_MANUAL_HOLD`);
   throw error;
 }

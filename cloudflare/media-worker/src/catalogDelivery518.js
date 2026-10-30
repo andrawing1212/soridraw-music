@@ -37,14 +37,15 @@ const validRow=row=>row&&text(row.owner_uid)&&text(row.favorite_id)
  &&Number(row.attempt_count)>=0;
 
 export const deliverDueCanonicalFavorites518=async({
- db,nowMs,readExactCanonical,applyVersionedR2,maxItems=128,
+ db,nowMs,readExactCanonical,applyVersionedR2,maxItems=128,pilotScope,
 }={})=>{
  if(!db||!Number.isSafeInteger(nowMs)||nowMs<0
    ||typeof readExactCanonical!=='function'
    ||typeof applyVersionedR2!=='function'
    ||!Number.isInteger(maxItems)||maxItems<1||maxItems>256)
    return {code:'DENY_DEPENDENCIES',attempted:0,acked:0,retry:0,drift:0};
- const fetched=await getDueFavoriteChanges518({db,nowMs,limit:maxItems});
+ const fetched=await getDueFavoriteChanges518({db,nowMs,limit:maxItems,
+  ...(pilotScope?{pilotUid:pilotScope.uid,pilotDocumentId:pilotScope.documentId}:{})});
  if(fetched.code!=='OK')return {code:'DENY_DUE_QUEUE',attempted:0,acked:0,retry:0,drift:0};
  const result={code:'OK',attempted:0,acked:0,retry:0,held:0,drift:0};
  const pauseForTomorrow=async({uid,id,version})=>{

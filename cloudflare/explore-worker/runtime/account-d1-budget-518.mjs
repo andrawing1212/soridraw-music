@@ -45,7 +45,20 @@ const plan=(sql,args=[])=>{
   if(!singleValues)deny('HOLD_518_UNBOUNDED_INSERT_SELECT');
  }else{
   const where=text.match(/\bWHERE\b([\s\S]*)/i)?.[1]||'';
-  if(!/\b(?:uid|user_uid|track_id|batch_id|id)\s*=\s*\?/i.test(where))
+  // Per-owner WHERE alone is not bounded for a member/batch table.
+  // Require the actual unique composite key for each audited table.
+  if(/\bOR\b/i.test(where))deny('HOLD_518_AMBIGUOUS_UPDATE_OR_DELETE');
+  const key=(column)=>new RegExp('\\\\b'+column+'\\\\s*=\\\\s*\\\\?','i').test(where);
+  const unique={
+   explore_curators:['uid'],
+   curated_picks:['collection_key','track_id'],
+   explore_like_overrides_171:['user_uid','track_id'],
+   explore_like_count_deltas_171:['track_id'],
+   explore_like_private_pending_416:['user_uid'],
+   explore_like_private_operations_416:['user_uid','operation_id'],
+   explore_like_batches_069:['batch_id'],
+  }[table];
+  if(!unique||!unique.every(key))
    deny('HOLD_518_UNBOUNDED_UPDATE_OR_DELETE');
  }
  if(!Array.isArray(args)||args.length>128)

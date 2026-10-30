@@ -1,0 +1,34 @@
+name: Verify app520 Recent Songs login restore (No Deploy)
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'src/App.tsx'
+      - 'scripts/verify-520-recent-login-recovery.mjs'
+      - '.github/workflows/verify-520-recent-login-recovery.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  recent-login-restore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Verify logout cache preservation and empty-cache re-login
+        run: node scripts/verify-520-recent-login-recovery.mjs
+      - name: Existing recent-song sync and batch guards
+        run: |
+          npx tsx scripts/verify-196-recent-song-sync.ts
+          node scripts/verify-290-recent-edit-batch.mjs
+          node scripts/verify-116-music-note-library-warm-cost.mjs
+      - name: TypeScript and build
+        run: |
+          npm run lint
+          npm run build

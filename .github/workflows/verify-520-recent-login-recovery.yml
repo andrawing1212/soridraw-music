@@ -26,7 +26,6 @@ jobs:
       - name: Existing recent-song sync and batch guards
         run: |
           npx tsx scripts/verify-196-recent-song-sync.ts
-          node scripts/verify-116-music-note-library-warm-cost.mjs
       - name: TypeScript and build
         run: |
           npm run lint

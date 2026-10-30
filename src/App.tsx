@@ -10490,6 +10490,17 @@ const toggleCycleVariantSelection = (
                 rememberFavoriteDeletedTombstones(currentUser.uid, bundle.deletedIds);
               }
               const localDeletedIds = getFavoriteDeletedTombstoneIds(currentUser.uid);
+              // app521: a successful changed-item RTDB SAVE is newer than a
+              // still-lagging R2 Catalog. Keep that exact server-confirmed row
+              // until the Catalog revision catches up. Never promote an
+              // optimistic heart preview or an unknown local row to authority.
+              const latestCanonicalSignal = readPendingMusicNoteSyncSignal(currentUser.uid);
+              const confirmedSaveId = latestCanonicalSignal
+                && ['save', 'restore', 'shared-note-save'].includes(latestCanonicalSignal.operation)
+                && latestCanonicalSignal.removed !== true
+                && Number(latestCanonicalSignal.version || 0) > Number(bundle.catalogRevision || 0)
+                ? String(latestCanonicalSignal.documentIds?.[0] || '').trim()
+                : '';
               const catalogFavorites = (bundle.items || []).filter((favorite: any) => {
                 if (isFavoriteSoftRemoved(favorite)) return false;
                 const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
@@ -10513,6 +10524,10 @@ const toggleCycleVariantSelection = (
                   if (isStudioHeartOptimisticFavorite(favorite)) return false;
                   const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
                   if (favoriteId && localDeletedIds.has(favoriteId)) return false;
+                  // The exact SAVE signal represents committed Firestore state,
+                  // not the earlier optimistic heart. An older Catalog cannot
+                  // discard this row while its changed-item delta is pending.
+                  if (confirmedSaveId && favoriteId === confirmedSaveId) return true;
                   const favoriteVersion = Number(favorite?.updatedAtMs || favorite?.createdAtMs || 0)
                     || getTimestampMs(favorite?.updatedAt)
                     || getTimestampMs(favorite?.createdAt)

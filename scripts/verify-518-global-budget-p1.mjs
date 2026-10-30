@@ -107,3 +107,71 @@ console.log('APP518_P1_SIX_20K_OWNERS_SHARED_D1_CAP=PASS');
 console.log('APP518_P1_D1_SECONDARY_MEMBER_INDEX_AND_OUTBOX_DUE_INDEX_BUDGETED=PASS');
 console.log('APP518_P1_UNATTESTED_GLOBAL_WRITERS_WRITE_ZERO=PASS');
 console.log('APP518_P1_DAILY_QUOTA_UTC_RETRY_NO_PERMANENT_HOLD=PASS');
+
+
+// An unknown future D1 write form must not silently bypass the account
+// reservation through prepared .first()/.all(), CTE or mixed .batch().
+let boundaryCalls=0;
+const reservedBoundary=[];
+const boundaryRaw={
+ prepare(){return {
+  bind(){return this;},
+  async first(){boundaryCalls++;return null;},
+  async all(){boundaryCalls++;return {results:[]};},
+  async run(){boundaryCalls++;return {success:true,meta:{changes:1}};},
+ };},
+ async batch(statements){boundaryCalls+=statements.length;return statements.map(()=>({success:true,meta:{changes:1}}));},
+};
+const boundary=createMeteredD1Database518({
+ rawDb:boundaryRaw,clock:()=>time,
+ reserveWriteBudget:async args=>{reservedBoundary.push(args);return {reserved:true};},
+});
+const rejects=async(execute)=>{
+ const beforeIo=boundaryCalls, beforeBudget=reservedBoundary.length;
+ await assert.rejects(execute(),e=>e.code==='HOLD_D1_UNMETERED_SQL'
+  ||e.code==='HOLD_D1_WRITE_THROUGH_READ');
+ assert.equal(boundaryCalls,beforeIo,'unrecognized D1 mutation must never reach raw DB');
+ assert.equal(reservedBoundary.length,beforeBudget,'unrecognized SQL must not reserve or execute');
+};
+const member='music_note_catalog_member_518';
+const outbox='music_note_catalog_outbox_518';
+await rejects(()=>boundary.prepare('INSERT INTO '+member+
+ ' (owner_uid,generation,favorite_id) VALUES (?,?,?) RETURNING *')
+ .bind('u',1,'song').first());
+await rejects(()=>boundary.prepare('UPDATE '+outbox+
+ ' SET attempt_count=1 WHERE owner_uid=? RETURNING *').bind('u').all());
+await rejects(()=>boundary.prepare('WITH candidate AS (SELECT 1) INSERT INTO '+member+
+ ' (owner_uid,generation,favorite_id) VALUES (?,?,?)').bind('u',1,'song').run());
+await rejects(()=>boundary.prepare('CREATE TABLE unsafe (id INTEGER)').run());
+await rejects(()=>boundary.prepare('PRAGMA writable_schema=ON').run());
+await rejects(()=>boundary.prepare('UPDATE '+outbox+' SET attempt_count=0').run());
+await rejects(()=>boundary.prepare('DELETE FROM '+member+' WHERE generation=?').bind(1).run());
+await rejects(()=>boundary.prepare('UPDATE explore_social_likes SET count=1 WHERE owner_uid=?').bind('u').run());
+await rejects(()=>boundary.prepare('INSERT INTO '+member+
+ ' (owner_uid,generation,favorite_id) VALUES (?,?,?); DELETE FROM '+member)
+ .bind('u',1,'song').run());
+await rejects(()=>boundary.batch([
+ boundary.prepare('UPDATE '+outbox+' SET attempt_count=? WHERE owner_uid=?').bind(1,'u'),
+ boundary.prepare('CREATE TABLE bypass (id INTEGER)'),
+]));
+assert.equal(reservedBoundary.length,0);
+await boundary.prepare('SELECT * FROM '+outbox+' WHERE owner_uid=?').bind('u').first();
+await boundary.prepare('SELECT * FROM '+outbox+' WHERE owner_uid=?').bind('u').all();
+assert.equal(boundaryCalls,2);
+assert.equal(reservedBoundary.length,0,'read-only SQL must not write budget rows');
+await boundary.prepare('UPDATE '+outbox+' SET attempt_count=? WHERE owner_uid=?')
+ .bind(1,'u').run();
+assert.equal(reservedBoundary.length,1,'recognized scoped update must reserve');
+assert.equal(boundaryCalls,3);
+const insert=boundary.prepare('INSERT OR IGNORE INTO '+member+
+ ' (owner_uid,generation,favorite_id) VALUES (?,?,?)').bind('u',1,'song');
+const applied=await boundary.batch([insert]);
+assert.equal(applied.length,1);
+assert.equal(reservedBoundary.length,2,'batch must reserve before raw execution');
+assert.equal(boundaryCalls,4);
+const controlSql='/* APP518_DAILY_PAUSE_CONTROL_518 */ UPDATE '+outbox+
+ ' SET next_attempt_ms=?,updated_at_ms=? WHERE owner_uid=? AND favorite_id=? AND source_version_ns=?';
+await boundary.prepare(controlSql).bind(1,2,'u','song','version').run();
+assert.equal(reservedBoundary.at(-1)?.purpose,'control','legitimate UTC pause must retain control-lane reservation');
+console.log('APP518_P1_D1_SQL_FIRST_ALL_CTE_DDL_AND_BATCH_BYPASS_DENIED=PASS');
+console.log('APP518_P1_D1_READ_ONLY_W0_AND_SCOPED_WRITES_RESERVED=PASS');

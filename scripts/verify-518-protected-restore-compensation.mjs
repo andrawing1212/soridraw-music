@@ -1,84 +1,96 @@
-// app518 isolated execution of the REAL protected restore() source.
-// No network, GitHub mutation, Cloudflare deployment or user data.
+// app518 P2 isolated red-team regression. Kept historical filename so the
+// existing CI runs it; protected RESTORE is now fail-closed, NOT compensated.
+// Exercise the real source; all Cloudflare/Wrangler actions are fake functions.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const source=readFileSync('.deploy/release-worker-runtime.mjs','utf8');
-const start=source.indexOf('async function restore() {');
-const end=source.indexOf('\n// app518: a legacy Explore',start);
-assert.ok(start>0&&end>start);
-const code=source.slice(start,end)+'\nreturn restore;';
-const ORIGINAL='aaaabbbb-2222-4222-8222-123456789abc';
+const start=source.indexOf('async function assertNoLegacyExploreBudgetDowngrade518()');
+const end=source.indexOf('\nawait assertNoLegacyExploreBudgetDowngrade518();',start);
+const restoreStart=source.indexOf('async function restore() {');
+const restoreEnd=source.indexOf('\n// app518: a legacy Explore',restoreStart);
+assert.ok(start>restoreEnd&&end>start);
+assert.ok(end<source.indexOf('\nawait makeConfig();',end));
+assert.ok(end<source.indexOf("if (action === 'restore') {",end));
+const guardCode=source.slice(start,end)+'\nreturn assertNoLegacyExploreBudgetDowngrade518;';
+const restoreCode=source.slice(restoreStart,restoreEnd)+'\nreturn restore;';
 const TARGET='deadbeef-1111-4111-8111-123456789abc';
-const originalSchedule=[{cron:'*/10 * * * *'}];
-const targetSchedule=[{cron:'*/5 * * * *'}];
-const setup=({guarded=true,failedPost=false,failedCompensation=false,
- failedRollbackDeploy=false,concurrent=false,originalDrift=false}={})=>{
- let active=originalDrift?'cccccccc-1111-4111-8111-123456789abc':ORIGINAL;
- let schedule=[...originalSchedule];
- const commands=[],checks=[];
- const run=(binary,args)=>{
-  commands.push({binary,args});
-  if(args[0]==='scripts/verify-518-account-release-preflight.mjs'){
-   checks.push(args[1]);
-   if(args[1]==='--post-restore'&&failedPost)throw Error('FAIL_518_CODE_AND_BINDINGS');
-   if(args[1]==='--post-compensate'&&failedCompensation)
-    throw Error('FAIL_518_ORIGINAL_CODE_OR_BINDINGS');
-   return 'READONLY_AUDIT_OK';
+const CURRENT='aaaabbbb-2222-4222-8222-123456789abc';
+const OTHER='cccccccc-3333-4333-8333-123456789abc';
+const OLD_SCHEDULE=[{cron:'*/10 * * * *'}];
+const NEW_SCHEDULE=[{cron:'*/5 * * * *'}];
+const OTHER_SCHEDULE=[{cron:'*/20 * * * *'}];
+const markers=['SORIDRAW_D1_ACCOUNT_BUDGET_ENFORCEMENT_518',
+ 'SORIDRAW_APP518_RELEASE_FENCES_VERIFIED'];
+const names=['soridraw-explore-api','soridraw-explore-test','soridraw-explore-preview'];
+
+const setup=({protectedAt='soridraw-explore-preview',marker=markers[0],
+ externalChange='between-reads',noMarker=false,readError=false}={})=>{
+ let active=CURRENT,schedules=OLD_SCHEDULE;
+ const observed=[],commands=[],schedulePuts=[];
+ const cfGet=async url=>{
+  const name=names.find(n=>url.endsWith('/'+n+'/settings'));
+  if(!name)throw Error('UNEXPECTED_API_READ');
+  observed.push(name);
+  // External actor deploys C outside the GitHub mutex while our GETs
+  // are executing. This must not enable a subsequent rollback write.
+  if(externalChange==='between-reads'&&name===names[1]){
+   active=OTHER;schedules=OTHER_SCHEDULE;
   }
-  if(args[0]==='wrangler'&&args[1]==='versions'&&args[2]==='deploy'){
-   const version=args[3].split('@')[0];
-   if(version===ORIGINAL&&failedRollbackDeploy)throw Error('CLOUDFLARE_DEPLOY_DENIED');
-   active=concurrent&&version===TARGET?'bbbbbbbb-2222-4222-8222-123456789abc':version;
-   return 'DEPLOY_RESPONSE_OK';
-  }
-  throw Error('UNEXPECTED_COMMAND');
+  if(readError&&name===names[1])throw Error('HTTP_403');
+  const bindings=[{name:'DB',type:'d1',database_id:'shared'}];
+  if(!noMarker&&name===protectedAt)
+   bindings.push({name:marker,type:'plain_text',text:'ENFORCE'});
+  return {bindings};
  };
- const cfPut=async(url,body)=>{schedule=body;};
- const live=async()=>active;
- const schedules=async()=>schedule;
- const processFake={env:{
-  RELEASE_WORKER_VERSION:TARGET,
-  RELEASE_WORKER_SCHEDULES_JSON:JSON.stringify(targetSchedule),
- },execPath:'node'};
- const deps=[processFake,guarded,ORIGINAL,run,'wrangler','/config','/worker','/root',
-  cfPut,'https://fake-cloudflare.example/v4','test',{worker:'soridraw-explore-test'},
-  async()=>{},live,schedules,{error:()=>{},log:()=>{}}];
- const names=['process','protectedRestorePreflight518','protectedOriginalVersion518',
-  'run','WRANGLER','CONFIG_PATH','WORKER_DIR','ROOT','cfPut','apiBase','mode','target',
-  'sleep','activeVersion','readSchedules','console'];
- const fn=new Function(...names,code)(...deps);
- return {fn,commands,checks,active:()=>active,schedules:()=>schedule};
+ const guard=new Function('cfGet','apiBase','action',guardCode)(
+  cfGet,'https://api.cloudflare.com/client/v4/accounts/account','restore');
+ const run=(_binary,args)=>{
+  commands.push(args);
+  if(args[0]==='wrangler'&&args[1]==='versions'&&args[2]==='deploy')
+   active=args[3].split('@')[0];
+ };
+ const cfPut=async(_url,value)=>{schedulePuts.push(value);schedules=value;};
+ const actualRestore=new Function('process','run','WRANGLER','CONFIG_PATH',
+  'WORKER_DIR','cfPut','apiBase','target','sleep','activeVersion',
+  'readSchedules','mode','console',restoreCode)(
+  {execPath:'node',env:{RELEASE_WORKER_VERSION:TARGET,
+   RELEASE_WORKER_SCHEDULES_JSON:JSON.stringify(NEW_SCHEDULE)}},
+  run,'wrangler','/config','/worker',cfPut,'https://fake-cloudflare.example/v4',
+  {worker:'soridraw-explore-test'},async()=>{},async()=>active,
+  async()=>schedules,'test',{log:()=>{}});
+ const invoke=async()=>{
+  await guard();
+  await actualRestore();
+ };
+ return {invoke,guard,active:()=>active,schedules:()=>schedules,
+  commands,schedulePuts,observed};
 };
-const normal=setup({failedPost:false});
-await normal.fn();
-assert.equal(normal.active(),TARGET);
-assert.deepEqual(normal.checks,['--post-restore']);
-assert.equal(normal.commands.filter(x=>x.args[1]==='versions').length,1);
-for(const mode of [{failedPost:true},{failedPost:true,failedCompensation:true},
- {failedPost:true,failedRollbackDeploy:true}]){
- const test=setup(mode);
- await assert.rejects(test.fn(),/HOLD_518_/);
- assert.deepEqual(test.checks.includes('--post-restore'),true);
- if(!mode.failedRollbackDeploy)
-  assert.equal(test.active(),ORIGINAL,'postcheck mismatch must revert 100% traffic');
- if(!mode.failedRollbackDeploy)
-  assert.deepEqual(test.schedules(),originalSchedule,'restore old schedules');
- if(!mode.failedCompensation&&!mode.failedRollbackDeploy)
-  assert.deepEqual(test.checks,['--post-restore','--post-compensate']);
- if(mode.failedRollbackDeploy)
-  assert.equal(test.active(),TARGET,'unrecoverable Cloudflare failure explicitly HOLD');
+
+for(const protectedAt of names)for(const marker of markers){
+ const attempt=setup({protectedAt,marker});
+ await assert.rejects(attempt.invoke(),/HOLD_518_PROTECTED_RESTORE_ATOMIC_DEPLOY_FENCE_UNVERIFIED/);
+ assert.equal(attempt.active(),OTHER,'external C traffic must remain 100%');
+ assert.deepEqual(attempt.schedules(),OTHER_SCHEDULE,'external C schedule must remain intact');
+ assert.equal(attempt.commands.length,0,'NO Wrangler traffic change in race');
+ assert.equal(attempt.schedulePuts.length,0,'NO Cloudflare schedules PUT in race');
+ const direct=setup({protectedAt,marker,externalChange:'none'});
+ await assert.rejects(direct.invoke(),/HOLD_518_PROTECTED_RESTORE_ATOMIC_DEPLOY_FENCE_UNVERIFIED/);
+ assert.equal(direct.active(),CURRENT,'no previous protected traffic mutation');
+ assert.equal(direct.commands.length,0);
+ assert.equal(direct.schedulePuts.length,0);
 }
-const race=setup({failedPost:true,concurrent:true});
-await assert.rejects(race.fn(),/HOLD_518_COMPENSATION_UNVERIFIED_MANUAL_RELEASE_HOLD/);
-assert.equal(race.commands.filter(x=>x.args[3]?.startsWith(ORIGINAL)).length,0,
- 'unknown concurrent deployment must not be overwritten');
-const drift=setup({originalDrift:true});
-await assert.rejects(drift.fn(),/HOLD_518_PROTECTED_ORIGINAL_VERSION_CHANGED/);
-assert.equal(drift.commands.length,0,'preflight-to-mutation version drift W0');
-const unguarded=setup({guarded:false,failedPost:true});
-await unguarded.fn();assert.deepEqual(unguarded.checks,[],
- 'legacy unprotected restore stays unchanged');
-console.log('APP518_PROTECTED_RESTORE_POSTCHECK_FAILURE_REVERTS_100_PERCENT_TRAFFIC=PASS');
-console.log('APP518_COMPENSATION_RESTORES_SCHEDULES_AND_AUDITS_ORIGINAL=PASS');
-console.log('APP518_COMPENSATION_FAILURE_AND_CONCURRENT_ROLLOUT_MANUAL_HOLD=PASS');
-console.log('APP518_ORIGINAL_VERSION_DRIFT_PREMUTATION_BLOCK=PASS');
+const unauthorized=setup({readError:true});
+await assert.rejects(unauthorized.invoke(),/HTTP_403/);
+assert.equal(unauthorized.commands.length,0);
+assert.equal(unauthorized.schedulePuts.length,0);
+// The unprotected, pre-existing restore behavior remains functional.
+const unprotected=setup({noMarker:true,externalChange:'none'});
+await unprotected.invoke();
+assert.equal(unprotected.active(),TARGET);
+assert.deepEqual(unprotected.schedules(),NEW_SCHEDULE);
+assert.equal(unprotected.commands.length,1);
+assert.equal(unprotected.schedulePuts.length,1);
+console.log('APP518_PROTECTED_ROLLBACK_CONCURRENT_C_TRAFFIC_OVERWRITE_DENIED_W0=PASS');
+console.log('APP518_PROTECTED_ROLLBACK_CONCURRENT_C_SCHEDULE_OVERWRITE_DENIED_W0=PASS');
+console.log('APP518_PROTECTED_ROLLBACK_NO_ATOMIC_CAS_FAILS_BEFORE_MUTATION=PASS');
+console.log('APP518_UNPROTECTED_LEGACY_RESTORE_RETAINED=PASS');

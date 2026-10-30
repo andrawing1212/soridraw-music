@@ -69,10 +69,15 @@ export const exploreBudgetPlan518=plan;
 
 // OFF is a byte-identical passthrough of the original binding and causes no
 // additional D1 reads, writes, DO requests, or page entry work.
-export const protectExploreEnv518=(env,{clock=()=>Date.now()}={})=>{
+export const protectExploreEnv518=(env,{clock=()=>Date.now(),
+ // Explicit source-level signoff, not an env variable. Production callers
+ // pass no override and remain safely OFF even if flags are changed.
+ signedAccountD1CutoverVerified=false}={})=>{
  if(mode(env)==='')return env;
  if(mode(env)!=='ENFORCE_AFTER_SIGNED_ALL_WRITERS_518')
   deny('HOLD_518_UNKNOWN_BUDGET_MODE');
+ if(signedAccountD1CutoverVerified!==true)
+  deny('HOLD_518_SIGNED_ACCOUNT_CUTOVER_MISSING');
  if(env?.SORIDRAW_D1_ALL_ACCOUNT_WRITERS_518!=='VERIFIED'
    ||env?.SORIDRAW_D1_SHARED_ACCOUNT_LEDGER_518!=='VERIFIED'
    ||env?.SORIDRAW_APP518_RELEASE_FENCES_VERIFIED!=='APPROVED_ALL_3_AND_NO_OLD_WRITERS')

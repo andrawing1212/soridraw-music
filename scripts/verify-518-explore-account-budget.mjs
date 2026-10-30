@@ -54,6 +54,8 @@ assert.equal(reserved,16,'5+4+ledger write');
 assert.equal(direct,2);
 await rejects(env.DB.prepare('DELETE FROM curated_picks').bind().run());
 await rejects(env.DB.prepare('UPDATE explore_curators SET is_active=0 WHERE is_active=1').bind().run());
+await rejects(env.DB.prepare('DELETE FROM curated_picks WHERE track_id=?').bind('song').run());
+await rejects(env.DB.prepare('UPDATE explore_like_overrides_171 SET liked=0 WHERE user_uid=?').bind('owner').run());
 await rejects(env.DB.prepare('INSERT INTO curated_picks SELECT * FROM other').bind().run());
 await rejects(env.DB.prepare('INSERT INTO unknown_table(id) VALUES (?)').bind('x').run());
 await rejects(env.DB.prepare('WITH e AS (SELECT 1) INSERT INTO curated_picks VALUES (?)').run());

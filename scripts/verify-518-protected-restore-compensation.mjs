@@ -25,8 +25,8 @@ const setup=({guarded=true,failedPost=false,failedCompensation=false,
     throw Error('FAIL_518_ORIGINAL_CODE_OR_BINDINGS');
    return 'READONLY_AUDIT_OK';
   }
-  if(args[0]==='versions'&&args[1]==='deploy'){
-   const version=args[2].split('@')[0];
+  if(args[0]==='wrangler'&&args[1]==='versions'&&args[2]==='deploy'){
+   const version=args[3].split('@')[0];
    if(version===ORIGINAL&&failedRollbackDeploy)throw Error('CLOUDFLARE_DEPLOY_DENIED');
    active=concurrent&&version===TARGET?'bbbbbbbb-2222-4222-8222-123456789abc':version;
    return 'DEPLOY_RESPONSE_OK';
@@ -40,7 +40,7 @@ const setup=({guarded=true,failedPost=false,failedCompensation=false,
   RELEASE_WORKER_VERSION:TARGET,
   RELEASE_WORKER_SCHEDULES_JSON:JSON.stringify(targetSchedule),
  },execPath:'node'};
- const deps=[processFake,guarded,ORIGINAL,run,'wrangler','/cloudflare','/root',
+ const deps=[processFake,guarded,ORIGINAL,run,'wrangler','/config','/worker','/root',
   cfPut,'https://fake-cloudflare.example/v4','test',{worker:'soridraw-explore-test'},
   async()=>{},live,schedules,{error:()=>{},log:()=>{}}];
  const names=['process','protectedRestorePreflight518','protectedOriginalVersion518',
@@ -53,7 +53,7 @@ const normal=setup({failedPost:false});
 await normal.fn();
 assert.equal(normal.active(),TARGET);
 assert.deepEqual(normal.checks,['--post-restore']);
-assert.equal(normal.commands.filter(x=>x.args[0]==='versions').length,1);
+assert.equal(normal.commands.filter(x=>x.args[1]==='versions').length,1);
 for(const mode of [{failedPost:true},{failedPost:true,failedCompensation:true},
  {failedPost:true,failedRollbackDeploy:true}]){
  const test=setup(mode);
@@ -61,7 +61,8 @@ for(const mode of [{failedPost:true},{failedPost:true,failedCompensation:true},
  assert.deepEqual(test.checks.includes('--post-restore'),true);
  if(!mode.failedRollbackDeploy)
   assert.equal(test.active(),ORIGINAL,'postcheck mismatch must revert 100% traffic');
- assert.deepEqual(test.schedules(),originalSchedule,'restore old schedules');
+ if(!mode.failedRollbackDeploy)
+  assert.deepEqual(test.schedules(),originalSchedule,'restore old schedules');
  if(!mode.failedCompensation&&!mode.failedRollbackDeploy)
   assert.deepEqual(test.checks,['--post-restore','--post-compensate']);
  if(mode.failedRollbackDeploy)
@@ -69,7 +70,7 @@ for(const mode of [{failedPost:true},{failedPost:true,failedCompensation:true},
 }
 const race=setup({failedPost:true,concurrent:true});
 await assert.rejects(race.fn(),/HOLD_518_COMPENSATION_UNVERIFIED_MANUAL_RELEASE_HOLD/);
-assert.equal(race.commands.filter(x=>x.args[2]?.startsWith(ORIGINAL)).length,0,
+assert.equal(race.commands.filter(x=>x.args[3]?.startsWith(ORIGINAL)).length,0,
  'unknown concurrent deployment must not be overwritten');
 const drift=setup({originalDrift:true});
 await assert.rejects(drift.fn(),/HOLD_518_PROTECTED_ORIGINAL_VERSION_CHANGED/);

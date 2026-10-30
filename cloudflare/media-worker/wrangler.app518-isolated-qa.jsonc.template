@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "soridraw-app518-qa",
-  "main": "./src/index.js",
+  "main": "./src/app518IsolatedQaWorker518.js",
   "account_id": "REPLACE_WITH_SEPARATE_CLOUDFLARE_ACCOUNT_ID",
   "compatibility_date": "2026-09-01",
   "keep_vars": false,
@@ -19,7 +19,9 @@
     "SORIDRAW_CANONICAL_CATALOG_518": "0",
     "SORIDRAW_APP518_RELEASE_FENCES_VERIFIED": "0",
     "SORIDRAW_D1_ALL_ACCOUNT_WRITERS_518": "0",
-    "SORIDRAW_D1_SHARED_ACCOUNT_LEDGER_518": "0"
+    "SORIDRAW_D1_SHARED_ACCOUNT_LEDGER_518": "0",
+    "SORIDRAW_APP518_QA_ACCOUNT_ID_518": "REPLACE_WITH_SEPARATE_CLOUDFLARE_ACCOUNT_ID",
+    "SORIDRAW_APP518_QA_RELEASE_518": "0"
   },
   "r2_buckets": [
     {

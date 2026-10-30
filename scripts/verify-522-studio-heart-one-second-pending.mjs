@@ -25,6 +25,7 @@ assert.match(flushSource, /baselineSaved: committed \? intent\.desiredSaved : !c
 
 const source = [
   'const STUDIO_HEART_BATCH_MS = 1_000;',
+  'const STUDIO_HEART_RETRY_MS = 60_000;',
   fromTo('  const rememberStudioHeartPreviewVersion = (', '  const persistRecentHeartAuthority = ('),
   flushSource,
   fromTo('  const scheduleStudioHeartPendingIntent = (', '  const queueStudioHeartPendingIntent = ('),

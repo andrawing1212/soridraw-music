@@ -96,6 +96,19 @@ for(const name of ['SORIDRAW_CANONICAL_CATALOG_518',
  'SORIDRAW_D1_ALL_ACCOUNT_WRITERS_518',
  'SORIDRAW_D1_SHARED_ACCOUNT_LEDGER_518'])assert.equal(qaWrangler.vars[name],'0');
 assert.equal(hasSensitiveKeys(qaWrangler),false);
+const qaFirebaseEnv=read('functions/.env.app518-isolated-qa.template');
+const expectedEnv=[
+ 'SORIDRAW_APP518_BRIDGE_ACTIVE=OFF',
+ 'SORIDRAW_APP518_PILOT_UID='+template.pilot.uid,
+ 'SORIDRAW_APP518_PILOT_FAVORITE_ID='+template.pilot.favoriteId,
+ 'SORIDRAW_APP518_WORKER_HOST='+template.cloudflare.workerHostname,
+ 'SORIDRAW_APP518_WORKER_URL=https://'+template.cloudflare.workerHostname+'/v1/server/catalog518',
+];
+for(const assignment of expectedEnv)
+ assert.ok(qaFirebaseEnv.split('\\n').includes(assignment),
+  'QA Firebase template must match the exact one-song manifest');
+assert.ok(!/^(?:SORIDRAW_CATALOG_SERVER_HMAC_518|GOOGLE_APPLICATION_CREDENTIALS|FIREBASE_TOKEN)=/m.test(qaFirebaseEnv),
+ 'QA Firebase template must not contain secret or operational login');
 const templateOutcome=assessIsolatedQa518(template);
 assert.equal(templateOutcome.code,'HOLD_ISOLATED_QA_RESOURCES_NOT_FILLED');
 if(process.argv.includes('--self-test')){

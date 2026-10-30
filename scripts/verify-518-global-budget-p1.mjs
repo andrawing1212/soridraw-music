@@ -180,6 +180,15 @@ const applied=await boundary.batch([insert]);
 assert.equal(applied.length,1);
 assert.equal(reservedBoundary.length,2,'batch must reserve before raw execution');
 assert.equal(boundaryCalls,4);
+assert.equal(reservedBoundary.at(-1)?.requestedRows,2,
+ 'one member must reserve 1 base + 1 index = 2 billed rows');
+const bulkMembers='INSERT OR IGNORE INTO '+member+
+ ' (owner_uid,generation,favorite_id) SELECT ?,?,value FROM json_each(?)';
+await boundary.prepare(bulkMembers).bind('u',1,JSON.stringify(['song-1','song-2'])).run();
+assert.equal(reservedBoundary.at(-1)?.requestedRows,4,
+ 'two indexed member rows reserve exactly four billed rows');
+assert.equal(reservedBoundary[0]?.requestedRows,3,
+ 'outbox due-index UPDATE keeps conservative three-row charge');
 const controlSql='/* APP518_DAILY_PAUSE_CONTROL_518 */ UPDATE '+outbox+
  ' SET next_attempt_ms=?,updated_at_ms=? WHERE owner_uid=? AND favorite_id=? AND source_version_ns=?';
 await boundary.prepare(controlSql).bind(1,2,'u','song','version').run();

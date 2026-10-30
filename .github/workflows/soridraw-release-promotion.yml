@@ -44,6 +44,13 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      # Only the release controller may supply this independently pinned
+      # trust fingerprint. Never accept a key hash from workflow_dispatch
+      # input, a PR artifact, the self-signed report or an environment flag.
+      # Unprovisioned secrets => protected restore fails closed.
+      APP518_TRUSTED_AUDITOR_KEY_SHA256_518: ${{ secrets.APP518_TRUSTED_AUDITOR_KEY_SHA256_518 }}
+      APP518_AUDITOR_PUBLIC_KEY_PEM_518: ${{ secrets.APP518_AUDITOR_PUBLIC_KEY_PEM_518 }}
+      APP518_SIGNED_ACCOUNT_PROOF_518: ${{ secrets.APP518_SIGNED_ACCOUNT_PROOF_518 }}
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
       FIREBASE_PROJECT: soridraw
       TEST_URL: https://test.soridraw.com

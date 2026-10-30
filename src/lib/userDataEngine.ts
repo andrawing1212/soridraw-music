@@ -202,9 +202,13 @@ const restoreCatalogPending519 = (kind: SoridrawCatalogKind, uid: string): Catal
     return pending;
   } catch { return null; }
 };
-const clearCatalogPending519 = (key: string, pending: CatalogPendingPublish519): void => {
-  // An older HTTP ACK may never erase an updated local mutation.
+const clearCatalogPending519 = (
+  key: string, pending: CatalogPendingPublish519, dirtyRevision: number,
+): void => {
+  // An older HTTP ACK may never erase an updated local mutation OR clear
+  // the live Firestore dirty counter for that newer mutation.
   if (catalogPendingPublishes.get(key) !== pending) return;
+  clearAdaptiveListIndexDirtyRevision(pending.kind, dirtyRevision);
   catalogPendingPublishes.delete(key);
   if (typeof localStorage !== 'undefined') {
     try { localStorage.removeItem(pendingStorageKey519(pending.kind, pending.uid)); } catch {}
@@ -1094,8 +1098,7 @@ const flushCatalogPendingPublish = async (key: string): Promise<void> => {
   }
 
   if (built.delta.upserts.length === 0 && built.delta.deletedIds.length === 0) {
-    clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
-    clearCatalogPending519(key, pending);
+    clearCatalogPending519(key, pending, currentDirtyRevision);
     return;
   }
 
@@ -1115,8 +1118,7 @@ const flushCatalogPendingPublish = async (key: string): Promise<void> => {
     revision: published.revision,
   };
   await writeCatalogSnapshotToLocalCache(kind, uid, confirmedSnapshot);
-  clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
-  clearCatalogPending519(key, pending);
+  clearCatalogPending519(key, pending, currentDirtyRevision);
 };
 
 export const scheduleCatalogSnapshotPublishIfDirty = (

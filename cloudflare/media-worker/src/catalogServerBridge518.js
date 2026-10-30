@@ -22,6 +22,9 @@ const validItem=source=>source&&source.verifiedByServer===true
  &&typeof source.updateTime==='string';
 export const createApp518ServerBridge=({
  env,sharedReleaseFencesVerified=false,
+ // Must be passed by a separately audited source-level release controller;
+ // env VERIFIED strings alone MUST NOT activate the global budget writer.
+ signedAccountD1CutoverVerified=false,
  readExactCanonical,projectItem,sortItems,budgetClock=()=>Date.now(),
 }={})=>{
  const rawDb=env?.CATALOG_OUTBOX_518;
@@ -52,7 +55,8 @@ export const createApp518ServerBridge=({
  const stageBudget=async({nowMs,requestedRows})=>db?.__budgeted518===true
   ?{reserved:true,code:'METERED_AT_SQL_BOUNDARY'}
   :reserveWriteBudget({nowMs,requestedRows});
- const enabled=Boolean(accountBudgetDb?.prepare&&accountBudgetDb?.batch
+ const enabled=Boolean(signedAccountD1CutoverVerified===true
+  &&accountBudgetDb?.prepare&&accountBudgetDb?.batch
   &&r2.enabled&&db?.prepare&&db?.batch
    &&typeof readExactCanonical==='function'
    &&typeof projectItem==='function'&&typeof sortItems==='function'

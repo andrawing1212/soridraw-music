@@ -33,7 +33,7 @@ const setup=({protectedAt='soridraw-explore-preview',marker=markers[0],
   observed.push(name);
   // External actor deploys C outside the GitHub mutex while our GETs
   // are executing. This must not enable a subsequent rollback write.
-  if(externalChange==='between-reads'&&name===names[1]){
+  if(externalChange==='between-reads'&&(name===names[1]||name===protectedAt)){
    active=OTHER;schedules=OTHER_SCHEDULE;
   }
   if(readError&&name===names[1])throw Error('HTTP_403');

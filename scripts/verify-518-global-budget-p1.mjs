@@ -146,6 +146,17 @@ await rejects(()=>boundary.prepare('CREATE TABLE unsafe (id INTEGER)').run());
 await rejects(()=>boundary.prepare('PRAGMA writable_schema=ON').run());
 await rejects(()=>boundary.prepare('UPDATE '+outbox+' SET attempt_count=0').run());
 await rejects(()=>boundary.prepare('DELETE FROM '+member+' WHERE generation=?').bind(1).run());
+await rejects(()=>boundary.prepare('DELETE FROM '+member+
+ ' WHERE owner_uid=? AND generation=?').bind('u',1).run());
+await rejects(()=>boundary.prepare('UPDATE '+outbox+
+ ' SET attempt_count=0 WHERE owner_uid=?').bind('u').run());
+await rejects(()=>boundary.prepare('INSERT INTO '+member+
+ ' (owner_uid,generation,favorite_id) SELECT owner_uid,generation,favorite_id FROM '+member).run());
+await rejects(()=>boundary.prepare('INSERT INTO '+member+
+ ' (owner_uid,generation,favorite_id) VALUES (?,?,?),(?,?,?)')
+ .bind('u',1,'x','u',1,'y').run());
+await rejects(()=>boundary.prepare('DELETE FROM music_note_catalog_paged_stage_518 WHERE owner_uid=?')
+ .bind('u').run());
 await rejects(()=>boundary.prepare('UPDATE explore_social_likes SET count=1 WHERE owner_uid=?').bind('u').run());
 await rejects(()=>boundary.prepare('INSERT INTO '+member+
  ' (owner_uid,generation,favorite_id) VALUES (?,?,?); DELETE FROM '+member)

@@ -43,6 +43,7 @@ const favorite = (id, db = aliceA.db) => doc(db, 'favorites', id);
 const args = (id, version, saved, baselineSaved = false) => ({
   uid: 'alice', documentId: id, previewVersion: version, desiredSaved: saved,
   baselineSaved,
+  knownExistingFavorite: false,
   creationPayload: {
     uid: 'alice', title: 'First song original title', prompt: 'original prompt',
     lyrics: 'original lyrics', sunoCoverUrl: 'original-cover',
@@ -105,10 +106,12 @@ try {
     await setDoc(doc(ctx.firestore(), 'favorites', 'legacy'), {
       uid: 'alice', title: 'Preserved legacy original',
       lyrics: 'old lyrics', prompt: 'old prompt', sunoCoverUrl: 'old-artwork',
-      saved: true, favoriteRemoved: false, createdAtMs: 42,
+      saved: false, favoriteRemoved: true, createdAtMs: 42,
     });
   });
-  await aliceA.commit(args('legacy', 900, true, true));
+  const legacyRestore = args('legacy', 900, true, false);
+  legacyRestore.knownExistingFavorite = true;
+  await aliceA.commit(legacyRestore);
   const legacy = (await getDoc(favorite('legacy'))).data();
   assert.equal(legacy.title, 'Preserved legacy original');
   assert.equal(legacy.sunoCoverUrl, 'old-artwork');

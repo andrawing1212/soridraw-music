@@ -22,6 +22,7 @@ const prepare=({action='upload',flags={},deny=null,trust='ok',rollbackVersion=ve
  const run=(command,args,cwd)=>{
   commands.push({command,args,cwd});
   if(trust!=='ok')throw Error('HOLD_518_AUDITOR_TRUST_SECRET_NOT_PINNED');
+  return 'APP518_PROTECTED_RESTORE_INDEPENDENT_TRUST_AND_LIVE_PROOF=PASS\nAPP518_PROTECTED_ORIGINAL_VERSION=aaaabbbb-2222-4222-8222-123456789abc';
  };
  const fakeProcess={execPath:'/node',env:{RELEASE_WORKER_VERSION:rollbackVersion}};
  const loaded=new Function('cfGet','apiBase','action','run','target','ROOT','process',fixture)(

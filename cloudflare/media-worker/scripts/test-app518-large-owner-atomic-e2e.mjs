@@ -59,7 +59,7 @@ const open=async()=>{
  bucket=await mf.getR2Bucket('CATALOG');
  // These are LOCAL test-only attestations of one owned D1 database.
  // They are NOT evidence for live account-wide or legacy writer coverage.
- const env={CATALOG:bucket,CATALOG_OUTBOX_518:db,
+ const env={CATALOG:bucket,CATALOG_OUTBOX_518:db,ACCOUNT_D1_BUDGET_518:db,
   CATALOG_SERVER_HMAC_518:secret,
   SORIDRAW_CANONICAL_CATALOG_518:'ENABLED_AFTER_SHARED_ROLLOUT',
   SORIDRAW_D1_ALL_ACCOUNT_WRITERS_518:'VERIFIED',

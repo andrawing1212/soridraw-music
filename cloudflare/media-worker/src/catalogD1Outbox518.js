@@ -120,6 +120,19 @@ export const enqueueVerifiedFavorite518=async({
    return {code:'DENY_UNVERIFIED_OR_UNVERSIONED',d1Writes:0};
  const version=parseFirestoreUpdateTimeNs518(sourceUpdateTime);
  if(!version)return {code:'DENY_UNVERIFIED_OR_UNVERSIONED',d1Writes:0};
+ // The account-wide Free budget reserves D1 rows BEFORE any write attempt.
+ // For an already persisted same/newer version, a redundant UPSERT would
+ // reserve+write the shared budget ledger despite changing no outbox row.
+ // Use one exact owner+ID indexed SELECT to return W0 for replay/duplicate.
+ // The conditional versioned UPSERT still protects any concurrent race.
+ const prior=await db.prepare(READ_ONE_518).bind(text(uid),text(documentId)).first();
+ if(prior){
+  const known=text(prior.source_version_ns);
+  if(!/^[0-9]{21}$/.test(known))
+   return {code:'DENY_OUTBOX_SOURCE_VERSION_CORRUPT',d1Writes:0};
+  if(known>=version)return {code:'STALE_OR_DUPLICATE',
+   d1Writes:0,sourceVersionNs:version};
+ }
  const q=await db.prepare(UPSERT_CANONICAL_518)
    .bind(text(uid),text(documentId),version,state,nowMs).run();
  const writes=Math.max(0,Number(q?.meta?.changes||0));

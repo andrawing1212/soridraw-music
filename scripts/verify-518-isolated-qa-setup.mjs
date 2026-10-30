@@ -76,6 +76,7 @@ export const assessIsolatedQa518=m=>{
 const template=JSON.parse(read('DOCS/APP518_ISOLATED_QA_MANIFEST.template.json'));
 // This template is a non-deployable starting point, never the live config.
 const qaWrangler=JSON.parse(read('cloudflare/media-worker/wrangler.app518-isolated-qa.jsonc.template'));
+assert.equal(qaWrangler.main,'./src/app518IsolatedQaWorker518.js');
 assert.equal(qaWrangler.account_id,template.cloudflare.accountId);
 assert.equal(qaWrangler.name,template.cloudflare.workerName);
 assert.equal(qaWrangler.vars.FIREBASE_PROJECT_ID,template.firebase.projectId);

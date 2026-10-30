@@ -58,7 +58,7 @@ const safeSql=sql=>{
 // whose UPDATE can remove and insert entries (base + 2 = 3).
 // Unknown app518 mutation targets use 3 rows per logical change.
 const billedPerRow=sql=>
- /\\bmusic_note_catalog_member_518\\b/i.test(sql)?2:3;
+ /\bmusic_note_catalog_member_518\b/i.test(sql)?2:3;
 const quantity=(sql,args)=>{
  if(safeSql(sql)==='read')return 0;
  // In-app JSON1 bulk member INSERT/DELETE is charged by affected rows,

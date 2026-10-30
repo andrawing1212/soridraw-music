@@ -596,6 +596,24 @@ async function restore() {
   console.log(`${mode.toUpperCase()}_WORKER_RESTORE=PASS version=${active}`);
 }
 
+// app518: a legacy Explore upload/activate/restore must NEVER silently
+// replace a protected account-wide D1 Writer (even in another environment).
+// GET-only Cloudflare control-plane preflight; no periodic app traffic.
+// Not a cutover authorization: approved new releases require another runner.
+async function assertNoLegacyExploreBudgetDowngrade518() {
+  if (!['upload','activate','restore'].includes(action)) return;
+  for (const name of ['soridraw-explore-api','soridraw-explore-test',
+    'soridraw-explore-preview']) {
+    const details=await cfGet(`${apiBase}/workers/scripts/${name}/settings`);
+    const bindings=details?.bindings;
+    if (!Array.isArray(bindings)||!bindings.length)
+      throw new Error('HOLD_518_LEGACY_DOWNGRADE_LIVE_SETTINGS_UNVERIFIED_'+name);
+    if (bindings.some(b=>b?.name==='SORIDRAW_D1_ACCOUNT_BUDGET_ENFORCEMENT_518'
+      ||b?.name==='SORIDRAW_APP518_RELEASE_FENCES_VERIFIED'))
+      throw new Error('HOLD_518_LEGACY_EXPLORE_ROLLBACK_REOPENS_D1_BYPASS_'+name);
+  }
+}
+await assertNoLegacyExploreBudgetDowngrade518();
 await makeConfig();
 if (action !== 'restore') {
   verifySocialConfig380(JSON.parse(readFileSync(CONFIG_PATH, 'utf8')), mode);

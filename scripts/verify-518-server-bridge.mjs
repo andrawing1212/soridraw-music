@@ -35,7 +35,8 @@ const canonical=()=>({uid,documentId,verifiedByServer:true,
  state:'saved',updateTime:'2026-10-28T02:00:00.000000001Z',
  item:{id:documentId,uid}});
 const build=(settings={})=>createApp518ServerBridge({
- env,sharedReleaseFencesVerified:true,readExactCanonical:async()=>canonical(),
+ env,sharedReleaseFencesVerified:true,signedAccountD1CutoverVerified:true,
+ readExactCanonical:async()=>canonical(),
  projectItem:item=>item,sortItems:items=>items,...settings,
 });
 let bridge=build();

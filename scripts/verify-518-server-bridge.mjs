@@ -23,7 +23,7 @@ const db={
  };}};},
  async batch(){throw Error('unexpected full index');},
 };
-const env={CATALOG_OUTBOX_518:db,
+const env={CATALOG_OUTBOX_518:db,ACCOUNT_D1_BUDGET_518:db,
  CATALOG_SERVER_HMAC_518:secret,
  SORIDRAW_CANONICAL_CATALOG_518:'ENABLED_AFTER_SHARED_ROLLOUT',
  SORIDRAW_D1_ALL_ACCOUNT_WRITERS_518:'VERIFIED',
@@ -40,6 +40,13 @@ const build=(settings={})=>createApp518ServerBridge({
 });
 let bridge=build();
 assert.equal(bridge.enabled,true);
+// An outbox-local ledger is NEVER evidence of account-wide coverage.
+const missingSharedLedger=build({env:{...env,ACCOUNT_D1_BUDGET_518:undefined}});
+assert.equal(missingSharedLedger.enabled,false);
+assert.equal((await missingSharedLedger.ingestSignedRequest({
+ request:sign(payload),nowMs,
+})).code,'HOLD_RELEASE_OR_SERVER_DEPENDENCIES');
+assert.equal(d1Writes,0,'missing account ledger must write nothing');
 let response=await bridge.ingestSignedRequest({request:sign(payload),nowMs});
 assert.equal(response.code,'ENQUEUED');assert.equal(response.d1Writes,1);
 assert.equal(d1Writes,1);

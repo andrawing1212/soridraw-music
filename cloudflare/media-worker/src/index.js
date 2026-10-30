@@ -1261,6 +1261,13 @@ const handleMedia = async (request, env, origin, url) => {
 // explicit 3-environment release attestation, canonical cutover, pinned
 // Firebase callback host and server secret are all required at runtime.
 const app518ServerConnector = (env) => {
+  // Shared user data across all stages: never enable app518 for the whole
+  // Firebase project during a PREVIEW single-song trial.
+  const pilotUid=text(env?.SORIDRAW_APP518_PILOT_UID);
+  const pilotDocumentId=text(env?.SORIDRAW_APP518_PILOT_FAVORITE_ID);
+  if (!pilotUid || pilotUid.length>128 || /[\\/]/.test(pilotUid)
+    || !pilotDocumentId || pilotDocumentId.length>240
+    || /[\\/]/.test(pilotDocumentId)) return null;
   if (!isCanonicalCatalogAuthority518(env)
     || env?.SORIDRAW_APP518_RELEASE_FENCES_VERIFIED !== 'APPROVED_ALL_3_AND_NO_OLD_WRITERS')
     return null;
@@ -1272,6 +1279,7 @@ const app518ServerConnector = (env) => {
   if (!readExactCanonical) return null;
   const bridge=createApp518ServerBridge({
     env,sharedReleaseFencesVerified:true,readExactCanonical,
+    pilotScope:{uid:pilotUid,documentId:pilotDocumentId},
     projectItem:(item,id)=>projectCatalogFields('musicNote',item,id),
     sortItems:sortCatalogItems,
   });

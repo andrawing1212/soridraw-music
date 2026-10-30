@@ -49,6 +49,7 @@ const calls = [];
 let canonicalSaved = false;
 let holdNext = null;
 let failNext = false;
+let failReason = '';
 const ref = { current: new Map() };
 const timerRef = { current: handles };
 const cleanTimer = id => {
@@ -100,7 +101,9 @@ const ctx = {
     }
     if (failNext) {
       failNext = false;
-      throw Error('offline');
+      const reason = failReason || 'offline';
+      failReason = '';
+      throw Error(reason);
     }
     canonicalSaved = opts.desiredSaved;
     return { outcome: 'written', membershipChanged: true, saved: canonicalSaved };
@@ -208,6 +211,7 @@ pending.set('F', {
 });
 api.scheduleStudioHeartPendingIntent('F');
 failNext = true;
+failReason = 'STUDIO_HEART_PREVIEW_ORDER_NOT_READY';
 await api.flushStudioHeartPendingIntent('F');
 assert.equal(nextDelay('F'), 60_000);
 const expectedAckTime = pending.get('F').updatedAtMs;

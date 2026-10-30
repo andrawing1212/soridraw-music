@@ -197,6 +197,8 @@ const projectRemovedMusicNoteIdentityForSync = (
     recentLegacyCreatedAtMs: toSyncTimestamp(source.recentLegacyCreatedAtMs),
     favoriteRemoved: true,
     saved: false,
+    ...(Number(source.studioHeartPreviewVersion || 0) > 0
+      ? { studioHeartPreviewVersion: Math.floor(Number(source.studioHeartPreviewVersion)) } : {}),
     favoriteRemovedAt: toSyncTimestamp(source.favoriteRemovedAt || source.unsavedAt || source.updatedAtMs),
     unsavedAt: toSyncTimestamp(source.unsavedAt || source.favoriteRemovedAt || source.updatedAtMs),
   };
@@ -230,6 +232,12 @@ const projectMusicNoteItemForSignal = (
     firestoreId: id,
   });
   if (!projected) return null;
+  // app523: carry the originating preview ordering fence through canonical RTDB.
+  // Do not compare against the later RTDB *delivery* version.
+  const canonicalVersion = Math.floor(Number(source.studioHeartPreviewVersion || 0));
+  if (canonicalVersion > 0 && Number.isSafeInteger(canonicalVersion)) {
+    projected.studioHeartPreviewVersion = canonicalVersion;
+  }
 
   try {
     if (JSON.stringify(projected).length <= MAX_SYNC_ITEM_JSON_CHARS) return projected;
@@ -284,6 +292,8 @@ const projectMusicNoteItemForSignal = (
     favoriteHidden: false,
     favoriteRemoved: false,
     saved: true,
+    ...(canonicalVersion > 0 && Number.isSafeInteger(canonicalVersion)
+      ? { studioHeartPreviewVersion: canonicalVersion } : {}),
     createdAtMs: toSyncTimestamp(source.createdAtMs || source.createdAt),
     updatedAtMs: toSyncTimestamp(source.updatedAtMs || source.updatedAt),
   }, projected);

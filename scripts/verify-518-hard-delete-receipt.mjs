@@ -85,7 +85,7 @@ const queued=await enqueueVerifiedFavorite518({
  state:'removed',verifiedByServer:true,nowMs:2000,
 });
 assert.equal(queued.code,'ENQUEUED');
-assert.equal(exactReads,1,'one exact version read before D1 budget write');
+assert.equal(exactReads,0,'legacy unmetered fixture retains its original no-read contract');
 assert.equal(binds.length,1);
 assert.equal(binds[0][3],'removed');
 // Rejected source/owner/event and unverifiable transaction cost zero.

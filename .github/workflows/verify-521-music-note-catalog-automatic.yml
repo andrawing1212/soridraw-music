@@ -1,0 +1,35 @@
+name: Verify app521 Music Note automatic Catalog settlement (No Deploy)
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'src/lib/userDataEngine.ts'
+      - 'src/App.tsx'
+      - 'scripts/verify-521-music-note-catalog-automatic.mjs'
+      - '.github/workflows/verify-521-music-note-catalog-automatic.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  music-note-sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Automatic post-commit Catalog settlement and stale signal protection
+        run: node scripts/verify-521-music-note-catalog-automatic.mjs
+      - name: Preserve existing Music Note queue, immediate RTDB and local draft
+        run: |
+          node scripts/verify-519-catalog-pending-recovery.mjs
+          node scripts/verify-349-studio-heart-settlement-media.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+      - name: TypeScript and app build
+        run: |
+          npm run lint
+          npm run build

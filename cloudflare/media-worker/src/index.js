@@ -1295,6 +1295,16 @@ export const drainApp518AcceptedPilot518=async({connector,code,nowMs})=>{
   if(delivery?.code!=='OK')throw new Error('APP518_PILOT_DRAIN_UNCONFIRMED');
   return delivery;
 };
+// The future cron only drains the exact pilot song through the existing
+// versioned D1 due selector. Do not report success if D1 could not persist
+// its backoff/hold state; the scheduled invocation must reject visibly.
+export const drainApp518ScheduledRetry518=async({connector,nowMs}={})=>{
+  if(connector?.enabled!==true||!Number.isSafeInteger(nowMs)||nowMs<0)
+    return {code:'HOLD_APP518_RELEASE_OFF'};
+  const result=await connector.drainServerPending({nowMs,limit:1});
+  if(result?.code!=='OK')throw new Error('APP518_SCHEDULED_DRAIN_UNCONFIRMED');
+  return result;
+};
 const handleApp518ServerRoute=async(request,env,ctx)=>{
   if(request.method!=='POST')return jsonResponse({code:'NOT_FOUND'},404);
   const connector=app518ServerConnector(env);
@@ -1372,8 +1382,8 @@ export default {
   async scheduled(_event,env,ctx) {
     const connector=app518ServerConnector(env);
     if(!connector)return;
-    const task=connector.drainServerPending({nowMs:Date.now(),limit:1});
+    const task=drainApp518ScheduledRetry518({connector,nowMs:Date.now()});
     if(ctx?.waitUntil)ctx.waitUntil(task);
-    else await task;
+    return await task;
   },
 };

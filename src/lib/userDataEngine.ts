@@ -1098,7 +1098,7 @@ const flushCatalogPendingPublish = async (key: string): Promise<void> => {
   }
 
   if (built.delta.upserts.length === 0 && built.delta.deletedIds.length === 0) {
-    clearCatalogPending519(key, pending, currentDirtyRevision);
+    clearCatalogPending519(key, pending, pending.dirtyRevision);
     return;
   }
 
@@ -1118,7 +1118,7 @@ const flushCatalogPendingPublish = async (key: string): Promise<void> => {
     revision: published.revision,
   };
   await writeCatalogSnapshotToLocalCache(kind, uid, confirmedSnapshot);
-  clearCatalogPending519(key, pending, currentDirtyRevision);
+  clearCatalogPending519(key, pending, pending.dirtyRevision);
 };
 
 export const scheduleCatalogSnapshotPublishIfDirty = (

@@ -11872,7 +11872,6 @@ const toggleCycleVariantSelection = (
       return;
     }
 
-    let committed = false;
     const committing = (async () => {
     try {
       const commitSong = normalizeFavoriteTitleFields({
@@ -11889,8 +11888,6 @@ const toggleCycleVariantSelection = (
         },
         suppressSuccessToast: true,
       });
-      committed = true;
-
       const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
       if (latest && latest.updatedAtMs === intent.updatedAtMs && latest.desiredSaved === intent.desiredSaved) {
         removeStudioHeartIntentLocal(uid, safeDocumentId);
@@ -11923,26 +11920,11 @@ const toggleCycleVariantSelection = (
         studioHeartCommitInFlightRef.current.delete(commitKey);
       }
       const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
-      if (latest && (latest.updatedAtMs !== intent.updatedAtMs || latest.desiredSaved !== intent.desiredSaved)) {
-        // The first in-flight write may already have changed Firestore even
-        // though the next click was entered before its ACK. Rebase the queued
-        // intent on the settled outcome before its net-zero W0 decision.
-        // On an ambiguous failure, force the final exact-ID action instead
-        // of incorrectly declaring net zero and losing the latest click.
-        updateStudioHeartPendingIntent(uid, safeDocumentId, (current) => {
-          if (current.updatedAtMs !== latest.updatedAtMs || current.desiredSaved !== latest.desiredSaved) return current;
-          return {
-            ...current,
-            baselineSaved: committed ? intent.desiredSaved : !current.desiredSaved,
-            // Keep the outbox small: the exact linked document ID is already
-            // on current.song, so a subsequent UNSAVE can target it directly.
-            // Duplicating the entire song into baselineFavorite risks quota loss.
-            baselineFavorite: committed && intent.desiredSaved ? intent.baselineFavorite : null,
-          };
-        });
-        if (!studioHeartIntentTimersRef.current.has(safeDocumentId)) {
-          scheduleStudioHeartPendingIntent(safeDocumentId, STUDIO_HEART_BATCH_MS);
-        }
+      if (latest && (latest.updatedAtMs !== intent.updatedAtMs || latest.desiredSaved !== intent.desiredSaved)
+        && !studioHeartIntentTimersRef.current.has(safeDocumentId)) {
+        // The newer click was persisted before the first ACK. Never risk a
+        // quota-failed after-the-fact rebase; just schedule its exact action.
+        scheduleStudioHeartPendingIntent(safeDocumentId, STUDIO_HEART_BATCH_MS);
       }
     }
   };
@@ -11977,9 +11959,14 @@ const toggleCycleVariantSelection = (
       uid,
       documentId: safeDocumentId,
       identityKey,
-      baselineSaved: existing ? existing.baselineSaved : baselineSaved,
+      // During an in-flight write the old canonical baseline is no longer
+      // reliable. Persist the opposite of the latest click, so a reload cannot
+      // discard the new command as false net-zero before it is applied.
+      baselineSaved: studioHeartCommitInFlightRef.current.has(`${uid}:${safeDocumentId}`)
+        ? !desiredSaved : (existing ? existing.baselineSaved : baselineSaved),
       desiredSaved,
-      baselineFavorite: existing ? existing.baselineFavorite : baselineFavorite,
+      baselineFavorite: studioHeartCommitInFlightRef.current.has(`${uid}:${safeDocumentId}`)
+        ? null : (existing ? existing.baselineFavorite : baselineFavorite),
       song: {
         ...(song as any),
         favoriteFirestoreId: safeDocumentId,

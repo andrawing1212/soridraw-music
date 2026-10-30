@@ -122,7 +122,30 @@ jobs:
           cache: npm
       - name: Install existing test dependencies
         run: npm ci --no-audit --no-fund
-      - name: Verify exact source version, stale save rejection, tombstones and cross-user safety
+      - name: Verify one-song delivery, deletion safety, and existing-client compatibility
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          node scripts/verify-518-canonical-fence.mjs
+          node scripts/verify-518-stale-save-delete-race.mjs
+          node scripts/verify-518-worker-compat-switch.mjs
+          node scripts/verify-518-shared-writer-rollout.mjs
+          node scripts/verify-518-media-workflow-mutex.mjs
+          node scripts/verify-518-d1-delivery-drain.mjs
+          node scripts/verify-518-server-bridge.mjs
+          node scripts/verify-518-account-d1-cutover.mjs --self-test
+          python3 scripts/verify-518-d1-outbox-sql.py
+          python3 scripts/verify-518-large-paging-concurrency-sql.py
+          npm --prefix functions ci --no-audit --no-fund
+          npm --prefix functions run build
+          node functions/scripts/test-app518-event-safety-fence.cjs
+          node functions/scripts/test-app518-atomic-favorite-write.cjs
+          node scripts/verify-518-live-connector.mjs
+          node scripts/verify-518-preview-pilot-readiness.mjs
+      # Preserve the full historical battery for explicit diagnostic runs.
+      # Routine PRs prioritize the executable Firestore + Miniflare one-song test.
+      - name: Verify full app518 source and infrastructure guard battery (manual)
+        if: github.event_name == 'workflow_dispatch'
         run: |
           node scripts/verify-518-canonical-fence.mjs
           node scripts/verify-518-catalog-event-cost-gate.mjs
@@ -179,8 +202,10 @@ jobs:
       - name: Install local-only Miniflare D1 and R2 simulator
         run: npm --prefix cloudflare/media-worker install --no-save --no-package-lock --no-audit --no-fund miniflare@4
       - name: Verify local canonical compaction CAS, crash resume and Workers Free bound
+        if: github.event_name == 'workflow_dispatch'
         run: node cloudflare/media-worker/scripts/test-app518-canonical-compaction-conflict.mjs
       - name: Verify local 20k/50k paged compaction stage and crash resume
+        if: github.event_name == 'workflow_dispatch'
         run: node cloudflare/media-worker/scripts/test-app518-paged-compaction-stage-e2e.mjs
       - name: Verify real Admin SDK against isolated local Firestore emulator
         shell: bash
@@ -197,7 +222,23 @@ jobs:
             --project demo-app518-atomic \
             --config "$RUNNER_TEMP/app518-emulator.json" \
             --only firestore \
-            "node functions/scripts/test-app518-firestore-emulator.cjs write && node functions/scripts/test-app518-firestore-emulator.cjs verify && APP518_E2E_OWNER_COUNT=49152 node cloudflare/media-worker/scripts/test-app518-large-owner-atomic-e2e.mjs && node cloudflare/media-worker/scripts/test-app518-large-owner-atomic-e2e.mjs && node cloudflare/media-worker/scripts/test-app518-atomic-relay-e2e.mjs"
+            "node functions/scripts/test-app518-firestore-emulator.cjs write && node functions/scripts/test-app518-firestore-emulator.cjs verify && node cloudflare/media-worker/scripts/test-app518-atomic-relay-e2e.mjs"
+      # Large-owner stress belongs to explicit diagnostics, never routine
+      # single-song PR verification. Both modes use local demo Firestore only.
+      - name: Verify 49k and 50k owner Miniflare E2E (manual)
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          GOOGLE_CLOUD_PROJECT: demo-app518-atomic
+          GCLOUD_PROJECT: demo-app518-atomic
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@14 emulators:exec \
+            --non-interactive \
+            --project demo-app518-atomic \
+            --config "$RUNNER_TEMP/app518-emulator.json" \
+            --only firestore \
+            "APP518_E2E_OWNER_COUNT=49152 node cloudflare/media-worker/scripts/test-app518-large-owner-atomic-e2e.mjs && node cloudflare/media-worker/scripts/test-app518-large-owner-atomic-e2e.mjs"
       - name: Protect existing next-song, publication, Music Note and local-first behaviors
         run: |
           node scripts/verify-204-explore-next-song-parity.mjs

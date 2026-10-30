@@ -21,7 +21,8 @@ assert.doesNotMatch(receiver, /removeStudioHeartPendingIntent|removeStudioHeartI
 const flushSource = fromTo('  const flushStudioHeartPendingIntent = async', '  const scheduleStudioHeartPendingIntent = (');
 assert.doesNotMatch(flushSource, /if \(intent\.signalVersion <= 0 && intent\.pendingRemotePreviewVersion > 0\)/);
 assert.match(flushSource, /studioHeartCommitInFlightRef\.current\.has\(commitKey\)/);
-assert.match(flushSource, /baselineSaved: committed \? intent\.desiredSaved : !current\.desiredSaved/);
+assert.match(flushSource, /commitStudioHeartCanonical523\(/);
+assert.doesNotMatch(flushSource, /baselineSaved: committed \?/);
 
 const source = [
   'const STUDIO_HEART_BATCH_MS = 1_000;',
@@ -90,8 +91,8 @@ const ctx = {
     },
     clearTimeout: n => timers.delete(n),
   },
-  toggleFavorite: async (_song, opts) => {
-    calls.push(opts.intendedAction);
+  commitStudioHeartCanonical523: async (opts) => {
+    calls.push(opts.desiredSaved ? 'save' : 'unsave');
     if (holdNext) {
       const waiting = holdNext;
       holdNext = null;
@@ -101,8 +102,20 @@ const ctx = {
       failNext = false;
       throw Error('offline');
     }
-    canonicalSaved = opts.intendedAction === 'save';
+    canonicalSaved = opts.desiredSaved;
+    return { outcome: 'written', membershipChanged: true, saved: canonicalSaved };
   },
+  sanitizeForFirestore: x => x,
+  getLiveSoridrawSongId: x => x.id,
+  buildLegacyRecentFavoriteBridge: () => ({}),
+  getResolvedGenre: () => 'folk',
+  buildFavoriteIdentityKey: x => x.id,
+  buildFavoriteSearchTokens: () => [],
+  serverTimestamp: () => 0,
+  runV1MutationBoundary: async (_context, write) => await write,
+  forgetFavoriteDeletedTombstones: () => {},
+  rememberFavoriteDeletedTombstones: () => {},
+  queueMusicNoteFavoriteCountDelta: () => {},
 };
 vm.runInNewContext(js.outputText, ctx, { filename: 'app522-studio-heart-extracted.ts' });
 const api = ctx.testApi;

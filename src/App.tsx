@@ -5984,22 +5984,15 @@ function App() {
     if (!updated) return;
     if (typeof desiredSaved === 'boolean' && updated.desiredSaved !== desiredSaved) return;
     if (Number.isFinite(expectedUpdatedAtMs) && Number(expectedUpdatedAtMs) > 0 && updated.updatedAtMs !== Number(expectedUpdatedAtMs)) return;
-    if (
-      updated.pendingRemotePreviewVersion > 0
-      && updated.pendingRemotePreviewVersion > updated.signalVersion
-    ) {
-      removeStudioHeartIntentLocal(uid, documentId);
-    }
+    // A newer RTDB preview is not a Firestore commit acknowledgement.
+    // Preserve this device's durable pending intent until canonical settlement.
   };
 
   const supersedeStudioHeartIntentFromRemotePreview = (uid: string, documentId: string, remoteVersion: number) => {
     if (!uid || !documentId || !Number.isFinite(remoteVersion) || remoteVersion <= 0) return;
     const pending = readStudioHeartPendingIntent(uid, documentId);
     if (!pending) return;
-    if (pending.signalVersion > 0) {
-      if (remoteVersion > pending.signalVersion) removeStudioHeartIntentLocal(uid, documentId);
-      return;
-    }
+    if (remoteVersion <= pending.signalVersion) return;
     updateStudioHeartPendingIntent(uid, documentId, (current) => ({
       ...current,
       pendingRemotePreviewVersion: Math.max(current.pendingRemotePreviewVersion || 0, Math.floor(remoteVersion)),
@@ -11913,8 +11906,9 @@ const toggleCycleVariantSelection = (
     const intent = readStudioHeartPendingIntent(uid, safeDocumentId);
     if (!intent) return;
 
-    if (intent.signalVersion <= 0 && intent.pendingRemotePreviewVersion > 0) {
-      removeStudioHeartPendingIntent(uid, safeDocumentId);
+    if (intent.pendingRemotePreviewVersion > intent.signalVersion) {
+      // A newer device's preview may still be uncommitted. Hold this older
+      // writer's outbox, not its Firestore write, until canonical resolution.
       return;
     }
 

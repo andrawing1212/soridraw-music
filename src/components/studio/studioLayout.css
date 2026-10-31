@@ -17194,5 +17194,5 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
 :is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
 > :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab) {
-  font-size: 15px !important;
+  font-size: 14px !important;
 }

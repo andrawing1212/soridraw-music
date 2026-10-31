@@ -571,7 +571,14 @@ const readCatalogFromIndexedDb = async (
           return;
         }
         const snapshot = record?.snapshot;
-        resolve(isValidSnapshot(kind, snapshot) ? snapshot : null);
+        const valid = isValidSnapshot(kind, snapshot);
+        // Only a snapshot persisted after an authenticated R2 response or
+        // accepted R2 delta is trusted across mobile tab/process restarts.
+        // Unverified legacy/device-local caches still receive one remote check.
+        if (valid && record?.remoteVerified === true) {
+          catalogRemoteValidatedSessionKeys.add(catalogKey(kind, uid));
+        }
+        resolve(valid ? snapshot : null);
       };
       request.onerror = () => resolve(null);
     });
@@ -584,6 +591,7 @@ export const writeCatalogSnapshotToLocalCache = async (
   kind: SoridrawCatalogKind,
   uid: string,
   snapshot: SoridrawCatalogSnapshot,
+  options: { remoteVerified?: boolean } = {},
 ): Promise<boolean> => {
   if (!uid || !isValidSnapshot(kind, snapshot)) return false;
   const key = catalogKey(kind, uid);
@@ -601,6 +609,7 @@ export const writeCatalogSnapshotToLocalCache = async (
       transaction.onabort = () => resolve(false);
       transaction.objectStore(CATALOG_DB_STORE).put({
         key, uid, kind, cacheGeneration: kind === 'musicNote' ? MUSIC_NOTE_LOCAL_CACHE_GENERATION_050 : CATALOG_LOCAL_CACHE_GENERATION, snapshot: visibleSnapshot,
+        remoteVerified: options.remoteVerified === true,
       });
     });
   } catch {
@@ -846,7 +855,7 @@ const readRemoteCatalogSnapshot = async (
       const visibleResolved = kind === 'musicNote'
         ? applyMusicNoteMediaOverlaysToSnapshot(uid, resolved)
         : resolved;
-      await writeCatalogSnapshotToLocalCache(kind, uid, visibleResolved);
+      await writeCatalogSnapshotToLocalCache(kind, uid, visibleResolved, { remoteVerified: true });
       catalogRemoteValidatedSessionKeys.add(catalogKey(kind, uid));
       if (kind === 'musicNote' && typeof sessionStorage !== 'undefined') {
         try { sessionStorage.setItem(`soridraw_catalog_verified_v1:${catalogKey(kind, uid)}`, `${visibleResolved.revision}:${Date.now()}`); } catch {}
@@ -1175,7 +1184,7 @@ const flushCatalogPendingPublishOnce521 = async (key: string): Promise<void> => 
     ...built.nextSnapshot,
     revision: published.revision,
   };
-  await writeCatalogSnapshotToLocalCache(kind, uid, confirmedSnapshot);
+  await writeCatalogSnapshotToLocalCache(kind, uid, confirmedSnapshot, { remoteVerified: true });
   clearCatalogPending519(key, pending, pending.dirtyRevision);
 };
 

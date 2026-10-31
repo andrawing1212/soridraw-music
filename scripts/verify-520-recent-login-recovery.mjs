@@ -182,3 +182,19 @@ assert.equal((pendingRecoveryBlock.match(/resumeAfterRead: true/g)||[]).length, 
 assert.equal((pendingRecoveryBlock.match(/clearRecentSongTextPendingMarker\(uid\)/g)||[]).length, 2);
 console.log('APP520_STALE_PENDING_MARKER_EMPTY_CACHE_RECOVERS_SERVER_TEN=PASS');
 console.log('APP520_REAL_LOCAL_DRAFT_AND_HEALTHY_CACHE_COST_PROTECTED=PASS');
+
+
+// app527: an already verified profile/document mismatch is not a reason to
+// reread the same canonical Recent aggregate on every mobile reload.
+const baseline527={...sample,hasLocalCache:true,profileVersion:500,localDocumentVersion:400};
+assert.equal(readNeeded(baseline527),true,'unverified profile advance requires canonical verification');
+assert.equal(readNeeded({...baseline527,verifiedProfileVersion:500}),false,'same verified gap is warm R0');
+assert.equal(readNeeded({...baseline527,verifiedProfileVersion:500,profileVersion:501}),true,
+ 'a new profile revision must invalidate the earlier proof');
+assert.equal(readNeeded({...baseline527,verifiedProfileVersion:500,pendingSignalVersion:900}),true,
+ 'an unacknowledged RTDB signal must still be recovered');
+assert.equal(readNeeded({...baseline527,verifiedProfileVersion:500,hasLocalCache:false}),true,
+ 'missing local originals cannot be hidden by a proof');
+assert.match(app,/readRecentSongsCheckedProfileVersion527\(user\.uid, localVersion\)/);
+assert.match(app,/rememberRecentSongsCheckedProfileVersion527\(/);
+console.log('APP527_RECENT_VERIFIED_PROFILE_GAP_WARM_R0_AND_CHANGE_INVALIDATION=PASS');

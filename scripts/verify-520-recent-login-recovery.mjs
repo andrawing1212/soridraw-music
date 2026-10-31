@@ -182,3 +182,21 @@ assert.equal((pendingRecoveryBlock.match(/resumeAfterRead: true/g)||[]).length, 
 assert.equal((pendingRecoveryBlock.match(/clearRecentSongTextPendingMarker\(uid\)/g)||[]).length, 2);
 console.log('APP520_STALE_PENDING_MARKER_EMPTY_CACHE_RECOVERS_SERVER_TEN=PASS');
 console.log('APP520_REAL_LOCAL_DRAFT_AND_HEALTHY_CACHE_COST_PROTECTED=PASS');
+
+
+// The exact cached profile/document pair was previously checked against
+// a successfully cached Firestore response. Never treat the hint as canonical.
+const gap529={...sample,hasLocalCache:true,profileVersion:500,localDocumentVersion:400};
+assert.equal(readNeeded(gap529),true,'unverified profile gap still reads once');
+assert.equal(readNeeded({...gap529,verifiedProfileVersion:500}),false,
+  'identical verified profile/document pair avoids repeat R1 on reentry');
+assert.equal(readNeeded({...gap529,verifiedProfileVersion:500,profileVersion:501}),true,
+  'a newly advanced profile hint must read');
+assert.equal(readNeeded({...gap529,verifiedProfileVersion:500,pendingSignalVersion:700}),true,
+  'unacknowledged RTDB change must read');
+assert.equal(readNeeded({...gap529,verifiedProfileVersion:500,hasLocalCache:false}),true,
+  'empty or failed local cache must read even with a prior receipt');
+assert.match(syncBlock,/verifiedProfileVersion,/);
+assert.match(syncBlock,/if \(cachedSuccessfully && snap\.exists\(\)/);
+assert.match(syncBlock,/localStorage\.setItem\(checkedKey,/);
+console.log('RECENT_PROFILE_GAP_529_VERIFIED_REENTRY_R0_AND_INVALIDATION=PASS');

@@ -12968,6 +12968,15 @@ const unlockAllFavorites = async () => {
       const cachedProfile = readUserProfileCache(user.uid);
       const remoteVersion = Number((cachedProfile as any)?.syncVersions?.recentSongs || 0);
       const localVersion = readRecentSongsLocalVersion(user.uid);
+      // Only the exact profile/doc pair already checked against Firestore may
+      // skip a repeated unchanged reentry; no canonical version is fabricated.
+      const checkedKey = `soridraw_recent_profile_checked_v1_${user.uid}`;
+      let verifiedProfileVersion = 0;
+      try {
+        if (localStorage.getItem(checkedKey) === `${remoteVersion}:${localVersion}`) {
+          verifiedProfileVersion = remoteVersion;
+        }
+      } catch {}
       const pendingSignalVersion = readRecentSongsPendingSignalVersion(user.uid);
       const acknowledgedSignalVersion = readRecentSongsAcknowledgedSignalVersion(user.uid);
       const retainedGapVersion = readRecentSongsRetainedDraftGap460(user.uid);
@@ -12985,6 +12994,7 @@ const unlockAllFavorites = async () => {
         hasLocalCache: hasVerifiedVisibleCache,
         profileVersion: remoteVersion,
         localDocumentVersion: localVersion,
+        verifiedProfileVersion,
         pendingSignalVersion,
         acknowledgedSignalVersion,
       });
@@ -13097,6 +13107,15 @@ const unlockAllFavorites = async () => {
             // Server revision is proven only after durable cache persistence.
             // If storage failed, leave prior revision/gap for safe next visit.
             writeRecentSongsLocalVersion(user.uid, documentVersion);
+          }
+          // The profile hint may stay ahead of the real document on older
+          // clients. The same checked pair needs no second billed read.
+          if (cachedSuccessfully && snap.exists()
+            && remoteVersion > readRecentSongsLocalVersion(user.uid)) {
+            try {
+              localStorage.setItem(checkedKey,
+                `${remoteVersion}:${readRecentSongsLocalVersion(user.uid)}`);
+            } catch {}
           }
           markCacheDiagnostic('recentSongs', 'SYNC', 1, 0);
           preserveHistoryIndexOnNextSnapshotRef.current = null;

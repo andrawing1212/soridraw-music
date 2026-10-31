@@ -741,6 +741,7 @@ const readRemoteCatalogSnapshot = async (
   minimumRevision = 0,
   localSnapshot: SoridrawCatalogSnapshot | null = null,
   allowBootstrapRepair = true,
+  requireFullSnapshot = false,
 ): Promise<SoridrawCatalogSnapshot | null> => {
   if (!uid || !isPreviewCatalogEnabled()) return null;
   const user = auth.currentUser;
@@ -752,7 +753,10 @@ const readRemoteCatalogSnapshot = async (
   markCatalogRuntimeDiagnostic(kind, { stage: 'START', attempt: 0, httpStatus: 0, remoteItemCount: 0, revision: 0, errorCode: '' });
   const retryDelays = [0, 350, 1000];
   let lastError: unknown = null;
-  let allowDeltaSync = Boolean(localSnapshot && minimumRevision <= 0);
+  // A browser with a possibly divergent local Catalog cannot use its local
+  // revision as the baseline of an R2 incremental journal response. During
+  // first-session verification request the actual full shared snapshot.
+  let allowDeltaSync = Boolean(localSnapshot && minimumRevision <= 0 && !requireFullSnapshot);
   let sharedBootstrapAttempted = false;
   for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
     if (retryDelays[attempt] > 0) await catalogWait(retryDelays[attempt]);
@@ -968,7 +972,7 @@ export const readCatalogSnapshotCacheFirst = async (
     // if R2 is missing/unavailable. Other Library behavior is unchanged.
     const verifyOnly = kind === 'musicNote' && !sessionValidated;
     const remote = await readRemoteCatalogSnapshot(
-      kind, uid, verifyOnly ? 0 : knownRemoteRevision, local, !verifyOnly,
+      kind, uid, verifyOnly ? 0 : knownRemoteRevision, local, !verifyOnly, verifyOnly,
     );
     if (remote) {
       catalogLastReadSources.set(key, 'remote');

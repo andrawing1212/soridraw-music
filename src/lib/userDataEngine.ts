@@ -943,11 +943,18 @@ export const readCatalogSnapshotCacheFirst = async (
     // 1054: a V5 Catalog is server-authored and may survive app restarts without
     // a redundant Worker GET when the already-paid users profile invalidation token
     // proves it is current. Unknown profile state remains fail-safe and validates remotely.
-    if (local && canUseWarmCatalogWithoutRemote({
-      localRevision: local.revision,
-      profileRevision: knownRemoteRevision,
-      sessionValidated,
-    })) {
+    // Music Note's shared R2 revision does not advance atomically with the
+    // user-profile hint. Across browser sessions, a locally newer revision
+    // cannot prove identical membership (and may omit another device's save).
+    // Validate exactly once when Music Note is actually opened in this tab.
+    // Subsequent entries in the same validated session are cache-first R0/W0.
+    // Library retains its existing warm-cache policy unchanged.
+    if (local && (kind !== 'musicNote' || sessionValidated)
+      && canUseWarmCatalogWithoutRemote({
+        localRevision: local.revision,
+        profileRevision: knownRemoteRevision,
+        sessionValidated,
+      })) {
       catalogLastReadSources.set(key, 'cache');
       return local;
     }

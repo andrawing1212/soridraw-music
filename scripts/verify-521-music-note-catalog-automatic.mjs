@@ -290,7 +290,7 @@ const optimistic={...song('UNCONFIRMED'),__studioHeartPendingLocal:true};
 const selected=vm.runInNewContext(pickCompiled,{
  catalogFavorites:[original,incoming],
  previous:[original,maybeOriginal,removed,optimistic],
- bundle:{updatedAtMs:501},
+ bundle:{updatedAtMs:1500},
  confirmedSaveId:'',
  localDeletedIds:new Set(),
  isFavoriteSoftRemoved:item=>item?.saved===false,

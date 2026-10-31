@@ -13123,16 +13123,14 @@ const unlockAllFavorites = async () => {
             // Server revision is proven only after durable cache persistence.
             // If storage failed, leave prior revision/gap for safe next visit.
             writeRecentSongsLocalVersion(user.uid, documentVersion);
-            // A stable users profile token can be greater than the actual
-            // canonical document version on legacy/mixed clients. Once this
-            // exact document is durably cached, re-reading an unchanged pair
-            // on every reload cannot discover new songs. New profile/RTDB
-            // invalidations still bypass the proof.
-            if (remoteVersion > documentVersion) {
-              rememberRecentSongsCheckedProfileVersion527(
-                user.uid, remoteVersion, readRecentSongsLocalVersion(user.uid),
-              );
-            }
+          }
+          // Separate the checked-profile hint from the canonical version ACK.
+          // Only a durable exact server snapshot proves this comparison, and
+          // a newer profile/RTDB signal can always invalidate it.
+          if (cachedSuccessfully && documentVersion > 0 && remoteVersion > documentVersion) {
+            rememberRecentSongsCheckedProfileVersion527(
+              user.uid, remoteVersion, readRecentSongsLocalVersion(user.uid),
+            );
           }
           markCacheDiagnostic('recentSongs', 'SYNC', 1, 0);
           preserveHistoryIndexOnNextSnapshotRef.current = null;

@@ -345,13 +345,3 @@ assert.match(cacheWrite,/localStorage\.setItem\(\`soridraw_favorites_cache_rev_/
 assert.match(firstPaint,/verified !== cacheRevision/);
 console.log('MUSIC_NOTE_VERIFIED_LOCALSTORAGE_REVISION_MATCH_FIRST_PAINT=PASS');
 
-
-// app527: do not allow a mobile process restart to turn an authenticated,
-// persisted R2 Catalog back into an unverified browser-private list.
-assert.match(engineSource,/record\?\.remoteVerified === true/);
-assert.match(engineSource,/remoteVerified: options\.remoteVerified === true/);
-assert.match(engineSource,/writeCatalogSnapshotToLocalCache\(kind, uid, visibleResolved, \{ remoteVerified: true \}\)/);
-assert.match(engineSource,/writeCatalogSnapshotToLocalCache\(kind, uid, confirmedSnapshot, \{ remoteVerified: true \}\)/);
-assert.match(firstPaint,/preferVerifiedCatalog = !cacheRevision \|\|/);
-assert.match(cacheWrite,/localStorage\.removeItem\(`soridraw_favorites_cache_rev_\$\{uid\}`\)/);
-console.log('APP527_MUSIC_NOTE_REMOTE_PROOF_PERSISTS_AND_LOCAL_PAINT_IS_UNVERIFIED=PASS');

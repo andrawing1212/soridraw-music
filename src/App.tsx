@@ -10988,6 +10988,11 @@ const toggleCycleVariantSelection = (
       }
 
       if (isHeartPreview) {
+      // Record ordering before rendering, otherwise the older pending overlay
+      // repaints on top of this newer cross-device preview.
+      if (remoteFavoriteId) {
+        supersedeStudioHeartIntentFromRemotePreview(uid, remoteFavoriteId, remoteVersion);
+      }
       applyRemoteStudioHeartPreview(
         uid,
         remoteItem,
@@ -10995,9 +11000,6 @@ const toggleCycleVariantSelection = (
         isHeartPreviewSave,
         remoteVersion,
       );
-      if (remoteFavoriteId) {
-        supersedeStudioHeartIntentFromRemotePreview(uid, remoteFavoriteId, remoteVersion);
-      }
       // app348: every signed-in device updates immediately; only the
       // canonical favorite write waits for the per-song 30s final state.
       writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);

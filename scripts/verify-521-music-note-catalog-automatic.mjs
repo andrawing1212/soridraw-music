@@ -138,3 +138,42 @@ assert.match(appSource.slice(end,end+1800),/if \(isStudioHeartOptimisticFavorite
 assert.match(appSource.slice(end,end+1800),/if \(confirmedSaveId && favoriteId === confirmedSaveId\) return true;/);
 assert.match(appSource.slice(end,end+1800),/if \(favoriteId && localDeletedIds.has\(favoriteId\)\) return false;/);
 console.log('APP521_STALE_CATALOG_SERVER_ACK_FENCE_NO_OPTIMISTIC_RESURRECTION=PASS');
+
+// app525: the exact Firestore-committed song may already be present in a
+// device's local Catalog even though the shared R2 Catalog missed the delta.
+// The dirty single-item mutation must still be sent, never silently ACKed
+// merely because local JSON matches.
+const beforeExact = await api.readCatalogSnapshotFromLocalCache('musicNote','owner-A');
+assert.ok(beforeExact.items.some(item=>item.id==='A'));
+dirtyRevision=4;
+api.scheduleCatalogSnapshotPublishIfDirty('musicNote','owner-A',[song('A')]);
+assert.equal(timers.size,1);
+assert.equal(await executeNextTimer(),1200);
+assert.equal(networkCalls,4,'canonical exact same-local item still needs one R2 delta');
+assert.deepEqual(accepted.at(-1).upserts.map(x=>x.id),['A']);
+assert.equal(api.getPendingCatalogPublishCount('owner-A'),0);
+console.log('APP525_CANONICAL_ONE_ITEM_MATCHES_LOCAL_STILL_REACHES_R2=PASS');
+
+// app525: a failed post leaves a durable outbox. A tab reload must recover its
+// bounded timer without needing another click, navigation, or another write.
+dirtyRevision=5;
+failNetwork=true;
+api.scheduleCatalogSnapshotPublishIfDirty('musicNote','owner-A',[song('B')]);
+await executeNextTimer();
+assert.equal(api.getPendingCatalogPublishCount('owner-A'),1);
+assert.ok(store.has(pendingKey));
+timers.clear(); // Simulate losing every old browser timer on a tab close.
+const reloadCtx={...ctx,exports:{}};
+vm.runInNewContext(compiled,reloadCtx,{filename:'reloaded-userDataEngine.ts'});
+const reloaded=reloadCtx.exports;
+await reloaded.writeCatalogSnapshotToLocalCache('musicNote','owner-A',beforeExact);
+dirtyRevision=0; // In-memory Firestore dirty marker was reset by navigation.
+failNetwork=false;
+assert.equal(reloaded.getPendingCatalogPublishCount('owner-A'),1);
+assert.equal(timers.size,1,'restored canonical outbox must re-arm bounded publish');
+assert.equal(await executeNextTimer(),1200);
+assert.equal(networkCalls,6);
+assert.deepEqual(accepted.at(-1).upserts.map(x=>x.id),['B']);
+assert.equal(reloaded.getPendingCatalogPublishCount('owner-A'),0);
+assert.equal(store.has(pendingKey),false);
+console.log('APP525_TAB_RELOAD_RECOVERS_DURABLE_MUSIC_NOTE_PUBLISH=PASS');

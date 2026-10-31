@@ -162,6 +162,9 @@ type CatalogPendingPublish519 = {
   sourceItems: any[];
   options: CatalogPublishOptions;
   dirtyRevision: number;
+  // Only exact single-item calls following a canonical dirty mutation may
+  // replay an upsert even when this browser's local cache already matches.
+  confirmedChangedIds?: string[];
 };
 const catalogPendingPublishes = new Map<string, CatalogPendingPublish519>();
 // app519: A completed Firestore favorite write must not lose its derived R2
@@ -195,6 +198,11 @@ const restoreCatalogPending519 = (kind: SoridrawCatalogKind, uid: string): Catal
       || !Array.isArray(stored.options?.deletedIds)) return null;
     const sourceItems = normalizeCatalogItems(kind, stored.sourceItems);
     if (sourceItems.length !== stored.sourceItems.length) return null;
+    const confirmedChangedIds: unknown[] = Array.isArray(stored.confirmedChangedIds)
+      ? stored.confirmedChangedIds : [];
+    if (confirmedChangedIds.length > CATALOG_DELTA_MAX_CHANGES
+      || confirmedChangedIds.some(id => typeof id !== 'string' || !id || id.length > 240
+        || !sourceItems.some(item => String(item.id) === id))) return null;
     const deletedIds = stored.options.deletedIds;
     if (deletedIds.length > CATALOG_DELTA_MAX_CHANGES
       || deletedIds.some((id: unknown) => typeof id !== 'string' || !id || id.length > 240)) return null;
@@ -202,8 +210,13 @@ const restoreCatalogPending519 = (kind: SoridrawCatalogKind, uid: string): Catal
       kind, uid, sourceItems,
       options: { deletedIds: [...deletedIds] },
       dirtyRevision: stored.dirtyRevision,
+      confirmedChangedIds: confirmedChangedIds as string[],
     };
     catalogPendingPublishes.set(key, pending);
+    // A real committed write can outlive a tab close. Restoring its durable
+    // outbox must restart bounded delivery; ordinary visits without pending
+    // data still schedule nothing and issue zero requests.
+    if (kind === 'musicNote') scheduleCommittedMusicNoteCatalogFlush521(key);
     return pending;
   } catch { return null; }
 };
@@ -974,9 +987,11 @@ const buildCatalogDelta = (
   sourceItems: any[],
   revision: number,
   explicitDeletedIds: string[] = [],
+  confirmedChangedIds: string[] = [],
 ): { delta: CatalogDelta; nextSnapshot: SoridrawCatalogSnapshot } | null => {
   const projectedItems = normalizeCatalogItems(kind, sourceItems);
   if (projectedItems.length > CATALOG_MAX_ITEMS) return null;
+  const confirmed = kind === 'musicNote' ? new Set(confirmedChangedIds) : new Set<string>();
   const previousById = new Map(previous.items.map((item) => [String(item.id), item]));
   const nextById = new Map(previous.items.map((item) => [String(item.id), item]));
   const upserts: any[] = [];
@@ -986,7 +1001,10 @@ const buildCatalogDelta = (
   for (const item of projectedItems) {
     const id = String(item.id);
     const prior = previousById.get(id);
-    if (!prior || stableItemHash(prior) !== stableItemHash(item)) {
+    // A successful exact-item canonical mutation must not vanish because
+    // local IndexedDB already had the same row while shared R2 missed it.
+    // Never force an entire UI list or an optimistic Studio-heart overlay.
+    if (!prior || stableItemHash(prior) !== stableItemHash(item) || confirmed.has(id)) {
       upserts.push(item);
       nextById.set(id, item);
     }
@@ -1103,6 +1121,7 @@ const flushCatalogPendingPublishOnce521 = async (key: string): Promise<void> => 
     sourceItems,
     pendingRevision,
     explicitDeletedIds,
+    pending.confirmedChangedIds || [],
   );
   if (!built) {
     console.warn(`[userDataEngine] ${kind} catalog delta deferred: change set is not safely representable.`);
@@ -1203,9 +1222,15 @@ export const scheduleCatalogSnapshotPublishIfDirty = (
     (previous?.sourceItems || []).map((item) => [String(item.id), item])
   );
   const deleted = new Set<string>(previous?.options.deletedIds || []);
+  const confirmed = new Set<string>(previous?.confirmedChangedIds || []);
+  const normalizedIncoming = normalizeCatalogItems(kind, sourceItems);
+  // Only the exact one-row call has enough evidence to identify a
+  // committed changed document. A full UI list is never an upsert mandate.
+  if (kind === 'musicNote' && normalizedIncoming.length === 1
+    && !(options.deletedIds || []).length) confirmed.add(String(normalizedIncoming[0].id));
   // Consecutive successful favorite writes may each report only one item.
   // Merge the pending items instead of overwriting song A with song B.
-  for (const item of normalizeCatalogItems(kind, sourceItems)) {
+  for (const item of normalizedIncoming) {
     byId.set(String(item.id), item);
     deleted.delete(String(item.id));
   }
@@ -1214,11 +1239,13 @@ export const scheduleCatalogSnapshotPublishIfDirty = (
     if (!safeId) continue;
     deleted.add(safeId);
     byId.delete(safeId);
+    confirmed.delete(safeId);
   }
   const pending: CatalogPendingPublish519 = {
     kind, uid, sourceItems: Array.from(byId.values()),
     options: { ...options, deletedIds: Array.from(deleted) },
     dirtyRevision: Math.max(dirtyRevision, previous?.dirtyRevision || 0),
+    confirmedChangedIds: [...confirmed].filter(id => byId.has(id)),
   };
   catalogPendingPublishes.set(key, pending);
   // No timer, Worker call or Firestore read here. Only real mutations write

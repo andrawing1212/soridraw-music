@@ -328,3 +328,14 @@ const cacheWrite=appSource.slice(cacheWriteStart,cacheWriteEnd);
 assert.match(cacheWrite,/if \(options\.immediate === true\) \{ doDeferredWrite\(\); return; \}/);
 assert.match(cacheWrite,/localStorage\.getItem\(`soridraw_favorites_cache_\$\{uid\}`\) !== serialized/);
 console.log('MUSIC_NOTE_RELOAD_VERIFIED_R2_REUSED_AND_INITIAL_CACHE_COMMITTED=PASS');
+
+const firstPaint=appSource.slice(appSource.indexOf('const hasAnyMusicNotePayload ='),appSource.indexOf('let musicNoteBundleMissingHandled'));
+assert.match(firstPaint,/preferVerifiedCatalog = !!sessionStorage\.getItem/);
+assert.match(firstPaint,/hasMusicNotePayloadCache\(currentUser.uid\) && !preferVerifiedCatalog/);
+assert.match(firstPaint,/hasAnyMusicNotePayload && !preferVerifiedCatalog/);
+const onData=appSource.slice(appSource.indexOf("unsubMusicNoteBundle = subscribeListBundle('musicNote'"),appSource.indexOf('const loadMoreFavorites ='));
+assert.match(onData,/previous = Array\.isArray\(prev\) && prev\.length > 0 \? prev : cachedFavs/);
+assert.match(onData,/if \(preferVerifiedCatalog\) setFavorites\(sortFavoriteList\(cachedFavs\)\)/);
+const bundleSource=readFileSync('src/lib/listBundleCache.ts','utf8');
+assert.match(bundleSource,/if \(kind === 'musicNote'\) callbacks\.onMissing\?\.\(\{ fromCache: false \}\)/);
+console.log('MUSIC_NOTE_RELOAD_NO_STALE_FIRST_PAINT_LOCAL_ORIGINALS_FALLBACK=PASS');

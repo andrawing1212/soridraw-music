@@ -7,6 +7,7 @@ const require=createRequire(import.meta.url);
 const ts=require('typescript');
 const engineSource=readFileSync('src/lib/userDataEngine.ts','utf8');
 const appSource=readFileSync('src/App.tsx','utf8');
+const domainSyncSource=readFileSync('src/services/userDomainSyncService.ts','utf8');
 const compiled=ts.transpileModule(engineSource,{compilerOptions:{
  target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,
 }}).outputText;
@@ -17,6 +18,8 @@ const timers=new Map();
 let dirtyRevision=0;
 let networkCalls=0;
 let failNetwork=false;
+let activeRemoteCatalog=null;
+let profileRevision=0;
 const accepted=[];
 const localStorage={
  getItem:key=>store.get(key)||null,
@@ -40,15 +43,23 @@ const ctx={
    readAdaptiveListIndexDirtyRevision:()=>dirtyRevision,
    clearAdaptiveListIndexDirtyRevision:(_,rev)=>{if(dirtyRevision===rev)dirtyRevision=0;},
   };
-  if(name==='./userProfileCache')return {readUserProfileCache:()=>null};
+  if(name==='./userProfileCache')return {readUserProfileCache:()=>({})};
   if(name==='./catalogWarmCachePolicy')return {
-   readCatalogProfileRevision:()=>0,canUseWarmCatalogWithoutRemote:()=>false,
+   readCatalogProfileRevision:()=>profileRevision,
+   canUseWarmCatalogWithoutRemote:({localRevision,profileRevision:profile,sessionValidated})=>Boolean(
+    localRevision>0&&(sessionValidated?localRevision>=profile:profile>0&&localRevision>=profile)
+   ),
   };
   if(name==='./catalogRuntimeDiagnostics')return {markCatalogRuntimeDiagnostic:()=>{}};
   return {};
  },
  fetch:async (url,init)=>{
   networkCalls++;
+  if(init.method==='GET'){
+   assert.match(url,/\/v1\/catalog\/musicNote$/);
+   if(!activeRemoteCatalog)throw Error('REMOTE_NOT_CONFIGURED');
+   return {ok:true,status:200,json:async()=>activeRemoteCatalog};
+  }
   assert.match(url,/\/v1\/catalog\/musicNote\/delta$/);
   if(failNetwork)throw Error('OFFLINE');
   const delta=JSON.parse(init.body);
@@ -177,3 +188,74 @@ assert.deepEqual(accepted.at(-1).upserts.map(x=>x.id),['B']);
 assert.equal(reloaded.getPendingCatalogPublishCount('owner-A'),0);
 assert.equal(store.has(pendingKey),false);
 console.log('APP525_TAB_RELOAD_RECOVERS_DURABLE_MUSIC_NOTE_PUBLISH=PASS');
+
+
+// app525-v2: execute the actual canonical post-success staging helper, not
+// just a one-row test that bypasses the App's normal full-list cache write.
+const stageBegin=domainSyncSource.indexOf('export const stageCommittedMusicNoteMembershipDelta = (');
+const stageEnd=domainSyncSource.indexOf('addV1MutationPostSuccessHook(async (context, result) => {',stageBegin);
+assert.ok(stageBegin>0&&stageEnd>stageBegin,'exact canonical sync hook is missing');
+assert.match(domainSyncSource.slice(stageEnd,stageEnd+400),
+ /stageCommittedMusicNoteMembershipDelta\(context, result\)/);
+const stageExports={};
+const compiledStage=ts.transpileModule(domainSyncSource.slice(stageBegin,stageEnd),{
+ compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS},
+}).outputText;
+const stageContext={
+ exports:stageExports,
+ projectCatalogItemForSync:api.projectCatalogItemForSync,
+ scheduleCatalogSnapshotPublishIfDirty:api.scheduleCatalogSnapshotPublishIfDirty,
+};
+vm.runInNewContext(compiledStage,stageContext,{filename:'exact-committed-music-note.ts'});
+const canonicalStage=stageExports.stageCommittedMusicNoteMembershipDelta;
+const onlyA=await api.readCatalogSnapshotFromLocalCache('musicNote','owner-A');
+assert.ok(onlyA.items.some(x=>x.id==='A')&&onlyA.items.some(x=>x.id==='B'));
+dirtyRevision=6;
+canonicalStage({domain:'musicNote',operation:'save',uid:'owner-A',
+ documentIds:['B'],syncItem:song('B')},null);
+api.scheduleCatalogSnapshotPublishIfDirty('musicNote','owner-A',
+ [song('A'),song('B'),song('C')],{complete:true});
+const beforeMulti=networkCalls;
+await executeNextTimer();
+assert.equal(networkCalls,beforeMulti+1,'full UI list must not drop the exact committed upsert');
+assert.deepEqual(accepted.at(-1).upserts.map(x=>x.id),['B']);
+assert.equal(api.getPendingCatalogPublishCount('owner-A'),0);
+console.log('APP525_V2_ACTUAL_FULL_LIST_SAVE_EXACT_ID_R2_PUBLISH=PASS');
+
+const oldNetwork=networkCalls;
+dirtyRevision=0;
+canonicalStage({domain:'musicNote',operation:'heart-preview-save',uid:'owner-A',
+ documentIds:['phantom'],syncItem:song('phantom')},null);
+canonicalStage({domain:'musicNote',operation:'save',uid:'owner-A',
+ documentIds:['phantom'],syncItem:{...song('phantom'),__studioHeartRemotePreview:true}},null);
+canonicalStage({domain:'musicNote',operation:'save',uid:'owner-B',
+ documentIds:['foreign'],syncItem:{...song('foreign'),uid:'owner-A'}},null);
+assert.equal(timers.size,0,'preview and mismatched-owner events must never schedule R2 writes');
+assert.equal(networkCalls,oldNetwork);
+console.log('APP525_V2_NO_PREVIEW_FOREIGN_OR_UNCHANGED_R2_WRITE=PASS');
+
+// app525-v2: on another browser session a cached revision >= the profile
+// hint is NOT proof of equal Music Note membership. Perform one necessary R2
+// read when the user actually opens Music Note, then keep warm entries R0/W0.
+profileRevision=100;
+const warmContext={...ctx,exports:{}};
+vm.runInNewContext(compiled,warmContext,{filename:'new-session-userDataEngine.ts'});
+const warmApi=warmContext.exports;
+const warmLocal={
+ ...seed,revision:500,generatedAtMs:500,
+ items:[song('A')],itemCount:1,
+};
+activeRemoteCatalog={
+ ...seed,revision:501,generatedAtMs:501,
+ items:[song('A'),song('NEW_FROM_OTHER_BROWSER')],itemCount:2,
+};
+await warmApi.writeCatalogSnapshotToLocalCache('musicNote','owner-A',warmLocal);
+const beforeWarmRead=networkCalls;
+const newest=await warmApi.readCatalogSnapshotCacheFirst('musicNote','owner-A');
+assert.equal(networkCalls,beforeWarmRead+1,'first Music Note entry must remotely validate a previous-session cache');
+assert.equal(newest.itemCount,2);
+assert.ok(newest.items.some(x=>x.id==='NEW_FROM_OTHER_BROWSER'));
+await warmApi.readCatalogSnapshotCacheFirst('musicNote','owner-A');
+assert.equal(networkCalls,beforeWarmRead+1,'subsequent validated Music Note entries must remain R0/W0');
+assert.equal(timers.size,0,'no page-entry publishing');
+console.log('APP525_V2_CROSS_BROWSER_WARM_CACHE_REFRESH_ONCE_PER_SESSION=PASS');

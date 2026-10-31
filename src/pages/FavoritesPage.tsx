@@ -7603,7 +7603,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         .soridraw-musicnote-theme.soridraw-responsive-content-page
         .soridraw-musicnote-song-card .soridraw-musicnote-song-title {
           margin-top: 5px !important;
-          font-size: 14px !important;
+          font-size: 15px !important;
           line-height: 1.12 !important;
         }
         :root body #root .soridraw-app-root

@@ -12972,6 +12972,24 @@ const unlockAllFavorites = async () => {
           const firestoreSongs = snap.exists() ? normalizeRecentSongList(snap.data().songs || []) : [];
           const documentVersion = Number(snap.exists() ? (snap.data() as any)?.syncVersion || 0 : 0);
           const currentCache = loadRecentSongsCache(user.uid);
+          // app520: a missing canonical document must not erase the only
+          // UID-scoped local backup left by an older logout-cache regression.
+          // A real existing empty document is an intentional empty state and
+          // must NOT revive stale backup songs. This is local display/cache
+          // recovery only: never recreate or modify Firestore on login.
+          if (!snap.exists() && !currentCache?.history?.length) {
+            const localBackup = loadRecentSongsBackup(user.uid);
+            if (localBackup.length > 0 && auth.currentUser?.uid === user.uid) {
+              const cachedBackup = saveRecentSongsCache(user.uid, {
+                history: localBackup,
+                historyIndex: 0,
+                latestGenerationBatchId: (localBackup[0]?.appliedKeywords as any)?.generationBatchId || null,
+              });
+              applyRecentSongsState(localBackup, { preferredIndex: 0 });
+              recentSongsReadyToCacheRef.current = cachedBackup;
+              return;
+            }
+          }
           const confirmedSongIds = new Set(firestoreSongs.map((song) => getLiveSoridrawSongId(song)).filter(Boolean));
           const legacyUnconfirmedSong = (currentCache?.history || []).some((song: any) => {
             const songId = getLiveSoridrawSongId(song);

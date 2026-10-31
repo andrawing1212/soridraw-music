@@ -200,3 +200,20 @@ assert.match(syncBlock,/verifiedProfileVersion,/);
 assert.match(syncBlock,/if \(cachedSuccessfully && snap\.exists\(\)/);
 assert.match(syncBlock,/localStorage\.setItem\(checkedKey,/);
 console.log('RECENT_PROFILE_GAP_529_VERIFIED_REENTRY_R0_AND_INVALIDATION=PASS');
+
+
+// A remote RTDB preview is never canonical proof. Preserve the exact local
+// Studio heart outbox until a confirmed Firestore mutation resolves it.
+const heartReceipt = within('  const rememberStudioHeartPreviewVersion = (', '  const persistRecentHeartAuthority =');
+const heartFlush = within('  const flushStudioHeartPendingIntent = async', '  const scheduleStudioHeartPendingIntent =');
+assert.doesNotMatch(heartReceipt,/removeStudioHeartIntentLocal\(/,
+  'newer RTDB preview must not delete an unsettled heart');
+assert.doesNotMatch(heartFlush,/removeStudioHeartPendingIntent\(uid, safeDocumentId\)/,
+  '30s timer must not throw away unsettled heart on preview reception');
+assert.match(heartFlush,/intent\.pendingRemotePreviewVersion > intent\.signalVersion/);
+assert.match(heartFlush,/await toggleFavorite\(commitSong,/,
+  'ordinary saved intent must still use the existing canonical boundary');
+const gateBlock=within('        const canDeriveFirstSaveId = Boolean(', '        const batchDocumentId =');
+assert.match(gateBlock,/musicNoteFullCatalogReadyUids\.has\(user\.uid\)/,
+  'verified empty Catalog must permit immediate cross-device heart preview');
+console.log('APP_HEART_PENDING_SURVIVES_RTDB_PREVIEW_AND_FIRST_SAVE_PATH=PASS');

@@ -330,7 +330,7 @@ assert.match(cacheWrite,/localStorage\.getItem\(`soridraw_favorites_cache_\$\{ui
 console.log('MUSIC_NOTE_RELOAD_VERIFIED_R2_REUSED_AND_INITIAL_CACHE_COMMITTED=PASS');
 
 const firstPaint=appSource.slice(appSource.indexOf('const hasAnyMusicNotePayload ='),appSource.indexOf('let musicNoteBundleMissingHandled'));
-assert.match(firstPaint,/preferVerifiedCatalog = !cacheRevision \|\| \(!!verified && verified !== cacheRevision\)/);
+assert.match(firstPaint,/preferVerifiedCatalog = !!verified && verified !== localStorage\.getItem/);
 assert.match(firstPaint,/hasMusicNotePayloadCache\(currentUser.uid\) && !preferVerifiedCatalog/);
 assert.match(firstPaint,/hasAnyMusicNotePayload && !preferVerifiedCatalog/);
 const onData=appSource.slice(appSource.indexOf("unsubMusicNoteBundle = subscribeListBundle('musicNote'"),appSource.indexOf('const loadMoreFavorites ='));
@@ -340,8 +340,9 @@ const bundleSource=readFileSync('src/lib/listBundleCache.ts','utf8');
 assert.match(bundleSource,/if \(kind === 'musicNote'\) callbacks\.onMissing\?\.\(\{ fromCache: false \}\)/);
 console.log('MUSIC_NOTE_RELOAD_NO_STALE_FIRST_PAINT_LOCAL_ORIGINALS_FALLBACK=PASS');
 
-assert.match(cacheWrite,/if \(options\.catalogRevision\) \{/);
-assert.match(cacheWrite,/localStorage\.setItem\(\`soridraw_favorites_cache_rev_/);
-assert.match(firstPaint,/verified !== cacheRevision/);
+assert.match(cacheWrite,/if \(options\.catalogRevision\) localStorage\.setItem/);
+assert.match(firstPaint,/verified !== localStorage\.getItem/);
 console.log('MUSIC_NOTE_VERIFIED_LOCALSTORAGE_REVISION_MATCH_FIRST_PAINT=PASS');
-
+assert.match(firstPaint, /window\.location\.hostname === 'preview\.soridraw\.com' && !verified/);
+assert.match(cacheWrite, /if \(!options\.catalogRevision\) localStorage\.removeItem/);
+console.log('MUSIC_NOTE_UNVERIFIED_NEW_MOBILE_SESSION_NO_STALE_PREPAINT=PASS');

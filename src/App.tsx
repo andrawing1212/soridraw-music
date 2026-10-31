@@ -390,28 +390,6 @@ const clearRecentSongTextPendingMarker = (uid: string) => {
 const hasRecentSongTextPendingMarker = (uid: string) => Boolean(readRecentSongTextPendingMarker(uid));
 
 const getRecentSongsVersionStorageKey = (uid: string) => `${RECENT_SONGS_LOCAL_SYNC_VERSION_STORAGE_BASE}_${uid}`;
-// A successful exact canonical read may prove that a cached profile hint is
-// ahead of the document. Store the compared pair, never invent a new doc ACK.
-const RECENT_SONGS_PROFILE_CHECK_BASE_527 = 'soridraw_recent_profile_checked_v1';
-const readRecentSongsCheckedProfileVersion527 = (uid: string, localVersion: number): number => {
-  if (!uid || typeof localStorage === 'undefined') return 0;
-  try {
-    const record = JSON.parse(localStorage.getItem(`${RECENT_SONGS_PROFILE_CHECK_BASE_527}_${uid}`) || 'null');
-    return record?.localVersion === localVersion && Number.isSafeInteger(record?.profileVersion)
-      ? Math.max(0, record.profileVersion) : 0;
-  } catch { return 0; }
-};
-const rememberRecentSongsCheckedProfileVersion527 = (uid: string, profileVersion: number, localVersion: number): void => {
-  if (!uid || !Number.isSafeInteger(profileVersion) || profileVersion <= 0
-    || !Number.isSafeInteger(localVersion) || localVersion <= 0 || typeof localStorage === 'undefined') return;
-  try {
-    const key = `${RECENT_SONGS_PROFILE_CHECK_BASE_527}_${uid}`;
-    const next = JSON.stringify({ profileVersion, localVersion });
-    if (localStorage.getItem(key) !== next) localStorage.setItem(key, next);
-  } catch {
-    // Quota/blocked storage: do not claim a verified gap on the next visit.
-  }
-};
 const RECENT_SONGS_MUTATION_EPOCH_STORAGE_BASE = 'soridraw_recent_songs_mutation_epoch_v1';
 const recentSongsWriteQueues = new Map<string, Promise<any>>();
 
@@ -6673,16 +6651,12 @@ function App() {
       favoritesCacheWriteTimers.delete(uid);
       try {
         const serialized = JSON.stringify(safeList);
+        // Local-only changes invalidate the previous Catalog-backed first-paint receipt.
+        if (!options.catalogRevision) localStorage.removeItem(`soridraw_favorites_cache_rev_${uid}`);
         if (localStorage.getItem(`soridraw_favorites_cache_${uid}`) !== serialized) {
           localStorage.setItem(`soridraw_favorites_cache_${uid}`, serialized);
         }
-        if (options.catalogRevision) {
-          localStorage.setItem(`soridraw_favorites_cache_rev_${uid}`, String(options.catalogRevision));
-        } else {
-          // An optimistic/private edit is useful locally but not R2 authority.
-          // The next boot must not mistake its body for a verified Catalog.
-          localStorage.removeItem(`soridraw_favorites_cache_rev_${uid}`);
-        }
+        if (options.catalogRevision) localStorage.setItem(`soridraw_favorites_cache_rev_${uid}`, String(options.catalogRevision));
         const maxCountKey = `soridraw_favorites_cache_max_count_${uid}`;
         const previousMax = Number(localStorage.getItem(maxCountKey) || '0') || 0;
         if ((safeList?.length || 0) > previousMax) {
@@ -10454,11 +10428,12 @@ const toggleCycleVariantSelection = (
         let preferVerifiedCatalog = false;
         try {
           const verified = sessionStorage.getItem(`soridraw_catalog_verified_v1:musicNote:${currentUser.uid}`)?.split(':')[0];
-          const cacheRevision = localStorage.getItem(`soridraw_favorites_cache_rev_${currentUser.uid}`);
-          // A local-only or older list has no committed Catalog revision.
-          // Never paint it ahead of the verified IndexedDB/R2 source.
-          preferVerifiedCatalog = !cacheRevision || (!!verified && verified !== cacheRevision);
-        } catch {}
+          preferVerifiedCatalog = !!verified && verified !== localStorage.getItem(`soridraw_favorites_cache_rev_${currentUser.uid}`);
+          // A new PREVIEW session must not flash unverified local rows before Catalog hydration.
+          if (window.location.hostname === 'preview.soridraw.com' && !verified) preferVerifiedCatalog = true;
+        } catch {
+          if (window.location.hostname === 'preview.soridraw.com') preferVerifiedCatalog = true;
+        }
         // 1030 Stage 1: cache is an instant-paint layer, not proof of completeness.
         // A tiny payload must get one bounded first-page repair instead of being
         // trusted forever and hiding the user's saved songs. Once a full 20-item
@@ -13010,7 +12985,6 @@ const unlockAllFavorites = async () => {
         hasLocalCache: hasVerifiedVisibleCache,
         profileVersion: remoteVersion,
         localDocumentVersion: localVersion,
-        verifiedProfileVersion: readRecentSongsCheckedProfileVersion527(user.uid, localVersion),
         pendingSignalVersion,
         acknowledgedSignalVersion,
       });
@@ -13123,14 +13097,6 @@ const unlockAllFavorites = async () => {
             // Server revision is proven only after durable cache persistence.
             // If storage failed, leave prior revision/gap for safe next visit.
             writeRecentSongsLocalVersion(user.uid, documentVersion);
-          }
-          // Separate the checked-profile hint from the canonical version ACK.
-          // Only a durable exact server snapshot proves this comparison, and
-          // a newer profile/RTDB signal can always invalidate it.
-          if (cachedSuccessfully && documentVersion > 0 && remoteVersion > documentVersion) {
-            rememberRecentSongsCheckedProfileVersion527(
-              user.uid, remoteVersion, readRecentSongsLocalVersion(user.uid),
-            );
           }
           markCacheDiagnostic('recentSongs', 'SYNC', 1, 0);
           preserveHistoryIndexOnNextSnapshotRef.current = null;

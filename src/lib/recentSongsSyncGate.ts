@@ -5,15 +5,13 @@ export type RecentSongsGate = {
   hasLocalCache: boolean;
   profileVersion: number;
   localDocumentVersion: number;
-  // Exact profile hint compared against a durably cached server document.
-  verifiedProfileVersion?: number;
   pendingSignalVersion: number;
   acknowledgedSignalVersion: number;
 };
 
 export const needsRecentSongsServerRead = (gate: RecentSongsGate): boolean =>
   !gate.hasLocalCache
-  || gate.profileVersion > Math.max(gate.localDocumentVersion, gate.verifiedProfileVersion || 0)
+  || gate.profileVersion > gate.localDocumentVersion
   || gate.pendingSignalVersion > gate.acknowledgedSignalVersion;
 
 // Do not let an orphaned text-edit marker suppress the only canonical read

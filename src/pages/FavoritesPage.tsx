@@ -9881,7 +9881,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         className="custom-scrollbar h-[380px] w-full resize-none rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 outline-none transition-all focus:border-[#FF7A72]/30"
                       />
                     ) : (
-                      <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-contain rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 whitespace-pre-wrap">
+                      <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-auto rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 whitespace-pre-wrap">
                         {normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.korean || '')}
                       </div>
                     )}
@@ -9978,7 +9978,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         className="custom-scrollbar h-[380px] w-full resize-none rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/72 italic outline-none transition-all focus:border-[#FF7A72]/30"
                       />
                     ) : (
-                      <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-contain rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/72 whitespace-pre-wrap">
+                      <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-auto rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/72 whitespace-pre-wrap">
                         {normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.english || '')}
                       </div>
                     )}
@@ -10045,8 +10045,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       className="custom-scrollbar h-[220px] w-full resize-none rounded-2xl border border-black/20 bg-black/15 p-4 text-sm leading-7 text-white/68 outline-none transition-all focus:border-[#FF7A72]/30"
                     />
                   ) : (
-                    <div className="rounded-2xl border border-black/20 bg-black/15 p-4 md:p-5">
-                      <p className="text-sm leading-7 text-white/68">{normalizeFavoritePromptForDisplay(selectedSong.prompt || '') || '프롬프트 정보가 없습니다.'}</p>
+                    <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-auto rounded-2xl border border-black/20 bg-black/15 p-4 md:p-5">
+                      <p className="whitespace-pre-wrap break-words text-sm leading-7 text-white/68">{normalizeFavoritePromptForDisplay(selectedSong.prompt || '') || '프롬프트 정보가 없습니다.'}</p>
                     </div>
                   )}
                 </section>

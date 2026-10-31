@@ -4544,6 +4544,16 @@ updates: draft.updates,
     event.stopPropagation();
   };
 
+  // Music Note list-only controls: retain pointer-drag/wheel behavior and scroll
+  // just the keyword strip belonging to the clicked song. No state or I/O.
+  const scrollFavoriteKeywordsByArrow = (event: React.MouseEvent<HTMLButtonElement>, direction: -1 | 1) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const strip = event.currentTarget.parentElement?.querySelector<HTMLElement>('.soridraw-musicnote-song-keywords');
+    if (!strip || strip.scrollWidth <= strip.clientWidth + 1) return;
+    strip.scrollBy({ left: direction * Math.max(100, Math.round(strip.clientWidth * 0.7)), behavior: 'smooth' });
+  };
+
   const handleHorizontalListWheel = (event: React.WheelEvent<HTMLElement>) => {
     if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
     event.currentTarget.scrollLeft += event.deltaY;
@@ -7376,6 +7386,51 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         }
         .favorite-mobile-title-strip:active { cursor: grabbing; }
         .favorite-mobile-title-strip::-webkit-scrollbar { display: none; }
+        /* Music Note keyword arrows belong to the strip, not the whole card. */
+        .soridraw-musicnote-keyword-scroll {
+          position: relative;
+          min-width: 0;
+          flex: 1 1 auto;
+          max-width: min(100%, 680px);
+        }
+        .soridraw-musicnote-keyword-scroll > .soridraw-musicnote-song-keywords {
+          width: 100% !important;
+          max-width: 100% !important;
+          padding-left: 20px !important;
+          padding-right: 20px !important;
+        }
+        .soridraw-musicnote-keyword-nav {
+          position: absolute;
+          top: 50%;
+          z-index: 2;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 20px;
+          height: 22px;
+          padding: 0;
+          transform: translateY(-50%);
+          border: 0;
+          border-radius: 5px;
+          background: rgba(32, 32, 34, 0.9);
+          color: rgba(255, 255, 255, 0.7);
+          font-size: 9px;
+          line-height: 1;
+          cursor: pointer;
+          touch-action: manipulation;
+        }
+        .soridraw-musicnote-keyword-nav:hover { color: rgba(255, 255, 255, 0.98); }
+        .soridraw-musicnote-keyword-nav:focus-visible { outline: 2px solid #ff7a72; outline-offset: -2px; }
+        .soridraw-musicnote-keyword-nav--left { left: 0; }
+        .soridraw-musicnote-keyword-nav--right { right: 0; }
+        @media (hover: hover) and (pointer: fine) {
+          .soridraw-musicnote-keyword-nav { opacity: 0; pointer-events: none; }
+          .soridraw-musicnote-keyword-scroll:hover .soridraw-musicnote-keyword-nav,
+          .soridraw-musicnote-keyword-scroll:focus-within .soridraw-musicnote-keyword-nav {
+            opacity: 1;
+            pointer-events: auto;
+          }
+        }
       `}</style>
       {studioWorkspaceHeroHost
         ? createPortal(musicNotePageHeader, studioWorkspaceHeroHost)
@@ -7631,7 +7686,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   onClickCapture={(event) => {
                     if (!isSelectionMode) return;
                     const target = event.target as HTMLElement | null;
-                    if (target?.closest('[data-selection-checkbox="true"], [data-favorite-color-control="true"], [data-favorite-color-menu="true"]')) return;
+                    if (target?.closest('[data-selection-checkbox="true"], [data-favorite-color-control="true"], [data-favorite-color-menu="true"], [data-musicnote-keyword-nav="true"]')) return;
                     if (consumeFavoriteSuppressedClick(event, song.id)) return;
                     if (consumeSelectionDragClick(event)) return;
                   }}
@@ -7891,16 +7946,40 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                             </button>
                           </div>
                         )}
-                        <div
-                          className="soridraw-musicnote-song-keywords favorite-keyword-strip flex h-5 min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto overflow-y-hidden whitespace-nowrap rounded-md pr-2"
-                          onPointerDown={handleHorizontalListPointerDown}
-                          onPointerMove={handleHorizontalListPointerMove}
-                          onPointerUp={finishHorizontalListPointerDrag}
-                          onPointerCancel={finishHorizontalListPointerDrag}
-                          onClickCapture={consumeHorizontalListClick}
-                          onWheel={handleHorizontalListWheel}
-                        >
-                          {renderFavoriteKeywordChips(song)}
+                        <div className="soridraw-musicnote-keyword-scroll min-w-0 flex-1">
+                          <div
+                            className="soridraw-musicnote-song-keywords favorite-keyword-strip flex h-5 min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto overflow-y-hidden whitespace-nowrap rounded-md pr-2"
+                            onPointerDown={handleHorizontalListPointerDown}
+                            onPointerMove={handleHorizontalListPointerMove}
+                            onPointerUp={finishHorizontalListPointerDrag}
+                            onPointerCancel={finishHorizontalListPointerDrag}
+                            onClickCapture={consumeHorizontalListClick}
+                            onWheel={handleHorizontalListWheel}
+                          >
+                            {renderFavoriteKeywordChips(song)}
+                          </div>
+                          <button
+                            type="button"
+                            data-no-card-long-press="true"
+                            data-musicnote-keyword-nav="true"
+                            className="soridraw-musicnote-keyword-nav soridraw-musicnote-keyword-nav--left"
+                            aria-label="곡 키워드 왼쪽으로 스크롤"
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onTouchStart={(event) => event.stopPropagation()}
+                            onClick={(event) => scrollFavoriteKeywordsByArrow(event, -1)}
+                          >◀</button>
+                          <button
+                            type="button"
+                            data-no-card-long-press="true"
+                            data-musicnote-keyword-nav="true"
+                            className="soridraw-musicnote-keyword-nav soridraw-musicnote-keyword-nav--right"
+                            aria-label="곡 키워드 오른쪽으로 스크롤"
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onTouchStart={(event) => event.stopPropagation()}
+                            onClick={(event) => scrollFavoriteKeywordsByArrow(event, 1)}
+                          >▶</button>
                         </div>
                       </div>
                     </div>

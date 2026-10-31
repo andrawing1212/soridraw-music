@@ -182,3 +182,68 @@ assert.equal((pendingRecoveryBlock.match(/resumeAfterRead: true/g)||[]).length, 
 assert.equal((pendingRecoveryBlock.match(/clearRecentSongTextPendingMarker\(uid\)/g)||[]).length, 2);
 console.log('APP520_STALE_PENDING_MARKER_EMPTY_CACHE_RECOVERS_SERVER_TEN=PASS');
 console.log('APP520_REAL_LOCAL_DRAFT_AND_HEALTHY_CACHE_COST_PROTECTED=PASS');
+
+
+// The exact cached profile/document pair was previously checked against
+// a successfully cached Firestore response. Never treat the hint as canonical.
+const gap529={...sample,hasLocalCache:true,profileVersion:500,localDocumentVersion:400};
+assert.equal(readNeeded(gap529),true,'unverified profile gap still reads once');
+assert.equal(readNeeded({...gap529,verifiedProfileVersion:500}),false,
+  'identical verified profile/document pair avoids repeat R1 on reentry');
+assert.equal(readNeeded({...gap529,verifiedProfileVersion:500,profileVersion:501}),true,
+  'a newly advanced profile hint must read');
+assert.equal(readNeeded({...gap529,verifiedProfileVersion:500,pendingSignalVersion:700}),true,
+  'unacknowledged RTDB change must read');
+assert.equal(readNeeded({...gap529,verifiedProfileVersion:500,hasLocalCache:false}),true,
+  'empty or failed local cache must read even with a prior receipt');
+assert.match(syncBlock,/verifiedProfileVersion,/);
+assert.match(syncBlock,/if \(cachedSuccessfully && snap\.exists\(\)/);
+assert.match(syncBlock,/localStorage\.setItem\(checkedKey,/);
+console.log('RECENT_PROFILE_GAP_529_VERIFIED_REENTRY_R0_AND_INVALIDATION=PASS');
+
+
+// A remote RTDB preview is never canonical proof. Preserve the exact local
+// Studio heart outbox until a confirmed Firestore mutation resolves it.
+const heartReceipt = within('  const rememberStudioHeartPreviewVersion = (', '  const persistRecentHeartAuthority =');
+const heartFlush = within('  const flushStudioHeartPendingIntent = async', '  const scheduleStudioHeartPendingIntent =');
+assert.doesNotMatch(heartReceipt,/removeStudioHeartIntentLocal\(/,
+  'newer RTDB preview must not delete an unsettled heart');
+assert.doesNotMatch(heartFlush,/removeStudioHeartPendingIntent\(uid, safeDocumentId\)/,
+  '30s timer must not throw away unsettled heart on preview reception');
+assert.match(heartFlush,/intent\.pendingRemotePreviewVersion > intent\.signalVersion/);
+assert.match(heartFlush,/await toggleFavorite\(commitSong,/,
+  'ordinary saved intent must still use the existing canonical boundary');
+const gateBlock=within('        const canDeriveFirstSaveId = Boolean(', '        const batchDocumentId =');
+assert.match(gateBlock,/musicNoteFullCatalogReadyUids\.has\(user\.uid\)/,
+  'verified empty Catalog must permit immediate cross-device heart preview');
+console.log('APP_HEART_PENDING_SURVIVES_RTDB_PREVIEW_AND_FIRST_SAVE_PATH=PASS');
+
+
+// A newer remote heart must win visual display without deleting any
+// uncommitted local outbox; only matching canonical confirmation may retire it.
+const heartOverlay=within('  function overlayStudioHeartPendingIntentsOnFavorites(', '  const getFavoriteCreatedSortTime =');
+const heartCanonical=within('        const isCanonicalMembershipSignal =', '        if (isRemovalOperation) {');
+assert.match(heartOverlay,/intent\.pendingRemotePreviewVersion > intent\.signalVersion/);
+assert.match(heartOverlay,/studioHeartRemotePreviewRef\.current\.get\(documentId\)/);
+assert.match(heartCanonical,/remoteVersion > newestPreview\.version/);
+assert.match(heartCanonical,/newestPreview\.desiredSaved === canonicalRemoteSaved/);
+assert.match(heartCanonical,/removeStudioHeartPendingIntent\(uid, confirmedId\)/);
+assert.match(syncBlock,/verifiedProfileVersion,/);
+console.log('APP_HEART_REMOTE_PREVIEW_VISIBLE_PENDING_DURABLE_CANONICAL_CONFIRMED_ONLY=PASS');
+
+
+// RTDB version must update pending ordering BEFORE visible remote heart paint.
+const remoteHeartBlock=within('      if (isHeartPreview) {\n      // Record ordering', '      // app348: every signed-in device updates immediately;');
+assert.ok(
+ remoteHeartBlock.indexOf('supersedeStudioHeartIntentFromRemotePreview(')
+  < remoteHeartBlock.indexOf('applyRemoteStudioHeartPreview('),
+ 'newer cross-device heart must not be hidden by stale local pending overlay',
+);
+console.log('APP_HEART_REMOTE_VERSION_BEFORE_REMOTE_PAINT=PASS');
+
+
+// An older canonical RTDB signal in the opposite direction cannot override
+// the local Studio heart authority while a newer preview remains unresolved.
+assert.match(src,/unresolvedPreview\.desiredSaved === remoteHeartSaved/);
+assert.match(src,/isHeartPreview \|\| !unresolvedPreview/);
+console.log('APP_HEART_STALE_CANONICAL_DOES_NOT_REVERSE_NEWER_REMOTE_PREVIEW=PASS');

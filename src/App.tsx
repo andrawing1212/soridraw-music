@@ -5984,22 +5984,15 @@ function App() {
     if (!updated) return;
     if (typeof desiredSaved === 'boolean' && updated.desiredSaved !== desiredSaved) return;
     if (Number.isFinite(expectedUpdatedAtMs) && Number(expectedUpdatedAtMs) > 0 && updated.updatedAtMs !== Number(expectedUpdatedAtMs)) return;
-    if (
-      updated.pendingRemotePreviewVersion > 0
-      && updated.pendingRemotePreviewVersion > updated.signalVersion
-    ) {
-      removeStudioHeartIntentLocal(uid, documentId);
-    }
+    // A newer RTDB preview is not a Firestore commit acknowledgement.
+    // Preserve this device's durable pending intent until canonical settlement.
   };
 
   const supersedeStudioHeartIntentFromRemotePreview = (uid: string, documentId: string, remoteVersion: number) => {
     if (!uid || !documentId || !Number.isFinite(remoteVersion) || remoteVersion <= 0) return;
     const pending = readStudioHeartPendingIntent(uid, documentId);
     if (!pending) return;
-    if (pending.signalVersion > 0) {
-      if (remoteVersion > pending.signalVersion) removeStudioHeartIntentLocal(uid, documentId);
-      return;
-    }
+    if (remoteVersion <= pending.signalVersion) return;
     updateStudioHeartPendingIntent(uid, documentId, (current) => ({
       ...current,
       pendingRemotePreviewVersion: Math.max(current.pendingRemotePreviewVersion || 0, Math.floor(remoteVersion)),
@@ -6345,6 +6338,9 @@ function App() {
     for (const intent of pending) {
       const documentId = String(intent.documentId || '').trim();
       if (!documentId) continue;
+      // Show a newer remote heart immediately without deleting local pending.
+      if (intent.pendingRemotePreviewVersion > intent.signalVersion
+        && studioHeartRemotePreviewRef.current.get(documentId)?.version === intent.pendingRemotePreviewVersion) continue;
 
       // app347 — pending controls membership only. If a newer canonical/local row
       // already exists for this document (for example Detail Suno media changed),
@@ -10909,7 +10905,9 @@ const toggleCycleVariantSelection = (
       // app286 — Record the latest heart direction before trying to patch a
       // possibly stale Recent Songs row. The immutable song key in the RTDB
       // payload is enough to update the open Studio heart without Firestore IO.
-      if (remoteItem && remoteFavoriteId && typeof remoteHeartSaved === 'boolean') {
+      const unresolvedPreview = studioHeartRemotePreviewRef.current.get(remoteFavoriteId);
+      if (remoteItem && remoteFavoriteId && typeof remoteHeartSaved === 'boolean'
+        && (isHeartPreview || !unresolvedPreview || unresolvedPreview.desiredSaved === remoteHeartSaved)) {
         rememberRecentHeartAuthority(
           uid,
           remoteItem,
@@ -10992,6 +10990,11 @@ const toggleCycleVariantSelection = (
       }
 
       if (isHeartPreview) {
+      // Record ordering before rendering, otherwise the older pending overlay
+      // repaints on top of this newer cross-device preview.
+      if (remoteFavoriteId) {
+        supersedeStudioHeartIntentFromRemotePreview(uid, remoteFavoriteId, remoteVersion);
+      }
       applyRemoteStudioHeartPreview(
         uid,
         remoteItem,
@@ -10999,9 +11002,6 @@ const toggleCycleVariantSelection = (
         isHeartPreviewSave,
         remoteVersion,
       );
-      if (remoteFavoriteId) {
-        supersedeStudioHeartIntentFromRemotePreview(uid, remoteFavoriteId, remoteVersion);
-      }
       // app348: every signed-in device updates immediately; only the
       // canonical favorite write waits for the per-song 30s final state.
       writeMusicNoteSyncVersion(MUSIC_NOTE_RTDB_ACK_VERSION_STORAGE_BASE, uid, remoteVersion);
@@ -11020,13 +11020,21 @@ const toggleCycleVariantSelection = (
           const canonicalRemoteSaved = !isRemovalOperation
             && !removed
             && Boolean(remoteItem && !isFavoriteSoftRemoved(remoteItem));
+          const confirmedId = remoteFavoriteId || exactDocumentIds[0] || '';
+          const newestPreview = studioHeartRemotePreviewRef.current.get(confirmedId);
+          const olderPending = readStudioHeartPendingIntent(uid, confirmedId);
+          // Only a later confirmed canonical state can retire superseded pending.
+          if (olderPending && newestPreview && remoteVersion > newestPreview.version
+            && olderPending.pendingRemotePreviewVersion > olderPending.signalVersion
+            && newestPreview.desiredSaved === canonicalRemoteSaved) {
+            removeStudioHeartPendingIntent(uid, confirmedId);
+          }
           reconcileStudioHeartPendingFromCanonicalSignal(
-            uid,
-            remoteItem,
-            remoteFavoriteId || exactDocumentIds[0] || '',
-            canonicalRemoteSaved,
+            uid, remoteItem, confirmedId, canonicalRemoteSaved,
           );
-          clearRemoteStudioHeartPreviewFromCanonical(uid, exactDocumentIds, remoteItem);
+          if (!newestPreview || newestPreview.desiredSaved === canonicalRemoteSaved) {
+            clearRemoteStudioHeartPreviewFromCanonical(uid, exactDocumentIds, remoteItem);
+          }
         }
 
         if (isRemovalOperation) {
@@ -11913,8 +11921,9 @@ const toggleCycleVariantSelection = (
     const intent = readStudioHeartPendingIntent(uid, safeDocumentId);
     if (!intent) return;
 
-    if (intent.signalVersion <= 0 && intent.pendingRemotePreviewVersion > 0) {
-      removeStudioHeartPendingIntent(uid, safeDocumentId);
+    if (intent.pendingRemotePreviewVersion > intent.signalVersion) {
+      // A newer device's preview may still be uncommitted. Hold this older
+      // writer's outbox, not its Firestore write, until canonical resolution.
       return;
     }
 
@@ -12002,7 +12011,8 @@ const toggleCycleVariantSelection = (
       },
       updatedAtMs: now,
       signalVersion: 0,
-      pendingRemotePreviewVersion: existing?.pendingRemotePreviewVersion || 0,
+      // A later local click supersedes an earlier remote preview.
+      pendingRemotePreviewVersion: 0,
       retryCount: 0,
     };
     const durableIntentResult = writeStudioHeartPendingIntentChecked(intent);
@@ -12968,6 +12978,15 @@ const unlockAllFavorites = async () => {
       const cachedProfile = readUserProfileCache(user.uid);
       const remoteVersion = Number((cachedProfile as any)?.syncVersions?.recentSongs || 0);
       const localVersion = readRecentSongsLocalVersion(user.uid);
+      // Only the exact profile/doc pair already checked against Firestore may
+      // skip a repeated unchanged reentry; no canonical version is fabricated.
+      const checkedKey = `soridraw_recent_profile_checked_v1_${user.uid}`;
+      let verifiedProfileVersion = 0;
+      try {
+        if (localStorage.getItem(checkedKey) === `${remoteVersion}:${localVersion}`) {
+          verifiedProfileVersion = remoteVersion;
+        }
+      } catch {}
       const pendingSignalVersion = readRecentSongsPendingSignalVersion(user.uid);
       const acknowledgedSignalVersion = readRecentSongsAcknowledgedSignalVersion(user.uid);
       const retainedGapVersion = readRecentSongsRetainedDraftGap460(user.uid);
@@ -12985,6 +13004,7 @@ const unlockAllFavorites = async () => {
         hasLocalCache: hasVerifiedVisibleCache,
         profileVersion: remoteVersion,
         localDocumentVersion: localVersion,
+        verifiedProfileVersion,
         pendingSignalVersion,
         acknowledgedSignalVersion,
       });
@@ -13097,6 +13117,15 @@ const unlockAllFavorites = async () => {
             // Server revision is proven only after durable cache persistence.
             // If storage failed, leave prior revision/gap for safe next visit.
             writeRecentSongsLocalVersion(user.uid, documentVersion);
+          }
+          // The profile hint may stay ahead of the real document on older
+          // clients. The same checked pair needs no second billed read.
+          if (cachedSuccessfully && snap.exists()
+            && remoteVersion > readRecentSongsLocalVersion(user.uid)) {
+            try {
+              localStorage.setItem(checkedKey,
+                `${remoteVersion}:${readRecentSongsLocalVersion(user.uid)}`);
+            } catch {}
           }
           markCacheDiagnostic('recentSongs', 'SYNC', 1, 0);
           preserveHistoryIndexOnNextSnapshotRef.current = null;
@@ -16684,9 +16713,9 @@ ${normalizePromptForDisplay(result.prompt)}
         const remoteMusicNoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, user.uid);
         const canDeriveFirstSaveId = Boolean(
           stableBatchIdentity
-          && hasMusicNotePayloadCache(user.uid)
-          && localMusicNoteVersion > 0
           && remoteMusicNoteVersion <= localMusicNoteVersion
+          && (musicNoteFullCatalogReadyUids.has(user.uid)
+            || (hasMusicNotePayloadCache(user.uid) && localMusicNoteVersion > 0))
         );
         const batchDocumentId = canonicalFavoriteId || (
           canDeriveFirstSaveId

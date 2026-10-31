@@ -5,13 +5,14 @@ export type RecentSongsGate = {
   hasLocalCache: boolean;
   profileVersion: number;
   localDocumentVersion: number;
+  verifiedProfileVersion?: number;
   pendingSignalVersion: number;
   acknowledgedSignalVersion: number;
 };
 
 export const needsRecentSongsServerRead = (gate: RecentSongsGate): boolean =>
   !gate.hasLocalCache
-  || gate.profileVersion > gate.localDocumentVersion
+  || gate.profileVersion > Math.max(gate.localDocumentVersion, gate.verifiedProfileVersion || 0)
   || gate.pendingSignalVersion > gate.acknowledgedSignalVersion;
 
 // Do not let an orphaned text-edit marker suppress the only canonical read

@@ -848,6 +848,9 @@ const readRemoteCatalogSnapshot = async (
         : resolved;
       await writeCatalogSnapshotToLocalCache(kind, uid, visibleResolved);
       catalogRemoteValidatedSessionKeys.add(catalogKey(kind, uid));
+      if (kind === 'musicNote' && typeof sessionStorage !== 'undefined') {
+        try { sessionStorage.setItem(`soridraw_catalog_verified_v1:${catalogKey(kind, uid)}`, `${visibleResolved.revision}:${Date.now()}`); } catch {}
+      }
       markCatalogRuntimeDiagnostic(kind, { stage: 'ACCEPTED', attempt: attempt + 1, httpStatus: response.status, remoteItemCount: Number(visibleResolved.itemCount || 0), revision: Number(visibleResolved.revision || 0), errorCode: '' });
       return visibleResolved;
     } catch (error) {
@@ -942,7 +945,14 @@ export const readCatalogSnapshotCacheFirst = async (
   const promise = (async () => {
     const local = await readCatalogSnapshotFromLocalCache(kind, uid);
     const knownRemoteRevision = readKnownRemoteCatalogRevision(kind, uid);
-    const sessionValidated = catalogRemoteValidatedSessionKeys.has(key);
+    let verified: number[] = [];
+    if (kind === 'musicNote' && typeof sessionStorage !== 'undefined') {
+      try { verified = String(sessionStorage.getItem(`soridraw_catalog_verified_v1:${key}`) || '').split(':').map(Number); } catch {}
+    }
+    const [verifiedRevision, verifiedAt] = verified;
+    const sessionValidated = catalogRemoteValidatedSessionKeys.has(key)
+      || (kind === 'musicNote' && !!local && verifiedRevision === local.revision
+        && Date.now() - verifiedAt < 5 * 60_000 && knownRemoteRevision <= local.revision);
 
     // 1054: a V5 Catalog is server-authored and may survive app restarts without
     // a redundant Worker GET when the already-paid users profile invalidation token

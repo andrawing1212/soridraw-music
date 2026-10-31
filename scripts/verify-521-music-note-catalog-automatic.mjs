@@ -13,6 +13,12 @@ const compiled=ts.transpileModule(engineSource,{compilerOptions:{
 }}).outputText;
 
 const store=new Map();
+const sessionStore=new Map();
+const sessionStorage={
+ getItem:key=>sessionStore.get(key)||null,
+ setItem:(key,val)=>sessionStore.set(key,String(val)),
+ removeItem:key=>sessionStore.delete(key),
+};
 let nextTimerId=0;
 const timers=new Map();
 let dirtyRevision=0;
@@ -29,7 +35,7 @@ const localStorage={
 const user={uid:'owner-A',getIdToken:async()=> 'test-token'};
 const exports={};
 const ctx={
- exports,console,Date,Math,JSON,TextEncoder,Set,Map,localStorage,
+ exports,console,Date,Math,JSON,TextEncoder,Set,Map,localStorage,sessionStorage,
  window:{location:{hostname:'preview.soridraw.com'}},
  setTimeout:(fn,delay)=>{const id=++nextTimerId;timers.set(id,{fn,delay});return id;},
  clearTimeout:id=>timers.delete(id),
@@ -300,8 +306,25 @@ const selected=vm.runInNewContext(pickCompiled,{
 });
 assert.deepEqual(Array.from(selected,x=>x.id),['ONLY_IN_LOCAL_OLD_PC']);
 assert.match(appSource.slice(localEnd,localEnd+500),
- /writeFavoritesCache\(currentUser.uid, authoritative, \{ publishDerived: false \}\)/);
+ /writeFavoritesCache\(currentUser.uid, authoritative, \{ publishDerived: false, immediate: true \}\)/);
 const recoveryStart=appSource.indexOf('const catalogFavoriteIds = new Set(',appSource.indexOf('const recoverMusicNoteCatalogAfterRemoteCanonical'));
 assert.ok(recoveryStart>0);
 assert.match(appSource.slice(recoveryStart,recoveryStart+1350),/!catalogFavoriteIds\.has\(favoriteId\)/);
 console.log('APP550_V2_R2_NEW_ITEM_PLUS_LOCAL_OLD_PRESERVED_NO_CACHE_ECHO=PASS');
+
+// A real reload retains the same tab's sessionStorage and IndexedDB snapshot.
+// It must neither flash the old localStorage list nor refetch unchanged R2.
+const warmReloadCtx={...ctx,exports:{}};
+vm.runInNewContext(compiled,warmReloadCtx,{filename:'verified-tab-reload.ts'});
+const warmReload=warmReloadCtx.exports;
+await warmReload.writeCatalogSnapshotToLocalCache('musicNote','owner-A',retained);
+const beforeReload=networkCalls;
+const afterReload=await warmReload.readCatalogSnapshotCacheFirst('musicNote','owner-A');
+assert.equal(networkCalls,beforeReload,'unchanged same-tab reload must not issue another R2 GET');
+assert.ok(afterReload.items.some(x=>x.id==='NEW_FROM_EDGE'));
+const cacheWriteStart=appSource.indexOf('  const writeFavoritesCache = (');
+const cacheWriteEnd=appSource.indexOf('  const patchFavoriteCacheImmediately',cacheWriteStart);
+const cacheWrite=appSource.slice(cacheWriteStart,cacheWriteEnd);
+assert.match(cacheWrite,/if \(options\.immediate === true\) \{ doDeferredWrite\(\); return; \}/);
+assert.match(cacheWrite,/localStorage\.getItem\(`soridraw_favorites_cache_\$\{uid\}`\) !== serialized/);
+console.log('MUSIC_NOTE_RELOAD_VERIFIED_R2_REUSED_AND_INITIAL_CACHE_COMMITTED=PASS');

@@ -6610,7 +6610,7 @@ function App() {
   const writeFavoritesCache = (
     uid: string,
     list: any[],
-    options: { publishDerived?: boolean } = {},
+    options: { publishDerived?: boolean; immediate?: boolean } = {},
   ) => {
     const safeList = filterDeletedFavoriteTombstones(uid, Array.isArray(list) ? list : []);
 
@@ -6650,7 +6650,10 @@ function App() {
     const doDeferredWrite = () => {
       favoritesCacheWriteTimers.delete(uid);
       try {
-        localStorage.setItem(`soridraw_favorites_cache_${uid}`, JSON.stringify(safeList));
+        const serialized = JSON.stringify(safeList);
+        if (localStorage.getItem(`soridraw_favorites_cache_${uid}`) !== serialized) {
+          localStorage.setItem(`soridraw_favorites_cache_${uid}`, serialized);
+        }
         const maxCountKey = `soridraw_favorites_cache_max_count_${uid}`;
         const previousMax = Number(localStorage.getItem(maxCountKey) || '0') || 0;
         if ((safeList?.length || 0) > previousMax) {
@@ -6661,6 +6664,7 @@ function App() {
       }
     };
 
+    if (options.immediate === true) { doDeferredWrite(); return; }
     // Use requestIdleCallback with high timeout to run when main thread is totally free, or setTimeout as fallback
     if (typeof requestIdleCallback !== 'undefined') {
       const id = requestIdleCallback(doDeferredWrite, { timeout: 1500 });
@@ -10551,7 +10555,7 @@ const toggleCycleVariantSelection = (
                   ? mergeFavoritePages(catalogFavorites, localNewer)
                   : mergeFavoriteFirstPageWithCache(catalogFavorites, previous, false);
                 // Reading Catalog must never cause a derived Catalog write.
-                writeFavoritesCache(currentUser.uid, authoritative, { publishDerived: false });
+                writeFavoritesCache(currentUser.uid, authoritative, { publishDerived: false, immediate: true });
                 return authoritative;
               });
 

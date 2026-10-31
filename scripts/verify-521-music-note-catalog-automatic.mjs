@@ -234,28 +234,26 @@ assert.equal(timers.size,0,'preview and mismatched-owner events must never sched
 assert.equal(networkCalls,oldNetwork);
 console.log('APP525_V2_NO_PREVIEW_FOREIGN_OR_UNCHANGED_R2_WRITE=PASS');
 
-// app525-v2: on another browser session a cached revision >= the profile
-// hint is NOT proof of equal Music Note membership. Perform one necessary R2
-// read when the user actually opens Music Note, then keep warm entries R0/W0.
+// Protect an old PC's local favorites while the shared R2 Catalog is known
+// to be incomplete. A profile hint behind its local snapshot is not deletion
+// authority, and unchanged page visits must not overwrite the local cache.
 profileRevision=100;
 const warmContext={...ctx,exports:{}};
 vm.runInNewContext(compiled,warmContext,{filename:'new-session-userDataEngine.ts'});
 const warmApi=warmContext.exports;
 const warmLocal={
  ...seed,revision:500,generatedAtMs:500,
- items:[song('A')],itemCount:1,
+ items:[song('A'),song('ONLY_IN_LOCAL_OLD_PC')],itemCount:2,
 };
 activeRemoteCatalog={
  ...seed,revision:501,generatedAtMs:501,
- items:[song('A'),song('NEW_FROM_OTHER_BROWSER')],itemCount:2,
+ items:[song('A')],itemCount:1,
 };
 await warmApi.writeCatalogSnapshotToLocalCache('musicNote','owner-A',warmLocal);
 const beforeWarmRead=networkCalls;
-const newest=await warmApi.readCatalogSnapshotCacheFirst('musicNote','owner-A');
-assert.equal(networkCalls,beforeWarmRead+1,'first Music Note entry must remotely validate a previous-session cache');
-assert.equal(newest.itemCount,2);
-assert.ok(newest.items.some(x=>x.id==='NEW_FROM_OTHER_BROWSER'));
-await warmApi.readCatalogSnapshotCacheFirst('musicNote','owner-A');
-assert.equal(networkCalls,beforeWarmRead+1,'subsequent validated Music Note entries must remain R0/W0');
-assert.equal(timers.size,0,'no page-entry publishing');
-console.log('APP525_V2_CROSS_BROWSER_WARM_CACHE_REFRESH_ONCE_PER_SESSION=PASS');
+const retained=await warmApi.readCatalogSnapshotCacheFirst('musicNote','owner-A');
+assert.equal(networkCalls,beforeWarmRead,
+ 'never delete legacy browser-only favorites via an unproven R2 read on an unchanged warm visit');
+assert.ok(retained.items.some(x=>x.id==='ONLY_IN_LOCAL_OLD_PC'));
+assert.equal(timers.size,0,'unchanged page-entry publishing remains disabled');
+console.log('APP525_V2_LEGACY_LOCAL_ORIGINALS_PRESERVED_WARM_R0_W0=PASS');

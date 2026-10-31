@@ -87,3 +87,25 @@ assert.equal(canFirstSave('new-song',102,101,fullCatalog,()=>true,owner),false,
 assert.equal(canFirstSave('',0,0,fullCatalog,()=>true,owner),false,
   'missing stable song identity must never create guessed favorite');
 console.log('APP_RECENT_HEART_FIRST_SAVE_EMPTY_VERIFIED_CATALOG_IMMEDIATE_R0=PASS');
+
+
+// Preview receipt is not canonical settlement. A later device's preview
+// must not delete this device's durable pending heart without Firestore proof.
+const previewReceiptBlock=app.slice(
+  app.indexOf('  const rememberStudioHeartPreviewVersion = ('),
+  app.indexOf('  const persistRecentHeartAuthority =',app.indexOf('  const rememberStudioHeartPreviewVersion = (')),
+);
+const flushBlock=app.slice(
+  app.indexOf('  const flushStudioHeartPendingIntent = async'),
+  app.indexOf('  const scheduleStudioHeartPendingIntent =',app.indexOf('  const flushStudioHeartPendingIntent = async')),
+);
+assert.doesNotMatch(previewReceiptBlock,/removeStudioHeartIntentLocal\(/,
+  'RTDB-only preview must never delete an uncommitted favorite outbox');
+assert.doesNotMatch(flushBlock,/removeStudioHeartPendingIntent\(uid, safeDocumentId\)/,
+  'newer uncommitted RTDB preview must never discard a local pending outbox');
+assert.match(flushBlock,/intent\.pendingRemotePreviewVersion > intent\.signalVersion/);
+assert.match(flushBlock,/return;/);
+assert.match(flushBlock,/await toggleFavorite\(commitSong,/,
+  'ordinary +30s canonical commit path must be preserved');
+assert.match(queueBlock,/publishMusicNoteHeartPreviewDelta\(uid, safeDocumentId, intent\.song, desiredSaved\)/);
+console.log('APP_HEART_PREVIEW_CANNOT_ERASE_UNCOMMITTED_OUTBOX=PASS');

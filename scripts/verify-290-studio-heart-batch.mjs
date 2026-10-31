@@ -63,3 +63,27 @@ console.log('APP290_STUDIO_HEART_CANONICAL_30S_BATCH=PASS');
 console.log('APP290_STUDIO_HEART_NET_ZERO_W0_GUARD=PASS');
 console.log('APP290_STUDIO_HEART_DURABLE_OUTBOX=PASS');
 console.log('APP290_STUDIO_HEART_PREVIEW_NO_FIRESTORE_IO=PASS');
+
+
+// A complete Catalog can be empty (revision 0) on a new account. The first
+// Studio SAVE still needs its existing deterministic ID and immediate RTDB
+// preview; an unverified/outdated Catalog must never mint a duplicate row.
+const firstSaveGate = handlerBlock.match(/const canDeriveFirstSaveId = Boolean\(([\s\S]*?)\);/)?.[1];
+assert.ok(firstSaveGate, 'deterministic first-save gate must remain in Studio');
+const canFirstSave = new Function('stableBatchIdentity','remoteMusicNoteVersion','localMusicNoteVersion',
+  'musicNoteFullCatalogReadyUids','hasMusicNotePayloadCache','user',
+  'return Boolean('+firstSaveGate+');');
+const fullCatalog = { has: uid => uid === 'owner-A' };
+const noCatalog = { has: () => false };
+const owner = { uid: 'owner-A' };
+assert.equal(canFirstSave('new-song',0,0,fullCatalog,()=>false,owner),true,
+  'a verified complete empty Catalog may publish a first-save preview');
+assert.equal(canFirstSave('new-song',0,0,noCatalog,()=>true,owner),false,
+  'unverified empty local cache must not create a guessed favorite');
+assert.equal(canFirstSave('new-song',100,101,noCatalog,()=>true,owner),true,
+  'legacy warm synced account retains prior deterministic preview');
+assert.equal(canFirstSave('new-song',102,101,fullCatalog,()=>true,owner),false,
+  'a newer remote mutation must prevent speculative first-save ID');
+assert.equal(canFirstSave('',0,0,fullCatalog,()=>true,owner),false,
+  'missing stable song identity must never create guessed favorite');
+console.log('APP_RECENT_HEART_FIRST_SAVE_EMPTY_VERIFIED_CATALOG_IMMEDIATE_R0=PASS');

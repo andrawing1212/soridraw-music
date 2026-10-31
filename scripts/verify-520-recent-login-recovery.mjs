@@ -78,3 +78,47 @@ assert.equal(readNeeded({...sample,hasLocalCache:true,profileVersion:101}),true)
 assert.equal(readNeeded({...sample,hasLocalCache:true,pendingSignalVersion:200}),true);
 console.log('APP520_EMPTY_CACHE_LOGIN_FETCH_ONCE_AND_WARM_R0=PASS');
 console.log('APP520_SERVER_VERSION_AND_RTDB_INVALIDATION_PRESERVED=PASS');
+
+const missingDocumentBackupBlock = within(
+  '          // app520: a missing canonical document must not erase',
+  '          const confirmedSongIds =',
+);
+const runnableMissingDocumentBackup = ts.transpileModule(
+  'function restoreFromBackup() {\n' + missingDocumentBackupBlock + '\n}\nrestoreFromBackup();',
+  { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } },
+).outputText;
+const recoverBackup = (documentExists, localCache, backup, authUid = 'owner-A') => {
+  let shown = null;
+  let localWrites = 0;
+  const scoped = {
+    snap: { exists: () => documentExists },
+    currentCache: localCache,
+    user: { uid: 'owner-A' },
+    auth: { currentUser: { uid: authUid } },
+    loadRecentSongsBackup: () => backup,
+    saveRecentSongsCache: (uid, payload) => {
+      assert.equal(uid, 'owner-A');
+      assert.deepEqual(payload.history, backup);
+      localWrites++;
+      return true;
+    },
+    applyRecentSongsState: songs => { shown = songs; },
+    recentSongsReadyToCacheRef: { current: false },
+  };
+  vm.runInNewContext(runnableMissingDocumentBackup, scoped);
+  return { shown, localWrites, ready: scoped.recentSongsReadyToCacheRef.current };
+};
+const localOnlyBackup = [{ title: 'Recovered original song', createdAt: 123 }];
+assert.equal(recoverBackup(false, null, localOnlyBackup).shown?.[0].title, 'Recovered original song');
+assert.equal(recoverBackup(false, null, localOnlyBackup).localWrites, 1);
+assert.equal(recoverBackup(false, null, localOnlyBackup).ready, true);
+assert.equal(recoverBackup(true, { history: [] }, localOnlyBackup).localWrites, 0,
+  'existing canonical empty document must not revive older backup');
+assert.equal(recoverBackup(false, { history: [{ title: 'Canonical local' }] }, localOnlyBackup).localWrites, 0,
+  'healthy local cache must not be overwritten by an older backup');
+assert.equal(recoverBackup(false, null, localOnlyBackup, 'other-owner').localWrites, 0,
+  'other authenticated account must not see or persist the old UID backup');
+assert.equal(recoverBackup(false, null, []).localWrites, 0,
+  'no saved backup must leave missing canonical empty');
+console.log('APP520_MISSING_CANONICAL_UID_BACKUP_LOCAL_ONLY_AND_EMPTY_PROTECTED=PASS');
+

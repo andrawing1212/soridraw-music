@@ -16703,9 +16703,9 @@ ${normalizePromptForDisplay(result.prompt)}
         const remoteMusicNoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, user.uid);
         const canDeriveFirstSaveId = Boolean(
           stableBatchIdentity
-          && hasMusicNotePayloadCache(user.uid)
-          && localMusicNoteVersion > 0
           && remoteMusicNoteVersion <= localMusicNoteVersion
+          && (musicNoteFullCatalogReadyUids.has(user.uid)
+            || (hasMusicNotePayloadCache(user.uid) && localMusicNoteVersion > 0))
         );
         const batchDocumentId = canonicalFavoriteId || (
           canDeriveFirstSaveId

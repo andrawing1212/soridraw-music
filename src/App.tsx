@@ -6652,6 +6652,8 @@ function App() {
       try {
         const serialized = JSON.stringify(safeList);
         if (localStorage.getItem(`soridraw_favorites_cache_${uid}`) !== serialized) {
+          // Only a changed local list invalidates the previous Catalog first-paint receipt.
+          if (!options.catalogRevision) localStorage.removeItem(`soridraw_favorites_cache_rev_${uid}`);
           localStorage.setItem(`soridraw_favorites_cache_${uid}`, serialized);
         }
         if (options.catalogRevision) localStorage.setItem(`soridraw_favorites_cache_rev_${uid}`, String(options.catalogRevision));
@@ -10427,7 +10429,11 @@ const toggleCycleVariantSelection = (
         try {
           const verified = sessionStorage.getItem(`soridraw_catalog_verified_v1:musicNote:${currentUser.uid}`)?.split(':')[0];
           preferVerifiedCatalog = !!verified && verified !== localStorage.getItem(`soridraw_favorites_cache_rev_${currentUser.uid}`);
-        } catch {}
+          // A new PREVIEW session must not flash unverified local rows before Catalog hydration.
+          if (window.location.hostname === 'preview.soridraw.com' && !verified) preferVerifiedCatalog = true;
+        } catch {
+          if (window.location.hostname === 'preview.soridraw.com') preferVerifiedCatalog = true;
+        }
         // 1030 Stage 1: cache is an instant-paint layer, not proof of completeness.
         // A tiny payload must get one bounded first-page repair instead of being
         // trusted forever and hiding the user's saved songs. Once a full 20-item

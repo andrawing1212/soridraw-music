@@ -343,3 +343,6 @@ console.log('MUSIC_NOTE_RELOAD_NO_STALE_FIRST_PAINT_LOCAL_ORIGINALS_FALLBACK=PAS
 assert.match(cacheWrite,/if \(options\.catalogRevision\) localStorage\.setItem/);
 assert.match(firstPaint,/verified !== localStorage\.getItem/);
 console.log('MUSIC_NOTE_VERIFIED_LOCALSTORAGE_REVISION_MATCH_FIRST_PAINT=PASS');
+assert.match(firstPaint, /window\.location\.hostname === 'preview\.soridraw\.com' && !verified/);
+assert.match(cacheWrite, /if \(!options\.catalogRevision\) localStorage\.removeItem/);
+console.log('MUSIC_NOTE_UNVERIFIED_NEW_MOBILE_SESSION_NO_STALE_PREPAINT=PASS');

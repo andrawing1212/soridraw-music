@@ -7393,6 +7393,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           flex: 1 1 auto;
           max-width: min(100%, 680px);
         }
+        :root body #root .soridraw-app-root .soridraw-musicnote-theme.soridraw-responsive-content-page
         .soridraw-musicnote-keyword-scroll > .soridraw-musicnote-song-keywords {
           width: 100% !important;
           max-width: 100% !important;

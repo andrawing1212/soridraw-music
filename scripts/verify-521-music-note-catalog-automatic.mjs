@@ -306,7 +306,7 @@ const selected=vm.runInNewContext(pickCompiled,{
 });
 assert.deepEqual(Array.from(selected,x=>x.id),['ONLY_IN_LOCAL_OLD_PC']);
 assert.match(appSource.slice(localEnd,localEnd+500),
- /writeFavoritesCache\(currentUser.uid, authoritative, \{ publishDerived: false, immediate: true \}\)/);
+ /writeFavoritesCache\(currentUser.uid, authoritative, \{ publishDerived: false, immediate: true, catalogRevision: Number\(bundle.catalogRevision \|\| 0\) \}\)/);
 const recoveryStart=appSource.indexOf('const catalogFavoriteIds = new Set(',appSource.indexOf('const recoverMusicNoteCatalogAfterRemoteCanonical'));
 assert.ok(recoveryStart>0);
 assert.match(appSource.slice(recoveryStart,recoveryStart+1350),/!catalogFavoriteIds\.has\(favoriteId\)/);
@@ -339,3 +339,7 @@ assert.match(onData,/if \(preferVerifiedCatalog\) setFavorites\(sortFavoriteList
 const bundleSource=readFileSync('src/lib/listBundleCache.ts','utf8');
 assert.match(bundleSource,/if \(kind === 'musicNote'\) callbacks\.onMissing\?\.\(\{ fromCache: false \}\)/);
 console.log('MUSIC_NOTE_RELOAD_NO_STALE_FIRST_PAINT_LOCAL_ORIGINALS_FALLBACK=PASS');
+
+assert.match(cacheWrite,/if \(options\.catalogRevision\) localStorage\.setItem/);
+assert.match(firstPaint,/verified !== localStorage\.getItem/);
+console.log('MUSIC_NOTE_VERIFIED_LOCALSTORAGE_REVISION_MATCH_FIRST_PAINT=PASS');

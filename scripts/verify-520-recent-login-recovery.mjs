@@ -195,6 +195,6 @@ assert.equal(readNeeded({...baseline527,verifiedProfileVersion:500,pendingSignal
  'an unacknowledged RTDB signal must still be recovered');
 assert.equal(readNeeded({...baseline527,verifiedProfileVersion:500,hasLocalCache:false}),true,
  'missing local originals cannot be hidden by a proof');
-assert.match(app,/readRecentSongsCheckedProfileVersion527\(user\.uid, localVersion\)/);
-assert.match(app,/rememberRecentSongsCheckedProfileVersion527\(/);
+assert.match(src,/readRecentSongsCheckedProfileVersion527\(user\.uid, localVersion\)/);
+assert.match(src,/rememberRecentSongsCheckedProfileVersion527\(/);
 console.log('APP527_RECENT_VERIFIED_PROFILE_GAP_WARM_R0_AND_CHANGE_INVALIDATION=PASS');

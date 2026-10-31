@@ -2,6 +2,8 @@
 
 > 현재 구체 상태는 `DOCS/CURRENT_RELEASE_STATE.md`를 우선한다.
 
+> **최신 디렉터 운영 지시(2026-10-31, 이전 TEST 관련 운영 서술보다 우선):** 승인된 정상 개발 작업의 PREVIEW Hosting은 검사 후 고정 트리거로 즉시 배포하고 추가 승인을 요구하지 않는다. `test.soridraw.com` TEST 앱은 현재 개발·승격 단계에서 사용하지 않으며 기존 환경을 변경·삭제하지 않는다. `soridraw.com` PRODUCTION 배포만 디렉터의 명시 승인 대상이다. 아래 역사적 TEST→PRODUCTION 절차는 현재의 TEST 실행 허가가 아니다. 정식배포 시 TEST 경로를 생략한 상태에서도 검증·환경 호환·롤백 안전이 성립하는 릴리스 절차를 별도 확인해야 하며, 안전 검증 자체를 생략해서는 안 된다. 공유 Firebase Rules·Functions·Workers·D1/R2·사용자 데이터는 PREVIEW Hosting 자동 배포 범위 밖이다.
+
 ## 1. 판단 순서
 현재 사용자 지시
 → `CURRENT_RELEASE_STATE.md`

@@ -17071,6 +17071,59 @@ html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-stud
   }
 }
 
+/* Music Note / Library folder navigation: retain the desktop-sized folder
+ * buttons after mobile pane handoff, without changing saved folder order.
+ * The scroll element remains the original drag/reorder owner. */
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-folder-drag-scrollbar > :is(.soridraw-musicnote-folder-button, .soridraw-library-folder-button) {
+  padding: 8px 16px !important;
+  font-size: 14px !important;
+  line-height: normal !important;
+}
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-folder-drag-scrollbar > :is(.soridraw-musicnote-folder-add, .soridraw-library-folder-add) {
+  padding: 8px 12px !important;
+  font-size: 14px !important;
+}
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-folder-scroll-shell .soridraw-folder-drag-scrollbar {
+  min-width: 0 !important;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none;
+}
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-folder-scroll-shell .soridraw-folder-drag-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-folder-scroll-shell .soridraw-folder-scroll-arrow {
+  flex: 0 0 18px !important;
+  width: 18px !important;
+  min-width: 18px !important;
+  height: 36px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: #fff !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
 /* APP463_MUSIC_NOTE_SONG_KEYWORD_12PX
  * Music Note saved-song list only. Existing 8px narrow-pane and 9px base
  * keyword labels are difficult to read. Preserve the 18/20px strip height,
@@ -17197,55 +17250,3 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   font-size: 14px !important;
 }
 
-/* Music Note / Library folder navigation: retain the desktop-sized folder
- * buttons after mobile pane handoff, without changing saved folder order.
- * The scroll element remains the original drag/reorder owner. */
-:root body #root .soridraw-app-root
-:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-.soridraw-folder-drag-scrollbar > :is(.soridraw-musicnote-folder-button, .soridraw-library-folder-button) {
-  padding: 8px 16px !important;
-  font-size: 14px !important;
-  line-height: normal !important;
-}
-:root body #root .soridraw-app-root
-:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-.soridraw-folder-drag-scrollbar > :is(.soridraw-musicnote-folder-add, .soridraw-library-folder-add) {
-  padding: 8px 12px !important;
-  font-size: 14px !important;
-}
-:root body #root .soridraw-app-root
-:is(.soridraw-musicnote-theme, .soridraw-library-theme)
-.soridraw-folder-scroll-shell .soridraw-folder-drag-scrollbar {
-  min-width: 0 !important;
-  scrollbar-width: none !important;
-  -ms-overflow-style: none;
-}
-:root body #root .soridraw-app-root
-:is(.soridraw-musicnote-theme, .soridraw-library-theme)
-.soridraw-folder-scroll-shell .soridraw-folder-drag-scrollbar::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-}
-:root body #root .soridraw-app-root
-:is(.soridraw-musicnote-theme, .soridraw-library-theme)
-.soridraw-folder-scroll-shell .soridraw-folder-scroll-arrow {
-  flex: 0 0 18px !important;
-  width: 18px !important;
-  min-width: 18px !important;
-  height: 36px !important;
-  padding: 0 !important;
-  border: 0 !important;
-  outline: 0 !important;
-  box-shadow: none !important;
-  background: transparent !important;
-  background-image: none !important;
-  color: #fff !important;
-  font-size: 12px !important;
-  line-height: 1 !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  cursor: pointer;
-  touch-action: manipulation;
-}

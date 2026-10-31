@@ -945,8 +945,11 @@ export const readCatalogSnapshotCacheFirst = async (
   const promise = (async () => {
     const local = await readCatalogSnapshotFromLocalCache(kind, uid);
     const knownRemoteRevision = readKnownRemoteCatalogRevision(kind, uid);
-    const [verifiedRevision, verifiedAt] = kind === 'musicNote' && typeof sessionStorage !== 'undefined'
-      ? String(sessionStorage.getItem(`soridraw_catalog_verified_v1:${key}`) || '').split(':').map(Number) : [];
+    let verified: number[] = [];
+    if (kind === 'musicNote' && typeof sessionStorage !== 'undefined') {
+      try { verified = String(sessionStorage.getItem(`soridraw_catalog_verified_v1:${key}`) || '').split(':').map(Number); } catch {}
+    }
+    const [verifiedRevision, verifiedAt] = verified;
     const sessionValidated = catalogRemoteValidatedSessionKeys.has(key)
       || (kind === 'musicNote' && !!local && verifiedRevision === local.revision
         && Date.now() - verifiedAt < 5 * 60_000 && knownRemoteRevision <= local.revision);

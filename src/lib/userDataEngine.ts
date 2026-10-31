@@ -741,6 +741,7 @@ const readRemoteCatalogSnapshot = async (
   minimumRevision = 0,
   localSnapshot: SoridrawCatalogSnapshot | null = null,
   allowBootstrapRepair = true,
+  requireFullSnapshot = false,
 ): Promise<SoridrawCatalogSnapshot | null> => {
   if (!uid || !isPreviewCatalogEnabled()) return null;
   const user = auth.currentUser;
@@ -752,7 +753,10 @@ const readRemoteCatalogSnapshot = async (
   markCatalogRuntimeDiagnostic(kind, { stage: 'START', attempt: 0, httpStatus: 0, remoteItemCount: 0, revision: 0, errorCode: '' });
   const retryDelays = [0, 350, 1000];
   let lastError: unknown = null;
-  let allowDeltaSync = Boolean(localSnapshot && minimumRevision <= 0);
+  // A browser with a possibly divergent local Catalog cannot use its local
+  // revision as the baseline of an R2 incremental journal response. During
+  // first-session verification request the actual full shared snapshot.
+  let allowDeltaSync = Boolean(localSnapshot && minimumRevision <= 0 && !requireFullSnapshot);
   let sharedBootstrapAttempted = false;
   for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
     if (retryDelays[attempt] > 0) await catalogWait(retryDelays[attempt]);
@@ -943,11 +947,17 @@ export const readCatalogSnapshotCacheFirst = async (
     // 1054: a V5 Catalog is server-authored and may survive app restarts without
     // a redundant Worker GET when the already-paid users profile invalidation token
     // proves it is current. Unknown profile state remains fail-safe and validates remotely.
-    if (local && canUseWarmCatalogWithoutRemote({
-      localRevision: local.revision,
-      profileRevision: knownRemoteRevision,
-      sessionValidated,
-    })) {
+    // A locally high revision is NOT evidence that this browser knows the
+    // other browsers' Music Note membership. On the first actual Music Note
+    // entry per authenticated tab session, validate R2 once even with a warm
+    // IndexedDB cache. Later visits use the validated cache with R0/W0.
+    // Library retains its existing cheap warm-cache behavior.
+    if (local && (kind !== 'musicNote' || sessionValidated)
+      && canUseWarmCatalogWithoutRemote({
+        localRevision: local.revision,
+        profileRevision: knownRemoteRevision,
+        sessionValidated,
+      })) {
       catalogLastReadSources.set(key, 'cache');
       return local;
     }
@@ -956,7 +966,14 @@ export const readCatalogSnapshotCacheFirst = async (
     // above already returned with zero Worker/Firestore work. A cold/missing/stale
     // device passes this revision fence; only an explicit shared-Catalog 409 may
     // trigger one bounded canonical bootstrap for this user/kind.
-    const remote = await readRemoteCatalogSnapshot(kind, uid, knownRemoteRevision, local);
+    // The first-session read is validation only: an old profile hint must
+    // never trigger a bootstrap/rebuild or server write while resolving a
+    // browser-to-browser mismatch. Existing local originals remain intact
+    // if R2 is missing/unavailable. Other Library behavior is unchanged.
+    const verifyOnly = kind === 'musicNote' && !sessionValidated;
+    const remote = await readRemoteCatalogSnapshot(
+      kind, uid, verifyOnly ? 0 : knownRemoteRevision, local, !verifyOnly, verifyOnly,
+    );
     if (remote) {
       catalogLastReadSources.set(key, 'remote');
       return remote;

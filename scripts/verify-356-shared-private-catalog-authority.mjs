@@ -97,7 +97,9 @@ assert.ok(
   cacheBlock.indexOf('canUseWarmCatalogWithoutRemote') < cacheBlock.indexOf('readRemoteCatalogSnapshot'),
   'healthy warm Catalog no-read gate must run before any remote/bootstrap path',
 );
-assert.match(cacheBlock, /readRemoteCatalogSnapshot\(kind, uid, knownRemoteRevision, local\)/);
+assert.match(cacheBlock, /const verifyOnly = kind === 'musicNote' && !sessionValidated;/);
+assert.match(cacheBlock, /verifyOnly \? 0 : knownRemoteRevision, local, !verifyOnly, verifyOnly/);
+assert.match(readBlock, /!requireFullSnapshot/, 'first-entry Chrome divergence requires full R2 response');
 assert.doesNotMatch(cacheBlock, /app-version|APP_VERSION|location\.reload/,
   'app version/reload must not trigger canonical bootstrap');
 

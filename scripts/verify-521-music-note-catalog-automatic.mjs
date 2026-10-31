@@ -330,7 +330,7 @@ assert.match(cacheWrite,/localStorage\.getItem\(`soridraw_favorites_cache_\$\{ui
 console.log('MUSIC_NOTE_RELOAD_VERIFIED_R2_REUSED_AND_INITIAL_CACHE_COMMITTED=PASS');
 
 const firstPaint=appSource.slice(appSource.indexOf('const hasAnyMusicNotePayload ='),appSource.indexOf('let musicNoteBundleMissingHandled'));
-assert.match(firstPaint,/preferVerifiedCatalog = !!sessionStorage\.getItem/);
+assert.match(firstPaint,/preferVerifiedCatalog = !!verified && verified !== localStorage\.getItem/);
 assert.match(firstPaint,/hasMusicNotePayloadCache\(currentUser.uid\) && !preferVerifiedCatalog/);
 assert.match(firstPaint,/hasAnyMusicNotePayload && !preferVerifiedCatalog/);
 const onData=appSource.slice(appSource.indexOf("unsubMusicNoteBundle = subscribeListBundle('musicNote'"),appSource.indexOf('const loadMoreFavorites ='));

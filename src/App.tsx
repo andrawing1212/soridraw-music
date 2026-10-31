@@ -6610,7 +6610,7 @@ function App() {
   const writeFavoritesCache = (
     uid: string,
     list: any[],
-    options: { publishDerived?: boolean; immediate?: boolean } = {},
+    options: { publishDerived?: boolean; immediate?: boolean; catalogRevision?: number } = {},
   ) => {
     const safeList = filterDeletedFavoriteTombstones(uid, Array.isArray(list) ? list : []);
 
@@ -6654,6 +6654,7 @@ function App() {
         if (localStorage.getItem(`soridraw_favorites_cache_${uid}`) !== serialized) {
           localStorage.setItem(`soridraw_favorites_cache_${uid}`, serialized);
         }
+        if (options.catalogRevision) localStorage.setItem(`soridraw_favorites_cache_rev_${uid}`, String(options.catalogRevision));
         const maxCountKey = `soridraw_favorites_cache_max_count_${uid}`;
         const previousMax = Number(localStorage.getItem(maxCountKey) || '0') || 0;
         if ((safeList?.length || 0) > previousMax) {
@@ -10423,7 +10424,10 @@ const toggleCycleVariantSelection = (
         // A R2-verified IndexedDB Catalog is the first-paint source after reload.
         // The legacy localStorage list may be older; keep it only as fallback.
         let preferVerifiedCatalog = false;
-        try { preferVerifiedCatalog = !!sessionStorage.getItem(`soridraw_catalog_verified_v1:musicNote:${currentUser.uid}`); } catch {}
+        try {
+          const verified = sessionStorage.getItem(`soridraw_catalog_verified_v1:musicNote:${currentUser.uid}`)?.split(':')[0];
+          preferVerifiedCatalog = !!verified && verified !== localStorage.getItem(`soridraw_favorites_cache_rev_${currentUser.uid}`);
+        } catch {}
         // 1030 Stage 1: cache is an instant-paint layer, not proof of completeness.
         // A tiny payload must get one bounded first-page repair instead of being
         // trusted forever and hiding the user's saved songs. Once a full 20-item
@@ -10558,7 +10562,7 @@ const toggleCycleVariantSelection = (
                   ? mergeFavoritePages(catalogFavorites, localNewer)
                   : mergeFavoriteFirstPageWithCache(catalogFavorites, previous, false);
                 // Reading Catalog must never cause a derived Catalog write.
-                writeFavoritesCache(currentUser.uid, authoritative, { publishDerived: false, immediate: true });
+                writeFavoritesCache(currentUser.uid, authoritative, { publishDerived: false, immediate: true, catalogRevision: Number(bundle.catalogRevision || 0) });
                 return authoritative;
               });
 

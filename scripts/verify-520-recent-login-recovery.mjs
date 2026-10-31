@@ -122,3 +122,37 @@ assert.equal(recoverBackup(false, null, []).localWrites, 0,
   'no saved backup must leave missing canonical empty');
 console.log('APP520_MISSING_CANONICAL_UID_BACKUP_LOCAL_ONLY_AND_EMPTY_PROTECTED=PASS');
 
+const exactSource = readFileSync('src/lib/recentSongsExactCountDiagnostic.ts', 'utf8');
+const exactComponent = readFileSync('src/components/RecentSongsExactCountDiagnostic.tsx', 'utf8');
+const existingPanel = readFileSync('src/components/CacheDiagnosticsOverlayImpl.tsx', 'utf8');
+const exactExports = {};
+vm.runInNewContext(ts.transpileModule(exactSource, {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+}).outputText, { exports: exactExports });
+const local = exactExports.summarizeExactRecentLocal;
+const server = exactExports.summarizeExactRecentServer;
+const owner = 'uid-A';
+const entries = new Map([
+  ['soridraw_recent_songs_cache_uid-A', JSON.stringify({ history: [{title:'A'}, {title:'B'}] })],
+  ['soridraw_recent_songs_cache_backup_uid-A', JSON.stringify({ songs: [{title:'A'}, { title:'C'}] })],
+]);
+const get = key => entries.get(key) ?? null;
+assert.equal(local(owner, get).primary.count, 2);
+assert.equal(local(owner, get).backup.count, 2);
+assert.equal(local('uid-B', get).primary.status, 'missing', 'do not scan other UIDs');
+assert.equal(local('uid-B', get).backup.status, 'missing', 'do not scan backup from another UID');
+assert.equal(local(owner, () => { throw Error('storage blocked'); }).primary.status, 'blocked');
+assert.equal(local(owner, () => '{broken').primary.status, 'invalid');
+assert.equal(server(false, undefined).exists, false);
+assert.equal(server(true, { songs: [] }).rawCount, 0);
+assert.equal(server(true, { songs: [] }).songsField, 'array', 'empty canonical document is real, not missing');
+assert.equal(server(true, { songs: [{title:'A'}, {foo:'unrecognized'}] }).renderableCount, 1);
+assert.equal(server(true, { songs: 'not-an-array' }).songsField, 'other');
+assert.equal(server(true, {}).songsField, 'missing');
+assert.match(existingPanel, /<RecentSongsExactCountDiagnostic \/>/);
+assert.match(exactComponent, /getDocFromServer\(doc\(db, 'user_recent_songs', uid\)\)/);
+assert.equal((exactComponent.match(/getDocFromServer\(/g)||[]).length, 1, 'only one exact server document read');
+assert.match(exactComponent, /onClick=\{\(\) => void inspectOnce\(\)\}/);
+assert.match(exactComponent, /onAuthStateChanged\(auth/);
+assert.doesNotMatch(exactComponent, /\b(setDoc|updateDoc|deleteDoc|runTransaction|setItem|removeItem|clear)\s*\(/);
+console.log('APP520_RECENT_EXACT_SOURCE_ONE_CLICK_READ_ONLY=PASS');

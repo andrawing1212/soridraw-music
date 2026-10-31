@@ -6644,7 +6644,7 @@ h1.text-3xl.md\:text-5xl {
   .soridraw-studio-result-pane > .soridraw-studio-workspace-page--music-note
   > .soridraw-musicnote-page-shell {
     padding-left: 12px !important;
-    padding-right: 10px !important;
+    padding-right: 12px !important;
   }
 
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root

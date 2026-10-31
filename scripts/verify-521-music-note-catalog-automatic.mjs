@@ -163,9 +163,9 @@ await executeNextTimer();
 assert.equal(api.getPendingCatalogPublishCount('owner-A'),1);
 assert.ok(store.has(pendingKey));
 timers.clear(); // Simulate losing every old browser timer on a tab close.
-ctx.exports={};
-vm.runInNewContext(compiled,ctx,{filename:'reloaded-userDataEngine.ts'});
-const reloaded=ctx.exports;
+const reloadCtx={...ctx,exports:{}};
+vm.runInNewContext(compiled,reloadCtx,{filename:'reloaded-userDataEngine.ts'});
+const reloaded=reloadCtx.exports;
 await reloaded.writeCatalogSnapshotToLocalCache('musicNote','owner-A',beforeExact);
 dirtyRevision=0; // In-memory Firestore dirty marker was reset by navigation.
 failNetwork=false;

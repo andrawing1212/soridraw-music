@@ -7624,7 +7624,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         .soridraw-musicnote-song-card .soridraw-musicnote-song-date {
           position: absolute !important;
           top: 10px !important;
-          right: 62px !important;
+          right: 50px !important;
           margin: 0 !important;
           font-size: 9px !important;
           line-height: 1 !important;

@@ -306,7 +306,7 @@ const selected=vm.runInNewContext(pickCompiled,{
 });
 assert.deepEqual(Array.from(selected,x=>x.id),['ONLY_IN_LOCAL_OLD_PC']);
 assert.match(appSource.slice(localEnd,localEnd+500),
- /writeFavoritesCache\(currentUser.uid, authoritative, \{ publishDerived: false, immediate: true \}\)/);
+ /writeFavoritesCache\(currentUser.uid, authoritative, \{ publishDerived: false, immediate: true, catalogRevision: Number\(bundle.catalogRevision \|\| 0\) \}\)/);
 const recoveryStart=appSource.indexOf('const catalogFavoriteIds = new Set(',appSource.indexOf('const recoverMusicNoteCatalogAfterRemoteCanonical'));
 assert.ok(recoveryStart>0);
 assert.match(appSource.slice(recoveryStart,recoveryStart+1350),/!catalogFavoriteIds\.has\(favoriteId\)/);
@@ -328,3 +328,18 @@ const cacheWrite=appSource.slice(cacheWriteStart,cacheWriteEnd);
 assert.match(cacheWrite,/if \(options\.immediate === true\) \{ doDeferredWrite\(\); return; \}/);
 assert.match(cacheWrite,/localStorage\.getItem\(`soridraw_favorites_cache_\$\{uid\}`\) !== serialized/);
 console.log('MUSIC_NOTE_RELOAD_VERIFIED_R2_REUSED_AND_INITIAL_CACHE_COMMITTED=PASS');
+
+const firstPaint=appSource.slice(appSource.indexOf('const hasAnyMusicNotePayload ='),appSource.indexOf('let musicNoteBundleMissingHandled'));
+assert.match(firstPaint,/preferVerifiedCatalog = !!verified && verified !== localStorage\.getItem/);
+assert.match(firstPaint,/hasMusicNotePayloadCache\(currentUser.uid\) && !preferVerifiedCatalog/);
+assert.match(firstPaint,/hasAnyMusicNotePayload && !preferVerifiedCatalog/);
+const onData=appSource.slice(appSource.indexOf("unsubMusicNoteBundle = subscribeListBundle('musicNote'"),appSource.indexOf('const loadMoreFavorites ='));
+assert.match(onData,/previous = Array\.isArray\(prev\) && prev\.length > 0 \? prev : cachedFavs/);
+assert.match(onData,/if \(preferVerifiedCatalog\) setFavorites\(sortFavoriteList\(cachedFavs\)\)/);
+const bundleSource=readFileSync('src/lib/listBundleCache.ts','utf8');
+assert.match(bundleSource,/if \(kind === 'musicNote'\) callbacks\.onMissing\?\.\(\{ fromCache: false \}\)/);
+console.log('MUSIC_NOTE_RELOAD_NO_STALE_FIRST_PAINT_LOCAL_ORIGINALS_FALLBACK=PASS');
+
+assert.match(cacheWrite,/if \(options\.catalogRevision\) localStorage\.setItem/);
+assert.match(firstPaint,/verified !== localStorage\.getItem/);
+console.log('MUSIC_NOTE_VERIFIED_LOCALSTORAGE_REVISION_MATCH_FIRST_PAINT=PASS');

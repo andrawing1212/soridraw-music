@@ -6610,7 +6610,7 @@ function App() {
   const writeFavoritesCache = (
     uid: string,
     list: any[],
-    options: { publishDerived?: boolean; immediate?: boolean } = {},
+    options: { publishDerived?: boolean; immediate?: boolean; catalogRevision?: number } = {},
   ) => {
     const safeList = filterDeletedFavoriteTombstones(uid, Array.isArray(list) ? list : []);
 
@@ -6654,6 +6654,7 @@ function App() {
         if (localStorage.getItem(`soridraw_favorites_cache_${uid}`) !== serialized) {
           localStorage.setItem(`soridraw_favorites_cache_${uid}`, serialized);
         }
+        if (options.catalogRevision) localStorage.setItem(`soridraw_favorites_cache_rev_${uid}`, String(options.catalogRevision));
         const maxCountKey = `soridraw_favorites_cache_max_count_${uid}`;
         const previousMax = Number(localStorage.getItem(maxCountKey) || '0') || 0;
         if ((safeList?.length || 0) > previousMax) {
@@ -10420,6 +10421,13 @@ const toggleCycleVariantSelection = (
           Math.floor(Number(cachedMusicNoteProfile?.favoriteCount || 0) || 0),
         );
         const hasAnyMusicNotePayload = hasMusicNotePayloadCache(currentUser.uid);
+        // A R2-verified IndexedDB Catalog is the first-paint source after reload.
+        // The legacy localStorage list may be older; keep it only as fallback.
+        let preferVerifiedCatalog = false;
+        try {
+          const verified = sessionStorage.getItem(`soridraw_catalog_verified_v1:musicNote:${currentUser.uid}`)?.split(':')[0];
+          preferVerifiedCatalog = !!verified && verified !== localStorage.getItem(`soridraw_favorites_cache_rev_${currentUser.uid}`);
+        } catch {}
         // 1030 Stage 1: cache is an instant-paint layer, not proof of completeness.
         // A tiny payload must get one bounded first-page repair instead of being
         // trusted forever and hiding the user's saved songs. Once a full 20-item
@@ -10433,9 +10441,8 @@ const toggleCycleVariantSelection = (
           musicNoteFreshBootstrapUids.add(currentUser.uid);
         }
 
-        if (!musicNoteCacheNeedsFullBootstrap && hasMusicNotePayloadCache(currentUser.uid)) {
+        if (!musicNoteCacheNeedsFullBootstrap && hasMusicNotePayloadCache(currentUser.uid) && !preferVerifiedCatalog) {
           markCacheDiagnostic('musicNote', 'CACHE', 0);
-          // Do not slice the cache. It costs nothing and prevents existing My Note / Shared Note items from visually disappearing.
           setFavorites(sortFavoriteList(cachedFavs.filter((favorite) => !isFavoriteSoftRemoved(favorite))));
         } else {
           setFavorites([]);
@@ -10453,7 +10460,7 @@ const toggleCycleVariantSelection = (
         // devices use the private full catalog; navigation itself never scans or pages favorites.
 
         const hasCachedMusicNote = !musicNoteCacheNeedsFullBootstrap
-          && hasAnyMusicNotePayload;
+          && hasAnyMusicNotePayload && !preferVerifiedCatalog;
         if (hasCachedMusicNote) {
           favoritePaginationCursorRef.current = null;
           favoritePaginationExhaustedRef.current = true;
@@ -10529,7 +10536,7 @@ const toggleCycleVariantSelection = (
               setHasMoreFavorites(false);
 
               setFavorites((prev) => {
-                const previous = Array.isArray(prev) ? prev : [];
+                const previous = Array.isArray(prev) && prev.length > 0 ? prev : cachedFavs;
                 const bundleVersion = Number(bundle.updatedAtMs || 0);
                 const localNewer = previous.filter((favorite: any) => {
                   if (!favorite || isFavoriteSoftRemoved(favorite)) return false;
@@ -10555,7 +10562,7 @@ const toggleCycleVariantSelection = (
                   ? mergeFavoritePages(catalogFavorites, localNewer)
                   : mergeFavoriteFirstPageWithCache(catalogFavorites, previous, false);
                 // Reading Catalog must never cause a derived Catalog write.
-                writeFavoritesCache(currentUser.uid, authoritative, { publishDerived: false, immediate: true });
+                writeFavoritesCache(currentUser.uid, authoritative, { publishDerived: false, immediate: true, catalogRevision: Number(bundle.catalogRevision || 0) });
                 return authoritative;
               });
 
@@ -10575,6 +10582,7 @@ const toggleCycleVariantSelection = (
             },
             onMissing: (meta) => {
               if (meta.fromCache) return;
+              if (preferVerifiedCatalog) setFavorites(sortFavoriteList(cachedFavs));
               musicNoteBundleMissingHandled = true;
               musicNoteFullCatalogReadyUids.delete(currentUser.uid);
               setHasMoreFavorites(false);
@@ -10583,6 +10591,7 @@ const toggleCycleVariantSelection = (
               console.warn('Music Note catalog unavailable; refusing legacy 20-row server pagination.');
             },
             onError: (error) => {
+              if (preferVerifiedCatalog) setFavorites(sortFavoriteList(cachedFavs));
               musicNoteFullCatalogReadyUids.delete(currentUser.uid);
               setHasMoreFavorites(false);
               setIsFavoritesLoading(false);

@@ -452,6 +452,7 @@ export const subscribeListBundle = (
       }
       if (isPreviewAdaptiveListIndexEnabled()) {
         console.warn(`[listBundleCache] ${kind} V4 catalog unavailable after startup retry; legacy partial fallback blocked.`);
+        if (kind === 'musicNote') callbacks.onMissing?.({ fromCache: false });
         return;
       }
       runLegacyOneShotRead();
@@ -459,6 +460,7 @@ export const subscribeListBundle = (
       if (cancelled) return;
       if (isPreviewAdaptiveListIndexEnabled()) {
         console.warn(`[listBundleCache] ${kind} V4 catalog startup failed; legacy partial fallback blocked.`, error);
+        if (kind === 'musicNote') callbacks.onError?.(error);
         return;
       }
       runLegacyOneShotRead();

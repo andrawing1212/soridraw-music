@@ -217,3 +217,16 @@ const gateBlock=within('        const canDeriveFirstSaveId = Boolean(', '       
 assert.match(gateBlock,/musicNoteFullCatalogReadyUids\.has\(user\.uid\)/,
   'verified empty Catalog must permit immediate cross-device heart preview');
 console.log('APP_HEART_PENDING_SURVIVES_RTDB_PREVIEW_AND_FIRST_SAVE_PATH=PASS');
+
+
+// A newer remote heart must win visual display without deleting any
+// uncommitted local outbox; only matching canonical confirmation may retire it.
+const heartOverlay=within('  function overlayStudioHeartPendingIntentsOnFavorites(', '  const getFavoriteCreatedSortTime =');
+const heartCanonical=within('        const isCanonicalMembershipSignal =', '        if (isRemovalOperation) {');
+assert.match(heartOverlay,/intent\.pendingRemotePreviewVersion > intent\.signalVersion/);
+assert.match(heartOverlay,/studioHeartRemotePreviewRef\.current\.get\(documentId\)/);
+assert.match(heartCanonical,/remoteVersion > newestPreview\.version/);
+assert.match(heartCanonical,/newestPreview\.desiredSaved === canonicalRemoteSaved/);
+assert.match(heartCanonical,/removeStudioHeartPendingIntent\(uid, confirmedId\)/);
+assert.match(syncBlock,/verifiedProfileVersion,/);
+console.log('APP_HEART_REMOTE_PREVIEW_VISIBLE_PENDING_DURABLE_CANONICAL_CONFIRMED_ONLY=PASS');

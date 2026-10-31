@@ -6651,9 +6651,9 @@ function App() {
       favoritesCacheWriteTimers.delete(uid);
       try {
         const serialized = JSON.stringify(safeList);
-        // Local-only changes invalidate the previous Catalog-backed first-paint receipt.
-        if (!options.catalogRevision) localStorage.removeItem(`soridraw_favorites_cache_rev_${uid}`);
         if (localStorage.getItem(`soridraw_favorites_cache_${uid}`) !== serialized) {
+          // Only a changed local list invalidates the previous Catalog first-paint receipt.
+          if (!options.catalogRevision) localStorage.removeItem(`soridraw_favorites_cache_rev_${uid}`);
           localStorage.setItem(`soridraw_favorites_cache_${uid}`, serialized);
         }
         if (options.catalogRevision) localStorage.setItem(`soridraw_favorites_cache_rev_${uid}`, String(options.catalogRevision));

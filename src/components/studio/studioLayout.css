@@ -17186,3 +17186,13 @@ body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]
     box-sizing: border-box !important;
   }
 }
+
+/* Music Note / Library navigation: keep one readable PC-sized label on every
+ * pane/viewport mode. Leave the 46px tab shell, three-column geometry and
+ * existing mobile paddings untouched while the split boundary moves. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
+> :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab) {
+  font-size: 15px !important;
+}

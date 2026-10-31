@@ -3,6 +3,7 @@ import { onValue, ref, runTransaction, set, type Unsubscribe } from 'firebase/da
 import { auth, realtimeDb } from '../firebase';
 import { projectCatalogItemForSync, rememberMusicNoteMediaPreview, scheduleCatalogSnapshotPublishIfDirty } from '../lib/userDataEngine';
 import { appendBoundedMusicNoteMediaFallback452 } from '../lib/musicNoteCompactMediaSync452';
+import { buildStudioHeartPreviewItem } from '../lib/studioHeartPreviewPayload.js';
 import {
   addV1MutationPostSuccessHook,
   type V1MutationBoundaryContext,
@@ -223,6 +224,10 @@ const projectMusicNoteItemForSignal = (
   const source = raw as Record<string, any>;
   const id = String(preferredId || source.id || source.firestoreId || '').trim();
   if (!id) return null;
+
+  if (source.__studioHeartRemotePreview === true) {
+    return buildStudioHeartPreviewItem(source, id, projectMusicNoteItemForSignal, MAX_SYNC_ITEM_JSON_CHARS);
+  }
 
   const projected = projectCatalogItemForSync('musicNote', {
     ...source,
@@ -552,28 +557,10 @@ export const publishMusicNoteHeartPreviewDelta = async (
   if (!safeUid || !safeDocumentId || !syncItem || typeof syncItem !== 'object' || Array.isArray(syncItem)) return 0;
   const now = Date.now();
   const source = syncItem as Record<string, any>;
-  const projected = projectMusicNoteItemForSignal(source, safeDocumentId) || {
-    __catalogSummary: true,
+  const projected = {
+    ...source,
     id: safeDocumentId,
     firestoreId: safeDocumentId,
-    title: String(source.title || ''),
-    koreanTitle: String(source.koreanTitle || ''),
-    englishTitle: String(source.englishTitle || ''),
-    soridrawSongId: String(source.soridrawSongId || '').trim() || null,
-    recentSongSyncKey: String(source.recentSongSyncKey || '').trim() || null,
-    recentLegacySourceId: String(source.recentLegacySourceId || '').trim() || null,
-    recentLegacyCreatedAtMs: toSyncTimestamp(source.recentLegacyCreatedAtMs),
-    imageUrl: source.imageUrl ?? source.image_url ?? null,
-    coverUrl: source.coverUrl ?? null,
-    thumbnailUrl: source.thumbnailUrl ?? null,
-    sunoCoverUrl: source.sunoCoverUrl ?? null,
-    sunoImageUrl: source.sunoImageUrl ?? null,
-    sunoArtworkUrl: source.sunoArtworkUrl ?? null,
-    sunoLinks: source.sunoLinks ?? null,
-    sunoShareLinks: source.sunoShareLinks ?? null,
-    mainSunoIndex: source.mainSunoIndex ?? null,
-    createdAtMs: toSyncTimestamp(source.createdAtMs || source.createdAt),
-    updatedAtMs: toSyncTimestamp(source.updatedAtMs || source.updatedAt),
   };
   const item = desiredSaved
     ? {

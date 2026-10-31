@@ -4,6 +4,9 @@ on:
     branches: [preview]
     paths:
       - 'src/App.tsx'
+      - 'src/services/userDomainSyncService.ts'
+      - 'src/lib/studioHeartPreviewPayload.js'
+      - 'scripts/verify-529-heart-preview-complete.mjs'
       - 'scripts/verify-520-recent-login-recovery.mjs'
       - '.github/workflows/verify-520-recent-login-recovery.yml'
   workflow_dispatch:
@@ -26,6 +29,8 @@ jobs:
       - name: Existing recent-song sync and batch guards
         run: |
           npx tsx scripts/verify-196-recent-song-sync.ts
+      - name: Verify complete Studio heart preview and unchanged 30s settlement
+        run: node scripts/verify-529-heart-preview-complete.mjs
       - name: TypeScript and build
         run: |
           npm run lint

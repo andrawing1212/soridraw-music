@@ -1,7 +1,7 @@
 import { onAuthStateChanged } from 'firebase/auth';
 import { onValue, ref, runTransaction, set, type Unsubscribe } from 'firebase/database';
 import { auth, realtimeDb } from '../firebase';
-import { projectCatalogItemForSync, rememberMusicNoteMediaPreview } from '../lib/userDataEngine';
+import { projectCatalogItemForSync, rememberMusicNoteMediaPreview, scheduleCatalogSnapshotPublishIfDirty } from '../lib/userDataEngine';
 import { appendBoundedMusicNoteMediaFallback452 } from '../lib/musicNoteCompactMediaSync452';
 import {
   addV1MutationPostSuccessHook,
@@ -971,7 +971,43 @@ const startDomainSubscriptions = (uid: string) => {
 // SORIDRAW_USER_DOMAIN_SYNC_STAGE2A_20260905
 // Mutation-only publisher: app entry, reload, cache hydration and ordinary reads never call set().
 // The payload is fixed-size and contains at most 10 document IDs.
+// A canonical Firestore save/restore has ONE exact changed document. Do not
+// infer the changed ID from the full browser Music Note list: a warm local
+// Catalog may already contain this row while the shared R2 Catalog does not.
+// This mutation hook runs only after the Firestore write resolves successfully.
+// No page-entry, RTDB preview, or unchanged list can call it.
+export const stageCommittedMusicNoteMembershipDelta = (
+  context: Readonly<V1MutationBoundaryContext>,
+  result: unknown,
+): void => {
+  if (context.domain !== 'musicNote'
+    || !['save', 'restore'].includes(context.operation)
+    || !context.uid || !context.syncItem || typeof context.syncItem !== 'object'
+    || Array.isArray(context.syncItem)) return;
+  const documentIds = (context.documentIds || [])
+    .map((id) => String(id || '').trim()).filter(Boolean);
+  if (documentIds.length > 1) return;
+  const documentId = documentIds[0] || resultDocumentId(result);
+  if (!documentId) return;
+  const source = context.syncItem as Record<string, any>;
+  if (String(source.uid || context.uid) !== context.uid) return;
+  const item = projectCatalogItemForSync('musicNote', {
+    ...source,
+    id: documentId,
+    firestoreId: documentId,
+    uid: context.uid,
+  });
+  if (!item) return;
+  // The existing dirty marker is set by the completed Firestore write. A
+  // failed/optimistic/pre-flush operation cannot enter this Catalog queue.
+  scheduleCatalogSnapshotPublishIfDirty('musicNote', context.uid, [item]);
+};
+
 addV1MutationPostSuccessHook(async (context, result) => {
+  // Schedule the exact confirmed item synchronously, before RTDB awaits.
+  // RTDB delivery failure must not suppress R2 canonical delivery.
+  try { stageCommittedMusicNoteMembershipDelta(context, result); }
+  catch (error) { console.warn('Music Note exact Catalog stage deferred.', error); }
   await publishSignal(context, result);
 });
 

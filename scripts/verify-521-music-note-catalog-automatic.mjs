@@ -57,6 +57,8 @@ const ctx={
   networkCalls++;
   if(init.method==='GET'){
    assert.match(url,/\/v1\/catalog\/musicNote$/);
+   assert.equal(init.headers['X-Soridraw-Known-Revision'],undefined,
+    'divergent old Chrome cache must not request incremental journal deltas');
    if(!activeRemoteCatalog)throw Error('REMOTE_NOT_CONFIGURED');
    return {ok:true,status:200,json:async()=>activeRemoteCatalog};
   }
@@ -247,7 +249,7 @@ const warmLocal={
 };
 activeRemoteCatalog={
  ...seed,revision:501,generatedAtMs:501,
- items:[song('A')],itemCount:1,
+ items:[song('A'),song('NEW_FROM_EDGE')],itemCount:2,
 };
 await warmApi.writeCatalogSnapshotToLocalCache('musicNote','owner-A',warmLocal);
 const beforeWarmRead=networkCalls;
@@ -256,7 +258,8 @@ const retained=await warmApi.readCatalogSnapshotCacheFirst('musicNote','owner-A'
 // consume a NEW row carried by another browser's shared Catalog.
 assert.equal(networkCalls,beforeWarmRead+1,
  'first actual Music Note entry must verify R2 despite a high warm cache revision');
-assert.equal(retained.itemCount,1,'R2 snapshot is read without turning local-only rows into server truth');
+assert.equal(retained.itemCount,2,'full R2 snapshot must discover songs that diverged from local revision');
+assert.ok(retained.items.some(x=>x.id==='NEW_FROM_EDGE'));
 assert.equal(retained.items.some(x=>x.id==='ONLY_IN_LOCAL_OLD_PC'),false);
 const afterVerify=networkCalls;
 await warmApi.readCatalogSnapshotCacheFirst('musicNote','owner-A');

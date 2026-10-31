@@ -10506,6 +10506,15 @@ const toggleCycleVariantSelection = (
                 const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
                 return !favoriteId || !localDeletedIds.has(favoriteId);
               });
+              // A server Catalog can still omit an old active Firestore favorite.
+              // Only treat its rows as confirmed remote state; absence alone is
+              // not a delete receipt. Keep absent local originals as provisional
+              // display-only rows (never publish them back to shared R2).
+              const catalogFavoriteIds = new Set(
+                catalogFavorites.map((favorite: any) =>
+                  String(favorite?.id || favorite?.firestoreId || '').trim()
+                ).filter(Boolean)
+              );
 
               // Full catalog follows the same contract as Library: no server cursor,
               // no 20-row More, and all subsequent More clicks are local rendering only.
@@ -10528,6 +10537,10 @@ const toggleCycleVariantSelection = (
                   // not the earlier optimistic heart. An older Catalog cannot
                   // discard this row while its changed-item delta is pending.
                   if (confirmedSaveId && favoriteId === confirmedSaveId) return true;
+                  // Do not erase a browser's sole surviving copy just because
+                  // the shared Catalog omitted this active ID. This is local
+                  // display retention, not Firestore/remote proof or R2 upsert.
+                  if (favoriteId && !catalogFavoriteIds.has(favoriteId)) return true;
                   const favoriteVersion = Number(favorite?.updatedAtMs || favorite?.createdAtMs || 0)
                     || getTimestampMs(favorite?.updatedAt)
                     || getTimestampMs(favorite?.createdAt)
@@ -10656,6 +10669,11 @@ const toggleCycleVariantSelection = (
         const favoriteId = String(favorite?.firestoreId || favorite?.id || '').trim();
         return !favoriteId || !localDeletedIds.has(favoriteId);
       });
+    const catalogFavoriteIds = new Set(
+      catalogFavorites.map((favorite: any) =>
+        String(favorite?.firestoreId || favorite?.id || '').trim()
+      ).filter(Boolean)
+    );
 
     const currentVisible = favoritesStore.getFavorites();
     const currentCanonical = stripStudioHeartPendingLayerFromFavorites(
@@ -10666,6 +10684,9 @@ const toggleCycleVariantSelection = (
     const localNewer = currentCanonical.filter((favorite: any) => {
       const favoriteId = String(favorite?.firestoreId || favorite?.id || '').trim();
       if (favoriteId && localDeletedIds.has(favoriteId)) return false;
+      // The exact RTDB mutation does not certify completeness of the R2
+      // journal. Do not drop unrelated old local originals on this catch-up.
+      if (favoriteId && !catalogFavoriteIds.has(favoriteId)) return true;
       const favoriteVersion = Number(favorite?.updatedAtMs || favorite?.createdAtMs || 0)
         || getTimestampMs(favorite?.updatedAt)
         || getTimestampMs(favorite?.createdAt)

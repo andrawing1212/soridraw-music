@@ -1,3 +1,12 @@
+## CURRENT — app520 Recent Songs 로그인 0곡: 서버 원본 10곡 확인, PREVIEW 읽기 차단 수정 (2026-10-31 KST)
+- **실제 사용자 증거:** PREVIEW 관리자 CACHE LIVE 원본 1건 조회에서 인증 계정의 Firestore `user_recent_songs/{uid}` 문서 존재, 서버 곡 10/화면 인식 가능한 곡 10, PREVIEW 브라우저 기본 캐시 0, 동일 origin의 백업 10. **백업과 서버 10곡의 정확한 ID 일치 여부는 미확인.**
+- **제품 장애는 미해결로 유지:** app520 이전 보완 #536/#544가 PREVIEW에 배포됐으나 로그인 후 목록은 0곡. #546 진단 배포 PASS. 원본 손실로 단정하거나 로컬·서버 곡을 강제 재생성/삭제하지 않는다.
+- **코드 비교:** PREVIEW와 PRODUCTION 소스는 모두 공유 Firebase 프로젝트 `soridraw-app-866a5`를 사용하지만, origin별 브라우저 저장소는 분리. PRODUCTION 코드는 빈 객체 캐시도 warm으로 취급해 원본 조회를 생략할 수 있음. PREVIEW는 빈 캐시 재조회 보완이 있으나, 이전 pending text marker가 원본 읽기를 차단하고 이후 marker 복구 effect가 서버 조회를 재개하지 않을 수 있는 추가 경로를 확인.
+- **최소 수정 후보:** 로컬 본캐시가 빈 경우 고아 pending marker가 원본 Firestore 1회 읽기를 막지 않게 하고, marker가 지워진 경우 필요한 기존 읽기를 재시도. 실제 미확정 곡 데이터가 남아 있는 경우에는 기존 pending 보호 유지. 동일 UID별 비용/기능 계약 보호. 테스트/배포만으로 실사용 PASS 주장 금지.
+- **다음 합격 기준:** PREVIEW 로그인 후 서버 10곡이 Studio 최근곡에 표시되고, 새로고침/재로그인에서도 유지. 서버 원본·기기 백업/캐시에 대한 파괴적 조작, 공유 Rules·Functions·Worker·D1·TEST·PRODUCTION 배포 금지.
+
+---
+
 ## CURRENT — app520 PREVIEW Hosting 배포 PASS, 실제 Chrome·Edge 재확인 대기 (2026-10-31 KST)
 - 디렉터 승인: PR #536의 로그인 후 최근 생성곡 복구를 `preview`에 병합하고 Firebase PREVIEW Hosting에만 배포. 코드 SHA `2be61304a05076c13ad95e9a9fea67c7a235670f`, 병합 SHA `53fecbab864c59d23c90f0a2cd002adf94b256d6`.
 - 검사 PASS: 최근 생성곡 로그아웃 캐시 보호·재로그인 빈 캐시 재조회·기존 RTDB 동기화·TS/빌드 #41130751834, 로그인 저장소 #41130751800, 좋아요 #41130751801. 기존 오래된 단언 검사 app290/app116은 현재 소스의 변경된 문자열과 호환되지 않아 이번 CI에서 제외(숨겨진 PASS 아님).

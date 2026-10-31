@@ -156,3 +156,29 @@ assert.match(exactComponent, /onClick=\{\(\) => void inspectOnce\(\)\}/);
 assert.match(exactComponent, /onAuthStateChanged\(auth/);
 assert.doesNotMatch(exactComponent, /\b(setDoc|updateDoc|deleteDoc|runTransaction|setItem|removeItem|clear)\s*\(/);
 console.log('APP520_RECENT_EXACT_SOURCE_ONE_CLICK_READ_ONLY=PASS');
+
+const shouldDeferPending = exports.shouldDeferRecentSongsServerReadForPendingText;
+assert.equal(typeof shouldDeferPending, 'function');
+const reproduced = { hasPendingMarker:true, cachedSongCount:0, pendingInMemorySongCount:0 };
+assert.equal(readNeeded({ ...sample, hasLocalCache:false }), true);
+assert.equal(shouldDeferPending(reproduced), false,
+  'reported server 10 / primary cache 0 / backup 10: stale marker cannot block canonical R1');
+assert.equal(shouldDeferPending({ ...reproduced, hasPendingMarker:false }), false);
+assert.equal(shouldDeferPending({ ...reproduced, cachedSongCount:10 }), true,
+  'valid UID-scoped cached text drafts must retain protection');
+assert.equal(shouldDeferPending({ ...reproduced, pendingInMemorySongCount:10 }), true,
+  'in-memory pending text must never be overwritten even if localStorage is blocked');
+assert.equal(shouldDeferPending({ hasPendingMarker:false, cachedSongCount:10, pendingInMemorySongCount:0 }), false,
+  'healthy local cache with no marker follows the existing version/cost gate');
+assert.equal((syncBlock.match(/shouldDeferRecentSongsServerReadForPendingText\(\{/g)||[]).length, 2,
+  'both before-read and after-server-response stale-marker checks must use the same safety policy');
+assert.match(syncBlock, /applyRecentSongsState\(visibleServerHistory453,/);
+const pendingRecoveryBlock = within(
+  '    const marker = readRecentSongTextPendingMarker(uid);',
+  '    const activeIndex = marker.activeIndex',
+);
+assert.equal((pendingRecoveryBlock.match(/resumeAfterRead: true/g)||[]).length, 2,
+  'clearing either invalid marker must resume Studio canonical verification');
+assert.equal((pendingRecoveryBlock.match(/clearRecentSongTextPendingMarker\(uid\)/g)||[]).length, 2);
+console.log('APP520_STALE_PENDING_MARKER_EMPTY_CACHE_RECOVERS_SERVER_TEN=PASS');
+console.log('APP520_REAL_LOCAL_DRAFT_AND_HEALTHY_CACHE_COST_PROTECTED=PASS');

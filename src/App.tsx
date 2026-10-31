@@ -18,7 +18,7 @@ import {
   queueMusicNoteFavoriteCountDelta,
   resumeMusicNoteFavoriteCountDelta,
 } from './services/musicNoteFavoriteCountBatch';
-import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck, canAcknowledgeRecentSongsInlineSignal, needsRecentSongsRetainedDraftGapRead460 } from './lib/recentSongsSyncGate';
+import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck, canAcknowledgeRecentSongsInlineSignal, needsRecentSongsRetainedDraftGapRead460, shouldDeferRecentSongsServerReadForPendingText } from './lib/recentSongsSyncGate';
 import { planRecentUnconfirmedRecovery436, patchExactRecentTextRow436 } from './lib/recentUnconfirmedRecovery436';
 import { protectRecentCanonicalSnapshotFromPreview453, pickRecentSongLiveTextPreview457, pickRecentSongLiveAppliedKeywords457 } from './lib/recentSongCanonicalPreviewGuard453';
 import './data/v2PreviewShadowMirror';
@@ -12956,7 +12956,15 @@ const unlockAllFavorites = async () => {
       }
       // In-flight local mutations and locally saved text edits must never be
       // overwritten by an older remote snapshot.
-      if (recentSongsSaveInFlightRef.current > 0 || recentSongTextWritePendingRef.current?.uid === user.uid || hasRecentSongTextPendingMarker(user.uid)) return;
+      // A stale text-edit marker without any surviving primary cache is not
+      // a draft to protect. It must not permanently block the canonical
+      // read after login; the UID's backup remains untouched.
+      if (recentSongsSaveInFlightRef.current > 0 || shouldDeferRecentSongsServerReadForPendingText({
+        hasPendingMarker: hasRecentSongTextPendingMarker(user.uid),
+        cachedSongCount: latestCache?.history?.length || 0,
+        pendingInMemorySongCount: recentSongTextWritePendingRef.current?.uid === user.uid
+          ? recentSongTextWritePendingRef.current.songs.length : 0,
+      })) return;
       if (recentSongsSessionReadInFlightUids.has(user.uid)) return;
       recentSongsSessionReadInFlightUids.add(user.uid);
       const recentReadMutationEpoch = readRecentSongsMutationEpoch(user.uid);
@@ -12967,11 +12975,16 @@ const unlockAllFavorites = async () => {
         .then((snap) => {
           if (cancelledRecentSongsRead || snap.metadata.fromCache) return;
           if (recentReadMutationEpoch !== readRecentSongsMutationEpoch(user.uid)) return;
-          if (recentSongsSaveInFlightRef.current > 0 || recentSongTextWritePendingRef.current?.uid === user.uid || hasRecentSongTextPendingMarker(user.uid)) return;
+          const currentCache = loadRecentSongsCache(user.uid);
+          if (recentSongsSaveInFlightRef.current > 0 || shouldDeferRecentSongsServerReadForPendingText({
+            hasPendingMarker: hasRecentSongTextPendingMarker(user.uid),
+            cachedSongCount: currentCache?.history?.length || 0,
+            pendingInMemorySongCount: recentSongTextWritePendingRef.current?.uid === user.uid
+              ? recentSongTextWritePendingRef.current.songs.length : 0,
+          })) return;
 
           const firestoreSongs = snap.exists() ? normalizeRecentSongList(snap.data().songs || []) : [];
           const documentVersion = Number(snap.exists() ? (snap.data() as any)?.syncVersion || 0 : 0);
-          const currentCache = loadRecentSongsCache(user.uid);
           // app520: a missing canonical document must not erase the only
           // UID-scoped local backup left by an older logout-cache regression.
           // A real existing empty document is an intentional empty state and
@@ -15955,11 +15968,21 @@ ${normalizePromptForDisplay(result.prompt)}
     if (!marker) return;
     if (marker.mutationEpoch !== readRecentSongsMutationEpoch(uid)) {
       clearRecentSongTextPendingMarker(uid);
+      // The earlier Studio read effect may have deferred behind this marker.
+      // Give it one immediate chance after the invalid guard is gone.
+      window.dispatchEvent(new CustomEvent(RECENT_SONGS_SYNC_VERSION_EVENT, {
+        detail: { uid, version: readRecentSongsPendingSignalVersion(uid), resumeAfterRead: true },
+      }));
       return;
     }
     const cache = loadRecentSongsCache(uid);
     if (!cache?.history?.length) {
       clearRecentSongTextPendingMarker(uid);
+      // With no primary cache there is no durable text draft to overwrite.
+      // Resume the canonical verification without creating any server write.
+      window.dispatchEvent(new CustomEvent(RECENT_SONGS_SYNC_VERSION_EVENT, {
+        detail: { uid, version: readRecentSongsPendingSignalVersion(uid), resumeAfterRead: true },
+      }));
       return;
     }
     const activeIndex = marker.activeIndex >= 0 && marker.activeIndex < cache.history.length

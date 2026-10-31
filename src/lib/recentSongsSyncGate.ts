@@ -14,6 +14,17 @@ export const needsRecentSongsServerRead = (gate: RecentSongsGate): boolean =>
   || gate.profileVersion > gate.localDocumentVersion
   || gate.pendingSignalVersion > gate.acknowledgedSignalVersion;
 
+// Do not let an orphaned text-edit marker suppress the only canonical read
+// when the UID's primary cache is already empty. A real local draft or
+// in-memory pending song continues to outrank an older server snapshot.
+export const shouldDeferRecentSongsServerReadForPendingText = (gate: {
+  hasPendingMarker: boolean;
+  cachedSongCount: number;
+  pendingInMemorySongCount: number;
+}): boolean =>
+  gate.pendingInMemorySongCount > 0
+  || (gate.hasPendingMarker && gate.cachedSongCount > 0);
+
 export type RecentSongsRecheck = {
   newestSignalVersion: number;
   signalVersionAtRead: number;

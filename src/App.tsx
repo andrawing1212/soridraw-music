@@ -6338,6 +6338,9 @@ function App() {
     for (const intent of pending) {
       const documentId = String(intent.documentId || '').trim();
       if (!documentId) continue;
+      // Show a newer remote heart immediately without deleting local pending.
+      if (intent.pendingRemotePreviewVersion > intent.signalVersion
+        && studioHeartRemotePreviewRef.current.get(documentId)?.version === intent.pendingRemotePreviewVersion) continue;
 
       // app347 — pending controls membership only. If a newer canonical/local row
       // already exists for this document (for example Detail Suno media changed),
@@ -11013,13 +11016,21 @@ const toggleCycleVariantSelection = (
           const canonicalRemoteSaved = !isRemovalOperation
             && !removed
             && Boolean(remoteItem && !isFavoriteSoftRemoved(remoteItem));
+          const confirmedId = remoteFavoriteId || exactDocumentIds[0] || '';
+          const newestPreview = studioHeartRemotePreviewRef.current.get(confirmedId);
+          const olderPending = readStudioHeartPendingIntent(uid, confirmedId);
+          // Only a later confirmed canonical state can retire superseded pending.
+          if (olderPending && newestPreview && remoteVersion > newestPreview.version
+            && olderPending.pendingRemotePreviewVersion > olderPending.signalVersion
+            && newestPreview.desiredSaved === canonicalRemoteSaved) {
+            removeStudioHeartPendingIntent(uid, confirmedId);
+          }
           reconcileStudioHeartPendingFromCanonicalSignal(
-            uid,
-            remoteItem,
-            remoteFavoriteId || exactDocumentIds[0] || '',
-            canonicalRemoteSaved,
+            uid, remoteItem, confirmedId, canonicalRemoteSaved,
           );
-          clearRemoteStudioHeartPreviewFromCanonical(uid, exactDocumentIds, remoteItem);
+          if (!newestPreview || newestPreview.desiredSaved === canonicalRemoteSaved) {
+            clearRemoteStudioHeartPreviewFromCanonical(uid, exactDocumentIds, remoteItem);
+          }
         }
 
         if (isRemovalOperation) {
@@ -11996,7 +12007,8 @@ const toggleCycleVariantSelection = (
       },
       updatedAtMs: now,
       signalVersion: 0,
-      pendingRemotePreviewVersion: existing?.pendingRemotePreviewVersion || 0,
+      // A later local click supersedes an earlier remote preview.
+      pendingRemotePreviewVersion: 0,
       retryCount: 0,
     };
     const durableIntentResult = writeStudioHeartPendingIntentChecked(intent);

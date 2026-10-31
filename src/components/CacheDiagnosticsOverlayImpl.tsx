@@ -24,6 +24,7 @@ import { USER_PROFILE_CACHE_EVENT, readUserProfileCache } from '../lib/userProfi
 import { inspectBrowserStorageCapacity504, type BrowserStorageAudit504 } from '../lib/browserStorageCapacityAudit504';import { hasAdminPermission } from '../constants/adminPermissions';
 import { favoritesStore } from '../hooks/useFavoritesStore';
 import StudioHeartSingleDocDiagnostic from './StudioHeartSingleDocDiagnostic';
+import RecentSongsExactCountDiagnostic from './RecentSongsExactCountDiagnostic';
 import { CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, readCatalogRuntimeDiagnostic, resetCatalogRuntimeDiagnostics, type CatalogRuntimeDiagnosticKind, type CatalogRuntimeDiagnosticState } from '../lib/catalogRuntimeDiagnostics';
 import { PAGE_SYNC_DIAGNOSTICS_UPDATE_EVENT, readPageSyncDiagnostics, resetPageSyncDiagnostics, type PageSyncDiagnosticState } from '../lib/pageSyncCoordinator';
 
@@ -697,6 +698,7 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
             </div>
           </div>
 
+          <RecentSongsExactCountDiagnostic />
           <StudioHeartSingleDocDiagnostic />
 
           <section className="mt-2 rounded-xl bg-white/[0.035] px-2.5 py-2 text-[10px] text-white/65">

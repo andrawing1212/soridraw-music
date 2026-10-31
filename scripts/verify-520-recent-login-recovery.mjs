@@ -230,3 +230,13 @@ assert.match(heartCanonical,/newestPreview\.desiredSaved === canonicalRemoteSave
 assert.match(heartCanonical,/removeStudioHeartPendingIntent\(uid, confirmedId\)/);
 assert.match(syncBlock,/verifiedProfileVersion,/);
 console.log('APP_HEART_REMOTE_PREVIEW_VISIBLE_PENDING_DURABLE_CANONICAL_CONFIRMED_ONLY=PASS');
+
+
+// RTDB version must update pending ordering BEFORE visible remote heart paint.
+const remoteHeartBlock=within('      if (isHeartPreview) {\n      // Record ordering', '      // app348: every signed-in device updates immediately;');
+assert.ok(
+ remoteHeartBlock.indexOf('supersedeStudioHeartIntentFromRemotePreview(')
+  < remoteHeartBlock.indexOf('applyRemoteStudioHeartPreview('),
+ 'newer cross-device heart must not be hidden by stale local pending overlay',
+);
+console.log('APP_HEART_REMOTE_VERSION_BEFORE_REMOTE_PAINT=PASS');

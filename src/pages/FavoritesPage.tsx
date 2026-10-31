@@ -7424,7 +7424,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         .soridraw-musicnote-keyword-nav:focus-visible { outline: 2px solid #ff7a72; outline-offset: -2px; }
         .soridraw-musicnote-keyword-nav--left { left: 0; }
         .soridraw-musicnote-keyword-nav--right { right: 0; }
-        @media (hover: hover) and (pointer: fine) {
+        @media (min-width: 768px) and (hover: hover) and (pointer: fine) {
           .soridraw-musicnote-keyword-nav { opacity: 0; pointer-events: none; }
           .soridraw-musicnote-keyword-scroll:hover .soridraw-musicnote-keyword-nav,
           .soridraw-musicnote-keyword-scroll:focus-within .soridraw-musicnote-keyword-nav {

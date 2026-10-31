@@ -7536,9 +7536,115 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             pointer-events: auto;
           }
         }
-        /* Mobile cards keep their state icons but omit the cramped keyword strip. */
+        /* Music Note song-list mobile mode is determined by the actual page/pane,
+           not merely the window width. Keep state icons and title visible. */
         @media (max-width: 767px) {
           .soridraw-musicnote-keyword-scroll { display: none !important; }
+        }
+        :root body #root .soridraw-app-root
+        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+        .soridraw-musicnote-keyword-scroll,
+        :root body #root .soridraw-app-root
+        .soridraw-studio-result-pane[data-pane-mode="mobile"]
+        .soridraw-musicnote-theme .soridraw-musicnote-keyword-scroll {
+          display: none !important;
+        }
+
+        /* One visual song-card baseline for PC/tablet/mobile and split resizing.
+           Previous pane-mode and page-mode rules competed on fonts and spacing;
+           retain the 88px rows and 50x64 covers, only the available text width
+           changes. The keyword strip remains a separate visibility exception. */
+        :root body #root .soridraw-app-root
+        .soridraw-musicnote-theme.soridraw-responsive-content-page
+        .soridraw-musicnote-song-card .soridraw-musicnote-song-row {
+          height: 88px !important;
+          min-height: 88px !important;
+          max-height: 88px !important;
+          padding: 12px 10px !important;
+          gap: 10px !important;
+        }
+        :root body #root .soridraw-app-root
+        .soridraw-musicnote-theme.soridraw-responsive-content-page
+        .soridraw-musicnote-song-card .soridraw-musicnote-song-media {
+          width: 50px !important;
+          min-width: 50px !important;
+          max-width: 50px !important;
+          height: 64px !important;
+          min-height: 64px !important;
+          max-height: 64px !important;
+          flex: 0 0 50px !important;
+          border-radius: 12px !important;
+        }
+        :root body #root .soridraw-app-root
+        .soridraw-musicnote-theme.soridraw-responsive-content-page
+        .soridraw-musicnote-song-card .soridraw-musicnote-song-media > svg {
+          width: 24px !important;
+          height: 24px !important;
+        }
+        :root body #root .soridraw-app-root
+        .soridraw-musicnote-theme.soridraw-responsive-content-page
+        .soridraw-musicnote-song-card .soridraw-musicnote-song-copy {
+          padding-left: 4px !important;
+          padding-right: 4px !important;
+        }
+        :root body #root .soridraw-app-root
+        .soridraw-musicnote-theme.soridraw-responsive-content-page
+        .soridraw-musicnote-song-card .soridraw-musicnote-song-meta {
+          gap: 8px !important;
+          padding-right: 64px;
+        }
+        :root body #root .soridraw-app-root
+        .soridraw-musicnote-theme.soridraw-responsive-content-page
+        .soridraw-musicnote-song-card .soridraw-musicnote-song-genre {
+          font-size: 12px !important;
+          line-height: 1.1 !important;
+        }
+        :root body #root .soridraw-app-root
+        .soridraw-musicnote-theme.soridraw-responsive-content-page
+        .soridraw-musicnote-song-card .soridraw-musicnote-song-title {
+          margin-top: 5px !important;
+          font-size: 14px !important;
+          line-height: 1.12 !important;
+        }
+        :root body #root .soridraw-app-root
+        .soridraw-musicnote-theme.soridraw-responsive-content-page
+        .soridraw-musicnote-song-card .soridraw-musicnote-song-creator {
+          font-size: 10px !important;
+          line-height: 1 !important;
+        }
+        :root body #root .soridraw-app-root
+        .soridraw-musicnote-theme.soridraw-responsive-content-page
+        .soridraw-musicnote-song-card .soridraw-musicnote-song-state-actions {
+          gap: 5px !important;
+        }
+
+        /* Stable mobile-reference anchors, independent of the copy's width. */
+        :root body #root .soridraw-app-root
+        .soridraw-musicnote-theme.soridraw-responsive-content-page
+        .soridraw-musicnote-song-card .soridraw-musicnote-song-date {
+          position: absolute !important;
+          top: 10px !important;
+          right: 62px !important;
+          margin: 0 !important;
+          font-size: 9px !important;
+          line-height: 1 !important;
+          white-space: nowrap !important;
+          pointer-events: none;
+        }
+        :root body #root .soridraw-app-root
+        .soridraw-musicnote-theme.soridraw-responsive-content-page
+        .soridraw-musicnote-song-card .soridraw-musicnote-song-actions {
+          position: absolute !important;
+          top: 2px !important;
+          right: 10px !important;
+          gap: 2px !important;
+          z-index: 1;
+        }
+        :root body #root .soridraw-app-root
+        .soridraw-musicnote-theme.soridraw-responsive-content-page
+        .soridraw-musicnote-song-card .soridraw-musicnote-song-actions > div > button {
+          width: 32px !important;
+          height: 32px !important;
         }
       `}</style>
       {studioWorkspaceHeroHost

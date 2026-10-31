@@ -4,7 +4,7 @@ const client = fs.readFileSync('src/lib/userDataEngine.ts', 'utf8');
 const worker = fs.readFileSync('cloudflare/media-worker/src/index.js', 'utf8');
 
 for (const token of [
-  'readRemoteCatalogSnapshot(kind, uid, knownRemoteRevision, local)',
+  'verifyOnly ? 0 : knownRemoteRevision, local, !verifyOnly, verifyOnly',
   "headers['X-Soridraw-Known-Revision'] = String(localSnapshot.revision)",
   "headers['X-Soridraw-Require-Revision'] = String(hardMinimumRevision)",
   'response.status === 409',
@@ -21,6 +21,9 @@ if (cacheStart < 0 || cacheEnd < 0) throw new Error('046 cache-first section mis
 const cacheSection = client.slice(cacheStart, cacheEnd);
 if (cacheSection.indexOf('canUseWarmCatalogWithoutRemote') > cacheSection.indexOf('readRemoteCatalogSnapshot')) {
   throw new Error('046 healthy warm cache no-read gate no longer precedes remote repair');
+}
+if (!cacheSection.includes("const verifyOnly = kind === 'musicNote' && !sessionValidated")) {
+  throw new Error('046 music note never verifies an unproven warm browser cache');
 }
 
 const stateStart = worker.indexOf('const getCatalogState = async');

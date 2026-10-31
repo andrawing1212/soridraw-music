@@ -262,7 +262,7 @@ try {
   assert.ok(remotePreview.includes('writeFavoritesCache(safeUid, visible, { publishDerived: false })'));
   const hydrate = app.slice(app.indexOf("unsubMusicNoteBundle = subscribeListBundle('musicNote'"), app.indexOf('const loadMoreFavorites ='));
   assert.ok(hydrate.includes('isStudioHeartOptimisticFavorite(favorite)'));
-  assert.ok(hydrate.includes('writeFavoritesCache(currentUser.uid, authoritative, { publishDerived: false, immediate: true })'));
+  assert.ok(hydrate.includes('writeFavoritesCache(currentUser.uid, authoritative, { publishDerived: false, immediate: true, catalogRevision: Number(bundle.catalogRevision || 0) })'));
   const refresh = app.slice(app.indexOf('const refreshFavoritesFromServerFirstPage ='), app.indexOf('const refreshFavoritesFromServerFirstPage =') + 5000);
   assert.ok(refresh.includes('isStudioHeartOptimisticFavorite(favorite)'));
   assert.ok(refresh.includes('writeFavoritesCache(uid, merged, { publishDerived: false })'));

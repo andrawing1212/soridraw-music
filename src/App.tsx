@@ -10905,7 +10905,9 @@ const toggleCycleVariantSelection = (
       // app286 — Record the latest heart direction before trying to patch a
       // possibly stale Recent Songs row. The immutable song key in the RTDB
       // payload is enough to update the open Studio heart without Firestore IO.
-      if (remoteItem && remoteFavoriteId && typeof remoteHeartSaved === 'boolean') {
+      const unresolvedPreview = studioHeartRemotePreviewRef.current.get(remoteFavoriteId);
+      if (remoteItem && remoteFavoriteId && typeof remoteHeartSaved === 'boolean'
+        && (isHeartPreview || !unresolvedPreview || unresolvedPreview.desiredSaved === remoteHeartSaved)) {
         rememberRecentHeartAuthority(
           uid,
           remoteItem,

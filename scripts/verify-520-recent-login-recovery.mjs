@@ -240,3 +240,10 @@ assert.ok(
  'newer cross-device heart must not be hidden by stale local pending overlay',
 );
 console.log('APP_HEART_REMOTE_VERSION_BEFORE_REMOTE_PAINT=PASS');
+
+
+// An older canonical RTDB signal in the opposite direction cannot override
+// the local Studio heart authority while a newer preview remains unresolved.
+assert.match(src,/unresolvedPreview\.desiredSaved === remoteHeartSaved/);
+assert.match(src,/isHeartPreview \|\| !unresolvedPreview/);
+console.log('APP_HEART_STALE_CANONICAL_DOES_NOT_REVERSE_NEWER_REMOTE_PREVIEW=PASS');

@@ -340,7 +340,8 @@ const bundleSource=readFileSync('src/lib/listBundleCache.ts','utf8');
 assert.match(bundleSource,/if \(kind === 'musicNote'\) callbacks\.onMissing\?\.\(\{ fromCache: false \}\)/);
 console.log('MUSIC_NOTE_RELOAD_NO_STALE_FIRST_PAINT_LOCAL_ORIGINALS_FALLBACK=PASS');
 
-assert.match(cacheWrite,/if \(options\.catalogRevision\) localStorage\.setItem/);
+assert.match(cacheWrite,/if \(options\.catalogRevision\) \{/);
+assert.match(cacheWrite,/localStorage\.setItem\(\`soridraw_favorites_cache_rev_/);
 assert.match(firstPaint,/verified !== localStorage\.getItem/);
 console.log('MUSIC_NOTE_VERIFIED_LOCALSTORAGE_REVISION_MATCH_FIRST_PAINT=PASS');
 

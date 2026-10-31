@@ -252,8 +252,53 @@ activeRemoteCatalog={
 await warmApi.writeCatalogSnapshotToLocalCache('musicNote','owner-A',warmLocal);
 const beforeWarmRead=networkCalls;
 const retained=await warmApi.readCatalogSnapshotCacheFirst('musicNote','owner-A');
-assert.equal(networkCalls,beforeWarmRead,
- 'never delete legacy browser-only favorites via an unproven R2 read on an unchanged warm visit');
-assert.ok(retained.items.some(x=>x.id==='ONLY_IN_LOCAL_OLD_PC'));
-assert.equal(timers.size,0,'unchanged page-entry publishing remains disabled');
-console.log('APP525_V2_LEGACY_LOCAL_ORIGINALS_PRESERVED_WARM_R0_W0=PASS');
+// A stale Chrome browser with its own higher local revision must still
+// consume a NEW row carried by another browser's shared Catalog.
+assert.equal(networkCalls,beforeWarmRead+1,
+ 'first actual Music Note entry must verify R2 despite a high warm cache revision');
+assert.equal(retained.itemCount,1,'R2 snapshot is read without turning local-only rows into server truth');
+assert.equal(retained.items.some(x=>x.id==='ONLY_IN_LOCAL_OLD_PC'),false);
+const afterVerify=networkCalls;
+await warmApi.readCatalogSnapshotCacheFirst('musicNote','owner-A');
+assert.equal(networkCalls,afterVerify,'already verified in this page session: R0/W0');
+assert.equal(timers.size,0,'read-only entry must not publish to R2');
+console.log('APP550_V2_WARM_CHROME_FIRST_ENTRY_REMOTE_VERIFICATION_ONCE=PASS');
+
+// Real App onData merges a verified remote list into favoritesStore's existing
+// displayed local originals. Missing R2 rows are provisional and must not be
+// published back as server authority just because they are visible.
+const idBegin=appSource.indexOf('              const catalogFavoriteIds = new Set(');
+const idEnd=appSource.indexOf('              // Full catalog follows',idBegin);
+const localBegin=appSource.indexOf('                const localNewer = previous.filter(',idEnd);
+const localEnd=appSource.indexOf('                const authoritative =',localBegin);
+assert.ok(idBegin>0&&idEnd>idBegin&&localBegin>idEnd&&localEnd>localBegin,
+ 'remote IDs and local provisional retention must exist in actual App onData');
+const pickSource=appSource.slice(idBegin,idEnd)+
+ '\nconst bundleVersion = Number(bundle.updatedAtMs || 0);\n'+
+ appSource.slice(localBegin,localEnd)+'\nlocalNewer;';
+const pickCompiled=ts.transpileModule(pickSource,{compilerOptions:{
+ target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None,
+}}).outputText;
+const maybeOriginal=song('ONLY_IN_LOCAL_OLD_PC');
+const incoming=song('NEW_FROM_EDGE');
+const original=song('A');
+const removed={...song('REMOVED'),saved:false};
+const optimistic={...song('UNCONFIRMED'),__studioHeartPendingLocal:true};
+const selected=vm.runInNewContext(pickCompiled,{
+ catalogFavorites:[original,incoming],
+ previous:[original,maybeOriginal,removed,optimistic],
+ bundle:{updatedAtMs:501},
+ confirmedSaveId:'',
+ localDeletedIds:new Set(),
+ isFavoriteSoftRemoved:item=>item?.saved===false,
+ isStudioHeartOptimisticFavorite:item=>item?.__studioHeartPendingLocal===true,
+ getTimestampMs:()=>0,
+ Number,String,Set,
+});
+assert.deepEqual(Array.from(selected,x=>x.id),['ONLY_IN_LOCAL_OLD_PC']);
+assert.match(appSource.slice(localEnd,localEnd+500),
+ /writeFavoritesCache\(currentUser.uid, authoritative, \{ publishDerived: false \}\)/);
+const recoveryStart=appSource.indexOf('const catalogFavoriteIds = new Set(',appSource.indexOf('const recoverMusicNoteCatalogAfterRemoteCanonical'));
+assert.ok(recoveryStart>0);
+assert.match(appSource.slice(recoveryStart,recoveryStart+1350),/!catalogFavoriteIds\.has\(favoriteId\)/);
+console.log('APP550_V2_R2_NEW_ITEM_PLUS_LOCAL_OLD_PRESERVED_NO_CACHE_ECHO=PASS');

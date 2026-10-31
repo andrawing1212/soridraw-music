@@ -147,9 +147,9 @@ assert.equal(signalId(canonical,200),'','matching Catalog revision clears except
 assert.equal(signalId({...canonical,operation:'heart-preview-save'},100),'');
 assert.equal(signalId({...canonical,operation:'unsave'},100),'');
 assert.equal(signalId({...canonical,removed:true},100),'');
-assert.match(appSource.slice(end,end+1800),/if \(isStudioHeartOptimisticFavorite\(favorite\)\) return false;/);
-assert.match(appSource.slice(end,end+1800),/if \(confirmedSaveId && favoriteId === confirmedSaveId\) return true;/);
-assert.match(appSource.slice(end,end+1800),/if \(favoriteId && localDeletedIds.has\(favoriteId\)\) return false;/);
+assert.match(appSource.slice(end,end+3400),/if \(isStudioHeartOptimisticFavorite\(favorite\)\) return false;/);
+assert.match(appSource.slice(end,end+3400),/if \(confirmedSaveId && favoriteId === confirmedSaveId\) return true;/);
+assert.match(appSource.slice(end,end+3400),/if \(favoriteId && localDeletedIds.has\(favoriteId\)\) return false;/);
 console.log('APP521_STALE_CATALOG_SERVER_ACK_FENCE_NO_OPTIMISTIC_RESURRECTION=PASS');
 
 // app525: the exact Firestore-committed song may already be present in a

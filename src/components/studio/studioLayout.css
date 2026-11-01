@@ -8506,6 +8506,15 @@ body #root .soridraw-app-root
   .soridraw-library-folder-list-start-divider {
     --soridraw-list-start-gap: 20px !important;
   }
+
+  /* Note Space only: the Classic mobile list has an existing 8px top gap
+   * (index.css). The former 13px stroke offset painted the line ~1px under
+   * the filter row. 7px places its 1px stroke at the gap midpoint (4px)
+   * without moving the filter, first song card, or any folder tabs. */
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-musicnote-theme .soridraw-musicnote-note-space-centered-divider {
+    --soridraw-list-start-gap: 7px !important;
+  }
 }
 
 /* 416 — Brighten the Music Note / Suno Library search fields with the same

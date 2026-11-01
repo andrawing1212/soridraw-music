@@ -17418,14 +17418,14 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
  * Outranks Studio Black's #root-wide shadow reset and generic button surface.
  * The existing selection-bar geometry and all other Studio/Library styling stay unchanged. */
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-musicnote-theme [data-music-note-selection-bar="true"] {
+[data-music-note-selection-bar="true"] {
   box-shadow:
     0 0 20px 5px rgba(180, 185, 200, 0.24),
     0 12px 32px rgba(0, 0, 0, 0.94),
     0 28px 68px rgba(0, 0, 0, 0.82) !important;
 }
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-musicnote-theme [data-music-note-share-action="copy"] {
+[data-music-note-share-action="copy"] {
   background: #51515b !important;
   background-color: #51515b !important;
   color: #ffffff !important;
@@ -17433,7 +17433,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   opacity: 1 !important;
 }
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-musicnote-theme [data-music-note-share-action="share"] {
+[data-music-note-share-action="share"] {
   background: #c94d47 !important;
   background-color: #c94d47 !important;
   color: #ffffff !important;
@@ -17441,7 +17441,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   opacity: 1 !important;
 }
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-musicnote-theme [data-music-note-share-action="close"] {
+[data-music-note-share-action="close"] {
   background: #37373d !important;
   background-color: #37373d !important;
   color: #f5f5f7 !important;
@@ -17449,22 +17449,22 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   opacity: 1 !important;
 }
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-musicnote-theme [data-music-note-share-action="copy"]:hover {
+[data-music-note-share-action="copy"]:hover {
   background: #64646e !important;
   background-color: #64646e !important;
 }
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-musicnote-theme [data-music-note-share-action="share"]:hover {
+[data-music-note-share-action="share"]:hover {
   background: #d75b54 !important;
   background-color: #d75b54 !important;
 }
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-musicnote-theme [data-music-note-share-action="close"]:hover {
+[data-music-note-share-action="close"]:hover {
   background: #484850 !important;
   background-color: #484850 !important;
 }
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-musicnote-theme [data-music-note-share-action]:disabled {
+[data-music-note-share-action]:disabled {
   opacity: 0.78 !important;
 }
 

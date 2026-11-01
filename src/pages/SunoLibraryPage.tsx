@@ -2,6 +2,7 @@ import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import { stageNextSongKeywords } from '../lib/nextSongPendingBridge';
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
+import { useFolderStripMouseScroll } from '../lib/folderStripMouseScroll';
 import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -6999,6 +7000,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
   };
 
+  const folderMouseScroll = useFolderStripMouseScroll(() => {
+    void finishPlaylistDrag(undefined, true);
+  });
+
   const libraryPageHeader = (
     <motion.div
       initial={false}
@@ -7818,6 +7823,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               ><span aria-hidden="true">◀</span></button>
               <div
                 ref={(element) => { playlistBarRefs.current.normal = element; }}
+                {...folderMouseScroll}
                 className="soridraw-folder-drag-scrollbar min-w-0 flex-1 flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2"
               >
                 {visibleNormalPlaylists.map((playlist) => {
@@ -7894,6 +7900,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               ><span aria-hidden="true">◀</span></button>
               <div
                 ref={(element) => { playlistBarRefs.current.shared = element; }}
+                {...folderMouseScroll}
                 data-soridraw-folder-section="shared"
                 className="soridraw-folder-drag-scrollbar min-w-0 flex-1 flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2"
               >

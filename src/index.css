@@ -3990,6 +3990,14 @@ body #root .favorite-keyword-strip > * {
     margin-top: 8px !important;
   }
 
+  /* Note Space's 8px legacy override created a visibly shorter gap than
+   * Music Space's 12px top-control/list rhythm. Only the dark mobile
+   * Note Space uses the same 12px; other Note folders stay at 8px. */
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-musicnote-theme .soridraw-musicnote-note-space-centered-divider {
+    margin-top: 12px !important;
+  }
+
   /* Align Sori Studio's wordmark and first menu card to the same compact upper
    * rhythm. The hero supplies the title slot; the old main pt-6 was a second
    * spacer that Library does not have. */

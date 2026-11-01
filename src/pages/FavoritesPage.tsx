@@ -8306,6 +8306,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         <button
                           data-floating-menu="true"
                           data-more-menu-button="true"
+                          data-selection-keep="true"
                           disabled={isSelectionMode}
                           aria-label="곡 더보기"
                           aria-expanded={!isSelectionMode && activeFavoriteMenuId === song.id}

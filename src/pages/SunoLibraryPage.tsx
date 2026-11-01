@@ -6292,6 +6292,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               <div className="soridraw-responsive-color-filter flex h-[46px] items-center gap-1.5 bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
                 <button
                   onClick={() => setWorkspaceColorFilter('all')}
+                  aria-pressed={workspaceColorFilter === 'all'}
                   className={`soridraw-color-reset-button h-9 text-xs font-bold px-4 transition-all rounded-xl ${workspaceColorFilter === 'all' ? 'text-[#D8CCFF] bg-[#A98BFF]/24' : 'text-white/40 hover:text-white/70'}`}
                   aria-label="전체 색상 보기"
                 >
@@ -6303,6 +6304,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <button
                     key={opt.value}
                     onClick={() => setWorkspaceColorFilter(opt.value)}
+                    aria-label={`색상: ${opt.value}`}
+                    aria-pressed={workspaceColorFilter === opt.value}
+                    data-soridraw-filter-dot="true"
                     className="group flex h-7 w-7 items-center justify-center rounded-full !bg-transparent !shadow-none !ring-0 transition-transform hover:scale-110"
                   >
                     <div
@@ -6349,6 +6353,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               <div className="soridraw-responsive-color-filter flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 px-2 border border-black/15 shrink-0 overflow-x-auto hide-scrollbar">
                 <button
                   onClick={() => setPlaylistColorFilter('all')}
+                  aria-pressed={playlistColorFilter === 'all'}
                   className={`soridraw-color-reset-button h-9 text-xs font-bold px-4 transition-all rounded-xl ${playlistColorFilter === 'all' ? 'text-[#D8CCFF] bg-[#A98BFF]/24' : 'text-white/40 hover:text-white/70'}`}
                   aria-label="전체 색상 보기"
                 >
@@ -6368,6 +6373,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <button
                     key={opt.value}
                     onClick={() => setPlaylistColorFilter(opt.value)}
+                    aria-label={`색상: ${opt.value}`}
+                    aria-pressed={playlistColorFilter === opt.value}
+                    data-soridraw-filter-dot="true"
                     className="group flex h-7 w-7 items-center justify-center rounded-full !bg-transparent !shadow-none !ring-0 transition-transform hover:scale-110"
                   >
                     <div
@@ -6447,6 +6455,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             onClick={() => setLibraryViewMode('workspace')}
             aria-pressed={libraryViewMode === 'workspace'}
             data-active={libraryViewMode === 'workspace' ? 'true' : 'false'}
+            onPointerEnter={(event) => {
+              if (event.pointerType === 'pen' || event.pointerType === 'mouse') event.currentTarget.dataset.soridrawPointerHover = 'true';
+            }}
+            onPointerLeave={(event) => { delete event.currentTarget.dataset.soridrawPointerHover; }}
+            onPointerDown={(event) => { delete event.currentTarget.dataset.soridrawPointerHover; }}
             className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'soridraw-library-mode-tab--active bg-[#A98BFF]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
             뮤직 스페이스
@@ -6454,6 +6467,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           <button
             aria-pressed={libraryViewMode === 'playlist'}
             data-active={libraryViewMode === 'playlist' ? 'true' : 'false'}
+            onPointerEnter={(event) => {
+              if (event.pointerType === 'pen' || event.pointerType === 'mouse') event.currentTarget.dataset.soridrawPointerHover = 'true';
+            }}
+            onPointerLeave={(event) => { delete event.currentTarget.dataset.soridrawPointerHover; }}
+            onPointerDown={(event) => { delete event.currentTarget.dataset.soridrawPointerHover; }}
             onClick={() => {
               if (libraryViewMode !== 'playlist') {
                 setLibraryViewMode('playlist');
@@ -6470,6 +6488,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           <button
             aria-pressed={libraryViewMode === 'sharedPlaylist'}
             data-active={libraryViewMode === 'sharedPlaylist' ? 'true' : 'false'}
+            onPointerEnter={(event) => {
+              if (event.pointerType === 'pen' || event.pointerType === 'mouse') event.currentTarget.dataset.soridrawPointerHover = 'true';
+            }}
+            onPointerLeave={(event) => { delete event.currentTarget.dataset.soridrawPointerHover; }}
+            onPointerDown={(event) => { delete event.currentTarget.dataset.soridrawPointerHover; }}
             onClick={() => {
               if (libraryViewMode !== 'sharedPlaylist') {
                 setLibraryViewMode('sharedPlaylist');

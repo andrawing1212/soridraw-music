@@ -17239,6 +17239,107 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
   }
 }
 
+
+/* Selected Music Note / Library navigation: S Pen or mouse HOVER is separate
+ * from touchscreen PRESS. PointerEnter sets this dataset only for pen/mouse;
+ * PointerDown clears it. Keep previously approved selection fill immutable.
+ * Non-selected hover gets a neutral preview; selected hover changes TEXT only. */
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+:is(.soridraw-musicnote-mode-tabs > .soridraw-musicnote-mode-tab,
+    .soridraw-library-mode-tabs > .soridraw-library-mode-tab)[data-soridraw-pointer-hover="true"]:not([aria-pressed="true"]) {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  background-color: rgba(255,255,255,0.08) !important;
+}
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+:is(.soridraw-musicnote-mode-tabs > .soridraw-musicnote-mode-tab,
+    .soridraw-library-mode-tabs > .soridraw-library-mode-tab)[data-soridraw-pointer-hover="true"][aria-pressed="true"] {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
+/* Library top selected tabs also keep their purple fill during a TOUCH.
+ * The previous Classic :hover color #B79FFF must not latch on a phone.
+ * Genuine pen/mouse hover is still visible via white text (above). */
+:root body #root .soridraw-app-root .soridraw-library-theme
+.soridraw-library-mode-tabs > .soridraw-library-mode-tab:is([aria-pressed="true"],[data-active="true"]),
+:root body #root .soridraw-app-root .soridraw-library-theme
+.soridraw-library-mode-tabs > .soridraw-library-mode-tab:is([aria-pressed="true"],[data-active="true"]):is(:hover,:active,:focus) {
+  background: #A98BFF !important;
+  background-color: #A98BFF !important;
+  opacity: 1 !important;
+}
+
+/* Keep selected folder colors and BLACK text constant during hover, including
+ * the phone's synthesized :hover (previous Library folder green flash). */
+:root body #root .soridraw-app-root .soridraw-musicnote-theme
+.soridraw-folder-drag-scrollbar > .soridraw-musicnote-folder-button:is([aria-pressed="true"],[data-active="true"]),
+:root body #root .soridraw-app-root .soridraw-musicnote-theme
+.soridraw-folder-drag-scrollbar > .soridraw-musicnote-folder-button:is([aria-pressed="true"],[data-active="true"]):is(:hover,:active,:focus) {
+  background: #FF7A72 !important;
+  background-color: #FF7A72 !important;
+  color: #101010 !important;
+  -webkit-text-fill-color: #101010 !important;
+}
+:root body #root .soridraw-app-root .soridraw-library-theme
+.soridraw-folder-drag-scrollbar > .soridraw-library-folder-button:is([aria-pressed="true"],[data-active="true"]),
+:root body #root .soridraw-app-root .soridraw-library-theme
+.soridraw-folder-drag-scrollbar > .soridraw-library-folder-button:is([aria-pressed="true"],[data-active="true"]):is(:hover,:active,:focus) {
+  background: #A98BFF !important;
+  background-color: #A98BFF !important;
+  color: #101010 !important;
+  -webkit-text-fill-color: #101010 !important;
+}
+
+/* "All colors" selected means a solid, readable button, not a pale pink/purple
+ * tile with white text. Applies to the refresh icon on narrow phone screens. */
+:root body #root .soridraw-app-root .soridraw-musicnote-theme
+.soridraw-responsive-color-filter > .soridraw-color-reset-button[aria-pressed="true"],
+:root body #root .soridraw-app-root .soridraw-musicnote-theme
+.soridraw-responsive-color-filter > .soridraw-color-reset-button[aria-pressed="true"]:is(:hover,:active,:focus) {
+  background: #FF7A72 !important;
+  background-color: #FF7A72 !important;
+  color: #101010 !important;
+  -webkit-text-fill-color: #101010 !important;
+}
+:root body #root .soridraw-app-root .soridraw-library-theme
+.soridraw-responsive-color-filter > .soridraw-color-reset-button[aria-pressed="true"],
+:root body #root .soridraw-app-root .soridraw-library-theme
+.soridraw-responsive-color-filter > .soridraw-color-reset-button[aria-pressed="true"]:is(:hover,:active,:focus) {
+  background: #A98BFF !important;
+  background-color: #A98BFF !important;
+  color: #101010 !important;
+  -webkit-text-fill-color: #101010 !important;
+}
+
+/* Strong, compact selected indicator around each color DOT. Use a pseudo-ring
+ * inside the existing 14-28px invisible hitbox; no new width/height, no layout
+ * reflow, no extra data reads. Overrides earlier reset of ring/box-shadow. */
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-color-filter > button[data-soridraw-filter-dot="true"] {
+  position: relative !important;
+}
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-color-filter > button[data-soridraw-filter-dot="true"][aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border: 2px solid #f5f5f5;
+  border-radius: 999px;
+  pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.32);
+}
+html[data-soridraw-color-mode="light"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-color-filter > button[data-soridraw-filter-dot="true"][aria-pressed="true"]::after {
+  border-color: #202022;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.65);
+}
+
 /* APP463_MUSIC_NOTE_SONG_KEYWORD_12PX
  * Music Note saved-song list only. Existing 8px narrow-pane and 9px base
  * keyword labels are difficult to read. Preserve the 18/20px strip height,

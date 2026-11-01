@@ -7734,6 +7734,11 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               onTouchEnd={onLongPressEnd}
               aria-pressed={musicNoteViewMode === tab.id}
               data-active={musicNoteViewMode === tab.id ? 'true' : 'false'}
+              onPointerEnter={(event) => {
+                if (event.pointerType === 'pen' || event.pointerType === 'mouse') event.currentTarget.dataset.soridrawPointerHover = 'true';
+              }}
+              onPointerLeave={(event) => { delete event.currentTarget.dataset.soridrawPointerHover; }}
+              onPointerDown={(event) => { delete event.currentTarget.dataset.soridrawPointerHover; }}
               className={cn(
                 'soridraw-musicnote-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate transition-all',
                 musicNoteViewMode === tab.id
@@ -7805,6 +7810,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           <div className="soridraw-responsive-color-filter flex h-[46px] items-center gap-1.5 bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
             <button
               onClick={() => setFavoriteColorFilter('all')}
+              aria-pressed={favoriteColorFilter === 'all'}
               className={`soridraw-color-reset-button h-9 text-xs font-bold px-4 transition-all rounded-xl ${favoriteColorFilter === 'all' ? 'bg-[#FF7A72]/24 text-[#FFC1BC]' : 'bg-transparent text-white/60 hover:text-white/75'}`}
               aria-label="전체 색상 보기"
             >
@@ -7816,6 +7822,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               <button
                 key={color.value}
                 onClick={() => setFavoriteColorFilter(color.value)}
+                aria-label={`색상: ${color.value}`}
+                aria-pressed={favoriteColorFilter === color.value}
+                data-soridraw-filter-dot="true"
                 className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${favoriteColorFilter === color.value ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'}`}
               >
                 <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: color.color }}></div>

@@ -627,7 +627,7 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
 
 /* Hover-only folder edit affordance. Keep existing folder button geometry and
  * drag/scroll handlers intact. The circle overlaps the top-right edge by
- * about half its diameter, outside the folder label's padded text area. */
+ * mostly inside the top-right corner, clear of the padded folder label. */
 .soridraw-folder-hover-edit {
   display: none;
 }
@@ -637,16 +637,16 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   }
   .soridraw-folder-hover-edit {
     position: absolute;
-    top: -9px;
-    right: -9px;
+    top: -5px;
+    right: -6px;
     z-index: 2;
     display: inline-flex;
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: #56565e;
+    background: #252528;
     color: #ffffff !important;
     -webkit-text-fill-color: #ffffff !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.65), 0 0 9px rgba(255, 255, 255, 0.13);
@@ -654,7 +654,7 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
     visibility: hidden;
     pointer-events: none;
     cursor: pointer;
-    transition: opacity 120ms ease, background-color 120ms ease;
+    transition: opacity 120ms ease;
   }
   /* Selected folder labels use dark !important text. Their edit icons must
    * remain white (including the SVG stroke), not inherit that label color. */
@@ -668,9 +668,6 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
-  }
-  .soridraw-folder-hover-edit:hover {
-    background: #686870;
   }
   body.soridraw-folder-dragging .soridraw-folder-hover-edit,
   .soridraw-folder-drag-active > .soridraw-folder-hover-edit {

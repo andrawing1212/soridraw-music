@@ -397,9 +397,7 @@ export default function LiteStudioSplitWorkspace({
     // Resolve the portaled selection bar once at pointer-down, not in each drag frame.
     current.musicNoteSelectionBar = workspaceViewRef.current === 'music-note'
       ? document.querySelector<HTMLElement>('body > [data-music-note-selection-bar="true"][data-music-note-split-selection="true"]')
-      : workspaceViewRef.current === 'library'
-        ? document.querySelector<HTMLElement>('body > [data-library-selection-action-bar="true"][data-library-split-selection="true"]')
-        : null;
+      : null;
     externalGeometryCacheRef.current = createEmptyExternalGeometryCache();
     generationBarLiveBaseRef.current = { node: null, width: 0, mode: null };
     return current;
@@ -1115,7 +1113,7 @@ export default function LiteStudioSplitWorkspace({
 
     // Track Music Note's portaled bar on the same drag frame in ALL
     // selectable split modes, using cached coordinates without DOM reads.
-    if (live && draggingRef.current && (workspaceViewRef.current === 'music-note' || workspaceViewRef.current === 'library')) {
+    if (live && draggingRef.current && workspaceViewRef.current === 'music-note') {
       const selectionBar = externalRef.current.musicNoteSelectionBar;
       if (selectionBar) {
         const resultLeft = splitterLeft + 18;

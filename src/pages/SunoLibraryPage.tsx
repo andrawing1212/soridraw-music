@@ -6006,6 +6006,47 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   };
   const isModalOpen = !!sharePopupInfo || !!showDetails || !!deleteTarget || !!playlistConfirmAction || !!renameModalArgs || !!moveModalArgs || !!playlistSavePicker || !!bulkShareModalOpen || !!bulkMoveModalOpen;
 
+  // App459 freezes the Lite split engine. While selecting tracks, mirror
+  // its EXISTING splitter's inline x-coordinate instead of adding work to its
+  // pointer/rAF hot path. One observer exists only while the Library bar is shown.
+  useEffect(() => {
+    if (!multiSelectMode || isModalOpen || !isStudioDesktopViewport ||
+        document.documentElement.dataset.soridrawTheme !== 'studio-black') return;
+    const splitter = document.querySelector<HTMLElement>('body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter');
+    const bar = document.querySelector<HTMLElement>('body > [data-library-selection-action-bar="true"][data-library-split-selection="true"]');
+    if (!splitter || !bar) return;
+    const root = document.documentElement;
+    let rightEdge = window.innerWidth;
+    const captureRightEdge = () => {
+      const inset = Number.parseFloat(getComputedStyle(root).getPropertyValue('--soridraw-studio-result-right'));
+      rightEdge = window.innerWidth - (Number.isFinite(inset) ? inset : 0);
+    };
+    captureRightEdge();
+    const onSplitterStyle = () => {
+      const splitterX = Number.parseFloat(splitter.style.left);
+      if (!Number.isFinite(splitterX)) {
+        bar.style.removeProperty('left');
+        bar.style.removeProperty('max-width');
+        return;
+      }
+      // Engine fixed splitter left = actual pane boundary - 8px.
+      const resultLeft = splitterX + 26;
+      bar.style.setProperty('left', `${Math.round((resultLeft + rightEdge) / 2)}px`, 'important');
+      bar.style.setProperty('max-width', `${Math.max(0, Math.round(rightEdge - resultLeft - 24))}px`, 'important');
+    };
+    const watcher = new MutationObserver(onSplitterStyle);
+    watcher.observe(splitter, { attributes: true, attributeFilter: ['style'] });
+    const onResize = () => { captureRightEdge(); onSplitterStyle(); };
+    window.addEventListener('resize', onResize, { passive: true });
+    onSplitterStyle();
+    return () => {
+      watcher.disconnect();
+      window.removeEventListener('resize', onResize);
+      bar.style.removeProperty('left');
+      bar.style.removeProperty('max-width');
+    };
+  }, [multiSelectMode, isModalOpen, isStudioDesktopViewport]);
+
   // Selection is page-wide, not scoped to the Library result pane. Preserve
   // track-row selection and the explicit action bar, overlays and splitter drags.
   useEffect(() => {

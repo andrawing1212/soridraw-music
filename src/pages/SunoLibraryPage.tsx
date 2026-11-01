@@ -7922,7 +7922,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       } ${
                         activePlaylistSection === 'shared' && selectedSharedPlaylistId === playlist.id 
                           ? 'bg-[#A98BFF]/78 text-white border-[#A98BFF]/55 shadow-lg' 
-                          : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
+                          : 'bg-[#2c2c2e] border-white/10 text-white/70 hover:bg-[#333336] hover:text-white'
                       }`}
                     >
                       <Share2 className="w-3.5 h-3.5" />

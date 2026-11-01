@@ -801,6 +801,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [selectedSharedPlaylistId, setSelectedSharedPlaylistId] = useState<string | null>(null);
   const [activePlaylistSection, setActivePlaylistSection] = useState<'normal' | 'shared'>('normal');
   const [playlistDragging, setPlaylistDragging] = useState<{ section: 'normal' | 'shared'; playlistId: string } | null>(null);
+  const [playlistFolderDeleteReady, setPlaylistFolderDeleteReady] = useState(false);
   const playlistButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const playlistBarRefs = useRef<Record<'normal' | 'shared', HTMLDivElement | null>>({ normal: null, shared: null });
   const playlistPressTimerRef = useRef<number | null>(null);
@@ -811,6 +812,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     startX: number;
     startY: number;
     active: boolean;
+    moved: boolean;
+    originalIds: string;
     originalOrders: Record<string, number>;
     target?: HTMLButtonElement | null;
     windowMoveHandler?: (event: PointerEvent) => void;
@@ -1949,10 +1952,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       return;
     }
 
+    setPlaylistFolderDeleteReady(false);
     setRenameModalArgs({ playlist, newTitle: playlist.title });
   };
 
-  const handleDeletePlaylist = async (playlist: Playlist) => {
+  const handleDeletePlaylist = async (playlist: Playlist, directFromEditor = false) => {
     if (!user || (playlist as any).isFallback) return;
 
     const isNormal = playlist.type === 'normal';
@@ -1968,7 +1972,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       return;
     }
 
-    setPlaylistConfirmAction({
+    let deleted = false;
+    const deleteAction = {
       title: '플레이리스트 삭제',
       message: '이 플레이리스트를 삭제할까요? 저장된 곡도 내 목록에서 함께 제거됩니다.',
       confirmLabel: '삭제',
@@ -1995,12 +2000,22 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             }
           }
           showToast('플레이리스트가 삭제되었습니다.');
+          deleted = true;
         } catch (error) {
           console.error(error);
           showToast('삭제에 실패했습니다.');
         }
       }
-    });
+    };
+    if (directFromEditor) {
+      await deleteAction.onConfirm();
+      if (deleted) {
+        setRenameModalArgs(null);
+        setPlaylistFolderDeleteReady(false);
+      }
+    } else {
+      setPlaylistConfirmAction(deleteAction);
+    }
   };
 
   const handleAddPlaylist = async (type: 'normal' | 'shared') => {
@@ -6624,7 +6639,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         .filter((entry) => Boolean(entry.id))
         .map((entry) => [entry.id!, Number(entry.order || 0)]),
     );
-    playlistDragRef.current = { section, playlistId: playlist.id, pointerId, startX, startY, active: false, originalOrders, target };
+    playlistDragRef.current = { section, playlistId: playlist.id, pointerId, startX, startY, active: false, moved: false, originalIds: getPlaylistsBySectionForDrag(section).map(item => item.id).join('|'), originalOrders, target };
 
     playlistPressTimerRef.current = window.setTimeout(() => {
       const drag = playlistDragRef.current;
@@ -6637,6 +6652,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         if (!currentDrag?.active || currentDrag.pointerId !== pointerId) return;
         if (nativeEvent.pointerType === 'touch') return;
         nativeEvent.preventDefault();
+        if (Math.abs(nativeEvent.clientX - currentDrag.startX) <= 8) return;
+        currentDrag.moved = true;
         autoScrollPlaylistBar(currentDrag.section, nativeEvent.clientX);
         reorderPlaylistsByPointer(currentDrag.section, currentDrag.playlistId, nativeEvent.clientX);
       };
@@ -6646,18 +6663,20 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         const touch = nativeEvent.touches?.[0];
         if (!touch) return;
         nativeEvent.preventDefault();
+        if (Math.abs(touch.clientX - currentDrag.startX) <= 8) return;
+        currentDrag.moved = true;
         autoScrollPlaylistBar(currentDrag.section, touch.clientX);
         reorderPlaylistsByPointer(currentDrag.section, currentDrag.playlistId, touch.clientX);
       };
       const handleWindowPointerEnd = (nativeEvent: PointerEvent) => {
         const currentDrag = playlistDragRef.current;
         if (!currentDrag || currentDrag.pointerId !== pointerId) return;
-        void finishPlaylistDrag();
+        void finishPlaylistDrag(undefined, nativeEvent.type === 'pointercancel');
       };
-      const handleWindowTouchEnd = () => {
+      const handleWindowTouchEnd = (nativeEvent: TouchEvent) => {
         const currentDrag = playlistDragRef.current;
         if (!currentDrag || currentDrag.pointerId !== pointerId) return;
-        void finishPlaylistDrag();
+        void finishPlaylistDrag(undefined, nativeEvent.type === 'touchcancel');
       };
       drag.windowMoveHandler = handleWindowPointerMove;
       drag.windowEndHandler = handleWindowPointerEnd;
@@ -6692,13 +6711,15 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (!drag.active) return;
     if (event.pointerType === 'touch') return;
     event.preventDefault();
+    if (Math.abs(event.clientX - drag.startX) <= 8) return;
+    drag.moved = true;
     // Keep the drag responsive while the cursor is still inside the original playlist button.
     // Touch dragging is handled by the window-level touch listener so native scroll does not trap it.
     autoScrollPlaylistBar(drag.section, event.clientX);
     reorderPlaylistsByPointer(drag.section, drag.playlistId, event.clientX);
   };
 
-  const finishPlaylistDrag = async (event?: React.PointerEvent<HTMLButtonElement>) => {
+  const finishPlaylistDrag = async (event?: React.PointerEvent<HTMLButtonElement>, cancelled = false) => {
     if (playlistPressTimerRef.current) window.clearTimeout(playlistPressTimerRef.current);
     playlistPressTimerRef.current = null;
 
@@ -6734,6 +6755,28 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
 
     setPlaylistDragging(null);
+    if (cancelled) {
+      if (drag.moved) {
+        const restored = playlistsRef.current.map(item => item.id && drag.originalOrders[item.id] !== undefined
+          ? { ...item, order: drag.originalOrders[item.id!] } : item);
+        playlistsRef.current = restored;
+        setPlaylists(restored);
+      }
+      return;
+    }
+    if (!drag.moved) {
+      const folder = getPlaylistsBySectionForDrag(drag.section).find(item => item.id === drag.playlistId);
+      if (folder) handleRenamePlaylist(folder);
+      return;
+    }
+    if (getPlaylistsBySectionForDrag(drag.section).map(item => item.id).join('|') === drag.originalIds) {
+      // No effective reorder; restore fractional canonical keys without a write.
+      const restored = playlistsRef.current.map(item => item.id && drag.originalOrders[item.id] !== undefined
+        ? { ...item, order: drag.originalOrders[item.id!] } : item);
+      playlistsRef.current = restored;
+      setPlaylists(restored);
+      return;
+    }
     try {
       await persistPlaylistOrder(drag.section, drag.playlistId, drag.originalOrders);
       showToast('플레이리스트 순서를 변경했습니다.');
@@ -6741,32 +6784,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       console.error('playlist reorder failed:', error);
       showToast('플레이리스트 순서 저장에 실패했습니다.');
     }
-  };
-
-  const renderActivePlaylistManageButtons = (section: 'normal' | 'shared') => {
-    const list = section === 'normal' ? visibleNormalPlaylists : visibleSharedPlaylists;
-    const selectedId = section === 'normal' ? selectedNormalPlaylistId : selectedSharedPlaylistId;
-    const activePlaylist = list.find(p => p.id === selectedId);
-    if (!activePlaylist || !user || (activePlaylist as any).isFallback) return null;
-    const isDefaultPlaylist = activePlaylist.id === list[0]?.id;
-    if (isDefaultPlaylist) return null;
-
-    return (
-      <div className="shrink-0 inline-flex items-center overflow-hidden rounded-xl bg-[var(--bg-secondary)] shadow-btn">
-        <button
-          onClick={() => handleRenamePlaylist(activePlaylist)}
-          className="h-9 w-9 flex items-center justify-center text-white/45 hover:text-[#D8CCFF] hover:bg-white/5 transition-all"
-        >
-          <Edit2 className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => handleDeletePlaylist(activePlaylist)}
-          className="h-9 w-9 flex items-center justify-center text-white/45 hover:text-red-400 hover:bg-red-400/10 transition-all"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
-      </div>
-    );
   };
 
   const libraryPageHeader = (
@@ -7019,7 +7036,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               className="bg-[#2a2a2a] w-full max-w-sm rounded-2xl flex flex-col overflow-hidden border border-black/20"
             >
               <div className="p-4 border-b border-black/15 flex items-center justify-between">
-                <h3 className="font-bold text-white">플레이리스트 이름 변경</h3>
+                <h3 className="font-bold text-white">폴더 편집</h3>
                 <button onClick={() => setRenameModalArgs(null)} className="p-1 rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors">
                   <X className="w-5 h-5" />
                 </button>
@@ -7053,6 +7070,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   }}
                 />
               </div>
+              {playlistFolderDeleteReady && (
+                <p className="px-4 pb-3 text-xs font-bold leading-5 text-red-300">
+                  다시 삭제를 누르면 폴더와 목록의 곡이 삭제됩니다.
+                </p>
+              )}
               <div className="p-4 bg-[#1a1a1a]/50 flex justify-end gap-2 border-t border-black/15">
                 <button className="px-4 py-2 font-bold text-white/50 hover:text-white transition-colors" onClick={() => setRenameModalArgs(null)}>취소</button>
                 <button className="px-4 py-2 font-bold bg-[#A98BFF] text-white rounded-xl hover:bg-[#A98BFF]/90 transition-colors" onClick={async () => {
@@ -7071,6 +7093,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     showToast('플레이리스트 이름이 변경되었습니다.');
                   } catch (error) { showToast('이름 변경에 실패했습니다.'); }
                 }}>저장</button>
+                <button
+                  type="button"
+                  className="rounded-xl bg-red-500/15 px-4 py-2 font-bold text-red-400 hover:bg-red-500/25"
+                  onClick={() => {
+                    if (!playlistFolderDeleteReady) { setPlaylistFolderDeleteReady(true); return; }
+                    void handleDeletePlaylist(renameModalArgs.playlist, true);
+                  }}
+                >삭제</button>
               </div>
             </motion.div>
           </div>
@@ -7591,7 +7621,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       onPointerDown={(event) => handlePlaylistPointerDown(event, 'normal', playlist)}
                       onPointerMove={handlePlaylistPointerMove}
                       onPointerUp={finishPlaylistDrag}
-                      onPointerCancel={finishPlaylistDrag}
+                      onPointerCancel={(event) => { void finishPlaylistDrag(event, true); }}
                       onClick={() => {
                         if (playlistSuppressClickRef.current === dragKey) return;
                         setSelectedNormalPlaylistId(playlist.id!);
@@ -7619,7 +7649,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 >
                   <span className="text-lg font-light leading-none">+</span>
                 </button>
-                {renderActivePlaylistManageButtons('normal')}
               </div>
               <button
                 type="button"
@@ -7664,7 +7693,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       onPointerDown={(event) => handlePlaylistPointerDown(event, 'shared', playlist)}
                       onPointerMove={handlePlaylistPointerMove}
                       onPointerUp={finishPlaylistDrag}
-                      onPointerCancel={finishPlaylistDrag}
+                      onPointerCancel={(event) => { void finishPlaylistDrag(event, true); }}
                       onClick={() => {
                         if (playlistSuppressClickRef.current === dragKey) return;
                         setSelectedSharedPlaylistId(playlist.id!);
@@ -7693,7 +7722,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 >
                   <span className="text-lg font-light leading-none">+</span>
                 </button>
-                {renderActivePlaylistManageButtons('shared')}
               </div>
               <button
                 type="button"

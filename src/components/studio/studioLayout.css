@@ -17449,8 +17449,8 @@ html[data-soridraw-theme="studio-black"] body
 [data-music-note-share-action="copy"],
 html[data-soridraw-theme="studio-black"] body
 [data-music-note-share-action="share"] {
-  background: #5a5451 !important;
-  background-color: #5a5451 !important;
+  background: #444447 !important;
+  background-color: #444447 !important;
   color: #fff !important;
   -webkit-text-fill-color: #fff !important;
   opacity: 1 !important;
@@ -17459,8 +17459,8 @@ html[data-soridraw-theme="studio-black"] body
 [data-music-note-share-action="copy"]:hover,
 html[data-soridraw-theme="studio-black"] body
 [data-music-note-share-action="share"]:hover {
-  background: #6b635f !important;
-  background-color: #6b635f !important;
+  background: #555559 !important;
+  background-color: #555559 !important;
 }
 html[data-soridraw-theme="studio-black"] body
 [data-music-note-share-action="close"] {

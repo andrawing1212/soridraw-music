@@ -8700,7 +8700,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0 }}
-              className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-[#FF7A72]/25 bg-[#1a1a1a] p-6 shadow-2xl"
+              className="relative w-full max-w-sm overflow-hidden rounded-2xl bg-[#1a1a1a] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.78),0_0_30px_rgba(0,0,0,0.36)]"
               onClick={(event) => event.stopPropagation()}
               onPointerDown={(event) => event.stopPropagation()}
             >
@@ -8723,7 +8723,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   disabled={musicNoteShareBusy}
                   onClick={() => { void handleMusicNoteLinkAction('copy'); }}
                   data-music-note-share-action="copy"
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#5a5451] py-3.5 text-sm font-bold text-white transition-colors hover:bg-[#6b635f] disabled:cursor-wait disabled:opacity-60"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#444447] py-3.5 text-sm font-bold text-white transition-colors hover:bg-[#555559] disabled:cursor-wait disabled:opacity-60"
                 >
                   <Copy className="h-5 w-5" /> 링크 복사
                 </button>
@@ -8732,7 +8732,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   disabled={musicNoteShareBusy}
                   onClick={() => { void handleMusicNoteLinkAction('share'); }}
                   data-music-note-share-action="share"
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#5a5451] py-3.5 text-sm font-bold text-white transition-colors hover:bg-[#6b635f] disabled:cursor-wait disabled:opacity-60"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#444447] py-3.5 text-sm font-bold text-white transition-colors hover:bg-[#555559] disabled:cursor-wait disabled:opacity-60"
                 >
                   <Share2 className="h-5 w-5" /> 링크 공유
                 </button>

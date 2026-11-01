@@ -8533,7 +8533,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.96 }}
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            className="fixed bottom-5 left-1/2 z-[170] flex max-w-[calc(100vw-24px)] -translate-x-1/2 items-center gap-1.5 overflow-x-auto rounded-[34px] border border-white/10 bg-[#242424] px-3 py-2.5 shadow-[0_0_0_1px_rgba(255,255,255,0.10),0_12px_28px_rgba(0,0,0,0.84),0_28px_72px_rgba(0,0,0,0.76)] favorite-keyword-strip md:bottom-7 md:gap-3 md:px-5 md:py-3"
+            className="fixed bottom-5 left-1/2 z-[170] flex max-w-[calc(100vw-24px)] -translate-x-1/2 items-center gap-1.5 overflow-x-auto rounded-[34px] border border-white/10 bg-[#242424] px-3 py-2.5 shadow-[0_8px_22px_rgba(0,0,0,0.46),0_18px_38px_rgba(0,0,0,0.36)] favorite-keyword-strip md:bottom-7 md:gap-3 md:px-5 md:py-3"
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
           >

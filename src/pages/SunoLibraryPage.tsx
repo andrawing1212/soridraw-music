@@ -1236,6 +1236,21 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [bulkMenuState, setBulkMenuState] = useState<{ top: number; right: number; anchorEl?: HTMLElement | null } | null>(null);
   const selectedTrackList = useMemo(() => Object.values(selectedTrackMap), [selectedTrackMap]);
   const selectedTrackCount = selectedTrackList.length;
+  // Dismiss only transient menus. Selected tracks and selection mode survive.
+  useEffect(() => {
+    const onSplitDragStart = () => {
+      setShowLibraryFilterPopup(false);
+      setActiveMenuState(null);
+      setActivePlaylistItemMenu(null);
+      setPlaylistItemContextMenuPosition(null);
+      setActiveColorMenu(null);
+      setBulkMenuState(null);
+      setLibrarySelectionMoreOpen(false);
+    };
+    window.addEventListener('soridraw-split-drag-start', onSplitDragStart);
+    return () => window.removeEventListener('soridraw-split-drag-start', onSplitDragStart);
+  }, []);
+
   const isLibraryTrashMode = filter === 'trash' && libraryViewMode === 'workspace';
   const libraryPageRootRef = useRef<HTMLDivElement | null>(null);
 
@@ -8412,6 +8427,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         )}
       </AnimatePresence>
 
+      {(() => {
+        const selectionActionBar = (
       <AnimatePresence>
         {multiSelectMode && selectedTrackCount > 0 && !bulkMoveModalOpen && !bulkShareModalOpen && (
           <motion.div
@@ -8422,7 +8439,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.96 }}
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            className="fixed bottom-5 left-1/2 z-[170] flex max-w-[calc(100vw-24px)] -translate-x-1/2 items-center gap-1.5 overflow-x-auto rounded-[34px] border border-white/10 bg-[#242424]/78 px-3 py-2.5 shadow-[0_18px_60px_rgba(0,0,0,0.45)] backdrop-blur-2xl favorite-keyword-strip md:bottom-7 md:gap-3 md:px-5 md:py-3"
+            className="fixed bottom-5 left-1/2 z-[170] flex max-w-[calc(100vw-24px)] -translate-x-1/2 items-center gap-1.5 overflow-x-auto rounded-[34px] border border-white/10 bg-[#242424] px-3 py-2.5 shadow-[0_20px_54px_rgba(0,0,0,0.58)] favorite-keyword-strip md:bottom-7 md:gap-3 md:px-5 md:py-3"
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
           >
@@ -8518,6 +8535,20 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           </motion.div>
         )}
       </AnimatePresence>
+        );
+        // Existing Result pane width follows the splitter in the same frame.
+        const resultPane = isStudioDesktopViewport
+          && typeof document !== 'undefined'
+          && document.documentElement.dataset.soridrawTheme === 'studio-black'
+          ? document.getElementById('soridraw-studio-result-pane')
+          : null;
+        return resultPane
+          ? createPortal(
+              <div className="soridraw-studio-result-selection-bar-host">{selectionActionBar}</div>,
+              resultPane
+            )
+          : selectionActionBar;
+      })()}
 
       <AnimatePresence>
         {bulkMenuState && multiSelectMode && (

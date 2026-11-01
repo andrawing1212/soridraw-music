@@ -6003,13 +6003,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       setIsDeleting(false);
     }
   };
-  const isModalOpen = !!sharePopupInfo || !!showDetails || !!deleteTarget || !!renameModalArgs || !!moveModalArgs || !!playlistSavePicker || !!bulkShareModalOpen || !!bulkMoveModalOpen;
+  const isModalOpen = !!sharePopupInfo || !!showDetails || !!deleteTarget || !!playlistConfirmAction || !!renameModalArgs || !!moveModalArgs || !!playlistSavePicker || !!bulkShareModalOpen || !!bulkMoveModalOpen;
 
   const clearModalState = () => {
     modalHistoryPushedRef.current = false;
     setSharePopupInfo(null);
     setShowDetails(null);
     setDeleteTarget(null);
+    setPlaylistConfirmAction(null);
     setRenameModalArgs(null);
     setMoveModalArgs(null);
     setPlaylistSavePicker(null);
@@ -8421,6 +8422,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             data-selection-keep="true"
             data-floating-menu="true"
             data-selection-action-bar="true"
+            data-library-selection-action-bar="true"
             initial={{ opacity: 0, y: 24, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.96 }}
@@ -8904,11 +8906,15 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       </AnimatePresence>
 
       <AnimatePresence>
-        {playlistConfirmAction && (
+        {playlistConfirmAction && typeof document !== 'undefined' && createPortal(
           <div
-            className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/35"
-            onClick={() => {
-              if (!isPlaylistConfirming) setPlaylistConfirmAction(null);
+            data-selection-keep="true"
+            data-floating-menu="true"
+            className="fixed inset-0 z-[240] flex items-center justify-center overflow-y-auto bg-black/55 p-4 backdrop-blur-sm"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (event.target === event.currentTarget && !isPlaylistConfirming) closeModal();
             }}
           >
             <motion.div
@@ -8916,6 +8922,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 16 }}
               onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
               className="w-full max-w-[360px] overflow-hidden rounded-3xl border border-black/20 bg-[var(--bg-secondary)] shadow-2xl"
             >
               <div className="px-5 pt-5 pb-4 border-b border-black/15">
@@ -8934,7 +8941,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 <button
                   type="button"
                   disabled={isPlaylistConfirming}
-                  onClick={() => setPlaylistConfirmAction(null)}
+                  onClick={closeModal}
                   className="h-11 rounded-2xl border border-black/20 bg-white/5 text-sm font-bold text-white/65 transition-all hover:bg-white/10 hover:text-white disabled:opacity-40"
                 >
                   취소
@@ -8947,7 +8954,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     setIsPlaylistConfirming(true);
                     try {
                       await playlistConfirmAction.onConfirm();
-                      setPlaylistConfirmAction(null);
+                      closeModal();
                     } finally {
                       setIsPlaylistConfirming(false);
                     }
@@ -8959,7 +8966,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 </button>
               </div>
             </motion.div>
-          </div>
+          </div>, document.body
         )}
       </AnimatePresence>
 
@@ -8975,13 +8982,16 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       />
 
       <AnimatePresence>
-        {deleteTarget && (
-          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/25" onClick={closeModal}>
+        {deleteTarget && typeof document !== 'undefined' && createPortal(
+          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[240] flex items-center justify-center overflow-y-auto bg-black/55 p-4 backdrop-blur-sm"
+             onPointerDown={(event) => event.stopPropagation()}
+             onClick={(event) => { event.stopPropagation(); if (event.target === event.currentTarget && !isDeleting) closeModal(); }}>
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
               className="w-full max-w-sm bg-[var(--bg-secondary)] border border-[#A98BFF]/28 rounded-3xl shadow-2xl p-6"
             >
               <div className="flex flex-col items-center text-center">
@@ -9029,7 +9039,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                  </div>
               </div>
             </motion.div>
-          </div>
+          </div>, document.body
         )}
       </AnimatePresence>
     </div>

@@ -5870,21 +5870,34 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     openMusicNoteShareModal(targets, 'default');
   };
 
-  const handleMusicNoteLinkCopy = async () => {
+  const handleMusicNoteLinkAction = async (method: 'copy' | 'share') => {
     if (!musicNoteShareInfo || musicNoteShareBusyRef.current) return;
     musicNoteShareBusyRef.current = true;
     setMusicNoteShareBusy(true);
     try {
-      // Link access remains on the dedicated share document; no original favorite edits.
+      // Sharing only writes the independent link document, never the original song.
       const shareUrl = await createMusicNoteShareDocument(musicNoteShareInfo.songs, { isPublic: true });
+      if (method === 'share' && typeof navigator.share === 'function') {
+        const title = musicNoteShareInfo.songs.length === 1
+          ? getCombinedFavoriteTitle(musicNoteShareInfo.songs[0])
+          : `SORIDRAW 선택한 ${musicNoteShareInfo.songs.length}곡`;
+        try {
+          await navigator.share({ title, url: shareUrl });
+          setMusicNoteShareInfo(null);
+          return;
+        } catch (error: any) {
+          // OS/browser share sheet cancellation is not an error or a success toast.
+          if (error?.name === 'AbortError') return;
+        }
+      }
       const copied = await copyTextWithFallback(shareUrl);
       if (!copied) throw new Error('clipboard-failed');
       setMusicNoteShareInfo(null);
-      showFavoriteToast('복사되었습니다');
+      if (method === 'copy') showFavoriteToast('복사되었습니다');
     } catch (error: any) {
       if (error?.message !== 'login-required') {
-        console.error('music note link copy failed:', error);
-        showFavoriteToast('링크 복사에 실패했습니다.');
+        console.error('music note link action failed:', error);
+        showFavoriteToast('공유 링크 처리에 실패했습니다.');
       }
     } finally {
       musicNoteShareBusyRef.current = false;
@@ -8502,6 +8515,11 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       </AnimatePresence>
 
       {(() => {
+        const resultPane = isStudioDesktopViewport
+          && typeof document !== 'undefined'
+          && document.documentElement.dataset.soridrawTheme === 'studio-black'
+          ? document.getElementById('soridraw-studio-result-pane')
+          : null;
         const selectionActionBar = (
       <AnimatePresence>
         {isSelectionMode && selectedSongIds.length > 0 && !musicNoteFolderPicker && (
@@ -8510,6 +8528,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             data-floating-menu="true"
             data-selection-action-bar="true"
             data-music-note-selection-bar="true"
+            data-music-note-split-selection={resultPane ? 'true' : undefined}
             initial={{ opacity: 0, y: 24, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.96 }}
@@ -8602,17 +8621,11 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         )}
       </AnimatePresence>
         );
-        // Existing Result pane width follows the splitter in the same frame.
-        const resultPane = isStudioDesktopViewport
-          && typeof document !== 'undefined'
-          && document.documentElement.dataset.soridrawTheme === 'studio-black'
-          ? document.getElementById('soridraw-studio-result-pane')
-          : null;
-        return resultPane
-          ? createPortal(
-              <div className="soridraw-studio-result-selection-bar-host">{selectionActionBar}</div>,
-              resultPane
-            )
+        // The viewport owns vertical anchoring. The Result pane scrollport
+        // cannot own a zero-height sticky bar (it jumps to its top on return).
+        // Root split geometry controls horizontal centering without a new observer.
+        return typeof document !== 'undefined'
+          ? createPortal(selectionActionBar, document.body)
           : selectionActionBar;
       })()}
 
@@ -8669,7 +8682,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       </AnimatePresence>
 
       <AnimatePresence>
-        {musicNoteShareInfo && (
+        {musicNoteShareInfo && typeof document !== 'undefined' && createPortal(
           <motion.div
             initial={{ opacity: 1 }}
             animate={{ opacity: 1 }}
@@ -8677,7 +8690,11 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             transition={{ duration: 0 }}
             data-selection-keep="true"
             className="fixed inset-0 z-[240] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"
-            onClick={() => setMusicNoteShareInfo(null)}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (event.target === event.currentTarget) setMusicNoteShareInfo(null);
+            }}
           >
             <motion.div
               initial={{ opacity: 1, scale: 1 }}
@@ -8698,18 +8715,27 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
               <div className="mb-6 text-center">
                 <h2 className="mb-1 text-xl font-black tracking-tight text-white">공유 링크</h2>
-                <p className="text-xs font-medium lowercase text-white/40">링크를 복사해 원하는 곳에 전달할 수 있습니다.</p>
+                <p className="text-xs font-medium lowercase text-white/40">링크 복사 또는 링크 공유를 선택해주세요.</p>
               </div>
 
               <div className="space-y-3">
                 <button
                   type="button"
                   disabled={musicNoteShareBusy}
-                  onClick={() => { void handleMusicNoteLinkCopy(); }}
+                  onClick={() => { void handleMusicNoteLinkAction('copy'); }}
                   data-music-note-share-action="copy"
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#3b3b40] py-3.5 text-sm font-bold text-white shadow-[0_5px_16px_rgba(0,0,0,0.28)] transition-colors hover:bg-[#4a4a50] disabled:cursor-wait disabled:opacity-60"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#5a5451] py-3.5 text-sm font-bold text-white transition-colors hover:bg-[#6b635f] disabled:cursor-wait disabled:opacity-60"
                 >
                   <Copy className="h-5 w-5" /> 링크 복사
+                </button>
+                <button
+                  type="button"
+                  disabled={musicNoteShareBusy}
+                  onClick={() => { void handleMusicNoteLinkAction('share'); }}
+                  data-music-note-share-action="share"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#5a5451] py-3.5 text-sm font-bold text-white transition-colors hover:bg-[#6b635f] disabled:cursor-wait disabled:opacity-60"
+                >
+                  <Share2 className="h-5 w-5" /> 링크 공유
                 </button>
                 <button
                   type="button"
@@ -8721,7 +8747,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 </button>
               </div>
             </motion.div>
-          </motion.div>
+          </motion.div>,
+          document.body
         )}
       </AnimatePresence>
 
@@ -8924,7 +8951,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       </AnimatePresence>
 
       <AnimatePresence>
-        {musicNoteFolderPicker && (
+        {musicNoteFolderPicker && typeof document !== 'undefined' && createPortal(
           <motion.div
             data-selection-keep="true"
             data-floating-menu="true"
@@ -8938,7 +8965,14 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 ? "pb-[128px] md:pb-[142px]"
                 : "pb-6 md:pb-0"
             )}
-            onClick={() => { setMusicNoteFolderPicker(null); setMusicNoteFolderCreateTitle(null); }}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (event.target === event.currentTarget) {
+                setMusicNoteFolderPicker(null);
+                setMusicNoteFolderCreateTitle(null);
+              }
+            }}
           >
             <motion.div
               data-selection-keep="true"
@@ -9031,7 +9065,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 )}
               </div>
             </motion.div>
-          </motion.div>
+          </motion.div>,
+          document.body
         )}
       </AnimatePresence>
 

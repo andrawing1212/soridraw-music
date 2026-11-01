@@ -1662,6 +1662,13 @@ export default function FavoritesPage({
   const [confirmUnlockAll, setConfirmUnlockAll] = useState(0);
   const [confirmLockAll, setConfirmLockAll] = useState(0);
   const [confirmDeleteSong, setConfirmDeleteSong] = useState(false);
+  const [musicNoteDeleteDialog, setMusicNoteDeleteDialog] = useState<{
+    songs: any[];
+    after: 'selection' | 'detail' | 'none';
+    permanent: boolean;
+  } | null>(null);
+  const [musicNoteDeleteBusy, setMusicNoteDeleteBusy] = useState(false);
+  const musicNoteDeleteBusyRef = useRef(false);
   const [confirmToggleLock, setConfirmToggleLock] = useState(false);
   const [deletingSongId, setDeletingSongId] = useState<string | null>(null);
   const deleteTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -3186,12 +3193,7 @@ updates: draft.updates,
 
   const handleSelectionPermanentDeleteFromTrash = () => {
     if (selectedSongIds.length === 0) return;
-    permanentlyDeleteFavoriteSongs(selectedSongIds).then((deleted) => {
-      if (deleted) {
-        setFavoriteSelectionMoreOpen(false);
-        exitSelectionMode();
-      }
-    });
+    openMusicNoteDeleteDialog(activeFavoriteSource.filter(song => selectedSongIds.includes(song.id)), 'selection', true);
   };
 
   const deleteSongsByMusicNoteContext = async (songs: any[]): Promise<boolean> => {
@@ -3215,6 +3217,58 @@ updates: draft.updates,
     if (musicNoteViewMode !== 'noteSpace' || isMusicNoteSharedView) return false;
     return moveSongsToFavoriteTrash(deletableSongs.map(getFavoriteDocumentId));
   };
+
+  // A confirmation dialog is a purely local intent until its final button.
+  const openMusicNoteDeleteDialog = (
+    songs: any[],
+    after: 'selection' | 'detail' | 'none' = 'none',
+    permanent = false,
+  ) => {
+    const eligible = songs.filter(song => getFavoriteDocumentId(song) && (permanent || !isMusicNoteCardLocked(song)));
+    if (eligible.length === 0) {
+      showFavoriteToast('삭제할 수 있는 곡이 없습니다. 잠금 상태를 확인해주세요.');
+      return;
+    }
+    setFavoriteSelectionMoreOpen(false);
+    setMusicNoteDeleteDialog({ songs: eligible, after, permanent });
+  };
+
+  const confirmMusicNoteDeleteDialog = async () => {
+    const request = musicNoteDeleteDialog;
+    if (!request || musicNoteDeleteBusyRef.current) return;
+    musicNoteDeleteBusyRef.current = true;
+    setMusicNoteDeleteBusy(true);
+    try {
+      const success = request.permanent
+        ? await permanentlyDeleteFavoriteSongs(request.songs.map(getFavoriteDocumentId))
+        : await deleteSongsByMusicNoteContext(request.songs);
+      if (!success) return;
+      setMusicNoteDeleteDialog(null);
+      if (request.after === 'selection') exitSelectionMode();
+      if (request.after === 'detail') {
+        setSelectedSong(null);
+        setConfirmDeleteSong(false);
+      }
+    } catch (error) {
+      console.error('Music Note deletion confirmation failed:', error);
+      showFavoriteToast('삭제에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      musicNoteDeleteBusyRef.current = false;
+      setMusicNoteDeleteBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!musicNoteDeleteDialog) return;
+    const originalOverflow = document.body.style.overflow;
+    const originalOverscroll = document.body.style.overscrollBehavior;
+    document.body.style.overflow = 'hidden';
+    document.body.style.overscrollBehavior = 'contain';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.overscrollBehavior = originalOverscroll;
+    };
+  }, [musicNoteDeleteDialog]);
 
 
   const normalizeFavoriteSunoLink = (link: any, index = 0): FavoriteSunoLink | null => {
@@ -4508,17 +4562,7 @@ updates: draft.updates,
       forceDeleteUnlockedFavoriteIfNeeded(song);
       return;
     }
-    
-    if (!confirmDeleteSong) {
-      setConfirmDeleteSong(true);
-      return;
-    }
-    
-    const deleted = await deleteSongsByMusicNoteContext([song]);
-    if (deleted) {
-      setSelectedSong(null);
-      setConfirmDeleteSong(false);
-    }
+    openMusicNoteDeleteDialog([song], 'detail');
   };
 
   const getBulkLockHover = (isConfirm = confirmLockAll === 1) => ({
@@ -5219,6 +5263,11 @@ updates: draft.updates,
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
       // A nested share/folder popup owns the first Back press.
+      if (musicNoteDeleteDialog) {
+        setMusicNoteDeleteDialog(null);
+        window.history.pushState({ favoritesOverlay: selectedSong ? 'song-detail' : 'selection-mode' }, '');
+        return;
+      }
       if (musicNoteFolderPicker || musicNoteShareInfo) {
         setMusicNoteFolderPicker(null);
         setMusicNoteShareInfo(null);
@@ -5268,7 +5317,11 @@ updates: draft.updates,
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (musicNoteFolderPicker || musicNoteShareInfo) {
+        if (musicNoteDeleteDialog) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          if (!musicNoteDeleteBusyRef.current) setMusicNoteDeleteDialog(null);
+        } else if (musicNoteFolderPicker || musicNoteShareInfo) {
           e.preventDefault();
           e.stopImmediatePropagation();
           requestCloseMusicNoteChildPopup();
@@ -5287,7 +5340,7 @@ updates: draft.updates,
       window.removeEventListener('keydown', handleKeyDown);
       if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
     };
-  }, [selectedSong, isSelectionMode, musicNoteShareInfo, musicNoteFolderPicker, confirmDeleteSong, confirmToggleLock, confirmDeleteAll, confirmUnlockAll, confirmLockAll]);
+  }, [selectedSong, isSelectionMode, musicNoteShareInfo, musicNoteFolderPicker, musicNoteDeleteDialog, confirmDeleteSong, confirmToggleLock, confirmDeleteAll, confirmUnlockAll, confirmLockAll]);
 
   const handleSelectedLock = async () => {
     if (pendingSelectionAction === 'lock' || pendingSelectionAction === 'unlock') {
@@ -5533,12 +5586,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       showFavoriteToast('잠긴 곡은 삭제할 수 없습니다.');
       return;
     }
-    deleteSongsByMusicNoteContext(deletable).then((deleted) => {
-      if (deleted) {
-        setFavoriteSelectionMoreOpen(false);
-        exitSelectionMode();
-      }
-    });
+    openMusicNoteDeleteDialog(deletable, 'selection');
   };
 
   const applyKeywordsToNext = (song: any) => {
@@ -6832,7 +6880,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
     if (action === 'deleteSelected') {
       const targets = activeFavoriteSource.filter(item => selectedSongIds.includes(item.id) && !isMusicNoteCardLocked(item));
-      deleteSongsByMusicNoteContext(targets).then((deleted) => { if (deleted) exitSelectionMode(); });
+      openMusicNoteDeleteDialog(targets, 'selection');
       return;
     }
 
@@ -6892,7 +6940,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     if (action === 'permanentDelete') {
-      permanentlyDeleteFavoriteSongs([getFavoriteDocumentId(song)]);
+      openMusicNoteDeleteDialog([song], 'none', true);
       return;
     }
 
@@ -6900,7 +6948,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       if (isMusicNoteCardLocked(song)) {
         forceDeleteUnlockedFavoriteIfNeeded(song);
       } else {
-        deleteSongsByMusicNoteContext([song]);
+        openMusicNoteDeleteDialog([song]);
       }
     }
   };
@@ -8701,7 +8749,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           : null;
         const selectionActionBar = (
       <AnimatePresence>
-        {isSelectionMode && selectedSongIds.length > 0 && !musicNoteFolderPicker && !musicNoteShareInfo && (
+        {isSelectionMode && selectedSongIds.length > 0 && !musicNoteFolderPicker && !musicNoteShareInfo && !musicNoteDeleteDialog && (
           <motion.div
             data-selection-keep="true"
             data-floating-menu="true"
@@ -8928,6 +8976,45 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           </motion.div>,
           document.body
         )}
+
+
+      {musicNoteDeleteDialog && typeof document !== 'undefined' && createPortal(
+        <div data-selection-keep="true" data-floating-menu="true"
+          className="fixed inset-0 z-[510] flex items-center justify-center overflow-y-auto bg-black/45 p-4 backdrop-blur-sm"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => { event.stopPropagation(); if (event.target === event.currentTarget && !musicNoteDeleteBusy) setMusicNoteDeleteDialog(null); }}>
+          <div className="relative w-full max-w-sm rounded-2xl bg-[#1a1a1a] p-6 text-white shadow-[0_24px_70px_rgba(0,0,0,0.78),0_0_30px_rgba(0,0,0,0.36)]"
+            role="dialog" aria-modal="true" aria-label="곡 삭제 확인"
+            onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
+            <button type="button" aria-label="삭제 확인창 닫기" disabled={musicNoteDeleteBusy}
+              onClick={() => setMusicNoteDeleteDialog(null)}
+              className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/55 hover:text-white disabled:opacity-50">
+              <X className="h-4 w-4" />
+            </button>
+            <div className="mb-6 pt-2 text-center">
+              <h3 className="mb-2 text-xl font-black tracking-tight text-white">
+                {musicNoteDeleteDialog.permanent ? '곡 영구 삭제' : musicNoteDeleteDialog.songs.length > 1 ? '선택한 곡 삭제' : '곡 삭제'}
+              </h3>
+              <p className="text-xs font-medium leading-5 text-white/55">
+                {musicNoteDeleteDialog.permanent
+                  ? `선택한 ${musicNoteDeleteDialog.songs.length}곡을 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다.`
+                  : musicNoteViewMode === 'noteSpace'
+                    ? `선택한 ${musicNoteDeleteDialog.songs.length}곡을 휴지통으로 이동할까요?`
+                    : `선택한 ${musicNoteDeleteDialog.songs.length}곡을 현재 폴더에서 제거할까요? 원본 곡은 삭제되지 않습니다.`}
+              </p>
+            </div>
+            <div className="space-y-3">
+              <button type="button" disabled={musicNoteDeleteBusy} onClick={() => { void confirmMusicNoteDeleteDialog(); }}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#75464B] py-3.5 text-sm font-bold text-white transition-colors hover:bg-[#86555B] disabled:opacity-50">
+                {musicNoteDeleteBusy && <Loader2 className="h-4 w-4 animate-spin"/>}
+                {musicNoteDeleteDialog.permanent ? '영구 삭제' : musicNoteViewMode === 'noteSpace' ? '휴지통으로 이동' : '삭제'}
+              </button>
+              <button type="button" disabled={musicNoteDeleteBusy} onClick={() => setMusicNoteDeleteDialog(null)}
+                className="w-full rounded-xl bg-[#444447] py-3.5 text-sm font-bold text-white transition-colors hover:bg-[#555559] disabled:opacity-50">취소</button>
+            </div>
+          </div>
+        </div>, document.body
+      )}
 
       <AnimatePresence>
         {explorePublicationDialog && (

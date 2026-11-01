@@ -4270,6 +4270,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     toggleSelectedTrack(selection, true);
   };
 
+
   const clearMultiSelect = () => {
     bulkShareUrlRef.current = null;
     setMultiSelectMode(false);
@@ -6004,6 +6005,71 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
   };
   const isModalOpen = !!sharePopupInfo || !!showDetails || !!deleteTarget || !!playlistConfirmAction || !!renameModalArgs || !!moveModalArgs || !!playlistSavePicker || !!bulkShareModalOpen || !!bulkMoveModalOpen;
+
+  // App459 freezes the Lite split engine. While selecting tracks, mirror
+  // its EXISTING splitter's inline x-coordinate instead of adding work to its
+  // pointer/rAF hot path. One observer exists only while the Library bar is shown.
+  useEffect(() => {
+    if (!multiSelectMode || isModalOpen || !isStudioDesktopViewport ||
+        document.documentElement.dataset.soridrawTheme !== 'studio-black') return;
+    const splitter = document.querySelector<HTMLElement>('body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter');
+    const bar = document.querySelector<HTMLElement>('body > [data-library-selection-action-bar="true"][data-library-split-selection="true"]');
+    if (!splitter || !bar) return;
+    const root = document.documentElement;
+    let rightEdge = window.innerWidth;
+    const captureRightEdge = () => {
+      const inset = Number.parseFloat(getComputedStyle(root).getPropertyValue('--soridraw-studio-result-right'));
+      rightEdge = window.innerWidth - (Number.isFinite(inset) ? inset : 0);
+    };
+    captureRightEdge();
+    const onSplitterStyle = () => {
+      const splitterX = Number.parseFloat(splitter.style.left);
+      if (!Number.isFinite(splitterX)) {
+        bar.style.removeProperty('left');
+        bar.style.removeProperty('max-width');
+        return;
+      }
+      // Engine fixed splitter left = actual pane boundary - 8px.
+      const resultLeft = splitterX + 26;
+      bar.style.setProperty('left', `${Math.round((resultLeft + rightEdge) / 2)}px`, 'important');
+      bar.style.setProperty('max-width', `${Math.max(0, Math.round(rightEdge - resultLeft - 24))}px`, 'important');
+    };
+    const watcher = new MutationObserver(onSplitterStyle);
+    watcher.observe(splitter, { attributes: true, attributeFilter: ['style'] });
+    const onResize = () => { captureRightEdge(); onSplitterStyle(); };
+    window.addEventListener('resize', onResize, { passive: true });
+    onSplitterStyle();
+    return () => {
+      watcher.disconnect();
+      window.removeEventListener('resize', onResize);
+      bar.style.removeProperty('left');
+      bar.style.removeProperty('max-width');
+    };
+  }, [multiSelectMode, isModalOpen, isStudioDesktopViewport]);
+
+  // Selection is page-wide, not scoped to the Library result pane. Preserve
+  // track-row selection and the explicit action bar, overlays and splitter drags.
+  useEffect(() => {
+    if (!multiSelectMode) return;
+    const handleOutsideSelection = (event: PointerEvent) => {
+      if (isModalOpen) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest([
+        '.soridraw-library-workspace-track-row',
+        '.soridraw-library-playlist-row',
+        '[data-selection-action-bar="true"]',
+        '[data-floating-menu="true"]',
+        '.soridraw-studio-splitter',
+        '.soridraw-lite-studio-splitter',
+      ].join(', '))) return;
+      clearMultiSelect();
+    };
+    document.addEventListener('pointerdown', handleOutsideSelection, true);
+    return () => document.removeEventListener('pointerdown', handleOutsideSelection, true);
+  }, [multiSelectMode, isModalOpen]);
+
+
 
   const clearModalState = () => {
     modalHistoryPushedRef.current = false;
@@ -8415,6 +8481,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       )}
 
       {(() => {
+        const resultPane = isStudioDesktopViewport
+          && typeof document !== 'undefined'
+          && document.documentElement.dataset.soridrawTheme === 'studio-black'
+          ? document.getElementById('soridraw-studio-result-pane')
+          : null;
         const selectionActionBar = (
       <AnimatePresence>
         {multiSelectMode && selectedTrackCount > 0 && !isModalOpen && (
@@ -8423,6 +8494,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             data-floating-menu="true"
             data-selection-action-bar="true"
             data-library-selection-action-bar="true"
+            data-library-split-selection={resultPane ? "true" : undefined}
             initial={{ opacity: 0, y: 24, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.96 }}
@@ -8898,67 +8970,42 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         )}
       </AnimatePresence>
 
-      {playlistConfirmAction && typeof document !== 'undefined' && createPortal(
-          <div
-            data-selection-keep="true"
-            data-floating-menu="true"
-            className="fixed inset-0 z-[240] flex items-center justify-center overflow-y-auto bg-black/55 p-4 backdrop-blur-sm"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (event.target === event.currentTarget && !isPlaylistConfirming) closeModal();
-            }}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 16 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 16 }}
-              onClick={(e) => e.stopPropagation()}
-              onPointerDown={(e) => e.stopPropagation()}
-              className="w-full max-w-[360px] overflow-hidden rounded-3xl border border-black/20 bg-[var(--bg-secondary)] shadow-2xl"
-            >
-              <div className="px-5 pt-5 pb-4 border-b border-black/15">
-                <div className={`mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border ${playlistConfirmAction.danger ? 'border-red-400/25 bg-red-400/10 text-red-400' : 'border-[#A98BFF]/25 bg-[#A98BFF]/10 text-[#A98BFF]'}`}>
-                  <Trash2 className="h-5 w-5" />
-                </div>
-                <h3 className="text-center text-lg font-black text-white tracking-tight">
-                  {playlistConfirmAction.title}
-                </h3>
-                <p className="mt-2 text-center text-sm leading-relaxed text-white/55">
-                  {playlistConfirmAction.message}
-                </p>
-              </div>
 
-              <div className="grid grid-cols-2 gap-2 p-4 bg-black/10">
-                <button
-                  type="button"
-                  disabled={isPlaylistConfirming}
-                  onClick={closeModal}
-                  className="h-11 rounded-2xl border border-black/20 bg-white/5 text-sm font-bold text-white/65 transition-all hover:bg-white/10 hover:text-white disabled:opacity-40"
-                >
-                  취소
-                </button>
-                <button
-                  type="button"
-                  disabled={isPlaylistConfirming}
-                  onClick={async () => {
-                    if (!playlistConfirmAction) return;
-                    setIsPlaylistConfirming(true);
-                    try {
-                      await playlistConfirmAction.onConfirm();
-                      closeModal();
-                    } finally {
-                      setIsPlaylistConfirming(false);
-                    }
-                  }}
-                  className={`h-11 rounded-2xl text-sm font-black text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${playlistConfirmAction.danger ? 'bg-red-500 hover:bg-red-500/90 shadow-lg shadow-red-500/15' : 'bg-[#A98BFF] hover:bg-[#A98BFF]/90 shadow-lg shadow-[#A98BFF]/15'}`}
-                >
-                  {isPlaylistConfirming && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {playlistConfirmAction.confirmLabel}
-                </button>
-              </div>
-            </motion.div>
-          </div>, document.body
+      {playlistConfirmAction && typeof document !== 'undefined' && createPortal(
+        <div data-selection-keep="true" data-floating-menu="true"
+          className="fixed inset-0 z-[240] flex items-center justify-center overflow-y-auto bg-black/45 p-4 backdrop-blur-sm"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => { event.stopPropagation(); if (event.target === event.currentTarget && !isPlaylistConfirming) closeModal(); }}>
+          <div className="relative w-full max-w-sm rounded-2xl bg-[#1a1a1a] p-6 text-white shadow-[0_24px_70px_rgba(0,0,0,0.78),0_0_30px_rgba(0,0,0,0.36)]"
+            role="dialog" aria-modal="true" aria-label={playlistConfirmAction.title}
+            onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
+            <button type="button" aria-label="삭제 확인창 닫기" onClick={closeModal} disabled={isPlaylistConfirming}
+              className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/55 hover:text-white disabled:opacity-50">
+              <X className="h-4 w-4"/>
+            </button>
+            <div className="mb-6 pt-2 text-center">
+              <h3 className="mb-2 text-xl font-black tracking-tight text-white">{playlistConfirmAction.title}</h3>
+              <p className="text-xs font-medium leading-5 text-white/55">{playlistConfirmAction.message}</p>
+            </div>
+            <div className="space-y-3">
+              <button type="button" disabled={isPlaylistConfirming} onClick={async () => {
+                if (isPlaylistConfirming) return;
+                setIsPlaylistConfirming(true);
+                try {
+                  await playlistConfirmAction.onConfirm();
+                  closeModal();
+                } finally {
+                  setIsPlaylistConfirming(false);
+                }
+              }} className={`flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold text-white transition-colors disabled:opacity-50 ${playlistConfirmAction.danger ? 'bg-[#75464B] hover:bg-[#86555B]' : 'bg-[#A98BFF] text-[#181818] hover:bg-[#BFA5FF]'}`}>
+                {isPlaylistConfirming && <Loader2 className="h-4 w-4 animate-spin" />}
+                {playlistConfirmAction.confirmLabel}
+              </button>
+              <button type="button" disabled={isPlaylistConfirming} onClick={closeModal}
+                className="w-full rounded-xl bg-[#444447] py-3.5 text-sm font-bold text-white transition-colors hover:bg-[#555559] disabled:opacity-50">취소</button>
+            </div>
+          </div>
+        </div>, document.body
       )}
 
       {/* Details Modal */}
@@ -8973,7 +9020,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       />
 
       {deleteTarget && typeof document !== 'undefined' && createPortal(
-          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[240] flex items-center justify-center overflow-y-auto bg-black/55 p-4 backdrop-blur-sm"
+          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[240] flex items-center justify-center overflow-y-auto bg-black/45 p-4 backdrop-blur-sm"
              onPointerDown={(event) => event.stopPropagation()}
              onClick={(event) => { event.stopPropagation(); if (event.target === event.currentTarget && !isDeleting) closeModal(); }}>
             <motion.div
@@ -8982,11 +9029,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
-              className="w-full max-w-sm bg-[var(--bg-secondary)] border border-[#A98BFF]/28 rounded-3xl shadow-2xl p-6"
+              className="relative w-full max-w-sm rounded-2xl bg-[#1a1a1a] p-6 text-white shadow-[0_24px_70px_rgba(0,0,0,0.78),0_0_30px_rgba(0,0,0,0.36)]"
             >
               <div className="flex flex-col items-center text-center">
-                 <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mb-4 border border-red-500/20">
-                    <AlertCircle className="w-6 h-6 text-red-500" />
+                 <div className="w-12 h-12 rounded-full bg-[#75464B]/25 flex items-center justify-center mb-4">
+                    <AlertCircle className="w-6 h-6 text-[#CD9196]" />
                  </div>
                  <h3 className="text-xl font-bold mb-2">
                    {deleteTarget.action === 'permanentDelete' ? '이 곡을 영구 삭제할까요?' : 
@@ -9009,7 +9056,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                    <button
                      onClick={closeModal}
                      disabled={isDeleting}
-                     className="flex-1 py-3 px-4 rounded-xl font-bold bg-white/5 hover:bg-white/10 transition-all text-white/70 hover:text-white disabled:opacity-50"
+                     className="flex-1 py-3 px-4 rounded-xl font-bold bg-[#444447] hover:bg-[#555559] transition-colors text-white disabled:opacity-50"
                    >
                      취소
                    </button>
@@ -9017,9 +9064,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                      onClick={confirmDelete}
                      disabled={isDeleting}
                      className={`flex-1 py-3 px-4 rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg ${
-                       deleteTarget.action === 'permanentDelete' ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/20' :
-                       deleteTarget.action === 'restore' ? 'bg-green-500 hover:bg-green-600 text-white shadow-green-500/20' :
-                       'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/20'
+                       deleteTarget.action === 'permanentDelete' ? 'bg-[#75464B] hover:bg-[#86555B] text-white shadow-none' :
+                       deleteTarget.action === 'restore' ? 'bg-[#47685C] hover:bg-[#567D6E] text-white shadow-none' :
+                       'bg-[#75464B] hover:bg-[#86555B] text-white shadow-none'
                      }`}
                    >
                      {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : 

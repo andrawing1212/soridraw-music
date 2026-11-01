@@ -6,9 +6,14 @@ import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent }
  * before its move handlers run. Touch and ordinary clicks keep their behavior.
  * No folder metadata or synchronization state is changed here.
  */
-export const useFolderStripMouseScroll = (cancelFolderLongPress: () => void) => {
+export const useFolderStripMouseScroll = (
+  cancelFolderLongPress: () => void,
+  isFolderReordering: () => boolean,
+) => {
   const cancelRef = useRef(cancelFolderLongPress);
   cancelRef.current = cancelFolderLongPress;
+  const reorderingRef = useRef(isFolderReordering);
+  reorderingRef.current = isFolderReordering;
   const detachRef = useRef<(() => void) | null>(null);
   const suppressClickRef = useRef(false);
   const suppressTimeoutRef = useRef<number | null>(null);
@@ -36,6 +41,13 @@ export const useFolderStripMouseScroll = (cancelFolderLongPress: () => void) => 
 
     const onMove = (move: PointerEvent) => {
       if (move.pointerId !== pointerId) return;
+      // The 700ms long press wins once folder reordering is active.
+      // Detach this passive mouse-pan observer, leaving the existing window
+      // reorder handlers in full control until pointer release.
+      if (reorderingRef.current()) {
+        detach();
+        return;
+      }
       const deltaX = move.clientX - startX;
       const deltaY = move.clientY - startY;
       if (!scrolling) {

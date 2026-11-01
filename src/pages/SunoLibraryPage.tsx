@@ -2038,7 +2038,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (directFromEditor) {
       await deleteAction.onConfirm();
       if (deleted) {
-        setRenameModalArgs(null);
+        closeModal();
         setPlaylistFolderDeleteReady(false);
       }
     } else {
@@ -7000,9 +7000,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
   };
 
-  const folderMouseScroll = useFolderStripMouseScroll(() => {
-    void finishPlaylistDrag(undefined, true);
-  });
+  const folderMouseScroll = useFolderStripMouseScroll(
+    () => { void finishPlaylistDrag(undefined, true); },
+    () => Boolean(playlistDragRef.current?.active),
+  );
 
   const libraryPageHeader = (
     <motion.div
@@ -7243,19 +7244,23 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         }
       `}</style>
       <AnimatePresence>
-        {renameModalArgs && (
-          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25"
-               onClick={closeModal}>
+        {renameModalArgs && typeof document !== 'undefined' && createPortal(
+          <div data-selection-keep="true" data-floating-menu="true"
+               className="fixed inset-0 z-[520] flex items-center justify-center overflow-y-auto bg-black/55 p-4 backdrop-blur-sm"
+               onPointerDown={(event) => event.stopPropagation()}
+               onClick={(event) => { if (event.target === event.currentTarget) closeModal(); }}>
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={e => e.stopPropagation()}
-              className="bg-[#2a2a2a] w-full max-w-sm rounded-2xl flex flex-col overflow-hidden border border-black/20"
+              className="bg-[#2a2a2a] w-full max-w-sm max-h-[calc(100dvh-32px)] rounded-2xl flex flex-col overflow-y-auto border border-black/20"
+              role="dialog" aria-modal="true" aria-label="라이브러리 폴더 편집"
+              onPointerDown={(event) => event.stopPropagation()}
             >
               <div className="p-4 border-b border-black/15 flex items-center justify-between">
                 <h3 className="font-bold text-white">폴더 편집</h3>
-                <button onClick={() => setRenameModalArgs(null)} className="p-1 rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors">
+                <button onClick={closeModal} className="p-1 rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -7281,7 +7286,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       }
                       try {
                         await renamePlaylist(user.uid, renameModalArgs.playlist.id!, trimmedTitle);
-                        setRenameModalArgs(null);
+                        closeModal();
                         showToast('플레이리스트 이름이 변경되었습니다.');
                       } catch (error) { showToast('이름 변경에 실패했습니다.'); }
                     }
@@ -7307,7 +7312,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   }
                   try {
                     await renamePlaylist(user.uid, renameModalArgs.playlist.id!, trimmedTitle);
-                    setRenameModalArgs(null);
+                    closeModal();
                     showToast('플레이리스트 이름이 변경되었습니다.');
                   } catch (error) { showToast('이름 변경에 실패했습니다.'); }
                 }}>저장</button>
@@ -7321,7 +7326,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 >삭제</button>
               </div>
             </motion.div>
-          </div>
+          </div>, document.body
         )}
       </AnimatePresence>
 

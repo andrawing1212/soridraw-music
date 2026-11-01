@@ -1280,6 +1280,7 @@ export default function FavoritesPage({
     if (delta > 0) container.scrollTo({ left: container.scrollLeft + delta, behavior: 'smooth' });
   }, [musicNoteViewMode, myNoteFolders, sharedNoteFolders]);
   const musicNoteFolderPressTimerRef = useRef<number | null>(null);
+  const musicNoteFolderEditHistoryRef = useRef(false);
   const musicNoteFolderDragRef = useRef<{
     mode: MusicNoteFolderMode;
     folderId: string;
@@ -7203,7 +7204,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       // Legacy per-song title copies remain untouched for backward readability,
       // so rename is one structure write instead of rewriting every song.
       await persistMusicNoteFolders(mode, nextFolders);
-      setMusicNoteFolderRenameArgs(null);
+      closeMusicNoteFolderEditor();
       showFavoriteToast('폴더 이름이 변경되었습니다.');
     } catch (error) {
       console.error('rename music note folder failed:', error);
@@ -7253,8 +7254,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         const updates = { sharedNoteFolderId: 'default', sharedNoteFolderTitle: '기본', sharedNoteFolderUpdatedAt: Date.now() };
         await commitMusicNoteFolderUpdates(affected.map(getFavoriteDocumentId).filter(Boolean), updates, 'folder-delete');
       }
-      setMusicNoteFolderRenameArgs(null);
-      setMusicNoteFolderDeleteReady(false);
+      closeMusicNoteFolderEditor();
       showFavoriteToast('폴더를 삭제했습니다. 곡은 기본 폴더로 이동했습니다.');
     } catch (error) {
       console.error('delete music note folder failed:', error);
@@ -7511,9 +7511,57 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
   };
 
-  const folderMouseScroll = useFolderStripMouseScroll(() => {
-    void finishMusicNoteFolderDrag(undefined, true);
-  });
+  const folderMouseScroll = useFolderStripMouseScroll(
+    () => { void finishMusicNoteFolderDrag(undefined, true); },
+    () => Boolean(musicNoteFolderDragRef.current?.active),
+  );
+
+  const closeMusicNoteFolderEditor = () => {
+    if (musicNoteFolderEditHistoryRef.current && window.history.state?.favoritesOverlay === 'folder-edit') {
+      window.history.back();
+      return;
+    }
+    musicNoteFolderEditHistoryRef.current = false;
+    setMusicNoteFolderRenameArgs(null);
+    setMusicNoteFolderDeleteReady(false);
+  };
+
+  useEffect(() => {
+    if (!musicNoteFolderRenameArgs) return;
+    // A dedicated history entry keeps Back/Escape within the folder editor.
+    if (!musicNoteFolderEditHistoryRef.current) {
+      window.history.pushState({ ...window.history.state, favoritesOverlay: 'folder-edit' }, '', window.location.href);
+      musicNoteFolderEditHistoryRef.current = true;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    const previousOverscroll = document.body.style.overscrollBehavior;
+    document.body.style.overflow = 'hidden';
+    document.body.style.overscrollBehavior = 'contain';
+
+    const onBack = (event: PopStateEvent) => {
+      if (!musicNoteFolderEditHistoryRef.current) return;
+      musicNoteFolderEditHistoryRef.current = false;
+      setMusicNoteFolderRenameArgs(null);
+      setMusicNoteFolderDeleteReady(false);
+      // Prevent the page's existing Back handler from closing a song/selection.
+      event.stopImmediatePropagation();
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeMusicNoteFolderEditor();
+    };
+    window.addEventListener('popstate', onBack, true);
+    window.addEventListener('keydown', onEscape, true);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.overscrollBehavior = previousOverscroll;
+      window.removeEventListener('popstate', onBack, true);
+      window.removeEventListener('keydown', onEscape, true);
+    };
+  }, [Boolean(musicNoteFolderRenameArgs)]);
 
   const renderMusicNoteFolderBar = (mode: 'myNote' | 'sharedNote') => {
     const isShared = mode === 'sharedNote';
@@ -8668,7 +8716,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       )}
 
       <AnimatePresence>
-        {musicNoteFolderRenameArgs && (
+        {musicNoteFolderRenameArgs && typeof document !== 'undefined' && createPortal(
           <motion.div
             data-selection-keep="true"
             data-floating-menu="true"
@@ -8676,22 +8724,25 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             animate={{ opacity: 1 }}
             exit={{ opacity: 1 }}
             transition={{ duration: 0 }}
-            className="fixed inset-0 z-[155] flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm"
-            onClick={() => setMusicNoteFolderRenameArgs(null)}
+            className="fixed inset-0 z-[520] flex items-center justify-center overflow-y-auto bg-black/55 px-4 py-4 backdrop-blur-sm"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => { if (event.target === event.currentTarget) closeMusicNoteFolderEditor(); }}
           >
             <motion.div
               initial={{ opacity: 1, y: 0, scale: 1 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0 }}
-              className="w-full max-w-[380px] overflow-hidden rounded-[24px] border border-[#FF7A72]/25 bg-[#181818] shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+              className="w-full max-w-[380px] max-h-[calc(100dvh-32px)] overflow-y-auto rounded-[24px] border border-[#FF7A72]/25 bg-[#181818] shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+              role="dialog" aria-modal="true" aria-label="뮤직노트 폴더 편집"
+              onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
             >
               <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
                 <h3 className="text-base font-black text-white">폴더 편집</h3>
                 <button
                   type="button"
-                  onClick={() => setMusicNoteFolderRenameArgs(null)}
+                  onClick={closeMusicNoteFolderEditor}
                   className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.06] text-white/55 transition-all hover:text-white"
                 >
                   <X className="h-4 w-4" />
@@ -8719,7 +8770,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               <div className="flex justify-end gap-2 border-t border-white/10 bg-black/20 px-5 py-4">
                 <button
                   type="button"
-                  onClick={() => setMusicNoteFolderRenameArgs(null)}
+                  onClick={closeMusicNoteFolderEditor}
                   className="px-4 py-2 text-sm font-bold text-white/50 transition-colors hover:text-white"
                 >
                   취소
@@ -8743,7 +8794,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 </button>
               </div>
             </motion.div>
-          </motion.div>
+          </motion.div>, document.body
         )}
       </AnimatePresence>
 

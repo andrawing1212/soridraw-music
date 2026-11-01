@@ -5911,7 +5911,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         }
       }
 
-      const copied = await copyTextWithFallback(`${title}\n${shareUrl}`);
+      const copied = await copyTextWithFallback(shareUrl);
       if (!copied) throw new Error('clipboard-failed');
       showFavoriteToast(method === 'share'
         ? '기기 공유를 지원하지 않아 링크를 복사했습니다.'

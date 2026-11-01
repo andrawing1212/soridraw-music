@@ -7243,7 +7243,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           }
         }
       `}</style>
-      <AnimatePresence>
         {renameModalArgs && typeof document !== 'undefined' && createPortal(
           <div data-selection-keep="true" data-floating-menu="true"
                className="fixed inset-0 z-[520] flex items-center justify-center overflow-y-auto bg-black/55 p-4 backdrop-blur-sm"
@@ -7328,7 +7327,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             </motion.div>
           </div>, document.body
         )}
-      </AnimatePresence>
 
 
       {moveModalArgs && typeof document !== 'undefined' && createPortal(

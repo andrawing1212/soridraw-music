@@ -8715,7 +8715,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         </div>
       )}
 
-      <AnimatePresence>
         {musicNoteFolderRenameArgs && typeof document !== 'undefined' && createPortal(
           <motion.div
             data-selection-keep="true"
@@ -8796,7 +8795,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             </motion.div>
           </motion.div>, document.body
         )}
-      </AnimatePresence>
 
       {(() => {
         const resultPane = isStudioDesktopViewport

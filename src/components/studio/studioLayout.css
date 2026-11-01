@@ -17430,7 +17430,10 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
  * viewport-fixed positioning never follows the pane's scroll content. */
 @media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"] body
-  [data-music-note-selection-bar="true"][data-music-note-split-selection="true"] {
+  :is(
+    [data-music-note-selection-bar="true"][data-music-note-split-selection="true"],
+    [data-library-selection-action-bar="true"][data-library-split-selection="true"]
+  ) {
     position: fixed !important;
     left: calc((var(--soridraw-studio-result-left, 50vw) + 100vw - var(--soridraw-studio-result-right, 0px)) / 2) !important;
     right: auto !important;

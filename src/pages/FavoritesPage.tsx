@@ -16,6 +16,7 @@ import {
 } from '../services/musicNoteFolderStructureBatch';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
+import { useFolderStripMouseScroll } from '../lib/folderStripMouseScroll';
 import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
@@ -7510,6 +7511,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
   };
 
+  const folderMouseScroll = useFolderStripMouseScroll(() => {
+    void finishMusicNoteFolderDrag(undefined, true);
+  });
+
   const renderMusicNoteFolderBar = (mode: 'myNote' | 'sharedNote') => {
     const isShared = mode === 'sharedNote';
     const folders = isShared ? sharedNoteFolders : myNoteFolders;
@@ -7544,6 +7549,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         ><span aria-hidden="true">◀</span></button>
         <div
           ref={(element) => { musicNoteFolderBarRefs.current[mode] = element; }}
+          {...folderMouseScroll}
           className="soridraw-folder-drag-scrollbar min-w-0 flex-1 flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2"
         >
           {folders.map((folder) => {

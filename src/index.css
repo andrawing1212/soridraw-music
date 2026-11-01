@@ -5391,17 +5391,3 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
   color: #4f4943 !important;
 }
 
-/* Library selection actions match Music Note's unboxed icon bar.
-   Scoped to this floating toolbar: page buttons and accent remain unchanged. */
-[data-library-selection-action-bar="true"] > button {
-  background-color: transparent !important;
-  background-image: none !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-}
-[data-library-selection-action-bar="true"] > button:hover {
-  background-color: rgba(255, 255, 255, 0.08) !important;
-}
-[data-library-selection-action-bar="true"] > button:has(> svg.lucide-trash-2):hover {
-  background-color: rgba(239, 68, 68, 0.1) !important;
-}

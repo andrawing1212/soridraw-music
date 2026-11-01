@@ -2978,7 +2978,7 @@ updates: draft.updates,
     try {
       await commitMusicNoteFolderUpdates(safeSongIds, updates);
       patchMusicNoteFolderMoveLocally(safeSongIds, updates);
-      showFavoriteToast(`${safeSongIds.length}곡을 현재 폴더에서 제거했습니다.`);
+      showFavoriteToast(`${safeSongIds.length}곡이 폴더에서 삭제되었습니다.`);
       return true;
     } catch (error) {
       console.error('remove songs from music note folder failed:', error);
@@ -3003,7 +3003,7 @@ updates: draft.updates,
 
     try {
       await Promise.all(safeSongIds.map((id) => Promise.resolve(updateFavorite(id, updates))));
-      showFavoriteToast(`${safeSongIds.length}곡을 휴지통으로 이동했습니다.`);
+      showFavoriteToast(`${safeSongIds.length}곡이 삭제되었습니다.`);
       return true;
     } catch (error) {
       console.error('move songs to favorite trash failed:', error);
@@ -3026,7 +3026,7 @@ updates: draft.updates,
 
     try {
       await Promise.all(safeSongIds.map((id) => Promise.resolve(updateFavorite(id, updates))));
-      showFavoriteToast(`${safeSongIds.length}곡을 복구했습니다.`);
+      showFavoriteToast(`${safeSongIds.length}곡이 복구되었습니다.`);
       return true;
     } catch (error) {
       console.error('restore songs from favorite trash failed:', error);
@@ -3084,8 +3084,18 @@ updates: draft.updates,
       return false;
     }
 
-    // The Delete action always means moving the owned Music Note to Trash.
-    // Folder removal is a separate folder-management action and must not intercept Delete.
+    // The folder item is only a shortcut to the canonical Note Space song.
+    // Deleting that shortcut must NEVER move the canonical original to Trash.
+    // Clearing the existing membership metadata works for the default folder too:
+    // getMusicNoteFolderIdFromSong then returns '__unassigned__'.
+    if (musicNoteViewMode === 'myNote' || musicNoteViewMode === 'sharedNote') {
+      return removeSongsFromCurrentMusicNoteFolder(
+        deletableSongs.map(getFavoriteDocumentId),
+        musicNoteViewMode,
+      );
+    }
+    // Only deleting a canonical Note Space item moves its original to Trash.
+    if (musicNoteViewMode !== 'noteSpace' || isMusicNoteSharedView) return false;
     return moveSongsToFavoriteTrash(deletableSongs.map(getFavoriteDocumentId));
   };
 
@@ -8956,12 +8966,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             animate={{ opacity: 1 }}
             exit={{ opacity: 1 }}
             transition={{ duration: 0 }}
-            className={cn(
-              "fixed inset-0 z-[220] flex items-end justify-center bg-black/55 px-4 backdrop-blur-sm md:items-center",
-              isSelectionMode && selectedSongIds.length > 0
-                ? "pb-[128px] md:pb-[142px]"
-                : "pb-6 md:pb-0"
-            )}
+            className="fixed inset-0 z-[220] flex items-center justify-center overflow-y-auto bg-black/55 px-4 py-4 backdrop-blur-sm"
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.stopPropagation();
@@ -9066,8 +9071,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           document.body
         )}
 
-      <AnimatePresence>
-        {favoriteToastMessage && (
+      {favoriteToastMessage && typeof document !== 'undefined' && createPortal(
           <motion.div
             initial={{ opacity: 0, y: 14, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -9082,9 +9086,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               <Check className="h-4 w-4 text-[#FF7A72]" />
               {favoriteToastMessage}
             </span>
-          </motion.div>
+          </motion.div>,
+          document.body
         )}
-      </AnimatePresence>
 
 
       <AnimatePresence>

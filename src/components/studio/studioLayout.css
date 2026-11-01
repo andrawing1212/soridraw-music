@@ -17260,6 +17260,18 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
   -webkit-text-fill-color: #fff !important;
 }
 
+/* Library top selected tabs also keep their purple fill during a TOUCH.
+ * The previous Classic :hover color #B79FFF must not latch on a phone.
+ * Genuine pen/mouse hover is still visible via white text (above). */
+:root body #root .soridraw-app-root .soridraw-library-theme
+.soridraw-library-mode-tabs > .soridraw-library-mode-tab:is([aria-pressed="true"],[data-active="true"]),
+:root body #root .soridraw-app-root .soridraw-library-theme
+.soridraw-library-mode-tabs > .soridraw-library-mode-tab:is([aria-pressed="true"],[data-active="true"]):is(:hover,:active,:focus) {
+  background: #A98BFF !important;
+  background-color: #A98BFF !important;
+  opacity: 1 !important;
+}
+
 /* Keep selected folder colors and BLACK text constant during hover, including
  * the phone's synthesized :hover (previous Library folder green flash). */
 :root body #root .soridraw-app-root .soridraw-musicnote-theme

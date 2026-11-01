@@ -1297,6 +1297,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
+      if (isModalOpen) return; // The top modal exclusively handles Escape.
       event.preventDefault();
       closeFloatingMenus();
       if (multiSelectMode) {
@@ -1321,7 +1322,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [multiSelectMode]);
+  }, [multiSelectMode, isModalOpen]);
 
   const computeFloatingMenuPosition = (anchorEl: HTMLElement, estimatedHeight = 280) => {
     const rect = anchorEl.getBoundingClientRect();
@@ -4519,13 +4520,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
 
     const handlePopState = () => {
+      if (isModalOpen) return; // Back dismisses the top popup, not selection.
       clearMultiSelect();
       multiSelectHistoryPushedRef.current = false;
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [multiSelectMode]);
+  }, [multiSelectMode, isModalOpen]);
 
 
   const normalizeCreatorName = (value: any, ownerUid?: string | null) => {
@@ -5949,15 +5951,29 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   };
   const isModalOpen = !!sharePopupInfo || !!showDetails || !!deleteTarget || !!renameModalArgs || !!moveModalArgs || !!playlistSavePicker || !!bulkShareModalOpen || !!bulkMoveModalOpen;
 
-  const closeModal = () => {
+  const clearModalState = () => {
     modalHistoryPushedRef.current = false;
     setSharePopupInfo(null);
     setShowDetails(null);
     setDeleteTarget(null);
     setRenameModalArgs(null);
     setMoveModalArgs(null);
+    setPlaylistSavePicker(null);
+    setPlaylistSaveCreateTitle(null);
+    setPlaylistSaveTargetId(null);
     setBulkShareModalOpen(false);
     setBulkMoveModalOpen(false);
+    setBulkMoveTargetId(null);
+    setSingleMoveTargetId(null);
+  };
+  const closeModal = () => {
+    // UI X/close also pops the child history marker instead of leaving a
+    // stale marker that could later close the bottom selection bar.
+    if (modalHistoryPushedRef.current && window.history.state?.soridrawModal) {
+      window.history.back();
+      return;
+    }
+    clearModalState();
   };
 
   useEffect(() => {
@@ -5972,24 +5988,25 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
 
     const handlePopState = () => {
-      closeModal();
+      clearModalState();
     };
 
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
+        e.stopImmediatePropagation();
         closeModal();
       }
     };
 
     window.addEventListener('popstate', handlePopState);
-    window.addEventListener('keydown', handleEsc);
+    window.addEventListener('keydown', handleEsc, true);
 
     return () => {
       document.body.style.overflow = '';
       document.body.style.overscrollBehavior = '';
       window.removeEventListener('popstate', handlePopState);
-      window.removeEventListener('keydown', handleEsc);
+      window.removeEventListener('keydown', handleEsc, true);
     };
   }, [isModalOpen]);
 

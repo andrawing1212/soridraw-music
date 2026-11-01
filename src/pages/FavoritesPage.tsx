@@ -1089,6 +1089,17 @@ const normalizeMusicNoteFolders = (value: any, fallback: MusicNoteFolder[]): Mus
     .map((folder, index) => ({ ...folder, order: index + 1, isDefault: folder.id === 'default' || folder.isDefault }));
 };
 
+const getMyNoteFolderIdsFromSong = (song: any): string[] => {
+  if (!song) return [];
+  // An explicit empty array means unassigned. Legacy songs without this array
+  // retain their single folder without any read-time server migration.
+  if (Array.isArray(song.noteFolderIds)) {
+    return [...new Set(song.noteFolderIds.map((id: unknown) => String(id || '').trim()).filter(Boolean))];
+  }
+  const legacy = String(song.noteFolderId || song.myNoteFolderId || song.favoriteFolderId || song.folderId || '').trim();
+  return legacy ? [legacy] : [];
+};
+
 const getMusicNoteFolderIdFromSong = (song: any, mode: MusicNoteFolderMode): string => {
   if (!song) return '__unassigned__';
   const raw = mode === 'sharedNote'
@@ -1240,6 +1251,9 @@ export default function FavoritesPage({
   const [musicNoteFolderPicker, setMusicNoteFolderPicker] = useState<{ mode: MusicNoteFolderMode; songIds: string[] } | null>(null);
   const [musicNoteFolderCreateTitle, setMusicNoteFolderCreateTitle] = useState<string | null>(null);
   const [musicNoteFolderTargetId, setMusicNoteFolderTargetId] = useState<string | null>(null);
+  const [musicNoteFolderTargetIds, setMusicNoteFolderTargetIds] = useState<string[]>([]);
+  const [musicNoteFolderInitialIds, setMusicNoteFolderInitialIds] = useState<string[]>([]);
+  const selectionChildHistoryPushedRef = useRef(false);
   const [musicNoteFolderRenameArgs, setMusicNoteFolderRenameArgs] = useState<{ mode: MusicNoteFolderMode; folder: MusicNoteFolder; newTitle: string } | null>(null);
   const [musicNoteFolderDeleteReady, setMusicNoteFolderDeleteReady] = useState(false);
   const [musicNoteFolderDragging, setMusicNoteFolderDragging] = useState<{ mode: MusicNoteFolderMode; folderId: string } | null>(null);
@@ -2804,8 +2818,21 @@ updates: draft.updates,
     const safeSongIds = Array.from(new Set(songIds.filter(Boolean)));
     if (safeSongIds.length === 0) return;
     const mode: MusicNoteFolderMode = preferredMode || (musicNoteViewMode === 'sharedNote' ? 'sharedNote' : 'myNote');
+    // All folders common to the selected canonical songs start checked. For
+    // a single song this is its exact existing shortcut set; no folder is
+    // prechecked for an unassigned original.
+    const savedSets = safeSongIds.map((id) => {
+      const song = favoritesStore.getFavorites().find((item: any) => getFavoriteDocumentId(item) === id)
+        || activeFavoriteSource.find((item: any) => getFavoriteDocumentId(item) === id);
+      return mode === 'myNote' ? getMyNoteFolderIdsFromSong(song) : [];
+    });
+    const existing = mode === 'myNote' && savedSets.length > 0
+      ? savedSets[0].filter(id => savedSets.every(ids => ids.includes(id)))
+      : [];
     setMusicNoteFolderPicker({ mode, songIds: safeSongIds });
     setMusicNoteFolderTargetId(null);
+    setMusicNoteFolderTargetIds(existing);
+    setMusicNoteFolderInitialIds(existing);
     setMusicNoteFolderCreateTitle(null);
     setActiveFavoriteMenuId(null);
   };
@@ -2865,6 +2892,62 @@ updates: draft.updates,
     }
   };
 
+  // Write only songs whose membership changed, one canonical favorite update
+  // per song, chunked through the existing mutation/sync boundary.
+  const commitMusicNoteIndividualFolderPatches = async (
+    patches: { id: string; updates: Record<string, any> }[],
+    operation: 'folder-update' | 'folder-delete' = 'folder-update',
+  ) => {
+    const sourceFavorites = favoritesStore.getFavorites();
+    for (let index = 0; index < patches.length; index += MUSIC_NOTE_FOLDER_WRITE_BATCH_LIMIT) {
+      const chunk = patches.slice(index, index + MUSIC_NOTE_FOLDER_WRITE_BATCH_LIMIT);
+      const batch = writeBatch(db);
+      for (const { id, updates } of chunk) batch.update(doc(db, 'favorites', id), updates);
+      const syncItems = chunk.slice(0, 10).map(({ id, updates }) => {
+        const source = sourceFavorites.find((song: any) => getFavoriteDocumentId(song) === id);
+        return source ? { ...source, ...updates, id, firestoreId: id, updatedAtMs: Date.now() } : null;
+      }).filter(Boolean);
+      await runV1MutationBoundary({
+        domain: 'musicNote', operation, uid: user?.uid || '',
+        documentIds: chunk.map(({ id }) => id), affectedCount: chunk.length, syncItems,
+      }, batch.commit());
+    }
+  };
+
+  const patchMusicNoteIndividualFolderChangesLocally = (
+    patches: { id: string; updates: Record<string, any> }[],
+  ) => {
+    const byId = new Map(patches.map(({ id, updates }) => [id, updates]));
+    const patchList = (songs: any[]) => (songs || []).map(song => {
+      const patch = byId.get(getFavoriteDocumentId(song));
+      return patch ? { ...song, ...patch } : song;
+    });
+    favoritesStore.setFavorites(patchList(favoritesStore.getFavorites()));
+    setServerSearchFavorites(prev => patchList(prev));
+    setSelectedSong(prev => prev ? patchList([prev])[0] : prev);
+    if (!user?.uid) return;
+    try {
+      const key = `soridraw_favorites_cache_${user.uid}`;
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (Array.isArray(cached)) localStorage.setItem(key, JSON.stringify(patchList(cached)));
+      }
+    } catch (error) {
+      console.warn('music note multi-folder local cache patch failed:', error);
+    }
+  };
+
+  const buildMyNoteFolderMembershipPatch = (ids: string[], folders: MusicNoteFolder[]) => {
+    const primary = ids[0] || null;
+    return {
+      noteFolderIds: ids,
+      noteFolderId: primary,
+      noteFolderTitle: primary ? (folders.find(folder => folder.id === primary)?.title || null) : null,
+      noteFolderUpdatedAt: Date.now(),
+    };
+  };
+
   const saveSongsToMusicNoteFolder = async (
     folderId: string,
     folderOverride?: MusicNoteFolder,
@@ -2873,45 +2956,54 @@ updates: draft.updates,
     if (!user?.uid) return;
     const picker = pickerOverride || musicNoteFolderPicker;
     if (!picker) return;
-    const mode = picker.mode;
-    const folders = mode === 'sharedNote' ? sharedNoteFolders : myNoteFolders;
-    const folder = folderOverride || folders.find((item) => item.id === folderId) || folders[0];
-    if (!folder) return;
-
-    const targetSongIds: string[] = Array.from(new Set<string>(picker.songIds.filter((id): id is string => Boolean(id))));
+    const folders = picker.mode === 'sharedNote' ? sharedNoteFolders : myNoteFolders;
+    const targetSongIds = [...new Set(picker.songIds.filter(Boolean))];
     if (targetSongIds.length === 0) return;
 
-    const updates = mode === 'sharedNote'
-      ? { sharedNoteFolderId: folder.id, sharedNoteFolderTitle: folder.title, sharedNoteFolderUpdatedAt: Date.now() }
-      : { noteFolderId: folder.id, noteFolderTitle: folder.title, noteFolderUpdatedAt: Date.now() };
-
-    // 폴더를 누르는 순간 폴더 선택창만 닫고, 선택모드는 유지한다.
-    // 모바일에서 선택 액션바가 동시에 사라지면 폴더 목록이 튕겨 보일 수 있다.
-    setMusicNoteFolderPicker(null);
-    setMusicNoteFolderCreateTitle(null);
-    setFavoriteSelectionMoreOpen(false);
-
-    if (mode === 'sharedNote') {
-      setMusicNoteViewMode('sharedNote');
-      setSelectedSharedNoteFolderId(folder.id);
-    } else {
-      setMusicNoteViewMode('myNote');
-      setSelectedMyNoteFolderId(folder.id);
-    }
-
     try {
-      await commitMusicNoteFolderUpdates(targetSongIds, updates);
-      patchMusicNoteFolderMoveLocally(targetSongIds, updates);
-      showFavoriteToast(`${folder.title} 폴더에 저장했습니다.`);
-      if (isSelectionMode) {
-        exitSelectionMode();
+      if (picker.mode === 'myNote') {
+        // Existing checked folders are preserved. Only changed folder links
+        // affect each selected original; other originals/folders are untouched.
+        const added = musicNoteFolderTargetIds.filter(id => !musicNoteFolderInitialIds.includes(id));
+        const removed = musicNoteFolderInitialIds.filter(id => !musicNoteFolderTargetIds.includes(id));
+        const source = favoritesStore.getFavorites();
+        const patches = targetSongIds.flatMap(id => {
+          const song = source.find((item: any) => getFavoriteDocumentId(item) === id)
+            || activeFavoriteSource.find((item: any) => getFavoriteDocumentId(item) === id);
+          if (!song) return [];
+          const before = getMyNoteFolderIdsFromSong(song);
+          const after = [...before.filter(existingId => !removed.includes(existingId))];
+          for (const addedId of added) if (!after.includes(addedId)) after.push(addedId);
+          if (before.length === after.length && before.every((existingId, i) => after[i] === existingId)) return [];
+          return [{ id, updates: buildMyNoteFolderMembershipPatch(after, folders) }];
+        });
+        if (patches.length === 0) {
+          showFavoriteToast('변경된 폴더가 없습니다.');
+          return;
+        }
+        await commitMusicNoteIndividualFolderPatches(patches);
+        patchMusicNoteIndividualFolderChangesLocally(patches);
+        showFavoriteToast(`${patches.length}곡의 폴더 저장을 변경했습니다.`);
+        // Keep Note Space and the bottom selection bar: another destination
+        // can be added without losing the original song selection.
+      } else {
+        // Shared Note retains its existing single-folder contract.
+        const folder = folderOverride || folders.find(item => item.id === folderId);
+        if (!folder) return;
+        const updates = {
+          sharedNoteFolderId: folder.id, sharedNoteFolderTitle: folder.title,
+          sharedNoteFolderUpdatedAt: Date.now(),
+        };
+        await commitMusicNoteFolderUpdates(targetSongIds, updates);
+        patchMusicNoteFolderMoveLocally(targetSongIds, updates);
+        showFavoriteToast(`${folder.title} 폴더에 저장했습니다.`);
       }
+      requestCloseMusicNoteChildPopup();
     } catch (error) {
       console.error('save music note folder failed:', error);
       showFavoriteToast('폴더 저장에 실패했습니다.');
     }
   };
-
 
   const commitCreateAndSaveMusicNoteFolder = async () => {
     if (!user?.uid || !musicNoteFolderPicker) return;
@@ -2957,7 +3049,11 @@ updates: draft.updates,
     try {
       await persistMusicNoteFolders(mode, nextFolders);
       // Folder creation selects a pending destination; actual songs move on confirm.
-      setMusicNoteFolderTargetId(nextFolder.id);
+      if (mode === 'myNote') {
+        setMusicNoteFolderTargetIds(prev => prev.includes(nextFolder.id) ? prev : [...prev, nextFolder.id]);
+      } else {
+        setMusicNoteFolderTargetId(nextFolder.id);
+      }
       setMusicNoteFolderCreateTitle(null);
     } catch (error) {
       console.error('create and save music note folder failed:', error);
@@ -2973,13 +3069,27 @@ updates: draft.updates,
     const safeSongIds = Array.from(new Set(songIds.filter(Boolean)));
     if (!mode || safeSongIds.length === 0) return false;
 
-    const updates = mode === 'sharedNote'
-      ? { sharedNoteFolderId: null, sharedNoteFolderTitle: null, sharedNoteFolderUpdatedAt: Date.now() }
-      : { noteFolderId: null, noteFolderTitle: null, noteFolderUpdatedAt: Date.now() };
-
     try {
-      await commitMusicNoteFolderUpdates(safeSongIds, updates);
-      patchMusicNoteFolderMoveLocally(safeSongIds, updates);
+      if (mode === 'myNote') {
+        const folderId = selectedMyNoteFolderId;
+        const source = favoritesStore.getFavorites();
+        const patches = safeSongIds.flatMap(id => {
+          const song = source.find((item: any) => getFavoriteDocumentId(item) === id)
+            || activeFavoriteSource.find((item: any) => getFavoriteDocumentId(item) === id);
+          if (!song) return [];
+          const existing = getMyNoteFolderIdsFromSong(song);
+          if (!existing.includes(folderId)) return [];
+          const remaining = existing.filter(id => id !== folderId);
+          return [{ id, updates: buildMyNoteFolderMembershipPatch(remaining, myNoteFolders) }];
+        });
+        if (patches.length === 0) return true;
+        await commitMusicNoteIndividualFolderPatches(patches);
+        patchMusicNoteIndividualFolderChangesLocally(patches);
+      } else {
+        const updates = { sharedNoteFolderId: null, sharedNoteFolderTitle: null, sharedNoteFolderUpdatedAt: Date.now() };
+        await commitMusicNoteFolderUpdates(safeSongIds, updates);
+        patchMusicNoteFolderMoveLocally(safeSongIds, updates);
+      }
       showFavoriteToast(`${safeSongIds.length}곡이 폴더에서 삭제되었습니다.`);
       return true;
     } catch (error) {
@@ -3957,6 +4067,33 @@ updates: draft.updates,
   }, [selectedSong]);
 
   const navigate = useNavigate();
+
+  const requestCloseMusicNoteChildPopup = () => {
+    // Closing a nested overlay consumes its own browser-history entry, not the
+    // underlying selection-mode history entry.
+    if (selectionChildHistoryPushedRef.current && window.history.state?.favoritesOverlay === 'selection-child') {
+      window.history.back();
+      return;
+    }
+    selectionChildHistoryPushedRef.current = false;
+    setMusicNoteFolderPicker(null);
+    setMusicNoteShareInfo(null);
+    setMusicNoteFolderCreateTitle(null);
+    setMusicNoteFolderTargetId(null);
+    setMusicNoteFolderTargetIds([]);
+    setMusicNoteFolderInitialIds([]);
+  };
+
+  useEffect(() => {
+    if (musicNoteFolderPicker || musicNoteShareInfo) {
+      if (!selectionChildHistoryPushedRef.current) {
+        window.history.pushState({ favoritesOverlay: 'selection-child' }, '');
+        selectionChildHistoryPushedRef.current = true;
+      }
+    } else {
+      selectionChildHistoryPushedRef.current = false;
+    }
+  }, [musicNoteFolderPicker, musicNoteShareInfo]);
 
   useEffect(() => {
     if (selectedSong) {
@@ -5076,7 +5213,18 @@ updates: draft.updates,
 
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
-      // Clear any pending actions on back navigation
+      // A nested share/folder popup owns the first Back press.
+      if (musicNoteFolderPicker || musicNoteShareInfo) {
+        setMusicNoteFolderPicker(null);
+        setMusicNoteShareInfo(null);
+        setMusicNoteFolderCreateTitle(null);
+        setMusicNoteFolderTargetId(null);
+        setMusicNoteFolderTargetIds([]);
+        setMusicNoteFolderInitialIds([]);
+        selectionChildHistoryPushedRef.current = false;
+        return;
+      }
+      // Clear pending actions only when dismissing the outer overlay.
       setPendingSelectionAction(null);
 
       if ((window as any).__soridrawSunoMobileGuideOpen) {
@@ -5115,9 +5263,10 @@ updates: draft.updates,
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (musicNoteShareInfo) {
-          // Dismissing a share dialog is not an instruction to clear selected songs.
-          setMusicNoteShareInfo(null);
+        if (musicNoteFolderPicker || musicNoteShareInfo) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          requestCloseMusicNoteChildPopup();
         } else if (selectedSong) {
           closeSelectedSong();
         } else if (isSelectionMode) {
@@ -5133,7 +5282,7 @@ updates: draft.updates,
       window.removeEventListener('keydown', handleKeyDown);
       if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
     };
-  }, [selectedSong, isSelectionMode, musicNoteShareInfo, confirmDeleteSong, confirmToggleLock, confirmDeleteAll, confirmUnlockAll, confirmLockAll]);
+  }, [selectedSong, isSelectionMode, musicNoteShareInfo, musicNoteFolderPicker, confirmDeleteSong, confirmToggleLock, confirmDeleteAll, confirmUnlockAll, confirmLockAll]);
 
   const handleSelectedLock = async () => {
     if (pendingSelectionAction === 'lock' || pendingSelectionAction === 'unlock') {
@@ -6816,7 +6965,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     const matchesFolder = musicNoteViewMode === 'noteSpace'
       ? !isSharedNoteOnly
       : musicNoteViewMode === 'myNote'
-        ? !isSharedNoteOnly && getMusicNoteFolderIdFromSong(song, 'myNote') === selectedMyNoteFolderId
+        ? !isSharedNoteOnly && getMyNoteFolderIdsFromSong(song).includes(selectedMyNoteFolderId)
         : isSharedNoteOnly && getMusicNoteFolderIdFromSong(song, 'sharedNote') === selectedSharedNoteFolderId;
     return matchesColor && matchesTrashState && matchesFolder;
   };
@@ -7032,11 +7181,24 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
     try {
       await persistMusicNoteFolders(mode, nextFolders, { immediate: true });
-      const affectedSongs = favorites.filter((song) => getMusicNoteFolderIdFromSong(song, mode) === folder.id);
-      const fallbackUpdates = mode === 'sharedNote'
-        ? { sharedNoteFolderId: 'default', sharedNoteFolderTitle: '기본', sharedNoteFolderUpdatedAt: Date.now() }
-        : { noteFolderId: 'default', noteFolderTitle: '기본', noteFolderUpdatedAt: Date.now() };
-      await commitMusicNoteFolderUpdates(affectedSongs.map((song) => song.id), fallbackUpdates, 'folder-delete');
+      if (mode === 'myNote') {
+        const patches = favorites.flatMap((song) => {
+          const existing = getMyNoteFolderIdsFromSong(song);
+          if (!existing.includes(folder.id)) return [];
+          const remaining = existing.filter(id => id !== folder.id);
+          // Preserve the protected app301 default-folder fallback only when
+          // deleting the last shortcut of that original.
+          const nextIds = remaining.length > 0 ? remaining : ['default'];
+          const id = getFavoriteDocumentId(song);
+          return id ? [{ id, updates: buildMyNoteFolderMembershipPatch(nextIds, nextFolders) }] : [];
+        });
+        await commitMusicNoteIndividualFolderPatches(patches, 'folder-delete');
+        patchMusicNoteIndividualFolderChangesLocally(patches);
+      } else {
+        const affected = favorites.filter(song => getMusicNoteFolderIdFromSong(song, mode) === folder.id);
+        const updates = { sharedNoteFolderId: 'default', sharedNoteFolderTitle: '기본', sharedNoteFolderUpdatedAt: Date.now() };
+        await commitMusicNoteFolderUpdates(affected.map(getFavoriteDocumentId).filter(Boolean), updates, 'folder-delete');
+      }
       setMusicNoteFolderRenameArgs(null);
       setMusicNoteFolderDeleteReady(false);
       showFavoriteToast('폴더를 삭제했습니다. 곡은 기본 폴더로 이동했습니다.');
@@ -8704,7 +8866,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.stopPropagation();
-              if (event.target === event.currentTarget) setMusicNoteShareInfo(null);
+              if (event.target === event.currentTarget) requestCloseMusicNoteChildPopup();
             }}
           >
             <motion.div
@@ -8718,7 +8880,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             >
               <button
                 type="button"
-                onClick={() => setMusicNoteShareInfo(null)}
+                onClick={requestCloseMusicNoteChildPopup}
                 className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/55 transition-all hover:text-white"
               >
                 <X className="h-4 w-4" />
@@ -8750,7 +8912,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setMusicNoteShareInfo(null)}
+                  onClick={requestCloseMusicNoteChildPopup}
                   data-music-note-share-action="close"
                   className="w-full rounded-xl bg-white/[0.07] py-3 text-xs font-bold text-white/75 transition-colors hover:bg-white/[0.13] hover:text-white"
                 >
@@ -8973,9 +9135,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             onClick={(event) => {
               event.stopPropagation();
               if (event.target === event.currentTarget) {
-                setMusicNoteFolderPicker(null);
-                setMusicNoteFolderCreateTitle(null);
-                setMusicNoteFolderTargetId(null);
+                requestCloseMusicNoteChildPopup();
               }
             }}
           >
@@ -8999,13 +9159,16 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <button type="button" aria-label="선택한 폴더로 저장 확인" title="선택한 폴더로 저장"
-                    disabled={!musicNoteFolderTargetId}
-                    onClick={() => { if (musicNoteFolderTargetId) void saveSongsToMusicNoteFolder(musicNoteFolderTargetId); }}
+                    disabled={musicNoteFolderPicker.mode === 'myNote'
+                      ? musicNoteFolderTargetIds.length === musicNoteFolderInitialIds.length
+                        && musicNoteFolderTargetIds.every(id => musicNoteFolderInitialIds.includes(id))
+                      : !musicNoteFolderTargetId}
+                    onClick={() => { void saveSongsToMusicNoteFolder(musicNoteFolderTargetId || ''); }}
                     className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#FF8C85] text-[#1a1a1a] transition-colors hover:bg-[#FFAAA4] disabled:cursor-not-allowed disabled:bg-[#303033] disabled:text-white/25">
                     <Check className="h-5 w-5" strokeWidth={3} />
                   </button>
                   <button type="button" aria-label="폴더 선택 취소"
-                    onClick={() => { setMusicNoteFolderPicker(null); setMusicNoteFolderCreateTitle(null); setMusicNoteFolderTargetId(null); }}
+                    onClick={requestCloseMusicNoteChildPopup}
                     className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#2c2c2e] text-white/55 transition-colors hover:bg-[#38383b] hover:text-white">
                     <X className="h-4 w-4" />
                   </button>
@@ -9014,22 +9177,31 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
               <div className="mt-5 grid gap-2">
                 {(musicNoteFolderPicker.mode === 'sharedNote' ? sharedNoteFolders : myNoteFolders).map((folder) => {
-                  const selectedId = musicNoteFolderTargetId;
+                  const isChecked = musicNoteFolderPicker.mode === 'myNote'
+                    ? musicNoteFolderTargetIds.includes(folder.id) : musicNoteFolderTargetId === folder.id;
                   return (
                     <button
                       key={folder.id}
                       type="button"
-                      aria-pressed={selectedId === folder.id}
-                      onClick={() => setMusicNoteFolderTargetId(folder.id)}
+                      aria-pressed={isChecked}
+                      onClick={() => {
+                        if (musicNoteFolderPicker.mode !== 'myNote') {
+                          setMusicNoteFolderTargetId(folder.id);
+                        } else {
+                          setMusicNoteFolderTargetIds(prev => prev.includes(folder.id)
+                            ? prev.filter(id => id !== folder.id)
+                            : [...prev, folder.id]);
+                        }
+                      }}
                       className={cn(
                         'flex h-12 items-center justify-between rounded-2xl px-4 text-sm font-bold transition-colors',
-                        selectedId === folder.id
+                        isChecked
                           ? 'bg-[#38383b] text-white'
                           : 'bg-[#262628] text-white/75 hover:bg-[#303033] hover:text-white'
                       )}
                     >
                       <span className="inline-flex items-center gap-2"><FolderOutput className="h-4 w-4 text-[#FFC1BC]" />{folder.title}</span>
-                      {selectedId === folder.id && <Check className="h-4 w-4 text-[#FFC1BC]" />}
+                      {isChecked && <Check className="h-4 w-4 text-[#FFC1BC]" />}
                     </button>
                   );
                 })}

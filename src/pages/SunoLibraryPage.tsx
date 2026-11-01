@@ -8450,7 +8450,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       {(() => {
         const selectionActionBar = (
       <AnimatePresence>
-        {multiSelectMode && selectedTrackCount > 0 && !bulkMoveModalOpen && !bulkShareModalOpen && (
+        {multiSelectMode && selectedTrackCount > 0 && !isModalOpen && (
           <motion.div
             data-selection-keep="true"
             data-floating-menu="true"

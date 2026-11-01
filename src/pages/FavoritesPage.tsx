@@ -8701,7 +8701,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           : null;
         const selectionActionBar = (
       <AnimatePresence>
-        {isSelectionMode && selectedSongIds.length > 0 && !musicNoteFolderPicker && (
+        {isSelectionMode && selectedSongIds.length > 0 && !musicNoteFolderPicker && !musicNoteShareInfo && (
           <motion.div
             data-selection-keep="true"
             data-floating-menu="true"

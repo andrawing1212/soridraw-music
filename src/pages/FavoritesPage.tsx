@@ -7851,11 +7851,11 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               {showSortPopup && (
                 <motion.div
                   data-floating-menu="true"
-                  initial={{ opacity: 1, y: 0 }}
+                  initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0 }}
-                  className="absolute right-0 top-[52px] z-[120] w-[210px] overflow-hidden rounded-2xl bg-[#1d1d1f] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.48)]"
+                  exit={{ opacity: 0, y: 4 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
+                  className="soridraw-menu-filter-popup absolute right-0 top-[52px] z-[120] w-[210px] overflow-hidden rounded-2xl bg-[#1d1d1f] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.48)]"
                   onClick={(event) => event.stopPropagation()}
                 >
                   {(['latest', 'oldest', 'genre', 'title', 'locked'] as const).map((mode) => {
@@ -8322,6 +8322,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         <button
                           data-floating-menu="true"
                           data-more-menu-button="true"
+                          aria-expanded={activeFavoriteMenuId === song.id}
                           onMouseDown={(event) => event.stopPropagation()}
                           onClick={(event) => {
                             event.stopPropagation();

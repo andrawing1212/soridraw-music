@@ -6327,10 +6327,15 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <span className="soridraw-filter-label">필터{filter !== 'all' ? ' (1)' : ''}</span>
                   <ChevronDown className={`soridraw-filter-chevron h-3.5 w-3.5 transition-transform ${showLibraryFilterPopup ? 'rotate-180' : ''}`} />
                 </button>
+                <AnimatePresence>
                 {showLibraryFilterPopup && (
-                  <div
+                  <motion.div
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 4 }}
+                    transition={{ duration: 0.15, ease: "easeOut" }}
                     data-floating-menu="true"
-                    className="absolute right-0 top-[52px] z-[120] w-[210px] overflow-hidden rounded-2xl bg-[#1d1d1f] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.48)]"
+                    className="soridraw-menu-filter-popup absolute right-0 top-[52px] z-[120] w-[210px] overflow-hidden rounded-2xl bg-[#1d1d1f] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.48)]"
                     onClick={(event) => event.stopPropagation()}
                   >
                     {(['all', 'completed', 'favorite', 'public', 'private', 'trash'] as const).map((f) => (
@@ -6344,8 +6349,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         {filter === f && <Check className="h-3.5 w-3.5" />}
                       </button>
                     ))}
-                  </div>
+                  </motion.div>
                 )}
+                </AnimatePresence>
               </div>
             </>
           ) : (
@@ -6396,10 +6402,15 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <span className="soridraw-filter-label">필터{(playlistSortMode !== 'added' ? 1 : 0) + (playlistVisibilityFilter !== 'all' ? 1 : 0) > 0 ? ` (${(playlistSortMode !== 'added' ? 1 : 0) + (playlistVisibilityFilter !== 'all' ? 1 : 0)})` : ''}</span>
                   <ChevronDown className={`soridraw-filter-chevron h-3.5 w-3.5 transition-transform ${showLibraryFilterPopup ? 'rotate-180' : ''}`} />
                 </button>
+                <AnimatePresence>
                 {showLibraryFilterPopup && (
-                  <div
+                  <motion.div
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 4 }}
+                    transition={{ duration: 0.15, ease: "easeOut" }}
                     data-floating-menu="true"
-                    className="absolute right-0 top-[52px] z-[120] w-[220px] overflow-hidden rounded-2xl bg-[#1d1d1f] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.48)]"
+                    className="soridraw-menu-filter-popup absolute right-0 top-[52px] z-[120] w-[220px] overflow-hidden rounded-2xl bg-[#1d1d1f] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.48)]"
                     onClick={(event) => event.stopPropagation()}
                   >
                     <p className="px-3 pb-1 pt-1 text-[10px] font-black uppercase tracking-[0.12em] text-white/30">정렬</p>
@@ -6435,8 +6446,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         {playlistVisibilityFilter === opt.value && <Check className="h-3.5 w-3.5" />}
                       </button>
                     ))}
-                  </div>
+                  </motion.div>
                 )}
+                </AnimatePresence>
               </div>
             </>
           )}
@@ -7544,6 +7556,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             <button
                               type="button"
                               data-floating-menu="true"
+                              data-library-workspace-more-button="true"
+                              aria-expanded={activeMenuState?.id === `${group.id}-${idx}`}
                               onMouseDown={(e) => e.stopPropagation()}
                               onClick={(e) => { 
                                 e.stopPropagation();
@@ -8108,6 +8122,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           <button 
                             data-floating-menu="true"
                             data-playlist-more-menu-button="true"
+                            aria-expanded={activePlaylistItemMenu === item.id}
                             onMouseDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -8123,8 +8138,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           >
                             <MoreVertical className="w-4 h-4" />
                           </button>
+                          <AnimatePresence>
                           {activePlaylistItemMenu === item.id && (
-                            <div
+                            <motion.div
+                              initial={{ opacity: 0, y: 4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: 4 }}
+                              transition={{ duration: 0.15, ease: "easeOut" }}
                               data-floating-menu="true"
                               data-more-menu-panel="true" data-soridraw-library-more-menu="true"
                               className={`soridraw-library-more-menu-panel absolute w-40 max-h-[calc(100vh-24px)] bg-[#2a2a2a] rounded-xl shadow-xl overflow-y-auto z-20 border border-black/15 text-sm py-1 ${playlistItemContextMenuPosition?.id === item.id ? '' : 'right-0 top-8'}`}
@@ -8223,8 +8243,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                               >
                                 <span className="flex items-center gap-2"><Trash2 className="w-4 h-4 opacity-70" />리스트 삭제</span>
                               </button>
-                            </div>
+                            </motion.div>
                           )}
+                          </AnimatePresence>
                         </div>
                       </div>
                     </div>
@@ -8502,9 +8523,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         {bulkMenuState && multiSelectMode && (
           <>
             <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 4 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
               data-selection-keep="true" data-floating-menu="true" data-more-menu-panel="true" data-soridraw-library-more-menu="true" className="soridraw-library-more-menu-panel fixed z-[9999] w-56 bg-[var(--bg-secondary)] border border-[#A98BFF]/22 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
               style={{ top: bulkMenuState.top, right: bulkMenuState.right }}
               onClick={(e) => e.stopPropagation()}
@@ -8838,9 +8860,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         {activeMenuState && (
           <>
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: -10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: -10 }}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 4 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
               data-floating-menu="true" data-more-menu-panel="true" data-soridraw-library-more-menu="true" className="soridraw-library-more-menu-panel absolute z-[9999] w-48 bg-[var(--bg-secondary)] border border-black/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
               style={{
                 top: activeMenuState.position.top,

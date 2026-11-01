@@ -17340,6 +17340,43 @@ html[data-soridraw-color-mode="light"] body #root .soridraw-app-root
   box-shadow: 0 0 0 1px rgba(255,255,255,.65);
 }
 
+
+/* Context menu polish: preserve Classic Dark Music Note #2a2a2a; Studio Black
+ * more menus match the #1d1d1f filter dropdown. Library uses the same surface
+ * per theme. Only the open popup carries the deeper shadow. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme [data-more-menu-panel="true"],
+    .soridraw-library-theme [data-soridraw-library-more-menu="true"]) {
+  background: #2a2a2a !important;
+  background-color: #2a2a2a !important;
+  background-image: none !important;
+}
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme [data-more-menu-panel="true"],
+    .soridraw-library-theme [data-soridraw-library-more-menu="true"]) {
+  background: #1d1d1f !important;
+  background-color: #1d1d1f !important;
+  background-image: none !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme [data-more-menu-panel="true"],
+    .soridraw-library-theme [data-soridraw-library-more-menu="true"],
+    .soridraw-musicnote-theme .soridraw-menu-filter-popup,
+    .soridraw-library-theme .soridraw-menu-filter-popup),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme [data-more-menu-panel="true"],
+    .soridraw-library-theme [data-soridraw-library-more-menu="true"],
+    .soridraw-musicnote-theme .soridraw-menu-filter-popup,
+    .soridraw-library-theme .soridraw-menu-filter-popup) {
+  box-shadow: 0 18px 44px rgba(0,0,0,0.45), 0 4px 14px rgba(0,0,0,0.28) !important;
+}
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme [data-more-menu-button="true"],
+    .soridraw-library-theme [data-playlist-more-menu-button="true"],
+    .soridraw-library-theme [data-library-workspace-more-button="true"])[aria-expanded="true"] {
+  box-shadow: 0 4px 14px rgba(0,0,0,0.3) !important;
+}
+
 /* APP463_MUSIC_NOTE_SONG_KEYWORD_12PX
  * Music Note saved-song list only. Existing 8px narrow-pane and 9px base
  * keyword labels are difficult to read. Preserve the 18/20px strip height,

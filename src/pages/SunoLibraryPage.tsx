@@ -7162,19 +7162,44 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       <AnimatePresence>
         {moveModalArgs && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25"
-               onClick={() => setMoveModalArgs(null)}>
+               onClick={() => { setMoveModalArgs(null); setSingleMoveTargetId(null); }}>
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={e => e.stopPropagation()}
-              className="bg-[#2a2a2a] w-full max-w-sm rounded-2xl flex flex-col overflow-hidden border border-black/20 max-h-[80vh]"
+              className="bg-[#1a1a1a] w-full max-w-sm rounded-[28px] flex flex-col overflow-hidden max-h-[calc(100dvh-24px)] shadow-[0_24px_70px_rgba(0,0,0,0.78)]"
             >
-              <div className="p-4 border-b border-black/15 flex items-center justify-between shrink-0">
+              <div className="p-4 flex items-center justify-between gap-3 shrink-0">
                 <h3 className="font-bold text-white">폴더 이동</h3>
-                <button onClick={() => setMoveModalArgs(null)} className="p-1 rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button type="button" aria-label="선택한 폴더로 이동 확인" title="선택한 폴더로 이동"
+                    disabled={!singleMoveTargetId}
+                    onClick={async () => {
+                      if (!user || !activePlaylistId || !singleMoveTargetId || !moveModalArgs) return;
+                      try {
+                        await movePlaylistItem(user.uid, activePlaylistId, singleMoveTargetId, moveModalArgs.item);
+                        showToast("플레이리스트를 이동했습니다.");
+                        setMoveModalArgs(null);
+                        setSingleMoveTargetId(null);
+                      } catch (error: any) {
+                        if (error?.message === 'DUPLICATE') {
+                          showToast("이미 대상 플레이리스트에 있는 곡입니다.");
+                          return;
+                        }
+                        console.error("move playlist item failed:", error);
+                        showToast("곡 이동에 실패했습니다.");
+                      }
+                    }}
+                    className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#A98BFF] text-[#181818] hover:bg-[#C5AEFF] disabled:cursor-not-allowed disabled:bg-[#303033] disabled:text-white/25">
+                    <Check className="h-5 w-5" strokeWidth={3}/>
+                  </button>
+                  <button type="button" aria-label="폴더 이동 취소"
+                    onClick={() => { setMoveModalArgs(null); setSingleMoveTargetId(null); }}
+                    className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#2c2c2e] text-white/55 hover:bg-[#38383b] hover:text-white">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
               <div className="p-4 overflow-y-auto flex flex-col gap-2">
                 {(() => {
@@ -7185,38 +7210,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   return availableLists.map(list => (
                     <button
                       key={list.id}
-                      onClick={async () => {
-                        if (!user || !activePlaylistId) return;
-                        try {
-                          await movePlaylistItem(user.uid, activePlaylistId, list.id!, moveModalArgs.item);
-                          showToast("플레이리스트를 이동했습니다.");
-                          setMoveModalArgs(null);
-                        } catch (error: any) {
-                          if (error?.message === 'DUPLICATE') {
-                            showToast("이미 대상 플레이리스트에 있는 곡입니다.");
-                            return;
-                          }
-                          console.error("move playlist item failed:", {
-                            error,
-                            fromPlaylistId: activePlaylistId,
-                            toPlaylistId: list.id,
-                            itemId: moveModalArgs.item?.id,
-                            item: moveModalArgs.item,
-                            activePlaylistType: activePlaylistSection
-                          });
-                          showToast("곡 이동에 실패했습니다."); 
-                        }
-                      }}
-                      className="w-full text-left px-4 py-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors font-medium text-white flex items-center"
+                      type="button"
+                      aria-pressed={singleMoveTargetId === list.id}
+                      onClick={() => setSingleMoveTargetId(list.id || null)}
+                      className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left font-medium transition-colors ${singleMoveTargetId === list.id ? 'bg-[#38383b] text-white' : 'bg-[#262628] text-white/80 hover:bg-[#303033]'}`}
                     >
-                      [{list.title}]
+                      <span className="inline-flex items-center gap-2"><FolderOutput className="h-4 w-4 text-[#D8CCFF]"/>{list.title}</span>
+                      {singleMoveTargetId === list.id && <Check className="h-4 w-4 text-[#D8CCFF]"/>}
                     </button>
                   ));
                 })()}
               </div>
-              <div className="p-4 bg-[#1a1a1a]/50 flex justify-end gap-2 border-t border-black/15 shrink-0">
-                <button className="px-4 py-2 font-bold bg-white/10 text-white rounded-xl hover:bg-white/20 transition-colors" onClick={() => setMoveModalArgs(null)}>닫기</button>
-              </div>
+
             </motion.div>
           </div>
         )}
@@ -8847,7 +8852,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       <AnimatePresence>
         {bulkMoveModalOpen && multiSelectMode && (
-          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/25" onClick={() => setBulkMoveModalOpen(false)}>
+          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/25" onClick={() => { setBulkMoveModalOpen(false); setBulkMoveTargetId(null); }}>
             <motion.div
               data-selection-keep="true"
               data-floating-menu="true"
@@ -8855,7 +8860,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 1 }}
               transition={{ duration: 0.08 }}
-              className="w-full max-w-sm bg-[#1a1a1a] border border-black/20 rounded-2xl p-5 shadow-2xl relative overflow-hidden"
+              className="w-full max-w-sm max-h-[calc(100dvh-24px)] overflow-y-auto bg-[#1a1a1a] rounded-[28px] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.78)] relative"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="mb-4 flex items-center justify-between">
@@ -8863,9 +8868,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <h2 className="text-lg font-black tracking-tight text-white">폴더 이동</h2>
                   <p className="text-xs text-white/40 mt-1">선택한 {selectedTrackCount}곡을 이동할 폴더를 선택해주세요.</p>
                 </div>
-                <button onClick={() => setBulkMoveModalOpen(false)} className="p-2 rounded-full text-white/40 hover:text-white hover:bg-white/5">
-                  <X className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button type="button" aria-label="선택한 폴더로 이동 확인" title="선택한 폴더로 이동"
+                    disabled={!bulkMoveTargetId}
+                    onClick={() => { if (bulkMoveTargetId) void handleBulkMoveToPlaylist(bulkMoveTargetId); }}
+                    className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#A98BFF] text-[#181818] hover:bg-[#C5AEFF] disabled:cursor-not-allowed disabled:bg-[#303033] disabled:text-white/25">
+                    <Check className="h-5 w-5" strokeWidth={3} />
+                  </button>
+                  <button type="button" onClick={() => { setBulkMoveModalOpen(false); setBulkMoveTargetId(null); }}
+                    aria-label="폴더 이동 취소" className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#2c2c2e] text-white/55 hover:bg-[#38383b] hover:text-white">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
@@ -8878,10 +8892,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   return availableLists.map(list => (
                     <button
                       key={list.id}
-                      onClick={() => handleBulkMoveToPlaylist(list.id!)}
-                      className="w-full px-4 py-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] border border-black/15 text-left text-sm font-bold text-white/80 hover:text-white transition-all"
+                      type="button"
+                      aria-pressed={bulkMoveTargetId === list.id}
+                      onClick={() => setBulkMoveTargetId(list.id || null)}
+                      className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm font-bold transition-colors ${bulkMoveTargetId === list.id ? 'bg-[#38383b] text-white' : 'bg-[#262628] text-white/80 hover:bg-[#303033]'}`}
                     >
-                      {list.title}
+                      <span className="inline-flex items-center gap-2"><FolderOutput className="h-4 w-4 text-[#D8CCFF]" />{list.title}</span>
+                      {bulkMoveTargetId === list.id && <Check className="h-4 w-4 text-[#D8CCFF]" />}
                     </button>
                   ));
                 })()}

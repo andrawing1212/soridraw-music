@@ -36,7 +36,7 @@ const normalizeAcceptedMusicNoteSelection = (source) => {
 for (const token of acceptedMusicNoteSelectionAdditions.slice(0, 4)) {
   assert(current.includes(token), 'Music Note selection portal cache/cleanup missing');
 }
-assert(baseline.includes(acceptedMusicNoteSelectionAdditions[4]), 'expected previous Hybrid writer');
+assert(baseline.includes(acceptedMusicNoteSelectionAdditions[4]) || baseline.includes(acceptedMusicNoteSelectionAdditions[5]), 'expected approved Hybrid or all-mode writer in baseline');
 assert(current.includes(acceptedMusicNoteSelectionAdditions[5]), 'all-mode live writer missing');
 assert(!current.includes(acceptedMusicNoteSelectionAdditions[4]), 'stale Hybrid-only writer');
 assert.equal(

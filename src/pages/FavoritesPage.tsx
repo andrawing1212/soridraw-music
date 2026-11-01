@@ -8681,8 +8681,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {musicNoteShareInfo && typeof document !== 'undefined' && createPortal(
+      {musicNoteShareInfo && typeof document !== 'undefined' && createPortal(
           <motion.div
             initial={{ opacity: 1 }}
             animate={{ opacity: 1 }}
@@ -8750,7 +8749,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           </motion.div>,
           document.body
         )}
-      </AnimatePresence>
 
       <AnimatePresence>
         {explorePublicationDialog && (
@@ -8950,8 +8948,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {musicNoteFolderPicker && typeof document !== 'undefined' && createPortal(
+      {musicNoteFolderPicker && typeof document !== 'undefined' && createPortal(
           <motion.div
             data-selection-keep="true"
             data-floating-menu="true"
@@ -9068,7 +9065,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           </motion.div>,
           document.body
         )}
-      </AnimatePresence>
 
       <AnimatePresence>
         {favoriteToastMessage && (

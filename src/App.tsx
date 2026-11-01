@@ -12106,6 +12106,12 @@ const toggleCycleVariantSelection = (
       || sanitizedUpdates.unsavedAt
     );
 
+    // Music Note's delete/restore workflow reports its own accurate action toast.
+    // Do not show the generic "수정되었습니다" for those exact four-field
+    // Trash transitions; title, lyrics, settings and lock toasts stay unchanged.
+    const isMusicNoteTrashStateMutation = ['hidden', 'favoriteHidden', 'deletedAt', 'trashedAt']
+      .every((key) => Object.prototype.hasOwnProperty.call(updates, key));
+
     const applyFavoriteUpdateToLocalState = (targetIds: string[], localIdsToRemove: string[] = []) => {
       const targetIdSet = new Set(targetIds.filter(Boolean));
       const removeIdSet = new Set(localIdsToRemove.filter(Boolean));
@@ -12227,7 +12233,7 @@ const toggleCycleVariantSelection = (
       }
       if ('isLocked' in updates) {
         showToast(updates.isLocked ? "곡을 잠궜습니다." : "잠김이 해제되었습니다.");
-      } else {
+      } else if (!isMusicNoteTrashStateMutation) {
         showToast('수정되었습니다.');
       }
     } catch (error: any) {
@@ -12249,7 +12255,7 @@ const toggleCycleVariantSelection = (
             const serverIds = serverMatches.map((favorite) => favorite.id);
             const localIdsToRemove = serverIds.includes(id) ? [] : [id];
             applyFavoriteUpdateToLocalState(serverIds, localIdsToRemove);
-            showToast('수정되었습니다.');
+            if (!isMusicNoteTrashStateMutation) showToast('수정되었습니다.');
             return;
           }
 

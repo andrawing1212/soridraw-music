@@ -7572,15 +7572,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                               type="button"
                               data-floating-menu="true"
                               data-library-workspace-more-button="true"
-                              aria-expanded={activeMenuState?.id === `${group.id}-${idx}`}
+                              disabled={multiSelectMode}
+                              aria-expanded={!multiSelectMode && activeMenuState?.id === `${group.id}-${idx}`}
                               onMouseDown={(e) => e.stopPropagation()}
                               onClick={(e) => { 
                                 e.stopPropagation();
                                 setPlaylistItemContextMenuPosition(null);
-                                if (multiSelectMode) {
-                                  openBulkMenuFromButton(e.currentTarget);
-                                  return;
-                                }
+                                if (multiSelectMode) return;
                                 const id = `${group.id}-${idx}`;
                                 if (activeMenuState?.id === id) {
                                   setActiveMenuState(null);
@@ -7596,7 +7594,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                   });
                                 }
                               }}
-                              className={`w-10 h-10 flex items-center justify-center transition-all ${multiSelectMode ? 'text-[#A98BFF] hover:text-[#A98BFF]/80' : 'rounded-full hover:bg-white/10 text-white/50'}`}
+                              className={`w-10 h-10 flex items-center justify-center transition-all ${multiSelectMode ? 'cursor-not-allowed text-white/15' : 'rounded-full hover:bg-white/10 text-white/50'}`}
                             >
                               <MoreVertical className="w-4 h-4" />
                             </button>
@@ -8137,24 +8135,22 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           <button 
                             data-floating-menu="true"
                             data-playlist-more-menu-button="true"
-                            aria-expanded={activePlaylistItemMenu === item.id}
+                            disabled={multiSelectMode}
+                            aria-expanded={!multiSelectMode && activePlaylistItemMenu === item.id}
                             onMouseDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                               e.stopPropagation();
                               setPlaylistItemContextMenuPosition(null);
-                              if (multiSelectMode) {
-                                openBulkMenuFromButton(e.currentTarget);
-                                return;
-                              }
+                              if (multiSelectMode) return;
                               setActivePlaylistItemMenu(activePlaylistItemMenu === item.id ? null : item.id!);
                               setActiveColorMenu(null);
                             }}
-                            className={`p-2 -mr-2 transition-colors ${multiSelectMode ? 'text-[#A98BFF] hover:text-[#A98BFF]/80' : 'rounded-full text-white/40 hover:text-white'}`}
+                            className={`p-2 -mr-2 transition-colors ${multiSelectMode ? 'cursor-not-allowed text-white/15' : 'rounded-full text-white/40 hover:text-white'}`}
                           >
                             <MoreVertical className="w-4 h-4" />
                           </button>
                           <AnimatePresence>
-                          {activePlaylistItemMenu === item.id && (
+                          {!multiSelectMode && activePlaylistItemMenu === item.id && (
                             <motion.div
                               initial={{ opacity: 0, y: 4 }}
                               animate={{ opacity: 1, y: 0 }}
@@ -8888,7 +8884,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       </AnimatePresence>
 
       <AnimatePresence>
-        {activeMenuState && (
+        {!multiSelectMode && activeMenuState && (
           <>
             <motion.div
               initial={{ opacity: 0, y: 4 }}

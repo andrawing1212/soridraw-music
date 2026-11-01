@@ -8537,12 +8537,17 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       </AnimatePresence>
         );
         // Existing Result pane width follows the splitter in the same frame.
-        const host = isStudioDesktopViewport
+        const resultPane = isStudioDesktopViewport
           && typeof document !== 'undefined'
           && document.documentElement.dataset.soridrawTheme === 'studio-black'
-          ? document.getElementById('soridraw-studio-result-selection-bar-host')
+          ? document.getElementById('soridraw-studio-result-pane')
           : null;
-        return host ? createPortal(selectionActionBar, host) : selectionActionBar;
+        return resultPane
+          ? createPortal(
+              <div className="soridraw-studio-result-selection-bar-host">{selectionActionBar}</div>,
+              resultPane
+            )
+          : selectionActionBar;
       })()}
 
       <AnimatePresence>

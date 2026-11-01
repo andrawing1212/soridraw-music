@@ -17365,6 +17365,26 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
   opacity: 1 !important;
 }
 
+/* Shared Library folder chips: match the same unselected control surface as
+ * My List. The earlier shared-only bg-[#2c2c2e] utility bypassed the existing
+ * bg-secondary neutral-control selector; CSS !important could leave it dark
+ * until hover. Restore the shared JSX to My List's classes and own the dark
+ * neutral/hover fills here. Selected purple, Classic Light and drag are intact. */
+:is(html[data-soridraw-theme="studio-black"],
+    html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"])
+body #root .soridraw-app-root .soridraw-library-theme
+.soridraw-folder-drag-scrollbar[data-soridraw-folder-section="shared"]
+> .soridraw-library-folder-button:not([aria-pressed="true"]):not([data-active="true"]) {
+  background: var(--soridraw-page-control-surface, #242426) !important;
+}
+:is(html[data-soridraw-theme="studio-black"],
+    html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"])
+body #root .soridraw-app-root .soridraw-library-theme
+.soridraw-folder-drag-scrollbar[data-soridraw-folder-section="shared"]
+> .soridraw-library-folder-button:not([aria-pressed="true"]):not([data-active="true"]):hover {
+  background: var(--soridraw-page-control-hover, #333336) !important;
+}
+
 /* Keep selected folder colors and BLACK text constant during hover, including
  * the phone's synthesized :hover (previous Library folder green flash). */
 :root body #root .soridraw-app-root .soridraw-musicnote-theme

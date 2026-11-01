@@ -8508,17 +8508,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         )}
       </AnimatePresence>
         );
-        // Existing Result pane width follows the splitter in the same frame.
-        const resultPane = isStudioDesktopViewport
-          && typeof document !== 'undefined'
-          && document.documentElement.dataset.soridrawTheme === 'studio-black'
-          ? document.getElementById('soridraw-studio-result-pane')
-          : null;
-        return resultPane
-          ? createPortal(
-              <div className="soridraw-studio-result-selection-bar-host">{selectionActionBar}</div>,
-              resultPane
-            )
+        // Music Note and Library must share one viewport-level action bar.
+        // Keeping the Library bar under the result pane inherited its button-tile overrides.
+        return typeof document !== 'undefined'
+          ? createPortal(selectionActionBar, document.body)
           : selectionActionBar;
       })()}
 
@@ -8905,8 +8898,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {playlistConfirmAction && typeof document !== 'undefined' && createPortal(
+      {playlistConfirmAction && typeof document !== 'undefined' && createPortal(
           <div
             data-selection-keep="true"
             data-floating-menu="true"
@@ -8967,8 +8959,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               </div>
             </motion.div>
           </div>, document.body
-        )}
-      </AnimatePresence>
+      )}
 
       {/* Details Modal */}
       <SunoTrackDetailModal
@@ -8981,8 +8972,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         }}
       />
 
-      <AnimatePresence>
-        {deleteTarget && typeof document !== 'undefined' && createPortal(
+      {deleteTarget && typeof document !== 'undefined' && createPortal(
           <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[240] flex items-center justify-center overflow-y-auto bg-black/55 p-4 backdrop-blur-sm"
              onPointerDown={(event) => event.stopPropagation()}
              onClick={(event) => { event.stopPropagation(); if (event.target === event.currentTarget && !isDeleting) closeModal(); }}>
@@ -9040,8 +9030,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               </div>
             </motion.div>
           </div>, document.body
-        )}
-      </AnimatePresence>
+      )}
     </div>
   );
 }

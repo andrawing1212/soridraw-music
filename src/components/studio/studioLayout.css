@@ -5701,7 +5701,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 
 
 /* Keep accent-selected Library controls green after neutral button cleanup. */
-.dark .soridraw-library-theme button[class*="bg-[#A98BFF]"],
+.dark .soridraw-library-theme button[class*="bg-[#A98BFF]"]:not([data-selection-checkbox="true"]),
 .dark .soridraw-library-theme button[class*="bg-emerald"],
 .dark .soridraw-library-theme button[class*="bg-green"] {
   background-color: var(--page-accent) !important;
@@ -5754,7 +5754,7 @@ button:not(:disabled):is([class*="bg-[#FF7A72]"], [class*="bg-brand-orange"]):ho
 }
 
 .dark .soridraw-library-theme
-button:not(:disabled):is([class*="bg-[#A98BFF]"], [class*="bg-emerald"], [class*="bg-green"]):hover {
+button:not(:disabled):not([data-selection-checkbox="true"]):is([class*="bg-[#A98BFF]"], [class*="bg-emerald"], [class*="bg-green"]):hover {
   background-color: #8ac982 !important;
 }
 

@@ -4358,6 +4358,35 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     clearLibraryLongPressTimer();
   };
 
+  // Android long-press can emit a native contextmenu event immediately after
+  // (or just before) the 500ms selection timer. It is not a second user action.
+  // Keep genuine desktop right-click menus available.
+  const suppressLibraryTouchContextMenu = (event: React.MouseEvent, selection: MultiSelectedTrack) => {
+    const native = event.nativeEvent as MouseEvent & {
+      sourceCapabilities?: { firesTouchEvents?: boolean };
+      pointerType?: string;
+    };
+    const touchGenerated = native.sourceCapabilities?.firesTouchEvents === true || native.pointerType === 'touch';
+    const alreadyEntered = libraryLongPressTriggeredRef.current || librarySuppressNextCardClickRef.current;
+    const pendingLongPress = libraryLongPressTimerRef.current !== null;
+    if (!touchGenerated && !alreadyEntered && !pendingLongPress) return false;
+
+    // Some devices dispatch contextmenu before the long-press timer callback.
+    // Complete the intended selection, never open the bulk more-menu.
+    if (!multiSelectMode && pendingLongPress && !alreadyEntered) {
+      libraryLongPressTriggeredRef.current = true;
+      librarySuppressNextCardClickRef.current = true;
+      librarySuppressNextCardClickKeyRef.current = selection.key;
+      enterMultiSelectWith(selection);
+    }
+    clearLibraryLongPressTimer();
+    setActiveMenuState(null);
+    setActivePlaylistItemMenu(null);
+    setPlaylistItemContextMenuPosition(null);
+    setBulkMenuState(null);
+    return true;
+  };
+
   const consumeLibrarySuppressedClick = (event: any, selectionKey?: string) => {
     if (!libraryLongPressTriggeredRef.current && !librarySuppressNextCardClickRef.current) return false;
 
@@ -7528,6 +7557,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           onContextMenu={(event) => {
                             event.preventDefault();
                             event.stopPropagation();
+                            if (suppressLibraryTouchContextMenu(event, selection)) return;
                             handleLibraryCardLongPressEnd();
                             setActiveColorMenu(null);
                             setActivePlaylistItemMenu(null);
@@ -8017,6 +8047,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       onContextMenu={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
+                        if (suppressLibraryTouchContextMenu(event, selection)) return;
                         handleLibraryCardLongPressEnd();
                         setActiveMenuState(null);
                         setActiveColorMenu(null);

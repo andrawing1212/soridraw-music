@@ -1297,7 +1297,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      if (isModalOpen) return; // The top modal exclusively handles Escape.
+      if (modalHistoryPushedRef.current) return; // The top modal exclusively handles Escape.
       event.preventDefault();
       closeFloatingMenus();
       if (multiSelectMode) {
@@ -1322,7 +1322,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [multiSelectMode, isModalOpen]);
+  }, [multiSelectMode]);
 
   const computeFloatingMenuPosition = (anchorEl: HTMLElement, estimatedHeight = 280) => {
     const rect = anchorEl.getBoundingClientRect();
@@ -4520,14 +4520,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
 
     const handlePopState = () => {
-      if (isModalOpen) return; // Back dismisses the top popup, not selection.
+      if (modalHistoryPushedRef.current) return; // Back dismisses the top popup, not selection.
       clearMultiSelect();
       multiSelectHistoryPushedRef.current = false;
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [multiSelectMode, isModalOpen]);
+  }, [multiSelectMode]);
 
 
   const normalizeCreatorName = (value: any, ownerUid?: string | null) => {

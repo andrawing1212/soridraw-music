@@ -5870,38 +5870,21 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     openMusicNoteShareModal(targets, 'default');
   };
 
-  const handleMusicNoteLinkAction = async (method: 'copy' | 'share') => {
+  const handleMusicNoteLinkCopy = async () => {
     if (!musicNoteShareInfo || musicNoteShareBusyRef.current) return;
     musicNoteShareBusyRef.current = true;
     setMusicNoteShareBusy(true);
     try {
-      // Preserve the existing link-readable share document contract. Removing
-      // the public/private choice must not produce an inaccessible link.
+      // Link access remains on the dedicated share document; no original favorite edits.
       const shareUrl = await createMusicNoteShareDocument(musicNoteShareInfo.songs, { isPublic: true });
-      const title = musicNoteShareInfo.songs.length === 1
-        ? getCombinedFavoriteTitle(musicNoteShareInfo.songs[0])
-        : `SORIDRAW 선택한 ${musicNoteShareInfo.songs.length}곡`;
-      const description = musicNoteShareInfo.songs.length === 1
-        ? 'SORIDRAW Music Note 공유곡입니다.'
-        : `SORIDRAW Music Note에서 선택한 ${musicNoteShareInfo.songs.length}곡입니다.`;
-
-      if (method === 'share' && navigator.share) {
-        try {
-          await navigator.share({ title, text: description, url: shareUrl });
-          setMusicNoteShareInfo(null);
-          return;
-        } catch (error: any) {
-          if (error?.name === 'AbortError') return;
-        }
-      }
-
       const copied = await copyTextWithFallback(shareUrl);
       if (!copied) throw new Error('clipboard-failed');
       setMusicNoteShareInfo(null);
+      showFavoriteToast('복사되었습니다');
     } catch (error: any) {
       if (error?.message !== 'login-required') {
-        console.error('music note share failed:', error);
-        showFavoriteToast('공유 링크 처리에 실패했습니다.');
+        console.error('music note link copy failed:', error);
+        showFavoriteToast('링크 복사에 실패했습니다.');
       }
     } finally {
       musicNoteShareBusyRef.current = false;
@@ -8714,28 +8697,19 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               </button>
 
               <div className="mb-6 text-center">
-                <h2 className="mb-1 text-xl font-black tracking-tight text-white">공유 설정</h2>
-                <p className="text-xs font-medium lowercase text-white/40">공유할 방법을 선택해주세요.</p>
+                <h2 className="mb-1 text-xl font-black tracking-tight text-white">공유 링크</h2>
+                <p className="text-xs font-medium lowercase text-white/40">링크를 복사해 원하는 곳에 전달할 수 있습니다.</p>
               </div>
 
               <div className="space-y-3">
                 <button
                   type="button"
                   disabled={musicNoteShareBusy}
-                  onClick={() => { void handleMusicNoteLinkAction('copy'); }}
+                  onClick={() => { void handleMusicNoteLinkCopy(); }}
                   data-music-note-share-action="copy"
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#3b3b40] py-3.5 text-sm font-bold text-white shadow-[0_5px_16px_rgba(0,0,0,0.28)] transition-colors hover:bg-[#4a4a50] disabled:cursor-wait disabled:opacity-60"
                 >
                   <Copy className="h-5 w-5" /> 링크 복사
-                </button>
-                <button
-                  type="button"
-                  disabled={musicNoteShareBusy}
-                  onClick={() => { void handleMusicNoteLinkAction('share'); }}
-                  data-music-note-share-action="share"
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#FF7A72] py-3.5 text-sm font-black text-[#181818] shadow-[0_6px_18px_rgba(0,0,0,0.32)] transition-colors hover:bg-[#FF9189] disabled:cursor-wait disabled:opacity-60"
-                >
-                  <Share2 className="h-5 w-5" /> 링크 공유
                 </button>
                 <button
                   type="button"
@@ -9069,8 +9043,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             exit={{ opacity: 0, y: 14, scale: 0.96 }}
             transition={{ duration: 0.16 }}
             className={cn(
-              "fixed left-1/2 z-[160] -translate-x-1/2 rounded-2xl border border-white/10 bg-[#1c1c1c]/95 px-5 py-3 text-sm font-semibold text-white shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl",
-              isSelectionMode && selectedSongIds.length > 0 ? "bottom-[7.75rem] md:bottom-[8.75rem]" : "bottom-6"
+              "fixed left-1/2 z-[160] -translate-x-1/2 w-max max-w-[calc(100vw-32px)] md:max-w-[680px] rounded-2xl border border-white/10 bg-[#1c1c1c]/95 px-5 py-3 text-center text-sm font-semibold break-keep text-white shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl",
+              isSelectionMode && selectedSongIds.length > 0 ? "bottom-[10.25rem] md:bottom-[11rem]" : "bottom-[7.75rem] md:bottom-[8.25rem]"
             )}
           >
             <span className="inline-flex items-center gap-2 whitespace-pre-line">

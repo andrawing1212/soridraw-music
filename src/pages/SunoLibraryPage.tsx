@@ -8316,10 +8316,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 50, scale: 0.9 }}
-            className={`fixed left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-3 px-5 py-3 rounded-full bg-white text-black shadow-2xl pointer-events-none text-center ${multiSelectMode && selectedTrackCount > 0 ? 'bottom-[7.75rem] md:bottom-[8.75rem]' : 'bottom-24'}`}
+            className={`fixed left-1/2 -translate-x-1/2 z-[1000] flex w-max max-w-[calc(100vw-32px)] items-center justify-center gap-3 rounded-full bg-white px-5 py-3 text-center text-black shadow-2xl pointer-events-none md:max-w-[680px] ${multiSelectMode && selectedTrackCount > 0 ? 'bottom-[10.25rem] md:bottom-[11rem]' : 'bottom-[7.75rem] md:bottom-[8.25rem]'}`}
           >
             <Share2 className="w-4 h-4 text-[#A98BFF] shrink-0" />
-            <span className="text-sm font-bold tracking-tight whitespace-nowrap">{shareToastInfo}</span>
+            <span className="min-w-0 text-sm font-bold tracking-tight whitespace-pre-line break-keep">{shareToastInfo}</span>
           </motion.div>
         )}
       </AnimatePresence>

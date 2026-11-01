@@ -17418,11 +17418,12 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
  * Outranks Studio Black's #root-wide shadow reset and generic button surface.
  * The existing selection-bar geometry and all other Studio/Library styling stay unchanged. */
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-[data-music-note-selection-bar="true"] {
+[data-selection-action-bar="true"] {
+  /* Both Music Note and Library, including the Result-pane portal.
+     Dark-only soft depth; no bright outer halo or new outline. */
   box-shadow:
-    0 0 20px 5px rgba(180, 185, 200, 0.24),
-    0 12px 32px rgba(0, 0, 0, 0.94),
-    0 28px 68px rgba(0, 0, 0, 0.82) !important;
+    0 8px 22px rgba(0, 0, 0, 0.46),
+    0 18px 38px rgba(0, 0, 0, 0.36) !important;
 }
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 [data-music-note-share-action="copy"] {

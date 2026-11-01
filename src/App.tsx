@@ -22134,7 +22134,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             initial={{ opacity: 0, y: 20, x: '-50%' }}
             animate={{ opacity: 1, y: 0, x: '-50%' }}
             exit={{ opacity: 0, y: 20, x: '-50%' }}
-            className="fixed bottom-24 left-1/2 z-[100] px-4 py-2 rounded-full bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl text-xs font-bold text-[var(--text-primary)] flex items-center gap-2 block whitespace-pre-line text-center"
+            className="fixed bottom-[7.75rem] md:bottom-[8.25rem] left-1/2 z-[100] w-max max-w-[calc(100vw-32px)] md:max-w-[680px] px-5 py-3 rounded-full bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl text-xs font-bold text-[var(--text-primary)] flex items-center justify-center gap-2 whitespace-pre-line break-keep text-center"
           >
             <Check className="w-3 h-3 text-brand-orange shrink-0" />
             {toast.message}

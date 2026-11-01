@@ -17192,6 +17192,14 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
   -webkit-text-fill-color: #101010 !important;
 }
 
+/* One authoritative selected Music Note tab paint on real Classic Dark phones.
+ * Keep the exact same color before, during and after a touch or focus change. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+.soridraw-musicnote-mode-tabs > .soridraw-musicnote-mode-tab:is([aria-pressed="true"], [data-active="true"]) {
+  background: rgba(255, 122, 114, 0.78) !important;
+  background-color: rgba(255, 122, 114, 0.78) !important;
+}
+
 /* Touch :hover persists until another target receives focus on Android.
  * Disable that temporary brightness only for the three navigation tabs. */
 @media (hover: none) and (pointer: coarse) {
@@ -17210,11 +17218,6 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
     background-color: transparent !important;
     color: rgba(255, 255, 255, 0.6) !important;
     -webkit-text-fill-color: rgba(255, 255, 255, 0.6) !important;
-  }
-  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
-  .soridraw-musicnote-mode-tabs > .soridraw-musicnote-mode-tab:is([aria-pressed="true"], [data-active="true"]):is(:hover, :active, :focus) {
-    background: rgba(255, 92, 82, 0.78) !important;
-    background-color: rgba(255, 92, 82, 0.78) !important;
   }
   html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
   .soridraw-library-mode-tabs > .soridraw-library-mode-tab:is([aria-pressed="true"], [data-active="true"]):is(:hover, :active, :focus) {

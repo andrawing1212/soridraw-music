@@ -17425,23 +17425,44 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     0 8px 22px rgba(0, 0, 0, 0.46),
     0 18px 38px rgba(0, 0, 0, 0.36) !important;
 }
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-[data-music-note-share-action="copy"] {
-  background: #51515b !important;
-  background-color: #51515b !important;
-  color: #ffffff !important;
-  -webkit-text-fill-color: #ffffff !important;
-  opacity: 1 !important;
+/* Portaled Music Note selection bar and modals live directly under body.
+ * Use the Lite split engine's existing root geometry for horizontal anchoring;
+ * viewport-fixed positioning never follows the pane's scroll content. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body
+  [data-music-note-selection-bar="true"][data-music-note-split-selection="true"] {
+    position: fixed !important;
+    left: calc((var(--soridraw-studio-result-left, 50vw) + 100vw - var(--soridraw-studio-result-right, 0px)) / 2) !important;
+    right: auto !important;
+    bottom: 24px !important;
+    max-width: max(0px, calc(100vw - var(--soridraw-studio-result-left, 50vw) - var(--soridraw-studio-result-right, 0px) - 24px)) !important;
+    pointer-events: auto !important;
+  }
 }
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+html[data-soridraw-theme="studio-black"] body
+[data-music-note-selection-bar="true"] {
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.46),
+              0 18px 38px rgba(0, 0, 0, 0.36) !important;
+}
+/* Copy and native share are equal peers, with warm neutral surfaces and white text. */
+html[data-soridraw-theme="studio-black"] body
+[data-music-note-share-action="copy"],
+html[data-soridraw-theme="studio-black"] body
 [data-music-note-share-action="share"] {
-  background: #c94d47 !important;
-  background-color: #c94d47 !important;
-  color: #ffffff !important;
-  -webkit-text-fill-color: #ffffff !important;
+  background: #5a5451 !important;
+  background-color: #5a5451 !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
   opacity: 1 !important;
 }
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+html[data-soridraw-theme="studio-black"] body
+[data-music-note-share-action="copy"]:hover,
+html[data-soridraw-theme="studio-black"] body
+[data-music-note-share-action="share"]:hover {
+  background: #6b635f !important;
+  background-color: #6b635f !important;
+}
+html[data-soridraw-theme="studio-black"] body
 [data-music-note-share-action="close"] {
   background: #37373d !important;
   background-color: #37373d !important;
@@ -17449,22 +17470,12 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   -webkit-text-fill-color: #f5f5f7 !important;
   opacity: 1 !important;
 }
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-[data-music-note-share-action="copy"]:hover {
-  background: #64646e !important;
-  background-color: #64646e !important;
-}
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-[data-music-note-share-action="share"]:hover {
-  background: #d75b54 !important;
-  background-color: #d75b54 !important;
-}
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+html[data-soridraw-theme="studio-black"] body
 [data-music-note-share-action="close"]:hover {
   background: #484850 !important;
   background-color: #484850 !important;
 }
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+html[data-soridraw-theme="studio-black"] body
 [data-music-note-share-action]:disabled {
   opacity: 0.78 !important;
 }

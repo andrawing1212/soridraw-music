@@ -1137,6 +1137,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   type PlaylistSaveTarget = { group: any; item: any; audioUrl: string; idx: number };
   const [playlistSavePicker, setPlaylistSavePicker] = useState<{ isShared: boolean; targets: PlaylistSaveTarget[]; playlists: Playlist[] } | null>(null);
   const [playlistSaveCreateTitle, setPlaylistSaveCreateTitle] = useState<string | null>(null);
+  const [playlistSaveTargetId, setPlaylistSaveTargetId] = useState<string | null>(null);
+  const [bulkMoveTargetId, setBulkMoveTargetId] = useState<string | null>(null);
+  const [singleMoveTargetId, setSingleMoveTargetId] = useState<string | null>(null);
 
   const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
 
@@ -2220,6 +2223,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       return;
     }
 
+    setSingleMoveTargetId(null);
     setMoveModalArgs({ item });
   };
 
@@ -5237,6 +5241,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       return;
     }
 
+    setPlaylistSaveTargetId(null);
     setPlaylistSavePicker({ isShared, targets: safeTargets, playlists: targetLists });
     setPlaylistSaveCreateTitle(null);
     setActiveMenuState(null);
@@ -5310,14 +5315,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         isDefault: false,
       };
 
-      if (type === 'normal') {
-        setSelectedNormalPlaylistId(newId);
-      } else {
-        setSelectedSharedPlaylistId(newId);
-      }
-
+      // New playlist is a pending destination; do not write the song until confirmed.
+      setPlaylistSavePicker({ ...picker, playlists: [...currentList, nextPlaylist] });
+      setPlaylistSaveTargetId(newId);
       setPlaylistSaveCreateTitle(null);
-      await savePlaylistPickerTargets(nextPlaylist);
     } catch (error) {
       console.error('create and save playlist failed:', error);
       showToast('새 폴더 저장에 실패했습니다.');
@@ -5866,6 +5867,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         showToast('비공개로 전환된 공유곡은 폴더 이동할 수 없습니다.');
         return;
       }
+      setBulkMoveTargetId(null);
       setBulkMoveModalOpen(true);
       return;
     }
@@ -7160,19 +7162,44 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       <AnimatePresence>
         {moveModalArgs && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25"
-               onClick={() => setMoveModalArgs(null)}>
+               onClick={() => { setMoveModalArgs(null); setSingleMoveTargetId(null); }}>
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={e => e.stopPropagation()}
-              className="bg-[#2a2a2a] w-full max-w-sm rounded-2xl flex flex-col overflow-hidden border border-black/20 max-h-[80vh]"
+              className="bg-[#1a1a1a] w-full max-w-sm rounded-[28px] flex flex-col overflow-hidden max-h-[calc(100dvh-24px)] shadow-[0_24px_70px_rgba(0,0,0,0.78)]"
             >
-              <div className="p-4 border-b border-black/15 flex items-center justify-between shrink-0">
+              <div className="p-4 flex items-center justify-between gap-3 shrink-0">
                 <h3 className="font-bold text-white">폴더 이동</h3>
-                <button onClick={() => setMoveModalArgs(null)} className="p-1 rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button type="button" aria-label="선택한 폴더로 이동 확인" title="선택한 폴더로 이동"
+                    disabled={!singleMoveTargetId}
+                    onClick={async () => {
+                      if (!user || !activePlaylistId || !singleMoveTargetId || !moveModalArgs) return;
+                      try {
+                        await movePlaylistItem(user.uid, activePlaylistId, singleMoveTargetId, moveModalArgs.item);
+                        showToast("플레이리스트를 이동했습니다.");
+                        setMoveModalArgs(null);
+                        setSingleMoveTargetId(null);
+                      } catch (error: any) {
+                        if (error?.message === 'DUPLICATE') {
+                          showToast("이미 대상 플레이리스트에 있는 곡입니다.");
+                          return;
+                        }
+                        console.error("move playlist item failed:", error);
+                        showToast("곡 이동에 실패했습니다.");
+                      }
+                    }}
+                    className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#A98BFF] text-[#181818] hover:bg-[#C5AEFF] disabled:cursor-not-allowed disabled:bg-[#303033] disabled:text-white/25">
+                    <Check className="h-5 w-5" strokeWidth={3}/>
+                  </button>
+                  <button type="button" aria-label="폴더 이동 취소"
+                    onClick={() => { setMoveModalArgs(null); setSingleMoveTargetId(null); }}
+                    className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#2c2c2e] text-white/55 hover:bg-[#38383b] hover:text-white">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
               <div className="p-4 overflow-y-auto flex flex-col gap-2">
                 {(() => {
@@ -7183,38 +7210,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   return availableLists.map(list => (
                     <button
                       key={list.id}
-                      onClick={async () => {
-                        if (!user || !activePlaylistId) return;
-                        try {
-                          await movePlaylistItem(user.uid, activePlaylistId, list.id!, moveModalArgs.item);
-                          showToast("플레이리스트를 이동했습니다.");
-                          setMoveModalArgs(null);
-                        } catch (error: any) {
-                          if (error?.message === 'DUPLICATE') {
-                            showToast("이미 대상 플레이리스트에 있는 곡입니다.");
-                            return;
-                          }
-                          console.error("move playlist item failed:", {
-                            error,
-                            fromPlaylistId: activePlaylistId,
-                            toPlaylistId: list.id,
-                            itemId: moveModalArgs.item?.id,
-                            item: moveModalArgs.item,
-                            activePlaylistType: activePlaylistSection
-                          });
-                          showToast("곡 이동에 실패했습니다."); 
-                        }
-                      }}
-                      className="w-full text-left px-4 py-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors font-medium text-white flex items-center"
+                      type="button"
+                      aria-pressed={singleMoveTargetId === list.id}
+                      onClick={() => setSingleMoveTargetId(list.id || null)}
+                      className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left font-medium transition-colors ${singleMoveTargetId === list.id ? 'bg-[#38383b] text-white' : 'bg-[#262628] text-white/80 hover:bg-[#303033]'}`}
                     >
-                      [{list.title}]
+                      <span className="inline-flex items-center gap-2"><FolderOutput className="h-4 w-4 text-[#D8CCFF]"/>{list.title}</span>
+                      {singleMoveTargetId === list.id && <Check className="h-4 w-4 text-[#D8CCFF]"/>}
                     </button>
                   ));
                 })()}
               </div>
-              <div className="p-4 bg-[#1a1a1a]/50 flex justify-end gap-2 border-t border-black/15 shrink-0">
-                <button className="px-4 py-2 font-bold bg-white/10 text-white rounded-xl hover:bg-white/20 transition-colors" onClick={() => setMoveModalArgs(null)}>닫기</button>
-              </div>
+
             </motion.div>
           </div>
         )}
@@ -8744,8 +8751,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           <motion.div
             data-selection-keep="true"
             data-floating-menu="true"
-            className={`fixed inset-0 z-[220] flex items-end justify-center bg-black/55 px-4 backdrop-blur-sm md:items-center ${multiSelectMode && selectedTrackCount > 0 ? 'pb-[128px] md:pb-[142px]' : 'pb-6 md:pb-0'}`}
-            onClick={() => { setPlaylistSavePicker(null); setPlaylistSaveCreateTitle(null); }}
+            className="fixed inset-0 z-[220] flex items-center justify-center overflow-y-auto bg-black/55 px-4 py-4 backdrop-blur-sm"
+            onClick={() => { setPlaylistSavePicker(null); setPlaylistSaveCreateTitle(null); setPlaylistSaveTargetId(null); }}
           >
             <motion.div
               data-selection-keep="true"
@@ -8754,7 +8761,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 0, scale: 1 }}
               transition={{ duration: 0.08, ease: [0.22, 1, 0.36, 1] }}
-              className="w-full max-w-[420px] overflow-hidden rounded-[28px] border border-[#A98BFF]/25 bg-[#181818] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+              className="w-full max-w-[420px] max-h-[calc(100dvh-24px)] overflow-y-auto rounded-[28px] bg-[#1a1a1a] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.78)]"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-3">
@@ -8765,27 +8772,33 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     {playlistSavePicker.isShared ? '공유 받은 곡 플레이리스트를 선택하세요.' : '저장할 플레이리스트를 선택하세요.'}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => { setPlaylistSavePicker(null); setPlaylistSaveCreateTitle(null); }}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/55 transition-all hover:text-white"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button type="button" aria-label="플레이리스트 저장 확인" title="선택한 폴더에 저장"
+                    disabled={!playlistSaveTargetId}
+                    onClick={() => {
+                      const target = playlistSavePicker.playlists.find(item => item.id === playlistSaveTargetId);
+                      if (target) void savePlaylistPickerTargets(target);
+                    }}
+                    className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#A98BFF] text-[#181818] transition-colors hover:bg-[#C5AEFF] disabled:cursor-not-allowed disabled:bg-[#303033] disabled:text-white/25">
+                    <Check className="h-5 w-5" strokeWidth={3} />
+                  </button>
+                  <button type="button" aria-label="플레이리스트 선택 취소"
+                    onClick={() => { setPlaylistSavePicker(null); setPlaylistSaveCreateTitle(null); setPlaylistSaveTargetId(null); }}
+                    className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#2c2c2e] text-white/55 transition-colors hover:bg-[#38383b] hover:text-white">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
               <div className="mt-5 grid gap-2 max-h-[50vh] overflow-y-auto pr-1">
                 {playlistSavePicker.playlists.map((playlist) => {
-                  const selectedId = playlistSavePicker.isShared ? selectedSharedPlaylistId : selectedNormalPlaylistId;
+                  const selectedId = playlistSaveTargetId;
                   return (
-                    <button
-                      key={playlist.id}
-                      type="button"
-                      onClick={() => savePlaylistPickerTargets(playlist)}
-                      className={`flex h-12 items-center justify-between rounded-2xl border px-4 text-sm font-bold transition-all ${selectedId === playlist.id ? 'border-[#A98BFF]/45 bg-[#A98BFF]/22 text-white' : 'border-white/10 bg-white/[0.035] text-white/72 hover:border-[#A98BFF]/32 hover:text-white'}`}
-                    >
+                    <button key={playlist.id} type="button" aria-pressed={selectedId === playlist.id}
+                      onClick={() => setPlaylistSaveTargetId(playlist.id || null)}
+                      className={`flex h-12 items-center justify-between rounded-2xl px-4 text-sm font-bold transition-colors ${selectedId === playlist.id ? 'bg-[#38383b] text-white' : 'bg-[#262628] text-white/75 hover:bg-[#303033] hover:text-white'}`}>
                       <span className="inline-flex items-center gap-2"><FolderOutput className="h-4 w-4 text-[#D8CCFF]" />{playlist.title}</span>
-                      {selectedId === playlist.id && <CheckSquare className="h-4 w-4 text-[#D8CCFF]" />}
+                      {selectedId === playlist.id && <Check className="h-4 w-4 text-[#D8CCFF]" />}
                     </button>
                   );
                 })}
@@ -8794,12 +8807,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <button
                     type="button"
                     onClick={() => setPlaylistSaveCreateTitle('')}
-                    className="mt-1 flex h-12 items-center justify-center gap-2 rounded-2xl border border-dashed border-[#A98BFF]/35 bg-[#A98BFF]/8 px-4 text-sm font-black text-[#D8CCFF] transition-all hover:bg-[#A98BFF]/14 hover:text-white"
+                    className="mt-1 flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#303033] px-4 text-sm font-black text-[#D8CCFF] transition-colors hover:bg-[#3b3b3e]"
                   >
                     <Plus className="h-4 w-4" /> 새 폴더 만들기
                   </button>
                 ) : (
-                  <div className="mt-1 flex h-12 items-center gap-2 rounded-2xl border border-[#A98BFF]/35 bg-black/20 px-3">
+                  <div className="mt-1 flex h-12 items-center gap-2 rounded-2xl bg-[#262628] px-3">
                     <input
                       type="text"
                       value={playlistSaveCreateTitle}
@@ -8839,7 +8852,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       <AnimatePresence>
         {bulkMoveModalOpen && multiSelectMode && (
-          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/25" onClick={() => setBulkMoveModalOpen(false)}>
+          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/25" onClick={() => { setBulkMoveModalOpen(false); setBulkMoveTargetId(null); }}>
             <motion.div
               data-selection-keep="true"
               data-floating-menu="true"
@@ -8847,7 +8860,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 1 }}
               transition={{ duration: 0.08 }}
-              className="w-full max-w-sm bg-[#1a1a1a] border border-black/20 rounded-2xl p-5 shadow-2xl relative overflow-hidden"
+              className="w-full max-w-sm max-h-[calc(100dvh-24px)] overflow-y-auto bg-[#1a1a1a] rounded-[28px] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.78)] relative"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="mb-4 flex items-center justify-between">
@@ -8855,9 +8868,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <h2 className="text-lg font-black tracking-tight text-white">폴더 이동</h2>
                   <p className="text-xs text-white/40 mt-1">선택한 {selectedTrackCount}곡을 이동할 폴더를 선택해주세요.</p>
                 </div>
-                <button onClick={() => setBulkMoveModalOpen(false)} className="p-2 rounded-full text-white/40 hover:text-white hover:bg-white/5">
-                  <X className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button type="button" aria-label="선택한 폴더로 이동 확인" title="선택한 폴더로 이동"
+                    disabled={!bulkMoveTargetId}
+                    onClick={() => { if (bulkMoveTargetId) void handleBulkMoveToPlaylist(bulkMoveTargetId); }}
+                    className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#A98BFF] text-[#181818] hover:bg-[#C5AEFF] disabled:cursor-not-allowed disabled:bg-[#303033] disabled:text-white/25">
+                    <Check className="h-5 w-5" strokeWidth={3} />
+                  </button>
+                  <button type="button" onClick={() => { setBulkMoveModalOpen(false); setBulkMoveTargetId(null); }}
+                    aria-label="폴더 이동 취소" className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#2c2c2e] text-white/55 hover:bg-[#38383b] hover:text-white">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
@@ -8870,10 +8892,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   return availableLists.map(list => (
                     <button
                       key={list.id}
-                      onClick={() => handleBulkMoveToPlaylist(list.id!)}
-                      className="w-full px-4 py-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] border border-black/15 text-left text-sm font-bold text-white/80 hover:text-white transition-all"
+                      type="button"
+                      aria-pressed={bulkMoveTargetId === list.id}
+                      onClick={() => setBulkMoveTargetId(list.id || null)}
+                      className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm font-bold transition-colors ${bulkMoveTargetId === list.id ? 'bg-[#38383b] text-white' : 'bg-[#262628] text-white/80 hover:bg-[#303033]'}`}
                     >
-                      {list.title}
+                      <span className="inline-flex items-center gap-2"><FolderOutput className="h-4 w-4 text-[#D8CCFF]" />{list.title}</span>
+                      {bulkMoveTargetId === list.id && <Check className="h-4 w-4 text-[#D8CCFF]" />}
                     </button>
                   ));
                 })()}

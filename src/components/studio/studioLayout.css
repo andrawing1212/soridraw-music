@@ -17122,6 +17122,8 @@ html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-stud
   justify-content: center !important;
   cursor: pointer;
   touch-action: manipulation;
+  /* Center the glyph on the folder labels rather than the scroll strip padding. */
+  transform: translateY(-4px) !important;
 }
 
 /* APP463_MUSIC_NOTE_SONG_KEYWORD_12PX

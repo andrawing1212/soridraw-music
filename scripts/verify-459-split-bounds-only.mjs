@@ -14,44 +14,27 @@ const before=baseline.match(pattern);
 const after=current.match(pattern);
 assert.equal(before?.length,1,'expected one original getSplitBounds function');
 assert.equal(after?.length,1,'expected one updated getSplitBounds function');
-// The Music Note selection bar is a body portal. Its approved live-position
-// writer is deliberately scoped to the existing Pure Pane Hybrid rAF. Strip
-// only these exact added tokens before enforcing the old byte-for-byte guard;
-// any other divider, pane, Generate or pointer code change still fails.
+// The app459 guard still prohibits changes to the rest of the split engine.
+// Normalize ONLY these five exact already-approved Music Note portal additions;
+// any other engine line difference continues to fail.
 const acceptedMusicNoteSelectionAdditions = [
-  '  musicNoteSelectionBar: HTMLElement | null;\\n',
-  '    musicNoteSelectionBar: null,\\n',
-  `    // Resolve the portaled selection bar once at pointer-down, not in each drag frame.
-    current.musicNoteSelectionBar = workspaceViewRef.current === 'music-note'
-      ? document.querySelector<HTMLElement>('body > [data-music-note-selection-bar="true"][data-music-note-split-selection="true"]')
-      : null;
-`,
-  `    // Return selection-bar position ownership to the committed root CSS vars.
-    controls.musicNoteSelectionBar?.style.removeProperty('left');
-    controls.musicNoteSelectionBar?.style.removeProperty('max-width');
-`,
-  `      // Music Note's body portal cannot inherit the Result pane's live geometry.
-      // Reuse this rAF's existing splitter/pane numbers without a DOM read,
-      // React update, or per-pixel root CSS variable invalidation.
-      if (purePaneHybridLive && workspaceViewRef.current === 'music-note') {
-        const selectionBar = externalRef.current.musicNoteSelectionBar;
-        if (selectionBar) {
-          const resultLeft = splitterLeft + 18;
-          const resultRight = metricsRef.current.left + safeWidth;
-          selectionBar.style.setProperty('left', \`${Math.round((resultLeft + resultRight) / 2)}px\`, 'important');
-          selectionBar.style.setProperty('max-width', \`${Math.max(0, Math.round(resultRight - resultLeft - 24))}px\`, 'important');
-        }
-      }
-
-`,
+  "  musicNoteSelectionBar: HTMLElement | null;\n",
+  "    musicNoteSelectionBar: null,\n",
+  "    // Resolve the portaled selection bar once at pointer-down, not in each drag frame.\n    current.musicNoteSelectionBar = workspaceViewRef.current === 'music-note'\n      ? document.querySelector<HTMLElement>('body > [data-music-note-selection-bar=\"true\"][data-music-note-split-selection=\"true\"]')\n      : null;\n",
+  "    // Return selection-bar position ownership to the committed root CSS vars.\n    controls.musicNoteSelectionBar?.style.removeProperty('left');\n    controls.musicNoteSelectionBar?.style.removeProperty('max-width');\n",
+  "      // Music Note's body portal cannot inherit the Result pane's live geometry.\n      // Reuse this rAF's existing splitter/pane numbers without a DOM read,\n      // React update, or per-pixel root CSS variable invalidation.\n      if (purePaneHybridLive && workspaceViewRef.current === 'music-note') {\n        const selectionBar = externalRef.current.musicNoteSelectionBar;\n        if (selectionBar) {\n          const resultLeft = splitterLeft + 18;\n          const resultRight = metricsRef.current.left + safeWidth;\n          selectionBar.style.setProperty('left', `${Math.round((resultLeft + resultRight) / 2)}px`, 'important');\n          selectionBar.style.setProperty('max-width', `${Math.max(0, Math.round(resultRight - resultLeft - 24))}px`, 'important');\n        }\n      }\n\n",
 ];
 const normalizeAcceptedMusicNoteSelection = (source) => {
   let normalized = source;
   for (const token of acceptedMusicNoteSelectionAdditions) {
-    normalized = normalized.replace(token.replaceAll('\\\\n','\\n'), '');
+    assert((normalized.split(token).length - 1) <= 1, 'duplicate approved selection token');
+    normalized = normalized.replace(token, '');
   }
   return normalized;
 };
+for (const token of acceptedMusicNoteSelectionAdditions) {
+  assert(current.includes(token), 'approved Music Note live-selection writer missing');
+}
 assert.equal(
   normalizeAcceptedMusicNoteSelection(baseline.replace(before[0], '<SPLIT_BOUNDS>')),
   normalizeAcceptedMusicNoteSelection(current.replace(after[0], '<SPLIT_BOUNDS>')),

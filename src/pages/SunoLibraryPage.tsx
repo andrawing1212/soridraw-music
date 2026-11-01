@@ -8494,6 +8494,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             data-floating-menu="true"
             data-selection-action-bar="true"
             data-library-selection-action-bar="true"
+            data-library-selection-trash={isLibraryTrashMode ? "true" : undefined}
             data-library-split-selection={resultPane ? "true" : undefined}
             initial={{ opacity: 0, y: 24, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}

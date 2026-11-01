@@ -17442,6 +17442,30 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     pointer-events: auto !important;
   }
 }
+
+/* Library selection bar: preserve Music Note's full-size five actions, but
+ * shrink the tracks together when the RESULT pane (not the viewport) gets
+ * narrower. Tailwind md:min-w-* follows window width and previously made the
+ * portaled bar scroll horizontally in a phone-width right pane. No new
+ * observer, splitter geometry or scroll handler is required. */
+html[data-soridraw-theme="studio-black"] body > [data-library-selection-action-bar="true"] {
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 72px));
+  width: max-content;
+  overflow-x: clip !important;
+  overflow-y: visible !important;
+}
+html[data-soridraw-theme="studio-black"] body >
+[data-library-selection-action-bar="true"][data-library-selection-trash="true"] {
+  grid-template-columns: minmax(0, 82px) minmax(0, 72px) minmax(0, 82px) minmax(0, 72px);
+}
+html[data-soridraw-theme="studio-black"] body >
+[data-library-selection-action-bar="true"] > button {
+  min-width: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
 html[data-soridraw-theme="studio-black"] body
 [data-music-note-selection-bar="true"] {
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.46),

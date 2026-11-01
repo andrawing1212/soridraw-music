@@ -17124,6 +17124,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-musicnote-folder-header > .soridraw-musicnote-folder-heading {
   font-size: 14px !important;
   line-height: 1.25 !important;
+  color: rgba(255, 193, 188, 0.8) !important;
 }
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-musicnote-theme.soridraw-responsive-content-page
@@ -17136,6 +17137,16 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   align-items: center !important;
   justify-content: center !important;
   line-height: 1 !important;
+}
+
+/* Library playlist headings use the same readable purple on Classic Dark
+ * phones and Studio Black desktop/split panes. Other themes stay unchanged. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page
+.soridraw-library-folder-header > .soridraw-library-folder-heading,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-library-folder-header > .soridraw-library-folder-heading {
+  color: #D8CCFF !important;
 }
 
 /* Actual phones use Classic Dark (themePreferences.ts), not Studio Black.

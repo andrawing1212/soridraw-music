@@ -2443,6 +2443,8 @@ export default function LiteStudioSplitWorkspace({
         >
           <div id="soridraw-studio-result-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-result-pane-masthead-host" />
           {panes[1] ?? null}
+          {/* Zero-height sticky overlay for Result-pane selection actions. */}
+          <div id="soridraw-studio-result-selection-bar-host" className="soridraw-studio-result-selection-bar-host" />
         </div>
       </div>
       {typeof document !== 'undefined' ? createPortal(centerModalHost, document.body) : centerModalHost}

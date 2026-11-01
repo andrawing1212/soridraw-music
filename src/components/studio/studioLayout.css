@@ -17153,6 +17153,30 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   line-height: 1 !important;
 }
 
+/* Music Note mobile folder heading: physical mobile and split-pane mobile
+ * are separate responsive paths; keep Library and desktop headings unchanged. */
+@media (max-width: 1099px) {
+  :root body #root .soridraw-app-root
+  .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-musicnote-region-top .soridraw-musicnote-folder-header
+  > .soridraw-musicnote-folder-heading,
+  :root body #root .soridraw-app-root
+  .soridraw-musicnote-region-top .soridraw-musicnote-folder-header
+  > .soridraw-musicnote-folder-heading {
+    font-size: 16px !important;
+    line-height: 1.25 !important;
+  }
+}
+@media (min-width: 1100px) {
+  :root body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-musicnote-region-top .soridraw-musicnote-folder-header
+  > .soridraw-musicnote-folder-heading {
+    font-size: 16px !important;
+    line-height: 1.25 !important;
+  }
+}
+
 /* APP463_MUSIC_NOTE_SONG_KEYWORD_12PX
  * Music Note saved-song list only. Existing 8px narrow-pane and 9px base
  * keyword labels are difficult to read. Preserve the 18/20px strip height,

@@ -1242,6 +1242,20 @@ export default function FavoritesPage({
   const [musicNoteFolderDragging, setMusicNoteFolderDragging] = useState<{ mode: MusicNoteFolderMode; folderId: string } | null>(null);
   const musicNoteFolderButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const musicNoteFolderBarRefs = useRef<Record<MusicNoteFolderMode, HTMLDivElement | null>>({ myNote: null, sharedNote: null });
+  const newlyCreatedMusicNoteFolderRevealRef = useRef<{ mode: MusicNoteFolderMode; id: string } | null>(null);
+  useLayoutEffect(() => {
+    const pending = newlyCreatedMusicNoteFolderRevealRef.current;
+    if (!pending || musicNoteViewMode !== pending.mode) return;
+    const folders = pending.mode === 'sharedNote' ? sharedNoteFolders : myNoteFolders;
+    if (!folders.some(folder => folder.id === pending.id)) return;
+    const container = musicNoteFolderBarRefs.current[pending.mode];
+    const button = musicNoteFolderButtonRefs.current[`${pending.mode}:${pending.id}`];
+    if (!container || !button) return;
+    // Reveal only the new folder in its own horizontal rail (not the page).
+    newlyCreatedMusicNoteFolderRevealRef.current = null;
+    const delta = button.getBoundingClientRect().right - container.getBoundingClientRect().right + 12;
+    if (delta > 0) container.scrollTo({ left: container.scrollLeft + delta, behavior: 'smooth' });
+  }, [musicNoteViewMode, myNoteFolders, sharedNoteFolders]);
   const musicNoteFolderPressTimerRef = useRef<number | null>(null);
   const musicNoteFolderDragRef = useRef<{
     mode: MusicNoteFolderMode;
@@ -6958,6 +6972,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       updatedAt: now,
     };
     const nextFolders = [...folders, nextFolder];
+    newlyCreatedMusicNoteFolderRevealRef.current = { mode, id: nextFolder.id };
 
     if (mode === 'sharedNote') {
       setSharedNoteFolders(nextFolders);

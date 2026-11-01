@@ -14,9 +14,49 @@ const before=baseline.match(pattern);
 const after=current.match(pattern);
 assert.equal(before?.length,1,'expected one original getSplitBounds function');
 assert.equal(after?.length,1,'expected one updated getSplitBounds function');
-assert.equal(baseline.replace(before[0],'<SPLIT_BOUNDS>'),
-  current.replace(after[0],'<SPLIT_BOUNDS>'),
-  'APP459 changed protected Lite splitter code outside getSplitBounds');
+// The Music Note selection bar is a body portal. Its approved live-position
+// writer is deliberately scoped to the existing Pure Pane Hybrid rAF. Strip
+// only these exact added tokens before enforcing the old byte-for-byte guard;
+// any other divider, pane, Generate or pointer code change still fails.
+const acceptedMusicNoteSelectionAdditions = [
+  '  musicNoteSelectionBar: HTMLElement | null;\\n',
+  '    musicNoteSelectionBar: null,\\n',
+  `    // Resolve the portaled selection bar once at pointer-down, not in each drag frame.
+    current.musicNoteSelectionBar = workspaceViewRef.current === 'music-note'
+      ? document.querySelector<HTMLElement>('body > [data-music-note-selection-bar="true"][data-music-note-split-selection="true"]')
+      : null;
+`,
+  `    // Return selection-bar position ownership to the committed root CSS vars.
+    controls.musicNoteSelectionBar?.style.removeProperty('left');
+    controls.musicNoteSelectionBar?.style.removeProperty('max-width');
+`,
+  `      // Music Note's body portal cannot inherit the Result pane's live geometry.
+      // Reuse this rAF's existing splitter/pane numbers without a DOM read,
+      // React update, or per-pixel root CSS variable invalidation.
+      if (purePaneHybridLive && workspaceViewRef.current === 'music-note') {
+        const selectionBar = externalRef.current.musicNoteSelectionBar;
+        if (selectionBar) {
+          const resultLeft = splitterLeft + 18;
+          const resultRight = metricsRef.current.left + safeWidth;
+          selectionBar.style.setProperty('left', \`${Math.round((resultLeft + resultRight) / 2)}px\`, 'important');
+          selectionBar.style.setProperty('max-width', \`${Math.max(0, Math.round(resultRight - resultLeft - 24))}px\`, 'important');
+        }
+      }
+
+`,
+];
+const normalizeAcceptedMusicNoteSelection = (source) => {
+  let normalized = source;
+  for (const token of acceptedMusicNoteSelectionAdditions) {
+    normalized = normalized.replace(token.replaceAll('\\\\n','\\n'), '');
+  }
+  return normalized;
+};
+assert.equal(
+  normalizeAcceptedMusicNoteSelection(baseline.replace(before[0], '<SPLIT_BOUNDS>')),
+  normalizeAcceptedMusicNoteSelection(current.replace(after[0], '<SPLIT_BOUNDS>')),
+  'APP459 changed protected Lite splitter code beyond approved Music Note selection writer',
+);
 // The initial app459 PR compared the legacy tablet-only guard to the new
 // real-center-workspace guard. Later PRs use app459 as their baseline: in
 // that case the full function must remain EXACT, not merely equivalent.

@@ -5805,23 +5805,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     };
   };
 
-  const syncMusicNoteShareStateToFavorites = (songs: any[], shareId: string, isPublic: boolean) => {
-    songs.forEach((song) => {
-      if (!song?.id || String(song.id).startsWith('shared-')) return;
-      try {
-        updateFavorite(song.id, {
-          isPublic,
-          shareId,
-          shareType: isPublic ? 'public' : 'private',
-          musicNoteShareId: shareId,
-          musicNoteShareUpdatedAt: Date.now(),
-        } as any);
-      } catch (error) {
-        console.warn('music note favorite share state sync skipped:', error);
-      }
-    });
-  };
-
   const createMusicNoteShareDocument = async (songs: any[], options?: { isPublic?: boolean }) => {
     if (!user?.uid) {
       showFavoriteToast('로그인이 필요합니다.');
@@ -5855,9 +5838,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       }
     }
 
-    syncMusicNoteShareStateToFavorites(songs, shareId, isPublic);
-    setMusicNoteShareInfo(prev => prev && prev.shareId === shareId ? { ...prev, isPublic } : prev);
-
+    // Link sharing owns the independent suno_shares document only. The
+    // original Music Note favorite and its publication metadata stay unchanged.
     return getMusicNoteSharePageUrl(shareId);
   };
 
@@ -5906,7 +5888,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       if (method === 'share' && navigator.share) {
         try {
           await navigator.share({ title, text: description, url: shareUrl });
-          showFavoriteToast('공유 링크를 보냈습니다.');
           setMusicNoteShareInfo(null);
           return;
         } catch (error: any) {
@@ -5916,9 +5897,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
       const copied = await copyTextWithFallback(shareUrl);
       if (!copied) throw new Error('clipboard-failed');
-      showFavoriteToast(method === 'share'
-        ? '기기 공유를 지원하지 않아 링크를 복사했습니다.'
-        : '공유 링크가 복사되었습니다.');
       setMusicNoteShareInfo(null);
     } catch (error: any) {
       if (error?.message !== 'login-required') {
@@ -8548,6 +8526,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             data-selection-keep="true"
             data-floating-menu="true"
             data-selection-action-bar="true"
+            data-music-note-selection-bar="true"
             initial={{ opacity: 0, y: 24, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.96 }}
@@ -8744,6 +8723,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   type="button"
                   disabled={musicNoteShareBusy}
                   onClick={() => { void handleMusicNoteLinkAction('copy'); }}
+                  data-music-note-share-action="copy"
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#3b3b40] py-3.5 text-sm font-bold text-white shadow-[0_5px_16px_rgba(0,0,0,0.28)] transition-colors hover:bg-[#4a4a50] disabled:cursor-wait disabled:opacity-60"
                 >
                   <Copy className="h-5 w-5" /> 링크 복사
@@ -8752,6 +8732,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   type="button"
                   disabled={musicNoteShareBusy}
                   onClick={() => { void handleMusicNoteLinkAction('share'); }}
+                  data-music-note-share-action="share"
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#FF7A72] py-3.5 text-sm font-black text-[#181818] shadow-[0_6px_18px_rgba(0,0,0,0.32)] transition-colors hover:bg-[#FF9189] disabled:cursor-wait disabled:opacity-60"
                 >
                   <Share2 className="h-5 w-5" /> 링크 공유
@@ -8759,6 +8740,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 <button
                   type="button"
                   onClick={() => setMusicNoteShareInfo(null)}
+                  data-music-note-share-action="close"
                   className="w-full rounded-xl bg-white/[0.07] py-3 text-xs font-bold text-white/75 transition-colors hover:bg-white/[0.13] hover:text-white"
                 >
                   닫기

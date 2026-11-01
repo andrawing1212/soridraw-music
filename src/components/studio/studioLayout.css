@@ -17402,7 +17402,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     right: auto !important;
     width: max-content;
     max-width: calc(100% - 24px) !important;
-    transform: translateX(-50%) !important;
+    /* Tailwind v4's -translate-x-1/2 already centers via the translate property.
+     * Do not apply a second transform: it shifts the bar left by half its width. */
     pointer-events: auto !important;
     background: #242424 !important;
     background-color: #242424 !important;

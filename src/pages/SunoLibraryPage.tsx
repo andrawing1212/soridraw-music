@@ -7810,7 +7810,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   aria-label="나의 플레이리스트 폴더 추가"
                   className="soridraw-library-folder-add inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--bg-secondary)] p-0 text-white/55 shadow-btn transition-all hover:bg-white/5 hover:text-white"
                 >
-                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
                 </button>
               </div>
               <div className="soridraw-folder-scroll-shell flex min-w-0 items-center gap-1">
@@ -7886,7 +7886,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   aria-label="공유 받은 곡 폴더 추가"
                   className="soridraw-library-folder-add inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--bg-secondary)] p-0 text-white/55 shadow-btn transition-all hover:bg-white/5 hover:text-white"
                 >
-                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
                 </button>
               </div>
               <div className="soridraw-folder-scroll-shell flex min-w-0 items-center gap-1">
@@ -7955,11 +7955,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
             {/* Playlist Items */}
             {loadingPlaylistItems ? (
-              <div className="flex justify-center p-6 mt-3 border-t border-white/10">
+              <div className="soridraw-library-list-start-divider flex justify-center p-6 mt-3">
                 <Loader2 className="w-6 h-6 animate-spin text-[#A98BFF]" />
               </div>
             ) : playlistItems.length > 0 ? (
-              <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-white/10" data-selection-keep="true">
+              <div className="soridraw-library-list-start-divider flex flex-col gap-2 mt-3 pt-3" data-selection-keep="true">
                 {(() => {
                   const normalizedPlaylistSearch = deferredPlaylistSearchTerm.trim().toLowerCase();
                   let items = playlistItems.filter(item => {
@@ -8451,7 +8451,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 })()}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-12 text-center border-t border-white/10 mt-3">
+              <div className="soridraw-library-list-start-divider flex flex-col items-center justify-center py-12 text-center mt-3">
                 <Music className="w-12 h-12 text-[#A98BFF]/40 mb-4" />
                 <h2 className="text-xl font-bold mb-2">
                   {activePlaylistSection === 'normal' ? '아직 저장된 곡이 없습니다.' : '아직 저장된 공유곡이 없습니다.'}

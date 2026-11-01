@@ -8578,43 +8578,26 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   <Trash2 className="h-6 w-6 md:h-7 md:w-7" />
                   <span className="text-[12px] font-black md:text-sm">영구삭제</span>
                 </button>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={(event) => { event.preventDefault(); event.stopPropagation(); setFavoriteSelectionMoreOpen(false); showFavoriteToast('아직 준비중입니다.'); }}
-                    onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                    onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                    onTouchStart={(event) => event.stopPropagation()}
-                    data-selection-keep="true"
-                    data-floating-menu="true"
-                    className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
-                  >
-                    <MoreVertical className="h-6 w-6 md:h-7 md:w-7" />
-                    <span className="text-[12px] font-black md:text-sm">더보기</span>
-                  </button>
-                  <AnimatePresence>
-                    {favoriteSelectionMoreOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        transition={{ duration: 0.16 }}
-                        data-selection-keep="true"
-                        data-floating-menu="true"
-                        data-more-menu-panel="true"
-                        className="absolute bottom-[calc(100%+12px)] right-0 z-[260] w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#1f1f1f]/95 py-2 text-sm text-white shadow-2xl backdrop-blur-xl"
-                      >
-                        <button onClick={selectAllVisibleFavorites} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><CheckSquare className="h-4 w-4" />전체선택</button>
-                        <button onClick={() => exitSelectionMode()} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><Square className="h-4 w-4" />선택해제</button>
-                        <button onClick={handleSelectionRestoreFromTrash} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><RefreshCw className="h-4 w-4" />복구</button>
-                        <button onClick={handleSelectionPermanentDeleteFromTrash} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-red-400 hover:bg-red-500/10"><Trash2 className="h-4 w-4" />영구 삭제</button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => exitSelectionMode()}
+                  className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
+                >
+                  <X className="h-6 w-6 md:h-7 md:w-7" />
+                  <span className="text-[12px] font-black md:text-sm">닫기</span>
+                </button>
               </>
             ) : (
               <>
+                <button
+                  type="button"
+                  onClick={handleSelectionQuickLock}
+                  aria-label={areSelectedSongsAllLocked ? '선택한 곡 잠금 해제' : '선택한 곡 잠금'}
+                  className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
+                >
+                  {areSelectedSongsAllLocked ? <Unlock className="h-6 w-6 md:h-7 md:w-7" /> : <Lock className="h-6 w-6 md:h-7 md:w-7" />}
+                  <span className="text-[12px] font-black md:text-sm">{areSelectedSongsAllLocked ? '잠금 해제' : '잠금'}</span>
+                </button>
                 <button
                   type="button"
                   onClick={handleSelectionMoveToFolder}
@@ -8625,15 +8608,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 </button>
                 <button
                   type="button"
-                  onClick={handleSelectionQuickLock}
-                  className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
-                >
-                  {areSelectedSongsAllLocked ? <Unlock className="h-6 w-6 md:h-7 md:w-7" /> : <Lock className="h-6 w-6 md:h-7 md:w-7" />}
-                  <span className="text-[12px] font-black md:text-sm">잠금</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setFavoriteSelectionMoreOpen(false); shareSelectedFavoriteSongs(); }}
+                  onClick={() => { setFavoriteSelectionMoreOpen(false); void shareSelectedFavoriteSongs(); }}
                   className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
                 >
                   <Share2 className="h-6 w-6 md:h-7 md:w-7" />
@@ -8647,38 +8622,14 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   <Trash2 className="h-6 w-6 md:h-7 md:w-7" />
                   <span className="text-[12px] font-black md:text-sm">삭제</span>
                 </button>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={(event) => { event.preventDefault(); event.stopPropagation(); setFavoriteSelectionMoreOpen(false); showFavoriteToast('아직 준비중입니다.'); }}
-                    onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                    onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                    onTouchStart={(event) => event.stopPropagation()}
-                    data-selection-keep="true"
-                    data-floating-menu="true"
-                    className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
-                  >
-                    <MoreVertical className="h-6 w-6 md:h-7 md:w-7" />
-                    <span className="text-[12px] font-black md:text-sm">더보기</span>
-                  </button>
-                  <AnimatePresence>
-                    {favoriteSelectionMoreOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        transition={{ duration: 0.16 }}
-                        data-selection-keep="true"
-                        data-floating-menu="true"
-                        data-more-menu-panel="true"
-                        className="absolute bottom-[calc(100%+12px)] right-0 z-[260] w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#1f1f1f]/95 py-2 text-sm text-white shadow-2xl backdrop-blur-xl"
-                      >
-                        <button onClick={selectAllVisibleFavorites} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><CheckSquare className="h-4 w-4" />전체선택</button>
-                        <button onClick={() => exitSelectionMode()} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><Square className="h-4 w-4" />선택해제</button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => exitSelectionMode()}
+                  className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
+                >
+                  <X className="h-6 w-6 md:h-7 md:w-7" />
+                  <span className="text-[12px] font-black md:text-sm">닫기</span>
+                </button>
               </>
             )}
           </motion.div>

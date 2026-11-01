@@ -6827,21 +6827,6 @@ h1.text-3xl.md\:text-5xl {
 
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-result-pane[data-pane-mode="mobile"]
-  :is(.soridraw-musicnote-folder-button, .soridraw-library-folder-button) {
-    padding: 6px 9px !important;
-    font-size: 10px !important;
-    line-height: 1.1 !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-result-pane[data-pane-mode="mobile"]
-  :is(.soridraw-musicnote-folder-add, .soridraw-library-folder-add) {
-    padding: 6px 8px !important;
-    font-size: 10px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-result-pane[data-pane-mode="mobile"]
   .soridraw-musicnote-hero-sync {
     width: 36px !important;
     height: 36px !important;
@@ -8446,8 +8431,40 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
-/* 516 — Library uses the same search-to-first-track divider midpoint as Music Note.
- * Only the painted line position is shared; Library track spacing itself is unchanged. */
+/* Library folder/list separator: its prior border-t utility was recolored
+ * black by the shared dark-theme border reset. Reuse the existing list-start
+ * pseudo-element rather than layering another border over that reset.
+ * The line is above list backgrounds and in the existing vertical gap. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-library-list-start-divider,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-library-list-start-divider {
+  position: relative !important;
+  --soridraw-list-start-gap: 21px;
+}
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-library-list-start-divider::before,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-library-list-start-divider::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--soridraw-list-start-gap) * -0.5);
+  left: 6px;
+  right: 6px;
+  height: 1px;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.15);
+  pointer-events: none;
+}
+@media (max-width: 660px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-library-theme .soridraw-library-list-start-divider,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-library-theme .soridraw-library-list-start-divider {
+    --soridraw-list-start-gap: 13px;
+  }
+}
 
 /* 416 — Brighten the Music Note / Suno Library search fields with the same
  * cool-neutral gray family used by the surrounding Studio Black controls.
@@ -11245,21 +11262,6 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-library-folder-heading {
   font-size: 14px !important;
   letter-spacing: 0.04em !important;
-}
-
-:root body #root .soridraw-app-root
-:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-:is(.soridraw-musicnote-folder-button, .soridraw-library-folder-button) {
-  padding: 6px 9px !important;
-  font-size: 10px !important;
-  line-height: 1.1 !important;
-}
-
-:root body #root .soridraw-app-root
-:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-:is(.soridraw-musicnote-folder-add, .soridraw-library-folder-add) {
-  padding: 6px 8px !important;
-  font-size: 10px !important;
 }
 
 :root body #root .soridraw-app-root
@@ -17071,22 +17073,10 @@ html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-stud
   }
 }
 
-/* Music Note / Library folder navigation: retain the desktop-sized folder
- * buttons after mobile pane handoff, without changing saved folder order.
- * The scroll element remains the original drag/reorder owner. */
-:root body #root .soridraw-app-root
-:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-.soridraw-folder-drag-scrollbar > :is(.soridraw-musicnote-folder-button, .soridraw-library-folder-button) {
-  padding: 8px 16px !important;
-  font-size: 14px !important;
-  line-height: normal !important;
-}
-:root body #root .soridraw-app-root
-:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-.soridraw-folder-drag-scrollbar > :is(.soridraw-musicnote-folder-add, .soridraw-library-folder-add) {
-  padding: 8px 12px !important;
-  font-size: 14px !important;
-}
+/* Folder chips keep the JSX desktop baseline (14px / 8px 16px) during
+ * every PC <-> mobile pane transition. Removing the old 10px overrides
+ * and mobile-only restoration prevents a frame of shrink/restore.
+ * The existing scroll strip remains the original drag/reorder owner. */
 :root body #root .soridraw-app-root
 :is(.soridraw-musicnote-theme, .soridraw-library-theme)
 .soridraw-folder-scroll-shell .soridraw-folder-drag-scrollbar {

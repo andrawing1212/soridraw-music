@@ -1111,6 +1111,18 @@ export default function LiteStudioSplitWorkspace({
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = metricsRef.current.left + builderWidth;
 
+    // Track Music Note's portaled bar on the same drag frame in ALL
+    // selectable split modes, using cached coordinates without DOM reads.
+    if (live && draggingRef.current && workspaceViewRef.current === 'music-note') {
+      const selectionBar = externalRef.current.musicNoteSelectionBar;
+      if (selectionBar) {
+        const resultLeft = splitterLeft + 18;
+        const resultRight = metricsRef.current.left + safeWidth;
+        selectionBar.style.setProperty('left', `${Math.round((resultLeft + resultRight) / 2)}px`, 'important');
+        selectionBar.style.setProperty('max-width', `${Math.max(0, Math.round(resultRight - resultLeft - 24))}px`, 'important');
+      }
+    }
+
     if (pureGeometryDiagnosticLive) {
       const viewportSplitterLeft = Math.max(0, Math.round(splitterLeft - 8));
 
@@ -1292,19 +1304,6 @@ export default function LiteStudioSplitWorkspace({
       // waited for pointer-up. Publish only the Generate bar's read-free geometry
       // from this same rAF frame; all other external/root work stays deferred.
       syncGenerationBarGeometry(builderWidth);
-
-      // Music Note's body portal cannot inherit the Result pane's live geometry.
-      // Reuse this rAF's existing splitter/pane numbers without a DOM read,
-      // React update, or per-pixel root CSS variable invalidation.
-      if (purePaneHybridLive && workspaceViewRef.current === 'music-note') {
-        const selectionBar = externalRef.current.musicNoteSelectionBar;
-        if (selectionBar) {
-          const resultLeft = splitterLeft + 18;
-          const resultRight = metricsRef.current.left + safeWidth;
-          selectionBar.style.setProperty('left', `${Math.round((resultLeft + resultRight) / 2)}px`, 'important');
-          selectionBar.style.setProperty('max-width', `${Math.max(0, Math.round(resultRight - resultLeft - 24))}px`, 'important');
-        }
-      }
 
       // Keep the split-edge collapse UI correct even on the Pure Pane
       // production hot path, which intentionally returns before auxiliary

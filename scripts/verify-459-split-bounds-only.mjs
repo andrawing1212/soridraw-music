@@ -23,6 +23,7 @@ const acceptedMusicNoteSelectionAdditions = [
   "    // Resolve the portaled selection bar once at pointer-down, not in each drag frame.\n    current.musicNoteSelectionBar = workspaceViewRef.current === 'music-note'\n      ? document.querySelector<HTMLElement>('body > [data-music-note-selection-bar=\"true\"][data-music-note-split-selection=\"true\"]')\n      : null;\n",
   "    // Return selection-bar position ownership to the committed root CSS vars.\n    controls.musicNoteSelectionBar?.style.removeProperty('left');\n    controls.musicNoteSelectionBar?.style.removeProperty('max-width');\n",
   "      // Music Note's body portal cannot inherit the Result pane's live geometry.\n      // Reuse this rAF's existing splitter/pane numbers without a DOM read,\n      // React update, or per-pixel root CSS variable invalidation.\n      if (purePaneHybridLive && workspaceViewRef.current === 'music-note') {\n        const selectionBar = externalRef.current.musicNoteSelectionBar;\n        if (selectionBar) {\n          const resultLeft = splitterLeft + 18;\n          const resultRight = metricsRef.current.left + safeWidth;\n          selectionBar.style.setProperty('left', `${Math.round((resultLeft + resultRight) / 2)}px`, 'important');\n          selectionBar.style.setProperty('max-width', `${Math.max(0, Math.round(resultRight - resultLeft - 24))}px`, 'important');\n        }\n      }\n\n",
+  "    // Track Music Note's portaled bar on the same drag frame in ALL\n    // selectable split modes, using cached coordinates without DOM reads.\n    if (live && draggingRef.current && workspaceViewRef.current === 'music-note') {\n      const selectionBar = externalRef.current.musicNoteSelectionBar;\n      if (selectionBar) {\n        const resultLeft = splitterLeft + 18;\n        const resultRight = metricsRef.current.left + safeWidth;\n        selectionBar.style.setProperty('left', `${Math.round((resultLeft + resultRight) / 2)}px`, 'important');\n        selectionBar.style.setProperty('max-width', `${Math.max(0, Math.round(resultRight - resultLeft - 24))}px`, 'important');\n      }\n    }\n\n",
 ];
 const normalizeAcceptedMusicNoteSelection = (source) => {
   let normalized = source;
@@ -32,9 +33,12 @@ const normalizeAcceptedMusicNoteSelection = (source) => {
   }
   return normalized;
 };
-for (const token of acceptedMusicNoteSelectionAdditions) {
-  assert(current.includes(token), 'approved Music Note live-selection writer missing');
+for (const token of acceptedMusicNoteSelectionAdditions.slice(0, 4)) {
+  assert(current.includes(token), 'Music Note selection portal cache/cleanup missing');
 }
+assert(baseline.includes(acceptedMusicNoteSelectionAdditions[4]), 'expected previous Hybrid writer');
+assert(current.includes(acceptedMusicNoteSelectionAdditions[5]), 'all-mode live writer missing');
+assert(!current.includes(acceptedMusicNoteSelectionAdditions[4]), 'stale Hybrid-only writer');
 assert.equal(
   normalizeAcceptedMusicNoteSelection(baseline.replace(before[0], '<SPLIT_BOUNDS>')),
   normalizeAcceptedMusicNoteSelection(current.replace(after[0], '<SPLIT_BOUNDS>')),

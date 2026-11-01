@@ -8978,7 +8978,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0 }}
-              className="w-full max-w-[420px] overflow-hidden rounded-[28px] border border-[#FF7A72]/25 bg-[#181818] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+              className="w-full max-w-[420px] max-h-[calc(100dvh-24px)] overflow-y-auto rounded-[28px] bg-[#1a1a1a] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.78),0_0_30px_rgba(0,0,0,0.36)]"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-3">
@@ -8992,7 +8992,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 <button
                   type="button"
                   onClick={() => { setMusicNoteFolderPicker(null); setMusicNoteFolderCreateTitle(null); }}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/55 transition-all hover:text-white"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#2c2c2e] text-white/55 transition-colors hover:bg-[#38383b] hover:text-white"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -9007,10 +9007,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       type="button"
                       onClick={() => saveSongsToMusicNoteFolder(folder.id)}
                       className={cn(
-                        'flex h-12 items-center justify-between rounded-2xl border px-4 text-sm font-bold transition-all',
+                        'flex h-12 items-center justify-between rounded-2xl px-4 text-sm font-bold transition-colors',
                         selectedId === folder.id
-                          ? 'border-[#FF7A72]/45 bg-[#FF7A72]/22 text-white'
-                          : 'border-white/10 bg-white/[0.035] text-white/72 hover:border-[#FF7A72]/32 hover:text-white'
+                          ? 'bg-[#38383b] text-white'
+                          : 'bg-[#262628] text-white/75 hover:bg-[#303033] hover:text-white'
                       )}
                     >
                       <span className="inline-flex items-center gap-2"><FolderOutput className="h-4 w-4 text-[#FFC1BC]" />{folder.title}</span>
@@ -9023,12 +9023,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   <button
                     type="button"
                     onClick={() => setMusicNoteFolderCreateTitle('')}
-                    className="mt-1 flex h-12 items-center justify-center gap-2 rounded-2xl border border-dashed border-[#FF7A72]/35 bg-[#FF7A72]/8 px-4 text-sm font-black text-[#FFC1BC] transition-all hover:bg-[#FF7A72]/14 hover:text-white"
+                    className="mt-1 flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#303033] px-4 text-sm font-black text-[#FFC1BC] transition-colors hover:bg-[#3b3b3e]"
                   >
                     <Plus className="h-4 w-4" /> 새 폴더 만들기
                   </button>
                 ) : (
-                  <div className="mt-1 flex h-12 items-center gap-2 rounded-2xl border border-[#FF7A72]/35 bg-black/20 px-3">
+                  <div className="mt-1 flex h-12 items-center gap-2 rounded-2xl bg-[#262628] px-3">
                     <input
                       type="text"
                       value={musicNoteFolderCreateTitle}

@@ -8516,21 +8516,24 @@ body #root .soridraw-app-root
   }
 }
 
-/* Desktop Music Note bottom "Show more": its generic --card-bg utility
- * was not visibly distinguishable on PC. Restore the phone's dark gray
- * button surface without touching dimensions or mobile rendering. */
+/* Desktop Music Note and Library bottom "Show more" share the exact
+ * same resting / hover surfaces; no change to mobile buttons or geometry. */
 @media (min-width: 768px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-musicnote-theme button.soridraw-musicnote-load-more-button,
+  :is(.soridraw-musicnote-theme button.soridraw-musicnote-load-more-button,
+      .soridraw-library-theme button.soridraw-library-load-more-button),
   html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
-  .soridraw-musicnote-theme button.soridraw-musicnote-load-more-button {
+  :is(.soridraw-musicnote-theme button.soridraw-musicnote-load-more-button,
+      .soridraw-library-theme button.soridraw-library-load-more-button) {
     background-color: #242424 !important;
   }
 
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-musicnote-theme button.soridraw-musicnote-load-more-button:hover,
+  :is(.soridraw-musicnote-theme button.soridraw-musicnote-load-more-button:hover,
+      .soridraw-library-theme button.soridraw-library-load-more-button:hover),
   html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
-  .soridraw-musicnote-theme button.soridraw-musicnote-load-more-button:hover {
+  :is(.soridraw-musicnote-theme button.soridraw-musicnote-load-more-button:hover,
+      .soridraw-library-theme button.soridraw-library-load-more-button:hover) {
     background-color: #333336 !important;
   }
 }

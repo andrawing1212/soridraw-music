@@ -7768,7 +7768,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   onMouseLeave={() => setShowWorkspaceMoreTooltip(false)}
                   onFocus={() => setShowWorkspaceMoreTooltip(true)}
                   onBlur={() => setShowWorkspaceMoreTooltip(false)}
-                  className={`px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-[var(--border-color)] flex items-center gap-2 group shadow-[var(--shadow-md)] ${isLoadingMoreWorkspaceTracks ? 'cursor-wait opacity-60' : ''}`}
+                  className={`soridraw-library-load-more-button px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-[var(--border-color)] flex items-center gap-2 group shadow-[var(--shadow-md)] ${isLoadingMoreWorkspaceTracks ? 'cursor-wait opacity-60' : ''}`}
                 >
                   <span className="text-[#A98BFF] text-xl leading-none group-hover:rotate-90 transition-transform">+</span>
                   {isLoadingMoreWorkspaceTracks
@@ -8431,7 +8431,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                               event.stopPropagation();
                               setPlaylistVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, items.length));
                             }}
-                            className="px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-[var(--border-color)] flex items-center gap-2 group shadow-[var(--shadow-md)]"
+                            className="soridraw-library-load-more-button px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-[var(--border-color)] flex items-center gap-2 group shadow-[var(--shadow-md)]"
                           >
                             <span className="text-[#A98BFF] text-xl leading-none group-hover:rotate-90 transition-transform">+</span>
                             {`더보기 (${Math.max(0, items.length - playlistVisibleCount)}곡 남음)`}

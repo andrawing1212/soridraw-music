@@ -70,6 +70,7 @@ type ExternalControls = {
   collapsedActionButton: HTMLElement | null;
   heroShell: HTMLElement | null;
   workspaceHeroHost: HTMLElement | null;
+  musicNoteSelectionBar: HTMLElement | null;
 };
 
 type ExternalGeometryCache = {
@@ -359,6 +360,7 @@ export default function LiteStudioSplitWorkspace({
     collapsedActionButton: null,
     heroShell: null,
     workspaceHeroHost: null,
+    musicNoteSelectionBar: null,
   });
   const externalGeometryCacheRef = useRef<ExternalGeometryCache>(createEmptyExternalGeometryCache());
   // 797 — The Generate bar keeps a stable layout width while the splitter is
@@ -392,6 +394,10 @@ export default function LiteStudioSplitWorkspace({
     // CSS and widened the live style-invalidation surface.
     current.heroShell = document.querySelector<HTMLElement>('.soridraw-studio-hero > .soridraw-studio-shell');
     current.workspaceHeroHost = document.getElementById('soridraw-studio-workspace-hero-host');
+    // Resolve the portaled selection bar once at pointer-down, not in each drag frame.
+    current.musicNoteSelectionBar = workspaceViewRef.current === 'music-note'
+      ? document.querySelector<HTMLElement>('body > [data-music-note-selection-bar="true"][data-music-note-split-selection="true"]')
+      : null;
     externalGeometryCacheRef.current = createEmptyExternalGeometryCache();
     generationBarLiveBaseRef.current = { node: null, width: 0, mode: null };
     return current;
@@ -879,6 +885,9 @@ export default function LiteStudioSplitWorkspace({
     resultToggleRef.current?.style.removeProperty('right');
     resultToggleRef.current?.style.removeProperty('--soridraw-lite-studio-result-toggle-left');
     controls.heroShell?.style.removeProperty('--soridraw-studio-builder-width');
+    // Return selection-bar position ownership to the committed root CSS vars.
+    controls.musicNoteSelectionBar?.style.removeProperty('left');
+    controls.musicNoteSelectionBar?.style.removeProperty('max-width');
     if (controls.floatingActionBar && !document.documentElement.classList.contains('soridraw-window-resizing')) {
       // 794: live drag geometry is direct/non-inherited. Remove both the new
       // properties and any stale 790~793 custom-property values before resting
@@ -1283,6 +1292,19 @@ export default function LiteStudioSplitWorkspace({
       // waited for pointer-up. Publish only the Generate bar's read-free geometry
       // from this same rAF frame; all other external/root work stays deferred.
       syncGenerationBarGeometry(builderWidth);
+
+      // Music Note's body portal cannot inherit the Result pane's live geometry.
+      // Reuse this rAF's existing splitter/pane numbers without a DOM read,
+      // React update, or per-pixel root CSS variable invalidation.
+      if (purePaneHybridLive && workspaceViewRef.current === 'music-note') {
+        const selectionBar = externalRef.current.musicNoteSelectionBar;
+        if (selectionBar) {
+          const resultLeft = splitterLeft + 18;
+          const resultRight = metricsRef.current.left + safeWidth;
+          selectionBar.style.setProperty('left', `${Math.round((resultLeft + resultRight) / 2)}px`, 'important');
+          selectionBar.style.setProperty('max-width', `${Math.max(0, Math.round(resultRight - resultLeft - 24))}px`, 'important');
+        }
+      }
 
       // Keep the split-edge collapse UI correct even on the Pure Pane
       // production hot path, which intentionally returns before auxiliary

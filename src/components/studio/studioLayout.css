@@ -6820,7 +6820,7 @@ h1.text-3xl.md\:text-5xl {
 
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-result-pane[data-pane-mode="mobile"]
-  :is(.soridraw-musicnote-folder-heading, .soridraw-library-folder-heading) {
+  .soridraw-library-folder-heading {
     font-size: 9.5px !important;
     letter-spacing: 0.04em !important;
   }
@@ -11242,7 +11242,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 
 :root body #root .soridraw-app-root
 :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-:is(.soridraw-musicnote-folder-heading, .soridraw-library-folder-heading) {
+.soridraw-library-folder-heading {
   font-size: 9.5px !important;
   letter-spacing: 0.04em !important;
 }
@@ -17127,18 +17127,13 @@ html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-stud
 }
 
 
-/* Music Note folder header: keep the desktop 14px heading on every pane
- * and center the relocated add icon independently of mobile folder-strip rules. */
+/* Music Note folder heading: 14px on wide Studio Black; 16px mobile below.
+ * Legacy 9.5px grouped heading rules now apply only to Library folders. */
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-musicnote-theme.soridraw-responsive-content-page
-.soridraw-musicnote-folder-heading,
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-.soridraw-musicnote-folder-heading,
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-result-pane[data-pane-mode="mobile"]
-.soridraw-musicnote-folder-heading {
+.soridraw-musicnote-folder-header > .soridraw-musicnote-folder-heading {
   font-size: 14px !important;
+  line-height: 1.25 !important;
 }
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-musicnote-theme.soridraw-responsive-content-page
@@ -17153,27 +17148,83 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   line-height: 1 !important;
 }
 
-/* Music Note mobile folder heading: physical mobile and split-pane mobile
- * are separate responsive paths; keep Library and desktop headings unchanged. */
+/* Actual phones use Classic Dark (themePreferences.ts), not Studio Black.
+ * Mobile: 16px; wide PC: 14px; a narrow PC split pane uses mobile size. */
 @media (max-width: 1099px) {
-  :root body #root .soridraw-app-root
-  .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-  .soridraw-musicnote-region-top .soridraw-musicnote-folder-header
-  > .soridraw-musicnote-folder-heading,
-  :root body #root .soridraw-app-root
-  .soridraw-musicnote-region-top .soridraw-musicnote-folder-header
-  > .soridraw-musicnote-folder-heading {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-musicnote-theme .soridraw-musicnote-folder-header > .soridraw-musicnote-folder-heading,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-musicnote-theme .soridraw-musicnote-folder-header > .soridraw-musicnote-folder-heading {
     font-size: 16px !important;
     line-height: 1.25 !important;
   }
 }
 @media (min-width: 1100px) {
-  :root body #root .soridraw-app-root
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-result-pane[data-pane-mode="mobile"]
-  .soridraw-musicnote-region-top .soridraw-musicnote-folder-header
-  > .soridraw-musicnote-folder-heading {
+  .soridraw-musicnote-folder-header > .soridraw-musicnote-folder-heading {
     font-size: 16px !important;
     line-height: 1.25 !important;
+  }
+}
+
+/* Music Note / Library three-button typography and touch contract.
+ * A physical phone is Classic Dark; Studio Black applies to desktop split panes.
+ * Both use 14px labels. Keep the existing 46px shell/40px buttons unchanged. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
+> :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
+> :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab) {
+  font-size: 14px !important;
+}
+
+/* Selected labels use the same dark text in Classic Dark phone and Studio Black PC.
+ * Keep the existing coral/purple selected fills and menu selection behavior. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+.soridraw-musicnote-mode-tabs > .soridraw-musicnote-mode-tab:is([aria-pressed="true"], [data-active="true"]),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+.soridraw-library-mode-tabs > .soridraw-library-mode-tab:is([aria-pressed="true"], [data-active="true"]) {
+  color: #101010 !important;
+  -webkit-text-fill-color: #101010 !important;
+}
+
+/* Touch :hover persists until another target receives focus on Android.
+ * Disable that temporary brightness only for the three navigation tabs. */
+@media (hover: none) and (pointer: coarse) {
+  :root body #root .soridraw-app-root
+  :is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
+  > :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab) {
+    -webkit-tap-highlight-color: transparent;
+    transition: none !important;
+    filter: none !important;
+    opacity: 1 !important;
+  }
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  :is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
+  > :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab):not([aria-pressed="true"]):not([data-active="true"]):is(:hover, :active, :focus) {
+    background: transparent !important;
+    background-color: transparent !important;
+    color: rgba(255, 255, 255, 0.6) !important;
+    -webkit-text-fill-color: rgba(255, 255, 255, 0.6) !important;
+  }
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-musicnote-mode-tabs > .soridraw-musicnote-mode-tab:is([aria-pressed="true"], [data-active="true"]):is(:hover, :active, :focus) {
+    background: rgba(255, 92, 82, 0.78) !important;
+    background-color: rgba(255, 92, 82, 0.78) !important;
+  }
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-library-mode-tabs > .soridraw-library-mode-tab:is([aria-pressed="true"], [data-active="true"]):is(:hover, :active, :focus) {
+    background: rgba(169, 139, 255, 0.78) !important;
+    background-color: rgba(169, 139, 255, 0.78) !important;
+  }
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  :is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
+  > :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab):not([aria-pressed="true"]):not([data-active="true"]):is(:hover, :active, :focus)::before {
+    background: transparent !important;
   }
 }
 
@@ -17291,15 +17342,5 @@ body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]
     padding-right: 36px !important;
     box-sizing: border-box !important;
   }
-}
-
-/* Music Note / Library navigation: keep one readable PC-sized label on every
- * pane/viewport mode. Leave the 46px tab shell, three-column geometry and
- * existing mobile paddings untouched while the split boundary moves. */
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
-:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
-> :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab) {
-  font-size: 14px !important;
 }
 

@@ -1239,6 +1239,7 @@ export default function FavoritesPage({
   const [selectedSharedNoteFolderId, setSelectedSharedNoteFolderId] = useState('default');
   const [musicNoteFolderPicker, setMusicNoteFolderPicker] = useState<{ mode: MusicNoteFolderMode; songIds: string[] } | null>(null);
   const [musicNoteFolderCreateTitle, setMusicNoteFolderCreateTitle] = useState<string | null>(null);
+  const [musicNoteFolderTargetId, setMusicNoteFolderTargetId] = useState<string | null>(null);
   const [musicNoteFolderRenameArgs, setMusicNoteFolderRenameArgs] = useState<{ mode: MusicNoteFolderMode; folder: MusicNoteFolder; newTitle: string } | null>(null);
   const [musicNoteFolderDeleteReady, setMusicNoteFolderDeleteReady] = useState(false);
   const [musicNoteFolderDragging, setMusicNoteFolderDragging] = useState<{ mode: MusicNoteFolderMode; folderId: string } | null>(null);
@@ -2804,6 +2805,7 @@ updates: draft.updates,
     if (safeSongIds.length === 0) return;
     const mode: MusicNoteFolderMode = preferredMode || (musicNoteViewMode === 'sharedNote' ? 'sharedNote' : 'myNote');
     setMusicNoteFolderPicker({ mode, songIds: safeSongIds });
+    setMusicNoteFolderTargetId(null);
     setMusicNoteFolderCreateTitle(null);
     setActiveFavoriteMenuId(null);
   };
@@ -2948,15 +2950,15 @@ updates: draft.updates,
 
     if (mode === 'sharedNote') {
       setSharedNoteFolders(nextFolders);
-      setSelectedSharedNoteFolderId(nextFolder.id);
     } else {
       setMyNoteFolders(nextFolders);
-      setSelectedMyNoteFolderId(nextFolder.id);
     }
 
     try {
       await persistMusicNoteFolders(mode, nextFolders);
-      await saveSongsToMusicNoteFolder(nextFolder.id, nextFolder, picker);
+      // Folder creation selects a pending destination; actual songs move on confirm.
+      setMusicNoteFolderTargetId(nextFolder.id);
+      setMusicNoteFolderCreateTitle(null);
     } catch (error) {
       console.error('create and save music note folder failed:', error);
       if (mode === 'sharedNote') setSharedNoteFolders(folders);
@@ -8973,6 +8975,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               if (event.target === event.currentTarget) {
                 setMusicNoteFolderPicker(null);
                 setMusicNoteFolderCreateTitle(null);
+                setMusicNoteFolderTargetId(null);
               }
             }}
           >
@@ -8994,23 +8997,30 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     {musicNoteFolderPicker.mode === 'sharedNote' ? '공유 노트 폴더를 선택하세요.' : '마이 노트 폴더를 선택하세요.'}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => { setMusicNoteFolderPicker(null); setMusicNoteFolderCreateTitle(null); }}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#2c2c2e] text-white/55 transition-colors hover:bg-[#38383b] hover:text-white"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button type="button" aria-label="선택한 폴더로 저장 확인" title="선택한 폴더로 저장"
+                    disabled={!musicNoteFolderTargetId}
+                    onClick={() => { if (musicNoteFolderTargetId) void saveSongsToMusicNoteFolder(musicNoteFolderTargetId); }}
+                    className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#FF8C85] text-[#1a1a1a] transition-colors hover:bg-[#FFAAA4] disabled:cursor-not-allowed disabled:bg-[#303033] disabled:text-white/25">
+                    <Check className="h-5 w-5" strokeWidth={3} />
+                  </button>
+                  <button type="button" aria-label="폴더 선택 취소"
+                    onClick={() => { setMusicNoteFolderPicker(null); setMusicNoteFolderCreateTitle(null); setMusicNoteFolderTargetId(null); }}
+                    className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#2c2c2e] text-white/55 transition-colors hover:bg-[#38383b] hover:text-white">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
               <div className="mt-5 grid gap-2">
                 {(musicNoteFolderPicker.mode === 'sharedNote' ? sharedNoteFolders : myNoteFolders).map((folder) => {
-                  const selectedId = musicNoteFolderPicker.mode === 'sharedNote' ? selectedSharedNoteFolderId : selectedMyNoteFolderId;
+                  const selectedId = musicNoteFolderTargetId;
                   return (
                     <button
                       key={folder.id}
                       type="button"
-                      onClick={() => saveSongsToMusicNoteFolder(folder.id)}
+                      aria-pressed={selectedId === folder.id}
+                      onClick={() => setMusicNoteFolderTargetId(folder.id)}
                       className={cn(
                         'flex h-12 items-center justify-between rounded-2xl px-4 text-sm font-bold transition-colors',
                         selectedId === folder.id

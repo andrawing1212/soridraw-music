@@ -1137,6 +1137,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   type PlaylistSaveTarget = { group: any; item: any; audioUrl: string; idx: number };
   const [playlistSavePicker, setPlaylistSavePicker] = useState<{ isShared: boolean; targets: PlaylistSaveTarget[]; playlists: Playlist[] } | null>(null);
   const [playlistSaveCreateTitle, setPlaylistSaveCreateTitle] = useState<string | null>(null);
+  const [playlistSaveTargetId, setPlaylistSaveTargetId] = useState<string | null>(null);
+  const [bulkMoveTargetId, setBulkMoveTargetId] = useState<string | null>(null);
+  const [singleMoveTargetId, setSingleMoveTargetId] = useState<string | null>(null);
 
   const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
 
@@ -2220,6 +2223,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       return;
     }
 
+    setSingleMoveTargetId(null);
     setMoveModalArgs({ item });
   };
 
@@ -5237,6 +5241,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       return;
     }
 
+    setPlaylistSaveTargetId(null);
     setPlaylistSavePicker({ isShared, targets: safeTargets, playlists: targetLists });
     setPlaylistSaveCreateTitle(null);
     setActiveMenuState(null);
@@ -5310,14 +5315,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         isDefault: false,
       };
 
-      if (type === 'normal') {
-        setSelectedNormalPlaylistId(newId);
-      } else {
-        setSelectedSharedPlaylistId(newId);
-      }
-
+      // New playlist is a pending destination; do not write the song until confirmed.
+      setPlaylistSavePicker({ ...picker, playlists: [...currentList, nextPlaylist] });
+      setPlaylistSaveTargetId(newId);
       setPlaylistSaveCreateTitle(null);
-      await savePlaylistPickerTargets(nextPlaylist);
     } catch (error) {
       console.error('create and save playlist failed:', error);
       showToast('새 폴더 저장에 실패했습니다.');
@@ -5866,6 +5867,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         showToast('비공개로 전환된 공유곡은 폴더 이동할 수 없습니다.');
         return;
       }
+      setBulkMoveTargetId(null);
       setBulkMoveModalOpen(true);
       return;
     }
@@ -8744,8 +8746,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           <motion.div
             data-selection-keep="true"
             data-floating-menu="true"
-            className={`fixed inset-0 z-[220] flex items-end justify-center bg-black/55 px-4 backdrop-blur-sm md:items-center ${multiSelectMode && selectedTrackCount > 0 ? 'pb-[128px] md:pb-[142px]' : 'pb-6 md:pb-0'}`}
-            onClick={() => { setPlaylistSavePicker(null); setPlaylistSaveCreateTitle(null); }}
+            className="fixed inset-0 z-[220] flex items-center justify-center overflow-y-auto bg-black/55 px-4 py-4 backdrop-blur-sm"
+            onClick={() => { setPlaylistSavePicker(null); setPlaylistSaveCreateTitle(null); setPlaylistSaveTargetId(null); }}
           >
             <motion.div
               data-selection-keep="true"
@@ -8754,7 +8756,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 0, scale: 1 }}
               transition={{ duration: 0.08, ease: [0.22, 1, 0.36, 1] }}
-              className="w-full max-w-[420px] overflow-hidden rounded-[28px] border border-[#A98BFF]/25 bg-[#181818] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+              className="w-full max-w-[420px] max-h-[calc(100dvh-24px)] overflow-y-auto rounded-[28px] bg-[#1a1a1a] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.78)]"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-3">
@@ -8765,27 +8767,33 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     {playlistSavePicker.isShared ? '공유 받은 곡 플레이리스트를 선택하세요.' : '저장할 플레이리스트를 선택하세요.'}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => { setPlaylistSavePicker(null); setPlaylistSaveCreateTitle(null); }}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/55 transition-all hover:text-white"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button type="button" aria-label="플레이리스트 저장 확인" title="선택한 폴더에 저장"
+                    disabled={!playlistSaveTargetId}
+                    onClick={() => {
+                      const target = playlistSavePicker.playlists.find(item => item.id === playlistSaveTargetId);
+                      if (target) void savePlaylistPickerTargets(target);
+                    }}
+                    className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#A98BFF] text-[#181818] transition-colors hover:bg-[#C5AEFF] disabled:cursor-not-allowed disabled:bg-[#303033] disabled:text-white/25">
+                    <Check className="h-5 w-5" strokeWidth={3} />
+                  </button>
+                  <button type="button" aria-label="플레이리스트 선택 취소"
+                    onClick={() => { setPlaylistSavePicker(null); setPlaylistSaveCreateTitle(null); setPlaylistSaveTargetId(null); }}
+                    className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#2c2c2e] text-white/55 transition-colors hover:bg-[#38383b] hover:text-white">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
               <div className="mt-5 grid gap-2 max-h-[50vh] overflow-y-auto pr-1">
                 {playlistSavePicker.playlists.map((playlist) => {
-                  const selectedId = playlistSavePicker.isShared ? selectedSharedPlaylistId : selectedNormalPlaylistId;
+                  const selectedId = playlistSaveTargetId;
                   return (
-                    <button
-                      key={playlist.id}
-                      type="button"
-                      onClick={() => savePlaylistPickerTargets(playlist)}
-                      className={`flex h-12 items-center justify-between rounded-2xl border px-4 text-sm font-bold transition-all ${selectedId === playlist.id ? 'border-[#A98BFF]/45 bg-[#A98BFF]/22 text-white' : 'border-white/10 bg-white/[0.035] text-white/72 hover:border-[#A98BFF]/32 hover:text-white'}`}
-                    >
+                    <button key={playlist.id} type="button" aria-pressed={selectedId === playlist.id}
+                      onClick={() => setPlaylistSaveTargetId(playlist.id || null)}
+                      className={`flex h-12 items-center justify-between rounded-2xl px-4 text-sm font-bold transition-colors ${selectedId === playlist.id ? 'bg-[#38383b] text-white' : 'bg-[#262628] text-white/75 hover:bg-[#303033] hover:text-white'}`}>
                       <span className="inline-flex items-center gap-2"><FolderOutput className="h-4 w-4 text-[#D8CCFF]" />{playlist.title}</span>
-                      {selectedId === playlist.id && <CheckSquare className="h-4 w-4 text-[#D8CCFF]" />}
+                      {selectedId === playlist.id && <Check className="h-4 w-4 text-[#D8CCFF]" />}
                     </button>
                   );
                 })}
@@ -8794,12 +8802,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <button
                     type="button"
                     onClick={() => setPlaylistSaveCreateTitle('')}
-                    className="mt-1 flex h-12 items-center justify-center gap-2 rounded-2xl border border-dashed border-[#A98BFF]/35 bg-[#A98BFF]/8 px-4 text-sm font-black text-[#D8CCFF] transition-all hover:bg-[#A98BFF]/14 hover:text-white"
+                    className="mt-1 flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#303033] px-4 text-sm font-black text-[#D8CCFF] transition-colors hover:bg-[#3b3b3e]"
                   >
                     <Plus className="h-4 w-4" /> 새 폴더 만들기
                   </button>
                 ) : (
-                  <div className="mt-1 flex h-12 items-center gap-2 rounded-2xl border border-[#A98BFF]/35 bg-black/20 px-3">
+                  <div className="mt-1 flex h-12 items-center gap-2 rounded-2xl bg-[#262628] px-3">
                     <input
                       type="text"
                       value={playlistSaveCreateTitle}

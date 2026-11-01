@@ -7789,7 +7789,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         )}
 
         {(libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist') && (
-          <div className="space-y-5 mt-3" data-selection-keep="true">
+          <div className="mt-3" data-selection-keep="true">
             {/* Playlist Tabs Layout */}
             
             {libraryViewMode === 'playlist' && (
@@ -7947,11 +7947,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
             {/* Playlist Items */}
             {loadingPlaylistItems ? (
-              <div className="soridraw-library-list-start-divider flex justify-center p-6 mt-3">
+              <div className="soridraw-library-list-start-divider soridraw-library-folder-list-start-divider flex justify-center p-6 mt-[13px] md:mt-[21px]">
                 <Loader2 className="w-6 h-6 animate-spin text-[#A98BFF]" />
               </div>
             ) : playlistItems.length > 0 ? (
-              <div className="soridraw-library-list-start-divider flex flex-col gap-2 mt-3 pt-3" data-selection-keep="true">
+              <div className="soridraw-library-list-start-divider soridraw-library-folder-list-start-divider flex flex-col gap-2 mt-[13px] md:mt-[21px]" data-selection-keep="true">
                 {(() => {
                   const normalizedPlaylistSearch = deferredPlaylistSearchTerm.trim().toLowerCase();
                   let items = playlistItems.filter(item => {
@@ -8443,7 +8443,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 })()}
               </div>
             ) : (
-              <div className="soridraw-library-list-start-divider flex flex-col items-center justify-center py-12 text-center mt-3">
+              <div className="soridraw-library-list-start-divider soridraw-library-folder-list-start-divider flex flex-col items-center justify-center py-12 text-center mt-[13px] md:mt-[21px]">
                 <Music className="w-12 h-12 text-[#A98BFF]/40 mb-4" />
                 <h2 className="text-xl font-bold mb-2">
                   {activePlaylistSection === 'normal' ? '아직 저장된 곡이 없습니다.' : '아직 저장된 공유곡이 없습니다.'}

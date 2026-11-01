@@ -8431,21 +8431,23 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
-/* Library folder/list separator: its prior border-t utility was recolored
- * black by the shared dark-theme border reset. Reuse the existing list-start
- * pseudo-element rather than layering another border over that reset.
- * The line is above list backgrounds and in the existing vertical gap. */
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-library-theme .soridraw-library-list-start-divider,
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
-.soridraw-library-theme .soridraw-library-list-start-divider {
+/* Music Space is the reference separator. Show the same 1px line in
+ * Note Space / My Note / Shared Note (Classic Dark phone + Studio Black).
+ * Playlist lists use the same line in the EXISTING gap; no border or spacer
+ * element changes list/card geometry. Keep public shared-note pages untouched. */
+:is(html[data-soridraw-theme="studio-black"],
+    html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"])
+body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme .soridraw-musicnote-tab-list-divider,
+    .soridraw-library-theme .soridraw-library-list-start-divider) {
   position: relative !important;
   --soridraw-list-start-gap: 21px;
 }
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-library-theme .soridraw-library-list-start-divider::before,
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
-.soridraw-library-theme .soridraw-library-list-start-divider::before {
+:is(html[data-soridraw-theme="studio-black"],
+    html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"])
+body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme .soridraw-musicnote-tab-list-divider,
+    .soridraw-library-theme .soridraw-library-list-start-divider)::before {
   content: "";
   position: absolute;
   z-index: 2;
@@ -8458,10 +8460,22 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
   pointer-events: none;
 }
 @media (max-width: 660px) {
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-library-theme .soridraw-library-list-start-divider,
-  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
-  .soridraw-library-theme .soridraw-library-list-start-divider {
+  :is(html[data-soridraw-theme="studio-black"],
+      html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"])
+  body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme .soridraw-musicnote-tab-list-divider,
+      .soridraw-library-theme .soridraw-library-list-start-divider) {
+    --soridraw-list-start-gap: 13px;
+  }
+}
+/* Between pane-mobile 661px and Tailwind md 768px, the Note/playlist
+ * wrapper is still mt-[13px]. Music Space retains its old line placement. */
+@media (min-width: 661px) and (max-width: 767px) {
+  :is(html[data-soridraw-theme="studio-black"],
+      html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"])
+  body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme .soridraw-musicnote-tab-list-divider,
+      .soridraw-library-theme .soridraw-library-folder-list-start-divider) {
     --soridraw-list-start-gap: 13px;
   }
 }

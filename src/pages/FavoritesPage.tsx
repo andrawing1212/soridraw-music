@@ -7385,7 +7385,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   isDefaultFolder && 'touch-pan-x',
                   isDraggingFolder && 'soridraw-folder-drag-active touch-none z-10',
                   selectedId === folder.id
-                    ? 'bg-[#FF7A72]/78 text-white border-[#FF7A72]/55 shadow-lg'
+                    ? 'bg-[#FF7A72] text-white border-[#FF7A72]/55 shadow-lg'
                     : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
                 )}
               >
@@ -7737,7 +7737,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               className={cn(
                 'soridraw-musicnote-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate transition-all',
                 musicNoteViewMode === tab.id
-                  ? 'soridraw-musicnote-mode-tab--active bg-[#FF7A72]/78 text-white shadow-lg'
+                  ? 'soridraw-musicnote-mode-tab--active bg-[#FF7A72] text-white shadow-lg'
                   : 'text-white/60 hover:text-white'
               )}
             >

@@ -17126,6 +17126,33 @@ html[data-soridraw-theme="classic"] body #root .soridraw-app-root .soridraw-stud
   transform: translateY(-4px) !important;
 }
 
+
+/* Music Note folder header: keep the desktop 14px heading on every pane
+ * and center the relocated add icon independently of mobile folder-strip rules. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page
+.soridraw-musicnote-folder-heading,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-folder-heading,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-result-pane[data-pane-mode="mobile"]
+.soridraw-musicnote-folder-heading {
+  font-size: 14px !important;
+}
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page
+.soridraw-musicnote-folder-header > .soridraw-musicnote-folder-add {
+  display: inline-flex !important;
+  width: 28px !important;
+  min-width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+}
+
 /* APP463_MUSIC_NOTE_SONG_KEYWORD_12PX
  * Music Note saved-song list only. Existing 8px narrow-pane and 9px base
  * keyword labels are difficult to read. Preserve the 18/20px strip height,

@@ -7315,9 +7315,19 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
     return (
       <div className="soridraw-musicnote-region-top mt-4 md:mt-5 space-y-3" data-selection-keep="true">
-        <h3 className="soridraw-musicnote-folder-heading px-2 text-[12px] md:text-sm font-bold text-[#FFC1BC]/80 tracking-wide">
-          {isShared ? '공유 받은 노트' : '나의 노트폴더'}
-        </h3>
+        <div className="soridraw-musicnote-folder-header flex min-h-7 items-center gap-2 px-2">
+          <h3 className="soridraw-musicnote-folder-heading text-sm font-bold text-[#FFC1BC]/80 tracking-wide">
+            {isShared ? '공유 받은 노트' : '나의 노트폴더'}
+          </h3>
+          <button
+            type="button"
+            onClick={() => handleAddMusicNoteFolder(mode)}
+            aria-label={isShared ? '공유 받은 노트 폴더 추가' : '나의 노트폴더 추가'}
+            className="soridraw-musicnote-folder-add inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--bg-secondary)] p-0 text-white/55 shadow-btn transition-all hover:bg-white/5 hover:text-white"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
         <div className="soridraw-folder-scroll-shell flex min-w-0 items-center gap-1">
         <button
           type="button"
@@ -7369,14 +7379,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               </button>
             );
           })}
-          <button
-            type="button"
-            onClick={() => handleAddMusicNoteFolder(mode)}
-            className="soridraw-musicnote-folder-add shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all bg-[var(--bg-secondary)] text-white/40 hover:bg-white/5 hover:text-white flex items-center gap-1 shadow-btn"
-          >
-            <span className="text-lg font-light leading-none">+</span>
-          </button>
-
         </div>
         <button
           type="button"

@@ -6641,21 +6641,6 @@ h1.text-3xl.md\:text-5xl {
  * narrower panes reveal proportionally fewer before horizontal drag/scroll. */
 @media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-result-pane > .soridraw-studio-workspace-page--music-note
-  > .soridraw-musicnote-page-shell {
-    padding-left: 12px !important;
-    padding-right: 12px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-result-pane[data-pane-mode="mobile"]
-  > .soridraw-studio-workspace-page--music-note
-  > .soridraw-musicnote-page-shell {
-    padding-left: 7px !important;
-    padding-right: 6px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-result-pane[data-pane-mode="desktop"]
   .soridraw-musicnote-song-row {
     padding: 12px 14px !important;
@@ -8458,6 +8443,17 @@ body #root .soridraw-app-root
   transform: translateY(-50%);
   background: rgba(255, 255, 255, 0.15);
   pointer-events: none;
+}
+
+/* The Library stroke was 1 screen pixel above the Note stroke in the
+ * director's same-row PC recording. Adjust paint only, not list geometry.
+ * Applies to Library in both Studio Black and Classic Dark, while keeping
+ * the previously approved mobile Note Space margin and line unchanged. */
+:is(html[data-soridraw-theme="studio-black"],
+    html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"])
+body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-library-list-start-divider::before {
+  transform: translateY(calc(-50% + 1px));
 }
 @media (max-width: 660px) {
   :is(html[data-soridraw-theme="studio-black"],

@@ -6821,7 +6821,7 @@ h1.text-3xl.md\:text-5xl {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-result-pane[data-pane-mode="mobile"]
   .soridraw-library-folder-heading {
-    font-size: 9.5px !important;
+    font-size: 14px !important;
     letter-spacing: 0.04em !important;
   }
 
@@ -11243,7 +11243,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 :root body #root .soridraw-app-root
 :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
 .soridraw-library-folder-heading {
-  font-size: 9.5px !important;
+  font-size: 14px !important;
   letter-spacing: 0.04em !important;
 }
 
@@ -17149,13 +17149,13 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 }
 
 /* Actual phones use Classic Dark (themePreferences.ts), not Studio Black.
- * Mobile: 16px; wide PC: 14px; a narrow PC split pane uses mobile size. */
+ * Both mobile and desktop: 14px, including a narrow PC split pane. */
 @media (max-width: 1099px) {
   html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
   .soridraw-musicnote-theme .soridraw-musicnote-folder-header > .soridraw-musicnote-folder-heading,
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-musicnote-theme .soridraw-musicnote-folder-header > .soridraw-musicnote-folder-heading {
-    font-size: 16px !important;
+    font-size: 14px !important;
     line-height: 1.25 !important;
   }
 }
@@ -17163,9 +17163,33 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-result-pane[data-pane-mode="mobile"]
   .soridraw-musicnote-folder-header > .soridraw-musicnote-folder-heading {
-    font-size: 16px !important;
+    font-size: 14px !important;
     line-height: 1.25 !important;
   }
+}
+
+/* Folder creation buttons are visible beside headings on Studio Black PC.
+ * The phone's existing Classic Dark button styling remains untouched. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+:is(.soridraw-musicnote-folder-header, .soridraw-library-folder-header)
+> :is(.soridraw-musicnote-folder-add, .soridraw-library-folder-add) {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 0 0 28px !important;
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: #2c2c2e !important;
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+:is(.soridraw-musicnote-folder-header, .soridraw-library-folder-header)
+> :is(.soridraw-musicnote-folder-add, .soridraw-library-folder-add):hover {
+  background: #333336 !important;
 }
 
 /* Music Note / Library three-button typography and touch contract.

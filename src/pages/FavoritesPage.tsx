@@ -1094,7 +1094,12 @@ const getMyNoteFolderIdsFromSong = (song: any): string[] => {
   // An explicit empty array means unassigned. Legacy songs without this array
   // retain their single folder without any read-time server migration.
   if (Array.isArray(song.noteFolderIds)) {
-    return [...new Set(song.noteFolderIds.map((id: unknown) => String(id || '').trim()).filter(Boolean))];
+    const ids = [...new Set<string>(song.noteFolderIds.map((id: unknown) => String(id || '').trim()).filter(Boolean))];
+    // An old single-folder client can still move the legacy primary. Merge it
+    // without a destructive backfill; our own writes always keep both aligned.
+    const primary = String(song.noteFolderId || '').trim();
+    if (primary && !ids.includes(primary)) ids.push(primary);
+    return ids;
   }
   const legacy = String(song.noteFolderId || song.myNoteFolderId || song.favoriteFolderId || song.folderId || '').trim();
   return legacy ? [legacy] : [];
@@ -2822,8 +2827,8 @@ updates: draft.updates,
     // a single song this is its exact existing shortcut set; no folder is
     // prechecked for an unassigned original.
     const savedSets = safeSongIds.map((id) => {
-      const song = favoritesStore.getFavorites().find((item: any) => getFavoriteDocumentId(item) === id)
-        || activeFavoriteSource.find((item: any) => getFavoriteDocumentId(item) === id);
+      const song = favoritesStore.getFavorites().find((item: any) => getFavoriteDocumentId(item) === id || String(item?.id || '') === id)
+        || activeFavoriteSource.find((item: any) => getFavoriteDocumentId(item) === id || String(item?.id || '') === id);
       return mode === 'myNote' ? getMyNoteFolderIdsFromSong(song) : [];
     });
     const existing = mode === 'myNote' && savedSets.length > 0
@@ -2968,14 +2973,14 @@ updates: draft.updates,
         const removed = musicNoteFolderInitialIds.filter(id => !musicNoteFolderTargetIds.includes(id));
         const source = favoritesStore.getFavorites();
         const patches = targetSongIds.flatMap(id => {
-          const song = source.find((item: any) => getFavoriteDocumentId(item) === id)
-            || activeFavoriteSource.find((item: any) => getFavoriteDocumentId(item) === id);
+          const song = source.find((item: any) => getFavoriteDocumentId(item) === id || String(item?.id || '') === id)
+            || activeFavoriteSource.find((item: any) => getFavoriteDocumentId(item) === id || String(item?.id || '') === id);
           if (!song) return [];
           const before = getMyNoteFolderIdsFromSong(song);
           const after = [...before.filter(existingId => !removed.includes(existingId))];
           for (const addedId of added) if (!after.includes(addedId)) after.push(addedId);
-          if (before.length === after.length && before.every((existingId, i) => after[i] === existingId)) return [];
-          return [{ id, updates: buildMyNoteFolderMembershipPatch(after, folders) }];
+          if (!getFavoriteDocumentId(song) || (before.length === after.length && before.every((existingId, i) => after[i] === existingId))) return [];
+          return [{ id: getFavoriteDocumentId(song), updates: buildMyNoteFolderMembershipPatch(after, folders) }];
         });
         if (patches.length === 0) {
           showFavoriteToast('변경된 폴더가 없습니다.');
@@ -3074,13 +3079,13 @@ updates: draft.updates,
         const folderId = selectedMyNoteFolderId;
         const source = favoritesStore.getFavorites();
         const patches = safeSongIds.flatMap(id => {
-          const song = source.find((item: any) => getFavoriteDocumentId(item) === id)
-            || activeFavoriteSource.find((item: any) => getFavoriteDocumentId(item) === id);
+          const song = source.find((item: any) => getFavoriteDocumentId(item) === id || String(item?.id || '') === id)
+            || activeFavoriteSource.find((item: any) => getFavoriteDocumentId(item) === id || String(item?.id || '') === id);
           if (!song) return [];
           const existing = getMyNoteFolderIdsFromSong(song);
-          if (!existing.includes(folderId)) return [];
+          if (!getFavoriteDocumentId(song) || !existing.includes(folderId)) return [];
           const remaining = existing.filter(id => id !== folderId);
-          return [{ id, updates: buildMyNoteFolderMembershipPatch(remaining, myNoteFolders) }];
+          return [{ id: getFavoriteDocumentId(song), updates: buildMyNoteFolderMembershipPatch(remaining, myNoteFolders) }];
         });
         if (patches.length === 0) return true;
         await commitMusicNoteIndividualFolderPatches(patches);
@@ -6044,7 +6049,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           : `SORIDRAW 선택한 ${musicNoteShareInfo.songs.length}곡`;
         try {
           await navigator.share({ title, url: shareUrl });
-          setMusicNoteShareInfo(null);
+          requestCloseMusicNoteChildPopup();
           return;
         } catch (error: any) {
           // OS/browser share sheet cancellation is not an error or a success toast.
@@ -6053,7 +6058,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       }
       const copied = await copyTextWithFallback(shareUrl);
       if (!copied) throw new Error('clipboard-failed');
-      setMusicNoteShareInfo(null);
+      requestCloseMusicNoteChildPopup();
       if (method === 'copy') showFavoriteToast('복사되었습니다');
     } catch (error: any) {
       if (error?.message !== 'login-required') {
@@ -9222,7 +9227,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       onChange={(event) => setMusicNoteFolderCreateTitle(event.target.value)}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') commitCreateAndSaveMusicNoteFolder();
-                        if (event.key === 'Escape') setMusicNoteFolderCreateTitle(null);
+                        if (event.key === 'Escape') { event.stopPropagation(); setMusicNoteFolderCreateTitle(null); }
                       }}
                       placeholder="새 폴더명"
                       maxLength={20}

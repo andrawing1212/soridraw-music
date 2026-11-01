@@ -5603,7 +5603,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     try {
       await createBulkSharePage({ makePublic: true });
-      setBulkShareModalOpen(false);
+      closeModal();
       setBulkMenuState(null);
       showToast(`선택한 ${selectedTrackCount}곡을 All 공개 상태로 설정했습니다.`);
     } catch (e) {
@@ -5637,7 +5637,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         showToast('공유 링크가 복사되었습니다.');
       }
 
-      setBulkShareModalOpen(false);
+      closeModal();
       setBulkMenuState(null);
     } catch (e) {
       console.error(e);
@@ -5680,7 +5680,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         console.error('bulk private share failed:', e);
       }
     }
-    setBulkShareModalOpen(false);
+    closeModal();
     setBulkMenuState(null);
     showToast(changed > 0 ? `${changed}곡을 비공개로 전환했습니다.` : '비공개로 전환할 수 있는 원곡이 없습니다.');
   };
@@ -7095,8 +7095,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       `}</style>
       <AnimatePresence>
         {renameModalArgs && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25"
-               onClick={() => setRenameModalArgs(null)}>
+          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25"
+               onClick={closeModal}>
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -7145,7 +7145,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 </p>
               )}
               <div className="p-4 bg-[#1a1a1a]/50 flex justify-end gap-2 border-t border-black/15">
-                <button className="px-4 py-2 font-bold text-white/50 hover:text-white transition-colors" onClick={() => setRenameModalArgs(null)}>취소</button>
+                <button className="px-4 py-2 font-bold text-white/50 hover:text-white transition-colors" onClick={closeModal}>취소</button>
                 <button className="px-4 py-2 font-bold bg-[#A98BFF] text-white rounded-xl hover:bg-[#A98BFF]/90 transition-colors" onClick={async () => {
                   if (!user || (renameModalArgs.playlist as any).isFallback) return;
                   const trimmedTitle = renameModalArgs.newTitle.trim();
@@ -7178,8 +7178,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       <AnimatePresence>
         {moveModalArgs && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25"
-               onClick={() => { setMoveModalArgs(null); setSingleMoveTargetId(null); }}>
+          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25"
+               onClick={closeModal}>
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -8347,7 +8347,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       {/* Share Modal */}
       <AnimatePresence>
         {sharePopupInfo && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/25" onClick={closeModal}>
+          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/25" onClick={closeModal}>
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -8713,7 +8713,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       <AnimatePresence>
         {bulkShareModalOpen && multiSelectMode && (
-          <div className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/25" onClick={() => setBulkShareModalOpen(false)}>
+          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/25" onClick={closeModal}>
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -8753,7 +8753,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               </div>
 
               <button
-                onClick={() => setBulkShareModalOpen(false)}
+                onClick={closeModal}
                 className="w-full py-3 text-white/20 text-[10px] font-black uppercase tracking-widest hover:text-white/60 transition-all mt-4"
               >
                 닫기
@@ -8769,7 +8769,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             data-selection-keep="true"
             data-floating-menu="true"
             className="fixed inset-0 z-[220] flex items-center justify-center overflow-y-auto bg-black/55 px-4 py-4 backdrop-blur-sm"
-            onClick={() => { setPlaylistSavePicker(null); setPlaylistSaveCreateTitle(null); setPlaylistSaveTargetId(null); }}
+            onClick={closeModal}
           >
             <motion.div
               data-selection-keep="true"
@@ -8800,7 +8800,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     <Check className="h-5 w-5" strokeWidth={3} />
                   </button>
                   <button type="button" aria-label="플레이리스트 선택 취소"
-                    onClick={() => { setPlaylistSavePicker(null); setPlaylistSaveCreateTitle(null); setPlaylistSaveTargetId(null); }}
+                    onClick={closeModal}
                     className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#2c2c2e] text-white/55 transition-colors hover:bg-[#38383b] hover:text-white">
                     <X className="h-4 w-4" />
                   </button>
@@ -8869,7 +8869,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       <AnimatePresence>
         {bulkMoveModalOpen && multiSelectMode && (
-          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/25" onClick={() => { setBulkMoveModalOpen(false); setBulkMoveTargetId(null); }}>
+          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/25" onClick={closeModal}>
             <motion.div
               data-selection-keep="true"
               data-floating-menu="true"
@@ -9058,7 +9058,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       <AnimatePresence>
         {deleteTarget && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/25" onClick={closeModal}>
+          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/25" onClick={closeModal}>
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}

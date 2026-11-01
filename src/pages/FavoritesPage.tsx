@@ -4556,6 +4556,18 @@ updates: draft.updates,
     frameId: number | null;
   } | null>(null);
   const keywordScrollRefreshFrameRef = useRef<number | null>(null);
+  // A held arrow can reach an edge before pointer-up. Keep its originating
+  // pointer marked until the synthetic click has crossed the card boundary.
+  const keywordNavClickPointerRef = useRef<number | null>(null);
+  const keywordNavClickTimerRef = useRef<number | null>(null);
+  const scheduleKeywordNavClickGuardClear = useCallback((pointerId: number) => {
+    if (keywordNavClickPointerRef.current !== pointerId) return;
+    if (keywordNavClickTimerRef.current !== null) window.clearTimeout(keywordNavClickTimerRef.current);
+    keywordNavClickTimerRef.current = window.setTimeout(() => {
+      if (keywordNavClickPointerRef.current === pointerId) keywordNavClickPointerRef.current = null;
+      keywordNavClickTimerRef.current = null;
+    }, 0);
+  }, []);
 
   const refreshFavoriteKeywordArrows = useCallback((strip: HTMLElement) => {
     const host = strip.parentElement;
@@ -4565,8 +4577,11 @@ updates: draft.updates,
     const canRight = maxScroll > 1 && strip.scrollLeft < maxScroll - 1;
     const left = host.querySelector<HTMLButtonElement>('.soridraw-musicnote-keyword-nav--left');
     const right = host.querySelector<HTMLButtonElement>('.soridraw-musicnote-keyword-nav--right');
-    if (left && left.hidden !== !canLeft) left.hidden = !canLeft;
-    if (right && right.hidden !== !canRight) right.hidden = !canRight;
+    // The active button stays mounted through release, even at the scroll edge.
+    // Hiding it under a held pointer otherwise retargets click to the song card.
+    const heldButton = keywordScrollHoldRef.current?.button;
+    if (left && left !== heldButton && left.hidden !== !canLeft) left.hidden = !canLeft;
+    if (right && right !== heldButton && right.hidden !== !canRight) right.hidden = !canRight;
   }, []);
 
   const scheduleFavoriteKeywordArrowRefresh = useCallback(() => {
@@ -4618,7 +4633,8 @@ updates: draft.updates,
         strip.scrollLeft = Math.max(0, Math.min(maxScroll, strip.scrollLeft + direction * 280 * elapsed / 1000));
       }
       if ((direction < 0 && strip.scrollLeft <= 1) || (direction > 0 && strip.scrollLeft >= maxScroll - 1)) {
-        stopFavoriteKeywordArrowHold(pointerId);
+        // End scrolling, not the pointer hold; release owns button hiding.
+        hold.frameId = null;
         return;
       }
       hold.frameId = window.requestAnimationFrame(tick);
@@ -4628,7 +4644,10 @@ updates: draft.updates,
 
   useEffect(() => {
     const stopOnBlur = () => stopFavoriteKeywordArrowHold();
-    const stopOnWindowPointerUp = (event: PointerEvent) => stopFavoriteKeywordArrowHold(event.pointerId);
+    const stopOnWindowPointerUp = (event: PointerEvent) => {
+      stopFavoriteKeywordArrowHold(event.pointerId);
+      scheduleKeywordNavClickGuardClear(event.pointerId);
+    };
     window.addEventListener('blur', stopOnBlur);
     window.addEventListener('pointerup', stopOnWindowPointerUp);
     window.addEventListener('pointercancel', stopOnWindowPointerUp);
@@ -4636,6 +4655,9 @@ updates: draft.updates,
     window.addEventListener('soridraw-split-drag-end', scheduleFavoriteKeywordArrowRefresh);
     return () => {
       stopFavoriteKeywordArrowHold();
+      if (keywordNavClickTimerRef.current !== null) window.clearTimeout(keywordNavClickTimerRef.current);
+      keywordNavClickPointerRef.current = null;
+      keywordNavClickTimerRef.current = null;
       if (keywordScrollRefreshFrameRef.current !== null) window.cancelAnimationFrame(keywordScrollRefreshFrameRef.current);
       keywordScrollRefreshFrameRef.current = null;
       window.removeEventListener('blur', stopOnBlur);
@@ -4644,7 +4666,7 @@ updates: draft.updates,
       window.removeEventListener('resize', scheduleFavoriteKeywordArrowRefresh);
       window.removeEventListener('soridraw-split-drag-end', scheduleFavoriteKeywordArrowRefresh);
     };
-  }, [scheduleFavoriteKeywordArrowRefresh, stopFavoriteKeywordArrowHold]);
+  }, [scheduleFavoriteKeywordArrowRefresh, scheduleKeywordNavClickGuardClear, stopFavoriteKeywordArrowHold]);
 
   const handleHorizontalListWheel = (event: React.WheelEvent<HTMLElement>) => {
     if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
@@ -7272,9 +7294,20 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         <h3 className="soridraw-musicnote-folder-heading px-2 text-[12px] md:text-sm font-bold text-[#FFC1BC]/80 tracking-wide">
           {isShared ? '공유 받은 노트' : '나의 노트폴더'}
         </h3>
+        <div className="soridraw-folder-scroll-shell flex min-w-0 items-center gap-1">
+        <button
+          type="button"
+          className="soridraw-folder-scroll-arrow shrink-0"
+          aria-label="노트 폴더 왼쪽으로 이동"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            musicNoteFolderBarRefs.current[mode]?.scrollBy({ left: - 220, behavior: 'smooth' });
+          }}
+        ><span aria-hidden="true">◀</span></button>
         <div
           ref={(element) => { musicNoteFolderBarRefs.current[mode] = element; }}
-          className="soridraw-folder-drag-scrollbar flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2"
+          className="soridraw-folder-drag-scrollbar min-w-0 flex-1 flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2"
         >
           {folders.map((folder) => {
             const dragKey = getMusicNoteFolderDragKey(mode, folder.id);
@@ -7341,6 +7374,17 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               </div>
             );
           })()}
+        </div>
+        <button
+          type="button"
+          className="soridraw-folder-scroll-arrow shrink-0"
+          aria-label="노트 폴더 오른쪽으로 이동"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            musicNoteFolderBarRefs.current[mode]?.scrollBy({ left: 220, behavior: 'smooth' });
+          }}
+        ><span aria-hidden="true">▶</span></button>
         </div>
       </div>
     );
@@ -7515,7 +7559,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           box-shadow: none !important;
           background: transparent !important;
           background-image: none !important;
-          color: rgba(255, 255, 255, 0.66);
+          color: #fff !important;
           font-size: 9px;
           line-height: 1;
           cursor: pointer;
@@ -7523,7 +7567,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           user-select: none;
         }
         .soridraw-musicnote-keyword-nav:hover,
-        .soridraw-musicnote-keyword-nav:active { color: rgba(255, 255, 255, 0.95); }
+        .soridraw-musicnote-keyword-nav:active { color: #fff !important; }
         .soridraw-musicnote-keyword-nav:focus-visible { outline: 1px solid #ff7a72; }
         .soridraw-musicnote-keyword-nav[hidden] { display: none !important; }
         .soridraw-musicnote-keyword-nav--left { left: 0; }
@@ -7899,6 +7943,14 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   onTouchCancel={handleCardLongPressEnd}
                   onContextMenu={(event) => openFavoriteMenuAtPointer(event, song)}
                   onClickCapture={(event) => {
+                    if (keywordNavClickPointerRef.current !== null) {
+                      keywordNavClickPointerRef.current = null;
+                      if (keywordNavClickTimerRef.current !== null) window.clearTimeout(keywordNavClickTimerRef.current);
+                      keywordNavClickTimerRef.current = null;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      return;
+                    }
                     if (!isSelectionMode) return;
                     const target = event.target as HTMLElement | null;
                     if (target?.closest('[data-selection-checkbox="true"], [data-favorite-color-control="true"], [data-favorite-color-menu="true"], [data-musicnote-keyword-nav="true"]')) return;
@@ -8196,6 +8248,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                               onPointerDown={(event) => {
                                 event.preventDefault();
                                 event.stopPropagation();
+                                keywordNavClickPointerRef.current = event.pointerId;
+                                if (keywordNavClickTimerRef.current !== null) window.clearTimeout(keywordNavClickTimerRef.current);
+                                keywordNavClickTimerRef.current = null;
                                 startFavoriteKeywordArrowHold(event.currentTarget, direction, event.pointerId);
                               }}
                               onPointerUp={(event) => {

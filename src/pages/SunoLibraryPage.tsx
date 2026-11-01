@@ -7565,9 +7565,20 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             {libraryViewMode === 'playlist' && (
             <div className="space-y-3">
               <h3 className="soridraw-library-folder-heading text-sm font-bold text-white/50 px-2 uppercase tracking-wider">나의 플레이리스트</h3>
+              <div className="soridraw-folder-scroll-shell flex min-w-0 items-center gap-1">
+              <button
+                type="button"
+                className="soridraw-folder-scroll-arrow shrink-0"
+                aria-label="나의 플레이리스트 폴더 왼쪽으로 이동"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  playlistBarRefs.current.normal?.scrollBy({ left: - 220, behavior: 'smooth' });
+                }}
+              ><span aria-hidden="true">◀</span></button>
               <div
                 ref={(element) => { playlistBarRefs.current.normal = element; }}
-                className="soridraw-folder-drag-scrollbar flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2"
+                className="soridraw-folder-drag-scrollbar min-w-0 flex-1 flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2"
               >
                 {visibleNormalPlaylists.map((playlist) => {
                   const dragKey = getPlaylistDragKey('normal', playlist.id!);
@@ -7610,15 +7621,37 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 </button>
                 {renderActivePlaylistManageButtons('normal')}
               </div>
+              <button
+                type="button"
+                className="soridraw-folder-scroll-arrow shrink-0"
+                aria-label="나의 플레이리스트 폴더 오른쪽으로 이동"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  playlistBarRefs.current.normal?.scrollBy({ left: 220, behavior: 'smooth' });
+                }}
+              ><span aria-hidden="true">▶</span></button>
+              </div>
             </div>
             )}
 
             {libraryViewMode === 'sharedPlaylist' && (
             <div className="space-y-3">
               <h3 className="soridraw-library-folder-heading text-sm font-bold text-white/50 px-2 uppercase tracking-wider">공유 받은 곡</h3>
+              <div className="soridraw-folder-scroll-shell flex min-w-0 items-center gap-1">
+              <button
+                type="button"
+                className="soridraw-folder-scroll-arrow shrink-0"
+                aria-label="공유 플레이리스트 폴더 왼쪽으로 이동"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  playlistBarRefs.current.shared?.scrollBy({ left: - 220, behavior: 'smooth' });
+                }}
+              ><span aria-hidden="true">◀</span></button>
               <div
                 ref={(element) => { playlistBarRefs.current.shared = element; }}
-                className="soridraw-folder-drag-scrollbar flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2"
+                className="soridraw-folder-drag-scrollbar min-w-0 flex-1 flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2"
               >
                 {visibleSharedPlaylists.map((playlist) => {
                   const dragKey = getPlaylistDragKey('shared', playlist.id!);
@@ -7661,6 +7694,17 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <span className="text-lg font-light leading-none">+</span>
                 </button>
                 {renderActivePlaylistManageButtons('shared')}
+              </div>
+              <button
+                type="button"
+                className="soridraw-folder-scroll-arrow shrink-0"
+                aria-label="공유 플레이리스트 폴더 오른쪽으로 이동"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  playlistBarRefs.current.shared?.scrollBy({ left: 220, behavior: 'smooth' });
+                }}
+              ><span aria-hidden="true">▶</span></button>
               </div>
             </div>
             )}

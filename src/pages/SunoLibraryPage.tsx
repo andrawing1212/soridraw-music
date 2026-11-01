@@ -1999,16 +1999,20 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             }
           }
           showToast('플레이리스트가 삭제되었습니다.');
+          return true;
         } catch (error) {
           console.error(error);
           showToast('삭제에 실패했습니다.');
+          return false;
         }
       }
     };
     if (directFromEditor) {
-      await deleteAction.onConfirm();
-      setRenameModalArgs(null);
-      setPlaylistFolderDeleteReady(false);
+      const deleted = await deleteAction.onConfirm();
+      if (deleted) {
+        setRenameModalArgs(null);
+        setPlaylistFolderDeleteReady(false);
+      }
     } else {
       setPlaylistConfirmAction(deleteAction);
     }
@@ -6751,7 +6755,15 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
 
     setPlaylistDragging(null);
-    if (cancelled) return;
+    if (cancelled) {
+      if (drag.moved) {
+        const restored = playlistsRef.current.map(item => item.id && drag.originalOrders[item.id] !== undefined
+          ? { ...item, order: drag.originalOrders[item.id!] } : item);
+        playlistsRef.current = restored;
+        setPlaylists(restored);
+      }
+      return;
+    }
     if (!drag.moved) {
       const folder = getPlaylistsBySectionForDrag(drag.section).find(item => item.id === drag.playlistId);
       if (folder) handleRenamePlaylist(folder);

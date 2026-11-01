@@ -7443,6 +7443,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     reorderMusicNoteFoldersByPointer(drag.mode, drag.folderId, event.clientX);
   };
 
+  const openMusicNoteFolderEditor = (mode: MusicNoteFolderMode, folder: MusicNoteFolder) => {
+    if (folder.isDefault || folder.id === 'default') return;
+    setMusicNoteFolderDeleteReady(false);
+    setMusicNoteFolderRenameArgs({ mode, folder, newTitle: folder.title });
+  };
+
   const finishMusicNoteFolderDrag = async (event?: React.PointerEvent<HTMLButtonElement>, cancelled = false) => {
     if (musicNoteFolderPressTimerRef.current) window.clearTimeout(musicNoteFolderPressTimerRef.current);
     musicNoteFolderPressTimerRef.current = null;
@@ -7494,10 +7500,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
     if (!drag.moved) {
       const folder = getMusicNoteFoldersByMode(drag.mode).find(item => item.id === drag.folderId);
-      if (folder) {
-        setMusicNoteFolderDeleteReady(false);
-        setMusicNoteFolderRenameArgs({ mode: drag.mode, folder, newTitle: folder.title });
-      }
+      if (folder) openMusicNoteFolderEditor(drag.mode, folder);
       return;
     }
     const currentIds = getMusicNoteFoldersByMode(drag.mode).map(item => item.id).join('|');
@@ -7633,6 +7636,21 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               >
                 {isShared && <Share2 className="w-3.5 h-3.5 shrink-0" />}
                 <span>{folder.title}</span>
+                {!isDefaultFolder && (
+                  <span
+                    className="soridraw-folder-hover-edit"
+                    title="폴더 편집"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onPointerUp={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      openMusicNoteFolderEditor(mode, folder);
+                    }}
+                  >
+                    <Edit2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  </span>
+                )}
               </button>
             );
           })}

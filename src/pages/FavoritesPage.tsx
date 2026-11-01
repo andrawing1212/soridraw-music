@@ -1204,6 +1204,8 @@ export default function FavoritesPage({
   const [sharedMusicNoteTitle, setSharedMusicNoteTitle] = useState('공유 뮤직노트');
   const [showMusicNoteKakaoWarning, setShowMusicNoteKakaoWarning] = useState(false);
   const [musicNoteShareInfo, setMusicNoteShareInfo] = useState<{ songs: any[]; mode: 'default' | 'pc-panel'; shareId?: string; isPublic?: boolean } | null>(null);
+  const [musicNoteShareBusy, setMusicNoteShareBusy] = useState(false);
+  const musicNoteShareBusyRef = useRef(false);
   const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
   const musicNoteShareParam = new URLSearchParams(window.location.search).get('note');
   const isMusicNoteShareRoute = Boolean(musicNoteShareParam);
@@ -4853,6 +4855,7 @@ updates: draft.updates,
     event.preventDefault();
     event.stopPropagation();
     handleCardLongPressEnd();
+    if (isSelectionMode) return;
 
     const card = event.currentTarget;
     const menuButton = card.querySelector<HTMLElement>('[data-more-menu-button="true"]');
@@ -5100,7 +5103,10 @@ updates: draft.updates,
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (selectedSong) {
+        if (musicNoteShareInfo) {
+          // Dismissing a share dialog is not an instruction to clear selected songs.
+          setMusicNoteShareInfo(null);
+        } else if (selectedSong) {
           closeSelectedSong();
         } else if (isSelectionMode) {
           exitSelectionMode();
@@ -5115,7 +5121,7 @@ updates: draft.updates,
       window.removeEventListener('keydown', handleKeyDown);
       if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
     };
-  }, [selectedSong, isSelectionMode, confirmDeleteSong, confirmToggleLock, confirmDeleteAll, confirmUnlockAll, confirmLockAll]);
+  }, [selectedSong, isSelectionMode, musicNoteShareInfo, confirmDeleteSong, confirmToggleLock, confirmDeleteAll, confirmUnlockAll, confirmLockAll]);
 
   const handleSelectedLock = async () => {
     if (pendingSelectionAction === 'lock' || pendingSelectionAction === 'unlock') {
@@ -5352,7 +5358,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     selectedSongs.forEach((song) => updateMusicNoteCardStateForSong(song, { locked: shouldLock }));
     setFavoriteSelectionMoreOpen(false);
     showFavoriteToast(shouldLock ? `${selectedSongs.length}곡을 잠금 처리했습니다.` : `${selectedSongs.length}곡 잠금을 해제했습니다.`);
-    exitSelectionMode();
   };
 
   const handleSelectionQuickDelete = () => {
@@ -5861,26 +5866,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     if (targets.length === 0) return;
 
     const shareId = makeMusicNoteShareId(targets);
-    const initialPublic = targets.length === 1 ? Boolean(targets[0]?.isPublic || targets[0]?.shareType === 'public') : targets.every(song => song?.isPublic === true);
-    setMusicNoteShareInfo({ songs: targets, mode, shareId, isPublic: initialPublic });
+    setMusicNoteShareInfo({ songs: targets, mode, shareId });
     setActiveFavoriteMenuId(null);
-
-    getDoc(doc(db, 'suno_shares', shareId))
-      .then((shareSnap) => {
-        if (!shareSnap.exists()) {
-          setMusicNoteShareInfo(prev => prev && prev.shareId === shareId ? { ...prev, isPublic: false } : prev);
-          return;
-        }
-        const nextPublic = shareSnap.data()?.isPublic === true;
-        setMusicNoteShareInfo(prev => prev && prev.shareId === shareId ? { ...prev, isPublic: nextPublic } : prev);
-      })
-      .catch((error: any) => {
-        const code = String(error?.code || '');
-        if (code !== 'permission-denied') {
-          console.warn('music note share status load failed:', error);
-        }
-        setMusicNoteShareInfo(prev => prev && prev.shareId === shareId ? { ...prev, isPublic: false } : prev);
-      });
   };
 
   const shareFavoriteSong = async (song: any) => {
@@ -5901,16 +5888,24 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     openMusicNoteShareModal(targets, 'default');
   };
 
-  const handleMusicNotePublicShare = async () => {
-    if (!musicNoteShareInfo) return;
+  const handleMusicNoteLinkAction = async (method: 'copy' | 'share') => {
+    if (!musicNoteShareInfo || musicNoteShareBusyRef.current) return;
+    musicNoteShareBusyRef.current = true;
+    setMusicNoteShareBusy(true);
     try {
+      // Preserve the existing link-readable share document contract. Removing
+      // the public/private choice must not produce an inaccessible link.
       const shareUrl = await createMusicNoteShareDocument(musicNoteShareInfo.songs, { isPublic: true });
-      const title = musicNoteShareInfo.songs.length === 1 ? getCombinedFavoriteTitle(musicNoteShareInfo.songs[0]) : `SORIDRAW 선택한 ${musicNoteShareInfo.songs.length}곡`;
-      const text = musicNoteShareInfo.songs.length === 1 ? 'SORIDRAW Music Note 공유곡입니다.' : `SORIDRAW Music Note에서 선택한 ${musicNoteShareInfo.songs.length}곡입니다.`;
+      const title = musicNoteShareInfo.songs.length === 1
+        ? getCombinedFavoriteTitle(musicNoteShareInfo.songs[0])
+        : `SORIDRAW 선택한 ${musicNoteShareInfo.songs.length}곡`;
+      const description = musicNoteShareInfo.songs.length === 1
+        ? 'SORIDRAW Music Note 공유곡입니다.'
+        : `SORIDRAW Music Note에서 선택한 ${musicNoteShareInfo.songs.length}곡입니다.`;
 
-      if (navigator.share) {
+      if (method === 'share' && navigator.share) {
         try {
-          await navigator.share({ title, text, url: shareUrl });
+          await navigator.share({ title, text: description, url: shareUrl });
           showFavoriteToast('공유 링크를 보냈습니다.');
           setMusicNoteShareInfo(null);
           return;
@@ -5919,41 +5914,20 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         }
       }
 
-      const copied = await copyTextWithFallback(`${title}\n${shareUrl}`);
+      const copied = await copyTextWithFallback(shareUrl);
       if (!copied) throw new Error('clipboard-failed');
-      showFavoriteToast(musicNoteShareInfo.songs.length > 1 ? '선택한 곡 공유 링크가 복사되었습니다.' : '공유 링크가 복사되었습니다.');
+      showFavoriteToast(method === 'share'
+        ? '기기 공유를 지원하지 않아 링크를 복사했습니다.'
+        : '공유 링크가 복사되었습니다.');
       setMusicNoteShareInfo(null);
     } catch (error: any) {
       if (error?.message !== 'login-required') {
         console.error('music note share failed:', error);
-        showFavoriteToast('공유 처리 중 오류가 발생했습니다.');
+        showFavoriteToast('공유 링크 처리에 실패했습니다.');
       }
-    }
-  };
-
-  const handleMusicNotePublicStatus = async () => {
-    if (!musicNoteShareInfo) return;
-    try {
-      await createMusicNoteShareDocument(musicNoteShareInfo.songs, { isPublic: true });
-      showFavoriteToast('공개 상태로 전환되었습니다.');
-    } catch (error: any) {
-      if (error?.message !== 'login-required') {
-        console.error('music note public update failed:', error);
-        showFavoriteToast('공개 전환 중 오류가 발생했습니다.');
-      }
-    }
-  };
-
-  const handleMusicNotePrivateStatus = async () => {
-    if (!musicNoteShareInfo) return;
-    try {
-      await createMusicNoteShareDocument(musicNoteShareInfo.songs, { isPublic: false });
-      showFavoriteToast('비공개 상태로 전환되었습니다.');
-    } catch (error: any) {
-      if (error?.message !== 'login-required') {
-        console.error('music note private update failed:', error);
-        showFavoriteToast('비공개 전환 중 오류가 발생했습니다.');
-      }
+    } finally {
+      musicNoteShareBusyRef.current = false;
+      setMusicNoteShareBusy(false);
     }
   };
 
@@ -8335,21 +8309,25 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         <button
                           data-floating-menu="true"
                           data-more-menu-button="true"
-                          aria-expanded={activeFavoriteMenuId === song.id}
+                          data-selection-keep="true"
+                          disabled={isSelectionMode}
+                          aria-label="곡 더보기"
+                          aria-expanded={!isSelectionMode && activeFavoriteMenuId === song.id}
                           onMouseDown={(event) => event.stopPropagation()}
                           onClick={(event) => {
                             event.stopPropagation();
+                            if (isSelectionMode) return;
                             setFavoriteContextMenuPosition(null);
                             setActiveFavoriteMenuId(activeFavoriteMenuId === song.id ? null : song.id);
                             setActiveFavoriteColorMenuId(null);
                           }}
-                          className={`w-10 h-10 flex items-center justify-center rounded-full transition-all ${isSelectionMode ? 'text-[#FF7A72]' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                          className={`w-10 h-10 flex items-center justify-center rounded-full transition-all ${isSelectionMode ? 'cursor-not-allowed text-white/15' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
                         >
                           <MoreVertical className="w-4 h-4" />
                         </button>
 
                         <AnimatePresence>
-                          {activeFavoriteMenuId === song.id && (
+                          {!isSelectionMode && activeFavoriteMenuId === song.id && (
                             <motion.div
                               data-more-menu-panel="true"
                               initial={{ opacity: 0, scale: 0.9, y: -10 }}
@@ -8574,7 +8552,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.96 }}
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            className="fixed bottom-5 left-1/2 z-[170] flex max-w-[calc(100vw-24px)] -translate-x-1/2 items-center gap-1.5 overflow-x-auto rounded-[34px] border border-white/10 bg-[#242424] px-3 py-2.5 shadow-[0_20px_54px_rgba(0,0,0,0.58)] favorite-keyword-strip md:bottom-7 md:gap-3 md:px-5 md:py-3"
+            className="fixed bottom-5 left-1/2 z-[170] flex max-w-[calc(100vw-24px)] -translate-x-1/2 items-center gap-1.5 overflow-x-auto rounded-[34px] border border-white/10 bg-[#242424] px-3 py-2.5 shadow-[0_0_0_1px_rgba(255,255,255,0.10),0_12px_28px_rgba(0,0,0,0.84),0_28px_72px_rgba(0,0,0,0.76)] favorite-keyword-strip md:bottom-7 md:gap-3 md:px-5 md:py-3"
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
           >
@@ -8604,43 +8582,26 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   <Trash2 className="h-6 w-6 md:h-7 md:w-7" />
                   <span className="text-[12px] font-black md:text-sm">영구삭제</span>
                 </button>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={(event) => { event.preventDefault(); event.stopPropagation(); setFavoriteSelectionMoreOpen(false); showFavoriteToast('아직 준비중입니다.'); }}
-                    onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                    onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                    onTouchStart={(event) => event.stopPropagation()}
-                    data-selection-keep="true"
-                    data-floating-menu="true"
-                    className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
-                  >
-                    <MoreVertical className="h-6 w-6 md:h-7 md:w-7" />
-                    <span className="text-[12px] font-black md:text-sm">더보기</span>
-                  </button>
-                  <AnimatePresence>
-                    {favoriteSelectionMoreOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        transition={{ duration: 0.16 }}
-                        data-selection-keep="true"
-                        data-floating-menu="true"
-                        data-more-menu-panel="true"
-                        className="absolute bottom-[calc(100%+12px)] right-0 z-[260] w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#1f1f1f]/95 py-2 text-sm text-white shadow-2xl backdrop-blur-xl"
-                      >
-                        <button onClick={selectAllVisibleFavorites} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><CheckSquare className="h-4 w-4" />전체선택</button>
-                        <button onClick={() => exitSelectionMode()} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><Square className="h-4 w-4" />선택해제</button>
-                        <button onClick={handleSelectionRestoreFromTrash} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><RefreshCw className="h-4 w-4" />복구</button>
-                        <button onClick={handleSelectionPermanentDeleteFromTrash} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-red-400 hover:bg-red-500/10"><Trash2 className="h-4 w-4" />영구 삭제</button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => exitSelectionMode()}
+                  className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
+                >
+                  <X className="h-6 w-6 md:h-7 md:w-7" />
+                  <span className="text-[12px] font-black md:text-sm">닫기</span>
+                </button>
               </>
             ) : (
               <>
+                <button
+                  type="button"
+                  onClick={handleSelectionQuickLock}
+                  aria-label={areSelectedSongsAllLocked ? '선택한 곡 잠금 해제' : '선택한 곡 잠금'}
+                  className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
+                >
+                  {areSelectedSongsAllLocked ? <Unlock className="h-6 w-6 md:h-7 md:w-7" /> : <Lock className="h-6 w-6 md:h-7 md:w-7" />}
+                  <span className="text-[12px] font-black md:text-sm">{areSelectedSongsAllLocked ? '잠금 해제' : '잠금'}</span>
+                </button>
                 <button
                   type="button"
                   onClick={handleSelectionMoveToFolder}
@@ -8651,15 +8612,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 </button>
                 <button
                   type="button"
-                  onClick={handleSelectionQuickLock}
-                  className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
-                >
-                  {areSelectedSongsAllLocked ? <Unlock className="h-6 w-6 md:h-7 md:w-7" /> : <Lock className="h-6 w-6 md:h-7 md:w-7" />}
-                  <span className="text-[12px] font-black md:text-sm">잠금</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setFavoriteSelectionMoreOpen(false); shareSelectedFavoriteSongs(); }}
+                  onClick={() => { setFavoriteSelectionMoreOpen(false); void shareSelectedFavoriteSongs(); }}
                   className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
                 >
                   <Share2 className="h-6 w-6 md:h-7 md:w-7" />
@@ -8673,38 +8626,14 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   <Trash2 className="h-6 w-6 md:h-7 md:w-7" />
                   <span className="text-[12px] font-black md:text-sm">삭제</span>
                 </button>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={(event) => { event.preventDefault(); event.stopPropagation(); setFavoriteSelectionMoreOpen(false); showFavoriteToast('아직 준비중입니다.'); }}
-                    onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                    onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                    onTouchStart={(event) => event.stopPropagation()}
-                    data-selection-keep="true"
-                    data-floating-menu="true"
-                    className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
-                  >
-                    <MoreVertical className="h-6 w-6 md:h-7 md:w-7" />
-                    <span className="text-[12px] font-black md:text-sm">더보기</span>
-                  </button>
-                  <AnimatePresence>
-                    {favoriteSelectionMoreOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        transition={{ duration: 0.16 }}
-                        data-selection-keep="true"
-                        data-floating-menu="true"
-                        data-more-menu-panel="true"
-                        className="absolute bottom-[calc(100%+12px)] right-0 z-[260] w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#1f1f1f]/95 py-2 text-sm text-white shadow-2xl backdrop-blur-xl"
-                      >
-                        <button onClick={selectAllVisibleFavorites} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><CheckSquare className="h-4 w-4" />전체선택</button>
-                        <button onClick={() => exitSelectionMode()} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><Square className="h-4 w-4" />선택해제</button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => exitSelectionMode()}
+                  className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
+                >
+                  <X className="h-6 w-6 md:h-7 md:w-7" />
+                  <span className="text-[12px] font-black md:text-sm">닫기</span>
+                </button>
               </>
             )}
           </motion.div>
@@ -8784,6 +8713,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             animate={{ opacity: 1 }}
             exit={{ opacity: 1 }}
             transition={{ duration: 0 }}
+            data-selection-keep="true"
             className="fixed inset-0 z-[240] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"
             onClick={() => setMusicNoteShareInfo(null)}
           >
@@ -8809,44 +8739,27 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 <p className="text-xs font-medium lowercase text-white/40">공유할 방법을 선택해주세요.</p>
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-3">
                 <button
                   type="button"
-                  onClick={handleMusicNotePublicShare}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#FF7A72] py-4 text-base font-black text-white shadow-lg shadow-[#FF7A72]/18 transition-all hover:bg-[#FF7A72]/90"
+                  disabled={musicNoteShareBusy}
+                  onClick={() => { void handleMusicNoteLinkAction('copy'); }}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#3b3b40] py-3.5 text-sm font-bold text-white shadow-[0_5px_16px_rgba(0,0,0,0.28)] transition-colors hover:bg-[#4a4a50] disabled:cursor-wait disabled:opacity-60"
                 >
-                  <Share2 className="h-5 w-5" /> 링크 공유하기
+                  <Copy className="h-5 w-5" /> 링크 복사
                 </button>
-
-                <div className="pt-4 border-t border-black/15">
-                  <div className="mb-3 text-center text-[10px] font-bold uppercase tracking-widest text-white/30">공개 범위 설정</div>
-                  <div className="flex gap-2">
-                    {[
-                      { id: 'public', label: '공개', active: musicNoteShareInfo.isPublic === true, action: handleMusicNotePublicStatus, color: 'note' },
-                      { id: 'private', label: '비공개', active: musicNoteShareInfo.isPublic !== true, action: handleMusicNotePrivateStatus, color: 'gray' },
-                    ].map(btn => (
-                      <button
-                        key={btn.id}
-                        type="button"
-                        onClick={btn.action}
-                        className={`flex-1 rounded-xl border py-3 text-sm font-bold transition-all ${
-                          btn.active
-                            ? btn.color === 'note'
-                              ? 'border-[#FF7A72]/35 bg-[#FF7A72]/15 text-[#FFC1BC]'
-                              : 'border-white/10 bg-white/10 text-white/65'
-                            : 'border-black/15 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'
-                        }`}
-                      >
-                        {btn.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
+                <button
+                  type="button"
+                  disabled={musicNoteShareBusy}
+                  onClick={() => { void handleMusicNoteLinkAction('share'); }}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#FF7A72] py-3.5 text-sm font-black text-[#181818] shadow-[0_6px_18px_rgba(0,0,0,0.32)] transition-colors hover:bg-[#FF9189] disabled:cursor-wait disabled:opacity-60"
+                >
+                  <Share2 className="h-5 w-5" /> 링크 공유
+                </button>
                 <button
                   type="button"
                   onClick={() => setMusicNoteShareInfo(null)}
-                  className="w-full py-3 text-[10px] font-black uppercase tracking-widest text-white/20 transition-all hover:text-white/60"
+                  className="w-full rounded-xl bg-white/[0.07] py-3 text-xs font-bold text-white/75 transition-colors hover:bg-white/[0.13] hover:text-white"
                 >
                   닫기
                 </button>

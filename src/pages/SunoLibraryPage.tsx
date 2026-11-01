@@ -6086,6 +6086,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       if (!(target instanceof Element)) return;
       if (target.closest([
         '.soridraw-library-workspace-track-row',
+        '.soridraw-library-workspace-header', // Drag/scroll starting on a group title is not an outside click.
         '.soridraw-library-playlist-row',
         '[data-selection-action-bar="true"]',
         '[data-floating-menu="true"]',

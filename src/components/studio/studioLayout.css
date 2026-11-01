@@ -17157,6 +17157,10 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
  * are separate responsive paths; keep Library and desktop headings unchanged. */
 @media (max-width: 1099px) {
   :root body #root .soridraw-app-root
+  .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-musicnote-region-top .soridraw-musicnote-folder-header
+  > .soridraw-musicnote-folder-heading,
+  :root body #root .soridraw-app-root
   .soridraw-musicnote-region-top .soridraw-musicnote-folder-header
   > .soridraw-musicnote-folder-heading {
     font-size: 16px !important;

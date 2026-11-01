@@ -7859,6 +7859,21 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       }`}
                     >
                       {playlist.title}
+                      {!isDefaultPlaylist && !(playlist as any).isFallback && (
+                        <span
+                          className="soridraw-folder-hover-edit"
+                          title="폴더 편집"
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onPointerUp={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            handleRenamePlaylist(playlist);
+                          }}
+                        >
+                          <Edit2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -7938,6 +7953,21 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     >
                       <Share2 className="w-3.5 h-3.5" />
                       {playlist.title}
+                      {!isDefaultPlaylist && !(playlist as any).isFallback && (
+                        <span
+                          className="soridraw-folder-hover-edit"
+                          title="폴더 편집"
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onPointerUp={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            handleRenamePlaylist(playlist);
+                          }}
+                        >
+                          <Edit2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        </span>
+                      )}
                     </button>
                   );
                 })}

@@ -1238,7 +1238,7 @@ export default function FavoritesPage({
   const [musicNoteFolderPicker, setMusicNoteFolderPicker] = useState<{ mode: MusicNoteFolderMode; songIds: string[] } | null>(null);
   const [musicNoteFolderCreateTitle, setMusicNoteFolderCreateTitle] = useState<string | null>(null);
   const [musicNoteFolderRenameArgs, setMusicNoteFolderRenameArgs] = useState<{ mode: MusicNoteFolderMode; folder: MusicNoteFolder; newTitle: string } | null>(null);
-  const [musicNoteFolderDeleteArgs, setMusicNoteFolderDeleteArgs] = useState<{ mode: MusicNoteFolderMode; folder: MusicNoteFolder } | null>(null);
+  const [musicNoteFolderDeleteReady, setMusicNoteFolderDeleteReady] = useState(false);
   const [musicNoteFolderDragging, setMusicNoteFolderDragging] = useState<{ mode: MusicNoteFolderMode; folderId: string } | null>(null);
   const musicNoteFolderButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const musicNoteFolderBarRefs = useRef<Record<MusicNoteFolderMode, HTMLDivElement | null>>({ myNote: null, sharedNote: null });
@@ -1250,6 +1250,8 @@ export default function FavoritesPage({
     startX: number;
     startY: number;
     active: boolean;
+    moved: boolean;
+    originalIds: string;
     target?: HTMLButtonElement | null;
     windowMoveHandler?: (event: PointerEvent) => void;
     windowEndHandler?: (event: PointerEvent) => void;
@@ -7018,17 +7020,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
   };
 
-  const openDeleteMusicNoteFolder = (mode: MusicNoteFolderMode, folder: MusicNoteFolder) => {
-    if (folder.isDefault || folder.id === 'default') {
-      showFavoriteToast('기본 폴더는 삭제할 수 없습니다.');
-      return;
-    }
-    setMusicNoteFolderDeleteArgs({ mode, folder });
-  };
-
-  const commitDeleteMusicNoteFolder = async () => {
-    if (!musicNoteFolderDeleteArgs || !user?.uid) return;
-    const { mode, folder } = musicNoteFolderDeleteArgs;
+  const commitDeleteMusicNoteFolder = async (args: { mode: MusicNoteFolderMode; folder: MusicNoteFolder }) => {
+    if (!user?.uid) return;
+    const { mode, folder } = args;
     if (folder.isDefault || folder.id === 'default') {
       showFavoriteToast('기본 폴더는 삭제할 수 없습니다.');
       return;
@@ -7055,7 +7049,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         ? { sharedNoteFolderId: 'default', sharedNoteFolderTitle: '기본', sharedNoteFolderUpdatedAt: Date.now() }
         : { noteFolderId: 'default', noteFolderTitle: '기본', noteFolderUpdatedAt: Date.now() };
       await commitMusicNoteFolderUpdates(affectedSongs.map((song) => song.id), fallbackUpdates, 'folder-delete');
-      setMusicNoteFolderDeleteArgs(null);
+      setMusicNoteFolderRenameArgs(null);
+      setMusicNoteFolderDeleteReady(false);
       showFavoriteToast('폴더를 삭제했습니다. 곡은 기본 폴더로 이동했습니다.');
     } catch (error) {
       console.error('delete music note folder failed:', error);
@@ -7164,7 +7159,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     const startX = event.clientX;
     const startY = event.clientY;
     const target = event.currentTarget;
-    musicNoteFolderDragRef.current = { mode, folderId: folder.id, pointerId, startX, startY, active: false, target };
+    musicNoteFolderDragRef.current = { mode, folderId: folder.id, pointerId, startX, startY, active: false, moved: false, originalIds: getMusicNoteFoldersByMode(mode).map(item => item.id).join('|'), target };
 
     musicNoteFolderPressTimerRef.current = window.setTimeout(() => {
       const drag = musicNoteFolderDragRef.current;
@@ -7177,6 +7172,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         if (!currentDrag?.active || currentDrag.pointerId !== pointerId) return;
         if (nativeEvent.pointerType === 'touch') return;
         nativeEvent.preventDefault();
+        if (Math.abs(nativeEvent.clientX - currentDrag.startX) <= 8) return;
+        currentDrag.moved = true;
         autoScrollMusicNoteFolderBar(currentDrag.mode, nativeEvent.clientX);
         reorderMusicNoteFoldersByPointer(currentDrag.mode, currentDrag.folderId, nativeEvent.clientX);
       };
@@ -7186,18 +7183,20 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         const touch = nativeEvent.touches?.[0];
         if (!touch) return;
         nativeEvent.preventDefault();
+        if (Math.abs(touch.clientX - currentDrag.startX) <= 8) return;
+        currentDrag.moved = true;
         autoScrollMusicNoteFolderBar(currentDrag.mode, touch.clientX);
         reorderMusicNoteFoldersByPointer(currentDrag.mode, currentDrag.folderId, touch.clientX);
       };
       const handleWindowPointerEnd = (nativeEvent: PointerEvent) => {
         const currentDrag = musicNoteFolderDragRef.current;
         if (!currentDrag || currentDrag.pointerId !== pointerId) return;
-        void finishMusicNoteFolderDrag();
+        void finishMusicNoteFolderDrag(undefined, nativeEvent.type === 'pointercancel');
       };
-      const handleWindowTouchEnd = () => {
+      const handleWindowTouchEnd = (nativeEvent: TouchEvent) => {
         const currentDrag = musicNoteFolderDragRef.current;
         if (!currentDrag || currentDrag.pointerId !== pointerId) return;
-        void finishMusicNoteFolderDrag();
+        void finishMusicNoteFolderDrag(undefined, nativeEvent.type === 'touchcancel');
       };
       drag.windowMoveHandler = handleWindowPointerMove;
       drag.windowEndHandler = handleWindowPointerEnd;
@@ -7232,13 +7231,15 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     if (!drag.active) return;
     if (event.pointerType === 'touch') return;
     event.preventDefault();
+    if (Math.abs(event.clientX - drag.startX) <= 8) return;
+    drag.moved = true;
     // Keep the drag responsive while the cursor is still inside the original folder button.
     // Touch dragging is handled by the window-level touch listener so native scroll does not trap it.
     autoScrollMusicNoteFolderBar(drag.mode, event.clientX);
     reorderMusicNoteFoldersByPointer(drag.mode, drag.folderId, event.clientX);
   };
 
-  const finishMusicNoteFolderDrag = async (event?: React.PointerEvent<HTMLButtonElement>) => {
+  const finishMusicNoteFolderDrag = async (event?: React.PointerEvent<HTMLButtonElement>, cancelled = false) => {
     if (musicNoteFolderPressTimerRef.current) window.clearTimeout(musicNoteFolderPressTimerRef.current);
     musicNoteFolderPressTimerRef.current = null;
 
@@ -7274,6 +7275,17 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     setMusicNoteFolderDragging(null);
+    if (cancelled) return;
+    if (!drag.moved) {
+      const folder = getMusicNoteFoldersByMode(drag.mode).find(item => item.id === drag.folderId);
+      if (folder) {
+        setMusicNoteFolderDeleteReady(false);
+        setMusicNoteFolderRenameArgs({ mode: drag.mode, folder, newTitle: folder.title });
+      }
+      return;
+    }
+    const currentIds = getMusicNoteFoldersByMode(drag.mode).map(item => item.id).join('|');
+    if (currentIds === drag.originalIds) return;
     try {
       await persistMusicNoteFolders(drag.mode, getMusicNoteFoldersByMode(drag.mode));
       showFavoriteToast('폴더 순서를 변경했습니다.');
@@ -7321,7 +7333,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 onPointerDown={(event) => handleMusicNoteFolderPointerDown(event, mode, folder)}
                 onPointerMove={handleMusicNoteFolderPointerMove}
                 onPointerUp={finishMusicNoteFolderDrag}
-                onPointerCancel={finishMusicNoteFolderDrag}
+                onPointerCancel={(event) => { void finishMusicNoteFolderDrag(event, true); }}
                 onClick={() => {
                   if (musicNoteFolderSuppressClickRef.current === dragKey) return;
                   setSelectedId(folder.id);
@@ -7352,28 +7364,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           >
             <span className="text-lg font-light leading-none">+</span>
           </button>
-          {(() => {
-            const activeFolder = folders.find((folder) => folder.id === selectedId);
-            if (!activeFolder || activeFolder.isDefault || activeFolder.id === 'default') return null;
-            return (
-              <div className="shrink-0 inline-flex items-center overflow-hidden rounded-xl bg-[var(--bg-secondary)] shadow-btn border border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setMusicNoteFolderRenameArgs({ mode, folder: activeFolder, newTitle: activeFolder.title })}
-                  className="h-9 w-9 flex items-center justify-center text-white/45 hover:text-[#FFC1BC] hover:bg-white/5 transition-all"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openDeleteMusicNoteFolder(mode, activeFolder)}
-                  className="h-9 w-9 flex items-center justify-center text-white/45 hover:text-red-400 hover:bg-red-400/10 transition-all"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            );
-          })()}
+
         </div>
         <button
           type="button"
@@ -8460,7 +8451,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               onClick={(event) => event.stopPropagation()}
             >
               <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-                <h3 className="text-base font-black text-white">폴더 이름 변경</h3>
+                <h3 className="text-base font-black text-white">폴더 편집</h3>
                 <button
                   type="button"
                   onClick={() => setMusicNoteFolderRenameArgs(null)}
@@ -8483,6 +8474,11 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   className="w-full rounded-2xl border border-white/10 bg-[#111] px-4 py-3 text-sm font-bold text-white outline-none transition-colors focus:border-[#FF7A72]/55"
                 />
               </div>
+              {musicNoteFolderDeleteReady && (
+                <p className="px-5 pb-3 text-xs font-bold leading-5 text-red-300">
+                  다시 삭제를 누르면 폴더가 삭제됩니다. 폴더 안의 곡은 기본 폴더로 이동합니다.
+                </p>
+              )}
               <div className="flex justify-end gap-2 border-t border-white/10 bg-black/20 px-5 py-4">
                 <button
                   type="button"
@@ -8498,50 +8494,13 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 >
                   저장
                 </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {musicNoteFolderDeleteArgs && (
-          <motion.div
-            data-selection-keep="true"
-            data-floating-menu="true"
-            initial={{ opacity: 1 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 1 }}
-            transition={{ duration: 0 }}
-            className="fixed inset-0 z-[155] flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm"
-            onClick={() => setMusicNoteFolderDeleteArgs(null)}
-          >
-            <motion.div
-              initial={{ opacity: 1, y: 0, scale: 1 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0 }}
-              className="w-full max-w-[380px] overflow-hidden rounded-[24px] border border-red-400/25 bg-[#181818] shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="border-b border-white/10 px-5 py-4">
-                <h3 className="text-base font-black text-white">폴더 삭제</h3>
-                <p className="mt-1 text-xs leading-5 text-white/45">
-                  <span className="font-bold text-white/80">{musicNoteFolderDeleteArgs.folder.title}</span> 폴더를 삭제할까요? 안의 곡은 기본 폴더로 이동합니다.
-                </p>
-              </div>
-              <div className="flex justify-end gap-2 bg-black/20 px-5 py-4">
                 <button
                   type="button"
-                  onClick={() => setMusicNoteFolderDeleteArgs(null)}
-                  className="px-4 py-2 text-sm font-bold text-white/50 transition-colors hover:text-white"
-                >
-                  취소
-                </button>
-                <button
-                  type="button"
-                  onClick={commitDeleteMusicNoteFolder}
-                  className="rounded-xl bg-red-500/18 px-4 py-2 text-sm font-black text-red-300 transition-colors hover:bg-red-500/28"
+                  onClick={() => {
+                    if (!musicNoteFolderDeleteReady) { setMusicNoteFolderDeleteReady(true); return; }
+                    void commitDeleteMusicNoteFolder({ mode: musicNoteFolderRenameArgs.mode, folder: musicNoteFolderRenameArgs.folder });
+                  }}
+                  className="rounded-xl bg-red-500/15 px-4 py-2 text-sm font-black text-red-400 transition-colors hover:bg-red-500/25"
                 >
                   삭제
                 </button>

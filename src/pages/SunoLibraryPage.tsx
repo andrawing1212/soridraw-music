@@ -1972,6 +1972,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       return;
     }
 
+    let deleted = false;
     const deleteAction = {
       title: '플레이리스트 삭제',
       message: '이 플레이리스트를 삭제할까요? 저장된 곡도 내 목록에서 함께 제거됩니다.',
@@ -1999,16 +2000,15 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             }
           }
           showToast('플레이리스트가 삭제되었습니다.');
-          return true;
+          deleted = true;
         } catch (error) {
           console.error(error);
           showToast('삭제에 실패했습니다.');
-          return false;
         }
       }
     };
     if (directFromEditor) {
-      const deleted = await deleteAction.onConfirm();
+      await deleteAction.onConfirm();
       if (deleted) {
         setRenameModalArgs(null);
         setPlaylistFolderDeleteReady(false);

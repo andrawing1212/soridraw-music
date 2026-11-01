@@ -7789,7 +7789,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         )}
 
         {(libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist') && (
-          <div className="mt-3" data-selection-keep="true">
+          <div className="soridraw-library-mobile-playlist-region mt-3" data-selection-keep="true">
             {/* Playlist Tabs Layout */}
             
             {libraryViewMode === 'playlist' && (

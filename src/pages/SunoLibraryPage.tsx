@@ -6542,7 +6542,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             </>
           ) : (
             <>
-              <div className="soridraw-responsive-color-filter flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 px-2 border border-black/15 shrink-0 overflow-x-auto hide-scrollbar">
+              <div className="soridraw-responsive-color-filter flex h-[46px] items-center gap-1.5 bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
                 <button
                   onClick={() => setPlaylistColorFilter('all')}
                   aria-pressed={playlistColorFilter === 'all'}
@@ -6553,15 +6553,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <RefreshCw className="soridraw-color-reset-icon hidden h-4 w-4" />
                 </button>
                 <div className="w-px h-3 bg-white/10 mx-1"></div>
-                {[
-                  { value: 'gray', color: '#6b7280' },
-                  { value: 'red', color: '#ef4444' },
-                  { value: 'orange', color: '#f97316' },
-                  { value: 'yellow', color: '#eab308' },
-                  { value: 'green', color: '#22c55e' },
-                  { value: 'blue', color: '#3b82f6' },
-                  { value: 'purple', color: '#a855f7' }
-                ].map(opt => (
+                {COLOR_OPTIONS.map(opt => (
                   <button
                     key={opt.value}
                     onClick={() => setPlaylistColorFilter(opt.value)}
@@ -7803,7 +7795,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             {libraryViewMode === 'playlist' && (
             <div className="space-y-3">
               <div className="soridraw-library-folder-header flex min-h-7 items-center gap-2 px-2">
-                <h3 className="soridraw-library-folder-heading text-sm font-bold text-white/50 uppercase tracking-wider">나의 플레이리스트</h3>
+                <h3 className="soridraw-library-folder-heading text-sm font-bold text-[#D8CCFF] uppercase tracking-wider">나의 플레이리스트</h3>
                 <button
                   type="button"
                   onClick={() => handleAddPlaylist('normal')}
@@ -7879,7 +7871,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             {libraryViewMode === 'sharedPlaylist' && (
             <div className="space-y-3">
               <div className="soridraw-library-folder-header flex min-h-7 items-center gap-2 px-2">
-                <h3 className="soridraw-library-folder-heading text-sm font-bold text-white/50 uppercase tracking-wider">공유 받은 곡</h3>
+                <h3 className="soridraw-library-folder-heading text-sm font-bold text-[#D8CCFF] uppercase tracking-wider">공유 받은 곡</h3>
                 <button
                   type="button"
                   onClick={() => handleAddPlaylist('shared')}

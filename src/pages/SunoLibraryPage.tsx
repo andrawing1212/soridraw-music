@@ -5603,7 +5603,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     try {
       await createBulkSharePage({ makePublic: true });
-      setBulkShareModalOpen(false);
+      closeModal();
       setBulkMenuState(null);
       showToast(`선택한 ${selectedTrackCount}곡을 All 공개 상태로 설정했습니다.`);
     } catch (e) {
@@ -5637,7 +5637,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         showToast('공유 링크가 복사되었습니다.');
       }
 
-      setBulkShareModalOpen(false);
+      closeModal();
       setBulkMenuState(null);
     } catch (e) {
       console.error(e);
@@ -5680,7 +5680,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         console.error('bulk private share failed:', e);
       }
     }
-    setBulkShareModalOpen(false);
+    closeModal();
     setBulkMenuState(null);
     showToast(changed > 0 ? `${changed}곡을 비공개로 전환했습니다.` : '비공개로 전환할 수 있는 원곡이 없습니다.');
   };
@@ -7095,7 +7095,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       `}</style>
       <AnimatePresence>
         {renameModalArgs && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25"
+          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25"
                onClick={() => setRenameModalArgs(null)}>
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
@@ -7178,7 +7178,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       <AnimatePresence>
         {moveModalArgs && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25"
+          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25"
                onClick={() => { setMoveModalArgs(null); setSingleMoveTargetId(null); }}>
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
@@ -8347,7 +8347,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       {/* Share Modal */}
       <AnimatePresence>
         {sharePopupInfo && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/25" onClick={closeModal}>
+          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/25" onClick={closeModal}>
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -8713,7 +8713,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       <AnimatePresence>
         {bulkShareModalOpen && multiSelectMode && (
-          <div className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/25" onClick={() => setBulkShareModalOpen(false)}>
+          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/25" onClick={closeModal}>
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -8753,7 +8753,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               </div>
 
               <button
-                onClick={() => setBulkShareModalOpen(false)}
+                onClick={closeModal}
                 className="w-full py-3 text-white/20 text-[10px] font-black uppercase tracking-widest hover:text-white/60 transition-all mt-4"
               >
                 닫기
@@ -9058,7 +9058,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       <AnimatePresence>
         {deleteTarget && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/25" onClick={closeModal}>
+          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/25" onClick={closeModal}>
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}

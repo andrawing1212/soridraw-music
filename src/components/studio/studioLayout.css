@@ -8480,6 +8480,34 @@ body #root .soridraw-app-root
   }
 }
 
+/* Physical mobile Classic layout only (2026-11-02 director video):
+ * 1. The playlist folder heading and chip row sit 4px above Music Note
+ *    because Library uses mt-3 while the Note folder uses mt-4.
+ *    Match the Note's 16px top offset; desktop/split layouts are untouched.
+ * 2. Paint divider strokes in the middle of the EXISTING empty space.
+ *    Changing this custom property moves only ::before, not cards or gaps.
+ *    Workspace: 13px -> 12px (line ~0.5px down, symmetric around gap).
+ *    Playlists: 13px -> 20px (line ~3.5px up, centered between chips/card).
+ *    No extra border element, padding, or content margin. */
+@media (max-width: 767px) {
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-library-theme .soridraw-library-mobile-playlist-region {
+    margin-top: 16px !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-library-theme
+  .soridraw-library-list-start-divider.soridraw-perf-layout-region-list {
+    --soridraw-list-start-gap: 12px !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-library-theme
+  .soridraw-library-folder-list-start-divider {
+    --soridraw-list-start-gap: 20px !important;
+  }
+}
+
 /* 416 — Brighten the Music Note / Suno Library search fields with the same
  * cool-neutral gray family used by the surrounding Studio Black controls.
  * The previous shared input surface read slightly warm and too close to the

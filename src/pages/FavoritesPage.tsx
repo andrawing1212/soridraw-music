@@ -7275,7 +7275,19 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     setMusicNoteFolderDragging(null);
-    if (cancelled) return;
+    if (cancelled) {
+      if (drag.moved) {
+        const current = getMusicNoteFoldersByMode(drag.mode);
+        const initialIds = drag.originalIds.split('|');
+        const initialSet = new Set(initialIds);
+        const restored = [
+          ...initialIds.map(id => current.find(item => item.id === id)).filter((item): item is MusicNoteFolder => Boolean(item)),
+          ...current.filter(item => !initialSet.has(item.id)),
+        ].map((item, index) => ({ ...item, order: index + 1 }));
+        setMusicNoteFoldersByMode(drag.mode, restored);
+      }
+      return;
+    }
     if (!drag.moved) {
       const folder = getMusicNoteFoldersByMode(drag.mode).find(item => item.id === drag.folderId);
       if (folder) {

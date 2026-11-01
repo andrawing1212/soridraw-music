@@ -7096,7 +7096,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       <AnimatePresence>
         {renameModalArgs && (
           <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25"
-               onClick={() => setRenameModalArgs(null)}>
+               onClick={closeModal}>
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -7145,7 +7145,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 </p>
               )}
               <div className="p-4 bg-[#1a1a1a]/50 flex justify-end gap-2 border-t border-black/15">
-                <button className="px-4 py-2 font-bold text-white/50 hover:text-white transition-colors" onClick={() => setRenameModalArgs(null)}>취소</button>
+                <button className="px-4 py-2 font-bold text-white/50 hover:text-white transition-colors" onClick={closeModal}>취소</button>
                 <button className="px-4 py-2 font-bold bg-[#A98BFF] text-white rounded-xl hover:bg-[#A98BFF]/90 transition-colors" onClick={async () => {
                   if (!user || (renameModalArgs.playlist as any).isFallback) return;
                   const trimmedTitle = renameModalArgs.newTitle.trim();
@@ -7179,7 +7179,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       <AnimatePresence>
         {moveModalArgs && (
           <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25"
-               onClick={() => { setMoveModalArgs(null); setSingleMoveTargetId(null); }}>
+               onClick={closeModal}>
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -8769,7 +8769,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             data-selection-keep="true"
             data-floating-menu="true"
             className="fixed inset-0 z-[220] flex items-center justify-center overflow-y-auto bg-black/55 px-4 py-4 backdrop-blur-sm"
-            onClick={() => { setPlaylistSavePicker(null); setPlaylistSaveCreateTitle(null); setPlaylistSaveTargetId(null); }}
+            onClick={closeModal}
           >
             <motion.div
               data-selection-keep="true"
@@ -8800,7 +8800,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     <Check className="h-5 w-5" strokeWidth={3} />
                   </button>
                   <button type="button" aria-label="플레이리스트 선택 취소"
-                    onClick={() => { setPlaylistSavePicker(null); setPlaylistSaveCreateTitle(null); setPlaylistSaveTargetId(null); }}
+                    onClick={closeModal}
                     className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#2c2c2e] text-white/55 transition-colors hover:bg-[#38383b] hover:text-white">
                     <X className="h-4 w-4" />
                   </button>
@@ -8869,7 +8869,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       <AnimatePresence>
         {bulkMoveModalOpen && multiSelectMode && (
-          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/25" onClick={() => { setBulkMoveModalOpen(false); setBulkMoveTargetId(null); }}>
+          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/25" onClick={closeModal}>
             <motion.div
               data-selection-keep="true"
               data-floating-menu="true"

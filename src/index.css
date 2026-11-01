@@ -625,9 +625,9 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   scroll-behavior: auto;
 }
 
-/* Hover-only folder editor: a positioned non-layout affordance inside each
- * editable folder button. The buttons stay direct scroll-strip children so
- * the existing selected-color, mouse pan and 700ms reorder CSS remain intact. */
+/* Hover-only folder edit affordance. Keep existing folder button geometry and
+ * drag/scroll handlers intact. The circle overlaps the top-right edge by
+ * about half its diameter, outside the folder label's padded text area. */
 .soridraw-folder-hover-edit {
   display: none;
 }
@@ -637,27 +637,40 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   }
   .soridraw-folder-hover-edit {
     position: absolute;
-    top: 1px;
-    right: 1px;
+    top: -9px;
+    right: -9px;
     z-index: 2;
     display: inline-flex;
     width: 20px;
     height: 20px;
     align-items: center;
     justify-content: center;
-    border-radius: 6px;
-    background: #252528;
-    color: #e0e0e4;
+    border-radius: 50%;
+    background: #56565e;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.65), 0 0 9px rgba(255, 255, 255, 0.13);
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
     cursor: pointer;
-    transition: opacity 120ms ease;
+    transition: opacity 120ms ease, background-color 120ms ease;
+  }
+  /* Selected folder labels use dark !important text. Their edit icons must
+   * remain white (including the SVG stroke), not inherit that label color. */
+  .soridraw-folder-hover-edit > svg {
+    color: #ffffff !important;
+    stroke: #ffffff !important;
+    opacity: 1 !important;
+    filter: none !important;
   }
   .soridraw-folder-drag-scrollbar > :is(.soridraw-musicnote-folder-button, .soridraw-library-folder-button):hover > .soridraw-folder-hover-edit {
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
+  }
+  .soridraw-folder-hover-edit:hover {
+    background: #686870;
   }
   body.soridraw-folder-dragging .soridraw-folder-hover-edit,
   .soridraw-folder-drag-active > .soridraw-folder-hover-edit {

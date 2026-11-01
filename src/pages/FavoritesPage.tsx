@@ -8649,7 +8649,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 onMouseEnter={() => onHover({ id: 'load-more', label: '더보기', description: '저장된 곡을 20개 더 보여줍니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-black/20 flex items-center gap-2 group shadow-[var(--shadow-md)]",
+                  "soridraw-musicnote-load-more-button px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-black/20 flex items-center gap-2 group shadow-[var(--shadow-md)]",
                   isLoadingMoreFavorites && "cursor-wait opacity-60"
                 )}
               >

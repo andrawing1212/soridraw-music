@@ -147,9 +147,14 @@ const livePurePaneCallComment = [
   '      // without updating inherited root variables or measuring the DOM.',
 ].join('\n');
 assert(current.includes(livePurePaneCallComment), 'APP716 live boundary call missing');
-const normalizeApp716Toggle = (source) => source
-  .replace(liveToggleRegion, oldToggleRegion)
-  .replace(livePurePaneCallComment, oldPurePaneCallComment);
+const normalizeApp716Toggle = (source) => (
+  // With a current APP716 preview baseline there is NOTHING to normalize:
+  // all collapse-button geometry and comments must remain byte-for-byte.
+  oldToggleRegion.startsWith('  // Keep both split-pane collapse buttons')
+    ? source
+    : source.replace(liveToggleRegion, oldToggleRegion)
+      .replace(livePurePaneCallComment, oldPurePaneCallComment)
+);
 
 assert.equal(
   normalizeAcceptedMusicNoteSelection(normalizeAcceptedResizeRail(normalizeAcceptedRailTransition(normalizeAcceptedFoldHandlers(baseline.replace(before[0], '<SPLIT_BOUNDS>'))))),

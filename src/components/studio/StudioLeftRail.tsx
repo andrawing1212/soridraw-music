@@ -285,7 +285,7 @@ export default function StudioLeftRail({
             <ChevronDown className="soridraw-studio-rail-profile-chevron" aria-hidden="true" />
           </button>
 
-          <nav className="soridraw-studio-rail-nav" aria-label="스튜디오 내부 이동">
+          <nav className="soridraw-studio-rail-nav" aria-label="워크스페이스 내부 이동">
             <p className="soridraw-studio-rail-label">WORKSPACE</p>
             <button
               type="button"
@@ -303,11 +303,11 @@ export default function StudioLeftRail({
               className={`soridraw-studio-rail-item${activeWorkspace === 'recent' ? ' is-active' : ''}`}
               onClick={onRecentSongs}
               aria-current={activeWorkspace === 'recent' ? 'page' : undefined}
-              onMouseEnter={(event) => showRailTooltip(event.currentTarget, '최근 생성곡')}
+              onMouseEnter={(event) => showRailTooltip(event.currentTarget, '스튜디오')}
               onMouseLeave={hideRailTooltip}
             >
               <History className="h-5 w-5" />
-              <span>최근 생성곡</span>
+              <span>스튜디오</span>
               <ChevronRight className="ml-auto h-4 w-4" />
             </button>
             <button

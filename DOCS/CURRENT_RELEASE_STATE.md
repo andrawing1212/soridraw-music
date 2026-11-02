@@ -1,11 +1,12 @@
-## CURRENT — Music Note / Library 과거 지정색 복구 1단계: 읽기 전용 원본 진단 배포, 실제 데이터 확인 대기 (2026-11-03 KST)
-- **디렉터 신고:** Music Note와 Library 색상 지정이 기기에만 남거나 PC↔모바일에 동기화되지 않고, 과거 지정색이 모두 회색으로 보임. 이 문제는 진행 중이며 앞서 완료(CLOSED) 처리한 Studio Black UI 개선과 무관한 신규 데이터 정합성 문제다.
-- **실제 사용자 원본은 미확인:** Firestore canonical의 색상 필드가 존재하는지/삭제됐는지/명시적으로 회색 해제됐는지 해당 계정의 인증된 정확한 문서 조회가 아직 없다. 색상이 삭제됐다고 판단하거나, 과거 색상을 자동 재생성·백필·전체 동기화·캐시 초기화하지 않는다.
-- **기존 복구 단서:** 2026-08-25 Firebase Storage V1 842문서 백업(run `32830504168`, 기록 `docs/SORIDRAW_BACKEND_V2_STEP3_3_STORAGE_BACKUP_RESULT.md`)에는 `favorites`, `user_playlists/.../lists/.../items` 원본 전체 payload 기록이 있다. 백업 보관 경로 `backend-v2-backups/step3-3/backend-v2-backup-2026-08-25T09-20-03-568Z`. 그 당시 payload의 개별 색상 값 및 **현재 백업 객체 존재·접근 여부는 미확인**. `suno_tracks`는 해당 백업 범위 밖.
-- **1단계 코드/검사:** #721 source SHA `9a6f6b8c45dc4f0e0524c8c46788454398b9a100`, app516/app517/product-quality(타입·빌드 포함) 3/3 PASS. 기존 관리자 CACHE LIVE → Music Note 특정곡 원본 1건 조회 화면에 `favoriteColorTag`, `colorTag`, legacy `favoriteColor`/`noteColor`/`color`, 기기 로컬 색상표·목록 색상을 별도 표시. 추가 Firestore read 0, 쓰기 0, 전체스캔 0, 인증 UID+정확 ID의 기존 수동 read 1건만 활용.
-- **PREVIEW 배포:** #722 병합 SHA `469eae2978007bb605e6bcdb720a8ad5d979f4fe` / Hosting run `41535671384` SUCCESS, exact build/TEST+PRODUCTION unchanged PASS. 사용자 원본·Rules·Functions·Worker·D1/R2 변경 0. 실제 색상 존재 여부는 여전히 **미확인**.
-- **다음 정확한 검증:** PREVIEW 인증된 관리자 CACHE LIVE에서 *실제 과거 지정색을 기억하는 저장곡 한 건*을 선택해 원본 1건 수동 확인(필드/legacy/로컬 값만, 계정·문서번호·본문 공유 금지). 이후 Library playlist item과 Suno workspace 색상 경로를 각각 단건 비교. 서버에서 과거색이 없고 최신 의도적 회색 해제와 충돌하지 않을 때만 보존 백업/기기 캐시를 추가 읽기 전용 비교한다. 복구 쓰기·대량 변경은 실행 전 별도 안전성·승인을 확인.
-- **기술적 의심:** Music Note/Library color click은 로컬 즉시, 서버는 page-exit async flush 위주. 또한 로컬 map이 server fields보다 우선하는 UI 경로와 수동 전체-color-sync 위험이 존재한다. 현 단계에서는 원인 후보이며 실제 해당 사용자의 데이터 유실 원인은 확정하지 않음.
+## CURRENT — Music Note / Library 과거 지정색 자동검색 PREVIEW 완료, 실제 보존·복구 검증 진행 중 (2026-11-03 KST)
+- **디렉터 신고:** 수개월 동안 지정색이 보이지 않고 PC↔모바일 색상 동기화가 안 됨. 어떤 곡에 색상을 지정했는지 기억할 수 없으며, 옛 곡 제목이나 ID를 사용자에게 찾게 해서는 안 된다. 기존 #721 '특정곡 정확 제목 입력' 진단만으로는 충분하지 않아 **자동검색으로 대체**했다. 이전 수동 진단은 보조용으로 남기되 필수 단계 아님.
+- **구현:** #724 Source merge SHA `caa160d49119d93ec5da11c3a6ee49c226ac541c`. 관리자 CACHE LIVE → **과거 지정색 자동 찾기 · 곡 제목 불필요**. 클릭 1회에서 현재 기기/UID 로컬 색상표 3종, Music Note 저장곡 및 영속 Catalog 캐시를 살피고, 로그인 계정 범위만 Firestore `favorites`(`uid` query), `suno_tracks/{uid}/tracks`, `user_playlists/{uid}/lists/.../items`에서 지정색 필드를 제한 조회한다. 색상별로 구/신 필드 현황 및 일부 제목 최대 24건 보여줌. 사용자가 제목이나 문서번호를 입력할 필요 없음.
+- **비용/안전:** 버튼 클릭 전 서버 데이터 읽기 0, 읽기 전용, 자동 재조회 없음, 서버/캐시 쓰기·삭제·복구 0. 1회 수동 최대 700 favorites + 100 tracks + 60 playlist headers + 400 playlist items (상한 감지 + empty query 최소 청구 포함 대략 1,400회 이내). 부분 조회/권한 오류는 '색 없음'으로 오판하지 않고 잘림·미판정 표시. 다른 계정 전체 검색/백필 금지. 구버전 legacy 지정색과 명시적 회색 해제 충돌 시 자동 재적용 금지.
+- **검사/배포:** PR #724 candidate `d70fcc37fda1d1f4baefbcbc79daf2e8098892ec`; Quality Action `41538267030` SUCCESS(TypeScript, Build, 기존 보호 검사). PREVIEW Hosting 전용 PR #725 merge SHA `3efc397a256a948102342611b6dea9e38bfce6e2`, Action `41538762108` completed/success. Exact PREVIEW build, TEST+PRODUCTION unchanged PASS, 공유 Rules·Functions·Worker·D1/R2·사용자 원본 무변경.
+- **백업 단서:** 2026-08-25 Storage V1 842문서 백업(run `32830504168`, `docs/SORIDRAW_BACKEND_V2_STEP3_3_STORAGE_BACKUP_RESULT.md`)에는 `favorites`와 Library playlist items의 전체 필드가 포함됨. prefix `backend-v2-backups/step3-3/backend-v2-backup-2026-08-25T09-20-03-568Z`. **현재 저장 객체 접근·특정 원본의 당시 실제 색상은 미확인**, `suno_tracks`는 백업 범위 밖.
+- **미완료·다음 증거:** 실제 인증된 사용자 계정에 색상이 몇 건 남아 있는지/필드가 삭제됐는지/고의 회색 해제됐는지는 아직 서버 자동검색 결과를 받지 못해 미확인. **색상 실제 복구와 PC↔모바일 즉시 동기화 버그 수정은 아직 시작 전**이며, UI 도구 배포 완료와 혼동하면 안 된다. 현재 관리자 CACHE LIVE에서 버튼 **'내 과거 색상 기록 자동 찾기 (읽기 전용)' 1회** 실행한 영역별 집계만 필요하며 곡 제목·UID·문서번호는 요구하지 않는다. 이후 백업 read-only 조회 및 최신 사용자 변경과 충돌 방지 여부를 판단하고 안전한 복구 범위를 결정한다. 서버색 부재/캐시 부재를 영구 삭제 확정으로 해석하지 않는다.
+- **기존 UI 완료 상태 유지:** Studio Black UI 개선 대다수는 디렉터 평가 기준 완료(CLOSED); 이 색상 데이터 정합성 작업과 혼합하지 않는다. 과거 Recent Songs 0곡 CLOSED도 보존.
+
 
 ---
 

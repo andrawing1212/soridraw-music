@@ -17827,4 +17827,28 @@ html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
     animation-duration: 260ms;
     animation-timing-function: cubic-bezier(.22, 1, .36, 1);
   }
+
+  /* The old narrow/stacked pane bitmap used to linger while its bounds grew.
+   * At the end of 260ms it handed off abruptly to the new wide/grid bitmap,
+   * producing an apparent downward content jump. Animate the geometry only:
+   * show the already-laid-out destination contents for the entire movement.
+   * Do not affect split dragging, scroll ownership or responsive breakpoints. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition]::view-transition-old(soridraw-fold-left-rail),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition]::view-transition-old(soridraw-fold-center),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition]::view-transition-old(soridraw-fold-right-rail),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition]::view-transition-old(soridraw-fold-builder),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition]::view-transition-old(soridraw-fold-result) {
+    animation: none;
+    opacity: 0;
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition]::view-transition-new(soridraw-fold-left-rail),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition]::view-transition-new(soridraw-fold-center),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition]::view-transition-new(soridraw-fold-right-rail),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition]::view-transition-new(soridraw-fold-builder),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition]::view-transition-new(soridraw-fold-result) {
+    animation: none;
+    opacity: 1;
+    object-fit: cover;
+    object-position: top;
+  }
 }

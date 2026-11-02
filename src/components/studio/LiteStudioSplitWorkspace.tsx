@@ -995,14 +995,12 @@ export default function LiteStudioSplitWorkspace({
     splitter?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
   }, [clearDirectBenchmarkGeometry]);
 
-  // 781 — The two minimum-width collapse controls must have the same live
-  // boundary owner as the divider. The production Pure Pane path deliberately
-  // skips `syncExternalGeometry`, so leaving minimum-state + button geometry in
-  // that auxiliary lane made the previously visible edge button stay on the
-  // opposite side while the divider crossed to the other minimum. Keep this
-  // tiny shared rule inside the split engine itself: switch the two minimum
-  // flags only when the threshold actually changes, and position only the
-  // currently visible edge control from the exact live splitter coordinate.
+  // Keep both split-pane collapse buttons attached to the live boundary.
+  // The 12px inset was previously applied only by resting CSS: Pure Pane Hybrid
+  // skips external geometry on drag, and the root splitter variable is not
+  // committed until pointer-up. Write both button X positions from the same
+  // already-calculated splitterLeft as the panes; restore CSS ownership on release.
+  // The minimum-edge flags still change only when their thresholds change.
   const syncMinimumCollapseControls = useCallback((
     nextPercent: number,
     bounds: SplitBounds,
@@ -1033,21 +1031,18 @@ export default function LiteStudioSplitWorkspace({
 
     if (!livePosition) return;
     const roundedSplitterLeft = Math.max(0, Math.round(splitterLeft));
-    if (builderAtMinimum && builderToggleRef.current) {
-      builderToggleRef.current.style.removeProperty('right');
-      builderToggleRef.current.style.setProperty(
-        'left',
-        `${Math.max(0, roundedSplitterLeft - 43)}px`,
-        'important',
-      );
+    // Match the resting Studio Black CSS offsets (-55/+21) at EVERY drag X,
+    // including both minimum edges. Inline-important wins over tablet rules
+    // that intentionally keep the root split variable unchanged until release.
+    const builderLeft = `${Math.max(0, roundedSplitterLeft - 55)}px`;
+    const resultLeft = `${roundedSplitterLeft + 21}px`;
+    const builderToggle = builderToggleRef.current;
+    const resultToggle = resultToggleRef.current;
+    if (builderToggle && builderToggle.style.left !== builderLeft) {
+      builderToggle.style.setProperty('left', builderLeft, 'important');
     }
-    if (resultAtMinimum && resultToggleRef.current) {
-      resultToggleRef.current.style.removeProperty('right');
-      resultToggleRef.current.style.setProperty(
-        'left',
-        `${Math.min(window.innerWidth - 43, roundedSplitterLeft + 9)}px`,
-        'important',
-      );
+    if (resultToggle && resultToggle.style.left !== resultLeft) {
+      resultToggle.style.setProperty('left', resultLeft, 'important');
     }
   }, []);
 
@@ -1306,10 +1301,8 @@ export default function LiteStudioSplitWorkspace({
       // from this same rAF frame; all other external/root work stays deferred.
       syncGenerationBarGeometry(builderWidth);
 
-      // Keep the split-edge collapse UI correct even on the Pure Pane
-      // production hot path, which intentionally returns before auxiliary
-      // external-geometry synchronization. This is threshold-only state plus
-      // one tiny button position write at an actual minimum edge.
+      // Keep BOTH collapse buttons on the same live splitter X and 12px inset,
+      // without updating inherited root variables or measuring the DOM.
       syncMinimumCollapseControls(nextPercent, bounds, safeWidth, splitterLeft, true);
 
       if (perfEnabled && live) {

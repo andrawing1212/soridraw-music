@@ -17757,6 +17757,14 @@ html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
   .soridraw-lite-studio-split-workspace > .soridraw-studio-result-pane {
     view-transition-name: soridraw-fold-result;
   }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="pane"]
+  body > .soridraw-lite-studio-builder-toggle {
+    view-transition-name: soridraw-fold-builder-button;
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="pane"]
+  body > .soridraw-lite-studio-result-toggle {
+    view-transition-name: soridraw-fold-result-button;
+  }
 
   html::view-transition-group(soridraw-fold-left-rail),
   html::view-transition-group(soridraw-fold-center),
@@ -17764,7 +17772,9 @@ html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
   html::view-transition-group(soridraw-fold-left-button),
   html::view-transition-group(soridraw-fold-right-button),
   html::view-transition-group(soridraw-fold-builder),
-  html::view-transition-group(soridraw-fold-result) {
+  html::view-transition-group(soridraw-fold-result),
+  html::view-transition-group(soridraw-fold-builder-button),
+  html::view-transition-group(soridraw-fold-result-button) {
     animation-duration: 260ms;
     animation-timing-function: cubic-bezier(.22, 1, .36, 1);
   }

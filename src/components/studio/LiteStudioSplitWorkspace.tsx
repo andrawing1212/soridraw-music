@@ -1449,8 +1449,10 @@ export default function LiteStudioSplitWorkspace({
     metricsRef.current = {
       left: rect.left,
       width: Math.max(1, rect.width),
+      // During native resize, retain the last settled left rail edge.
+      // layout.rect.left can move independently; resize-end reads the rail.
       leftRailEdge: nativeWindowResize
-        ? rect.left
+        ? metricsRef.current.leftRailEdge
         : leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
     };
 

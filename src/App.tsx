@@ -4408,7 +4408,7 @@ function Navigation({
                 title="홈"
                 className="flex h-11 shrink-0 items-center rounded-xl px-2 text-left transition-all hover:bg-white/[0.04]"
               >
-                <span className="font-display text-[20px] font-black leading-none tracking-tight bg-gradient-to-r from-[#FFE08A] via-[#FF9A80] to-[#F06CA4] bg-clip-text text-transparent">
+                <span className="font-display text-[22px] font-black leading-none tracking-tight text-[#f4f4f5]">
                   SORiDRAW
                 </span>
               </button>

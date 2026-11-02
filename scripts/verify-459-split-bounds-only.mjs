@@ -39,10 +39,28 @@ for (const token of acceptedMusicNoteSelectionAdditions.slice(0, 4)) {
 assert(baseline.includes(acceptedMusicNoteSelectionAdditions[4]) || baseline.includes(acceptedMusicNoteSelectionAdditions[5]), 'expected approved Hybrid or all-mode writer in baseline');
 assert(current.includes(acceptedMusicNoteSelectionAdditions[5]), 'all-mode live writer missing');
 assert(!current.includes(acceptedMusicNoteSelectionAdditions[4]), 'stale Hybrid-only writer');
+// Allow exactly this previously failing native resize rail-edge fix.
+// Normalize its known before/after text and keep byte-exact comparison of
+// every other Lite splitter line. Do not relax pointer/drag/viewport guards.
+const acceptedResizeRailSource = [
+  '      // During native resize, retain the last settled left rail edge.',
+  '      // layout.rect.left can move independently; resize-end reads the rail.',
+  '      leftRailEdge: nativeWindowResize',
+  '        ? metricsRef.current.leftRailEdge',
+  '        : leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,',
+].join('\n');
+const previousResizeRailSource = [
+  '      leftRailEdge: nativeWindowResize',
+  '        ? rect.left',
+  '        : leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,',
+].join('\n');
+assert(current.includes(acceptedResizeRailSource), 'native resize must preserve settled rail anchor');
+assert.equal(current.split(acceptedResizeRailSource).length, 2, 'exactly one approved resize rail writer');
+const normalizeAcceptedResizeRail = (source) => source.replace(acceptedResizeRailSource, previousResizeRailSource);
 assert.equal(
-  normalizeAcceptedMusicNoteSelection(baseline.replace(before[0], '<SPLIT_BOUNDS>')),
-  normalizeAcceptedMusicNoteSelection(current.replace(after[0], '<SPLIT_BOUNDS>')),
-  'APP459 changed protected Lite splitter code beyond approved Music Note selection writer',
+  normalizeAcceptedMusicNoteSelection(normalizeAcceptedResizeRail(baseline.replace(before[0], '<SPLIT_BOUNDS>'))),
+  normalizeAcceptedMusicNoteSelection(normalizeAcceptedResizeRail(current.replace(after[0], '<SPLIT_BOUNDS>'))),
+  'APP459 changed protected Lite splitter code beyond approved Music Note selection and native resize rail edge',
 );
 // The initial app459 PR compared the legacy tablet-only guard to the new
 // real-center-workspace guard. Later PRs use app459 as their baseline: in

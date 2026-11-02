@@ -73,6 +73,118 @@ for (const item of [compactWorker, compactClient]) {
 const getState = block(worker, 'const getCatalogState = async', '\nconst materializeCatalogState');
 assert.doesNotMatch(getState, /firestoreCatalogQuery\(|buildCanonicalCatalog\(/);
 assert.doesNotMatch(clientProjectCode, /getDocs|setDoc|updateDoc|writeBatch/);
+// Execute the actual R2 delta merge code, including CAS retries, in a
+// no-network in-memory harness. This is a test of the deployed handler path,
+// not a standalone approximation of the merge behavior.
+const mergeCode = block(worker, 'const existingLibraryColorRowsForDelta = ', '\nconst handleCatalog = async');
+const actualWorkerApply = async ({ base, deltas = [], incoming, deletedIds = [], retryState = null }) => {
+  const baseState = {
+    base: { items: base },
+    head: { deltas, headRevision: 100, itemCount: base.length },
+    journalObject: { etag: 'base' },
+  };
+  const states = [baseState, retryState || baseState];
+  let getCalls = 0;
+  let putCalls = 0;
+  let lastWritten = null;
+  const context = {
+    catalogFieldList: () => workerList,
+    catalogCreatedAtMs: (item) => Number(item.createdAtMs || 1),
+    text: (value) => typeof value === 'string' ? value.trim() : '',
+    getCatalogState: async () => states[Math.min(getCalls++, states.length - 1)],
+    projectCatalogFields: workerProject,
+    appendCatalogJournalDelta: ({ head, delta, serverRevision }) => ({
+      ok: true, duplicate: false, revision: serverRevision,
+      itemCount: delta.nextItemCount,
+      head: { ...head, deltas: [...head.deltas, { ...delta, revision: serverRevision }] },
+    }),
+    putCatalogJournalHead: async (_env, _uid, _kind, nextHead) => {
+      putCalls++;
+      lastWritten = nextHead;
+      // Fake CAS failure on first attempt only when a concurrent state was supplied.
+      return !(retryState && putCalls === 1);
+    },
+    shouldCompactCatalogJournal: () => false,
+    compactCatalogJournal: async () => { throw new Error('no compaction expected'); },
+    Math, Date, Object, Set, Map,
+  };
+  const apply = vm.runInNewContext(workerListCode + '\n' + mergeCode + '\napplyCatalogDelta;', context);
+  const result = await apply(
+    { uid: 'owner-one' }, 'library',
+    { baseRevision: 100, revision: 101, baseItemCount: base.length,
+      nextItemCount: base.length, deletedIds, upserts: incoming }, {},
+  );
+  return { result, lastWritten, getCalls, putCalls };
+};
+const base = [{ id: 'track-one', createdAtMs: 1, title: 'before',
+  colorTags: { '0': 'purple', '1': null },
+  favoriteColorTags: { '0': 'blue', '1': null } }];
+const oldClientEdit = { id: 'track-one', createdAtMs: 1, title: 'edited on older browser' };
+const legacy = await actualWorkerApply({ base, incoming: [oldClientEdit] });
+const legacyRow = legacy.lastWritten.deltas.at(-1).upserts[0];
+assert.equal(JSON.stringify(legacyRow.colorTags), JSON.stringify(base[0].colorTags));
+assert.equal(JSON.stringify(legacyRow.favoriteColorTags), JSON.stringify(base[0].favoriteColorTags));
+assert.equal(legacyRow.title, oldClientEdit.title);
+
+const deliberateClear = await actualWorkerApply({ base, incoming: [{
+  ...oldClientEdit, colorTags: null, favoriteColorTags: { '0': null },
+}] });
+const cleared = deliberateClear.lastWritten.deltas.at(-1).upserts[0];
+assert.equal(cleared.colorTags, null);
+assert.equal(JSON.stringify(cleared.favoriteColorTags), '{"0":null}');
+
+const history = [{ deletedIds: [], upserts: [{
+  id: 'track-one', createdAtMs: 1, title: 'newer color edit',
+  colorTags: { '0': 'green', '1': null }, favoriteColorTags: { '0': null },
+}] }];
+const recent = await actualWorkerApply({ base, deltas: history, incoming: [oldClientEdit] });
+assert.equal(recent.lastWritten.deltas.at(-1).upserts[0].colorTags['0'], 'green');
+assert.equal(recent.lastWritten.deltas.at(-1).upserts[0].favoriteColorTags['0'], null);
+
+const deleted = await actualWorkerApply({
+  base, deltas: [{ deletedIds: ['track-one'], upserts: [] }], incoming: [oldClientEdit],
+});
+const noResurrection = deleted.lastWritten.deltas.at(-1).upserts[0];
+assert.equal(Object.hasOwn(noResurrection, 'colorTags'), false);
+assert.equal(Object.hasOwn(noResurrection, 'favoriteColorTags'), false);
+
+const newRow = await actualWorkerApply({ base: [], incoming: [{
+  id: 'brand-new', title: 'uncolored new track', createdAtMs: 1,
+}] });
+const uncolored = newRow.lastWritten.deltas.at(-1).upserts[0];
+assert.equal(Object.hasOwn(uncolored, 'colorTags'), false);
+
+// A CAS loss must re-evaluate the new head rather than retaining swatches
+// from the old attempted publish, without an extra Firestore read.
+const concurrent = await actualWorkerApply({
+  base, incoming: [oldClientEdit],
+  retryState: {
+    base: { items: base },
+    head: { headRevision: 101, itemCount: 1, deltas: [{
+      deletedIds: [], upserts: [{
+        id: 'track-one', createdAtMs: 1,
+        colorTags: { '0': 'red', '1': null },
+        favoriteColorTags: { '0': 'yellow' },
+      }],
+    }] },
+    journalObject: { etag: 'newer' },
+  },
+});
+assert.equal(concurrent.getCalls, 2);
+assert.equal(concurrent.putCalls, 2);
+assert.equal(concurrent.lastWritten.deltas.at(-1).upserts[0].colorTags['0'], 'red');
+assert.equal(concurrent.lastWritten.deltas.at(-1).upserts[0].favoriteColorTags['0'], 'yellow');
+
+// This compatibility path cannot requery canonical Firestore, issue a new
+// R2 read, or mutate any user source. Only the already acquired state is used.
+const compatibilitySource = block(worker, 'const existingLibraryColorRowsForDelta = ', '\nconst handleCatalog = async');
+assert.doesNotMatch(compatibilitySource, /firestoreCatalogQuery\s*\(|buildCanonicalCatalog\s*\(|catalogBucket\s*\(|\.get\s*\(/);
+assert.doesNotMatch(compatibilitySource, /(?:setDoc|updateDoc|deleteDoc|writeBatch)\s*\(/);
+console.log('LIBRARY_OLD_CLIENT_MISSING_COLOR_PRESERVES_LATEST_R2=PASS');
+console.log('LIBRARY_EXPLICIT_CLEAR_NULL_AND_DELETION_NO_RESURRECTION=PASS');
+console.log('LIBRARY_CAS_RETRY_PRESERVES_CONCURRENT_COLOR=PASS');
+console.log('LIBRARY_COLOR_DELTA_ADDITIONAL_R2_FIRESTORE_IO=ZERO');
+
 console.log('LIBRARY_CANONICAL_COLOR_FIELDS_SERVER_AND_BROWSER_PROJECTION=PASS');
 console.log('LIBRARY_COLOR_NULL_RESET_AND_COMPACT_SUMMARY=PASS');
 console.log('LIBRARY_CATALOG_WARM_READ_EXTRA_FIRESTORE_R0_W0=PASS');

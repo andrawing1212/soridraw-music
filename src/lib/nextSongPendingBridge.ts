@@ -65,3 +65,23 @@ export const clearNextSongKeywords = (applied: string): void => {
   safeRemove('sessionStorage', 'pendingAppliedKeywords');
   safeRemove('localStorage', 'pendingAppliedKeywordsBackup');
 };
+
+// Preserve the current Result when the existing Studio Builder is already
+// visible next to Music Note/Library. The URL remains the canonical owner of
+// split workspace selection; no new event, data store or pane observer.
+export const resolveNextSongApplyRoute = (timestamp: number): string => {
+  const createRoute = `/studio?applyPending=1&t=${timestamp}`;
+  if (typeof window === 'undefined' || typeof document === 'undefined') return createRoute;
+  if (
+    document.documentElement?.dataset.soridrawTheme !== 'studio-black'
+    || !window.matchMedia?.('(min-width: 1100px)').matches
+    || window.location.pathname !== '/studio'
+  ) return createRoute;
+
+  const params = new URLSearchParams(window.location.search);
+  const view = params.get('view');
+  if (view !== 'music-note' && view !== 'library') return createRoute;
+  params.set('applyPending', '1');
+  params.set('t', String(timestamp));
+  return `/studio?${params.toString()}`;
+};

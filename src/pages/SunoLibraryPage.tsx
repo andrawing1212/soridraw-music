@@ -1,5 +1,5 @@
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
-import { stageNextSongKeywords } from '../lib/nextSongPendingBridge';
+import { resolveNextSongApplyRoute, stageNextSongKeywords } from '../lib/nextSongPendingBridge';
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
 import { useFolderStripMouseScroll } from '../lib/folderStripMouseScroll';
@@ -5069,7 +5069,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     showToast("다음 곡에 곡 설정이 복원되었습니다.");
 
     setTimeout(() => {
-      navigate(`/studio?applyPending=1&t=${Date.now()}`);
+      navigate(resolveNextSongApplyRoute(Date.now()));
     }, 700);
   };
 

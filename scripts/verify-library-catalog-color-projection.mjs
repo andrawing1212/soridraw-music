@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { appendCatalogJournalDelta as actualAppendCatalogJournalDelta } from '../cloudflare/media-worker/src/catalogJournal.js';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -78,9 +79,19 @@ assert.doesNotMatch(clientProjectCode, /getDocs|setDoc|updateDoc|writeBatch/);
 // not a standalone approximation of the merge behavior.
 const mergeCode = block(worker, 'const existingLibraryColorRowsForDelta = ', '\nconst handleCatalog = async');
 const actualWorkerApply = async ({ base, deltas = [], incoming, deletedIds = [], retryState = null }) => {
+  const currentIds = new Set(base.map(item => item.id));
+  for (const entry of deltas) {
+    for (const id of entry.deletedIds) currentIds.delete(id);
+    for (const item of entry.upserts) currentIds.add(item.id);
+  }
+  const expectedAfterIds = new Set(currentIds);
+  for (const id of deletedIds) expectedAfterIds.delete(id);
+  for (const item of incoming) expectedAfterIds.add(item.id);
+  const baseRevision = 100 + deltas.length;
   const baseState = {
     base: { items: base },
-    head: { deltas, headRevision: 100, itemCount: base.length },
+    head: { deltas, headRevision: baseRevision, itemCount: currentIds.size,
+      recentMutations: [] },
     journalObject: { etag: 'base' },
   };
   const states = [baseState, retryState || baseState];
@@ -93,11 +104,8 @@ const actualWorkerApply = async ({ base, deltas = [], incoming, deletedIds = [],
     text: (value) => typeof value === 'string' ? value.trim() : '',
     getCatalogState: async () => states[Math.min(getCalls++, states.length - 1)],
     projectCatalogFields: workerProject,
-    appendCatalogJournalDelta: ({ head, delta, serverRevision }) => ({
-      ok: true, duplicate: false, revision: serverRevision,
-      itemCount: delta.nextItemCount,
-      head: { ...head, deltas: [...head.deltas, { ...delta, revision: serverRevision }] },
-    }),
+    // Use the production journal's *actual* revision and count fences.
+    appendCatalogJournalDelta: actualAppendCatalogJournalDelta,
     putCatalogJournalHead: async (_env, _uid, _kind, nextHead) => {
       putCalls++;
       lastWritten = nextHead;
@@ -111,8 +119,9 @@ const actualWorkerApply = async ({ base, deltas = [], incoming, deletedIds = [],
   const apply = vm.runInNewContext(workerListCode + '\n' + mergeCode + '\napplyCatalogDelta;', context);
   const result = await apply(
     { uid: 'owner-one' }, 'library',
-    { baseRevision: 100, revision: 101, baseItemCount: base.length,
-      nextItemCount: base.length, deletedIds, upserts: incoming }, {},
+    { mutationId: 'compat-test-1', baseRevision, revision: baseRevision + 1,
+      baseItemCount: currentIds.size, nextItemCount: expectedAfterIds.size,
+      deletedIds, upserts: incoming }, {},
   );
   return { result, lastWritten, getCalls, putCalls };
 };
@@ -154,8 +163,8 @@ const newRow = await actualWorkerApply({ base: [], incoming: [{
 const uncolored = newRow.lastWritten.deltas.at(-1).upserts[0];
 assert.equal(Object.hasOwn(uncolored, 'colorTags'), false);
 
-// A CAS loss must re-evaluate the new head rather than retaining swatches
-// from the old attempted publish, without an extra Firestore read.
+// An older mutation that loses CAS must NOT publish over a newer color.
+// Real appendCatalogJournalDelta returns CONFLICT on the second attempt.
 const concurrent = await actualWorkerApply({
   base, incoming: [oldClientEdit],
   retryState: {
@@ -171,9 +180,11 @@ const concurrent = await actualWorkerApply({
   },
 });
 assert.equal(concurrent.getCalls, 2);
-assert.equal(concurrent.putCalls, 2);
-assert.equal(concurrent.lastWritten.deltas.at(-1).upserts[0].colorTags['0'], 'red');
-assert.equal(concurrent.lastWritten.deltas.at(-1).upserts[0].favoriteColorTags['0'], 'yellow');
+assert.equal(concurrent.putCalls, 1, 'stale retry must not attempt a second R2 write');
+assert.equal(concurrent.result.conflict, true, 'stale old-browser delta must be rejected');
+assert.equal(concurrent.lastWritten.deltas.at(-1).upserts[0].colorTags['0'], 'purple',
+  'first failed CAS was only an uncommitted proposal');
+assert.equal(concurrent.result.revision, 101, 'latest concurrent head remains authoritative');
 
 // This compatibility path cannot requery canonical Firestore, issue a new
 // R2 read, or mutate any user source. Only the already acquired state is used.
@@ -185,7 +196,7 @@ assert.equal(deliberateClear.getCalls, 1, 'modern color reset adds no R2 reads')
 assert.equal(recent.getCalls, 1, 'journal scan is memory-only');
 console.log('LIBRARY_OLD_CLIENT_MISSING_COLOR_PRESERVES_LATEST_R2=PASS');
 console.log('LIBRARY_EXPLICIT_CLEAR_NULL_AND_DELETION_NO_RESURRECTION=PASS');
-console.log('LIBRARY_CAS_RETRY_PRESERVES_CONCURRENT_COLOR=PASS');
+console.log('LIBRARY_CAS_CONFLICT_REJECTS_STALE_COLOR_OVERWRITE=PASS');
 console.log('LIBRARY_COLOR_DELTA_ADDITIONAL_R2_FIRESTORE_IO=ZERO');
 
 console.log('LIBRARY_CANONICAL_COLOR_FIELDS_SERVER_AND_BROWSER_PROJECTION=PASS');

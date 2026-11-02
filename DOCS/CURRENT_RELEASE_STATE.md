@@ -1,3 +1,11 @@
+## CURRENT — 최근 생성곡 로그인 후 0곡 문제 해결 완료 (디렉터 최종 확인, 2026-11-03 KST)
+- **현재 상태: 완료(CLOSED).** 디렉터가 이미 여러 차례 해결 완료를 알려준 사항이며, 2026-11-03 개발방에서 이를 다시 미완료·다음 권장 작업으로 제시한 것은 잘못된 상태 보고다.
+- **재추천 금지:** 로그인 후 최근 생성곡이 0곡으로 표시되던 app520 관련 문제(과거 서버 최근곡 10곡 확인 기록)는 미완료 작업이나 다음 개발 우선순위로 제시하지 않는다. 새로 재현되는 별도의 오류 증거 또는 디렉터의 명시적인 재개 지시가 있을 때만 다시 검토한다.
+- **과거 기록 해석:** 아래 2026-10-31자 '미해결', '실기기 재확인 대기' 내용은 당시의 역사적 기록이며 **현재 장애 상태가 아니다.** 최신 완료 판단은 이 항목이 우선한다.
+- **근거·변경 범위:** 디렉터의 완료 확인에 따른 상태 기록 정정이다. 이번 기록 자체가 별도의 PC·모바일 재시험이나 새로운 배포 검증을 뜻하지 않는다. 제품 코드·기존 곡·서버·사용자 데이터·Hosting 변경 없음.
+
+---
+
 ## CURRENT — Studio Black 접기/펼치기 수직 튐 방지 PREVIEW 배포 (2026-11-03 KST)
 - **증거:** 2026-11-02 19:18 사용자 영상에서 좌·우 메뉴 및 중앙 pane 접기/펼치기의 세로 튐 반복. 이전 #703 사용자 QA FAIL, 이번 수정의 실제 로그인 PC/모바일 체감은 **미확인**.
 - **수정:** PR #705 병합 `d005e8ba3eae3828d47b62fab79a7c894b5e5c34`. 생존 center/Builder/Result의 X좌표·폭만 260ms 애니메이션하고 Y·높이 고정; 접히는 패널 효과, 상단 메뉴/가로선 2개, split pointer·scroll·반응형은 보호. 역사적 app463 글꼴 검사 범위만 해당 CSS로 한정.
@@ -7,7 +15,7 @@
 
 ---
 
-## CURRENT — app520 Recent Songs 로그인 0곡: 서버 원본 10곡 확인, PREVIEW 읽기 차단 수정 (2026-10-31 KST)
+## HISTORY — app520 Recent Songs 로그인 0곡: 당시 문제 기록 (2026-10-31 KST · 2026-11-03 완료로 종료)
 - **실제 사용자 증거:** PREVIEW 관리자 CACHE LIVE 원본 1건 조회에서 인증 계정의 Firestore `user_recent_songs/{uid}` 문서 존재, 서버 곡 10/화면 인식 가능한 곡 10, PREVIEW 브라우저 기본 캐시 0, 동일 origin의 백업 10. **백업과 서버 10곡의 정확한 ID 일치 여부는 미확인.**
 - **제품 장애는 미해결로 유지:** app520 이전 보완 #536/#544가 PREVIEW에 배포됐으나 로그인 후 목록은 0곡. #546 진단 배포 PASS. 원본 손실로 단정하거나 로컬·서버 곡을 강제 재생성/삭제하지 않는다.
 - **코드 비교:** PREVIEW와 PRODUCTION 소스는 모두 공유 Firebase 프로젝트 `soridraw-app-866a5`를 사용하지만, origin별 브라우저 저장소는 분리. PRODUCTION 코드는 빈 객체 캐시도 warm으로 취급해 원본 조회를 생략할 수 있음. PREVIEW는 빈 캐시 재조회 보완이 있으나, 이전 pending text marker가 원본 읽기를 차단하고 이후 marker 복구 effect가 서버 조회를 재개하지 않을 수 있는 추가 경로를 확인.
@@ -16,7 +24,7 @@
 
 ---
 
-## CURRENT — app520 PREVIEW Hosting 배포 PASS, 실제 Chrome·Edge 재확인 대기 (2026-10-31 KST)
+## HISTORY — app520 PREVIEW Hosting 배포 및 당시 재확인 기록 (2026-10-31 KST · 현재 CLOSED)
 - 디렉터 승인: PR #536의 로그인 후 최근 생성곡 복구를 `preview`에 병합하고 Firebase PREVIEW Hosting에만 배포. 코드 SHA `2be61304a05076c13ad95e9a9fea67c7a235670f`, 병합 SHA `53fecbab864c59d23c90f0a2cd002adf94b256d6`.
 - 검사 PASS: 최근 생성곡 로그아웃 캐시 보호·재로그인 빈 캐시 재조회·기존 RTDB 동기화·TS/빌드 #41130751834, 로그인 저장소 #41130751800, 좋아요 #41130751801. 기존 오래된 단언 검사 app290/app116은 현재 소스의 변경된 문자열과 호환되지 않아 이번 CI에서 제외(숨겨진 PASS 아님).
 - 배포 완료: 보호된 트리거 PR #537 병합 SHA `8b609c09ab2fb9a8df09dfab2c9ed6051d146aae`, 기존 Firebase PREVIEW Hosting 전용 워크플로 run #41132051323 SUCCESS. `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`. 공유 Rules·Functions·Worker·D1·사용자 데이터 변경 없음. PREVIEW 웹앱 `https://preview.soridraw.com`.

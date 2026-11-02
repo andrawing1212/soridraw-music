@@ -2293,16 +2293,16 @@ updates: draft.updates,
   ];
 
   const getFavoriteColorValue = (song: any): string => {
-    // Respect an explicit per-device gray reset or a server-side null/gray
-    // assignment. Only consult old aliases when the new fields are absent.
+    // A deliberate unsaved click wins locally. Otherwise canonical values,
+    // including a deliberate server gray/null reset, win over old device maps.
     const local = favoriteColorMap[song?.id];
-    if (FAVORITE_COLOR_OPTIONS.some(option => option.value === local)) return local;
-    const assigned = [song?.favoriteColorTag, song?.colorTag]
-      .find(value => FAVORITE_COLOR_OPTIONS.some(option => option.value === value));
-    if (assigned) return assigned;
+    const isValid = (value: unknown) => FAVORITE_COLOR_OPTIONS.some(option => option.value === value);
+    if (pendingFavoriteColorIdsRef.current.has(song?.id) && isValid(local)) return local;
+    const assigned = [song?.favoriteColorTag, song?.colorTag].find(isValid);
+    if (assigned) return assigned as string;
     if (song && ('favoriteColorTag' in song || 'colorTag' in song)) return 'gray';
-    return [song?.favoriteColor, song?.noteColor, song?.color]
-      .find(value => FAVORITE_COLOR_OPTIONS.some(option => option.value === value)) || 'gray';
+    const legacy = [song?.favoriteColor, song?.noteColor, song?.color].find(isValid);
+    return (legacy as string | undefined) || (isValid(local) ? local : 'gray');
   };
 
   const getFavoriteColorHex = (songId: string, song?: any) => {

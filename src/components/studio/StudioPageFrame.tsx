@@ -1,5 +1,6 @@
 import React, { type ReactNode, useEffect, useLayoutEffect, useState } from 'react';
 import { useMediaQuery } from '../../lib/mediaQueryStore';
+import { runStudioFoldTransition } from './studioFoldTransition';
 
 const LEFT_RAIL_STORAGE_KEY = 'soridraw_studio_black_left_rail_collapsed_v1';
 const RIGHT_RAIL_STORAGE_KEY = 'soridraw_studio_black_right_rail_collapsed_v1';
@@ -127,7 +128,7 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
         <button
           type="button"
           className="soridraw-studio-left-rail-collapse-toggle"
-          onClick={() => setIsLeftRailCollapsed((current) => !current)}
+          onClick={() => runStudioFoldTransition('rail', () => setIsLeftRailCollapsed((current) => !current))}
           aria-label={isLeftRailCollapsed ? '왼쪽 메뉴 펼치기' : '왼쪽 메뉴 접기'}
           title={isLeftRailCollapsed ? '왼쪽 메뉴 펼치기' : '왼쪽 메뉴 접기'}
           aria-expanded={!isLeftRailCollapsed}
@@ -143,7 +144,7 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
         <button
           type="button"
           className="soridraw-studio-right-rail-collapse-toggle"
-          onClick={() => setIsRightRailCollapsed((current) => !current)}
+          onClick={() => runStudioFoldTransition('rail', () => setIsRightRailCollapsed((current) => !current))}
           aria-label={isRightRailCollapsed ? '오른쪽 메뉴 펼치기' : '오른쪽 메뉴 접기'}
           title={isRightRailCollapsed ? '오른쪽 메뉴 펼치기' : '오른쪽 메뉴 접기'}
           aria-expanded={!isRightRailCollapsed}

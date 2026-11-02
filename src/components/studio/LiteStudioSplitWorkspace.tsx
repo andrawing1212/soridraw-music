@@ -8,6 +8,7 @@ import React, {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { runStudioFoldTransition } from './studioFoldTransition';
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from '../../lib/studioActionBarGeometry';
 import './liteSplitWorkspace.css';
 import {
@@ -2410,10 +2411,10 @@ export default function LiteStudioSplitWorkspace({
       ref={builderToggleRef}
       type="button"
       className={`soridraw-studio-builder-collapse-toggle soridraw-lite-studio-builder-toggle${isBuilderCollapsed ? ' is-collapsed' : ''}`}
-      onClick={() => {
+      onClick={() => runStudioFoldTransition('pane', () => {
         setIsResultCollapsed(false);
         setIsBuilderCollapsed((current) => !current);
-      }}
+      })}
       aria-label={isBuilderCollapsed ? '곡 만들기 영역 펼치기' : '곡 만들기 영역 접기'}
       title={isBuilderCollapsed ? '곡 만들기 영역 펼치기' : '곡 만들기 영역 접기'}
       aria-expanded={!isBuilderCollapsed}
@@ -2428,10 +2429,10 @@ export default function LiteStudioSplitWorkspace({
       ref={resultToggleRef}
       type="button"
       className={`soridraw-studio-result-collapse-toggle soridraw-lite-studio-result-toggle${isResultCollapsed ? ' is-collapsed' : ''}`}
-      onClick={() => {
+      onClick={() => runStudioFoldTransition('pane', () => {
         setIsBuilderCollapsed(false);
         setIsResultCollapsed((current) => !current);
-      }}
+      })}
       aria-label={isResultCollapsed ? '생성 결과 영역 펼치기' : '생성 결과 영역 접기'}
       title={isResultCollapsed ? '생성 결과 영역 펼치기' : '생성 결과 영역 접기'}
       aria-expanded={!isResultCollapsed}

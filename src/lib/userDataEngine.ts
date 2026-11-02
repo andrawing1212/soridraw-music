@@ -136,6 +136,8 @@ const LIBRARY_SUMMARY_KEYS = new Set([
   'audioUrl', 'audio_url', 'streamAudioUrl', 'stream_audio_url', 'sourceAudioUrl', 'sourceStreamAudioUrl',
   'imageUrl', 'image_url', 'coverUrl', 'thumbnailUrl', 'audioUrls', 'duration', 'durationSeconds',
   'sunoData', 'isPublic', 'hidden', 'deletedAt', 'trashedAt', 'favoriteColor', 'color',
+  // Keep track-level per-generation swatches in bounded private Catalog summaries.
+  'colorTags', 'favoriteColorTags',
 ]);
 
 const catalogMemory = new Map<string, SoridrawCatalogSnapshot>();

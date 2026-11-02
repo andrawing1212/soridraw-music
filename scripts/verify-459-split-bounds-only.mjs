@@ -67,7 +67,7 @@ const normalizeAcceptedRailTransition = (source) =>
   source.replace(acceptedRailTransitionRefresh, previousRailTransitionRefresh);
 // The new director-approved four fold controls only wrap the two Lite V2
 // button click callbacks. Normalize precisely that import + two callbacks
-// before comparing the frozen pointer/geometry source byte-for-byte.
+// on both the old and new source before comparing the frozen pointer/geometry source byte-for-byte.
 const acceptedFoldImport = "import { runStudioFoldTransition } from './studioFoldTransition';\n";
 const acceptedBuilderFold = [
   "onClick={() => runStudioFoldTransition('pane', () => {",
@@ -99,7 +99,7 @@ assert(current.includes(acceptedFoldImport), 'approved Studio fold helper import
 assert(current.includes(acceptedBuilderFold), 'approved Builder button fold wrapper missing');
 assert(current.includes(acceptedResultFold), 'approved Result button fold wrapper missing');
 assert.equal(
-  normalizeAcceptedMusicNoteSelection(normalizeAcceptedResizeRail(normalizeAcceptedRailTransition(baseline.replace(before[0], '<SPLIT_BOUNDS>')))),
+  normalizeAcceptedMusicNoteSelection(normalizeAcceptedResizeRail(normalizeAcceptedRailTransition(normalizeAcceptedFoldHandlers(baseline.replace(before[0], '<SPLIT_BOUNDS>'))))),
   normalizeAcceptedMusicNoteSelection(normalizeAcceptedResizeRail(normalizeAcceptedRailTransition(normalizeAcceptedFoldHandlers(current.replace(after[0], '<SPLIT_BOUNDS>'))))),
   'APP459 changed protected Lite splitter code beyond approved Music Note selection and boundary-only rail change',
 );

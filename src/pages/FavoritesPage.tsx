@@ -2298,9 +2298,12 @@ updates: draft.updates,
     const local = favoriteColorMap[song?.id];
     const isValid = (value: unknown) => FAVORITE_COLOR_OPTIONS.some(option => option.value === value);
     if (pendingFavoriteColorIdsRef.current.has(song?.id) && isValid(local)) return local;
-    const assigned = [song?.favoriteColorTag, song?.colorTag].find(isValid);
-    if (assigned) return assigned as string;
-    if (song && ('favoriteColorTag' in song || 'colorTag' in song)) return 'gray';
+    if (song && Object.prototype.hasOwnProperty.call(song, 'favoriteColorTag')) {
+      return isValid(song.favoriteColorTag) ? song.favoriteColorTag : 'gray';
+    }
+    if (song && Object.prototype.hasOwnProperty.call(song, 'colorTag')) {
+      return isValid(song.colorTag) ? song.colorTag : 'gray';
+    }
     const legacy = [song?.favoriteColor, song?.noteColor, song?.color].find(isValid);
     return (legacy as string | undefined) || (isValid(local) ? local : 'gray');
   };
@@ -4046,7 +4049,8 @@ updates: draft.updates,
     const serverMap: Record<string, string> = {};
     for (const song of favorites || []) {
       if (!song?.id) continue;
-      const rawColor = song.favoriteColorTag || song.colorTag || null;
+      const rawColor = Object.prototype.hasOwnProperty.call(song, 'favoriteColorTag')
+        ? song.favoriteColorTag : song.colorTag;
       if (rawColor && rawColor !== 'gray') serverMap[song.id] = rawColor;
     }
 

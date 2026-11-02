@@ -17724,3 +17724,71 @@ body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]
 html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
   display: none !important;
 }
+
+/* Button-only Studio Black rail/pane fold: native View Transition snapshots
+ * animate actual before/after pane bounds. No layout transition is added to
+ * Lite V2 splitter dragging, native window resize, Classic, or mobile. */
+@media (min-width: 1100px) and (prefers-reduced-motion: no-preference) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="rail"]
+  .soridraw-studio-page-frame > .soridraw-studio-left-panel {
+    view-transition-name: soridraw-fold-left-rail;
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="rail"]
+  .soridraw-studio-page-frame > .soridraw-studio-page-center {
+    view-transition-name: soridraw-fold-center;
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="rail"]
+  .soridraw-studio-page-frame > .soridraw-studio-dashboard-panel {
+    view-transition-name: soridraw-fold-right-rail;
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="rail"]
+  .soridraw-studio-page-frame > .soridraw-studio-left-rail-collapse-toggle {
+    view-transition-name: soridraw-fold-left-button;
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="rail"]
+  .soridraw-studio-page-frame > .soridraw-studio-right-rail-collapse-toggle {
+    view-transition-name: soridraw-fold-right-button;
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="pane"]
+  .soridraw-lite-studio-split-workspace > .soridraw-studio-builder-pane {
+    view-transition-name: soridraw-fold-builder;
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="pane"]
+  .soridraw-lite-studio-split-workspace > .soridraw-studio-result-pane {
+    view-transition-name: soridraw-fold-result;
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="pane"]
+  body > .soridraw-lite-studio-builder-toggle {
+    view-transition-name: soridraw-fold-builder-button;
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="pane"]
+  body > .soridraw-lite-studio-result-toggle {
+    view-transition-name: soridraw-fold-result-button;
+  }
+
+  html::view-transition-group(soridraw-fold-left-rail),
+  html::view-transition-group(soridraw-fold-center),
+  html::view-transition-group(soridraw-fold-right-rail),
+  html::view-transition-group(soridraw-fold-left-button),
+  html::view-transition-group(soridraw-fold-right-button),
+  html::view-transition-group(soridraw-fold-builder),
+  html::view-transition-group(soridraw-fold-result),
+  html::view-transition-group(soridraw-fold-builder-button),
+  html::view-transition-group(soridraw-fold-result-button) {
+    animation-duration: 260ms;
+    animation-timing-function: cubic-bezier(.22, 1, .36, 1);
+  }
+  html::view-transition-old(soridraw-fold-left-rail),
+  html::view-transition-new(soridraw-fold-left-rail),
+  html::view-transition-old(soridraw-fold-center),
+  html::view-transition-new(soridraw-fold-center),
+  html::view-transition-old(soridraw-fold-right-rail),
+  html::view-transition-new(soridraw-fold-right-rail),
+  html::view-transition-old(soridraw-fold-builder),
+  html::view-transition-new(soridraw-fold-builder),
+  html::view-transition-old(soridraw-fold-result),
+  html::view-transition-new(soridraw-fold-result) {
+    animation-duration: 260ms;
+    animation-timing-function: cubic-bezier(.22, 1, .36, 1);
+  }
+}

@@ -65,9 +65,42 @@ assert(current.includes(acceptedRailTransitionRefresh), 'PC/tablet rail change m
 assert.equal(current.split(acceptedRailTransitionRefresh).length, 2, 'rail rebase callback must appear exactly once');
 const normalizeAcceptedRailTransition = (source) =>
   source.replace(acceptedRailTransitionRefresh, previousRailTransitionRefresh);
+// The new director-approved four fold controls only wrap the two Lite V2
+// button click callbacks. Normalize precisely that import + two callbacks
+// before comparing the frozen pointer/geometry source byte-for-byte.
+const acceptedFoldImport = "import { runStudioFoldTransition } from './studioFoldTransition';\\n";
+const acceptedBuilderFold = [
+  "onClick={() => runStudioFoldTransition('pane', () => {",
+  "        setIsResultCollapsed(false);",
+  "        setIsBuilderCollapsed((current) => !current);",
+  "      })}",
+].join('\\n');
+const acceptedResultFold = [
+  "onClick={() => runStudioFoldTransition('pane', () => {",
+  "        setIsBuilderCollapsed(false);",
+  "        setIsResultCollapsed((current) => !current);",
+  "      })}",
+].join('\\n');
+const previousBuilderFold = acceptedBuilderFold.replace("runStudioFoldTransition('pane', () => {", '{').replace('      })}', '      }}');
+const previousResultFold = acceptedResultFold.replace("runStudioFoldTransition('pane', () => {", '{').replace('      })}', '      }}');
+const normalizeAcceptedFoldHandlers = (source) => {
+  let result = source;
+  for (const [next, previous] of [
+    [acceptedFoldImport, ''],
+    [acceptedBuilderFold, previousBuilderFold],
+    [acceptedResultFold, previousResultFold],
+  ]) {
+    assert((result.split(next).length - 1) <= 1, 'duplicate fold-only button token');
+    result = result.replace(next, previous);
+  }
+  return result;
+};
+assert(current.includes(acceptedFoldImport), 'approved Studio fold helper import missing');
+assert(current.includes(acceptedBuilderFold), 'approved Builder button fold wrapper missing');
+assert(current.includes(acceptedResultFold), 'approved Result button fold wrapper missing');
 assert.equal(
   normalizeAcceptedMusicNoteSelection(normalizeAcceptedResizeRail(normalizeAcceptedRailTransition(baseline.replace(before[0], '<SPLIT_BOUNDS>')))),
-  normalizeAcceptedMusicNoteSelection(normalizeAcceptedResizeRail(normalizeAcceptedRailTransition(current.replace(after[0], '<SPLIT_BOUNDS>')))),
+  normalizeAcceptedMusicNoteSelection(normalizeAcceptedResizeRail(normalizeAcceptedRailTransition(normalizeAcceptedFoldHandlers(current.replace(after[0], '<SPLIT_BOUNDS>'))))),
   'APP459 changed protected Lite splitter code beyond approved Music Note selection and boundary-only rail change',
 );
 // The initial app459 PR compared the legacy tablet-only guard to the new

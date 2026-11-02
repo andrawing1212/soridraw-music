@@ -17845,4 +17845,41 @@ html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
     object-fit: cover;
     object-position: top;
   }
+
+  /* The survivor's target layout is already finalized before the screenshot.
+   * Animate left/width ONLY. The browser's default group animation also
+   * interpolates pane height, which scales the header/cards down and back up
+   * when a narrower pane reflows into a taller grid. Keep top and height at
+   * their settled destination coordinates throughout the 260ms gesture. */
+  @keyframes soridraw-fold-horizontal-only {
+    from {
+      transform: translate(var(--soridraw-fold-from-left), var(--soridraw-fold-to-top));
+      width: var(--soridraw-fold-from-width);
+      height: var(--soridraw-fold-to-height);
+    }
+    to {
+      transform: translate(var(--soridraw-fold-to-left), var(--soridraw-fold-to-top));
+      width: var(--soridraw-fold-to-width);
+      height: var(--soridraw-fold-to-height);
+    }
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-horizontal="true"][data-soridraw-fold-transition="rail"]::view-transition-group(soridraw-fold-center),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-horizontal="true"][data-soridraw-fold-survivor="builder"]::view-transition-group(soridraw-fold-builder),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-horizontal="true"][data-soridraw-fold-survivor="result"]::view-transition-group(soridraw-fold-result) {
+    animation: soridraw-fold-horizontal-only 260ms cubic-bezier(.22, 1, .36, 1) both;
+    transform-origin: top left;
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-horizontal="true"][data-soridraw-fold-transition="rail"]::view-transition-image-pair(soridraw-fold-center),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-horizontal="true"][data-soridraw-fold-survivor="builder"]::view-transition-image-pair(soridraw-fold-builder),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-horizontal="true"][data-soridraw-fold-survivor="result"]::view-transition-image-pair(soridraw-fold-result) {
+    overflow: clip;
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-horizontal="true"][data-soridraw-fold-transition="rail"]::view-transition-new(soridraw-fold-center),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-horizontal="true"][data-soridraw-fold-survivor="builder"]::view-transition-new(soridraw-fold-builder),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-horizontal="true"][data-soridraw-fold-survivor="result"]::view-transition-new(soridraw-fold-result) {
+    object-fit: none;
+    object-position: left top;
+    width: 100%;
+    height: 100%;
+  }
 }

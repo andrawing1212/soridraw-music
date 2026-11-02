@@ -237,6 +237,7 @@ const clickContext={
  exports:{},
  onHover(){}, onLongPressEnd(){}, setSelectedSong(){}, setActiveFavoriteMenuId(){},
  document:{activeElement:null}, window:{dispatchEvent(){}},
+ resolveNextSongApplyRoute:(timestamp)=>`/studio?applyPending=1&t=${timestamp}`,
  CustomEvent:class {constructor(type){this.type=type;}},
  sessionStorage:{setItem:(k,v)=>sent.set(k,v)},
  localStorage:{setItem:(k,v)=>sent.set(k,v)},

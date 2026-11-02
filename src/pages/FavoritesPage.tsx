@@ -1,5 +1,5 @@
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
-import { stageNextSongKeywords } from '../lib/nextSongPendingBridge';
+import { resolveNextSongApplyRoute, stageNextSongKeywords } from '../lib/nextSongPendingBridge';
 import {
   MUSIC_NOTE_SYNC_EVENT,
   publishMusicNoteDetailPreviewDelta,
@@ -5655,7 +5655,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
     requestAnimationFrame(() => {
       window.dispatchEvent(new CustomEvent('soridraw:clear-interaction-hints'));
-      navigate(`/studio?applyPending=1&t=${Date.now()}`);
+      navigate(resolveNextSongApplyRoute(Date.now()));
     });
   };
 

@@ -70,9 +70,42 @@ clear(two);
 assert.equal(read(), null);
 
 assert.match(note, /stageNextSongKeywords\(serialized\)/);
-assert.match(note, /navigate\(`\/studio\?applyPending=1&t=\$\{Date\.now\(\)\}`\)/);
+assert.ok(note.includes('navigate(resolveNextSongApplyRoute(Date.now()))'));
 assert.match(library, /stageNextSongKeywords\(serialized\)/);
-assert.match(library, /navigate\(`\/studio\?applyPending=1&t=\$\{Date\.now\(\)\}`\)/);
+assert.ok(library.includes('navigate(resolveNextSongApplyRoute(Date.now()))'));
+
+const resolveRoute = (await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`)).resolveNextSongApplyRoute;
+const setLocation = ({ pathname = '/studio', search = '?view=music-note', theme = 'studio-black', width = 1440 } = {}) => {
+  globalThis.document = { documentElement: { dataset: { soridrawTheme: theme } } };
+  globalThis.window = {
+    location: { pathname, search },
+    matchMedia: (query) => ({ matches: query === '(min-width: 1100px)' && width >= 1100 }),
+  };
+};
+const fallback = '/studio?applyPending=1&t=1729';
+setLocation({search:'?view=music-note&splitEngine=lite&v2DragPerf=pure-pane'});
+assert.equal(resolveRoute(1729),
+  '/studio?view=music-note&splitEngine=lite&v2DragPerf=pure-pane&applyPending=1&t=1729',
+  'desktop Music Note next-song must keep Result view and split query params');
+setLocation({search:'?view=library&applyPending=1&t=old'});
+assert.equal(resolveRoute(1729), '/studio?view=library&applyPending=1&t=1729',
+  'desktop Library next-song updates the apply signal without switching workspace');
+setLocation({search:'?view=music-note',width:1099});
+assert.equal(resolveRoute(1729),fallback,'compact 1099px must navigate to Builder');
+setLocation({search:'?view=library',width:390});
+assert.equal(resolveRoute(1729),fallback,'phone must navigate to Builder');
+setLocation({search:'?view=music-note',theme:'classic'});
+assert.equal(resolveRoute(1729),fallback,'classic appearance keeps original Create routing');
+setLocation({pathname:'/history',search:''});
+assert.equal(resolveRoute(1729),fallback,'standalone Music Note keeps Create routing');
+setLocation({pathname:'/suno-library',search:''});
+assert.equal(resolveRoute(1729),fallback,'standalone Library keeps Create routing');
+setLocation({search:'?view=create'});
+assert.equal(resolveRoute(1729),fallback,'unexpected view retains Create routing');
+setLocation({search:'?view=music-note'});
+assert.equal(resolveRoute(1730),'/studio?view=music-note&applyPending=1&t=1730',
+  'new click changes query and reruns App applyPending receiver');
+
 assert.match(app, /const pending = readNextSongKeywords\(\)/);
 assert.match(app, /applyKeywordsToNext\(keywords\);\s*clearNextSongKeywords\(pending\)/);
 assert.match(app, /onClick=\{\(\) => \{\s*applyKeywordsToNext\(result\.appliedKeywords\);[\s\S]{0,500}?navigateStudioWorkspaceView\('create'\)/);

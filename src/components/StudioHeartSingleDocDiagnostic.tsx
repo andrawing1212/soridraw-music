@@ -5,6 +5,7 @@ import {
   findSingleLocalFavoriteDocumentId,
   inspectExactStudioHeartDocument,
   type StudioHeartExactReadReport,
+  type ExactFavoriteColorField,
 } from '../lib/studioHeartSingleDocDiagnostic';
 import {
   inspectExactSharedMusicNoteCatalog517,
@@ -162,6 +163,11 @@ export default function StudioHeartSingleDocDiagnostic() {
   };
 
   const label = (value: boolean | null) => value === null ? '판정 불가' : value ? '예' : '아니요';
+  const colorLabel = (value: ExactFavoriteColorField) => ({
+    unavailable: '원본 없음/미확인', absent: '필드 없음', gray: '회색/명시적 해제',
+    red: '빨강', orange: '주황', yellow: '노랑', green: '초록',
+    blue: '파랑', purple: '보라', invalid: '기타/비표준값', blocked: '기기 저장소 확인 불가',
+  }[value]);
   return (
     <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.035] p-2.5 text-[11px] text-white/75">
       <div className="font-black text-white/90">뮤직노트 특정곡 원본 확인 · 읽기 전용</div>
@@ -219,6 +225,15 @@ export default function StudioHeartSingleDocDiagnostic() {
         <div>이 기기 하트 기록: {label(report.deviceRecentHeartAuthority)}</div>
         <div>이 기기 Catalog 캐시 존재: {label(report.deviceCatalogCached)}</div>
         <div>Catalog 캐시에 저장곡 포함: {label(report.deviceCatalogContainsDocument)}</div>
+        <div className="mt-1 border-t border-white/10 pt-1 font-bold text-white/85">곡 색상 원본 비교 · 동일한 서버 1건 조회 결과</div>
+        <div>서버 현재색 favoriteColorTag: {colorLabel(report.serverFavoriteColorTag)}</div>
+        <div>서버 다른색 colorTag: {colorLabel(report.serverColorTag)}</div>
+        <div>서버 과거색 favoriteColor: {colorLabel(report.serverLegacyFavoriteColor)}</div>
+        <div>서버 과거색 noteColor: {colorLabel(report.serverLegacyNoteColor)}</div>
+        <div>서버 과거색 color: {colorLabel(report.serverLegacyColor)}</div>
+        <div>이 기기 로컬 색상표: {colorLabel(report.deviceColorMap)}</div>
+        <div>이 기기 목록의 현재색 필드: {colorLabel(report.deviceSummaryFavoriteColorTag)}</div>
+        <div className="text-[10px] leading-4 text-white/50">필드 없음과 명시적 회색 해제를 구분합니다. 서버에 과거색이 있어도 현재색 해제가 최신 의도일 수 있으므로 자동 복구·덮어쓰기는 하지 않습니다.</div>
         <button type="button"
           disabled={busy || sharedInspected || !report.documentPresent || report.ownerMatchesSignedInUser !== true}
           onClick={() => void inspectShared()}

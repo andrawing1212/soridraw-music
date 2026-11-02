@@ -6,6 +6,7 @@ import { collection, limit, query, where } from '../lib/firestoreMeasured';
 import { markFirestoreActualRead } from '../lib/cacheDiagnostics';
 import { favoritesStore } from '../hooks/useFavoritesStore';
 import { readCatalogSnapshotFromLocalCache } from '../lib/userDataEngine';
+import { isMusicNoteItemRemoved } from '../lib/musicNoteSavedState';
 
 // Admin CACHE LIVE only. Nothing is read from the server until the signed-in
 // owner explicitly clicks once; no document, cache, or backup is ever written.
@@ -13,8 +14,20 @@ type Color = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple';
 type ColorArea = '뮤직노트' | '라이브러리 음악' | '라이브러리 폴더';
 type Hit = { area: ColorArea; color: Color; title: string; provenance: '현재 필드' | '과거 필드' };
 type Stats = { examined: number; current: number; legacy: number; resetConflict: number; byColor: Record<Color, number> };
+type NoteCoverage = {
+  activeSongs: number;
+  inactiveSongs: number;
+  activeColored: number;
+  inactiveColored: number;
+  activeInCatalog: number;
+  activeColoredInCatalog: number;
+  activeColoredMissingFromCatalog: number;
+  activeCatalogRowWithoutColor: number;
+};
 type AuditResult = {
   local: { musicNoteMap: number; workspaceMap: number; playlistMap: number; visibleNote: number; catalogNote: number };
+  noteCoverage: NoteCoverage;
+  catalogAvailable: boolean;
   server: { note: Stats; workspace: Stats; playlist: Stats; documentsRead: number };
   hits: Hit[];
   truncated: boolean;
@@ -113,6 +126,12 @@ export default function ColorHistoryReadOnlyDiagnostic() {
     const current = () => generation === generationRef.current && auth.currentUser?.uid === uid;
     const result: AuditResult = {
       local: { musicNoteMap: 0, workspaceMap: 0, playlistMap: 0, visibleNote: 0, catalogNote: 0 },
+      noteCoverage: {
+        activeSongs: 0, inactiveSongs: 0, activeColored: 0, inactiveColored: 0,
+        activeInCatalog: 0, activeColoredInCatalog: 0, activeColoredMissingFromCatalog: 0,
+        activeCatalogRowWithoutColor: 0,
+      },
+      catalogAvailable: false,
       server: { note: emptyStats(), workspace: emptyStats(), playlist: emptyStats(), documentsRead: 0 },
       hits: [], truncated: false, errors: [],
     };
@@ -125,9 +144,19 @@ export default function ColorHistoryReadOnlyDiagnostic() {
       result.local.visibleNote = favoritesStore.getFavorites()
         .filter((song: any) => !song?.uid || String(song.uid) === uid)
         .filter((song: any) => Boolean(classifyNote(song).color)).length;
+      const catalogRows = new Map<string, Record<string, unknown>>();
       try {
         const catalog = await readCatalogSnapshotFromLocalCache('musicNote', uid);
         if (!current()) return;
+        result.catalogAvailable = Boolean(catalog);
+        for (const row of catalog?.items || []) {
+          if (!row || typeof row !== 'object') continue;
+          const doc = row as Record<string, unknown>;
+          for (const alias of [doc.id, doc.firestoreId]) {
+            const id = String(alias || '').trim();
+            if (id) catalogRows.set(id, doc);
+          }
+        }
         result.local.catalogNote = (catalog?.items || [])
           .filter((song: any) => Boolean(classifyNote(song).color)).length;
       } catch {
@@ -156,7 +185,26 @@ export default function ColorHistoryReadOnlyDiagnostic() {
           const data = doc.data() as Record<string, unknown>;
           result.server.note.examined++;
           const candidate = classifyNote(data);
+          const removed = isMusicNoteItemRemoved(data);
+          if (removed) result.noteCoverage.inactiveSongs++;
+          else result.noteCoverage.activeSongs++;
+          const catalogRow = [doc.id, data.firestoreId, data.id]
+            .map((value) => catalogRows.get(String(value || '').trim()))
+            .find(Boolean);
+          if (!removed && catalogRow) result.noteCoverage.activeInCatalog++;
           if (candidate.conflict) result.server.note.resetConflict++;
+          if (candidate.color) {
+            if (removed) result.noteCoverage.inactiveColored++;
+            else {
+              result.noteCoverage.activeColored++;
+              if (catalogRow) {
+                result.noteCoverage.activeColoredInCatalog++;
+                if (!classifyNote(catalogRow).color) result.noteCoverage.activeCatalogRowWithoutColor++;
+              } else if (result.catalogAvailable) {
+                result.noteCoverage.activeColoredMissingFromCatalog++;
+              }
+            }
+          }
           if (candidate.color) {
             pushHit(result, result.server.note, '뮤직노트',
               data.title || data.koreanTitle || data.englishTitle,
@@ -257,6 +305,19 @@ export default function ColorHistoryReadOnlyDiagnostic() {
           <div>라이브러리 음악 로컬 {report.local.workspaceMap}건 · 폴더 로컬 {report.local.playlistMap}건</div>
           <div className="mt-2 font-black">내 서버 원본의 지정색 기록</div>
           <div>뮤직노트: {sourceSummary(report.server.note)}</div>
+          <div className="mt-1 rounded-md bg-white/[0.04] p-1.5 text-white/80">
+            <div className="font-bold">뮤직노트 색상 원본 — 활성/과거 제외 구분</div>
+            <div>서버 활성 {report.noteCoverage.activeSongs}건 · 삭제/숨김/저장해제 {report.noteCoverage.inactiveSongs}건</div>
+            <div>활성곡 지정색 {report.noteCoverage.activeColored}건 · 제외된 곡의 지정색 {report.noteCoverage.inactiveColored}건</div>
+            {report.catalogAvailable ? (
+              <>
+                <div>활성곡 중 기기 Catalog ID 일치 {report.noteCoverage.activeInCatalog}건</div>
+                <div>활성 지정색 중 Catalog ID 일치 {report.noteCoverage.activeColoredInCatalog}건 · Catalog에 없는 활성 지정색 {report.noteCoverage.activeColoredMissingFromCatalog}건</div>
+                <div>활성 지정색 원본이 있으나 Catalog 해당 행은 무색 {report.noteCoverage.activeCatalogRowWithoutColor}건</div>
+              </>
+            ) : <div>기기 Catalog 스냅샷 없음 — 원본과 Catalog의 일치 여부 판정 불가</div>}
+            <div className="text-white/50">색상 조회를 추가하지 않고 이미 읽은 서버/기기 기록만 비교한 결과입니다. 제외된 곡을 자동 복원하지 않습니다.</div>
+          </div>
           <div>라이브러리 음악: 색상 항목 {sourceSummary(report.server.workspace)}</div>
           <div>라이브러리 폴더: {sourceSummary(report.server.playlist)}</div>
           <div className="text-white/50">서버 조회 문서 약 {report.server.documentsRead}건 · 쓰기 0 · 캐시 변경 0</div>

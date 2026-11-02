@@ -2426,16 +2426,6 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
     bottom: var(--soridraw-action-collapsed-bottom) !important;
   }
 
-  /* Generation modal and lower hint belong to the builder pane only. */
-  html[data-soridraw-theme="studio-black"] body #root .music-api-generate-modal--main {
-    max-width: min(520px, calc(var(--soridraw-studio-builder-width, 520px) - 24px)) !important;
-    translate: calc(
-      var(--soridraw-studio-builder-left, 0px)
-      + (var(--soridraw-studio-builder-width, 100vw) * 0.5)
-      - 50vw
-    ) 0 !important;
-  }
-
   /* The description overlay now receives the owning pane's live center and
    * width from App.tsx. Do not force every tooltip back onto the builder pane:
    * that legacy override made result-pane hints appear at the lower center of

@@ -17,6 +17,18 @@ assert.match(lazy,/lazy\(\(\) => import\(['"]\.\/MusicApiGenerateModal['"]\)\)/)
 assert.match(lazy,/<MusicApiGenerateModalImpl \{\.\.\.props\} \/>/,
   'the lazy wrapper must forward every prop without remount transforms');
 assert.match(lazy,/<Suspense fallback=\{\(/, 'lazy modal must show a loading state');
+assert.ok(lazy.includes("import { createPortal } from 'react-dom';"),
+  'the generation options dialog must escape the split pane stacking context');
+assert.ok(lazy.includes("props.variant === 'main' && typeof document !== 'undefined'"),
+  'only the main generation flow moves to the document viewport');
+assert.ok(lazy.includes("createPortal(content, document.body)"),
+  'the Suspense fallback and the actual modal must share one body portal');
+assert.ok(lazy.includes("fixed inset-0 z-[9999]") && lazy.includes("backdrop-blur-sm"),
+  'the loading state must cover and blur the full viewport');
+const studioCss = readFileSync('src/components/studio/studioLayout.css','utf8');
+assert.ok(!studioCss.includes('body #root .music-api-generate-modal--main'),
+  'obsolete builder-centered modal translation must not return');
+
 assert.match(lazy,/role="status"/, 'first modal download must report loading accessibly');
 assert.match(lazy,/aria-live="polite"/);
 assert.match(lazy,/aria-label="생성 설정 불러오는 중…"/, 'status needs an accessible name');

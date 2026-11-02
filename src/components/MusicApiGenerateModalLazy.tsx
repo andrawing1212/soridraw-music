@@ -1,4 +1,5 @@
 import { lazy, Suspense, type ComponentProps } from 'react';
+import { createPortal } from 'react-dom';
 
 // Do not eagerly load generation settings and their UI libraries on every
 // Home/Explore/Music Note visit. Preserve the same props, instance lifecycle
@@ -7,7 +8,7 @@ const MusicApiGenerateModalImpl = lazy(() => import('./MusicApiGenerateModal'));
 type Props = ComponentProps<typeof import('./MusicApiGenerateModal')['default']>;
 
 export default function MusicApiGenerateModalLazy(props: Props) {
-  return (
+  const content = (
     <Suspense fallback={(
       <div
         className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/25 backdrop-blur-sm px-3"
@@ -24,4 +25,9 @@ export default function MusicApiGenerateModalLazy(props: Props) {
       <MusicApiGenerateModalImpl {...props} />
     </Suspense>
   );
+  // Render both the lazy loading state and main generation dialog above the
+  // split Builder pane. Preserve the Music API variant's existing placement.
+  return props.variant === 'main' && typeof document !== 'undefined'
+    ? createPortal(content, document.body)
+    : content;
 }

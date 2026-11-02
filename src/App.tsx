@@ -4169,6 +4169,7 @@ function Navigation({
     <>
       {/* Top Navigation */}
       <div
+        data-soridraw-full-admin-home={isSplitAdminHomeNavigation ? 'true' : undefined}
         className="soridraw-top-navigation absolute left-0 z-[60] hidden w-full items-center justify-between gap-3 border-b border-white/10 bg-[#101010]/92 px-5 py-3.5 shadow-[0_10px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl min-[1600px]:flex"
       >
         <button

@@ -332,8 +332,12 @@ assert.match(app, /isAdminUser && !isSplitRailNavigation/);
 // The previous global CSS rule masked the complete React header on Split
 // Home despite the administrator navigation filter already being correct.
 const exploreNavCss = readFileSync('src/components/explore/exploreNavigation.css', 'utf8');
-assert.ok(!exploreNavCss.includes('[data-soridraw-nav-key]:not('),
-  'a global Split CSS selector must never hide authorized Home menu buttons');
+assert.ok(!exploreNavCss.includes('html[data-soridraw-theme="studio-black"] [data-soridraw-nav-key]:not('),
+  'unscoped Split CSS must never hide authorized Home menu buttons');
+assert.ok(exploreNavCss.includes('.soridraw-top-navigation:not([data-soridraw-full-admin-home="true"])'),
+  'only administrator Split Home may bypass the original non-Home menu reduction');
+assert.ok(app.includes("data-soridraw-full-admin-home={isSplitAdminHomeNavigation ? 'true' : undefined}"),
+  'the top navigation must provide its own authorized Home scope');
 assert.ok(exploreNavCss.includes('@media (max-width: 1099px)'),
   'compact menu rules must remain intact');
 console.log('VERIFY_SPLIT_HOME_FULL_ADMIN_NAV=PASS');

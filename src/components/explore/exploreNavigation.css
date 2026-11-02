@@ -18,6 +18,12 @@
   }
 }
 
-/* PC Split pages with a left rail hide their top buttons in Navigation
-   (isSplitRailNavigation). Never hide individual nav keys globally: the
-   rail-less Split Home must show the same complete authorized header as Dark. */
+/* Preserve the existing Split top-menu reduction on other desktop routes,
+   but exempt administrator Split Home, which keeps the Dark Home header.
+   PC workspace routes already hide their whole top bar via Navigation's
+   isSplitRailNavigation; small screens keep the compact navigation rule. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] .soridraw-top-navigation:not([data-soridraw-full-admin-home="true"]) [data-soridraw-nav-key]:not([data-soridraw-nav-key="home"]):not([data-soridraw-nav-key="studio"]):not([data-soridraw-nav-key="explore"]) {
+    display: none !important;
+  }
+}

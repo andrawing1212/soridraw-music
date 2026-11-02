@@ -10,6 +10,33 @@ import { isMusicNoteItemRemoved } from './musicNoteSavedState';
 // app502: one voluntarily invoked read-only, one-result EXACT-ID + UID query.
 // No collection scan, mutations, cache invalidation, uploads, song-content logs,
 // or page-entry IO. Supports missing records under existing owner-based Rules.
+export type ExactFavoriteColorField = 'unavailable' | 'absent' | 'gray' | 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'invalid' | 'blocked';
+
+const canonicalColors = new Set(['gray', 'red', 'orange', 'yellow', 'green', 'blue', 'purple']);
+const classifyColorValue = (value: unknown): ExactFavoriteColorField => (
+  value === null || value === undefined || value === 'gray' ? 'gray'
+    : typeof value === 'string' && canonicalColors.has(value)
+      ? value as ExactFavoriteColorField : 'invalid'
+);
+const fieldColor = (data: Record<string, unknown> | null, key: string): ExactFavoriteColorField => (
+  !data ? 'unavailable'
+    : Object.prototype.hasOwnProperty.call(data, key) ? classifyColorValue(data[key]) : 'absent'
+);
+const readExactDeviceColor = (uid: string, documentId: string): ExactFavoriteColorField => {
+  try {
+    const scoped = localStorage.getItem(`soridraw.favoriteColorTags.${uid}`);
+    const raw = scoped || localStorage.getItem('soridraw.favoriteColorTags');
+    if (!raw) return 'absent';
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return 'invalid';
+    const record = parsed as Record<string, unknown>;
+    return Object.prototype.hasOwnProperty.call(record, documentId)
+      ? classifyColorValue(record[documentId]) : 'absent';
+  } catch {
+    return 'blocked';
+  }
+};
+
 export type StudioHeartExactReadReport = {
   documentPresent: boolean;
   ownerMatchesSignedInUser: boolean | null;
@@ -21,6 +48,14 @@ export type StudioHeartExactReadReport = {
   deviceRecentHeartAuthority: boolean | null;
   deviceCatalogCached: boolean;
   deviceCatalogContainsDocument: boolean | null;
+  /** Exact server fields: absent != explicit gray. No extra reads. */
+  serverFavoriteColorTag: ExactFavoriteColorField;
+  serverColorTag: ExactFavoriteColorField;
+  serverLegacyFavoriteColor: ExactFavoriteColorField;
+  serverLegacyNoteColor: ExactFavoriteColorField;
+  serverLegacyColor: ExactFavoriteColorField;
+  deviceColorMap: ExactFavoriteColorField;
+  deviceSummaryFavoriteColorTag: ExactFavoriteColorField;
 };
 
 const validDocumentId = (value: string) => (
@@ -124,5 +159,12 @@ export const inspectExactStudioHeartDocument = async (
     deviceCatalogContainsDocument: catalog
       ? catalogContainsExactFavoriteDocument516(catalog.items, documentId)
       : null,
+    serverFavoriteColorTag: fieldColor(serverData, 'favoriteColorTag'),
+    serverColorTag: fieldColor(serverData, 'colorTag'),
+    serverLegacyFavoriteColor: fieldColor(serverData, 'favoriteColor'),
+    serverLegacyNoteColor: fieldColor(serverData, 'noteColor'),
+    serverLegacyColor: fieldColor(serverData, 'color'),
+    deviceColorMap: readExactDeviceColor(uid, documentId),
+    deviceSummaryFavoriteColorTag: fieldColor(visible, 'favoriteColorTag'),
   };
 };

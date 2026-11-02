@@ -2995,16 +2995,6 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
   border-color: #8f7548 !important;
 }
 
-/* 261: Studio Black popup backdrops should read mainly as a brightness shift,
- * not as a frosted-glass blur. Scope this to the active Studio route so Classic
- * and non-Studio pages keep their existing modal treatment. */
-html[data-soridraw-theme="studio-black"].soridraw-studio-route-active
-body.soridraw-studio-route-active
-:is(.fixed.inset-0, .absolute.inset-0)[class*="backdrop-blur"] {
-  backdrop-filter: blur(0.2px) !important;
-  -webkit-backdrop-filter: blur(0.2px) !important;
-}
-
 /* 262: Recent-result surfaces use a deeper neutral charcoal while the Applied
  * Keywords card keeps the existing result-card tone. The title card also uses
  * the same collapsed-row height as the left Genre menu card on desktop panes.

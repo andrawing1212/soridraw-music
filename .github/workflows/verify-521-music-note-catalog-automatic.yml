@@ -4,6 +4,8 @@ on:
     branches: [preview]
     paths:
       - 'src/lib/userDataEngine.ts'
+      - 'cloudflare/media-worker/src/index.js'
+      - 'scripts/verify-library-catalog-color-projection.mjs'
       - 'src/App.tsx'
       - 'scripts/verify-521-music-note-catalog-automatic.mjs'
       - '.github/workflows/verify-521-music-note-catalog-automatic.yml'
@@ -24,6 +26,11 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Automatic post-commit Catalog settlement and stale signal protection
         run: node scripts/verify-521-music-note-catalog-automatic.mjs
+      - name: Library canonical color projection (source only, zero deploy)
+        run: |
+          node --check cloudflare/media-worker/src/index.js
+          node scripts/verify-library-catalog-color-projection.mjs
+          node scripts/verify-356-shared-private-catalog-authority.mjs
       - name: Preserve existing Music Note queue, immediate RTDB and local draft
         run: |
           node scripts/verify-519-catalog-pending-recovery.mjs

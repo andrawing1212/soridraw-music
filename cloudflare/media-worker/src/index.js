@@ -505,6 +505,8 @@ const LIBRARY_CATALOG_FIELDS = [
   'audioUrl', 'audio_url', 'streamAudioUrl', 'stream_audio_url', 'sourceAudioUrl', 'sourceStreamAudioUrl',
   'imageUrl', 'image_url', 'coverUrl', 'thumbnailUrl', 'audioUrls', 'duration', 'durationSeconds',
   'sunoData', 'isPublic', 'hidden', 'deletedAt', 'trashedAt', 'favoriteColor', 'color',
+  // Keep track-level per-generation swatches in bounded private Catalog summaries.
+  'colorTags', 'favoriteColorTags',
 ];
 
 const MUSIC_NOTE_MEDIA_FIELDS = [

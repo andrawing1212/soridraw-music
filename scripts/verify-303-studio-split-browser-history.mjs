@@ -329,14 +329,13 @@ for (const [mode, path, admin, expected] of [
 assert.match(app, /allTopNavItems\.filter\(\(item\) => isSplitAdminHomeNavigation \|\| canShowMenu\(item\.key\)\)/);
 assert.match(app, /!isSplitRailNavigation && topNavItems\.map/);
 assert.match(app, /isAdminUser && !isSplitRailNavigation/);
-// The old global selector masked the actual React menu on Split Home,
- // even though PR #687 produced all seven authorized items. Protect the
- // CSS+React interaction, not only the React boolean expression.
+// The previous global CSS rule masked the complete React header on Split
+// Home despite the administrator navigation filter already being correct.
 const exploreNavCss = readFileSync('src/components/explore/exploreNavigation.css', 'utf8');
-assert.doesNotMatch(exploreNavCss, /\\[data-soridraw-nav-key\\]:not\\(/,
-  'Split Home top navigation must not be hidden by a global CSS selector');
-assert.match(exploreNavCss, /@media \\(max-width: 1099px\\)/,
-  'existing compact navigation layout must be preserved');
+assert.ok(!exploreNavCss.includes('[data-soridraw-nav-key]:not('),
+  'a global Split CSS selector must never hide authorized Home menu buttons');
+assert.ok(exploreNavCss.includes('@media (max-width: 1099px)'),
+  'compact menu rules must remain intact');
 console.log('VERIFY_SPLIT_HOME_FULL_ADMIN_NAV=PASS');
 
 // PC split with a left rail owns the navigation; Home/Classic/compact keep

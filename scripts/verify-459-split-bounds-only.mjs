@@ -101,9 +101,15 @@ assert(current.includes(acceptedResultFold), 'approved Result button fold wrappe
 // APP716 — The director-approved 12px collapse-button inset must follow the
 // real splitter while dragging, not appear only at pointer-up. The app459
 // byte-frozen engine guard is retained for every other geometry line.
-const oldToggleRegion = baseline.match(/  \/\/ 781 —[\s\S]*?\n  \}, \[\]\);/)?.[0];
+const oldToggleRegion = baseline.match(/  \/\/ 781 —[\s\S]*?\n  \}, \[\]\);/)?.[0]
+  // New PRs have APP716's approved live toggle code already in preview.
+  // Accept that exact current baseline as the only other starting point.
+  || baseline.match(/  \/\/ Keep both split-pane collapse buttons[\s\S]*?\n  \}, \[\]\);/)?.[0];
 const liveToggleRegion = current.match(/  \/\/ Keep both split-pane collapse buttons[\s\S]*?\n  \}, \[\]\);/)?.[0];
 assert(oldToggleRegion && liveToggleRegion, 'APP716 toggle region not found');
+if (oldToggleRegion.startsWith('  // Keep both split-pane collapse buttons')) {
+  assert.equal(oldToggleRegion, liveToggleRegion, 'APP716 previously merged toggle must remain byte-exact');
+}
 const functionStart = '  const syncMinimumCollapseControls = useCallback((';
 const liveStart = '    if (!livePosition) return;';
 assert.equal(

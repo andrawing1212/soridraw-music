@@ -2299,7 +2299,19 @@ export default function LiteStudioSplitWorkspace({
     // geometry in the same layout phase instead of one rAF later, otherwise the
     // builder masthead/search can visibly overshoot before snapping back.
     const handleFrameResize = () => {
-      if (!draggingRef.current) refreshMetrics();
+      if (draggingRef.current) return;
+      // The frame owns rail collapse/expand only at its discrete 1600px
+      // boundary. Native resize frames deliberately hold the settled rail
+      // edge, so refresh it exactly here, after the new rail grid is committed.
+      // Do not read the rail on every native resize frame.
+      if (document.documentElement.classList.contains('soridraw-window-resizing')) {
+        const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
+        const leftRailRect = leftRail?.getBoundingClientRect();
+        if (leftRailRect && leftRailRect.width > 0) {
+          metricsRef.current.leftRailEdge = leftRailRect.right;
+        }
+      }
+      refreshMetrics();
     };
     window.addEventListener('resize', handleWindowResize, { passive: true });
     window.addEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener);

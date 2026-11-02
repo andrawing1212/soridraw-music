@@ -401,6 +401,22 @@ assert.ok(resizeMetrics.includes('? metricsRef.current.leftRailEdge'));
 assert.ok(!resizeMetrics.includes('? rect.left\\n        : leftRailRect'));
 assert.ok(resizeMetrics.includes('const leftRail = nativeWindowResize ? null'));
 assert.ok(liteWorkspace.includes("root.style.setProperty('--soridraw-studio-left-rail-edge'"));
+// At the actual 1600px PC/tablet rail handoff the rail itself changes
+// (normally 214px to 64px). Update the collapsed tab's settled edge once
+// from StudioPageFrame's synchronous frame-resize event, not every resize rAF.
+const railSwitchStart = liteWorkspace.indexOf('    const handleFrameResize = () => {');
+const railSwitchEnd = liteWorkspace.indexOf("    window.addEventListener('resize', handleWindowResize", railSwitchStart);
+assert.ok(railSwitchStart >= 0 && railSwitchEnd > railSwitchStart);
+const railSwitch = liteWorkspace.slice(railSwitchStart, railSwitchEnd);
+assert.ok(railSwitch.includes("classList.contains('soridraw-window-resizing')"));
+assert.ok(railSwitch.includes("document.querySelector<HTMLElement>('.soridraw-studio-left-panel')"));
+assert.ok(railSwitch.includes('leftRail?.getBoundingClientRect()'));
+assert.ok(railSwitch.includes('metricsRef.current.leftRailEdge = leftRailRect.right'));
+assert.ok(railSwitch.indexOf('metricsRef.current.leftRailEdge = leftRailRect.right') < railSwitch.indexOf('refreshMetrics();'));
+assert.ok(resizeMetrics.includes('const leftRail = nativeWindowResize ? null'));
+assert.ok(liteWorkspace.includes("window.addEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener)"));
+console.log('VERIFY_NATIVE_RESIZE_RAIL_BREAKPOINT_ONE_SHOT_SYNC=PASS');
+
 console.log('VERIFY_NATIVE_RESIZE_COLLAPSED_RAIL_EDGE_STABLE=PASS');
 
 // Tablet wordmark shares the original Split desktop white font/color.

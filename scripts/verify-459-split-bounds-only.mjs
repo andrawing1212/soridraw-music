@@ -57,10 +57,18 @@ const previousResizeRailSource = [
 assert(current.includes(acceptedResizeRailSource), 'native resize must preserve settled rail anchor');
 assert.equal(current.split(acceptedResizeRailSource).length, 2, 'exactly one approved resize rail writer');
 const normalizeAcceptedResizeRail = (source) => source.replace(acceptedResizeRailSource, previousResizeRailSource);
+// The only additional accepted Lite delta is the boundary-only rail read.
+// Compare the remainder of the frozen split engine byte-for-byte.
+const acceptedRailTransitionRefresh = "    const handleFrameResize = () => {\n      if (draggingRef.current) return;\n      // The frame owns rail collapse/expand only at its discrete 1600px\n      // boundary. Native resize frames deliberately hold the settled rail\n      // edge, so refresh it exactly here, after the new rail grid is committed.\n      // Do not read the rail on every native resize frame.\n      if (document.documentElement.classList.contains('soridraw-window-resizing')) {\n        const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');\n        const leftRailRect = leftRail?.getBoundingClientRect();\n        if (leftRailRect && leftRailRect.width > 0) {\n          metricsRef.current.leftRailEdge = leftRailRect.right;\n        }\n      }\n      refreshMetrics();\n    };";
+const previousRailTransitionRefresh = "    const handleFrameResize = () => {\n      if (!draggingRef.current) refreshMetrics();\n    };";
+assert(current.includes(acceptedRailTransitionRefresh), 'PC/tablet rail change must rebase the collapsed tab once');
+assert.equal(current.split(acceptedRailTransitionRefresh).length, 2, 'rail rebase callback must appear exactly once');
+const normalizeAcceptedRailTransition = (source) =>
+  source.replace(acceptedRailTransitionRefresh, previousRailTransitionRefresh);
 assert.equal(
-  normalizeAcceptedMusicNoteSelection(normalizeAcceptedResizeRail(baseline.replace(before[0], '<SPLIT_BOUNDS>'))),
-  normalizeAcceptedMusicNoteSelection(normalizeAcceptedResizeRail(current.replace(after[0], '<SPLIT_BOUNDS>'))),
-  'APP459 changed protected Lite splitter code beyond approved Music Note selection and native resize rail edge',
+  normalizeAcceptedMusicNoteSelection(normalizeAcceptedResizeRail(normalizeAcceptedRailTransition(baseline.replace(before[0], '<SPLIT_BOUNDS>')))),
+  normalizeAcceptedMusicNoteSelection(normalizeAcceptedResizeRail(normalizeAcceptedRailTransition(current.replace(after[0], '<SPLIT_BOUNDS>')))),
+  'APP459 changed protected Lite splitter code beyond approved Music Note selection and boundary-only rail change',
 );
 // The initial app459 PR compared the legacy tablet-only guard to the new
 // real-center-workspace guard. Later PRs use app459 as their baseline: in

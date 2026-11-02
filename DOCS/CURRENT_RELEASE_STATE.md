@@ -1,3 +1,14 @@
+## CURRENT — Music Note / Library 과거 지정색 복구 1단계: 읽기 전용 원본 진단 배포, 실제 데이터 확인 대기 (2026-11-03 KST)
+- **디렉터 신고:** Music Note와 Library 색상 지정이 기기에만 남거나 PC↔모바일에 동기화되지 않고, 과거 지정색이 모두 회색으로 보임. 이 문제는 진행 중이며 앞서 완료(CLOSED) 처리한 Studio Black UI 개선과 무관한 신규 데이터 정합성 문제다.
+- **실제 사용자 원본은 미확인:** Firestore canonical의 색상 필드가 존재하는지/삭제됐는지/명시적으로 회색 해제됐는지 해당 계정의 인증된 정확한 문서 조회가 아직 없다. 색상이 삭제됐다고 판단하거나, 과거 색상을 자동 재생성·백필·전체 동기화·캐시 초기화하지 않는다.
+- **기존 복구 단서:** 2026-08-25 Firebase Storage V1 842문서 백업(run `32830504168`, 기록 `docs/SORIDRAW_BACKEND_V2_STEP3_3_STORAGE_BACKUP_RESULT.md`)에는 `favorites`, `user_playlists/.../lists/.../items` 원본 전체 payload 기록이 있다. 백업 보관 경로 `backend-v2-backups/step3-3/backend-v2-backup-2026-08-25T09-20-03-568Z`. 그 당시 payload의 개별 색상 값 및 **현재 백업 객체 존재·접근 여부는 미확인**. `suno_tracks`는 해당 백업 범위 밖.
+- **1단계 코드/검사:** #721 source SHA `9a6f6b8c45dc4f0e0524c8c46788454398b9a100`, app516/app517/product-quality(타입·빌드 포함) 3/3 PASS. 기존 관리자 CACHE LIVE → Music Note 특정곡 원본 1건 조회 화면에 `favoriteColorTag`, `colorTag`, legacy `favoriteColor`/`noteColor`/`color`, 기기 로컬 색상표·목록 색상을 별도 표시. 추가 Firestore read 0, 쓰기 0, 전체스캔 0, 인증 UID+정확 ID의 기존 수동 read 1건만 활용.
+- **PREVIEW 배포:** #722 병합 SHA `469eae2978007bb605e6bcdb720a8ad5d979f4fe` / Hosting run `41535671384` SUCCESS, exact build/TEST+PRODUCTION unchanged PASS. 사용자 원본·Rules·Functions·Worker·D1/R2 변경 0. 실제 색상 존재 여부는 여전히 **미확인**.
+- **다음 정확한 검증:** PREVIEW 인증된 관리자 CACHE LIVE에서 *실제 과거 지정색을 기억하는 저장곡 한 건*을 선택해 원본 1건 수동 확인(필드/legacy/로컬 값만, 계정·문서번호·본문 공유 금지). 이후 Library playlist item과 Suno workspace 색상 경로를 각각 단건 비교. 서버에서 과거색이 없고 최신 의도적 회색 해제와 충돌하지 않을 때만 보존 백업/기기 캐시를 추가 읽기 전용 비교한다. 복구 쓰기·대량 변경은 실행 전 별도 안전성·승인을 확인.
+- **기술적 의심:** Music Note/Library color click은 로컬 즉시, 서버는 page-exit async flush 위주. 또한 로컬 map이 server fields보다 우선하는 UI 경로와 수동 전체-color-sync 위험이 존재한다. 현 단계에서는 원인 후보이며 실제 해당 사용자의 데이터 유실 원인은 확정하지 않음.
+
+---
+
 ## CURRENT — 최근 생성곡 로그인 후 0곡 문제 해결 완료 (디렉터 최종 확인, 2026-11-03 KST)
 - **현재 상태: 완료(CLOSED).** 디렉터가 이미 여러 차례 해결 완료를 알려준 사항이며, 2026-11-03 개발방에서 이를 다시 미완료·다음 권장 작업으로 제시한 것은 잘못된 상태 보고다.
 - **재추천 금지:** 로그인 후 최근 생성곡이 0곡으로 표시되던 app520 관련 문제(과거 서버 최근곡 10곡 확인 기록)는 미완료 작업이나 다음 개발 우선순위로 제시하지 않는다. 새로 재현되는 별도의 오류 증거 또는 디렉터의 명시적인 재개 지시가 있을 때만 다시 검토한다.

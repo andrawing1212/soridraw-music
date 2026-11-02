@@ -195,7 +195,12 @@ console.log('APP464_TABLET_CREATE_GUTTERS_MATCH_1031=PASS');
 // APP465_TABLET_ONEPANE_GUTTERS_AND_RAIL_SCROLLBAR
 // One-pane must not inherit 1031's split-only scope or 779's asymmetric padding.
 // The unchanged 1031 and 779 rules are intentional protected baselines.
-const app465=splitterCss.slice(splitterCss.indexOf('APP465_TABLET_ONEPANE_GUTTERS_AND_RAIL_SCROLLBAR'));
+const app465Start=splitterCss.indexOf('APP465_TABLET_ONEPANE_GUTTERS_AND_RAIL_SCROLLBAR');
+const app465End=splitterCss.indexOf('/* The relocated rail menus belong only to Split;', app465Start);
+// APP465 protects this tablet-only rule block, not later independent fold
+// animations or the director-approved wide-PC reading-width rule.
+assert(app465Start >= 0 && app465End > app465Start, 'APP465 isolated tablet CSS rule block missing');
+const app465=splitterCss.slice(app465Start,app465End);
 assert(app465.startsWith('APP465_TABLET_ONEPANE_GUTTERS_AND_RAIL_SCROLLBAR'),'APP465 tablet one-pane correction missing');
 assert.match(app465,/@media \(min-width: 1100px\) and \(max-width: 1599\.98px\)/);
 for (const token of [

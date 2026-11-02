@@ -17901,3 +17901,58 @@ html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
     opacity: 1;
   }
 }
+
+/* APP_WIDE_SPLIT_SHARED_READING_WIDTH_20261103
+ * Director video 2026-11-02 20:25: after the content is comfortably desktop,
+ * further splitter movement should grow ONLY the black outer breathing room.
+ * Use the existing Studio Black content-width variable for Sori Studio,
+ * full-pane Builder/Result and Create; keep real pane/scrollbar full width.
+ * Recent uses its existing 12px content padding; Music Note/Library keep
+ * their existing page padding, search controls and list/card geometry.
+ * Do not change the 660/820/1080px responsive handoffs or pointer hot path. */
+@media (min-width: 1600px) {
+  html[data-soridraw-theme="studio-black"] {
+    --soridraw-studio-full-pane-max-width: 1104px;
+  }
+
+  /* The Result masthead follows the same centered content guide as Builder.
+   * Its title/search row stays a real part of the pane, not a floating portal. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="recent"],
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  )
+  .soridraw-lite-studio-split-workspace:not(.is-create-vertical):not(.is-builder-collapsed):not(.is-result-collapsed)
+  > .soridraw-studio-result-pane
+  > .soridraw-studio-result-pane-masthead-host {
+    width: min(calc(100% - 24px), var(--soridraw-studio-full-pane-max-width)) !important;
+    max-width: var(--soridraw-studio-full-pane-max-width) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Keep each actual scrollport at the divider/rail. Cap only its child.
+   * Recent keeps 12px inner padding, so 1104px of usable UI plus 24px
+   * gives the same maximum reading width as Sori Studio's 1104px cards. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-workspace-view="recent"]
+  .soridraw-lite-studio-split-workspace:not(.is-create-vertical):not(.is-builder-collapsed):not(.is-result-collapsed)
+  > .soridraw-studio-result-pane
+  > .soridraw-studio-result-content,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  )
+  .soridraw-lite-studio-split-workspace:not(.is-create-vertical):not(.is-builder-collapsed):not(.is-result-collapsed)
+  > .soridraw-studio-result-pane
+  > .soridraw-studio-workspace-page {
+    width: min(100%, calc(var(--soridraw-studio-full-pane-max-width) + 24px)) !important;
+    max-width: calc(var(--soridraw-studio-full-pane-max-width) + 24px) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+  }
+}

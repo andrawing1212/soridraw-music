@@ -306,6 +306,31 @@ console.log('VERIFY_448_GENERATE_COMPACT_AND_PC_BUTTON_DRIFT_BOUNDED=PASS');
 await import('./verify-214-navigation-visibility-sync.mjs');
 
 
+// Split administrator Home must list every accessible top item, matching
+// Dark Home. Run the real boolean expression on authorized/non-authorized
+// and Home/non-Home cases to guard unintended expansion.
+const adminHomeStart = app.indexOf('  const isSplitAdminHomeNavigation = ');
+const adminHomeEnd = app.indexOf(';\n  const topNavItems', adminHomeStart);
+assert.ok(adminHomeStart > 0 && adminHomeEnd > adminHomeStart);
+const adminHomeExpr = app.slice(
+  adminHomeStart + '  const isSplitAdminHomeNavigation = '.length, adminHomeEnd);
+const splitAdminHome = new Function('displayMode', 'location', 'isAdminUser',
+  'return (' + adminHomeExpr + ')');
+for (const [mode, path, admin, expected] of [
+  ['studio-black', '/', true, true],
+  ['studio-black', '/', false, false],
+  ['studio-black', '/studio', true, false],
+  ['studio-black', '/explore', true, false],
+  ['classic', '/', true, false],
+]) {
+  assert.equal(splitAdminHome(mode, {pathname:path}, admin), expected,
+    'Home nav admin-only scope mismatch');
+}
+assert.match(app, /allTopNavItems\.filter\(\(item\) => isSplitAdminHomeNavigation \|\| canShowMenu\(item\.key\)\)/);
+assert.match(app, /!isSplitRailNavigation && topNavItems\.map/);
+assert.match(app, /isAdminUser && !isSplitRailNavigation/);
+console.log('VERIFY_SPLIT_HOME_FULL_ADMIN_NAV=PASS');
+
 // PC split with a left rail owns the navigation; Home/Classic/compact keep
 // the original top bar and pages without a rail never lose navigation.
 const leftRail = readFileSync('src/components/studio/StudioLeftRail.tsx', 'utf8');

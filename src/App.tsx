@@ -4020,7 +4020,13 @@ function Navigation({
     { key: 'lab', path: '/lab', label: '실험실', icon: FlaskConical },
     { key: 'myPage', path: '/my-page', label: '마이페이지', icon: UserIcon },
   ];
-  const topNavItems = allTopNavItems.filter((item) => canShowMenu(item.key));
+  // Admin route authorization is wider than public menu visibility. On
+  // the Split Home only, show the complete authorized header like Dark Home.
+  // Do not override visibility for regular users or non-Home workspaces.
+  const isSplitAdminHomeNavigation = displayMode === 'studio-black'
+    && location.pathname === '/'
+    && isAdminUser;
+  const topNavItems = allTopNavItems.filter((item) => isSplitAdminHomeNavigation || canShowMenu(item.key));
   const preferredLandingPath = menuVisibility.home
     ? '/'
     : topNavItems[0]?.path || (isAdminUser ? '/admin/users' : '/');

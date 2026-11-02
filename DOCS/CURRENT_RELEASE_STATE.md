@@ -1,3 +1,12 @@
+## CURRENT — Studio Black 접기/펼치기 수직 튐 방지 PREVIEW 배포 (2026-11-03 KST)
+- **증거:** 2026-11-02 19:18 사용자 영상에서 좌·우 메뉴 및 중앙 pane 접기/펼치기의 세로 튐 반복. 이전 #703 사용자 QA FAIL, 이번 수정의 실제 로그인 PC/모바일 체감은 **미확인**.
+- **수정:** PR #705 병합 `d005e8ba3eae3828d47b62fab79a7c894b5e5c34`. 생존 center/Builder/Result의 X좌표·폭만 260ms 애니메이션하고 Y·높이 고정; 접히는 패널 효과, 상단 메뉴/가로선 2개, split pointer·scroll·반응형은 보호. 역사적 app463 글꼴 검사 범위만 해당 CSS로 한정.
+- **검사:** 소스 최종 SHA `6f980015f9faa2e84cce5d266219333a80487981`의 source-and-split / product-quality CI 모두 PASS. 별도 Chromium 재현으로 브라우저 기본 height 보간 원인 확인. 사용자 실기기 PASS로 간주하지 않음.
+- **PREVIEW 배포:** PR #706 최종 배포 소스 SHA `29373dba38656af28e08dea4ed798c4b4414bb55`, Hosting run `41512095011` SUCCESS, LOCKED SHA·exact build PASS, 공유 RTDB Rules SKIPPED, TEST/PRODUCTION unchanged PASS. 사용자 원본·Worker/Functions/D1/R2 미변경.
+- **남은 합격 기준:** PREVIEW 로그인 PC에서 네 버튼 반복 시 세로 튐이 사라졌는지 실사용 검증. 이 문서의 오래된 장애 스냅샷을 현재 신규 작업 승인으로 해석하지 않음.
+
+---
+
 ## CURRENT — app520 Recent Songs 로그인 0곡: 서버 원본 10곡 확인, PREVIEW 읽기 차단 수정 (2026-10-31 KST)
 - **실제 사용자 증거:** PREVIEW 관리자 CACHE LIVE 원본 1건 조회에서 인증 계정의 Firestore `user_recent_songs/{uid}` 문서 존재, 서버 곡 10/화면 인식 가능한 곡 10, PREVIEW 브라우저 기본 캐시 0, 동일 origin의 백업 10. **백업과 서버 10곡의 정확한 ID 일치 여부는 미확인.**
 - **제품 장애는 미해결로 유지:** app520 이전 보완 #536/#544가 PREVIEW에 배포됐으나 로그인 후 목록은 0곡. #546 진단 배포 PASS. 원본 손실로 단정하거나 로컬·서버 곡을 강제 재생성/삭제하지 않는다.

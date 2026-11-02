@@ -177,9 +177,12 @@ assert.equal(concurrent.lastWritten.deltas.at(-1).upserts[0].favoriteColorTags['
 
 // This compatibility path cannot requery canonical Firestore, issue a new
 // R2 read, or mutate any user source. Only the already acquired state is used.
-const compatibilitySource = block(worker, 'const existingLibraryColorRowsForDelta = ', '\nconst handleCatalog = async');
-assert.doesNotMatch(compatibilitySource, /firestoreCatalogQuery\s*\(|buildCanonicalCatalog\s*\(|catalogBucket\s*\(|\.get\s*\(/);
+const compatibilitySource = block(worker, 'const existingLibraryColorRowsForDelta = ', '\nconst applyCatalogDelta = async');
+assert.doesNotMatch(compatibilitySource, /firestoreCatalogQuery\s*\(|buildCanonicalCatalog\s*\(|catalogBucket\s*\(|await\s+[^;]*\.get\s*\(/);
 assert.doesNotMatch(compatibilitySource, /(?:setDoc|updateDoc|deleteDoc|writeBatch)\s*\(/);
+assert.equal(legacy.getCalls, 1, 'old-client delta must only reuse its existing R2 state read');
+assert.equal(deliberateClear.getCalls, 1, 'modern color reset adds no R2 reads');
+assert.equal(recent.getCalls, 1, 'journal scan is memory-only');
 console.log('LIBRARY_OLD_CLIENT_MISSING_COLOR_PRESERVES_LATEST_R2=PASS');
 console.log('LIBRARY_EXPLICIT_CLEAR_NULL_AND_DELETION_NO_RESURRECTION=PASS');
 console.log('LIBRARY_CAS_RETRY_PRESERVES_CONCURRENT_COLOR=PASS');

@@ -305,3 +305,31 @@ console.log('VERIFY_448_GENERATE_COMPACT_AND_PC_BUTTON_DRIFT_BOUNDED=PASS');
 // no app448 geometry, CSS or pointer math is modified by this test.
 await import('./verify-214-navigation-visibility-sync.mjs');
 
+
+// PC split with a left rail owns the navigation; Home/Classic/compact keep
+// the original top bar and pages without a rail never lose navigation.
+const leftRail = readFileSync('src/components/studio/StudioLeftRail.tsx', 'utf8');
+const studioCss = readFileSync('src/components/studio/studioLayout.css', 'utf8');
+const menuStart = app.indexOf('  const isSplitRailNavigation = ');
+const menuEnd = app.indexOf('  const isCompactStudioMobileNavigation', menuStart);
+assert.ok(menuStart > 0 && menuEnd > menuStart, 'split menu placement owner missing');
+const splitMenu = app.slice(menuStart, menuEnd);
+assert.match(splitMenu, /displayMode === 'studio-black'/);
+assert.match(splitMenu, /!isRailLessNavigationViewport/);
+for (const route of ['/studio', '/explore', '/history']) {
+  assert.ok(splitMenu.includes(`location.pathname === '${route}'`), 'rail route missing: ' + route);
+}
+assert.ok(!splitMenu.includes("location.pathname === '/'"), 'Home must keep the original top bar');
+assert.match(app, /!isSplitRailNavigation && topNavItems\.map/);
+assert.match(app, /isAdminUser && !isSplitRailNavigation/);
+assert.match(app, /isSplitRailNavigation \? \[\] : topNavItems\.filter/);
+assert.match(leftRail, /showExplore && onExplore/);
+assert.match(leftRail, /data-soridraw-menu-access="explore"/);
+assert.match(leftRail, /isExploreActive \? ' is-active'/);
+assert.match(explore, /onExplore=\{\(\) => \{ void go\('\/explore'\); \}\}/);
+assert.match(leftRail, /showAdmin && onAdmin/);
+assert.match(leftRail, /<span>API 설정<\/span>[\s\S]*?showAdmin && onAdmin[\s\S]*?<span>관리자<\/span>/);
+assert.match(studioCss, /html:not\(\[data-soridraw-theme="studio-black"\]\) \.soridraw-split-rail-only \{\s*display: none !important;/);
+assert.match(app, /showExplore=\{canAccessNavigationMenu\('explore'\)\}/);
+assert.match(app, /showAdmin=\{isAdminUser\}/);
+console.log('VERIFY_SPLIT_RAIL_RELOCATED_NAV=PASS');

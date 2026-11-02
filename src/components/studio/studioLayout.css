@@ -17719,3 +17719,8 @@ body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]
   }
 }
 
+
+/* The relocated rail menus belong only to Split; Classic remains unchanged. */
+html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
+  display: none !important;
+}

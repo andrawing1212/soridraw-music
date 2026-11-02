@@ -14,6 +14,7 @@ import {
   Settings,
   User,
   Compass,
+  Shield,
   LogOut,
 } from 'lucide-react';
 import { SORIDRAW_PROFILE_AVATAR_EVENT } from '../../services/profileAvatarAuthority';
@@ -26,6 +27,9 @@ type StudioLeftRailProps = {
   onRecentSongs: () => void;
   onMusicNote: () => void;
   onLibrary: () => void;
+  onExplore?: () => void;
+  showExplore?: boolean;
+  isExploreActive?: boolean;
   onSearch: () => void;
   onApiSettings: () => void;
   onLab: () => void;
@@ -61,12 +65,17 @@ export default function StudioLeftRail({
   onRecentSongs,
   onMusicNote,
   onLibrary,
+  onExplore,
+  showExplore = false,
+  isExploreActive = false,
   onSearch,
   onApiSettings,
   onLab,
   onProfile,
   onPublicProfile,
   onSettings,
+  onAdmin,
+  showAdmin = false,
   onLogout,
   profileName,
   profileEmail = '',
@@ -286,6 +295,24 @@ export default function StudioLeftRail({
           </button>
 
           <nav className="soridraw-studio-rail-nav" aria-label="워크스페이스 내부 이동">
+            {showExplore && onExplore && (
+              <>
+                <p className="soridraw-studio-rail-label soridraw-split-rail-only">DISCOVER</p>
+                <button
+                  type="button"
+                  data-soridraw-menu-access="explore"
+                  className={`soridraw-studio-rail-item soridraw-split-rail-only${isExploreActive ? ' is-active' : ''}`}
+                  onClick={onExplore}
+                  aria-current={isExploreActive ? 'page' : undefined}
+                  onMouseEnter={(event) => showRailTooltip(event.currentTarget, '익스플로어')}
+                  onMouseLeave={hideRailTooltip}
+                >
+                  <Compass className="h-5 w-5" />
+                  <span>익스플로어</span>
+                </button>
+                <div className="soridraw-studio-rail-divider soridraw-split-rail-only" aria-hidden="true" />
+              </>
+            )}
             <p className="soridraw-studio-rail-label">WORKSPACE</p>
             <button
               type="button"
@@ -359,6 +386,18 @@ export default function StudioLeftRail({
               <Settings className="h-5 w-5" />
               <span>API 설정</span>
             </button>
+            {showAdmin && onAdmin && (
+              <button
+                type="button"
+                className="soridraw-studio-rail-item soridraw-split-rail-only"
+                onClick={onAdmin}
+                onMouseEnter={(event) => showRailTooltip(event.currentTarget, '관리자')}
+                onMouseLeave={hideRailTooltip}
+              >
+                <Shield className="h-5 w-5" />
+                <span>관리자</span>
+              </button>
+            )}
           </nav>
 
           <div className="soridraw-studio-rail-bottom-actions" aria-label="추가 메뉴">

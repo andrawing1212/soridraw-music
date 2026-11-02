@@ -17923,7 +17923,7 @@ html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
     [data-workspace-view="music-note"],
     [data-workspace-view="library"]
   )
-  .soridraw-lite-studio-split-workspace:not(.is-create-vertical)
+  .soridraw-lite-studio-split-workspace:not(.is-create-vertical):not(.is-builder-collapsed):not(.is-result-collapsed)
   > .soridraw-studio-result-pane
   > .soridraw-studio-result-pane-masthead-host {
     width: min(calc(100% - 24px), var(--soridraw-studio-full-pane-max-width)) !important;
@@ -17938,7 +17938,7 @@ html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
    * gives the same maximum reading width as Sori Studio's 1104px cards. */
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-workspace-view="recent"]
-  .soridraw-lite-studio-split-workspace:not(.is-create-vertical)
+  .soridraw-lite-studio-split-workspace:not(.is-create-vertical):not(.is-builder-collapsed):not(.is-result-collapsed)
   > .soridraw-studio-result-pane
   > .soridraw-studio-result-content,
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
@@ -17946,7 +17946,7 @@ html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
     [data-workspace-view="music-note"],
     [data-workspace-view="library"]
   )
-  .soridraw-lite-studio-split-workspace:not(.is-create-vertical)
+  .soridraw-lite-studio-split-workspace:not(.is-create-vertical):not(.is-builder-collapsed):not(.is-result-collapsed)
   > .soridraw-studio-result-pane
   > .soridraw-studio-workspace-page {
     width: min(100%, calc(var(--soridraw-studio-full-pane-max-width) + 24px)) !important;

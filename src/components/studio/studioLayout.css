@@ -75,7 +75,7 @@
 @media (min-width: 1100px) {
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame {
     display: grid;
-    grid-template-columns: 214px minmax(0, 1fr) 292px;
+    grid-template-columns: 232px minmax(0, 1fr) 292px;
     width: 100%;
     min-height: 100vh;
     align-items: start;
@@ -3688,7 +3688,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     position: fixed !important;
     z-index: 145 !important;
     top: 72px !important;
-    left: 172px !important;
+    left: calc(var(--soridraw-studio-left-rail-width, 232px) - 42px) !important;
     width: 30px !important;
     height: 30px !important;
     min-width: 30px !important;
@@ -4217,7 +4217,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
   .soridraw-studio-left-rail-collapse-toggle {
     top: 72px !important;
-    left: 172px !important;
+    left: calc(var(--soridraw-studio-left-rail-width, 232px) - 42px) !important;
   }
 
   html[data-soridraw-theme="studio-black"]
@@ -4640,7 +4640,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 @media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-page-frame {
-    --soridraw-studio-left-rail-width: 214px;
+    --soridraw-studio-left-rail-width: 232px;
     --soridraw-studio-right-rail-width: 292px;
     display: grid !important;
     grid-template-columns:
@@ -6534,7 +6534,7 @@ h1.text-3xl.md\:text-5xl {
     display: block !important;
     position: fixed !important;
     top: 102px !important;
-    left: calc(var(--soridraw-studio-left-rail-width, 214px) - 1px) !important;
+    left: calc(var(--soridraw-studio-left-rail-width, 232px) - 1px) !important;
     right: calc(var(--soridraw-studio-right-rail-width, 292px) - 1px) !important;
     width: auto !important;
     height: 1px !important;

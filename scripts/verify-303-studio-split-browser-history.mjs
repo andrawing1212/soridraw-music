@@ -427,3 +427,20 @@ console.log('VERIFY_SPLIT_TABLET_WHITE_BRAND_PARITY=PASS');
 console.log('VERIFY_COLLAPSED_GENERATE_TAB_RETURNS_TO_RAIL=PASS');
 
 console.log('VERIFY_SPLIT_RAIL_RELOCATED_NAV=PASS');
+
+// Expanded Studio Black PC rail gains 18px (roughly one Hangul glyph).
+// Both historical grid fallback and active CSS variable must agree; the
+// existing 64px collapsed/tablet state must not inherit this wider rail.
+const expandedLeftRail = studioLayout.match(/--soridraw-studio-left-rail-width:\s*(\d+)px;/g) || [];
+assert.deepEqual(expandedLeftRail, ['--soridraw-studio-left-rail-width: 232px;']);
+assert.ok(studioLayout.includes('grid-template-columns: 232px minmax(0, 1fr) 292px;'));
+assert.ok(studioLayout.includes('--soridraw-studio-left-rail-width: 64px !important;'));
+assert.ok(studioLayout.includes('var(--soridraw-studio-left-rail-width, 232px) - 1px'));
+assert.equal(
+  studioLayout.split('left: calc(var(--soridraw-studio-left-rail-width, 232px) - 42px) !important;').length - 1,
+  2, 'expanded collapse toggle must follow the same widened grid edge in both owners',
+);
+assert.ok(studioPageFrame.includes("if (railViewport === 'compact')"));
+assert.ok(studioPageFrame.includes('setIsLeftRailCollapsed(true)'));
+assert.ok(studioPageFrame.includes('setIsLeftRailCollapsed(readStoredRailState(LEFT_RAIL_STORAGE_KEY, false))'));
+console.log('VERIFY_STUDIO_EXPANDED_PC_RAIL_232_COLLAPSED_64=PASS');

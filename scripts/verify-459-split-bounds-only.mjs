@@ -68,19 +68,19 @@ const normalizeAcceptedRailTransition = (source) =>
 // The new director-approved four fold controls only wrap the two Lite V2
 // button click callbacks. Normalize precisely that import + two callbacks
 // before comparing the frozen pointer/geometry source byte-for-byte.
-const acceptedFoldImport = "import { runStudioFoldTransition } from './studioFoldTransition';\\n";
+const acceptedFoldImport = "import { runStudioFoldTransition } from './studioFoldTransition';\n";
 const acceptedBuilderFold = [
   "onClick={() => runStudioFoldTransition('pane', () => {",
   "        setIsResultCollapsed(false);",
   "        setIsBuilderCollapsed((current) => !current);",
   "      })}",
-].join('\\n');
+].join('\n');
 const acceptedResultFold = [
   "onClick={() => runStudioFoldTransition('pane', () => {",
   "        setIsBuilderCollapsed(false);",
   "        setIsResultCollapsed((current) => !current);",
   "      })}",
-].join('\\n');
+].join('\n');
 const previousBuilderFold = acceptedBuilderFold.replace("runStudioFoldTransition('pane', () => {", '{').replace('      })}', '      }}');
 const previousResultFold = acceptedResultFold.replace("runStudioFoldTransition('pane', () => {", '{').replace('      })}', '      }}');
 const normalizeAcceptedFoldHandlers = (source) => {

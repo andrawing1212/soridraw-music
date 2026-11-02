@@ -198,12 +198,12 @@
   }
 
   html[data-soridraw-theme="studio-black"] body > .soridraw-studio-builder-collapse-toggle.soridraw-lite-studio-builder-toggle {
-    left: var(--soridraw-lite-studio-builder-toggle-left, calc(var(--soridraw-studio-splitter-left, 50vw) - 43px)) !important;
+    left: calc(var(--soridraw-lite-studio-builder-toggle-left, calc(var(--soridraw-studio-splitter-left, 50vw) - 43px)) - 12px) !important;
     right: auto !important;
   }
 
   html[data-soridraw-theme="studio-black"] body > .soridraw-studio-result-collapse-toggle.soridraw-lite-studio-result-toggle {
-    left: var(--soridraw-lite-studio-result-toggle-left, calc(var(--soridraw-studio-splitter-left, 50vw) + 9px)) !important;
+    left: calc(var(--soridraw-lite-studio-result-toggle-left, calc(var(--soridraw-studio-splitter-left, 50vw) + 9px)) + 12px) !important;
     right: auto !important;
   }
 
@@ -1302,13 +1302,13 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
    * splitter coordinate that already owns the real divider position. */
   html[data-soridraw-theme="studio-black"]
   body > .soridraw-studio-builder-collapse-toggle.soridraw-lite-studio-builder-toggle {
-    left: calc(var(--soridraw-studio-splitter-left, 50vw) - 43px) !important;
+    left: calc(var(--soridraw-studio-splitter-left, 50vw) - 55px) !important;
     right: auto !important;
   }
 
   html[data-soridraw-theme="studio-black"]
   body > .soridraw-studio-result-collapse-toggle.soridraw-lite-studio-result-toggle {
-    left: calc(var(--soridraw-studio-splitter-left, 50vw) + 9px) !important;
+    left: calc(var(--soridraw-studio-splitter-left, 50vw) + 21px) !important;
     right: auto !important;
   }
 

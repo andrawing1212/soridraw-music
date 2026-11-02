@@ -302,7 +302,12 @@ console.log('APP460_CLASSIC_DARK_MOBILE_IDLE_SEARCH_ROUNDING=PASS');
 // APP463_MUSIC_NOTE_KEYWORDS_READABLE_12PX: font-only override for the Music Note saved-song keyword strip.
 // Keep the old narrow-pane size rules as historical CSS; the scoped later
 // override wins without widening cards or changing native scroll behavior.
-const app463Css=css.slice(css.indexOf('APP463_MUSIC_NOTE_SONG_KEYWORD_12PX'));
+const app463Start=css.indexOf('APP463_MUSIC_NOTE_SONG_KEYWORD_12PX');
+const app463End=css.indexOf('/* Button-only Studio Black rail/pane fold:', app463Start);
+// The fold-animation section is a separate later feature; do not make the
+// historic keyword-font-only guard own every future CSS rule to EOF.
+assert(app463Start>=0 && app463End>app463Start, 'app463 keyword/font and later fold CSS boundary missing');
+const app463Css=css.slice(app463Start,app463End);
 assert(app463Css.startsWith('APP463_MUSIC_NOTE_SONG_KEYWORD_12PX'), 'app463 keyword font CSS missing');
 for (const token of [
   '.soridraw-musicnote-theme .soridraw-musicnote-song-keywords > .soridraw-musicnote-keyword-chip',

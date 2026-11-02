@@ -2303,17 +2303,21 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   };
 
   const getPlaylistItemColor = (item: PlaylistItem, playlistId = activePlaylistId): string => {
-    const local = playlistLocalColorMap[getPlaylistColorKey(playlistId, item?.id)];
-    return local || item?.colorTag || 'gray';
+    const key = getPlaylistColorKey(playlistId, item?.id);
+    const local = playlistLocalColorMap[key];
+    if (pendingPlaylistColorKeysRef.current.has(key)) return local || 'gray';
+    if (item && Object.prototype.hasOwnProperty.call(item, 'colorTag')) return item.colorTag || 'gray';
+    return local || 'gray';
   };
 
   const getWorkspaceItemColor = (group: any, idx: number): string => {
     const colorField = getWorkspaceColorField();
-    const local = workspaceLocalColorMap[getWorkspaceColorKey(group, idx, colorField)];
-    if (local) return local;
+    const key = getWorkspaceColorKey(group, idx, colorField);
+    const local = workspaceLocalColorMap[key];
+    if (pendingWorkspaceColorKeysRef.current.has(key)) return local || 'gray';
     const source = colorField === 'favoriteColorTags' ? group?.favoriteColorTags : group?.colorTags;
-    const raw = source?.[String(idx)] ?? source?.[idx] ?? null;
-    return raw || 'gray';
+    if (source && Object.prototype.hasOwnProperty.call(source, String(idx))) return source[String(idx)] || 'gray';
+    return local || 'gray';
   };
 
   const isWorkspaceItemVisible = (group: any, item: any, idx: number): boolean => {

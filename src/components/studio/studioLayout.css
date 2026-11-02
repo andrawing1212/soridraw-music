@@ -17846,40 +17846,58 @@ html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
     object-position: top;
   }
 
-  /* The survivor's target layout is already finalized before the screenshot.
-   * Animate left/width ONLY. The browser's default group animation also
-   * interpolates pane height, which scales the header/cards down and back up
-   * when a narrower pane reflows into a taller grid. Keep top and height at
-   * their settled destination coordinates throughout the 260ms gesture. */
-  @keyframes soridraw-fold-horizontal-only {
-    from {
-      transform: translate(var(--soridraw-fold-from-left), var(--soridraw-fold-to-top));
-      width: var(--soridraw-fold-from-width);
-      height: var(--soridraw-fold-to-height);
-    }
-    to {
-      transform: translate(var(--soridraw-fold-to-left), var(--soridraw-fold-to-top));
-      width: var(--soridraw-fold-to-width);
-      height: var(--soridraw-fold-to-height);
-    }
-  }
-  html[data-soridraw-theme="studio-black"][data-soridraw-fold-horizontal="true"][data-soridraw-fold-transition="rail"]::view-transition-group(soridraw-fold-center),
-  html[data-soridraw-theme="studio-black"][data-soridraw-fold-horizontal="true"][data-soridraw-fold-survivor="builder"]::view-transition-group(soridraw-fold-builder),
-  html[data-soridraw-theme="studio-black"][data-soridraw-fold-horizontal="true"][data-soridraw-fold-survivor="result"]::view-transition-group(soridraw-fold-result) {
-    animation: soridraw-fold-horizontal-only 260ms cubic-bezier(.22, 1, .36, 1) both;
+  /* The target layout is rendered once in its settled position. Do not
+   * translate/resize the center or surviving pane bitmap: that caused a
+   * visible left/right sway while card columns changed in the snapshot.
+   * The rail still folds at 260ms; its moving boundary reveals the steady
+   * center beneath. Neither top coordinate nor height is animated. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="rail"]::view-transition-group(soridraw-fold-center),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="pane"]::view-transition-group(soridraw-fold-builder),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="pane"]::view-transition-group(soridraw-fold-result) {
+    animation: none;
     transform-origin: top left;
   }
-  html[data-soridraw-theme="studio-black"][data-soridraw-fold-horizontal="true"][data-soridraw-fold-transition="rail"]::view-transition-image-pair(soridraw-fold-center),
-  html[data-soridraw-theme="studio-black"][data-soridraw-fold-horizontal="true"][data-soridraw-fold-survivor="builder"]::view-transition-image-pair(soridraw-fold-builder),
-  html[data-soridraw-theme="studio-black"][data-soridraw-fold-horizontal="true"][data-soridraw-fold-survivor="result"]::view-transition-image-pair(soridraw-fold-result) {
-    overflow: clip;
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="rail"]::view-transition-group(soridraw-fold-left-rail),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="rail"]::view-transition-group(soridraw-fold-right-rail) {
+    z-index: 2;
   }
-  html[data-soridraw-theme="studio-black"][data-soridraw-fold-horizontal="true"][data-soridraw-fold-transition="rail"]::view-transition-new(soridraw-fold-center),
-  html[data-soridraw-theme="studio-black"][data-soridraw-fold-horizontal="true"][data-soridraw-fold-survivor="builder"]::view-transition-new(soridraw-fold-builder),
-  html[data-soridraw-theme="studio-black"][data-soridraw-fold-horizontal="true"][data-soridraw-fold-survivor="result"]::view-transition-new(soridraw-fold-result) {
-    object-fit: none;
-    object-position: left top;
-    width: 100%;
-    height: 100%;
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="rail"]::view-transition-group(soridraw-fold-center) {
+    z-index: 1;
+  }
+
+  /* The pane being toggled opens/closes as a clipped edge, never as a
+   * horizontally sliding screenshot over the surviving content. This avoids
+   * the two superimposed layouts that were visible near 22s in the video. */
+  @keyframes soridraw-fold-clip-builder-out {
+    from { clip-path: inset(0 0 0 0); }
+    to { clip-path: inset(0 100% 0 0); }
+  }
+  @keyframes soridraw-fold-clip-builder-in {
+    from { clip-path: inset(0 100% 0 0); }
+    to { clip-path: inset(0 0 0 0); }
+  }
+  @keyframes soridraw-fold-clip-result-out {
+    from { clip-path: inset(0 0 0 0); }
+    to { clip-path: inset(0 0 0 100%); }
+  }
+  @keyframes soridraw-fold-clip-result-in {
+    from { clip-path: inset(0 0 0 100%); }
+    to { clip-path: inset(0 0 0 0); }
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="pane"][data-soridraw-fold-survivor="result"][data-soridraw-builder-collapsed="true"]::view-transition-old(soridraw-fold-builder) {
+    animation: soridraw-fold-clip-builder-out 260ms cubic-bezier(.22, 1, .36, 1) both;
+    opacity: 1;
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="pane"][data-soridraw-fold-survivor="result"]:not([data-soridraw-builder-collapsed="true"])::view-transition-new(soridraw-fold-builder) {
+    animation: soridraw-fold-clip-builder-in 260ms cubic-bezier(.22, 1, .36, 1) both;
+    opacity: 1;
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="pane"][data-soridraw-fold-survivor="builder"][data-soridraw-result-collapsed="true"]::view-transition-old(soridraw-fold-result) {
+    animation: soridraw-fold-clip-result-out 260ms cubic-bezier(.22, 1, .36, 1) both;
+    opacity: 1;
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="pane"][data-soridraw-fold-survivor="builder"]:not([data-soridraw-result-collapsed="true"])::view-transition-new(soridraw-fold-result) {
+    animation: soridraw-fold-clip-result-in 260ms cubic-bezier(.22, 1, .36, 1) both;
+    opacity: 1;
   }
 }

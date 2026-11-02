@@ -391,6 +391,23 @@ const collapsedButton = app.slice(collapsedButtonStart, collapsedButtonEnd);
 assert.ok(collapsedButton.includes('dragSnapToOrigin'));
 assert.ok(collapsedButton.includes('dragMomentum={false}'));
 assert.ok(collapsedButton.includes('info.offset.x > 34 || info.velocity.x > 360'));
+// The collapsing tab follows the settled rail edge even when center layout
+// moves during native window resize. Resize end still reads the real rail once.
+const resizeMetricsStart = liteWorkspace.indexOf('  const refreshMetrics = useCallback(() => {');
+const resizeMetricsEnd = liteWorkspace.indexOf('  const scheduleMetricsRefresh = useCallback(', resizeMetricsStart);
+assert.ok(resizeMetricsStart >= 0 && resizeMetricsEnd > resizeMetricsStart);
+const resizeMetrics = liteWorkspace.slice(resizeMetricsStart, resizeMetricsEnd);
+assert.ok(resizeMetrics.includes('? metricsRef.current.leftRailEdge'));
+assert.ok(!resizeMetrics.includes('? rect.left\\n        : leftRailRect'));
+assert.ok(resizeMetrics.includes('const leftRail = nativeWindowResize ? null'));
+assert.ok(liteWorkspace.includes("root.style.setProperty('--soridraw-studio-left-rail-edge'"));
+console.log('VERIFY_NATIVE_RESIZE_COLLAPSED_RAIL_EDGE_STABLE=PASS');
+
+// Tablet wordmark shares the original Split desktop white font/color.
+assert.ok(compactTop.includes('font-display text-[22px] font-black leading-none tracking-tight text-[#f4f4f5]'));
+assert.ok(!compactTop.includes('text-[20px] font-black leading-none tracking-tight bg-gradient-to-r'));
+console.log('VERIFY_SPLIT_TABLET_WHITE_BRAND_PARITY=PASS');
+
 console.log('VERIFY_COLLAPSED_GENERATE_TAB_RETURNS_TO_RAIL=PASS');
 
 console.log('VERIFY_SPLIT_RAIL_RELOCATED_NAV=PASS');

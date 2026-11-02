@@ -3818,12 +3818,12 @@ updates: draft.updates,
 
     const existingIds = new Set(activeFavoriteSource.map(song => song.id));
     const favoriteMap = { ...readLocalColorMap('soridraw.favoriteColorTags'), ...favoriteColorMap };
-    const workspaceMap = readLocalColorMap('soridraw.library.workspaceColorTags');
-    const playlistMap = readLocalColorMap('soridraw.library.playlistColorTags');
-
-    const favoriteEntries = Object.entries(favoriteMap).filter(([id]) => existingIds.has(id));
-    const workspaceEntries = Object.entries(workspaceMap);
-    const playlistEntries = Object.entries(playlistMap);
+    // Only exact local color clicks may overwrite a canonical color.
+    // Saved maps from another device/session are not mutation authority.
+    const favoriteEntries = Object.entries(favoriteMap).filter(([id]) =>
+      existingIds.has(id) && pendingFavoriteColorIdsRef.current.has(id));
+    const workspaceEntries: [string, string][] = [];
+    const playlistEntries: [string, string][] = [];
 
     if (favoriteEntries.length === 0 && workspaceEntries.length === 0 && playlistEntries.length === 0) {
       showFavoriteToast('동기화할 색상 변경 내역이 없습니다.');
@@ -3848,8 +3848,15 @@ updates: draft.updates,
         await updatePlaylistItemColor(user.uid, playlistId, itemId, color === 'gray' ? null : color);
       }
 
+      for (const [id, color] of favoriteEntries) {
+        if (favoriteColorMapRef.current[id] === color) pendingFavoriteColorIdsRef.current.delete(id);
+      }
+      favoriteColorDirtyRef.current = pendingFavoriteColorIdsRef.current.size > 0;
+      if (!favoriteColorDirtyRef.current) {
+        favoriteColorBaselineRef.current = serializeColorMap(favoriteColorMapRef.current);
+      }
       markFavoriteColorSynced();
-      showFavoriteToast(`색상 설정을 동기화했습니다. 오늘 남은 횟수: ${isFavoriteAdminUser ? '무제한' : `${Math.max(0, 5 - getFavoriteColorSyncCount())}회`}`);
+      showFavoriteToast(`이 페이지에서 수정한 색상을 저장했습니다. 오늘 남은 횟수: ${isFavoriteAdminUser ? '무제한' : `${Math.max(0, 5 - getFavoriteColorSyncCount())}회`}`);
     } catch (error) {
       console.error('unified color sync failed', error);
       showFavoriteToast('색상 동기화에 실패했습니다.');

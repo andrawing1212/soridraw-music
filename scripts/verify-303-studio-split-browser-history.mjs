@@ -375,11 +375,11 @@ const compactTopStart = app.indexOf('      {/* Mobile Top Icon Bar */}');
 const compactTopEnd = app.indexOf('          <div className="ml-auto flex shrink-0 items-center gap-1">', compactTopStart);
 assert.ok(compactTopStart >= 0 && compactTopEnd > compactTopStart);
 const compactTop = app.slice(compactTopStart, compactTopEnd);
-assert.match(compactTop, /min-\\[1600px\\]:hidden/);
-assert.match(compactTop, /\\{isSplitRailNavigation && \\(/);
-assert.match(compactTop, /data-soridraw-compact-home-brand="true"/);
-assert.match(compactTop, /onClick=\\{\\(\\) => goToTopNav\\(preferredLandingPath\\)\\}/);
-assert.match(compactTop, /isSplitRailNavigation \\? \\[\\] : topNavItems\\.filter/);
+assert.ok(compactTop.includes('min-[1600px]:hidden'));
+assert.ok(compactTop.includes('{isSplitRailNavigation && ('));
+assert.ok(compactTop.includes('data-soridraw-compact-home-brand="true"'));
+assert.ok(compactTop.includes('onClick={() => goToTopNav(preferredLandingPath)}'));
+assert.ok(compactTop.includes('isSplitRailNavigation ? [] : topNavItems.filter'));
 console.log('VERIFY_SPLIT_RAIL_TABLET_HOME_WORDMARK=PASS');
 
 // A partial swipe on the collapsed fixed Generate tab must not leave Motion's
@@ -388,9 +388,9 @@ const collapsedButtonStart = app.indexOf('dragConstraints={isActionSwipeCollapse
 const collapsedButtonEnd = app.indexOf('aria-label="생성 버튼 펼치기"', collapsedButtonStart);
 assert.ok(collapsedButtonStart >= 0 && collapsedButtonEnd > collapsedButtonStart);
 const collapsedButton = app.slice(collapsedButtonStart, collapsedButtonEnd);
-assert.match(collapsedButton, /dragSnapToOrigin/);
-assert.match(collapsedButton, /dragMomentum=\\{false\\}/);
-assert.match(collapsedButton, /info\\.offset\\.x > 34 \\|\\| info\\.velocity\\.x > 360/);
+assert.ok(collapsedButton.includes('dragSnapToOrigin'));
+assert.ok(collapsedButton.includes('dragMomentum={false}'));
+assert.ok(collapsedButton.includes('info.offset.x > 34 || info.velocity.x > 360'));
 console.log('VERIFY_COLLAPSED_GENERATE_TAB_RETURNS_TO_RAIL=PASS');
 
 console.log('VERIFY_SPLIT_RAIL_RELOCATED_NAV=PASS');

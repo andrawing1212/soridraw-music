@@ -7477,10 +7477,13 @@ html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-th
   pointer-events: auto !important;
 }
 
+/* Studio-wide detail dialogs already declare their own blur amounts
+ * (Music Note 5px / Library 2px). Keep the split-only dim surface while
+ * allowing those existing backdrop classes to render when the modal opens.
+ * No effect or additional compositor layer exists when the popup is closed;
+ * split drag/resize and admin-only performance A/B guards remain untouched. */
 .soridraw-detail-modal-portal-scope.is-studio-center-overlay .soridraw-detail-modal-backdrop {
   background: rgba(0, 0, 0, 0.56) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
 }
 
 .soridraw-detail-modal-portal-scope.is-studio-center-overlay .soridraw-musicnote-detail-panel {

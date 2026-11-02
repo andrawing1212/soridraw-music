@@ -17827,4 +17827,22 @@ html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
     animation-duration: 260ms;
     animation-timing-function: cubic-bezier(.22, 1, .36, 1);
   }
+
+  /* Only the panel that remains visible must use the new responsive layout
+   * throughout its width animation. Hiding an outgoing panel's old bitmap
+   * would make that panel vanish immediately instead of folding closed. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="rail"]::view-transition-old(soridraw-fold-center),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="pane"][data-soridraw-fold-survivor="builder"]::view-transition-old(soridraw-fold-builder),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="pane"][data-soridraw-fold-survivor="result"]::view-transition-old(soridraw-fold-result) {
+    animation: none;
+    opacity: 0;
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="rail"]::view-transition-new(soridraw-fold-center),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="pane"][data-soridraw-fold-survivor="builder"]::view-transition-new(soridraw-fold-builder),
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="pane"][data-soridraw-fold-survivor="result"]::view-transition-new(soridraw-fold-result) {
+    animation: none;
+    opacity: 1;
+    object-fit: cover;
+    object-position: top;
+  }
 }

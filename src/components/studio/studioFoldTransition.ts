@@ -31,17 +31,34 @@ export const runStudioFoldTransition = (kind: FoldKind, update: () => void) => {
   activeTransition?.skipTransition();
   const token = ++activeToken;
   const root = document.documentElement;
+  // Keep the outgoing pane's normal fold animation. Only suppress the old
+  // snapshot of the pane that survives the click and changes responsive layout.
+  const wasBuilderCollapsed = root.dataset.soridrawBuilderCollapsed === 'true';
+  const wasResultCollapsed = root.dataset.soridrawResultCollapsed === 'true';
   root.dataset.soridrawFoldTransition = kind;
+  delete root.dataset.soridrawFoldSurvivor;
   try {
-    const transition = doc.startViewTransition(() => flushSync(update));
+    const transition = doc.startViewTransition(() => {
+      flushSync(update);
+      if (kind !== 'pane') return;
+      const builderChanged = (root.dataset.soridrawBuilderCollapsed === 'true') !== wasBuilderCollapsed;
+      const resultChanged = (root.dataset.soridrawResultCollapsed === 'true') !== wasResultCollapsed;
+      if (builderChanged !== resultChanged) {
+        root.dataset.soridrawFoldSurvivor = builderChanged ? 'result' : 'builder';
+      }
+    });
     activeTransition = transition;
     void transition.finished.catch(() => undefined).then(() => {
       if (token !== activeToken) return;
       delete root.dataset.soridrawFoldTransition;
+      delete root.dataset.soridrawFoldSurvivor;
       activeTransition = null;
     });
   } catch {
-    if (token === activeToken) delete root.dataset.soridrawFoldTransition;
+    if (token === activeToken) {
+      delete root.dataset.soridrawFoldTransition;
+      delete root.dataset.soridrawFoldSurvivor;
+    }
     activeTransition = null;
     update();
   }

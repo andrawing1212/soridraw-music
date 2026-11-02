@@ -98,9 +98,56 @@ const normalizeAcceptedFoldHandlers = (source) => {
 assert(current.includes(acceptedFoldImport), 'approved Studio fold helper import missing');
 assert(current.includes(acceptedBuilderFold), 'approved Builder button fold wrapper missing');
 assert(current.includes(acceptedResultFold), 'approved Result button fold wrapper missing');
+// APP716 — The director-approved 12px collapse-button inset must follow the
+// real splitter while dragging, not appear only at pointer-up. The app459
+// byte-frozen engine guard is retained for every other geometry line.
+const oldToggleRegion = baseline.match(/  \/\/ 781 —[\s\S]*?\n  \}, \[\]\);/)?.[0];
+const liveToggleRegion = current.match(/  \/\/ Keep both split-pane collapse buttons[\s\S]*?\n  \}, \[\]\);/)?.[0];
+assert(oldToggleRegion && liveToggleRegion, 'APP716 toggle region not found');
+const functionStart = '  const syncMinimumCollapseControls = useCallback((';
+const liveStart = '    if (!livePosition) return;';
+assert.equal(
+  liveToggleRegion.slice(liveToggleRegion.indexOf(functionStart), liveToggleRegion.indexOf(liveStart)),
+  oldToggleRegion.slice(oldToggleRegion.indexOf(functionStart), oldToggleRegion.indexOf(liveStart)),
+  'APP716 must not change minimum-edge state or drag geometry inputs',
+);
+const approvedToggleWriter = [
+  '    if (!livePosition) return;',
+  '    const roundedSplitterLeft = Math.max(0, Math.round(splitterLeft));',
+  '    // Match the resting Studio Black CSS offsets (-55/+21) at EVERY drag X,',
+  '    // including both minimum edges. Inline-important wins over tablet rules',
+  '    // that intentionally keep the root split variable unchanged until release.',
+  '    const builderLeft = \`\${Math.max(0, roundedSplitterLeft - 55)}px\`;',
+  '    const resultLeft = \`\${roundedSplitterLeft + 21}px\`;',
+  '    const builderToggle = builderToggleRef.current;',
+  '    const resultToggle = resultToggleRef.current;',
+  '    if (builderToggle && builderToggle.style.left !== builderLeft) {',
+  "      builderToggle.style.setProperty('left', builderLeft, 'important');",
+  '    }',
+  '    if (resultToggle && resultToggle.style.left !== resultLeft) {',
+  "      resultToggle.style.setProperty('left', resultLeft, 'important');",
+  '    }',
+  '  }, []);',
+].join('\n');
+assert(liveToggleRegion.endsWith(approvedToggleWriter), 'APP716 live toggle writer differs from approved two-button inset');
+const oldPurePaneCallComment = [
+  '      // Keep the split-edge collapse UI correct even on the Pure Pane',
+  '      // production hot path, which intentionally returns before auxiliary',
+  '      // external-geometry synchronization. This is threshold-only state plus',
+  '      // one tiny button position write at an actual minimum edge.',
+].join('\n');
+const livePurePaneCallComment = [
+  '      // Keep BOTH collapse buttons on the same live splitter X and 12px inset,',
+  '      // without updating inherited root variables or measuring the DOM.',
+].join('\n');
+assert(current.includes(livePurePaneCallComment), 'APP716 live boundary call missing');
+const normalizeApp716Toggle = (source) => source
+  .replace(liveToggleRegion, oldToggleRegion)
+  .replace(livePurePaneCallComment, oldPurePaneCallComment);
+
 assert.equal(
   normalizeAcceptedMusicNoteSelection(normalizeAcceptedResizeRail(normalizeAcceptedRailTransition(normalizeAcceptedFoldHandlers(baseline.replace(before[0], '<SPLIT_BOUNDS>'))))),
-  normalizeAcceptedMusicNoteSelection(normalizeAcceptedResizeRail(normalizeAcceptedRailTransition(normalizeAcceptedFoldHandlers(current.replace(after[0], '<SPLIT_BOUNDS>'))))),
+  normalizeAcceptedMusicNoteSelection(normalizeAcceptedResizeRail(normalizeAcceptedRailTransition(normalizeAcceptedFoldHandlers(normalizeApp716Toggle(current.replace(after[0], '<SPLIT_BOUNDS>')))))),
   'APP459 changed protected Lite splitter code beyond approved Music Note selection and boundary-only rail change',
 );
 // The initial app459 PR compared the legacy tablet-only guard to the new

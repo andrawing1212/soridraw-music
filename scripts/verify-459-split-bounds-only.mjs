@@ -101,9 +101,15 @@ assert(current.includes(acceptedResultFold), 'approved Result button fold wrappe
 // APP716 — The director-approved 12px collapse-button inset must follow the
 // real splitter while dragging, not appear only at pointer-up. The app459
 // byte-frozen engine guard is retained for every other geometry line.
-const oldToggleRegion = baseline.match(/  \/\/ 781 —[\s\S]*?\n  \}, \[\]\);/)?.[0];
+const oldToggleRegion = baseline.match(/  \/\/ 781 —[\s\S]*?\n  \}, \[\]\);/)?.[0]
+  // New PRs have APP716's approved live toggle code already in preview.
+  // Accept that exact current baseline as the only other starting point.
+  || baseline.match(/  \/\/ Keep both split-pane collapse buttons[\s\S]*?\n  \}, \[\]\);/)?.[0];
 const liveToggleRegion = current.match(/  \/\/ Keep both split-pane collapse buttons[\s\S]*?\n  \}, \[\]\);/)?.[0];
 assert(oldToggleRegion && liveToggleRegion, 'APP716 toggle region not found');
+if (oldToggleRegion.startsWith('  // Keep both split-pane collapse buttons')) {
+  assert.equal(oldToggleRegion, liveToggleRegion, 'APP716 previously merged toggle must remain byte-exact');
+}
 const functionStart = '  const syncMinimumCollapseControls = useCallback((';
 const liveStart = '    if (!livePosition) return;';
 assert.equal(
@@ -141,9 +147,14 @@ const livePurePaneCallComment = [
   '      // without updating inherited root variables or measuring the DOM.',
 ].join('\n');
 assert(current.includes(livePurePaneCallComment), 'APP716 live boundary call missing');
-const normalizeApp716Toggle = (source) => source
-  .replace(liveToggleRegion, oldToggleRegion)
-  .replace(livePurePaneCallComment, oldPurePaneCallComment);
+const normalizeApp716Toggle = (source) => (
+  // With a current APP716 preview baseline there is NOTHING to normalize:
+  // all collapse-button geometry and comments must remain byte-for-byte.
+  oldToggleRegion.startsWith('  // Keep both split-pane collapse buttons')
+    ? source
+    : source.replace(liveToggleRegion, oldToggleRegion)
+      .replace(livePurePaneCallComment, oldPurePaneCallComment)
+);
 
 assert.equal(
   normalizeAcceptedMusicNoteSelection(normalizeAcceptedResizeRail(normalizeAcceptedRailTransition(normalizeAcceptedFoldHandlers(baseline.replace(before[0], '<SPLIT_BOUNDS>'))))),

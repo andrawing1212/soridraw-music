@@ -2303,17 +2303,21 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   };
 
   const getPlaylistItemColor = (item: PlaylistItem, playlistId = activePlaylistId): string => {
-    const local = playlistLocalColorMap[getPlaylistColorKey(playlistId, item?.id)];
-    return local || item?.colorTag || 'gray';
+    const key = getPlaylistColorKey(playlistId, item?.id);
+    const local = playlistLocalColorMap[key];
+    if (pendingPlaylistColorKeysRef.current.has(key)) return local || 'gray';
+    if (item && Object.prototype.hasOwnProperty.call(item, 'colorTag')) return item.colorTag || 'gray';
+    return local || 'gray';
   };
 
   const getWorkspaceItemColor = (group: any, idx: number): string => {
     const colorField = getWorkspaceColorField();
-    const local = workspaceLocalColorMap[getWorkspaceColorKey(group, idx, colorField)];
-    if (local) return local;
+    const key = getWorkspaceColorKey(group, idx, colorField);
+    const local = workspaceLocalColorMap[key];
+    if (pendingWorkspaceColorKeysRef.current.has(key)) return local || 'gray';
     const source = colorField === 'favoriteColorTags' ? group?.favoriteColorTags : group?.colorTags;
-    const raw = source?.[String(idx)] ?? source?.[idx] ?? null;
-    return raw || 'gray';
+    if (source && Object.prototype.hasOwnProperty.call(source, String(idx))) return source[String(idx)] || 'gray';
+    return local || 'gray';
   };
 
   const isWorkspaceItemVisible = (group: any, item: any, idx: number): boolean => {
@@ -2374,13 +2378,16 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       return;
     }
 
-    const favoriteMap = readLocalColorMap('soridraw.favoriteColorTags');
     const workspaceMap = { ...readLocalColorMap('soridraw.library.workspaceColorTags'), ...workspaceLocalColorMap };
     const playlistMap = { ...readLocalColorMap('soridraw.library.playlistColorTags'), ...playlistLocalColorMap };
 
-    const favoriteEntries = Object.entries(favoriteMap);
-    const workspaceEntries = Object.entries(workspaceMap);
-    const playlistEntries = Object.entries(playlistMap);
+    // A saved per-device map is not authority to overwrite canonical colors.
+    // Only the user's current unsaved clicks may be submitted.
+    const favoriteEntries: [string, string][] = [];
+    const workspaceEntries = Object.entries(workspaceMap).filter(([key]) =>
+      pendingWorkspaceColorKeysRef.current.has(key));
+    const playlistEntries = Object.entries(playlistMap).filter(([key]) =>
+      pendingPlaylistColorKeysRef.current.has(key));
 
     if (favoriteEntries.length === 0 && workspaceEntries.length === 0 && playlistEntries.length === 0) {
       showToast('동기화할 색상 변경 내역이 없습니다.');
@@ -2412,12 +2419,16 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         await updatePlaylistItemColor(user.uid, playlistId, itemId, (color === 'gray' ? null : color) as any);
       }
 
-      pendingWorkspaceColorKeysRef.current.clear();
-      pendingPlaylistColorKeysRef.current.clear();
+      for (const [key, color] of workspaceEntries) {
+        if (workspaceLocalColorMapRef.current[key] === color) pendingWorkspaceColorKeysRef.current.delete(key);
+      }
+      for (const [key, color] of playlistEntries) {
+        if (playlistLocalColorMapRef.current[key] === color) pendingPlaylistColorKeysRef.current.delete(key);
+      }
       workspaceColorBaselineRef.current = serializeColorMap(workspaceLocalColorMapRef.current || {});
       playlistColorBaselineRef.current = serializeColorMap(playlistLocalColorMapRef.current || {});
-      workspaceColorDirtyRef.current = false;
-      playlistColorDirtyRef.current = false;
+      workspaceColorDirtyRef.current = pendingWorkspaceColorKeysRef.current.size > 0;
+      playlistColorDirtyRef.current = pendingPlaylistColorKeysRef.current.size > 0;
       markLibraryColorSynced();
       showToast(`색상 설정을 동기화했습니다. 오늘 남은 횟수: ${isLibraryAdminUser ? '무제한' : `${Math.max(0, 5 - getLibraryColorSyncCount())}회`}`);
     } catch (error) {

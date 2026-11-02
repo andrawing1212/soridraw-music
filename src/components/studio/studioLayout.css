@@ -17912,7 +17912,7 @@ html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
  * Do not change the 660/820/1080px responsive handoffs or pointer hot path. */
 @media (min-width: 1600px) {
   html[data-soridraw-theme="studio-black"] {
-    --soridraw-studio-full-pane-max-width: 1104px;
+    --soridraw-studio-full-pane-max-width: 1300px;
   }
 
   /* The Result masthead follows the same centered content guide as Builder.
@@ -17934,8 +17934,8 @@ html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
   }
 
   /* Keep each actual scrollport at the divider/rail. Cap only its child.
-   * Recent keeps 12px inner padding, so 1104px of usable UI plus 24px
-   * gives the same maximum reading width as Sori Studio's 1104px cards. */
+   * Recent keeps 12px inner padding, so 1300px of usable UI plus 24px
+   * gives the same maximum reading width as Sori Studio's 1300px cards. */
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-workspace-view="recent"]
   .soridraw-lite-studio-split-workspace:not(.is-create-vertical):not(.is-builder-collapsed):not(.is-result-collapsed)

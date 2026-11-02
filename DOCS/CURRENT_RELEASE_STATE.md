@@ -6,7 +6,19 @@
 
 ---
 
-## CURRENT — Studio Black 접기/펼치기 수직 튐 방지 PREVIEW 배포 (2026-11-03 KST)
+## CURRENT — Studio Black UI 개선 누적 적용 기록 (2026-11-03 KST; PR #691~#717)
+- **적용 범위:** 2026-11-02 디렉터 영상과 요청에 따라 완료된 Split Home / Studio Black PC·태블릿 UI 개선의 **현행 PREVIEW 코드 기준 요약**. 각 PR은 아래 이력으로 보존하며, 과거 중간 시안은 다시 작업할 미완료 지시가 아니다.
+- **상단 내비게이션·태블릿:** 관리자 Split Home 메뉴가 전역 CSS 때문에 숨겨지던 문제 수정 #691; 태블릿(1100~1599px) Split Home 로고 노출·흰색 Playfair 표현 복원 #693/#695.
+- **생성바·PC↔태블릿 전환:** 접힌 생성바의 스와이프 후 위치 복귀 #693, 브라우저 가로폭 변경 중 왼쪽 레일에서 밀렸다 돌아오는 현상 #695, 1600px PC↔태블릿 경계에서의 별도 좌우 튐 #697. #698에서 Studio Black PC 펼친 왼쪽 메뉴 폭 214→232px(+18px) 조정(접힌 64px 보존). 디렉터의 #698 기록에는 이전 생성바 PC↔태블릿 동작 PASS 확인이 있다.
+- **네 버튼 접기·펼치기:** 왼쪽/Builder/Result/오른쪽 패널의 260ms 전환 #699; 상단 내비게이션과 가로선 2개 고정 #701; 중간의 세로 튐·스냅샷 잔상 수정 #703/#705. **최신 소유권은 #708**: 남는 중앙 콘텐츠를 최종 자리에 고정하고 접히는 pane만 노출/가림으로 전환하여 가로 흔들림 보정. **#705의 위치·폭 보간 시안은 최종 상태가 아니며 #708이 대체한다.**
+- **분할 화면 콘텐츠 폭:** Sori Studio / Recent / Music Note / Library의 넓은 PC 분할 화면에서 내부 콘텐츠 폭을 제한하고 초과 공간은 블랙 좌우 여백으로 배분 #710; 초기 1104px이 과하게 좁아 최종 공용 최대폭을 **1300px**로 조정 #712. Tablet/Compact Mobile/Classic 및 기존 split hot path는 변경하지 않음.
+- **분할선 접기 버튼 간격:** Builder/Result 접기 버튼을 분할선에서 각각 **12px 더 안쪽**으로 이동 #714(기존 펼치기 버튼 6px inset 보존). 드래그 중 과거 위치에 머물고 마우스 해제 시에만 새 위치로 이동하던 결함을 #716에서 수정: **실제 분할선 X 좌표로 두 버튼의 -55px/+21px 위치를 같은 rAF에 갱신**하고 pointer-up에서 기존 CSS에 소유권 반환.
+- **마지막 코드/배포:** #716 소스 병합 SHA `60816fee5871db520d69519ef17c0b00355b8ccc`; #717 Hosting 전용 배포 SHA `58c8f5729b484b6cfbcbb02d686ad8f868d3d9a2`, Actions run `41528930019` SUCCESS. 소스의 source-and-split / product-quality, TS/React Build PASS; 배포의 exact build·TEST/PRODUCTION 미변경 PASS. 공유 사용자 원본·Rules·Functions·Worker·D1/R2 불변.
+- **구분:** GitHub 코드·배포 완료와 로그인된 PC·모바일 실사용 최종 체감 PASS는 다르다. #716의 분할 드래그와 접기 버튼 영상 재확인 등 실기기 합격은 현재 미확인. **이미 반영된 UI 개선을 새 미완료 작업으로 다시 추천하지 않는다.** 새로 관찰되는 구체적인 결함이나 디렉터 추가 지시가 있을 때만 해당 범위를 재검토한다.
+
+---
+
+## HISTORY — Studio Black 접기/펼치기 수직 튐 방지 당시 PREVIEW 배포 기록 (2026-11-03 KST; 최신 #708이 대체)
 - **증거:** 2026-11-02 19:18 사용자 영상에서 좌·우 메뉴 및 중앙 pane 접기/펼치기의 세로 튐 반복. 이전 #703 사용자 QA FAIL, 이번 수정의 실제 로그인 PC/모바일 체감은 **미확인**.
 - **수정:** PR #705 병합 `d005e8ba3eae3828d47b62fab79a7c894b5e5c34`. 생존 center/Builder/Result의 X좌표·폭만 260ms 애니메이션하고 Y·높이 고정; 접히는 패널 효과, 상단 메뉴/가로선 2개, split pointer·scroll·반응형은 보호. 역사적 app463 글꼴 검사 범위만 해당 CSS로 한정.
 - **검사:** 소스 최종 SHA `6f980015f9faa2e84cce5d266219333a80487981`의 source-and-split / product-quality CI 모두 PASS. 별도 Chromium 재현으로 브라우저 기본 height 보간 원인 확인. 사용자 실기기 PASS로 간주하지 않음.

@@ -4026,6 +4026,11 @@ function Navigation({
     : topNavItems[0]?.path || (isAdminUser ? '/admin/users' : '/');
 
   const isRailLessNavigationViewport = useMediaQuery('(max-width: 1099px)');
+  // Only the PC Split pages with an existing left rail move navigation
+  // there. Home, Classic, compact mobile, and non-rail pages keep the bar.
+  const isSplitRailNavigation = displayMode === 'studio-black'
+    && !isRailLessNavigationViewport
+    && (location.pathname === '/studio' || location.pathname === '/explore' || location.pathname === '/history');
   const isCompactStudioMobileNavigation = isRailLessNavigationViewport;
   const shouldUseStudioWorkspaceMobileNavigation = displayMode === 'studio-black'
     && studioCompactMobileLayout
@@ -4171,7 +4176,7 @@ function Navigation({
         </button>
 
         <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-visible">
-          {topNavItems.map((item) => {
+          {!isSplitRailNavigation && topNavItems.map((item) => {
             const Icon = item.icon;
             const active = isActivePath(item.path);
             const signalActive = item.path === '/suno-library' && sunoLibrarySignal;
@@ -4200,7 +4205,7 @@ function Navigation({
               </button>
             );
           })}
-          {isAdminUser && (
+          {isAdminUser && !isSplitRailNavigation && (
             <button
               type="button"
               onClick={() => goToTopNav('/admin/users')}
@@ -4385,7 +4390,7 @@ function Navigation({
       >
         <div className="flex w-full min-w-0 items-center gap-1 overflow-visible">
           <div className="soridraw-compact-nav-scroll flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overflow-y-hidden">
-            {topNavItems.filter((item) => item.key !== 'myPage' && !(isRailLessNavigationViewport && item.key === 'lab')).map((item) => {
+            {(isSplitRailNavigation ? [] : topNavItems.filter((item) => item.key !== 'myPage' && !(isRailLessNavigationViewport && item.key === 'lab'))).map((item) => {
               const Icon = item.icon;
               return (
                 <button
@@ -19015,6 +19020,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 onRecentSongs={() => navigateStudioWorkspaceView('recent')}
                 onMusicNote={() => navigateStudioWorkspaceView('music-note')}
                 onLibrary={() => navigateStudioWorkspaceView('library')}
+                onExplore={() => navigate('/explore')}
+                showExplore={canAccessNavigationMenu('explore')}
                 onSearch={openGlobalSearchModal}
                 onApiSettings={() => navigate('/suno-api-settings')}
                 onLab={() => navigate('/lab')}
@@ -21800,6 +21807,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         clearSunoLibrarySignal();
                         navigate('/suno-library');
                       }}
+                      onExplore={() => navigate('/explore')}
+                      showExplore={canAccessNavigationMenu('explore')}
                       onSearch={openGlobalSearchModal}
                       onApiSettings={() => navigate('/suno-api-settings')}
                       onLab={() => navigate('/lab')}

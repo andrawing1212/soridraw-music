@@ -53,6 +53,9 @@ export default function ExploreShell({ isAdminUser = false }: ExploreShellProps)
       onRecentSongs={() => go('/studio?view=recent')}
       onMusicNote={() => go('/history')}
       onLibrary={() => go('/suno-library')}
+      onExplore={() => { void go('/explore'); }}
+      showExplore
+      isExploreActive
       onSearch={() => go('/')}
       onApiSettings={() => go('/suno-api-settings')}
       onLab={() => go('/lab')}

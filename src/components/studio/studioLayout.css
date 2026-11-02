@@ -17729,6 +17729,42 @@ html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
  * animate actual before/after pane bounds. No layout transition is added to
  * Lite V2 splitter dragging, native window resize, Classic, or mobile. */
 @media (min-width: 1100px) and (prefers-reduced-motion: no-preference) {
+  /* Keep the global top menu and both horizontal boundaries completely stable.
+   * The root snapshot otherwise cross-fades the entire page (including the
+   * navigation underline) while the fold panels animate. The fixed 110px
+   * masthead divider must also paint above animated pane snapshots. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition]
+  .soridraw-top-navigation {
+    view-transition-name: soridraw-fold-static-navigation;
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition]
+  .soridraw-studio-page-frame > .soridraw-studio-masthead-divider {
+    view-transition-name: soridraw-fold-static-divider;
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition]::view-transition-old(root) {
+    animation: none;
+    opacity: 0;
+  }
+  html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition]::view-transition-new(root) {
+    animation: none;
+    opacity: 1;
+  }
+  html::view-transition-group(soridraw-fold-static-navigation),
+  html::view-transition-group(soridraw-fold-static-divider) {
+    animation: none;
+    z-index: 100;
+  }
+  html::view-transition-old(soridraw-fold-static-navigation),
+  html::view-transition-old(soridraw-fold-static-divider) {
+    animation: none;
+    opacity: 0;
+  }
+  html::view-transition-new(soridraw-fold-static-navigation),
+  html::view-transition-new(soridraw-fold-static-divider) {
+    animation: none;
+    opacity: 1;
+  }
+
   html[data-soridraw-theme="studio-black"][data-soridraw-fold-transition="rail"]
   .soridraw-studio-page-frame > .soridraw-studio-left-panel {
     view-transition-name: soridraw-fold-left-rail;

@@ -368,4 +368,29 @@ assert.match(leftRail, /<span>API 설정<\/span>[\s\S]*?showAdmin && onAdmin[\s\
 assert.match(studioCss, /html:not\(\[data-soridraw-theme="studio-black"\]\) \.soridraw-split-rail-only \{\s*display: none !important;/);
 assert.match(app, /showExplore=\{canAccessNavigationMenu\('explore'\)\}/);
 assert.match(app, /showAdmin=\{isAdminUser\}/);
+// At 1100–1599px the Split rail intentionally owns all page icons, so
+// the compact header must keep a Home wordmark until its Home icon returns
+// below 1100px. The >=1600px original header remains the sole owner there.
+const compactTopStart = app.indexOf('      {/* Mobile Top Icon Bar */}');
+const compactTopEnd = app.indexOf('          <div className="ml-auto flex shrink-0 items-center gap-1">', compactTopStart);
+assert.ok(compactTopStart >= 0 && compactTopEnd > compactTopStart);
+const compactTop = app.slice(compactTopStart, compactTopEnd);
+assert.ok(compactTop.includes('min-[1600px]:hidden'));
+assert.ok(compactTop.includes('{isSplitRailNavigation && ('));
+assert.ok(compactTop.includes('data-soridraw-compact-home-brand="true"'));
+assert.ok(compactTop.includes('onClick={() => goToTopNav(preferredLandingPath)}'));
+assert.ok(compactTop.includes('isSplitRailNavigation ? [] : topNavItems.filter'));
+console.log('VERIFY_SPLIT_RAIL_TABLET_HOME_WORDMARK=PASS');
+
+// A partial swipe on the collapsed fixed Generate tab must not leave Motion's
+// persistent x transform offset from its CSS left-rail anchor across resizes.
+const collapsedButtonStart = app.indexOf('dragConstraints={isActionSwipeCollapseMode ? { left: 0, right: 92 } : undefined}');
+const collapsedButtonEnd = app.indexOf('aria-label="생성 버튼 펼치기"', collapsedButtonStart);
+assert.ok(collapsedButtonStart >= 0 && collapsedButtonEnd > collapsedButtonStart);
+const collapsedButton = app.slice(collapsedButtonStart, collapsedButtonEnd);
+assert.ok(collapsedButton.includes('dragSnapToOrigin'));
+assert.ok(collapsedButton.includes('dragMomentum={false}'));
+assert.ok(collapsedButton.includes('info.offset.x > 34 || info.velocity.x > 360'));
+console.log('VERIFY_COLLAPSED_GENERATE_TAB_RETURNS_TO_RAIL=PASS');
+
 console.log('VERIFY_SPLIT_RAIL_RELOCATED_NAV=PASS');

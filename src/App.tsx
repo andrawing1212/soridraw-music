@@ -4397,6 +4397,22 @@ function Navigation({
       >
         <div className="flex w-full min-w-0 items-center gap-1 overflow-visible">
           <div className="soridraw-compact-nav-scroll flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overflow-y-hidden">
+            {/* 1100–1599px Split rail has no Home icon. Keep the original
+                wordmark Home action until the compact Home icon takes over. */}
+            {isSplitRailNavigation && (
+              <button
+                type="button"
+                data-soridraw-compact-home-brand="true"
+                onClick={() => goToTopNav(preferredLandingPath)}
+                aria-label="홈"
+                title="홈"
+                className="flex h-11 shrink-0 items-center rounded-xl px-2 text-left transition-all hover:bg-white/[0.04]"
+              >
+                <span className="font-display text-[20px] font-black leading-none tracking-tight bg-gradient-to-r from-[#FFE08A] via-[#FF9A80] to-[#F06CA4] bg-clip-text text-transparent">
+                  SORiDRAW
+                </span>
+              </button>
+            )}
             {(isSplitRailNavigation ? [] : topNavItems.filter((item) => item.key !== 'myPage' && !(isRailLessNavigationViewport && item.key === 'lab'))).map((item) => {
               const Icon = item.icon;
               return (
@@ -20242,6 +20258,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     }}
                     drag={isActionSwipeCollapseMode ? "x" : false}
                     dragConstraints={isActionSwipeCollapseMode ? { left: 0, right: 92 } : undefined}
+                    dragSnapToOrigin
+                    dragMomentum={false}
                     dragElastic={0.12}
                     onDragEnd={(_, info) => {
                       if (!isActionSwipeCollapseMode) return;

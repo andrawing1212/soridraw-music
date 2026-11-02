@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { transform } from 'esbuild';
+import vm from 'node:vm';
 
 const source = readFileSync('src/lib/nextSongPendingBridge.ts', 'utf8');
 const app = readFileSync('src/App.tsx', 'utf8');
@@ -105,6 +106,36 @@ assert.equal(resolveRoute(1729),fallback,'unexpected view retains Create routing
 setLocation({search:'?view=music-note'});
 assert.equal(resolveRoute(1730),'/studio?view=music-note&applyPending=1&t=1730',
   'new click changes query and reruns App applyPending receiver');
+
+// Exercise the actual Recent result button handler (not a reimplemented rule).
+const recentMarkerPos = app.indexOf('applyKeywordsToNext(result.appliedKeywords);');
+const recentOpenPos = app.lastIndexOf('onClick={() => {', recentMarkerPos);
+const recentClosePos = app.indexOf('\n                      }}', recentMarkerPos);
+assert.ok(recentMarkerPos > 0 && recentOpenPos > 0 && recentClosePos > recentMarkerPos);
+const recentClickBody = app.slice(recentOpenPos + 'onClick={() => {'.length, recentClosePos);
+for (const { mode, compact, create } of [
+  { mode: 'studio-black', compact: false, create: false },
+  { mode: 'studio-black', compact: true, create: true },
+  { mode: 'dark', compact: false, create: true },
+  { mode: 'light', compact: false, create: true },
+]) {
+  const called = [];
+  vm.runInNewContext(recentClickBody, {
+    result: { appliedKeywords: { genre: ['test-recipe'] } },
+    applyKeywordsToNext: (value) => called.push(['apply', value.genre[0]]),
+    readSoridrawDisplayMode: () => mode,
+    isStudioCompactMobileLayout: compact,
+    navigateStudioWorkspaceView: (view) => called.push(['navigate', view]),
+  });
+  assert.equal(JSON.stringify(called), JSON.stringify(create
+    ? [['apply', 'test-recipe'], ['navigate', 'create']]
+    : [['apply', 'test-recipe']]),
+    'Recent next-song route mismatch for ' + mode + '/' + compact);
+}
+const leftRail = readFileSync('src/components/studio/StudioLeftRail.tsx', 'utf8');
+assert.match(app, /\{ key: 'studio', path: '\/studio', label: '워크스페이스', icon: Zap \}/);
+assert.match(leftRail, /onMouseEnter=\{\(event\) => showRailTooltip\(event.currentTarget, '스튜디오'\)\}[\s\S]*?<span>스튜디오<\/span>/);
+assert.match(leftRail, /onMouseEnter=\{\(event\) => showRailTooltip\(event.currentTarget, '곡 만들기'\)\}[\s\S]*?<span>곡 만들기<\/span>/);
 
 assert.match(app, /const pending = readNextSongKeywords\(\)/);
 assert.match(app, /applyKeywordsToNext\(keywords\);\s*clearNextSongKeywords\(pending\)/);

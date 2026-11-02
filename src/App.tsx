@@ -4014,7 +4014,7 @@ function Navigation({
   const allTopNavItems: Array<{ key: NavigationMenuKey; path: string; label: string; icon: React.ElementType; clearSuno?: boolean }> = [
     { key: 'home', path: '/', label: '홈', icon: HomeIcon },
     { key: 'explore', path: '/explore', label: '익스플로어', icon: ExploreCompass },
-    { key: 'studio', path: '/studio', label: '스튜디오', icon: Zap },
+    { key: 'studio', path: '/studio', label: '워크스페이스', icon: Zap },
     { key: 'musicNote', path: '/history', label: '뮤직노트', icon: HeartIcon },
     { key: 'library', path: '/suno-library', label: '라이브러리', icon: Library, clearSuno: true },
     { key: 'lab', path: '/lab', label: '실험실', icon: FlaskConical },
@@ -20890,11 +20890,12 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <button
                       onClick={() => {
                         applyKeywordsToNext(result.appliedKeywords);
-                        // app468: restore the selected recipe AND return to the
-                        // Create workspace. Use the existing URL-owned Split
-                        // navigation (and Classic fallback); never mutate the
-                        // Split geometry or recreate the Studio.
-                        navigateStudioWorkspaceView('create');
+                        // PC split already displays the Builder beside Recent.
+                        // Keep Recent visible; Classic/compact still navigates
+                        // to Create so the restored settings are shown.
+                        if (readSoridrawDisplayMode() !== 'studio-black' || isStudioCompactMobileLayout) {
+                          navigateStudioWorkspaceView('create');
+                        }
                       }}
                       onMouseEnter={() => setHoveredItem({ id: 'apply-keywords-all', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}

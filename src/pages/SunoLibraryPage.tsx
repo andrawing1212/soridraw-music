@@ -1,3 +1,4 @@
+import { SORIDRAW_COLOR_LOCAL_RECOVERY_EVENT } from '../lib/colorLocalRecovery';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import { resolveNextSongApplyRoute, stageNextSongKeywords } from '../lib/nextSongPendingBridge';
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useDeferredValue } from 'react';
@@ -838,6 +839,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const deferredPlaylistSearchTerm = useDeferredValue(playlistSearchTerm);
   const [workspaceColorFilter, setWorkspaceColorFilter] = useState<string>('all');
   const [workspaceLocalColorMap, setWorkspaceLocalColorMap] = useState<Record<string, string>>({});
+  const [libraryColorHydratedUid, setLibraryColorHydratedUid] = useState<string | null>(null);
   const [playlistLocalColorMap, setPlaylistLocalColorMap] = useState<Record<string, string>>({});
   const [, setLibraryColorSyncTick] = useState(0);
   const [isLibraryAdminUser, setIsLibraryAdminUser] = useState(false);
@@ -960,6 +962,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       pendingPlaylistColorKeysRef.current.clear();
       workspaceColorDirtyRef.current = false;
       playlistColorDirtyRef.current = false;
+      setLibraryColorHydratedUid(user?.uid || 'anonymous');
     } catch (error) {
       console.warn('load library color map failed:', error);
     }
@@ -981,12 +984,36 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   // tracks state back to Firestore merely because the Library page mounted.
 
   useEffect(() => {
+    if (libraryColorHydratedUid !== (user?.uid || 'anonymous')) return;
     writeLocalColorMap('soridraw.library.workspaceColorTags', workspaceLocalColorMap);
-  }, [workspaceLocalColorMap, user?.uid]);
+  }, [workspaceLocalColorMap, libraryColorHydratedUid, user?.uid]);
 
   useEffect(() => {
+    const applyRecoveredColors = (event: Event) => {
+      const detail = (event as CustomEvent<{uid?:string; baseKey?:string}>).detail;
+      if (!user?.uid || detail?.uid !== user.uid ||
+        detail.baseKey !== 'soridraw.library.workspaceColorTags') return;
+      const recovered = readLocalColorMap('soridraw.library.workspaceColorTags');
+      setWorkspaceLocalColorMap(previous => {
+        let next: Record<string,string> | null = null;
+        for (const [key, color] of Object.entries(recovered)) {
+          if (pendingWorkspaceColorKeysRef.current.has(key) ||
+            !COLOR_OPTIONS.some(option => option.value === color) ||
+            Object.prototype.hasOwnProperty.call(previous, key)) continue;
+          if (!next) next = { ...previous };
+          next[key] = color;
+        }
+        return next || previous;
+      });
+    };
+    window.addEventListener(SORIDRAW_COLOR_LOCAL_RECOVERY_EVENT, applyRecoveredColors);
+    return () => window.removeEventListener(SORIDRAW_COLOR_LOCAL_RECOVERY_EVENT, applyRecoveredColors);
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (libraryColorHydratedUid !== (user?.uid || 'anonymous')) return;
     writeLocalColorMap('soridraw.library.playlistColorTags', playlistLocalColorMap);
-  }, [playlistLocalColorMap, user?.uid]);
+  }, [playlistLocalColorMap, libraryColorHydratedUid, user?.uid]);
 
   useEffect(() => {
     const authoritative = new Map<string, string>();

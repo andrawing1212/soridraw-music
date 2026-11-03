@@ -7,6 +7,7 @@ import { markFirestoreActualRead } from '../lib/cacheDiagnostics';
 import { favoritesStore } from '../hooks/useFavoritesStore';
 import { readCatalogSnapshotFromLocalCache } from '../lib/userDataEngine';
 import { isMusicNoteItemRemoved } from '../lib/musicNoteSavedState';
+import { applyInspectedColorsToDevice } from '../lib/colorLocalRecovery';
 
 // Admin CACHE LIVE only. Nothing is read from the server until the signed-in
 // owner explicitly clicks once; no document, cache, or backup is ever written.
@@ -99,6 +100,8 @@ export default function ColorHistoryReadOnlyDiagnostic() {
   const [report, setReport] = useState<AuditResult | null>(null);
   const runRef = useRef(false);
   const generationRef = useRef(0);
+  const recoverableRef = useRef<{ uid: string; note: Record<string,string>; workspace: Record<string,string> } | null>(null);
+  const [restored, setRestored] = useState<{ note: number; workspace: number } | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, () => {
@@ -108,6 +111,8 @@ export default function ColorHistoryReadOnlyDiagnostic() {
       setFinished(false);
       setProgress('');
       setReport(null);
+      recoverableRef.current = null;
+      setRestored(null);
     });
     return () => {
       generationRef.current++;
@@ -124,6 +129,8 @@ export default function ColorHistoryReadOnlyDiagnostic() {
     setProgress('이 기기와 서버에서 색상 기록을 확인하는 중…');
     const generation = ++generationRef.current;
     const current = () => generation === generationRef.current && auth.currentUser?.uid === uid;
+    const noteRecoverable: Record<string,string> = {};
+    const workspaceRecoverable: Record<string,string> = {};
     const result: AuditResult = {
       local: { musicNoteMap: 0, workspaceMap: 0, playlistMap: 0, visibleNote: 0, catalogNote: 0 },
       noteCoverage: {
@@ -145,6 +152,7 @@ export default function ColorHistoryReadOnlyDiagnostic() {
         .filter((song: any) => !song?.uid || String(song.uid) === uid)
         .filter((song: any) => Boolean(classifyNote(song).color)).length;
       const catalogRows = new Map<string, Record<string, unknown>>();
+      const libraryCatalogRows = new Map<string, Record<string, unknown>>();
       try {
         const catalog = await readCatalogSnapshotFromLocalCache('musicNote', uid);
         if (!current()) return;
@@ -161,6 +169,22 @@ export default function ColorHistoryReadOnlyDiagnostic() {
           .filter((song: any) => Boolean(classifyNote(song).color)).length;
       } catch {
         result.errors.push('기기 Catalog 캐시 확인 실패 (서버 원본 유실을 의미하지 않음)');
+      }
+
+      // No network call: reuse the currently cached Library item identities.
+      try {
+        const catalog = await readCatalogSnapshotFromLocalCache('library', uid);
+        if (!current()) return;
+        for (const row of catalog?.items || []) {
+          if (!row || typeof row !== 'object') continue;
+          const record = row as Record<string, unknown>;
+          for (const alias of [record.id, record.firestoreId]) {
+            const id = String(alias || '').trim();
+            if (id) libraryCatalogRows.set(id, record);
+          }
+        }
+      } catch {
+        result.errors.push('라이브러리 기기 Catalog ID 비교 실패 — 해당 영역은 복원 대상에서 제외');
       }
 
       // Each read is opt-in, UID-scoped and bounded. Sentinel +1 lets us
@@ -199,7 +223,14 @@ export default function ColorHistoryReadOnlyDiagnostic() {
               result.noteCoverage.activeColored++;
               if (catalogRow) {
                 result.noteCoverage.activeColoredInCatalog++;
-                if (!classifyNote(catalogRow).color) result.noteCoverage.activeCatalogRowWithoutColor++;
+                if (!classifyNote(catalogRow).color) {
+                  result.noteCoverage.activeCatalogRowWithoutColor++;
+                  // Only fill an absent Catalog field, not an explicit gray/reset.
+                  if (!has(catalogRow, 'favoriteColorTag') && !has(catalogRow, 'colorTag')) {
+                    const key = String(catalogRow.id || '').trim();
+                    if (key) noteRecoverable[key] = candidate.color;
+                  }
+                }
               } else if (result.catalogAvailable) {
                 result.noteCoverage.activeColoredMissingFromCatalog++;
               }
@@ -221,15 +252,24 @@ export default function ColorHistoryReadOnlyDiagnostic() {
         if (!current()) return;
         for (const doc of tracks) {
           const data = doc.data() as Record<string, unknown>;
+          const visible = libraryCatalogRows.get(doc.id)
+            || libraryCatalogRows.get(String(data.id || '').trim());
           for (const field of ['colorTags', 'favoriteColorTags']) {
             const values = data[field];
-            if (!values || typeof values !== 'object') continue;
-            for (const color of Object.values(values)) {
+            if (!values || typeof values !== 'object' || Array.isArray(values)) continue;
+            for (const [index, color] of Object.entries(values)) {
               result.server.workspace.examined++;
               if (isColor(color)) {
                 pushHit(result, result.server.workspace, '라이브러리 음악',
                   data.title || data.koreanTitle || data.englishTitle,
                   color, '현재 필드');
+                if (visible) {
+                  const trackField = visible[field];
+                  const hasColor = trackField && typeof trackField === 'object'
+                    && Object.prototype.hasOwnProperty.call(trackField, index);
+                  const id = String(visible.id || '').trim();
+                  if (!hasColor && id) workspaceRecoverable[`workspace:${field}:${id}:${index}`] = color;
+                }
               }
             }
           }
@@ -271,6 +311,8 @@ export default function ColorHistoryReadOnlyDiagnostic() {
         result.errors.push('라이브러리 폴더 서버 읽기 실패 — 미존재 판정 불가');
       }
       if (!current()) return;
+      recoverableRef.current = { uid, note: noteRecoverable, workspace: workspaceRecoverable };
+      setRestored(null);
       setReport(result);
       setFinished(true);
       setProgress('');
@@ -280,6 +322,18 @@ export default function ColorHistoryReadOnlyDiagnostic() {
         setBusy(false);
       }
     }
+  };
+
+  const restoreToThisDevice = () => {
+    const discovered = recoverableRef.current;
+    if (!discovered || !finished || busy || restored || auth.currentUser?.uid !== discovered.uid) return;
+    const note = applyInspectedColorsToDevice(
+      discovered.uid, 'soridraw.favoriteColorTags', discovered.note,
+    );
+    const workspace = applyInspectedColorsToDevice(
+      discovered.uid, 'soridraw.library.workspaceColorTags', discovered.workspace,
+    );
+    setRestored({ note, workspace });
   };
 
   return (
@@ -321,6 +375,18 @@ export default function ColorHistoryReadOnlyDiagnostic() {
           <div>라이브러리 음악: 색상 항목 {sourceSummary(report.server.workspace)}</div>
           <div>라이브러리 폴더: {sourceSummary(report.server.playlist)}</div>
           <div className="text-white/50">서버 조회 문서 약 {report.server.documentsRead}건 · 쓰기 0 · 캐시 변경 0</div>
+          <div className="mt-2 rounded-md bg-white/[0.04] p-2">
+            <div className="font-bold">서버에 남은 색상 → 이 기기 복원</div>
+            <div className="text-white/55">현재 Catalog에 같은 곡 ID가 있고 색상 필드만 누락된 활성곡을 대상으로 합니다. 기존 로컬 지정색·회색 해제는 덮어쓰지 않으며, Firestore·R2 서버 쓰기는 없습니다.</div>
+            <button type="button" disabled={busy || restored !== null ||
+              !recoverableRef.current ||
+              Object.keys(recoverableRef.current.note).length + Object.keys(recoverableRef.current.workspace).length === 0}
+              onClick={restoreToThisDevice}
+              className="mt-2 rounded-lg bg-[#a98bff]/25 px-3 py-2 font-bold text-white disabled:opacity-45">
+              {restored ? '이 기기 복원 완료' : `기존 색상 복원 (뮤직노트 ${Object.keys(recoverableRef.current?.note || {}).length} · 라이브러리 ${Object.keys(recoverableRef.current?.workspace || {}).length})`}
+            </button>
+            {restored && <div className="mt-1 text-[#d8ccff]">이 기기에 보존: 뮤직노트 {restored.note}건 · 라이브러리 {restored.workspace}건. 현재 화면의 색상 재반영은 해당 페이지에서 확인하세요.</div>}
+          </div>
           {report.hits.length > 0 && (
             <div className="mt-1 border-t border-white/10 pt-1">
               <div className="font-bold">찾은 지정색 곡 일부 (최대 24건)</div>

@@ -6,6 +6,8 @@ on:
       - 'src/lib/userDataEngine.ts'
       - 'cloudflare/media-worker/src/index.js'
       - 'scripts/verify-library-catalog-color-projection.mjs'
+      - 'cloudflare/media-worker/src/colorRestoration.js'
+      - 'scripts/verify-exact-color-restore-candidate.mjs'
       - 'src/App.tsx'
       - 'scripts/verify-521-music-note-catalog-automatic.mjs'
       - '.github/workflows/verify-521-music-note-catalog-automatic.yml'
@@ -26,6 +28,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Automatic post-commit Catalog settlement and stale signal protection
         run: node scripts/verify-521-music-note-catalog-automatic.mjs
+      - name: Manual one-row canonical color restore candidate (default OFF, no deploy)
+        run: node scripts/verify-exact-color-restore-candidate.mjs
       - name: Library canonical color projection (source only, zero deploy)
         run: |
           node --check cloudflare/media-worker/src/index.js

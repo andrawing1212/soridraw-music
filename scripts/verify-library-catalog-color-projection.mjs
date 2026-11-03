@@ -366,3 +366,6 @@ console.log('MUSIC_NOTE_COLOR_COMPAT_ADDITIONAL_FIRESTORE_R2_IO=ZERO');
 // Source-only shared-Catalog rollout/rollback decision gates (never deploy).
 const { runRolloutSelfTest } = await import('./verify-743-media-color-rollout-readiness.mjs');
 await runRolloutSelfTest();
+
+// Dormant shared Catalog cutover queue and receipt replay contract (zero deploy).
+await import('./verify-743-catalog-cutover-pending.mjs');

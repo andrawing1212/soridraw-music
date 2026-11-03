@@ -22,3 +22,11 @@
 
 ## 현재 결론
 **SOURCE READY FOR FURTHER REVIEW / LIVE ROLLOUT NO-GO.** 3개 구형 Writer·안전한 rollback artifact 미확보·쓰기 배리어 미구현·실사용 미확인. 제품 원본 보호 때문에 이번 PR에서 Worker 배포 workflow를 활성화/변경하지 않으며 PR은 Draft·미병합 유지한다.
+
+## 2026-11-04: 공유 Writer 전환의 영속 pending 후보 (코드만, 기본 OFF)
+- `cloudflare/media-worker/src/catalogCutoverOutbox.js`: **이미 인증된** changed-item Catalog delta만 owner+kind별 R2 독립 outbox에 CAS 기록하는 코드. mutationId와 원본 delta를 보존하고 중복 재시도에는 별도 쓰기를 하지 않는다. 변조/동일 mutationId 다른 payload/부피·개수 초과/CAS 실패는 fail-closed. bounded owner-kind 객체 **최대 32 mutation / 512KiB**이며 페이지 방문 비용은 0. R2의 일반 Catalog HEAD·base·journal을 변경하지 않는다.
+- `SORIDRAW_CATALOG_CUTOVER_HOLD_V1=1` **명시적 신규 환경변수**를 완전히 배포·활성화한 경우에만 Worker의 인증된 delta는 R2 outbox에 먼저 기록되고 응답은 **503 retryable**(성공 ACK 불가). GET/Bootstrap의 시드 쓰기도 막지만 그동안 cold Catalog 읽기 지연이 발생하므로 **현재 기능과 동기화 요구를 완전히 충족하지 않는다**. 정상 runtime은 flag absent/OFF이며 추가 서버 IO 0. PRODUCTION/TEST/PREVIEW 모두 현재 이 flag를 추가하거나 변경하지 않음.
+- `replayCatalogCutoverPending`: **HTTP 라우트 연결 없음**. 운영자 증거(구형 3 Worker 외부 ingress 차단/동일 버전 고정/안전 롤백 사전확보/별도 수동 승인)가 모두 있어야 호출 가능한 주입형 재처리. 정확한 원 mutationId를 재사용하고 **Catalog journal의 durable receipt를 다시 검증한 후에만** outbox entry를 committed 처리. 성공한 entry도 자동 삭제하지 않는다. 재조회 실패/충돌/상충한 수정/락 CAS 실패면 pending 보존. 버전 재기반(rebase)·전체 리스트 재생성·R2 LIST·Firestore 스캔·자동 백필 없음.
+- 기존 브라우저 `CATALOG_PENDING_KEY_519` 로컬 outbox는 유지. HTTP 503은 실패로 판정하므로 정상 ACK가 아니라 retry pending을 남긴다. 그러나 로컬 저장소 quota 실패나 구버전 브라우저·인터넷 단절까지 무조건 무손실이라고 보장하지 않는다. 전환 때 필요한 **공유 ingress 전역 쓰기 배리어는 아직 미구현**: 이전 활성 Worker는 이 flag를 보지 못하고 계속 쓸 수 있다. 안정적인 전면 배리어 없이 이 기능만 켜서는 안전하지 않다.
+- 검증: `scripts/verify-743-catalog-cutover-pending.mjs` (실제 module + in-memory R2 fixture: 성공 저장/중복/변조/명시적 null/저장 실패/동시 CAS/할당량/로그 미확인/재처리/중복 처리). 기존 Catalog 색상 검사의 끝에서 실행한다.
+- **현재 판정:** 코드는 배포 준비의 구성요소만 확보했으며 '무손실 전환 완료'가 아니다. 실제 서비스에서 3개 Writer를 가로지르는 배리어·결정적 모든 UID pending 회수·안전한 실기기 검증 및 정확한 rollback artifact가 확보되기 전까지 **LIVE NO-GO**. 이 PR은 Draft·미병합 유지, 모든 사용자 데이터/배포 금지.

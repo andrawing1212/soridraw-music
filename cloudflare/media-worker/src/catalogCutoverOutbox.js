@@ -1,0 +1,105 @@
+// Staged/disabled shared-Catalog cutover guard. Never activate before ALL legacy
+// Writers are fenced outside the Worker and a compatible rollback is pinned.
+// A 503 is intentional: old clients must NEVER treat a queued intent as saved.
+export const CUTOVER_PENDING_LIMIT = 32;
+export const CUTOVER_PENDING_BYTES = 512 * 1024;
+const text = value => typeof value === 'string' ? value.trim() : '';
+const bytes = value => new TextEncoder().encode(value).length;
+const fail = reason => { throw new Error('CATALOG_CUTOVER_' + reason); };
+export const catalogCutoverHoldEnabled = env => String(env?.SORIDRAW_CATALOG_CUTOVER_HOLD_V1 || '') === '1';
+export const cutoverOutboxKey = (uid, kind) => {
+  if (!text(uid) || !['musicNote','library'].includes(kind)) fail('INVALID_SCOPE');
+  return 'catalog/cutover/v1/' + encodeURIComponent(uid) + '/' + kind + '/pending.json';
+};
+const empty = (uid, kind) => ({ schemaVersion: 1, uid, kind, entries: [] });
+const validate = (record, uid, kind) => {
+  if (!record || record.schemaVersion !== 1 || record.uid !== uid
+    || record.kind !== kind || !Array.isArray(record.entries)
+    || record.entries.length > CUTOVER_PENDING_LIMIT) fail('OUTBOX_INVALID');
+  const ids = new Set();
+  for (const entry of record.entries) {
+    const id = text(entry?.mutationId);
+    if (!id || id.length > 240 || ids.has(id) || !entry.delta
+      || entry.delta.mutationId !== id || entry.delta.kind !== kind
+      || !['pending','committed'].includes(entry.status)) fail('OUTBOX_INVALID');
+    if (entry.status === 'committed'
+      && (!Number.isSafeInteger(entry.receiptRevision) || entry.receiptRevision <= 0)) fail('OUTBOX_INVALID');
+    ids.add(id);
+  }
+  return record;
+};
+const read = async (bucket, uid, kind) => {
+  if (!bucket?.get || !bucket?.put) fail('PRIVATE_CATALOG_UNAVAILABLE');
+  const object = await bucket.get(cutoverOutboxKey(uid,kind));
+  if (!object) return {record: empty(uid,kind),etag:null};
+  let raw;
+  try { raw = await object.text(); } catch { fail('OUTBOX_UNREADABLE'); }
+  if (bytes(raw) > CUTOVER_PENDING_BYTES) fail('OUTBOX_OVERSIZED');
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch { fail('OUTBOX_CORRUPT'); }
+  return {record:validate(parsed,uid,kind),etag:text(object.etag)};
+};
+const put = async (bucket, uid, kind, record, etag) => {
+  validate(record,uid,kind);
+  const encoded=JSON.stringify(record);
+  if (bytes(encoded)>CUTOVER_PENDING_BYTES) fail('OUTBOX_FULL');
+  return bucket.put(cutoverOutboxKey(uid,kind),encoded,{
+    httpMetadata:{contentType:'application/json; charset=utf-8',cacheControl:'private, no-store'},
+    onlyIf: etag ? {etagMatches:etag} : {etagDoesNotMatch:'*'},
+  });
+};
+// R2 must durably accept the exact authenticated mutation BEFORE returning
+// even a retryable response. A failed CAS/write never yields a success ACK.
+export const persistCatalogCutoverPending = async (bucket,uid,kind,delta) => {
+  const id=text(delta?.mutationId);
+  if (!id || id.length>240 || delta?.kind!==kind || !Number.isInteger(delta?.baseRevision)) fail('DELTA_INVALID');
+  for(let attempt=0;attempt<4;attempt++){
+    const {record,etag}=await read(bucket,uid,kind);
+    const existing=record.entries.find(entry=>entry.mutationId===id);
+    if(existing){
+      if(JSON.stringify(existing.delta)!==JSON.stringify(delta)) fail('MUTATION_ID_REUSED');
+      return {held:true,pendingCount:record.entries.filter(entry=>entry.status==='pending').length,duplicate:true};
+    }
+    if(record.entries.length>=CUTOVER_PENDING_LIMIT) fail('OUTBOX_FULL');
+    const next={...record,entries:[...record.entries,{mutationId:id,status:'pending',delta}]};
+    const stored=await put(bucket,uid,kind,next,etag);
+    if(stored)return {held:true,pendingCount:next.entries.length,duplicate:false};
+  }
+  fail('OUTBOX_CAS_CONFLICT');
+};
+const isReceipt = (proof,id) => proof?.confirmed === true && proof.mutationId === id
+  && Number.isSafeInteger(proof.revision) && proof.revision>0;
+// Explicit operator-only replay building block; never called by HTTP/page load.
+// Caller must verify old Writer ingress block and exact pinned versions itself.
+// The queue is RETAINED even after confirmation; never automatically purge.
+export const replayCatalogCutoverPending = async ({bucket,uid,kind,barrier,readReceipt,commit}) => {
+  if (!barrier || barrier.allWritersFenced!==true || barrier.exactVersionsVerified!==true
+    || barrier.rollbackVersionsPinned!==true || barrier.authorizedReplay!==true) fail('REPLAY_NOT_AUTHORIZED');
+  if(typeof readReceipt!=='function'||typeof commit!=='function')fail('REPLAY_HANDLERS_MISSING');
+  let {record}=await read(bucket,uid,kind);
+  let confirmed=0;
+  for(const item of record.entries){
+    if(item.status==='committed')continue;
+    // A missing/failed proof is NOT permission to drop or blindly rebase.
+    let proof=await readReceipt(item.delta);
+    if(!isReceipt(proof,item.mutationId)){
+      const result=await commit(item.delta);
+      if(result?.ok!==true||result?.conflict)return {status:'HOLD',reason:'REVISION_OR_WRITE_CONFLICT',confirmed};
+      proof=await readReceipt(item.delta);
+      if(!isReceipt(proof,item.mutationId))return {status:'HOLD',reason:'DURABLE_RECEIPT_UNCONFIRMED',confirmed};
+    }
+    let marked=false;
+    for(let attempt=0;attempt<4;attempt++){
+      const state=await read(bucket,uid,kind);
+      const old=state.record.entries.find(entry=>entry.mutationId===item.mutationId);
+      if(!old||JSON.stringify(old.delta)!==JSON.stringify(item.delta))fail('OUTBOX_CHANGED');
+      if(old.status==='committed'){marked=true;break;}
+      const next={...state.record,entries:state.record.entries.map(entry=>
+        entry.mutationId===item.mutationId?{...entry,status:'committed',receiptRevision:proof.revision}:entry)};
+      if(await put(bucket,uid,kind,next,state.etag)){marked=true;break;}
+    }
+    if(!marked)return {status:'HOLD',reason:'RECEIPT_CAS_UNCONFIRMED',confirmed};
+    confirmed++;
+  }
+  return {status:'RETAINED_RECEIPTS',confirmed};
+};

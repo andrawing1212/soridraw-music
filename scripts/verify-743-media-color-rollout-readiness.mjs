@@ -115,13 +115,15 @@ export function validateCapture(summary, sources, expectedWorkers = NAMES) {
 // A decision about the *proposed transition*, not a deployment authorization.
 // A passing source test alone is never permission to touch the shared bucket.
 export function assessColorRollout({ activeSafe, candidateSafe, rollbackSafe, writerBarrierVerified,
-  exactVersionsVerified, approvedDeployment, capturedAgeMinutes }) {
+  durableOutboxVerified, replayReceiptVerified, exactVersionsVerified, approvedDeployment, capturedAgeMinutes }) {
   const reasons=[];
   if (!Array.isArray(activeSafe) || activeSafe.length!==3) reasons.push('ACTIVE_PROOF_MISSING');
   if (!Array.isArray(candidateSafe) || candidateSafe.length!==3 || candidateSafe.some(x=>x!==true)) reasons.push('THREE_CANDIDATE_BUNDLES_NOT_PROVEN');
   if (!Array.isArray(rollbackSafe) || rollbackSafe.length!==3 || rollbackSafe.some(x=>x!==true)) reasons.push('THREE_SAFE_ROLLBACK_BUNDLES_NOT_PROVEN');
   if (activeSafe?.some(x=>x!==true)) reasons.push('OLD_WRITER_ON_SHARED_CATALOG');
   if (writerBarrierVerified!==true) reasons.push('WRITER_QUIESCENCE_NOT_VERIFIED');
+  if (durableOutboxVerified!==true) reasons.push('DURABLE_OUTBOX_NOT_VERIFIED');
+  if (replayReceiptVerified!==true) reasons.push('REPLAY_RECEIPT_NOT_VERIFIED');
   if (exactVersionsVerified!==true || !Number.isFinite(capturedAgeMinutes) || capturedAgeMinutes<0 || capturedAgeMinutes>10) reasons.push('LIVE_VERSION_DRIFT_UNVERIFIED');
   if (approvedDeployment!==true) reasons.push('DIRECTOR_DEPLOYMENT_APPROVAL_REQUIRED');
   return {status:reasons.length?'HOLD':'CONDITIONS_SATISFIED_NOT_DEPLOYED',reasons};
@@ -129,7 +131,8 @@ export function assessColorRollout({ activeSafe, candidateSafe, rollbackSafe, wr
 
 export async function runRolloutSelfTest() {
   const sample = { activeSafe:[true,true,true],candidateSafe:[true,true,true],rollbackSafe:[true,true,true],
-    writerBarrierVerified:true,exactVersionsVerified:true,approvedDeployment:true,capturedAgeMinutes:1 };
+    writerBarrierVerified:true,durableOutboxVerified:true,replayReceiptVerified:true,
+    exactVersionsVerified:true,approvedDeployment:true,capturedAgeMinutes:1 };
   assert.equal(assessColorRollout(sample).status,'CONDITIONS_SATISFIED_NOT_DEPLOYED');
   for (let i=0;i<3;i++) {
     const active=[true,true,true];active[i]=false;
@@ -139,7 +142,7 @@ export async function runRolloutSelfTest() {
     const candidate=[true,true,true];candidate[i]=false;
     assert.equal(assessColorRollout({...sample,candidateSafe:candidate}).status,'HOLD');
   }
-  for (const field of ['writerBarrierVerified','exactVersionsVerified','approvedDeployment']) {
+  for (const field of ['writerBarrierVerified','durableOutboxVerified','replayReceiptVerified','exactVersionsVerified','approvedDeployment']) {
     assert.equal(assessColorRollout({...sample,[field]:false}).status,'HOLD');
   }
   assert.equal(assessColorRollout({...sample,capturedAgeMinutes:11}).status,'HOLD');

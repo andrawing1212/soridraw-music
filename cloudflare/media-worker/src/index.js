@@ -13,6 +13,7 @@ import {
   materializeCatalogJournal,
   shouldCompactCatalogJournal,
 } from './catalogJournal.js';
+import { catalogCutoverHoldEnabled, persistCatalogCutoverPending } from './catalogCutoverOutbox.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const AUTH_CERT_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
@@ -1184,6 +1185,13 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
       return new Response(JSON.stringify(payload), { status: 200, headers });
     }
 
+    // Dormant until an independently verified ingress fence stops EVERY older
+    // Worker touching the shared CATALOG. Cold GET/bootstrap can seed R2, so
+    // block them too. Exact inspection remains genuinely read-only.
+    if (catalogCutoverHoldEnabled(env) && route.action !== 'inspect-exact'
+      && !(request.method === 'POST' && route.action === 'delta')) {
+      return jsonResponse({ok:false,code:'CATALOG_CUTOVER_HOLD',retryable:true},503,origin);
+    }
     if (request.method === 'POST' && route.action === 'bootstrap') {
       const body = await request.json().catch(() => ({}));
       const requiredRevision = Math.max(
@@ -1205,6 +1213,13 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
       if (declaredLength > 2 * 1024 * 1024) return jsonResponse({ ok: false, code: 'CATALOG_DELTA_TOO_LARGE' }, 413, origin);
       const delta = await request.json();
       if (!validateCatalogDelta(delta, route.kind)) return jsonResponse({ ok: false, code: 'INVALID_CATALOG_DELTA' }, 400, origin);
+      if (catalogCutoverHoldEnabled(env)) {
+        // Authenticated, bounded, per-owner R2 write-ahead only. HTTP 503 (not
+        // success/202) keeps existing browser pending outboxes retryable.
+        // Never read/modify the active Catalog while the cutover is held.
+        await persistCatalogCutoverPending(env?.CATALOG,identity.uid,route.kind,delta);
+        return jsonResponse({ok:false,code:'CATALOG_CUTOVER_PENDING_DURABLE',retryable:true},503,origin);
+      }
       const next = await applyCatalogDelta(identity, route.kind, delta, env, executionCtx);
       if (next.conflict) {
         return jsonResponse({ ok: false, code: 'CATALOG_DELTA_CONFLICT', kind: route.kind, revision: next.revision, itemCount: next.itemCount }, 409, origin);

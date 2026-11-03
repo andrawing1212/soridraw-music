@@ -1,3 +1,12 @@
+## CURRENT — 공유 Media Worker 색상 보존 3개 환경 실제 배포 PASS / 사용자 실기기 검증 OPEN (2026-11-04 08:27 KST)
+- **디렉터 명시 승인:** 기존 `preview` source `71e11ad842faf7f6841f919e83c4f0c4af355169`의 동일 Worker 색상 보존 코드로 PREVIEW·TEST·PRODUCTION 3개 Media Worker 배포, 구형 버전 URL 비활성화, 배포 전후 검증 승인. TEST 앱 Hosting은 여전히 사용하지 않고 변경하지 않음.
+- **실제 배포 기록:** GitHub Actions [41739067356](https://github.com/andrawing1212/soridraw-music/actions/runs/41739067356) 2026-11-04 08:27 KST **SUCCESS**. 승인 SHA를 유지하고 PR #745 첫 trigger run [41738044533](https://github.com/andrawing1212/soridraw-music/actions/runs/41738044533)은 앱 TypeScript 패키지 미설치로 Cloudflare API 접촉 전 FAIL. runner-only PR #746 수정/검사 PASS/병합, 재시도 trigger PR #747 merge `8d6976744ac3ae34df7382be33fada186b2a7518`에서 성공. 기존 color patch #743, version URL fence #744 병합.
+- **Cloudflare 활성 버전(공식 API 배포 로그):** PREVIEW `83175bcc-fe25-4d17-86c0-1592e47d358e` → **`705418cc-9445-45e5-920b-d3ece6ed7023`**; TEST `f0a86688-5ffc-42ed-aecd-c01f8c17c636` → **`2bf14a7f-2e1b-4553-b153-65867dadf406`**; PRODUCTION `2c2e3236-d9a6-4771-b2ba-7baff496145c` → **`a2f49bb0-a75d-428e-bff2-de78e47081a7`**. 세 Worker compiled code SHA256 `3d932ad703d09503e5e078d7d3c34065e8e68ab115f46c7bd885f9ff87a2feb3` 동일.
+- **활성화 후 검사:** 세 환경 /health, OPTIONS/CORS, MEDIA 각각 환경 전용, CATALOG `soridraw-user-catalog`, shared flag=1 전부 PASS. 일반 workers.dev 주소 유지, version URLs `previews_enabled=false` 전부 재확인 PASS. 서버 자원 대량 복사·대량 갱신·백필·D1/Firestore 수정·Hosting/Rules/Functions 배포 없음; 정상 사용자 요청에 따른 일반 Writer 쓰기는 별개. Emergency rollback 불필요.
+- **한계/합격 구분:** 배포 PASS·API/CORS PASS와 별개로 인증 PC↔모바일 실제 지정색 저장·해제·새로고침/동기화는 아직 **미검증**. 과거 구형 Worker가 이미 제거한 색상을 서버에서 임의 복원하지 않으며, 기존 수동 복원 절차/원본 보존을 유지. 최종 사용자 기능 PASS는 실제 사용 확인이 필요하다. 아래 “Worker 미배포” 표기는 본 항목 이전 역사 상태이며 현재 판정이 아님.
+
+---
+
 ## CURRENT — 색상 앱 수정 병합·검사 완료 / Hosting 릴리스 준비 / 공유 Worker 미배포 (2026-11-04 KST)
 - **실제 GitHub 기준:** PR #734 merge `68264649f79ab57d94636eba6a5fda17a8171932`, PR #741 merge 및 작업 시작 시 preview HEAD **`dbb6a69f90facb6107bedc0f5cfe4d1d1c366611`**. 아래 과거 #734 Draft/HOLD 표기는 당시 기록이며 현재 미병합을 뜻하지 않는다. #741은 확정 색상만 기존 Catalog 변경분 큐로 전달하고, Library 저장 중 새 클릭/다른 계정 pending을 보존한다.
 - **검사 증거 재사용:** #741 exact candidate `bf0d3e05e120c45571f6cd045fcd09ae4da9b1b6` CI 6/6 SUCCESS. 병합 SHA product-quality run [41635057662](https://github.com/andrawing1212/soridraw-music/actions/runs/41635057662) SUCCESS(TypeScript/Build 포함). 이번 Hosting 릴리스 후보는 trigger와 이 상태 기록만 변경하며 제품 소스/배포 Workflow는 변경하지 않는다.

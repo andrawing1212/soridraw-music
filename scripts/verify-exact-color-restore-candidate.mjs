@@ -201,13 +201,13 @@ const newest = planCanonicalColorVersionTransition({
 });
 assert.equal(newest.code, 'COLOR_VERSION_ADVANCE_CANDIDATE');
 assert.equal(newest.patch.favoriteColorTag, null);
-const stale = planCanonicalColorVersionTransition({
+const staleColorEvent = planCanonicalColorVersionTransition({
   kind: 'musicNote', canonical: { favoriteColorTag: 'red' },
   catalogRow: { id: 'note-1', favoriteColorTag: null },
   appliedSourceUpdateTime: t2, sourceUpdateTime: t1,
 });
-assert.equal(stale.code, 'OLDER_EVENT_REJECTED');
-assert.equal(stale.patch, null);
+assert.equal(staleColorEvent.code, 'OLDER_EVENT_REJECTED');
+assert.equal(staleColorEvent.patch, null);
 const duplicate = planCanonicalColorVersionTransition({
   kind: 'musicNote', canonical: { favoriteColorTag: 'red' },
   catalogRow: { id: 'note-1', favoriteColorTag: null },

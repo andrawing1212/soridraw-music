@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {persistCatalogCutoverPending,replayCatalogCutoverPending,catalogCutoverHoldEnabled,
   CUTOVER_PENDING_LIMIT,cutoverOutboxKey} from '../cloudflare/media-worker/src/catalogCutoverOutbox.js';
 import {readFileSync} from 'node:fs';
+import {appendCatalogJournalDelta} from '../cloudflare/media-worker/src/catalogJournal.js';
 class FakeR2 {
   objects=new Map(); writes=0; reads=0; forceFail=false; loseCasOnce=false;
   async get(key) {
@@ -99,6 +100,42 @@ const r6=new FakeR2();
 for(let i=0;i<CUTOVER_PENDING_LIMIT;i++)await persistCatalogCutoverPending(r6,uid,kind,delta('cap-'+i));
 await assert.rejects(persistCatalogCutoverPending(r6,uid,kind,delta('overflow')),/OUTBOX_FULL/);
 assert.equal(r6.rows(uid,kind).length,CUTOVER_PENDING_LIMIT);
+// Real Catalog Journal proof: 2 pending deltas with one old base revision
+// cannot be replayed blindly. The second MUST remain pending (NO-GO).
+const queued = new FakeR2();
+await persistCatalogCutoverPending(queued,uid,kind,delta('queued-1',{colorTags:{'0':'purple'}}));
+await persistCatalogCutoverPending(queued,uid,kind,delta('queued-2',{colorTags:{'0':null}}));
+let journalHead = {headRevision:100,itemCount:1,deltas:[],recentMutations:[]};
+const journalReceipts = new Map();
+let journalCommits = 0;
+const ordering = await replayCatalogCutoverPending({
+  bucket:queued,uid,kind,barrier,
+  readReceipt:async d=>journalReceipts.get(d.mutationId)||null,
+  commit:async d=>{
+    journalCommits++;
+    const result=appendCatalogJournalDelta({head:journalHead,delta:d,serverRevision:journalHead.headRevision+1});
+    if(!result.ok)return {ok:false,conflict:result.reason==='CONFLICT'};
+    journalHead=result.head;
+    journalReceipts.set(d.mutationId,{confirmed:true,mutationId:d.mutationId,revision:result.revision});
+    return {ok:true};
+  },
+});
+assert.equal(ordering.status,'HOLD','stale-base second mutation MUST not be acknowledged');
+assert.equal(ordering.reason,'REVISION_OR_WRITE_CONFLICT');
+assert.equal(journalCommits,2);
+assert.equal(queued.rows(uid,kind)[0].status,'committed');
+assert.equal(queued.rows(uid,kind)[1].status,'pending');
+assert.equal(journalHead.headRevision,101);
+console.log('CATALOG_CUTOVER_MULTI_PENDING_STALE_BASE_HOLD_EXPECTED=PASS');
+
+// A new Worker local flag cannot isolate old live Worker ingress paths.
+// All three explicit runtime configurations currently leave hold disabled.
+const wrangler=JSON.parse(readFileSync('cloudflare/media-worker/wrangler.jsonc','utf8'));
+for(const vars of [wrangler.vars,wrangler.env?.test?.vars,wrangler.env?.production?.vars]){
+  assert.equal(vars?.SORIDRAW_CATALOG_CUTOVER_HOLD_V1,undefined);
+}
+console.log('CATALOG_CUTOVER_ALL_ENV_FLAGS_OFF_AND_NO_GLOBAL_INGRESS_FENCE=PASS');
+
 // Runtime integration is opt-in, with successful outbox persistence -> HTTP 503.
 // No read-only GET/bootstrap should sneak in a canonical Catalog write during hold.
 const worker=readFileSync('cloudflare/media-worker/src/index.js','utf8');

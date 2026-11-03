@@ -115,7 +115,9 @@ export function validateCapture(summary, sources, expectedWorkers = NAMES) {
 // A decision about the *proposed transition*, not a deployment authorization.
 // A passing source test alone is never permission to touch the shared bucket.
 export function assessColorRollout({ activeSafe, candidateSafe, rollbackSafe, writerBarrierVerified,
-  durableOutboxVerified, replayReceiptVerified, exactVersionsVerified, approvedDeployment, capturedAgeMinutes }) {
+  durableOutboxVerified, replayReceiptVerified, ingressPathsFencedVerified,
+  orderedReplayVerified, allPendingDiscoverableVerified, readAvailabilityVerified,
+  exactVersionsVerified, approvedDeployment, capturedAgeMinutes }) {
   const reasons=[];
   if (!Array.isArray(activeSafe) || activeSafe.length!==3) reasons.push('ACTIVE_PROOF_MISSING');
   if (!Array.isArray(candidateSafe) || candidateSafe.length!==3 || candidateSafe.some(x=>x!==true)) reasons.push('THREE_CANDIDATE_BUNDLES_NOT_PROVEN');
@@ -124,6 +126,10 @@ export function assessColorRollout({ activeSafe, candidateSafe, rollbackSafe, wr
   if (writerBarrierVerified!==true) reasons.push('WRITER_QUIESCENCE_NOT_VERIFIED');
   if (durableOutboxVerified!==true) reasons.push('DURABLE_OUTBOX_NOT_VERIFIED');
   if (replayReceiptVerified!==true) reasons.push('REPLAY_RECEIPT_NOT_VERIFIED');
+  if (ingressPathsFencedVerified!==true) reasons.push('LEGACY_WORKERS_DEV_AND_ORIGIN_INGRESS_NOT_FENCED');
+  if (orderedReplayVerified!==true) reasons.push('STALE_BASE_MULTI_PENDING_REPLAY_NOT_SAFE');
+  if (allPendingDiscoverableVerified!==true) reasons.push('GLOBAL_PENDING_INVENTORY_NOT_VERIFIED');
+  if (readAvailabilityVerified!==true) reasons.push('CATALOG_READ_DURING_HOLD_NOT_VERIFIED');
   if (exactVersionsVerified!==true || !Number.isFinite(capturedAgeMinutes) || capturedAgeMinutes<0 || capturedAgeMinutes>10) reasons.push('LIVE_VERSION_DRIFT_UNVERIFIED');
   if (approvedDeployment!==true) reasons.push('DIRECTOR_DEPLOYMENT_APPROVAL_REQUIRED');
   return {status:reasons.length?'HOLD':'CONDITIONS_SATISFIED_NOT_DEPLOYED',reasons};
@@ -132,6 +138,8 @@ export function assessColorRollout({ activeSafe, candidateSafe, rollbackSafe, wr
 export async function runRolloutSelfTest() {
   const sample = { activeSafe:[true,true,true],candidateSafe:[true,true,true],rollbackSafe:[true,true,true],
     writerBarrierVerified:true,durableOutboxVerified:true,replayReceiptVerified:true,
+    ingressPathsFencedVerified:true,orderedReplayVerified:true,
+    allPendingDiscoverableVerified:true,readAvailabilityVerified:true,
     exactVersionsVerified:true,approvedDeployment:true,capturedAgeMinutes:1 };
   assert.equal(assessColorRollout(sample).status,'CONDITIONS_SATISFIED_NOT_DEPLOYED');
   for (let i=0;i<3;i++) {
@@ -142,7 +150,9 @@ export async function runRolloutSelfTest() {
     const candidate=[true,true,true];candidate[i]=false;
     assert.equal(assessColorRollout({...sample,candidateSafe:candidate}).status,'HOLD');
   }
-  for (const field of ['writerBarrierVerified','durableOutboxVerified','replayReceiptVerified','exactVersionsVerified','approvedDeployment']) {
+  for (const field of ['writerBarrierVerified','durableOutboxVerified','replayReceiptVerified',
+    'ingressPathsFencedVerified','orderedReplayVerified','allPendingDiscoverableVerified',
+    'readAvailabilityVerified','exactVersionsVerified','approvedDeployment']) {
     assert.equal(assessColorRollout({...sample,[field]:false}).status,'HOLD');
   }
   assert.equal(assessColorRollout({...sample,capturedAgeMinutes:11}).status,'HOLD');

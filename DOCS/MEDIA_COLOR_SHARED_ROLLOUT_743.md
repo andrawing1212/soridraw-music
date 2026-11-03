@@ -30,3 +30,14 @@
 - 기존 브라우저 `CATALOG_PENDING_KEY_519` 로컬 outbox는 유지. HTTP 503은 실패로 판정하므로 정상 ACK가 아니라 retry pending을 남긴다. 그러나 로컬 저장소 quota 실패나 구버전 브라우저·인터넷 단절까지 무조건 무손실이라고 보장하지 않는다. 전환 때 필요한 **공유 ingress 전역 쓰기 배리어는 아직 미구현**: 이전 활성 Worker는 이 flag를 보지 못하고 계속 쓸 수 있다. 안정적인 전면 배리어 없이 이 기능만 켜서는 안전하지 않다.
 - 검증: `scripts/verify-743-catalog-cutover-pending.mjs` (실제 module + in-memory R2 fixture: 성공 저장/중복/변조/명시적 null/저장 실패/동시 CAS/할당량/로그 미확인/재처리/중복 처리). 기존 Catalog 색상 검사의 끝에서 실행한다.
 - **현재 판정:** 코드는 배포 준비의 구성요소만 확보했으며 '무손실 전환 완료'가 아니다. 실제 서비스에서 3개 Writer를 가로지르는 배리어·결정적 모든 UID pending 회수·안전한 실기기 검증 및 정확한 rollback artifact가 확보되기 전까지 **LIVE NO-GO**. 이 PR은 Draft·미병합 유지, 모든 사용자 데이터/배포 금지.
+
+## 2026-11-04 — 이전 Worker 격리·전환·복구의 실행형 오프라인 판정
+
+- 과거 Cloudflare 2026-11-03 21:21 KST 캡처 #41635057757의 PREVIEW/TEST/PRODUCTION 실행 번들에서는 신규 SORIDRAW_CATALOG_CUTOVER_HOLD_V1 분기와 outbox를 찾을 수 없다. 3개 모두 공유 CATALOG Writer가 될 수 있어, 최신 Worker 한 곳에서만 hold를 켜도 이전 Worker 직접 URL/기존 호출 경로가 우회한다. 기존 CORS와 새 Worker flag만으로 전역 격리를 주장하지 않는다.
+- PR #743 현재 단계에는 구형 Worker 전체 수신 차단의 검증 가능한 운영 장치가 없다. 어떤 기존 접근 경로도 우회할 수 없다는 증거가 나올 때까지 NO-GO. 현재의 활성 버전·경로는 캡처 시점 이후 drift 가능성이 있다.
+- 실제 catalogJournal.js append로 baseRevision=100인 pending A, B를 순차 실행: A revision 101 커밋 후 B는 CONFLICT. replayCatalogCutoverPending은 B를 HOLD/pending으로 보존하지만 완료/정상복구는 하지 못한다. 새 자동 rebase나 묵시적 최신 덮어쓰기는 금지한다.
+- 현재 outbox의 정확 UID/kind 키만 아는 조회 방식은 전 사용자 pending 결정적 수집을 보장하지 않는다. 32개 한도·committed 자동 미삭제로 큐 포화가 가능하다.
+- Hold 활성 때 GET/bootstrap은 503이므로 신규 기기/PC↔모바일 읽기 정상성은 미확인. 구형 활성 Worker로 rollback하면 색상 손실 가능성이 남는다.
+- 기존 검사 스크립트에 두 건 이상의 동시 base pending 충돌 재현을 추가하고 rollout gate는 외부 ingress 격리, ordered replay, 모든 pending 키 확인, 읽기 가용성 검증 네 조건을 명시적으로 요구하도록 수정했다.
+- 조건부 검증 순서: 세 환경의 모든 Worker 진입점과 고정된 활성 버전 확인 → 외부 격리/기존 사용자 pending 보존 증명 → 3개 color-safe candidate 및 rollback artifact 검증 → 순서/충돌/색상 null/삭제 동시변경 재처리 → 모든 UID pending 확인 → 최소 인증된 PC↔모바일 실사용과 복구 검증. 실패 시 전환 중단. TEST 앱은 사용하지 않되 살아 있는 TEST Worker는 격리 확인 대상이다.
+- 이 작업은 코드·오프라인 검사만 수행한다. 병합, Cloudflare/Firebase 배포·변경, R2/Firestore 사용자 원본 접근 또는 대량 작업 금지. 결론은 LIVE NO-GO.

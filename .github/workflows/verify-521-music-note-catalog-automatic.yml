@@ -6,6 +6,11 @@ on:
       - 'src/lib/userDataEngine.ts'
       - 'cloudflare/media-worker/src/index.js'
       - 'scripts/verify-library-catalog-color-projection.mjs'
+      - 'scripts/verify-canonical-color-event-delivery.mjs'
+      - 'functions/src/colorCatalogEventPure.ts'
+      - 'functions/src/colorCatalogPublisher.ts'
+      - 'functions/src/index.ts'
+      - 'functions/scripts/verify-color-canonical-events.cjs'
       - 'cloudflare/media-worker/src/colorRestoration.js'
       - 'scripts/verify-exact-color-restore-candidate.mjs'
       - 'scripts/verify-media-color-rollback-readonly.mjs'
@@ -32,6 +37,13 @@ jobs:
         run: node scripts/verify-521-music-note-catalog-automatic.mjs
       - name: Manual one-row canonical color restore candidate (default OFF, no deploy)
         run: node scripts/verify-exact-color-restore-candidate.mjs
+      - name: Server-signed color delivery / R2 CAS (source-only)
+        run: node scripts/verify-canonical-color-event-delivery.mjs
+      - name: Firebase color publisher build and offline contract (no deploy)
+        run: |
+          npm --prefix functions ci --no-audit --no-fund
+          npm --prefix functions run build
+          node functions/scripts/verify-color-canonical-events.cjs
       - name: Media Worker bundle dry-run (no Cloudflare upload or deployment)
         run: |
           npm --prefix cloudflare/media-worker install --no-audit --no-fund

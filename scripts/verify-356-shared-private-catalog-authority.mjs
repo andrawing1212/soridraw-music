@@ -11,10 +11,13 @@ assert.match(worker, /const catalogBucket = \(env\) =>/);
 assert.match(worker, /env\?\.CATALOG \? env\.CATALOG : env\.MEDIA/);
 assert.match(worker, /catalogAuthorityMode/);
 // Preserve the exact supported routes and their bootstrap guard. app517 adds
-// a read-only manual inspect-exact action; no other route expansion is allowed.
+// a read-only manual inspect-exact action. The explicit one-row restore-color
+// candidate is permitted only with the separate fail-closed guards below.
 const allowedCatalogRouteSignatures = [
   "match(/^\\/v1\\/catalog\\/(musicNote|library)(?:\\/(delta|bootstrap))?$/)",
   "match(/^\\/v1\\/catalog\\/(musicNote|library)(?:\\/(delta|bootstrap|inspect-exact))?$/)",
+  // Exact owner-only color recovery remains disabled unless BOTH server gates are set.
+  "match(/^\\/v1\\/catalog\\/(musicNote|library)(?:\\/(delta|bootstrap|inspect-exact|restore-color))?$/)",
 ];
 assert.ok(
   allowedCatalogRouteSignatures.some((signature) => worker.includes(signature)),
@@ -69,6 +72,25 @@ assert.equal(buildCalls, 1, 'canonical full Catalog build must have exactly one 
 const handleStart = worker.indexOf('const handleCatalog = async');
 const handleEnd = worker.indexOf('const handleMedia = async', handleStart);
 const handleBlock = worker.slice(handleStart, handleEnd);
+// A new Catalog write path must be manual POST, authenticated, UID-limited,
+// revision fenced and OFF by default. Ordinary entry may not invoke it.
+assert.match(handleBlock, /request\.method === 'POST' && route\.action === 'restore-color'/);
+assert.match(handleBlock, /text\(env\.SORIDRAW_COLOR_RESTORE_V1\) !== '1'/);
+assert.match(handleBlock, /text\(env\.SORIDRAW_COLOR_RESTORE_UID\) !== identity\.uid/);
+assert.match(handleBlock, /Number\.isSafeInteger\(expectedRevision\)/);
+assert.match(handleBlock, /fetchExactCanonicalColorSource\(identity, route\.kind, exactId, env\)/);
+assert.match(handleBlock, /restoreExactColorFromCanonical\(/);
+const restorationStart = worker.indexOf('const restoreExactColorFromCanonical = async');
+const restorationEnd = worker.indexOf('const handleCatalog = async', restorationStart);
+assert.ok(restorationStart >= 0 && restorationEnd > restorationStart, 'exact restore missing');
+const restorationBlock = worker.slice(restorationStart, restorationEnd);
+assert.doesNotMatch(restorationBlock, /getCatalogState\(|buildCanonicalCatalog\(|firestoreCatalogQuery\(|seedSharedCatalogFromCurrentLegacy\(/);
+assert.match(restorationBlock, /readStrictCatalogStateForInspection\(env\.CATALOG/);
+assert.match(restorationBlock, /putCatalogJournalHead\(/);
+for (const vars of [cfg.vars, cfg.env.test.vars, cfg.env.production.vars]) {
+  assert.notEqual(String(vars.SORIDRAW_COLOR_RESTORE_V1 || ''), '1',
+    'exact color restore must NOT be activated by source configuration');
+}
 assert.match(handleBlock, /route\.action === 'bootstrap'/);
 assert.match(handleBlock, /bootstrapSharedCatalogFromCanonical/);
 assert.match(handleBlock, /route\.action === 'delta'/);

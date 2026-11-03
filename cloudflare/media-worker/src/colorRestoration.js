@@ -70,3 +70,78 @@ export const planExactCanonicalColorRestore = (kind, canonical, catalogRow) => {
   }
   return next ? { code: 'READY', row: next } : { code: 'NO_MISSING_COLOR', row: null };
 };
+
+
+// Future canonical-authoritative version fence. Not called by any live Writer.
+// A Firestore onWrite/outbox publisher must provide a server-attested updateTime
+// and deliver every change (including explicit null/gray) at least once.
+// An R2 CAS loop must re-run this pure decision after every conflict.
+// This prevents late OLD events overwriting a NEWER source version already
+// applied. It cannot make Firestore+R2 atomic or substitute for delivery.
+const firestoreVersion = (version) => {
+  if (typeof version !== 'string') return '';
+  const match = version.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?Z$/);
+  if (!match || !Number.isFinite(Date.parse(match[1] + 'Z'))) return '';
+  return match[1] + '.' + (match[2] || '').padEnd(9, '0') + 'Z';
+};
+const normalizedColor = (value) => (
+  colored(value) ? value : (value === null || value === 'gray' ? null : undefined)
+);
+const canonicalColorPatch = (kind, canonical, existing, allowExisting) => {
+  const patch = {};
+  if (kind === 'musicNote') {
+    const key = has(canonical, 'favoriteColorTag') ? 'favoriteColorTag'
+      : has(canonical, 'colorTag') ? 'colorTag' : '';
+    if (!key) return patch;
+    const value = normalizedColor(canonical[key]);
+    if (value === undefined) return patch;
+    if (!allowExisting && ['favoriteColorTag', 'colorTag', 'favoriteColor', 'noteColor', 'color']
+      .some(k => has(existing, k))) return patch;
+    patch.favoriteColorTag = value;
+    return patch;
+  }
+  for (const field of ['colorTags', 'favoriteColorTags']) {
+    const original = canonical[field];
+    if (!map(original)) continue;
+    const target = existing[field];
+    if (!allowExisting && has(existing, field) && !map(target)) continue;
+    if (!allowExisting && map(target) && Object.keys(target).length === 0) continue;
+    const update = {};
+    for (const [index, raw] of Object.entries(original)) {
+      if (!/^(0|[1-9]\d{0,3})$/.test(index)) continue;
+      const value = normalizedColor(raw);
+      if (value === undefined) continue;
+      if (!allowExisting && map(target) && has(target, index)) continue;
+      if (map(target) && has(target, index) && target[index] === value) continue;
+      update[index] = value;
+    }
+    if (Object.keys(update).length) patch[field] = update;
+  }
+  return patch;
+};
+
+// Candidate for a future event-backed Writer; this function performs NO IO.
+// Invalid or unversioned events never overwrite existing explicit resets.
+// Versions alone are insufficient: the caller must authenticate exact owner/ID,
+// read the true canonical source, and establish guaranteed eventual delivery.
+export const planCanonicalColorVersionTransition = ({
+  kind, canonical, catalogRow, sourceUpdateTime, appliedSourceUpdateTime,
+}) => {
+  if (!['musicNote', 'library'].includes(kind) || !canonical || !catalogRow
+    || !String(catalogRow.id || '').trim()
+    || inactive(canonical, kind) || inactive(catalogRow, kind)) {
+    return { code: 'INACTIVE_OR_UNKNOWN', patch: null };
+  }
+  const next = firestoreVersion(sourceUpdateTime);
+  const previous = appliedSourceUpdateTime ? firestoreVersion(appliedSourceUpdateTime) : '';
+  if (!next || (appliedSourceUpdateTime && !previous)) {
+    return { code: 'SOURCE_VERSION_INVALID', patch: null };
+  }
+  if (previous && next < previous) return { code: 'OLDER_EVENT_REJECTED', patch: null };
+  if (previous && next === previous) return { code: 'DUPLICATE_EVENT', patch: null };
+  const patch = canonicalColorPatch(kind, canonical, catalogRow, Boolean(previous));
+  if (!Object.keys(patch).length) {
+    return { code: previous ? 'NO_COLOR_CHANGE' : 'UNVERSIONED_RESET_OR_NO_MISSING_COLOR', patch: null };
+  }
+  return { code: 'COLOR_VERSION_ADVANCE_CANDIDATE', patch, updateTime: next };
+};

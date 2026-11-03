@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { planExactCanonicalColorRestore as plan } from '../cloudflare/media-worker/src/colorRestoration.js';
+import { planExactCanonicalColorRestore as plan, planCanonicalColorVersionTransition } from '../cloudflare/media-worker/src/colorRestoration.js';
 import {
   createEmptyCatalogJournal,
   materializeCatalogJournal,
@@ -187,4 +187,69 @@ assert.doesNotMatch(actualSource, /return \{ code: 'RESTORED'|changed: true/,
   'preview cannot claim durable R2 restoration');
 assert.match(worker, /COLOR_RESTORE_READ_ONLY_PREVIEW/);
 
+
+// A future event-backed Writer must let the newest canonical version win even
+// if Cloudflare receives mutation requests out of order. Pure only: no CAS,
+// Firestore, R2, or background publish is exercised here.
+const t1 = '2026-11-03T03:01:01.000000001Z';
+const t2 = '2026-11-03T03:01:02.000000002Z';
+const t3 = '2026-11-03T03:01:03.000000001Z';
+const newest = planCanonicalColorVersionTransition({
+  kind: 'musicNote', canonical: { favoriteColorTag: null },
+  catalogRow: { id: 'note-1', favoriteColorTag: 'purple' },
+  appliedSourceUpdateTime: t1, sourceUpdateTime: t2,
+});
+assert.equal(newest.code, 'COLOR_VERSION_ADVANCE_CANDIDATE');
+assert.equal(newest.patch.favoriteColorTag, null);
+const stale = planCanonicalColorVersionTransition({
+  kind: 'musicNote', canonical: { favoriteColorTag: 'red' },
+  catalogRow: { id: 'note-1', favoriteColorTag: null },
+  appliedSourceUpdateTime: t2, sourceUpdateTime: t1,
+});
+assert.equal(stale.code, 'OLDER_EVENT_REJECTED');
+assert.equal(stale.patch, null);
+const duplicate = planCanonicalColorVersionTransition({
+  kind: 'musicNote', canonical: { favoriteColorTag: 'red' },
+  catalogRow: { id: 'note-1', favoriteColorTag: null },
+  appliedSourceUpdateTime: t2, sourceUpdateTime: t2,
+});
+assert.equal(duplicate.code, 'DUPLICATE_EVENT');
+const selectedAgain = planCanonicalColorVersionTransition({
+  kind: 'musicNote', canonical: { favoriteColorTag: 'blue', saved: true },
+  catalogRow: { id: 'note-1', favoriteColorTag: null, saved: true },
+  appliedSourceUpdateTime: t2, sourceUpdateTime: t3,
+});
+assert.equal(selectedAgain.patch.favoriteColorTag, 'blue');
+const explicitGrayWithoutOldVersion = planCanonicalColorVersionTransition({
+  kind: 'musicNote', canonical: { favoriteColorTag: 'red' },
+  catalogRow: { id: 'note-1', favoriteColorTag: null },
+  appliedSourceUpdateTime: '', sourceUpdateTime: t3,
+});
+assert.equal(explicitGrayWithoutOldVersion.code, 'UNVERSIONED_RESET_OR_NO_MISSING_COLOR');
+const missingOnly = planCanonicalColorVersionTransition({
+  kind: 'musicNote', canonical: { favoriteColorTag: 'purple' },
+  catalogRow: { id: 'note-1' },
+  appliedSourceUpdateTime: '', sourceUpdateTime: t3,
+});
+assert.equal(missingOnly.patch.favoriteColorTag, 'purple');
+const libraryReset = planCanonicalColorVersionTransition({
+  kind: 'library', canonical: { colorTags: { '0': null, '1': 'blue' } },
+  catalogRow: { id: 'track-1', colorTags: { '0': 'red', '1': 'blue' } },
+  appliedSourceUpdateTime: t1, sourceUpdateTime: t2,
+});
+assert.equal(libraryReset.patch.colorTags['0'], null);
+assert.equal(libraryReset.patch.colorTags['1'], undefined);
+const libraryOld = planCanonicalColorVersionTransition({
+  kind: 'library', canonical: { colorTags: { '0': 'purple' } },
+  catalogRow: { id: 'track-1', colorTags: { '0': null } },
+  appliedSourceUpdateTime: t2, sourceUpdateTime: t1,
+});
+assert.equal(libraryOld.code, 'OLDER_EVENT_REJECTED');
+const badSourceVersion = planCanonicalColorVersionTransition({
+  kind: 'library', canonical: { colorTags: { '0': 'red' } },
+  catalogRow: { id: 'track-1' },
+  appliedSourceUpdateTime: '', sourceUpdateTime: 'client-123',
+});
+assert.equal(badSourceVersion.code, 'SOURCE_VERSION_INVALID');
+console.log('CANONICAL_COLOR_VERSION_ORDER_PURE=PASS (newer canonical wins, null/tombstone protected)');
 console.log('EXACT_CANONICAL_COLOR_READ_ONLY_PREVIEW=PASS (zero writes, disabled by default)');

@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { planExactCanonicalColorRestore as plan } from '../cloudflare/media-worker/src/colorRestoration.js';
 import {
-  appendCatalogJournalDelta,
   createEmptyCatalogJournal,
   materializeCatalogJournal,
 } from '../cloudflare/media-worker/src/catalogJournal.js';
@@ -52,11 +51,11 @@ assert.equal(plan('library', { colorTags: { '0': 'green' } },
   { id: 'track-1', trashedAt: 'yesterday' }).row, null);
 
 const worker = readFileSync('cloudflare/media-worker/src/index.js', 'utf8');
-const start = worker.indexOf('const restoreExactColorFromCanonical = async');
+const start = worker.indexOf('const previewExactColorFromCanonical = async');
 const end = worker.indexOf('\nconst handleCatalog = async', start);
-assert.ok(start >= 0 && end > start, 'actual exact-color restore function missing');
+assert.ok(start >= 0 && end > start, 'read-only exact-color preview function missing');
 const actualSource = worker.slice(start, end);
-assert.doesNotMatch(actualSource, /firestoreCatalogQuery|buildCanonicalCatalog|getCatalogState|seedSharedCatalog|compactCatalogJournal/);
+assert.doesNotMatch(actualSource, /firestoreCatalogQuery|buildCanonicalCatalog|getCatalogState|seedSharedCatalog|compactCatalogJournal|putCatalogJournalHead\(|appendCatalogJournalDelta\(|\.put\(|\.delete\(/);
 assert.match(worker, /SORIDRAW_COLOR_RESTORE_V1/);
 assert.match(worker, /SORIDRAW_COLOR_RESTORE_UID/);
 assert.match(worker, /fetchExactCanonicalColorSource/);
@@ -101,17 +100,14 @@ const createCase = ({ kind = 'musicNote', rows = [note], journalDeleted = [], ca
       projectItem: (item, id) => ({ ...item, id }), sortItems: xs => xs,
     }),
     planExactCanonicalColorRestore: plan,
-    appendCatalogJournalDelta,
-    putCatalogJournalHead: async (_env, _uid, _kind, nextHead) => {
-      writes++;
-      storedHead = nextHead;
-      return cas ? { etag: 'saved' } : null;
-    },
+    // A malicious accidental mutation in the preview must fail the test.
+    appendCatalogJournalDelta: () => { throw new Error('UNEXPECTED_APPEND'); },
+    putCatalogJournalHead: async () => { writes++; throw new Error('UNEXPECTED_R2_WRITE'); },
     text: value => typeof value === 'string' ? value.trim() : '',
     crypto: { randomUUID: () => 'manual-proof-1' },
     Date, Math, Object, Number,
   };
-  const executeActual = vm.runInNewContext(actualSource + '\nrestoreExactColorFromCanonical;', ctx);
+  const executeActual = vm.runInNewContext(actualSource + '\npreviewExactColorFromCanonical;', ctx);
   const execute = (identity, caseKind, id, revision, canonical, env) =>
     executeActual(identity, caseKind, id, revision,
       { data: canonical, updateTime: originalUpdateTime }, env);
@@ -122,14 +118,15 @@ const createCase = ({ kind = 'musicNote', rows = [note], journalDeleted = [], ca
 const normal = createCase({});
 const good = await normal.execute({ uid: 'owner' }, 'musicNote', 'note-1', 100,
   { favoriteColorTag: 'purple' }, { CATALOG: {} });
-assert.equal(good.code, 'RESTORED');
-assert.equal(normal.getWrites(), 1);
+assert.equal(good.code, 'COLOR_RESTORE_READ_ONLY_PREVIEW');
+assert.equal(good.dryRun, true);
+assert.equal(good.changed, false);
+assert.equal(good.wouldRestore, true);
+assert.equal(good.revision, 100);
+assert.equal(good.proposedColor.favoriteColorTag, 'purple');
+assert.equal(good.proposedColor.title, undefined);
+assert.equal(normal.getWrites(), 0);
 assert.equal(normal.getRechecks(), 1);
-const appended = normal.getHead().deltas.at(-1);
-assert.equal(appended.upserts[0].favoriteColorTag, 'purple');
-assert.equal(appended.upserts[0].title, 'preserve me');
-assert.equal(appended.nextItemCount, 1);
-assert.equal(appended.deletedIds.length, 0);
 
 const stale = createCase({});
 const conflict = await stale.execute({ uid: 'owner' }, 'musicNote', 'note-1', 99,
@@ -149,11 +146,11 @@ const gone = await deleted.execute({ uid: 'owner' }, 'musicNote', 'note-1', 101,
 assert.equal(gone.code, 'EXACT_ROW_NOT_ACTIVE');
 assert.equal(deleted.getWrites(), 0);
 
-const cas = createCase({ cas: false });
-const blocked = await cas.execute({ uid: 'owner' }, 'musicNote', 'note-1', 100,
+const unusedCas = createCase({ cas: false });
+const notWriting = await unusedCas.execute({ uid: 'owner' }, 'musicNote', 'note-1', 100,
   { favoriteColorTag: 'purple' }, { CATALOG: {} });
-assert.equal(blocked.code, 'CATALOG_CAS_CONFLICT');
-assert.equal(cas.getWrites(), 1); // attempted write rejected, no unguarded retry
+assert.equal(notWriting.code, 'COLOR_RESTORE_READ_ONLY_PREVIEW');
+assert.equal(unusedCas.getWrites(), 0); // even a failing CAS hook is never called
 
 // Stale canonical observations must never reach the R2 PUT call.
 const changed = createCase({ nextCanonical: { uid: 'owner', favoriteColorTag: null }, nextUpdateTime: 'v2' });
@@ -186,5 +183,8 @@ assert.equal(versionMissing.getWrites(), 0);
 assert.match(worker, /'unlikedAt', 'unsavedAt'/, 'read the exact legacy removal markers');
 assert.match(worker, /responseBody\?\.updateTime/, 'read Firestore server updateTime');
 assert.match(worker, /latest\.updateTime !== canonicalSnapshot\.updateTime/, 'compare source versions');
+assert.doesNotMatch(actualSource, /return \{ code: 'RESTORED'|changed: true/,
+  'preview cannot claim durable R2 restoration');
+assert.match(worker, /COLOR_RESTORE_READ_ONLY_PREVIEW/);
 
-console.log('EXACT_CANONICAL_COLOR_RESTORE_CANDIDATE=PASS (disabled; no network/no live write)');
+console.log('EXACT_CANONICAL_COLOR_READ_ONLY_PREVIEW=PASS (zero writes, disabled by default)');

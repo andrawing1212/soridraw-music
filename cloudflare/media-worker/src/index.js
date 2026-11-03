@@ -1107,9 +1107,11 @@ const applyCatalogDelta = async (identity, kind, delta, env, executionCtx = null
   return { conflict: true, revision: latest.head.headRevision, itemCount: latest.head.itemCount, deltaCount: latest.head.deltas.length };
 };
 
-// Exact owner-requested repair candidate. Disabled unless BOTH server-controlled
-// gates are explicitly configured. Never called by GET, bootstrap, page entry,
-// background tasks or ordinary Catalog delta. No Firestore scan or R2 rebuild.
+// Exact owner-requested color reconciliation PREVIEW. It is deliberately
+// read-only: Firestore and R2 cannot form a shared atomic transaction, so a
+// canonical snapshot must NEVER be replayed as an R2 write. Future durable
+// repair must use a separately audited canonical-authoritative writer.
+
 const fetchExactCanonicalColorSource = async (identity, kind, documentId, env) => {
   const parts = kind === 'musicNote'
     ? ['favorites', documentId]
@@ -1145,7 +1147,7 @@ const fetchExactCanonicalColorSource = async (identity, kind, documentId, env) =
   return { data: canonical, updateTime };
 };
 
-const restoreExactColorFromCanonical = async (identity, kind, documentId, expectedRevision, canonicalSnapshot, env) => {
+const previewExactColorFromCanonical = async (identity, kind, documentId, expectedRevision, canonicalSnapshot, env) => {
   // Strict read cannot seed an absent shared Catalog from the legacy bucket.
   const state = await readStrictCatalogStateForInspection(env.CATALOG, identity.uid, kind);
   if (!state) return { code: 'CATALOG_ABSENT', changed: false };
@@ -1160,9 +1162,9 @@ const restoreExactColorFromCanonical = async (identity, kind, documentId, expect
   }
   const plan = planExactCanonicalColorRestore(kind, canonicalSnapshot.data, row);
   if (!plan.row) return { code: plan.code, changed: false };
-  // Detect canonical color clears, save-state changes and deletion between the
-  // first Firestore read and the planned R2 CAS. This is a bounded race guard,
-  // NOT a cross-service transaction: a write after this read remains possible.
+  // Read again only for an owner-invoked preview; it can detect a concurrent
+  // change already committed, but is NOT a cross-service transaction and
+  // never authorizes a later R2 write.
   const latest = await fetchExactCanonicalColorSource(identity, kind, documentId, env);
   if (!latest || !latest.updateTime || latest.updateTime !== canonicalSnapshot.updateTime) {
     return { code: 'CANONICAL_VERSION_CONFLICT', changed: false, conflict: true };
@@ -1171,24 +1173,23 @@ const restoreExactColorFromCanonical = async (identity, kind, documentId, expect
   if (!confirmed.row || JSON.stringify(confirmed.row) !== JSON.stringify(plan.row)) {
     return { code: 'CANONICAL_COLOR_CONFLICT', changed: false, conflict: true };
   }
-  const serverRevision = Math.max(Date.now(), state.head.headRevision + 1);
-  const delta = {
-    mutationId: 'exact-color-' + crypto.randomUUID(),
-    baseRevision: state.head.headRevision,
-    baseItemCount: state.head.itemCount,
-    nextItemCount: state.head.itemCount,
-    revision: serverRevision,
-    deletedIds: [],
-    upserts: [plan.row],
+  // Only return the missing color fields, never a full song document. No
+  // journal append, Catalog put, Firestore update, seeding or migration occurs.
+  // The preview may become stale immediately; it MUST NOT be treated as an
+  // authorization to write R2 later.
+  const projectedColor = kind === 'musicNote'
+    ? { favoriteColorTag: plan.row.favoriteColorTag }
+    : Object.fromEntries(
+      ['colorTags', 'favoriteColorTags'].filter((field) => (
+        JSON.stringify(plan.row[field]) !== JSON.stringify(row[field])
+      )).map((field) => [field, plan.row[field]])
+    );
+  return {
+    code: 'COLOR_RESTORE_READ_ONLY_PREVIEW',
+    changed: false, dryRun: true, wouldRestore: true,
+    revision: state.head.headRevision,
+    proposedColor: projectedColor,
   };
-  const appended = appendCatalogJournalDelta({ head: state.head, delta, serverRevision });
-  if (!appended.ok) {
-    return { code: 'JOURNAL_' + appended.reason, changed: false, conflict: true };
-  }
-  // A concurrent user edit wins; do not retry with an old Firestore observation.
-  const stored = await putCatalogJournalHead(env, identity.uid, kind, appended.head, state.journalObject);
-  if (!stored) return { code: 'CATALOG_CAS_CONFLICT', changed: false, conflict: true };
-  return { code: 'RESTORED', changed: true, revision: appended.revision };
 };
 
 
@@ -1238,7 +1239,7 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
 
 
     if (request.method === 'POST' && route.action === 'restore-color') {
-      // Two server-only gates: an opt-in flag AND a single permitted owner UID.
+      // Even a read-only preview requires two server-only gates and exact owner UID.
       // Not enabled by any checked-in Wrangler environment (PREVIEW/TEST/PROD).
       if (text(env.SORIDRAW_COLOR_RESTORE_V1) !== '1'
         || text(env.SORIDRAW_COLOR_RESTORE_UID) !== identity.uid) {
@@ -1264,7 +1265,7 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
       }
       const canonical = await fetchExactCanonicalColorSource(identity, route.kind, exactId, env);
       if (!canonical) return jsonResponse({ ok: true, changed: false, code: 'CANONICAL_ABSENT' }, 200, origin);
-      const result = await restoreExactColorFromCanonical(
+      const result = await previewExactColorFromCanonical(
         identity, route.kind, exactId, expectedRevision, canonical, env,
       );
       return jsonResponse({ ok: !result.conflict, ...result }, result.conflict ? 409 : 200, origin);

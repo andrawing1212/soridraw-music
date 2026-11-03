@@ -38,6 +38,12 @@ jobs:
           npm --prefix cloudflare/media-worker run check
       - name: Shared Media color rollback preflight guard (mock-only, no deploy)
         run: node scripts/verify-media-color-rollback-readonly.mjs --self-test
+      - name: Live Media Worker deployment version inspection (GET only, PR 741)
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 741 }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+        run: node scripts/verify-media-color-rollback-readonly.mjs --live-versions
       - name: Library canonical color projection (source only, zero deploy)
         run: |
           node --check cloudflare/media-worker/src/index.js

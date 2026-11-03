@@ -121,6 +121,64 @@ const checkLiveReadOnly = async (plan) => {
   return observations;
 };
 
+// One bounded read-only snapshot of all currently active Media Workers.
+// No release manifest or historical source-code assumption is needed here.
+const reportLiveMediaWorkerVersions = async () => {
+  const accountId = String(process.env.CLOUDFLARE_ACCOUNT_ID || '').trim();
+  const token = String(process.env.CLOUDFLARE_API_TOKEN || '').trim();
+  if (!/^[0-9a-f]{32}$/i.test(accountId) || !token) {
+    throw new Error('LIVE_MEDIA_READ_ONLY_CREDENTIALS_UNAVAILABLE');
+  }
+  const headers = { Authorization: 'Bearer ' + token, Accept: 'application/json' };
+  const root = 'https://api.cloudflare.com/client/v4/accounts/' + accountId;
+  const get = async (path) => {
+    const response = await fetch(root + path, { method: 'GET', headers, redirect: 'error' });
+    if (!response.ok) throw new Error('LIVE_MEDIA_READ_ONLY_HTTP_' + response.status);
+    const payload = await response.json();
+    if (!payload?.success) throw new Error('LIVE_MEDIA_READ_ONLY_RESPONSE_UNAVAILABLE');
+    return payload.result;
+  };
+  const summaries = {};
+  for (const [stage, target] of Object.entries(targets)) {
+    const name = encodeURIComponent(target.worker);
+    const [deployments, settings] = await Promise.all([
+      get('/workers/scripts/' + name + '/deployments?per_page=4'),
+      get('/workers/scripts/' + name + '/settings'),
+    ]);
+    const first = (deployments?.deployments || [])[0];
+    const versions = first?.versions;
+    if (!Array.isArray(versions) || versions.length !== 1
+      || Number(versions[0].percentage) !== 100 || !uuid.test(versions[0].version_id)) {
+      throw new Error(stage + ':ACTIVE_MEDIA_VERSION_UNCERTAIN_OR_TRAFFIC_SPLIT');
+    }
+    const bindings = settings?.bindings || [];
+    const binding = (key, type) => bindings.find(v => v?.name === key && v?.type === type);
+    const catalog = binding('CATALOG', 'r2_bucket');
+    const media = binding('MEDIA', 'r2_bucket');
+    const shared = binding('SORIDRAW_SHARED_CATALOG_V1', 'plain_text');
+    const summary = {
+      worker: target.worker,
+      activeVersionId: versions[0].version_id,
+      activePercent: versions[0].percentage,
+      activeDeploymentTime: first?.created_on || 'unknown',
+      catalog: catalog?.bucket_name ?? catalog?.bucket ?? 'unknown',
+      media: media?.bucket_name ?? media?.bucket ?? 'unknown',
+      sharedCatalogFlag: String(shared?.text ?? shared?.value ?? 'unknown'),
+      previousDeploymentVersionIds: (deployments?.deployments || []).slice(1, 4)
+        .flatMap(d => (d?.versions || []).map(v => v.version_id)),
+    };
+    summaries[stage] = summary;
+    console.log('READ_ONLY_MEDIA_' + stage.toUpperCase() + '=' + JSON.stringify(summary));
+  }
+  const safe = Object.entries(summaries).every(([stage, item]) => (
+    item.catalog === 'soridraw-user-catalog'
+    && item.media === targets[stage].media && item.sharedCatalogFlag === '1'
+  ));
+  if (!safe) throw new Error('LIVE_MEDIA_SHARED_CATALOG_OR_BINDINGS_DRIFT');
+  console.log('LIVE_MEDIA_CURRENT_DEPLOYMENTS_READ_ONLY=PASS');
+  console.log('LIVE_MEDIA_COLOR_COMPATIBLE_ROLLBACK=NOT_ATTESTED');
+};
+
 const runSelfTest = () => {
   const source = readFileSync('cloudflare/media-worker/src/index.js', 'utf8');
   assert.ok(sourceProtectsLibraryColors(source));
@@ -166,6 +224,8 @@ const runSelfTest = () => {
 if (process.argv[1]?.endsWith('verify-media-color-rollback-readonly.mjs')) {
   if (process.argv[2] === '--self-test') {
     runSelfTest();
+  } else if (process.argv[2] === '--live-versions') {
+    await reportLiveMediaWorkerVersions();
   } else {
     const file = process.argv[2];
     if (!file) throw new Error('USAGE: node scripts/verify-media-color-rollback-readonly.mjs <attested-manifest.json>');

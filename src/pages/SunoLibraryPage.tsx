@@ -2380,16 +2380,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         });
         confirmedWorkspaceColors.push({ trackId, field: colorField, index: idx, color });
       }
-      if (!stageConfirmedWorkspaceColors(user.uid, confirmedWorkspaceColors)) {
-        throw new Error('COLOR_CATALOG_EXACT_ROW_NOT_CACHED');
-      }
-      if (confirmedWorkspaceColors.length > 0) await flushPendingCatalogPublishes(user.uid);
-
       for (const [key, color] of playlistEntries) {
         const [, playlistId, itemId] = key.split(':');
         if (!playlistId || !itemId || playlistId === 'unknown' || itemId === 'unknown') continue;
         await updatePlaylistItemColor(user.uid, playlistId, itemId, (color === 'gray' ? null : color) as any);
       }
+      // Persist other Library color sections independently before attempting
+      // the R2 Catalog projection; a retryable Catalog failure cannot skip
+      // a user-confirmed playlist color write.
+      if (!stageConfirmedWorkspaceColors(user.uid, confirmedWorkspaceColors)) {
+        throw new Error('COLOR_CATALOG_EXACT_ROW_NOT_CACHED');
+      }
+      if (confirmedWorkspaceColors.length > 0) await flushPendingCatalogPublishes(user.uid);
 
       for (const [key, color] of workspaceEntries) {
         if (workspaceLocalColorMapRef.current[key] === color) pendingWorkspaceColorKeysRef.current.delete(key);
@@ -2446,16 +2448,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         });
         confirmedWorkspaceColors.push({ trackId, field: colorField, index: idx, color });
       }
-      if (!stageConfirmedWorkspaceColors(currentUser.uid, confirmedWorkspaceColors)) {
-        throw new Error('COLOR_CATALOG_EXACT_ROW_NOT_CACHED');
-      }
-      if (confirmedWorkspaceColors.length > 0) await flushPendingCatalogPublishes(currentUser.uid);
-
       for (const [key, color] of playlistEntries) {
         const [, playlistId, itemId] = key.split(':');
         if (!playlistId || !itemId || playlistId === 'unknown' || itemId === 'unknown') continue;
         await updatePlaylistItemColor(currentUser.uid, playlistId, itemId, (color === 'gray' ? null : color) as any);
       }
+      // Persist other Library color sections independently before attempting
+      // the R2 Catalog projection; a retryable Catalog failure cannot skip
+      // a user-confirmed playlist color write.
+      if (!stageConfirmedWorkspaceColors(currentUser.uid, confirmedWorkspaceColors)) {
+        throw new Error('COLOR_CATALOG_EXACT_ROW_NOT_CACHED');
+      }
+      if (confirmedWorkspaceColors.length > 0) await flushPendingCatalogPublishes(currentUser.uid);
 
       pendingWorkspaceColorKeysRef.current.clear();
       pendingPlaylistColorKeysRef.current.clear();

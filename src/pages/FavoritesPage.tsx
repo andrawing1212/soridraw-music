@@ -2203,7 +2203,6 @@ updates: draft.updates,
   const [, setFavoriteColorSyncTick] = useState(0);
   const [isFavoriteAdminUser, setIsFavoriteAdminUser] = useState(false);
   const [favoriteUserProfile, setFavoriteUserProfile] = useState<any | null>(null);
-  const lastFavoriteServerColorMapRef = useRef<Record<string, string>>({});
   const favoriteColorMapRef = useRef<Record<string, string>>({});
   const favoriteColorBaselineRef = useRef<string>('{}');
   const favoriteColorDirtyRef = useRef(false);

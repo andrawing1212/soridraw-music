@@ -2199,6 +2199,7 @@ updates: draft.updates,
   }, [user?.uid]);
   const [favoriteContextMenuPosition, setFavoriteContextMenuPosition] = useState<{ songId: string; top: number; left: number } | null>(null);
   const [favoriteColorMap, setFavoriteColorMap] = useState<Record<string, string>>({});
+  const [favoriteColorHydratedUid, setFavoriteColorHydratedUid] = useState<string | null>(null);
   const [activeFavoriteColorMenuId, setActiveFavoriteColorMenuId] = useState<string | null>(null);
   const [favoriteColorFilter, setFavoriteColorFilter] = useState<string>('all');
   const [, setFavoriteColorSyncTick] = useState(0);
@@ -4036,14 +4037,18 @@ updates: draft.updates,
       favoriteColorBaselineRef.current = serializeColorMap(loaded);
       pendingFavoriteColorIdsRef.current.clear();
       favoriteColorDirtyRef.current = false;
+      setFavoriteColorHydratedUid(user?.uid || 'anonymous');
     } catch (error) {
       console.warn('favorite color map load failed', error);
     }
   }, [user?.uid]);
 
   useEffect(() => {
+    // Never write the initial empty React state over an existing device map
+    // before that account's scoped map has been hydrated.
+    if (favoriteColorHydratedUid !== (user?.uid || 'anonymous')) return;
     writeLocalColorMap('soridraw.favoriteColorTags', favoriteColorMap);
-  }, [favoriteColorMap, user?.uid]);
+  }, [favoriteColorMap, favoriteColorHydratedUid, user?.uid]);
 
   useEffect(() => {
     const applyRecoveredColors = (event: Event) => {

@@ -8,6 +8,8 @@ on:
       - 'scripts/verify-library-catalog-color-projection.mjs'
       - 'cloudflare/media-worker/src/colorRestoration.js'
       - 'scripts/verify-exact-color-restore-candidate.mjs'
+      - 'scripts/verify-media-color-rollback-readonly.mjs'
+      - '.deploy/release-media-worker-runtime.mjs'
       - 'src/App.tsx'
       - 'scripts/verify-521-music-note-catalog-automatic.mjs'
       - '.github/workflows/verify-521-music-note-catalog-automatic.yml'
@@ -34,6 +36,8 @@ jobs:
         run: |
           npm --prefix cloudflare/media-worker install --no-audit --no-fund
           npm --prefix cloudflare/media-worker run check
+      - name: Shared Media color rollback preflight guard (mock-only, no deploy)
+        run: node scripts/verify-media-color-rollback-readonly.mjs --self-test
       - name: Library canonical color projection (source only, zero deploy)
         run: |
           node --check cloudflare/media-worker/src/index.js

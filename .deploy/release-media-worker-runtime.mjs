@@ -109,10 +109,18 @@ function hashReleaseIdentity() {
   // across invocations. TEST and PRODUCTION intentionally use different MEDIA
   // buckets/origins, so release identity covers the common approved code/tool
   // contract while target-specific bindings/CORS are verified independently.
-  const files = [
-    join(WORKER_DIR, 'src', 'index.js'),
-    join(WORKER_DIR, 'package.json'),
-  ];
+  // Include every source module, not only index.js. A color-safety helper
+  // change must invalidate release identity and its rollback attestation.
+  const files = [join(WORKER_DIR, 'package.json')];
+  const visitSource = (directory) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) visitSource(path);
+      else if (entry.isFile() && /\.m?js$/.test(entry.name)) files.push(path);
+    }
+  };
+  visitSource(join(WORKER_DIR, 'src'));
+  files.sort((a, b) => a.localeCompare(b, 'en'));
   const hash = createHash('sha256');
   hash.update(`compatibility_date=${String(SOURCE_CONFIG.compatibility_date || '').slice(0, 10)}\0`, 'utf8');
   hash.update(`shared_catalog_flag=${expectedSharedFlag}\0`, 'utf8');

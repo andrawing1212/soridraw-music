@@ -19,6 +19,19 @@ assert.equal(plan('musicNote', { favoriteColorTag: 'purple' }, { ...note, favori
 assert.equal(plan('musicNote', { favoriteColorTag: 'purple' }, { ...note, colorTag: null }).row, null);
 assert.equal(plan('musicNote', { favoriteColorTag: 'purple' }, { ...note, color: null }).row, null);
 assert.equal(plan('musicNote', { favoriteColorTag: 'purple', saved: false }, note).row, null);
+// Match the live Music Note saved-state contract, not historical timestamps
+// treated as unconditional deletion markers.
+same(plan('musicNote', { favoriteColorTag: 'purple', saved: true, favoriteRemovedAt: 1 }, note).row,
+  { ...note, favoriteColorTag: 'purple' });
+same(plan('musicNote', { favoriteColorTag: 'purple', favoriteRemoved: false, unlikedAt: 1 }, note).row,
+  { ...note, favoriteColorTag: 'purple' });
+for (const legacy of ['favoriteRemovedAt', 'unlikedAt', 'unsavedAt']) {
+  assert.equal(plan('musicNote', { favoriteColorTag: 'purple', [legacy]: 1 }, note).row, null,
+    'legacy removed canonical must not be restored: ' + legacy);
+  assert.equal(plan('musicNote', { favoriteColorTag: 'purple' }, { ...note, [legacy]: 1 }).row, null,
+    'legacy removed R2 row must not be restored: ' + legacy);
+}
+
 assert.equal(plan('musicNote', { favoriteColorTag: 'purple' }, { ...note, deletedAt: 123 }).row, null);
 
 same(plan('library', {
@@ -51,7 +64,8 @@ assert.match(worker, /route\.action === 'restore-color'/);
 // Only exact POST, never GET/ordinary page and never bulk canonical reads.
 assert.match(worker, /request\.method === 'POST' && route\.action === 'restore-color'/);
 
-const createCase = ({ kind = 'musicNote', rows = [note], journalDeleted = [], cas = true }) => {
+const createCase = ({ kind = 'musicNote', rows = [note], journalDeleted = [], cas = true,
+  nextCanonical = null, nextUpdateTime = 'v1', originalUpdateTime = 'v1', missingLatest = false }) => {
   const snapshot = {
     schemaVersion: 4, authority: 'server', kind,
     revision: 100, generatedAtMs: 100, complete: true,
@@ -61,8 +75,14 @@ const createCase = ({ kind = 'musicNote', rows = [note], journalDeleted = [], ca
     kind, baseKey: 'base', baseRevision: 100, itemCount: rows.length, now: 100,
   });
   let writes = 0;
+  let rechecks = 0;
   let storedHead = null;
   const ctx = {
+    fetchExactCanonicalColorSource: async () => {
+      rechecks++;
+      if (missingLatest) return null;
+      return { data: nextCanonical || { uid: 'owner', favoriteColorTag: 'purple' }, updateTime: nextUpdateTime };
+    },
     readStrictCatalogStateForInspection: async () => {
       const current = { ...head, deltas: [] };
       if (journalDeleted.length) {
@@ -91,8 +111,12 @@ const createCase = ({ kind = 'musicNote', rows = [note], journalDeleted = [], ca
     crypto: { randomUUID: () => 'manual-proof-1' },
     Date, Math, Object, Number,
   };
-  const execute = vm.runInNewContext(actualSource + '\nrestoreExactColorFromCanonical;', ctx);
-  return { execute, getWrites: () => writes, getHead: () => storedHead };
+  const executeActual = vm.runInNewContext(actualSource + '\nrestoreExactColorFromCanonical;', ctx);
+  const execute = (identity, caseKind, id, revision, canonical, env) =>
+    executeActual(identity, caseKind, id, revision,
+      { data: canonical, updateTime: originalUpdateTime }, env);
+  return { execute, getWrites: () => writes, getRechecks: () => rechecks,
+    getHead: () => storedHead };
 };
 
 const normal = createCase({});
@@ -100,6 +124,7 @@ const good = await normal.execute({ uid: 'owner' }, 'musicNote', 'note-1', 100,
   { favoriteColorTag: 'purple' }, { CATALOG: {} });
 assert.equal(good.code, 'RESTORED');
 assert.equal(normal.getWrites(), 1);
+assert.equal(normal.getRechecks(), 1);
 const appended = normal.getHead().deltas.at(-1);
 assert.equal(appended.upserts[0].favoriteColorTag, 'purple');
 assert.equal(appended.upserts[0].title, 'preserve me');
@@ -129,5 +154,37 @@ const blocked = await cas.execute({ uid: 'owner' }, 'musicNote', 'note-1', 100,
   { favoriteColorTag: 'purple' }, { CATALOG: {} });
 assert.equal(blocked.code, 'CATALOG_CAS_CONFLICT');
 assert.equal(cas.getWrites(), 1); // attempted write rejected, no unguarded retry
+
+// Stale canonical observations must never reach the R2 PUT call.
+const changed = createCase({ nextCanonical: { uid: 'owner', favoriteColorTag: null }, nextUpdateTime: 'v2' });
+const sourceChanged = await changed.execute({ uid: 'owner' }, 'musicNote', 'note-1', 100,
+  { uid: 'owner', favoriteColorTag: 'purple' }, { CATALOG: {} });
+assert.equal(sourceChanged.code, 'CANONICAL_VERSION_CONFLICT');
+assert.equal(changed.getWrites(), 0);
+assert.equal(changed.getRechecks(), 1);
+
+// Any intervening save/remove/clear changes the Firestore updateTime even if
+// the chosen color happens to remain the same.
+const latestSameColor = createCase({ nextUpdateTime: 'v2' });
+const staleVersion = await latestSameColor.execute({ uid: 'owner' }, 'musicNote', 'note-1', 100,
+  { uid: 'owner', favoriteColorTag: 'purple' }, { CATALOG: {} });
+assert.equal(staleVersion.code, 'CANONICAL_VERSION_CONFLICT');
+assert.equal(latestSameColor.getWrites(), 0);
+
+const deletedSource = createCase({ missingLatest: true });
+const deletedBetweenReads = await deletedSource.execute({ uid: 'owner' }, 'musicNote', 'note-1', 100,
+  { uid: 'owner', favoriteColorTag: 'purple' }, { CATALOG: {} });
+assert.equal(deletedBetweenReads.code, 'CANONICAL_VERSION_CONFLICT');
+assert.equal(deletedSource.getWrites(), 0);
+
+const versionMissing = createCase({ originalUpdateTime: '' });
+const noVersion = await versionMissing.execute({ uid: 'owner' }, 'musicNote', 'note-1', 100,
+  { uid: 'owner', favoriteColorTag: 'purple' }, { CATALOG: {} });
+assert.equal(noVersion.code, 'CANONICAL_VERSION_UNAVAILABLE');
+assert.equal(versionMissing.getWrites(), 0);
+
+assert.match(worker, /'unlikedAt', 'unsavedAt'/, 'read the exact legacy removal markers');
+assert.match(worker, /responseBody\?\.updateTime/, 'read Firestore server updateTime');
+assert.match(worker, /latest\.updateTime !== canonicalSnapshot\.updateTime/, 'compare source versions');
 
 console.log('EXACT_CANONICAL_COLOR_RESTORE_CANDIDATE=PASS (disabled; no network/no live write)');

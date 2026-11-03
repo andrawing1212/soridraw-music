@@ -8,13 +8,19 @@ const colored = (value) => typeof value === 'string' && colors.has(value);
 const map = (value) => value !== null && typeof value === 'object'
   && !Array.isArray(value);
 
+// Match src/lib/musicNoteSavedState.ts exactly: explicit current save status
+// outranks historical removal timestamps, and legacy removals still count.
+const isMusicNoteRemoved = (row) => {
+  if (row.favoriteRemoved === true || row.saved === false
+    || row.hidden === true || row.favoriteHidden === true
+    || row.deletedAt || row.trashedAt) return true;
+  if (row.saved === true || row.favoriteRemoved === false) return false;
+  return Boolean(row.favoriteRemovedAt || row.unlikedAt || row.unsavedAt);
+};
 const inactive = (row, kind) => (
-  row.hidden === true || row.deletedAt != null || row.trashedAt != null
-  || row.status === 'deleted'
-  || (kind === 'musicNote' && (
-    row.saved === false || row.favoriteRemoved === true
-    || row.favoriteHidden === true || row.favoriteRemovedAt != null
-  ))
+  row.status === 'deleted'
+  || (kind === 'musicNote' ? isMusicNoteRemoved(row)
+    : row.hidden === true || row.deletedAt != null || row.trashedAt != null)
 );
 
 export const planExactCanonicalColorRestore = (kind, canonical, catalogRow) => {

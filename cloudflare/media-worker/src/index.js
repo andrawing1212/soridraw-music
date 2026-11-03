@@ -1116,7 +1116,8 @@ const fetchExactCanonicalColorSource = async (identity, kind, documentId, env) =
     : ['suno_tracks', identity.uid, 'tracks', documentId];
   const fields = kind === 'musicNote'
     ? ['uid', 'saved', 'hidden', 'favoriteHidden', 'favoriteRemoved',
-      'favoriteRemovedAt', 'deletedAt', 'trashedAt', 'favoriteColorTag', 'colorTag']
+      'favoriteRemovedAt', 'unlikedAt', 'unsavedAt', 'deletedAt', 'trashedAt',
+      'favoriteColorTag', 'colorTag']
     : ['uid', 'hidden', 'status', 'deletedAt', 'trashedAt', 'colorTags', 'favoriteColorTags'];
   const mask = new URLSearchParams();
   for (const field of fields) mask.append('mask.fieldPaths', field);
@@ -1129,17 +1130,22 @@ const fetchExactCanonicalColorSource = async (identity, kind, documentId, env) =
   });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`COLOR_SOURCE_READ_${response.status}`);
-  const canonical = decodeFirestoreDocument(await response.json());
+  const responseBody = await response.json();
+  const canonical = decodeFirestoreDocument(responseBody);
+  // Re-validation needs a Firestore server-supplied document version, not a
+  // client timestamp or app-maintained updatedAt. Missing version fails closed.
+  const updateTime = text(responseBody?.updateTime);
+  if (!updateTime) throw new Error('COLOR_SOURCE_UPDATE_TIME_MISSING');
   // Music Note collection is top-level; the UID in its document is essential.
   if ((kind === 'musicNote' && text(canonical.uid) !== identity.uid)
     || (kind === 'library' && canonical.uid != null
       && text(canonical.uid) !== identity.uid)) {
     throw new Error('COLOR_SOURCE_OWNER_MISMATCH');
   }
-  return canonical;
+  return { data: canonical, updateTime };
 };
 
-const restoreExactColorFromCanonical = async (identity, kind, documentId, expectedRevision, canonical, env) => {
+const restoreExactColorFromCanonical = async (identity, kind, documentId, expectedRevision, canonicalSnapshot, env) => {
   // Strict read cannot seed an absent shared Catalog from the legacy bucket.
   const state = await readStrictCatalogStateForInspection(env.CATALOG, identity.uid, kind);
   if (!state) return { code: 'CATALOG_ABSENT', changed: false };
@@ -1149,8 +1155,22 @@ const restoreExactColorFromCanonical = async (identity, kind, documentId, expect
   const snapshot = materializeCatalogState(state, kind);
   const row = snapshot.items.find(item => text(item?.id) === documentId);
   if (!row) return { code: 'EXACT_ROW_NOT_ACTIVE', changed: false };
-  const plan = planExactCanonicalColorRestore(kind, canonical, row);
+  if (!canonicalSnapshot?.updateTime || !canonicalSnapshot?.data) {
+    return { code: 'CANONICAL_VERSION_UNAVAILABLE', changed: false, conflict: true };
+  }
+  const plan = planExactCanonicalColorRestore(kind, canonicalSnapshot.data, row);
   if (!plan.row) return { code: plan.code, changed: false };
+  // Detect canonical color clears, save-state changes and deletion between the
+  // first Firestore read and the planned R2 CAS. This is a bounded race guard,
+  // NOT a cross-service transaction: a write after this read remains possible.
+  const latest = await fetchExactCanonicalColorSource(identity, kind, documentId, env);
+  if (!latest || !latest.updateTime || latest.updateTime !== canonicalSnapshot.updateTime) {
+    return { code: 'CANONICAL_VERSION_CONFLICT', changed: false, conflict: true };
+  }
+  const confirmed = planExactCanonicalColorRestore(kind, latest.data, row);
+  if (!confirmed.row || JSON.stringify(confirmed.row) !== JSON.stringify(plan.row)) {
+    return { code: 'CANONICAL_COLOR_CONFLICT', changed: false, conflict: true };
+  }
   const serverRevision = Math.max(Date.now(), state.head.headRevision + 1);
   const delta = {
     mutationId: 'exact-color-' + crypto.randomUUID(),

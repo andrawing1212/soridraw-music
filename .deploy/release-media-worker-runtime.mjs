@@ -89,6 +89,7 @@ function makeConfig() {
     main: '../../src/index.js',
     compatibility_date: String(SOURCE_CONFIG.compatibility_date || '2026-09-01').slice(0, 10),
     keep_vars: true,
+    ...(process.env.RELEASE_MEDIA_DISABLE_VERSION_URLS === '1' ? { preview_urls: false } : {}),
     vars: { ...(SOURCE_ENV.vars || {}) },
     r2_buckets: sourceR2.map((item) => ({
       binding: String(item.binding),

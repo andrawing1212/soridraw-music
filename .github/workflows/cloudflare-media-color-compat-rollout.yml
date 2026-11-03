@@ -22,6 +22,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      RELEASE_MEDIA_DISABLE_VERSION_URLS: '1'
     steps:
       - name: Pin approved preview source and refuse drift
         uses: actions/checkout@v4
@@ -121,6 +122,24 @@ jobs:
           done
           echo 'SHARED_MEDIA_UPLOADS_INACTIVE=PASS'
 
+      - name: Disable old version-specific URLs and preserve canonical workers.dev URLs
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts"
+          for worker in soridraw-media-preview soridraw-media-test soridraw-media; do
+            url="$api/$worker/subdomain"
+            before="$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$url")"
+            printf '%s' "$before" | jq -e '.success==true and .result.enabled==true' >/dev/null
+            changed="$(curl -fsS -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H 'Content-Type: application/json' \
+              -d '{"enabled":true,"previews_enabled":false}' "$url")"
+            printf '%s' "$changed" | jq -e '.success==true and .result.enabled==true and .result.previews_enabled==false' >/dev/null
+            after="$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$url")"
+            printf '%s' "$after" | jq -e '.success==true and .result.enabled==true and .result.previews_enabled==false' >/dev/null
+          done
+          echo 'ALL_LEGACY_VERSION_URLS_DISABLED_MAIN_WORKER_URLS_PRESERVED=PASS'
+
       - name: Activate all three in sequence with automatic global emergency restore
         shell: bash
         run: |
@@ -158,6 +177,11 @@ jobs:
           done
           for stage in preview test production; do
             node .deploy/release-media-worker-runtime.mjs "$stage" verify
+          done
+          api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts"
+          for worker in soridraw-media-preview soridraw-media-test soridraw-media; do
+            status="$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$api/$worker/subdomain")"
+            printf '%s' "$status" | jq -e '.success==true and .result.enabled==true and .result.previews_enabled==false' >/dev/null
           done
           trap - EXIT
           echo 'THREE_SHARED_COLOR_COMPAT_WORKERS_ACTIVE=PASS'

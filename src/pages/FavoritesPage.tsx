@@ -2203,7 +2203,6 @@ updates: draft.updates,
   const [, setFavoriteColorSyncTick] = useState(0);
   const [isFavoriteAdminUser, setIsFavoriteAdminUser] = useState(false);
   const [favoriteUserProfile, setFavoriteUserProfile] = useState<any | null>(null);
-  const lastFavoriteServerColorMapRef = useRef<Record<string, string>>({});
   const favoriteColorMapRef = useRef<Record<string, string>>({});
   const favoriteColorBaselineRef = useRef<string>('{}');
   const favoriteColorDirtyRef = useRef(false);
@@ -4046,61 +4045,33 @@ updates: draft.updates,
   }, [favoriteColorMap, user?.uid]);
 
   useEffect(() => {
-    const serverMap: Record<string, string> = {};
+    // Absence of a color field in a legacy/R2 Catalog summary is NOT the same
+    // as an explicit server-side gray reset. Never erase a device's surviving
+    // color merely because a projected row omitted the canonical color field.
+    const authoritative = new Map<string, string>();
     for (const song of favorites || []) {
-      if (!song?.id) continue;
-      const rawColor = Object.prototype.hasOwnProperty.call(song, 'favoriteColorTag')
-        ? song.favoriteColorTag : song.colorTag;
-      if (rawColor && rawColor !== 'gray') serverMap[song.id] = rawColor;
+      const id = String(song?.id || '').trim();
+      if (!id) continue;
+      const hasModern = Object.prototype.hasOwnProperty.call(song, 'favoriteColorTag');
+      const hasAlias = Object.prototype.hasOwnProperty.call(song, 'colorTag');
+      if (!hasModern && !hasAlias) continue;
+      const value = hasModern ? song.favoriteColorTag : song.colorTag;
+      authoritative.set(id, FAVORITE_COLOR_OPTIONS.some(option => option.value === value)
+        ? String(value) : 'gray');
     }
-
-    const previous = lastFavoriteServerColorMapRef.current || {};
-    const allIds = new Set([...Object.keys(previous), ...Object.keys(serverMap)]);
-    if (allIds.size === 0) {
-      lastFavoriteServerColorMapRef.current = serverMap;
-      return;
-    }
-
-    if (favoriteColorDirtyRef.current) {
-      lastFavoriteServerColorMapRef.current = serverMap;
-      return;
-    }
-
-    let changed = false;
-    setFavoriteColorMap((prev) => {
-      const next = { ...prev };
-      for (const id of allIds) {
-        const before = previous[id] || 'gray';
-        const current = serverMap[id] || 'gray';
-        if (before !== current) {
-          changed = true;
-          if (current === 'gray') delete next[id];
-          else next[id] = current;
-        }
+    if (authoritative.size === 0 || favoriteColorDirtyRef.current) return;
+    setFavoriteColorMap(prev => {
+      let next: Record<string, string> | null = null;
+      for (const [id, current] of authoritative) {
+        if (pendingFavoriteColorIdsRef.current.has(id)) continue;
+        const old = prev[id] || 'gray';
+        if (old === current) continue;
+        if (!next) next = { ...prev };
+        if (current === 'gray') delete next[id];
+        else next[id] = current;
       }
-      return changed ? next : prev;
+      return next || prev;
     });
-
-    if (changed) {
-      try {
-        const merged = { ...readLocalColorMap('soridraw.favoriteColorTags') };
-        for (const id of allIds) {
-          const before = previous[id] || 'gray';
-          const current = serverMap[id] || 'gray';
-          if (before !== current) {
-            if (current === 'gray') delete merged[id];
-            else merged[id] = current;
-          }
-        }
-        writeLocalColorMap('soridraw.favoriteColorTags', merged);
-        favoriteColorMapRef.current = merged;
-        favoriteColorBaselineRef.current = serializeColorMap(merged);
-        favoriteColorDirtyRef.current = false;
-      } catch (error) {
-        console.warn('favorite server color merge failed', error);
-      }
-    }
-    lastFavoriteServerColorMapRef.current = serverMap;
   }, [favorites]);
 
   useEffect(() => {

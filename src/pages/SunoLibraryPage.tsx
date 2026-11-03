@@ -839,6 +839,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const deferredPlaylistSearchTerm = useDeferredValue(playlistSearchTerm);
   const [workspaceColorFilter, setWorkspaceColorFilter] = useState<string>('all');
   const [workspaceLocalColorMap, setWorkspaceLocalColorMap] = useState<Record<string, string>>({});
+  const [libraryColorHydratedUid, setLibraryColorHydratedUid] = useState<string | null>(null);
   const [playlistLocalColorMap, setPlaylistLocalColorMap] = useState<Record<string, string>>({});
   const [, setLibraryColorSyncTick] = useState(0);
   const [isLibraryAdminUser, setIsLibraryAdminUser] = useState(false);
@@ -961,6 +962,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       pendingPlaylistColorKeysRef.current.clear();
       workspaceColorDirtyRef.current = false;
       playlistColorDirtyRef.current = false;
+      setLibraryColorHydratedUid(user?.uid || 'anonymous');
     } catch (error) {
       console.warn('load library color map failed:', error);
     }
@@ -982,8 +984,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   // tracks state back to Firestore merely because the Library page mounted.
 
   useEffect(() => {
+    if (libraryColorHydratedUid !== (user?.uid || 'anonymous')) return;
     writeLocalColorMap('soridraw.library.workspaceColorTags', workspaceLocalColorMap);
-  }, [workspaceLocalColorMap, user?.uid]);
+  }, [workspaceLocalColorMap, libraryColorHydratedUid, user?.uid]);
 
   useEffect(() => {
     const applyRecoveredColors = (event: Event) => {
@@ -1008,8 +1011,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   }, [user?.uid]);
 
   useEffect(() => {
+    if (libraryColorHydratedUid !== (user?.uid || 'anonymous')) return;
     writeLocalColorMap('soridraw.library.playlistColorTags', playlistLocalColorMap);
-  }, [playlistLocalColorMap, user?.uid]);
+  }, [playlistLocalColorMap, libraryColorHydratedUid, user?.uid]);
 
   useEffect(() => {
     const authoritative = new Map<string, string>();

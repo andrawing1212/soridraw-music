@@ -841,8 +841,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [playlistLocalColorMap, setPlaylistLocalColorMap] = useState<Record<string, string>>({});
   const [, setLibraryColorSyncTick] = useState(0);
   const [isLibraryAdminUser, setIsLibraryAdminUser] = useState(false);
-  const lastWorkspaceServerColorMapRef = React.useRef<Record<string, string>>({});
-  const lastPlaylistServerColorMapRef = React.useRef<Record<string, string>>({});
   const pendingWorkspaceColorKeysRef = React.useRef<Set<string>>(new Set());
   const pendingPlaylistColorKeysRef = React.useRef<Set<string>>(new Set());
   const workspaceLocalColorMapRef = React.useRef<Record<string, string>>({});

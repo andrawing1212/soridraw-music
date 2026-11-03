@@ -140,7 +140,7 @@ assert.match(lib,/persistWorkspaceColorOnly\(user\.uid, trackId, colorField, idx
 // in-memory ref/transaction/send stubs. No Firebase project, Cloudflare or
 // network connection is used by this test.
 const start=outbox.indexOf('export const tryDeliverPendingCanonicalColor = async (');
-const end=outbox.indexOf('\nexport const commitCanonicalColorWithOutbox = onCall(',start);
+const end=outbox.indexOf('\n// Short-lived, explicit-approval compatibility bridge',start);
 assert.ok(start>=0&&end>start,'actual durable deliver code must exist');
 const compiled=ts.transpileModule(
   outbox.slice(start,end).replace('export const ','const ')+'\n',

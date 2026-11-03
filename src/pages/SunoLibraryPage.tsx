@@ -2334,6 +2334,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   };
 
   const handleSyncLibraryColors = async () => {
+    // Manual and exit saves share one writer; an older request must not land last.
+    if (libraryColorsAutoSyncingRef.current) return;
     if (!user) {
       showToast('로그인이 필요합니다.');
       return;
@@ -2360,6 +2362,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       return;
     }
 
+    const workspaceSerialized = serializeColorMap(workspaceMap);
+    const playlistSerialized = serializeColorMap(playlistMap);
+    libraryColorsAutoSyncingRef.current = true;
     try {
       for (const [id, color] of favoriteEntries) {
         if (!id) continue;
@@ -2393,14 +2398,16 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       }
       if (confirmedWorkspaceColors.length > 0) await flushPendingCatalogPublishes(user.uid);
 
+      // An old account's completion cannot acknowledge a new account's clicks.
+      if (libraryUserRef.current?.uid !== user.uid) return;
       for (const [key, color] of workspaceEntries) {
         if (workspaceLocalColorMapRef.current[key] === color) pendingWorkspaceColorKeysRef.current.delete(key);
       }
       for (const [key, color] of playlistEntries) {
         if (playlistLocalColorMapRef.current[key] === color) pendingPlaylistColorKeysRef.current.delete(key);
       }
-      workspaceColorBaselineRef.current = serializeColorMap(workspaceLocalColorMapRef.current || {});
-      playlistColorBaselineRef.current = serializeColorMap(playlistLocalColorMapRef.current || {});
+      workspaceColorBaselineRef.current = workspaceSerialized;
+      playlistColorBaselineRef.current = playlistSerialized;
       workspaceColorDirtyRef.current = pendingWorkspaceColorKeysRef.current.size > 0;
       playlistColorDirtyRef.current = pendingPlaylistColorKeysRef.current.size > 0;
       markLibraryColorSynced();
@@ -2408,6 +2415,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     } catch (error) {
       console.error('unified color sync failed:', error);
       showToast('색상 동기화에 실패했습니다.');
+    } finally {
+      libraryColorsAutoSyncingRef.current = false;
     }
   };
 
@@ -2461,12 +2470,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       }
       if (confirmedWorkspaceColors.length > 0) await flushPendingCatalogPublishes(currentUser.uid);
 
-      pendingWorkspaceColorKeysRef.current.clear();
-      pendingPlaylistColorKeysRef.current.clear();
+      if (libraryUserRef.current?.uid !== currentUser.uid) return;
+      // A click made while Firestore/Catalog was awaiting belongs to the next save.
+      for (const [key, color] of workspaceEntries) {
+        if (workspaceLocalColorMapRef.current[key] === color) pendingWorkspaceColorKeysRef.current.delete(key);
+      }
+      for (const [key, color] of playlistEntries) {
+        if (playlistLocalColorMapRef.current[key] === color) pendingPlaylistColorKeysRef.current.delete(key);
+      }
       workspaceColorBaselineRef.current = workspaceSerialized;
       playlistColorBaselineRef.current = playlistSerialized;
-      workspaceColorDirtyRef.current = false;
-      playlistColorDirtyRef.current = false;
+      workspaceColorDirtyRef.current = pendingWorkspaceColorKeysRef.current.size > 0;
+      playlistColorDirtyRef.current = pendingPlaylistColorKeysRef.current.size > 0;
       if (!silent) showToast('색상 변경사항을 저장했습니다.');
     } catch (error) {
       console.error('library color exit sync failed:', error);

@@ -7,6 +7,7 @@ on:
       - 'cloudflare/media-worker/src/index.js'
       - 'scripts/verify-library-catalog-color-projection.mjs'
       - 'src/App.tsx'
+      - 'src/pages/SunoLibraryPage.tsx'
       - 'src/data/v1MutationBoundary.ts'
       - 'src/services/userDomainSyncService.ts'
       - 'scripts/verify-forward-color-catalog.mjs'

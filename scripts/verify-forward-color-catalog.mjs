@@ -85,3 +85,96 @@ assert.equal(libraryStaged.length,1,'uncached row must never publish partial dat
 console.log('FORWARD_COLOR_CATALOG_CANONICAL_COMMIT_STAGES_EXACT_ROW=PASS');
 console.log('FORWARD_COLOR_CATALOG_LEGACY_WORKER_CODE_PRESERVES_MISSING_FIELDS=PASS');
 console.log('FORWARD_COLOR_CATALOG_NO_ADDITIONAL_FIRESTORE_IO=PASS');
+
+// Run the actual manual/exit save functions with deferred Firestore/Catalog
+// promises. A staging-only test cannot expose completion races in these callers.
+const saveStart=lib.indexOf('  const handleSyncLibraryColors = async');
+const saveEnd=lib.indexOf('\n  useEffect(() => {',saveStart);
+assert.ok(saveStart>=0&&saveEnd>saveStart);
+const saveSource=lib.slice(saveStart,saveEnd);
+const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
+const workspaceKey='workspace:colorTags:track-1:0';
+const playlistKey='playlist:list-1:item-1';
+const saveHarness=()=>{
+  const writes=[],stages=[],toasts=[];
+  const canonical=deferred(),catalog=deferred(),catalogStarted=deferred();
+  const ctx={
+    user:{uid:'owner'},libraryUserRef:{current:{uid:'owner'}},
+    libraryColorsAutoSyncingRef:{current:false},isLibraryAdminUser:true,
+    workspaceLocalColorMap:{[workspaceKey]:'red'},playlistLocalColorMap:{[playlistKey]:'red'},
+    workspaceLocalColorMapRef:{current:{[workspaceKey]:'red'}},
+    playlistLocalColorMapRef:{current:{[playlistKey]:'red'}},
+    pendingWorkspaceColorKeysRef:{current:new Set([workspaceKey])},
+    pendingPlaylistColorKeysRef:{current:new Set([playlistKey])},
+    workspaceColorDirtyRef:{current:true},playlistColorDirtyRef:{current:true},
+    workspaceColorBaselineRef:{current:'{}'},playlistColorBaselineRef:{current:'{}'},
+    serializeColorMap:JSON.stringify,readLocalColorMap:()=>({}),getLibraryColorSyncCount:()=>0,
+    markLibraryColorSynced:()=>{},showToast:text=>toasts.push(text),
+    db:{},doc:(_db,...path)=>path.join('/'),serverTimestamp:()=>123,
+    updateDoc:async(path,data)=>{writes.push({path,data});await canonical.promise;},
+    updatePlaylistItemColor:async(uid,list,item,color)=>{writes.push({uid,list,item,color});},
+    stageConfirmedWorkspaceColors:(uid,items)=>{stages.push({uid,items});return true;},
+    flushPendingCatalogPublishes:async()=>{catalogStarted.resolve();await catalog.promise;},
+    runV1MutationBoundary:()=>{throw new Error('no cross-page Music Note writes');},
+    console:{error:()=>{}},
+  };
+  const handlers=vm.runInNewContext(compile(saveSource)+'\n({manual:handleSyncLibraryColors,exit:syncLibraryColorsOnExit});',ctx);
+  return {ctx,writes,stages,toasts,canonical,catalog,catalogStarted,...handlers};
+};
+for(const entry of ['manual','exit']){
+  const h=saveHarness();
+  const job=h[entry]();
+  assert.equal(h.writes.length,1);
+  const overlapping=[h.manual(),h.exit()];
+  assert.equal(h.writes.length,1,`${entry}: manual/exit must share one in-flight writer`);
+  await Promise.all(overlapping);
+  // Change both the already-in-flight key and a previously unqueued key.
+  const newKey='workspace:colorTags:track-2:0';
+  h.ctx.workspaceLocalColorMapRef.current[workspaceKey]='blue';
+  h.ctx.workspaceLocalColorMapRef.current[newKey]='gray';
+  h.ctx.pendingWorkspaceColorKeysRef.current.add(newKey);
+  h.ctx.playlistLocalColorMapRef.current[playlistKey]='green';
+  h.canonical.resolve();await h.catalogStarted.promise;
+  assert.equal(h.stages[0].items[0].color,'red','only confirmed captured color is staged');
+  h.catalog.resolve();await job;
+  assert.equal(h.ctx.pendingWorkspaceColorKeysRef.current.has(workspaceKey),true);
+  assert.equal(h.ctx.pendingWorkspaceColorKeysRef.current.has(newKey),true);
+  assert.equal(h.ctx.pendingPlaylistColorKeysRef.current.has(playlistKey),true);
+  assert.equal(h.ctx.workspaceColorDirtyRef.current,true);
+  assert.equal(h.ctx.playlistColorDirtyRef.current,true);
+  assert.equal(JSON.parse(h.ctx.workspaceColorBaselineRef.current)[workspaceKey],'red',
+    'unsaved blue must not become the confirmed baseline');
+  assert.equal(h.ctx.libraryColorsAutoSyncingRef.current,false);
+  // The existing next exit/manual opportunity persists the remaining final state.
+  await h.exit();
+  assert.equal(h.ctx.pendingWorkspaceColorKeysRef.current.size,0);
+  assert.equal(h.ctx.pendingPlaylistColorKeysRef.current.size,0);
+  assert.equal(h.writes.at(-1).color,'green');
+  assert.equal(h.writes.some(w=>w.data?.['colorTags.0']==='blue'),true);
+  assert.equal(h.writes.some(w=>w.data?.['colorTags.0']===null),true);
+  assert.equal(h.ctx.workspaceColorDirtyRef.current,false);
+  const settledWrites=h.writes.length;
+  await h.exit();
+  assert.equal(h.writes.length,settledWrites,'unchanged exit writes zero');
+}
+for(const entry of ['manual','exit']){
+  for(const failure of ['canonical','catalog']){
+    const h=saveHarness(),job=h[entry]();
+    if(failure==='canonical')h.canonical.reject(new Error('offline'));
+    else {h.canonical.resolve();await h.catalogStarted.promise;h.catalog.reject(new Error('offline'));}
+    await job;
+    assert.equal(h.ctx.pendingWorkspaceColorKeysRef.current.has(workspaceKey),true);
+    assert.equal(h.ctx.pendingPlaylistColorKeysRef.current.has(playlistKey),true);
+    assert.equal(h.ctx.libraryColorsAutoSyncingRef.current,false,'failure releases shared writer');
+  }
+  const h=saveHarness(),job=h[entry]();
+  h.canonical.resolve();await h.catalogStarted.promise;
+  h.ctx.libraryUserRef.current={uid:'different-owner'};
+  h.ctx.workspaceColorBaselineRef.current='{"newAccount":true}';
+  h.catalog.resolve();await job;
+  assert.equal(h.ctx.pendingWorkspaceColorKeysRef.current.has(workspaceKey),true,
+    'old completion cannot clear new-account same-key pending');
+  assert.equal(h.ctx.workspaceColorBaselineRef.current,'{"newAccount":true}');
+}
+console.log('LIBRARY_COLOR_IN_FLIGHT_NEW_CLICKS_AND_FAILURE_RETRY=PASS');
+console.log('LIBRARY_COLOR_MANUAL_EXIT_SERIALIZATION_AND_ACCOUNT_ACK=PASS');

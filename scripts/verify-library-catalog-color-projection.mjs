@@ -77,8 +77,16 @@ assert.doesNotMatch(clientProjectCode, /getDocs|setDoc|updateDoc|writeBatch/);
 // Execute the actual R2 delta merge code, including CAS retries, in a
 // no-network in-memory harness. This is a test of the deployed handler path,
 // not a standalone approximation of the merge behavior.
-const mergeCode = block(worker, 'const existingLibraryColorRowsForDelta = ', '\nconst handleCatalog = async');
-const actualWorkerApply = async ({ base, deltas = [], incoming, deletedIds = [], retryState = null }) => {
+const mergeCode = block(worker, 'const catalogColorFields = ', '\nconst handleCatalog = async');
+const noteListCode = block(worker, 'const MUSIC_NOTE_CATALOG_FIELDS = [', '\nconst LIBRARY_CATALOG_FIELDS');
+const noteList = Array.from(vm.runInNewContext(noteListCode + '\nMUSIC_NOTE_CATALOG_FIELDS;'));
+const noteActive = vm.runInNewContext(block(worker, 'const isActiveMusicNoteCatalogItem = ', '\nconst catalogCreatedAtMs') + '\nisActiveMusicNoteCatalogItem;');
+const noteProject = vm.runInNewContext(workerProjectCode + '\nprojectCatalogFields;', {
+  catalogFieldList: () => noteList, catalogCreatedAtMs: () => 1,
+  text: value => typeof value === 'string' ? value.trim() : '',
+  isActiveMusicNoteCatalogItem: noteActive,
+});
+const actualWorkerApply = async ({ base, deltas = [], incoming, deletedIds = [], retryState = null, kind = 'library' }) => {
   const currentIds = new Set(base.map(item => item.id));
   for (const entry of deltas) {
     for (const id of entry.deletedIds) currentIds.delete(id);
@@ -99,11 +107,11 @@ const actualWorkerApply = async ({ base, deltas = [], incoming, deletedIds = [],
   let putCalls = 0;
   let lastWritten = null;
   const context = {
-    catalogFieldList: () => workerList,
+    catalogFieldList: () => kind === 'musicNote' ? noteList : workerList,
     catalogCreatedAtMs: (item) => Number(item.createdAtMs || 1),
     text: (value) => typeof value === 'string' ? value.trim() : '',
     getCatalogState: async () => states[Math.min(getCalls++, states.length - 1)],
-    projectCatalogFields: workerProject,
+    projectCatalogFields: kind === 'musicNote' ? noteProject : workerProject,
     // Use the production journal's *actual* revision and count fences.
     appendCatalogJournalDelta: actualAppendCatalogJournalDelta,
     putCatalogJournalHead: async (_env, _uid, _kind, nextHead) => {
@@ -118,7 +126,7 @@ const actualWorkerApply = async ({ base, deltas = [], incoming, deletedIds = [],
   };
   const apply = vm.runInNewContext(workerListCode + '\n' + mergeCode + '\napplyCatalogDelta;', context);
   const result = await apply(
-    { uid: 'owner-one' }, 'library',
+    { uid: 'owner-one' }, kind,
     { mutationId: 'compat-test-1', baseRevision, revision: baseRevision + 1,
       baseItemCount: currentIds.size, nextItemCount: expectedAfterIds.size,
       deletedIds, upserts: incoming }, {},
@@ -188,7 +196,7 @@ assert.equal(concurrent.result.revision, 101, 'latest concurrent head remains au
 
 // This compatibility path cannot requery canonical Firestore, issue a new
 // R2 read, or mutate any user source. Only the already acquired state is used.
-const compatibilitySource = block(worker, 'const existingLibraryColorRowsForDelta = ', '\nconst applyCatalogDelta = async');
+const compatibilitySource = block(worker, 'const catalogColorFields = ', '\nconst applyCatalogDelta = async');
 assert.doesNotMatch(compatibilitySource, /firestoreCatalogQuery\s*\(|buildCanonicalCatalog\s*\(|catalogBucket\s*\(|await\s+[^;]*\.get\s*\(/);
 assert.doesNotMatch(compatibilitySource, /(?:setDoc|updateDoc|deleteDoc|writeBatch)\s*\(/);
 assert.equal(legacy.getCalls, 1, 'old-client delta must only reuse its existing R2 state read');
@@ -202,3 +210,53 @@ console.log('LIBRARY_COLOR_DELTA_ADDITIONAL_R2_FIRESTORE_IO=ZERO');
 console.log('LIBRARY_CANONICAL_COLOR_FIELDS_SERVER_AND_BROWSER_PROJECTION=PASS');
 console.log('LIBRARY_COLOR_NULL_RESET_AND_COMPACT_SUMMARY=PASS');
 console.log('LIBRARY_CATALOG_WARM_READ_EXTRA_FIRESTORE_R0_W0=PASS');
+
+// Music Note uses two aliases for ONE swatch. An explicit modern or legacy
+// choice wins; only a row missing both fields inherits the existing color.
+const noteBase = [{ id: 'note-one', uid: 'owner-one', saved: true,
+  createdAtMs: 1, title: 'keep', favoriteColorTag: 'purple', colorTag: 'red' }];
+const oldNoteEdit = { id: 'note-one', uid: 'owner-one', saved: true, createdAtMs: 1, title: 'edited' };
+const noteApply = options => actualWorkerApply({ kind: 'musicNote', base: noteBase, ...options });
+const noteLegacy = await noteApply({ incoming: [oldNoteEdit] });
+const noteRow = noteLegacy.lastWritten.deltas.at(-1).upserts[0];
+assert.equal(noteRow.favoriteColorTag, 'purple');
+assert.equal(noteRow.colorTag, 'red');
+assert.equal(noteRow.title, 'edited');
+assert.equal(noteLegacy.getCalls, 1, 'reuse existing state read only');
+assert.equal(noteLegacy.putCalls, 1, 'one existing journal write');
+for (const choice of [
+  { favoriteColorTag: null }, { favoriteColorTag: 'blue' },
+  { colorTag: null }, { colorTag: 'green' },
+]) {
+  const result = await noteApply({ incoming: [{ ...oldNoteEdit, ...choice }] });
+  const row = result.lastWritten.deltas.at(-1).upserts[0];
+  for (const key of ['favoriteColorTag', 'colorTag']) {
+    assert.equal(Object.hasOwn(row, key), Object.hasOwn(choice, key), 'do not restore a competing stale alias');
+    if (Object.hasOwn(choice, key)) assert.equal(row[key], choice[key]);
+  }
+}
+const noteHistory = [{ deletedIds: [], upserts: [{ ...noteBase[0], favoriteColorTag: null }] }];
+const noteLatest = await noteApply({ deltas: noteHistory, incoming: [oldNoteEdit] });
+assert.equal(noteLatest.lastWritten.deltas.at(-1).upserts[0].favoriteColorTag, null,
+  'latest journal clear outranks old colored base');
+const noteDeleted = await noteApply({
+  deltas: [{ deletedIds: ['note-one'], upserts: [] }], incoming: [oldNoteEdit],
+});
+assert.equal(Object.hasOwn(noteDeleted.lastWritten.deltas.at(-1).upserts[0], 'favoriteColorTag'), false);
+assert.equal(Object.hasOwn(noteDeleted.lastWritten.deltas.at(-1).upserts[0], 'colorTag'), false);
+const noteConflict = await noteApply({
+  incoming: [oldNoteEdit],
+  retryState: {
+    base: { items: noteBase },
+    head: { headRevision: 101, itemCount: 1, deltas: [{
+      deletedIds: [], upserts: [{ ...noteBase[0], favoriteColorTag: 'green' }],
+    }] }, journalObject: { etag: 'newer' },
+  },
+});
+assert.equal(noteConflict.result.conflict, true);
+assert.equal(noteConflict.getCalls, 2);
+assert.equal(noteConflict.putCalls, 1, 'losing CAS cannot overwrite newer color');
+console.log('MUSIC_NOTE_OLD_CLIENT_MISSING_SWATCH_PRESERVED=PASS');
+console.log('MUSIC_NOTE_EXPLICIT_GRAY_AND_LEGACY_ALIAS_NO_RESURRECTION=PASS');
+console.log('MUSIC_NOTE_LATEST_JOURNAL_DELETE_AND_CAS_COLOR_FENCE=PASS');
+console.log('MUSIC_NOTE_COLOR_COMPAT_ADDITIONAL_FIRESTORE_R2_IO=ZERO');

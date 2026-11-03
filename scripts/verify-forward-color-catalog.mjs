@@ -22,7 +22,7 @@ assert.match(lib,/schedulePreviewAdaptiveListIndexPublishIfDirty\('library', uid
 assert.equal((lib.match(/if \(confirmedWorkspaceColors\.length > 0\) await flushPendingCatalogPublishes\(/g)||[]).length,2);
 assert.equal((lib.match(/confirmedWorkspaceColors\.push\(/g)||[]).length,2);
 assert.match(worker,/'colorTags', 'favoriteColorTags'/);
-assert.match(worker,/const preserveExistingLibrarySwatches/);
+assert.match(worker,/const preserveExistingCatalogColors/);
 assert.doesNotMatch(appBlock,/getDocs\([\s\S]*?favoriteColorTag\s*:/, 'no new full-collection read');
 
 // Execute the two actual staging functions against in-memory samples. This

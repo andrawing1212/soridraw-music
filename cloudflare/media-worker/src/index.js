@@ -1009,16 +1009,19 @@ const compactCatalogJournal = async (env, uid, kind) => {
   return Boolean(stored);
 };
 
-// Old browser clients do not know the Library swatch fields. Their full-row
-// Catalog upserts must not erase a newer R2 swatch. This inspects only the R2
+// Old browser clients may omit swatch fields. Their full-row
+// Music Note/Library upserts must not erase a newer R2 swatch. This inspects only the R2
 // base/journal already loaded by getCatalogState: no additional R2/Firestore IO.
 // Recompute it for each CAS retry so a concurrent newer color is not lost.
-const existingLibraryColorRowsForDelta = (state, incomingUpserts) => {
+const catalogColorFields = (kind) => kind === 'musicNote'
+  ? ['favoriteColorTag', 'colorTag'] : ['colorTags', 'favoriteColorTags'];
+
+const existingCatalogColorRowsForDelta = (state, incomingUpserts, kind) => {
+  const fields = catalogColorFields(kind);
   const ids = new Set();
   for (const item of incomingUpserts) {
     const id = text(item?.id);
-    if (id && (!Object.prototype.hasOwnProperty.call(item, 'colorTags')
-      || !Object.prototype.hasOwnProperty.call(item, 'favoriteColorTags'))) ids.add(id);
+    if (id && fields.some((key) => !Object.prototype.hasOwnProperty.call(item, key))) ids.add(id);
   }
   const rows = new Map();
   if (!ids.size) return rows;
@@ -1041,9 +1044,15 @@ const existingLibraryColorRowsForDelta = (state, incomingUpserts) => {
   return rows;
 };
 
-const preserveExistingLibrarySwatches = (incoming, projected, previous) => {
+const preserveExistingCatalogColors = (kind, incoming, projected, previous) => {
   if (!previous || !projected) return projected;
-  for (const key of ['colorTags', 'favoriteColorTags']) {
+  const fields = catalogColorFields(kind);
+  // Music Note's modern/legacy fields are alternative representations of one
+  // choice. Any explicit representation (including null) wins over old aliases.
+  if (kind === 'musicNote' && fields.some((key) => Object.prototype.hasOwnProperty.call(incoming, key))) {
+    return projected;
+  }
+  for (const key of fields) {
     // "Missing" means old-client ignorance, NOT explicit user reset.
     // Preserve explicit null, empty maps and per-index null values as provided.
     if (!Object.prototype.hasOwnProperty.call(incoming, key)
@@ -1061,8 +1070,7 @@ const applyCatalogDelta = async (identity, kind, delta, env, executionCtx = null
     const sanitizedDeletedIds = new Set(delta.deletedIds.map((id) => text(id)).filter(Boolean));
     // The existing base+journal are already in memory. Do not add per-item
     // canonical reads or rebuild the shared Catalog on old-client traffic.
-    const existingLibraryRows = kind === 'library'
-      ? existingLibraryColorRowsForDelta(state, delta.upserts) : null;
+    const existingColorRows = existingCatalogColorRowsForDelta(state, delta.upserts, kind);
     const sanitizedUpserts = [];
     for (const rawItem of delta.upserts) {
       const id = text(rawItem?.id);
@@ -1070,8 +1078,8 @@ const applyCatalogDelta = async (identity, kind, delta, env, executionCtx = null
       const projected = projectCatalogFields(kind, rawItem, id);
       if (!projected) sanitizedDeletedIds.add(id);
       else sanitizedUpserts.push(
-        existingLibraryRows && !sanitizedDeletedIds.has(id)
-          ? preserveExistingLibrarySwatches(rawItem, projected, existingLibraryRows.get(id))
+        !sanitizedDeletedIds.has(id)
+          ? preserveExistingCatalogColors(kind, rawItem, projected, existingColorRows.get(id))
           : projected,
       );
     }

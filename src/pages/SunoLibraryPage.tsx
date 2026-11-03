@@ -991,147 +991,61 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   }, [playlistLocalColorMap, user?.uid]);
 
   useEffect(() => {
-    const serverMap: Record<string, string> = {};
-    const loadedTrackIds = new Set<string>();
-
+    const authoritative = new Map<string, string>();
     for (const track of tracks || []) {
       const trackId = track?.id || track?.trackId;
       if (!trackId) continue;
-      loadedTrackIds.add(String(trackId));
-      for (const colorField of ['colorTags', 'favoriteColorTags']) {
-        const source = track?.[colorField] || {};
-        Object.entries(source).forEach(([idx, color]) => {
-          serverMap[`workspace:${colorField}:${trackId}:${idx}`] = color && color !== 'gray' ? String(color) : 'gray';
-        });
+      for (const field of ['colorTags', 'favoriteColorTags']) {
+        const source = track?.[field];
+        // A Catalog version that does not project these keys does not have
+        // permission to clear a previously retained local color.
+        if (!source || typeof source !== 'object' || Array.isArray(source)) continue;
+        for (const [idx, value] of Object.entries(source)) {
+          authoritative.set(`workspace:${field}:${trackId}:${idx}`,
+            value && value !== 'gray' ? String(value) : 'gray');
+        }
       }
     }
-
-    const localWorkspaceMap = { ...readLocalColorMap('soridraw.library.workspaceColorTags'), ...workspaceLocalColorMap };
-    Object.keys(localWorkspaceMap).forEach((key) => {
-      const [, colorField, trackId, idx] = key.split(':');
-      if (!trackId || idx === undefined || (colorField !== 'colorTags' && colorField !== 'favoriteColorTags')) return;
-      if (loadedTrackIds.has(trackId) && serverMap[key] === undefined) serverMap[key] = 'gray';
-    });
-
-    const previous = lastWorkspaceServerColorMapRef.current || {};
-    const allKeys = new Set([...Object.keys(previous), ...Object.keys(serverMap)]);
-    if (allKeys.size === 0) {
-      lastWorkspaceServerColorMapRef.current = serverMap;
-      return;
-    }
-
-    if (workspaceColorDirtyRef.current) {
-      lastWorkspaceServerColorMapRef.current = serverMap;
-      return;
-    }
-
-    let changed = false;
-    setWorkspaceLocalColorMap((prev) => {
-      const next = { ...prev };
-      for (const key of allKeys) {
+    if (!authoritative.size || workspaceColorDirtyRef.current) return;
+    setWorkspaceLocalColorMap(prev => {
+      let next: Record<string, string> | null = null;
+      for (const [key, value] of authoritative) {
         if (pendingWorkspaceColorKeysRef.current.has(key)) continue;
-        const before = previous[key] || 'gray';
-        const current = serverMap[key] || 'gray';
-        if (before !== current) {
-          changed = true;
-          if (current === 'gray') delete next[key];
-          else next[key] = current;
-        }
+        if ((prev[key] || 'gray') === value) continue;
+        if (!next) next = { ...prev };
+        if (value === 'gray') delete next[key];
+        else next[key] = value;
       }
-      return changed ? next : prev;
+      return next || prev;
     });
-    if (changed) {
-      try {
-        const merged = { ...readLocalColorMap('soridraw.library.workspaceColorTags') };
-        for (const key of allKeys) {
-          if (pendingWorkspaceColorKeysRef.current.has(key)) continue;
-          const before = previous[key] || 'gray';
-          const current = serverMap[key] || 'gray';
-          if (before !== current) {
-            if (current === 'gray') delete merged[key];
-            else merged[key] = current;
-          }
-        }
-        writeLocalColorMap('soridraw.library.workspaceColorTags', merged);
-        workspaceLocalColorMapRef.current = merged;
-        workspaceColorBaselineRef.current = serializeColorMap(merged);
-        workspaceColorDirtyRef.current = false;
-      } catch (error) {
-        console.warn('workspace server color merge failed:', error);
-      }
-    }
-    lastWorkspaceServerColorMapRef.current = serverMap;
-  }, [tracks, workspaceLocalColorMap]);
+  }, [tracks]);
 
   useEffect(() => {
-    const serverMap: Record<string, string> = {};
-    const loadedPlaylistId = activePlaylistId || 'unknown';
-
+    const authoritative = new Map<string, string>();
+    const active = activePlaylistId || 'unknown';
     for (const item of playlistItems || []) {
-      const playlistId = (item as any)?.playlistId || loadedPlaylistId;
-      const itemId = (item as any)?.id || 'unknown';
-      const color = (item as any)?.colorTag;
-      if (playlistId !== 'unknown' && itemId !== 'unknown') {
-        serverMap[`playlist:${playlistId}:${itemId}`] = color && color !== 'gray' ? String(color) : 'gray';
-      }
+      const playlistId = (item as any)?.playlistId || active;
+      const itemId = (item as any)?.id;
+      if (!itemId || playlistId === 'unknown') continue;
+      // A missing colorTag is an unknown old-client summary, NOT gray.
+      if (!Object.prototype.hasOwnProperty.call(item, 'colorTag')) continue;
+      const color = (item as any).colorTag;
+      authoritative.set(`playlist:${playlistId}:${itemId}`,
+        color && color !== 'gray' ? String(color) : 'gray');
     }
-
-    const localPlaylistMap = { ...readLocalColorMap('soridraw.library.playlistColorTags'), ...playlistLocalColorMap };
-    Object.keys(localPlaylistMap).forEach((key) => {
-      const [, playlistId, itemId] = key.split(':');
-      if (!playlistId || !itemId || playlistId === 'unknown' || itemId === 'unknown') return;
-      if (playlistId === loadedPlaylistId && serverMap[key] === undefined) serverMap[key] = 'gray';
-    });
-
-    const previous = lastPlaylistServerColorMapRef.current || {};
-    const allKeys = new Set([...Object.keys(previous), ...Object.keys(serverMap)]);
-    if (allKeys.size === 0) {
-      lastPlaylistServerColorMapRef.current = serverMap;
-      return;
-    }
-
-    if (playlistColorDirtyRef.current) {
-      lastPlaylistServerColorMapRef.current = serverMap;
-      return;
-    }
-
-    let changed = false;
-    setPlaylistLocalColorMap((prev) => {
-      const next = { ...prev };
-      for (const key of allKeys) {
+    if (!authoritative.size || playlistColorDirtyRef.current) return;
+    setPlaylistLocalColorMap(prev => {
+      let next: Record<string, string> | null = null;
+      for (const [key, value] of authoritative) {
         if (pendingPlaylistColorKeysRef.current.has(key)) continue;
-        const before = previous[key] || 'gray';
-        const current = serverMap[key] || 'gray';
-        if (before !== current) {
-          changed = true;
-          if (current === 'gray') delete next[key];
-          else next[key] = current;
-        }
+        if ((prev[key] || 'gray') === value) continue;
+        if (!next) next = { ...prev };
+        if (value === 'gray') delete next[key];
+        else next[key] = value;
       }
-      return changed ? next : prev;
+      return next || prev;
     });
-    if (changed) {
-      try {
-        const merged = { ...readLocalColorMap('soridraw.library.playlistColorTags') };
-        for (const key of allKeys) {
-          if (pendingPlaylistColorKeysRef.current.has(key)) continue;
-          const before = previous[key] || 'gray';
-          const current = serverMap[key] || 'gray';
-          if (before !== current) {
-            if (current === 'gray') delete merged[key];
-            else merged[key] = current;
-          }
-        }
-        writeLocalColorMap('soridraw.library.playlistColorTags', merged);
-        playlistLocalColorMapRef.current = merged;
-        playlistColorBaselineRef.current = serializeColorMap(merged);
-        playlistColorDirtyRef.current = false;
-      } catch (error) {
-        console.warn('playlist server color merge failed:', error);
-      }
-    }
-    lastPlaylistServerColorMapRef.current = serverMap;
-  }, [playlistItems, activePlaylistId, playlistLocalColorMap]);
+  }, [playlistItems, activePlaylistId]);
 
   const [renameModalArgs, setRenameModalArgs] = useState<{ playlist: Playlist, newTitle: string } | null>(null);
   const [moveModalArgs, setMoveModalArgs] = useState<{ item: PlaylistItem } | null>(null);

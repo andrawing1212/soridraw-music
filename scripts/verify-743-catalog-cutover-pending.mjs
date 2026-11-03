@@ -45,7 +45,7 @@ assert.equal((await persistCatalogCutoverPending(r2,uid,kind,delta('id-two'))).h
 assert.equal(r2.rows(uid,kind).length,2,'R2 CAS retry may not erase previous mutation');
 const snapshot=r2.rows(uid,kind).map(x=>x.mutationId);
 r2.forceFail=true;
-await assert.rejects(persistCatalogCutoverPending(r2,uid,kind,delta('fail-io')),/R2_UNAVAILABLE/);
+await assert.rejects(persistCatalogCutoverPending(r2,uid,kind,{...delta('fail-io'),upserts:[{id:'failure-test',createdAtMs:1}]}),/R2_UNAVAILABLE/);
 r2.forceFail=false;
 assert.deepEqual(r2.rows(uid,kind).map(x=>x.mutationId),snapshot,'failed write preserves queue');
 const key=cutoverOutboxKey(uid,kind);

@@ -146,7 +146,12 @@ export const retryPendingCanonicalColors = onSchedule({
   // roughly once per 15 min when enabled; no page-entry reads or writes.
   const due = await queue().where('nextAttemptAt','<=',admin.firestore.Timestamp.now())
     .orderBy('nextAttemptAt').limit(80).get();
-  for (const item of due.docs) {
-    await tryDeliverPendingCanonicalColor(item.ref);
+  // Five concurrent exact deliveries bound the 80-row batch to approximately
+  // 16 rounds even when Cloudflare responds slowly. One user's failure does
+  // not prevent other pending colors from being retried.
+  for (let index = 0; index < due.docs.length; index += 5) {
+    await Promise.allSettled(due.docs.slice(index,index+5).map(item =>
+      tryDeliverPendingCanonicalColor(item.ref)
+    ));
   }
 });

@@ -32,7 +32,7 @@ jobs:
         run: node scripts/verify-exact-color-restore-candidate.mjs
       - name: Media Worker bundle dry-run (no Cloudflare upload or deployment)
         run: |
-          npm --prefix cloudflare/media-worker ci --no-audit --no-fund
+          npm --prefix cloudflare/media-worker install --no-audit --no-fund
           npm --prefix cloudflare/media-worker run check
       - name: Library canonical color projection (source only, zero deploy)
         run: |

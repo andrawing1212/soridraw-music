@@ -145,3 +145,54 @@ export const planCanonicalColorVersionTransition = ({
   }
   return { code: 'COLOR_VERSION_ADVANCE_CANDIDATE', patch, updateTime: next };
 };
+
+
+// A trusted Firebase event indicates an actual color mutation. This is distinct
+// from manual historical backfill: after the writer has authenticated the
+// server delivery, an explicit null/gray must replace an old color. All
+// provenance is server-issued; no browser may set __colorSourceUpdateTime.
+export const planTrustedCanonicalColorEvent = ({
+  kind, canonical, catalogRow, sourceUpdateTime,
+}) => {
+  if (!['musicNote', 'library'].includes(kind)
+    || !canonical || typeof canonical !== 'object' || Array.isArray(canonical)
+    || !catalogRow || typeof catalogRow !== 'object' || !String(catalogRow.id || '').trim()
+    || inactive(canonical, kind) || inactive(catalogRow, kind)) {
+    return { code: 'INACTIVE_OR_MISSING', row: null };
+  }
+  const next = firestoreVersion(sourceUpdateTime);
+  const priorRaw = catalogRow.__colorSourceUpdateTime;
+  const prior = priorRaw == null ? '' : firestoreVersion(priorRaw);
+  if (!next || (priorRaw != null && !prior)) return { code: 'BAD_SOURCE_VERSION', row: null };
+  if (prior && next < prior) return { code: 'STALE', row: null };
+  if (prior && next === prior) return { code: 'DUPLICATE', row: null };
+  const projected = { ...catalogRow };
+  let hasColor = false;
+  if (kind === 'musicNote') {
+    const key = has(canonical, 'favoriteColorTag') ? 'favoriteColorTag'
+      : has(canonical, 'colorTag') ? 'colorTag' : '';
+    const value = key ? normalizedColor(canonical[key]) : undefined;
+    if (value === undefined) return { code: 'NO_CANONICAL_COLOR', row: null };
+    projected.favoriteColorTag = value;
+    hasColor = true;
+  } else {
+    for (const field of ['colorTags', 'favoriteColorTags']) {
+      if (!has(canonical, field)) continue;
+      if (!map(canonical[field])) return { code: 'INVALID_COLOR_MAP', row: null };
+      const keys = Object.entries(canonical[field]);
+      if (keys.length > 1000) return { code: 'COLOR_MAP_TOO_LARGE', row: null };
+      const nextMap = {};
+      for (const [index, raw] of keys) {
+        if (!/^(0|[1-9]\d{0,3})$/.test(index)) return { code: 'INVALID_COLOR_INDEX', row: null };
+        const value = normalizedColor(raw);
+        if (value === undefined) return { code: 'INVALID_COLOR_VALUE', row: null };
+        nextMap[index] = value;
+      }
+      projected[field] = nextMap;
+      hasColor = true;
+    }
+  }
+  if (!hasColor) return { code: 'NO_CANONICAL_COLOR', row: null };
+  projected.__colorSourceUpdateTime = next;
+  return { code: 'APPLY', row: projected };
+};

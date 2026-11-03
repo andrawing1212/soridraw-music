@@ -1,5 +1,5 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
-export { syncMusicNoteCanonicalColors, syncLibraryCanonicalColors } from "./colorCatalogPublisher";
+export { commitCanonicalColorWithOutbox, retryPendingCanonicalColors } from "./colorCatalogOutbox";
 import { defineSecret } from "firebase-functions/params";
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";

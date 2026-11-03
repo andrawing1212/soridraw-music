@@ -5,27 +5,23 @@
 // a cross-service transaction. Existing local/RTDB immediate paint is intact.
 import { createHmac } from 'node:crypto';
 import * as admin from 'firebase-admin';
-import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { defineSecret } from 'firebase-functions/params';
 import {
-  colorEventNeeded, firestoreTimestampNano, buildCanonicalColorDelivery,
-  type CanonicalColorKind,
+  firestoreTimestampNano, buildCanonicalColorDelivery, type CanonicalColorKind,
 } from './colorCatalogEventPure';
 
-const signingKey = defineSecret('SORIDRAW_COLOR_CATALOG_HMAC_SECRET');
+export const colorCatalogSigningKey = defineSecret('SORIDRAW_COLOR_CATALOG_HMAC_SECRET');
 const targetHosts = new Set([
   'soridraw-media-preview.andrawing1212.workers.dev',
   'soridraw-media-test.andrawing1212.workers.dev',
   'soridraw-media.andrawing1212.workers.dev',
 ]);
-const sendChangedColor = async (
+export const deliverLatestCanonicalColor = async (
   kind:CanonicalColorKind, uid:string, documentId:string, eventId:string,
-  before:Record<string,unknown>|null, after:Record<string,unknown>|null,
-) => {
-  if (process.env.SORIDRAW_COLOR_CATALOG_EVENTS_V1 !== '1'
-    || !colorEventNeeded(kind,before,after)) return;
+):Promise<'DELIVERED'|'CANONICAL_ABSENT'> => {
+  if (process.env.SORIDRAW_COLOR_CATALOG_EVENTS_V1 !== '1') throw Error('COLOR_CATALOG_DISABLED');
   const target = String(process.env.SORIDRAW_COLOR_CATALOG_WORKER_URL || '');
-  const secret = signingKey.value();
+  const secret = colorCatalogSigningKey.value();
   let url:URL;
   try { url = new URL(target); }
   catch { throw Error('COLOR_CATALOG_WORKER_URL_MISSING'); }
@@ -39,16 +35,16 @@ const sendChangedColor = async (
   // R1 for a REAL color change only. Re-read canonical on each event retry:
   // delayed event snapshots cannot override a user's newer gray/reset click.
   const latest = await ref.get();
-  if (!latest.exists) return; // never resurrect a deleted document
+  if (!latest.exists) return 'CANONICAL_ABSENT'; // never resurrect a deleted document
   const source = latest.data() as Record<string,unknown> | undefined;
-  if (!source) return;
+  if (!source) return 'CANONICAL_ABSENT';
   const event = buildCanonicalColorDelivery({
     kind, uid, documentId,
     eventId: eventId.replace(/[^A-Za-z0-9_-]/g,'').slice(0,180),
     data: source,
     sourceUpdateTime: firestoreTimestampNano(latest.updateTime),
   });
-  if (!event) return; // inactive, invalid, or explicit color absence
+  if (!event) return 'CANONICAL_ABSENT'; // inactive, invalid, or absent current color
   const raw = JSON.stringify(event);
   if (raw.length > 32 * 1024) throw Error('COLOR_CATALOG_DELIVERY_TOO_LARGE');
   const issued = String(Date.now());
@@ -63,28 +59,10 @@ const sendChangedColor = async (
     body:raw, signal:AbortSignal.timeout(12_000),
   });
   if (!response.ok) throw Error('COLOR_CATALOG_DELIVERY_HTTP_'+response.status);
+  const acknowledged = await response.json().catch(() => null);
+  if (acknowledged?.ok !== true || !['APPLIED','DUPLICATE','STALE'].includes(acknowledged?.code)) {
+    throw Error('COLOR_CATALOG_DELIVERY_UNCONFIRMED');
+  }
+  return 'DELIVERED';
 };
 
-export const syncMusicNoteCanonicalColors = onDocumentWritten({
-  document:'favorites/{documentId}', region:'asia-northeast3',
-  retry:true, secrets:[signingKey], maxInstances:5,
-}, async (event) => {
-  const before = event.data?.before?.data() as Record<string,unknown>|undefined;
-  const after = event.data?.after?.data() as Record<string,unknown>|undefined;
-  const uid = String(after?.uid || before?.uid || '').trim();
-  const documentId = String(event.params.documentId || '').trim();
-  if (!uid || !documentId || (after?.uid && after.uid !== uid)) return;
-  await sendChangedColor('musicNote',uid,documentId,event.id,before || null,after || null);
-});
-
-export const syncLibraryCanonicalColors = onDocumentWritten({
-  document:'suno_tracks/{uid}/tracks/{documentId}', region:'asia-northeast3',
-  retry:true, secrets:[signingKey], maxInstances:5,
-}, async (event) => {
-  const before = event.data?.before?.data() as Record<string,unknown>|undefined;
-  const after = event.data?.after?.data() as Record<string,unknown>|undefined;
-  const uid = String(event.params.uid || '').trim();
-  const documentId = String(event.params.documentId || '').trim();
-  if (!uid || !documentId || (after?.uid && after.uid !== uid)) return;
-  await sendChangedColor('library',uid,documentId,event.id,before || null,after || null);
-});

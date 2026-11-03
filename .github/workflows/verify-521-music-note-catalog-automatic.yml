@@ -10,6 +10,7 @@ on:
       - 'functions/src/colorCatalogEventPure.ts'
       - 'functions/src/colorCatalogPublisher.ts'
       - 'functions/src/colorCatalogOutbox.ts'
+      - 'functions/src/colorCatalogLegacyBridge.ts'
       - 'src/services/colorCatalogOutboxService.ts'
       - 'src/pages/FavoritesPage.tsx'
       - 'src/pages/SunoLibraryPage.tsx'

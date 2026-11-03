@@ -240,3 +240,14 @@ assert.doesNotMatch(releaseWorkflow,/workflow_dispatch:|wrangler r2 object put|w
 assert.doesNotMatch(readFileSync('.github/workflows/cloudflare-media-r2-preview-deploy.yml','utf8'),
   /deploy-shared-color:/);
 console.log('COLOR_SHARED_WORKERS_PINNED_SINGLE_TRIGGER_MANUAL_APPROVAL_GATE=PASS');
+
+// During the explicit coordinated release, old version URLs must be
+// disabled while the normal workers.dev URLs remain available to the app.
+const versionRelease=readFileSync('.github/workflows/cloudflare-media-color-compat-rollout.yml','utf8');
+const compatHelper=readFileSync('.deploy/release-media-worker-runtime.mjs','utf8');
+assert.match(versionRelease,/ALL_LEGACY_VERSION_URLS_DISABLED_MAIN_WORKER_URLS_PRESERVED=PASS/);
+assert.ok(versionRelease.indexOf('Disable old version-specific URLs') <
+  versionRelease.indexOf('Activate all three in sequence'));
+assert.match(compatHelper,/RELEASE_MEDIA_DISABLE_VERSION_URLS/);
+assert.match(compatHelper,/preview_urls: false/);
+console.log('COLOR_RELEASE_RETIRE_OLD_VERSION_URLS_KEEP_MAIN_WORKERS_DEV=PASS');

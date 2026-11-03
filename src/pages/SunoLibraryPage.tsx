@@ -1,4 +1,5 @@
 import { SORIDRAW_COLOR_LOCAL_RECOVERY_EVENT } from '../lib/colorLocalRecovery';
+import { isCanonicalColorOutboxClientEnabled, commitCanonicalColorWithOutboxClient } from '../services/colorCatalogOutboxService';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import { resolveNextSongApplyRoute, stageNextSongKeywords } from '../lib/nextSongPendingBridge';
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useDeferredValue } from 'react';
@@ -2306,6 +2307,23 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
   };
 
+  const persistWorkspaceColorOnly = async (
+    uid: string, trackId: string, field: 'colorTags' | 'favoriteColorTags',
+    index: string, color: string,
+  ) => {
+    if (!isCanonicalColorOutboxClientEnabled) {
+      await updateDoc(doc(db, 'suno_tracks', uid, 'tracks', trackId), {
+        [`${field}.${index}`]: color === 'gray' ? null : color,
+        updatedAt: serverTimestamp(),
+      });
+      return;
+    }
+    await commitCanonicalColorWithOutboxClient({
+      kind: 'library', documentId: trackId, field, index: Number(index),
+      color: color === 'gray' ? null : color,
+    });
+  };
+
   const handleSyncLibraryColors = async () => {
     if (!user) {
       showToast('로그인이 필요합니다.');
@@ -2345,11 +2363,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       for (const [key, color] of workspaceEntries) {
         const [, colorField, trackId, idx] = key.split(':');
         if (!trackId || idx === undefined || (colorField !== 'colorTags' && colorField !== 'favoriteColorTags')) continue;
-        const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', trackId);
-        await updateDoc(trackRef, {
-          [`${colorField}.${idx}`]: color === 'gray' ? null : color,
-          updatedAt: serverTimestamp()
-        });
+        await persistWorkspaceColorOnly(user.uid, trackId, colorField, idx, color);
       }
 
       for (const [key, color] of playlistEntries) {
@@ -2406,10 +2420,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       for (const [key, color] of workspaceEntries) {
         const [, colorField, trackId, idx] = key.split(':');
         if (!trackId || idx === undefined || (colorField !== 'colorTags' && colorField !== 'favoriteColorTags')) continue;
-        await updateDoc(doc(db, 'suno_tracks', currentUser.uid, 'tracks', trackId), {
-          [`${colorField}.${idx}`]: color === 'gray' ? null : color,
-          updatedAt: serverTimestamp()
-        });
+        await persistWorkspaceColorOnly(currentUser.uid, trackId, colorField, idx, color);
       }
 
       for (const [key, color] of playlistEntries) {

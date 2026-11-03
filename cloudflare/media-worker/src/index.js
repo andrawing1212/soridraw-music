@@ -1035,11 +1035,12 @@ const existingCatalogColorRowsForDelta = (state, incomingUpserts, kind) => {
     const id = text(item?.id);
     if (ids.has(id)) rows.set(id, item);
   }
-  // Earlier deployed Workers omitted some swatch fields in journal upserts.
-  // Fold those historical rows as missing (not gray), or a later old-client
-  // edit would inherit the LAST uncolored row instead of the last real choice.
-  // Explicit null/map clears remain authoritative; a deletion resets history.
-  // Use only the base+journal already loaded for CAS: no new R2/Firestore reads.
+  // A historical Worker may have omitted swatches for BOTH an unchanged row
+  // and an explicit gray reset. The two cases are indistinguishable after
+  // projection: never inherit across such an ambiguous journal upsert.
+  // Treat the latest row as authoritative (including missing fields).
+  // A tombstone still cuts off older color history entirely.
+  // This only scans the already loaded base+journal; no extra server reads.
   for (const entry of state.head.deltas) {
     for (const idValue of entry.deletedIds) {
       const id = text(idValue);
@@ -1047,9 +1048,7 @@ const existingCatalogColorRowsForDelta = (state, incomingUpserts, kind) => {
     }
     for (const item of entry.upserts) {
       const id = text(item?.id);
-      if (ids.has(id)) {
-        rows.set(id, preserveExistingCatalogColors(kind, item, { ...item }, rows.get(id)));
-      }
+      if (ids.has(id)) rows.set(id, item);
     }
   }
   return rows;
@@ -1064,8 +1063,9 @@ const preserveExistingCatalogColors = (kind, incoming, projected, previous) => {
     return projected;
   }
   for (const key of fields) {
-    // "Missing" means old-client ignorance, NOT explicit user reset.
-    // Preserve explicit null, empty maps and per-index null values as provided.
+    // Only the INCOMING old-client omission may inherit from the latest
+    // materialized row. A historical missing field is not proof of a color.
+    // Explicit null, empty maps and per-index clears always win.
     if (!Object.prototype.hasOwnProperty.call(incoming, key)
       && Object.prototype.hasOwnProperty.call(previous, key)) {
       projected[key] = previous[key];

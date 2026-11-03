@@ -41,3 +41,10 @@
 - 기존 검사 스크립트에 두 건 이상의 동시 base pending 충돌 재현을 추가하고 rollout gate는 외부 ingress 격리, ordered replay, 모든 pending 키 확인, 읽기 가용성 검증 네 조건을 명시적으로 요구하도록 수정했다.
 - 조건부 검증 순서: 세 환경의 모든 Worker 진입점과 고정된 활성 버전 확인 → 외부 격리/기존 사용자 pending 보존 증명 → 3개 color-safe candidate 및 rollback artifact 검증 → 순서/충돌/색상 null/삭제 동시변경 재처리 → 모든 UID pending 확인 → 최소 인증된 PC↔모바일 실사용과 복구 검증. 실패 시 전환 중단. TEST 앱은 사용하지 않되 살아 있는 TEST Worker는 격리 확인 대상이다.
 - 이 작업은 코드·오프라인 검사만 수행한다. 병합, Cloudflare/Firebase 배포·변경, R2/Firestore 사용자 원본 접근 또는 대량 작업 금지. 결론은 LIVE NO-GO.
+
+## 2026-11-04 — 안전한 순차 재처리와 격리 증거 (코드 검증만)
+- 기존 클라이언트가 503 응답 뒤 새 mutationId를 생성해도 내용이 동일한 pending은 새 R2 쓰기를 만들지 않도록 막는다. 별도의 실제 회색 변경과 서로 다른 곡 변경은 보존한다.
+- 영속 pending 재처리는 현재 HEAD의 완전한 journal 기록으로 변경 내역이 서로 다른 곡 ID임이 증명될 때만 안전하게 baseRevision 및 itemCount를 갱신한다. 같은 곡 전체 행 편집, 삭제·재추가, 압축으로 확인할 수 없는 기록은 HOLD 및 pending 유지. 임의 최신 덮어쓰기 금지.
+- 재처리는 외부에서 승인, 구형 Writer 격리, 단독 재처리자 임대, 모든 pending 회수 증거, 롤백 버전을 제공한 경우만 가능하다. 해당 증거는 이 코드가 Cloudflare에서 직접 조회·서명한 것이 아니다. 운영 전환 GO를 의미하지 않는다.
+- 보류 모드에서 이미 저장된 공유 CATALOG는 strict R2 GET로 읽기만 한다. 기존 seed 함수를 호출하지 않아 보류 중 데이터 오염을 차단한다. 누락·손상·리비전 부족은 503이며 bootstrap 쓰기는 금지.
+- 구형 PREVIEW/TEST/PRODUCTION 직접 URL, route, custom domain, service binding을 실제로 차단하는 장치는 미구현/미적용이다. 코드의 ingress 증거 형식 검사는 실제 Cloudflare 제어 권한을 대신하지 않는다. 안전한 전역 격리가 입증될 때까지 LIVE NO-GO.

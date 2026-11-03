@@ -1171,7 +1171,18 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
     }
 
     if (request.method === 'GET' && route.action === 'base') {
-      const state = await getCatalogState(identity, route.kind, catalogRequiredRevision(request), env);
+      // In hold mode, ordinary getCatalogState may seed a missing shared
+      // Catalog from older MEDIA R2. Only strict existing shared reads are
+      // safe. Keep healthy reads working without any bootstrap/write.
+      const holding = catalogCutoverHoldEnabled(env);
+      const required = catalogRequiredRevision(request);
+      const state = holding
+        ? (isSharedCatalogEnabled(env) && env?.CATALOG
+          ? await readStrictCatalogStateForInspection(env.CATALOG, identity.uid, route.kind)
+          : null)
+        : await getCatalogState(identity, route.kind, required, env);
+      if (holding && (!state || Number(state.head?.headRevision || 0) < required))
+        return jsonResponse({ok:false,code:'CATALOG_CUTOVER_READ_UNAVAILABLE',retryable:true},503,origin);
       const knownRevision = catalogKnownRevision(request);
       const syncPayload = knownRevision > 0 ? buildCatalogJournalSyncResponse({ head: state.head, knownRevision }) : null;
       const payload = syncPayload || materializeCatalogState(state, route.kind);

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {persistCatalogCutoverPending,replayCatalogCutoverPending,catalogCutoverHoldEnabled,
   CUTOVER_PENDING_LIMIT,cutoverOutboxKey} from '../cloudflare/media-worker/src/catalogCutoverOutbox.js';
 import {readFileSync} from 'node:fs';
-import {appendCatalogJournalDelta} from '../cloudflare/media-worker/src/catalogJournal.js';
+import {appendCatalogJournalDelta,createEmptyCatalogJournal} from '../cloudflare/media-worker/src/catalogJournal.js';
 class FakeR2 {
   objects=new Map(); writes=0; reads=0; forceFail=false; loseCasOnce=false;
   async get(key) {
@@ -53,81 +53,91 @@ const kept=r2.objects.get(key);
 r2.objects.set(key,{etag:'bad',body:'{bad'});
 await assert.rejects(persistCatalogCutoverPending(r2,uid,kind,delta('third')),/OUTBOX_CORRUPT/);
 r2.objects.set(key,kept);
-const untrusted={bucket:r2,uid,kind,barrier:{},readReceipt:async()=>null,commit:async()=>{throw Error('must not commit');}};
+const untrusted={bucket:r2,uid,kind,barrier:{},readReceipt:async()=>null,
+  readJournalHead:async()=>null,commit:async()=>{throw Error('must never commit');}};
 await assert.rejects(replayCatalogCutoverPending(untrusted),/REPLAY_NOT_AUTHORIZED/);
-assert.equal(r2.rows(uid,kind)[0].status,'pending');
-const barrier={allWritersFenced:true,exactVersionsVerified:true,rollbackVersionsPinned:true,authorizedReplay:true};
-let applyCalls=0;const durable=new Map();
-const replayArgs={bucket:r2,uid,kind,barrier,
-  readReceipt:async(d)=>durable.get(d.mutationId)||null,
-  commit:async(d)=>{applyCalls++;durable.set(d.mutationId,{confirmed:true,mutationId:d.mutationId,revision:200+applyCalls});return {ok:true};}};
-const replayed=await replayCatalogCutoverPending(replayArgs);
-assert.equal(replayed.status,'RETAINED_RECEIPTS');
-assert.equal(replayed.confirmed,2);
-assert.equal(r2.rows(uid,kind).every(x=>x.status==='committed'),true);
-const calls=applyCalls;
-await replayCatalogCutoverPending(replayArgs);
-assert.equal(applyCalls,calls,'never apply confirmed mutations twice');
-const r3=new FakeR2();
-await persistCatalogCutoverPending(r3,uid,kind,delta('conflict'));
-let conflictCalls=0;
-const conflict=await replayCatalogCutoverPending({...replayArgs,bucket:r3,
-  readReceipt:async()=>null,commit:async()=>{conflictCalls++;return {ok:false,conflict:true};}});
-assert.equal(conflict.status,'HOLD');
-assert.equal(conflictCalls,1);
-assert.equal(r3.rows(uid,kind)[0].status,'pending');
-const r4=new FakeR2();
-await persistCatalogCutoverPending(r4,uid,kind,delta('ack-lost'));
-let hadCommitted=false;let count=0;
-const uncertain=await replayCatalogCutoverPending({...replayArgs,bucket:r4,
-  readReceipt:async()=>hadCommitted?{confirmed:true,mutationId:'ack-lost',revision:220}:null,
-  commit:async()=>{count++;hadCommitted=true;return {ok:true};}});
-assert.equal(uncertain.status,'RETAINED_RECEIPTS');
-const before=count;
-await replayCatalogCutoverPending({...replayArgs,bucket:r4,
-  readReceipt:async()=>({confirmed:true,mutationId:'ack-lost',revision:220}),
-  commit:async()=>{throw Error('duplicate forbidden');}});
-assert.equal(count,before);
-// Refuse unproven receipt after a claimed successful commit.
-const r5=new FakeR2();
-await persistCatalogCutoverPending(r5,uid,kind,delta('no-receipt'));
-const noReceipt=await replayCatalogCutoverPending({...replayArgs,bucket:r5,
+const barrier={allWritersFenced:true,exactVersionsVerified:true,rollbackVersionsPinned:true,
+  authorizedReplay:true,exclusiveReplayLeaseVerified:true,allPendingDiscoverableVerified:true};
+await assert.rejects(replayCatalogCutoverPending({...untrusted,barrier,readJournalHead:undefined}),/REPLAY_HANDLERS_MISSING/);
+const emptyHead=count=>createEmptyCatalogJournal({kind,baseKey:'fixture',baseRevision:100,itemCount:count,now:100});
+let head=emptyHead(1);const receipts=new Map();let commits=0;
+const commit=async next=>{
+  const applied=appendCatalogJournalDelta({head,delta:next,serverRevision:head.headRevision+1,now:101});
+  if(!applied.ok)return {ok:false,conflict:applied.reason==='CONFLICT'};
+  head=applied.head;commits++;
+  receipts.set(next.mutationId,{confirmed:true,mutationId:next.mutationId,revision:applied.revision});
+  return {ok:true};
+};
+const callbacks={bucket:r2,uid,kind,barrier,
+  readJournalHead:async()=>head,readReceipt:async d=>receipts.get(d.mutationId)||null,commit};
+const overlapping=await replayCatalogCutoverPending(callbacks);
+assert.equal(overlapping.status,'HOLD');
+assert.equal(overlapping.reason,'OVERLAPPING_ITEM_CONFLICT');
+assert.equal(commits,1);
+assert.equal(r2.rows(uid,kind)[0].status,'committed');
+assert.equal(r2.rows(uid,kind)[1].status,'pending');
+await replayCatalogCutoverPending(callbacks);
+assert.equal(commits,1,'retry never duplicates a committed Catalog write');
+console.log('CATALOG_CUTOVER_SAME_ID_STALE_UPSERT_HOLD=PASS');
+
+// Different IDs can be safely replayed from the same old revision. The
+// journal proves no intervening mutation has touched the second item.
+const disjointR2=new FakeR2();
+const itemDelta=(mutationId,id,swatch)=>({kind,mutationId,baseRevision:100,revision:101,
+  baseItemCount:2,nextItemCount:2,upserts:[{id,createdAtMs:1,colorTags:{'0':swatch}}],deletedIds:[]});
+await persistCatalogCutoverPending(disjointR2,uid,kind,itemDelta('A','song-a','purple'));
+await persistCatalogCutoverPending(disjointR2,uid,kind,itemDelta('B','song-b',null));
+let disjointHead=emptyHead(2);const confirmations=new Map(),sent=[];
+const disjointCallbacks={bucket:disjointR2,uid,kind,barrier,
+  readJournalHead:async()=>disjointHead,
+  readReceipt:async d=>confirmations.get(d.mutationId)||null,
+  commit:async next=>{
+    const appended=appendCatalogJournalDelta({head:disjointHead,delta:next,serverRevision:disjointHead.headRevision+1,now:101});
+    if(!appended.ok)return {ok:false,conflict:appended.reason==='CONFLICT'};
+    disjointHead=appended.head;sent.push(next);
+    confirmations.set(next.mutationId,{confirmed:true,mutationId:next.mutationId,revision:appended.revision});
+    return {ok:true};
+  }};
+const result=await replayCatalogCutoverPending(disjointCallbacks);
+assert.equal(result.status,'RETAINED_RECEIPTS');
+assert.equal(result.confirmed,2);
+assert.equal(sent[1].baseRevision,101);
+assert.equal(sent[1].baseItemCount,2);
+assert.equal(sent[1].upserts[0].colorTags['0'],null);
+assert.equal(disjointR2.rows(uid,kind).every(e=>e.status==='committed'),true);
+await replayCatalogCutoverPending(disjointCallbacks);
+assert.equal(sent.length,2,'idempotent receipts');
+const receiptOnly=new FakeR2();
+await persistCatalogCutoverPending(receiptOnly,uid,kind,itemDelta('recovered','song-r','green'));
+let unexpectedWrites=0;
+const recovered=await replayCatalogCutoverPending({...disjointCallbacks,bucket:receiptOnly,
+  readReceipt:async d=>({confirmed:true,mutationId:d.mutationId,revision:200}),
+  commit:async()=>{unexpectedWrites++;return {ok:false};}});
+assert.equal(recovered.status,'RETAINED_RECEIPTS');
+assert.equal(unexpectedWrites,0);
+const noProof=new FakeR2();
+await persistCatalogCutoverPending(noProof,uid,kind,itemDelta('unconfirmed','song-x',null));
+const uncertain=await replayCatalogCutoverPending({...disjointCallbacks,bucket:noProof,
   readReceipt:async()=>null,commit:async()=>({ok:true})});
-assert.equal(noReceipt.status,'HOLD');
-assert.equal(r5.rows(uid,kind)[0].status,'pending');
+assert.equal(uncertain.status,'HOLD');
+assert.equal(noProof.rows(uid,kind)[0].status,'pending');
+const retries=new FakeR2();
+await persistCatalogCutoverPending(retries,uid,kind,itemDelta('http-1','song-x','blue'));
+const w=retries.writes;
+assert.equal((await persistCatalogCutoverPending(retries,uid,kind,itemDelta('http-2','song-x','blue'))).duplicate,true);
+assert.equal(retries.writes,w);
+await persistCatalogCutoverPending(retries,uid,kind,itemDelta('gray-click','song-x',null));
+assert.equal(retries.rows(uid,kind).length,2);
+console.log('CATALOG_CUTOVER_DISJOINT_PENDING_SAFE_REBASE=PASS');
+console.log('CATALOG_CUTOVER_RECEIPT_RETRY_DEDUP_NO_LOSS=PASS');
 // Capacity saturation is a retryable hold, never a silent overwrite.
 const r6=new FakeR2();
-for(let i=0;i<CUTOVER_PENDING_LIMIT;i++)await persistCatalogCutoverPending(r6,uid,kind,delta('cap-'+i));
-await assert.rejects(persistCatalogCutoverPending(r6,uid,kind,delta('overflow')),/OUTBOX_FULL/);
+for(let i=0;i<CUTOVER_PENDING_LIMIT;i++)await persistCatalogCutoverPending(r6,uid,kind,{...delta('cap-'+i),upserts:[{id:'cap-'+i,createdAtMs:1}]});
+await assert.rejects(persistCatalogCutoverPending(r6,uid,kind,{...delta('overflow'),upserts:[{id:'overflow',createdAtMs:1}]}),/OUTBOX_FULL/);
 assert.equal(r6.rows(uid,kind).length,CUTOVER_PENDING_LIMIT);
 // Real Catalog Journal proof: 2 pending deltas with one old base revision
 // cannot be replayed blindly. The second MUST remain pending (NO-GO).
-const queued = new FakeR2();
-await persistCatalogCutoverPending(queued,uid,kind,delta('queued-1',{colorTags:{'0':'purple'}}));
-await persistCatalogCutoverPending(queued,uid,kind,delta('queued-2',{colorTags:{'0':null}}));
-let journalHead = {headRevision:100,itemCount:1,deltas:[],recentMutations:[]};
-const journalReceipts = new Map();
-let journalCommits = 0;
-const ordering = await replayCatalogCutoverPending({
-  bucket:queued,uid,kind,barrier,
-  readReceipt:async d=>journalReceipts.get(d.mutationId)||null,
-  commit:async d=>{
-    journalCommits++;
-    const result=appendCatalogJournalDelta({head:journalHead,delta:d,serverRevision:journalHead.headRevision+1});
-    if(!result.ok)return {ok:false,conflict:result.reason==='CONFLICT'};
-    journalHead=result.head;
-    journalReceipts.set(d.mutationId,{confirmed:true,mutationId:d.mutationId,revision:result.revision});
-    return {ok:true};
-  },
-});
-assert.equal(ordering.status,'HOLD','stale-base second mutation MUST not be acknowledged');
-assert.equal(ordering.reason,'REVISION_OR_WRITE_CONFLICT');
-assert.equal(journalCommits,2);
-assert.equal(queued.rows(uid,kind)[0].status,'committed');
-assert.equal(queued.rows(uid,kind)[1].status,'pending');
-assert.equal(journalHead.headRevision,101);
-console.log('CATALOG_CUTOVER_MULTI_PENDING_STALE_BASE_HOLD_EXPECTED=PASS');
-
+// The same-ID overlap is already tested against the actual journal above.
 // A new Worker local flag cannot isolate old live Worker ingress paths.
 // All three explicit runtime configurations currently leave hold disabled.
 const wrangler=JSON.parse(readFileSync('cloudflare/media-worker/wrangler.jsonc','utf8'));
@@ -136,6 +146,10 @@ for(const vars of [wrangler.vars,wrangler.env?.test?.vars,wrangler.env?.producti
 }
 console.log('CATALOG_CUTOVER_ALL_ENV_FLAGS_OFF_AND_NO_GLOBAL_INGRESS_FENCE=PASS');
 
+// Hold GET must avoid legacy seeding: only an exact shared R2 read is allowed.
+assert.match(readFileSync('cloudflare/media-worker/src/index.js','utf8'),
+  /holding[\s\S]*readStrictCatalogStateForInspection\(env\.CATALOG, identity\.uid, route\.kind\)/);
+console.log('CATALOG_CUTOVER_HOLD_GET_STRICT_SHARED_READ_NO_SEED=PASS');
 // Runtime integration is opt-in, with successful outbox persistence -> HTTP 503.
 // No read-only GET/bootstrap should sneak in a canonical Catalog write during hold.
 const worker=readFileSync('cloudflare/media-worker/src/index.js','utf8');

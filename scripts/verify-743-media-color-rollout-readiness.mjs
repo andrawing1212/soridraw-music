@@ -114,6 +114,26 @@ export function validateCapture(summary, sources, expectedWorkers = NAMES) {
 
 // A decision about the *proposed transition*, not a deployment authorization.
 // A passing source test alone is never permission to touch the shared bucket.
+// Offline evidence-shape gate only. Old Worker versions have no hold flag;
+// all direct workers.dev, route, custom-domain and service-binding paths must
+// be independently proved unable to mutate the shared CATALOG.
+export function assessLegacyIngressEvidence(rows) {
+  const errors=[];
+  if(!Array.isArray(rows)||rows.length!==3)
+    return {status:'HOLD',reasons:['THREE_LEGACY_INGRESS_REPORTS_REQUIRED']};
+  for(let i=0;i<3;i++){
+    const row=rows[i];
+    if(row?.stage!==STAGES[i]||row?.worker!==NAMES[i])
+      errors.push(STAGES[i]+':WORKER_IDENTITY_MISMATCH');
+    for(const field of ['cloudflareControlPlaneCaptured','oldVersionWriteDenied',
+      'workersDevDirectDenied','customDomainsEnumerated','routesEnumerated',
+      'serviceBindingsEnumerated','inFlightWritesDrained']){
+      if(row?.[field]!==true)errors.push(STAGES[i]+':'+field);
+    }
+  }
+  return {status:errors.length?'HOLD':'EVIDENCE_SHAPE_COMPLETE_NOT_LIVE_VERIFIED',reasons:errors};
+}
+
 export function assessColorRollout({ activeSafe, candidateSafe, rollbackSafe, writerBarrierVerified,
   durableOutboxVerified, replayReceiptVerified, ingressPathsFencedVerified,
   orderedReplayVerified, allPendingDiscoverableVerified, readAvailabilityVerified,
@@ -157,6 +177,16 @@ export async function runRolloutSelfTest() {
   }
   assert.equal(assessColorRollout({...sample,capturedAgeMinutes:11}).status,'HOLD');
   assert.equal(assessColorRollout({}).status,'HOLD');
+  assert.equal(assessLegacyIngressEvidence([]).status,'HOLD');
+  const fixture=STAGES.map((stage,i)=>({stage,worker:NAMES[i],
+    cloudflareControlPlaneCaptured:true,oldVersionWriteDenied:true,
+    workersDevDirectDenied:true,customDomainsEnumerated:true,routesEnumerated:true,
+    serviceBindingsEnumerated:true,inFlightWritesDrained:true}));
+  assert.equal(assessLegacyIngressEvidence(fixture).status,'EVIDENCE_SHAPE_COMPLETE_NOT_LIVE_VERIFIED');
+  for(let i=0;i<3;i++){
+    const broken=fixture.map(x=>({...x}));broken[i].oldVersionWriteDenied=false;
+    assert.equal(assessLegacyIngressEvidence(broken).status,'HOLD');
+  }
   const fakeSource=Buffer.from('test');
   const fakeSummary=STAGES.map((stage,i)=>({stage,worker:NAMES[i],media:NAMES[i],catalog:'soridraw-user-catalog',sharedFlag:'1',activeVersion:'83175bcc-fe25-4d17-86c0-1592e47d358e',sourceSha256:sha256(fakeSource)}));
   assert.deepEqual(validateCapture(fakeSummary,Object.fromEntries(STAGES.map(stage=>[stage,fakeSource]))),STAGES.map(stage=>stage+':CAPTURE_PIN_VALID'));

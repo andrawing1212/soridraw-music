@@ -40,8 +40,17 @@ jobs:
           grep -Fxq 'shared_user_data_bulk_change=false' "$trigger"
           source_sha="$(sed -n 's/^approved_candidate_sha=//p' "$trigger")"
           [[ "$source_sha" =~ ^[a-f0-9]{40}$ ]]
+          # Approved Worker code is immutable; only the one prior trigger
+          # and the runner dependency fix may differ from its exact commit.
+          grep -Fxq 'retry_of_run=41738044533' "$trigger"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse HEAD^)" = "$source_sha"
+          git merge-base --is-ancestor "$source_sha" HEAD^
+          changes="$(git diff --name-only "$source_sha" HEAD^)"
+          expected_changes="$(printf '%s\n%s' \
+            '.deploy/media-color-compat-release.trigger' \
+            '.github/workflows/cloudflare-media-color-compat-rollout.yml')"
+          test "$changes" = "$expected_changes"
+          git diff --exit-code "$source_sha" HEAD^ -- cloudflare/media-worker .deploy/release-media-worker-runtime.mjs
           test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = "$trigger"
           git fetch origin preview --no-tags
           test "$(git rev-parse FETCH_HEAD)" = "$GITHUB_SHA"
@@ -53,6 +62,8 @@ jobs:
       - name: Install Media Worker tooling
         working-directory: cloudflare/media-worker
         run: npm install --no-audit --no-fund
+      - name: Install root app tooling required by color verification
+        run: npm ci --no-audit --no-fund
       - name: Verify exact color compatibility source, no cutover queue
         shell: bash
         run: |

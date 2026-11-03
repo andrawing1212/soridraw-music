@@ -35,6 +35,7 @@ import CacheDiagnosticBadge from '../components/CacheDiagnosticBadge';
 import { markCacheDiagnostic } from '../lib/cacheDiagnostics';
 import { subscribeListBundle, readLibraryBundleLocalSyncVersion, writeLibraryBundleLocalSyncVersion } from '../lib/listBundleCache';
 import { schedulePreviewAdaptiveListIndexPublishIfDirty } from '../lib/adaptiveListIndexV2';
+import { flushPendingCatalogPublishes } from '../lib/userDataEngine';
 import { flushSoridrawPageSync } from '../lib/pageSyncCoordinator';
 import {
   LIBRARY_PLAYLIST_CACHE_EVENT,
@@ -2306,7 +2307,35 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
   };
 
+  // A saved local color map is not server authority. Only stage an exact
+  // workspace row AFTER its Firestore color update has committed. Reuse the
+  // already-loaded full Catalog row; no extra Firestore query or collection scan.
+  const stageConfirmedWorkspaceColors = (
+    uid: string,
+    confirmed: Array<{ trackId: string; field: 'colorTags' | 'favoriteColorTags'; index: string; color: string }>,
+  ): boolean => {
+    if (!uid || confirmed.length === 0) return true;
+    const byId = new Map<string, any>();
+    const cacheRows = libraryWorkspaceSession?.uid === uid ? libraryWorkspaceSession.tracks : [];
+    for (const { trackId, field, index, color } of confirmed) {
+      const source = byId.get(trackId)
+        || tracks.find((track: any) => String(track?.id || '') === trackId)
+        || cacheRows.find((track: any) => String(track?.id || '') === trackId);
+      if (!source) return false; // keep the pending click; never publish a partial item
+      byId.set(trackId, {
+        ...source,
+        [field]: { ...(source[field] || {}), [index]: color === 'gray' ? null : color },
+      });
+    }
+    schedulePreviewAdaptiveListIndexPublishIfDirty('library', uid, [...byId.values()], {
+      hasMore: true, complete: false,
+    });
+    return true;
+  };
+
   const handleSyncLibraryColors = async () => {
+    // Manual and exit saves share one writer; an older request must not land last.
+    if (libraryColorsAutoSyncingRef.current) return;
     if (!user) {
       showToast('로그인이 필요합니다.');
       return;
@@ -2333,6 +2362,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       return;
     }
 
+    const workspaceSerialized = serializeColorMap(workspaceMap);
+    const playlistSerialized = serializeColorMap(playlistMap);
+    libraryColorsAutoSyncingRef.current = true;
     try {
       for (const [id, color] of favoriteEntries) {
         if (!id) continue;
@@ -2342,6 +2374,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         }));
       }
 
+      const confirmedWorkspaceColors: Array<{ trackId: string; field: 'colorTags' | 'favoriteColorTags'; index: string; color: string }> = [];
       for (const [key, color] of workspaceEntries) {
         const [, colorField, trackId, idx] = key.split(':');
         if (!trackId || idx === undefined || (colorField !== 'colorTags' && colorField !== 'favoriteColorTags')) continue;
@@ -2350,22 +2383,31 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           [`${colorField}.${idx}`]: color === 'gray' ? null : color,
           updatedAt: serverTimestamp()
         });
+        confirmedWorkspaceColors.push({ trackId, field: colorField, index: idx, color });
       }
-
       for (const [key, color] of playlistEntries) {
         const [, playlistId, itemId] = key.split(':');
         if (!playlistId || !itemId || playlistId === 'unknown' || itemId === 'unknown') continue;
         await updatePlaylistItemColor(user.uid, playlistId, itemId, (color === 'gray' ? null : color) as any);
       }
+      // Persist other Library color sections independently before attempting
+      // the R2 Catalog projection; a retryable Catalog failure cannot skip
+      // a user-confirmed playlist color write.
+      if (!stageConfirmedWorkspaceColors(user.uid, confirmedWorkspaceColors)) {
+        throw new Error('COLOR_CATALOG_EXACT_ROW_NOT_CACHED');
+      }
+      if (confirmedWorkspaceColors.length > 0) await flushPendingCatalogPublishes(user.uid);
 
+      // An old account's completion cannot acknowledge a new account's clicks.
+      if (libraryUserRef.current?.uid !== user.uid) return;
       for (const [key, color] of workspaceEntries) {
         if (workspaceLocalColorMapRef.current[key] === color) pendingWorkspaceColorKeysRef.current.delete(key);
       }
       for (const [key, color] of playlistEntries) {
         if (playlistLocalColorMapRef.current[key] === color) pendingPlaylistColorKeysRef.current.delete(key);
       }
-      workspaceColorBaselineRef.current = serializeColorMap(workspaceLocalColorMapRef.current || {});
-      playlistColorBaselineRef.current = serializeColorMap(playlistLocalColorMapRef.current || {});
+      workspaceColorBaselineRef.current = workspaceSerialized;
+      playlistColorBaselineRef.current = playlistSerialized;
       workspaceColorDirtyRef.current = pendingWorkspaceColorKeysRef.current.size > 0;
       playlistColorDirtyRef.current = pendingPlaylistColorKeysRef.current.size > 0;
       markLibraryColorSynced();
@@ -2373,6 +2415,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     } catch (error) {
       console.error('unified color sync failed:', error);
       showToast('색상 동기화에 실패했습니다.');
+    } finally {
+      libraryColorsAutoSyncingRef.current = false;
     }
   };
 
@@ -2403,6 +2447,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     libraryColorsAutoSyncingRef.current = true;
     try {
+      const confirmedWorkspaceColors: Array<{ trackId: string; field: 'colorTags' | 'favoriteColorTags'; index: string; color: string }> = [];
       for (const [key, color] of workspaceEntries) {
         const [, colorField, trackId, idx] = key.split(':');
         if (!trackId || idx === undefined || (colorField !== 'colorTags' && colorField !== 'favoriteColorTags')) continue;
@@ -2410,20 +2455,33 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           [`${colorField}.${idx}`]: color === 'gray' ? null : color,
           updatedAt: serverTimestamp()
         });
+        confirmedWorkspaceColors.push({ trackId, field: colorField, index: idx, color });
       }
-
       for (const [key, color] of playlistEntries) {
         const [, playlistId, itemId] = key.split(':');
         if (!playlistId || !itemId || playlistId === 'unknown' || itemId === 'unknown') continue;
         await updatePlaylistItemColor(currentUser.uid, playlistId, itemId, (color === 'gray' ? null : color) as any);
       }
+      // Persist other Library color sections independently before attempting
+      // the R2 Catalog projection; a retryable Catalog failure cannot skip
+      // a user-confirmed playlist color write.
+      if (!stageConfirmedWorkspaceColors(currentUser.uid, confirmedWorkspaceColors)) {
+        throw new Error('COLOR_CATALOG_EXACT_ROW_NOT_CACHED');
+      }
+      if (confirmedWorkspaceColors.length > 0) await flushPendingCatalogPublishes(currentUser.uid);
 
-      pendingWorkspaceColorKeysRef.current.clear();
-      pendingPlaylistColorKeysRef.current.clear();
+      if (libraryUserRef.current?.uid !== currentUser.uid) return;
+      // A click made while Firestore/Catalog was awaiting belongs to the next save.
+      for (const [key, color] of workspaceEntries) {
+        if (workspaceLocalColorMapRef.current[key] === color) pendingWorkspaceColorKeysRef.current.delete(key);
+      }
+      for (const [key, color] of playlistEntries) {
+        if (playlistLocalColorMapRef.current[key] === color) pendingPlaylistColorKeysRef.current.delete(key);
+      }
       workspaceColorBaselineRef.current = workspaceSerialized;
       playlistColorBaselineRef.current = playlistSerialized;
-      workspaceColorDirtyRef.current = false;
-      playlistColorDirtyRef.current = false;
+      workspaceColorDirtyRef.current = pendingWorkspaceColorKeysRef.current.size > 0;
+      playlistColorDirtyRef.current = pendingPlaylistColorKeysRef.current.size > 0;
       if (!silent) showToast('색상 변경사항을 저장했습니다.');
     } catch (error) {
       console.error('library color exit sync failed:', error);

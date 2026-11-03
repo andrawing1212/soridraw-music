@@ -12240,6 +12240,11 @@ const toggleCycleVariantSelection = (
       await runV1MutationBoundary({
         domain: 'musicNote',
         operation: 'update',
+        // Only an exact, canonical-confirmed swatch edit stages a Catalog
+        // color upsert. Keep the existing 'update' RTDB operation unchanged.
+        colorCatalogChanged: Boolean(currentFavorite)
+          && Object.keys(updates).length === 1
+          && Object.prototype.hasOwnProperty.call(updates, 'favoriteColorTag'),
         uid: user?.uid || currentFavorite?.uid || '',
         documentIds: [id],
         affectedCount: 1,

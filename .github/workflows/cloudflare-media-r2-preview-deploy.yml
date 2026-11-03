@@ -3,6 +3,11 @@ name: Cloudflare Media R2 Preview Deploy
 # app517: NEVER deploy a Worker merely because source was merged into preview.
 # Only a manual dispatch, with a pinned SHA and explicit deploy confirmation.
 on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/cloudflare-media-r2-preview-deploy.yml'
+      - 'scripts/media-color-release-preflight.mjs'
   workflow_dispatch:
     inputs:
       commit_sha:
@@ -22,8 +27,34 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  color-release-inputs:
+    # Capture only the active code and binding identities; never user objects.
+    # A push to this workflow is READ ONLY, not a deployment trigger.
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check read-only capture boundaries
+        run: node scripts/media-color-release-preflight.mjs --self-test
+      - name: Capture three active Media Worker sources and binding identities
+        run: node scripts/media-color-release-preflight.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: media-color-release-inputs
+          path: .media-color-preflight/
+          retention-days: 1
+          include-hidden-files: true
   deploy:
-    if: ${{ inputs.approve_preview_deploy == 'DEPLOY_PREVIEW_MEDIA' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.approve_preview_deploy == 'DEPLOY_PREVIEW_MEDIA' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:

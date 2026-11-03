@@ -7,6 +7,10 @@ on:
       - 'cloudflare/media-worker/src/index.js'
       - 'scripts/verify-library-catalog-color-projection.mjs'
       - 'src/App.tsx'
+      - 'src/pages/SunoLibraryPage.tsx'
+      - 'src/data/v1MutationBoundary.ts'
+      - 'src/services/userDomainSyncService.ts'
+      - 'scripts/verify-forward-color-catalog.mjs'
       - 'scripts/verify-521-music-note-catalog-automatic.mjs'
       - '.github/workflows/verify-521-music-note-catalog-automatic.yml'
   workflow_dispatch:
@@ -24,6 +28,8 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci --no-audit --no-fund
+      - name: Forward-only color Catalog settle (no deploy)
+        run: node scripts/verify-forward-color-catalog.mjs
       - name: Automatic post-commit Catalog settlement and stale signal protection
         run: node scripts/verify-521-music-note-catalog-automatic.mjs
       - name: Library canonical color projection (source only, zero deploy)

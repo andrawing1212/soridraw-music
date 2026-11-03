@@ -60,6 +60,9 @@ export interface V1MutationBoundaryContext {
   // The sync service projects this through the same catalog summary allow-list,
   // so RTDB never receives the full detail document.
   syncItem?: unknown;
+  // Exact color-only canonical update after a successful Firestore write.
+  // Never mark unrelated edits, read/hydration or an optimistic preview.
+  colorCatalogChanged?: boolean;
   // Optional bounded changed-item summaries for one canonical mutation that touches
   // multiple Music Note rows (for example a folder move/rename).
   syncItems?: readonly unknown[];

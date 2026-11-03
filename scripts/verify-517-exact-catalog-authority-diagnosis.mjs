@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { runInNewContext } from 'node:vm';
+import { execFileSync } from 'node:child_process';
 import ts from 'typescript';
 
 const worker = fs.readFileSync('cloudflare/media-worker/src/index.js', 'utf8');
@@ -232,9 +233,16 @@ console.log('APP517_MANUAL_ONLY_NO_CLIENT_CACHE_OR_R2_WRITES=PASS');
   console.log('APP517_AUDIT_P2_REAL_READER_BODY_JSON_VALIDATION_AND_JOURNAL_FAIL_CLOSED=PASS');
 }
 {
+  execFileSync(process.execPath, ['scripts/media-color-release-preflight.mjs', '--self-test'], { stdio: 'inherit' });
   const workflow=fs.readFileSync('.github/workflows/cloudflare-media-r2-preview-deploy.yml','utf8');
   assert.match(workflow,/workflow_dispatch:/);
-  assert.doesNotMatch(workflow,/^  push:/m);
+  const releaseJob = workflow.slice(workflow.indexOf('\n  deploy:'));
+  assert.match(releaseJob, /if: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.approve_preview_deploy == 'DEPLOY_PREVIEW_MEDIA' \}\}/);
+  const readOnlyJob = workflow.slice(workflow.indexOf('\n  color-release-inputs:'), workflow.indexOf('\n  deploy:'));
+  assert.match(readOnlyJob, /github\.event_name == 'push'/);
+  assert.match(readOnlyJob, /node scripts\/media-color-release-preflight\.mjs/);
+  assert.doesNotMatch(readOnlyJob, /npm run deploy|wrangler|release-media-worker-runtime|r2 object/);
+
   assert.match(workflow,/ref: \$\{\{ inputs\.commit_sha \}\}/);
   assert.match(workflow,/APPROVED_SHA/);
   assert.match(workflow,/git merge-base --is-ancestor/);

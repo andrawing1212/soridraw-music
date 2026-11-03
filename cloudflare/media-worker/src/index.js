@@ -1021,7 +1021,13 @@ const existingCatalogColorRowsForDelta = (state, incomingUpserts, kind) => {
   const ids = new Set();
   for (const item of incomingUpserts) {
     const id = text(item?.id);
-    if (id && fields.some((key) => !Object.prototype.hasOwnProperty.call(item, key))) ids.add(id);
+    // Music Note aliases represent one choice. A supplied alias is already
+    // authoritative; only old clients missing BOTH need history inheritance.
+    // Library swatch maps are independent (normal/favorite filter).
+    const needsHistory = kind === 'musicNote'
+      ? fields.every((key) => !Object.prototype.hasOwnProperty.call(item, key))
+      : fields.some((key) => !Object.prototype.hasOwnProperty.call(item, key));
+    if (id && needsHistory) ids.add(id);
   }
   const rows = new Map();
   if (!ids.size) return rows;
@@ -1029,8 +1035,11 @@ const existingCatalogColorRowsForDelta = (state, incomingUpserts, kind) => {
     const id = text(item?.id);
     if (ids.has(id)) rows.set(id, item);
   }
-  // A journal deletion makes the old color in the base non-authoritative;
-  // a later re-add without colors must stay uncolored.
+  // Earlier deployed Workers omitted some swatch fields in journal upserts.
+  // Fold those historical rows as missing (not gray), or a later old-client
+  // edit would inherit the LAST uncolored row instead of the last real choice.
+  // Explicit null/map clears remain authoritative; a deletion resets history.
+  // Use only the base+journal already loaded for CAS: no new R2/Firestore reads.
   for (const entry of state.head.deltas) {
     for (const idValue of entry.deletedIds) {
       const id = text(idValue);
@@ -1038,7 +1047,9 @@ const existingCatalogColorRowsForDelta = (state, incomingUpserts, kind) => {
     }
     for (const item of entry.upserts) {
       const id = text(item?.id);
-      if (ids.has(id)) rows.set(id, item);
+      if (ids.has(id)) {
+        rows.set(id, preserveExistingCatalogColors(kind, item, { ...item }, rows.get(id)));
+      }
     }
   }
   return rows;

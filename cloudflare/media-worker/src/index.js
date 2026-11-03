@@ -1140,12 +1140,21 @@ const applyServerColorEvent = async (event, env, executionCtx = null) => {
     if (result.code === 'DUPLICATE' || result.code === 'STALE') {
       return { code: result.code, retryable: false };
     }
+    if (result.code === 'INACTIVE_OR_MISSING') {
+      // The canonical source is active but the R2 row may still be marked
+      // removed. Retry until its ordinary membership delta settles; never
+      // acknowledge a color event that could disappear permanently.
+      return { code: 'CATALOG_ROW_INACTIVE_RETRY', retryable: true };
+    }
     if (result.code !== 'APPLY' || !result.row) {
-      return { code: result.code, retryable: false };
+      return { code: result.code, retryable: result.code === 'BAD_SOURCE_VERSION' };
     }
     const version = Math.max(Date.now(), state.head.headRevision + 1);
     const delta = {
-      mutationId: 'srv-color-' + event.eventId,
+      // One Firebase event can be retried after a newer canonical mutation.
+      // The source version is part of identity so that the newer payload
+      // cannot be suppressed by recentMutations for the older payload.
+      mutationId: 'srv-color-' + event.eventId + '-' + event.sourceUpdateTime,
       baseRevision: state.head.headRevision,
       baseItemCount: state.head.itemCount,
       nextItemCount: state.head.itemCount,

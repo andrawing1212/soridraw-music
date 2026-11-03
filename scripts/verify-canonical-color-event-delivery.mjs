@@ -99,6 +99,26 @@ const missing=make(null);
 assert.equal((await missing.run(ev(at1,'red'))).code,'CATALOG_ROW_NOT_MATERIALIZED');
 assert.equal(missing.count().writes,0);
 
+const inactiveRow=make({...base,saved:false});
+const inactiveResult=await inactiveRow.run(ev(at1,'red','canonical-event-resave'));
+assert.equal(inactiveResult.code,'CATALOG_ROW_INACTIVE_RETRY');
+assert.equal(inactiveResult.retryable,true);
+assert.equal(inactiveRow.count().writes,0);
+
+// The same Eventarc event id may be delivered with a newer *current*
+// Firestore snapshot after a retry: it must get a distinct journal ID.
+const eventSameId=make();
+const firstSource=await eventSameId.run(ev(at1,'purple','canonical-event-retry'));
+assert.equal(firstSource.code,'APPLIED');
+const retryLaterSource=await eventSameId.run(ev(at2,null,'canonical-event-retry'));
+assert.equal(retryLaterSource.code,'APPLIED');
+assert.equal(eventSameId.latest().favoriteColorTag,null);
+assert.equal(eventSameId.count().writes,2);
+const badMarker=make({...base,__colorSourceUpdateTime:'nonsense'});
+assert.equal((await badMarker.run(ev(at1,null))).retryable,true);
+assert.equal(badMarker.count().writes,0);
+
+
 const libraryOriginal={
  id:'track-1', createdAtMs:200,colorTags:{'0':'red','1':null},
  favoriteColorTags:{'0':'green'},__colorSourceUpdateTime:at0,

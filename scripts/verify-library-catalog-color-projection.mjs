@@ -202,6 +202,66 @@ assert.doesNotMatch(compatibilitySource, /(?:setDoc|updateDoc|deleteDoc|writeBat
 assert.equal(legacy.getCalls, 1, 'old-client delta must only reuse its existing R2 state read');
 assert.equal(deliberateClear.getCalls, 1, 'modern color reset adds no R2 reads');
 assert.equal(recent.getCalls, 1, 'journal scan is memory-only');
+// Older Workers dropped both absent swatches and explicit gray resets. A
+// historical row without fields is an uncertainty boundary, not a license
+// to restore an older color from the base. The test uses the real delta path.
+const oldWorkerLibraryRow = { ...oldClientEdit, title: 'older Worker dropped swatches' };
+const historicalLibrary = await actualWorkerApply({
+  base, deltas: [{ deletedIds: [], upserts: [oldWorkerLibraryRow] }],
+  incoming: [oldClientEdit],
+});
+const historicalLibraryRow = historicalLibrary.lastWritten.deltas.at(-1).upserts[0];
+for (const key of ['colorTags', 'favoriteColorTags']) {
+  assert.equal(Object.hasOwn(historicalLibraryRow, key), false,
+    'indistinguishable old-Worker omission/gray must not revive old colors');
+}
+assert.equal(historicalLibrary.getCalls, 1, 'ambiguity guard adds no server reads');
+
+const historicalLibraryClear = await actualWorkerApply({
+  base, deltas: [
+    { deletedIds: [], upserts: [oldWorkerLibraryRow] },
+    { deletedIds: [], upserts: [{ ...oldWorkerLibraryRow, colorTags: null, favoriteColorTags: { '0': null } }] },
+    { deletedIds: [], upserts: [oldWorkerLibraryRow] },
+  ], incoming: [oldClientEdit],
+});
+const clearRow = historicalLibraryClear.lastWritten.deltas.at(-1).upserts[0];
+for (const key of ['colorTags', 'favoriteColorTags']) {
+  assert.equal(Object.hasOwn(clearRow, key), false,
+    'later uncolored old-Worker row makes prior explicit gray/value unknowable');
+}
+// When the LAST materialized row has an explicit gray, retain it, without
+// crossing into an even older colored base row.
+const latestGray = await actualWorkerApply({
+  base, deltas: [
+    { deletedIds: [], upserts: [oldWorkerLibraryRow] },
+    { deletedIds: [], upserts: [{ ...oldWorkerLibraryRow, colorTags: null, favoriteColorTags: { '0': null } }] },
+  ], incoming: [oldClientEdit],
+});
+const grayRow = latestGray.lastWritten.deltas.at(-1).upserts[0];
+assert.equal(grayRow.colorTags, null);
+assert.equal(JSON.stringify(grayRow.favoriteColorTags), '{"0":null}');
+
+const historicalLibraryDeleted = await actualWorkerApply({
+  base, deltas: [
+    { deletedIds: ['track-one'], upserts: [] },
+    { deletedIds: [], upserts: [oldWorkerLibraryRow] },
+  ], incoming: [oldClientEdit],
+});
+for (const field of ['colorTags', 'favoriteColorTags']) {
+  assert.equal(Object.hasOwn(historicalLibraryDeleted.lastWritten.deltas.at(-1).upserts[0], field), false,
+    'deleted and re-added row must never inherit deleted colors');
+}
+const partialLegacyLibrary = await actualWorkerApply({
+  base, deltas: [{ deletedIds: [], upserts: [{ ...oldWorkerLibraryRow, colorTags: { '0': 'green' } }] }],
+  incoming: [oldClientEdit],
+});
+const partialRow = partialLegacyLibrary.lastWritten.deltas.at(-1).upserts[0];
+assert.equal(partialRow.colorTags['0'], 'green', 'newly provided map wins');
+assert.equal(Object.hasOwn(partialRow, 'favoriteColorTags'), false,
+  'missing independent favorite map is ambiguous after an old-Worker journal row');
+
+console.log('LIBRARY_HISTORICAL_OLD_WORKER_GRAY_AMBIGUITY_FAIL_CLOSED=PASS');
+console.log('LIBRARY_EXPLICIT_LATEST_GRAY_AND_DELETION_BARRIER=PASS');
 console.log('LIBRARY_OLD_CLIENT_MISSING_COLOR_PRESERVES_LATEST_R2=PASS');
 console.log('LIBRARY_EXPLICIT_CLEAR_NULL_AND_DELETION_NO_RESURRECTION=PASS');
 console.log('LIBRARY_CAS_CONFLICT_REJECTS_STALE_COLOR_OVERWRITE=PASS');
@@ -256,7 +316,56 @@ const noteConflict = await noteApply({
 assert.equal(noteConflict.result.conflict, true);
 assert.equal(noteConflict.getCalls, 2);
 assert.equal(noteConflict.putCalls, 1, 'losing CAS cannot overwrite newer color');
+const oldWorkerNoteRow = { ...oldNoteEdit, title: 'older Worker dropped aliases' };
+const noteHistorical = await noteApply({
+  deltas: [{ deletedIds: [], upserts: [oldWorkerNoteRow] }],
+  incoming: [oldNoteEdit],
+});
+for (const key of ['favoriteColorTag', 'colorTag']) {
+  assert.equal(Object.hasOwn(noteHistorical.lastWritten.deltas.at(-1).upserts[0], key), false,
+    'ambiguous historical Music Note color is not safe to restore');
+}
+assert.equal(noteHistorical.getCalls, 1);
+
+const noteHistoricalClear = await noteApply({
+  deltas: [
+    { deletedIds: [], upserts: [{ ...oldWorkerNoteRow, favoriteColorTag: null }] },
+    { deletedIds: [], upserts: [oldWorkerNoteRow] },
+  ], incoming: [oldNoteEdit],
+});
+const noteClearedRow = noteHistoricalClear.lastWritten.deltas.at(-1).upserts[0];
+assert.equal(Object.hasOwn(noteClearedRow, 'favoriteColorTag'), false,
+  'uncolored later Worker upsert may have stripped explicit gray');
+assert.equal(Object.hasOwn(noteClearedRow, 'colorTag'), false,
+  'legacy alias must not revive historical color');
+// Preserve explicit null on the latest actual row, and never copy a stale alias.
+const noteLatestGray = await noteApply({
+  deltas: [
+    { deletedIds: [], upserts: [oldWorkerNoteRow] },
+    { deletedIds: [], upserts: [{ ...oldWorkerNoteRow, favoriteColorTag: null }] },
+  ], incoming: [oldNoteEdit],
+});
+const noteLatestGrayRow = noteLatestGray.lastWritten.deltas.at(-1).upserts[0];
+assert.equal(noteLatestGrayRow.favoriteColorTag, null);
+assert.equal(Object.hasOwn(noteLatestGrayRow, 'colorTag'), false);
+
+const noteHistoricalDeleted = await noteApply({
+  deltas: [
+    { deletedIds: ['note-one'], upserts: [] },
+    { deletedIds: [], upserts: [oldWorkerNoteRow] },
+  ], incoming: [oldNoteEdit],
+});
+assert.equal(Object.hasOwn(noteHistoricalDeleted.lastWritten.deltas.at(-1).upserts[0], 'favoriteColorTag'), false);
+assert.equal(Object.hasOwn(noteHistoricalDeleted.lastWritten.deltas.at(-1).upserts[0], 'colorTag'), false);
+console.log('MUSIC_NOTE_HISTORICAL_WORKER_GRAY_AMBIGUITY_FAIL_CLOSED=PASS');
 console.log('MUSIC_NOTE_OLD_CLIENT_MISSING_SWATCH_PRESERVED=PASS');
 console.log('MUSIC_NOTE_EXPLICIT_GRAY_AND_LEGACY_ALIAS_NO_RESURRECTION=PASS');
 console.log('MUSIC_NOTE_LATEST_JOURNAL_DELETE_AND_CAS_COLOR_FENCE=PASS');
 console.log('MUSIC_NOTE_COLOR_COMPAT_ADDITIONAL_FIRESTORE_R2_IO=ZERO');
+
+// Source-only shared-Catalog rollout/rollback decision gates (never deploy).
+const { runRolloutSelfTest } = await import('./verify-743-media-color-rollout-readiness.mjs');
+await runRolloutSelfTest();
+
+// Dormant shared Catalog cutover queue and receipt replay contract (zero deploy).
+await import('./verify-743-catalog-cutover-pending.mjs');

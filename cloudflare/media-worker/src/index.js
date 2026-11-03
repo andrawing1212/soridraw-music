@@ -1021,7 +1021,13 @@ const existingCatalogColorRowsForDelta = (state, incomingUpserts, kind) => {
   const ids = new Set();
   for (const item of incomingUpserts) {
     const id = text(item?.id);
-    if (id && fields.some((key) => !Object.prototype.hasOwnProperty.call(item, key))) ids.add(id);
+    // Music Note aliases represent one choice. A supplied alias is already
+    // authoritative; only old clients missing BOTH need history inheritance.
+    // Library swatch maps are independent (normal/favorite filter).
+    const needsHistory = kind === 'musicNote'
+      ? fields.every((key) => !Object.prototype.hasOwnProperty.call(item, key))
+      : fields.some((key) => !Object.prototype.hasOwnProperty.call(item, key));
+    if (id && needsHistory) ids.add(id);
   }
   const rows = new Map();
   if (!ids.size) return rows;
@@ -1029,8 +1035,12 @@ const existingCatalogColorRowsForDelta = (state, incomingUpserts, kind) => {
     const id = text(item?.id);
     if (ids.has(id)) rows.set(id, item);
   }
-  // A journal deletion makes the old color in the base non-authoritative;
-  // a later re-add without colors must stay uncolored.
+  // A historical Worker may have omitted swatches for BOTH an unchanged row
+  // and an explicit gray reset. The two cases are indistinguishable after
+  // projection: never inherit across such an ambiguous journal upsert.
+  // Treat the latest row as authoritative (including missing fields).
+  // A tombstone still cuts off older color history entirely.
+  // This only scans the already loaded base+journal; no extra server reads.
   for (const entry of state.head.deltas) {
     for (const idValue of entry.deletedIds) {
       const id = text(idValue);
@@ -1053,8 +1063,9 @@ const preserveExistingCatalogColors = (kind, incoming, projected, previous) => {
     return projected;
   }
   for (const key of fields) {
-    // "Missing" means old-client ignorance, NOT explicit user reset.
-    // Preserve explicit null, empty maps and per-index null values as provided.
+    // Only the INCOMING old-client omission may inherit from the latest
+    // materialized row. A historical missing field is not proof of a color.
+    // Explicit null, empty maps and per-index clears always win.
     if (!Object.prototype.hasOwnProperty.call(incoming, key)
       && Object.prototype.hasOwnProperty.call(previous, key)) {
       projected[key] = previous[key];
@@ -1159,6 +1170,7 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
     }
 
     if (request.method === 'GET' && route.action === 'base') {
+      // Shared-Catalog color compatibility: unchanged normal read path.
       const state = await getCatalogState(identity, route.kind, catalogRequiredRevision(request), env);
       const knownRevision = catalogKnownRevision(request);
       const syncPayload = knownRevision > 0 ? buildCatalogJournalSyncResponse({ head: state.head, knownRevision }) : null;

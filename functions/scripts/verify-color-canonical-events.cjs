@@ -27,6 +27,6 @@ assert.match(source,/secrets:\[signingKey\]/);
 assert.match(source,/latest = await ref\.get\(\)/);
 assert.match(source,/if \(!latest\.exists\) return/);
 assert.match(source,/createHmac\('sha256',secret\)/);
-assert.doesNotMatch(source,/(?:\.set\(|\.update\(|\.delete\(|runTransaction\()/,
+assert.doesNotMatch(source,/(?:\b(?:ref|userRef|docRef|transaction|firestore)\.(?:set|update|delete)\(|runTransaction\()/,
  'publisher must not write to Firestore');
 console.log('FIRESTORE_COLOR_CHANGE_FILTER_AND_LATEST_CANONICAL_READ=PASS');

@@ -1,5 +1,4 @@
 import { SORIDRAW_COLOR_LOCAL_RECOVERY_EVENT } from '../lib/colorLocalRecovery';
-import { isCanonicalColorOutboxClientEnabled, commitCanonicalColorWithOutboxClient } from '../services/colorCatalogOutboxService';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import { resolveNextSongApplyRoute, stageNextSongKeywords } from '../lib/nextSongPendingBridge';
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useDeferredValue } from 'react';
@@ -36,6 +35,7 @@ import CacheDiagnosticBadge from '../components/CacheDiagnosticBadge';
 import { markCacheDiagnostic } from '../lib/cacheDiagnostics';
 import { subscribeListBundle, readLibraryBundleLocalSyncVersion, writeLibraryBundleLocalSyncVersion } from '../lib/listBundleCache';
 import { schedulePreviewAdaptiveListIndexPublishIfDirty } from '../lib/adaptiveListIndexV2';
+import { flushPendingCatalogPublishes } from '../lib/userDataEngine';
 import { flushSoridrawPageSync } from '../lib/pageSyncCoordinator';
 import {
   LIBRARY_PLAYLIST_CACHE_EVENT,
@@ -2307,21 +2307,30 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
   };
 
-  const persistWorkspaceColorOnly = async (
-    uid: string, trackId: string, field: 'colorTags' | 'favoriteColorTags',
-    index: string, color: string,
-  ) => {
-    if (!isCanonicalColorOutboxClientEnabled) {
-      await updateDoc(doc(db, 'suno_tracks', uid, 'tracks', trackId), {
-        [`${field}.${index}`]: color === 'gray' ? null : color,
-        updatedAt: serverTimestamp(),
+  // A saved local color map is not server authority. Only stage an exact
+  // workspace row AFTER its Firestore color update has committed. Reuse the
+  // already-loaded full Catalog row; no extra Firestore query or collection scan.
+  const stageConfirmedWorkspaceColors = (
+    uid: string,
+    confirmed: Array<{ trackId: string; field: 'colorTags' | 'favoriteColorTags'; index: string; color: string }>,
+  ): boolean => {
+    if (!uid || confirmed.length === 0) return true;
+    const byId = new Map<string, any>();
+    const cacheRows = libraryWorkspaceSession?.uid === uid ? libraryWorkspaceSession.tracks : [];
+    for (const { trackId, field, index, color } of confirmed) {
+      const source = byId.get(trackId)
+        || tracks.find((track: any) => String(track?.id || '') === trackId)
+        || cacheRows.find((track: any) => String(track?.id || '') === trackId);
+      if (!source) return false; // keep the pending click; never publish a partial item
+      byId.set(trackId, {
+        ...source,
+        [field]: { ...(source[field] || {}), [index]: color === 'gray' ? null : color },
       });
-      return;
     }
-    await commitCanonicalColorWithOutboxClient({
-      kind: 'library', documentId: trackId, field, index: Number(index),
-      color: color === 'gray' ? null : color,
+    schedulePreviewAdaptiveListIndexPublishIfDirty('library', uid, [...byId.values()], {
+      hasMore: true, complete: false,
     });
+    return true;
   };
 
   const handleSyncLibraryColors = async () => {
@@ -2360,11 +2369,21 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         }));
       }
 
+      const confirmedWorkspaceColors: Array<{ trackId: string; field: 'colorTags' | 'favoriteColorTags'; index: string; color: string }> = [];
       for (const [key, color] of workspaceEntries) {
         const [, colorField, trackId, idx] = key.split(':');
         if (!trackId || idx === undefined || (colorField !== 'colorTags' && colorField !== 'favoriteColorTags')) continue;
-        await persistWorkspaceColorOnly(user.uid, trackId, colorField, idx, color);
+        const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', trackId);
+        await updateDoc(trackRef, {
+          [`${colorField}.${idx}`]: color === 'gray' ? null : color,
+          updatedAt: serverTimestamp()
+        });
+        confirmedWorkspaceColors.push({ trackId, field: colorField, index: idx, color });
       }
+      if (!stageConfirmedWorkspaceColors(user.uid, confirmedWorkspaceColors)) {
+        throw new Error('COLOR_CATALOG_EXACT_ROW_NOT_CACHED');
+      }
+      if (confirmedWorkspaceColors.length > 0) await flushPendingCatalogPublishes(user.uid);
 
       for (const [key, color] of playlistEntries) {
         const [, playlistId, itemId] = key.split(':');
@@ -2417,11 +2436,20 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     libraryColorsAutoSyncingRef.current = true;
     try {
+      const confirmedWorkspaceColors: Array<{ trackId: string; field: 'colorTags' | 'favoriteColorTags'; index: string; color: string }> = [];
       for (const [key, color] of workspaceEntries) {
         const [, colorField, trackId, idx] = key.split(':');
         if (!trackId || idx === undefined || (colorField !== 'colorTags' && colorField !== 'favoriteColorTags')) continue;
-        await persistWorkspaceColorOnly(currentUser.uid, trackId, colorField, idx, color);
+        await updateDoc(doc(db, 'suno_tracks', currentUser.uid, 'tracks', trackId), {
+          [`${colorField}.${idx}`]: color === 'gray' ? null : color,
+          updatedAt: serverTimestamp()
+        });
+        confirmedWorkspaceColors.push({ trackId, field: colorField, index: idx, color });
       }
+      if (!stageConfirmedWorkspaceColors(currentUser.uid, confirmedWorkspaceColors)) {
+        throw new Error('COLOR_CATALOG_EXACT_ROW_NOT_CACHED');
+      }
+      if (confirmedWorkspaceColors.length > 0) await flushPendingCatalogPublishes(currentUser.uid);
 
       for (const [key, color] of playlistEntries) {
         const [, playlistId, itemId] = key.split(':');

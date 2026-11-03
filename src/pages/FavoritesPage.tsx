@@ -80,7 +80,6 @@ import { db } from '../firebase';
 import { doc, getDoc, getDocFromServer, updateDoc, setDoc, deleteDoc, addDoc, collection, serverTimestamp, writeBatch } from '../lib/firestoreMeasured';
 import { updatePlaylistItemColor } from '../services/playlistService';
 import { favoritesStore } from '../hooks/useFavoritesStore';
-import { isCanonicalColorOutboxClientEnabled, commitCanonicalColorWithOutboxClient } from '../services/colorCatalogOutboxService';
 import { SORIDRAW_COLOR_LOCAL_RECOVERY_EVENT } from '../lib/colorLocalRecovery';
 import {
   getExploreMusicNotePublicationState,
@@ -3836,7 +3835,7 @@ updates: draft.updates,
     }
 
     try {
-      await Promise.all(favoriteEntries.map(([id, color]) => persistFavoriteColorOnly(id, color)));
+      await Promise.all(favoriteEntries.map(([id, color]) => updateFavorite(id, { favoriteColorTag: color === 'gray' ? null : color } as any)));
 
       for (const [key, color] of workspaceEntries) {
         const [, colorField, trackId, idx] = key.split(':');
@@ -3869,24 +3868,6 @@ updates: draft.updates,
   };
 
 
-  const persistFavoriteColorOnly = async (id: string, color: string) => {
-    const value = color === 'gray' ? null : color;
-    if (!isCanonicalColorOutboxClientEnabled) {
-      await updateFavorite(id, { favoriteColorTag: value } as any);
-      return;
-    }
-    await commitCanonicalColorWithOutboxClient({
-      kind: 'musicNote', documentId: id, field: 'favoriteColorTag', color: value,
-    });
-    // Keep the already-confirmed canonical color visible without waiting for
-    // a parent list refresh. No new server reads or extra writes.
-    const current = favoritesStore.getFavorites();
-    favoritesStore.setFavorites(current.map((song: any) =>
-      (song?.id === id || song?.firestoreId === id)
-        ? { ...song, favoriteColorTag: value } : song
-    ));
-  };
-
   const syncFavoriteColorsOnExit = async (silent = true) => {
     const currentUser = favoriteUserRef.current;
     if (!currentUser || favoriteColorsAutoSyncingRef.current) return;
@@ -3905,7 +3886,7 @@ updates: draft.updates,
 
     favoriteColorsAutoSyncingRef.current = true;
     try {
-      await Promise.all(entries.map(([id, color]) => persistFavoriteColorOnly(id, color)));
+      await Promise.all(entries.map(([id, color]) => updateFavorite(id, { favoriteColorTag: color === 'gray' ? null : color } as any)));
       pendingFavoriteColorIdsRef.current.clear();
       favoriteColorBaselineRef.current = currentSerialized;
       favoriteColorDirtyRef.current = false;

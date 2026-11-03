@@ -4,7 +4,6 @@ import {
   importX509,
   jwtVerify,
 } from 'jose';
-import { planTrustedCanonicalColorEvent } from './colorRestoration.js';
 import {
   appendCatalogJournalDelta,
   buildCatalogJournalSyncResponse,
@@ -14,7 +13,6 @@ import {
   materializeCatalogJournal,
   shouldCompactCatalogJournal,
 } from './catalogJournal.js';
-import { planExactCanonicalColorRestore } from './colorRestoration.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const AUTH_CERT_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
@@ -521,7 +519,7 @@ const MUSIC_NOTE_MEDIA_FIELDS = [
 ];
 
 const catalogRouteFromPath = (pathname) => {
-  const match = String(pathname || '').match(/^\/v1\/catalog\/(musicNote|library)(?:\/(delta|bootstrap|inspect-exact|restore-color))?$/);
+  const match = String(pathname || '').match(/^\/v1\/catalog\/(musicNote|library)(?:\/(delta|bootstrap|inspect-exact))?$/);
   return match ? { kind: match[1], action: match[2] || 'base' } : null;
 };
 
@@ -570,7 +568,7 @@ const catalogCreatedAtMs = (item, document = null) => {
   return Math.max(1, Math.floor(Number(value) || 1));
 };
 
-const projectCatalogFields = (kind, source, id, document = null, trustedR2 = false) => {
+const projectCatalogFields = (kind, source, id, document = null) => {
   if (!source || typeof source !== 'object' || Array.isArray(source) || !id) return null;
   if (kind === 'musicNote' && !isActiveMusicNoteCatalogItem(source)) return null;
   const projected = {
@@ -581,10 +579,6 @@ const projectCatalogFields = (kind, source, id, document = null, trustedR2 = fal
   };
   for (const key of catalogFieldList(kind)) {
     if (source[key] !== undefined) projected[key] = source[key];
-  }
-  // Never accept a color-version watermark from an untrusted browser delta.
-  if (trustedR2 && typeof source.__colorSourceUpdateTime === 'string') {
-    projected.__colorSourceUpdateTime = source.__colorSourceUpdateTime;
   }
   projected.createdAtMs = catalogCreatedAtMs(projected, document);
   return projected;
@@ -932,7 +926,7 @@ const materializeCatalogState = (state, kind) => {
   const payload = materializeCatalogJournal({
     baseSnapshot: state.base,
     head: state.head,
-    projectItem: (item, id) => projectCatalogFields(kind, item, id, null, true),
+    projectItem: (item, id) => projectCatalogFields(kind, item, id),
     sortItems: sortCatalogItems,
   });
   if (!payload || !validateCatalogPayload(payload, kind)) throw new Error('CATALOG_JOURNAL_MATERIALIZE_INVALID');
@@ -1015,21 +1009,30 @@ const compactCatalogJournal = async (env, uid, kind) => {
   return Boolean(stored);
 };
 
-// A client catalog delta is NOT evidence of an authoritative Firestore color
-// change. Once a signed canonical event establishes a watermark, ALL clients
-// (including stale PC tabs) must preserve the authoritative swatches. Without
-// a watermark, preserve only keys absent from old clients. Existing base and
-// journal are already loaded; no additional Firestore/R2 reads.
-const existingColorRowsForDelta = (state, incomingUpserts) => {
-  const ids = new Set(incomingUpserts.map(item => text(item?.id)).filter(Boolean));
+// Old browser clients do not know the Library swatch fields. Their full-row
+// Catalog upserts must not erase a newer R2 swatch. This inspects only the R2
+// base/journal already loaded by getCatalogState: no additional R2/Firestore IO.
+// Recompute it for each CAS retry so a concurrent newer color is not lost.
+const existingLibraryColorRowsForDelta = (state, incomingUpserts) => {
+  const ids = new Set();
+  for (const item of incomingUpserts) {
+    const id = text(item?.id);
+    if (id && (!Object.prototype.hasOwnProperty.call(item, 'colorTags')
+      || !Object.prototype.hasOwnProperty.call(item, 'favoriteColorTags'))) ids.add(id);
+  }
   const rows = new Map();
   if (!ids.size) return rows;
   for (const item of state.base.items) {
     const id = text(item?.id);
     if (ids.has(id)) rows.set(id, item);
   }
+  // A journal deletion makes the old color in the base non-authoritative;
+  // a later re-add without colors must stay uncolored.
   for (const entry of state.head.deltas) {
-    for (const deleted of entry.deletedIds) rows.delete(text(deleted));
+    for (const idValue of entry.deletedIds) {
+      const id = text(idValue);
+      if (ids.has(id)) rows.delete(id);
+    }
     for (const item of entry.upserts) {
       const id = text(item?.id);
       if (ids.has(id)) rows.set(id, item);
@@ -1037,23 +1040,15 @@ const existingColorRowsForDelta = (state, incomingUpserts) => {
   }
   return rows;
 };
-const preserveServerColorAuthority = (kind, incoming, projected, previous) => {
+
+const preserveExistingLibrarySwatches = (incoming, projected, previous) => {
   if (!previous || !projected) return projected;
-  const protectedKeys = kind === 'library'
-    ? ['colorTags', 'favoriteColorTags']
-    : ['favoriteColorTag', 'colorTag', 'favoriteColor', 'noteColor', 'color'];
-  const serverWatermark = text(previous.__colorSourceUpdateTime);
-  if (serverWatermark) projected.__colorSourceUpdateTime = serverWatermark;
-  for (const key of protectedKeys) {
-    if (Object.prototype.hasOwnProperty.call(previous, key)
-      && (serverWatermark || !Object.prototype.hasOwnProperty.call(incoming, key))) {
+  for (const key of ['colorTags', 'favoriteColorTags']) {
+    // "Missing" means old-client ignorance, NOT explicit user reset.
+    // Preserve explicit null, empty maps and per-index null values as provided.
+    if (!Object.prototype.hasOwnProperty.call(incoming, key)
+      && Object.prototype.hasOwnProperty.call(previous, key)) {
       projected[key] = previous[key];
-    }
-  }
-  // A server-side authoritative gray/null must block a legacy color alias.
-  if (serverWatermark && kind === 'musicNote' && Object.prototype.hasOwnProperty.call(previous, 'favoriteColorTag')) {
-    for (const legacy of ['colorTag', 'favoriteColor', 'noteColor', 'color']) {
-      if (!Object.prototype.hasOwnProperty.call(previous, legacy)) delete projected[legacy];
     }
   }
   return projected;
@@ -1066,7 +1061,8 @@ const applyCatalogDelta = async (identity, kind, delta, env, executionCtx = null
     const sanitizedDeletedIds = new Set(delta.deletedIds.map((id) => text(id)).filter(Boolean));
     // The existing base+journal are already in memory. Do not add per-item
     // canonical reads or rebuild the shared Catalog on old-client traffic.
-    const existingColorRows = existingColorRowsForDelta(state, delta.upserts);
+    const existingLibraryRows = kind === 'library'
+      ? existingLibraryColorRowsForDelta(state, delta.upserts) : null;
     const sanitizedUpserts = [];
     for (const rawItem of delta.upserts) {
       const id = text(rawItem?.id);
@@ -1074,8 +1070,8 @@ const applyCatalogDelta = async (identity, kind, delta, env, executionCtx = null
       const projected = projectCatalogFields(kind, rawItem, id);
       if (!projected) sanitizedDeletedIds.add(id);
       else sanitizedUpserts.push(
-        !sanitizedDeletedIds.has(id)
-          ? preserveServerColorAuthority(kind, rawItem, projected, existingColorRows.get(id))
+        existingLibraryRows && !sanitizedDeletedIds.has(id)
+          ? preserveExistingLibrarySwatches(rawItem, projected, existingLibraryRows.get(id))
           : projected,
       );
     }
@@ -1109,197 +1105,6 @@ const applyCatalogDelta = async (identity, kind, delta, env, executionCtx = null
   const latest = await getCatalogState(identity, kind, 0, env);
   return { conflict: true, revision: latest.head.headRevision, itemCount: latest.head.itemCount, deltaCount: latest.head.deltas.length };
 };
-
-
-// Only Firebase server-triggered, HMAC-signed color changes reach this endpoint.
-// It is disabled unless BOTH shared deployment gates and the server secret are
-// configured. No user browser can supply the canonical version or bypass auth.
-const applyServerColorEvent = async (event, env, executionCtx = null) => {
-  if (!event || event.schemaVersion !== 1
-    || !['musicNote','library'].includes(event.kind)
-    || !text(event.uid) || !text(event.documentId)
-    || text(event.documentId).length > 240 || /[\\/]/.test(event.documentId)
-    || !/^[A-Za-z0-9_-]{8,180}$/.test(text(event.eventId))
-    || !event.canonical || typeof event.canonical !== 'object' || Array.isArray(event.canonical)) {
-    return { code: 'INVALID_SERVER_COLOR_EVENT', retryable: false };
-  }
-  if (event.kind === 'musicNote' && text(event.canonical.uid) !== text(event.uid)) {
-    return { code: 'EVENT_OWNER_MISMATCH', retryable: false };
-  }
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    // Strict R2-only inspection prevents any legacy seed or canonical rebuild.
-    const state = await readStrictCatalogStateForInspection(env.CATALOG, event.uid, event.kind);
-    if (!state) return { code: 'CATALOG_UNAVAILABLE', retryable: true };
-    const snapshot = materializeCatalogState(state, event.kind);
-    const row = snapshot.items.find(item => text(item.id) === event.documentId);
-    if (!row) return { code: 'CATALOG_ROW_NOT_MATERIALIZED', retryable: true };
-    const result = planTrustedCanonicalColorEvent({
-      kind: event.kind, canonical: event.canonical, catalogRow: row,
-      sourceUpdateTime: event.sourceUpdateTime,
-    });
-    if (result.code === 'DUPLICATE' || result.code === 'STALE') {
-      return { code: result.code, retryable: false };
-    }
-    if (result.code === 'INACTIVE_OR_MISSING') {
-      // The canonical source is active but the R2 row may still be marked
-      // removed. Retry until its ordinary membership delta settles; never
-      // acknowledge a color event that could disappear permanently.
-      return { code: 'CATALOG_ROW_INACTIVE_RETRY', retryable: true };
-    }
-    if (result.code !== 'APPLY' || !result.row) {
-      return { code: result.code, retryable: result.code === 'BAD_SOURCE_VERSION' };
-    }
-    const version = Math.max(Date.now(), state.head.headRevision + 1);
-    const delta = {
-      // One Firebase event can be retried after a newer canonical mutation.
-      // The source version is part of identity so that the newer payload
-      // cannot be suppressed by recentMutations for the older payload.
-      mutationId: 'srv-color-' + event.eventId + '-' + event.sourceUpdateTime,
-      baseRevision: state.head.headRevision,
-      baseItemCount: state.head.itemCount,
-      nextItemCount: state.head.itemCount,
-      revision: version,
-      deletedIds: [],
-      upserts: [result.row],
-    };
-    const next = appendCatalogJournalDelta({ head: state.head, delta, serverRevision: version });
-    if (!next.ok && next.reason === 'COMPACT_REQUIRED') {
-      const compacted = await compactCatalogJournal(env, event.uid, event.kind);
-      if (compacted) continue;
-      return { code: 'COLOR_JOURNAL_COMPACT_RETRY', retryable: true };
-    }
-    if (!next.ok && next.reason === 'CONFLICT') continue;
-    if (!next.ok) return { code: 'COLOR_JOURNAL_' + next.reason, retryable: true };
-    if (next.duplicate) return { code: 'DUPLICATE', retryable: false };
-    const stored = await putCatalogJournalHead(env, event.uid, event.kind, next.head, state.journalObject);
-    if (!stored) continue;
-    if (shouldCompactCatalogJournal(next.head)) {
-      const compacting = compactCatalogJournal(env, event.uid, event.kind).catch(() => false);
-      if (executionCtx?.waitUntil) executionCtx.waitUntil(compacting);
-      else await compacting;
-    }
-    return { code: 'APPLIED', retryable: false, revision: next.revision };
-  }
-  return { code: 'COLOR_CAS_CONFLICT', retryable: true };
-};
-const handleServerColorEvent = async (request, env, executionCtx) => {
-  if (request.method !== 'POST'
-    || text(env?.SORIDRAW_COLOR_CATALOG_EVENTS_V1) !== '1'
-    || !isSharedCatalogEnabled(env) || !env?.CATALOG) {
-    return jsonResponse({ ok: false, code: 'SERVER_COLOR_SYNC_DISABLED' }, 404);
-  }
-  const secret = text(env.SORIDRAW_COLOR_CATALOG_HMAC_SECRET);
-  const issued = text(request.headers.get('X-Soridraw-Color-Time'));
-  const signed = text(request.headers.get('X-Soridraw-Color-Signature'));
-  const when = Number(issued);
-  if (secret.length < 32 || !Number.isSafeInteger(when)
-    || Math.abs(Date.now() - when) > 5 * 60_000 || signed.length > 120
-    || Number(request.headers.get('content-length') || 0) > 32 * 1024) {
-    return jsonResponse({ ok: false, code: 'SERVER_COLOR_AUTH_REQUIRED' }, 401);
-  }
-  const raw = await request.text();
-  if (raw.length > 32 * 1024) return jsonResponse({ ok: false, code: 'SERVER_COLOR_TOO_LARGE' }, 413);
-  const expected = await signValue(secret, issued + '.' + raw);
-  if (!constantTimeEqual(expected, signed)) {
-    return jsonResponse({ ok: false, code: 'SERVER_COLOR_BAD_SIGNATURE' }, 401);
-  }
-  const data = (() => { try { return JSON.parse(raw); } catch { return null; } })();
-  try {
-    const result = await applyServerColorEvent(data, env, executionCtx);
-    return jsonResponse({ ok: !result.retryable && result.code !== 'INVALID_SERVER_COLOR_EVENT'
-      && result.code !== 'EVENT_OWNER_MISMATCH', ...result },
-      result.retryable ? 503 : (result.code === 'INVALID_SERVER_COLOR_EVENT'
-        || result.code === 'EVENT_OWNER_MISMATCH' ? 400 : 200));
-  } catch (error) {
-    return jsonResponse({ ok:false, code: 'SERVER_COLOR_DELIVERY_RETRY' }, 503);
-  }
-};
-
-// Exact owner-requested color reconciliation PREVIEW. It is deliberately
-// read-only: Firestore and R2 cannot form a shared atomic transaction, so a
-// canonical snapshot must NEVER be replayed as an R2 write. Future durable
-// repair must use a separately audited canonical-authoritative writer.
-
-const fetchExactCanonicalColorSource = async (identity, kind, documentId, env) => {
-  const parts = kind === 'musicNote'
-    ? ['favorites', documentId]
-    : ['suno_tracks', identity.uid, 'tracks', documentId];
-  const fields = kind === 'musicNote'
-    ? ['uid', 'saved', 'hidden', 'favoriteHidden', 'favoriteRemoved',
-      'favoriteRemovedAt', 'unlikedAt', 'unsavedAt', 'deletedAt', 'trashedAt',
-      'favoriteColorTag', 'colorTag']
-    : ['uid', 'hidden', 'status', 'deletedAt', 'trashedAt', 'colorTags', 'favoriteColorTags'];
-  const mask = new URLSearchParams();
-  for (const field of fields) mask.append('mask.fieldPaths', field);
-  const path = parts.map(encodeURIComponent).join('/');
-  const endpoint = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(env.FIREBASE_PROJECT_ID)}/databases/(default)/documents/${path}?${mask}`;
-  const response = await fetch(endpoint, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${identity.idToken}` },
-    cf: { cacheTtl: 0 },
-  });
-  if (response.status === 404) return null;
-  if (!response.ok) throw new Error(`COLOR_SOURCE_READ_${response.status}`);
-  const responseBody = await response.json();
-  const canonical = decodeFirestoreDocument(responseBody);
-  // Re-validation needs a Firestore server-supplied document version, not a
-  // client timestamp or app-maintained updatedAt. Missing version fails closed.
-  const updateTime = text(responseBody?.updateTime);
-  if (!updateTime) throw new Error('COLOR_SOURCE_UPDATE_TIME_MISSING');
-  // Music Note collection is top-level; the UID in its document is essential.
-  if ((kind === 'musicNote' && text(canonical.uid) !== identity.uid)
-    || (kind === 'library' && canonical.uid != null
-      && text(canonical.uid) !== identity.uid)) {
-    throw new Error('COLOR_SOURCE_OWNER_MISMATCH');
-  }
-  return { data: canonical, updateTime };
-};
-
-const previewExactColorFromCanonical = async (identity, kind, documentId, expectedRevision, canonicalSnapshot, env) => {
-  // Strict read cannot seed an absent shared Catalog from the legacy bucket.
-  const state = await readStrictCatalogStateForInspection(env.CATALOG, identity.uid, kind);
-  if (!state) return { code: 'CATALOG_ABSENT', changed: false };
-  if (state.head.headRevision !== expectedRevision) {
-    return { code: 'CATALOG_REVISION_CONFLICT', changed: false, conflict: true };
-  }
-  const snapshot = materializeCatalogState(state, kind);
-  const row = snapshot.items.find(item => text(item?.id) === documentId);
-  if (!row) return { code: 'EXACT_ROW_NOT_ACTIVE', changed: false };
-  if (!canonicalSnapshot?.updateTime || !canonicalSnapshot?.data) {
-    return { code: 'CANONICAL_VERSION_UNAVAILABLE', changed: false, conflict: true };
-  }
-  const plan = planExactCanonicalColorRestore(kind, canonicalSnapshot.data, row);
-  if (!plan.row) return { code: plan.code, changed: false };
-  // Read again only for an owner-invoked preview; it can detect a concurrent
-  // change already committed, but is NOT a cross-service transaction and
-  // never authorizes a later R2 write.
-  const latest = await fetchExactCanonicalColorSource(identity, kind, documentId, env);
-  if (!latest || !latest.updateTime || latest.updateTime !== canonicalSnapshot.updateTime) {
-    return { code: 'CANONICAL_VERSION_CONFLICT', changed: false, conflict: true };
-  }
-  const confirmed = planExactCanonicalColorRestore(kind, latest.data, row);
-  if (!confirmed.row || JSON.stringify(confirmed.row) !== JSON.stringify(plan.row)) {
-    return { code: 'CANONICAL_COLOR_CONFLICT', changed: false, conflict: true };
-  }
-  // Only return the missing color fields, never a full song document. No
-  // journal append, Catalog put, Firestore update, seeding or migration occurs.
-  // The preview may become stale immediately; it MUST NOT be treated as an
-  // authorization to write R2 later.
-  const projectedColor = kind === 'musicNote'
-    ? { favoriteColorTag: plan.row.favoriteColorTag }
-    : Object.fromEntries(
-      ['colorTags', 'favoriteColorTags'].filter((field) => (
-        JSON.stringify(plan.row[field]) !== JSON.stringify(row[field])
-      )).map((field) => [field, plan.row[field]])
-    );
-  return {
-    code: 'COLOR_RESTORE_READ_ONLY_PREVIEW',
-    changed: false, dryRun: true, wouldRestore: true,
-    revision: state.head.headRevision,
-    proposedColor: projectedColor,
-  };
-};
-
 
 const handleCatalog = async (request, env, origin, url, executionCtx = null) => {
   const route = catalogRouteFromPath(url.pathname);
@@ -1343,40 +1148,6 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
       const membership = catalog.items.some((item) => text(item?.id) === exactId);
       return jsonResponse({ ok: true, materialized: true, membership,
         revision: catalog.revision, itemCount: catalog.itemCount }, 200, origin);
-    }
-
-
-    if (request.method === 'POST' && route.action === 'restore-color') {
-      // Even a read-only preview requires two server-only gates and exact owner UID.
-      // Not enabled by any checked-in Wrangler environment (PREVIEW/TEST/PROD).
-      if (text(env.SORIDRAW_COLOR_RESTORE_V1) !== '1'
-        || text(env.SORIDRAW_COLOR_RESTORE_UID) !== identity.uid) {
-        return jsonResponse({ ok: false, code: 'COLOR_RESTORE_DISABLED' }, 404, origin);
-      }
-      if (!isSharedCatalogEnabled(env) || !env.CATALOG) {
-        return jsonResponse({ ok: false, code: 'SHARED_CATALOG_UNAVAILABLE' }, 503, origin);
-      }
-      if (Number(request.headers.get('content-length') || 0) > 512) {
-        return jsonResponse({ ok: false, code: 'REQUEST_TOO_LARGE' }, 413, origin);
-      }
-      const body = await request.json().catch(() => null);
-      if (!body || typeof body !== 'object' || Array.isArray(body)
-        || Object.keys(body).some(key => !['documentId', 'expectedRevision'].includes(key))) {
-        return jsonResponse({ ok: false, code: 'INVALID_COLOR_RESTORE_REQUEST' }, 400, origin);
-      }
-      const exactId = text(body.documentId);
-      const expectedRevision = Number(body.expectedRevision);
-      if (!exactId || exactId.length > 240 || exactId === '.' || exactId === '..'
-        || /[\\/]/.test(exactId) || !Number.isSafeInteger(expectedRevision)
-        || expectedRevision <= 0) {
-        return jsonResponse({ ok: false, code: 'INVALID_COLOR_RESTORE_ID_OR_REVISION' }, 400, origin);
-      }
-      const canonical = await fetchExactCanonicalColorSource(identity, route.kind, exactId, env);
-      if (!canonical) return jsonResponse({ ok: true, changed: false, code: 'CANONICAL_ABSENT' }, 200, origin);
-      const result = await previewExactColorFromCanonical(
-        identity, route.kind, exactId, expectedRevision, canonical, env,
-      );
-      return jsonResponse({ ok: !result.conflict, ...result }, result.conflict ? 409 : 200, origin);
     }
 
     if (request.method === 'GET' && route.action === 'base') {
@@ -1522,10 +1293,6 @@ export default {
         catalogBinding: Boolean(env.CATALOG),
         catalogAuthorityMode: catalogAuthorityMode(env),
       }, 200, origin);
-    }
-
-    if (url.pathname === '/v1/internal/catalog-color-event') {
-      return handleServerColorEvent(request, env, executionCtx);
     }
 
     if (request.method === 'POST' && url.pathname === '/v1/archive/resolve') {

@@ -1,6 +1,4 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
-export { commitCanonicalColorWithOutbox, retryPendingCanonicalColors } from "./colorCatalogOutbox";
-export { captureLegacyMusicNoteColor, captureLegacyLibraryColor } from "./colorCatalogLegacyBridge";
 import { defineSecret } from "firebase-functions/params";
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";

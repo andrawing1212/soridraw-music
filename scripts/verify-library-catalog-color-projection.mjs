@@ -77,7 +77,7 @@ assert.doesNotMatch(clientProjectCode, /getDocs|setDoc|updateDoc|writeBatch/);
 // Execute the actual R2 delta merge code, including CAS retries, in a
 // no-network in-memory harness. This is a test of the deployed handler path,
 // not a standalone approximation of the merge behavior.
-const mergeCode = block(worker, 'const existingColorRowsForDelta = ', '\n// Only Firebase server-triggered');
+const mergeCode = block(worker, 'const existingLibraryColorRowsForDelta = ', '\nconst handleCatalog = async');
 const actualWorkerApply = async ({ base, deltas = [], incoming, deletedIds = [], retryState = null }) => {
   const currentIds = new Set(base.map(item => item.id));
   for (const entry of deltas) {
@@ -188,32 +188,12 @@ assert.equal(concurrent.result.revision, 101, 'latest concurrent head remains au
 
 // This compatibility path cannot requery canonical Firestore, issue a new
 // R2 read, or mutate any user source. Only the already acquired state is used.
-const compatibilitySource = block(worker, 'const existingColorRowsForDelta = ', '\nconst applyCatalogDelta = async');
+const compatibilitySource = block(worker, 'const existingLibraryColorRowsForDelta = ', '\nconst applyCatalogDelta = async');
 assert.doesNotMatch(compatibilitySource, /firestoreCatalogQuery\s*\(|buildCanonicalCatalog\s*\(|catalogBucket\s*\(|await\s+[^;]*\.get\s*\(/);
 assert.doesNotMatch(compatibilitySource, /(?:setDoc|updateDoc|deleteDoc|writeBatch)\s*\(/);
 assert.equal(legacy.getCalls, 1, 'old-client delta must only reuse its existing R2 state read');
 assert.equal(deliberateClear.getCalls, 1, 'modern color reset adds no R2 reads');
 assert.equal(recent.getCalls, 1, 'journal scan is memory-only');
-
-// A server-attested version fences ALL old browser upserts, including explicit
-// stale values and legacy app clients that know no watermark field. This is
-// separate from the old unversioned null-reset tests above.
-const attestedBase = [{ ...base[0], __colorSourceUpdateTime:'2026-11-03T03:02:00.000000000Z' }];
-const staleExplicitEdit = await actualWorkerApply({
-  base: attestedBase,
-  incoming: [{...oldClientEdit, colorTags:{'0':'red'}, favoriteColorTags:{'0':'orange'},
-    __colorSourceUpdateTime:'2099-01-01T00:00:00.000000000Z'}],
-});
-const fenced = staleExplicitEdit.lastWritten.deltas.at(-1).upserts[0];
-assert.equal(fenced.colorTags['0'], 'purple');
-assert.equal(fenced.favoriteColorTags['0'], 'blue');
-assert.equal(fenced.__colorSourceUpdateTime, attestedBase[0].__colorSourceUpdateTime);
-const untrustedMarker = workerProject('library', {
-  ...oldClientEdit, __colorSourceUpdateTime:'2099-01-01T00:00:00.000000000Z',
-}, oldClientEdit.id);
-assert.equal(Object.hasOwn(untrustedMarker,'__colorSourceUpdateTime'), false);
-console.log('CANONICAL_ATTESTED_COLOR_FENCES_STALE_BROWSER_UPSERTS=PASS');
-
 console.log('LIBRARY_OLD_CLIENT_MISSING_COLOR_PRESERVES_LATEST_R2=PASS');
 console.log('LIBRARY_EXPLICIT_CLEAR_NULL_AND_DELETION_NO_RESURRECTION=PASS');
 console.log('LIBRARY_CAS_CONFLICT_REJECTS_STALE_COLOR_OVERWRITE=PASS');

@@ -958,7 +958,8 @@ const startDomainSubscriptions = (uid: string) => {
 // SORIDRAW_USER_DOMAIN_SYNC_STAGE2A_20260905
 // Mutation-only publisher: app entry, reload, cache hydration and ordinary reads never call set().
 // The payload is fixed-size and contains at most 10 document IDs.
-// A canonical Firestore save/restore has ONE exact changed document. Do not
+// A canonical Firestore save/restore or an explicit confirmed color-only edit
+// has ONE exact changed document. Do not
 // infer the changed ID from the full browser Music Note list: a warm local
 // Catalog may already contain this row while the shared R2 Catalog does not.
 // This mutation hook runs only after the Firestore write resolves successfully.
@@ -967,8 +968,9 @@ export const stageCommittedMusicNoteMembershipDelta = (
   context: Readonly<V1MutationBoundaryContext>,
   result: unknown,
 ): void => {
+  const confirmedColorUpdate = context.operation === 'update' && context.colorCatalogChanged === true;
   if (context.domain !== 'musicNote'
-    || !['save', 'restore'].includes(context.operation)
+    || (!['save', 'restore'].includes(context.operation) && !confirmedColorUpdate)
     || !context.uid || !context.syncItem || typeof context.syncItem !== 'object'
     || Array.isArray(context.syncItem)) return;
   const documentIds = (context.documentIds || [])

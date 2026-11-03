@@ -222,3 +222,15 @@ console.log('CATALOG_COLOR_RELEASE_CANDIDATE_NORMAL_GET_DELTA_NO_HOLD=PASS');
 assert.equal(catalogCutoverHoldEnabled({}),false);
 console.log('CATALOG_CUTOVER_STAGED_ONLY_NO_RUNTIME_IO=PASS');
 
+
+// The main-registered workflow_dispatch is the only executable way to release
+// three shared Media Workers. Its new job is gated by the exact production
+// approval phrase; ordinary preview push can only capture read-only state.
+const sharedRelease = readFileSync('.github/workflows/cloudflare-media-r2-preview-deploy.yml','utf8');
+assert.match(sharedRelease,/if: \$\{\{ github\.ref == 'refs\/heads\/preview' && inputs\.approve_preview_deploy == 'DEPLOY_ALL_SHARED_MEDIA_WORKERS' \}\}/);
+assert.match(sharedRelease,/release-media-worker-runtime\.mjs "\$stage" upload/);
+assert.match(sharedRelease,/release-media-worker-runtime\.mjs "\$stage" activate/);
+assert.match(sharedRelease,/RELEASE_MEDIA_WORKER_VERSION="\$old" node .* restore/);
+assert.match(sharedRelease,/ACTIVE_WORKER_VERSION_CHANGED_SINCE_DIRECTOR_EVIDENCE/);
+assert.match(sharedRelease,/THREE_SHARED_COLOR_COMPAT_WORKERS_ACTIVE=PASS/);
+console.log('COLOR_SHARED_WORKERS_MANUAL_ONLY_EXACT_SHA_AND_ROLLBACK_GATE=PASS');

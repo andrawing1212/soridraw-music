@@ -15,7 +15,7 @@ on:
         required: true
         type: string
       approve_preview_deploy:
-        description: 'Type DEPLOY_PREVIEW_MEDIA to authorize this specific deployment'
+        description: 'DEPLOY_PREVIEW_MEDIA (preview only) or DEPLOY_ALL_SHARED_MEDIA_WORKERS (three-worker coordinated release)'
         required: true
         type: string
 
@@ -179,3 +179,146 @@ jobs:
           echo 'NO_FIREBASE_HOSTING_DEPLOY=true'
           echo 'NO_MAIN_CHANGE=true'
           echo 'NO_PRODUCTION_CHANGE=true'
+
+
+  deploy-shared-color:
+    if: ${{ github.ref == 'refs/heads/preview' && inputs.approve_preview_deploy == 'DEPLOY_ALL_SHARED_MEDIA_WORKERS' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      APPROVED_SHA: ${{ inputs.commit_sha }}
+    steps:
+      - name: Pin approved preview source and refuse drift
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha }}
+          fetch-depth: 0
+      - name: Enforce exact SHA and manual production authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$APPROVED_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
+          test "$GITHUB_SHA" = "$APPROVED_SHA"
+          git fetch origin preview --no-tags
+          test "$(git rev-parse FETCH_HEAD)" = "$APPROVED_SHA"
+          echo 'PINNED_SHARED_MEDIA_SOURCE=PASS'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Media Worker tooling
+        working-directory: cloudflare/media-worker
+        run: npm install --no-audit --no-fund
+      - name: Verify exact color compatibility source, no cutover queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-library-catalog-color-projection.mjs
+          node scripts/verify-356-shared-private-catalog-authority.mjs
+          node - <<'NODE'
+          const fs=require('fs');
+          const worker=fs.readFileSync('cloudflare/media-worker/src/index.js','utf8');
+          if (/catalogCutoverHoldEnabled|persistCatalogCutoverPending/.test(worker))
+            throw Error('CUTOVER_QUEUE_MUST_REMAIN_DISCONNECTED');
+          const cfg=JSON.parse(fs.readFileSync('cloudflare/media-worker/wrangler.jsonc','utf8'));
+          for(const env of [cfg,cfg.env.test,cfg.env.production]){
+            if(env.vars.SORIDRAW_SHARED_CATALOG_V1!=='1'
+              ||env.vars.SORIDRAW_CATALOG_CUTOVER_HOLD_V1!==undefined
+              ||env.r2_buckets.find(b=>b.binding==='CATALOG')?.bucket_name!=='soridraw-user-catalog')
+              throw Error('SHARED_COLOR_DEPLOY_CONFIG_DRIFT');
+          }
+          console.log('THREE_WORKER_COLOR_CODE_ONLY=PASS');
+          NODE
+
+      - name: Capture exact existing 100 percent active versions and bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/media-color-release-preflight.mjs
+          node - <<'NODE'
+          const fs=require('fs');
+          const rows=JSON.parse(fs.readFileSync('.media-color-preflight/summary.json','utf8'));
+          const expected={
+            preview:'83175bcc-fe25-4d17-86c0-1592e47d358e',
+            test:'f0a86688-5ffc-42ed-aecd-c01f8c17c636',
+            production:'2c2e3236-d9a6-4771-b2ba-7baff496145c'
+          };
+          if(rows.length!==3||rows.some(row=>row.activeVersion!==expected[row.stage]))
+            throw Error('ACTIVE_WORKER_VERSION_CHANGED_SINCE_DIRECTOR_EVIDENCE');
+          console.log('LIVE_ALL_THREE_PINNED_VERSIONS=PASS');
+          NODE
+
+      - name: Dry run all three variant bundles before touching traffic
+        shell: bash
+        run: |
+          set -euo pipefail
+          for stage in preview test production; do
+            node .deploy/release-media-worker-runtime.mjs "$stage" dry-run | tee "$RUNNER_TEMP/$stage-dry.log"
+          done
+          for stage in preview test production; do
+            prefix="$(echo "$stage" | tr '[:lower:]' '[:upper:]')"
+            value="$(sed -n "s/^${prefix}_MEDIA_WORKER_CODE_SHA256=//p" "$RUNNER_TEMP/$stage-dry.log" | tail -1)"
+            test -n "$value"
+            if [ "$stage" = preview ]; then common_code="$value"; else test "$common_code" = "$value"; fi
+          done
+          echo 'THREE_IDENTICAL_COMPILED_WORKER_CODES=PASS'
+
+      - name: Upload three inactive versions and confirm no traffic changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          for stage in preview test production; do
+            prefix="$(echo "$stage" | tr '[:lower:]' '[:upper:]')"
+            node .deploy/release-media-worker-runtime.mjs "$stage" upload | tee "$RUNNER_TEMP/$stage-upload.log"
+            before="$(sed -n "s/^${prefix}_MEDIA_WORKER_BEFORE=//p" "$RUNNER_TEMP/$stage-upload.log" | tail -1)"
+            uploaded="$(sed -n "s/^${prefix}_MEDIA_WORKER_UPLOADED_VERSION=//p" "$RUNNER_TEMP/$stage-upload.log" | tail -1)"
+            test -n "$before" && test -n "$uploaded" && test "$before" != "$uploaded"
+            echo "$prefix""_BEFORE=$before" >> "$GITHUB_ENV"
+            echo "$prefix""_UPLOADED=$uploaded" >> "$GITHUB_ENV"
+          done
+          echo 'SHARED_MEDIA_UPLOADS_INACTIVE=PASS'
+
+      - name: Activate all three in sequence with automatic global emergency restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          restore_all() {
+            set +e
+            failed=0
+            # Emergency availability rollback only: legacy versions are NOT
+            # color-safe; release remains FAILED and needs operator follow-up.
+            for stage in production test preview; do
+              case "$stage" in
+                preview) old="$PREVIEW_BEFORE";;
+                test) old="$TEST_BEFORE";;
+                production) old="$PRODUCTION_BEFORE";;
+              esac
+              RELEASE_MEDIA_WORKER_VERSION="$old" node .deploy/release-media-worker-runtime.mjs "$stage" restore || failed=1
+            done
+            if [ "$failed" -ne 0 ]; then echo 'GLOBAL_EMERGENCY_RESTORE=FAILED'; fi
+            return "$failed"
+          }
+          on_exit() {
+            status=$?
+            trap - EXIT
+            if [ "$status" -ne 0 ]; then restore_all || true; fi
+            exit "$status"
+          }
+          trap on_exit EXIT
+          for stage in preview test production; do
+            case "$stage" in
+              preview) new="$PREVIEW_UPLOADED";;
+              test) new="$TEST_UPLOADED";;
+              production) new="$PRODUCTION_UPLOADED";;
+            esac
+            RELEASE_MEDIA_WORKER_VERSION="$new" node .deploy/release-media-worker-runtime.mjs "$stage" activate
+          done
+          for stage in preview test production; do
+            node .deploy/release-media-worker-runtime.mjs "$stage" verify
+          done
+          trap - EXIT
+          echo 'THREE_SHARED_COLOR_COMPAT_WORKERS_ACTIVE=PASS'
+          echo 'NO_BULK_R2_D1_FIRESTORE_USER_DATA_OPERATION=PASS'

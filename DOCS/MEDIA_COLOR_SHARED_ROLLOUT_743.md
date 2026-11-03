@@ -61,3 +61,8 @@
 - **실제 배포 경로:** `.github/workflows/cloudflare-media-color-compat-rollout.yml`은 workflow_dispatch 수동 실행 전용. preview의 정확한 SHA와 별도 `DEPLOY_ALL_SHARED_MEDIA_WORKERS` 승인이 필요. 이미 공유 CATALOG=1인 세 Worker 버전과 바인딩을 Cloudflare API에서 검증하고, 3개를 트래픽 변경 없이 업로드한 뒤 순차 활성화/검증. 자동 push 배포 아님.
 - **위험:** 순차 활성화 사이에 잠시 구형 Writer가 공존할 수 있고, 기존 버전의 미리보기 URL도 계속 켜질 수 있음. 이전 구형 Worker로의 긴급 복귀는 가용성 복구이지 색상 안전 롤백이 아님. 따라서 이 경로의 존재만으로 무손실 보장을 선언할 수 없으며, 실제 실행 전 해당 공유 리스크와 PRODUCTION 변경의 **명시적 승인**이 필요하다.
 - 서버 설정·사용자 데이터·호스팅은 실제로 변경하지 않음. 배포 후 인증된 PC/모바일 색상 저장·해제·재접속 실사용 확인 전 완료 선언 불가.
+
+### 실행 가능한 GitHub Actions 경로 수정
+- GitHub 기본 브랜치는 `main`이므로 PR에만 추가한 `cloudflare-media-color-compat-rollout.yml` 단독 workflow_dispatch는 실제 실행 진입점으로 신뢰할 수 없다. 이 미사용 새 파일은 제거하고 **기본 브랜치에도 이미 존재하는** `cloudflare-media-r2-preview-deploy.yml`의 `workflow_dispatch`에 `deploy-shared-color` 잡을 추가했다.
+- 기존 입력 `commit_sha`와 `approve_preview_deploy`를 재사용한다. 새 수동 승인 값은 `DEPLOY_ALL_SHARED_MEDIA_WORKERS`이며, `github.ref=preview`·정확 SHA 검사 조건을 전부 만족해야 PREVIEW·TEST·PRODUCTION 업로드/활성화가 실행된다. 기존 PREVIEW 단독 배포는 `DEPLOY_PREVIEW_MEDIA` 그대로 유지. push 시에는 기존 read-only capture만 실행.
+- 정확 후보 SHA가 preview HEAD에 들어간 후에도 PRODUCTION 공유 Worker 변경은 별도 명시 승인이 필요하며, 이 채팅에서 수동 workflow_dispatch 호출을 제공하는 GitHub 도구는 연결되지 않았다. workflow가 존재한다는 사실과 실제 배포 성공은 다르다.

@@ -20,9 +20,13 @@ export const sourceProtectsLibraryColors = (source) => {
   const stop = source.indexOf('];', start);
   const section = start >= 0 && stop > start ? source.slice(start, stop + 2) : '';
   return section.includes("'colorTags'") && section.includes("'favoriteColorTags'")
-    && source.includes('const preserveExistingLibrarySwatches')
-    && source.includes('existingLibraryColorRowsForDelta')
-    && source.includes('!Object.prototype.hasOwnProperty.call(incoming, key)')
+    // A fallback must protect BOTH legacy Library swatches and the server-only
+    // watermark once signed canonical color events have ever been enabled.
+    // Old #734 code alone is NOT a safe rollback for post-watermark data.
+    && source.includes('const preserveServerColorAuthority')
+    && source.includes('existingColorRowsForDelta')
+    && source.includes('serverWatermark || !Object.prototype.hasOwnProperty.call(incoming, key)')
+    && source.includes('trustedR2 && typeof source.__colorSourceUpdateTime')
     && source.includes('!sanitizedDeletedIds.has(id)');
 };
 

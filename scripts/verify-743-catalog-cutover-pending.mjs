@@ -208,16 +208,17 @@ for(const vars of [wrangler.vars,wrangler.env?.test?.vars,wrangler.env?.producti
 }
 console.log('CATALOG_CUTOVER_ALL_ENV_FLAGS_OFF_AND_NO_GLOBAL_INGRESS_FENCE=PASS');
 
-// Hold GET must avoid legacy seeding: only an exact shared R2 read is allowed.
-assert.match(readFileSync('cloudflare/media-worker/src/index.js','utf8'),
-  /holding[\s\S]*readStrictCatalogStateForInspection\(env\.CATALOG, identity\.uid, route\.kind\)/);
-console.log('CATALOG_CUTOVER_HOLD_GET_STRICT_SHARED_READ_NO_SEED=PASS');
-// Runtime integration is opt-in, with successful outbox persistence -> HTTP 503.
-// No read-only GET/bootstrap should sneak in a canonical Catalog write during hold.
-const worker=readFileSync('cloudflare/media-worker/src/index.js','utf8');
-assert.match(worker,/catalogCutoverHoldEnabled\(env\)[\s\S]*route\.action !== 'inspect-exact'/);
-assert.match(worker,/await persistCatalogCutoverPending\(env\?\.CATALOG,identity\.uid,route\.kind,delta\);[\s\S]*code:'CATALOG_CUTOVER_PENDING_DURABLE'[\s\S]*503/);
-assert.doesNotMatch(worker,/replayCatalogCutoverPending\(/);
-console.log('CATALOG_CUTOVER_DURABLE_PENDING_CAS_IDEMPOTENCY_GRAY=PASS');
-console.log('CATALOG_CUTOVER_FAIL_CLOSED_IO_CONFLICT_LIMIT_AND_RECEIPT=PASS');
-console.log('CATALOG_CUTOVER_DEFAULT_OFF_503_NO_AUTO_REPLAY=PASS');
+// Release candidate Worker must NOT import the cutover queue or activate its
+// 503 paths. The outbox/replay library is reserved for offline analysis.
+const releaseWorker=readFileSync('cloudflare/media-worker/src/index.js','utf8');
+assert.doesNotMatch(releaseWorker,/catalogCutoverHoldEnabled|persistCatalogCutoverPending|CATALOG_CUTOVER_PENDING_DURABLE/);
+assert.match(releaseWorker,/await getCatalogState\(identity, route\.kind, catalogRequiredRevision\(request\), env\)/);
+assert.match(releaseWorker,/const next = await applyCatalogDelta\(identity, route\.kind, delta, env, executionCtx\)/);
+console.log('CATALOG_COLOR_RELEASE_CANDIDATE_NORMAL_GET_DELTA_NO_HOLD=PASS');
+
+// Stage-only operator outbox helper stays independently testable. A regular
+// page load can never reach it unless a future separately reviewed change
+// explicitly wires it back into the Worker.
+assert.equal(catalogCutoverHoldEnabled({}),false);
+console.log('CATALOG_CUTOVER_STAGED_ONLY_NO_RUNTIME_IO=PASS');
+

@@ -55,3 +55,9 @@
 - **한정 R2 회수 도구:** `listCatalogCutoverPendingScopes`는 앱 HTTP에 연결되지 않은 **operator-only 코드**. 명시적 외부 Writer 격리 증거를 호출자가 제공해야 하며, 일반 전체 R2 스캔 없이 `catalog/cutover/v1/` prefix만 bounded pagination으로 **두 번** 나열하여 stable 목록을 확인한다. 사용자 원본 Catalog 읽기/쓰기와 평시 호출 R0/W0. drift·손상·페이지 미완성·한도 초과·증거 부족이면 fail-closed. 해당 결과는 **R2 outbox 범위만** 증명하며 브라우저 로컬 pending 및 Cloudflare 인입 격리까지 증명하지 않는다.
 - **배포 차단:** `assessLegacyIngressEvidence`에 old Worker 버전 미리보기 URL 격리 확인 조건 추가. 화면의 버전 URL은 아직 켜짐이므로 배포 가능 판정 불가. CORS와 직접 Workers.dev 도메인 미차단 상태에서 '안전'하다고 표시하지 않는다.
 - 이 작업으로 구형 Worker에 대한 전역 쓰기 권한을 제거하거나 무중단 전환을 **완성한 것은 아니다**. 서버 설정·권한 변경 없이 이전에 배포된 코드를 바꿀 수 없으며, 같은 곡 충돌 해결·전역 클라이언트 pending 가시화·안전한 rollback artifact·실기기 동기화가 미완료. PR #743 Draft, 미병합·미배포 유지.
+
+## 2026-11-04 — 실제 적용 최소화 후보 및 단일 통합 배포 경로
+- **배포될 Worker 코드:** 기존 GET/Bootstrap/Delta 경로 유지, PR #743 색상 gray/null 보존 수정만 적용. catalogCutoverOutbox.js는 오프라인 테스트용으로만 남고 index.js에서 전혀 import하지 않음. 보류 503/R2 추가 쓰기/읽기는 배포 후보에서 제거.
+- **실제 배포 경로:** `.github/workflows/cloudflare-media-color-compat-rollout.yml`은 workflow_dispatch 수동 실행 전용. preview의 정확한 SHA와 별도 `DEPLOY_ALL_SHARED_MEDIA_WORKERS` 승인이 필요. 이미 공유 CATALOG=1인 세 Worker 버전과 바인딩을 Cloudflare API에서 검증하고, 3개를 트래픽 변경 없이 업로드한 뒤 순차 활성화/검증. 자동 push 배포 아님.
+- **위험:** 순차 활성화 사이에 잠시 구형 Writer가 공존할 수 있고, 기존 버전의 미리보기 URL도 계속 켜질 수 있음. 이전 구형 Worker로의 긴급 복귀는 가용성 복구이지 색상 안전 롤백이 아님. 따라서 이 경로의 존재만으로 무손실 보장을 선언할 수 없으며, 실제 실행 전 해당 공유 리스크와 PRODUCTION 변경의 **명시적 승인**이 필요하다.
+- 서버 설정·사용자 데이터·호스팅은 실제로 변경하지 않음. 배포 후 인증된 PC/모바일 색상 저장·해제·재접속 실사용 확인 전 완료 선언 불가.

@@ -13,7 +13,6 @@ import {
   materializeCatalogJournal,
   shouldCompactCatalogJournal,
 } from './catalogJournal.js';
-import { catalogCutoverHoldEnabled, persistCatalogCutoverPending } from './catalogCutoverOutbox.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const AUTH_CERT_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
@@ -1171,18 +1170,8 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
     }
 
     if (request.method === 'GET' && route.action === 'base') {
-      // In hold mode, ordinary getCatalogState may seed a missing shared
-      // Catalog from older MEDIA R2. Only strict existing shared reads are
-      // safe. Keep healthy reads working without any bootstrap/write.
-      const holding = catalogCutoverHoldEnabled(env);
-      const required = catalogRequiredRevision(request);
-      const state = holding
-        ? (isSharedCatalogEnabled(env) && env?.CATALOG
-          ? await readStrictCatalogStateForInspection(env.CATALOG, identity.uid, route.kind)
-          : null)
-        : await getCatalogState(identity, route.kind, required, env);
-      if (holding && (!state || Number(state.head?.headRevision || 0) < required))
-        return jsonResponse({ok:false,code:'CATALOG_CUTOVER_READ_UNAVAILABLE',retryable:true},503,origin);
+      // Shared-Catalog color compatibility: unchanged normal read path.
+      const state = await getCatalogState(identity, route.kind, catalogRequiredRevision(request), env);
       const knownRevision = catalogKnownRevision(request);
       const syncPayload = knownRevision > 0 ? buildCatalogJournalSyncResponse({ head: state.head, knownRevision }) : null;
       const payload = syncPayload || materializeCatalogState(state, route.kind);
@@ -1196,13 +1185,6 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
       return new Response(JSON.stringify(payload), { status: 200, headers });
     }
 
-    // Dormant until an independently verified ingress fence stops EVERY older
-    // Worker touching the shared CATALOG. Cold GET/bootstrap can seed R2, so
-    // block them too. Exact inspection remains genuinely read-only.
-    if (catalogCutoverHoldEnabled(env) && route.action !== 'inspect-exact'
-      && !(request.method === 'POST' && route.action === 'delta')) {
-      return jsonResponse({ok:false,code:'CATALOG_CUTOVER_HOLD',retryable:true},503,origin);
-    }
     if (request.method === 'POST' && route.action === 'bootstrap') {
       const body = await request.json().catch(() => ({}));
       const requiredRevision = Math.max(
@@ -1224,13 +1206,6 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
       if (declaredLength > 2 * 1024 * 1024) return jsonResponse({ ok: false, code: 'CATALOG_DELTA_TOO_LARGE' }, 413, origin);
       const delta = await request.json();
       if (!validateCatalogDelta(delta, route.kind)) return jsonResponse({ ok: false, code: 'INVALID_CATALOG_DELTA' }, 400, origin);
-      if (catalogCutoverHoldEnabled(env)) {
-        // Authenticated, bounded, per-owner R2 write-ahead only. HTTP 503 (not
-        // success/202) keeps existing browser pending outboxes retryable.
-        // Never read/modify the active Catalog while the cutover is held.
-        await persistCatalogCutoverPending(env?.CATALOG,identity.uid,route.kind,delta);
-        return jsonResponse({ok:false,code:'CATALOG_CUTOVER_PENDING_DURABLE',retryable:true},503,origin);
-      }
       const next = await applyCatalogDelta(identity, route.kind, delta, env, executionCtx);
       if (next.conflict) {
         return jsonResponse({ ok: false, code: 'CATALOG_DELTA_CONFLICT', kind: route.kind, revision: next.revision, itemCount: next.itemCount }, 409, origin);

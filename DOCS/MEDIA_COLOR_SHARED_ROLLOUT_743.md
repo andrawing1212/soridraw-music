@@ -66,3 +66,8 @@
 - GitHub 기본 브랜치는 `main`이므로 PR에만 추가한 `cloudflare-media-color-compat-rollout.yml` 단독 workflow_dispatch는 실제 실행 진입점으로 신뢰할 수 없다. 이 미사용 새 파일은 제거하고 **기본 브랜치에도 이미 존재하는** `cloudflare-media-r2-preview-deploy.yml`의 `workflow_dispatch`에 `deploy-shared-color` 잡을 추가했다.
 - 기존 입력 `commit_sha`와 `approve_preview_deploy`를 재사용한다. 새 수동 승인 값은 `DEPLOY_ALL_SHARED_MEDIA_WORKERS`이며, `github.ref=preview`·정확 SHA 검사 조건을 전부 만족해야 PREVIEW·TEST·PRODUCTION 업로드/활성화가 실행된다. 기존 PREVIEW 단독 배포는 `DEPLOY_PREVIEW_MEDIA` 그대로 유지. push 시에는 기존 read-only capture만 실행.
 - 정확 후보 SHA가 preview HEAD에 들어간 후에도 PRODUCTION 공유 Worker 변경은 별도 명시 승인이 필요하며, 이 채팅에서 수동 workflow_dispatch 호출을 제공하는 GitHub 도구는 연결되지 않았다. workflow가 존재한다는 사실과 실제 배포 성공은 다르다.
+
+### 통합 배포를 실제로 실행할 수 있는 승인 트리거
+- 새 통합 workflow는 `workflow_dispatch` 대신 기존 저장소에서 검증된 `push: preview` + **별도 `.deploy/media-color-compat-release.trigger` 단일 파일 경로**만 수신한다. 다른 파일의 merge/push는 Worker를 배포하지 않는다.
+- 이 PR에는 트리거 파일을 포함하지 않는다. 디렉터가 TEST·PRODUCTION 공유 Worker 변경까지 명시 승인한 후, 개발 책임자가 정확한 병합 완료 SHA를 담은 단일 트리거 파일을 PREVIEW에 새 커밋으로 생성해 워크플로를 실제 시작할 수 있다. 트리거 커밋에서 부모 SHA와 변경 파일 정확 한 개, 승인 문구, 데이터 대량변경 금지를 검사한다.
+- 기존 `.github/workflows/cloudflare-media-r2-preview-deploy.yml`은 원본대로 보호한다. 별도 통합 workflow만 3개 전체 업로드→활성화→검증을 담당한다. 공유 변경 위험과 구형 버전 미리보기 URL 잔존은 별도 PRODUCTION 승인 전까지 미완료.

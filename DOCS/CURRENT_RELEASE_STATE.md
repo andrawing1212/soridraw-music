@@ -1,3 +1,13 @@
+## CURRENT — Canonical 지정색 기기 복원 버튼 PREVIEW 배포 · 전체 PC↔모바일 복원 OPEN (2026-11-03 KST)
+- **실제 변경:** #735 source `826518f177ad98c09e6b2189bcb9ee227a2e63d7`: Music Note/Library에서 색상 필드 *누락*을 회색 해제와 구분해, Catalog 투영 누락 시 이미 남아 있는 브라우저 색상을 삭제하지 않음. #736 PREVIEW Hosting SHA `778d82686870479b45a634a9800607fbf1f8a1f1`, workflow `41551374419` SUCCESS.
+- **복원 기능:** #737 source `605737f5b8ebf24e68f859242c19338c7655df9d`: 관리자 CACHE LIVE 기존 '과거 지정색 자동 찾기'의 **명시적 수동 Firestore 조회를 한 번 완료한 뒤**, 검색 결과 아래 '기존 색상 복원' 버튼으로 이미 읽은 원본에서 **삭제/숨김/저장해제 아닌 활성곡**, **기기 Catalog의 동일 ID가 실제 존재**, **Catalog 색상 필드 자체가 빠진 경우**만 현 기기에 복구. UID별 기기 로컬 색상표의 비어있는 키만 작성, 기존 색/명시적 gray/null/사용자 최신 클릭 우선. 현재 페이지에는 이벤트로 반영. 복원 버튼의 **추가 Firestore/R2 R0/W0**, 원본·공유 데이터 쓰기 0, 캐시 강제 초기화 0. 초기 React 빈 상태가 UID별 기존 기기 색상표를 덮는 위험도 차단.
+- **검사/배포:** #737 candidate `8b261ed81868177faf2198e77d260c8ebcfcbf5c`의 UI split, Auth498, Quality 3/3 SUCCESS(TS/Build). #738 Firebase PREVIEW Hosting SHA `a16078f24e25ec8ad187f5a3af6fc9f44b3b7bda`, workflow `41552620520` completed/SUCCESS. exact build & TEST/PRODUCTION unchanged PASS. 공유 Worker/Rules/Functions/D1/R2 원본 변경 없음.
+- **사용자 원본 과거 색상 증거:** 2026-11-03 본인 수동 진단 `favorites` 692건 중 지정색 106, Library workspace 12항목. 이 수치는 **현재 활성 목록에 모두 포함됐다는 증거는 아니며**, 현재 새 복원 버튼이 실제로 몇 건 적용했는지, 실기기 PC/모바일 화면이 정상인지 **아직 미확인**. 복원 기능은 현재 로그인 **그 기기만** 대상이며 다른 기기 동기화를 완료했다고 주장하지 말 것. 서버 원본 색상이 없는 항목/ID 불일치/명시적 해제는 임의 재생성 금지. 과거 2026-08-25 백업의 현재 실제 값은 미확인.
+- **공유 Catalog OPEN/HOLD:** 라이브러리 서버+브라우저 projector의 `colorTags`/`favoriteColorTags` 누락, 구버전 클라이언트가 최신 R2 색상을 지울 위험 보호 후보 #734 Draft SHA `51e5ccbc154acb521331edc2cc4835da241baf46`, 5/5 CI PASS. 공유 Worker 배포 및 R2 코드 승격 **미실행**. 실제 운영 R2/Firestore ID별 정확 비교·구버전 활성 Worker/보호되는 rollback 경로 미확인, 공유 버킷 PREVIEW/TEST/PRODUCTION 영향 가능. PR #734 검증 완료만으로 실제 전체 색상·PC↔모바일 동기화 완료 판정 금지. 기존 버킷 전량 rebuild/Firestore mass rewrite 무단 실행 금지.
+- **기존 CLOSED 보호:** Studio Black UI 대부분 성공 완료, 최근 생성곡 로그인 후 0곡 해결 완료는 재개하지 않음.
+
+---
+
 ## CURRENT — 색상 로컬 덮어쓰기 방지 PREVIEW 배포 PASS · 실제 원본색 전체 복원/기기 동기화 미완료 (2026-11-03 KST)
 - **확인된 실사용 원본:** 2026-11-03 관리자 수동 Firestore 819문서 R / W0 진단: Music Note `favorites` 색상 현재 필드 106건, Library `suno_tracks` 색상 12항목 잔존. Music Note 현 브라우저 표시/영속 Catalog 색상 0, local color map 0. 원본 106건 중 **활성/삭제·숨김 구분과 Catalog 실제 누락 수는 아직 디렉터의 확장 진단 실행 결과가 없어 미확인**. 692 canonical vs 586 Catalog의 차이 106을 색상 개수와 동일시해서는 안 됨.
 - **이번 범위:** #731 source merge `adf45c3d034789d3432942dbdd25fdb85f467826` — Music Note / Library 둘 다 **현재 행의 명시적 canonical 색상/해제 값이 오래된 기기 local map보다 우선**, 단 사용자가 지금 누른 아직 저장 안 된 클릭 pending은 local-first 보존. Music Note `favoriteColorTag:null`이 오래된 `colorTag` 색상으로 되살아나는 오류도 막음.

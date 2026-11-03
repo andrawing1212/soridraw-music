@@ -1,11 +1,11 @@
 // Real cutover outbox + CAS + replay verification: NO network, no user data.
 import assert from 'node:assert/strict';
 import {persistCatalogCutoverPending,replayCatalogCutoverPending,catalogCutoverHoldEnabled,
-  CUTOVER_PENDING_LIMIT,cutoverOutboxKey} from '../cloudflare/media-worker/src/catalogCutoverOutbox.js';
+  CUTOVER_PENDING_LIMIT,cutoverOutboxKey,listCatalogCutoverPendingScopes} from '../cloudflare/media-worker/src/catalogCutoverOutbox.js';
 import {readFileSync} from 'node:fs';
 import {appendCatalogJournalDelta,createEmptyCatalogJournal} from '../cloudflare/media-worker/src/catalogJournal.js';
 class FakeR2 {
-  objects=new Map(); writes=0; reads=0; forceFail=false; loseCasOnce=false;
+  objects=new Map(); writes=0; reads=0; lists=0; forceFail=false; loseCasOnce=false;
   async get(key) {
     this.reads++;
     const found=this.objects.get(key);
@@ -20,6 +20,15 @@ class FakeR2 {
     const etag='etag-'+(++this.writes);
     this.objects.set(key,{body,etag});
     return {etag};
+  }
+  async list({prefix,limit=1000,cursor}) {
+    this.lists++;
+    const entries=[...this.objects.keys()].filter(k=>k.startsWith(prefix)).sort();
+    const start=cursor?Number(cursor):0;
+    const pageSize=Math.min(limit,this.pageSize||limit);
+    const keys=entries.slice(start,start+pageSize);
+    const truncated=start+keys.length<entries.length;
+    return {objects:keys.map(key=>({key})),truncated,cursor:truncated?String(start+keys.length):undefined};
   }
   rows(uid,kind){return JSON.parse(this.objects.get(cutoverOutboxKey(uid,kind)).body).entries;}
 }
@@ -41,7 +50,7 @@ assert.equal((await persistCatalogCutoverPending(r2,uid,kind,gray)).duplicate,tr
 assert.equal(r2.writes,priorWrites,'no repeat put on retry');
 await assert.rejects(persistCatalogCutoverPending(r2,uid,kind,delta('id-gray',{colorTags:{'0':'purple'}})),/MUTATION_ID_REUSED/);
 r2.loseCasOnce=true;
-assert.equal((await persistCatalogCutoverPending(r2,uid,kind,delta('id-two'))).held,true);
+assert.equal((await persistCatalogCutoverPending(r2,uid,kind,delta('id-two',{colorTags:{'0':'blue'}}))).held,true);
 assert.equal(r2.rows(uid,kind).length,2,'R2 CAS retry may not erase previous mutation');
 const snapshot=r2.rows(uid,kind).map(x=>x.mutationId);
 r2.forceFail=true;
@@ -130,6 +139,59 @@ await persistCatalogCutoverPending(retries,uid,kind,itemDelta('gray-click','song
 assert.equal(retries.rows(uid,kind).length,2);
 console.log('CATALOG_CUTOVER_DISJOINT_PENDING_SAFE_REBASE=PASS');
 console.log('CATALOG_CUTOVER_RECEIPT_RETRY_DEDUP_NO_LOSS=PASS');
+
+const aba=new FakeR2();
+const choice=(mutationId,color)=>itemDelta(mutationId,'same-song',color);
+await persistCatalogCutoverPending(aba,uid,kind,choice('purple-1','purple'));
+await persistCatalogCutoverPending(aba,uid,kind,choice('gray-reset',null));
+await persistCatalogCutoverPending(aba,uid,kind,choice('purple-2','purple'));
+assert.deepEqual(aba.rows(uid,kind).map(e=>e.mutationId),
+  ['purple-1','gray-reset','purple-2'],'last user choice must not be lost');
+const abaBefore=aba.writes;
+assert.equal((await persistCatalogCutoverPending(aba,uid,kind,choice('purple-retry','purple'))).duplicate,true);
+assert.equal(aba.writes,abaBefore,'adjacent identical retry has zero new writes');
+console.log('CATALOG_CUTOVER_ABA_LAST_CLICK_PRESERVED=PASS');
+
+// Operator-only bounded R2-prefix inventory (never a page/API side effect).
+const invR2=new FakeR2();
+invR2.pageSize=1;
+await persistCatalogCutoverPending(invR2,'uid-a','library',itemDelta('l-1','song-a','blue'));
+await persistCatalogCutoverPending(invR2,'uid-b','musicNote',
+  {...itemDelta('n-1','note-a',null),kind:'musicNote'});
+invR2.objects.set('catalog/v5/uid-a/library/journal.json',{body:'fixture',etag:'not-read'});
+const invBarrier={allWritersFenced:true,inFlightWritesDrained:true,authorizedInventory:true};
+const invPrior={reads:invR2.reads,writes:invR2.writes};
+const inventory=await listCatalogCutoverPendingScopes(invR2,{
+  barrier:invBarrier,limit:2,maxPages:5});
+assert.equal(inventory.status,'R2_OUTBOX_SCOPES_STABLE_NOT_GLOBAL_QUIESCENCE');
+assert.equal(inventory.scopeCount,2);
+assert.deepEqual(inventory.scopes,[{uid:'uid-a',kind:'library'},{uid:'uid-b',kind:'musicNote'}]);
+assert.deepEqual({reads:invR2.reads,writes:invR2.writes},invPrior,
+  'inventory cannot read or modify user Catalog');
+assert.equal(invR2.lists,4,'two pages twice with exact cutover prefix');
+await assert.rejects(listCatalogCutoverPendingScopes(invR2,{barrier:{}}),/INVENTORY_NOT_AUTHORIZED/);
+await assert.rejects(listCatalogCutoverPendingScopes(invR2,{
+  barrier:invBarrier,limit:1,maxPages:1}),/INVENTORY_PAGINATION_INCOMPLETE/);
+const failList=new FakeR2();
+failList.objects.set('catalog/cutover/v1/uid-a/library/pending.json',{etag:'fixture',body:'{}'});
+failList.objects.set('catalog/cutover/v1/uid-b/library/unexpected.json',{etag:'fixture',body:'{}'});
+await assert.rejects(listCatalogCutoverPendingScopes(failList,{barrier:invBarrier}),
+  /INVENTORY_UNEXPECTED_KEY/);
+const driftList=new FakeR2();
+driftList.objects.set('catalog/cutover/v1/uid-a/library/pending.json',{etag:'fixture',body:'{}'});
+const realList=driftList.list.bind(driftList);
+driftList.list=async params=>{
+  if(driftList.lists===1){
+    driftList.objects.set('catalog/cutover/v1/uid-new/library/pending.json',
+      {etag:'fixture',body:'{}'});
+  }
+  return realList(params);
+};
+await assert.rejects(listCatalogCutoverPendingScopes(driftList,{barrier:invBarrier}),
+  /INVENTORY_DRIFT/);
+console.log('CATALOG_CUTOVER_BOUNDED_R2_OUTBOX_ONLY_INVENTORY=PASS');
+console.log('CATALOG_CUTOVER_DRIFT_INCOMPLETE_UNAUTHORIZED_FAIL_CLOSED=PASS');
+
 // Capacity saturation is a retryable hold, never a silent overwrite.
 const r6=new FakeR2();
 for(let i=0;i<CUTOVER_PENDING_LIMIT;i++)await persistCatalogCutoverPending(r6,uid,kind,{...delta('cap-'+i),upserts:[{id:'cap-'+i,createdAtMs:1}]});

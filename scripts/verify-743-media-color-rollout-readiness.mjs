@@ -127,7 +127,8 @@ export function assessLegacyIngressEvidence(rows) {
       errors.push(STAGES[i]+':WORKER_IDENTITY_MISMATCH');
     for(const field of ['cloudflareControlPlaneCaptured','oldVersionWriteDenied',
       'workersDevDirectDenied','customDomainsEnumerated','routesEnumerated',
-      'serviceBindingsEnumerated','inFlightWritesDrained']){
+      'serviceBindingsEnumerated','inFlightWritesDrained',
+      'oldVersionPreviewUrlsDenied']){
       if(row?.[field]!==true)errors.push(STAGES[i]+':'+field);
     }
   }
@@ -181,10 +182,14 @@ export async function runRolloutSelfTest() {
   const fixture=STAGES.map((stage,i)=>({stage,worker:NAMES[i],
     cloudflareControlPlaneCaptured:true,oldVersionWriteDenied:true,
     workersDevDirectDenied:true,customDomainsEnumerated:true,routesEnumerated:true,
-    serviceBindingsEnumerated:true,inFlightWritesDrained:true}));
+    serviceBindingsEnumerated:true,inFlightWritesDrained:true,
+    oldVersionPreviewUrlsDenied:true}));
   assert.equal(assessLegacyIngressEvidence(fixture).status,'EVIDENCE_SHAPE_COMPLETE_NOT_LIVE_VERIFIED');
   for(let i=0;i<3;i++){
     const broken=fixture.map(x=>({...x}));broken[i].oldVersionWriteDenied=false;
+    assert.equal(assessLegacyIngressEvidence(broken).status,'HOLD');
+    broken[i].oldVersionWriteDenied=true;
+    broken[i].oldVersionPreviewUrlsDenied=false;
     assert.equal(assessLegacyIngressEvidence(broken).status,'HOLD');
   }
   const fakeSource=Buffer.from('test');

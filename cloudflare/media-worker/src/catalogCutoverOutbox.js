@@ -115,7 +115,10 @@ export const persistCatalogCutoverPending = async (bucket,uid,kind,delta) => {
     // Retrying browsers may mint a new mutationId for the SAME pending
     // body after 503. Do not grow R2 outbox for an identical pending intent.
     const comparable = value => JSON.stringify({...value,mutationId:undefined,revision:undefined});
-    if(record.entries.some(entry=>entry.status==='pending' && comparable(entry.delta)===comparable(delta)))
+    // Only the adjacent pending entry can represent a retry. Earlier matching
+    // entries may precede a different user choice (purple -> gray -> purple).
+    const tail=record.entries[record.entries.length-1];
+    if(tail?.status==='pending' && comparable(tail.delta)===comparable(delta))
       return {held:true,pendingCount:record.entries.filter(entry=>entry.status==='pending').length,duplicate:true};
     if(record.entries.length>=CUTOVER_PENDING_LIMIT) fail('OUTBOX_FULL');
     const next={...record,entries:[...record.entries,{mutationId:id,status:'pending',delta}]};
@@ -168,4 +171,65 @@ export const replayCatalogCutoverPending = async ({bucket,uid,kind,barrier,readR
     confirmed++;
   }
   return {status:'RETAINED_RECEIPTS',confirmed};
+};
+
+
+const CUTOVER_OUTBOX_ROOT='catalog/cutover/v1/';
+const CUTOVER_OUTBOX_SUFFIX='/pending.json';
+const CUTOVER_OUTBOX_KEY_RE=/^catalog\/cutover\/v1\/([^/]+)\/(musicNote|library)\/pending\.json$/;
+// OPERATOR-ONLY. This is deliberately not imported by an HTTP route.
+// Never list the full CATALOG, favorites, Firestore, or normal app data.
+// The result is a list of R2 outbox scopes, NOT a proof that old browser tabs
+// or inaccessible old Workers have no pending writes.
+export const listCatalogCutoverPendingScopes = async (bucket,{
+  barrier,limit=1000,maxScopes=20000,maxPages=25,
+}={})=>{
+  if(barrier?.allWritersFenced!==true || barrier?.inFlightWritesDrained!==true
+    || barrier?.authorizedInventory!==true)fail('INVENTORY_NOT_AUTHORIZED');
+  if(!bucket?.list)fail('PRIVATE_CATALOG_UNAVAILABLE');
+  if(!Number.isInteger(limit)||limit<1||limit>1000
+    ||!Number.isInteger(maxScopes)||maxScopes<1||maxScopes>200000
+    ||!Number.isInteger(maxPages)||maxPages<1||maxPages>250)fail('INVENTORY_BOUNDS_INVALID');
+  const scan=async()=>{
+    const keys=[];
+    let cursor;
+    const cursors=new Set();
+    for(let pageIndex=0;pageIndex<maxPages;pageIndex++){
+      const params={prefix:CUTOVER_OUTBOX_ROOT,limit};
+      if(cursor)params.cursor=cursor;
+      const response=await bucket.list(params);
+      if(!response || !Array.isArray(response.objects)
+        || typeof response.truncated!=='boolean')fail('INVENTORY_PAGE_INVALID');
+      for(const record of response.objects){
+        const key=record?.key;
+        if(typeof key!=='string' || !CUTOVER_OUTBOX_KEY_RE.test(key))
+          fail('INVENTORY_UNEXPECTED_KEY');
+        keys.push(key);
+        if(keys.length>maxScopes)fail('INVENTORY_LIMIT_EXCEEDED');
+      }
+      if(!response.truncated)return keys.sort();
+      const next=response.cursor;
+      if(typeof next!=='string'||!next||cursors.has(next))fail('INVENTORY_CURSOR_INVALID');
+      cursors.add(next);
+      cursor=next;
+    }
+    fail('INVENTORY_PAGINATION_INCOMPLETE');
+  };
+  const first=await scan();
+  const second=await scan();
+  if(JSON.stringify(first)!==JSON.stringify(second))fail('INVENTORY_DRIFT');
+  // Do not materialize or log any user object here. The caller is entrusted
+  // with uid/kind and may replay only after independently verified fencing.
+  const scopes=first.map(key=>{
+    const match=CUTOVER_OUTBOX_KEY_RE.exec(key);
+    const encodedUid=match[1];
+    let uid;
+    try{uid=decodeURIComponent(encodedUid);}catch{fail('INVENTORY_INVALID_UID');}
+    if(!uid || encodeURIComponent(uid)!==encodedUid)fail('INVENTORY_INVALID_UID');
+    return {uid,kind:match[2]};
+  });
+  if(scopes.some((s,i)=>i>0 && scopes[i-1].uid===s.uid
+    && scopes[i-1].kind===s.kind))fail('INVENTORY_DUPLICATE_SCOPE');
+  return {status:'R2_OUTBOX_SCOPES_STABLE_NOT_GLOBAL_QUIESCENCE',
+    scopes,scopeCount:scopes.length,readOnly:true};
 };

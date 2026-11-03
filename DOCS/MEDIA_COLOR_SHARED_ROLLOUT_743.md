@@ -48,3 +48,10 @@
 - 재처리는 외부에서 승인, 구형 Writer 격리, 단독 재처리자 임대, 모든 pending 회수 증거, 롤백 버전을 제공한 경우만 가능하다. 해당 증거는 이 코드가 Cloudflare에서 직접 조회·서명한 것이 아니다. 운영 전환 GO를 의미하지 않는다.
 - 보류 모드에서 이미 저장된 공유 CATALOG는 strict R2 GET로 읽기만 한다. 기존 seed 함수를 호출하지 않아 보류 중 데이터 오염을 차단한다. 누락·손상·리비전 부족은 503이며 bootstrap 쓰기는 금지.
 - 구형 PREVIEW/TEST/PRODUCTION 직접 URL, route, custom domain, service binding을 실제로 차단하는 장치는 미구현/미적용이다. 코드의 ingress 증거 형식 검사는 실제 Cloudflare 제어 권한을 대신하지 않는다. 안전한 전역 격리가 입증될 때까지 LIVE NO-GO.
+
+## 2026-11-04 — 디렉터 승인 범위: 전역 Writer 전환용 코드 보호 강화, 배포 금지
+- **실제 화면 증거:** PREVIEW `83175bcc`, TEST `f0a86688`, PRODUCTION `2c2e3236` 유지. 세 환경 모두 Workers.dev/Version preview URL 스위치 ON, 사용자 지정 도메인·라우트 없음. 인증되지 않은 제3 Worker의 Service Binding 호출과 in-flight write는 화면만으로 입증하지 못한다. 구형 Worker를 안전하게 막는 Cloudflare 제어는 **이번 PR에서 수행/구현된 것이 아니며 LIVE NO-GO**.
+- **마지막 클릭 보존:** R2 pending 내용 전체를 무작위로 중복 제거하면 보라→회색→보라 세 번째 색상 클릭이 지워지는 위험을 수정. **오직 마지막 pending과 현재 요청이 연속·동일할 때**만 HTTP 503 반복시도 중복을 줄인다. 같은 mutationId 다른 payload는 여전히 오류, 서로 다른 실제 클릭 순서는 모두 남긴다.
+- **한정 R2 회수 도구:** `listCatalogCutoverPendingScopes`는 앱 HTTP에 연결되지 않은 **operator-only 코드**. 명시적 외부 Writer 격리 증거를 호출자가 제공해야 하며, 일반 전체 R2 스캔 없이 `catalog/cutover/v1/` prefix만 bounded pagination으로 **두 번** 나열하여 stable 목록을 확인한다. 사용자 원본 Catalog 읽기/쓰기와 평시 호출 R0/W0. drift·손상·페이지 미완성·한도 초과·증거 부족이면 fail-closed. 해당 결과는 **R2 outbox 범위만** 증명하며 브라우저 로컬 pending 및 Cloudflare 인입 격리까지 증명하지 않는다.
+- **배포 차단:** `assessLegacyIngressEvidence`에 old Worker 버전 미리보기 URL 격리 확인 조건 추가. 화면의 버전 URL은 아직 켜짐이므로 배포 가능 판정 불가. CORS와 직접 Workers.dev 도메인 미차단 상태에서 '안전'하다고 표시하지 않는다.
+- 이 작업으로 구형 Worker에 대한 전역 쓰기 권한을 제거하거나 무중단 전환을 **완성한 것은 아니다**. 서버 설정·권한 변경 없이 이전에 배포된 코드를 바꿀 수 없으며, 같은 곡 충돌 해결·전역 클라이언트 pending 가시화·안전한 rollback artifact·실기기 동기화가 미완료. PR #743 Draft, 미병합·미배포 유지.

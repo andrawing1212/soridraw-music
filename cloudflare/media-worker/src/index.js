@@ -505,6 +505,8 @@ const LIBRARY_CATALOG_FIELDS = [
   'audioUrl', 'audio_url', 'streamAudioUrl', 'stream_audio_url', 'sourceAudioUrl', 'sourceStreamAudioUrl',
   'imageUrl', 'image_url', 'coverUrl', 'thumbnailUrl', 'audioUrls', 'duration', 'durationSeconds',
   'sunoData', 'isPublic', 'hidden', 'deletedAt', 'trashedAt', 'favoriteColor', 'color',
+  // Keep track-level per-generation swatches in bounded private Catalog summaries.
+  'colorTags', 'favoriteColorTags',
 ];
 
 const MUSIC_NOTE_MEDIA_FIELDS = [
@@ -1007,18 +1009,71 @@ const compactCatalogJournal = async (env, uid, kind) => {
   return Boolean(stored);
 };
 
+// Old browser clients do not know the Library swatch fields. Their full-row
+// Catalog upserts must not erase a newer R2 swatch. This inspects only the R2
+// base/journal already loaded by getCatalogState: no additional R2/Firestore IO.
+// Recompute it for each CAS retry so a concurrent newer color is not lost.
+const existingLibraryColorRowsForDelta = (state, incomingUpserts) => {
+  const ids = new Set();
+  for (const item of incomingUpserts) {
+    const id = text(item?.id);
+    if (id && (!Object.prototype.hasOwnProperty.call(item, 'colorTags')
+      || !Object.prototype.hasOwnProperty.call(item, 'favoriteColorTags'))) ids.add(id);
+  }
+  const rows = new Map();
+  if (!ids.size) return rows;
+  for (const item of state.base.items) {
+    const id = text(item?.id);
+    if (ids.has(id)) rows.set(id, item);
+  }
+  // A journal deletion makes the old color in the base non-authoritative;
+  // a later re-add without colors must stay uncolored.
+  for (const entry of state.head.deltas) {
+    for (const idValue of entry.deletedIds) {
+      const id = text(idValue);
+      if (ids.has(id)) rows.delete(id);
+    }
+    for (const item of entry.upserts) {
+      const id = text(item?.id);
+      if (ids.has(id)) rows.set(id, item);
+    }
+  }
+  return rows;
+};
+
+const preserveExistingLibrarySwatches = (incoming, projected, previous) => {
+  if (!previous || !projected) return projected;
+  for (const key of ['colorTags', 'favoriteColorTags']) {
+    // "Missing" means old-client ignorance, NOT explicit user reset.
+    // Preserve explicit null, empty maps and per-index null values as provided.
+    if (!Object.prototype.hasOwnProperty.call(incoming, key)
+      && Object.prototype.hasOwnProperty.call(previous, key)) {
+      projected[key] = previous[key];
+    }
+  }
+  return projected;
+};
+
 const applyCatalogDelta = async (identity, kind, delta, env, executionCtx = null) => {
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const state = await getCatalogState(identity, kind, delta.baseRevision, env);
     const head = state.head;
     const sanitizedDeletedIds = new Set(delta.deletedIds.map((id) => text(id)).filter(Boolean));
+    // The existing base+journal are already in memory. Do not add per-item
+    // canonical reads or rebuild the shared Catalog on old-client traffic.
+    const existingLibraryRows = kind === 'library'
+      ? existingLibraryColorRowsForDelta(state, delta.upserts) : null;
     const sanitizedUpserts = [];
     for (const rawItem of delta.upserts) {
       const id = text(rawItem?.id);
       if (!id) continue;
       const projected = projectCatalogFields(kind, rawItem, id);
       if (!projected) sanitizedDeletedIds.add(id);
-      else sanitizedUpserts.push(projected);
+      else sanitizedUpserts.push(
+        existingLibraryRows && !sanitizedDeletedIds.has(id)
+          ? preserveExistingLibrarySwatches(rawItem, projected, existingLibraryRows.get(id))
+          : projected,
+      );
     }
     const normalizedDelta = { ...delta, upserts: sanitizedUpserts, deletedIds: Array.from(sanitizedDeletedIds) };
     const serverRevision = Math.max(Date.now(), Number(delta.revision || 0), Number(head.headRevision || 0) + 1);

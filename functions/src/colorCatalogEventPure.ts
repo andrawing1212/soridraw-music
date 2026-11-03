@@ -27,13 +27,18 @@ const activeLibrary = (row: Record<string, unknown>) =>
 const selectedColor = (kind: CanonicalColorKind, data: Record<string, unknown> | null) => {
   if (!data) return null;
   if (kind === 'musicNote') {
-    const key = owns(data,'favoriteColorTag') ? 'favoriteColorTag' :
-      owns(data,'colorTag') ? 'colorTag' : '';
-    return key ? { [key]: data[key] } : {};
+    // A legacy client may remove the field instead of writing null. Missing
+    // authoritative color is an explicit reset ONLY for a captured color
+    // event; the publisher must never replay an old R2 color.
+    const value = owns(data,'favoriteColorTag') ? data.favoriteColorTag
+      : owns(data,'colorTag') ? data.colorTag : null;
+    return { favoriteColorTag: value };
   }
   const color: Record<string, unknown> = {};
   for (const name of ['colorTags','favoriteColorTags']) {
-    if (owns(data,name)) color[name] = data[name];
+    // An absent map is a whole-field reset. The Worker receives a complete
+    // map so missing canonical fields cannot retain stale R2 swatches.
+    color[name] = owns(data,name) && data[name] != null ? data[name] : {};
   }
   return color;
 };
@@ -45,10 +50,12 @@ export const colorEventNeeded = (
   after: Record<string, unknown> | null,
 ) => {
   if (!docActive(kind, after)) return false;
-  if (kind === 'musicNote') {
-    const now = selectedColor(kind, after);
-    if (!now || !Object.keys(now).length) return false;
-  } else if (!after || (!owns(after,'colorTags') && !owns(after,'favoriteColorTags'))) return false;
+  // Never stage brand-new uncolored documents just because they became active.
+  // But detect legacy deletion of a previously existing color field/map:
+  // missing field is a canonical reset, not permission to replay old R2 color.
+  const fields = kind === 'musicNote'
+    ? ['favoriteColorTag','colorTag'] : ['colorTags','favoriteColorTags'];
+  if (![before,after].some(row => row && fields.some(key => owns(row,key)))) return false;
   return !docActive(kind,before)
     || JSON.stringify(selectedColor(kind,before)) !== JSON.stringify(selectedColor(kind,after));
 };

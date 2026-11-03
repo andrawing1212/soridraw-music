@@ -85,6 +85,40 @@ export const tryDeliverPendingCanonicalColor = async (
   }
 };
 
+// Short-lived, explicit-approval compatibility bridge for clients that still
+// write colors directly to Firestore without using the callable. An isolated
+// trigger compares its event snapshots first; an unchanged document costs no
+// extra Firestore IO beyond the event invocation. Enqueue ONLY the exact active
+// canonical row. An existing pending generation is authoritative because its
+// later delivery re-reads the latest canonical value.
+export const stageLegacyCanonicalColorChange = async (
+  kind: CanonicalColorKind, uid: string, documentId: string,
+):Promise<'QUEUED'|'EXISTING'|'INACTIVE'> => {
+  if (!uid || uid.length > 128 || !validId(documentId)
+    || !['musicNote','library'].includes(kind)) return 'INACTIVE';
+  const song = sourceRef(uid,kind,documentId);
+  const rowRef = queue().doc(keyFor(uid,kind,documentId));
+  let state:'QUEUED'|'EXISTING'|'INACTIVE' = 'INACTIVE';
+  await admin.firestore().runTransaction(async tx => {
+    const latest = await tx.get(song);
+    const pending = await tx.get(rowRef);
+    if (!latest.exists) return;
+    const data = (latest.data() || {}) as Record<string,unknown>;
+    if (!isActive(kind,data)
+      || (kind === 'musicNote' && data.uid !== uid)
+      || (kind === 'library' && data.uid && data.uid !== uid)) return;
+    if (pending.exists) { state='EXISTING'; return; }
+    tx.set(rowRef,{
+      schemaVersion:1,uid,kind,documentId,
+      generation:randomUUID(),attempts:0,
+      createdAt:admin.firestore.Timestamp.now(),
+      nextAttemptAt:admin.firestore.Timestamp.now(),
+    } satisfies OutboxRow);
+    state='QUEUED';
+  });
+  return state;
+};
+
 export const commitCanonicalColorWithOutbox = onCall({
   region:'asia-northeast3', enforceAppCheck:true, maxInstances:10,
   secrets:[colorCatalogSigningKey],
@@ -137,20 +171,23 @@ export const commitCanonicalColorWithOutbox = onCall({
   return {ok:true,changed:true,pending:delivery === 'RETRY'};
 });
 
+// Bounded backlog capacity: 300 due rows per 5 minutes, max 15 concurrent
+// deliveries. At 12s network timeout each wave of 15 needs <=12s network
+// time; 20 waves have a 240s network ceiling excluding Firestore latency.
+// Failure backoff, per-event CAS and single scheduler instance remain intact.
+export const COLOR_REPLAY_LIMIT = 300;
+export const COLOR_REPLAY_PARALLELISM = 15;
+export const COLOR_REPLAY_CADENCE_MINUTES = 5;
 export const retryPendingCanonicalColors = onSchedule({
-  schedule:'every 15 minutes', timeZone:'UTC', region:'asia-northeast3',
+  schedule:'every 5 minutes', timeZone:'UTC', region:'asia-northeast3',
   maxInstances:1, timeoutSeconds:540, secrets:[colorCatalogSigningKey],
 }, async () => {
   if (!isColorOutboxEnabled()) return;
-  // One indexed, bounded range query, not a collection scan. Empty query R1
-  // roughly once per 15 min when enabled; no page-entry reads or writes.
+  // Indexed, due-time-bounded query; NEVER enumerate all outbox rows.
   const due = await queue().where('nextAttemptAt','<=',admin.firestore.Timestamp.now())
-    .orderBy('nextAttemptAt').limit(80).get();
-  // Five concurrent exact deliveries bound the 80-row batch to approximately
-  // 16 rounds even when Cloudflare responds slowly. One user's failure does
-  // not prevent other pending colors from being retried.
-  for (let index = 0; index < due.docs.length; index += 5) {
-    await Promise.allSettled(due.docs.slice(index,index+5).map(item =>
+    .orderBy('nextAttemptAt').limit(COLOR_REPLAY_LIMIT).get();
+  for (let index = 0; index < due.docs.length; index += COLOR_REPLAY_PARALLELISM) {
+    await Promise.allSettled(due.docs.slice(index,index+COLOR_REPLAY_PARALLELISM).map(item =>
       tryDeliverPendingCanonicalColor(item.ref)
     ));
   }

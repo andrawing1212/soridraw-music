@@ -80,6 +80,7 @@ import { db } from '../firebase';
 import { doc, getDoc, getDocFromServer, updateDoc, setDoc, deleteDoc, addDoc, collection, serverTimestamp, writeBatch } from '../lib/firestoreMeasured';
 import { updatePlaylistItemColor } from '../services/playlistService';
 import { favoritesStore } from '../hooks/useFavoritesStore';
+import { SORIDRAW_COLOR_LOCAL_RECOVERY_EVENT } from '../lib/colorLocalRecovery';
 import {
   getExploreMusicNotePublicationState,
   getExploreMusicNotePublicationStates,
@@ -4043,6 +4044,28 @@ updates: draft.updates,
   useEffect(() => {
     writeLocalColorMap('soridraw.favoriteColorTags', favoriteColorMap);
   }, [favoriteColorMap, user?.uid]);
+
+  useEffect(() => {
+    const applyRecoveredColors = (event: Event) => {
+      const detail = (event as CustomEvent<{uid?:string; baseKey?:string}>).detail;
+      if (!user?.uid || detail?.uid !== user.uid
+        || detail.baseKey !== 'soridraw.favoriteColorTags') return;
+      const recovered = readLocalColorMap('soridraw.favoriteColorTags');
+      setFavoriteColorMap(previous => {
+        let next: Record<string,string> | null = null;
+        for (const [id, color] of Object.entries(recovered)) {
+          if (pendingFavoriteColorIdsRef.current.has(id) ||
+            !FAVORITE_COLOR_OPTIONS.some(option => option.value === color) ||
+            Object.prototype.hasOwnProperty.call(previous, id)) continue;
+          if (!next) next = { ...previous };
+          next[id] = color;
+        }
+        return next || previous;
+      });
+    };
+    window.addEventListener(SORIDRAW_COLOR_LOCAL_RECOVERY_EVENT, applyRecoveredColors);
+    return () => window.removeEventListener(SORIDRAW_COLOR_LOCAL_RECOVERY_EVENT, applyRecoveredColors);
+  }, [user?.uid]);
 
   useEffect(() => {
     // Absence of a color field in a legacy/R2 Catalog summary is NOT the same

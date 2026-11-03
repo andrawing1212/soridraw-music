@@ -362,3 +362,7 @@ console.log('MUSIC_NOTE_OLD_CLIENT_MISSING_SWATCH_PRESERVED=PASS');
 console.log('MUSIC_NOTE_EXPLICIT_GRAY_AND_LEGACY_ALIAS_NO_RESURRECTION=PASS');
 console.log('MUSIC_NOTE_LATEST_JOURNAL_DELETE_AND_CAS_COLOR_FENCE=PASS');
 console.log('MUSIC_NOTE_COLOR_COMPAT_ADDITIONAL_FIRESTORE_R2_IO=ZERO');
+
+// Source-only shared-Catalog rollout/rollback decision gates (never deploy).
+const { runRolloutSelfTest } = await import('./verify-743-media-color-rollout-readiness.mjs');
+await runRolloutSelfTest();

@@ -7813,7 +7813,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               )}
               <div className="p-4 bg-[#1a1a1a]/50 flex justify-end gap-2 border-t border-black/15">
                 <button className="px-4 py-2 font-bold text-white/50 hover:text-white transition-colors" onClick={closeModal}>취소</button>
-                <button type="button" className="px-4 py-2 font-bold bg-[#A98BFF] text-white rounded-xl hover:bg-[#A98BFF]/90 transition-colors" onClick={() => { void commitLibraryFolderEditor(); }}>저장</button>
+                <button type="button" className="px-4 py-2 font-bold bg-[#A98BFF] text-white rounded-xl hover:bg-[#A98BFF]/90 transition-colors" onClick={() => { void commitLibraryFolderEditor(); }}>{renameModalArgs.isCreate ? '생성' : '저장'}</button>
                 {!renameModalArgs.isCreate && (
                 <button
                   type="button"

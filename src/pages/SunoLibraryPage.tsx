@@ -2,6 +2,7 @@ import { SORIDRAW_COLOR_LOCAL_RECOVERY_EVENT } from '../lib/colorLocalRecovery';
 import { readLibraryColorReceipts, rememberLibraryColorReceipts, LIBRARY_COLOR_RECEIPT_CONFIRMED_EVENT } from '../lib/libraryColorReceipts';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import { resolveNextSongApplyRoute, stageNextSongKeywords } from '../lib/nextSongPendingBridge';
+import { stageNextSongOriginalProbeSelection } from '../lib/nextSongOriginalProbe';
 import { mergeMusicNoteNextSongClickRecipe455, resolveMusicNoteNextSongRecipe } from '../lib/musicNoteNextSongRecipe';
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
@@ -5302,6 +5303,15 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
     const serialized = JSON.stringify(appliedKeywords);
     stageNextSongKeywords(serialized);
+    stageNextSongOriginalProbeSelection({
+      uid: isSharedSource ? '' : activeUid,
+      origin: 'library',
+      trackId: sourceTrackId,
+      playlistId: isPlaylistSource ? String(group?.playlistId || item?.playlistId || '') : '',
+      playlistItemId: isPlaylistSource ? String(item?.id || group?.itemId || '') : '',
+      stableSongId: String(item?.soridrawSongId || group?.soridrawSongId || item?.recentSongSyncKey || ''),
+      taskId: String(item?.taskId || group?.taskId || ''),
+    });
     setTimeout(() => {
       navigate(resolveNextSongApplyRoute(Date.now()));
     }, 700);

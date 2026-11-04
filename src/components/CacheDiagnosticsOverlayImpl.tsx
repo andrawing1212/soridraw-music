@@ -26,6 +26,7 @@ import { favoritesStore } from '../hooks/useFavoritesStore';
 import StudioHeartSingleDocDiagnostic from './StudioHeartSingleDocDiagnostic';
 import ColorHistoryReadOnlyDiagnostic from './ColorHistoryReadOnlyDiagnostic';
 import RecentSongsExactCountDiagnostic from './RecentSongsExactCountDiagnostic';
+import NextSongOriginalReadOnlyDiagnostic from './NextSongOriginalReadOnlyDiagnostic';
 import { CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, readCatalogRuntimeDiagnostic, resetCatalogRuntimeDiagnostics, type CatalogRuntimeDiagnosticKind, type CatalogRuntimeDiagnosticState } from '../lib/catalogRuntimeDiagnostics';
 import { PAGE_SYNC_DIAGNOSTICS_UPDATE_EVENT, readPageSyncDiagnostics, resetPageSyncDiagnostics, type PageSyncDiagnosticState } from '../lib/pageSyncCoordinator';
 
@@ -700,6 +701,7 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
           </div>
 
           <RecentSongsExactCountDiagnostic />
+          <NextSongOriginalReadOnlyDiagnostic />
           <ColorHistoryReadOnlyDiagnostic />
           <StudioHeartSingleDocDiagnostic />
 

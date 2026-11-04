@@ -4760,9 +4760,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       if (!matchesPlaylistVisibilityFilter(item)) return false;
       if (playlistMenuFilter === 'favorite') {
         if (item?.sourceType === 'shared_track') return false;
-        const id = String(item?.sourceId || item?.trackId || item?.parentTrackId || '');
+        const id = String(item?.sourceId || (item as any)?.trackId || (item as any)?.parentTrackId || '');
         const source = playlistSearchTrackById.get(id);
-        if (!Boolean(source?.favorite ?? item?.favorite)) return false;
+        if (!Boolean(source?.favorite ?? (item as any)?.favorite)) return false;
       }
       if (playlistColorFilter === 'all') return true;
       const itemColor = getPlaylistItemColor(item);

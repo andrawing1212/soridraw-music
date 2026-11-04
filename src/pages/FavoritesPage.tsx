@@ -9136,7 +9136,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   onClick={commitRenameMusicNoteFolder}
                   className="rounded-xl bg-[#FF7A72]/85 px-4 py-2 text-sm font-black text-white transition-colors hover:bg-[#FF7A72]"
                 >
-                  저장
+                  {musicNoteFolderRenameArgs.isCreate ? '생성' : '저장'}
                 </button>
                 {!musicNoteFolderRenameArgs.isCreate && (
                 <button

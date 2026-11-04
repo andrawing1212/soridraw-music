@@ -1,3 +1,14 @@
+## CURRENT — 검색어 입력 시 Music Note 선택·폴더 이동 지연 회귀 최소 수정 / QA PASS → PREVIEW Hosting 릴리스 (2026-11-04 KST)
+- **실사용 실패:** 디렉터 동영상 20261104-0757·0759에서 `아인` 등 검색어 입력 상태의 Music Note 다곡 선택·선택모드·폴더 이동 시 심한 지연. 검색 정확도는 사용자 판정 PASS. 이전 복수 폴더 저장은 사용자 실사용 PASS.
+- **확정 코드 원인:** #766 이후 선택/모달 상태를 바꿀 때마다 음악 가사·키워드·한글표시명 검색을 전체 목록에 반복 적용하고, `mergeMusicNoteSearchSource`가 기존 검색곡까지 매 렌더 복사해 결과 재사용을 방해. UI 선택이 검색과 무관해도 긴 문자열 파싱·대량 객체 생성이 다시 실행됨.
+- **수정:** PR #768 merge `c7893f152ed91f4abebf207b917b9d7bb9489b04`; exact validated `8f6601ba88155f7b84173ef1963036d3dfb1d057`. `src/lib/songMetadataSearch.ts`에서 원본 객체별/마지막 검색어별 결과 1건을 메모리 WeakMap으로 재사용하고, 제목·가사·키워드 필드 교체/버전 변경 시 무효화. 한글 표시 키워드의 별도 계산은 캐시 MISS에서만 수행. Music Note `activeFavoriteSource`는 같은 원본·검색상태에 React memo 적용. 목록/원본 병합 시 중복하지 않은 기존 객체의 참조를 유지해 선택 반복 시 재검색을 방지. 검색 범위/결과, Library 정상 동작, Music Note 폴더 저장·선택/정렬/분할 UI 로직 변경 없음.
+- **검사:** PR #768 최종 head 관련 4/4 SUCCESS (product-quality, auth-storage + TypeScript/Build + 새 검색/선택 300회 positive·negative fixture 및 identity/merge 테스트, Music Note sync, split UI). 테스트는 동일 검색어 선택 반복에 lyrics 중첩 필드 재탐색/키워드 레이블 재계산 0, 원본 수정 시 무효화, 서버검색 중복 병합 결과 보존을 확인. 실제 반응속도 장치 측정은 별도이며 CI 성공만으로 실사용 PASS 아님.
+- **안전/비용:** 검색은 메모리 계산만; 추가 Firestore/RTDB/R2/D1 read/write 0. 기존 원본곡·폴더·Library 저장/공유 Worker·Rules·Functions·TEST/PRODUCTION·캐시 초기화 변경 없음.
+- **배포:** 검증된 source merge의 PREVIEW Hosting 전용 트리거. Actions Hosting/정확 일치/환경 불변 PASS 후 최종 배포로 기록. 검색어가 남은 상태의 PC 연속 선택·폴더 이동 및 모바일 실사용 확인은 OPEN.
+- **별도 OPEN:** 구형 곡 직접입력 ‘다음곡에 적용’ 복원 실패는 이 성능 수정 범위 밖이며 원본 미확정 상태 유지.
+
+---
+
 ## CURRENT — Music Note·Library 저장된 키워드/가사 검색 확장 · 소스 검사 PASS · PREVIEW Hosting 릴리스 (2026-11-04 KST)
 - **디렉터 실사용 판정:** Music Note 여러 곡 폴더 저장→새로고침·재접속 **PASS(CLOSED)** (2026-11-04 사진). 기존 기능 보호. 과거 곡 ‘다음곡에 적용’ 직접입력은 여전히 OPEN; #762 진단에서 해당 favorites 원본은 존재하나 직접입력 필드 미검출, recent ID 일치 없음. 데이터 소실 단정·임의 복원 없음.
 - **확인한 기존 검색:** Music Note는 제목·선택 장르/스타일/사운드/분위기/주제와 목록 객체에 가사가 있는 경우 검색했으나 저장된 한글 표시 메타·상황/가사 변형 모두 포괄하지 못함. Library workspace는 제목·프롬프트만, playlist는 제목·제작자·장르 중심.

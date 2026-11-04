@@ -5495,25 +5495,30 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
   }
 }
 
-/* Music Note folder edit visual refinement only; Library chips remain unchanged.
- * Preserve hover/touch visibility, drag suppression and existing click handlers. */
+/* Music Note and Library use the same small translucent folder edit circle.
+ * Its background is actually transparent, including over a selected folder.
+ * Keep folder labels/colors, hover/touch toggles and drag-hide logic untouched. */
 @media (hover: hover) and (pointer: fine) {
-  .soridraw-folder-drag-scrollbar > .soridraw-musicnote-folder-button > .soridraw-folder-hover-edit {
+  .soridraw-folder-drag-scrollbar > :is(.soridraw-musicnote-folder-button, .soridraw-library-folder-button) > .soridraw-folder-hover-edit {
     top: -7px;
     width: 22px;
     height: 22px;
+    background: rgba(37, 37, 40, 0.6);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.34);
   }
-  .soridraw-folder-drag-scrollbar > .soridraw-musicnote-folder-button:hover > .soridraw-folder-hover-edit {
+  .soridraw-folder-drag-scrollbar > :is(.soridraw-musicnote-folder-button, .soridraw-library-folder-button):hover > .soridraw-folder-hover-edit {
     opacity: 0.72;
   }
 }
 @media (hover: none), (pointer: coarse) {
-  .soridraw-folder-drag-scrollbar > .soridraw-musicnote-folder-button > .soridraw-folder-hover-edit {
+  .soridraw-folder-drag-scrollbar > :is(.soridraw-musicnote-folder-button, .soridraw-library-folder-button) > .soridraw-folder-hover-edit {
     top: -7px;
     width: 26px;
     height: 26px;
+    background: rgba(37, 37, 40, 0.6);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.34);
   }
-  .soridraw-folder-drag-scrollbar > .soridraw-musicnote-folder-button[data-mobile-edit-armed="true"] > .soridraw-folder-hover-edit {
+  .soridraw-folder-drag-scrollbar > :is(.soridraw-musicnote-folder-button, .soridraw-library-folder-button)[data-mobile-edit-armed="true"] > .soridraw-folder-hover-edit {
     opacity: 0.72;
   }
 }

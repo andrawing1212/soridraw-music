@@ -159,6 +159,22 @@ assert(newCss.includes('gap: 2px !important;'),
   'two 34px controls must remain separated by 2px');
 assert(newCss.includes('calc((100cqi - 158px) / 8)'),
   'narrow 320px container space reclamation preserved');
+/* Keep visible folded-search status: both page-specific glyphs must
+ * be brand-colored, and both backgrounds as bright as the toolbar buttons.
+ * No changes are allowed to the two hitboxes or query lifecycle. */
+assert(newCss.includes('background: #2c2c2e !important;'),
+  'folded controls use the normal button background, not dim secondary');
+assert(newCss.includes('color: var(--soridraw-search-active-accent, #FF7A72) !important;'),
+  'folded icon tint reflects active query');
+assert(newCss.includes('--soridraw-search-active-accent: #FF7A72;'),
+  'Music Note controls have page coral accent');
+assert(newCss.includes('--soridraw-search-active-accent: #A98BFF;'),
+  'Library controls have page purple accent');
+assert(newCss.includes('flex: 0 0 34px !important;')
+  && newCss.includes('gap: 2px !important;'),
+  'the approved two-button no-overlap geometry must remain');
+console.log('MUSIC_NOTE_LIBRARY_FOLDED_SEARCH_BRAND_COLOR_VISIBLE=PASS');
+
 console.log('MUSIC_NOTE_LIBRARY_MOBILE_SEARCH_SIBLING_CONTROLS_GEOMETRY=PASS');
 console.log('MUSIC_NOTE_LIBRARY_ORANGE_FILTER_REMOVAL_SAVED_ORIGINALS_SAFE=PASS');
 

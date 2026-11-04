@@ -18021,8 +18021,8 @@ html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
   border: 0 !important;
   outline-offset: -2px;
   border-radius: 14px !important;
-  background: var(--bg-secondary, #29292a) !important;
-  color: var(--text-secondary, #a1a1aa) !important;
+  background: #2c2c2e !important;
+  color: var(--soridraw-search-active-accent, #FF7A72) !important;
   pointer-events: auto !important;
   cursor: pointer;
   touch-action: manipulation;
@@ -18039,6 +18039,22 @@ html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
 .soridraw-stable-top-controls[data-soridraw-search-folded="true"]
 > .soridraw-compact-search-controls > button:active {
   background: #333336 !important;
+}
+
+/* A folded search has an active query, not an inactive button.
+ * Tint both control glyphs with the page brand while matching the usual
+ * dark toolbar button surface. No geometry or click handler changes. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-stable-top-controls[data-soridraw-search-folded="true"]
+> .soridraw-compact-search-controls {
+  --soridraw-search-active-accent: #FF7A72;
+}
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-stable-top-controls[data-soridraw-search-folded="true"]
+> .soridraw-compact-search-controls {
+  --soridraw-search-active-accent: #A98BFF;
 }
 
 /* The two new controls replace one orange 20–28px filter dot. At 320px,

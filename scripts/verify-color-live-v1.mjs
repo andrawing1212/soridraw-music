@@ -108,3 +108,22 @@ for (const [label,begin,end] of [
   assert(view.indexOf('remote')<view.indexOf('hasOwnProperty.call('),label+' remote preview must outrank canonical');
 }
 console.log('COLOR_BADGE_RENDER_PRECEDENCE_AFTER_ACK=PASS');
+
+
+// Library-only regression: Studio Black's result-pane button background has
+// !important priority over a button's inline color. The child swatch owns it.
+for(const [scope,getter] of [['workspace','getWorkspaceItemColor'],['playlist','getPlaylistItemColor']]) {
+  assert.match(lib,new RegExp('data-library-color-dot="'+scope+'"'));
+  assert.match(lib,new RegExp('data-library-color-swatch="'+scope+'"[\\s\\S]{0,160}backgroundColor:getColorHex\\('+getter+'\\('));
+}
+// One live RTDB payload carries all selected colors. Per-song canonical
+// outbox/Firestore writes remain unchanged and still resolve independently.
+const bulkColor=getSection(lib,'const handleBulkChangeColor =','const handleBulkFavorite =');
+assert.match(bulkColor,/handleChangeWorkspaceColor\\(selection.group, selection.idx, color, true\\)/);
+assert.match(bulkColor,/handleChangeColor\\(item, color, true\\)/);
+assert.match(bulkColor,/changes.push\\(\\{scope:'workspace'/);
+assert.match(bulkColor,/changes.push\\(\\{scope:'playlist'/);
+assert.match(bulkColor,/publishColorSelectionPreview\\(uid,changes.slice\\(offset,offset\\+30\\)\\)/);
+assert.match(playlistClick,/if \\(!skipLivePreview\\)/);
+assert.match(workspaceClick,/if \\(!skipLivePreview\\)/);
+console.log('LIBRARY_PC_SWATCH_AND_BULK_ALL_ROWS_LIVE=PASS');

@@ -2338,6 +2338,9 @@ updates: draft.updates,
     { value: 'blue', color: '#3b82f6', label: '파랑' },
     { value: 'purple', color: '#a855f7', label: '보라' },
   ];
+  // Orange remains a VALID stored/assigned color (including old songs);
+  // only its TOP search dot is removed to give mobile search two real controls.
+  const FAVORITE_COLOR_FILTER_OPTIONS = FAVORITE_COLOR_OPTIONS.filter((color) => color.value !== 'orange');
 
   const getFavoriteColorValue = (song: any): string => {
     // A deliberate unsaved click wins locally. Otherwise canonical values,
@@ -8210,8 +8213,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
 
       <style>{`
-        /* Mobile-only search fold: keep the query/results; recover palette width.
-           Split-pane responsive mode uses the same explicit compact state. */
+        /* Only the mobile Music Note search's folded state changes.
+           A real ~70px row slot now contains TWO separate touch targets,
+           funded by removing orange from the TOP filter only.
+           The originals, including saved orange, stay unchanged. */
         :root body #root .soridraw-app-root
         .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
         .soridraw-stable-top-controls .soridraw-responsive-search-slot.is-search-collapsed,
@@ -8219,14 +8224,17 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         .soridraw-studio-result-pane
         .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
         .soridraw-stable-top-controls .soridraw-responsive-search-slot.is-search-collapsed {
-          /* Keep the original 42px toolbar footprint. 82px overflow pushed
-             color dots and Filter outside the mobile viewport. */
+          box-sizing: border-box !important;
+          display: flex !important;
+          flex-direction: row !important;
+          align-items: center !important;
+          justify-content: flex-start !important;
           position: relative !important;
-          flex: 0 0 42px !important;
-          width: 42px !important;
-          min-width: 42px !important;
-          max-width: 42px !important;
-          gap: 0 !important;
+          flex: 0 0 70px !important;
+          width: 70px !important;
+          min-width: 70px !important;
+          max-width: 70px !important;
+          gap: 2px !important;
           overflow: visible !important;
           z-index: 1 !important;
         }
@@ -8237,11 +8245,16 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         .soridraw-studio-result-pane
         .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
         .soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search {
+          box-sizing: border-box !important;
           position: relative !important;
-          flex: 0 0 42px !important;
-          width: 42px !important;
-          min-width: 42px !important;
-          max-width: 42px !important;
+          top: auto !important;
+          left: auto !important;
+          right: auto !important;
+          bottom: auto !important;
+          flex: 0 0 36px !important;
+          width: 36px !important;
+          min-width: 36px !important;
+          max-width: 36px !important;
           height: 46px !important;
           overflow: hidden !important;
           z-index: 1 !important;
@@ -8253,9 +8266,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         .soridraw-studio-result-pane
         .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
         .soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search-input {
-          width: 42px !important;
-          min-width: 42px !important;
-          max-width: 42px !important;
+          width: 36px !important;
+          min-width: 36px !important;
+          max-width: 36px !important;
           padding: 0 !important;
           color: transparent !important;
           -webkit-text-fill-color: transparent !important;
@@ -8269,21 +8282,21 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         .soridraw-studio-result-pane
         .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
         .soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search-icon {
-          /* Magnifier and X share the existing compact control, not another
-             flex item that consumes the color tray's width. */
+          box-sizing: border-box !important;
+          display: flex !important;
           left: 0 !important;
           right: auto !important;
-          width: 22px !important;
-          min-width: 22px !important;
+          top: 0 !important;
+          bottom: 0 !important;
+          width: 36px !important;
           height: 46px !important;
           padding: 0 !important;
-          display: flex !important;
-          align-items: center !important;
           justify-content: center !important;
+          align-items: center !important;
           transform: none !important;
           translate: none !important;
           pointer-events: auto !important;
-          z-index: 30 !important;
+          z-index: 10 !important;
         }
         :root body #root .soridraw-app-root
         .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
@@ -8301,21 +8314,39 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         .soridraw-studio-result-pane
         .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
         .soridraw-responsive-search-slot.is-search-collapsed .soridraw-musicnote-search-collapsed-clear {
+          box-sizing: border-box !important;
           display: flex !important;
-          position: absolute !important;
-          top: 0 !important;
-          right: 0 !important;
+          position: relative !important;
+          top: auto !important;
           left: auto !important;
+          right: auto !important;
           bottom: auto !important;
-          z-index: 40 !important;
-          flex: 0 0 20px !important;
-          width: 20px !important;
-          min-width: 20px !important;
+          z-index: 2 !important;
+          flex: 0 0 32px !important;
+          width: 32px !important;
+          min-width: 32px !important;
+          max-width: 32px !important;
           height: 46px !important;
           margin: 0 !important;
           padding: 0 !important;
           border: 0 !important;
+          justify-content: center !important;
+          align-items: center !important;
           pointer-events: auto !important;
+        }
+        /* With only six filter dots, compact the transparent dot hitboxes
+           by 1px on very narrow panes; keep the painted 14px dots unchanged.
+           This offsets the +28px two-control search slot at ~320px too. */
+        @container (max-width: 420px) {
+          :root body #root .soridraw-app-root
+          .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+          .soridraw-stable-top-controls .soridraw-responsive-color-filter
+          > button[data-soridraw-filter-dot="true"] {
+            flex: 0 0 clamp(14px, calc((100cqi - 158px) / 8), 28px) !important;
+            width: clamp(14px, calc((100cqi - 158px) / 8), 28px) !important;
+            min-width: clamp(14px, calc((100cqi - 158px) / 8), 28px) !important;
+            max-width: clamp(14px, calc((100cqi - 158px) / 8), 28px) !important;
+          }
         }
       `}</style>
 
@@ -8426,7 +8457,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             {isMusicNoteSearchCollapsed && Boolean(searchQuery.trim()) && (
               <button
                 type="button"
-                className="soridraw-musicnote-search-collapsed-clear hidden shrink-0 items-center justify-center rounded-xl text-white/55 hover:text-[#FF9A94]"
+                className="soridraw-musicnote-search-collapsed-clear hidden shrink-0 items-center justify-center rounded-xl bg-white/[0.045] text-white/65 transition-colors hover:bg-white/[0.09] hover:text-[#FF9A94]"
                 aria-label="검색어 지우기"
                 onClick={clearMusicNoteSearch}
               >
@@ -8446,7 +8477,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               <RefreshCw className="soridraw-color-reset-icon hidden h-4 w-4" />
             </button>
             <div className="w-px h-3 bg-white/10 mx-1"></div>
-            {FAVORITE_COLOR_OPTIONS.map((color) => (
+            {FAVORITE_COLOR_FILTER_OPTIONS.map((color) => (
               <button
                 key={color.value}
                 onClick={() => setFavoriteColorFilter(color.value)}

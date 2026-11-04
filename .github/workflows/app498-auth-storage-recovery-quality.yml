@@ -41,6 +41,8 @@ jobs:
         run: node scripts/verify-500-auth-sdk-restore.mjs
       - name: Next-song quota and Studio navigation regression
         run: node scripts/verify-468-next-song-navigation.mjs
+      - name: Historical menu, command and authored lyric next-song regression
+        run: node scripts/verify-next-song-direct-inputs.mjs
       - name: Auth navigation readiness regression
         run: node scripts/verify-035-auth-nav-readiness.mjs
       - name: Studio Rap AUTO and lyric style reset regression

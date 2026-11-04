@@ -2,6 +2,7 @@ import { SORIDRAW_COLOR_LOCAL_RECOVERY_EVENT } from '../lib/colorLocalRecovery';
 import { readLibraryColorReceipts, rememberLibraryColorReceipts, LIBRARY_COLOR_RECEIPT_CONFIRMED_EVENT } from '../lib/libraryColorReceipts';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import { resolveNextSongApplyRoute, stageNextSongKeywords } from '../lib/nextSongPendingBridge';
+import { mergeMusicNoteNextSongClickRecipe455, resolveMusicNoteNextSongRecipe } from '../lib/musicNoteNextSongRecipe';
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
 import { useFolderStripMouseScroll } from '../lib/folderStripMouseScroll';
@@ -17,7 +18,7 @@ import {
   Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle, Edit2, Heart, FolderOutput, Globe2, Plus, Check, CheckSquare, Square, ListChecks, Palette, Lock
 } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { collection, query, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp, orderBy, limit, startAfter, writeBatch } from '../lib/firestoreMeasured';
+import { collection, query, collectionGroup, where, getDocs, doc, getDoc, getDocFromServer, updateDoc, setDoc, serverTimestamp, orderBy, limit, startAfter, writeBatch } from '../lib/firestoreMeasured';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useGlobalPlayerControls } from '../contexts/GlobalPlayerContext';
 import { applyRecoveredSunoAudioUrl, downloadSunoAudioWithRecovery, recoverSunoAudioUrl } from '../services/sunoAudioRecovery';
@@ -5227,14 +5228,20 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const handleApplyNext = async (group: any, item: any) => {
     if (!group && !item) return;
 
-    let appliedKeywords = resolveSunoAppliedKeywords(
-      item,
-      group,
-      group?.item,
-      group?.track,
-      group?.shareData,
-      group?.tracks?.[0]
+    const listApplied = resolveSunoAppliedKeywords(
+      item, group, group?.item, group?.track, group?.shareData, group?.tracks?.[0]
     );
+    // A catalog row with some genre/style keys can still lack a real older
+    // command, menu custom value or user-authored lyric draft in requestPayload.
+    const clickedSource = {
+      ...(group || {}),
+      ...(item || {}),
+      appliedKeywords: listApplied || undefined,
+      requestPayload: item?.requestPayload || group?.requestPayload
+        || group?.shareData?.requestPayload || undefined,
+      userInput: item?.userInput || group?.userInput || undefined,
+    };
+    let appliedKeywords = resolveMusicNoteNextSongRecipe(clickedSource);
 
     const activeUid = String(user?.uid || auth.currentUser?.uid || '').trim();
     const isPlaylistSource = Boolean(
@@ -5250,61 +5257,50 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         : (group?.id || group?.trackId || item?.sourceId || item?.trackId || '')
     ).trim();
     const keywordCacheKey = activeUid && sourceTrackId ? `${activeUid}:${sourceTrackId}` : '';
+    let originalChecked = false;
+    let originalUnavailable = false;
 
-    if ((!appliedKeywords || Object.keys(appliedKeywords).length === 0) && keywordCacheKey) {
-      appliedKeywords = libraryAppliedKeywordsSessionCache.get(keywordCacheKey) || null;
-    }
-
-    if ((!appliedKeywords || Object.keys(appliedKeywords).length === 0) && activeUid && sourceTrackId && !isSharedSource) {
+    // One exact single-document read ONLY on explicit owned Apply. A nonempty
+    // partial catalog is not evidence that historical direct fields are there.
+    // No background reads, all-song scan, storage rewrite, or data migration.
+    if (activeUid && sourceTrackId && !isSharedSource) {
       try {
-        const sourceSnapshot = await getDoc(doc(db, 'suno_tracks', activeUid, 'tracks', sourceTrackId));
-        if (sourceSnapshot.exists()) {
-          const fullTrack: any = { id: sourceTrackId, ...(sourceSnapshot.data() || {}) };
-          appliedKeywords = resolveSunoAppliedKeywords(
-            item,
-            fullTrack,
-            fullTrack?.item,
-            fullTrack?.track,
-            fullTrack?.shareData,
-            fullTrack?.tracks?.[0]
-          );
-          if (appliedKeywords && Object.keys(appliedKeywords).length > 0) {
-            libraryAppliedKeywordsSessionCache.set(keywordCacheKey, appliedKeywords);
-            patchWorkspaceTrackLocally(sourceTrackId, (current) => ({
-              ...current,
-              appliedKeywords,
-              requestPayload: current?.requestPayload || fullTrack?.requestPayload || null,
-            }));
+        const snapshot = await getDocFromServer(doc(db, 'suno_tracks', activeUid, 'tracks', sourceTrackId));
+        if (snapshot.exists()) {
+          const fullTrack: any = { id: sourceTrackId, ...(snapshot.data() || {}) };
+          const ownerUid = String(fullTrack.ownerUid || fullTrack.uid || '').trim();
+          if (!ownerUid || ownerUid === activeUid) {
+            appliedKeywords = mergeMusicNoteNextSongClickRecipe455(clickedSource, fullTrack);
+            originalChecked = true;
+            if (keywordCacheKey && Object.keys(appliedKeywords).length > 0) {
+              libraryAppliedKeywordsSessionCache.set(keywordCacheKey, appliedKeywords);
+            }
+          } else {
+            originalUnavailable = true;
           }
+        } else {
+          originalUnavailable = true;
         }
       } catch (error) {
-        console.warn('Library next-song keyword hydration failed:', error);
+        originalUnavailable = true;
+        console.warn('Library next-song exact original unavailable:', error);
       }
     }
 
-    if (appliedKeywords && Object.keys(appliedKeywords).length > 0 && keywordCacheKey) {
-      libraryAppliedKeywordsSessionCache.set(keywordCacheKey, appliedKeywords);
+    if (!originalChecked && keywordCacheKey && Object.keys(appliedKeywords).length === 0) {
+      const previouslyVerified = libraryAppliedKeywordsSessionCache.get(keywordCacheKey);
+      if (previouslyVerified) appliedKeywords = previouslyVerified;
     }
-
-    console.log("Shared/Library apply source:", {
-      group,
-      item,
-      resolvedAppliedKeywords: appliedKeywords,
-    });
-
     if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {
-      showToast("이 곡은 키워드 정보가 없어 적용할 수 없습니다.");
+      showToast('이 곡에 저장된 원본 설정을 찾을 수 없습니다.');
       return;
     }
-
-    const serialized = JSON.stringify(appliedKeywords);
-    // app468: write both old handoff keys if possible, but do not let Chrome's
-    // QuotaExceededError cancel the next-song navigation. Same-tab memory
-    // keeps the selected recipe until Studio successfully applies it.
-    stageNextSongKeywords(serialized);
-
-    showToast("다음 곡에 곡 설정이 복원되었습니다.");
-
+    if (originalUnavailable) {
+      showToast('서버 원본을 확인하지 못해 현재 곡에 남아 있는 설정만 적용합니다.');
+    } else {
+      showToast('다음 곡에 저장된 설정이 복원되었습니다.');
+    }
+    stageNextSongKeywords(JSON.stringify(appliedKeywords));
     setTimeout(() => {
       navigate(resolveNextSongApplyRoute(Date.now()));
     }, 700);

@@ -9,10 +9,10 @@ import {
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { useMediaQuery } from '../lib/mediaQueryStore';
 import { auth, db } from '../firebase';
-import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from '../lib/firestoreMeasured';
+import { doc, getDoc, getDocFromServer, updateDoc, setDoc, serverTimestamp } from '../lib/firestoreMeasured';
 import { ensureDefaultPlaylists, getPrimaryNormalPlaylist, addPlaylistItem } from '../services/playlistService';
 import { downloadSunoAudioWithRecovery } from '../services/sunoAudioRecovery';
-import { resolveMusicNoteNextSongRecipe } from '../lib/musicNoteNextSongRecipe';
+import { mergeMusicNoteNextSongClickRecipe455, resolveMusicNoteNextSongRecipe } from '../lib/musicNoteNextSongRecipe';
 // SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
 import SunoTrackDetailModal from './SunoTrackDetailModal';
 
@@ -706,12 +706,37 @@ export default function GlobalPlayer() {
     if (!currentTrack) return;
     const group = currentTrack.parent || {};
 
-    let appliedKeywords = resolveMusicNoteNextSongRecipe({
+    const clickedSource = {
       ...group,
       ...(currentTrack as any),
-      appliedKeywords: group.appliedKeywords || (currentTrack as any)?.appliedKeywords,
-      requestPayload: group.requestPayload || (currentTrack as any)?.requestPayload,
-    });
+      appliedKeywords: (currentTrack as any)?.appliedKeywords || group.appliedKeywords,
+      requestPayload: (currentTrack as any)?.requestPayload || group.requestPayload,
+    };
+    let appliedKeywords = resolveMusicNoteNextSongRecipe(clickedSource);
+    const currentUser = auth.currentUser;
+    const sourceTrackId = String(
+      isPlaylistTrack
+        ? (group?.sourceId || group?.trackId || (currentTrack as any)?.sourceId || (currentTrack as any)?.trackId || '')
+        : (group?.id || group?.trackId || group?.taskId || '')
+    ).trim();
+
+    if (currentUser && sourceTrackId && !isSharedPlaylistTrack) {
+      // An explicit click verifies the exact original even when the cached
+      // track already has partial genre/style fields. Never infer the user's
+      // words from the generated prompt or output lyrics.
+      try {
+        const snapshot = await getDocFromServer(doc(db, 'suno_tracks', currentUser.uid, 'tracks', sourceTrackId));
+        if (snapshot.exists()) {
+          const original: any = snapshot.data() || {};
+          const ownerUid = String(original.ownerUid || original.uid || '').trim();
+          if (!ownerUid || ownerUid === currentUser.uid) {
+            appliedKeywords = mergeMusicNoteNextSongClickRecipe455(clickedSource, original);
+          }
+        }
+      } catch (error) {
+        console.warn('Global player next-song exact original unavailable:', error);
+      }
+    }
 
     if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {
       const currentUser = auth.currentUser;

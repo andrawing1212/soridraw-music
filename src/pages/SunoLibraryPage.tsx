@@ -37,7 +37,7 @@ import { subscribeListBundle, readLibraryBundleLocalSyncVersion, writeLibraryBun
 import { schedulePreviewAdaptiveListIndexPublishIfDirty } from '../lib/adaptiveListIndexV2';
 import { flushPendingCatalogPublishes } from '../lib/userDataEngine';
 import { flushSoridrawPageSync } from '../lib/pageSyncCoordinator';
-import { COLOR_SELECTION_SYNC_EVENT, publishColorSelectionPreview } from '../services/userDomainSyncService';
+import { COLOR_SELECTION_SYNC_EVENT, publishColorSelectionPreview, type ColorSelectionPreview } from '../services/userDomainSyncService';
 import { acknowledgeColorPending, listColorPending, readColorPending, stageColorPending } from '../lib/colorPendingOutbox';
 import {
   LIBRARY_PLAYLIST_CACHE_EVENT,
@@ -2306,7 +2306,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 저장이 끝나기 전에 앱을 닫으면 다음 실행 때 미완료 변경을 다시 처리합니다.
 필요하면 이 버튼으로 저장을 다시 시도할 수 있습니다.`;
 
-  const handleChangeColor = async (item: PlaylistItem, color: string | null) => {
+  const handleChangeColor = async (item: PlaylistItem, color: string | null, skipLivePreview = false) => {
     if (!activePlaylistId || !item.id) return;
     const targetPlaylistId = (item as any)?.playlistId || activePlaylistId;
     const key = getPlaylistColorKey(targetPlaylistId, item.id);
@@ -2321,8 +2321,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     playlistColorDirtyRef.current=true;
     if(user?.uid) {
       stageColorPending(user.uid,'playlist',key,nextColor);
-      void publishColorSelectionPreview(user.uid,[{scope:'playlist',key,color:nextColor as 'gray'|'red'|'orange'|'yellow'|'green'|'blue'|'purple'}])
-        .catch(error=>console.warn('[color] Library playlist live preview deferred',error));
+      if (!skipLivePreview) {
+        void publishColorSelectionPreview(user.uid,[{scope:'playlist',key,color:nextColor as 'gray'|'red'|'orange'|'yellow'|'green'|'blue'|'purple'}])
+          .catch(error=>console.warn('[color] Library playlist live preview deferred',error));
+      }
       libraryColorAutoRetryRef.current=0;
       scheduleLibraryColorAutoSave();
     }
@@ -2368,7 +2370,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     return workspaceColorFilter === 'gray' ? color === 'gray' : color === workspaceColorFilter;
   };
 
-  const handleChangeWorkspaceColor = async (group: any, idx: number, color: string | null) => {
+  const handleChangeWorkspaceColor = async (group: any, idx: number, color: string | null, skipLivePreview = false) => {
     if (!group?.id) {
       showToast("색상 정보를 저장할 수 없습니다.");
       return;
@@ -2387,8 +2389,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     workspaceColorDirtyRef.current=true;
     if(user?.uid) {
       stageColorPending(user.uid,'workspace',key,nextColor);
-      void publishColorSelectionPreview(user.uid,[{scope:'workspace',key,color:nextColor as 'gray'|'red'|'orange'|'yellow'|'green'|'blue'|'purple'}])
-        .catch(error=>console.warn('[color] Library workspace live preview deferred',error));
+      if (!skipLivePreview) {
+        void publishColorSelectionPreview(user.uid,[{scope:'workspace',key,color:nextColor as 'gray'|'red'|'orange'|'yellow'|'green'|'blue'|'purple'}])
+          .catch(error=>console.warn('[color] Library workspace live preview deferred',error));
+      }
       libraryColorAutoRetryRef.current=0;
       scheduleLibraryColorAutoSave();
     }
@@ -5693,17 +5697,39 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   const handleBulkChangeColor = async (color: string | null) => {
     if (selectedTrackCount === 0) return;
+    const changes: ColorSelectionPreview[] = [];
+    const nextColor = (color || 'gray') as ColorSelectionPreview['color'];
     try {
       for (const selection of selectedTrackList) {
         if (selection.context === 'workspace') {
-          await handleChangeWorkspaceColor(selection.group, selection.idx, color);
+          if (!selection.group?.id) continue;
+          await handleChangeWorkspaceColor(selection.group, selection.idx, color, true);
+          changes.push({scope:'workspace',key:getWorkspaceColorKey(selection.group,selection.idx),color:nextColor});
         } else {
-          await handleChangeColor(selection.item as PlaylistItem, color);
+          const item = selection.item as PlaylistItem;
+          if (!activePlaylistId || !item.id) continue;
+          await handleChangeColor(item, color, true);
+          changes.push({scope:'playlist',key:getPlaylistColorKey((item as any)?.playlistId || activePlaylistId,item.id),color:nextColor});
         }
+      }
+      if (changes.length === 0) {
+        showToast('변경할 곡이 없습니다.');
+        return;
+      }
+      // Per-item transactions on the same RTDB node can coalesce at the
+      // receiver, leaving only the first/last visible. Send every selected
+      // song together; serial chunks protect the existing 30-item payload cap.
+      if (user?.uid) {
+        const uid = user.uid;
+        void (async () => {
+          for (let offset=0;offset<changes.length;offset+=30) {
+            await publishColorSelectionPreview(uid,changes.slice(offset,offset+30));
+          }
+        })().catch(error=>console.warn('[color] Library bulk live preview deferred',error));
       }
       setActiveColorMenu(null);
       clearMultiSelect();
-      showToast(`${selectedTrackCount}곡 색상이 변경되었습니다.`);
+      showToast(`${changes.length}곡 색상이 변경되었습니다.`);
     } catch (e) {
       console.error(e);
       showToast('선택한 곡 색상 변경에 실패했습니다.');
@@ -7842,9 +7868,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             <button
                               type="button" data-no-card-long-press="true" aria-label="라이브러리 곡 색상"
                               onClick={(e)=>openLibraryColorPortal(e,{id:`workspace-${group.id}-${idx}`,kind:'workspace',group,idx})}
+                              data-library-color-dot="workspace"
                               className="w-3 h-3 rounded-full shrink-0 hover:scale-110 transition-transform"
-                              style={{ backgroundColor: getColorHex(getWorkspaceItemColor(group, idx)) }}
-                            />
+                            >
+                              <span data-library-color-swatch="workspace" className="block w-full h-full rounded-full"
+                                style={{backgroundColor:getColorHex(getWorkspaceItemColor(group,idx))}} />
+                            </button>
                             <h4 className={`soridraw-library-item-title-wrap text-sm md:text-base font-bold transition-colors min-w-0 flex-1 max-w-full overflow-hidden ${isCurrent ? 'text-[#A98BFF]' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
                               <span className="soridraw-library-item-title suno-mobile-title-strip">
                                 {itemTitleParts.genre && (
@@ -8398,9 +8427,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           <button
                             type="button" data-no-card-long-press="true" aria-label="재생목록 곡 색상"
                             onClick={(e)=>openLibraryColorPortal(e,{id:item.id!,kind:'playlist',item})}
+                            data-library-color-dot="playlist"
                             className="w-3 h-3 rounded-full shrink-0 flex items-center justify-center hover:scale-110 transition-transform"
-                            style={{ backgroundColor: getColorHex(getPlaylistItemColor(item)) }}
-                          />
+                          >
+                            <span data-library-color-swatch="playlist" className="block w-full h-full rounded-full"
+                              style={{backgroundColor:getColorHex(getPlaylistItemColor(item))}} />
+                          </button>
                           
                           <h3 className={`soridraw-library-item-title-wrap text-sm font-bold min-w-0 flex-1 max-w-full overflow-hidden ${isActive ? 'text-[#A98BFF]' : 'text-white'}`}>
                             {(() => {

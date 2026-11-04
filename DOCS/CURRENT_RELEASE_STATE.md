@@ -1,3 +1,12 @@
+## CURRENT — Library PC 색상 표시·묶음 실시간 전송 수정 PREVIEW 배포 PASS / 실기기 Library QA OPEN (2026-11-04 12:41 KST)
+- **디렉터 실사용 검증:** 2026-11-04 PC↔모바일 Music Note 색상 양방향 동기화 **PASS(CLOSED)**. Music Note는 이번 변경 범위에서 제외. 같은 영상/신고에서 Library는 PC 색상 점이 변하지 않고, PC→모바일은 전달되나 모바일→PC 화면은 반영되지 않으며, 묶음 변경 중 첫·마지막 외 중간 곡의 변화가 누락되는 증상 **FAIL**.
+- **Library 원인 및 최소 수정:** Studio Black 결과 패널 공통 button 배경 `!important`가 PC Library 색상 점의 인라인 배경을 가리는 문제를 색상 원을 내부 span에 분리해 수정. 묶음 변경 시 선택곡마다 같은 RTDB 신호 노드를 연속 교체해 중간 변경이 수신되지 않을 수 있는 경로를 최대 30곡 단위로 묶은 순차 신호로 수정. 개별 곡의 기존 durable pending outbox/정본 쓰기/회색 해제 동작은 보존. Music Note·공유 Firebase/Worker·기존 사용자 원본 변경 없음.
+- **GitHub/검사:** PR [#753](https://github.com/andrawing1212/soridraw-music/pull/753) source merge `3727e6e2d6618e96e61b6272b9e60a3907e0a132` (validated head `6d9651680d8b9b022c3ad2f8296be67f61f4eb03`). 관련 CI **4/4 SUCCESS** (color regression, source-and-split, auth-storage, app521 Music Note/catalog; TypeScript·Build 포함).
+- **실제 PREVIEW Hosting:** 배포 전용 PR [#754](https://github.com/andrawing1212/soridraw-music/pull/754) merge **`0feb4527dc5cc4766352bd431e6fa9963e427bbb`**, [Actions run 41768464029](https://github.com/andrawing1212/soridraw-music/actions/runs/41768464029) **completed/success**, `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`. 배포 대상 `https://preview.soridraw.com`, TEST/PRODUCTION Hosting 불변.
+- **완료 구분:** 코드·CI·PREVIEW Hosting PASS. **Library 인증 PC/모바일 실기기 표시 및 양방향·묶음 누락 수정은 배포 후 실사용 확인 전까지 OPEN**. 기존 과거 색상 전체 복원 여부 역시 별도 미확정. 새로운 실패 영상이 나오면 Library 동작만 최소 수정하고 Music Note는 재개하지 않음. 대량 원본 재작성·캐시 초기화 금지.
+
+---
+
 ## CURRENT — 공유 Media Worker 색상 보존 3개 환경 실제 배포 PASS / 사용자 실기기 검증 OPEN (2026-11-04 08:27 KST)
 - **디렉터 명시 승인:** 기존 `preview` source `71e11ad842faf7f6841f919e83c4f0c4af355169`의 동일 Worker 색상 보존 코드로 PREVIEW·TEST·PRODUCTION 3개 Media Worker 배포, 구형 버전 URL 비활성화, 배포 전후 검증 승인. TEST 앱 Hosting은 여전히 사용하지 않고 변경하지 않음.
 - **실제 배포 기록:** GitHub Actions [41739067356](https://github.com/andrawing1212/soridraw-music/actions/runs/41739067356) 2026-11-04 08:27 KST **SUCCESS**. 승인 SHA를 유지하고 PR #745 첫 trigger run [41738044533](https://github.com/andrawing1212/soridraw-music/actions/runs/41738044533)은 앱 TypeScript 패키지 미설치로 Cloudflare API 접촉 전 FAIL. runner-only PR #746 수정/검사 PASS/병합, 재시도 trigger PR #747 merge `8d6976744ac3ae34df7382be33fada186b2a7518`에서 성공. 기존 color patch #743, version URL fence #744 병합.

@@ -51,6 +51,30 @@ const KEYWORD_FIELDS = [
   'customMoodInput', 'customThemeInput', 'lyricDraft',
 ] as const;
 
+
+// The same filtered list is evaluated repeatedly while the director selects
+// songs, opens a move dialog or moves the split pane. A full lyric/metadata
+// walk on every unrelated React render causes noticeable input latency.
+// Remember only the LAST query result per actual list item (WeakMap), and
+// invalidate whenever any search-bearing field is replaced/updated.
+const CACHE_FIELDS = [...new Set<string>([
+  ...LOOKUP_FIELDS, ...KEYWORD_FIELDS, 'updatedAt', 'updatedAtMs',
+  'keywordDetails', 'keywordSections', 'requestPayload', 'metadataVersion',
+])];
+type SearchHitMemo = { query: string; fields: readonly unknown[]; hit: boolean };
+const lastSearchHit = new WeakMap<SearchRecord, SearchHitMemo>();
+const normalizedQueryMemo = new Map<string, string>();
+const normalizeSearchQuery = (input: string): string => {
+  const cached = normalizedQueryMemo.get(input);
+  if (cached !== undefined) return cached;
+  const normalized = normalize(input);
+  if (normalizedQueryMemo.size >= 24) normalizedQueryMemo.clear();
+  normalizedQueryMemo.set(input, normalized);
+  return normalized;
+};
+const sameSearchFields = (a: readonly unknown[], b: readonly unknown[]): boolean =>
+  a.length === b.length && a.every((value, index) => Object.is(value, b[index]));
+
 /**
  * Case-insensitive partial phrase search across existing titles, selected
  * keywords, prompts and stored lyrics. This is a pure, bounded local filter:
@@ -59,10 +83,21 @@ const KEYWORD_FIELDS = [
 export const matchesStoredSongSearch = (
   source: unknown,
   search: string,
-  extraFields: readonly unknown[] = [],
+  extraFields: readonly unknown[] | (() => readonly unknown[]) = [],
 ): boolean => {
-  const query = normalize(search || '');
+  const query = normalizeSearchQuery(search || '');
   if (!query) return true;
+  // The optional producer is evaluated only on a cache MISS. This is
+  // essential for Music Note: resolving displayed genre/keyword metadata for
+  // every song on every checkbox click was the main slowdown.
+  const record = isRecord(source) ? source : null;
+  const searchFields = record
+    ? [...CACHE_FIELDS.map(key => record[key]),
+      ...(Array.isArray(extraFields) ? extraFields : [])]
+    : null;
+  const previous = record ? lastSearchHit.get(record) : null;
+  if (previous && searchFields && previous.query === query
+    && sameSearchFields(previous.fields, searchFields)) return previous.hit;
   let visited = 0;
   const matches = (value: unknown, keyword = false, depth = 0): boolean => {
     if (++visited > 650 || depth > 6 || value == null) return false;
@@ -83,33 +118,36 @@ export const matchesStoredSongSearch = (
     }
     return false;
   };
-  if (!isRecord(source)) return matches(source);
-  for (const field of LOOKUP_FIELDS) {
-    if (!Object.prototype.hasOwnProperty.call(source, field)) continue;
-    if (field === 'sunoData') {
-      const items = source.sunoData;
-      if (Array.isArray(items)) {
-        for (const item of items.slice(0, 12)) {
-          if (!isRecord(item)) continue;
-          for (const name of ITEM_FIELDS) {
-            if (matches(item[name], name === 'appliedKeywords' || name === 'genre' || name === 'genreLabels' || name === 'style' || name === 'tags')) return true;
+  if (!record) return matches(source);
+  const evaluate = (): boolean => {
+    for (const field of LOOKUP_FIELDS) {
+      if (!Object.prototype.hasOwnProperty.call(record, field)) continue;
+      if (field === 'sunoData') {
+        const items = record.sunoData;
+        if (Array.isArray(items)) {
+          for (const item of items.slice(0, 12)) {
+            if (!isRecord(item)) continue;
+            for (const name of ITEM_FIELDS) {
+              if (matches(item[name], name === 'appliedKeywords' || name === 'genre' || name === 'genreLabels' || name === 'style' || name === 'tags')) return true;
+            }
           }
         }
+        continue;
       }
-      continue;
+      const keyword = field === 'appliedKeywords' || field === 'genre' || field === 'genreLabels' || field === 'style' || field === 'tags';
+      if (matches(record[field], keyword)) return true;
     }
-    const keyword = field === 'appliedKeywords' || field === 'genre' || field === 'genreLabels' || field === 'style' || field === 'tags';
-    if (matches(source[field], keyword)) return true;
-  }
-  // Some historical notes saved the situation/keywords outside appliedKeywords.
-  for (const field of KEYWORD_FIELDS) {
-    if (matches(source[field], true)) return true;
-  }
-  // A Library folder keeps limited song metadata, and some items can be linked
-  // to an already-loaded Library workspace source. Callers pass that source
-  // separately; never initiate a Firestore read from this matcher.
-  for (const extra of extraFields) {
-    if (matches(extra, true)) return true;
-  }
-  return false;
+    // Historical notes can also place keywords outside appliedKeywords.
+    for (const field of KEYWORD_FIELDS) {
+      if (matches(record[field], true)) return true;
+    }
+    // No per-input server IO. Check the displayed keyword fallback only when
+    // the local canonical fields did not already match.
+    const extra = typeof extraFields === 'function' ? extraFields() : extraFields;
+    for (const value of extra) if (matches(value, true)) return true;
+    return false;
+  };
+  const hit = evaluate();
+  if (searchFields) lastSearchHit.set(record, { query, fields: searchFields, hit });
+  return hit;
 };

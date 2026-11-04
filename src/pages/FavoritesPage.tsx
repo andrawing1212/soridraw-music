@@ -576,7 +576,11 @@ const mergeMusicNoteSearchSource = (base: any[], extra: any[]) => {
   [...(base || []), ...(extra || [])].forEach((item) => {
     if (!item) return;
     const key = item.id || `${item.title || ''}-${item.createdAtMs || item.createdAt || Math.random()}`;
-    map.set(String(key), { ...(map.get(String(key)) || {}), ...item });
+    // Preserve canonical item identity when no server-search duplicate exists.
+    // Re-cloning EVERY item on checkbox/folder-dialog rerenders defeated the
+    // per-song search cache and forced large lyrics/keywords traversals.
+    const prior = map.get(String(key));
+    map.set(String(key), prior ? { ...prior, ...item } : item);
   });
   return Array.from(map.values());
 };
@@ -1246,9 +1250,15 @@ export default function FavoritesPage({
   const serverSearchRunIdRef = useRef(0);
   const [musicNoteViewMode, setMusicNoteViewMode] = useState<'noteSpace' | 'myNote' | 'sharedNote'>('noteSpace');
   const baseFavoriteSource = isMusicNoteSharedView ? sharedMusicNoteSongs : favorites;
-  const activeFavoriteSource = !isMusicNoteSharedView && deferredSearchQuery.trim()
-    ? mergeMusicNoteSearchSource(baseFavoriteSource, serverSearchFavorites)
-    : baseFavoriteSource;
+  const hasActiveFavoritesSearch = Boolean(deferredSearchQuery.trim());
+  // Checkbox / folder-picker state must not rebuild search result objects
+  // while the source list and the text-search mode are unchanged.
+  const activeFavoriteSource = React.useMemo(
+    () => !isMusicNoteSharedView && hasActiveFavoritesSearch
+      ? mergeMusicNoteSearchSource(baseFavoriteSource, serverSearchFavorites)
+      : baseFavoriteSource,
+    [baseFavoriteSource, serverSearchFavorites, isMusicNoteSharedView, hasActiveFavoritesSearch],
+  );
   const [creatorNameByUid, setCreatorNameByUid] = useState<Record<string, string>>({});
   const isSharedMusicNoteItem = (song: any) => Boolean(
     song?.sharedReadOnly
@@ -7168,7 +7178,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
   const normalizedSearchQuery = deferredSearchQuery.trim().toLowerCase();
   const songMatchesMusicNoteSearch = (song: any, queryText = normalizedSearchQuery) => {
     if (!queryText) return true;
-    return matchesStoredSongSearch(song, queryText, [
+    return matchesStoredSongSearch(song, queryText, () => [
       getSongGenreValues(song),
       getSongMoodValues(song),
       getSongThemeValues(song),

@@ -103,34 +103,54 @@ assert.deepEqual([...visible('all')],['new','old','shared']);
 assert.deepEqual([...visible('favorite')],['new']);
 assert.deepEqual([...visible('public','public')],['new']);
 
-/* 2026-11-04 director Android regression: compact search must leave
- * all toolbar space to the color palette and keep BOTH buttons actionable. */
-const mobileFold = extract(note, '/* Mobile-only search fold:', '`}</style>');
+/* 2026-11-04 physical Android recording 22153:
+ * 42px shared/absolute magnifier & X overlapped. Remove orange only from
+ * the top filter, and use the saved space for 36px + gap + 32px controls. */
+const paletteOptions = extract(note,
+  '  const FAVORITE_COLOR_OPTIONS = [',
+  '  const getFavoriteColorValue =');
+assert(paletteOptions.includes("{ value: 'orange', color: '#f97316'"),
+  'stored orange remains a valid color: no destructive migration');
+assert(paletteOptions.includes("FAVORITE_COLOR_FILTER_OPTIONS = FAVORITE_COLOR_OPTIONS.filter((color) => color.value !== 'orange')"),
+  'filter-only orange removal must not change the stored palette');
+const colorBar = extract(note,
+  '<div className="soridraw-responsive-color-filter flex h-[46px]',
+  '<div ref={sortPopupRef}');
+assert(colorBar.includes('{FAVORITE_COLOR_FILTER_OPTIONS.map((color) => ('),
+  'top search dots must use six colors, excluding orange');
+assert(!colorBar.includes('{FAVORITE_COLOR_OPTIONS.map((color) => ('),
+  'do not render seven filter dots again');
+const mobileFold = extract(note, '/* Only the mobile Music Note search\'s folded state changes.', '`}</style>');
 const compactRule = extract(mobileFold,
   '.soridraw-stable-top-controls .soridraw-responsive-search-slot.is-search-collapsed {',
   ':root body #root .soridraw-app-root\n        .soridraw-musicnote-theme');
-assert(compactRule.includes('flex: 0 0 42px !important;'),
-  'mobile collapsed search must not reserve 82px and push palette right');
-assert(compactRule.includes('width: 42px !important;'));
-assert(compactRule.includes('gap: 0 !important;'));
-assert(!mobileFold.includes('82px !important'), 'old oversized mobile search footprint reintroduced');
-const compactIcon = extract(mobileFold,
+assert(compactRule.includes('flex: 0 0 70px !important;')
+  && compactRule.includes('width: 70px !important;')
+  && compactRule.includes('gap: 2px !important;'),
+  'folded search row slot is exactly 70px with 2px separation');
+const compactMagnifier = extract(mobileFold,
   '.soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search-icon {',
   ':root body #root .soridraw-app-root\n        .soridraw-musicnote-theme');
-assert(compactIcon.includes('width: 22px !important;'),
-  'magnifier should occupy only left half of existing 42px');
+assert(compactMagnifier.includes('width: 36px !important;')
+  && compactMagnifier.includes('left: 0 !important;'),
+  'magnifier has its own 36px click area');
 const compactClear = mobileFold.slice(mobileFold.lastIndexOf(
-  '.soridraw-responsive-search-slot.is-search-collapsed .soridraw-musicnote-search-collapsed-clear {'));
-assert(compactClear.includes('position: absolute !important;'),
-  'X must not be another flex item pushing the palette');
-assert(compactClear.includes('display: flex !important;'), 'X must be visible');
-assert(compactClear.includes('right: 0 !important;') && compactClear.includes('width: 20px !important;'),
-  'X must fit in the right half of 42px compact control');
-assert(note.includes("onClick={expandMusicNoteSearch}"), 'magnifier reopens input');
-assert(note.includes("onClick={clearMusicNoteSearch}"), 'compact X clears query');
-assert(note.includes('is-search-collapsed'), 'collapsed state remains separate from search term');
-assert(note.includes('collapseMusicNoteSearchAfterAction()'), 'Enter/row actions still fold');
-console.log('MOBILE_MUSIC_NOTE_SEARCH_COMPACT_X_PALETTE_NO_SHIFT=PASS');
+  '.soridraw-responsive-search-slot.is-search-collapsed .soridraw-musicnote-search-collapsed-clear {'),
+  mobileFold.indexOf('/* With only six filter dots'));
+assert(compactClear.includes('position: relative !important;'),
+  'X must sit as an independent flex sibling, not an overlay');
+assert(compactClear.includes('display: flex !important;')
+  && compactClear.includes('flex: 0 0 32px !important;')
+  && compactClear.includes('width: 32px !important;'),
+  'X must be visible and get a full 32px hit box');
+assert(!compactClear.includes('position: absolute !important;'),
+  'a positioned X could again overlap the magnifier');
+assert(mobileFold.includes('calc((100cqi - 158px) / 8)'),
+  '320px pane must reclaim narrow invisible dot spacing');
+assert(note.includes('onClick={expandMusicNoteSearch}'), 'magnifier still reopens search');
+assert(note.includes('onClick={clearMusicNoteSearch}'), 'X still clears search');
+assert(note.includes('collapseMusicNoteSearchAfterAction()'), 'Enter/color/row actions still fold');
+console.log('MOBILE_NOTE_SIX_COLOR_FILTER_TWO_SEPARATE_SEARCH_TOUCH_TARGETS=PASS');
 
 console.log('MUSIC_NOTE_FILTER_ORDER_AND_LIKE_LOCK_PUBLIC_URL_TRASH=PASS');
 console.log('LIBRARY_FILTER_ORDER_SUPPORTED_AND_DISABLED_PLACEHOLDERS=PASS');

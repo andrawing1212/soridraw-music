@@ -5300,7 +5300,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     } else {
       showToast('다음 곡에 저장된 설정이 복원되었습니다.');
     }
-    stageNextSongKeywords(JSON.stringify(appliedKeywords));
+    const serialized = JSON.stringify(appliedKeywords);
+    stageNextSongKeywords(serialized);
     setTimeout(() => {
       navigate(resolveNextSongApplyRoute(Date.now()));
     }, 700);

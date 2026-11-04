@@ -61,7 +61,8 @@ const libraryApply=lib.slice(lib.indexOf('  const handleApplyNext = async (group
                              lib.indexOf('  const getPlaylistSaveIsShared ='));
 assert.match(libraryApply,/getDocFromServer\(doc\(db, 'suno_tracks', activeUid, 'tracks', sourceTrackId\)\)/);
 assert.match(libraryApply,/mergeMusicNoteNextSongClickRecipe455\(clickedSource, fullTrack\)/);
-assert.match(libraryApply,/stageNextSongKeywords\(JSON.stringify\(appliedKeywords\)\)/);
+assert.match(libraryApply,/const serialized = JSON.stringify\(appliedKeywords\)/);
+assert.match(libraryApply,/stageNextSongKeywords\(serialized\)/);
 assert.ok(libraryApply.indexOf('getDocFromServer')<libraryApply.indexOf('stageNextSongKeywords'));
 assert.match(player,/getDocFromServer\(doc\(db, 'suno_tracks', currentUser.uid, 'tracks', sourceTrackId\)\)/);
 assert.match(player,/mergeMusicNoteNextSongClickRecipe455\(clickedSource, original\)/);

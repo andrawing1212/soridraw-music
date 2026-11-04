@@ -79,7 +79,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import type { User } from 'firebase/auth';
-import { db } from '../firebase';
+import { auth, db } from '../firebase';
 import { doc, getDoc, getDocFromServer, updateDoc, setDoc, deleteDoc, addDoc, collection, serverTimestamp, writeBatch } from '../lib/firestoreMeasured';
 import { updatePlaylistItemColor } from '../services/playlistService';
 import { favoritesStore } from '../hooks/useFavoritesStore';
@@ -1099,8 +1099,11 @@ const getMyNoteFolderIdsFromSong = (song: any): string[] => {
   if (!song) return [];
   // An explicit empty array means unassigned. Legacy songs without this array
   // retain their single folder without any read-time server migration.
-  if (Array.isArray(song.noteFolderIds)) {
-    const ids = [...new Set<string>(song.noteFolderIds.map((id: unknown) => String(id || '').trim()).filter(Boolean))];
+  const storedIds = Array.isArray(song.noteFolderIds)
+    ? song.noteFolderIds
+    : Array.isArray(song.musicNoteFolderIds) ? song.musicNoteFolderIds : null;
+  if (storedIds) {
+    const ids = [...new Set<string>(storedIds.map((id: unknown) => String(id || '').trim()).filter(Boolean))];
     // An old single-folder client can still move the legacy primary. Merge it
     // without a destructive backfill; our own writes always keep both aligned.
     const primary = String(song.noteFolderId || '').trim();
@@ -2931,14 +2934,16 @@ updates: draft.updates,
   const commitMusicNoteIndividualFolderPatches = async (
     patches: { id: string; updates: Record<string, any> }[],
     operation: 'folder-update' | 'folder-delete' = 'folder-update',
+    exactSources: any[] = [],
   ) => {
     const sourceFavorites = favoritesStore.getFavorites();
+    const exactById = new Map(exactSources.map(song => [getFavoriteDocumentId(song), song]));
     for (let index = 0; index < patches.length; index += MUSIC_NOTE_FOLDER_WRITE_BATCH_LIMIT) {
       const chunk = patches.slice(index, index + MUSIC_NOTE_FOLDER_WRITE_BATCH_LIMIT);
       const batch = writeBatch(db);
       for (const { id, updates } of chunk) batch.update(doc(db, 'favorites', id), updates);
-      const syncItems = chunk.slice(0, 10).map(({ id, updates }) => {
-        const source = sourceFavorites.find((song: any) => getFavoriteDocumentId(song) === id);
+      const syncItems = chunk.map(({ id, updates }) => {
+        const source = exactById.get(id) || sourceFavorites.find((song: any) => getFavoriteDocumentId(song) === id);
         return source ? { ...source, ...updates, id, firestoreId: id, updatedAtMs: Date.now() } : null;
       }).filter(Boolean);
       await runV1MutationBoundary({
@@ -2976,6 +2981,10 @@ updates: draft.updates,
     const primary = ids[0] || null;
     return {
       noteFolderIds: ids,
+      // Already supported by all deployed shared Media Workers / older readers.
+      // Alias makes the complete membership survive R2 Catalog projection
+      // without a shared Worker/Rules deployment.
+      musicNoteFolderIds: ids,
       noteFolderId: primary,
       noteFolderTitle: primary ? (folders.find(folder => folder.id === primary)?.title || null) : null,
       noteFolderUpdatedAt: Date.now(),
@@ -3001,21 +3010,50 @@ updates: draft.updates,
         const added = musicNoteFolderTargetIds.filter(id => !musicNoteFolderInitialIds.includes(id));
         const removed = musicNoteFolderInitialIds.filter(id => !musicNoteFolderTargetIds.includes(id));
         const source = favoritesStore.getFavorites();
-        const patches = targetSongIds.flatMap(id => {
+        const selectedSources = targetSongIds.map(id => {
           const song = source.find((item: any) => getFavoriteDocumentId(item) === id || String(item?.id || '') === id)
             || activeFavoriteSource.find((item: any) => getFavoriteDocumentId(item) === id || String(item?.id || '') === id);
-          if (!song) return [];
+          if (!song || !getFavoriteDocumentId(song)) throw new Error('FOLDER_SOURCE_NOT_FOUND');
+          return song;
+        });
+        const uid = user.uid;
+        const exactSources: any[] = [];
+        // An older shared Catalog could strip noteFolderIds. Check only those
+        // deliberately selected originals before adding/removing folders.
+        // No collection scan, no page-entry read, no mutation on read failure.
+        for (let index = 0; index < selectedSources.length; index += 10) {
+          const group = selectedSources.slice(index, index + 10);
+          const hydrated = await Promise.all(group.map(async (song) => {
+            if (Array.isArray(song.noteFolderIds) || Array.isArray(song.musicNoteFolderIds)) return song;
+            const id = getFavoriteDocumentId(song);
+            const snap = await getDocFromServer(doc(db, 'favorites', id));
+            if (!snap.exists()) throw new Error('FOLDER_CANONICAL_MISSING');
+            const original = snap.data() as Record<string, any>;
+            if (String(original.uid || '') !== uid || isFavoriteSoftRemoved(original) || isFavoriteInTrash(original)) {
+              throw new Error('FOLDER_CANONICAL_OWNER_OR_STATE_MISMATCH');
+            }
+            // A previously saved multi-folder link can be correct in Firestore
+            // while absent from the old R2/catalog summary. A deliberate Save
+            // may repair this missing projection even if membership is unchanged.
+            return { ...song, ...original, id, firestoreId: id, __musicNoteFolderCatalogWasIncomplete: true };
+          }));
+          exactSources.push(...hydrated);
+        }
+        if (auth.currentUser?.uid !== uid) throw new Error('FOLDER_ACCOUNT_CHANGED');
+        const patches = targetSongIds.flatMap((id, index) => {
+          const song = exactSources[index];
           const before = getMyNoteFolderIdsFromSong(song);
           const after = [...before.filter(existingId => !removed.includes(existingId))];
           for (const addedId of added) if (!after.includes(addedId)) after.push(addedId);
-          if (!getFavoriteDocumentId(song) || (before.length === after.length && before.every((existingId, i) => after[i] === existingId))) return [];
+          const unchanged = before.length === after.length && before.every((existingId, i) => after[i] === existingId);
+          if (!getFavoriteDocumentId(song) || (unchanged && song.__musicNoteFolderCatalogWasIncomplete !== true)) return [];
           return [{ id: getFavoriteDocumentId(song), updates: buildMyNoteFolderMembershipPatch(after, folders) }];
         });
         if (patches.length === 0) {
           showFavoriteToast('변경된 폴더가 없습니다.');
           return;
         }
-        await commitMusicNoteIndividualFolderPatches(patches);
+        await commitMusicNoteIndividualFolderPatches(patches, 'folder-update', exactSources);
         patchMusicNoteIndividualFolderChangesLocally(patches);
         showFavoriteToast(`${patches.length}곡의 폴더 저장을 변경했습니다.`);
         // Keep Note Space and the bottom selection bar: another destination

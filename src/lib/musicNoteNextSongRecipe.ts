@@ -290,3 +290,62 @@ export const resolveStoredAuthoredLyricDraft = (recipe: PlainRecord): {
     lyricMode: enabled && recipe?.lyricMode === 'preserve' ? 'preserve' : 'assist',
   };
 };
+
+/**
+ * On an explicit owned Music Note Next Song click, a historical favorite may
+ * have retained only its generated summary while the linked original Suno
+ * track kept the exact authored inputs. This is a read-only, direct-text-only
+ * recovery: never infer the user's words from final prompt/lyrics.
+ */
+export const recoverLinkedSunoOriginalDirectInputs = (
+  favoriteOriginal: unknown,
+  linkedSunoOriginal: unknown,
+  mergedRecipe: PlainRecord,
+  verifiedPendingUpdates?: unknown,
+): PlainRecord => {
+  const favorite = parseRecord(favoriteOriginal) || {};
+  const linked = parseRecord(linkedSunoOriginal);
+  if (!linked) return mergedRecipe;
+  const favoriteTaskId = String(favorite.sourceTaskId || favorite.taskId || '').trim();
+  const linkedTaskId = String(linked.taskId || '').trim();
+  // An exact track path is mandatory in the caller. An additionally present
+  // task identity must never contradict the saved favorite.
+  if (favoriteTaskId && linkedTaskId && favoriteTaskId !== linkedTaskId) return mergedRecipe;
+  const source = resolveMusicNoteNextSongRecipe(linked);
+  const pending = parseRecord(verifiedPendingUpdates);
+  const pendingApplied = parseRecord(pending?.appliedKeywords);
+  const favoriteApplied = parseRecord(favorite.appliedKeywords);
+  const favoriteRequest = parseRecord(favorite.requestPayload);
+  const requestApplied = parseRecord(favoriteRequest?.appliedKeywords);
+  const hasOwn = (obj: PlainRecord | null, key: string) =>
+    Boolean(obj && Object.prototype.hasOwnProperty.call(obj, key));
+  const newerCommand = [pending, pendingApplied].some((obj) =>
+    COMMAND_KEYS_459.some((key) => hasOwn(obj, key))
+    || hasProvenManualCommandClear459(obj));
+  const clearedCommand = hasProvenManualCommandClear459(
+    favoriteApplied, requestApplied, favoriteRequest, favorite,
+  );
+  const recovered: PlainRecord = { ...mergedRecipe };
+  if (!newerCommand && !clearedCommand
+      && !String(recovered.userInput || '').trim()
+      && typeof source.userInput === 'string' && source.userInput.trim()) {
+    recovered.userInput = source.userInput;
+  }
+
+  // Only an actual original authored draft qualifies. A favorite/pending
+  // explicit off or clear must not be resurrected from an older track.
+  const newerLyricEdit = [pending, pendingApplied].some((obj) =>
+    hasOwn(obj, 'lyricDraft') || hasOwn(obj, 'isLyricMode') || hasOwn(obj, 'lyricMode'));
+  const favoriteLyricOff = favoriteApplied?.isLyricMode === false
+    || favorite?.isLyricMode === false;
+  if (!newerLyricEdit && !favoriteLyricOff
+      && recovered.isLyricMode !== false
+      && !String(recovered.lyricDraft || '').trim()
+      && typeof source.lyricDraft === 'string' && source.lyricDraft.trim()
+      && source.isLyricMode !== false) {
+    recovered.lyricDraft = source.lyricDraft;
+    recovered.isLyricMode = true;
+    recovered.lyricMode = source.lyricMode === 'preserve' ? 'preserve' : 'assist';
+  }
+  return recovered;
+};

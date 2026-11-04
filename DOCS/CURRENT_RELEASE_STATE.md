@@ -1,3 +1,12 @@
+## CURRENT — 오래된 곡 ‘다음곡에 적용’ 원본 위치 진단 · 코드/검사 PASS, PREVIEW Hosting 릴리스 트리거 (2026-11-04 KST)
+- **디렉터 YES 승인:** 예전 곡에서 ‘다음곡에 적용’ 클릭 이후 관리자 CACHE LIVE 버튼으로 원본 보관 위치와 직접입력 필드 존재 여부를 직접 확인하는 진단 기능. 사용자 곡 제목·ID 수동 입력 불필요.
+- **코드:** #762 merge `eb5501769d7ed447ec05f4c8905c10fb032f0388`, 검증 후보 `6e86109ccc773a07f86163e3e24ec8d7b5928028`. Music Note / Library / 재생기 최근 클릭 식별정보만 탭 메모리 보관. 사용자 명시적 관리자 버튼 시 본인 UID의 exact favorites / suno_tracks / playlist item / recent aggregate 중 존재하는 경로 최대 **4개 문서** 조회. 과거 수동 명령·직접작사·커스텀 필드의 경로/값 유무만 표시하며 내용 노출 없음. recent 최근 목록에 없거나 task ID 중복 시 유실로 판정하지 않음. 공유곡은 계정 소유 원본 진단 대상 아님.
+- **검사:** PR #762 최종 후보 source-and-split, product-quality, auth-storage, Music Note sync **4/4 SUCCESS** (기존 454/468/201 보호 검사·새 필드 위치 fixture·TS/Build 포함). 실패한 이전 테스트 모의환경을 같은 PR에서 수정 후 재검사.
+- **배포:** 기존 `.deploy/preview-app-release.trigger`의 PREVIEW Hosting 전용 트리거만 변경. 실제 Hosting 성공 여부는 배포 Actions run으로 별도 판단. 공유 Rules/Functions/Workers/D1/R2, TEST/PRODUCTION, 사용자 원본, 카탈로그 및 캐시 강제 초기화 변경 없음.
+- **남은 실제 QA:** PREVIEW 인증 PC/모바일 옛 곡 클릭 → CACHE LIVE 원본 위치 버튼 → 직접입력 필드가 어느 원본 문서에 남는지 **실사용 미확인**. 진단 결과는 자동 복구가 아니며 '원본 없음' 단정 금지. 기존 #760/#761 복원 기능 자체의 실제 옛 곡 FAIL은 별도 해결 전까지 OPEN.
+
+---
+
 ## CURRENT — Library PC 색상 표시·묶음 실시간 전송 수정 PREVIEW 배포 PASS / 실기기 Library QA OPEN (2026-11-04 12:41 KST)
 - **디렉터 실사용 검증:** 2026-11-04 PC↔모바일 Music Note 색상 양방향 동기화 **PASS(CLOSED)**. Music Note는 이번 변경 범위에서 제외. 같은 영상/신고에서 Library는 PC 색상 점이 변하지 않고, PC→모바일은 전달되나 모바일→PC 화면은 반영되지 않으며, 묶음 변경 중 첫·마지막 외 중간 곡의 변화가 누락되는 증상 **FAIL**.
 - **Library 원인 및 최소 수정:** Studio Black 결과 패널 공통 button 배경 `!important`가 PC Library 색상 점의 인라인 배경을 가리는 문제를 색상 원을 내부 span에 분리해 수정. 묶음 변경 시 선택곡마다 같은 RTDB 신호 노드를 연속 교체해 중간 변경이 수신되지 않을 수 있는 경로를 최대 30곡 단위로 묶은 순차 신호로 수정. 개별 곡의 기존 durable pending outbox/정본 쓰기/회색 해제 동작은 보존. Music Note·공유 Firebase/Worker·기존 사용자 원본 변경 없음.

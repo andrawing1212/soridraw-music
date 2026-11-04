@@ -18097,3 +18097,49 @@ html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
     max-width: clamp(14px, calc((100cqi - 158px) / 8), 28px) !important;
   }
 }
+
+/* 2026-11-04 Search toolbar visual parity (Music Note & Library).
+ * Selected "all colors" resets to a neutral button; only the icon/text
+ * receives the page accent. Preserve all stored color values and filter state. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme .soridraw-stable-top-controls
+.soridraw-responsive-color-filter > .soridraw-color-reset-button[aria-pressed="true"] {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #FF7A72 !important;
+}
+:root body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-stable-top-controls
+.soridraw-responsive-color-filter > .soridraw-color-reset-button[aria-pressed="true"] {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #A98BFF !important;
+}
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme .soridraw-stable-top-controls
+.soridraw-responsive-color-filter > .soridraw-color-reset-button[aria-pressed="true"] .soridraw-color-reset-icon {
+  color: #FF7A72 !important;
+}
+:root body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-stable-top-controls
+.soridraw-responsive-color-filter > .soridraw-color-reset-button[aria-pressed="true"] .soridraw-color-reset-icon {
+  color: #A98BFF !important;
+}
+
+/* Existing PC/tablet input outline colors were hidden by earlier common
+ * Studio field rules. Only a focused or non-empty search gets its accent;
+ * the box stays the same size and the idle/other input fields are unchanged. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-stable-top-controls
+.soridraw-responsive-search-slot:is(.has-search-value, :focus-within)
+.soridraw-responsive-search-input {
+  border: 1px solid rgba(255, 122, 114, 0.76) !important;
+}
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-stable-top-controls
+.soridraw-responsive-search-slot:is(.has-search-value, :focus-within)
+.soridraw-responsive-search-input {
+  border: 1px solid rgba(169, 139, 255, 0.76) !important;
+}

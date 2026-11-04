@@ -1415,6 +1415,65 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   const isLibraryTrashMode = filter === 'trash' && libraryViewMode === 'workspace';
   const libraryPageRootRef = useRef<HTMLDivElement | null>(null);
+  // A synthetic same-URL history entry exists only while a typed search
+  // is active. Its first browser/Android Back clears the query, not the page.
+  const librarySearchBackArmedRef = useRef(false);
+  const librarySearchBackReleaseRef = useRef(false);
+  const librarySearchBackModeRef = useRef<'workspace' | 'playlist'>('workspace');
+  const releaseLibrarySearchBack = () => {
+    if (librarySearchBackArmedRef.current
+      && window.history.state?.soridrawSearchDraft === 'library') {
+      librarySearchBackReleaseRef.current = true;
+      window.history.back();
+    }
+    librarySearchBackArmedRef.current = false;
+  };
+  const changeLibrarySearch = (value: string, mode: 'workspace' | 'playlist') => {
+    if (mode === 'workspace') setSearchTerm(value);
+    else setPlaylistSearchTerm(value);
+    if (!value.trim()) {
+      releaseLibrarySearchBack();
+      return;
+    }
+    librarySearchBackModeRef.current = mode;
+    if (librarySearchBackArmedRef.current) return;
+    if (window.history.state?.soridrawSearchDraft !== 'library') {
+      window.history.pushState(
+        { ...window.history.state, soridrawSearchDraft: 'library' },
+        '', window.location.href,
+      );
+    }
+    librarySearchBackArmedRef.current = true;
+  };
+  const resetLibrarySearch = (mode: 'workspace' | 'playlist') => {
+    if (mode === 'workspace') setSearchTerm('');
+    else setPlaylistSearchTerm('');
+    setIsLibrarySearchCollapsed(false);
+    setIsLibrarySearchFocused(false);
+    librarySearchInputRef.current?.blur();
+    releaseLibrarySearchBack();
+  };
+  useEffect(() => {
+    const onSearchBack = (event: PopStateEvent) => {
+      if (librarySearchBackReleaseRef.current) {
+        librarySearchBackReleaseRef.current = false;
+        event.stopImmediatePropagation();
+        return;
+      }
+      if (!librarySearchBackArmedRef.current
+        || window.history.state?.soridrawSearchDraft === 'library') return;
+      librarySearchBackArmedRef.current = false;
+      if (librarySearchBackModeRef.current === 'workspace') setSearchTerm('');
+      else setPlaylistSearchTerm('');
+      setIsLibrarySearchCollapsed(false);
+      setIsLibrarySearchFocused(false);
+      librarySearchInputRef.current?.blur();
+      event.stopImmediatePropagation();
+    };
+    window.addEventListener('popstate', onSearchBack, true);
+    return () => window.removeEventListener('popstate', onSearchBack, true);
+  }, []);
+
   const collapseLibrarySearchAfterAction = () => {
     const term = libraryViewMode === 'workspace' ? searchTerm : playlistSearchTerm;
     if (!term.trim() || libraryPageRootRef.current?.dataset.soridrawResponsiveMode !== 'mobile') return;
@@ -6840,13 +6899,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (isSharedView) return null;
     const isWorkspaceMode = libraryViewMode === 'workspace';
     const activeSearchTerm = isWorkspaceMode ? searchTerm : playlistSearchTerm;
-    const clearActiveLibrarySearch = () => {
-      if (isWorkspaceMode) setSearchTerm('');
-      else setPlaylistSearchTerm('');
-      setIsLibrarySearchCollapsed(false);
-      setIsLibrarySearchFocused(false);
-      librarySearchInputRef.current?.blur();
-    };
+    const clearActiveLibrarySearch = () => resetLibrarySearch(isWorkspaceMode ? 'workspace' : 'playlist');
 
     return (
       <>
@@ -6863,16 +6916,19 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 ref={librarySearchInputRef}
                 type="text"
                 value={activeSearchTerm}
-                onChange={(e) => {
-                  if (isWorkspaceMode) setSearchTerm(e.target.value);
-                  else setPlaylistSearchTerm(e.target.value);
-                }}
+                onChange={(e) => changeLibrarySearch(e.target.value, isWorkspaceMode ? 'workspace' : 'playlist')}
                 onFocus={() => {
                   setIsLibrarySearchCollapsed(false);
                   setIsLibrarySearchFocused(true);
                 }}
                 onBlur={() => setIsLibrarySearchFocused(false)}
                 onKeyDown={(event) => {
+                  if (event.key === 'Escape' && activeSearchTerm && !event.nativeEvent.isComposing) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    clearActiveLibrarySearch();
+                    return;
+                  }
                   if (event.key === 'Enter') {
                     event.preventDefault();
                     collapseLibrarySearchAfterAction();

@@ -1182,12 +1182,12 @@ import { readStoredV1LyricWritingStyle, writeStoredV1LyricWritingStyle } from '.
 
 const RAP_MODE_STORAGE_KEY = 'soridraw_rap_mode';
 const readStoredRapMode = (): RapMode => {
-  if (typeof window === 'undefined') return 'off';
+  if (typeof window === 'undefined') return 'auto';
   try {
     const stored = String(window.localStorage.getItem(RAP_MODE_STORAGE_KEY) || '').toLowerCase();
     if (stored === 'auto' || stored === 'off' || stored === 'on') return stored;
   } catch {}
-  return 'off';
+  return 'auto';
 };
 const writeStoredRapMode = (mode: RapMode) => {
   if (typeof window === 'undefined') return;
@@ -13984,7 +13984,10 @@ const unlockAllFavorites = async () => {
     setMaleCount(0);
     setFemaleCount(0);
     setVocalMembers([{ id: 'member_default_solo', gender: 'neutral', roles: ['main'] }]);
+    setRapMode('auto');
     setRapEnabled(false);
+    setLyricWritingStyle('default');
+    writeStoredV1LyricWritingStyle('default');
     setCustomStructure([]);
 
     setTempoEnabled(true);
@@ -17399,11 +17402,17 @@ ${normalizePromptForDisplay(result.prompt)}
     selectedPointSounds.length > 0 ||
     userInput !== '' ||
     lyricsLength !== 'normal' ||
+    lyricWritingStyle !== 'default' ||
     songStructure !== '1' ||
+    customStructure.length > 0 ||
     !sectionVocalCueEnabled ||
     !sectionInstrumentCueEnabled ||
     maleCount > 0 ||
     femaleCount > 0 ||
+    vocalMode !== 'solo' ||
+    selectedVocalToneId !== undefined ||
+    hasNonDefaultStudioVocalMembers(vocalMembers) ||
+    rapMode !== 'auto' ||
     rapEnabled ||
     !tempoEnabled ||
     minBPM !== 90 ||
@@ -19983,6 +19992,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 setVocalMode('solo');
                 setSelectedVocalToneId(undefined);
                 setVocalMembers([{ id: 'member_default_solo', gender: 'neutral', roles: ['main'] }]);
+                setRapMode('auto');
+                setRapEnabled(false);
               }}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
@@ -26163,6 +26174,14 @@ function SongStructureIntegratedControlComponent({
     </div>
   );
 
+  const isLyricsResettable =
+    lyricsLength !== 'normal' ||
+    lyricWritingStyle !== 'default' ||
+    songStructure !== '1' ||
+    customStructure.length > 0 ||
+    !sectionVocalCueEnabled ||
+    !sectionInstrumentCueEnabled;
+
   return (
     <>
       <div data-studio-menu="lyrics" className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-3xl p-5 border border-[var(--home-card-border)] flex flex-col h-full relative pb-12 overflow-visible">
@@ -26201,10 +26220,10 @@ function SongStructureIntegratedControlComponent({
               onMouseLeave={() => onHover(null)}
               className={cn(
                 "p-2.5 rounded-xl transition-all border shadow-btn",
-                (lyricsLength !== 'normal' || songStructure !== '1' || (customStructure ?? []).length > 0)
+                isLyricsResettable
                   ? "bg-[#FFB400]/14 border-black/20 text-[#FFD36A] hover:bg-[#FFB400]/20"
                   : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover",
-                (lyricsLength !== 'normal' || songStructure !== '1' || (customStructure ?? []).length > 0) && "soridraw-active-reset-button"
+                isLyricsResettable && "soridraw-active-reset-button"
               )}
             >
               <Trash2 className="w-4 h-4" />
@@ -28368,6 +28387,14 @@ const createRandomVocalGroupMembers = (
   return genders.map((gender, index) => createRandomVocalMember(gender, index, genders.length, genreHints));
 };
 
+const hasNonDefaultStudioVocalMembers = (members: VocalMember[]): boolean =>
+  members.length !== 1 || members.some((member, index) =>
+    member.gender !== 'neutral' ||
+    !isArrayEqual(member.roles || [], index === 0 ? ['main'] : ['lead']) ||
+    Boolean(member.character) ||
+    Boolean(member.toneId)
+  );
+
 const isDefaultAutoGroupMembers = (members: VocalMember[], maleCount: number, femaleCount: number) => {
   if (maleCount !== 1 || femaleCount !== 1 || members.length !== 2) return false;
   const [first, second] = members;
@@ -29012,6 +29039,13 @@ function VocalControlComponent({
     });
   };
 
+  const isVocalResettable =
+    maleCount > 0 ||
+    femaleCount > 0 ||
+    vocalMode !== 'solo' ||
+    rapMode !== 'auto' ||
+    hasNonDefaultStudioVocalMembers(vocalMembers);
+
   const cycleRapMode = () => {
     const nextMode: RapMode = rapMode === 'auto' ? 'off' : rapMode === 'off' ? 'on' : 'auto';
     onRapModeChange(nextMode);
@@ -29135,10 +29169,10 @@ function VocalControlComponent({
             onTouchCancel={onLongPressEnd}
             className={cn(
               "p-2.5 rounded-xl transition-all border shadow-btn",
-              (maleCount > 0 || femaleCount > 0)
+              isVocalResettable
                 ? "bg-[#FFB400]/14 border-black/20 text-[#FFD36A] hover:bg-[#FFB400]/20"
                 : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
-              (maleCount > 0 || femaleCount > 0) && "soridraw-active-reset-button"
+              isVocalResettable && "soridraw-active-reset-button"
             )}
           >
             <Trash2 className="w-4 h-4" />

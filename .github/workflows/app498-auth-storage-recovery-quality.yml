@@ -43,6 +43,8 @@ jobs:
         run: node scripts/verify-468-next-song-navigation.mjs
       - name: Auth navigation readiness regression
         run: node scripts/verify-035-auth-nav-readiness.mjs
+      - name: Studio Rap AUTO and lyric style reset regression
+        run: node scripts/verify-studio-reset-rap-lyrics.mjs
       - name: TypeScript
         run: npx tsc --noEmit
       - name: Build

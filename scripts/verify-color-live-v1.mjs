@@ -119,11 +119,11 @@ for(const [scope,getter] of [['workspace','getWorkspaceItemColor'],['playlist','
 // One live RTDB payload carries all selected colors. Per-song canonical
 // outbox/Firestore writes remain unchanged and still resolve independently.
 const bulkColor=getSection(lib,'const handleBulkChangeColor =','const handleBulkFavorite =');
-assert.match(bulkColor,/handleChangeWorkspaceColor\\(selection.group, selection.idx, color, true\\)/);
-assert.match(bulkColor,/handleChangeColor\\(item, color, true\\)/);
-assert.match(bulkColor,/changes.push\\(\\{scope:'workspace'/);
-assert.match(bulkColor,/changes.push\\(\\{scope:'playlist'/);
-assert.match(bulkColor,/publishColorSelectionPreview\\(uid,changes.slice\\(offset,offset\\+30\\)\\)/);
-assert.match(playlistClick,/if \\(!skipLivePreview\\)/);
-assert.match(workspaceClick,/if \\(!skipLivePreview\\)/);
+assert.match(bulkColor,/handleChangeWorkspaceColor\(selection.group, selection.idx, color, true\)/);
+assert.match(bulkColor,/handleChangeColor\(item, color, true\)/);
+assert.match(bulkColor,/changes.push\(\{scope:'workspace'/);
+assert.match(bulkColor,/changes.push\(\{scope:'playlist'/);
+assert.match(bulkColor,/publishColorSelectionPreview\(uid,changes.slice\(offset,offset\+30\)\)/);
+assert.match(playlistClick,/if \(!skipLivePreview\)/);
+assert.match(workspaceClick,/if \(!skipLivePreview\)/);
 console.log('LIBRARY_PC_SWATCH_AND_BULK_ALL_ROWS_LIVE=PASS');

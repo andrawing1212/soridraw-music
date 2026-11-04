@@ -164,8 +164,11 @@ assert(newCss.includes('calc((100cqi - 158px) / 8)'),
  * No changes are allowed to the two hitboxes or query lifecycle. */
 assert(newCss.includes('background: #2c2c2e !important;'),
   'folded controls use the normal button background, not dim secondary');
-assert(newCss.includes('color: var(--soridraw-search-active-accent, #FF7A72) !important;'),
-  'folded icon tint reflects active query');
+assert(newCss.includes('color: #f5f5f5 !important;'),
+  'folded magnifier stays neutral white');
+assert(newCss.includes('> .soridraw-compact-search-controls > button:last-child {')
+  && newCss.includes('color: var(--soridraw-search-active-accent, #FF7A72) !important;'),
+  'only the folded X uses the active query page color');
 assert(newCss.includes('--soridraw-search-active-accent: #FF7A72;'),
   'Music Note controls have page coral accent');
 assert(newCss.includes('--soridraw-search-active-accent: #A98BFF;'),
@@ -173,6 +176,15 @@ assert(newCss.includes('--soridraw-search-active-accent: #A98BFF;'),
 assert(newCss.includes('flex: 0 0 34px !important;')
   && newCss.includes('gap: 2px !important;'),
   'the approved two-button no-overlap geometry must remain');
+assert(newCss.includes('.soridraw-musicnote-theme .soridraw-stable-top-controls\\n.soridraw-responsive-search-slot.has-search-value\\n.soridraw-responsive-search-clear {\\n  color: #FF7A72 !important;'),
+  'desktop Music Note typed-query X must be coral');
+assert(newCss.includes('.soridraw-library-theme .soridraw-stable-top-controls\\n.soridraw-responsive-search-slot.has-search-value\\n.soridraw-responsive-search-clear {\\n  color: #A98BFF !important;'),
+  'desktop Library typed-query X must be purple');
+assert(note.includes('has-search-value') && library.includes('has-search-value'),
+  'both expanded search fields must set a non-empty query marker');
+assert(note.includes('soridraw-responsive-search-clear') && library.includes('soridraw-responsive-search-clear'),
+  'both desktop inputs must keep their clear-button class');
+console.log('MUSIC_NOTE_LIBRARY_PC_SEARCH_X_ACCENT_ONLY=PASS');
 console.log('MUSIC_NOTE_LIBRARY_FOLDED_SEARCH_BRAND_COLOR_VISIBLE=PASS');
 
 console.log('MUSIC_NOTE_LIBRARY_MOBILE_SEARCH_SIBLING_CONTROLS_GEOMETRY=PASS');

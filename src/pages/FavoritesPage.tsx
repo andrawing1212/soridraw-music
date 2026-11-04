@@ -8209,7 +8209,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         : musicNotePageHeader}
 
 
-      <style>{\`
+      <style>{`
         /* Mobile-only search fold: keep the query/results; recover palette width.
            Split-pane responsive mode uses the same explicit compact state. */
         :root body #root .soridraw-app-root
@@ -8294,7 +8294,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           width: 36px !important;
           height: 46px !important;
         }
-      \`}</style>
+      `}</style>
 
       {!isMusicNoteSharedView && (
       <div className="soridraw-musicnote-region-top soridraw-stable-mode-viewport flex items-center gap-2 max-w-full whitespace-nowrap" data-selection-keep="true">

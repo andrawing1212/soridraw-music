@@ -5494,3 +5494,26 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
     pointer-events: none !important;
   }
 }
+
+/* Music Note folder edit visual refinement only; Library chips remain unchanged.
+ * Preserve hover/touch visibility, drag suppression and existing click handlers. */
+@media (hover: hover) and (pointer: fine) {
+  .soridraw-folder-drag-scrollbar > .soridraw-musicnote-folder-button > .soridraw-folder-hover-edit {
+    top: -7px;
+    width: 22px;
+    height: 22px;
+  }
+  .soridraw-folder-drag-scrollbar > .soridraw-musicnote-folder-button:hover > .soridraw-folder-hover-edit {
+    opacity: 0.72;
+  }
+}
+@media (hover: none), (pointer: coarse) {
+  .soridraw-folder-drag-scrollbar > .soridraw-musicnote-folder-button > .soridraw-folder-hover-edit {
+    top: -7px;
+    width: 26px;
+    height: 26px;
+  }
+  .soridraw-folder-drag-scrollbar > .soridraw-musicnote-folder-button[data-mobile-edit-armed="true"] > .soridraw-folder-hover-edit {
+    opacity: 0.72;
+  }
+}

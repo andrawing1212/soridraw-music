@@ -103,54 +103,64 @@ assert.deepEqual([...visible('all')],['new','old','shared']);
 assert.deepEqual([...visible('favorite')],['new']);
 assert.deepEqual([...visible('public','public')],['new']);
 
-/* 2026-11-04 physical Android recording 22153:
- * 42px shared/absolute magnifier & X overlapped. Remove orange only from
- * the top filter, and use the saved space for 36px + gap + 32px controls. */
-const paletteOptions = extract(note,
-  '  const FAVORITE_COLOR_OPTIONS = [',
-  '  const getFavoriteColorValue =');
+/* 2026-11-04 Android regression: nested active-search overlay covered X,
+ * and previous CSS widths failed even after shrinking the orange top dot.
+ * The folded input must be display:none, replaced with TWO sibling buttons
+ * outside the original input slot in BOTH Music Note and Library. */
+const layout = readFileSync('src/components/studio/studioLayout.css','utf8');
+const paletteOptions = extract(note,'  const FAVORITE_COLOR_OPTIONS = [','  const getFavoriteColorValue =');
 assert(paletteOptions.includes("{ value: 'orange', color: '#f97316'"),
-  'stored orange remains a valid color: no destructive migration');
+  'Music Note previously stored orange must remain valid');
 assert(paletteOptions.includes("FAVORITE_COLOR_FILTER_OPTIONS = FAVORITE_COLOR_OPTIONS.filter((color) => color.value !== 'orange')"),
-  'filter-only orange removal must not change the stored palette');
-const colorBar = extract(note,
+  'Music Note orange removed only from display filter');
+const noteBar = extract(note,
   '<div className="soridraw-responsive-color-filter flex h-[46px]',
   '<div ref={sortPopupRef}');
-assert(colorBar.includes('{FAVORITE_COLOR_FILTER_OPTIONS.map((color) => ('),
-  'top search dots must use six colors, excluding orange');
-assert(!colorBar.includes('{FAVORITE_COLOR_OPTIONS.map((color) => ('),
-  'do not render seven filter dots again');
-const mobileFold = extract(note, '/* Only the mobile Music Note search\'s folded state changes.', '`}</style>');
-const compactRule = extract(mobileFold,
-  '.soridraw-stable-top-controls .soridraw-responsive-search-slot.is-search-collapsed {',
-  ':root body #root .soridraw-app-root\n        .soridraw-musicnote-theme');
-assert(compactRule.includes('flex: 0 0 70px !important;')
-  && compactRule.includes('width: 70px !important;')
-  && compactRule.includes('gap: 2px !important;'),
-  'folded search row slot is exactly 70px with 2px separation');
-const compactMagnifier = extract(mobileFold,
-  '.soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search-icon {',
-  ':root body #root .soridraw-app-root\n        .soridraw-musicnote-theme');
-assert(compactMagnifier.includes('width: 36px !important;')
-  && compactMagnifier.includes('left: 0 !important;'),
-  'magnifier has its own 36px click area');
-const compactClear = mobileFold.slice(mobileFold.lastIndexOf(
-  '.soridraw-responsive-search-slot.is-search-collapsed .soridraw-musicnote-search-collapsed-clear {'),
-  mobileFold.indexOf('/* With only six filter dots'));
-assert(compactClear.includes('position: relative !important;'),
-  'X must sit as an independent flex sibling, not an overlay');
-assert(compactClear.includes('display: flex !important;')
-  && compactClear.includes('flex: 0 0 32px !important;')
-  && compactClear.includes('width: 32px !important;'),
-  'X must be visible and get a full 32px hit box');
-assert(!compactClear.includes('position: absolute !important;'),
-  'a positioned X could again overlap the magnifier');
-assert(mobileFold.includes('calc((100cqi - 158px) / 8)'),
-  '320px pane must reclaim narrow invisible dot spacing');
-assert(note.includes('onClick={expandMusicNoteSearch}'), 'magnifier still reopens search');
-assert(note.includes('onClick={clearMusicNoteSearch}'), 'X still clears search');
-assert(note.includes('collapseMusicNoteSearchAfterAction()'), 'Enter/color/row actions still fold');
-console.log('MOBILE_NOTE_SIX_COLOR_FILTER_TWO_SEPARATE_SEARCH_TOUCH_TARGETS=PASS');
+assert(noteBar.includes('{FAVORITE_COLOR_FILTER_OPTIONS.map((color) => ('),
+  'Music Note top filter uses six colors');
+const libraryOptions = extract(library,'const COLOR_OPTIONS = [','const getColorHex =');
+assert(libraryOptions.includes("{ value: 'orange', color: '#f97316'"),
+  'Library previously stored orange must remain valid');
+assert(libraryOptions.includes("COLOR_FILTER_OPTIONS = COLOR_OPTIONS.filter((color) => color.value !== 'orange')"),
+  'Library orange removed only from top filter');
+assert((library.match(/\{COLOR_FILTER_OPTIONS\.map\(opt => \(/g)||[]).length === 2,
+  'Library workspace and playlists must both have six top filter dots');
+for (const [label,page] of [['note',note],['library',library]]) {
+  assert(page.includes('soridraw-compact-search-controls hidden'),
+    label+': two standalone buttons must be rendered as a sibling group');
+  assert(page.includes('data-soridraw-search-folded={'),
+    label+': toolbar folded state drives structural swap');
+  assert(page.includes('aria-label="검색창 펼치기"') && page.includes('aria-label="검색어 지우기"'),
+    label+': both independent touch targets have accessible labels');
+  assert(page.includes("data-soridraw-responsive-mode") || page.includes("soridrawResponsiveMode"),
+    label+': fold only in mobile responsive mode');
+  assert(page.includes('onKeyDown='), label+': Enter collapses while search continues on input');
+}
+assert(!note.includes('/* Only the mobile Music Note search\'s folded state changes.'),
+  'delete all old in-component overlay/position hacks');
+assert(!note.includes('soridraw-musicnote-search-collapsed-clear'),
+  'nested X button must not remain');
+assert(layout.includes('SORIDRAW_MUSIC_SEARCH_SEPARATE_MOBILE_CONTROLS_20261104'),
+  'one shared mobile CSS owner for Music Note and Library');
+const newCss = layout.slice(layout.indexOf('SORIDRAW_MUSIC_SEARCH_SEPARATE_MOBILE_CONTROLS_20261104'));
+assert(newCss.includes('.soridraw-stable-top-controls[data-soridraw-search-folded="true"]'),
+  'only explicit folded state can switch controls');
+assert(newCss.includes('> .soridraw-responsive-search-slot {\n  display: none !important;'),
+  'original active text slot must NOT paint or intercept folded buttons');
+assert(newCss.includes('> .soridraw-compact-search-controls {')
+  && newCss.includes('display: flex !important;')
+  && newCss.includes('flex: 0 0 70px !important;'),
+  'replacement control group stays real 70px flex sibling');
+assert(newCss.includes('> .soridraw-compact-search-controls > button {')
+  && newCss.includes('position: static !important;')
+  && newCss.includes('flex: 0 0 34px !important;'),
+  'each control must have distinct 34px hit area, not overlays');
+assert(newCss.includes('gap: 2px !important;'),
+  'two 34px controls must remain separated by 2px');
+assert(newCss.includes('calc((100cqi - 158px) / 8)'),
+  'narrow 320px container space reclamation preserved');
+console.log('MUSIC_NOTE_LIBRARY_MOBILE_SEARCH_SIBLING_CONTROLS_GEOMETRY=PASS');
+console.log('MUSIC_NOTE_LIBRARY_ORANGE_FILTER_REMOVAL_SAVED_ORIGINALS_SAFE=PASS');
 
 console.log('MUSIC_NOTE_FILTER_ORDER_AND_LIKE_LOCK_PUBLIC_URL_TRASH=PASS');
 console.log('LIBRARY_FILTER_ORDER_SUPPORTED_AND_DISABLED_PLACEHOLDERS=PASS');

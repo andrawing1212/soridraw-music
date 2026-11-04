@@ -38,7 +38,11 @@ assert.equal(listColorPending('same-uid','musicNote').length,0);
 // Color live preview reuses the existing account-owned RTDB Music Note signal;
 // it is never mistaken for a committed canonical membership revision.
 assert.match(svc,/operation:'color-preview'/);
-assert.match(svc,/initialRetained \|\| signal.originDeviceId === getDeviceId\('musicNote'\)/);
+// Music Note still ignores retained color preview; Library alone may recover
+// an unseen retained changed-color receipt after local canonical revision check.
+assert.match(svc,/if \(signal.originDeviceId === getDeviceId\('musicNote'\)\) return;/);
+assert.match(svc,/if\(initialRetained\)/);
+assert.match(svc,/readCatalogSnapshotFromLocalCache\('library',uid\)/);
 const colorGate=svc.indexOf("if (signal.operation === 'color-preview')");
 const canonicalGate=svc.indexOf("writeLocalNumberMax(scopedVersionKey(MUSIC_NOTE_REMOTE_VERSION_BASE");
 assert(colorGate>=0&&canonicalGate>colorGate);

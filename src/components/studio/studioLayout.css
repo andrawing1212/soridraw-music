@@ -18022,7 +18022,7 @@ html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
   outline-offset: -2px;
   border-radius: 14px !important;
   background: #2c2c2e !important;
-  color: var(--soridraw-search-active-accent, #FF7A72) !important;
+  color: #f5f5f5 !important;
   pointer-events: auto !important;
   cursor: pointer;
   touch-action: manipulation;
@@ -18055,6 +18055,32 @@ html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
 .soridraw-stable-top-controls[data-soridraw-search-folded="true"]
 > .soridraw-compact-search-controls {
   --soridraw-search-active-accent: #A98BFF;
+}
+
+
+/* Search magnifier stays neutral; only the X shows the active query.
+ * Folded controls are separate button siblings, so do not reflow them. */
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-stable-top-controls[data-soridraw-search-folded="true"]
+> .soridraw-compact-search-controls > button:last-child {
+  color: var(--soridraw-search-active-accent, #FF7A72) !important;
+}
+
+/* Expanded search (desktop and mobile): tint ONLY a non-empty query's
+ * clear X, never the idle magnifier or another text-input button.
+ * Library workspace/playlist both use this shared search slot. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme .soridraw-stable-top-controls
+.soridraw-responsive-search-slot.has-search-value
+.soridraw-responsive-search-clear {
+  color: #FF7A72 !important;
+}
+:root body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-stable-top-controls
+.soridraw-responsive-search-slot.has-search-value
+.soridraw-responsive-search-clear {
+  color: #A98BFF !important;
 }
 
 /* The two new controls replace one orange 20–28px filter dot. At 320px,

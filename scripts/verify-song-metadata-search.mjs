@@ -135,7 +135,9 @@ assert(playlistFn.includes('matchesStoredSongSearch(item, query, searchableMeta)
 assert(playlistFn.includes('playlistSearchTrackById.get'), 'Library folder can search already-loaded source text');
 assert(playlistFn.includes("item?.sourceType === 'shared_track'"), 'shared item cannot inspect private source');
 const occurrences = libPage.match(/playlistItemMatchesStoredSearch\(item, normalizedPlaylistSearch\)/g) || [];
-assert.equal(occurrences.length,2, 'visible folder results and multi-select must search identically');
+assert.equal(occurrences.length,1, 'playlist matcher belongs to one shared filtering function');
+assert(libPage.includes('const items = getVisiblePlaylistItemsForSelection();'),
+  'visible playlist and bulk selection must use the same filtered list rather than duplicate filters');
 assert(!source.includes('getDocs(') && !source.includes('getDocFromServer(')
   && !source.includes('setDoc(') && !source.includes('fetch('),
   'no per-keystroke server I/O');

@@ -1250,9 +1250,15 @@ export default function FavoritesPage({
   const serverSearchRunIdRef = useRef(0);
   const [musicNoteViewMode, setMusicNoteViewMode] = useState<'noteSpace' | 'myNote' | 'sharedNote'>('noteSpace');
   const baseFavoriteSource = isMusicNoteSharedView ? sharedMusicNoteSongs : favorites;
-  const activeFavoriteSource = !isMusicNoteSharedView && deferredSearchQuery.trim()
-    ? mergeMusicNoteSearchSource(baseFavoriteSource, serverSearchFavorites)
-    : baseFavoriteSource;
+  const hasActiveFavoritesSearch = Boolean(deferredSearchQuery.trim());
+  // Checkbox / folder-picker state must not rebuild search result objects
+  // while the source list and the text-search mode are unchanged.
+  const activeFavoriteSource = React.useMemo(
+    () => !isMusicNoteSharedView && hasActiveFavoritesSearch
+      ? mergeMusicNoteSearchSource(baseFavoriteSource, serverSearchFavorites)
+      : baseFavoriteSource,
+    [baseFavoriteSource, serverSearchFavorites, isMusicNoteSharedView, hasActiveFavoritesSearch],
+  );
   const [creatorNameByUid, setCreatorNameByUid] = useState<Record<string, string>>({});
   const isSharedMusicNoteItem = (song: any) => Boolean(
     song?.sharedReadOnly

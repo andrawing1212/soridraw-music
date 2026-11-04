@@ -116,6 +116,8 @@ assert.strictEqual(mergedOnce[0],aSong, 'first source identity must be retained'
 assert.strictEqual(mergedOnce[1],bSong, 'second source identity must be retained');
 assert.strictEqual(mergedAgain[0],mergedOnce[0], 'unrelated selection rerenders must not clone');
 assert.strictEqual(mergedAgain[1],mergedOnce[1], 'folder opening must not clone');
+assert(notePage.includes('const activeFavoriteSource = React.useMemo('), 'Music Note active source is memoized across selection renders');
+assert(notePage.includes('hasActiveFavoritesSearch],'), 'Music Note merge only updates when source or search-mode changes');
 const mergedDuplicate = mergeSource([aSong], [{id:'id-a', englishTitle:'new title'}]);
 assert.equal(mergedDuplicate[0].englishTitle,'new title','server duplicate still augments source');
 assert.equal(mergedDuplicate[0].lyrics.korean,'original lyrics','canonical lyric retained');

@@ -8,6 +8,9 @@ on:
       - 'scripts/verify-library-catalog-color-projection.mjs'
       - 'src/App.tsx'
       - 'src/pages/SunoLibraryPage.tsx'
+      - 'src/pages/FavoritesPage.tsx'
+      - 'src/lib/colorPendingOutbox.ts'
+      - 'scripts/verify-color-live-v1.mjs'
       - 'src/data/v1MutationBoundary.ts'
       - 'src/services/userDomainSyncService.ts'
       - 'scripts/verify-forward-color-catalog.mjs'
@@ -42,6 +45,8 @@ jobs:
           node scripts/verify-519-catalog-pending-recovery.mjs
           node scripts/verify-349-studio-heart-settlement-media.mjs
           node scripts/verify-031-music-note-detail-batched-draft.mjs
+      - name: Color immediate preview, durable last click and accessible Library palette
+        run: node scripts/verify-color-live-v1.mjs
       - name: TypeScript and app build
         run: |
           npm run lint

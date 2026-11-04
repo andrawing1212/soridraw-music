@@ -2,6 +2,8 @@ import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import { resolveNextSongApplyRoute, stageNextSongKeywords } from '../lib/nextSongPendingBridge';
 import {
   MUSIC_NOTE_SYNC_EVENT,
+  COLOR_SELECTION_SYNC_EVENT,
+  publishColorSelectionPreview,
   publishMusicNoteDetailPreviewDelta,
   publishMusicNoteStructureDelta,
   publishMusicNoteSunoMediaDelta,
@@ -106,6 +108,7 @@ import { resolveMusicNoteNextSongRecipe, mergeMusicNoteNextSongClickRecipe455 } 
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
 import { getMusicNoteDetailSourceVersion, getOrLoadMusicNoteDetail, getOrLoadMusicNoteOriginalRecipe456, patchMusicNoteDetailCache } from '../lib/musicNoteDetailCache';
 import { rememberMusicNoteMediaPreview } from '../lib/userDataEngine';
+import { acknowledgeColorPending, listColorPending, readColorPending, stageColorPending } from '../lib/colorPendingOutbox';
 import { clearMusicNoteDetailDraft, listMusicNoteDetailDrafts, mergeMusicNoteDetailDraft, readMusicNoteDetailDraft, writeMusicNoteDetailDraft } from '../lib/musicNoteDetailDraft';
 import { flushSoridrawPageSync, registerPageSyncHandler } from '../lib/pageSyncCoordinator';
 
@@ -2210,6 +2213,9 @@ updates: draft.updates,
   const favoriteColorDirtyRef = useRef(false);
   const pendingFavoriteColorIdsRef = useRef<Set<string>>(new Set());
   const favoriteColorsAutoSyncingRef = useRef(false);
+  const favoriteColorAutoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const favoriteColorAutoRetryRef = useRef(0);
+  const favoriteRemoteColorRef = useRef<Map<string,{color:string;version:number;until:number}>>(new Map());
   const favoritesRef = useRef<any[]>(favorites || []);
   const favoriteUserRef = useRef<User | null>(user);
   const [lastSelectionAction, setLastSelectionAction] = useState<'none' | 'lock' | 'unlock'>('none');
@@ -2299,6 +2305,8 @@ updates: draft.updates,
     const local = favoriteColorMap[song?.id];
     const isValid = (value: unknown) => FAVORITE_COLOR_OPTIONS.some(option => option.value === value);
     if (pendingFavoriteColorIdsRef.current.has(song?.id) && isValid(local)) return local;
+    const remote = favoriteRemoteColorRef.current.get(String(song?.id || ''));
+    if (remote && remote.until > Date.now() && isValid(remote.color)) return remote.color;
     if (song && Object.prototype.hasOwnProperty.call(song, 'favoriteColorTag')) {
       return isValid(song.favoriteColorTag) ? song.favoriteColorTag : 'gray';
     }
@@ -3805,11 +3813,12 @@ updates: draft.updates,
       console.warn('color map save failed', error);
     }
   };
-  const getUnifiedColorSyncDescription = () => `색상 변경사항은 이 페이지를 나갈 때 1회 자동 저장됩니다.
-페이지 안에서는 로컬 상태만 바뀌며, 변경이 없으면 저장하지 않습니다.
-필요하면 이 버튼으로 즉시 저장할 수 있습니다.`;
+  const getUnifiedColorSyncDescription = () => `색상 선택 즉시 기기 간 알림과 자동 저장이 시작됩니다.
+저장이 끝나기 전에 앱을 닫으면 다음 실행 때 미완료 변경을 다시 처리합니다.
+필요하면 이 버튼으로 저장을 다시 시도할 수 있습니다.`;
 
   const handleSyncFavoriteColors = async () => {
+    if (favoriteColorsAutoSyncingRef.current) return;
     if (!user) {
       showFavoriteToast('로그인이 필요합니다.');
       return;
@@ -3834,6 +3843,8 @@ updates: draft.updates,
       return;
     }
 
+    const manualTokens=new Map(favoriteEntries.map(([id])=>[id,readColorPending(user.uid,'musicNote',id)]));
+    favoriteColorsAutoSyncingRef.current=true;
     try {
       await Promise.all(favoriteEntries.map(([id, color]) => updateFavorite(id, { favoriteColorTag: color === 'gray' ? null : color } as any)));
 
@@ -3853,7 +3864,12 @@ updates: draft.updates,
       }
 
       for (const [id, color] of favoriteEntries) {
-        if (favoriteColorMapRef.current[id] === color) pendingFavoriteColorIdsRef.current.delete(id);
+        const pending=manualTokens.get(id);
+        if (favoriteColorMapRef.current[id] === color
+          && (!pending || readColorPending(user.uid,'musicNote',id)?.token===pending.token)) {
+          pendingFavoriteColorIdsRef.current.delete(id);
+          if(pending) acknowledgeColorPending(user.uid,'musicNote',pending);
+        }
       }
       favoriteColorDirtyRef.current = pendingFavoriteColorIdsRef.current.size > 0;
       if (!favoriteColorDirtyRef.current) {
@@ -3864,43 +3880,79 @@ updates: draft.updates,
     } catch (error) {
       console.error('unified color sync failed', error);
       showFavoriteToast('색상 동기화에 실패했습니다.');
+    } finally {
+      favoriteColorsAutoSyncingRef.current=false;
+      if(pendingFavoriteColorIdsRef.current.size>0) scheduleFavoriteColorAutoSave(350);
     }
   };
 
+
+  const scheduleFavoriteColorAutoSave = (delayMs = 220): void => {
+    if (favoriteColorAutoSaveTimerRef.current) clearTimeout(favoriteColorAutoSaveTimerRef.current);
+    favoriteColorAutoSaveTimerRef.current = setTimeout(() => {
+      favoriteColorAutoSaveTimerRef.current = null;
+      void syncFavoriteColorsOnExit(true);
+    }, delayMs);
+  };
 
   const syncFavoriteColorsOnExit = async (silent = true) => {
     const currentUser = favoriteUserRef.current;
     if (!currentUser || favoriteColorsAutoSyncingRef.current) return;
 
-    // Page entry/exit, server hydration and cache restoration must never write.
-    // Only explicit color clicks are eligible for an exit sync.
+    // Only explicit color clicks or their durable startup recovery may write.
+    // Page hydration and unchanged route entry remain zero-write.
     if (!favoriteColorDirtyRef.current) return;
 
     const currentMap = favoriteColorMapRef.current || {};
     const currentSerialized = serializeColorMap(currentMap);
     const existingIds = new Set((favoritesRef.current || []).map(song => song?.id).filter(Boolean));
-    const entries: [string, string][] = Array.from(pendingFavoriteColorIdsRef.current)
-      .filter((id) => existingIds.has(id))
-      .map((id): [string, string] => [id, currentMap[id] || 'gray']);
+    const entries = Array.from(pendingFavoriteColorIdsRef.current)
+      .filter(id => existingIds.has(id))
+      .map(id => ({ id, color: currentMap[id] || 'gray',
+        pending: readColorPending(currentUser.uid, 'musicNote', id) }));
     if (entries.length === 0) return;
 
     favoriteColorsAutoSyncingRef.current = true;
+    let failed = false;
     try {
-      await Promise.all(entries.map(([id, color]) => updateFavorite(id, { favoriteColorTag: color === 'gray' ? null : color } as any)));
-      pendingFavoriteColorIdsRef.current.clear();
-      favoriteColorBaselineRef.current = currentSerialized;
-      favoriteColorDirtyRef.current = false;
-      if (!silent) showFavoriteToast('색상 변경사항을 저장했습니다.');
-    } catch (error) {
-      console.error('favorite color exit sync failed', error);
-      if (!silent) showFavoriteToast('색상 변경사항 저장에 실패했습니다.');
+      // Each successful row ACK is independent. An old response cannot clear
+      // a newer click on the same song (including red -> gray -> red).
+      for (const entry of entries) {
+        try {
+          await updateFavorite(entry.id, { favoriteColorTag: entry.color === 'gray' ? null : entry.color } as any);
+          if (favoriteColorMapRef.current[entry.id] === entry.color
+            && (!entry.pending || readColorPending(currentUser.uid, 'musicNote', entry.id)?.token === entry.pending.token)) {
+            pendingFavoriteColorIdsRef.current.delete(entry.id);
+            if (entry.pending) acknowledgeColorPending(currentUser.uid, 'musicNote', entry.pending);
+          }
+        } catch (error) {
+          failed = true;
+          console.warn('favorite color write retained for retry', entry.id, error);
+        }
+      }
+      favoriteColorDirtyRef.current = pendingFavoriteColorIdsRef.current.size > 0;
+      if (!favoriteColorDirtyRef.current) {
+        favoriteColorBaselineRef.current = serializeColorMap(favoriteColorMapRef.current);
+      }
+      if (!silent) showFavoriteToast(failed ? '색상 변경사항 저장에 실패했습니다.' : '색상 변경사항을 저장했습니다.');
     } finally {
       favoriteColorsAutoSyncingRef.current = false;
+      if (failed && favoriteColorDirtyRef.current && favoriteColorAutoRetryRef.current < 2) {
+        favoriteColorAutoRetryRef.current += 1;
+        scheduleFavoriteColorAutoSave(favoriteColorAutoRetryRef.current === 1 ? 3000 : 12000);
+      } else if (!failed && favoriteColorDirtyRef.current) {
+        // A newer click occurred while the previous write was in flight.
+        scheduleFavoriteColorAutoSave();
+      } else if (!favoriteColorDirtyRef.current) {
+        favoriteColorAutoRetryRef.current = 0;
+      }
     }
   };
 
   useEffect(() => {
     return () => {
+      if (favoriteColorAutoSaveTimerRef.current) clearTimeout(favoriteColorAutoSaveTimerRef.current);
+      favoriteColorAutoSaveTimerRef.current = null;
       void syncFavoriteColorsOnExit(true);
     };
   }, [user?.uid]);
@@ -4032,15 +4084,61 @@ updates: draft.updates,
   useEffect(() => {
     try {
       const loaded = readLocalColorMap('soridraw.favoriteColorTags');
-      setFavoriteColorMap(loaded);
-      favoriteColorMapRef.current = loaded;
-      favoriteColorBaselineRef.current = serializeColorMap(loaded);
+      const next = { ...loaded };
       pendingFavoriteColorIdsRef.current.clear();
-      favoriteColorDirtyRef.current = false;
+      for (const entry of user?.uid ? listColorPending(user.uid, 'musicNote') : []) {
+        pendingFavoriteColorIdsRef.current.add(entry.key);
+        next[entry.key] = entry.color;
+      }
+      setFavoriteColorMap(next);
+      favoriteColorMapRef.current = next;
+      favoriteColorBaselineRef.current = serializeColorMap(loaded);
+      favoriteColorDirtyRef.current = pendingFavoriteColorIdsRef.current.size > 0;
       setFavoriteColorHydratedUid(user?.uid || 'anonymous');
     } catch (error) {
       console.warn('favorite color map load failed', error);
     }
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid || favoriteColorHydratedUid !== user.uid
+      || pendingFavoriteColorIdsRef.current.size === 0 || favorites.length === 0) return;
+    const activeIds = new Set(favorites.map(song => String(song?.id || '')));
+    if ([...pendingFavoriteColorIdsRef.current].some(id => activeIds.has(id))) {
+      scheduleFavoriteColorAutoSave(450);
+    }
+  }, [user?.uid, favoriteColorHydratedUid, favorites]);
+
+  useEffect(() => {
+    const onRemoteColor = (event: Event) => {
+      const detail = (event as CustomEvent<{uid?:string;version?:number;changes?:Array<{scope:string;key:string;color:string}>}>).detail;
+      if (!user?.uid || detail?.uid !== user.uid || !Array.isArray(detail.changes)) return;
+      const version = Number(detail.version || 0);
+      const now = Date.now();
+      const accepted = detail.changes.filter(c => c.scope === 'musicNote'
+        && c.key && FAVORITE_COLOR_OPTIONS.some(option => option.value === c.color)
+        && !pendingFavoriteColorIdsRef.current.has(c.key)
+        && version > Number(favoriteRemoteColorRef.current.get(c.key)?.version || 0));
+      if (!accepted.length) return;
+      const next = { ...favoriteColorMapRef.current };
+      for (const change of accepted) {
+        favoriteRemoteColorRef.current.set(change.key, {color:change.color,version,until:now+120000});
+        next[change.key] = change.color;
+      }
+      favoriteColorMapRef.current = next;
+      setFavoriteColorMap(next);
+      // This is remote visual state, NOT a local unsaved mutation.
+      window.setTimeout(() => {
+        for (const change of accepted) {
+          if (favoriteRemoteColorRef.current.get(change.key)?.version === version) {
+            favoriteRemoteColorRef.current.delete(change.key);
+          }
+        }
+        setFavoriteColorMap(current => ({ ...current }));
+      }, 120050);
+    };
+    window.addEventListener(COLOR_SELECTION_SYNC_EVENT, onRemoteColor as EventListener);
+    return () => window.removeEventListener(COLOR_SELECTION_SYNC_EVENT, onRemoteColor as EventListener);
   }, [user?.uid]);
 
   useEffect(() => {
@@ -5829,15 +5927,25 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       ? selectedSongIds
       : [song.id];
 
-    targetIds.forEach((id) => { if (id) pendingFavoriteColorIdsRef.current.add(id); });
-    setFavoriteColorMap(prev => {
-      const next = { ...prev };
-      targetIds.forEach(id => { next[id] = color; });
-      writeLocalColorMap('soridraw.favoriteColorTags', next);
-      favoriteColorMapRef.current = next;
-      favoriteColorDirtyRef.current = serializeColorMap(next) !== favoriteColorBaselineRef.current;
-      return next;
+    const next = { ...favoriteColorMapRef.current };
+    const changes: Array<{scope:'musicNote';key:string;color:'gray'|'red'|'orange'|'yellow'|'green'|'blue'|'purple'}> = [];
+    targetIds.forEach(id => {
+      if (!id) return;
+      pendingFavoriteColorIdsRef.current.add(id);
+      next[id] = color;
+      if (user?.uid) stageColorPending(user.uid, 'musicNote', id, color);
+      changes.push({scope:'musicNote',key:id,color:color as (typeof changes)[number]['color']});
     });
+    favoriteColorMapRef.current = next;
+    setFavoriteColorMap(next);
+    writeLocalColorMap('soridraw.favoriteColorTags', next);
+    favoriteColorDirtyRef.current = pendingFavoriteColorIdsRef.current.size > 0;
+    favoriteColorAutoRetryRef.current = 0;
+    if (user?.uid && changes.length) {
+      void publishColorSelectionPreview(user.uid, changes).catch(error =>
+        console.warn('[color] Music Note live preview deferred until canonical sync', error));
+      scheduleFavoriteColorAutoSave();
+    }
 
     setActiveFavoriteColorMenuId(null);
     if (isSelectionMode) exitSelectionMode();

@@ -53,6 +53,46 @@ const RECENT_ACKNOWLEDGED_SIGNAL_BASE = 'soridraw_recent_songs_acknowledged_sign
 const RECENT_RETAINED_DRAFT_GAP_BASE_460 = 'soridraw_recent_retained_draft_gap_460';
 const RECENT_RETAINED_DRAFT_VERIFIED_BASE_460 = 'soridraw_recent_retained_draft_verified_460';
 export const MUSIC_NOTE_SYNC_EVENT = 'soridraw:music-note-sync-version';
+export const COLOR_SELECTION_SYNC_EVENT = 'soridraw:color-selection-live-v1';
+
+// Only exact user-clicked color fields travel in the already-authorized
+// UID-owned Music Note RTDB signal. This is visual preview, never a
+// canonical Firestore write or Catalog revision.
+export type ColorSelectionPreview = {
+  scope: 'musicNote' | 'workspace' | 'playlist';
+  key: string;
+  color: 'gray' | 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple';
+};
+const COLOR_SELECTION_VALUES = new Set(['gray','red','orange','yellow','green','blue','purple']);
+const validColorPreview = (v: any): v is ColorSelectionPreview =>
+  !!v && typeof v === 'object'
+  && ['musicNote','workspace','playlist'].includes(v.scope)
+  && typeof v.key === 'string' && v.key.length > 0 && v.key.length <= 350
+  && COLOR_SELECTION_VALUES.has(v.color);
+
+// One RTDB update per explicit click batch, no polling or Firestore read.
+// A closed browser may not finish network IO; canonical recovery uses the
+// independently durable per-UID color pending outbox.
+export const publishColorSelectionPreview = async (
+  uid: string, changes: ColorSelectionPreview[],
+): Promise<void> => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid || !Array.isArray(changes) || changes.length === 0) return;
+  const valid = changes.filter(validColorPreview).slice(0, 30);
+  if (!valid.length) return;
+  const itemJson = JSON.stringify({__colorSelectionPreviewV1:true, changes:valid});
+  if (itemJson.length > MAX_SYNC_ITEM_JSON_CHARS) return;
+  const location = ref(realtimeDb, `userSync/${safeUid}/musicNote`);
+  await runTransaction(location, current => {
+    const now = Date.now();
+    const version = Math.max(now, Math.floor(Number(current?.version || 0)) + 1);
+    return {
+      version, at:now, originDeviceId:getDeviceId('musicNote'),
+      operation:'color-preview', affectedCount:valid.length, documentIds:[],
+      truncated:changes.length > valid.length, itemJson,
+    };
+  }, {applyLocally:true});
+};
 const RECENT_SONGS_SYNC_EVENT = 'soridraw:recent-songs-sync-version-v2';
 const MAX_DOCUMENT_IDS = 10;
 const MAX_SYNC_ITEM_JSON_CHARS = 24000;
@@ -817,6 +857,21 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
   if (typeof window === 'undefined') return;
 
   if (kind === 'musicNote') {
+    if (signal.operation === 'color-preview') {
+      // Old RTDB retained values are not a new click. They must not mask
+      // canonical colors or move the Music Note canonical revision gate.
+      if (initialRetained || signal.originDeviceId === getDeviceId('musicNote')) return;
+      try {
+        const raw = signal.itemJson ? JSON.parse(signal.itemJson) : null;
+        if (raw?.__colorSelectionPreviewV1 !== true || !Array.isArray(raw.changes)
+          || raw.changes.length < 1 || raw.changes.length > 30
+          || !raw.changes.every(validColorPreview)) return;
+        window.dispatchEvent(new CustomEvent(COLOR_SELECTION_SYNC_EVENT, {
+          detail:{uid,version:signal.version,changes:raw.changes},
+        }));
+      } catch {}
+      return;
+    }
     // app350 — persist only bounded media fields before the UI event. This is
     // device-local cache state (no Firestore/D1/RTDB write) and survives a PC
     // reload while the canonical Catalog catches up with the Detail draft.
@@ -917,9 +972,12 @@ const startDomainSubscriptions = (uid: string) => {
   stopDomainSubscriptions();
   activeUid = safeUid;
 
+  let firstMusicNoteSnapshot = true;
   unsubscribeMusicNote = onValue(ref(realtimeDb, `userSync/${safeUid}/musicNote`), (snapshot) => {
+    const initialRetained = firstMusicNoteSnapshot;
+    firstMusicNoteSnapshot = false;
     const signal = normalizeSignal(snapshot.val());
-    if (signal) dispatchSignal(safeUid, 'musicNote', signal);
+    if (signal) dispatchSignal(safeUid, 'musicNote', signal, initialRetained);
   }, (error) => {
     console.warn('Music Note RTDB sync signal unavailable; Firestore fallback remains active.', error);
   });

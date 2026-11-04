@@ -8327,7 +8327,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               value={searchQuery}
               onChange={(e) => changeMusicNoteSearch(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Escape' && searchQuery) {
+                if (e.key === 'Escape' && searchQuery && !e.nativeEvent.isComposing) {
                   e.preventDefault();
                   e.stopPropagation();
                   clearMusicNoteSearch();

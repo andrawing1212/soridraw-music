@@ -7988,7 +7988,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         const target = e.target as HTMLElement;
         // Clicking a song, its menu or a color/filter control folds the mobile
         // search only; it never clears or reruns the current search result.
-        if (!target.closest('.soridraw-responsive-search-slot')) {
+        if (!target.closest('.soridraw-responsive-search-slot, .soridraw-compact-search-controls')) {
           collapseMusicNoteSearchAfterAction();
         }
 
@@ -8212,143 +8212,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         : musicNotePageHeader}
 
 
-      <style>{`
-        /* Only the mobile Music Note search's folded state changes.
-           A real ~70px row slot now contains TWO separate touch targets,
-           funded by removing orange from the TOP filter only.
-           The originals, including saved orange, stay unchanged. */
-        :root body #root .soridraw-app-root
-        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-        .soridraw-stable-top-controls .soridraw-responsive-search-slot.is-search-collapsed,
-        html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-        .soridraw-studio-result-pane
-        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-        .soridraw-stable-top-controls .soridraw-responsive-search-slot.is-search-collapsed {
-          box-sizing: border-box !important;
-          display: flex !important;
-          flex-direction: row !important;
-          align-items: center !important;
-          justify-content: flex-start !important;
-          position: relative !important;
-          flex: 0 0 70px !important;
-          width: 70px !important;
-          min-width: 70px !important;
-          max-width: 70px !important;
-          gap: 2px !important;
-          overflow: visible !important;
-          z-index: 1 !important;
-        }
-        :root body #root .soridraw-app-root
-        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-        .soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search,
-        html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-        .soridraw-studio-result-pane
-        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-        .soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search {
-          box-sizing: border-box !important;
-          position: relative !important;
-          top: auto !important;
-          left: auto !important;
-          right: auto !important;
-          bottom: auto !important;
-          flex: 0 0 36px !important;
-          width: 36px !important;
-          min-width: 36px !important;
-          max-width: 36px !important;
-          height: 46px !important;
-          overflow: hidden !important;
-          z-index: 1 !important;
-        }
-        :root body #root .soridraw-app-root
-        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-        .soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search-input,
-        html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-        .soridraw-studio-result-pane
-        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-        .soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search-input {
-          width: 36px !important;
-          min-width: 36px !important;
-          max-width: 36px !important;
-          padding: 0 !important;
-          color: transparent !important;
-          -webkit-text-fill-color: transparent !important;
-          caret-color: transparent !important;
-          pointer-events: none !important;
-        }
-        :root body #root .soridraw-app-root
-        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-        .soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search-icon,
-        html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-        .soridraw-studio-result-pane
-        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-        .soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search-icon {
-          box-sizing: border-box !important;
-          display: flex !important;
-          left: 0 !important;
-          right: auto !important;
-          top: 0 !important;
-          bottom: 0 !important;
-          width: 36px !important;
-          height: 46px !important;
-          padding: 0 !important;
-          justify-content: center !important;
-          align-items: center !important;
-          transform: none !important;
-          translate: none !important;
-          pointer-events: auto !important;
-          z-index: 10 !important;
-        }
-        :root body #root .soridraw-app-root
-        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-        .soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search-clear,
-        html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-        .soridraw-studio-result-pane
-        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-        .soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search-clear {
-          display: none !important;
-        }
-        :root body #root .soridraw-app-root
-        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-        .soridraw-responsive-search-slot.is-search-collapsed .soridraw-musicnote-search-collapsed-clear,
-        html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-        .soridraw-studio-result-pane
-        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-        .soridraw-responsive-search-slot.is-search-collapsed .soridraw-musicnote-search-collapsed-clear {
-          box-sizing: border-box !important;
-          display: flex !important;
-          position: relative !important;
-          top: auto !important;
-          left: auto !important;
-          right: auto !important;
-          bottom: auto !important;
-          z-index: 2 !important;
-          flex: 0 0 32px !important;
-          width: 32px !important;
-          min-width: 32px !important;
-          max-width: 32px !important;
-          height: 46px !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          border: 0 !important;
-          justify-content: center !important;
-          align-items: center !important;
-          pointer-events: auto !important;
-        }
-        /* With only six filter dots, compact the transparent dot hitboxes
-           by 1px on very narrow panes; keep the painted 14px dots unchanged.
-           This offsets the +28px two-control search slot at ~320px too. */
-        @container (max-width: 420px) {
-          :root body #root .soridraw-app-root
-          .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
-          .soridraw-stable-top-controls .soridraw-responsive-color-filter
-          > button[data-soridraw-filter-dot="true"] {
-            flex: 0 0 clamp(14px, calc((100cqi - 158px) / 8), 28px) !important;
-            width: clamp(14px, calc((100cqi - 158px) / 8), 28px) !important;
-            min-width: clamp(14px, calc((100cqi - 158px) / 8), 28px) !important;
-            max-width: clamp(14px, calc((100cqi - 158px) / 8), 28px) !important;
-          }
-        }
-      `}</style>
+
 
       {!isMusicNoteSharedView && (
       <div className="soridraw-musicnote-region-top soridraw-stable-mode-viewport flex items-center gap-2 max-w-full whitespace-nowrap" data-selection-keep="true">
@@ -8391,27 +8255,19 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
       {!isMusicNoteSharedView && (
       <div className="soridraw-musicnote-region-top mt-2 md:mt-3 space-y-4 md:space-y-5">
-        <div className="soridraw-responsive-top-controls soridraw-stable-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
+        <div
+          className="soridraw-responsive-top-controls soridraw-stable-top-controls flex flex-col xl:flex-row xl:items-center gap-3"
+          data-soridraw-search-folded={isMusicNoteSearchCollapsed && Boolean(searchQuery.trim()) ? 'true' : 'false'}
+        >
           <div className={cn(
             "soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2",
             (isSearchFocused || Boolean(searchQuery)) && "is-search-active",
             Boolean(searchQuery) && "has-search-value",
-            isMusicNoteSearchCollapsed && Boolean(searchQuery.trim()) && "is-search-collapsed",
           )}>
             <div className="soridraw-responsive-search relative flex-1 min-w-0 group overflow-hidden">
-            <button
-              type="button"
-              className={cn(
-                "soridraw-responsive-search-icon absolute inset-y-0 left-4 z-10 flex items-center",
-                isMusicNoteSearchCollapsed ? "pointer-events-auto" : "pointer-events-none",
-              )}
-              aria-label="검색창 펼치기"
-              aria-expanded={!isMusicNoteSearchCollapsed}
-              tabIndex={isMusicNoteSearchCollapsed ? 0 : -1}
-              onClick={expandMusicNoteSearch}
-            >
+            <div className="soridraw-responsive-search-icon absolute inset-y-0 left-4 z-10 flex items-center pointer-events-none">
               <Search className="w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-[#FF7A72] transition-colors" />
-            </button>
+            </div>
             <input
               ref={musicNoteSearchInputRef}
               type="text"
@@ -8454,17 +8310,17 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               </div>
             )}
             </div>
-            {isMusicNoteSearchCollapsed && Boolean(searchQuery.trim()) && (
-              <button
-                type="button"
-                className="soridraw-musicnote-search-collapsed-clear hidden shrink-0 items-center justify-center rounded-xl bg-white/[0.045] text-white/65 transition-colors hover:bg-white/[0.09] hover:text-[#FF9A94]"
-                aria-label="검색어 지우기"
-                onClick={clearMusicNoteSearch}
-              >
+          </div>
+          {isMusicNoteSearchCollapsed && Boolean(searchQuery.trim()) && (
+            <div className="soridraw-compact-search-controls hidden" role="group" aria-label="검색 제어">
+              <button type="button" aria-label="검색창 펼치기" onClick={expandMusicNoteSearch}>
+                <Search className="h-4 w-4" />
+              </button>
+              <button type="button" aria-label="검색어 지우기" onClick={clearMusicNoteSearch}>
                 <X className="h-4 w-4" />
               </button>
-            )}
-          </div>
+            </div>
+          )}
 
           <div className="soridraw-responsive-color-filter flex h-[46px] items-center gap-1.5 bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
             <button

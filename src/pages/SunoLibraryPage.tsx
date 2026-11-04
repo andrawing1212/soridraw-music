@@ -1251,7 +1251,17 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     });
   }, [playlistItems, activePlaylistId]);
 
-  const [renameModalArgs, setRenameModalArgs] = useState<{ playlist: Playlist, newTitle: string } | null>(null);
+  const [renameModalArgs, setRenameModalArgs] = useState<{ playlist: Playlist, newTitle: string, isCreate?: boolean } | null>(null);
+  const [mobileLibraryEditKey, setMobileLibraryEditKey] = useState<string | null>(null);
+  const libraryFolderSaveBusyRef = useRef(false);
+  useEffect(() => {
+    const onOutsideFolderTap = (event: PointerEvent) => {
+      if (event.target instanceof Element && event.target.closest('.soridraw-library-folder-button')) return;
+      setMobileLibraryEditKey(null);
+    };
+    document.addEventListener('pointerdown', onOutsideFolderTap, true);
+    return () => document.removeEventListener('pointerdown', onOutsideFolderTap, true);
+  }, []);
   const [moveModalArgs, setMoveModalArgs] = useState<{ item: PlaylistItem } | null>(null);
   type PlaylistSaveTarget = { group: any; item: any; audioUrl: string; idx: number };
   const [playlistSavePicker, setPlaylistSavePicker] = useState<{ isShared: boolean; targets: PlaylistSaveTarget[]; playlists: Playlist[] } | null>(null);
@@ -2269,32 +2279,20 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
   };
 
-  const handleAddPlaylist = async (type: 'normal' | 'shared') => {
+  const handleAddPlaylist = (type: 'normal' | 'shared') => {
     if (!user) return;
-    const isNormal = type === 'normal';
-    const listCount = isNormal ? actualNormalPlaylists.length : actualSharedPlaylists.length;
-    const maxCount = isNormal ? 10 : 10;
-
-    if (listCount >= maxCount) {
+    const list = type === 'normal' ? actualNormalPlaylists : actualSharedPlaylists;
+    if (list.length >= 10) {
       showToast('최대 개수까지 생성되었습니다.');
       return;
     }
-
-    const currentList = isNormal ? actualNormalPlaylists : actualSharedPlaylists;
-    const newTitle = '새폴더';
-    const newOrder = currentList.length > 0 ? Math.max(...currentList.map(p => p.order)) + 1 : 1;
-
-    try {
-      const newId = await createPlaylist(user.uid, type, newTitle, newOrder);
-      if (isNormal) {
-        setSelectedNormalPlaylistId(newId);
-      } else {
-        setSelectedSharedPlaylistId(newId);
-      }
-    } catch (e) {
-      console.error(e);
-      showToast('플레이리스트 생성에 실패했습니다.');
-    }
+    // The draft never reaches Firebase until the user presses Save.
+    setPlaylistFolderDeleteReady(false);
+    setRenameModalArgs({
+      playlist: { id: '__new_folder_draft__', title: '새폴더', type, order: list.length + 1, isDefault: false },
+      newTitle: '새폴더',
+      isCreate: true,
+    });
   };
 
   useEffect(() => {
@@ -6551,6 +6549,48 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
     clearModalState();
   };
+  const commitLibraryFolderEditor = async () => {
+    if (!user || !renameModalArgs || libraryFolderSaveBusyRef.current) return;
+    const title = renameModalArgs.newTitle.trim();
+    if (!title) { showToast('이름을 입력해주세요.'); return; }
+    if (title.length > 20) { showToast('이름은 최대 20자까지 가능합니다.'); return; }
+    const type = renameModalArgs.playlist.type;
+    const currentList = type === 'normal' ? actualNormalPlaylists : actualSharedPlaylists;
+    if (currentList.some(p => p.id !== renameModalArgs.playlist.id && p.title === title)) {
+      showToast('같은 이름의 플레이리스트가 이미 있습니다.');
+      return;
+    }
+    if (renameModalArgs.isCreate && currentList.length >= 10) {
+      showToast('최대 개수까지 생성되었습니다.');
+      return;
+    }
+    libraryFolderSaveBusyRef.current = true;
+    try {
+      if (renameModalArgs.isCreate) {
+        const newOrder = currentList.length ? Math.max(...currentList.map(p => p.order || 0)) + 1 : 1;
+        const id = await createPlaylist(user.uid, type, title, newOrder);
+        if (type === 'normal') {
+          setSelectedNormalPlaylistId(id);
+          setActivePlaylistSection('normal');
+        } else {
+          setSelectedSharedPlaylistId(id);
+          setActivePlaylistSection('shared');
+        }
+        closeModal();
+        showToast('폴더를 추가했습니다.');
+      } else {
+        if ((renameModalArgs.playlist as any).isFallback) return;
+        await renamePlaylist(user.uid, renameModalArgs.playlist.id!, title);
+        closeModal();
+        showToast('플레이리스트 이름이 변경되었습니다.');
+      }
+    } catch (error) {
+      console.error('save playlist folder failed:', error);
+      showToast(renameModalArgs.isCreate ? '폴더 생성에 실패했습니다.' : '이름 변경에 실패했습니다.');
+    } finally {
+      libraryFolderSaveBusyRef.current = false;
+    }
+  };
 
   useEffect(() => {
     if (!isModalOpen) return;
@@ -7741,11 +7781,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={e => e.stopPropagation()}
               className="bg-[#2a2a2a] w-full max-w-sm max-h-[calc(100dvh-32px)] rounded-2xl flex flex-col overflow-y-auto border border-black/20"
-              role="dialog" aria-modal="true" aria-label="라이브러리 폴더 편집"
+              role="dialog" aria-modal="true" aria-label={renameModalArgs.isCreate ? '라이브러리 폴더 생성' : '라이브러리 폴더 편집'}
               onPointerDown={(event) => event.stopPropagation()}
             >
               <div className="p-4 border-b border-black/15 flex items-center justify-between">
-                <h3 className="font-bold text-white">폴더 편집</h3>
+                <h3 className="font-bold text-white">{renameModalArgs.isCreate ? '폴더 생성' : '폴더 편집'}</h3>
                 <button onClick={closeModal} className="p-1 rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors">
                   <X className="w-5 h-5" />
                 </button>
@@ -7758,50 +7798,23 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   placeholder="플레이리스트 이름 (최대 20자)"
                   maxLength={20}
                   className="w-full bg-[#1a1a1a] text-white rounded-xl px-4 py-3 outline-none border border-black/15 focus:border-[#A98BFF]/45 transition-colors"
-                  autoFocus
-                  onKeyDown={async (e) => {
-                    if (e.key === 'Enter') {
-                      if (!user || (renameModalArgs.playlist as any).isFallback) return;
-                      const trimmedTitle = renameModalArgs.newTitle.trim();
-                      if (!trimmedTitle) { showToast('이름을 입력해주세요.'); return; }
-                      if (trimmedTitle.length > 20) { showToast('이름은 최대 20자까지 가능합니다.'); return; }
-                      const isNormal = renameModalArgs.playlist.type === 'normal';
-                      const currentList = isNormal ? actualNormalPlaylists : actualSharedPlaylists;
-                      if (currentList.some(p => p.id !== renameModalArgs.playlist.id && p.title === trimmedTitle)) {
-                        showToast('같은 이름의 플레이리스트가 이미 있습니다.'); return;
-                      }
-                      try {
-                        await renamePlaylist(user.uid, renameModalArgs.playlist.id!, trimmedTitle);
-                        closeModal();
-                        showToast('플레이리스트 이름이 변경되었습니다.');
-                      } catch (error) { showToast('이름 변경에 실패했습니다.'); }
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                      void commitLibraryFolderEditor();
                     }
                   }}
                 />
               </div>
-              {playlistFolderDeleteReady && (
+              {!renameModalArgs.isCreate && playlistFolderDeleteReady && (
                 <p className="px-4 pb-3 text-xs font-bold leading-5 text-red-300">
                   다시 삭제를 누르면 폴더와 목록의 곡이 삭제됩니다.
                 </p>
               )}
               <div className="p-4 bg-[#1a1a1a]/50 flex justify-end gap-2 border-t border-black/15">
                 <button className="px-4 py-2 font-bold text-white/50 hover:text-white transition-colors" onClick={closeModal}>취소</button>
-                <button className="px-4 py-2 font-bold bg-[#A98BFF] text-white rounded-xl hover:bg-[#A98BFF]/90 transition-colors" onClick={async () => {
-                  if (!user || (renameModalArgs.playlist as any).isFallback) return;
-                  const trimmedTitle = renameModalArgs.newTitle.trim();
-                  if (!trimmedTitle) { showToast('이름을 입력해주세요.'); return; }
-                  if (trimmedTitle.length > 20) { showToast('이름은 최대 20자까지 가능합니다.'); return; }
-                  const isNormal = renameModalArgs.playlist.type === 'normal';
-                  const currentList = isNormal ? actualNormalPlaylists : actualSharedPlaylists;
-                  if (currentList.some(p => p.id !== renameModalArgs.playlist.id && p.title === trimmedTitle)) {
-                    showToast('같은 이름의 플레이리스트가 이미 있습니다.'); return;
-                  }
-                  try {
-                    await renamePlaylist(user.uid, renameModalArgs.playlist.id!, trimmedTitle);
-                    closeModal();
-                    showToast('플레이리스트 이름이 변경되었습니다.');
-                  } catch (error) { showToast('이름 변경에 실패했습니다.'); }
-                }}>저장</button>
+                <button type="button" className="px-4 py-2 font-bold bg-[#A98BFF] text-white rounded-xl hover:bg-[#A98BFF]/90 transition-colors" onClick={() => { void commitLibraryFolderEditor(); }}>저장</button>
+                {!renameModalArgs.isCreate && (
                 <button
                   type="button"
                   className="rounded-xl bg-red-500/15 px-4 py-2 font-bold text-red-400 hover:bg-red-500/25"
@@ -7810,6 +7823,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     void handleDeletePlaylist(renameModalArgs.playlist, true);
                   }}
                 >삭제</button>
+                )}
               </div>
             </motion.div>
           </div>, document.body
@@ -8306,9 +8320,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         if (playlistSuppressClickRef.current === dragKey) return;
                         setSelectedNormalPlaylistId(playlist.id!);
                         setActivePlaylistSection('normal');
+                        setMobileLibraryEditKey(isDefaultPlaylist ? null : dragKey);
                       }}
                       aria-pressed={activePlaylistSection === 'normal' && selectedNormalPlaylistId === playlist.id}
                       data-active={activePlaylistSection === 'normal' && selectedNormalPlaylistId === playlist.id ? 'true' : 'false'}
+                      data-mobile-edit-armed={mobileLibraryEditKey === dragKey && selectedNormalPlaylistId === playlist.id ? 'true' : 'false'}
                       className={`soridraw-library-folder-button shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border select-none ${
                         !isDefaultPlaylist && !(playlist as any).isFallback ? 'cursor-grab active:cursor-grabbing touch-pan-x' : 'touch-pan-x'
                       } ${
@@ -8399,9 +8415,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         if (playlistSuppressClickRef.current === dragKey) return;
                         setSelectedSharedPlaylistId(playlist.id!);
                         setActivePlaylistSection('shared');
+                        setMobileLibraryEditKey(isDefaultPlaylist ? null : dragKey);
                       }}
                       aria-pressed={activePlaylistSection === 'shared' && selectedSharedPlaylistId === playlist.id}
                       data-active={activePlaylistSection === 'shared' && selectedSharedPlaylistId === playlist.id ? 'true' : 'false'}
+                      data-mobile-edit-armed={mobileLibraryEditKey === dragKey && selectedSharedPlaylistId === playlist.id ? 'true' : 'false'}
                       className={`soridraw-library-folder-button shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-1.5 touch-pan-x select-none ${
                         !isDefaultPlaylist && !(playlist as any).isFallback ? 'cursor-grab active:cursor-grabbing touch-pan-x' : 'touch-pan-x'
                       } ${

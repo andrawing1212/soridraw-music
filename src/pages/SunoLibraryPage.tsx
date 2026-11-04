@@ -632,6 +632,8 @@ const COLOR_OPTIONS = [
   { value: 'blue', color: '#3b82f6', label: '파랑' },
   { value: 'purple', color: '#a855f7', label: '보라' }
 ];
+// Filter UI is six colors like Music Note; original saved orange remains valid.
+const COLOR_FILTER_OPTIONS = COLOR_OPTIONS.filter((color) => color.value !== 'orange');
 
 const getColorHex = (colorTag?: string | null) => {
   const found = COLOR_OPTIONS.find(c => c.value === colorTag);
@@ -1283,6 +1285,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [searchTerm, setSearchTerm] = useState(() => readLibrarySearchSession(LIBRARY_WORKSPACE_SEARCH_SESSION_KEY));
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const [isLibrarySearchFocused, setIsLibrarySearchFocused] = useState(false);
+  const [isLibrarySearchCollapsed, setIsLibrarySearchCollapsed] = useState(false);
   const librarySearchInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -1412,6 +1415,17 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   const isLibraryTrashMode = filter === 'trash' && libraryViewMode === 'workspace';
   const libraryPageRootRef = useRef<HTMLDivElement | null>(null);
+  const collapseLibrarySearchAfterAction = () => {
+    const term = libraryViewMode === 'workspace' ? searchTerm : playlistSearchTerm;
+    if (!term.trim() || libraryPageRootRef.current?.dataset.soridrawResponsiveMode !== 'mobile') return;
+    setIsLibrarySearchCollapsed(true);
+    setIsLibrarySearchFocused(false);
+    librarySearchInputRef.current?.blur();
+  };
+  const expandLibrarySearch = () => {
+    setIsLibrarySearchCollapsed(false);
+    window.requestAnimationFrame(() => librarySearchInputRef.current?.focus());
+  };
 
   useLayoutEffect(() => {
     const root = libraryPageRootRef.current;
@@ -6829,13 +6843,17 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const clearActiveLibrarySearch = () => {
       if (isWorkspaceMode) setSearchTerm('');
       else setPlaylistSearchTerm('');
+      setIsLibrarySearchCollapsed(false);
       setIsLibrarySearchFocused(false);
       librarySearchInputRef.current?.blur();
     };
 
     return (
       <>
-        <div className="soridraw-responsive-top-controls soridraw-stable-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
+        <div
+          className="soridraw-responsive-top-controls soridraw-stable-top-controls flex flex-col xl:flex-row xl:items-center gap-3"
+          data-soridraw-search-folded={isLibrarySearchCollapsed && Boolean(activeSearchTerm.trim()) ? 'true' : 'false'}
+        >
           <div className={`soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2${isLibrarySearchFocused || activeSearchTerm ? ' is-search-active' : ''}${activeSearchTerm ? ' has-search-value' : ''}`}>
             <div className="soridraw-responsive-search relative flex-1 min-w-0 group overflow-hidden">
               <div className="soridraw-responsive-search-icon absolute inset-y-0 left-4 z-10 flex items-center pointer-events-none">
@@ -6849,8 +6867,17 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   if (isWorkspaceMode) setSearchTerm(e.target.value);
                   else setPlaylistSearchTerm(e.target.value);
                 }}
-                onFocus={() => setIsLibrarySearchFocused(true)}
+                onFocus={() => {
+                  setIsLibrarySearchCollapsed(false);
+                  setIsLibrarySearchFocused(true);
+                }}
                 onBlur={() => setIsLibrarySearchFocused(false)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    collapseLibrarySearchAfterAction();
+                  }
+                }}
                 className={`soridraw-responsive-search-input w-full h-[46px] pl-12 ${isLibrarySearchFocused || activeSearchTerm ? 'pr-11' : 'pr-4'} rounded-2xl bg-white/[0.145] border border-white/[0.14] outline-none focus:bg-white/[0.17] focus:border-[#A98BFF]/45 transition-all text-sm text-[var(--text-primary)]`}
               />
               {(isLibrarySearchFocused || Boolean(activeSearchTerm)) && (
@@ -6876,6 +6903,16 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               )}
             </div>
           </div>
+          {isLibrarySearchCollapsed && Boolean(activeSearchTerm.trim()) && (
+            <div className="soridraw-compact-search-controls hidden" role="group" aria-label="검색 제어">
+              <button type="button" aria-label="검색창 펼치기" onClick={expandLibrarySearch}>
+                <Search className="h-4 w-4" />
+              </button>
+              <button type="button" aria-label="검색어 지우기" onClick={clearActiveLibrarySearch}>
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
 
           {isWorkspaceMode ? (
             <>
@@ -6890,7 +6927,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <RefreshCw className="soridraw-color-reset-icon hidden h-4 w-4" />
                 </button>
                 <div className="w-px h-3 bg-white/10 mx-1"></div>
-                {COLOR_OPTIONS.map(opt => (
+                {COLOR_FILTER_OPTIONS.map(opt => (
                   <button
                     key={opt.value}
                     onClick={() => setWorkspaceColorFilter(opt.value)}
@@ -6947,7 +6984,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <RefreshCw className="soridraw-color-reset-icon hidden h-4 w-4" />
                 </button>
                 <div className="w-px h-3 bg-white/10 mx-1"></div>
-                {COLOR_OPTIONS.map(opt => (
+                {COLOR_FILTER_OPTIONS.map(opt => (
                   <button
                     key={opt.value}
                     onClick={() => setPlaylistColorFilter(opt.value)}
@@ -7421,6 +7458,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       className={`soridraw-responsive-content-page soridraw-library-theme mx-auto w-full max-w-[1548px] min-h-screen overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-18 md:pt-24 pb-32 text-[var(--text-primary)] relative ${multiSelectMode ? 'select-none' : ''}`}
       onClickCapture={(e) => {
         const target = e.target as HTMLElement;
+        if (!target.closest('.soridraw-responsive-search-slot, .soridraw-compact-search-controls')) {
+          collapseLibrarySearchAfterAction();
+        }
         const isSelectionActionTarget = Boolean(target.closest('[data-selection-action-bar="true"], [data-more-menu-panel="true"]'));
         const hasOpenMoreMenu = Boolean(activeMenuState || activePlaylistItemMenu || bulkMenuState);
 

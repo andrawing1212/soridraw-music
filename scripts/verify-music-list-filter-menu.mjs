@@ -176,9 +176,9 @@ assert(newCss.includes('--soridraw-search-active-accent: #A98BFF;'),
 assert(newCss.includes('flex: 0 0 34px !important;')
   && newCss.includes('gap: 2px !important;'),
   'the approved two-button no-overlap geometry must remain');
-assert(newCss.includes('.soridraw-musicnote-theme .soridraw-stable-top-controls\\n.soridraw-responsive-search-slot.has-search-value\\n.soridraw-responsive-search-clear {\\n  color: #FF7A72 !important;'),
+assert(newCss.includes('.soridraw-musicnote-theme .soridraw-stable-top-controls\n.soridraw-responsive-search-slot.has-search-value\n.soridraw-responsive-search-clear {\n  color: #FF7A72 !important;'),
   'desktop Music Note typed-query X must be coral');
-assert(newCss.includes('.soridraw-library-theme .soridraw-stable-top-controls\\n.soridraw-responsive-search-slot.has-search-value\\n.soridraw-responsive-search-clear {\\n  color: #A98BFF !important;'),
+assert(newCss.includes('.soridraw-library-theme .soridraw-stable-top-controls\n.soridraw-responsive-search-slot.has-search-value\n.soridraw-responsive-search-clear {\n  color: #A98BFF !important;'),
   'desktop Library typed-query X must be purple');
 assert(note.includes('has-search-value') && library.includes('has-search-value'),
   'both expanded search fields must set a non-empty query marker');

@@ -2514,8 +2514,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           if(pending) acknowledgeColorPending(user.uid,'playlist',pending);
         }
       }
-      workspaceColorBaselineRef.current = serializeColorMap(workspaceLocalColorMapRef.current);
-      playlistColorBaselineRef.current = serializeColorMap(playlistLocalColorMapRef.current);
+      workspaceColorBaselineRef.current = workspaceSerialized;
+      playlistColorBaselineRef.current = playlistSerialized;
       workspaceColorDirtyRef.current = pendingWorkspaceColorKeysRef.current.size > 0;
       playlistColorDirtyRef.current = pendingPlaylistColorKeysRef.current.size > 0;
       markLibraryColorSynced();
@@ -2610,8 +2610,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           if(pending) acknowledgeColorPending(currentUser.uid,'playlist',pending);
         }
       }
-      workspaceColorBaselineRef.current = serializeColorMap(workspaceLocalColorMapRef.current);
-      playlistColorBaselineRef.current = serializeColorMap(playlistLocalColorMapRef.current);
+      workspaceColorBaselineRef.current = workspaceSerialized;
+      playlistColorBaselineRef.current = playlistSerialized;
       workspaceColorDirtyRef.current = pendingWorkspaceColorKeysRef.current.size > 0;
       playlistColorDirtyRef.current = pendingPlaylistColorKeysRef.current.size > 0;
       if (!silent) showToast('색상 변경사항을 저장했습니다.');

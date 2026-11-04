@@ -1179,6 +1179,7 @@ import GenreHierarchySelector from './components/GenreHierarchySelector';
 import MusicApiGenerateModal from './components/MusicApiGenerateModalLazy';
 import type { LanguageCode, MusicApiTargetOption, SunoModelVersion, RapMode, GenerationEngineVersion, V1LyricWritingStyle } from './components/MusicApiGenerateModal';
 import { readStoredV1LyricWritingStyle, writeStoredV1LyricWritingStyle } from './components/musicApiLyricWritingPreference';
+import { resolveStoredAuthoredLyricDraft } from './lib/musicNoteNextSongRecipe';
 
 const RAP_MODE_STORAGE_KEY = 'soridraw_rap_mode';
 const readStoredRapMode = (): RapMode => {
@@ -12533,7 +12534,18 @@ const unlockAllFavorites = async () => {
       .filter(Boolean) as string[]));
 
     setSelectedGenres([]);
-    setSubGenre(explicitCustomGenreInput ? [makeCustomKeywordId(CUSTOM_GENRE_PREFIX, explicitCustomGenreInput)] : limitFusionGenreIds(restoredGenreIds));
+    // Before dedicated custom fields, a single typed menu value could live
+    // directly under genre/subGenre. Only treat an unrecognized ORIGINAL
+    // value as custom; never infer text from a generated music prompt.
+    const legacyGenreValues = [
+      ...(Array.isArray(appliedKeywords.subGenre) ? appliedKeywords.subGenre : []),
+      ...(Array.isArray(appliedKeywords.genre) ? appliedKeywords.genre : []),
+    ].map(value => String(value || '').trim()).filter(Boolean);
+    const legacyGenreCustom = !explicitCustomGenreInput && restoredGenreIds.length === 0
+      && legacyGenreValues.length === 1 ? legacyGenreValues[0] : '';
+    setSubGenre(explicitCustomGenreInput || legacyGenreCustom
+      ? [makeCustomKeywordId(CUSTOM_GENRE_PREFIX, explicitCustomGenreInput || legacyGenreCustom)]
+      : limitFusionGenreIds(restoredGenreIds));
 
     const rawMoodValues = Array.isArray(appliedKeywords.mood) ? appliedKeywords.mood : [];
     const rawThemeValues = Array.isArray(appliedKeywords.theme) ? appliedKeywords.theme : [];
@@ -12576,18 +12588,26 @@ const unlockAllFavorites = async () => {
     }
     const rawAppliedStyleValues = normalizeStringList(appliedKeywords.style ?? appliedKeywords.theme ?? []);
     const migratedStyleSoundIds = explicitCustomStyleInput ? [] : resolveMovedStyleSoundIds(rawAppliedStyleValues);
-    const styleIds = explicitCustomStyleInput
-      ? [makeCustomKeywordId(CUSTOM_STYLE_PREFIX, explicitCustomStyleInput)]
-      : limitHybridStyleIds(
-          resolveStyleIds(rawAppliedStyleValues),
-          getHybridStyleLimitForGenreCount(Math.min(MAX_FUSION_GENRES, restoredGenreIds.length || (explicitCustomGenreInput ? 1 : 0))),
-        );
-    const rawInstrumentSoundIds = explicitCustomSoundInput
-      ? [makeCustomKeywordId(CUSTOM_SOUND_PREFIX, explicitCustomSoundInput)]
-      : Array.from(new Set([
-          ...resolveSoundTextureIds(appliedKeywords.instrumentSound ?? []),
-          ...migratedStyleSoundIds,
-        ]));
+    const resolvedLegacyStyleIds = limitHybridStyleIds(
+      resolveStyleIds(rawAppliedStyleValues),
+      getHybridStyleLimitForGenreCount(Math.min(MAX_FUSION_GENRES, restoredGenreIds.length || (explicitCustomGenreInput ? 1 : 0))),
+    );
+    // The old style fallback reads theme for display. It must NOT turn a
+    // theme into a fabricated custom style when the actual style is absent.
+    const originalStyleValues = normalizeStringList(appliedKeywords.style ?? []);
+    const legacyCustomStyle = !explicitCustomStyleInput && resolvedLegacyStyleIds.length === 0
+      && originalStyleValues.length === 1 && migratedStyleSoundIds.length === 0
+      ? originalStyleValues[0] : '';
+    const styleIds = explicitCustomStyleInput || legacyCustomStyle
+      ? [makeCustomKeywordId(CUSTOM_STYLE_PREFIX, explicitCustomStyleInput || legacyCustomStyle)]
+      : resolvedLegacyStyleIds;
+    const originalSoundValues = normalizeStringList(appliedKeywords.instrumentSound ?? []);
+    const resolvedLegacySoundIds = resolveSoundTextureIds(originalSoundValues);
+    const legacyCustomSound = !explicitCustomSoundInput && resolvedLegacySoundIds.length === 0
+      && originalSoundValues.length === 1 ? originalSoundValues[0] : '';
+    const rawInstrumentSoundIds = explicitCustomSoundInput || legacyCustomSound
+      ? [makeCustomKeywordId(CUSTOM_SOUND_PREFIX, explicitCustomSoundInput || legacyCustomSound)]
+      : Array.from(new Set([...resolvedLegacySoundIds, ...migratedStyleSoundIds]));
 
     // SORIDRAW_RECOMMENDED_SOUND_COMBO_NEXT_APPLY_FIX: 다음곡 적용 시 추천조합으로 자동 선택된 실제 악기들을 UI 강조 상태까지 복원
     const restoreRecommendedSoundComboFromAppliedKeywords = (ids: string[]) => {
@@ -12745,8 +12765,12 @@ const unlockAllFavorites = async () => {
       setTempoEnabled(true);
     }
 
-    setIsLyricMode(false);
-    setLyricDraft('');
+    // Recover only a stored author's Direct Lyrics draft; generated lyrics
+    // are never repurposed as user-typed input.
+    const authoredLyrics = resolveStoredAuthoredLyricDraft(appliedKeywords as any);
+    setIsLyricMode(authoredLyrics.isLyricMode);
+    setLyricDraft(authoredLyrics.lyricDraft);
+    setLyricMode(authoredLyrics.lyricMode);
 
     // Restore command window prompt content
     const resolvedUserInput = String(

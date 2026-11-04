@@ -104,7 +104,7 @@ import {
   type ExplorePublicationSyncSignal,
 } from '../services/userDomainSyncService';
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
-import { resolveMusicNoteNextSongRecipe, mergeMusicNoteNextSongClickRecipe455 } from '../lib/musicNoteNextSongRecipe';
+import { resolveMusicNoteNextSongRecipe, mergeMusicNoteNextSongClickRecipe455, resolveStoredAuthoredLyricDraft } from '../lib/musicNoteNextSongRecipe';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
 import { getMusicNoteDetailSourceVersion, getOrLoadMusicNoteDetail, getOrLoadMusicNoteOriginalRecipe456, patchMusicNoteDetailCache } from '../lib/musicNoteDetailCache';
 import { rememberMusicNoteMediaPreview } from '../lib/userDataEngine';
@@ -5723,6 +5723,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       ? song.appliedKeywords
       : resolveMusicNoteNextSongRecipe(song);
     const normalizedSong = { ...song, appliedKeywords: resolvedRecipe };
+    const authoredLyrics = resolveStoredAuthoredLyricDraft(resolvedRecipe);
     const pendingKeywords = {
       ...resolvedRecipe,
       // The display helper may infer a genre from the generated [Genre]
@@ -5750,11 +5751,11 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       songStructure: resolvedRecipe.songStructure ?? '2',
       customStructure: resolvedRecipe.customStructure ?? [],
       userInput: String(resolvedRecipe.userInput ?? ''),
-      // Preserve the existing next-song policy: finished/direct lyrics are not
-      // copied automatically. #229 only restores the generation recipe that was
-      // actually persisted for historical Music Note rows.
-      lyricDraft: '',
-      isLyricMode: false,
+      // Only the original Direct Lyrics draft may be reapplied. Never copy
+      // finished lyrics, regenerated lyrics or the displayed result text.
+      lyricDraft: authoredLyrics.lyricDraft,
+      isLyricMode: authoredLyrics.isLyricMode,
+      lyricMode: authoredLyrics.lyricMode,
     };
     const serialized = JSON.stringify(pendingKeywords);
     // app468: a full browser store must not block the click-to-Studio handoff.

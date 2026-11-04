@@ -64,12 +64,31 @@ const mergeAbsentOnlyClick462 = (target: PlainRecord, fallback: PlainRecord): Pl
   return merged;
 };
 
+const RECIPE_LEGACY_SELECTION_ALIASES = {
+  mood: 'moods', theme: 'themes', style: 'styles', instrumentSound: 'instrumentSounds',
+} as const;
+
+// Historical generation requests used plural keys, while Studio's apply
+// expects singular keys. Explicit newer null/[] must never be overwritten.
 const pickKnownRecipeFields = (source: PlainRecord | null): PlainRecord => {
   if (!source) return {};
   const picked: PlainRecord = {};
   for (const key of MUSIC_NOTE_NEXT_SONG_RECIPE_FIELDS) {
     if (Object.prototype.hasOwnProperty.call(source, key) && source[key] !== undefined) {
       picked[key] = source[key];
+    }
+  }
+  for (const [target, legacy] of Object.entries(RECIPE_LEGACY_SELECTION_ALIASES)) {
+    if (!Object.prototype.hasOwnProperty.call(picked, target)
+        && Object.prototype.hasOwnProperty.call(source, legacy)
+        && source[legacy] !== undefined) picked[target] = source[legacy];
+  }
+  // Some old requests saved scalar genre/style instead of an array; do not
+  // split that text character-by-character when applying to Studio.
+  for (const key of ['genre', 'subGenre', 'subGenreIds', 'mood', 'theme', 'style', 'instrumentSound', 'pointSound', 'pointSounds'] as const) {
+    if (typeof picked[key] === 'string') {
+      const raw = picked[key].trim();
+      picked[key] = raw ? [raw] : [];
     }
   }
   return picked;
@@ -252,4 +271,22 @@ export const mergeMusicNoteNextSongClickRecipe455 = (
   else if (typeof persisted.userInput === 'string') merged.userInput = persisted.userInput;
 
   return merged;
+};
+
+
+// This field can only originate from the user's stored Direct Lyrics draft.
+// Never reconstruct it from final lyrics, generated prompt, or provider output.
+// A legacy draft lacking a mode flag is still authored; explicit false clears it.
+export const resolveStoredAuthoredLyricDraft = (recipe: PlainRecord): {
+  lyricDraft: string;
+  isLyricMode: boolean;
+  lyricMode: 'assist' | 'preserve';
+} => {
+  const text = typeof recipe?.lyricDraft === 'string' ? recipe.lyricDraft : '';
+  const enabled = Boolean(text.trim()) && recipe?.isLyricMode !== false;
+  return {
+    lyricDraft: enabled ? text : '',
+    isLyricMode: enabled,
+    lyricMode: enabled && recipe?.lyricMode === 'preserve' ? 'preserve' : 'assist',
+  };
 };

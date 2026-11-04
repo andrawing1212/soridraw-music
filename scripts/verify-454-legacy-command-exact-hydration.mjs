@@ -249,6 +249,7 @@ const clickContext={
    return {sessionSaved:true,backupSaved:true};
  },
  resolveMusicNoteNextSongRecipe:resolve,
+ resolveStoredAuthoredLyricDraft:ctx.exports.resolveStoredAuthoredLyricDraft,
  getSongGenreValues:(song)=>{
    displayGenreCalls++;
    return song.appliedKeywords.genre?.length ? song.appliedKeywords.genre : ['INFERRED FROM [Genre] PROMPT'];
@@ -347,7 +348,7 @@ assert.deepEqual(applyToStudioGenre(JSON.parse(sent.get('pendingAppliedKeywords'
 // Execute Studio's actual tempo restore decisions, starting from the normal
 // clearAll default range (90-110) rather than trusting the recipe in isolation.
 const tempoStart=studio.indexOf('    const appliedTempoSource = String((appliedKeywords as any).tempoSource');
-const tempoEnd=studio.indexOf('    setIsLyricMode(false);',tempoStart);
+const tempoEnd=studio.indexOf('    const authoredLyrics = resolveStoredAuthoredLyricDraft',tempoStart);
 assert.ok(tempoStart>=0 && tempoEnd>tempoStart);
 const restoreTempoJs=ts.transpileModule('const appliedKeywords = rawKeywords;\n'
  +studio.slice(tempoStart,tempoEnd),{

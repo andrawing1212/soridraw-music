@@ -1,3 +1,14 @@
+## CURRENT — Music Note 여러 곡의 복수 폴더 저장·재접속 초기화 수정 / 소스 QA PASS · PREVIEW Hosting 릴리스 (2026-11-04 KST)
+- **디렉터 실기기 신고 (2026-11-04):** Music Note 마이 노트에서 여러 곡을 선택해 폴더에 저장하면 화면에는 반영되지만 새로고침 또는 앱 종료 후 기존 목록이 다시 표시됨. Library 폴더는 정상으로 보여 이번 변경 대상에서 제외. 디렉터 스크린샷 4장의 당시 사용자 현상과 CACHE LIVE 진단을 확인.
+- **확인된 코드 원인 두 개:** 새 복수 폴더 소속 `noteFolderIds`는 Favorites 정본에 써도 앱/R2 Media Worker Catalog 허용 필드에서 누락되어 목록 재수신 시 첫 폴더 `noteFolderId`만 남음. 별도로 Music Note `folder-update` 성공 mutation이 확정 변경분을 Catalog pending delta로 전달하지 않아 서버 저장과 R2 파생 목록이 불일치.
+- **최소 수정:** #764 source merge `cc9297ab10a650fccbc5f964ac2da001c0373b32` / 검증 후보 `68cb1d203f14707e2ed7c4a5bbf65a5137bfc2da`. 사용자 수동 Save 시 정본 `noteFolderIds`와 **기존 모든 Media Worker가 이미 허용하는** `musicNoteFolderIds`를 동일하게 기록하고 새 앱의 Catalog projection/필터가 두 형태를 인식. 성공한 `folder-update/folder-delete`의 **정확히 변경된 곡들만** 기존 확정 Catalog delta outbox에 넘김 (12곡 fixture 포함, 전량 조회/재생성 없음). 오래된 Catalog에 배열이 아예 없는 명시 선택곡만 클릭 시 본인 `favorites/{id}` 문서를 정확하게 조회한 뒤 기존 소속을 보전해 저장; 권한/원본 상태/계정 다르면 저장 중단. 원본에 이미 저장돼 있지만 Catalog에서 누락된 배열은 동일한 명시적 Save로 호환 표현을 보정.
+- **QA:** PR #764 8/8 SUCCESS (source-and-split, Auth/TS/Build, Music Note Catalog 521/519/517/516, Recent login, product-quality). 여러 폴더 유지·과거 원본 보전·12곡 일괄 Catalog 전달 fixture PASS. 원본 자동 백필·문서 전체 scan·페이지 진입 읽기/쓰기·Library 코드 변경 0.
+- **배포:** 기존 PREVIEW Hosting 전용 릴리스 트리거만 변경. 실제 Hosting 성공/앱 PC·모바일 검증은 릴리스 Actions 및 실사용으로 별도 판정. 공유 Worker·Rules·Functions·D1/R2 전체 rebuild·TEST/PRODUCTION 불변.
+- **미완료 및 위험:** 기존 구형 Catalog가 원본에 저장된 과거 복수 폴더 소속을 이미 누락했다면 새 코드 배포 자체만으로 모든 항목이 한 번에 자동 복구되지는 않음. 사용자 명시적 폴더 저장에서 대상곡별 정확 복구/전달. 인증 PC↔모바일에서 여러 곡 저장→새로고침→앱 종료·재접속 실제 확인 OPEN.
+- **별도 다음곡 진단 (같은 스크린샷):** 해당 Music Note `favorites` 원본은 존재하지만 직접입력 필드가 검출되지 않았고, 최근 생성곡에서는 일치하는 ID가 없었음. 이것은 원본 전반 소실 증거가 아니므로 다른 저장 위치를 추정으로 덮어쓰지 않음. 폴더 저장과 별개로 OPEN.
+
+---
+
 ## CURRENT — 오래된 곡 ‘다음곡에 적용’ 원본 위치 진단 · 코드/검사 PASS, PREVIEW Hosting 릴리스 트리거 (2026-11-04 KST)
 - **디렉터 YES 승인:** 예전 곡에서 ‘다음곡에 적용’ 클릭 이후 관리자 CACHE LIVE 버튼으로 원본 보관 위치와 직접입력 필드 존재 여부를 직접 확인하는 진단 기능. 사용자 곡 제목·ID 수동 입력 불필요.
 - **코드:** #762 merge `eb5501769d7ed447ec05f4c8905c10fb032f0388`, 검증 후보 `6e86109ccc773a07f86163e3e24ec8d7b5928028`. Music Note / Library / 재생기 최근 클릭 식별정보만 탭 메모리 보관. 사용자 명시적 관리자 버튼 시 본인 UID의 exact favorites / suno_tracks / playlist item / recent aggregate 중 존재하는 경로 최대 **4개 문서** 조회. 과거 수동 명령·직접작사·커스텀 필드의 경로/값 유무만 표시하며 내용 노출 없음. recent 최근 목록에 없거나 task ID 중복 시 유실로 판정하지 않음. 공유곡은 계정 소유 원본 진단 대상 아님.

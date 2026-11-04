@@ -1246,6 +1246,52 @@ export default function FavoritesPage({
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const musicNoteSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [isMusicNoteSearchCollapsed, setIsMusicNoteSearchCollapsed] = useState(false);
+  // One same-URL history entry while a new search is being typed. A first
+  // browser/Android Back consumes the entry and clears ONLY the query.
+  const musicNoteSearchBackArmedRef = useRef(false);
+  const musicNoteSearchBackReleaseRef = useRef(false);
+  const releaseMusicNoteSearchBack = () => {
+    if (musicNoteSearchBackArmedRef.current
+      && window.history.state?.soridrawSearchDraft === 'music-note') {
+      musicNoteSearchBackReleaseRef.current = true;
+      window.history.back();
+    }
+    musicNoteSearchBackArmedRef.current = false;
+  };
+  const changeMusicNoteSearch = (value: string) => {
+    setSearchQuery(value);
+    if (!value.trim()) {
+      releaseMusicNoteSearchBack();
+      return;
+    }
+    if (musicNoteSearchBackArmedRef.current) return;
+    if (window.history.state?.soridrawSearchDraft !== 'music-note') {
+      window.history.pushState(
+        { ...window.history.state, soridrawSearchDraft: 'music-note' },
+        '', window.location.href,
+      );
+    }
+    musicNoteSearchBackArmedRef.current = true;
+  };
+  useEffect(() => {
+    const onSearchBack = (event: PopStateEvent) => {
+      if (musicNoteSearchBackReleaseRef.current) {
+        musicNoteSearchBackReleaseRef.current = false;
+        event.stopImmediatePropagation();
+        return;
+      }
+      if (!musicNoteSearchBackArmedRef.current
+        || window.history.state?.soridrawSearchDraft === 'music-note') return;
+      musicNoteSearchBackArmedRef.current = false;
+      setSearchQuery('');
+      setIsMusicNoteSearchCollapsed(false);
+      setIsSearchFocused(false);
+      musicNoteSearchInputRef.current?.blur();
+      event.stopImmediatePropagation();
+    };
+    window.addEventListener('popstate', onSearchBack, true);
+    return () => window.removeEventListener('popstate', onSearchBack, true);
+  }, []);
   // The query itself remains the single filter authority; folding is visual only.
   const collapseMusicNoteSearchAfterAction = () => {
     if (!searchQuery.trim()) return;
@@ -1263,6 +1309,7 @@ export default function FavoritesPage({
     setIsMusicNoteSearchCollapsed(false);
     setIsSearchFocused(false);
     musicNoteSearchInputRef.current?.blur();
+    releaseMusicNoteSearchBack();
   };
   const [serverSearchFavorites, setServerSearchFavorites] = useState<any[]>([]);
   const [isServerSearchLoading, setIsServerSearchLoading] = useState(false);
@@ -8278,8 +8325,14 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               ref={musicNoteSearchInputRef}
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => changeMusicNoteSearch(e.target.value)}
               onKeyDown={(e) => {
+                if (e.key === 'Escape' && searchQuery) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  clearMusicNoteSearch();
+                  return;
+                }
                 if (e.key === 'Enter') {
                   e.preventDefault();
                   void runFavoriteServerSearch();

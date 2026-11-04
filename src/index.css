@@ -5451,3 +5451,46 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
   color: #4f4943 !important;
 }
 
+/* Touch folder editing: first tap selects a folder, then its edit affordance
+ * appears at the top-right. Touch outside hides it. PC hover stays unchanged.
+ * The selector does not alter folder drag/scroll, order, or selected colors. */
+@media (hover: none), (pointer: coarse) {
+  .soridraw-folder-drag-scrollbar > :is(.soridraw-musicnote-folder-button, .soridraw-library-folder-button) {
+    position: relative;
+  }
+  .soridraw-folder-drag-scrollbar > :is(.soridraw-musicnote-folder-button, .soridraw-library-folder-button) > .soridraw-folder-hover-edit {
+    position: absolute;
+    display: inline-flex;
+    top: -5px;
+    right: -6px;
+    z-index: 3;
+    width: 28px;
+    height: 28px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #252528;
+    color: #fff !important;
+    -webkit-text-fill-color: #fff !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,.6);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    touch-action: manipulation;
+  }
+  .soridraw-folder-drag-scrollbar > :is(.soridraw-musicnote-folder-button, .soridraw-library-folder-button)[data-mobile-edit-armed="true"] > .soridraw-folder-hover-edit {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+  .soridraw-folder-drag-scrollbar > :is(.soridraw-musicnote-folder-button, .soridraw-library-folder-button) > .soridraw-folder-hover-edit > svg {
+    color: #fff !important;
+    stroke: #fff !important;
+  }
+  body.soridraw-folder-dragging .soridraw-folder-hover-edit,
+  .soridraw-folder-drag-active > .soridraw-folder-hover-edit {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+}

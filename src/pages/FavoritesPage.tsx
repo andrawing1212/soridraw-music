@@ -1348,7 +1348,17 @@ export default function FavoritesPage({
   const [musicNoteFolderTargetIds, setMusicNoteFolderTargetIds] = useState<string[]>([]);
   const [musicNoteFolderInitialIds, setMusicNoteFolderInitialIds] = useState<string[]>([]);
   const selectionChildHistoryPushedRef = useRef(false);
-  const [musicNoteFolderRenameArgs, setMusicNoteFolderRenameArgs] = useState<{ mode: MusicNoteFolderMode; folder: MusicNoteFolder; newTitle: string } | null>(null);
+  const [musicNoteFolderRenameArgs, setMusicNoteFolderRenameArgs] = useState<{ mode: MusicNoteFolderMode; folder: MusicNoteFolder; newTitle: string; isCreate?: boolean } | null>(null);
+  const [mobileNoteEditKey, setMobileNoteEditKey] = useState<string | null>(null);
+  const folderCreateBusyRef = useRef(false);
+  useEffect(() => {
+    const onOutsideFolderTap = (event: PointerEvent) => {
+      if (event.target instanceof Element && event.target.closest('.soridraw-musicnote-folder-button')) return;
+      setMobileNoteEditKey(null);
+    };
+    document.addEventListener('pointerdown', onOutsideFolderTap, true);
+    return () => document.removeEventListener('pointerdown', onOutsideFolderTap, true);
+  }, []);
   const [musicNoteFolderDeleteReady, setMusicNoteFolderDeleteReady] = useState(false);
   const [musicNoteFolderDragging, setMusicNoteFolderDragging] = useState<{ mode: MusicNoteFolderMode; folderId: string } | null>(null);
   const musicNoteFolderButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -7411,39 +7421,20 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     { id: 'sharedNote' as const, label: '공유 노트', description: '공유받은 곡을 저장하고 조회 전용으로 관리할 공간입니다.' },
   ];
 
-  const handleAddMusicNoteFolder = async (mode: MusicNoteFolderMode) => {
+  const handleAddMusicNoteFolder = (mode: MusicNoteFolderMode) => {
     const folders = mode === 'sharedNote' ? sharedNoteFolders : myNoteFolders;
     if (folders.length >= 10) {
       showFavoriteToast('최대 개수까지 생성되었습니다.');
       return;
     }
-
-    const now = Date.now();
-    const nextFolder: MusicNoteFolder = {
-      id: `note-${mode}-${now}`,
-      title: '새폴더',
-      order: folders.length + 1,
-      createdAt: now,
-      updatedAt: now,
-    };
-    const nextFolders = [...folders, nextFolder];
-    newlyCreatedMusicNoteFolderRevealRef.current = { mode, id: nextFolder.id };
-
-    if (mode === 'sharedNote') {
-      setSharedNoteFolders(nextFolders);
-      setSelectedSharedNoteFolderId(nextFolder.id);
-    } else {
-      setMyNoteFolders(nextFolders);
-      setSelectedMyNoteFolderId(nextFolder.id);
-    }
-
-    try {
-      await persistMusicNoteFolders(mode, nextFolders);
-      showFavoriteToast('폴더를 추가했습니다.');
-    } catch (error) {
-      console.error('add music note folder failed:', error);
-      showFavoriteToast('폴더 추가에 실패했습니다.');
-    }
+    // A local-only draft; Cancel must never create or write a folder.
+    setMusicNoteFolderDeleteReady(false);
+    setMusicNoteFolderRenameArgs({
+      mode,
+      folder: { id: '__new_folder_draft__', title: '새폴더', order: folders.length + 1 },
+      newTitle: '새폴더',
+      isCreate: true,
+    });
   };
 
   const commitRenameMusicNoteFolder = async () => {
@@ -7464,6 +7455,46 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     const folders = mode === 'sharedNote' ? sharedNoteFolders : myNoteFolders;
+    if (musicNoteFolderRenameArgs.isCreate) {
+      if (folderCreateBusyRef.current) return;
+      if (folders.length >= 10) {
+        showFavoriteToast('최대 개수까지 생성되었습니다.');
+        return;
+      }
+      if (folders.some((item) => item.title === trimmedTitle)) {
+        showFavoriteToast('같은 이름의 폴더가 이미 있습니다.');
+        return;
+      }
+      folderCreateBusyRef.current = true;
+      const now = Date.now();
+      const nextFolder: MusicNoteFolder = {
+        id: `note-${mode}-${now}`,
+        title: trimmedTitle,
+        order: folders.length + 1,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const nextFolders = [...folders, nextFolder];
+      try {
+        newlyCreatedMusicNoteFolderRevealRef.current = { mode, id: nextFolder.id };
+        if (mode === 'sharedNote') {
+          setSharedNoteFolders(nextFolders);
+          setSelectedSharedNoteFolderId(nextFolder.id);
+        } else {
+          setMyNoteFolders(nextFolders);
+          setSelectedMyNoteFolderId(nextFolder.id);
+        }
+        await persistMusicNoteFolders(mode, nextFolders);
+        closeMusicNoteFolderEditor();
+        showFavoriteToast('폴더를 추가했습니다.');
+      } catch (error) {
+        console.error('add music note folder failed:', error);
+        showFavoriteToast('폴더 추가에 실패했습니다.');
+      } finally {
+        folderCreateBusyRef.current = false;
+      }
+      return;
+    }
     if (folders.some((item) => item.id !== folder.id && item.title === trimmedTitle)) {
       showFavoriteToast('같은 이름의 폴더가 이미 있습니다.');
       return;
@@ -7897,11 +7928,13 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 onClick={() => {
                   if (musicNoteFolderSuppressClickRef.current === dragKey) return;
                   setSelectedId(folder.id);
+                  setMobileNoteEditKey(isDefaultFolder ? null : dragKey);
                   resetVisibleCount();
                   exitSelectionMode('ui');
                 }}
                 aria-pressed={selectedId === folder.id}
                 data-active={selectedId === folder.id ? 'true' : 'false'}
+                data-mobile-edit-armed={mobileNoteEditKey === dragKey && selectedId === folder.id ? 'true' : 'false'}
                 className={cn(
                   'soridraw-musicnote-folder-button shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border select-none inline-flex items-center gap-1.5',
                   !isDefaultFolder && 'cursor-grab active:cursor-grabbing touch-pan-x',
@@ -9063,7 +9096,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               onClick={(event) => event.stopPropagation()}
             >
               <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-                <h3 className="text-base font-black text-white">폴더 편집</h3>
+                <h3 className="text-base font-black text-white">{musicNoteFolderRenameArgs.isCreate ? '폴더 생성' : '폴더 편집'}</h3>
                 <button
                   type="button"
                   onClick={closeMusicNoteFolderEditor}
@@ -9082,11 +9115,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   }}
                   placeholder="폴더 이름 (최대 20자)"
                   maxLength={20}
-                  autoFocus
                   className="w-full rounded-2xl border border-white/10 bg-[#111] px-4 py-3 text-sm font-bold text-white outline-none transition-colors focus:border-[#FF7A72]/55"
                 />
               </div>
-              {musicNoteFolderDeleteReady && (
+              {!musicNoteFolderRenameArgs.isCreate && musicNoteFolderDeleteReady && (
                 <p className="px-5 pb-3 text-xs font-bold leading-5 text-red-300">
                   다시 삭제를 누르면 폴더가 삭제됩니다. 폴더 안의 곡은 기본 폴더로 이동합니다.
                 </p>
@@ -9106,6 +9138,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 >
                   저장
                 </button>
+                {!musicNoteFolderRenameArgs.isCreate && (
                 <button
                   type="button"
                   onClick={() => {
@@ -9116,6 +9149,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 >
                   삭제
                 </button>
+                )}
               </div>
             </motion.div>
           </motion.div>, document.body

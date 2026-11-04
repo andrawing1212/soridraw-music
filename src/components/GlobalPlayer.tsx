@@ -770,7 +770,6 @@ export default function GlobalPlayer() {
 
     const serialized = JSON.stringify(appliedKeywords);
     // Share the same quota-safe Studio handoff used by Explore.
-    stageNextSongKeywords(serialized);
     stageNextSongOriginalProbeSelection({
       uid: (!isSharedPlaylistTrack && (!group.ownerUid || group.ownerUid === currentUser?.uid)) ? String(currentUser?.uid || '') : '',
       origin: 'player',
@@ -780,6 +779,7 @@ export default function GlobalPlayer() {
       stableSongId: String((currentTrack as any)?.soridrawSongId || group?.soridrawSongId || ''),
       taskId: String((currentTrack as any)?.taskId || group?.taskId || ''),
     });
+    stageNextSongKeywords(serialized);
 
     if (!auth.currentUser) {
       if (confirm('로그인 후 다음 곡에 설정이 적용됩니다. 로그인 화면으로 이동할까요?')) {

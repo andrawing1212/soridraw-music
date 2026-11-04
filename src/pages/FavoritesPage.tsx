@@ -8219,11 +8219,14 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         .soridraw-studio-result-pane
         .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
         .soridraw-stable-top-controls .soridraw-responsive-search-slot.is-search-collapsed {
-          flex: 0 0 82px !important;
-          width: 82px !important;
-          min-width: 82px !important;
-          max-width: 82px !important;
-          gap: 4px !important;
+          /* Keep the original 42px toolbar footprint. 82px overflow pushed
+             color dots and Filter outside the mobile viewport. */
+          position: relative !important;
+          flex: 0 0 42px !important;
+          width: 42px !important;
+          min-width: 42px !important;
+          max-width: 42px !important;
+          gap: 0 !important;
           overflow: visible !important;
           z-index: 1 !important;
         }
@@ -8266,12 +8269,21 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         .soridraw-studio-result-pane
         .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
         .soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search-icon {
-          left: 13px !important;
+          /* Magnifier and X share the existing compact control, not another
+             flex item that consumes the color tray's width. */
+          left: 0 !important;
           right: auto !important;
+          width: 22px !important;
+          min-width: 22px !important;
+          height: 46px !important;
+          padding: 0 !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
           transform: none !important;
           translate: none !important;
           pointer-events: auto !important;
-          z-index: 10 !important;
+          z-index: 30 !important;
         }
         :root body #root .soridraw-app-root
         .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
@@ -8290,9 +8302,20 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
         .soridraw-responsive-search-slot.is-search-collapsed .soridraw-musicnote-search-collapsed-clear {
           display: flex !important;
-          flex: 0 0 36px !important;
-          width: 36px !important;
+          position: absolute !important;
+          top: 0 !important;
+          right: 0 !important;
+          left: auto !important;
+          bottom: auto !important;
+          z-index: 40 !important;
+          flex: 0 0 20px !important;
+          width: 20px !important;
+          min-width: 20px !important;
           height: 46px !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border: 0 !important;
+          pointer-events: auto !important;
         }
       `}</style>
 

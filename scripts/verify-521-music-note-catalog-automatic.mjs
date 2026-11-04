@@ -331,8 +331,12 @@ console.log('MUSIC_NOTE_RELOAD_VERIFIED_R2_REUSED_AND_INITIAL_CACHE_COMMITTED=PA
 
 const firstPaint=appSource.slice(appSource.indexOf('const hasAnyMusicNotePayload ='),appSource.indexOf('let musicNoteBundleMissingHandled'));
 assert.match(firstPaint,/preferVerifiedCatalog = !!verified && verified !== localStorage\.getItem/);
-assert.match(firstPaint,/hasMusicNotePayloadCache\(currentUser.uid\) && !preferVerifiedCatalog/);
-assert.match(firstPaint,/hasAnyMusicNotePayload && !preferVerifiedCatalog/);
+assert.match(firstPaint,/hasAnyMusicNotePayload/);
+assert.match(firstPaint,/cachedFavoriteCount > 0/);
+assert.match(firstPaint,/canUseWarmCatalogWithoutRemote\(\{/);
+assert.match(firstPaint,/profileRevision: readCatalogProfileRevision\('musicNote', cachedMusicNoteProfile\)/);
+assert.match(firstPaint,/sessionValidated: false/);
+assert.match(firstPaint,/\(!preferVerifiedCatalog \|\| hasVerifiedWarmMusicNoteList\)/);
 const onData=appSource.slice(appSource.indexOf("unsubMusicNoteBundle = subscribeListBundle('musicNote'"),appSource.indexOf('const loadMoreFavorites ='));
 assert.match(onData,/previous = Array\.isArray\(prev\) && prev\.length > 0 \? prev : cachedFavs/);
 assert.match(onData,/if \(preferVerifiedCatalog\) setFavorites\(sortFavoriteList\(cachedFavs\)\)/);

@@ -11,6 +11,8 @@ on:
       - 'src/lib/songMetadataSearch.ts'
       - 'scripts/verify-song-metadata-search.mjs'
       - 'scripts/verify-music-list-filter-menu.mjs'
+      - 'src/components/music/MusicListLoadingState.tsx'
+      - 'scripts/verify-music-list-warm-entry.mjs'
       - 'src/lib/userDataEngine.ts'
       - 'src/services/userDomainSyncService.ts'
       - 'scripts/verify-music-note-multi-folder-persistence.mjs'
@@ -61,6 +63,8 @@ jobs:
         run: node scripts/verify-song-metadata-search.mjs
       - name: Music Note and Library filter menu and lifecycle regression
         run: node scripts/verify-music-list-filter-menu.mjs
+      - name: Music Note Library verified warm-first-paint and shared loader regression
+        run: node scripts/verify-music-list-warm-entry.mjs
       - name: Auth navigation readiness regression
         run: node scripts/verify-035-auth-nav-readiness.mjs
       - name: Studio Rap AUTO and lyric style reset regression

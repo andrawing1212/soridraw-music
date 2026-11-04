@@ -36,6 +36,7 @@ import { Playlist, PlaylistItem } from '../types';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
 import SunoTrackDetailModal from '../components/SunoTrackDetailModal';
 import CacheDiagnosticBadge from '../components/CacheDiagnosticBadge';
+import MusicListLoadingState from '../components/music/MusicListLoadingState';
 import { markCacheDiagnostic } from '../lib/cacheDiagnostics';
 import { subscribeListBundle, readLibraryBundleLocalSyncVersion, writeLibraryBundleLocalSyncVersion } from '../lib/listBundleCache';
 import { confirmMatchingLibraryWorkspaceReceipts } from '../lib/libraryColorReceipts';
@@ -818,7 +819,22 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     };
   }, [isStudioDesktopViewport]);
 
-  const [tracks, setTracks] = useState<any[]>([]);
+  // A re-entry into the same signed-in workspace should paint its existing
+  // UID-scoped in-memory/session list before any passive auth effect runs.
+  // Shared-link routes never borrow private workspace rows.
+  const [tracks, setTracks] = useState<any[]>(() => {
+    const uid = String((appUser || auth.currentUser)?.uid || '').trim();
+    const isSharedLink = typeof window !== 'undefined'
+      && new URLSearchParams(window.location.search).has('track');
+    if (!uid || isSharedLink) return [];
+    const warmList = libraryWorkspaceSession?.uid === uid
+      ? libraryWorkspaceSession.tracks
+      : readLibraryWorkspaceTrackCache(uid);
+    return Array.isArray(warmList) ? warmList : [];
+  });
+  const libraryRenderedUidRef = useRef<string | null>(
+    (appUser || auth.currentUser)?.uid || null,
+  );
   // Local-only lookup: playlist search can reuse lyrics/keywords already loaded
   // in the user's workspace without a Firestore scan or per-result request.
   const playlistSearchTrackById = useMemo(() => {
@@ -831,7 +847,15 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
     return index;
   }, [tracks]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    const uid = String((appUser || auth.currentUser)?.uid || '').trim();
+    const isSharedLink = typeof window !== 'undefined'
+      && new URLSearchParams(window.location.search).has('track');
+    if (!uid || isSharedLink) return true;
+    // Also allow a known-empty ready workspace without an artificial spinner.
+    return tracks.length === 0
+      && !(libraryWorkspaceSession?.uid === uid && libraryWorkspaceSession.ready);
+  });
   const [statusChecking, setStatusChecking] = useState<string | null>(null);
   const [user, setUser] = useState<any>(() => appUser || auth.currentUser);
   const [remainingCredits, setRemainingCredits] = useState<number | null>(() => readStoredSunoCredits(auth.currentUser?.uid).credits);
@@ -1815,12 +1839,15 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       const resolvedUser = currentUser || appUser || auth.currentUser;
       setUser(resolvedUser);
       const nextLibraryUiUid = resolvedUser?.uid || null;
-      if (libraryActiveUiUid !== nextLibraryUiUid) {
-        // Account A/B active state must never cross even for one render.
+      if (libraryRenderedUidRef.current !== nextLibraryUiUid) {
+        // The only valid reason to clear warm rows is a genuine UID change.
+        // In particular, first auth resolution for the SAME UID must not
+        // blank the list that was already painted from this user's cache.
         setTracks([]);
         setWorkspaceVisibleCount(WORKSPACE_PAGE_SIZE);
-        libraryActiveUiUid = nextLibraryUiUid;
       }
+      libraryRenderedUidRef.current = nextLibraryUiUid;
+      libraryActiveUiUid = nextLibraryUiUid;
 
       if (unsubscribeWorkspaceView) {
         unsubscribeWorkspaceView();
@@ -7800,10 +7827,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
         {libraryViewMode === 'workspace' && (
           <>
-        {loading || sharedTrackLoading ? (
-          <div className="!mt-2 md:!mt-3 pt-0 flex items-center justify-center py-16">
-            <Loader2 className="w-8 h-8 animate-spin text-[#A98BFF]" />
-          </div>
+        {(loading || sharedTrackLoading) && (tracks.length === 0 || isSharedView) ? (
+          <MusicListLoadingState />
         ) : (!(user || appUser || auth.currentUser) && !isSharedView) ? (
           <div className="!mt-2 md:!mt-3 pt-0 flex flex-col items-center justify-center py-16 text-center">
             <h2 className="text-xl font-bold mb-2">로그인이 필요합니다</h2>
@@ -8328,9 +8353,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
             {/* Playlist Items */}
             {loadingPlaylistItems ? (
-              <div className="soridraw-library-list-start-divider soridraw-library-folder-list-start-divider flex justify-center p-6 mt-[13px] md:mt-[21px]">
-                <Loader2 className="w-6 h-6 animate-spin text-[#A98BFF]" />
-              </div>
+              <MusicListLoadingState />
             ) : playlistItems.length > 0 ? (
               <div className="soridraw-library-list-start-divider soridraw-library-folder-list-start-divider flex flex-col gap-2 mt-[13px] md:mt-[21px]" data-selection-keep="true">
                 {(() => {

@@ -8258,6 +8258,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         <div
           className="soridraw-responsive-top-controls soridraw-stable-top-controls flex flex-col xl:flex-row xl:items-center gap-3"
           data-soridraw-search-folded={isMusicNoteSearchCollapsed && Boolean(searchQuery.trim()) ? 'true' : 'false'}
+          onClickCapture={(event) => {
+            const target = event.target as HTMLElement;
+            if (!target.closest('.soridraw-responsive-search-slot, .soridraw-compact-search-controls')) {
+              collapseMusicNoteSearchAfterAction();
+            }
+          }}
         >
           <div className={cn(
             "soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2",

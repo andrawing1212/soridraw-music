@@ -27,6 +27,7 @@ import { translateLyrics } from '../services/geminiService';
 import MusicApiGenerateModal, { LanguageCode, SunoModelVersion } from '../components/MusicApiGenerateModal';
 import StudioCenterModalPortal from '../components/studio/StudioCenterModalPortal';
 import CacheDiagnosticBadge from '../components/CacheDiagnosticBadge';
+import MusicListLoadingState from '../components/music/MusicListLoadingState';
 
 const SORIDRAW_930_ROUTE_USER_READ_CACHE = true;
 const SORIDRAW_917_MUSIC_NOTE_DELTA_SYNC_NO_FULLSCAN = true;
@@ -8351,10 +8352,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       )}
 
       {((isFavoritesLoading && activeFavoriteSource.length === 0) || sharedMusicNoteLoading) ? (
-        <div className="mt-2 md:mt-3 min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
-          <Loader2 className="w-12 h-12 text-[#FF7A72] animate-spin mb-4" />
-          <p className="text-[var(--text-secondary)] text-lg font-medium">노트를 불러오는 중...</p>
-        </div>
+        <MusicListLoadingState />
       ) : activeFavoriteSource.length === 0 ? (
         <div className="mt-2 md:mt-3 min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
           <Music className="w-12 h-12 text-[var(--text-secondary)]/20 mb-4" />

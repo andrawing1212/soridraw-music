@@ -77,6 +77,7 @@ import { useMediaQuery } from './lib/mediaQueryStore';
 import CacheDiagnosticBadge from './components/CacheDiagnosticBadge';
 import CacheDiagnosticsOverlay from './components/CacheDiagnosticsOverlay';
 import { markCacheDiagnostic } from './lib/cacheDiagnostics';
+import { canUseWarmCatalogWithoutRemote, readCatalogProfileRevision } from './lib/catalogWarmCachePolicy';
 import { scheduleListBundleWrite, subscribeListBundle, readListBundleFromServerOnce } from './lib/listBundleCache';
 import { schedulePreviewAdaptiveListIndexPublishIfDirty } from './lib/adaptiveListIndexV2';
 import { refreshCatalogSnapshotAfterKnownMutation } from './lib/userDataEngine';
@@ -10459,6 +10460,27 @@ const toggleCycleVariantSelection = (
         } catch {
           if (window.location.hostname === 'preview.soridraw.com') preferVerifiedCatalog = true;
         }
+        // A previous R2 Catalog has already verified this UID's local list
+        // when its durable revision receipt survived unchanged. It may paint
+        // while the REQUIRED first-tab R2 validation runs in the background;
+        // it is not promoted to server authority and cannot publish itself.
+        // Never paint an unknown/old local cache or an out-of-date profile.
+        let localCatalogReceipt = 0;
+        try {
+          localCatalogReceipt = Number(
+            localStorage.getItem(`soridraw_favorites_cache_rev_${currentUser.uid}`) || 0,
+          );
+        } catch {}
+        const hasVerifiedWarmMusicNoteList =
+          !musicNoteCacheNeedsFullBootstrap
+          && hasAnyMusicNotePayload
+          && cachedFavoriteCount > 0
+          && canUseWarmCatalogWithoutRemote({
+            localRevision: localCatalogReceipt,
+            profileRevision: readCatalogProfileRevision('musicNote', cachedMusicNoteProfile),
+            sessionValidated: false,
+          });
+
         // 1030 Stage 1: cache is an instant-paint layer, not proof of completeness.
         // A tiny payload must get one bounded first-page repair instead of being
         // trusted forever and hiding the user's saved songs. Once a full 20-item
@@ -10472,10 +10494,13 @@ const toggleCycleVariantSelection = (
           musicNoteFreshBootstrapUids.add(currentUser.uid);
         }
 
-        if (!musicNoteCacheNeedsFullBootstrap && hasMusicNotePayloadCache(currentUser.uid) && !preferVerifiedCatalog) {
+        if (!musicNoteCacheNeedsFullBootstrap && hasAnyMusicNotePayload
+          && (!preferVerifiedCatalog || hasVerifiedWarmMusicNoteList)) {
           markCacheDiagnostic('musicNote', 'CACHE', 0);
           setFavorites(sortFavoriteList(cachedFavs.filter((favorite) => !isFavoriteSoftRemoved(favorite))));
         } else {
+          // A cache with no valid Catalog receipt is still withheld until the
+          // route-gated canonical Catalog check completes.
           setFavorites([]);
         }
         setIsFavoritesLoading(true);

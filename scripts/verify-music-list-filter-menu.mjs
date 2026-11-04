@@ -102,6 +102,36 @@ assert.deepEqual([...visible('oldest')],['old','shared','new']);
 assert.deepEqual([...visible('all')],['new','old','shared']);
 assert.deepEqual([...visible('favorite')],['new']);
 assert.deepEqual([...visible('public','public')],['new']);
+
+/* 2026-11-04 director Android regression: compact search must leave
+ * all toolbar space to the color palette and keep BOTH buttons actionable. */
+const mobileFold = extract(note, '/* Mobile-only search fold:', '`}</style>');
+const compactRule = extract(mobileFold,
+  '.soridraw-stable-top-controls .soridraw-responsive-search-slot.is-search-collapsed {',
+  ':root body #root .soridraw-app-root\n        .soridraw-musicnote-theme');
+assert(compactRule.includes('flex: 0 0 42px !important;'),
+  'mobile collapsed search must not reserve 82px and push palette right');
+assert(compactRule.includes('width: 42px !important;'));
+assert(compactRule.includes('gap: 0 !important;'));
+assert(!mobileFold.includes('82px !important'), 'old oversized mobile search footprint reintroduced');
+const compactIcon = extract(mobileFold,
+  '.soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search-icon {',
+  ':root body #root .soridraw-app-root\n        .soridraw-musicnote-theme');
+assert(compactIcon.includes('width: 22px !important;'),
+  'magnifier should occupy only left half of existing 42px');
+const compactClear = mobileFold.slice(mobileFold.lastIndexOf(
+  '.soridraw-responsive-search-slot.is-search-collapsed .soridraw-musicnote-search-collapsed-clear {'));
+assert(compactClear.includes('position: absolute !important;'),
+  'X must not be another flex item pushing the palette');
+assert(compactClear.includes('display: flex !important;'), 'X must be visible');
+assert(compactClear.includes('right: 0 !important;') && compactClear.includes('width: 20px !important;'),
+  'X must fit in the right half of 42px compact control');
+assert(note.includes("onClick={expandMusicNoteSearch}"), 'magnifier reopens input');
+assert(note.includes("onClick={clearMusicNoteSearch}"), 'compact X clears query');
+assert(note.includes('is-search-collapsed'), 'collapsed state remains separate from search term');
+assert(note.includes('collapseMusicNoteSearchAfterAction()'), 'Enter/row actions still fold');
+console.log('MOBILE_MUSIC_NOTE_SEARCH_COMPACT_X_PALETTE_NO_SHIFT=PASS');
+
 console.log('MUSIC_NOTE_FILTER_ORDER_AND_LIKE_LOCK_PUBLIC_URL_TRASH=PASS');
 console.log('LIBRARY_FILTER_ORDER_SUPPORTED_AND_DISABLED_PLACEHOLDERS=PASS');
 console.log('LIBRARY_PLAYLIST_DATE_LIKE_PUBLIC_DISPLAY_SELECTION_PARITY=PASS');

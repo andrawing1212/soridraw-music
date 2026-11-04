@@ -306,6 +306,22 @@ const getLibraryWorkspaceTrackCreatedAtMs = (track: any): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+// Old/new playlist order is based on already stored per-item timestamps only.
+const getLibraryPlaylistItemAddedAtMs = (item: any): number => {
+  const raw = item?.addedAt;
+  if (!raw) return 0;
+  if (typeof raw?.toMillis === 'function') return raw.toMillis();
+  if (typeof raw?.seconds === 'number') return raw.seconds * 1000;
+  if (typeof raw?._seconds === 'number') return raw._seconds * 1000;
+  if (typeof raw?.toDate === 'function') return raw.toDate().getTime();
+  if (typeof raw === 'number') return raw;
+  if (typeof raw === 'string') {
+    const result = new Date(raw).getTime();
+    return Number.isFinite(result) ? result : 0;
+  }
+  return 0;
+};
+
 const mergeLibraryWorkspaceSessionTracks = (incoming: any[], previous: any[] = []): any[] => {
   const map = new Map<string, any>();
   (Array.isArray(previous) ? previous : []).forEach((track: any) => {
@@ -862,6 +878,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [playlistVisibleCount, setPlaylistVisibleCount] = useState(WORKSPACE_PAGE_SIZE);
   const [loadingPlaylistItems, setLoadingPlaylistItems] = useState(false);
   const [playlistSortMode, setPlaylistSortMode] = useState<'added' | 'genre' | 'custom'>('added');
+  const [playlistMenuFilter, setPlaylistMenuFilter] = useState<'all' | 'latest' | 'oldest' | 'favorite' | 'public'>('all');
   const [playlistVisibilityFilter, setPlaylistVisibilityFilter] = useState<'all' | 'public' | 'private'>('all');
   const [playlistColorFilter, setPlaylistColorFilter] = useState<string>('all');
   const [playlistSearchTerm, setPlaylistSearchTerm] = useState(() => readLibrarySearchSession(LIBRARY_PLAYLIST_SEARCH_SESSION_KEY));
@@ -1251,7 +1268,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   useEffect(() => {
     writeLibrarySearchSession(LIBRARY_PLAYLIST_SEARCH_SESSION_KEY, playlistSearchTerm);
   }, [playlistSearchTerm]);
-  const [filter, setFilter] = useState<'all' | 'completed' | 'favorite' | 'public' | 'private' | 'trash'>('all');
+  const [filter, setFilter] = useState<'all' | 'latest' | 'oldest' | 'completed' | 'favorite' | 'public' | 'private' | 'trash'>('all');
   const [showLibraryFilterPopup, setShowLibraryFilterPopup] = useState(false);
   const libraryFilterPopupRef = useRef<HTMLDivElement | null>(null);
   const [workspaceVisibleCount, setWorkspaceVisibleCount] = useState(WORKSPACE_PAGE_SIZE);
@@ -1267,8 +1284,16 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         setShowLibraryFilterPopup(false);
       }
     };
+    // The menu stays open at rest; scroll, resize and click-away dismiss it.
+    const closeOnMotion = () => setShowLibraryFilterPopup(false);
     document.addEventListener('mousedown', handleLibraryFilterOutside);
-    return () => document.removeEventListener('mousedown', handleLibraryFilterOutside);
+    window.addEventListener('scroll', closeOnMotion, true);
+    window.addEventListener('resize', closeOnMotion);
+    return () => {
+      document.removeEventListener('mousedown', handleLibraryFilterOutside);
+      window.removeEventListener('scroll', closeOnMotion, true);
+      window.removeEventListener('resize', closeOnMotion);
+    };
   }, []);
 
   useEffect(() => {
@@ -1285,7 +1310,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist') {
       setPlaylistVisibleCount(WORKSPACE_PAGE_SIZE);
     }
-  }, [libraryViewMode, activePlaylistId, deferredPlaylistSearchTerm, playlistVisibilityFilter, playlistColorFilter, playlistSortMode]);
+  }, [libraryViewMode, activePlaylistId, deferredPlaylistSearchTerm, playlistVisibilityFilter, playlistColorFilter, playlistSortMode, playlistMenuFilter]);
 
   useEffect(() => {
     setMultiSelectMode(false);
@@ -3659,7 +3684,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   }, [user?.uid]);
 
   const filteredTracks = useMemo(() => {
-    return tracks.filter(t => {
+    const results = tracks.filter(t => {
       if (filter === 'trash') {
         const hasHiddenItem = extractSunoData(t).some((i: any) => i.hidden);
         if (!t.hidden && !hasHiddenItem) return false;
@@ -3671,7 +3696,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       const matchesSearch = matchesStoredSongSearch(t, deferredSearchTerm);
       
-      const matchesFilter = filter === 'all' || filter === 'trash' ||
+      const matchesFilter = filter === 'all' || filter === 'latest' || filter === 'oldest' || filter === 'trash' ||
                             (filter === 'completed' && t.status === 'completed') || 
                             (filter === 'favorite' && t.favorite) ||
                             (filter === 'public' && t.isPublic === true) ||
@@ -3681,6 +3706,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       return matchesSearch && matchesFilter && matchesColor;
     });
+    if (filter === 'latest' || filter === 'oldest') {
+      const direction = filter === 'latest' ? -1 : 1;
+      return [...results].sort((a, b) => direction * (
+        getLibraryWorkspaceTrackCreatedAtMs(a) - getLibraryWorkspaceTrackCreatedAtMs(b)
+      ));
+    }
+    return results;
   }, [tracks, deferredSearchTerm, filter, workspaceColorFilter]);
 
   const displayedWorkspaceTracks = useMemo(() => {
@@ -3693,7 +3725,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     libraryViewMode === 'workspace' &&
     !isSharedView &&
     !deferredSearchTerm.trim() &&
-    filter === 'all' &&
+    (filter === 'all' || filter === 'latest') &&
     workspaceColorFilter === 'all' &&
     hasMoreWorkspaceServerTracks
   );
@@ -4726,6 +4758,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const normalizedPlaylistSearch = deferredPlaylistSearchTerm.trim().toLowerCase();
     let items = playlistItems.filter((item) => {
       if (!matchesPlaylistVisibilityFilter(item)) return false;
+      if (playlistMenuFilter === 'favorite') {
+        if (item?.sourceType === 'shared_track') return false;
+        const id = String(item?.sourceId || (item as any)?.trackId || (item as any)?.parentTrackId || '');
+        const source = playlistSearchTrackById.get(id);
+        if (!Boolean(source?.favorite ?? (item as any)?.favorite)) return false;
+      }
       if (playlistColorFilter === 'all') return true;
       const itemColor = getPlaylistItemColor(item);
       if (playlistColorFilter === 'gray') return itemColor === 'gray';
@@ -4738,7 +4776,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       });
     }
 
-    if (playlistSortMode === 'added') {
+    if (playlistMenuFilter === 'latest' || playlistMenuFilter === 'oldest') {
+      const direction = playlistMenuFilter === 'latest' ? -1 : 1;
+      items = [...items].sort((a, b) => direction * (
+        getLibraryPlaylistItemAddedAtMs(a) - getLibraryPlaylistItemAddedAtMs(b)
+      ) || a.order - b.order);
+    } else if (playlistSortMode === 'added') {
       items = [...items].sort((a, b) => {
         if (a.order !== b.order) return a.order - b.order;
         const timeA = a.addedAt ? (typeof a.addedAt.toMillis === 'function' ? a.addedAt.toMillis() : 0) : 0;
@@ -6699,6 +6742,59 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   }, [playlistItems, tracks, activePlaylistId, libraryViewMode, user, isSharedView]);
 
 
+
+  type LibraryMenuOption = 'all' | 'latest' | 'oldest' | 'favorite' | 'locked' | 'public' | 'trash';
+  const libraryMenuOptions: Array<{ value: LibraryMenuOption; label: string }> = [
+    { value: 'all', label: '전체' },
+    { value: 'latest', label: '최신' },
+    { value: 'oldest', label: '오래된' },
+    { value: 'favorite', label: '좋아요' },
+    { value: 'locked', label: '잠금' },
+    { value: 'public', label: '공개' },
+    { value: 'trash', label: '휴지통' },
+  ];
+  const renderLibraryFilterChoices = (workspace: boolean) => (
+    <>
+      {libraryMenuOptions.map(({ value, label }, index) => {
+        // Library has no supported lock flag. Folder trash is not the same as
+        // workspace trash; both remain visible but inactive until implemented.
+        const deferred = value === 'locked' || (!workspace && value === 'trash');
+        const selected = workspace ? filter === value : playlistMenuFilter === value;
+        return (
+          <React.Fragment key={value}>
+            {index === libraryMenuOptions.length - 1 && <div className="my-1 h-px bg-white/[0.07]" />}
+            <button
+              type="button"
+              disabled={deferred}
+              aria-pressed={!deferred && selected}
+              title={deferred ? '추후 지원 예정' : undefined}
+              onClick={() => {
+                if (deferred) return;
+                if (workspace) {
+                  setFilter(value as 'all' | 'latest' | 'oldest' | 'favorite' | 'public' | 'trash');
+                } else {
+                  setPlaylistMenuFilter(value as 'all' | 'latest' | 'oldest' | 'favorite' | 'public');
+                  setPlaylistVisibilityFilter(value === 'public' ? 'public' : 'all');
+                }
+                setShowLibraryFilterPopup(false);
+              }}
+              className={[
+                'flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all',
+                deferred ? 'cursor-not-allowed text-white/25'
+                  : selected ? 'bg-[#A98BFF]/16 text-[#D8CCFF]'
+                  : 'text-white/66 hover:bg-white/[0.06] hover:text-white',
+              ].join(' ')}
+            >
+              <span>{label}</span>
+              {deferred ? <span className="text-[9px] font-medium text-white/25">준비 중</span>
+                : selected ? <Check className="h-3.5 w-3.5" /> : null}
+            </button>
+          </React.Fragment>
+        );
+      })}
+    </>
+  );
+
   const renderLibraryTopControls = () => {
     if (isSharedView) return null;
     const isWorkspaceMode = libraryViewMode === 'workspace';
@@ -6802,20 +6898,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     exit={{ opacity: 0, y: 4 }}
                     transition={{ duration: 0.15, ease: "easeOut" }}
                     data-floating-menu="true"
-                    className="soridraw-menu-filter-popup absolute right-0 top-[52px] z-[120] w-[210px] overflow-hidden rounded-2xl bg-[#1d1d1f] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.48)]"
+                    className="soridraw-menu-filter-popup absolute right-0 top-[52px] z-[120] w-[210px] max-h-[70vh] overflow-y-auto rounded-2xl bg-[#1d1d1f] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.48)]"
                     onClick={(event) => event.stopPropagation()}
                   >
-                    {(['all', 'completed', 'favorite', 'public', 'private', 'trash'] as const).map((f) => (
-                      <button
-                        key={f}
-                        type="button"
-                        onClick={() => { setFilter(f); setShowLibraryFilterPopup(false); }}
-                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all ${filter === f ? 'bg-[#A98BFF]/16 text-[#D8CCFF]' : 'text-white/66 hover:bg-white/[0.06] hover:text-white'}`}
-                      >
-                        <span>{f === 'all' ? '전체' : f === 'completed' ? '완료' : f === 'favorite' ? '즐겨찾기' : f === 'public' ? '공개' : f === 'private' ? '비공개' : '휴지통'}</span>
-                        {filter === f && <Check className="h-3.5 w-3.5" />}
-                      </button>
-                    ))}
+                    {renderLibraryFilterChoices(true)}
                   </motion.div>
                 )}
                 </AnimatePresence>
@@ -6858,7 +6944,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   aria-expanded={showLibraryFilterPopup}
                 >
                   <Filter className="h-4 w-4" />
-                  <span className="soridraw-filter-label">필터{(playlistSortMode !== 'added' ? 1 : 0) + (playlistVisibilityFilter !== 'all' ? 1 : 0) > 0 ? ` (${(playlistSortMode !== 'added' ? 1 : 0) + (playlistVisibilityFilter !== 'all' ? 1 : 0)})` : ''}</span>
+                  <span className="soridraw-filter-label">필터{playlistMenuFilter !== 'all' ? ' (1)' : ''}</span>
                   <ChevronDown className={`soridraw-filter-chevron h-3.5 w-3.5 transition-transform ${showLibraryFilterPopup ? 'rotate-180' : ''}`} />
                 </button>
                 <AnimatePresence>
@@ -6869,42 +6955,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     exit={{ opacity: 0, y: 4 }}
                     transition={{ duration: 0.15, ease: "easeOut" }}
                     data-floating-menu="true"
-                    className="soridraw-menu-filter-popup absolute right-0 top-[52px] z-[120] w-[220px] overflow-hidden rounded-2xl bg-[#1d1d1f] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.48)]"
+                    className="soridraw-menu-filter-popup absolute right-0 top-[52px] z-[120] w-[220px] max-h-[70vh] overflow-y-auto rounded-2xl bg-[#1d1d1f] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.48)]"
                     onClick={(event) => event.stopPropagation()}
                   >
-                    <p className="px-3 pb-1 pt-1 text-[10px] font-black uppercase tracking-[0.12em] text-white/30">정렬</p>
-                    {[
-                      { value: 'added', label: '저장순' },
-                      { value: 'genre', label: '장르순' },
-                      { value: 'custom', label: '사용자' }
-                    ].map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => { setPlaylistSortMode(opt.value as any); setShowLibraryFilterPopup(false); }}
-                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all ${playlistSortMode === opt.value ? 'bg-[#A98BFF]/16 text-[#D8CCFF]' : 'text-white/66 hover:bg-white/[0.06] hover:text-white'}`}
-                      >
-                        <span>{opt.label}</span>
-                        {playlistSortMode === opt.value && <Check className="h-3.5 w-3.5" />}
-                      </button>
-                    ))}
-                    <div className="my-1 h-px bg-white/[0.07]" />
-                    <p className="px-3 pb-1 pt-1 text-[10px] font-black uppercase tracking-[0.12em] text-white/30">공개 상태</p>
-                    {[
-                      { value: 'all', label: '전체' },
-                      { value: 'public', label: '공개' },
-                      { value: 'private', label: '비공개' }
-                    ].map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => { setPlaylistVisibilityFilter(opt.value as any); setShowLibraryFilterPopup(false); }}
-                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all ${playlistVisibilityFilter === opt.value ? 'bg-[#A98BFF]/16 text-[#D8CCFF]' : 'text-white/66 hover:bg-white/[0.06] hover:text-white'}`}
-                      >
-                        <span>{opt.label}</span>
-                        {playlistVisibilityFilter === opt.value && <Check className="h-3.5 w-3.5" />}
-                      </button>
-                    ))}
+                    {renderLibraryFilterChoices(false)}
                   </motion.div>
                 )}
                 </AnimatePresence>
@@ -8280,37 +8334,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             ) : playlistItems.length > 0 ? (
               <div className="soridraw-library-list-start-divider soridraw-library-folder-list-start-divider flex flex-col gap-2 mt-[13px] md:mt-[21px]" data-selection-keep="true">
                 {(() => {
-                  const normalizedPlaylistSearch = deferredPlaylistSearchTerm.trim().toLowerCase();
-                  let items = playlistItems.filter(item => {
-                    if (!matchesPlaylistVisibilityFilter(item)) return false;
-                    if (playlistColorFilter === 'all') return true;
-                    const itemColor = getPlaylistItemColor(item);
-                    if (playlistColorFilter === 'gray') return itemColor === 'gray';
-                    return itemColor === playlistColorFilter;
-                  });
-
-                  if (normalizedPlaylistSearch) {
-                    items = items.filter(item => {
-                      return playlistItemMatchesStoredSearch(item, normalizedPlaylistSearch);
-                    });
-                  }
-
-                  if (playlistSortMode === 'added') {
-                    items = items.sort((a, b) => {
-                      if (a.order !== b.order) return a.order - b.order;
-                      const timeA = a.addedAt ? (typeof a.addedAt.toMillis === 'function' ? a.addedAt.toMillis() : 0) : 0;
-                      const timeB = b.addedAt ? (typeof b.addedAt.toMillis === 'function' ? b.addedAt.toMillis() : 0) : 0;
-                      return timeA - timeB;
-                    });
-                  } else if (playlistSortMode === 'genre') {
-                    items = items.sort((a, b) => {
-                      const genreA = (a.genreLabels && a.genreLabels[0]) || '';
-                      const genreB = (b.genreLabels && b.genreLabels[0]) || '';
-                      return genreA.localeCompare(genreB);
-                    });
-                  } else if (playlistSortMode === 'custom') {
-                    items = items.sort((a, b) => a.order - b.order);
-                  }
+                  // Keep display + bulk selection on the exact same sorted source.
+                  const items = getVisiblePlaylistItemsForSelection();
 
                   const displayedItems = items.slice(0, playlistVisibleCount);
                   const hasMorePlaylistItems = playlistVisibleCount < items.length;

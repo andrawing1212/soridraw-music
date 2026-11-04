@@ -1320,6 +1320,9 @@ export default function FavoritesPage({
   const sharedNoteFoldersRef = useRef<MusicNoteFolder[]>(DEFAULT_SHARED_NOTE_FOLDERS);
   const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'genre-1' | 'genre-2' | 'title-en' | 'title-ko' | 'locked-top' | 'locked-bottom'>('latest');
   const [favoriteTrashView, setFavoriteTrashView] = useState(false);
+  const [musicNoteListFilter, setMusicNoteListFilter] = useState<
+    'all' | 'latest' | 'oldest' | 'liked' | 'locked' | 'public' | 'url' | 'trash'
+  >('all');
   const [showSortPopup, setShowSortPopup] = useState(false);
   const [visibleCount, setVisibleCountState] = useState(() => Math.max(MUSIC_NOTE_VISIBLE_BATCH_SIZE, musicNoteVisibleCountMemory));
   const setVisibleCount = (value: number | ((prev: number) => number)) => {
@@ -1331,7 +1334,6 @@ export default function FavoritesPage({
     });
   };
   const resetVisibleCount = () => setVisibleCount(MUSIC_NOTE_VISIBLE_BATCH_SIZE);
-  const sortPopupTimerRef = useRef<NodeJS.Timeout | null>(null);
   const sortPopupRef = useRef<HTMLDivElement>(null);
   const [copiedType, setCopiedType] = useState<string | null>(null);
   const [favoriteMemoDrafts, setFavoriteMemoDrafts] = useState<Record<string, string>>({});
@@ -5580,43 +5582,36 @@ updates: draft.updates,
     }
   };
 
-  const handleSortChange = (newSort: 'latest' | 'oldest' | 'genre' | 'title' | 'locked') => {
-    setFavoriteTrashView(false);
-    if (newSort === 'title') {
-      setSortBy(prev => prev === 'title-en' ? 'title-ko' : 'title-en');
-    } else if (newSort === 'genre') {
-      setSortBy(prev => prev === 'genre-1' ? 'genre-2' : 'genre-1');
-    } else if (newSort === 'locked') {
-      setSortBy(prev => prev === 'locked-top' ? 'locked-bottom' : 'locked-top');
-    } else {
-      setSortBy(newSort as any);
+  const applyMusicNoteListFilter = (
+    mode: 'all' | 'latest' | 'oldest' | 'liked' | 'locked' | 'public' | 'url' | 'trash',
+  ) => {
+    setMusicNoteListFilter(mode);
+    setSortBy(mode === 'oldest' ? 'oldest' : 'latest');
+    setFavoriteTrashView(mode === 'trash');
+    if (mode === 'trash') {
+      setMusicNoteViewMode('noteSpace');
+      exitSelectionMode('ui');
     }
-    // Reset timer when a sort option is clicked
-    if (sortPopupTimerRef.current) clearTimeout(sortPopupTimerRef.current);
-    sortPopupTimerRef.current = setTimeout(() => setShowSortPopup(false), 5000);
+    resetVisibleCount();
+    setShowSortPopup(false);
   };
 
-  const toggleSortPopup = () => {
-    if (showSortPopup) {
-      setShowSortPopup(false);
-      if (sortPopupTimerRef.current) clearTimeout(sortPopupTimerRef.current);
-    } else {
-      setShowSortPopup(true);
-      if (sortPopupTimerRef.current) clearTimeout(sortPopupTimerRef.current);
-      sortPopupTimerRef.current = setTimeout(() => setShowSortPopup(false), 5000);
-    }
-  };
+  const toggleSortPopup = () => setShowSortPopup((open) => !open);
 
-  // Close sort popup when clicking outside
+  // No idle expiry; dismiss only on outside click, scroll, resize or split drag.
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (sortPopupRef.current && !sortPopupRef.current.contains(event.target as Node)) {
-        setShowSortPopup(false);
-        if (sortPopupTimerRef.current) clearTimeout(sortPopupTimerRef.current);
-      }
+    const closeOutside = (event: MouseEvent) => {
+      if (sortPopupRef.current && !sortPopupRef.current.contains(event.target as Node)) setShowSortPopup(false);
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    const closeOnMove = () => setShowSortPopup(false);
+    document.addEventListener('mousedown', closeOutside);
+    window.addEventListener('scroll', closeOnMove, true);
+    window.addEventListener('resize', closeOnMove);
+    return () => {
+      document.removeEventListener('mousedown', closeOutside);
+      window.removeEventListener('scroll', closeOnMove, true);
+      window.removeEventListener('resize', closeOnMove);
+    };
   }, []);
 
   // SORIDRAW_596: detail copy/edit uses the same visible text.
@@ -7196,13 +7191,20 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     const matchesTrashState = favoriteTrashView
       ? musicNoteViewMode === 'noteSpace' && isTrashed
       : !isTrashed;
+    const matchesListFilter = musicNoteListFilter === 'liked' ? isMusicNoteCardLiked(song)
+      : musicNoteListFilter === 'locked' ? isMusicNoteCardLocked(song)
+      : musicNoteListFilter === 'public'
+        ? (explorePublicationStateBySongId[getFavoriteDocumentId(song)]?.status === 'public'
+          || (!explorePublicationStateBySongId[getFavoriteDocumentId(song)] && song?.isPublic === true))
+      : musicNoteListFilter === 'url' ? Boolean(getFavoriteSunoShareUrl(song))
+      : true;
     const isSharedNoteOnly = isSharedMusicNoteItem(song);
     const matchesFolder = musicNoteViewMode === 'noteSpace'
       ? !isSharedNoteOnly
       : musicNoteViewMode === 'myNote'
         ? !isSharedNoteOnly && getMyNoteFolderIdsFromSong(song).includes(selectedMyNoteFolderId)
         : isSharedNoteOnly && getMusicNoteFolderIdFromSong(song, 'sharedNote') === selectedSharedNoteFolderId;
-    return matchesColor && matchesTrashState && matchesFolder;
+    return matchesColor && matchesTrashState && matchesFolder && matchesListFilter;
   };
 
   const localSearchMatchCount = baseFavoriteSource.filter(song => {
@@ -7305,7 +7307,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
   // 1036: Music Note mirrors Library full-catalog behavior. More is local-only.
   const shouldShowMusicNoteMoreButton = canShowCachedMusicNoteMore;
 
-  const musicNoteFilterCount = (sortBy !== 'latest' ? 1 : 0) + (favoriteTrashView ? 1 : 0);
+  const musicNoteFilterCount = musicNoteListFilter === 'all' ? 0 : 1;
 
   const musicNoteTabs = [
     { id: 'noteSpace' as const, label: '노트 스페이스', description: '내가 저장한 전체 뮤직노트입니다.' },
@@ -8165,6 +8167,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               onClick={() => {
                 setMusicNoteViewMode(tab.id);
                 setFavoriteTrashView(false);
+                setMusicNoteListFilter((current) => current === 'trash' ? 'all' : current);
                 resetVisibleCount();
                 exitSelectionMode('ui');
               }}
@@ -8295,48 +8298,44 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 4 }}
                   transition={{ duration: 0.15, ease: "easeOut" }}
-                  className="soridraw-menu-filter-popup absolute right-0 top-[52px] z-[120] w-[210px] overflow-hidden rounded-2xl bg-[#1d1d1f] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.48)]"
+                  className="soridraw-menu-filter-popup absolute right-0 top-[52px] z-[120] w-[210px] max-h-[70vh] overflow-y-auto rounded-2xl bg-[#1d1d1f] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.48)]"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  {(['latest', 'oldest', 'genre', 'title', 'locked'] as const).map((mode) => {
-                    const active =
-                      (mode === 'latest' && sortBy === 'latest') ||
-                      (mode === 'oldest' && sortBy === 'oldest') ||
-                      (mode === 'genre' && sortBy.startsWith('genre')) ||
-                      (mode === 'title' && sortBy.startsWith('title')) ||
-                      (mode === 'locked' && sortBy.startsWith('locked'));
-                    return (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => { handleSortChange(mode); setShowSortPopup(false); }}
-                        className={cn(
-                          "flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all",
-                          active ? "bg-[#FF7A72]/16 text-[#FFC1BC]" : "text-white/66 hover:bg-white/[0.06] hover:text-white"
-                        )}
-                      >
-                        <span>{mode === 'latest' ? '최신' : mode === 'oldest' ? '오래된' : mode === 'genre' ? '장르' : mode === 'title' ? '제목' : '잠금'}</span>
-                        {active && <Check className="h-3.5 w-3.5" />}
-                      </button>
-                    );
-                  })}
+                  {([
+                    { value: 'all', label: '전체' },
+                    { value: 'latest', label: '최신' },
+                    { value: 'oldest', label: '오래된' },
+                    { value: 'liked', label: '좋아요' },
+                    { value: 'locked', label: '잠금' },
+                    { value: 'public', label: '공개' },
+                    { value: 'url', label: 'URL 등록' },
+                  ] as const).map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={musicNoteListFilter === option.value}
+                      onClick={() => applyMusicNoteListFilter(option.value)}
+                      className={cn(
+                        "flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all",
+                        musicNoteListFilter === option.value ? "bg-[#FF7A72]/16 text-[#FFC1BC]" : "text-white/66 hover:bg-white/[0.06] hover:text-white"
+                      )}
+                    >
+                      <span>{option.label}</span>
+                      {musicNoteListFilter === option.value && <Check className="h-3.5 w-3.5" />}
+                    </button>
+                  ))}
                   <div className="my-1 h-px bg-white/[0.07]" />
                   <button
                     type="button"
-                    onClick={() => {
-                      setMusicNoteViewMode('noteSpace');
-                      setFavoriteTrashView((prev) => !prev);
-                      resetVisibleCount();
-                      exitSelectionMode('ui');
-                      setShowSortPopup(false);
-                    }}
+                    aria-pressed={musicNoteListFilter === 'trash'}
+                    onClick={() => applyMusicNoteListFilter('trash')}
                     className={cn(
                       "flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all",
-                      favoriteTrashView ? "bg-[#FF7A72]/16 text-[#FFC1BC]" : "text-white/66 hover:bg-white/[0.06] hover:text-white"
+                      musicNoteListFilter === 'trash' ? "bg-[#FF7A72]/16 text-[#FFC1BC]" : "text-white/66 hover:bg-white/[0.06] hover:text-white"
                     )}
                   >
                     <span>휴지통</span>
-                    {favoriteTrashView && <Check className="h-3.5 w-3.5" />}
+                    {musicNoteListFilter === 'trash' && <Check className="h-3.5 w-3.5" />}
                   </button>
                 </motion.div>
               )}

@@ -1,7 +1,9 @@
 import { onAuthStateChanged } from 'firebase/auth';
 import { onValue, ref, runTransaction, set, type Unsubscribe } from 'firebase/database';
 import { auth, realtimeDb } from '../firebase';
-import { projectCatalogItemForSync, rememberMusicNoteMediaPreview, scheduleCatalogSnapshotPublishIfDirty } from '../lib/userDataEngine';
+import { projectCatalogItemForSync, rememberMusicNoteMediaPreview, scheduleCatalogSnapshotPublishIfDirty, readCatalogSnapshotFromLocalCache } from '../lib/userDataEngine';
+import { rememberLibraryColorReceipts } from '../lib/libraryColorReceipts';
+import { readColorPending } from '../lib/colorPendingOutbox';
 import { appendBoundedMusicNoteMediaFallback452 } from '../lib/musicNoteCompactMediaSync452';
 import { buildStudioHeartPreviewItem } from '../lib/studioHeartPreviewPayload.js';
 import {
@@ -858,14 +860,36 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
 
   if (kind === 'musicNote') {
     if (signal.operation === 'color-preview') {
-      // Old RTDB retained values are not a new click. They must not mask
-      // canonical colors or move the Music Note canonical revision gate.
-      if (initialRetained || signal.originDeviceId === getDeviceId('musicNote')) return;
+      // Preserve Music Note's proven behavior. Only Library scopes get a
+      // durable, UID-local receipt; it is never a canonical Firestore write.
+      if (signal.originDeviceId === getDeviceId('musicNote')) return;
       try {
         const raw = signal.itemJson ? JSON.parse(signal.itemJson) : null;
         if (raw?.__colorSelectionPreviewV1 !== true || !Array.isArray(raw.changes)
           || raw.changes.length < 1 || raw.changes.length > 30
           || !raw.changes.every(validColorPreview)) return;
+        const libraryChanges=raw.changes.filter(
+          (change:ColorSelectionPreview)=>change.scope==='workspace'||change.scope==='playlist'
+        );
+        if(initialRetained){
+          // A retained signal is NOT automatically a fresh click. Only accept
+          // unseen Library changes when no unsaved local click conflicts and
+          // the already-cached canonical Catalog cannot prove a newer state.
+          const eligible=libraryChanges.filter(
+            (change:ColorSelectionPreview)=>!readColorPending(uid,change.scope as 'workspace'|'playlist',change.key)
+          );
+          if(!eligible.length)return;
+          void readCatalogSnapshotFromLocalCache('library',uid).then(cached=>{
+            if(cached && cached.revision>=signal.version)return;
+            const accepted=rememberLibraryColorReceipts(uid,signal.version,eligible,'remote');
+            if(accepted.length && typeof window!=='undefined')
+              window.dispatchEvent(new CustomEvent(COLOR_SELECTION_SYNC_EVENT,
+                {detail:{uid,version:signal.version,changes:accepted}}));
+          }).catch(()=>{});
+          return;
+        }
+        if(libraryChanges.length)
+          rememberLibraryColorReceipts(uid,signal.version,libraryChanges,'remote',true);
         window.dispatchEvent(new CustomEvent(COLOR_SELECTION_SYNC_EVENT, {
           detail:{uid,version:signal.version,changes:raw.changes},
         }));

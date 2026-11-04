@@ -127,3 +127,41 @@ assert.match(bulkColor,/publishColorSelectionPreview\(uid,changes.slice\(offset,
 assert.match(playlistClick,/if \(!skipLivePreview\)/);
 assert.match(workspaceClick,/if \(!skipLivePreview\)/);
 console.log('LIBRARY_PC_SWATCH_AND_BULK_ALL_ROWS_LIVE=PASS');
+
+
+// Library reconnect regression: a live gray reset may not become old PC red
+// after a stale Catalog effect, app upgrade, route remount or missing swatch.
+const receiptSource=read('src/lib/libraryColorReceipts.ts');
+const receiptCompiled=ts.transpileModule(receiptSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const receiptExports={};
+new Function('exports','localStorage','console',receiptCompiled)(receiptExports,localStorage,console);
+const {readLibraryColorReceipts,rememberLibraryColorReceipts,confirmMatchingLibraryWorkspaceReceipts}=receiptExports;
+const keyA='workspace:colorTags:group-a:1';
+const keyB='workspace:colorTags:group-b:1';
+const group=[{scope:'workspace',key:keyA,color:'gray'},{scope:'workspace',key:keyB,color:'blue'}];
+assert.equal(rememberLibraryColorReceipts('uid-PC',200,group,'remote',true).length,2);
+assert.equal(readLibraryColorReceipts('uid-PC')[keyA].color,'gray');
+assert.equal(readLibraryColorReceipts('uid-PC')[keyB].color,'blue');
+assert.equal(rememberLibraryColorReceipts('uid-PC',199,[{scope:'workspace',key:keyA,color:'red'}],'remote').length,0);
+assert.equal(readLibraryColorReceipts('uid-PC')[keyA].color,'gray');
+assert.equal(rememberLibraryColorReceipts('uid-mobile',210,[{scope:'workspace',key:keyA,color:'red'}],'remote',true).length,1);
+assert.equal(readLibraryColorReceipts('uid-PC')[keyA].color,'gray');
+assert.deepEqual(confirmMatchingLibraryWorkspaceReceipts('uid-PC',[{id:'group-a',colorTags:{1:'red'}}]),[]);
+assert.equal(readLibraryColorReceipts('uid-PC')[keyA].color,'gray');
+assert.deepEqual(confirmMatchingLibraryWorkspaceReceipts('uid-PC',[{id:'group-a',colorTags:{1:null}}]),[keyA]);
+assert.equal(readLibraryColorReceipts('uid-PC')[keyA],undefined);
+assert.equal(readLibraryColorReceipts('uid-PC')[keyB].color,'blue');
+const localSet=[{scope:'workspace',key:keyB,color:'purple'}];
+rememberLibraryColorReceipts('uid-PC',300,localSet,'local',true);
+assert.equal(readLibraryColorReceipts('uid-PC')[keyB].color,'purple');
+assert.equal(rememberLibraryColorReceipts('uid-PC',299,[{scope:'workspace',key:keyB,color:'red'}],'remote').length,0);
+assert.match(svc,/readCatalogSnapshotFromLocalCache\('library',uid\)/);
+assert.match(svc,/if\(initialRetained\)/);
+assert.match(svc,/rememberLibraryColorReceipts\(uid,signal.version,libraryChanges,'remote',true\)/);
+assert.match(lib,/useLayoutEffect\(\(\) => \{\s*try \{\s*const loadedWorkspaceMap = readLocalColorMap/);
+assert.match(lib,/readLibraryColorReceipts\(user\?\.uid\|\|''\)/);
+assert.match(lib,/remoteWorkspaceColorRef\.current\.has\(key\)/);
+assert.match(lib,/remotePlaylistColorRef\.current\.has\(key\)/);
+assert.match(lib,/supersedePending\('workspace',change\.key,change\.color\)/);
+assert.match(lib,/supersedePending\('playlist',change\.key,change\.color\)/);
+console.log('LIBRARY_COLOR_RECONNECT_RECEIPT_AND_STALE_CACHE_GUARD=PASS');

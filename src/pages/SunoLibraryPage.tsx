@@ -1,4 +1,5 @@
 import { SORIDRAW_COLOR_LOCAL_RECOVERY_EVENT } from '../lib/colorLocalRecovery';
+import { readLibraryColorReceipts, rememberLibraryColorReceipts, LIBRARY_COLOR_RECEIPT_CONFIRMED_EVENT } from '../lib/libraryColorReceipts';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import { resolveNextSongApplyRoute, stageNextSongKeywords } from '../lib/nextSongPendingBridge';
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useDeferredValue } from 'react';
@@ -34,6 +35,7 @@ import SunoTrackDetailModal from '../components/SunoTrackDetailModal';
 import CacheDiagnosticBadge from '../components/CacheDiagnosticBadge';
 import { markCacheDiagnostic } from '../lib/cacheDiagnostics';
 import { subscribeListBundle, readLibraryBundleLocalSyncVersion, writeLibraryBundleLocalSyncVersion } from '../lib/listBundleCache';
+import { confirmMatchingLibraryWorkspaceReceipts } from '../lib/libraryColorReceipts';
 import { schedulePreviewAdaptiveListIndexPublishIfDirty } from '../lib/adaptiveListIndexV2';
 import { flushPendingCatalogPublishes } from '../lib/userDataEngine';
 import { flushSoridrawPageSync } from '../lib/pageSyncCoordinator';
@@ -428,6 +430,15 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
         writeLibraryBundleLocalSyncVersion(uid, verifiedVersion);
         const list = Array.isArray(bundle.items) ? bundle.items : [];
         const isFullCatalogSnapshot = bundle.schemaVersion === 1001;
+        // Only a confirmed network Catalog showing the SAME explicit color
+        // may retire an optimistic receipt; cached/missing swatches cannot.
+        if(isFullCatalogSnapshot && !meta.fromCache){
+          const confirmed=confirmMatchingLibraryWorkspaceReceipts(uid,list);
+          if(confirmed.length && typeof window!=='undefined'){
+            window.dispatchEvent(new CustomEvent(LIBRARY_COLOR_RECEIPT_CONFIRMED_EVENT,
+              {detail:{uid,keys:confirmed}}));
+          }
+        }
         session.tracks = isFullCatalogSnapshot
           ? mergeLibraryWorkspaceSessionTracks(list, [])
           : mergeLibraryLatestBundleWithCache(list, session.tracks, bundle.cursorCreatedAtMs, bundle.hasMore);
@@ -957,7 +968,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     try {
       const loadedWorkspaceMap = readLocalColorMap('soridraw.library.workspaceColorTags');
       const loadedPlaylistMap = readLocalColorMap('soridraw.library.playlistColorTags');
@@ -969,13 +980,27 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       remotePlaylistColorRef.current.clear();
       workspaceLocalColorHoldRef.current.clear();
       playlistLocalColorHoldRef.current.clear();
+      // Rehydrate only explicit per-UID color receipts, never a guessed gray
+      // from a missing old Catalog field or the cumulative CACHE LIVE counter.
+      const receipts=readLibraryColorReceipts(user?.uid||'');
+      for(const [key,receipt] of Object.entries(receipts)){
+        if(key.startsWith('workspace:')){
+          remoteWorkspaceColorRef.current.set(key,{color:receipt.color,version:receipt.source==='local'?0:receipt.version});
+          workspaceNext[key]=receipt.color;
+        }else if(key.startsWith('playlist:')){
+          remotePlaylistColorRef.current.set(key,{color:receipt.color,version:receipt.source==='local'?0:receipt.version});
+          playlistNext[key]=receipt.color;
+        }
+      }
       for (const entry of user?.uid ? listColorPending(user.uid, 'workspace') : []) {
         pendingWorkspaceColorKeysRef.current.add(entry.key);
         workspaceNext[entry.key] = entry.color;
+        workspaceLocalColorHoldRef.current.set(entry.key,entry.color);
       }
       for (const entry of user?.uid ? listColorPending(user.uid, 'playlist') : []) {
         pendingPlaylistColorKeysRef.current.add(entry.key);
         playlistNext[entry.key] = entry.color;
+        playlistLocalColorHoldRef.current.set(entry.key,entry.color);
       }
       setWorkspaceLocalColorMap(workspaceNext);
       setPlaylistLocalColorMap(playlistNext);
@@ -1012,11 +1037,30 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       const workspace={...workspaceLocalColorMapRef.current};
       const playlist={...playlistLocalColorMapRef.current};
       let workspaceChanged=false, playlistChanged=false;
+      const supersedePending=(scope:'workspace'|'playlist',key:string,nextColor:string)=>{
+        const keys=scope==='workspace'?pendingWorkspaceColorKeysRef.current:pendingPlaylistColorKeysRef.current;
+        if(!keys.has(key))return;
+        // An older, not-yet-started local click must never be replayed over a
+        // later remote click on the next PC startup. If a write is in flight,
+        // retain a corrective latest-intent token for its trailing retry.
+        if(libraryColorsAutoSyncingRef.current){
+          stageColorPending(user.uid,scope,key,nextColor);
+          if(scope==='workspace')workspaceColorDirtyRef.current=true;
+          else playlistColorDirtyRef.current=true;
+        }else{
+          const older=readColorPending(user.uid,scope,key);
+          if(older)acknowledgeColorPending(user.uid,scope,older);
+          keys.delete(key);
+          if(scope==='workspace')workspaceColorDirtyRef.current=keys.size>0;
+          else playlistColorDirtyRef.current=keys.size>0;
+        }
+      };
       for (const change of detail.changes) {
         if (!change.key || !COLOR_OPTIONS.some(c=>c.value===change.color)) continue;
         if (change.scope==='workspace'
           && version>Number(remoteWorkspaceColorRef.current.get(change.key)?.version||0)) {
           workspaceLocalColorHoldRef.current.delete(change.key);
+          supersedePending('workspace',change.key,change.color);
           remoteWorkspaceColorRef.current.set(change.key,{color:change.color,version});
           workspace[change.key]=change.color;
           workspaceChanged=true;
@@ -1024,6 +1068,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         if (change.scope==='playlist'
           && version>Number(remotePlaylistColorRef.current.get(change.key)?.version||0)) {
           playlistLocalColorHoldRef.current.delete(change.key);
+          supersedePending('playlist',change.key,change.color);
           remotePlaylistColorRef.current.set(change.key,{color:change.color,version});
           playlist[change.key]=change.color;
           playlistChanged=true;
@@ -1037,6 +1082,22 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     window.addEventListener(COLOR_SELECTION_SYNC_EVENT,onRemoteColor as EventListener);
     return()=>window.removeEventListener(COLOR_SELECTION_SYNC_EVENT,onRemoteColor as EventListener);
   }, [user?.uid]);
+
+  useEffect(()=>{
+    const onConfirmed=(event:Event)=>{
+      const detail=(event as CustomEvent<{uid?:string;keys?:string[]}>).detail;
+      if(!user?.uid || detail?.uid!==user.uid || !Array.isArray(detail.keys))return;
+      let workspace=false,playlist=false;
+      for(const key of detail.keys){
+        if(key.startsWith('workspace:')){remoteWorkspaceColorRef.current.delete(key);workspace=true;}
+        if(key.startsWith('playlist:')){remotePlaylistColorRef.current.delete(key);playlist=true;}
+      }
+      if(workspace)setWorkspaceLocalColorMap(prev=>({...prev}));
+      if(playlist)setPlaylistLocalColorMap(prev=>({...prev}));
+    };
+    window.addEventListener(LIBRARY_COLOR_RECEIPT_CONFIRMED_EVENT,onConfirmed as EventListener);
+    return()=>window.removeEventListener(LIBRARY_COLOR_RECEIPT_CONFIRMED_EVENT,onConfirmed as EventListener);
+  },[user?.uid]);
 
   // 906: route hydration/remount is cache-only. Do not mirror the visible
   // tracks state back to Firestore merely because the Library page mounted.
@@ -1093,7 +1154,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     setWorkspaceLocalColorMap(prev => {
       let next: Record<string, string> | null = null;
       for (const [key, value] of authoritative) {
-        if (pendingWorkspaceColorKeysRef.current.has(key)) continue;
+        if (pendingWorkspaceColorKeysRef.current.has(key)
+          || remoteWorkspaceColorRef.current.has(key)) continue;
         if ((prev[key] || 'gray') === value) continue;
         if (!next) next = { ...prev };
         if (value === 'gray') delete next[key];
@@ -1120,7 +1182,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     setPlaylistLocalColorMap(prev => {
       let next: Record<string, string> | null = null;
       for (const [key, value] of authoritative) {
-        if (pendingPlaylistColorKeysRef.current.has(key)) continue;
+        if (pendingPlaylistColorKeysRef.current.has(key)
+          || remotePlaylistColorRef.current.has(key)) continue;
         if ((prev[key] || 'gray') === value) continue;
         if (!next) next = { ...prev };
         if (value === 'gray') delete next[key];
@@ -2314,6 +2377,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     pendingPlaylistColorKeysRef.current.add(key);
     remotePlaylistColorRef.current.delete(key);
     playlistLocalColorHoldRef.current.set(key,nextColor);
+    if(user?.uid)rememberLibraryColorReceipts(user.uid,Date.now(),
+      [{scope:'playlist',key,color:nextColor as 'gray'|'red'|'orange'|'yellow'|'green'|'blue'|'purple'}],'local',true);
     const next={...playlistLocalColorMapRef.current,[key]:nextColor};
     playlistLocalColorMapRef.current=next;
     setPlaylistLocalColorMap(next);
@@ -2382,6 +2447,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     pendingWorkspaceColorKeysRef.current.add(key);
     remoteWorkspaceColorRef.current.delete(key);
     workspaceLocalColorHoldRef.current.set(key,nextColor);
+    if(user?.uid)rememberLibraryColorReceipts(user.uid,Date.now(),
+      [{scope:'workspace',key,color:nextColor as 'gray'|'red'|'orange'|'yellow'|'green'|'blue'|'purple'}],'local',true);
     const next={...workspaceLocalColorMapRef.current,[key]:nextColor};
     workspaceLocalColorMapRef.current=next;
     setWorkspaceLocalColorMap(next);

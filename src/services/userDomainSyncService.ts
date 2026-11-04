@@ -1050,6 +1050,30 @@ export const stageCommittedMusicNoteMembershipDelta = (
   context: Readonly<V1MutationBoundaryContext>,
   result: unknown,
 ): void => {
+  // Folder membership is canonical per favorite, not only local folder UI.
+  // Stage ALL exact changed summaries after a successful Firestore batch so
+  // old R2 catalog rows cannot undo multi-folder membership on reload.
+  // This is an explicit completed mutation; never an automatic list rebuild.
+  if (context.domain === 'musicNote'
+    && (context.operation === 'folder-update' || context.operation === 'folder-delete')
+    && context.uid && Array.isArray(context.syncItems)) {
+    const confirmedIds = new Set((context.documentIds || []).map(id => String(id || '').trim()).filter(Boolean));
+    const exactItems: Record<string, unknown>[] = [];
+    for (const value of context.syncItems) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+      const source = value as Record<string, any>;
+      const id = String(source.firestoreId || source.id || '').trim();
+      if (!id || !confirmedIds.has(id) || String(source.uid || context.uid) !== context.uid) continue;
+      const item = projectCatalogItemForSync('musicNote', { ...source, uid: context.uid, id, firestoreId: id });
+      if (item) exactItems.push(item);
+    }
+    if (exactItems.length) {
+      scheduleCatalogSnapshotPublishIfDirty('musicNote', context.uid, exactItems, {
+        confirmedChangedIds: exactItems.map(item => String(item.id || '')),
+      });
+    }
+    return;
+  }
   const confirmedColorUpdate = context.operation === 'update' && context.colorCatalogChanged === true;
   if (context.domain !== 'musicNote'
     || (!['save', 'restore'].includes(context.operation) && !confirmedColorUpdate)

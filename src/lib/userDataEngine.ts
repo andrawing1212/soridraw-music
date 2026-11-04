@@ -41,6 +41,8 @@ type CatalogPublishOptions = {
   complete?: boolean;
   expectedItemCount?: number | null;
   deletedIds?: string[];
+  // Exact IDs from a *completed* canonical folder batch, never from a UI list.
+  confirmedChangedIds?: string[];
 };
 
 type CatalogDelta = {
@@ -115,7 +117,7 @@ const MUSIC_NOTE_SUMMARY_KEYS = new Set([
   'isLocked', 'liked', 'isLiked', 'personalLiked', 'favoriteLiked', 'isFavorite',
   'isPublic', 'exploreTrackId', 'explorePublicationId',
   'hidden', 'favoriteHidden', 'favoriteRemoved', 'favoriteRemovedAt', 'saved', 'deletedAt', 'trashedAt',
-  'color', 'favoriteColor', 'noteColor', 'favoriteColorTag', 'colorTag', 'folderId', 'folderIds', 'musicNoteFolderIds',
+  'color', 'favoriteColor', 'noteColor', 'favoriteColorTag', 'colorTag', 'folderId', 'folderIds', 'musicNoteFolderIds', 'noteFolderIds',
   'noteFolderId', 'noteFolderTitle', 'noteFolderUpdatedAt', 'myNoteFolderId', 'favoriteFolderId',
   'sharedNoteFolderId', 'sharedNoteFolderTitle', 'sharedNoteFolderUpdatedAt', 'sharedNoteFolder', 'noteSharedFolderId',
   'sharedNoteShareId', 'isSharedMusicNote', 'sharedReadOnly', 'sourceType', 'originalFavoriteId',
@@ -1257,6 +1259,12 @@ export const scheduleCatalogSnapshotPublishIfDirty = (
   // committed changed document. A full UI list is never an upsert mandate.
   if (kind === 'musicNote' && normalizedIncoming.length === 1
     && !(options.deletedIds || []).length) confirmed.add(String(normalizedIncoming[0].id));
+  if (kind === 'musicNote' && !(options.deletedIds || []).length) {
+    const exactIds = new Set(normalizedIncoming.map(item => String(item.id)));
+    for (const id of options.confirmedChangedIds || []) {
+      if (exactIds.has(id)) confirmed.add(id);
+    }
+  }
   // Consecutive successful favorite writes may each report only one item.
   // Merge the pending items instead of overwriting song A with song B.
   for (const item of normalizedIncoming) {

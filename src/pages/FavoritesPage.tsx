@@ -1,5 +1,6 @@
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import { resolveNextSongApplyRoute, stageNextSongKeywords } from '../lib/nextSongPendingBridge';
+import { stageNextSongOriginalProbeSelection } from '../lib/nextSongOriginalProbe';
 import {
   MUSIC_NOTE_SYNC_EVENT,
   COLOR_SELECTION_SYNC_EVENT,
@@ -5762,6 +5763,14 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     // Keep the exact selected recipe in same-tab memory as well as best-effort
     // legacy session/local storage; do not clear unrelated user data.
     stageNextSongKeywords(serialized);
+    stageNextSongOriginalProbeSelection({
+      uid: (!isMusicNoteShareRoute && !song?.sharedReadOnly && (!song?.uid || song.uid === user?.uid)) ? String(user?.uid || '') : '',
+      origin: 'musicNote',
+      favoriteId: String(song?.firestoreId || song?.id || ''),
+      stableSongId: String(song?.soridrawSongId || song?.recentSongSyncKey || song?.id || ''),
+      trackId: String(song?.sourceTrackId || song?.trackId || ''),
+      taskId: String(song?.taskId || ''),
+    });
     setSelectedSong(null);
     setActiveFavoriteMenuId(null);
 

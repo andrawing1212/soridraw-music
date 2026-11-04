@@ -1,4 +1,5 @@
 import { stageNextSongKeywords } from '../lib/nextSongPendingBridge';
+import { stageNextSongOriginalProbeSelection } from '../lib/nextSongOriginalProbe';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
@@ -769,6 +770,15 @@ export default function GlobalPlayer() {
 
     const serialized = JSON.stringify(appliedKeywords);
     // Share the same quota-safe Studio handoff used by Explore.
+    stageNextSongOriginalProbeSelection({
+      uid: (!isSharedPlaylistTrack && (!group.ownerUid || group.ownerUid === currentUser?.uid)) ? String(currentUser?.uid || '') : '',
+      origin: 'player',
+      trackId: sourceTrackId,
+      playlistId: isPlaylistTrack ? String(group?.playlistId || (currentTrack as any)?.playlistId || '') : '',
+      playlistItemId: isPlaylistTrack ? String((currentTrack as any)?.id || '') : '',
+      stableSongId: String((currentTrack as any)?.soridrawSongId || group?.soridrawSongId || ''),
+      taskId: String((currentTrack as any)?.taskId || group?.taskId || ''),
+    });
     stageNextSongKeywords(serialized);
 
     if (!auth.currentUser) {

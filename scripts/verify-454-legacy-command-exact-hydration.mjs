@@ -235,6 +235,7 @@ let displayGenreCalls=0;
 let navigated='';
 const clickContext={
  exports:{},
+ user:{uid:'owner'}, isMusicNoteShareRoute:false,
  onHover(){}, onLongPressEnd(){}, setSelectedSong(){}, setActiveFavoriteMenuId(){},
  document:{activeElement:null}, window:{dispatchEvent(){}},
  resolveNextSongApplyRoute:(timestamp)=>`/studio?applyPending=1&t=${timestamp}`,
@@ -243,6 +244,7 @@ const clickContext={
  localStorage:{setItem:(k,v)=>sent.set(k,v)},
  requestAnimationFrame:(fn)=>fn(), navigate:(route)=>{navigated=route;},
  // app468: the actual click stages the exact recipe via the shared bridge.
+ stageNextSongOriginalProbeSelection:()=>{},
  stageNextSongKeywords:(serialized)=>{
    sent.set('pendingAppliedKeywords',serialized);
    sent.set('pendingAppliedKeywordsBackup',serialized);

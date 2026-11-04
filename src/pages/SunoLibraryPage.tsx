@@ -857,8 +857,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const libraryColorsAutoSyncingRef = React.useRef(false);
   const libraryColorAutoSaveTimerRef = React.useRef<ReturnType<typeof setTimeout>|null>(null);
   const libraryColorAutoRetryRef = React.useRef(0);
-  const remoteWorkspaceColorRef = React.useRef<Map<string,{color:string;version:number;until:number}>>(new Map());
-  const remotePlaylistColorRef = React.useRef<Map<string,{color:string;version:number;until:number}>>(new Map());
+  const remoteWorkspaceColorRef = React.useRef<Map<string,{color:string;version:number}>>(new Map());
+  const remotePlaylistColorRef = React.useRef<Map<string,{color:string;version:number}>>(new Map());
+  const workspaceLocalColorHoldRef = React.useRef<Map<string,string>>(new Map());
+  const playlistLocalColorHoldRef = React.useRef<Map<string,string>>(new Map());
   const libraryUserRef = React.useRef(user);
   
   const [likesCache, setLikesCache] = useState<Record<string, { likeCount: number, likedByMe: boolean }>>({});
@@ -963,6 +965,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       const playlistNext = { ...loadedPlaylistMap };
       pendingWorkspaceColorKeysRef.current.clear();
       pendingPlaylistColorKeysRef.current.clear();
+      remoteWorkspaceColorRef.current.clear();
+      remotePlaylistColorRef.current.clear();
+      workspaceLocalColorHoldRef.current.clear();
+      playlistLocalColorHoldRef.current.clear();
       for (const entry of user?.uid ? listColorPending(user.uid, 'workspace') : []) {
         pendingWorkspaceColorKeysRef.current.add(entry.key);
         workspaceNext[entry.key] = entry.color;
@@ -1002,39 +1008,31 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const onRemoteColor = (event: Event) => {
       const detail=(event as CustomEvent<{uid?:string;version?:number;changes?:Array<{scope:string;key:string;color:string}>}>).detail;
       if (!user?.uid || detail?.uid !== user.uid || !Array.isArray(detail.changes)) return;
-      const version=Number(detail.version||0), now=Date.now();
+      const version=Number(detail.version||0);
       const workspace={...workspaceLocalColorMapRef.current};
       const playlist={...playlistLocalColorMapRef.current};
       let workspaceChanged=false, playlistChanged=false;
       for (const change of detail.changes) {
         if (!change.key || !COLOR_OPTIONS.some(c=>c.value===change.color)) continue;
         if (change.scope==='workspace'
-          && !pendingWorkspaceColorKeysRef.current.has(change.key)
           && version>Number(remoteWorkspaceColorRef.current.get(change.key)?.version||0)) {
-          remoteWorkspaceColorRef.current.set(change.key,{color:change.color,version,until:now+120000});
+          workspaceLocalColorHoldRef.current.delete(change.key);
+          remoteWorkspaceColorRef.current.set(change.key,{color:change.color,version});
           workspace[change.key]=change.color;
           workspaceChanged=true;
         }
         if (change.scope==='playlist'
-          && !pendingPlaylistColorKeysRef.current.has(change.key)
           && version>Number(remotePlaylistColorRef.current.get(change.key)?.version||0)) {
-          remotePlaylistColorRef.current.set(change.key,{color:change.color,version,until:now+120000});
+          playlistLocalColorHoldRef.current.delete(change.key);
+          remotePlaylistColorRef.current.set(change.key,{color:change.color,version});
           playlist[change.key]=change.color;
           playlistChanged=true;
         }
       }
       if (workspaceChanged) {workspaceLocalColorMapRef.current=workspace;setWorkspaceLocalColorMap(workspace);}
       if (playlistChanged) {playlistLocalColorMapRef.current=playlist;setPlaylistLocalColorMap(playlist);}
-      if (workspaceChanged||playlistChanged) {
-        window.setTimeout(()=>{
-          for (const change of detail.changes||[]) {
-            const dest=change.scope==='workspace'?remoteWorkspaceColorRef.current:remotePlaylistColorRef.current;
-            if (dest.get(change.key)?.version===version) dest.delete(change.key);
-          }
-          setWorkspaceLocalColorMap(current=>({...current}));
-          setPlaylistLocalColorMap(current=>({...current}));
-        },120050);
-      }
+      // A later explicit click replaces this color. Never expire live state
+      // after two minutes and accidentally show a stale cached Catalog.
     };
     window.addEventListener(COLOR_SELECTION_SYNC_EVENT,onRemoteColor as EventListener);
     return()=>window.removeEventListener(COLOR_SELECTION_SYNC_EVENT,onRemoteColor as EventListener);
@@ -2314,6 +2312,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const key = getPlaylistColorKey(targetPlaylistId, item.id);
     const nextColor = color || 'gray';
     pendingPlaylistColorKeysRef.current.add(key);
+    remotePlaylistColorRef.current.delete(key);
+    playlistLocalColorHoldRef.current.set(key,nextColor);
     const next={...playlistLocalColorMapRef.current,[key]:nextColor};
     playlistLocalColorMapRef.current=next;
     setPlaylistLocalColorMap(next);
@@ -2332,9 +2332,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const getPlaylistItemColor = (item: PlaylistItem, playlistId = activePlaylistId): string => {
     const key = getPlaylistColorKey(playlistId, item?.id);
     const local = playlistLocalColorMap[key];
-    if (pendingPlaylistColorKeysRef.current.has(key)) return local || 'gray';
+    const localHold=playlistLocalColorHoldRef.current.get(key);
+    if(localHold) return localHold;
     const remote=remotePlaylistColorRef.current.get(key);
-    if(remote && remote.until>Date.now()) return remote.color;
+    if(remote) return remote.color;
+    if (pendingPlaylistColorKeysRef.current.has(key)) return local || 'gray';
     if (item && Object.prototype.hasOwnProperty.call(item, 'colorTag')) return item.colorTag || 'gray';
     return local || 'gray';
   };
@@ -2343,9 +2345,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const colorField = getWorkspaceColorField();
     const key = getWorkspaceColorKey(group, idx, colorField);
     const local = workspaceLocalColorMap[key];
-    if (pendingWorkspaceColorKeysRef.current.has(key)) return local || 'gray';
+    const localHold=workspaceLocalColorHoldRef.current.get(key);
+    if(localHold) return localHold;
     const remote=remoteWorkspaceColorRef.current.get(key);
-    if(remote && remote.until>Date.now()) return remote.color;
+    if(remote) return remote.color;
+    if (pendingWorkspaceColorKeysRef.current.has(key)) return local || 'gray';
     const source = colorField === 'favoriteColorTags' ? group?.favoriteColorTags : group?.colorTags;
     if (source && Object.prototype.hasOwnProperty.call(source, String(idx))) return source[String(idx)] || 'gray';
     return local || 'gray';
@@ -2374,6 +2378,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const nextColor = color || 'gray';
     const key = getWorkspaceColorKey(group, idx, colorField);
     pendingWorkspaceColorKeysRef.current.add(key);
+    remoteWorkspaceColorRef.current.delete(key);
+    workspaceLocalColorHoldRef.current.set(key,nextColor);
     const next={...workspaceLocalColorMapRef.current,[key]:nextColor};
     workspaceLocalColorMapRef.current=next;
     setWorkspaceLocalColorMap(next);

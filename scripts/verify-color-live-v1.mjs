@@ -71,3 +71,40 @@ assert.match(lib,/handleChangeColor\(colorPortalMenu.item,c.value\)/);
 assert.doesNotMatch(lib,/activeColorMenu === item.id && \(/);
 assert.doesNotMatch(lib,/activeColorMenu === `workspace-\$\{group.id\}-\$\{idx\}` && \(/);
 console.log('COLOR_LIVE_SYNC_DURABLE_ABA_PORTAL_PC_MOBILE=PASS');
+
+// app regression: A's remote-purple cannot override B's later local-red once
+// B's save ACK clears pending; likewise PC Library local colors must survive
+// a stale workspace/playlist canonical cache after ACK.
+for(const [name,source] of [['Music Note',fav],['Library',lib]]) {
+  assert.doesNotMatch(source,/remote\.until>Date\.now\(\)/,name+' expired preview would revert');
+  assert.doesNotMatch(source,/until:now\+120000/,name+' expired preview would revert');
+}
+assert.match(fav,/favoriteRemoteColorRef\.current\.delete\(id\);\s*favoriteLocalColorHoldRef\.current\.set\(id, color\)/);
+assert.match(fav,/favoriteLocalColorHoldRef\.current\.delete\(change\.key\)/);
+assert.match(lib,/remoteWorkspaceColorRef\.current\.delete\(key\);\s*workspaceLocalColorHoldRef\.current\.set\(key,nextColor\)/);
+assert.match(lib,/remotePlaylistColorRef\.current\.delete\(key\);\s*playlistLocalColorHoldRef\.current\.set\(key,nextColor\)/);
+assert.match(lib,/workspaceLocalColorHoldRef\.current\.delete\(change\.key\)/);
+assert.match(lib,/playlistLocalColorHoldRef\.current\.delete\(change\.key\)/);
+console.log('COLOR_LAST_SELECTION_WINS_OVER_PRIOR_REMOTE_AND_STALE_CANONICAL=PASS');
+
+const getSection=(source,begin,end)=>{
+  const a=source.indexOf(begin),b=source.indexOf(end,a);
+  assert(a>=0&&b>a,`Missing view function: ${begin}`);
+  return source.slice(a,b);
+};
+const noteView=getSection(fav,'const getFavoriteColorValue =','const getFavoriteColorHex =');
+assert(noteView.indexOf('favoriteLocalColorHoldRef.current.get(id)')<
+  noteView.indexOf('favoriteRemoteColorRef.current.get(id)'), 'a local explicit click wins over old remote');
+assert(noteView.indexOf('favoriteRemoteColorRef.current.get(id)')<
+  noteView.indexOf("hasOwnProperty.call(song, 'favoriteColorTag')"), 'a remote explicit click wins over stale canonical');
+for (const [label,begin,end] of [
+  ['workspace','const getWorkspaceItemColor =','const isWorkspaceItemVisible ='],
+  ['playlist','const getPlaylistItemColor =','const getWorkspaceItemColor ='],
+]) {
+  const view=getSection(lib,begin,end);
+  assert(view.indexOf('LocalColorHoldRef.current.get(key)')>=0,label+' local hold missing');
+  assert(view.indexOf('LocalColorHoldRef.current.get(key)')<
+    view.indexOf('Ref.current.get(key)'),label+' local hold order invalid');
+  assert(view.indexOf('remote')<view.indexOf('hasOwnProperty.call('),label+' remote preview must outrank canonical');
+}
+console.log('COLOR_BADGE_RENDER_PRECEDENCE_AFTER_ACK=PASS');

@@ -1,3 +1,14 @@
+## CURRENT — Music Note·Library 재진입 로딩 최소화, 통일된 소형 로더 / 소스 QA PASS · PREVIEW Hosting 릴리스 (2026-11-04 KST)
+- **디렉터 실사용 신고:** 앱을 새로 실행한 뒤 Music Note 최초 진입에서 큰 ‘노트를 불러오는 중’ 화면이 상대적으로 길게 나타남. Library는 앱 재실행과 무관하게 매번 아주 짧은 보라색 스피너가 깜빡임. 정상 사용자 곡 데이터·저장 기능은 보호하며 두 화면의 로딩 디자인을 통일할 것.
+- **확인된 원인:** PREVIEW 신규 세션에 `sessionStorage` 검증 키가 없으면 이전 Catalog 검증 기록이 있는 로컬 리스트까지 전부 숨기는 Music Note 초기 페인트 가드. Library는 페이지 컴포넌트가 매번 `tracks=[]` + `loading=true`로 시작하여 동일 UID의 이미 실행 중인 workspace session/list도 첫 페인트에 사용하지 않음.
+- **이번 수정:** PR #772 merge `417a0ac6517f774b1de065bfd2214fafe9be3c9d`, 최종 검사 SHA `a88211714ddf990a075f97add4dc74b497e0f828`. Music Note는 **동일 UID에 남은 변경 없는 Catalog revision 영수증 + 이미 로드된 프로필 최신 버전 일치**가 둘 다 확인될 때만 로컬 목록을 즉시 화면에 표시. 아직 검증되지 않았거나 구버전·다른 UID는 기존 서버 검증 경로로 유지. 앱 첫 세션의 실제 R2 Catalog 검증·원본/최신값 병합 및 local-first 저장은 그대로. Library는 동일 UID의 이미 가진 세션/메모리 목록을 첫 화면에 사용; 계정 변경/공유 `?track` 라우트는 기존처럼 엄격히 분리.
+- **공통 로딩 UI:** `src/components/music/MusicListLoadingState.tsx` 하나를 Music Note·Library workspace·Library playlist에서 재사용. 실제 목록이 없을 때만 마운트하고 180ms 미만의 순간 수신에서는 스피너를 보여주지 않음; 오래 걸리는 진짜 초기 로드에서만 작고 중립적인 ‘곡 목록을 확인하는 중...’ 표시. 기존 탭·분할바·카드 디자인 변경 없음.
+- **QA:** PR #772 최종 후보 **5/5 SUCCESS** (product-quality, recent-login-restore, music-note-sync, auth-storage-source-and-build 및 새 warm-entry fixture/TS/Build, source-and-split). 초기 Music Note 구버전 테스트의 ‘무조건 로컬 숨기기’ 가정을 새 검증된 캐시 예외에 맞춰 수정 후 동일 작업 내 재검사 통과.
+- **비용·안전:** 앱 진입·재방문 추가 서버 read/write 0. 기존 공유 Worker/Rules/Functions/D1/R2·사용자 원본·캐시 초기화·TEST/PRODUCTION 변경 없음.
+- **현재 상태:** 검증된 소스가 `preview`에 병합됨. Hosting-only 릴리스 트리거 배포/배포본 exact match는 릴리스 Actions 완료 후 확정. 인증 PC·모바일의 첫 진입/재실행/계정 전환 실사용 QA는 OPEN.
+
+---
+
 ## CURRENT — 검색어 입력 시 Music Note 선택·폴더 이동 지연 회귀 최소 수정 / QA PASS → PREVIEW Hosting 릴리스 (2026-11-04 KST)
 - **실사용 실패:** 디렉터 동영상 20261104-0757·0759에서 `아인` 등 검색어 입력 상태의 Music Note 다곡 선택·선택모드·폴더 이동 시 심한 지연. 검색 정확도는 사용자 판정 PASS. 이전 복수 폴더 저장은 사용자 실사용 PASS.
 - **확정 코드 원인:** #766 이후 선택/모달 상태를 바꿀 때마다 음악 가사·키워드·한글표시명 검색을 전체 목록에 반복 적용하고, `mergeMusicNoteSearchSource`가 기존 검색곡까지 매 렌더 복사해 결과 재사용을 방해. UI 선택이 검색과 무관해도 긴 문자열 파싱·대량 객체 생성이 다시 실행됨.

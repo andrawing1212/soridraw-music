@@ -1,3 +1,14 @@
+## CURRENT — Music Note·Library 저장된 키워드/가사 검색 확장 · 소스 검사 PASS · PREVIEW Hosting 릴리스 (2026-11-04 KST)
+- **디렉터 실사용 판정:** Music Note 여러 곡 폴더 저장→새로고침·재접속 **PASS(CLOSED)** (2026-11-04 사진). 기존 기능 보호. 과거 곡 ‘다음곡에 적용’ 직접입력은 여전히 OPEN; #762 진단에서 해당 favorites 원본은 존재하나 직접입력 필드 미검출, recent ID 일치 없음. 데이터 소실 단정·임의 복원 없음.
+- **확인한 기존 검색:** Music Note는 제목·선택 장르/스타일/사운드/분위기/주제와 목록 객체에 가사가 있는 경우 검색했으나 저장된 한글 표시 메타·상황/가사 변형 모두 포괄하지 못함. Library workspace는 제목·프롬프트만, playlist는 제목·제작자·장르 중심.
+- **이번 수정:** #766 source merge `383f6badf6a5dce9b9f43107d7312d27399a5ec5`, 검증 후보 `f9a4d58d56d40babe22a7979cf383cffc31d07a5`. 공통 순수 검색 함수 `src/lib/songMetadataSearch.ts`가 현재 앱에 이미 저장/로딩된 제목, 키워드 선택(장르·스타일·사운드·분위기·주제·상황·보컬/직접입력), 한글 키워드 라벨, 프롬프트와 가사 원문/언어 변형, Suno 세부 트랙 가사를 대소문자·공백 정규화 부분 문자열로 검색. Library 폴더는 현재 로딩된 본인 workspace 원곡을 ID로 연결하여 메타데이터 활용, 공유곡의 private source는 읽지 않음. 리스트 표시/멀티선택 두 경로 동일 필터. UI 레이아웃·저장·폴더/색상·다음곡 로직 변경 없음.
+- **비용/개인정보:** 입력 시 기존 보유 목록 메모리만 필터링; 검색 추가 Firestore/RTDB/R2/D1 R0/W0. 서버 전체 스캔·원본 일괄 읽기·검색 인덱스 쓰기/가사 Catalog 복사/캐시 강제 초기화 없음. 기존 Music Note Enter 선택적 검색은 그대로.
+- **검사:** PR #766 관련 CI **4/4 SUCCESS** (product-quality, app498 Auth/TS/Build + 새 키워드·가사 fixtures, Music Note sync, split UI). Search helper no I/O/static and selection vs displayed filter parity tests PASS.
+- **한계/실사용:** 오래된 Music Note의 원본 가사가 compact Catalog에 없으면 기존 가사 부분 검색 불가. 이미 로드된 가사만 찾으며, 과거 모든 가사의 완전한 전역 텍스트 검색이라고 보고하지 않음. PREVIEW 인증 PC·모바일 직접 검색 QA OPEN.
+- **배포:** Hosting-only 릴리스 trigger. 실제 결과는 Actions run 확정 후 구분. 공유 Worker·Firestore/RTDB Rules·Functions·D1/R2, TEST/PRODUCTION 미변경.
+
+---
+
 ## CURRENT — Music Note 여러 곡의 복수 폴더 저장·재접속 초기화 수정 / 소스 QA PASS · PREVIEW Hosting 릴리스 (2026-11-04 KST)
 - **디렉터 실기기 신고 (2026-11-04):** Music Note 마이 노트에서 여러 곡을 선택해 폴더에 저장하면 화면에는 반영되지만 새로고침 또는 앱 종료 후 기존 목록이 다시 표시됨. Library 폴더는 정상으로 보여 이번 변경 대상에서 제외. 디렉터 스크린샷 4장의 당시 사용자 현상과 CACHE LIVE 진단을 확인.
 - **확인된 코드 원인 두 개:** 새 복수 폴더 소속 `noteFolderIds`는 Favorites 정본에 써도 앱/R2 Media Worker Catalog 허용 필드에서 누락되어 목록 재수신 시 첫 폴더 `noteFolderId`만 남음. 별도로 Music Note `folder-update` 성공 mutation이 확정 변경분을 Catalog pending delta로 전달하지 않아 서버 저장과 R2 파생 목록이 불일치.

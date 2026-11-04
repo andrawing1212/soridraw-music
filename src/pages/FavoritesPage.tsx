@@ -1188,6 +1188,8 @@ export default function FavoritesPage({
   showMusicApiGeneration?: boolean;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
+  const [isFavoriteDetailOpening, setIsFavoriteDetailOpening] = useState(false);
+  const favoriteDetailOpenRequestRef = useRef(0);
   const musicNotePageRootRef = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
@@ -1243,6 +1245,25 @@ export default function FavoritesPage({
   const [searchQuery, setSearchQuery] = useState(readMusicNoteSearchSession);
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const musicNoteSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const [isMusicNoteSearchCollapsed, setIsMusicNoteSearchCollapsed] = useState(false);
+  // The query itself remains the single filter authority; folding is visual only.
+  const collapseMusicNoteSearchAfterAction = () => {
+    if (!searchQuery.trim()) return;
+    if (musicNotePageRootRef.current?.dataset.soridrawResponsiveMode !== 'mobile') return;
+    setIsMusicNoteSearchCollapsed(true);
+    setIsSearchFocused(false);
+    musicNoteSearchInputRef.current?.blur();
+  };
+  const expandMusicNoteSearch = () => {
+    setIsMusicNoteSearchCollapsed(false);
+    window.requestAnimationFrame(() => musicNoteSearchInputRef.current?.focus());
+  };
+  const clearMusicNoteSearch = () => {
+    setSearchQuery('');
+    setIsMusicNoteSearchCollapsed(false);
+    setIsSearchFocused(false);
+    musicNoteSearchInputRef.current?.blur();
+  };
   const [serverSearchFavorites, setServerSearchFavorites] = useState<any[]>([]);
   const [isServerSearchLoading, setIsServerSearchLoading] = useState(false);
   const [isManualSyncingFavorites, setIsManualSyncingFavorites] = useState(false);
@@ -4405,13 +4426,13 @@ updates: draft.updates,
   }, [selectedSong]);
 
   useEffect(() => {
-    if (!selectedSong || !pendingDetailSunoUrlScrollRef.current) return;
+    if (!selectedSong || isFavoriteDetailOpening || !pendingDetailSunoUrlScrollRef.current) return;
 
     pendingDetailSunoUrlScrollRef.current = false;
     scrollDetailToSunoUrlSection('auto');
     const timer = window.setTimeout(() => setIsDetailSunoUrlHighlighted(false), 1400);
     return () => window.clearTimeout(timer);
-  }, [selectedSong]);
+  }, [selectedSong, isFavoriteDetailOpening]);
 
   // Data safety: do not auto-cache text edit drafts by song id.
   // The previous draft cache could briefly pair the old song's edit fields with
@@ -5361,6 +5382,8 @@ updates: draft.updates,
   }, [isSelectionMode]);
 
   const closeSelectedSong = async (source: 'ui' | 'history' = 'ui') => {
+    ++favoriteDetailOpenRequestRef.current;
+    setIsFavoriteDetailOpening(false);
     const shouldPopOverlayHistory = source === 'ui' && detailHistoryPushedRef.current;
 
     // 081: closing the detail modal is local-only; the page exit owns server sync.
@@ -6918,8 +6941,16 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
   };
 
   const openFavoriteDetail = async (song: any) => {
+    if (!song) return;
+    const requestId = ++favoriteDetailOpenRequestRef.current;
+    // Open at tap time, not after a potentially slow exact-song/IndexedDB read.
+    // Block edits until hydrated originals and pending-draft reconciliation finish.
+    setSelectedSong(song);
+    setIsFavoriteDetailOpening(true);
+    try {
     const hydrated = await hydrateCatalogFavorite(song);
-    let nextSong = hydrated;
+    if (favoriteDetailOpenRequestRef.current !== requestId) return;
+    let nextSong = hydrated || song;
     const sourceId = getFavoriteDocumentId(hydrated || song);
     const currentVersion = getMusicNoteDetailSourceVersion(hydrated);
 
@@ -6929,6 +6960,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
     if (user?.uid && sourceId && !isMusicNoteSharedView && !isSharedMusicNoteItem(hydrated)) {
       const recovered = await readMusicNoteDetailDraft(user.uid, sourceId);
+      if (favoriteDetailOpenRequestRef.current !== requestId) return;
       if (recovered?.updates && Object.keys(recovered.updates).length > 0) {
         const compatible = recovered.baseVersion <= 0 || currentVersion <= 0 || currentVersion <= recovered.baseVersion;
         const recoveredMediaVersion = Math.max(
@@ -6963,6 +6995,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       }
     }
 
+    if (favoriteDetailOpenRequestRef.current !== requestId) return;
+    // Editor state from the immediate preview row is never authoritative.
+    // Reinitialize it from the fully loaded song before enabling edits.
+    popupOpenedSongIdRef.current = null;
+    activeFavoriteEditorSongIdRef.current = null;
+    favoriteEditorReadySongIdRef.current = null;
     setSelectedSong(nextSong);
     // app353 — opening Detail proves the exact row already has this media. The list
     // patch below is only transient; route re-entry reloads the authoritative Catalog.
@@ -6984,6 +7022,13 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     // A catalog row can predate its detailed Suno metadata. Reuse the detail we just
     // loaded rather than fetching every list item or waiting for another server read.
     if (sourceId) syncFavoriteSunoCardMedia(sourceId, nextSong);
+    } catch (error) {
+      // Do not leave an invisible/unresponsive tap when an optional detail read
+      // fails. The already-open row remains visible, without a server write.
+      console.warn('Music Note detail hydration unavailable:', error);
+    } finally {
+      if (favoriteDetailOpenRequestRef.current === requestId) setIsFavoriteDetailOpening(false);
+    }
   };
 
   const executeFavoriteMenuAction = (action: 'details' | 'select' | 'apply' | 'share' | 'sunoOpen' | 'sunoUrl' | 'sunoRemove' | 'favorite' | 'folder' | 'saveSharedNote' | 'delete' | 'restore' | 'permanentDelete' | 'selectAll' | 'clearSelection' | 'lock' | 'unlock' | 'lockSelected' | 'unlockSelected' | 'shareSelected' | 'favoriteSelected' | 'unfavoriteSelected' | 'folderSelected' | 'deleteSelected' | 'restoreSelected' | 'permanentDeleteSelected', song: any) => {
@@ -7938,6 +7983,11 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       )}
       onClickCapture={(e) => {
         const target = e.target as HTMLElement;
+        // Clicking a song, its menu or a color/filter control folds the mobile
+        // search only; it never clears or reruns the current search result.
+        if (!target.closest('.soridraw-responsive-search-slot')) {
+          collapseMusicNoteSearchAfterAction();
+        }
 
         const isSelectionActionTarget = Boolean(target.closest('[data-selection-action-bar="true"], [data-more-menu-panel="true"]'));
 
@@ -8158,6 +8208,94 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         ? createPortal(musicNotePageHeader, studioWorkspaceHeroHost)
         : musicNotePageHeader}
 
+
+      <style>{\`
+        /* Mobile-only search fold: keep the query/results; recover palette width.
+           Split-pane responsive mode uses the same explicit compact state. */
+        :root body #root .soridraw-app-root
+        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+        .soridraw-stable-top-controls .soridraw-responsive-search-slot.is-search-collapsed,
+        html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+        .soridraw-studio-result-pane
+        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+        .soridraw-stable-top-controls .soridraw-responsive-search-slot.is-search-collapsed {
+          flex: 0 0 82px !important;
+          width: 82px !important;
+          min-width: 82px !important;
+          max-width: 82px !important;
+          gap: 4px !important;
+          overflow: visible !important;
+          z-index: 1 !important;
+        }
+        :root body #root .soridraw-app-root
+        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+        .soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search,
+        html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+        .soridraw-studio-result-pane
+        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+        .soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search {
+          position: relative !important;
+          flex: 0 0 42px !important;
+          width: 42px !important;
+          min-width: 42px !important;
+          max-width: 42px !important;
+          height: 46px !important;
+          overflow: hidden !important;
+          z-index: 1 !important;
+        }
+        :root body #root .soridraw-app-root
+        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+        .soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search-input,
+        html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+        .soridraw-studio-result-pane
+        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+        .soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search-input {
+          width: 42px !important;
+          min-width: 42px !important;
+          max-width: 42px !important;
+          padding: 0 !important;
+          color: transparent !important;
+          -webkit-text-fill-color: transparent !important;
+          caret-color: transparent !important;
+          pointer-events: none !important;
+        }
+        :root body #root .soridraw-app-root
+        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+        .soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search-icon,
+        html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+        .soridraw-studio-result-pane
+        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+        .soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search-icon {
+          left: 13px !important;
+          right: auto !important;
+          transform: none !important;
+          translate: none !important;
+          pointer-events: auto !important;
+          z-index: 10 !important;
+        }
+        :root body #root .soridraw-app-root
+        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+        .soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search-clear,
+        html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+        .soridraw-studio-result-pane
+        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+        .soridraw-responsive-search-slot.is-search-collapsed .soridraw-responsive-search-clear {
+          display: none !important;
+        }
+        :root body #root .soridraw-app-root
+        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+        .soridraw-responsive-search-slot.is-search-collapsed .soridraw-musicnote-search-collapsed-clear,
+        html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+        .soridraw-studio-result-pane
+        .soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+        .soridraw-responsive-search-slot.is-search-collapsed .soridraw-musicnote-search-collapsed-clear {
+          display: flex !important;
+          flex: 0 0 36px !important;
+          width: 36px !important;
+          height: 46px !important;
+        }
+      \`}</style>
+
       {!isMusicNoteSharedView && (
       <div className="soridraw-musicnote-region-top soridraw-stable-mode-viewport flex items-center gap-2 max-w-full whitespace-nowrap" data-selection-keep="true">
         <div className="soridraw-musicnote-mode-tabs grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[480px] shadow-[var(--shadow-md)]">
@@ -8204,11 +8342,22 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             "soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2",
             (isSearchFocused || Boolean(searchQuery)) && "is-search-active",
             Boolean(searchQuery) && "has-search-value",
+            isMusicNoteSearchCollapsed && Boolean(searchQuery.trim()) && "is-search-collapsed",
           )}>
             <div className="soridraw-responsive-search relative flex-1 min-w-0 group overflow-hidden">
-            <div className="soridraw-responsive-search-icon absolute inset-y-0 left-4 z-10 flex items-center pointer-events-none">
+            <button
+              type="button"
+              className={cn(
+                "soridraw-responsive-search-icon absolute inset-y-0 left-4 z-10 flex items-center",
+                isMusicNoteSearchCollapsed ? "pointer-events-auto" : "pointer-events-none",
+              )}
+              aria-label="검색창 펼치기"
+              aria-expanded={!isMusicNoteSearchCollapsed}
+              tabIndex={isMusicNoteSearchCollapsed ? 0 : -1}
+              onClick={expandMusicNoteSearch}
+            >
               <Search className="w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-[#FF7A72] transition-colors" />
-            </div>
+            </button>
             <input
               ref={musicNoteSearchInputRef}
               type="text"
@@ -8217,10 +8366,14 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
-                  runFavoriteServerSearch();
+                  void runFavoriteServerSearch();
+                  collapseMusicNoteSearchAfterAction();
                 }
               }}
-              onFocus={() => setIsSearchFocused(true)}
+              onFocus={() => {
+                setIsMusicNoteSearchCollapsed(false);
+                setIsSearchFocused(true);
+              }}
               onBlur={() => setIsSearchFocused(false)}
               className={cn(
                 "soridraw-responsive-search-input w-full h-[46px] bg-white/[0.145] border border-white/[0.14] rounded-2xl pl-12 text-sm text-[var(--text-primary)] focus:outline-none focus:bg-white/[0.17] focus:border-[#FF7A72]/50 transition-all",
@@ -8234,9 +8387,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 aria-label="검색 취소"
                 onPointerDown={(event) => event.preventDefault()}
                 onClick={(event) => {
-                  setSearchQuery('');
-                  setIsSearchFocused(false);
-                  musicNoteSearchInputRef.current?.blur();
+                  clearMusicNoteSearch();
                   event.currentTarget.blur();
                 }}
               >
@@ -8249,6 +8400,16 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               </div>
             )}
             </div>
+            {isMusicNoteSearchCollapsed && Boolean(searchQuery.trim()) && (
+              <button
+                type="button"
+                className="soridraw-musicnote-search-collapsed-clear hidden shrink-0 items-center justify-center rounded-xl text-white/55 hover:text-[#FF9A94]"
+                aria-label="검색어 지우기"
+                onClick={clearMusicNoteSearch}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
 
           <div className="soridraw-responsive-color-filter flex h-[46px] items-center gap-1.5 bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
@@ -9734,6 +9895,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               exit={{ opacity: 1, scale: 1, y: 0 }}
               transition={{ duration: 0 }}
               className="soridraw-musicnote-detail-panel relative flex w-full max-w-[1120px] flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[#131313] shadow-[0_40px_140px_rgba(0,0,0,0.58)] max-h-[92vh] musicnote-edit-mobile-boost"
+              aria-busy={isFavoriteDetailOpening}
               onClick={(e) => e.stopPropagation()}
               onClickCapture={(e) => {
                 if (confirmDeleteSong && !(e.target as HTMLElement).closest('[data-detail-delete-button="true"]')) {
@@ -9741,6 +9903,15 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 }
               }}
             >
+              {isFavoriteDetailOpening && (
+                <div className="absolute inset-0 z-[400] flex flex-col items-center justify-center gap-3 bg-[#131313]/95 text-sm text-white/70" role="status" aria-live="polite">
+                  <Loader2 className="h-6 w-6 animate-spin text-[#FF7A72]" />
+                  곡 상세 정보를 확인하는 중...
+                  <button type="button" onClick={() => void closeSelectedSong()} className="mt-2 rounded-xl bg-white/10 px-4 py-2 text-xs text-white/80">
+                    닫기
+                  </button>
+                </div>
+              )}
               <style>{`
                   .musicnote-edit-mobile-boost {
                     --mn-edit-hot: #FF6F5F;

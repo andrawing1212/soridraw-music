@@ -2215,7 +2215,8 @@ updates: draft.updates,
   const favoriteColorsAutoSyncingRef = useRef(false);
   const favoriteColorAutoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const favoriteColorAutoRetryRef = useRef(0);
-  const favoriteRemoteColorRef = useRef<Map<string,{color:string;version:number;until:number}>>(new Map());
+  const favoriteRemoteColorRef = useRef<Map<string,{color:string;version:number}>>(new Map());
+  const favoriteLocalColorHoldRef = useRef<Map<string,string>>(new Map());
   const favoritesRef = useRef<any[]>(favorites || []);
   const favoriteUserRef = useRef<User | null>(user);
   const [lastSelectionAction, setLastSelectionAction] = useState<'none' | 'lock' | 'unlock'>('none');
@@ -2304,9 +2305,15 @@ updates: draft.updates,
     // including a deliberate server gray/null reset, win over old device maps.
     const local = favoriteColorMap[song?.id];
     const isValid = (value: unknown) => FAVORITE_COLOR_OPTIONS.some(option => option.value === value);
-    if (pendingFavoriteColorIdsRef.current.has(song?.id) && isValid(local)) return local;
-    const remote = favoriteRemoteColorRef.current.get(String(song?.id || ''));
-    if (remote && remote.until > Date.now() && isValid(remote.color)) return remote.color;
+    // A just-selected color must survive its async ACK and stale list snapshots.
+    // A NEWER inbound click replaces this local hold; an older inbound click
+    // is cleared by a later explicit local click.
+    const id = String(song?.id || '');
+    const hold = favoriteLocalColorHoldRef.current.get(id);
+    if (hold && isValid(hold)) return hold;
+    const remote = favoriteRemoteColorRef.current.get(id);
+    if (remote && isValid(remote.color)) return remote.color;
+    if (pendingFavoriteColorIdsRef.current.has(id) && isValid(local)) return local;
     if (song && Object.prototype.hasOwnProperty.call(song, 'favoriteColorTag')) {
       return isValid(song.favoriteColorTag) ? song.favoriteColorTag : 'gray';
     }
@@ -4086,6 +4093,8 @@ updates: draft.updates,
       const loaded = readLocalColorMap('soridraw.favoriteColorTags');
       const next = { ...loaded };
       pendingFavoriteColorIdsRef.current.clear();
+      favoriteRemoteColorRef.current.clear();
+      favoriteLocalColorHoldRef.current.clear();
       for (const entry of user?.uid ? listColorPending(user.uid, 'musicNote') : []) {
         pendingFavoriteColorIdsRef.current.add(entry.key);
         next[entry.key] = entry.color;
@@ -4114,28 +4123,22 @@ updates: draft.updates,
       const detail = (event as CustomEvent<{uid?:string;version?:number;changes?:Array<{scope:string;key:string;color:string}>}>).detail;
       if (!user?.uid || detail?.uid !== user.uid || !Array.isArray(detail.changes)) return;
       const version = Number(detail.version || 0);
-      const now = Date.now();
       const accepted = detail.changes.filter(c => c.scope === 'musicNote'
         && c.key && FAVORITE_COLOR_OPTIONS.some(option => option.value === c.color)
-        && !pendingFavoriteColorIdsRef.current.has(c.key)
         && version > Number(favoriteRemoteColorRef.current.get(c.key)?.version || 0));
       if (!accepted.length) return;
       const next = { ...favoriteColorMapRef.current };
       for (const change of accepted) {
-        favoriteRemoteColorRef.current.set(change.key, {color:change.color,version,until:now+120000});
+        favoriteLocalColorHoldRef.current.delete(change.key);
+        favoriteRemoteColorRef.current.set(change.key, {color:change.color,version});
         next[change.key] = change.color;
       }
       favoriteColorMapRef.current = next;
       setFavoriteColorMap(next);
-      // This is remote visual state, NOT a local unsaved mutation.
-      window.setTimeout(() => {
-        for (const change of accepted) {
-          if (favoriteRemoteColorRef.current.get(change.key)?.version === version) {
-            favoriteRemoteColorRef.current.delete(change.key);
-          }
-        }
-        setFavoriteColorMap(current => ({ ...current }));
-      }, 120050);
+      // The live selection stays visible until superseded by an explicit
+      // click, not until an arbitrary two-minute timeout. Cache hydration
+      // must never resurrect a stale color while the page remains open.
+      // Remote visual state is not a new local Firestore mutation.
     };
     window.addEventListener(COLOR_SELECTION_SYNC_EVENT, onRemoteColor as EventListener);
     return () => window.removeEventListener(COLOR_SELECTION_SYNC_EVENT, onRemoteColor as EventListener);
@@ -5933,6 +5936,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       if (!id) return;
       pendingFavoriteColorIdsRef.current.add(id);
       next[id] = color;
+      favoriteRemoteColorRef.current.delete(id);
+      favoriteLocalColorHoldRef.current.set(id, color);
       if (user?.uid) stageColorPending(user.uid, 'musicNote', id, color);
       changes.push({scope:'musicNote',key:id,color:color as (typeof changes)[number]['color']});
     });

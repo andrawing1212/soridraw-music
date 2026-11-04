@@ -233,7 +233,7 @@ assert(libAdd.includes('setRenameModalArgs({') && libAdd.includes('isCreate: tru
   'Library + must open its folder creation draft');
 assert(!libAdd.includes('createPlaylist(') && !libAdd.includes('setPlaylists('),
   'Library + cannot write before Save');
-const noteEditor = extract(note, "        {musicNoteFolderRenameArgs && typeof document", '        )}');
+const noteEditor = extract(note, "        {musicNoteFolderRenameArgs && typeof document", '      {(() => {');
 assert(noteEditor.includes("musicNoteFolderRenameArgs.isCreate ? '폴더 생성' : '폴더 편집'"),
   'Music Note create title must be different from edit');
 assert(noteEditor.includes('!musicNoteFolderRenameArgs.isCreate && ('),

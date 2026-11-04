@@ -221,6 +221,54 @@ for (const [label,page,scope] of [
       || label === 'Music Note' && page.includes('setIsMusicNoteSearchCollapsed(false)'),
     label+': search clear returns an expanded unfiltered state');
 }
+// The director's folder + opens a draft editor, not an already-saved folder.
+// Saving reuses the original one-record/batched creator. Cancel does no writes.
+const noteAdd = extract(note, '  const handleAddMusicNoteFolder = (mode:', '  const commitRenameMusicNoteFolder = async');
+const libAdd = extract(library, "  const handleAddPlaylist = (type:", '  useEffect(() => {');
+assert(noteAdd.includes('setMusicNoteFolderRenameArgs({') && noteAdd.includes('isCreate: true'),
+  'Music Note + must open a local-only folder creation draft');
+assert(!noteAdd.includes('persistMusicNoteFolders(') && !noteAdd.includes('setMyNoteFolders('),
+  'Music Note + cannot write before Save');
+assert(libAdd.includes('setRenameModalArgs({') && libAdd.includes('isCreate: true'),
+  'Library + must open its folder creation draft');
+assert(!libAdd.includes('createPlaylist(') && !libAdd.includes('setPlaylists('),
+  'Library + cannot write before Save');
+const noteEditor = extract(note, "        {musicNoteFolderRenameArgs && typeof document", '        )}');
+assert(noteEditor.includes("musicNoteFolderRenameArgs.isCreate ? '폴더 생성' : '폴더 편집'"),
+  'Music Note create title must be different from edit');
+assert(noteEditor.includes('!musicNoteFolderRenameArgs.isCreate && ('),
+  'Music Note create must not offer Delete');
+assert(!noteEditor.includes('autoFocus'),
+  'Music Note creation/edit must not auto-open mobile keyboard');
+const libEditor = extract(library, "        {renameModalArgs && typeof document", '      {moveModalArgs && typeof document');
+assert(libEditor.includes("renameModalArgs.isCreate ? '폴더 생성' : '폴더 편집'"),
+  'Library create title must be different from edit');
+assert(libEditor.includes('!renameModalArgs.isCreate && ('),
+  'Library create must not offer Delete');
+assert(!libEditor.includes('autoFocus'),
+  'Library creation/edit must not auto-open mobile keyboard');
+assert(note.includes('await persistMusicNoteFolders(mode, nextFolders);')
+  && note.includes('if (musicNoteFolderRenameArgs.isCreate)'),
+  'Music Note original grouped folder save remains attached to Save');
+assert(library.includes('if (renameModalArgs.isCreate) {')
+  && library.includes('const id = await createPlaylist(user.uid, type, title, newOrder);'),
+  'Library original create service runs only on Save');
+const folderEditCss = readFileSync('src/index.css', 'utf8');
+assert(folderEditCss.includes('@media (hover: none), (pointer: coarse)'),
+  'mobile touch-only edit rule must not replace PC hover');
+assert(folderEditCss.includes('[data-mobile-edit-armed="true"] > .soridraw-folder-hover-edit'),
+  'mobile edit icon appears only for an explicitly tapped folder');
+assert(folderEditCss.includes('pointer-events: none;'),
+  'hidden edit icon cannot steal the folder-selection tap');
+for(const [name,page] of [['Music Note',note],['Library',library]]) {
+  assert(page.includes("data-mobile-edit-armed={"), name+': selected folder identifies the armed edit');
+  assert(page.includes("document.addEventListener('pointerdown', onOutsideFolderTap, true)"),
+    name+': tapping outside hides the edit button');
+  assert(page.includes("target.closest('.soridraw-") && page.includes("folder-button')"),
+    name+': tapping a folder does not accidentally dismiss its edit button');
+}
+console.log('FOLDER_CREATE_MODAL_NO_EARLY_WRITE_MOBILE_EDIT_NO_AUTOFOCUS=PASS');
+
 console.log('MUSIC_NOTE_LIBRARY_SEARCH_RESET_ICON_PC_BORDER_ESC_BACK=PASS');
 
 console.log('MUSIC_NOTE_LIBRARY_PC_SEARCH_X_ACCENT_ONLY=PASS');

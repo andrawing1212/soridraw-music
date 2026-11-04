@@ -8,6 +8,8 @@ on:
       - 'src/pages/SunoLibraryPage.tsx'
       - 'src/lib/nextSongPendingBridge.ts'
       - 'src/lib/nextSongOriginalProbe.ts'
+      - 'src/lib/songMetadataSearch.ts'
+      - 'scripts/verify-song-metadata-search.mjs'
       - 'src/lib/userDataEngine.ts'
       - 'src/services/userDomainSyncService.ts'
       - 'scripts/verify-music-note-multi-folder-persistence.mjs'
@@ -54,6 +56,8 @@ jobs:
         run: node scripts/verify-next-song-readonly-source-probe.mjs
       - name: Music Note multi-folder canonical and Catalog persistence regression
         run: node scripts/verify-music-note-multi-folder-persistence.mjs
+      - name: Music Note and Library keyword / lyric search regression
+        run: node scripts/verify-song-metadata-search.mjs
       - name: Auth navigation readiness regression
         run: node scripts/verify-035-auth-nav-readiness.mjs
       - name: Studio Rap AUTO and lyric style reset regression

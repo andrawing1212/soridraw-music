@@ -105,6 +105,7 @@ import {
   type ExplorePublicationSyncSignal,
 } from '../services/userDomainSyncService';
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
+import { matchesStoredSongSearch } from '../lib/songMetadataSearch';
 import { resolveMusicNoteNextSongRecipe, mergeMusicNoteNextSongClickRecipe455, resolveStoredAuthoredLyricDraft } from '../lib/musicNoteNextSongRecipe';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
 import { getMusicNoteDetailSourceVersion, getOrLoadMusicNoteDetail, getOrLoadMusicNoteOriginalRecipe456, patchMusicNoteDetailCache } from '../lib/musicNoteDetailCache';
@@ -7167,16 +7168,14 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
   const normalizedSearchQuery = deferredSearchQuery.trim().toLowerCase();
   const songMatchesMusicNoteSearch = (song: any, queryText = normalizedSearchQuery) => {
     if (!queryText) return true;
-    return (song.koreanTitle || '').toLowerCase().includes(queryText) ||
-      (song.englishTitle || '').toLowerCase().includes(queryText) ||
-      (song.title || '').toLowerCase().includes(queryText) ||
-      ((song.lyrics?.korean || '') as string).toLowerCase().includes(queryText) ||
-      ((song.lyrics?.english || '') as string).toLowerCase().includes(queryText) ||
-      getSongGenreValues(song).some((g: string) => g.toLowerCase().includes(queryText)) ||
-      getSongMoodValues(song).some((m: string) => m.toLowerCase().includes(queryText)) ||
-      getSongThemeValues(song).some((t: string) => t.toLowerCase().includes(queryText)) ||
-      getSongStyleValues(song).some((st: string) => st.toLowerCase().includes(queryText)) ||
-      getSongInstrumentSoundValues(song).some((sound: string) => sound.toLowerCase().includes(queryText));
+    return matchesStoredSongSearch(song, queryText, [
+      getSongGenreValues(song),
+      getSongMoodValues(song),
+      getSongThemeValues(song),
+      getSongSituationSummary(song),
+      getSongStyleValues(song),
+      getSongInstrumentSoundValues(song),
+    ]);
   };
 
   const songMatchesMusicNoteFilters = (song: any) => {

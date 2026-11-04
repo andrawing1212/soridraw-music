@@ -3,6 +3,7 @@ import { readLibraryColorReceipts, rememberLibraryColorReceipts, LIBRARY_COLOR_R
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import { resolveNextSongApplyRoute, stageNextSongKeywords } from '../lib/nextSongPendingBridge';
 import { stageNextSongOriginalProbeSelection } from '../lib/nextSongOriginalProbe';
+import { matchesStoredSongSearch } from '../lib/songMetadataSearch';
 import { mergeMusicNoteNextSongClickRecipe455, resolveMusicNoteNextSongRecipe } from '../lib/musicNoteNextSongRecipe';
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
@@ -802,6 +803,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   }, [isStudioDesktopViewport]);
 
   const [tracks, setTracks] = useState<any[]>([]);
+  // Local-only lookup: playlist search can reuse lyrics/keywords already loaded
+  // in the user's workspace without a Firestore scan or per-result request.
+  const playlistSearchTrackById = useMemo(() => {
+    const index = new Map<string, any>();
+    for (const track of tracks) {
+      for (const raw of [track?.id, track?.trackId, track?.sourceId]) {
+        const id = String(raw || '').trim();
+        if (id && !index.has(id)) index.set(id, track);
+      }
+    }
+    return index;
+  }, [tracks]);
   const [loading, setLoading] = useState(true);
   const [statusChecking, setStatusChecking] = useState<string | null>(null);
   const [user, setUser] = useState<any>(() => appUser || auth.currentUser);
@@ -3656,8 +3669,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         if (allHidden) return false;
       }
 
-      const matchesSearch = (t.title || '').toLowerCase().includes(deferredSearchTerm.toLowerCase()) || 
-                            (t.prompt || '').toLowerCase().includes(deferredSearchTerm.toLowerCase());
+      const matchesSearch = matchesStoredSongSearch(t, deferredSearchTerm);
       
       const matchesFilter = filter === 'all' || filter === 'trash' ||
                             (filter === 'completed' && t.status === 'completed') || 
@@ -4693,6 +4705,23 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     return getPlaylistItemVisibilityState(item) === playlistVisibilityFilter;
   };
 
+  const playlistItemMatchesStoredSearch = (item: any, query: string): boolean => {
+    const searchableMeta = [
+      formatSunoDisplayTitle(item?.title || ''),
+      getPlaylistItemCreatorName(item),
+      item?.ownerNickname, item?.creatorNickname, item?.ownerEmail, item?.creatorEmail,
+      item?.ownerUid, item?.sourceId, item?.genreLabels,
+    ];
+    if (matchesStoredSongSearch(item, query, searchableMeta)) return true;
+    if (item?.sourceType === 'shared_track') return false;
+    const candidateIds = [item?.sourceId, item?.trackId, item?.originalTrackId, item?.parentTrackId];
+    for (const raw of candidateIds) {
+      const track = playlistSearchTrackById.get(String(raw || '').trim());
+      if (track) return matchesStoredSongSearch(track, query);
+    }
+    return false;
+  };
+
   const getVisiblePlaylistItemsForSelection = () => {
     const normalizedPlaylistSearch = deferredPlaylistSearchTerm.trim().toLowerCase();
     let items = playlistItems.filter((item) => {
@@ -4705,22 +4734,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     if (normalizedPlaylistSearch) {
       items = items.filter((item) => {
-        const searchable = [
-          item.title,
-          formatSunoDisplayTitle(item.title),
-          getPlaylistItemCreatorName(item),
-          item.ownerNickname,
-          item.creatorNickname,
-          item.ownerEmail,
-          item.creatorEmail,
-          item.ownerUid,
-          item.sourceId,
-          ...(item.genreLabels || [])
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
-        return searchable.includes(normalizedPlaylistSearch);
+        return playlistItemMatchesStoredSearch(item, normalizedPlaylistSearch);
       });
     }
 
@@ -8277,22 +8291,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
                   if (normalizedPlaylistSearch) {
                     items = items.filter(item => {
-                      const searchable = [
-                        item.title,
-                        formatSunoDisplayTitle(item.title),
-                        getPlaylistItemCreatorName(item),
-                        item.ownerNickname,
-                        item.creatorNickname,
-                        item.ownerEmail,
-                        item.creatorEmail,
-                        item.ownerUid,
-                        item.sourceId,
-                        ...(item.genreLabels || [])
-                      ]
-                        .filter(Boolean)
-                        .join(' ')
-                        .toLowerCase();
-                      return searchable.includes(normalizedPlaylistSearch);
+                      return playlistItemMatchesStoredSearch(item, normalizedPlaylistSearch);
                     });
                   }
 

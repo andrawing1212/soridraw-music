@@ -184,6 +184,45 @@ assert(note.includes('has-search-value') && library.includes('has-search-value')
   'both expanded search fields must set a non-empty query marker');
 assert(note.includes('soridraw-responsive-search-clear') && library.includes('soridraw-responsive-search-clear'),
   'both desktop inputs must keep their clear-button class');
+/* 2026-11-04 director: both color reset icons only (no selected fill),
+ * typed desktop search has visible page border, Esc/Back cancel the query.
+ * Search history uses one same-URL entry only after user starts typing;
+ * modal/selection history remains owned by its existing handlers. */
+const searchToolbarCss = layout.slice(layout.lastIndexOf(
+  '2026-11-04 Search toolbar visual parity (Music Note & Library)'));
+assert(searchToolbarCss.includes('.soridraw-color-reset-button[aria-pressed="true"]')
+  && searchToolbarCss.includes('background: transparent !important;'),
+  'selected all-colors button must not fill its background');
+assert(searchToolbarCss.includes('.soridraw-color-reset-icon {\n  color: #FF7A72 !important;')
+  && searchToolbarCss.includes('.soridraw-color-reset-icon {\n  color: #A98BFF !important;'),
+  'selected reset icon should use each page accent');
+assert(searchToolbarCss.includes(':not([data-soridraw-responsive-mode="mobile"])'),
+  'PC border change must not alter already-good mobile responsive sizing');
+assert(searchToolbarCss.includes('border: 1px solid rgba(255, 122, 114, 0.76) !important;')
+  && searchToolbarCss.includes('border: 1px solid rgba(169, 139, 255, 0.76) !important;'),
+  'typed/focused PC search borders should be coral and purple');
+assert(searchToolbarCss.includes('.soridraw-responsive-search-slot:is(.has-search-value, :focus-within)'),
+  'PC search border should respond to both typing and focus');
+for (const [label,page,scope] of [
+  ['Music Note', note, 'music-note'],
+  ['Library', library, 'library'],
+]) {
+  assert(page.includes("soridrawSearchDraft: '"+scope+"'"),
+    label+': typing must arm a same-URL search history entry');
+  assert(page.includes("window.addEventListener('popstate', onSearchBack, true)"),
+    label+': browser Back must be intercepted before page history handlers');
+  assert(page.includes('event.stopImmediatePropagation();'),
+    label+': consumed Back must not trigger page modal/route handlers');
+  assert(page.includes('window.history.back();'),
+    label+': clearing typed search must consume its own synthetic entry');
+  assert(page.includes("key === 'Escape'") && page.includes('nativeEvent.isComposing'),
+    label+': Esc should clear search without breaking Korean IME composition');
+  assert(page.includes('release') && page.includes('setIsLibrarySearchCollapsed(false)')
+      || label === 'Music Note' && page.includes('setIsMusicNoteSearchCollapsed(false)'),
+    label+': search clear returns an expanded unfiltered state');
+}
+console.log('MUSIC_NOTE_LIBRARY_SEARCH_RESET_ICON_PC_BORDER_ESC_BACK=PASS');
+
 console.log('MUSIC_NOTE_LIBRARY_PC_SEARCH_X_ACCENT_ONLY=PASS');
 console.log('MUSIC_NOTE_LIBRARY_FOLDED_SEARCH_BRAND_COLOR_VISIBLE=PASS');
 

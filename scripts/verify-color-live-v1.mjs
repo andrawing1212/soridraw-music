@@ -65,7 +65,7 @@ assert.match(lib,/window.addEventListener\(COLOR_SELECTION_SYNC_EVENT/);
 // playlist row, and both palettes call their real color mutation handlers.
 assert.match(lib,/data-library-color-portal="true"/);
 assert.match(lib,/createPortal\(\s*<div data-floating-menu="true" data-library-color-portal/);
-assert.match(lib,/onClick=\{event=>openLibraryColorPortal\(event,\{id:/);
+assert.match(lib,/onClick=\{\(e\)=>openLibraryColorPortal\(e,\{id:/);
 assert.match(lib,/handleChangeWorkspaceColor\(colorPortalMenu.group,colorPortalMenu.idx!,c.value\)/);
 assert.match(lib,/handleChangeColor\(colorPortalMenu.item,c.value\)/);
 assert.doesNotMatch(lib,/activeColorMenu === item.id && \(/);

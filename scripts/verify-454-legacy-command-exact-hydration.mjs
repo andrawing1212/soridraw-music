@@ -235,6 +235,7 @@ let displayGenreCalls=0;
 let navigated='';
 const clickContext={
  exports:{},
+ user:{uid:'owner'}, isMusicNoteShareRoute:false,
  onHover(){}, onLongPressEnd(){}, setSelectedSong(){}, setActiveFavoriteMenuId(){},
  document:{activeElement:null}, window:{dispatchEvent(){}},
  resolveNextSongApplyRoute:(timestamp)=>`/studio?applyPending=1&t=${timestamp}`,

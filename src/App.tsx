@@ -10614,7 +10614,9 @@ const toggleCycleVariantSelection = (
           favoritePaginationFallbackModeRef.current = false;
           clearMusicNotePaginationCursor(currentUser.uid);
           setHasMoreFavorites(false);
-          setIsFavoritesLoading(false);
+          // Do not release here: the RTDB initial signal may have arrived
+          // before this auth bootstrap rewrote the local list. The ordered
+          // sync consumer and its first-paint effect release it together.
         }
 
         // 1036: paged favorites onSnapshot removed; full catalog is the bootstrap source.

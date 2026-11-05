@@ -77,10 +77,10 @@ assert.match(service, /const projected = \{\s*\.\.\.source,\s*id: safeDocumentId
 assert.match(service, /operation: desiredSaved \? 'heart-preview-save' : 'heart-preview-unsave'/);
 assert.match(service, /syncItem: item,/);
 // No timing or canonical boundary change: every same-song click reschedules
-// the same 30-second timer and net-zero settles without a Firestore write.
-assert.match(app, /const STUDIO_HEART_BATCH_MS = 30_000/);
+// the same 5-second timer and net-zero settles without a Firestore write.
+assert.match(app, /const STUDIO_HEART_BATCH_MS = 5_000/);
 assert.match(app, /scheduleStudioHeartPendingIntent\(safeDocumentId\)/);
 assert.match(app, /if \(intent.desiredSaved === intent.baselineSaved\)/);
 assert.match(app, /applyRemoteStudioHeartPreview\(/);
 console.log('STUDIO_HEART_FULL_TITLE_DETAIL_BOTH_DIRECTIONS=PASS');
-console.log('STUDIO_HEART_30S_CANONICAL_AND_R0_RECEIVER_CONTRACT=PASS');
+console.log('STUDIO_HEART_5S_CANONICAL_AND_R0_RECEIVER_CONTRACT=PASS');

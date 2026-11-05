@@ -1,3 +1,13 @@
+## CURRENT — Studio 하트 저장 직후 종료·PC 재접속 불일치 방지 / PREVIEW 배포 PASS · 실기기 QA OPEN (2026-11-06 KST)
+- **디렉터 재현:** PC를 닫은 상태에서 모바일의 기존 저장곡 하트를 해제하고 곧바로 모바일 앱 종료. 30초 후 PC 시작 시 최근 생성곡 하트는 해제된 것으로 보이는데 Music Note 원곡은 저장된 채 남음. 서버 원본에 확인되지 않은 미확정 RTDB preview가 다른 기기에 확정 상태처럼 반영된 것이 원인 경로. 사용자 원본 삭제·정리 금지.
+- **수정:** PR #810 (검증 head `890a67474497ae65222a6bc7186786b6f6436b10`, merge `1af402bac6296894490672a480eecc3ec295422b`). 수신 첫 RTDB retained `heart-preview-save/unsave`와 구버전 로컬 preview replay를 확정 상태로 처리하지 않음. 실시간 live preview는 이전과 동일하게 즉시 반영. Recent 하트 권위 저장은 canonical 확인 결과로 제한하며, 미확정 preview가 영구 Recent UNSAVE 표시를 기록하지 않도록 변경. 같은 기기 로컬 pending outbox 및 앱 재접속 후 자동 재시도 유지. 클릭 안내 '처리 중'과 canonical 성공 후 '완료'를 분리.
+- **비용·보호:** 곡별 최신 클릭 +30초, net-zero W0/변경 W1, 10곡 독립 outbox, 기존 PC↔모바일 실시간 표시, Suno 미디어·Music Note 원본 보존. 이번 수정은 추가 Firestore/D1 read/write 또는 공유 Rules/Functions/Worker 변경 없음. 모바일 앱이 canonical 쓰기 전에 강제 종료되면 타 기기가 대신 확정 저장할 수 있다는 보장은 **하지 않음**.
+- **검사:** PR #810 후보 관련 GitHub CI **5/5 SUCCESS** (종료/reconnect 회귀, 10곡/30초 보호, Recent login, Music Note, auth/likes 및 TS/Build). 소스 검사와 실사용 PASS 구분.
+- **릴리스:** PR #811 merge, Hosting-only PREVIEW exact SHA `329ee1fbb5c6236ab3b669b628941dcbd757799e`. Actions run [42075969125](https://github.com/andrawing1212/soridraw-music/actions/runs/42075969125) **SUCCESS**; `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`, `TEST_PRODUCTION_UNCHANGED=PASS`. TEST/PRODUCTION 미배포.
+- **OPEN — 실기기:** 인증된 PC↔모바일에서 (1) 저장/해제 직후 30초 전 모바일 종료·PC 뒤늦게 실행 시 **서버 미확정 상태를 완료라고 오인하지 않는지**, (2) 모바일 원래 브라우저 재접속 후 미완료 저장이 정본에 반영되는지, (3) 일반 30초 저장 완료 및 10곡 독립 동작을 사용자가 확인해야 함. 실사용 QA 미확인 상태에서 완전 해결로 보고 금지.
+
+---
+
 ## CURRENT — Music Note·Library 재진입 로딩 최소화, 통일된 소형 로더 / 소스 QA PASS · PREVIEW Hosting 릴리스 (2026-11-04 KST)
 - **디렉터 실사용 신고:** 앱을 새로 실행한 뒤 Music Note 최초 진입에서 큰 ‘노트를 불러오는 중’ 화면이 상대적으로 길게 나타남. Library는 앱 재실행과 무관하게 매번 아주 짧은 보라색 스피너가 깜빡임. 정상 사용자 곡 데이터·저장 기능은 보호하며 두 화면의 로딩 디자인을 통일할 것.
 - **확인된 원인:** PREVIEW 신규 세션에 `sessionStorage` 검증 키가 없으면 이전 Catalog 검증 기록이 있는 로컬 리스트까지 전부 숨기는 Music Note 초기 페인트 가드. Library는 페이지 컴포넌트가 매번 `tracks=[]` + `loading=true`로 시작하여 동일 UID의 이미 실행 중인 workspace session/list도 첫 페인트에 사용하지 않음.

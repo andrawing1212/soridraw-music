@@ -303,7 +303,7 @@
           },
           "slots": {
             "$slot": {
-              ".validate": "$slot.matches(/^(0|[1-9]|1[0-9])$/) && newData.hasChildren(['documentId','seq','desiredSaved','originDeviceId','updatedAtMs','status','claimToken','claimedUntilMs','songJson']) && (!data.exists() || newData.child('seq').val() >= data.child('seq').val())",
+              ".validate": "$slot.matches(/^(0|[1-9]|1[0-9])$/) && newData.hasChildren(['documentId','seq','desiredSaved','originDeviceId','updatedAtMs','status','claimToken','claimedUntilMs','songJson']) && (!data.exists() || (newData.child('documentId').val() === data.child('documentId').val() && (newData.child('seq').val() > data.child('seq').val() || (newData.child('seq').val() === data.child('seq').val() && newData.child('desiredSaved').val() === data.child('desiredSaved').val() && newData.child('originDeviceId').val() === data.child('originDeviceId').val() && newData.child('updatedAtMs').val() === data.child('updatedAtMs').val() && newData.child('songJson').val() === data.child('songJson').val()))))",
               "documentId": {
                 ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 256"
               },

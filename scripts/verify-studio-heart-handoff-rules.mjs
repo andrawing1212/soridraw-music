@@ -38,9 +38,17 @@ try{
  await assertSucceeds(slot(0).set(fixture('song-1',{
    status:'claimed',claimToken:'claim-A',claimedUntilMs:Date.now()+30000,
  })));
+ // Same-version metadata is immutable: a stale tab cannot silently flip
+ // the saved direction or substitute another song under a claimed receipt.
+ await assertFails(slot(0).set(fixture('song-1',{seq:1,desiredSaved:true})));
+ await assertFails(slot(0).set(fixture('song-2',{seq:2})));
  await assertSucceeds(slot(0).set(fixture('song-1',{
    seq:2,desiredSaved:true,songJson:'{"title":"A"}',
  })));
+ await assertFails(slot(0).set(fixture('song-1',{
+   seq:2,desiredSaved:false,songJson:'{"title":"A"}',
+ })));
+ await assertFails(slot(0).set(fixture('other-song',{seq:3})));
  await assertFails(slot(0).set(fixture('song-1',{seq:1})));
  await assertFails(slot(0).set(fixture('song-1',{seq:3,unexpected:true})));
  await assertFails(slot(0).set(fixture('song-1',{seq:3,status:'completed'})));

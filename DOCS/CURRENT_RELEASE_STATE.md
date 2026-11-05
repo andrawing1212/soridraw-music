@@ -1,3 +1,11 @@
+## CURRENT — Music Note 첫 진입 때 변경곡 한 개만 먼저 표시되는 현상: PREVIEW 수정 배포 PASS, 실기기 QA OPEN (2026-11-06 KST)
+- **디렉터 확인:** 이번 문제는 PR #819 하트 패치의 회귀가 아니라 전날부터 있었던 별도 화면 표시 문제. 저장/해제 PC↔모바일 양방향 반영은 실제 디렉터 확인 PASS. 그러나 A에서 변경한 뒤 B가 Music Note에 진입하면 변경곡 한 개만 1~2초 표시되고 나중에 전체 목록이 나타나는 현상.
+- **원인 확인:** 전체 Music Note Catalog가 아직 준비되지 않은 초기 구간에도 RTDB 변경곡 한 개가 favoritesStore에 들어오면 FavoritesPage의 기존 'isFavoritesLoading && 목록 길이 0' 조건이 로더를 우회. 또한 UID별 로컬 캐시 존재만으로 Loading false가 되는 경로는 완전한 Catalog 영수증과 별개.
+- **수정:** PR #822 merge c40d739dc0bc474131229ab9d152378ddffebe23 (검증 commit 80457a2ba237b22bbbd9348a6622afa860c031ac). 검증된 same-UID warm Catalog 영수증이 있을 때만 즉시 전체 목록 표시. 그 외에는 Catalog 수신 전 한 곡 delta가 존재하더라도 기존 지연형 소형 로더를 표시. Catalog 수신/오류 후 기존 완료 처리는 유지. 저장/해제·원본·폴더/검색·RTDB·서버 읽기/쓰기 추가 없음.
+- **검사·배포:** PR #822 관련 CI 7/7 SUCCESS (Music Note warm-first-paint, Music Note Catalog, Recent/login, Studio 10곡/RTDB, 반응형, auth, likes, TypeScript/Build). trigger-only PR #823 merge e50ae0274705c2d3b7a87fde196c5d3765fd4710. [PREVIEW Actions 42121427452](https://github.com/andrawing1212/soridraw-music/actions/runs/42121427452) SUCCESS: SHARED_RTDB_RULES_DEPLOY=SKIPPED, FIREBASE_PREVIEW_DEPLOY=PASS, PREVIEW_EXACT_BUILD=PASS, TEST_PRODUCTION_UNCHANGED=PASS.
+- **실사용 남음:** 동일 로그인 계정 A에서 저장/해제→B에서 Music Note 최초 진입 시 바뀐 곡 한 개만 선표시되지 않는지 PC·모바일에서 확인 OPEN. CI+배포 PASS ≠ 제품 실사용 PASS. 캐시 초기화 요구·전체 서버 재조회 금지.
+
+---
 ## CURRENT — 5초 미만 종료 후 기기 간 저장 해제: Music Note PASS / Studio 최근 하트 표시 FAIL → 수정 배포, 실기기 재검증 OPEN (2026-11-06 KST)
 - **디렉터 실사용 FAIL:** PC→모바일·모바일→PC 모두 출발 기기 하트 해제 후 5초 전 종료, 다른 기기 Music Note 해제 정상이나 Studio 최근 생성곡 하트 채워진 상태 유지. 5~10초 동기화 미달.
 - **원인:** 받는 기기가 studioHeartHandoffs 요청을 서버에 확정하더라도 recentHeartAuthorityRef 과거 저장=true 확정 기록 갱신 누락. Studio 하트는 Music Note보다 그 기록을 우선. 원래 기기 재진입 시 canonical 완료 확인 경로도 같은 누락.

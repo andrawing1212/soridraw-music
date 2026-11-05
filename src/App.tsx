@@ -7,6 +7,9 @@ import {
   publishMusicNoteHeartPreviewDelta,
   publishRecentSongEditPreviewDelta,
   readPendingMusicNoteSyncSignal,
+  MUSIC_NOTE_INITIAL_LIVE_READY_EVENT,
+  isMusicNoteInitialLiveReady,
+  isMusicNoteInitialLiveUnavailable,
   readRecentSongsAcknowledgedSignalVersion,
   readRecentSongsPendingSignalVersion,
   readRecentSongsRetainedDraftGap460,
@@ -5600,6 +5603,14 @@ function App() {
   }, [user?.uid]);
   const favorites = favoritesStore.getFavorites();
   const [isFavoritesLoading, setIsFavoritesLoading] = useState(true);
+  // A same-UID warm Catalog is complete but can predate another device's
+  // most recent mutation. Hold its first visible paint until the existing
+  // RTDB subscriber has delivered its initial server state.
+  const musicNoteFirstPaintGateRef = useRef<{
+    uid: string;
+    warmVerified: boolean;
+    catalogReceived: boolean;
+  } | null>(null);
   const FAVORITES_PAGE_SIZE = 20;
   const favoritePaginationCursorRef = useRef<any>(null);
   const favoritePaginationExhaustedRef = useRef(false);
@@ -10573,10 +10584,15 @@ const toggleCycleVariantSelection = (
           // route-gated canonical Catalog check completes.
           setFavorites([]);
         }
-        // A changed-item RTDB delta can arrive before the complete Music Note
-        // Catalog. Do not render that single row as if it were the full list.
-        // A verified warm list may still paint instantly while Catalog checks.
-        setIsFavoritesLoading(!hasVerifiedWarmMusicNoteList);
+        // The warm Catalog may be complete but older than a remote save or
+        // unsave. It cannot paint until the existing RTDB subscription has
+        // processed its first server snapshot; no new network I/O is needed.
+        musicNoteFirstPaintGateRef.current = {
+          uid: currentUser.uid,
+          warmVerified: hasVerifiedWarmMusicNoteList,
+          catalogReceived: false,
+        };
+        setIsFavoritesLoading(true);
 
         favoritePaginationCursorRef.current = null;
         favoritePaginationExhaustedRef.current = false;
@@ -10593,13 +10609,15 @@ const toggleCycleVariantSelection = (
         // A partial local cache is not proof of full-list readiness. In
         // particular, one recently changed remote song must not bypass the
         // Catalog loading gate and appear alone before the other songs.
-        if (hasCachedMusicNote && hasVerifiedWarmMusicNoteList) {
+        if (hasCachedMusicNote && hasVerifiedWarmMusicNoteList && isMusicNoteInitialLiveReady(currentUser.uid)) {
           favoritePaginationCursorRef.current = null;
           favoritePaginationExhaustedRef.current = true;
           favoritePaginationFallbackModeRef.current = false;
           clearMusicNotePaginationCursor(currentUser.uid);
           setHasMoreFavorites(false);
-          setIsFavoritesLoading(false);
+          // Do not release here: the RTDB initial signal may have arrived
+          // before this auth bootstrap rewrote the local list. The ordered
+          // sync consumer and its first-paint effect release it together.
         }
 
         // 1036: paged favorites onSnapshot removed; full catalog is the bootstrap source.
@@ -10710,7 +10728,14 @@ const toggleCycleVariantSelection = (
                 );
               }
               markCacheDiagnostic('musicNote', meta.fromCache ? 'CACHE' : 'SYNC', meta.fromCache ? 0 : 1);
-              setIsFavoritesLoading(false);
+              if (musicNoteFirstPaintGateRef.current?.uid === currentUser.uid) {
+                musicNoteFirstPaintGateRef.current.catalogReceived = true;
+              }
+              // A Catalog-only event may still precede the retained RTDB
+              // canonical item signal. Render both together rather than
+              // showing old membership for the first second.
+              if (isMusicNoteInitialLiveReady(currentUser.uid)
+                || isMusicNoteInitialLiveUnavailable(currentUser.uid)) setIsFavoritesLoading(false);
             },
             onMissing: (meta) => {
               if (meta.fromCache) return;
@@ -11332,6 +11357,30 @@ const toggleCycleVariantSelection = (
     }
     return () => window.removeEventListener(MUSIC_NOTE_SYNC_VERSION_EVENT, handleMusicNoteSyncVersion as EventListener);
   }, [user, syncMusicNoteIncrementalFromRemoteVersion]);
+
+  // This listener runs after the existing canonical RTDB item consumer.
+  // Its readiness event contains no new song data and makes no remote calls.
+  useEffect(() => {
+    const uid = String(user?.uid || '').trim();
+    if (!uid || typeof window === 'undefined') return;
+    const releaseFirstPaint = () => {
+      const gate = musicNoteFirstPaintGateRef.current;
+      if (!gate || gate.uid !== uid
+        || (!isMusicNoteInitialLiveReady(uid) && !isMusicNoteInitialLiveUnavailable(uid))) return;
+      if (gate.warmVerified || gate.catalogReceived) {
+        setIsFavoritesLoading(false);
+      }
+    };
+    const onInitialLiveReady = (event: Event) => {
+      if ((event as CustomEvent<{ uid?: string }>).detail?.uid !== uid) return;
+      // The current signal listener has already processed the initial
+      // snapshot; defer the paint to the end of that React update.
+      queueMicrotask(releaseFirstPaint);
+    };
+    window.addEventListener(MUSIC_NOTE_INITIAL_LIVE_READY_EVENT, onInitialLiveReady as EventListener);
+    queueMicrotask(releaseFirstPaint);
+    return () => window.removeEventListener(MUSIC_NOTE_INITIAL_LIVE_READY_EVENT, onInitialLiveReady as EventListener);
+  }, [user?.uid]);
 
   const searchFavoritesOnServer = useCallback(async (rawSearchText: string): Promise<any[]> => {
     const currentUser = user || auth.currentUser;

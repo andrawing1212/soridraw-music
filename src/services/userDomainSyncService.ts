@@ -56,6 +56,17 @@ const RECENT_ACKNOWLEDGED_SIGNAL_BASE = 'soridraw_recent_songs_acknowledged_sign
 const RECENT_RETAINED_DRAFT_GAP_BASE_460 = 'soridraw_recent_retained_draft_gap_460';
 const RECENT_RETAINED_DRAFT_VERIFIED_BASE_460 = 'soridraw_recent_retained_draft_verified_460';
 export const MUSIC_NOTE_SYNC_EVENT = 'soridraw:music-note-sync-version';
+// This is a UI-only receipt for the existing UID-owned RTDB listener's first
+// server snapshot. No additional RTDB subscription/read/write is created.
+// A cached Catalog is not a fresh cross-device membership proof until that
+// initial snapshot has been processed.
+export const MUSIC_NOTE_INITIAL_LIVE_READY_EVENT = 'soridraw:music-note-initial-live-ready';
+let initialMusicNoteLiveReadyUid = '';
+let initialMusicNoteLiveUnavailableUid = '';
+export const isMusicNoteInitialLiveReady = (uid: string): boolean =>
+  Boolean(uid && initialMusicNoteLiveReadyUid === uid);
+export const isMusicNoteInitialLiveUnavailable = (uid: string): boolean =>
+  Boolean(uid && initialMusicNoteLiveUnavailableUid === uid);
 export const COLOR_SELECTION_SYNC_EVENT = 'soridraw:color-selection-live-v1';
 
 // Only exact user-clicked color fields travel in the already-authorized
@@ -995,6 +1006,8 @@ const stopDomainSubscriptions = () => {
   unsubscribeMusicNote = null;
   unsubscribeRecentSongs = null;
   unsubscribeExplorePublication = null;
+  initialMusicNoteLiveReadyUid = '';
+  initialMusicNoteLiveUnavailableUid = '';
   activeUid = '';
 };
 
@@ -1010,7 +1023,26 @@ const startDomainSubscriptions = (uid: string) => {
     firstMusicNoteSnapshot = false;
     const signal = normalizeSignal(snapshot.val());
     if (signal) dispatchSignal(safeUid, 'musicNote', signal, initialRetained);
+    if (initialRetained && activeUid === safeUid) {
+      // Dispatch after the changed-item event, so the new UI first-paint
+      // gate releases only after the current canonical delta was delivered.
+      initialMusicNoteLiveReadyUid = safeUid;
+      initialMusicNoteLiveUnavailableUid = '';
+      if (typeof window !== 'undefined') window.dispatchEvent(
+        new CustomEvent(MUSIC_NOTE_INITIAL_LIVE_READY_EVENT, { detail: { uid: safeUid } }),
+      );
+    }
   }, (error) => {
+    // A denied/unavailable listener must not trap an otherwise verified
+    // same-UID Catalog behind a permanent loader. Distinguish the degraded
+    // local-first fallback from a verified initial server snapshot.
+    if (activeUid === safeUid && !isMusicNoteInitialLiveReady(safeUid)) {
+      initialMusicNoteLiveUnavailableUid = safeUid;
+      if (typeof window !== 'undefined') window.dispatchEvent(
+        new CustomEvent(MUSIC_NOTE_INITIAL_LIVE_READY_EVENT,
+          { detail: { uid: safeUid, unavailable: true } }),
+      );
+    }
     console.warn('Music Note RTDB sync signal unavailable; Firestore fallback remains active.', error);
   });
 

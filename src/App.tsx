@@ -1,5 +1,6 @@
 import { runV1MutationBoundary, type V1MutationMirrorTarget } from './data/v1MutationBoundary';
 import { readNextSongKeywords, clearNextSongKeywords } from './lib/nextSongPendingBridge';
+import { pickOwnedSunoOriginalLinkForFavorite } from './lib/musicNoteFavoriteSourceLink';
 import {
   acknowledgeRecentSongsSignalVersion,
   publishMusicNoteSaveStateDelta,
@@ -11883,6 +11884,9 @@ const toggleCycleVariantSelection = (
         soridrawSongId: favoriteSoridrawSongId,
         recentSongSyncKey: recentSongSyncKey || buildRecentSongSyncKey(song),
         ...buildLegacyRecentFavoriteBridge(song),
+        // Copy a known owned Suno document link into THIS existing favorite W1.
+        // No new reads, migrations or guesses from song IDs, task IDs or titles.
+        ...pickOwnedSunoOriginalLinkForFavorite(song, user.uid),
         title: song.title,
         koreanTitle: song.koreanTitle ?? '',
         englishTitle: song.englishTitle ?? '',

@@ -39,6 +39,10 @@ import {
 } from './lib/studioHeartBatch';
 import { admitStudioHeartClick } from './lib/studioHeartClickGuard';
 import {
+  canProjectStudioHeartCanonicalToRecent,
+  matchStudioHeartCanonicalRecentSongs,
+} from './lib/studioHeartRecentConfirmation';
+import {
   publishStudioHeartHandoff, claimStudioHeartHandoff, settleStudioHeartHandoff,
   releaseStudioHeartHandoff, readStudioHeartHandoff, subscribeStudioHeartHandoffs,
   studioHeartHandoffDeviceId,
@@ -6106,6 +6110,34 @@ function App() {
     return recentHeartAuthorityRef.current.get(identityKey) || null;
   };
 
+  // A remote device may finish a Studio handoff while this device has a
+  // persisted, confirmed-but-now-stale Recent heart. Music Note's canonical
+  // mutation must also settle that exact Recent display authority. Never
+  // override a newer local intent or cross-device preview.
+  const confirmStudioHeartRecentFromCanonical = (
+    uid: string, documentId: string, desiredSaved: boolean, sourceSong: any,
+  ) => {
+    if (!uid || auth.currentUser?.uid !== uid
+      || !canProjectStudioHeartCanonicalToRecent(
+        documentId, desiredSaved,
+        readStudioHeartPendingIntent(uid, documentId),
+        studioHeartRemotePreviewRef.current.get(documentId) || null,
+      )) return;
+    const confirmationVersion = Date.now();
+    const matched = matchStudioHeartCanonicalRecentSongs(
+      historyRef.current || [], documentId, sourceSong || null, isSameRecentSongSyncItem,
+    );
+    for (const recentSong of matched) {
+      rememberRecentHeartAuthority(uid, recentSong, desiredSaved, documentId, confirmationVersion, true);
+    }
+    // The source device may re-open before its Recent list hydrates. The
+    // exact, server-confirmed favorite identity remains replayable later.
+    if (sourceSong && !matched.some((recentSong) =>
+      buildRecentSongSyncKey(recentSong) === buildRecentSongSyncKey(sourceSong))) {
+      rememberRecentHeartAuthority(uid, sourceSong, desiredSaved, documentId, confirmationVersion, true);
+    }
+  };
+
   useEffect(() => {
     const uid = String(user?.uid || '').trim();
     recentHeartAuthorityRef.current = new Map();
@@ -12074,6 +12106,7 @@ const toggleCycleVariantSelection = (
           const serverFavorite = serverSnap.exists() ? mapFavoriteFirestoreDoc(serverSnap) : null;
           if (serverFavorite && serverFavorite.uid !== uid) return;
           if (Boolean(serverFavorite && !isFavoriteSoftRemoved(serverFavorite)) === intent.desiredSaved) {
+            confirmStudioHeartRecentFromCanonical(uid, safeDocumentId, intent.desiredSaved, intent.song || serverFavorite);
             removeStudioHeartIntentLocal(uid, safeDocumentId);
           } else {
             // Missing receipt plus conflicting canonical is ambiguous, and
@@ -12326,6 +12359,7 @@ const toggleCycleVariantSelection = (
         const serverFavorite = snapshot.exists() ? mapFavoriteFirestoreDoc(snapshot) : null;
         if (serverFavorite && String(serverFavorite.uid || '') !== uid) return;
         const actualSaved = Boolean(serverFavorite && !isFavoriteSoftRemoved(serverFavorite));
+        let settledRecentSource: any = serverFavorite;
         if (actualSaved !== desiredSaved) {
           // A stale receipt must not overwrite a later request.
           const current = await readStudioHeartHandoff(uid, documentId);
@@ -12339,6 +12373,7 @@ const toggleCycleVariantSelection = (
               || (parsed.uid && parsed.uid !== uid)) return;
             song = parsed;
           }
+          settledRecentSource = song;
           song = normalizeFavoriteTitleFields({
             ...song, uid, favoriteFirestoreId: documentId, musicNoteFavoriteId: documentId,
           } as SongResult);
@@ -12355,7 +12390,10 @@ const toggleCycleVariantSelection = (
           if (Boolean(confirmedFavorite && !isFavoriteSoftRemoved(confirmedFavorite)) !== desiredSaved) return;
         }
         settled = await settleStudioHeartHandoff(uid, documentId, version, claim.token);
-        if (settled) clearScheduled(documentId);
+        if (settled) {
+          confirmStudioHeartRecentFromCanonical(uid, documentId, desiredSaved, settledRecentSource);
+          clearScheduled(documentId);
+        }
       } catch (error) {
         console.warn('Studio heart remote handoff remains pending.', error);
       } finally {

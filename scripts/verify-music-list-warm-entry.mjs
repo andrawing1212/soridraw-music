@@ -35,6 +35,17 @@ assert(bootstrap.includes('&& cachedFavoriteCount > 0'),'empty/unknown list must
 assert(bootstrap.includes('&& hasAnyMusicNotePayload'),'UID cache required');
 assert(bootstrap.includes('&& (!preferVerifiedCatalog || hasVerifiedWarmMusicNoteList)'),
   'validated warm rows paint without waiting for remote verification');
+assert(bootstrap.includes('setIsFavoritesLoading(!hasVerifiedWarmMusicNoteList);'),
+  'an isolated changed-item row cannot make a cold Music Note catalog appear ready');
+assert(bootstrap.includes('if (hasCachedMusicNote && hasVerifiedWarmMusicNoteList) {'),
+  'only a verified complete warm list bypasses the loading gate');
+assert(bootstrap.includes('setIsFavoritesLoading(false);'),
+  'a fully received Music Note catalog still releases the loading gate');
+assert(note.includes('((isFavoritesLoading && !isMusicNoteSharedView) || sharedMusicNoteLoading)'),
+  'Music Note must not paint a one-item RTDB delta as the complete list during cold hydration');
+assert(!note.includes('isFavoritesLoading && activeFavoriteSource.length === 0'),
+  'partial delta cannot bypass the catalog loader');
+
 assert(bootstrap.includes('setFavorites([]);'),'unverified and empty UID cache stays withheld');
 assert(app.includes('const shouldVerifyMusicNoteBundle = true;'),'first Music Note session Catalog verification preserved');
 assert(app.includes("unsubMusicNoteBundle = subscribeListBundle('musicNote', currentUser.uid"),

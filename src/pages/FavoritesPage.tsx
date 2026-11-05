@@ -8652,7 +8652,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         renderMusicNoteFolderBar(musicNoteViewMode)
       )}
 
-      {((isFavoritesLoading && activeFavoriteSource.length === 0) || sharedMusicNoteLoading) ? (
+      {((isFavoritesLoading && !isMusicNoteSharedView) || sharedMusicNoteLoading) ? (
         <MusicListLoadingState />
       ) : activeFavoriteSource.length === 0 ? (
         <div className="mt-2 md:mt-3 min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">

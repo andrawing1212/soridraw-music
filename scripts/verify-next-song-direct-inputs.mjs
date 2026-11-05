@@ -122,3 +122,48 @@ console.log('NEXT_SONG_OLD_MENU_AND_COMMAND_FIELDS=PASS');
 console.log('NEXT_SONG_ONLY_ORIGINAL_AUTHORED_LYRICS_DRAFT=PASS');
 console.log('NEXT_SONG_ONE_EXPLICIT_ORIGINAL_READ_NO_BACKGROUND_SCANS=PASS');
 console.log('NEXT_SONG_APRIL_EXACT_LINKED_SUNO_ORIGINAL_SAFETY=PASS');
+
+const ownedSourceLink = readFileSync('src/lib/musicNoteFavoriteSourceLink.ts', 'utf8');
+const ownedSourceLinkJs = (await transform(ownedSourceLink, {
+  loader: 'ts', format: 'esm', target: 'es2022',
+})).code;
+const { pickOwnedSunoOriginalLinkForFavorite: sourceLink } = await import(
+  'data:text/javascript;base64,' + Buffer.from(ownedSourceLinkJs).toString('base64')
+);
+assert.deepEqual(sourceLink(
+  {sourceType:'suno_track',sourceId:'own_Suno_123',ownerUid:'account-a',taskId:'task_A'},
+  'account-a',
+), {sourceTrackId:'own_Suno_123',sourceTaskId:'task_A'},
+ 'new owned Library source must retain canonical source and task identity');
+assert.deepEqual(sourceLink(
+  {sourceTrackId:'exactOwnSuno123',sourceTaskId:'task_B',uid:'account-a'},
+  'account-a',
+), {sourceTrackId:'exactOwnSuno123',sourceTaskId:'task_B'});
+assert.deepEqual(sourceLink({sourceType:'suno-api',trackId:'sunoRef001'},'account-a'),
+  {sourceTrackId:'sunoRef001'});
+for (const unsafe of [
+  {id:'favorite-1',taskId:'task1',title:'a',sourceId:'maybe-a-song'},
+  {sourceType:'shared_track',sourceTrackId:'foreignRef'},
+  {sourceType:'suno_track',sourceId:'foreignRef',ownerUid:'account-b'},
+  {sourceTrackId:'foreignRef',uid:'account-b'},
+  {sourceTrackId:'bad/path'},
+  {sourceTrackId:'staleRef',sourceId:'differentRef',sourceType:'suno_track'},
+  {sourceTrackId:'oldRef',recentFavoriteDetachedAt:1},
+  {sourceTrackId:'oldRef',appliedKeywords:{editedInStudio:true}},
+  {sourceTrackId:'oldRef',sourceTaskId:'task-A',taskId:'task-B'},
+]) {
+  assert.deepEqual(sourceLink(unsafe,'account-a'),{},
+    'ambiguous, shared or edited song must never invent an owned Suno link');
+}
+assert.deepEqual(sourceLink({sourceTrackId:'exactOwnSuno123'},''),{});
+const favoritePayloadStart = app.indexOf('const favoritePayload = sanitizeForFirestore({');
+const favoritePayloadEnd = app.indexOf('const deterministicRecentIdentity =', favoritePayloadStart);
+assert.ok(favoritePayloadStart >= 0 && favoritePayloadEnd > favoritePayloadStart);
+const favoritePayloadCode = app.slice(favoritePayloadStart, favoritePayloadEnd);
+assert.match(favoritePayloadCode,/\.\.\.pickOwnedSunoOriginalLinkForFavorite\(song, user\.uid\)/,
+  'link fields are carried in the existing new-favorite canonical W1, not a second write');
+assert.doesNotMatch(favoritePayloadCode,/getDoc\(|getDocs\(|getDocFromServer\(/,
+  'preserving an already-known identity must not add a per-save source read');
+assert.match(note,/doc\(db, 'suno_tracks', user.uid, 'tracks', linkedTrackId\)/,
+  'Next Song must validate the saved exact same-user link');
+console.log('NEW_MUSIC_NOTE_KNOWN_OWNED_SUNO_LINK_W1_R0=PASS');

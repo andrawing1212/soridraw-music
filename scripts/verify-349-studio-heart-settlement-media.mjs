@@ -51,6 +51,7 @@ const ctx = {
     setFavorites: (next) => { current = next; },
   },
   clearStudioHeartIntentTimer: () => {},
+  studioHeartConflictRecheckOnceRef: { current: new Set(['doc-a']) },
   removeStudioHeartPendingIntent: () => { removed = true; },
   normalizeFavoriteTitleFields: (x) => x,
   mergeFavoritePages: (a, b) => [...a, ...b.filter((x) => !a.some((y) => y.id === x.id))],
@@ -62,6 +63,7 @@ vm.createContext(ctx);
 vm.runInContext(settleJs, ctx);
 ctx.__settle('u', 'doc-a');
 assert.equal(removed, true);
+assert.equal(ctx.studioHeartConflictRecheckOnceRef.current.size, 0);
 assert.equal(current.length, 1);
 assert.equal(current[0].id, 'doc-a');
 assert.equal(current[0].saved, true);

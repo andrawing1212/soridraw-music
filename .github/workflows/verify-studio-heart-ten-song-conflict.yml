@@ -1,0 +1,39 @@
+name: SORIDRAW Studio Heart Ten-song Conflict — No Deploy
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'src/App.tsx'
+      - 'src/lib/studioHeartBatch.ts'
+      - 'src/lib/studioHeartConflictRecovery.ts'
+      - 'scripts/verify-studio-heart-ten-song-conflict.mjs'
+      - 'scripts/verify-349-studio-heart-settlement-media.mjs'
+      - 'scripts/verify-520-recent-login-recovery.mjs'
+      - '.github/workflows/verify-studio-heart-ten-song-conflict.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ten-song-safety:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Ten-song conflict and recovery fixtures
+        run: node scripts/verify-studio-heart-ten-song-conflict.mjs
+      - name: Existing complete preview and post-settlement media regressions
+        run: |
+          node scripts/verify-529-heart-preview-complete.mjs
+          node scripts/verify-349-studio-heart-settlement-media.mjs
+      - name: TypeScript and Vite build
+        run: |
+          npx tsc --noEmit
+          npm run build
+      - run: echo 'SOURCE_QA_ONLY;NO_SHARED_BACKEND_CHANGE;NO_DEPLOYMENT'

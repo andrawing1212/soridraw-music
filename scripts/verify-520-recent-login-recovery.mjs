@@ -210,7 +210,8 @@ assert.doesNotMatch(heartReceipt,/removeStudioHeartIntentLocal\(/,
   'newer RTDB preview must not delete an unsettled heart');
 assert.doesNotMatch(heartFlush,/removeStudioHeartPendingIntent\(uid, safeDocumentId\)/,
   '30s timer must not throw away unsettled heart on preview reception');
-assert.match(heartFlush,/intent\.pendingRemotePreviewVersion > intent\.signalVersion/);
+assert.match(heartFlush,/isStudioHeartRemoteSuperseded\(intent\)/);
+assert.match(heartFlush,/studioHeartConflictRecheckOnceRef\.current\.has\(safeDocumentId\)/);
 assert.match(heartFlush,/await toggleFavorite\(commitSong,/,
   'ordinary saved intent must still use the existing canonical boundary');
 const gateBlock=within('        const canDeriveFirstSaveId = Boolean(', '        const batchDocumentId =');
@@ -225,9 +226,11 @@ const heartOverlay=within('  function overlayStudioHeartPendingIntentsOnFavorite
 const heartCanonical=within('        const isCanonicalMembershipSignal =', '        if (isRemovalOperation) {');
 assert.match(heartOverlay,/intent\.pendingRemotePreviewVersion > intent\.signalVersion/);
 assert.match(heartOverlay,/studioHeartRemotePreviewRef\.current\.get\(documentId\)/);
-assert.match(heartCanonical,/remoteVersion > newestPreview\.version/);
-assert.match(heartCanonical,/newestPreview\.desiredSaved === canonicalRemoteSaved/);
-assert.match(heartCanonical,/removeStudioHeartPendingIntent\(uid, confirmedId\)/);
+assert.match(heartCanonical,/reconcileStudioHeartPendingFromCanonicalSignal\(/);
+const reconciliation = within('  const reconcileStudioHeartPendingFromCanonicalSignal = (',
+  '  const rememberStudioHeartPreviewVersion = (');
+assert.match(reconciliation,/canRetireStudioHeartPendingFromCanonical\(pending, remoteVersion, remoteSaved, preview\)/);
+assert.match(reconciliation,/removeStudioHeartIntentLocal\(safeUid, pending\.documentId\)/);
 assert.match(syncBlock,/verifiedProfileVersion,/);
 console.log('APP_HEART_REMOTE_PREVIEW_VISIBLE_PENDING_DURABLE_CANONICAL_CONFIRMED_ONLY=PASS');
 

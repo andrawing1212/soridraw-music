@@ -1,3 +1,11 @@
+## CURRENT — 5초 미만 종료 후 기기 간 저장 해제: Music Note PASS / Studio 최근 하트 표시 FAIL → 수정 배포, 실기기 재검증 OPEN (2026-11-06 KST)
+- **디렉터 실사용 FAIL:** PC→모바일·모바일→PC 모두 출발 기기 하트 해제 후 5초 전 종료, 다른 기기 Music Note 해제 정상이나 Studio 최근 생성곡 하트 채워진 상태 유지. 5~10초 동기화 미달.
+- **원인:** 받는 기기가 studioHeartHandoffs 요청을 서버에 확정하더라도 recentHeartAuthorityRef 과거 저장=true 확정 기록 갱신 누락. Studio 하트는 Music Note보다 그 기록을 우선. 원래 기기 재진입 시 canonical 완료 확인 경로도 같은 누락.
+- **수정:** PR #819 merge 2ee6196f6f41b1c77484c46fcdb55a85603a40fa (검증 4437f961c68173993b2fd1284be4407e62e941e2). 서버 확정·정확한 인계 영수증 정산 후 해당 곡의 Recent authority만 갱신/지속 저장. 재진입 시 확인된 canonical 결과에도 적용. 더 최신 로컬/RTDB 클릭 및 다른 문서 링크 보호. 추가 Firestore read/write, 공유 Rules/Worker/Functions/D1/R2 변경 없음.
+- **검사·배포:** PR #819 GitHub CI 6/6 SUCCESS, 정확 링크/신규 요청 보호/복구 후 Recent 표시 회귀 포함. PR #820 merge 685625c7d8eb465c80b280b9c748923ca774f9d6; [PREVIEW Hosting Actions 42117514214](https://github.com/andrawing1212/soridraw-music/actions/runs/42117514214) SUCCESS. SHARED_RTDB_RULES_DEPLOY=SKIPPED, FIREBASE_PREVIEW_DEPLOY=PASS, PREVIEW_EXACT_BUILD=PASS, TEST_PRODUCTION_UNCHANGED=PASS.
+- **남은 확인:** 양방향 5초 전 종료→다른 기기 5~10초 후 Studio Recent 하트 꺼짐, Music Note 해제 유지, 새로고침 후 유지하는지 실제 PC·모바일 재시험 OPEN. CI PASS와 실사용 PASS 구분. 사용자 캐시 초기화/원본 변경 금지.
+
+---
 ## CURRENT — Studio 하트 5초 미만 종료 후 기기 간 인계 / PREVIEW 배포 PASS, 실기기 QA OPEN (2026-11-06 KST)
 - **승인:** 디렉터 YES로 공유 RTDB Rules 읽기 전용 대조 → 기존 규칙 불변·UID 전용 인계 경로 한 개만 추가 확인 시 PR #816 병합과 PREVIEW Hosting/공유 Rules 배포 승인. PRODUCTION/TEST Hosting 변경 금지.
 - **소스 및 검사:** PR #816 merge `f5612b8876e3bbf1d1a23e440d5cb3d3140fc167` (검증 head `1b88aa4f92e2ddb8e0dfc4bf2c3bbd304905f1d0`), CI **7/7 SUCCESS**. RTDB emulator 두 기기 claim 단일 승자·오래된 ACK 차단, 20개 슬롯/24KB 제한, 기존 5초 정산·10곡/Recent/Music Note/로그인·TypeScript·Build 보호. [Live GET-only run 42114181734](https://github.com/andrawing1212/soridraw-music/actions/runs/42114181734): `ADD_ONLY_STUDIO_HEART_HANDOFF`, 기존 ACL 변경 0, 원본 사용자 데이터 변경 0.

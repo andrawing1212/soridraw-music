@@ -8,6 +8,7 @@ export type StudioHeartPendingIntent = {
   baselineFavorite: any | null;
   song: any;
   updatedAtMs: number;
+  firstQueuedAtMs?: number;
   signalVersion: number;
   pendingRemotePreviewVersion: number;
   pendingRemotePreviewSaved?: boolean | null;
@@ -36,6 +37,7 @@ const normalizeIntent = (uid: string, value: any): StudioHeartPendingIntent | nu
     baselineFavorite: value.baselineFavorite && typeof value.baselineFavorite === 'object' ? value.baselineFavorite : null,
     song: value.song && typeof value.song === 'object' ? value.song : null,
     updatedAtMs: Math.max(0, Math.floor(Number(value.updatedAtMs || 0))),
+    firstQueuedAtMs: Math.max(0, Math.floor(Number(value.firstQueuedAtMs || value.updatedAtMs || 0))),
     signalVersion: Math.max(0, Math.floor(Number(value.signalVersion || 0))),
     pendingRemotePreviewVersion: Math.max(0, Math.floor(Number(value.pendingRemotePreviewVersion || 0))),
     pendingRemotePreviewSaved: typeof value.pendingRemotePreviewSaved === 'boolean' ? value.pendingRemotePreviewSaved : null,
@@ -96,6 +98,7 @@ export const writeStudioHeartPendingIntent = (intent: StudioHeartPendingIntent):
     uid,
     documentId,
     updatedAtMs: Math.max(1, Math.floor(Number(intent.updatedAtMs || Date.now()))),
+    firstQueuedAtMs: Math.max(1, Math.floor(Number(intent.firstQueuedAtMs || intent.updatedAtMs || Date.now()))),
     signalVersion: Math.max(0, Math.floor(Number(intent.signalVersion || 0))),
     pendingRemotePreviewVersion: Math.max(0, Math.floor(Number(intent.pendingRemotePreviewVersion || 0))),
     pendingRemotePreviewSaved: typeof intent.pendingRemotePreviewSaved === 'boolean' ? intent.pendingRemotePreviewSaved : null,
@@ -168,3 +171,15 @@ export const isStudioHeartOptimisticFavorite = (favorite: any): boolean => (
   favorite?.__studioHeartPendingLocal === true
   || favorite?.__studioHeartRemotePreviewLocal === true
 );
+
+/** Per-song trailing quiet period with a hard cap from the first accepted click. */
+export const computeStudioHeartSettleDelay = (
+  intent: Pick<StudioHeartPendingIntent, 'updatedAtMs' | 'firstQueuedAtMs'>,
+  now: number,
+  quietMs = 5_000,
+  maxWaitMs = 15_000,
+): number => {
+  const last = Math.max(0, Number(intent.updatedAtMs || 0));
+  const first = Math.max(0, Number(intent.firstQueuedAtMs || last));
+  return Math.max(1, Math.min(last + quietMs - now, first + maxWaitMs - now));
+};

@@ -5,7 +5,7 @@ const app = fs.readFileSync('src/App.tsx', 'utf8');
 const sync = fs.readFileSync('src/services/userDomainSyncService.ts', 'utf8');
 const batch = fs.readFileSync('src/lib/studioHeartBatch.ts', 'utf8');
 
-assert.match(app, /const STUDIO_HEART_BATCH_MS = 30_000;/);
+assert.match(app, /const STUDIO_HEART_BATCH_MS = 5_000;/);
 assert.match(app, /const STUDIO_HEART_RETRY_MS = 60_000;/);
 assert.match(app, /queueStudioHeartPendingIntent/);
 assert.match(app, /flushStudioHeartPendingIntent/);

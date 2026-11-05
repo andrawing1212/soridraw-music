@@ -33,7 +33,9 @@ import {
   writeStudioHeartPendingIntentChecked,
   isStudioHeartOptimisticFavorite,
   type StudioHeartPendingIntent,
+  computeStudioHeartSettleDelay,
 } from './lib/studioHeartBatch';
+import { admitStudioHeartClick } from './lib/studioHeartClickGuard';
 import {
   canRetireStudioHeartPendingFromCanonical,
   isStudioHeartRemoteSuperseded,
@@ -54,7 +56,8 @@ const ensureLiveSoridrawSongId = <T extends Record<string, any>>(song: T): T => 
   catch { return { ...song, soridrawSongId }; }
 };
 
-const STUDIO_HEART_BATCH_MS = 30_000;
+const STUDIO_HEART_BATCH_MS = 5_000;
+const STUDIO_HEART_MAX_WAIT_MS = 15_000;
 const STUDIO_HEART_RETRY_MS = 60_000;
 const buildBatchedRecentFavoriteDocumentId = (uid: string, stableIdentity: string): string => {
   const raw = `${uid}|${stableIdentity}`;
@@ -12093,10 +12096,14 @@ const toggleCycleVariantSelection = (
     const safeDocumentId = String(documentId || '').trim();
     if (!safeDocumentId) return;
     clearStudioHeartIntentTimer(safeDocumentId);
+    const pending = user?.uid ? readStudioHeartPendingIntent(user.uid, safeDocumentId) : null;
+    const effectiveDelayMs = pending && delayMs === STUDIO_HEART_BATCH_MS
+      ? computeStudioHeartSettleDelay(pending, Date.now(), STUDIO_HEART_BATCH_MS, STUDIO_HEART_MAX_WAIT_MS)
+      : delayMs;
     const timer = window.setTimeout(() => {
       studioHeartIntentTimersRef.current.delete(safeDocumentId);
       void flushStudioHeartPendingIntent(safeDocumentId);
-    }, Math.max(1_000, Math.floor(delayMs)));
+    }, Math.max(1, Math.floor(effectiveDelayMs)));
     studioHeartIntentTimersRef.current.set(safeDocumentId, timer);
   };
 
@@ -12128,6 +12135,7 @@ const toggleCycleVariantSelection = (
         musicNoteFavoriteId: safeDocumentId,
       },
       updatedAtMs: now,
+      firstQueuedAtMs: existing?.firstQueuedAtMs || existing?.updatedAtMs || now,
       signalVersion: 0,
       // A later local click supersedes an earlier remote preview.
       pendingRemotePreviewVersion: 0,
@@ -12175,9 +12183,7 @@ const toggleCycleVariantSelection = (
     if (!uid) return;
     const pendingIntents = listStudioHeartPendingIntents(uid);
     for (const intent of pendingIntents) {
-      const age = Math.max(0, Date.now() - intent.updatedAtMs);
-      const delay = Math.max(1_000, STUDIO_HEART_BATCH_MS - age);
-      scheduleStudioHeartPendingIntent(intent.documentId, delay);
+      scheduleStudioHeartPendingIntent(intent.documentId);
     }
     if (pendingIntents.length > 0) {
       setFavorites((previous) => previous);
@@ -16779,6 +16785,19 @@ ${normalizePromptForDisplay(result.prompt)}
     const snapshot = getStudioFavoriteSaveSnapshot();
     if (!snapshot) return;
 
+    // Stop excessive same-song clicks before changing UI, outbox or RTDB.
+    // This is browser friction, not a substitute for backend authorization.
+    if (user?.uid) {
+      const clickIdentity = buildRecentSongSyncKey(snapshot)
+        || getLiveSoridrawSongId(snapshot)
+        || String((snapshot as any).favoriteFirestoreId || (snapshot as any).id || '').trim();
+      const clickDecision = admitStudioHeartClick(user.uid, clickIdentity);
+      if (!clickDecision.allowed) {
+        if (clickDecision.notify) showToast('저장에 문제가 있으신가요? 잠시 후 다시 시도해 주세요.');
+        return;
+      }
+    }
+
     setIsTogglingCurrentStudioFavorite(true);
     const favoriteToggleStartedAt = Date.now();
     const currentIndex = historyIndexRef.current;
@@ -16928,8 +16947,8 @@ ${normalizePromptForDisplay(result.prompt)}
               });
             }
             showToast(intendedFavoriteAction === 'save'
-              ? '저장 처리 중 · 서버 저장은 약 30초 후'
-              : '저장 해제 처리 중 · 서버 반영은 약 30초 후');
+              ? '저장 처리 중 · 서버 저장은 약 5초 후'
+              : '저장 해제 처리 중 · 서버 반영은 약 5초 후');
             return;
           }
           }

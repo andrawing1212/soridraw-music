@@ -5,9 +5,11 @@ on:
     paths:
       - 'src/App.tsx'
       - 'src/lib/studioHeartBatch.ts'
+      - 'src/lib/studioHeartClickGuard.ts'
       - 'src/lib/studioHeartConflictRecovery.ts'
       - 'scripts/verify-studio-heart-ten-song-conflict.mjs'
       - 'scripts/verify-studio-heart-close-reconnect.mjs'
+      - 'scripts/verify-studio-heart-five-second-click-guard.mjs'
       - 'src/services/userDomainSyncService.ts'
       - 'scripts/verify-349-studio-heart-settlement-media.mjs'
       - 'scripts/verify-520-recent-login-recovery.mjs'
@@ -32,6 +34,8 @@ jobs:
         run: node scripts/verify-studio-heart-ten-song-conflict.mjs
       - name: Reconnect after closing a pending Studio heart
         run: node scripts/verify-studio-heart-close-reconnect.mjs
+      - name: Five-second batch and click guard
+        run: node scripts/verify-studio-heart-five-second-click-guard.mjs
       - name: Existing complete preview and post-settlement media regressions
         run: |
           node scripts/verify-529-heart-preview-complete.mjs

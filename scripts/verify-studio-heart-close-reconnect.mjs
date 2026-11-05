@@ -19,7 +19,7 @@ const section = (src,start,end) => {
   return src.slice(a,b);
 };
 
-// PC is closed at click; mobile publishes UNSAVE preview and closes before +30s.
+// PC is closed at click; mobile publishes UNSAVE preview and closes before +5s.
 // RTDB's first retained event is NOT a durable Firestore mutation.
 assert.equal(shouldApplyStudioHeartSignalOnAttach('heart-preview-unsave',true),false);
 assert.equal(shouldApplyStudioHeartSignalOnAttach('heart-preview-save',true),false);
@@ -72,8 +72,8 @@ for(let n=0;n<10;n++){
 assert.equal(listStudioHeartPendingIntents(uid).length,10);
 assert.equal(readStudioHeartPendingIntent(uid,'song-7')?.desiredSaved,false);
 const recovery=section(app,'    const pendingIntents = listStudioHeartPendingIntents(uid);', '  const updateFavorite = async');
-assert.match(recovery,/STUDIO_HEART_BATCH_MS - age/);
-assert.match(recovery,/scheduleStudioHeartPendingIntent\(intent\.documentId, delay\)/);
+assert.match(recovery,/scheduleStudioHeartPendingIntent\(intent\.documentId\)/);
+assert.match(recovery,/scheduleStudioHeartPendingIntent\(intent\.documentId\)/);
 const flush=section(app,'  const flushStudioHeartPendingIntent = async','  const scheduleStudioHeartPendingIntent =');
 assert.match(flush,/await toggleFavorite\(commitSong,/);
 assert.match(flush,/STUDIO_HEART_RETRY_MS/);
@@ -81,9 +81,10 @@ assert.match(flush,/showToast\(intent\.desiredSaved \? '저장이 완료되었�
 const queue=section(app,'  const queueStudioHeartPendingIntent = (','  useEffect(() => {');
 assert.match(queue,/publishMusicNoteHeartPreviewDelta\(uid, safeDocumentId, intent\.song, desiredSaved\)/);
 assert.match(queue,/scheduleStudioHeartPendingIntent\(safeDocumentId\)/);
-assert.match(app,/const STUDIO_HEART_BATCH_MS = 30_000/);
+assert.match(app,/const STUDIO_HEART_BATCH_MS = 5_000/);
+assert.match(app,/const STUDIO_HEART_MAX_WAIT_MS = 15_000/);
 const toggle=section(app,'  const handleToggleCurrentStudioFavorite = async', '  const isRecentSongSectionEditing');
-assert.match(toggle,/저장 해제 처리 중 · 서버 반영은 약 30초 후/);
+assert.match(toggle,/저장 해제 처리 중 · 서버 반영은 약 5초 후/);
 console.log('MOBILE_PENDING_TEN_SONG_SAME_DEVICE_REENTRY=PASS');
-console.log('EXISTING_30S_W0_W1_NO_ADDITIONAL_FIRESTORE_IO=PASS');
+console.log('EXISTING_5S_W0_W1_NO_ADDITIONAL_FIRESTORE_IO=PASS');
 console.log('PREVIEW_STATUS_DISTINCT_FROM_CANONICAL_COMPLETION=PASS');

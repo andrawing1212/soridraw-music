@@ -10573,7 +10573,10 @@ const toggleCycleVariantSelection = (
           // route-gated canonical Catalog check completes.
           setFavorites([]);
         }
-        setIsFavoritesLoading(true);
+        // A changed-item RTDB delta can arrive before the complete Music Note
+        // Catalog. Do not render that single row as if it were the full list.
+        // A verified warm list may still paint instantly while Catalog checks.
+        setIsFavoritesLoading(!hasVerifiedWarmMusicNoteList);
 
         favoritePaginationCursorRef.current = null;
         favoritePaginationExhaustedRef.current = false;
@@ -10587,7 +10590,10 @@ const toggleCycleVariantSelection = (
 
         const hasCachedMusicNote = !musicNoteCacheNeedsFullBootstrap
           && hasAnyMusicNotePayload && !preferVerifiedCatalog;
-        if (hasCachedMusicNote) {
+        // A partial local cache is not proof of full-list readiness. In
+        // particular, one recently changed remote song must not bypass the
+        // Catalog loading gate and appear alone before the other songs.
+        if (hasCachedMusicNote && hasVerifiedWarmMusicNoteList) {
           favoritePaginationCursorRef.current = null;
           favoritePaginationExhaustedRef.current = true;
           favoritePaginationFallbackModeRef.current = false;

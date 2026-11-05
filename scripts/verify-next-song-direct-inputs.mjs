@@ -96,7 +96,10 @@ const app=readFileSync('src/App.tsx','utf8');
 const player=readFileSync('src/components/GlobalPlayer.tsx','utf8');
 const libraryApply=lib.slice(lib.indexOf('  const handleApplyNext = async (group: any, item: any) => {'),
                              lib.indexOf('  const getPlaylistSaveIsShared ='));
-assert.match(libraryApply,/getDocFromServer\(doc\(db, 'suno_tracks', activeUid, 'tracks', sourceTrackId\)\)/);
+assert.equal((libraryApply.match(/getDocFromServer\(doc\(db, 'suno_tracks', activeUid, 'tracks', sourceTrackId\)\)/g) || []).length, 2,
+ 'Library exact owned source is read once, with at most one transient retry');
+assert.match(libraryApply,/\['unavailable', 'deadline-exceeded', 'network-request-failed'\]\.includes\(code\)/,
+ 'Library only retries transient exact-source failures');
 assert.match(libraryApply,/mergeMusicNoteNextSongClickRecipe455\(clickedSource, fullTrack\)/);
 assert.match(libraryApply,/const serialized = JSON.stringify\(appliedKeywords\)/);
 assert.match(libraryApply,/stageNextSongKeywords\(serialized\)/);

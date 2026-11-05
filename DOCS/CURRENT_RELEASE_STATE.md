@@ -1,11 +1,20 @@
-## CURRENT — Studio 하트 저장 직후 종료·PC 재접속 불일치 방지 / PREVIEW 배포 PASS · 재현 2경로 실사용 PASS (2026-11-06 KST)
+## CURRENT — Studio 하트 5초 묶음·반복 클릭 제한 / 소스 QA PASS · PREVIEW Hosting 릴리스 요청 (2026-11-06 KST)
+- **승인 범위:** 디렉터 YES — 30초→5초 곡별 최종 상태 묶음, 첫 클릭 기준 최대 15초 대기, 다중 시간대 반복 클릭 감지, 기존 RTDB live preview 및 Firestore W0/W1 최적화 유지. 모바일 A 종료 후 다른 기기 B가 미완료 요청을 이어받는 별도 기능까지 최종 목표.
+- **이번에 실제 구현한 부분:** PR #814 소스 head `3ade7aff56a35896a0210ef8b196dd9151d73384`, merge `4d6655648a5336d02c582c772cc72c17c6298480`. 곡별 마지막 클릭 5초, 최초 클릭 후 최대 15초에 정산 시도, 신규/구 pending outbox 재개 호환, 같은 곡 5초 6회/30초 10회/5분 20회 시 20초/60초/5분 단계적 UI 클릭 차단 및 한 번만 안내. 제한된 클릭은 UI/RTDB/Firestore로 보내지 않으며 다른 곡 정상 10곡 저장은 보호. `favoriteCount` 별도 공통 30초 통계 묶음 유지.
+- **소스 QA:** PR #814 최종 후보 GitHub Actions 5/5 SUCCESS (Studio ten-song + new 5s guard/15s cap, Music Note, Recent login, Auth storage, product quality, TS/Build). 코드 검사와 실제 PC·모바일 동작은 구분.
+- **제품 핵심 문제 OPEN / 미완료:** A가 5초 전 종료하면 현재 새 PREVIEW 코드도 그 요청을 Firestore에 확정할 수 없음. RTDB `userSync/{uid}/musicNote` 마지막 미리보기 1개를 영속 곡별 요청으로 간주하거나 PC가 무조건 재적용하면 과거 데이터 부활/충돌 위험. 안전한 10곡 인계에는 별도 UID-소유 곡별 bounded receipt 경로와 원자적 최종 상태/중복 commit/악성 요청 제한·공유 RTDB rules 안전 검증이 필요함. **공유 RTDB Rules/Functions/Worker/D1/R2 사용자 원본에 대한 변경 없음.** 공유 Rules 배포는 Hosting 자동 승인 대상이 아니며 별도 사전 승인을 필요로 함.
+- **릴리스 요청:** PREVIEW Hosting-only 소스 변경. `deploy_shared_rtdb_rules=false`, TEST/PRODUCTION 변경 금지. Actions 배포 결과와 실기기 QA는 아직 OPEN; 배포 PASS 또는 근본 문제 해결로 주장 금지.
+
+---
+
+## HISTORICAL — Studio 하트 표시 불일치 보정 / PREVIEW 배포 PASS · 종료 후 저장 완료는 FAIL (2026-11-06 KST)
 - **디렉터 재현:** PC를 닫은 상태에서 모바일의 기존 저장곡 하트를 해제하고 곧바로 모바일 앱 종료. 30초 후 PC 시작 시 최근 생성곡 하트는 해제된 것으로 보이는데 Music Note 원곡은 저장된 채 남음. 서버 원본에 확인되지 않은 미확정 RTDB preview가 다른 기기에 확정 상태처럼 반영된 것이 원인 경로. 사용자 원본 삭제·정리 금지.
 - **수정:** PR #810 (검증 head `890a67474497ae65222a6bc7186786b6f6436b10`, merge `1af402bac6296894490672a480eecc3ec295422b`). 수신 첫 RTDB retained `heart-preview-save/unsave`와 구버전 로컬 preview replay를 확정 상태로 처리하지 않음. 실시간 live preview는 이전과 동일하게 즉시 반영. Recent 하트 권위 저장은 canonical 확인 결과로 제한하며, 미확정 preview가 영구 Recent UNSAVE 표시를 기록하지 않도록 변경. 같은 기기 로컬 pending outbox 및 앱 재접속 후 자동 재시도 유지. 클릭 안내 '처리 중'과 canonical 성공 후 '완료'를 분리.
 - **비용·보호:** 곡별 최신 클릭 +30초, net-zero W0/변경 W1, 10곡 독립 outbox, 기존 PC↔모바일 실시간 표시, Suno 미디어·Music Note 원본 보존. 이번 수정은 추가 Firestore/D1 read/write 또는 공유 Rules/Functions/Worker 변경 없음. 모바일 앱이 canonical 쓰기 전에 강제 종료되면 타 기기가 대신 확정 저장할 수 있다는 보장은 **하지 않음**.
 - **검사:** PR #810 후보 관련 GitHub CI **5/5 SUCCESS** (종료/reconnect 회귀, 10곡/30초 보호, Recent login, Music Note, auth/likes 및 TS/Build). 소스 검사와 실사용 PASS 구분.
 - **릴리스:** PR #811 merge, Hosting-only PREVIEW exact SHA `329ee1fbb5c6236ab3b669b628941dcbd757799e`. Actions run [42075969125](https://github.com/andrawing1212/soridraw-music/actions/runs/42075969125) **SUCCESS**; `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`, `TEST_PRODUCTION_UNCHANGED=PASS`. TEST/PRODUCTION 미배포.
-- **실사용 QA PASS (디렉터 확인, 2026-11-06 KST):** (1) PC 종료 상태에서 모바일 저장 해제 후 즉시 앱 종료, 30초 뒤 PC 재접속 시 최근 생성곡 하트와 Music Note가 모두 기존 서버 확정 저장 상태로 일치. (2) 저장 해제한 모바일의 동일 브라우저 재실행 후 pending outbox 복구·정본 반영 및 PC의 두 화면 일치. 디렉터가 두 테스트 모두 의도대로 동작했다고 직접 확인. **이번 재현 불일치는 실사용 확인으로 CLOSED.**
-- **별도 QA OPEN:** 일반적인 30초 계속 접속 저장, 서로 다른 10곡 연속 저장, 모든 PC·모바일 환경 및 비용 실측은 이 두 번의 확인만으로 PASS로 간주하지 않음. 원본·캐시·서버 정책 및 PRODUCTION 변경 없음.
+- **정정 — 디렉터 제품 판정 FAIL:** (1) A 모바일에서 저장 해제 후 즉시 종료하고 PC B를 나중에 열었을 때 Recent와 Music Note 표시가 일치하는 것만 확인했으며, **원래 저장 해제 요청은 서버에 확정되지 않았음.** (2) A의 같은 브라우저를 재실행해야 pending이 확정됨. 이는 사용자 요구를 충족하지 못하므로 과거 **‘실사용 PASS/CLOSED’ 표기를 취소**한다. #810은 미확정 신호의 허위 표시만 막았고 종료 후 요청 인계는 해결하지 못함.
+- **OPEN:** 모바일 A의 미확정 저장·해제를 A가 꺼진 상태에서 B가 서버 정본으로 확정하는 기능은 **미구현**. 5초 단축도 A가 5초 전에 종료되면 이 문제를 해결하지 못한다. 추가 공유 RTDB 규칙 변경은 승인/검증 전 배포 금지. 일반 저장/10곡 PC·모바일 실사용과 비용 실측은 별도 미검증.
 
 ---
 

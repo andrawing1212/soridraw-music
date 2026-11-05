@@ -6955,7 +6955,16 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
   };
 
-  const hydrateCatalogFavorite = async (song: any, requireStoredRecipe = false): Promise<any> => {
+  type NextSongOriginalFailure = 'login' | 'source-id' | 'missing' | 'owner' | 'network' | 'permission' | 'unknown';
+  const musicNoteOriginalErrorCode = (error: unknown): string =>
+    String((error as { code?: unknown } | null)?.code || '').toLowerCase().replace(/^firestore\//, '');
+  const isTransientMusicNoteOriginalError = (error: unknown): boolean =>
+    ['unavailable', 'deadline-exceeded', 'network-request-failed'].includes(musicNoteOriginalErrorCode(error));
+
+  const hydrateCatalogFavorite = async (
+    song: any, requireStoredRecipe = false,
+    reportOriginalFailure?: (reason: NextSongOriginalFailure) => void,
+  ): Promise<any> => {
     // app267 — shared-note rows are also compact Catalog summaries. Their full
     // lyrics/prompt stay in the canonical favorites document, so hydrate exactly
     // that one document on explicit detail open. Page entry remains Catalog-only.
@@ -6969,10 +6978,16 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         !String(song?.prompt || '').trim()
         || !String(song?.lyrics?.korean || song?.lyrics?.english || song?.lyrics?.foreign || '').trim()
       );
-    if (requireStoredRecipe && !user?.uid && !isMusicNoteSharedView) return null;
+    if (requireStoredRecipe && !user?.uid && !isMusicNoteSharedView) {
+      reportOriginalFailure?.('login');
+      return null;
+    }
     if ((!requireStoredRecipe && !song?.__catalogSummary && !legacySharedNoteNeedsHydration273) || !user?.uid || isMusicNoteSharedView) return song;
     const sourceId = getFavoriteDocumentId(song);
-    if (!sourceId) return requireStoredRecipe ? null : song;
+    if (!sourceId) {
+      if (requireStoredRecipe) reportOriginalFailure?.('source-id');
+      return requireStoredRecipe ? null : song;
+    }
     const sourceVersion = getMusicNoteDetailSourceVersion(song);
     try {
       const detail = await (requireStoredRecipe
@@ -6983,11 +6998,26 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             // Only an explicit Next Song click verifies this exact owned
             // original document. Old same-version detail cache is insufficient.
             loader: async () => {
-              const snapshot = await getDocFromServer(doc(db, 'favorites', sourceId));
-              if (!snapshot.exists()) return null;
+              const sourceRef = doc(db, 'favorites', sourceId);
+              let snapshot;
+              try {
+                snapshot = await getDocFromServer(sourceRef);
+              } catch (error) {
+                // Retry once only for a transient server/network failure on
+                // an explicit user click. Never trust a stale cache instead.
+                if (!isTransientMusicNoteOriginalError(error)) throw error;
+                snapshot = await getDocFromServer(sourceRef);
+              }
+              if (!snapshot.exists()) {
+                reportOriginalFailure?.('missing');
+                return null;
+              }
               const original = snapshot.data() || {};
               const ownerUid = String((original as any).uid || (original as any).ownerUid || '').trim();
-              if (ownerUid && ownerUid !== user.uid) return null;
+              if (ownerUid && ownerUid !== user.uid) {
+                reportOriginalFailure?.('owner');
+                return null;
+              }
               return original;
             },
           })
@@ -7037,6 +7067,13 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       };
     } catch (error) {
       console.warn('music note detail hydration failed:', error);
+      if (requireStoredRecipe) {
+        const code = musicNoteOriginalErrorCode(error);
+        reportOriginalFailure?.(
+          isTransientMusicNoteOriginalError(error) ? 'network'
+          : code === 'permission-denied' || code === 'unauthenticated' ? 'permission' : 'unknown'
+        );
+      }
       return requireStoredRecipe ? null : song;
     }
   };
@@ -7049,9 +7086,19 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       applyKeywordsToNext(song);
       return;
     }
-    const hydrated = await hydrateCatalogFavorite(song, true);
+    let failureReason: NextSongOriginalFailure = 'unknown';
+    const hydrated = await hydrateCatalogFavorite(song, true, (reason) => { failureReason = reason; });
     if (hydrated?.__musicNoteNextSongOriginalVerified462 !== true) {
-      showFavoriteToast('원본 설정을 확인하지 못했습니다. 연결 상태를 확인하고 다시 시도해주세요.');
+      const message: Record<NextSongOriginalFailure, string> = {
+        login: '로그인 상태를 확인한 뒤 다시 시도해주세요.',
+        'source-id': '이 곡의 원본 연결 ID가 없어 설정을 불러올 수 없습니다.',
+        missing: '이 곡의 원본 문서를 찾지 못했습니다. 설정 복구 확인이 필요합니다.',
+        owner: '원본 곡의 소유자가 현재 계정과 일치하지 않습니다.',
+        network: '원본 확인 중 연결이 불안정했습니다. 잠시 후 다시 시도해주세요.',
+        permission: '원본 설정 접근 권한을 확인하지 못했습니다. 로그인 상태를 확인해주세요.',
+        unknown: '원본 설정을 확인하지 못했습니다. 다시 시도해주세요.',
+      };
+      showFavoriteToast(message[failureReason], 4000);
       return;
     }
     applyKeywordsToNext(hydrated);

@@ -84,7 +84,7 @@ assert.match(queue,/scheduleStudioHeartPendingIntent\(safeDocumentId\)/);
 assert.match(app,/const STUDIO_HEART_BATCH_MS = 5_000/);
 assert.match(app,/const STUDIO_HEART_MAX_WAIT_MS = 15_000/);
 const toggle=section(app,'  const handleToggleCurrentStudioFavorite = async', '  const isRecentSongSectionEditing');
-assert.match(toggle,/저장 해제 처리 중 · 서버 반영은 약 30초 후/);
+assert.match(toggle,/저장 해제 처리 중 · 서버 반영은 약 5초 후/);
 console.log('MOBILE_PENDING_TEN_SONG_SAME_DEVICE_REENTRY=PASS');
 console.log('EXISTING_5S_W0_W1_NO_ADDITIONAL_FIRESTORE_IO=PASS');
 console.log('PREVIEW_STATUS_DISTINCT_FROM_CANONICAL_COMPLETION=PASS');

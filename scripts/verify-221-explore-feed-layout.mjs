@@ -701,13 +701,13 @@ assert.match(css, /\.soridraw-explore-grid--feed \.soridraw-explore-card-actions
   'three-column mobile feed should use compact but enlarged actions');
 
 // Profile-only smaller More overlays: leave Explore feed controls untouched.
-assert.match(css, /\.soridraw-explore-page--profile \.soridraw-explore-cover-wrap > \.soridraw-explore-more-button\{\s*width:27px;height:27px;/,
+assert.match(css, /\.soridraw-explore-page--profile \.soridraw-explore-cover-wrap > \.soridraw-explore-more-button\{\s*width:25px;height:25px;/,
   'profile grid More must be slightly smaller than the 31px Explore base');
-assert.match(css, /\.soridraw-explore-page--profile \.soridraw-explore-pinned-actions-255 > \.soridraw-explore-pinned-more-255\{\s*left:calc\(35\.714% - 37px\);width:30px;height:30px;/,
+assert.match(css, /\.soridraw-explore-page--profile \.soridraw-explore-pinned-actions-255 > \.soridraw-explore-pinned-more-255\{\s*left:calc\(35\.714% - 35px\);width:28px;height:28px;/,
   'profile pinned More must be smaller but stay at the cover right edge');
-assert.match(css, /@media \(max-width:720px\)[\s\S]*?\.soridraw-explore-page--profile \.soridraw-explore-cover-wrap > \.soridraw-explore-more-button\{\s*width:24px;height:24px;/,
+assert.match(css, /@media \(max-width:720px\)[\s\S]*?\.soridraw-explore-page--profile \.soridraw-explore-cover-wrap > \.soridraw-explore-more-button\{\s*width:22px;height:22px;/,
   'profile mobile grid More must be smaller');
-assert.match(css, /\.soridraw-explore-page--profile \.soridraw-explore-card--profile-list \.soridraw-explore-cover-wrap > \.soridraw-explore-more-button\{\s*width:23px;height:23px;/,
+assert.match(css, /\.soridraw-explore-page--profile \.soridraw-explore-card--profile-list \.soridraw-explore-cover-wrap > \.soridraw-explore-more-button\{\s*width:21px;height:21px;/,
   'profile compact list More must remain smaller');
 assert.match(css, /\.soridraw-explore-cover-wrap > \.soridraw-explore-more-button\{[\s\S]*?width:31px;height:31px/,
   'Explore feed More base dimensions must remain untouched');

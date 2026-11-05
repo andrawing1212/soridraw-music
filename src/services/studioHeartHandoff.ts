@@ -14,14 +14,37 @@ export type StudioHeartHandoffReceipt = {
 };
 
 const MAX_SONG_JSON = 24000;
+const MAX_SLOTS = 20;
 const CLAIM_LEASE_MS = 30_000;
-const quietMs = 5_000;
+const QUIET_MS = 5_000;
+const slotByDocument = new Map<string, string>();
+let fallbackDeviceId = '';
 const safeKey = (value: string): string => {
   const id = String(value || '').trim();
   return id.length > 0 && id.length <= 256 && !/[.#$\[\]/]/.test(id) ? id : '';
 };
-const receiptRef = (uid: string, id: string) =>
-  ref(realtimeDb, 'userSync/' + uid + '/studioHeartHandoffs/' + id);
+const rootPath = (uid: string) => 'userSync/' + uid + '/studioHeartHandoffs';
+const rootRef = (uid: string) => ref(realtimeDb, rootPath(uid));
+const slotRef = (uid: string, slot: string) => ref(realtimeDb, rootPath(uid) + '/slots/' + slot);
+const cachedKey = (uid: string, documentId: string) => uid + '|' + documentId;
+const normalize = (input: unknown): StudioHeartHandoffReceipt | null => {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const x = input as Record<string, any>;
+  const id = safeKey(String(x.documentId || ''));
+  const seq = Number(x.seq || 0);
+  const updated = Number(x.updatedAtMs || 0);
+  if (!id || !Number.isSafeInteger(seq) || seq < 1 || !Number.isFinite(updated)
+    || updated <= 0 || typeof x.desiredSaved !== 'boolean'
+    || (x.status !== 'pending' && x.status !== 'claimed')) return null;
+  return {
+    documentId: id, seq, desiredSaved: x.desiredSaved,
+    originDeviceId: String(x.originDeviceId || '').slice(0, 96),
+    updatedAtMs: updated, status: x.status,
+    claimToken: String(x.claimToken || '').slice(0, 96),
+    claimedUntilMs: Math.max(0, Number(x.claimedUntilMs || 0)),
+    songJson: typeof x.songJson === 'string' && x.songJson.length <= MAX_SONG_JSON ? x.songJson : '',
+  };
+};
 const getOrigin = (): string => {
   try {
     const key = 'soridraw_studio_heart_handoff_device_v1';
@@ -31,34 +54,30 @@ const getOrigin = (): string => {
     localStorage.setItem(key, id);
     return id;
   } catch {
-    return 'sh_session_' + Math.random().toString(36).slice(2, 12);
+    if (!fallbackDeviceId) fallbackDeviceId = 'sh_session_' + Math.random().toString(36).slice(2, 12);
+    return fallbackDeviceId;
   }
 };
 export const studioHeartHandoffDeviceId = getOrigin;
-const normalize = (input: unknown): StudioHeartHandoffReceipt | null => {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
-  const x = input as Record<string, any>;
-  const id = safeKey(String(x.documentId || ''));
-  const seq = Number(x.seq || 0);
-  const updated = Number(x.updatedAtMs || 0);
-  const desired = x.desiredSaved;
-  const status = x.status;
-  if (!id || !Number.isSafeInteger(seq) || seq < 1 || !Number.isFinite(updated)
-    || updated <= 0 || typeof desired !== 'boolean'
-    || (status !== 'pending' && status !== 'claimed')) return null;
-  const songJson = typeof x.songJson === 'string' && x.songJson.length <= MAX_SONG_JSON
-    ? x.songJson : '';
-  return {
-    documentId: id, seq, desiredSaved: desired,
-    originDeviceId: String(x.originDeviceId || '').slice(0, 96),
-    updatedAtMs: updated, status,
-    claimToken: String(x.claimToken || '').slice(0, 96),
-    claimedUntilMs: Math.max(0, Number(x.claimedUntilMs || 0)),
-    songJson,
-  };
+const findSlot = (raw: any, id: string): string | null => {
+  const slots = raw?.slots && typeof raw.slots === 'object' ? raw.slots : {};
+  for (let index = 0; index < MAX_SLOTS; index += 1) {
+    const key = String(index);
+    if (normalize(slots[key])?.documentId === id) return key;
+  }
+  return null;
+};
+const rememberSlot = (uid: string, id: string, slot: string) => slotByDocument.set(cachedKey(uid, id), slot);
+const resolveSlot = async (uid: string, id: string): Promise<string | null> => {
+  const cached = slotByDocument.get(cachedKey(uid, id));
+  if (cached !== undefined) return cached;
+  const snapshot = await get(rootRef(uid));
+  const slot = findSlot(snapshot.val(), id);
+  if (slot !== null) rememberSlot(uid, id, slot);
+  return slot;
 };
 
-/** The durable RTDB receipt is independent of the ephemeral live-preview event. */
+/** At most twenty named slots can ever exist: enforceable by RTDB Rules. */
 export const publishStudioHeartHandoff = async (
   uid: string, documentId: string, desiredSaved: boolean, song: unknown,
   updatedAtMs: number,
@@ -67,29 +86,38 @@ export const publishStudioHeartHandoff = async (
   if (!uid || !id || typeof desiredSaved !== 'boolean') return null;
   let songJson = '';
   if (desiredSaved) {
-    try {
-      songJson = JSON.stringify(song);
-    } catch { throw new Error('STUDIO_HEART_HANDOFF_SONG_NOT_SERIALIZABLE'); }
+    try { songJson = JSON.stringify(song); }
+    catch { throw new Error('STUDIO_HEART_HANDOFF_SONG_NOT_SERIALIZABLE'); }
     if (!songJson || songJson.length > MAX_SONG_JSON)
       throw new Error('STUDIO_HEART_HANDOFF_SONG_TOO_LARGE');
   }
   const originDeviceId = getOrigin();
-  const target = receiptRef(uid, id);
-  const outcome = await runTransaction(target, (current: any) => {
-    const previous = normalize(current);
-    // An earlier click on THIS device must not overwrite a newer delivered click.
-    if (previous && previous.originDeviceId === originDeviceId
-      && previous.updatedAtMs > updatedAtMs) return;
-    return {
-      documentId: id,
-      seq: Math.max(Date.now(), (previous?.seq || 0) + 1),
-      desiredSaved, originDeviceId,
-      updatedAtMs,
-      status: 'pending', claimToken: '', claimedUntilMs: 0,
-      songJson,
+  const outcome = await runTransaction(rootRef(uid), (current: any) => {
+    const snapshot = current && typeof current === 'object' ? current : {};
+    const slots = snapshot.slots && typeof snapshot.slots === 'object' ? { ...snapshot.slots } : {};
+    let slot = findSlot({ slots }, id);
+    if (slot === null) {
+      for (let index = 0; index < MAX_SLOTS; index += 1) {
+        if (!slots[String(index)]) { slot = String(index); break; }
+      }
+    }
+    if (slot === null) return; // Never evict another unfinished song.
+    const previous = normalize(slots[slot]);
+    if (previous && previous.documentId === id
+      && previous.originDeviceId === originDeviceId && previous.updatedAtMs > updatedAtMs) return;
+    const seq = Math.max(Date.now(), (previous?.seq || 0) + 1);
+    slots[slot] = {
+      documentId: id, seq, desiredSaved, originDeviceId, updatedAtMs,
+      status:'pending', claimToken:'', claimedUntilMs:0, songJson,
     };
-  }, { applyLocally: false });
-  return outcome.committed ? normalize(outcome.snapshot.val()) : null;
+    return { version:Math.max(seq,Number(snapshot.version || 0)+1), slots };
+  }, { applyLocally:false });
+  if (!outcome.committed) return null;
+  const raw = outcome.snapshot.val();
+  const slot = findSlot(raw, id);
+  if (slot === null) return null;
+  rememberSlot(uid, id, slot);
+  return normalize(raw?.slots?.[slot]);
 };
 
 export const claimStudioHeartHandoff = async (
@@ -98,38 +126,46 @@ export const claimStudioHeartHandoff = async (
 ): Promise<{ receipt: StudioHeartHandoffReceipt; token: string } | null> => {
   const id = safeKey(documentId);
   if (!uid || !id) return null;
+  const slot = await resolveSlot(uid, id);
+  if (slot === null) return null;
   const token = getOrigin() + '_' + Math.random().toString(36).slice(2, 13);
   const now = Date.now();
-  const outcome = await runTransaction(receiptRef(uid, id), (value: any) => {
+  const outcome = await runTransaction(slotRef(uid,slot), (value: any) => {
     const current = normalize(value);
-    if (!current) return;
+    if (!current || current.documentId !== id) return;
     if (expected && (current.seq !== expected.seq || current.desiredSaved !== expected.desiredSaved)) return;
-    if (current.updatedAtMs + quietMs > now) return;
+    if (current.updatedAtMs + QUIET_MS > now) return;
     if (current.status === 'claimed' && current.claimedUntilMs > now) return;
-    return { ...current, status: 'claimed', claimToken: token, claimedUntilMs: now + CLAIM_LEASE_MS };
-  }, { applyLocally: false });
-  const value = normalize(outcome.snapshot.val());
-  return outcome.committed && value?.claimToken === token ? { receipt: value, token } : null;
+    return { ...current, status:'claimed', claimToken:token, claimedUntilMs:now+CLAIM_LEASE_MS };
+  }, { applyLocally:false });
+  const receipt = normalize(outcome.snapshot.val());
+  return outcome.committed && receipt?.claimToken === token ? { receipt, token } : null;
 };
 
-/** A completed receipt is deleted only by the exact claim owner and version. */
 export const settleStudioHeartHandoff = async (uid: string, documentId: string, seq: number, token: string): Promise<boolean> => {
   const id = safeKey(documentId);
   if (!uid || !id || !token) return false;
-  const outcome = await runTransaction(receiptRef(uid, id), (value: any) => {
+  const slot = await resolveSlot(uid, id);
+  if (slot === null) return false;
+  const outcome = await runTransaction(slotRef(uid,slot), (value: any) => {
     const current = normalize(value);
-    if (!current || current.seq !== seq || current.claimToken !== token || current.status !== 'claimed') return;
+    if (!current || current.documentId !== id || current.seq !== seq
+      || current.claimToken !== token || current.status !== 'claimed') return;
     return null;
-  }, { applyLocally: false });
+  }, { applyLocally:false });
+  if (outcome.committed) slotByDocument.delete(cachedKey(uid,id));
   return outcome.committed;
 };
 
 export const releaseStudioHeartHandoff = async (uid: string, documentId: string, seq: number, token: string): Promise<void> => {
   const id = safeKey(documentId);
   if (!uid || !id || !token) return;
-  await runTransaction(receiptRef(uid, id), (value: any) => {
+  const slot = await resolveSlot(uid, id);
+  if (slot === null) return;
+  await runTransaction(slotRef(uid,slot), (value: any) => {
     const current = normalize(value);
-    if (!current || current.seq !== seq || current.claimToken !== token || current.status !== 'claimed') return;
+    if (!current || current.documentId !== id || current.seq !== seq
+      || current.claimToken !== token || current.status !== 'claimed') return;
     return { ...current, status:'pending', claimToken:'', claimedUntilMs:0 };
   }, { applyLocally:false });
 };
@@ -137,24 +173,38 @@ export const releaseStudioHeartHandoff = async (uid: string, documentId: string,
 export const readStudioHeartHandoff = async (uid: string, documentId: string): Promise<StudioHeartHandoffReceipt | null> => {
   const id = safeKey(documentId);
   if (!uid || !id) return null;
-  return normalize((await get(receiptRef(uid, id))).val());
+  let slot = await resolveSlot(uid, id);
+  if (slot === null) return null;
+  let receipt = normalize((await get(slotRef(uid,slot))).val());
+  if (receipt?.documentId === id) return receipt;
+  slotByDocument.delete(cachedKey(uid,id));
+  slot = await resolveSlot(uid,id);
+  if (slot === null) return null;
+  receipt = normalize((await get(slotRef(uid,slot))).val());
+  return receipt?.documentId === id ? receipt : null;
 };
 
-/** Child-only subscription: an empty inbox has no per-song downloads or polling. */
 export const subscribeStudioHeartHandoffs = (
   uid: string, callback: (receipt: StudioHeartHandoffReceipt) => void,
   onRemoved?: (documentId: string) => void,
 ): Unsubscribe => {
   if (!uid) return () => {};
-  const location = ref(realtimeDb, 'userSync/' + uid + '/studioHeartHandoffs');
+  const location = ref(realtimeDb, rootPath(uid) + '/slots');
   const receive = (snapshot: any) => {
     const item = normalize(snapshot.val());
-    if (item && item.documentId === snapshot.key) callback(item);
+    if (item && snapshot.key && Number(snapshot.key) >= 0 && Number(snapshot.key) < MAX_SLOTS) {
+      rememberSlot(uid,item.documentId,snapshot.key);
+      callback(item);
+    }
   };
-  const offAdd = onChildAdded(location, receive);
-  const offChange = onChildChanged(location, receive);
-  const offRemove = onChildRemoved(location, (snapshot) => {
-    if (snapshot.key && onRemoved) onRemoved(snapshot.key);
+  const offAdd = onChildAdded(location,receive);
+  const offChange = onChildChanged(location,receive);
+  const offRemove = onChildRemoved(location,(snapshot) => {
+    const item = normalize(snapshot.val());
+    if (item) {
+      slotByDocument.delete(cachedKey(uid,item.documentId));
+      onRemoved?.(item.documentId);
+    }
   });
   return () => { offAdd(); offChange(); offRemove(); };
 };

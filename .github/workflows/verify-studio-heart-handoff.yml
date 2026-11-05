@@ -5,6 +5,8 @@ on:
     paths:
       - 'database.rules.json'
       - 'src/services/studioHeartHandoff.ts'
+      - 'src/lib/studioHeartRecentConfirmation.ts'
+      - 'scripts/verify-studio-heart-recent-confirmation.mjs'
       - 'src/App.tsx'
       - 'src/lib/studioHeartBatch.ts'
       - 'scripts/verify-studio-heart-handoff-rules.mjs'
@@ -87,6 +89,7 @@ jobs:
           echo 'USER_DATA_WRITES=0'
       - name: Existing Studio ten-song 5s restart protections
         run: |
+          node scripts/verify-studio-heart-recent-confirmation.mjs
           node scripts/verify-studio-heart-five-second-click-guard.mjs
           node scripts/verify-studio-heart-ten-song-conflict.mjs
           node scripts/verify-studio-heart-close-reconnect.mjs

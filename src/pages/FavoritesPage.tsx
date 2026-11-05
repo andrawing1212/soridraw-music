@@ -6961,10 +6961,11 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
   const isTransientMusicNoteOriginalError = (error: unknown): boolean =>
     ['unavailable', 'deadline-exceeded', 'network-request-failed'].includes(musicNoteOriginalErrorCode(error));
 
-  const hydrateCatalogFavorite = async (
-    song: any, requireStoredRecipe = false,
-    reportOriginalFailure?: (reason: NextSongOriginalFailure) => void,
-  ): Promise<any> => {
+  const nextSongOriginalFailureRef = useRef<NextSongOriginalFailure>('unknown');
+  const hydrateCatalogFavorite = async (song: any, requireStoredRecipe = false): Promise<any> => {
+    const reportOriginalFailure = (reason: NextSongOriginalFailure): void => {
+      if (requireStoredRecipe) nextSongOriginalFailureRef.current = reason;
+    };
     // app267 — shared-note rows are also compact Catalog summaries. Their full
     // lyrics/prompt stay in the canonical favorites document, so hydrate exactly
     // that one document on explicit detail open. Page entry remains Catalog-only.
@@ -7086,9 +7087,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       applyKeywordsToNext(song);
       return;
     }
-    let failureReason: NextSongOriginalFailure = 'unknown';
-    const hydrated = await hydrateCatalogFavorite(song, true, (reason) => { failureReason = reason; });
+    nextSongOriginalFailureRef.current = 'unknown';
+    const hydrated = await hydrateCatalogFavorite(song, true);
     if (hydrated?.__musicNoteNextSongOriginalVerified462 !== true) {
+      const failureReason = nextSongOriginalFailureRef.current;
       const message: Record<NextSongOriginalFailure, string> = {
         login: '로그인 상태를 확인한 뒤 다시 시도해주세요.',
         'source-id': '이 곡의 원본 연결 ID가 없어 설정을 불러올 수 없습니다.',

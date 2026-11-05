@@ -1,0 +1,55 @@
+name: SORIDRAW Studio Heart Handoff - Emulator and Product Safety
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'database.rules.json'
+      - 'src/services/studioHeartHandoff.ts'
+      - 'src/App.tsx'
+      - 'src/lib/studioHeartBatch.ts'
+      - 'scripts/verify-studio-heart-handoff-rules.mjs'
+      - '.github/workflows/verify-studio-heart-handoff.yml'
+permissions:
+  contents: read
+jobs:
+  handoff-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: |
+          npm ci --no-audit --no-fund
+          npm install --no-save --package-lock=false --legacy-peer-deps --no-audit --no-fund @firebase/rules-unit-testing@5 firebase-tools@14
+      - name: Isolated RTDB emulator (no shared data)
+        run: |
+          node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/heart-rtdb-emulator.json',
+            JSON.stringify({database:{rules:process.cwd()+'/database.rules.json'},
+              emulators:{database:{host:'127.0.0.1',port:9000},ui:{enabled:false}}}));
+          JS
+          ./node_modules/.bin/firebase emulators:exec --only database \
+            --project demo-soridraw-studio-heart-handoff \
+            --config "$RUNNER_TEMP/heart-rtdb-emulator.json" \
+            "node scripts/verify-studio-heart-handoff-rules.mjs"
+      - name: Existing Studio ten-song 5s restart protections
+        run: |
+          node scripts/verify-studio-heart-five-second-click-guard.mjs
+          node scripts/verify-studio-heart-ten-song-conflict.mjs
+          node scripts/verify-studio-heart-close-reconnect.mjs
+          node scripts/verify-349-studio-heart-settlement-media.mjs
+      - name: Types and build
+        run: |
+          npx tsc --noEmit
+          npm run build
+      - run: echo "EMULATOR_ONLY;SHARED_RULES_DEPLOY=0;FIRESTORE_DATA_WRITES=0"

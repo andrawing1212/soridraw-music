@@ -295,6 +295,42 @@
         },
         "$other": {
           ".validate": false
+        },
+        "studioHeartHandoffs": {
+          ".validate": "newData.numChildren() <= 20",
+          "$documentId": {
+            ".validate": "newData.hasChildren(['documentId','seq','desiredSaved','originDeviceId','updatedAtMs','status','claimToken','claimedUntilMs','songJson']) && (newData.child('status').val() === 'pending' || newData.child('status').val() === 'claimed') && (!data.exists() || newData.child('seq').val() >= data.child('seq').val())",
+            "documentId": {
+              ".validate": "newData.isString() && newData.val() === $documentId && newData.val().length > 0 && newData.val().length <= 256"
+            },
+            "seq": {
+              ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 9007199254740991"
+            },
+            "desiredSaved": {
+              ".validate": "newData.isBoolean()"
+            },
+            "originDeviceId": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 96"
+            },
+            "updatedAtMs": {
+              ".validate": "newData.isNumber() && newData.val() > 0"
+            },
+            "status": {
+              ".validate": "newData.isString() && (newData.val() === 'pending' || newData.val() === 'claimed')"
+            },
+            "claimToken": {
+              ".validate": "newData.isString() && newData.val().length <= 96"
+            },
+            "claimedUntilMs": {
+              ".validate": "newData.isNumber() && newData.val() >= 0"
+            },
+            "songJson": {
+              ".validate": "newData.isString() && newData.val().length <= 24000"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
         }
       }
     },

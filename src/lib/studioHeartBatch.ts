@@ -9,6 +9,7 @@ export type StudioHeartPendingIntent = {
   song: any;
   updatedAtMs: number;
   firstQueuedAtMs?: number;
+  handoffSeq?: number;
   signalVersion: number;
   pendingRemotePreviewVersion: number;
   pendingRemotePreviewSaved?: boolean | null;
@@ -38,6 +39,7 @@ const normalizeIntent = (uid: string, value: any): StudioHeartPendingIntent | nu
     song: value.song && typeof value.song === 'object' ? value.song : null,
     updatedAtMs: Math.max(0, Math.floor(Number(value.updatedAtMs || 0))),
     firstQueuedAtMs: Math.max(0, Math.floor(Number(value.firstQueuedAtMs || value.updatedAtMs || 0))),
+    handoffSeq: Math.max(0, Math.floor(Number(value.handoffSeq || 0))),
     signalVersion: Math.max(0, Math.floor(Number(value.signalVersion || 0))),
     pendingRemotePreviewVersion: Math.max(0, Math.floor(Number(value.pendingRemotePreviewVersion || 0))),
     pendingRemotePreviewSaved: typeof value.pendingRemotePreviewSaved === 'boolean' ? value.pendingRemotePreviewSaved : null,
@@ -99,6 +101,7 @@ export const writeStudioHeartPendingIntent = (intent: StudioHeartPendingIntent):
     documentId,
     updatedAtMs: Math.max(1, Math.floor(Number(intent.updatedAtMs || Date.now()))),
     firstQueuedAtMs: Math.max(1, Math.floor(Number(intent.firstQueuedAtMs || intent.updatedAtMs || Date.now()))),
+    handoffSeq: Math.max(0, Math.floor(Number(intent.handoffSeq || 0))),
     signalVersion: Math.max(0, Math.floor(Number(intent.signalVersion || 0))),
     pendingRemotePreviewVersion: Math.max(0, Math.floor(Number(intent.pendingRemotePreviewVersion || 0))),
     pendingRemotePreviewSaved: typeof intent.pendingRemotePreviewSaved === 'boolean' ? intent.pendingRemotePreviewSaved : null,

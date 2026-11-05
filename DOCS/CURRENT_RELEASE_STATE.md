@@ -1,3 +1,11 @@
+## CURRENT — Studio 하트 5초 미만 종료 후 기기 간 인계 / PREVIEW 배포 PASS, 실기기 QA OPEN (2026-11-06 KST)
+- **승인:** 디렉터 YES로 공유 RTDB Rules 읽기 전용 대조 → 기존 규칙 불변·UID 전용 인계 경로 한 개만 추가 확인 시 PR #816 병합과 PREVIEW Hosting/공유 Rules 배포 승인. PRODUCTION/TEST Hosting 변경 금지.
+- **소스 및 검사:** PR #816 merge `f5612b8876e3bbf1d1a23e440d5cb3d3140fc167` (검증 head `1b88aa4f92e2ddb8e0dfc4bf2c3bbd304905f1d0`), CI **7/7 SUCCESS**. RTDB emulator 두 기기 claim 단일 승자·오래된 ACK 차단, 20개 슬롯/24KB 제한, 기존 5초 정산·10곡/Recent/Music Note/로그인·TypeScript·Build 보호. [Live GET-only run 42114181734](https://github.com/andrawing1212/soridraw-music/actions/runs/42114181734): `ADD_ONLY_STUDIO_HEART_HANDOFF`, 기존 ACL 변경 0, 원본 사용자 데이터 변경 0.
+- **배포:** trigger-only PR #817 merge `074d771ab6fb3e84c996ed1bf6e9f8acbf9728fd`; [Actions 42114809401](https://github.com/andrawing1212/soridraw-music/actions/runs/42114809401) **SUCCESS**. 공유 RTDB Rules 두 차례 live re-GET 후 정확히 `studioHeartHandoffs` 자식 한 개만 추가, post-PUT exact 확인 PASS. PREVIEW Hosting 배포·exact build·TEST/PRODUCTION Hosting 불변 PASS. 공유 Rules는 세 앱 공용이나 기존 규칙은 변경 0; Functions/Workers/D1/R2/Firestore 사용자 원본 이전·삭제 없음.
+- **실기기 QA 구분:** 디렉터 모바일 저장 해제→10초 이상 대기→종료→PC 하트/Music Note 일치 PASS는 기존 5초 정산의 실사용 검증. **새로운 5초 이내 앱 종료 후 다른 기기 인계**는 인증 PC·모바일에서 아직 미검증(OPEN). 새 기능 전체 제품 PASS로 보고하지 않음.
+
+---
+
 ## CURRENT — Studio 하트 5초 묶음·반복 클릭 제한 / 소스 QA PASS · PREVIEW Hosting 릴리스 요청 (2026-11-06 KST)
 - **승인 범위:** 디렉터 YES — 30초→5초 곡별 최종 상태 묶음, 첫 클릭 기준 최대 15초 대기, 다중 시간대 반복 클릭 감지, 기존 RTDB live preview 및 Firestore W0/W1 최적화 유지. 모바일 A 종료 후 다른 기기 B가 미완료 요청을 이어받는 별도 기능까지 최종 목표.
 - **이번에 실제 구현한 부분:** PR #814 소스 head `3ade7aff56a35896a0210ef8b196dd9151d73384`, merge `4d6655648a5336d02c582c772cc72c17c6298480`. 곡별 마지막 클릭 5초, 최초 클릭 후 최대 15초에 정산 시도, 신규/구 pending outbox 재개 호환, 같은 곡 5초 6회/30초 10회/5분 20회 시 20초/60초/5분 단계적 UI 클릭 차단 및 한 번만 안내. 제한된 클릭은 UI/RTDB/Firestore로 보내지 않으며 다른 곡 정상 10곡 저장은 보호. `favoriteCount` 별도 공통 30초 통계 묶음 유지.

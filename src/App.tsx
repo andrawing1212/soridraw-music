@@ -9,6 +9,7 @@ import {
   readPendingMusicNoteSyncSignal,
   MUSIC_NOTE_INITIAL_LIVE_READY_EVENT,
   isMusicNoteInitialLiveReady,
+  isMusicNoteInitialLiveUnavailable,
   readRecentSongsAcknowledgedSignalVersion,
   readRecentSongsPendingSignalVersion,
   readRecentSongsRetainedDraftGap460,
@@ -10733,7 +10734,8 @@ const toggleCycleVariantSelection = (
               // A Catalog-only event may still precede the retained RTDB
               // canonical item signal. Render both together rather than
               // showing old membership for the first second.
-              if (isMusicNoteInitialLiveReady(currentUser.uid)) setIsFavoritesLoading(false);
+              if (isMusicNoteInitialLiveReady(currentUser.uid)
+                || isMusicNoteInitialLiveUnavailable(currentUser.uid)) setIsFavoritesLoading(false);
             },
             onMissing: (meta) => {
               if (meta.fromCache) return;
@@ -11363,7 +11365,8 @@ const toggleCycleVariantSelection = (
     if (!uid || typeof window === 'undefined') return;
     const releaseFirstPaint = () => {
       const gate = musicNoteFirstPaintGateRef.current;
-      if (!gate || gate.uid !== uid || !isMusicNoteInitialLiveReady(uid)) return;
+      if (!gate || gate.uid !== uid
+        || (!isMusicNoteInitialLiveReady(uid) && !isMusicNoteInitialLiveUnavailable(uid))) return;
       if (gate.warmVerified || gate.catalogReceived) {
         setIsFavoritesLoading(false);
       }

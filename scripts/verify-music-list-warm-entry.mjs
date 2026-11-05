@@ -41,8 +41,10 @@ assert(bootstrap.includes('musicNoteFirstPaintGateRef.current = {'),
   'cold Music Note list readiness is scoped to the current UID');
 assert(bootstrap.includes('if (hasCachedMusicNote && hasVerifiedWarmMusicNoteList && isMusicNoteInitialLiveReady(currentUser.uid)) {'),
   'only a verified complete warm list with live initial receipt bypasses loading');
-assert(bootstrap.includes('if (isMusicNoteInitialLiveReady(currentUser.uid)) setIsFavoritesLoading(false);'),
+assert(app.includes('if (isMusicNoteInitialLiveReady(currentUser.uid)'),
   'a full Catalog must not paint older remote membership before initial RTDB reconciliation');
+assert(app.includes('|| isMusicNoteInitialLiveUnavailable(currentUser.uid)) setIsFavoritesLoading(false);'),
+  'RTDB read failure still permits the existing Catalog-only fallback');
 assert(note.includes('((isFavoritesLoading && !isMusicNoteSharedView) || sharedMusicNoteLoading)'),
   'Music Note must not paint a one-item RTDB delta as the complete list during cold hydration');
 assert(!note.includes('isFavoritesLoading && activeFavoriteSource.length === 0'),
@@ -103,6 +105,10 @@ assert(sync.indexOf("if (signal) dispatchSignal(safeUid, 'musicNote', signal, in
   'the initial canonical delta dispatch must precede ready visibility');
 assert(sync.includes("initialMusicNoteLiveReadyUid = '';"),
   'switching UID clears the previous live receipt');
+assert(sync.includes("initialMusicNoteLiveUnavailableUid = '';"),
+  'changing UID also clears the prior account\'s offline fallback');
+assert(sync.includes('new CustomEvent(MUSIC_NOTE_INITIAL_LIVE_READY_EVENT,'),
+  'offline RTDB failure signals the existing Catalog-only fallback without extra reads');
 assert(app.includes('queueMicrotask(releaseFirstPaint);'),
   'the latest delta must be applied before releasing a warm list');
 console.log('MUSIC_NOTE_FIRST_LIVE_SNAPSHOT_BEFORE_VISIBLE_WARM_CATALOG=PASS');

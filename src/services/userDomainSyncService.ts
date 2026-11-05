@@ -62,8 +62,11 @@ export const MUSIC_NOTE_SYNC_EVENT = 'soridraw:music-note-sync-version';
 // initial snapshot has been processed.
 export const MUSIC_NOTE_INITIAL_LIVE_READY_EVENT = 'soridraw:music-note-initial-live-ready';
 let initialMusicNoteLiveReadyUid = '';
+let initialMusicNoteLiveUnavailableUid = '';
 export const isMusicNoteInitialLiveReady = (uid: string): boolean =>
   Boolean(uid && initialMusicNoteLiveReadyUid === uid);
+export const isMusicNoteInitialLiveUnavailable = (uid: string): boolean =>
+  Boolean(uid && initialMusicNoteLiveUnavailableUid === uid);
 export const COLOR_SELECTION_SYNC_EVENT = 'soridraw:color-selection-live-v1';
 
 // Only exact user-clicked color fields travel in the already-authorized
@@ -1004,6 +1007,7 @@ const stopDomainSubscriptions = () => {
   unsubscribeRecentSongs = null;
   unsubscribeExplorePublication = null;
   initialMusicNoteLiveReadyUid = '';
+  initialMusicNoteLiveUnavailableUid = '';
   activeUid = '';
 };
 
@@ -1023,13 +1027,22 @@ const startDomainSubscriptions = (uid: string) => {
       // Dispatch after the changed-item event, so the new UI first-paint
       // gate releases only after the current canonical delta was delivered.
       initialMusicNoteLiveReadyUid = safeUid;
+      initialMusicNoteLiveUnavailableUid = '';
       if (typeof window !== 'undefined') window.dispatchEvent(
         new CustomEvent(MUSIC_NOTE_INITIAL_LIVE_READY_EVENT, { detail: { uid: safeUid } }),
       );
     }
   }, (error) => {
-    // Offline/error fallback is still allowed via the existing Catalog error
-    // path; do not mislabel an unavailable RTDB snapshot as verified.
+    // A denied/unavailable listener must not trap an otherwise verified
+    // same-UID Catalog behind a permanent loader. Distinguish the degraded
+    // local-first fallback from a verified initial server snapshot.
+    if (activeUid === safeUid && !isMusicNoteInitialLiveReady(safeUid)) {
+      initialMusicNoteLiveUnavailableUid = safeUid;
+      if (typeof window !== 'undefined') window.dispatchEvent(
+        new CustomEvent(MUSIC_NOTE_INITIAL_LIVE_READY_EVENT,
+          { detail: { uid: safeUid, unavailable: true } }),
+      );
+    }
     console.warn('Music Note RTDB sync signal unavailable; Firestore fallback remains active.', error);
   });
 

@@ -6,7 +6,8 @@ const helper=readFileSync('src/lib/musicNoteNextSongRecipe.ts','utf8');
 const {code}=await transform(helper,{loader:'ts',format:'esm',target:'es2022'});
 const {resolveMusicNoteNextSongRecipe:resolve,
   mergeMusicNoteNextSongClickRecipe455:merge,
-  resolveStoredAuthoredLyricDraft:authored}=await import(
+  resolveStoredAuthoredLyricDraft:authored,
+  recoverLinkedSunoOriginalDirectInputs:recoverLinked}=await import(
     'data:text/javascript;base64,'+Buffer.from(code).toString('base64')
   );
 const legacy=resolve({
@@ -53,13 +54,52 @@ const older=merge(
     requestPayload:{commandInput:'EXACT OLD DIRECT COMMAND'}}
 );
 assert.equal(older.userInput,'EXACT OLD DIRECT COMMAND');
+
+const aprilFavorite={
+  uid:'own',taskId:'task-2026-04',sourceTrackId:'exact-own-track',
+  appliedKeywords:{genre:['Dance'],userInput:''},
+  prompt:'AI GENERATED PROMPT MUST NOT BECOME COMMAND'
+};
+const aprilSuno={
+  taskId:'task-2026-04',
+  requestPayload:{appliedKeywords:{
+    userInput:'EXACT APRIL USER COMMAND',lyricDraft:'MY OLD LYRIC DRAFT',
+    isLyricMode:true,lyricMode:'preserve',
+  }},
+  lyrics:'GENERATED FINAL LYRICS',
+};
+const restoredApril=recoverLinked(aprilFavorite,aprilSuno,
+  resolve(aprilFavorite));
+assert.equal(restoredApril.userInput,'EXACT APRIL USER COMMAND');
+assert.deepEqual(authored(restoredApril),{
+  lyricDraft:'MY OLD LYRIC DRAFT',isLyricMode:true,lyricMode:'preserve'
+});
+assert.equal(recoverLinked(aprilFavorite,
+  {...aprilSuno,taskId:'other-song'},resolve(aprilFavorite)).userInput,'',
+  'mismatched task cannot supply another song command');
+assert.equal(recoverLinked({...aprilFavorite,appliedKeywords:{
+  userInput:'',manualCommandCleared:true}},aprilSuno,
+  {userInput:''}).userInput,'','explicit canonical clear wins');
+assert.equal(recoverLinked(aprilFavorite,aprilSuno,{userInput:''},
+  {appliedKeywords:{userInput:''}}).userInput,'',
+  'newer verified pending blank must not be replaced');
+assert.equal(recoverLinked({...aprilFavorite,appliedKeywords:{
+  userInput:'',isLyricMode:false}},aprilSuno,resolve(aprilFavorite)).lyricDraft,
+  undefined,'explicit lyrics off cannot be revived');
+assert.equal(recoverLinked(aprilFavorite,{prompt:'GENERATED',lyrics:'GENERATED'},
+  resolve(aprilFavorite)).userInput,'',
+  'never infer original direct input from rendered output');
+
 const lib=readFileSync('src/pages/SunoLibraryPage.tsx','utf8');
 const note=readFileSync('src/pages/FavoritesPage.tsx','utf8');
 const app=readFileSync('src/App.tsx','utf8');
 const player=readFileSync('src/components/GlobalPlayer.tsx','utf8');
 const libraryApply=lib.slice(lib.indexOf('  const handleApplyNext = async (group: any, item: any) => {'),
                              lib.indexOf('  const getPlaylistSaveIsShared ='));
-assert.match(libraryApply,/getDocFromServer\(doc\(db, 'suno_tracks', activeUid, 'tracks', sourceTrackId\)\)/);
+assert.equal((libraryApply.match(/getDocFromServer\(doc\(db, 'suno_tracks', activeUid, 'tracks', sourceTrackId\)\)/g) || []).length, 2,
+ 'Library exact owned source is read once, with at most one transient retry');
+assert.match(libraryApply,/\['unavailable', 'deadline-exceeded', 'network-request-failed'\]\.includes\(code\)/,
+ 'Library only retries transient exact-source failures');
 assert.match(libraryApply,/mergeMusicNoteNextSongClickRecipe455\(clickedSource, fullTrack\)/);
 assert.match(libraryApply,/const serialized = JSON.stringify\(appliedKeywords\)/);
 assert.match(libraryApply,/stageNextSongKeywords\(serialized\)/);
@@ -74,7 +114,11 @@ assert.match(app,/setIsLyricMode\(authoredLyrics.isLyricMode\)/);
 assert.match(app,/legacyGenreCustom/);
 assert.match(app,/legacyCustomStyle/);
 assert.match(app,/legacyCustomSound/);
+assert.ok(note.includes("doc(db, 'suno_tracks', user.uid, 'tracks', linkedTrackId)"));
+assert.ok(note.includes('recoverLinkedSunoOriginalDirectInputs('));
+assert.ok(note.includes('if (needsOriginalText && !isSharedMusicNoteItem(song)'));
 assert.doesNotMatch(helper,/source\?\.prompt|source\?\.lyricsText|source\?\.generatedLyrics/);
 console.log('NEXT_SONG_OLD_MENU_AND_COMMAND_FIELDS=PASS');
 console.log('NEXT_SONG_ONLY_ORIGINAL_AUTHORED_LYRICS_DRAFT=PASS');
 console.log('NEXT_SONG_ONE_EXPLICIT_ORIGINAL_READ_NO_BACKGROUND_SCANS=PASS');
+console.log('NEXT_SONG_APRIL_EXACT_LINKED_SUNO_ORIGINAL_SAFETY=PASS');

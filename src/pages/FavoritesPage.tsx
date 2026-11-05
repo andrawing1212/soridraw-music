@@ -107,7 +107,7 @@ import {
 } from '../services/userDomainSyncService';
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
 import { matchesStoredSongSearch } from '../lib/songMetadataSearch';
-import { resolveMusicNoteNextSongRecipe, mergeMusicNoteNextSongClickRecipe455, resolveStoredAuthoredLyricDraft } from '../lib/musicNoteNextSongRecipe';
+import { resolveMusicNoteNextSongRecipe, mergeMusicNoteNextSongClickRecipe455, resolveStoredAuthoredLyricDraft, recoverLinkedSunoOriginalDirectInputs } from '../lib/musicNoteNextSongRecipe';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
 import { getMusicNoteDetailSourceVersion, getOrLoadMusicNoteDetail, getOrLoadMusicNoteOriginalRecipe456, patchMusicNoteDetailCache } from '../lib/musicNoteDetailCache';
 import { rememberMusicNoteMediaPreview } from '../lib/userDataEngine';
@@ -7049,10 +7049,41 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           || (originalVersion <= 0 && pendingBase <= 0)
         ) ? pendingDraft.updates : null;
         const mergedRecipe = mergeMusicNoteNextSongClickRecipe455(song, detail, verifiedPendingUpdates);
+        let recoveredRecipe = mergedRecipe;
+        // Old Music API tracks (including April 2026 records) may retain
+        // authored text in requestPayload.appliedKeywords even when a later
+        // favorite summary has lost it. Query ONLY the explicitly linked own
+        // Suno track after this user clicked Next Song. Never search by title,
+        // task ID, or generated lyrics; missing links stay partial.
+        const linkedTrackId = String((detail as any).sourceTrackId || (detail as any).trackId || '').trim();
+        const needsOriginalText = !String(mergedRecipe.userInput || '').trim()
+          || (!String(mergedRecipe.lyricDraft || '').trim() && mergedRecipe.isLyricMode !== false);
+        if (needsOriginalText && !isSharedMusicNoteItem(song)
+            && linkedTrackId && linkedTrackId.length <= 240
+            && !linkedTrackId.includes('/') && !linkedTrackId.includes('\\')) {
+          try {
+            const linkedSnapshot = await getDocFromServer(
+              doc(db, 'suno_tracks', user.uid, 'tracks', linkedTrackId)
+            );
+            if (linkedSnapshot.exists()) {
+              const linkedOriginal = linkedSnapshot.data() || {};
+              const linkedOwner = String((linkedOriginal as any).ownerUid || (linkedOriginal as any).uid || '').trim();
+              if (!linkedOwner || linkedOwner === user.uid) {
+                recoveredRecipe = recoverLinkedSunoOriginalDirectInputs(
+                  detail, linkedOriginal, mergedRecipe, verifiedPendingUpdates,
+                );
+              }
+            }
+          } catch (error) {
+            // Exact linked source may no longer exist. Existing favorite
+            // settings still apply; no fallback scan or speculative rewrite.
+            console.warn('Music Note linked historical original unavailable:', error);
+          }
+        }
         return {
           ...song,
           __musicNoteNextSongOriginalVerified462: true,
-          appliedKeywords: mergedRecipe,
+          appliedKeywords: recoveredRecipe,
           requestPayload: song?.requestPayload ?? detail.requestPayload,
           id: sourceId,
           firestoreId: sourceId,

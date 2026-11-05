@@ -1258,12 +1258,7 @@ export default function FavoritesPage({
     }
     musicNoteSearchBackArmedRef.current = false;
   };
-  const changeMusicNoteSearch = (value: string) => {
-    setSearchQuery(value);
-    if (!value.trim()) {
-      releaseMusicNoteSearchBack();
-      return;
-    }
+  const armMusicNoteSearchBack = () => {
     if (musicNoteSearchBackArmedRef.current) return;
     if (window.history.state?.soridrawSearchDraft !== 'music-note') {
       window.history.pushState(
@@ -1272,6 +1267,16 @@ export default function FavoritesPage({
       );
     }
     musicNoteSearchBackArmedRef.current = true;
+  };
+  const changeMusicNoteSearch = (value: string) => {
+    setSearchQuery(value);
+    // Keep the same-URL Back entry while the input is focused, even when empty.
+    // Otherwise Android Back can leave Music Note instead of closing search.
+    if (!value.trim() && document.activeElement !== musicNoteSearchInputRef.current) {
+      releaseMusicNoteSearchBack();
+      return;
+    }
+    armMusicNoteSearchBack();
   };
   useEffect(() => {
     const onSearchBack = (event: PopStateEvent) => {
@@ -1414,6 +1419,8 @@ export default function FavoritesPage({
   };
   const resetVisibleCount = () => setVisibleCount(MUSIC_NOTE_VISIBLE_BATCH_SIZE);
   const sortPopupRef = useRef<HTMLDivElement>(null);
+  const sortPopupBackArmedRef = useRef(false);
+  const sortPopupBackReleaseRef = useRef(false);
   const [copiedType, setCopiedType] = useState<string | null>(null);
   const [favoriteMemoDrafts, setFavoriteMemoDrafts] = useState<Record<string, string>>({});
   const [favoriteMemoSavingIds, setFavoriteMemoSavingIds] = useState<Record<string, boolean>>({});
@@ -5680,7 +5687,57 @@ updates: draft.updates,
     setShowSortPopup(false);
   };
 
-  const toggleSortPopup = () => setShowSortPopup((open) => !open);
+  const toggleSortPopup = () => {
+    if (showSortPopup) {
+      setShowSortPopup(false);
+      return;
+    }
+    if (!sortPopupBackArmedRef.current) {
+      window.history.pushState(
+        { ...window.history.state, soridrawFilterPopup: 'music-note' },
+        '', window.location.href,
+      );
+      sortPopupBackArmedRef.current = true;
+    }
+    setShowSortPopup(true);
+  };
+
+  // A filter popup uses one same-URL history entry so Android Back dismisses
+  // the popup before the search field or Music Note page history.
+  useEffect(() => {
+    if (showSortPopup || !sortPopupBackArmedRef.current) return;
+    if (window.history.state?.soridrawFilterPopup === 'music-note') {
+      sortPopupBackReleaseRef.current = true;
+      window.history.back();
+    }
+    sortPopupBackArmedRef.current = false;
+  }, [showSortPopup]);
+  useEffect(() => {
+    const onFilterBack = (event: PopStateEvent) => {
+      if (sortPopupBackReleaseRef.current) {
+        sortPopupBackReleaseRef.current = false;
+        event.stopImmediatePropagation();
+        return;
+      }
+      if (!sortPopupBackArmedRef.current
+        || window.history.state?.soridrawFilterPopup === 'music-note') return;
+      sortPopupBackArmedRef.current = false;
+      setShowSortPopup(false);
+      event.stopImmediatePropagation();
+    };
+    const onFilterEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !sortPopupBackArmedRef.current) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setShowSortPopup(false);
+    };
+    window.addEventListener('popstate', onFilterBack, true);
+    window.addEventListener('keydown', onFilterEscape, true);
+    return () => {
+      window.removeEventListener('popstate', onFilterBack, true);
+      window.removeEventListener('keydown', onFilterEscape, true);
+    };
+  }, []);
 
   // No idle expiry; dismiss only on outside click, scroll, resize or split drag.
   useEffect(() => {
@@ -8360,7 +8417,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               value={searchQuery}
               onChange={(e) => changeMusicNoteSearch(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Escape' && searchQuery && !e.nativeEvent.isComposing) {
+                if (e.key === 'Escape' && !e.nativeEvent.isComposing) {
                   e.preventDefault();
                   e.stopPropagation();
                   clearMusicNoteSearch();
@@ -8375,6 +8432,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               onFocus={() => {
                 setIsMusicNoteSearchCollapsed(false);
                 setIsSearchFocused(true);
+                armMusicNoteSearchBack();
               }}
               onBlur={() => setIsSearchFocused(false)}
               className={cn(

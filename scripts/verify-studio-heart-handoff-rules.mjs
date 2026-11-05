@@ -62,6 +62,12 @@ try{
  const pending={...version2,seq:10,updatedAtMs:Date.now()-7_000,
    status:'pending',claimToken:'',claimedUntilMs:0};
  await assertSucceeds(refA.set(pending));
+ // Real receiver devices have already received the receipt via child_added.
+ // Warm each isolated client cache before transaction: RTDB transactions
+ // otherwise see initial local null and correctly abort without a claim.
+ const [seenA,seenB]=await Promise.all([refA.get(),refB.get()]);
+ assert.equal(seenA.val()?.seq,10);
+ assert.equal(seenB.val()?.seq,10);
  const claim=(reference,token)=>reference.transaction((current)=>{
    if(!current || current.status!=='pending') return;
    return {...current,status:'claimed',claimToken:token,

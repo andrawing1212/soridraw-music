@@ -1,3 +1,12 @@
+## CURRENT — Studio 하트 빠른 종료 후 다른 기기 인계: 재시도 경로 수정·PREVIEW Hosting PASS / 실사용 OPEN (2026-11-06 KST)
+- **디렉터 실사용 확인:** 앞선 Music Note 첫 진입 목록 표시 지연은 해결(PASS). 새 문제는 A에서 하트 저장/해제 직후 1초 만에 앱 종료, 약 3초 뒤 B 실행 시 최종 상태 불일치가 생길 수 있음. 5초 이전 B 진입도 늦게라도 일치해야 한다는 목표.
+- **확인한 코드 원인:** 다른 기기의 RTDB 영속 인계 receipt에 대한 claim/저장 실패가 child_changed를 발생시키지 않을 때 B가 다시 시도하지 않아 미완료 요청이 멈출 수 있었음. 서버 ACK 이전 A 종료로 receipt 자체가 도착하지 않은 경우는 별개이며 B에서 복구 불가능.
+- **최소 코드 수정:** #827 검증 SHA `6cc745721dba33ac470a14d5670a6af24f28d3f5`, 소스 merge `e8f8716f108989746ad48d230c2a9dede601a525`. B는 실제 받은 exact UID/곡/seq/최종 원하는 상태 receipt만 보관, 실패 claim도 60초 기존 쿨다운으로 최대 3회 제한 재시도. 삭제/더 최신 seq가 오면 오래된 시도 차단, 네트워크 재연결 시 미완료에 한해 재개. 정상 데이터 R/W 추가 0 목표, 전역 폴링·새 백엔드 없음. 기존 5초 묶음/W0-W1, Studio Recent/Music Note, 사용자 원본 유지.
+- **검사·배포:** #827 CI 6/6 SUCCESS (RTDB emulator, 10곡, Recent, Music Note, Auth, TypeScript/Build). #828 Hosting-only merge `3495b13d885e99e4f99239aa66b6424c4eb83113`, [Actions run 42130638887](https://github.com/andrawing1212/soridraw-music/actions/runs/42130638887) SUCCESS: PREVIEW Hosting, exact build, TEST/PRODUCTION unchanged PASS, SHARED_RTDB_RULES_DEPLOY SKIPPED. 공유 Rules/Functions/Workers/D1/R2 및 원본 데이터 변경 없음.
+- **OPEN:** PC↔모바일에서 저장/해제 각각 A 1초 종료 → B 최초 진입 → 5초 이후 최종 자동 일치 실사용 재시험 필요. 서버 ACK 전 A 종료를 100% 복구하지 못하므로 전체 문제 완료 선언 금지. 사용량 비용은 실제 실측하지 않았으며 실패 재시도 추가 호출만 예외적 발생 가능.
+
+---
+
 ## CURRENT — Music Note 첫 진입 때 변경곡 한 개만 먼저 표시되는 현상: PREVIEW 수정 배포 PASS, 실기기 QA OPEN (2026-11-06 KST)
 - **디렉터 확인:** 이번 문제는 PR #819 하트 패치의 회귀가 아니라 전날부터 있었던 별도 화면 표시 문제. 저장/해제 PC↔모바일 양방향 반영은 실제 디렉터 확인 PASS. 그러나 A에서 변경한 뒤 B가 Music Note에 진입하면 변경곡 한 개만 1~2초 표시되고 나중에 전체 목록이 나타나는 현상.
 - **원인 확인:** 전체 Music Note Catalog가 아직 준비되지 않은 초기 구간에도 RTDB 변경곡 한 개가 favoritesStore에 들어오면 FavoritesPage의 기존 'isFavoritesLoading && 목록 길이 0' 조건이 로더를 우회. 또한 UID별 로컬 캐시 존재만으로 Loading false가 되는 경로는 완전한 Catalog 영수증과 별개.

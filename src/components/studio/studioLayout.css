@@ -17956,3 +17956,190 @@ html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
     box-sizing: border-box !important;
   }
 }
+
+
+/* SORIDRAW_MUSIC_SEARCH_SEPARATE_MOBILE_CONTROLS_20261104
+ * Director Android 22153 + 2026-11-04 screenshot showed layered X/magnifier.
+ * Stop trying to lay out buttons INSIDE an active overlay input. When the
+ * retained-query search is folded, the original input SLOT is display:none
+ * (value and filtering still live in React); two independent sibling buttons
+ * occupy the 70px slot freed by hiding orange from BOTH TOP FILTER BARS.
+ * The complete saved color palettes continue to accept legacy orange.
+ * Applies to Music Note and Library workspace/playlists only in their own
+ * already-published mobile responsive mode, including a narrow split pane.
+ * Existing drag/resize/PC/tablet layouts and search overlay stay untouched. */
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-compact-search-controls {
+  display: none !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-stable-top-controls[data-soridraw-search-folded="true"]
+> .soridraw-responsive-search-slot {
+  display: none !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-stable-top-controls[data-soridraw-search-folded="true"]
+> .soridraw-compact-search-controls {
+  box-sizing: border-box !important;
+  position: relative !important;
+  display: flex !important;
+  flex: 0 0 70px !important;
+  width: 70px !important;
+  min-width: 70px !important;
+  max-width: 70px !important;
+  height: 46px !important;
+  gap: 2px !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  flex-wrap: nowrap !important;
+  overflow: hidden !important;
+  z-index: 3 !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-stable-top-controls[data-soridraw-search-folded="true"]
+> .soridraw-compact-search-controls > button {
+  box-sizing: border-box !important;
+  position: static !important;
+  display: flex !important;
+  flex: 0 0 34px !important;
+  width: 34px !important;
+  min-width: 34px !important;
+  max-width: 34px !important;
+  height: 46px !important;
+  min-height: 46px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  outline-offset: -2px;
+  border-radius: 14px !important;
+  background: #2c2c2e !important;
+  color: #f5f5f5 !important;
+  pointer-events: auto !important;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-stable-top-controls[data-soridraw-search-folded="true"]
+> .soridraw-compact-search-controls > button:focus-visible {
+  outline: 2px solid currentColor !important;
+}
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-stable-top-controls[data-soridraw-search-folded="true"]
+> .soridraw-compact-search-controls > button:active {
+  background: #333336 !important;
+}
+
+/* A folded search has an active query, not an inactive button.
+ * Tint both control glyphs with the page brand while matching the usual
+ * dark toolbar button surface. No geometry or click handler changes. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-stable-top-controls[data-soridraw-search-folded="true"]
+> .soridraw-compact-search-controls {
+  --soridraw-search-active-accent: #FF7A72;
+}
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-stable-top-controls[data-soridraw-search-folded="true"]
+> .soridraw-compact-search-controls {
+  --soridraw-search-active-accent: #A98BFF;
+}
+
+
+/* Search magnifier stays neutral; only the X shows the active query.
+ * Folded controls are separate button siblings, so do not reflow them. */
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-stable-top-controls[data-soridraw-search-folded="true"]
+> .soridraw-compact-search-controls > button:last-child {
+  color: var(--soridraw-search-active-accent, #FF7A72) !important;
+}
+
+/* Expanded search (desktop and mobile): tint ONLY a non-empty query's
+ * clear X, never the idle magnifier or another text-input button.
+ * Library workspace/playlist both use this shared search slot. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme .soridraw-stable-top-controls
+.soridraw-responsive-search-slot.has-search-value
+.soridraw-responsive-search-clear {
+  color: #FF7A72 !important;
+}
+:root body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-stable-top-controls
+.soridraw-responsive-search-slot.has-search-value
+.soridraw-responsive-search-clear {
+  color: #A98BFF !important;
+}
+
+/* The two new controls replace one orange 20–28px filter dot. At 320px,
+ * reduce only the invisible dot hitbox; keep the 14px painted circle. */
+@container (max-width: 420px) {
+  :root body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+  .soridraw-stable-top-controls .soridraw-responsive-color-filter
+  > button[data-soridraw-filter-dot="true"] {
+    box-sizing: border-box !important;
+    flex: 0 0 clamp(14px, calc((100cqi - 158px) / 8), 28px) !important;
+    width: clamp(14px, calc((100cqi - 158px) / 8), 28px) !important;
+    min-width: clamp(14px, calc((100cqi - 158px) / 8), 28px) !important;
+    max-width: clamp(14px, calc((100cqi - 158px) / 8), 28px) !important;
+  }
+}
+
+/* 2026-11-04 Search toolbar visual parity (Music Note & Library).
+ * Selected "all colors" resets to a neutral button; only the icon/text
+ * receives the page accent. Preserve all stored color values and filter state. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme .soridraw-stable-top-controls
+.soridraw-responsive-color-filter > .soridraw-color-reset-button[aria-pressed="true"] {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #FF7A72 !important;
+}
+:root body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-stable-top-controls
+.soridraw-responsive-color-filter > .soridraw-color-reset-button[aria-pressed="true"] {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #A98BFF !important;
+}
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme .soridraw-stable-top-controls
+.soridraw-responsive-color-filter > .soridraw-color-reset-button[aria-pressed="true"] .soridraw-color-reset-icon {
+  color: #FF7A72 !important;
+}
+:root body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-stable-top-controls
+.soridraw-responsive-color-filter > .soridraw-color-reset-button[aria-pressed="true"] .soridraw-color-reset-icon {
+  color: #A98BFF !important;
+}
+
+/* Existing PC/tablet input outline colors were hidden by earlier common
+ * Studio field rules. Only a focused or non-empty search gets its accent;
+ * the box stays the same size and the idle/other input fields are unchanged. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-stable-top-controls
+.soridraw-responsive-search-slot:is(.has-search-value, :focus-within)
+.soridraw-responsive-search-input {
+  border: 1px solid rgba(255, 122, 114, 0.76) !important;
+}
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-stable-top-controls
+.soridraw-responsive-search-slot:is(.has-search-value, :focus-within)
+.soridraw-responsive-search-input {
+  border: 1px solid rgba(169, 139, 255, 0.76) !important;
+}

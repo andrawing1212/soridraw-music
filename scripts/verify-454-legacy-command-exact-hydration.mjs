@@ -382,9 +382,10 @@ assert.deepEqual(applyToStudioTempo(JSON.parse(sent.get('pendingAppliedKeywords'
 assert.match(favorite,/const hydrateCatalogFavorite = async \(song: any, requireStoredRecipe = false\)/);
 assert.match(favorite,/if \(requireStoredRecipe\) \{[\s\S]{0,2300}mergeMusicNoteNextSongClickRecipe455\(song, detail, verifiedPendingUpdates\)/,
  'click-only exact original must pass a version-verified local pending draft');
-assert.ok(favorite.includes("getDocFromServer(doc(db, 'favorites', sourceId))"),
- 'explicit Next Song must read its one exact original, not stale same-version cache');
-assert.ok(favorite.includes('if (ownerUid && ownerUid !== user.uid) return null'),
+assert.ok(favorite.includes("const sourceRef = doc(db, 'favorites', sourceId)")
+ && favorite.includes('getDocFromServer(sourceRef)'),
+ 'explicit Next Song must read its one exact owned original, not stale same-version cache');
+assert.match(favorite,/if \(ownerUid && ownerUid !== user\.uid\) \{[\s\S]{0,140}reportOriginalFailure\?\.\('owner'\);[\s\S]{0,90}return null;/,
  'explicit source verification must block mismatched ownership');
 assert.ok(favorite.includes('getOrLoadMusicNoteOriginalRecipe456({'),
  'explicit next-song uses special action-scoped source loader');
@@ -407,19 +408,22 @@ assert.ok(source.includes('mergeAbsentOnlyClick462(persisted, local)'),
 assert.doesNotMatch(favorite,/getDocs\(collection\(db, 'favorites'/,'no collection scan');
 // P2: run the real source hydrator and guarded click wrapper. Simulated
 // missing/offline/foreign-owner source must never show a success or navigate.
+const originalHelpersStart=favorite.indexOf("  type NextSongOriginalFailure = 'login'");
 const hydrateStart=favorite.indexOf('  const hydrateCatalogFavorite = async (song: any, requireStoredRecipe = false): Promise<any> => {');
 const wrapStart=favorite.indexOf('  const applyStoredRecipeToNext = async (song: any) => {',hydrateStart);
 const wrapEnd=favorite.indexOf('\n\n  const openFavoriteDetail',wrapStart);
-assert.ok(hydrateStart>=0 && wrapStart>hydrateStart && wrapEnd>wrapStart,
- 'real owned Original hydrator and guarded apply wrapper must remain extractable');
-const verifyClickJs=ts.transpileModule(favorite.slice(hydrateStart,wrapEnd)
+assert.ok(originalHelpersStart>=0 && hydrateStart>originalHelpersStart && wrapStart>hydrateStart && wrapEnd>wrapStart,
+ 'real owned Original hydrator, bounded retry and guarded apply wrapper must remain extractable');
+const verifyClickJs=ts.transpileModule(favorite.slice(originalHelpersStart,wrapEnd)
  + '\nexports.applyStoredRecipeToNext=applyStoredRecipeToNext;',
  {compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS}}).outputText;
 const guardedCalls={applied:[],toasts:[]};
 let originalReadMode='offline';
 let originalReads=0;
+let transientFailures=0;
 const verifyCtx={
- exports:{},user:{uid:'owner'},isMusicNoteSharedView:false,
+ exports:{},useRef:(value)=>({current:value}),
+ user:{uid:'owner'},isMusicNoteSharedView:false,
  isSharedMusicNoteItem:()=>false,
  getFavoriteDocumentId:(song)=>song?.id||'',
  getMusicNoteDetailSourceVersion:()=>0,
@@ -428,6 +432,9 @@ const verifyCtx={
  getDocFromServer:async()=>{
   originalReads++;
   if(originalReadMode==='offline') throw Error('network offline');
+  if(originalReadMode==='permission')throw Object.assign(Error('denied'),{code:'permission-denied'});
+  if(originalReadMode==='transient-once' && ++transientFailures===1)
+    throw Object.assign(Error('temporary unavailable'),{code:'unavailable'});
   if(originalReadMode==='missing')return {exists:()=>false};
   if(originalReadMode==='foreign')return {exists:()=>true,data:()=>({uid:'other-user',appliedKeywords:{tempo:145}})};
   return {exists:()=>true,data:()=>({uid:'owner',appliedKeywords:{genre:['LATEST'],tempo:null}})};
@@ -441,23 +448,41 @@ const verifyCtx={
 };
 vm.runInNewContext(verifyClickJs,verifyCtx);
 const applyOwned=verifyCtx.exports.applyStoredRecipeToNext;
+const failureMessages={
+ offline:/원본 설정을 확인하지 못했습니다.*다시 시도해주세요/,
+ missing:/원본 문서를 찾지 못했습니다/,
+ foreign:/소유자가 현재 계정과 일치하지 않습니다/,
+};
 for(const mode of ['offline','missing','foreign']){
  originalReadMode=mode;
+ const before=originalReads;
  await applyOwned({id:'owned-old',appliedKeywords:{tempo:'145-155'}});
  assert.equal(guardedCalls.applied.length,0,mode+' cannot silently apply stale cache');
- assert.match(guardedCalls.toasts.at(-1),/다시 시도해주세요/,
-  mode+' must tell user to retry rather than showing Studio success');
+ assert.match(guardedCalls.toasts.at(-1),failureMessages[mode],
+  mode+' must accurately distinguish its failure without Studio navigation');
+ assert.equal(originalReads,before+1,mode+' must not scan or retry permanent failures');
 }
 originalReadMode='success';
 await applyOwned({id:'owned-old',appliedKeywords:{tempo:'145-155'}});
 assert.equal(guardedCalls.applied.length,1,'successful exact owned original may apply');
 assert.equal(guardedCalls.applied[0].__musicNoteNextSongOriginalVerified462,true);
 assert.equal(guardedCalls.applied[0].appliedKeywords.tempo,null);
-assert.equal(originalReads,4,'only explicit apply click reads one original per attempt');
+assert.equal(originalReads,4,'nontransient clicks read one exact original');
+originalReadMode='transient-once';
+transientFailures=0;
+await applyOwned({id:'owned-old',appliedKeywords:{tempo:'145-155'}});
+assert.equal(guardedCalls.applied.length,2,
+ 'one transient failure followed by verified original must apply successfully');
+assert.equal(originalReads,6,'transient click retries exactly one additional owned source');
+originalReadMode='permission';
+await applyOwned({id:'owned-old',appliedKeywords:{tempo:'145-155'}});
+assert.equal(guardedCalls.applied.length,2,'permission failure cannot apply stale local recipe');
+assert.match(guardedCalls.toasts.at(-1),/접근 권한/);
+assert.equal(originalReads,7,'permission failure must never retry');
 verifyCtx.isMusicNoteSharedView=true;
 await applyOwned({id:'shared-song',appliedKeywords:{tempo:'100-110'}});
-assert.equal(guardedCalls.applied.length,2,'intentional shared-view recipe path remains supported');
-assert.equal(originalReads,4,'shared view cannot read another account-owned original');
+assert.equal(guardedCalls.applied.length,3,'intentional shared-view recipe path remains supported');
+assert.equal(originalReads,7,'shared view cannot read another account-owned original');
 
 
 const detailCacheSource=fs.readFileSync('src/lib/musicNoteDetailCache.ts','utf8');

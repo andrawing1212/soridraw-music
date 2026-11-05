@@ -632,6 +632,8 @@ const COLOR_OPTIONS = [
   { value: 'blue', color: '#3b82f6', label: '파랑' },
   { value: 'purple', color: '#a855f7', label: '보라' }
 ];
+// Filter UI is six colors like Music Note; original saved orange remains valid.
+const COLOR_FILTER_OPTIONS = COLOR_OPTIONS.filter((color) => color.value !== 'orange');
 
 const getColorHex = (colorTag?: string | null) => {
   const found = COLOR_OPTIONS.find(c => c.value === colorTag);
@@ -1249,7 +1251,17 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     });
   }, [playlistItems, activePlaylistId]);
 
-  const [renameModalArgs, setRenameModalArgs] = useState<{ playlist: Playlist, newTitle: string } | null>(null);
+  const [renameModalArgs, setRenameModalArgs] = useState<{ playlist: Playlist, newTitle: string, isCreate?: boolean } | null>(null);
+  const [mobileLibraryEditKey, setMobileLibraryEditKey] = useState<string | null>(null);
+  const libraryFolderSaveBusyRef = useRef(false);
+  useEffect(() => {
+    const onOutsideFolderTap = (event: PointerEvent) => {
+      if (event.target instanceof Element && event.target.closest('.soridraw-library-folder-button')) return;
+      setMobileLibraryEditKey(null);
+    };
+    document.addEventListener('pointerdown', onOutsideFolderTap, true);
+    return () => document.removeEventListener('pointerdown', onOutsideFolderTap, true);
+  }, []);
   const [moveModalArgs, setMoveModalArgs] = useState<{ item: PlaylistItem } | null>(null);
   type PlaylistSaveTarget = { group: any; item: any; audioUrl: string; idx: number };
   const [playlistSavePicker, setPlaylistSavePicker] = useState<{ isShared: boolean; targets: PlaylistSaveTarget[]; playlists: Playlist[] } | null>(null);
@@ -1283,6 +1295,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [searchTerm, setSearchTerm] = useState(() => readLibrarySearchSession(LIBRARY_WORKSPACE_SEARCH_SESSION_KEY));
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const [isLibrarySearchFocused, setIsLibrarySearchFocused] = useState(false);
+  const [isLibrarySearchCollapsed, setIsLibrarySearchCollapsed] = useState(false);
   const librarySearchInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -1295,6 +1308,56 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [filter, setFilter] = useState<'all' | 'latest' | 'oldest' | 'completed' | 'favorite' | 'public' | 'private' | 'trash'>('all');
   const [showLibraryFilterPopup, setShowLibraryFilterPopup] = useState(false);
   const libraryFilterPopupRef = useRef<HTMLDivElement | null>(null);
+  const libraryFilterBackArmedRef = useRef(false);
+  const libraryFilterBackReleaseRef = useRef(false);
+  const toggleLibraryFilterPopup = () => {
+    if (showLibraryFilterPopup) {
+      setShowLibraryFilterPopup(false);
+      return;
+    }
+    if (!libraryFilterBackArmedRef.current) {
+      window.history.pushState(
+        { ...window.history.state, soridrawFilterPopup: 'library' },
+        '', window.location.href,
+      );
+      libraryFilterBackArmedRef.current = true;
+    }
+    setShowLibraryFilterPopup(true);
+  };
+  useEffect(() => {
+    if (showLibraryFilterPopup || !libraryFilterBackArmedRef.current) return;
+    if (window.history.state?.soridrawFilterPopup === 'library') {
+      libraryFilterBackReleaseRef.current = true;
+      window.history.back();
+    }
+    libraryFilterBackArmedRef.current = false;
+  }, [showLibraryFilterPopup]);
+  useEffect(() => {
+    const onFilterBack = (event: PopStateEvent) => {
+      if (libraryFilterBackReleaseRef.current) {
+        libraryFilterBackReleaseRef.current = false;
+        event.stopImmediatePropagation();
+        return;
+      }
+      if (!libraryFilterBackArmedRef.current
+        || window.history.state?.soridrawFilterPopup === 'library') return;
+      libraryFilterBackArmedRef.current = false;
+      setShowLibraryFilterPopup(false);
+      event.stopImmediatePropagation();
+    };
+    const onFilterEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !libraryFilterBackArmedRef.current) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setShowLibraryFilterPopup(false);
+    };
+    window.addEventListener('popstate', onFilterBack, true);
+    window.addEventListener('keydown', onFilterEscape, true);
+    return () => {
+      window.removeEventListener('popstate', onFilterBack, true);
+      window.removeEventListener('keydown', onFilterEscape, true);
+    };
+  }, []);
   const [workspaceVisibleCount, setWorkspaceVisibleCount] = useState(WORKSPACE_PAGE_SIZE);
   const [hasMoreWorkspaceServerTracks, setHasMoreWorkspaceServerTracks] = useState(false);
   const [isLoadingMoreWorkspaceTracks, setIsLoadingMoreWorkspaceTracks] = useState(false);
@@ -1412,6 +1475,80 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   const isLibraryTrashMode = filter === 'trash' && libraryViewMode === 'workspace';
   const libraryPageRootRef = useRef<HTMLDivElement | null>(null);
+  // A synthetic same-URL history entry exists only while a typed search
+  // is active. Its first browser/Android Back clears the query, not the page.
+  const librarySearchBackArmedRef = useRef(false);
+  const librarySearchBackReleaseRef = useRef(false);
+  const librarySearchBackModeRef = useRef<'workspace' | 'playlist'>('workspace');
+  const releaseLibrarySearchBack = () => {
+    if (librarySearchBackArmedRef.current
+      && window.history.state?.soridrawSearchDraft === 'library') {
+      librarySearchBackReleaseRef.current = true;
+      window.history.back();
+    }
+    librarySearchBackArmedRef.current = false;
+  };
+  const armLibrarySearchBack = (mode: 'workspace' | 'playlist') => {
+    librarySearchBackModeRef.current = mode;
+    if (librarySearchBackArmedRef.current) return;
+    if (window.history.state?.soridrawSearchDraft !== 'library') {
+      window.history.pushState(
+        { ...window.history.state, soridrawSearchDraft: 'library' },
+        '', window.location.href,
+      );
+    }
+    librarySearchBackArmedRef.current = true;
+  };
+  const changeLibrarySearch = (value: string, mode: 'workspace' | 'playlist') => {
+    if (mode === 'workspace') setSearchTerm(value);
+    else setPlaylistSearchTerm(value);
+    // Empty focused search also owns the first Android Back, matching typed search.
+    if (!value.trim() && document.activeElement !== librarySearchInputRef.current) {
+      releaseLibrarySearchBack();
+      return;
+    }
+    armLibrarySearchBack(mode);
+  };
+  const resetLibrarySearch = (mode: 'workspace' | 'playlist') => {
+    if (mode === 'workspace') setSearchTerm('');
+    else setPlaylistSearchTerm('');
+    setIsLibrarySearchCollapsed(false);
+    setIsLibrarySearchFocused(false);
+    librarySearchInputRef.current?.blur();
+    releaseLibrarySearchBack();
+  };
+  useEffect(() => {
+    const onSearchBack = (event: PopStateEvent) => {
+      if (librarySearchBackReleaseRef.current) {
+        librarySearchBackReleaseRef.current = false;
+        event.stopImmediatePropagation();
+        return;
+      }
+      if (!librarySearchBackArmedRef.current
+        || window.history.state?.soridrawSearchDraft === 'library') return;
+      librarySearchBackArmedRef.current = false;
+      if (librarySearchBackModeRef.current === 'workspace') setSearchTerm('');
+      else setPlaylistSearchTerm('');
+      setIsLibrarySearchCollapsed(false);
+      setIsLibrarySearchFocused(false);
+      librarySearchInputRef.current?.blur();
+      event.stopImmediatePropagation();
+    };
+    window.addEventListener('popstate', onSearchBack, true);
+    return () => window.removeEventListener('popstate', onSearchBack, true);
+  }, []);
+
+  const collapseLibrarySearchAfterAction = () => {
+    const term = libraryViewMode === 'workspace' ? searchTerm : playlistSearchTerm;
+    if (!term.trim() || libraryPageRootRef.current?.dataset.soridrawResponsiveMode !== 'mobile') return;
+    setIsLibrarySearchCollapsed(true);
+    setIsLibrarySearchFocused(false);
+    librarySearchInputRef.current?.blur();
+  };
+  const expandLibrarySearch = () => {
+    setIsLibrarySearchCollapsed(false);
+    window.requestAnimationFrame(() => librarySearchInputRef.current?.focus());
+  };
 
   useLayoutEffect(() => {
     const root = libraryPageRootRef.current;
@@ -2196,32 +2333,20 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
   };
 
-  const handleAddPlaylist = async (type: 'normal' | 'shared') => {
+  const handleAddPlaylist = (type: 'normal' | 'shared') => {
     if (!user) return;
-    const isNormal = type === 'normal';
-    const listCount = isNormal ? actualNormalPlaylists.length : actualSharedPlaylists.length;
-    const maxCount = isNormal ? 10 : 10;
-
-    if (listCount >= maxCount) {
+    const list = type === 'normal' ? actualNormalPlaylists : actualSharedPlaylists;
+    if (list.length >= 10) {
       showToast('최대 개수까지 생성되었습니다.');
       return;
     }
-
-    const currentList = isNormal ? actualNormalPlaylists : actualSharedPlaylists;
-    const newTitle = '새폴더';
-    const newOrder = currentList.length > 0 ? Math.max(...currentList.map(p => p.order)) + 1 : 1;
-
-    try {
-      const newId = await createPlaylist(user.uid, type, newTitle, newOrder);
-      if (isNormal) {
-        setSelectedNormalPlaylistId(newId);
-      } else {
-        setSelectedSharedPlaylistId(newId);
-      }
-    } catch (e) {
-      console.error(e);
-      showToast('플레이리스트 생성에 실패했습니다.');
-    }
+    // The draft never reaches Firebase until the user presses Save.
+    setPlaylistFolderDeleteReady(false);
+    setRenameModalArgs({
+      playlist: { id: '__new_folder_draft__', title: '새폴더', type, order: list.length + 1, isDefault: false },
+      newTitle: '새폴더',
+      isCreate: true,
+    });
   };
 
   useEffect(() => {
@@ -6478,6 +6603,48 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
     clearModalState();
   };
+  const commitLibraryFolderEditor = async () => {
+    if (!user || !renameModalArgs || libraryFolderSaveBusyRef.current) return;
+    const title = renameModalArgs.newTitle.trim();
+    if (!title) { showToast('이름을 입력해주세요.'); return; }
+    if (title.length > 20) { showToast('이름은 최대 20자까지 가능합니다.'); return; }
+    const type = renameModalArgs.playlist.type;
+    const currentList = type === 'normal' ? actualNormalPlaylists : actualSharedPlaylists;
+    if (currentList.some(p => p.id !== renameModalArgs.playlist.id && p.title === title)) {
+      showToast('같은 이름의 플레이리스트가 이미 있습니다.');
+      return;
+    }
+    if (renameModalArgs.isCreate && currentList.length >= 10) {
+      showToast('최대 개수까지 생성되었습니다.');
+      return;
+    }
+    libraryFolderSaveBusyRef.current = true;
+    try {
+      if (renameModalArgs.isCreate) {
+        const newOrder = currentList.length ? Math.max(...currentList.map(p => p.order || 0)) + 1 : 1;
+        const id = await createPlaylist(user.uid, type, title, newOrder);
+        if (type === 'normal') {
+          setSelectedNormalPlaylistId(id);
+          setActivePlaylistSection('normal');
+        } else {
+          setSelectedSharedPlaylistId(id);
+          setActivePlaylistSection('shared');
+        }
+        closeModal();
+        showToast('폴더를 추가했습니다.');
+      } else {
+        if ((renameModalArgs.playlist as any).isFallback) return;
+        await renamePlaylist(user.uid, renameModalArgs.playlist.id!, title);
+        closeModal();
+        showToast('플레이리스트 이름이 변경되었습니다.');
+      }
+    } catch (error) {
+      console.error('save playlist folder failed:', error);
+      showToast(renameModalArgs.isCreate ? '폴더 생성에 실패했습니다.' : '이름 변경에 실패했습니다.');
+    } finally {
+      libraryFolderSaveBusyRef.current = false;
+    }
+  };
 
   useEffect(() => {
     if (!isModalOpen) return;
@@ -6826,16 +6993,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (isSharedView) return null;
     const isWorkspaceMode = libraryViewMode === 'workspace';
     const activeSearchTerm = isWorkspaceMode ? searchTerm : playlistSearchTerm;
-    const clearActiveLibrarySearch = () => {
-      if (isWorkspaceMode) setSearchTerm('');
-      else setPlaylistSearchTerm('');
-      setIsLibrarySearchFocused(false);
-      librarySearchInputRef.current?.blur();
-    };
+    const clearActiveLibrarySearch = () => resetLibrarySearch(isWorkspaceMode ? 'workspace' : 'playlist');
 
     return (
       <>
-        <div className="soridraw-responsive-top-controls soridraw-stable-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
+        <div
+          className="soridraw-responsive-top-controls soridraw-stable-top-controls flex flex-col xl:flex-row xl:items-center gap-3"
+          data-soridraw-search-folded={isLibrarySearchCollapsed && Boolean(activeSearchTerm.trim()) ? 'true' : 'false'}
+        >
           <div className={`soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2${isLibrarySearchFocused || activeSearchTerm ? ' is-search-active' : ''}${activeSearchTerm ? ' has-search-value' : ''}`}>
             <div className="soridraw-responsive-search relative flex-1 min-w-0 group overflow-hidden">
               <div className="soridraw-responsive-search-icon absolute inset-y-0 left-4 z-10 flex items-center pointer-events-none">
@@ -6845,12 +7010,25 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 ref={librarySearchInputRef}
                 type="text"
                 value={activeSearchTerm}
-                onChange={(e) => {
-                  if (isWorkspaceMode) setSearchTerm(e.target.value);
-                  else setPlaylistSearchTerm(e.target.value);
+                onChange={(e) => changeLibrarySearch(e.target.value, isWorkspaceMode ? 'workspace' : 'playlist')}
+                onFocus={() => {
+                  setIsLibrarySearchCollapsed(false);
+                  setIsLibrarySearchFocused(true);
+                  armLibrarySearchBack(isWorkspaceMode ? 'workspace' : 'playlist');
                 }}
-                onFocus={() => setIsLibrarySearchFocused(true)}
                 onBlur={() => setIsLibrarySearchFocused(false)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape' && !event.nativeEvent.isComposing) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    clearActiveLibrarySearch();
+                    return;
+                  }
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    collapseLibrarySearchAfterAction();
+                  }
+                }}
                 className={`soridraw-responsive-search-input w-full h-[46px] pl-12 ${isLibrarySearchFocused || activeSearchTerm ? 'pr-11' : 'pr-4'} rounded-2xl bg-white/[0.145] border border-white/[0.14] outline-none focus:bg-white/[0.17] focus:border-[#A98BFF]/45 transition-all text-sm text-[var(--text-primary)]`}
               />
               {(isLibrarySearchFocused || Boolean(activeSearchTerm)) && (
@@ -6876,6 +7054,16 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               )}
             </div>
           </div>
+          {isLibrarySearchCollapsed && Boolean(activeSearchTerm.trim()) && (
+            <div className="soridraw-compact-search-controls hidden" role="group" aria-label="검색 제어">
+              <button type="button" aria-label="검색창 펼치기" onClick={expandLibrarySearch}>
+                <Search className="h-4 w-4" />
+              </button>
+              <button type="button" aria-label="검색어 지우기" onClick={clearActiveLibrarySearch}>
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
 
           {isWorkspaceMode ? (
             <>
@@ -6890,7 +7078,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <RefreshCw className="soridraw-color-reset-icon hidden h-4 w-4" />
                 </button>
                 <div className="w-px h-3 bg-white/10 mx-1"></div>
-                {COLOR_OPTIONS.map(opt => (
+                {COLOR_FILTER_OPTIONS.map(opt => (
                   <button
                     key={opt.value}
                     onClick={() => setWorkspaceColorFilter(opt.value)}
@@ -6909,7 +7097,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               <div ref={libraryFilterPopupRef} className="relative shrink-0">
                 <button
                   type="button"
-                  onClick={(event) => { event.stopPropagation(); setShowLibraryFilterPopup((prev) => !prev); }}
+                  onClick={(event) => { event.stopPropagation(); toggleLibraryFilterPopup(); }}
                   className={`soridraw-responsive-filter-button flex h-[46px] items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] px-4 text-xs font-black transition-all ${showLibraryFilterPopup ? 'bg-white/[0.09] text-white' : 'text-white/70 hover:bg-white/[0.08] hover:text-white'}`}
                   aria-expanded={showLibraryFilterPopup}
                 >
@@ -6947,7 +7135,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <RefreshCw className="soridraw-color-reset-icon hidden h-4 w-4" />
                 </button>
                 <div className="w-px h-3 bg-white/10 mx-1"></div>
-                {COLOR_OPTIONS.map(opt => (
+                {COLOR_FILTER_OPTIONS.map(opt => (
                   <button
                     key={opt.value}
                     onClick={() => setPlaylistColorFilter(opt.value)}
@@ -6966,7 +7154,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               <div ref={libraryFilterPopupRef} className="relative shrink-0">
                 <button
                   type="button"
-                  onClick={(event) => { event.stopPropagation(); setShowLibraryFilterPopup((prev) => !prev); }}
+                  onClick={(event) => { event.stopPropagation(); toggleLibraryFilterPopup(); }}
                   className={`soridraw-responsive-filter-button flex h-[46px] items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] px-4 text-xs font-black transition-all ${showLibraryFilterPopup ? 'bg-white/[0.09] text-white' : 'text-white/70 hover:bg-white/[0.08] hover:text-white'}`}
                   aria-expanded={showLibraryFilterPopup}
                 >
@@ -7421,6 +7609,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       className={`soridraw-responsive-content-page soridraw-library-theme mx-auto w-full max-w-[1548px] min-h-screen overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-18 md:pt-24 pb-32 text-[var(--text-primary)] relative ${multiSelectMode ? 'select-none' : ''}`}
       onClickCapture={(e) => {
         const target = e.target as HTMLElement;
+        if (!target.closest('.soridraw-responsive-search-slot, .soridraw-compact-search-controls')) {
+          collapseLibrarySearchAfterAction();
+        }
         const isSelectionActionTarget = Boolean(target.closest('[data-selection-action-bar="true"], [data-more-menu-panel="true"]'));
         const hasOpenMoreMenu = Boolean(activeMenuState || activePlaylistItemMenu || bulkMenuState);
 
@@ -7645,11 +7836,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={e => e.stopPropagation()}
               className="bg-[#2a2a2a] w-full max-w-sm max-h-[calc(100dvh-32px)] rounded-2xl flex flex-col overflow-y-auto border border-black/20"
-              role="dialog" aria-modal="true" aria-label="라이브러리 폴더 편집"
+              role="dialog" aria-modal="true" aria-label={renameModalArgs.isCreate ? '라이브러리 폴더 생성' : '라이브러리 폴더 편집'}
               onPointerDown={(event) => event.stopPropagation()}
             >
               <div className="p-4 border-b border-black/15 flex items-center justify-between">
-                <h3 className="font-bold text-white">폴더 편집</h3>
+                <h3 className="font-bold text-white">{renameModalArgs.isCreate ? '폴더 생성' : '폴더 편집'}</h3>
                 <button onClick={closeModal} className="p-1 rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors">
                   <X className="w-5 h-5" />
                 </button>
@@ -7662,50 +7853,23 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   placeholder="플레이리스트 이름 (최대 20자)"
                   maxLength={20}
                   className="w-full bg-[#1a1a1a] text-white rounded-xl px-4 py-3 outline-none border border-black/15 focus:border-[#A98BFF]/45 transition-colors"
-                  autoFocus
-                  onKeyDown={async (e) => {
-                    if (e.key === 'Enter') {
-                      if (!user || (renameModalArgs.playlist as any).isFallback) return;
-                      const trimmedTitle = renameModalArgs.newTitle.trim();
-                      if (!trimmedTitle) { showToast('이름을 입력해주세요.'); return; }
-                      if (trimmedTitle.length > 20) { showToast('이름은 최대 20자까지 가능합니다.'); return; }
-                      const isNormal = renameModalArgs.playlist.type === 'normal';
-                      const currentList = isNormal ? actualNormalPlaylists : actualSharedPlaylists;
-                      if (currentList.some(p => p.id !== renameModalArgs.playlist.id && p.title === trimmedTitle)) {
-                        showToast('같은 이름의 플레이리스트가 이미 있습니다.'); return;
-                      }
-                      try {
-                        await renamePlaylist(user.uid, renameModalArgs.playlist.id!, trimmedTitle);
-                        closeModal();
-                        showToast('플레이리스트 이름이 변경되었습니다.');
-                      } catch (error) { showToast('이름 변경에 실패했습니다.'); }
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                      void commitLibraryFolderEditor();
                     }
                   }}
                 />
               </div>
-              {playlistFolderDeleteReady && (
+              {!renameModalArgs.isCreate && playlistFolderDeleteReady && (
                 <p className="px-4 pb-3 text-xs font-bold leading-5 text-red-300">
                   다시 삭제를 누르면 폴더와 목록의 곡이 삭제됩니다.
                 </p>
               )}
               <div className="p-4 bg-[#1a1a1a]/50 flex justify-end gap-2 border-t border-black/15">
                 <button className="px-4 py-2 font-bold text-white/50 hover:text-white transition-colors" onClick={closeModal}>취소</button>
-                <button className="px-4 py-2 font-bold bg-[#A98BFF] text-white rounded-xl hover:bg-[#A98BFF]/90 transition-colors" onClick={async () => {
-                  if (!user || (renameModalArgs.playlist as any).isFallback) return;
-                  const trimmedTitle = renameModalArgs.newTitle.trim();
-                  if (!trimmedTitle) { showToast('이름을 입력해주세요.'); return; }
-                  if (trimmedTitle.length > 20) { showToast('이름은 최대 20자까지 가능합니다.'); return; }
-                  const isNormal = renameModalArgs.playlist.type === 'normal';
-                  const currentList = isNormal ? actualNormalPlaylists : actualSharedPlaylists;
-                  if (currentList.some(p => p.id !== renameModalArgs.playlist.id && p.title === trimmedTitle)) {
-                    showToast('같은 이름의 플레이리스트가 이미 있습니다.'); return;
-                  }
-                  try {
-                    await renamePlaylist(user.uid, renameModalArgs.playlist.id!, trimmedTitle);
-                    closeModal();
-                    showToast('플레이리스트 이름이 변경되었습니다.');
-                  } catch (error) { showToast('이름 변경에 실패했습니다.'); }
-                }}>저장</button>
+                <button type="button" className="px-4 py-2 font-bold bg-[#A98BFF] text-white rounded-xl hover:bg-[#A98BFF]/90 transition-colors" onClick={() => { void commitLibraryFolderEditor(); }}>{renameModalArgs.isCreate ? '생성' : '저장'}</button>
+                {!renameModalArgs.isCreate && (
                 <button
                   type="button"
                   className="rounded-xl bg-red-500/15 px-4 py-2 font-bold text-red-400 hover:bg-red-500/25"
@@ -7714,6 +7878,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     void handleDeletePlaylist(renameModalArgs.playlist, true);
                   }}
                 >삭제</button>
+                )}
               </div>
             </motion.div>
           </div>, document.body
@@ -8210,9 +8375,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         if (playlistSuppressClickRef.current === dragKey) return;
                         setSelectedNormalPlaylistId(playlist.id!);
                         setActivePlaylistSection('normal');
+                        setMobileLibraryEditKey(isDefaultPlaylist ? null : dragKey);
                       }}
                       aria-pressed={activePlaylistSection === 'normal' && selectedNormalPlaylistId === playlist.id}
                       data-active={activePlaylistSection === 'normal' && selectedNormalPlaylistId === playlist.id ? 'true' : 'false'}
+                      data-mobile-edit-armed={mobileLibraryEditKey === dragKey && selectedNormalPlaylistId === playlist.id ? 'true' : 'false'}
                       className={`soridraw-library-folder-button shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border select-none ${
                         !isDefaultPlaylist && !(playlist as any).isFallback ? 'cursor-grab active:cursor-grabbing touch-pan-x' : 'touch-pan-x'
                       } ${
@@ -8303,9 +8470,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         if (playlistSuppressClickRef.current === dragKey) return;
                         setSelectedSharedPlaylistId(playlist.id!);
                         setActivePlaylistSection('shared');
+                        setMobileLibraryEditKey(isDefaultPlaylist ? null : dragKey);
                       }}
                       aria-pressed={activePlaylistSection === 'shared' && selectedSharedPlaylistId === playlist.id}
                       data-active={activePlaylistSection === 'shared' && selectedSharedPlaylistId === playlist.id ? 'true' : 'false'}
+                      data-mobile-edit-armed={mobileLibraryEditKey === dragKey && selectedSharedPlaylistId === playlist.id ? 'true' : 'false'}
                       className={`soridraw-library-folder-button shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-1.5 touch-pan-x select-none ${
                         !isDefaultPlaylist && !(playlist as any).isFallback ? 'cursor-grab active:cursor-grabbing touch-pan-x' : 'touch-pan-x'
                       } ${

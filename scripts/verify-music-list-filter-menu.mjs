@@ -102,6 +102,181 @@ assert.deepEqual([...visible('oldest')],['old','shared','new']);
 assert.deepEqual([...visible('all')],['new','old','shared']);
 assert.deepEqual([...visible('favorite')],['new']);
 assert.deepEqual([...visible('public','public')],['new']);
+
+/* 2026-11-04 Android regression: nested active-search overlay covered X,
+ * and previous CSS widths failed even after shrinking the orange top dot.
+ * The folded input must be display:none, replaced with TWO sibling buttons
+ * outside the original input slot in BOTH Music Note and Library. */
+const layout = readFileSync('src/components/studio/studioLayout.css','utf8');
+const paletteOptions = extract(note,'  const FAVORITE_COLOR_OPTIONS = [','  const getFavoriteColorValue =');
+assert(paletteOptions.includes("{ value: 'orange', color: '#f97316'"),
+  'Music Note previously stored orange must remain valid');
+assert(paletteOptions.includes("FAVORITE_COLOR_FILTER_OPTIONS = FAVORITE_COLOR_OPTIONS.filter((color) => color.value !== 'orange')"),
+  'Music Note orange removed only from display filter');
+const noteBar = extract(note,
+  '<div className="soridraw-responsive-color-filter flex h-[46px]',
+  '<div ref={sortPopupRef}');
+assert(noteBar.includes('{FAVORITE_COLOR_FILTER_OPTIONS.map((color) => ('),
+  'Music Note top filter uses six colors');
+const libraryOptions = extract(library,'const COLOR_OPTIONS = [','const getColorHex =');
+assert(libraryOptions.includes("{ value: 'orange', color: '#f97316'"),
+  'Library previously stored orange must remain valid');
+assert(libraryOptions.includes("COLOR_FILTER_OPTIONS = COLOR_OPTIONS.filter((color) => color.value !== 'orange')"),
+  'Library orange removed only from top filter');
+assert((library.match(/\{COLOR_FILTER_OPTIONS\.map\(opt => \(/g)||[]).length === 2,
+  'Library workspace and playlists must both have six top filter dots');
+for (const [label,page] of [['note',note],['library',library]]) {
+  assert(page.includes('soridraw-compact-search-controls hidden'),
+    label+': two standalone buttons must be rendered as a sibling group');
+  assert(page.includes('data-soridraw-search-folded={'),
+    label+': toolbar folded state drives structural swap');
+  assert(page.includes('aria-label="검색창 펼치기"') && page.includes('aria-label="검색어 지우기"'),
+    label+': both independent touch targets have accessible labels');
+  assert(page.includes("data-soridraw-responsive-mode") || page.includes("soridrawResponsiveMode"),
+    label+': fold only in mobile responsive mode');
+  assert(page.includes('onKeyDown='), label+': Enter collapses while search continues on input');
+}
+assert(!note.includes('/* Only the mobile Music Note search\'s folded state changes.'),
+  'delete all old in-component overlay/position hacks');
+assert(!note.includes('soridraw-musicnote-search-collapsed-clear'),
+  'nested X button must not remain');
+assert(layout.includes('SORIDRAW_MUSIC_SEARCH_SEPARATE_MOBILE_CONTROLS_20261104'),
+  'one shared mobile CSS owner for Music Note and Library');
+const newCss = layout.slice(layout.indexOf('SORIDRAW_MUSIC_SEARCH_SEPARATE_MOBILE_CONTROLS_20261104'));
+assert(newCss.includes('.soridraw-stable-top-controls[data-soridraw-search-folded="true"]'),
+  'only explicit folded state can switch controls');
+assert(newCss.includes('> .soridraw-responsive-search-slot {\n  display: none !important;'),
+  'original active text slot must NOT paint or intercept folded buttons');
+assert(newCss.includes('> .soridraw-compact-search-controls {')
+  && newCss.includes('display: flex !important;')
+  && newCss.includes('flex: 0 0 70px !important;'),
+  'replacement control group stays real 70px flex sibling');
+assert(newCss.includes('> .soridraw-compact-search-controls > button {')
+  && newCss.includes('position: static !important;')
+  && newCss.includes('flex: 0 0 34px !important;'),
+  'each control must have distinct 34px hit area, not overlays');
+assert(newCss.includes('gap: 2px !important;'),
+  'two 34px controls must remain separated by 2px');
+assert(newCss.includes('calc((100cqi - 158px) / 8)'),
+  'narrow 320px container space reclamation preserved');
+/* Keep visible folded-search status: both page-specific glyphs must
+ * be brand-colored, and both backgrounds as bright as the toolbar buttons.
+ * No changes are allowed to the two hitboxes or query lifecycle. */
+assert(newCss.includes('background: #2c2c2e !important;'),
+  'folded controls use the normal button background, not dim secondary');
+assert(newCss.includes('color: #f5f5f5 !important;'),
+  'folded magnifier stays neutral white');
+assert(newCss.includes('> .soridraw-compact-search-controls > button:last-child {')
+  && newCss.includes('color: var(--soridraw-search-active-accent, #FF7A72) !important;'),
+  'only the folded X uses the active query page color');
+assert(newCss.includes('--soridraw-search-active-accent: #FF7A72;'),
+  'Music Note controls have page coral accent');
+assert(newCss.includes('--soridraw-search-active-accent: #A98BFF;'),
+  'Library controls have page purple accent');
+assert(newCss.includes('flex: 0 0 34px !important;')
+  && newCss.includes('gap: 2px !important;'),
+  'the approved two-button no-overlap geometry must remain');
+assert(newCss.includes('.soridraw-musicnote-theme .soridraw-stable-top-controls\n.soridraw-responsive-search-slot.has-search-value\n.soridraw-responsive-search-clear {\n  color: #FF7A72 !important;'),
+  'desktop Music Note typed-query X must be coral');
+assert(newCss.includes('.soridraw-library-theme .soridraw-stable-top-controls\n.soridraw-responsive-search-slot.has-search-value\n.soridraw-responsive-search-clear {\n  color: #A98BFF !important;'),
+  'desktop Library typed-query X must be purple');
+assert(note.includes('has-search-value') && library.includes('has-search-value'),
+  'both expanded search fields must set a non-empty query marker');
+assert(note.includes('soridraw-responsive-search-clear') && library.includes('soridraw-responsive-search-clear'),
+  'both desktop inputs must keep their clear-button class');
+/* 2026-11-04 director: both color reset icons only (no selected fill),
+ * typed desktop search has visible page border, Esc/Back cancel the query.
+ * Search history uses one same-URL entry only after user starts typing;
+ * modal/selection history remains owned by its existing handlers. */
+const searchToolbarCss = layout.slice(layout.lastIndexOf(
+  '2026-11-04 Search toolbar visual parity (Music Note & Library)'));
+assert(searchToolbarCss.includes('.soridraw-color-reset-button[aria-pressed="true"]')
+  && searchToolbarCss.includes('background: transparent !important;'),
+  'selected all-colors button must not fill its background');
+assert(searchToolbarCss.includes('.soridraw-color-reset-icon {\n  color: #FF7A72 !important;')
+  && searchToolbarCss.includes('.soridraw-color-reset-icon {\n  color: #A98BFF !important;'),
+  'selected reset icon should use each page accent');
+assert(searchToolbarCss.includes(':not([data-soridraw-responsive-mode="mobile"])'),
+  'PC border change must not alter already-good mobile responsive sizing');
+assert(searchToolbarCss.includes('border: 1px solid rgba(255, 122, 114, 0.76) !important;')
+  && searchToolbarCss.includes('border: 1px solid rgba(169, 139, 255, 0.76) !important;'),
+  'typed/focused PC search borders should be coral and purple');
+assert(searchToolbarCss.includes('.soridraw-responsive-search-slot:is(.has-search-value, :focus-within)'),
+  'PC search border should respond to both typing and focus');
+for (const [label,page,scope] of [
+  ['Music Note', note, 'music-note'],
+  ['Library', library, 'library'],
+]) {
+  assert(page.includes("soridrawSearchDraft: '"+scope+"'"),
+    label+': typing must arm a same-URL search history entry');
+  assert(page.includes("window.addEventListener('popstate', onSearchBack, true)"),
+    label+': browser Back must be intercepted before page history handlers');
+  assert(page.includes('event.stopImmediatePropagation();'),
+    label+': consumed Back must not trigger page modal/route handlers');
+  assert(page.includes('window.history.back();'),
+    label+': clearing typed search must consume its own synthetic entry');
+  assert(page.includes("key === 'Escape'") && page.includes('nativeEvent.isComposing'),
+    label+': Esc should clear search without breaking Korean IME composition');
+  assert(page.includes('release') && page.includes('setIsLibrarySearchCollapsed(false)')
+      || label === 'Music Note' && page.includes('setIsMusicNoteSearchCollapsed(false)'),
+    label+': search clear returns an expanded unfiltered state');
+}
+// The director's folder + opens a draft editor, not an already-saved folder.
+// Saving reuses the original one-record/batched creator. Cancel does no writes.
+const noteAdd = extract(note, '  const handleAddMusicNoteFolder = (mode:', '  const commitRenameMusicNoteFolder = async');
+const libAdd = extract(library, "  const handleAddPlaylist = (type:", '  useEffect(() => {');
+assert(noteAdd.includes('setMusicNoteFolderRenameArgs({') && noteAdd.includes('isCreate: true'),
+  'Music Note + must open a local-only folder creation draft');
+assert(!noteAdd.includes('persistMusicNoteFolders(') && !noteAdd.includes('setMyNoteFolders('),
+  'Music Note + cannot write before Save');
+assert(libAdd.includes('setRenameModalArgs({') && libAdd.includes('isCreate: true'),
+  'Library + must open its folder creation draft');
+assert(!libAdd.includes('createPlaylist(') && !libAdd.includes('setPlaylists('),
+  'Library + cannot write before Save');
+const noteEditor = extract(note, "        {musicNoteFolderRenameArgs && typeof document", '      {(() => {');
+assert(noteEditor.includes("musicNoteFolderRenameArgs.isCreate ? '폴더 생성' : '폴더 편집'"),
+  'Music Note create title must be different from edit');
+assert(noteEditor.includes('!musicNoteFolderRenameArgs.isCreate && ('),
+  'Music Note create must not offer Delete');
+assert(!noteEditor.includes('autoFocus'),
+  'Music Note creation/edit must not auto-open mobile keyboard');
+const libEditor = extract(library, "        {renameModalArgs && typeof document", '      {moveModalArgs && typeof document');
+assert(libEditor.includes("renameModalArgs.isCreate ? '폴더 생성' : '폴더 편집'"),
+  'Library create title must be different from edit');
+assert(libEditor.includes('!renameModalArgs.isCreate && ('),
+  'Library create must not offer Delete');
+assert(!libEditor.includes('autoFocus'),
+  'Library creation/edit must not auto-open mobile keyboard');
+assert(note.includes('await persistMusicNoteFolders(mode, nextFolders);')
+  && note.includes('if (musicNoteFolderRenameArgs.isCreate)'),
+  'Music Note original grouped folder save remains attached to Save');
+assert(library.includes('if (renameModalArgs.isCreate) {')
+  && library.includes('const id = await createPlaylist(user.uid, type, title, newOrder);'),
+  'Library original create service runs only on Save');
+const folderEditCss = readFileSync('src/index.css', 'utf8');
+assert(folderEditCss.includes('@media (hover: none), (pointer: coarse)'),
+  'mobile touch-only edit rule must not replace PC hover');
+assert(folderEditCss.includes('[data-mobile-edit-armed="true"] > .soridraw-folder-hover-edit'),
+  'mobile edit icon appears only for an explicitly tapped folder');
+assert(folderEditCss.includes('pointer-events: none;'),
+  'hidden edit icon cannot steal the folder-selection tap');
+for(const [name,page] of [['Music Note',note],['Library',library]]) {
+  assert(page.includes("data-mobile-edit-armed={"), name+': selected folder identifies the armed edit');
+  assert(page.includes("document.addEventListener('pointerdown', onOutsideFolderTap, true)"),
+    name+': tapping outside hides the edit button');
+  assert(page.includes("target.closest('.soridraw-") && page.includes("folder-button')"),
+    name+': tapping a folder does not accidentally dismiss its edit button');
+}
+console.log('FOLDER_CREATE_MODAL_NO_EARLY_WRITE_MOBILE_EDIT_NO_AUTOFOCUS=PASS');
+
+console.log('MUSIC_NOTE_LIBRARY_SEARCH_RESET_ICON_PC_BORDER_ESC_BACK=PASS');
+
+console.log('MUSIC_NOTE_LIBRARY_PC_SEARCH_X_ACCENT_ONLY=PASS');
+console.log('MUSIC_NOTE_LIBRARY_FOLDED_SEARCH_BRAND_COLOR_VISIBLE=PASS');
+
+console.log('MUSIC_NOTE_LIBRARY_MOBILE_SEARCH_SIBLING_CONTROLS_GEOMETRY=PASS');
+console.log('MUSIC_NOTE_LIBRARY_ORANGE_FILTER_REMOVAL_SAVED_ORIGINALS_SAFE=PASS');
+
 console.log('MUSIC_NOTE_FILTER_ORDER_AND_LIKE_LOCK_PUBLIC_URL_TRASH=PASS');
 console.log('LIBRARY_FILTER_ORDER_SUPPORTED_AND_DISABLED_PLACEHOLDERS=PASS');
 console.log('LIBRARY_PLAYLIST_DATE_LIKE_PUBLIC_DISPLAY_SELECTION_PARITY=PASS');

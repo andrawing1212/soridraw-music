@@ -1808,7 +1808,7 @@ function ExploreTrackCard({
                 onClick={(event) => {
                   event.stopPropagation();
                   onOpenMore(track);
-                }
+                }}
                 aria-label="곡 더보기"
                 title="더보기"
               >

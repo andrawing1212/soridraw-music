@@ -83,8 +83,6 @@ try{
  console.log('STUDIO_HEART_CLAIM_EMULATOR_TRACE='+JSON.stringify({claimSeen,
    winnerA:claimA.committed,winnerB:claimB.committed}));
  assert.equal(Number(claimA.committed)+Number(claimB.committed),1,'one winning claimant');
- refA.off('value',watchA);
- refB.off('value',watchB);
  const winningToken=claimA.committed?'device-A-claim':'device-B-claim';
  const claimed=(await refA.get()).val();
  assert.equal(claimed.claimToken,winningToken);
@@ -104,6 +102,8 @@ try{
  const newClaim=await claim(refB,'device-B-new-claim');
  assert.equal(newClaim.committed,true,'other device can take latest version');
  assert.equal(newClaim.snapshot.val().seq,11);
+ refA.off('value',watchA);
+ refB.off('value',watchB);
  console.log('STUDIO_HEART_TWO_DEVICE_CLAIM_SINGLE_WINNER_AND_STALE_ACK_FENCE=PASS');
  await assertSucceeds(slot(0).remove());
  await assertSucceeds(slot(0).set(fixture('song-21')));

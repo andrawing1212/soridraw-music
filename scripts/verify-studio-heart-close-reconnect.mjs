@@ -73,7 +73,7 @@ assert.equal(listStudioHeartPendingIntents(uid).length,10);
 assert.equal(readStudioHeartPendingIntent(uid,'song-7')?.desiredSaved,false);
 const recovery=section(app,'    const pendingIntents = listStudioHeartPendingIntents(uid);', '  const updateFavorite = async');
 assert.match(recovery,/scheduleStudioHeartPendingIntent\(intent\.documentId\)/);
-assert.match(recovery,/scheduleStudioHeartPendingIntent\(intent\.documentId, delay\)/);
+assert.match(recovery,/scheduleStudioHeartPendingIntent\(intent\.documentId\)/);
 const flush=section(app,'  const flushStudioHeartPendingIntent = async','  const scheduleStudioHeartPendingIntent =');
 assert.match(flush,/await toggleFavorite\(commitSong,/);
 assert.match(flush,/STUDIO_HEART_RETRY_MS/);

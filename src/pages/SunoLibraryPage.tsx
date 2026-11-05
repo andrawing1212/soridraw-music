@@ -1308,6 +1308,56 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [filter, setFilter] = useState<'all' | 'latest' | 'oldest' | 'completed' | 'favorite' | 'public' | 'private' | 'trash'>('all');
   const [showLibraryFilterPopup, setShowLibraryFilterPopup] = useState(false);
   const libraryFilterPopupRef = useRef<HTMLDivElement | null>(null);
+  const libraryFilterBackArmedRef = useRef(false);
+  const libraryFilterBackReleaseRef = useRef(false);
+  const toggleLibraryFilterPopup = () => {
+    if (showLibraryFilterPopup) {
+      setShowLibraryFilterPopup(false);
+      return;
+    }
+    if (!libraryFilterBackArmedRef.current) {
+      window.history.pushState(
+        { ...window.history.state, soridrawFilterPopup: 'library' },
+        '', window.location.href,
+      );
+      libraryFilterBackArmedRef.current = true;
+    }
+    setShowLibraryFilterPopup(true);
+  };
+  useEffect(() => {
+    if (showLibraryFilterPopup || !libraryFilterBackArmedRef.current) return;
+    if (window.history.state?.soridrawFilterPopup === 'library') {
+      libraryFilterBackReleaseRef.current = true;
+      window.history.back();
+    }
+    libraryFilterBackArmedRef.current = false;
+  }, [showLibraryFilterPopup]);
+  useEffect(() => {
+    const onFilterBack = (event: PopStateEvent) => {
+      if (libraryFilterBackReleaseRef.current) {
+        libraryFilterBackReleaseRef.current = false;
+        event.stopImmediatePropagation();
+        return;
+      }
+      if (!libraryFilterBackArmedRef.current
+        || window.history.state?.soridrawFilterPopup === 'library') return;
+      libraryFilterBackArmedRef.current = false;
+      setShowLibraryFilterPopup(false);
+      event.stopImmediatePropagation();
+    };
+    const onFilterEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !libraryFilterBackArmedRef.current) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setShowLibraryFilterPopup(false);
+    };
+    window.addEventListener('popstate', onFilterBack, true);
+    window.addEventListener('keydown', onFilterEscape, true);
+    return () => {
+      window.removeEventListener('popstate', onFilterBack, true);
+      window.removeEventListener('keydown', onFilterEscape, true);
+    };
+  }, []);
   const [workspaceVisibleCount, setWorkspaceVisibleCount] = useState(WORKSPACE_PAGE_SIZE);
   const [hasMoreWorkspaceServerTracks, setHasMoreWorkspaceServerTracks] = useState(false);
   const [isLoadingMoreWorkspaceTracks, setIsLoadingMoreWorkspaceTracks] = useState(false);
@@ -1438,13 +1488,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
     librarySearchBackArmedRef.current = false;
   };
-  const changeLibrarySearch = (value: string, mode: 'workspace' | 'playlist') => {
-    if (mode === 'workspace') setSearchTerm(value);
-    else setPlaylistSearchTerm(value);
-    if (!value.trim()) {
-      releaseLibrarySearchBack();
-      return;
-    }
+  const armLibrarySearchBack = (mode: 'workspace' | 'playlist') => {
     librarySearchBackModeRef.current = mode;
     if (librarySearchBackArmedRef.current) return;
     if (window.history.state?.soridrawSearchDraft !== 'library') {
@@ -1454,6 +1498,16 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       );
     }
     librarySearchBackArmedRef.current = true;
+  };
+  const changeLibrarySearch = (value: string, mode: 'workspace' | 'playlist') => {
+    if (mode === 'workspace') setSearchTerm(value);
+    else setPlaylistSearchTerm(value);
+    // Empty focused search also owns the first Android Back, matching typed search.
+    if (!value.trim() && document.activeElement !== librarySearchInputRef.current) {
+      releaseLibrarySearchBack();
+      return;
+    }
+    armLibrarySearchBack(mode);
   };
   const resetLibrarySearch = (mode: 'workspace' | 'playlist') => {
     if (mode === 'workspace') setSearchTerm('');
@@ -6960,10 +7014,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 onFocus={() => {
                   setIsLibrarySearchCollapsed(false);
                   setIsLibrarySearchFocused(true);
+                  armLibrarySearchBack(isWorkspaceMode ? 'workspace' : 'playlist');
                 }}
                 onBlur={() => setIsLibrarySearchFocused(false)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Escape' && activeSearchTerm && !event.nativeEvent.isComposing) {
+                  if (event.key === 'Escape' && !event.nativeEvent.isComposing) {
                     event.preventDefault();
                     event.stopPropagation();
                     clearActiveLibrarySearch();
@@ -7042,7 +7097,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               <div ref={libraryFilterPopupRef} className="relative shrink-0">
                 <button
                   type="button"
-                  onClick={(event) => { event.stopPropagation(); setShowLibraryFilterPopup((prev) => !prev); }}
+                  onClick={(event) => { event.stopPropagation(); toggleLibraryFilterPopup(); }}
                   className={`soridraw-responsive-filter-button flex h-[46px] items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] px-4 text-xs font-black transition-all ${showLibraryFilterPopup ? 'bg-white/[0.09] text-white' : 'text-white/70 hover:bg-white/[0.08] hover:text-white'}`}
                   aria-expanded={showLibraryFilterPopup}
                 >
@@ -7099,7 +7154,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               <div ref={libraryFilterPopupRef} className="relative shrink-0">
                 <button
                   type="button"
-                  onClick={(event) => { event.stopPropagation(); setShowLibraryFilterPopup((prev) => !prev); }}
+                  onClick={(event) => { event.stopPropagation(); toggleLibraryFilterPopup(); }}
                   className={`soridraw-responsive-filter-button flex h-[46px] items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] px-4 text-xs font-black transition-all ${showLibraryFilterPopup ? 'bg-white/[0.09] text-white' : 'text-white/70 hover:bg-white/[0.08] hover:text-white'}`}
                   aria-expanded={showLibraryFilterPopup}
                 >

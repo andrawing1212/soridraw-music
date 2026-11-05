@@ -176,6 +176,25 @@ export const isStudioHeartOptimisticFavorite = (favorite: any): boolean => (
 );
 
 /** Per-song trailing quiet period with a hard cap from the first accepted click. */
+// A remote device may claim a durable handoff at most three times per app
+// session. Failed Firestore recovery is event-driven with a 60s cooldown,
+// never a 250ms retry loop while a receipt remains pending.
+export type StudioHeartHandoffRecoveryAttempt = {
+  version: number;
+  attempts: number;
+  retryAfterMs: number;
+};
+export const nextStudioHeartHandoffRecoveryAttempt = (
+  previous: StudioHeartHandoffRecoveryAttempt | null,
+  version: number,
+  now: number,
+): StudioHeartHandoffRecoveryAttempt | null => {
+  if (!Number.isSafeInteger(version) || version < 1) return null;
+  const attempts = previous?.version === version ? previous.attempts : 0;
+  if (attempts >= 3) return null;
+  return { version, attempts: attempts + 1, retryAfterMs: now + 60_000 };
+};
+
 export const computeStudioHeartSettleDelay = (
   intent: Pick<StudioHeartPendingIntent, 'updatedAtMs' | 'firstQueuedAtMs'>,
   now: number,

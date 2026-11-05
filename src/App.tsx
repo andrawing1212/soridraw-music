@@ -34,6 +34,8 @@ import {
   isStudioHeartOptimisticFavorite,
   type StudioHeartPendingIntent,
   computeStudioHeartSettleDelay,
+  nextStudioHeartHandoffRecoveryAttempt,
+  type StudioHeartHandoffRecoveryAttempt,
 } from './lib/studioHeartBatch';
 import { admitStudioHeartClick } from './lib/studioHeartClickGuard';
 import {
@@ -12299,6 +12301,7 @@ const toggleCycleVariantSelection = (
     let closed = false;
     const scheduled = new Map<string, ReturnType<typeof setTimeout>>();
     const processing = new Set<string>();
+    const recoverAttempts = new Map<string, StudioHeartHandoffRecoveryAttempt>();
     const clearScheduled = (id: string) => {
       const timer = scheduled.get(id);
       if (timer !== undefined) clearTimeout(timer);
@@ -12308,6 +12311,11 @@ const toggleCycleVariantSelection = (
       if (closed || processing.has(documentId) || auth.currentUser?.uid !== uid) return;
       // The originating device already has its exact durable local outbox.
       if (readStudioHeartPendingIntent(uid, documentId)) return;
+      const nextAttempt = nextStudioHeartHandoffRecoveryAttempt(
+        recoverAttempts.get(documentId) || null, version, Date.now(),
+      );
+      if (!nextAttempt) return;
+      recoverAttempts.set(documentId, nextAttempt);
       processing.add(documentId);
       let claim: Awaited<ReturnType<typeof claimStudioHeartHandoff>> = null;
       let settled = false;
@@ -12361,21 +12369,32 @@ const toggleCycleVariantSelection = (
       if (closed) return;
       const id = receipt.documentId;
       clearScheduled(id);
+      const previousAttempt = recoverAttempts.get(id);
+      if (previousAttempt && previousAttempt.version !== receipt.seq) recoverAttempts.delete(id);
+      const retry = recoverAttempts.get(id);
+      // A failed claim/recovery may emit another pending child_changed. Limit
+      // that signal to a cooldown instead of repeated Firestore reads/writes.
+      if (retry && retry.attempts >= 3) return;
       const boundary = receipt.status === 'claimed'
         ? receipt.claimedUntilMs + 500
         : receipt.updatedAtMs + STUDIO_HEART_BATCH_MS + 500;
-      const delay = Math.max(250, Math.min(30_500, boundary - Date.now()));
+      const delay = Math.max(250, Math.min(60_500,
+        Math.max(boundary, retry?.retryAfterMs || 0) - Date.now()));
       scheduled.set(id, setTimeout(() => {
         scheduled.delete(id);
         void recover(id, receipt.seq, receipt.desiredSaved);
       }, delay));
     };
-    const stop = subscribeStudioHeartHandoffs(uid, receive, clearScheduled);
+    const stop = subscribeStudioHeartHandoffs(uid, receive, (id) => {
+      clearScheduled(id);
+      recoverAttempts.delete(id);
+    });
     return () => {
       closed = true;
       stop();
       for (const timer of scheduled.values()) clearTimeout(timer);
       scheduled.clear();
+      recoverAttempts.clear();
     };
   }, [user?.uid]);
 

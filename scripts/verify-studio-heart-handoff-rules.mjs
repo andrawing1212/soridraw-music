@@ -34,21 +34,19 @@ try{
  await assertFails(other.ref(base).get());
  await assertFails(other.ref(base+'/slots/0').set(fixture()));
  await assertFails(anon.ref(base+'/slots/0').set(fixture()));
- await assertSucceeds(owner.ref(base).set({version:1,slots:{'0':fixture()}}));
- await assertSucceeds(slot(0).set(fixture('song-1',{
-   status:'claimed',claimToken:'claim-A',claimedUntilMs:Date.now()+30000,
- })));
- // Same-version metadata is immutable: a stale tab cannot silently flip
- // the saved direction or substitute another song under a claimed receipt.
- await assertFails(slot(0).set(fixture('song-1',{seq:1,desiredSaved:true})));
- await assertFails(slot(0).set(fixture('song-2',{seq:2})));
- await assertSucceeds(slot(0).set(fixture('song-1',{
-   seq:2,desiredSaved:true,songJson:'{"title":"A"}',
- })));
- await assertFails(slot(0).set(fixture('song-1',{
-   seq:2,desiredSaved:false,songJson:'{"title":"A"}',
- })));
- await assertFails(slot(0).set(fixture('other-song',{seq:3})));
+ const initial=fixture();
+ await assertSucceeds(owner.ref(base).set({version:1,slots:{'0':initial}}));
+ await assertSucceeds(slot(0).set({
+   ...initial,status:'claimed',claimToken:'claim-A',claimedUntilMs:Date.now()+30000,
+ }));
+ // Preserve the original click time across claim/release; only a new click
+ // may change immutable receipt details and must increment seq.
+ await assertFails(slot(0).set({...initial,desiredSaved:true}));
+ await assertFails(slot(0).set({...initial,documentId:'song-2',seq:2}));
+ const version2={...initial,seq:2,desiredSaved:true,songJson:'{"title":"A"}'};
+ await assertSucceeds(slot(0).set(version2));
+ await assertFails(slot(0).set({...version2,desiredSaved:false}));
+ await assertFails(slot(0).set({...version2,documentId:'other-song',seq:3}));
  await assertFails(slot(0).set(fixture('song-1',{seq:1})));
  await assertFails(slot(0).set(fixture('song-1',{seq:3,unexpected:true})));
  await assertFails(slot(0).set(fixture('song-1',{seq:3,status:'completed'})));

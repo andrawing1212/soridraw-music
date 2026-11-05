@@ -1762,6 +1762,21 @@ function ExploreTrackCard({
           )}
         </button>
 
+        {variant !== 'profilePinnedBanner' && (
+          <button
+            type="button"
+            className="soridraw-explore-more-button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenMore(track);
+            }}
+            aria-label="곡 더보기"
+            title="더보기"
+          >
+            <EllipsisVertical aria-hidden="true" />
+          </button>
+        )}
+
         {variant === 'profilePinnedBanner' && (
           <div className="soridraw-explore-pinned-actions-255" aria-label="고정 곡 빠른 작업">
             <div className="soridraw-explore-pinned-top-actions-259">
@@ -1785,17 +1800,20 @@ function ExploreTrackCard({
               >
                 <Reply className="soridraw-explore-share-icon" aria-hidden="true" />
               </button>
+            </div>
 
-              <button
+            <button
                 type="button"
                 className="soridraw-explore-pinned-action-255 soridraw-explore-pinned-more-255"
-                onClick={() => onOpenMore(track)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenMore(track);
+                }}
                 aria-label="곡 더보기"
                 title="더보기"
               >
                 <EllipsisVertical aria-hidden="true" />
               </button>
-            </div>
 
             <button
               type="button"
@@ -1869,15 +1887,6 @@ function ExploreTrackCard({
             title="공유"
           >
             <Reply className="soridraw-explore-share-icon" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            className="soridraw-explore-more-button"
-            onClick={() => onOpenMore(track)}
-            aria-label="곡 더보기"
-            title="더보기"
-          >
-            <EllipsisVertical aria-hidden="true" />
           </button>
         </div>
       </div>

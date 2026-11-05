@@ -35,12 +35,14 @@ assert(bootstrap.includes('&& cachedFavoriteCount > 0'),'empty/unknown list must
 assert(bootstrap.includes('&& hasAnyMusicNotePayload'),'UID cache required');
 assert(bootstrap.includes('&& (!preferVerifiedCatalog || hasVerifiedWarmMusicNoteList)'),
   'validated warm rows paint without waiting for remote verification');
-assert(bootstrap.includes('setIsFavoritesLoading(!hasVerifiedWarmMusicNoteList);'),
-  'an isolated changed-item row cannot make a cold Music Note catalog appear ready');
-assert(bootstrap.includes('if (hasCachedMusicNote && hasVerifiedWarmMusicNoteList) {'),
-  'only a verified complete warm list bypasses the loading gate');
-assert(bootstrap.includes('setIsFavoritesLoading(false);'),
-  'a fully received Music Note catalog still releases the loading gate');
+assert(bootstrap.includes('setIsFavoritesLoading(true);'),
+  'a stale but complete same-UID list must await the existing RTDB initial snapshot');
+assert(bootstrap.includes('musicNoteFirstPaintGateRef.current = {'),
+  'cold Music Note list readiness is scoped to the current UID');
+assert(bootstrap.includes('if (hasCachedMusicNote && hasVerifiedWarmMusicNoteList && isMusicNoteInitialLiveReady(currentUser.uid)) {'),
+  'only a verified complete warm list with live initial receipt bypasses loading');
+assert(bootstrap.includes('if (isMusicNoteInitialLiveReady(currentUser.uid)) setIsFavoritesLoading(false);'),
+  'a full Catalog must not paint older remote membership before initial RTDB reconciliation');
 assert(note.includes('((isFavoritesLoading && !isMusicNoteSharedView) || sharedMusicNoteLoading)'),
   'Music Note must not paint a one-item RTDB delta as the complete list during cold hydration');
 assert(!note.includes('isFavoritesLoading && activeFavoriteSource.length === 0'),
@@ -92,6 +94,18 @@ assert(spinner.includes('window.clearTimeout(timer)'), 'short-lived loading neve
 assert(spinner.includes('곡 목록을 확인하는 중...'));
 assert(!/getDocs|fetch\(|setDoc|writeBatch|indexedDB/.test(spinner),
  'shared spinner is pure UI and does not read or write remote/local data');
+const sync = readFileSync('src/services/userDomainSyncService.ts', 'utf8');
+assert(sync.includes("export const MUSIC_NOTE_INITIAL_LIVE_READY_EVENT = 'soridraw:music-note-initial-live-ready'"));
+assert(sync.includes("if (signal) dispatchSignal(safeUid, 'musicNote', signal, initialRetained);"));
+assert(sync.includes('initialMusicNoteLiveReadyUid = safeUid;'));
+assert(sync.indexOf("if (signal) dispatchSignal(safeUid, 'musicNote', signal, initialRetained);")
+  < sync.indexOf('initialMusicNoteLiveReadyUid = safeUid;'),
+  'the initial canonical delta dispatch must precede ready visibility');
+assert(sync.includes("initialMusicNoteLiveReadyUid = '';"),
+  'switching UID clears the previous live receipt');
+assert(app.includes('queueMicrotask(releaseFirstPaint);'),
+  'the latest delta must be applied before releasing a warm list');
+console.log('MUSIC_NOTE_FIRST_LIVE_SNAPSHOT_BEFORE_VISIBLE_WARM_CATALOG=PASS');
 console.log('MUSIC_NOTE_VERIFIED_CACHE_FIRST_PAINT_WITH_REMOTE_AUTHORITY_PRESERVED=PASS');
 console.log('LIBRARY_UID_SCOPED_INSTANT_SESSION_FIRST_PAINT=PASS');
 console.log('MUSIC_LIST_SHARED_DELAYED_COMPACT_LOADER=PASS');

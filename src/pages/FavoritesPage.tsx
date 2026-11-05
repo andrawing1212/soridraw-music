@@ -1258,12 +1258,7 @@ export default function FavoritesPage({
     }
     musicNoteSearchBackArmedRef.current = false;
   };
-  const changeMusicNoteSearch = (value: string) => {
-    setSearchQuery(value);
-    if (!value.trim()) {
-      releaseMusicNoteSearchBack();
-      return;
-    }
+  const armMusicNoteSearchBack = () => {
     if (musicNoteSearchBackArmedRef.current) return;
     if (window.history.state?.soridrawSearchDraft !== 'music-note') {
       window.history.pushState(
@@ -1272,6 +1267,16 @@ export default function FavoritesPage({
       );
     }
     musicNoteSearchBackArmedRef.current = true;
+  };
+  const changeMusicNoteSearch = (value: string) => {
+    setSearchQuery(value);
+    // Keep the same-URL Back entry while the input is focused, even when empty.
+    // Otherwise Android Back can leave Music Note instead of closing search.
+    if (!value.trim() && document.activeElement !== musicNoteSearchInputRef.current) {
+      releaseMusicNoteSearchBack();
+      return;
+    }
+    armMusicNoteSearchBack();
   };
   useEffect(() => {
     const onSearchBack = (event: PopStateEvent) => {
@@ -8360,7 +8365,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               value={searchQuery}
               onChange={(e) => changeMusicNoteSearch(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Escape' && searchQuery && !e.nativeEvent.isComposing) {
+                if (e.key === 'Escape' && !e.nativeEvent.isComposing) {
                   e.preventDefault();
                   e.stopPropagation();
                   clearMusicNoteSearch();
@@ -8375,6 +8380,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               onFocus={() => {
                 setIsMusicNoteSearchCollapsed(false);
                 setIsSearchFocused(true);
+                armMusicNoteSearchBack();
               }}
               onBlur={() => setIsSearchFocused(false)}
               className={cn(

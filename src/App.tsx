@@ -12037,6 +12037,14 @@ const toggleCycleVariantSelection = (
           if (late?.originDeviceId === studioHeartHandoffDeviceId()
             && late.updatedAtMs === intent.updatedAtMs && late.desiredSaved === intent.desiredSaved) {
             handoffSeq = late.seq;
+          } else if (late) {
+            // A different song version is already recorded as latest.
+            // Never replay this older local click on top of its new owner.
+            if (!studioHeartConflictRecheckOnceRef.current.has(safeDocumentId)) {
+              studioHeartConflictRecheckOnceRef.current.add(safeDocumentId);
+              scheduleStudioHeartPendingIntent(safeDocumentId, STUDIO_HEART_RETRY_MS);
+            }
+            return;
           }
         } catch {}
       }

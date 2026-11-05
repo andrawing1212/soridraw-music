@@ -106,9 +106,16 @@ export const publishStudioHeartHandoff = async (
     if (previous && previous.documentId === id
       && previous.originDeviceId === originDeviceId && previous.updatedAtMs > updatedAtMs) return;
     const seq = Math.max(Date.now(), (previous?.seq || 0) + 1);
+    // Keep the prior claim's lease while a newer click replaces its desired
+    // state. The old writer must finish/release before the new version commits.
+    const activeClaim = previous?.status === 'claimed'
+      && previous.claimedUntilMs > Date.now();
     slots[slot] = {
       documentId: id, seq, desiredSaved, originDeviceId, updatedAtMs,
-      status:'pending', claimToken:'', claimedUntilMs:0, songJson,
+      status: activeClaim ? 'claimed' : 'pending',
+      claimToken: activeClaim ? previous.claimToken : '',
+      claimedUntilMs: activeClaim ? previous.claimedUntilMs : 0,
+      songJson,
     };
     return { version:Math.max(seq,Number(snapshot.version || 0)+1), slots };
   }, { applyLocally:false });
@@ -164,8 +171,10 @@ export const releaseStudioHeartHandoff = async (uid: string, documentId: string,
   if (slot === null) return;
   await runTransaction(slotRef(uid,slot), (value: any) => {
     const current = normalize(value);
-    if (!current || current.documentId !== id || current.seq !== seq
+    if (!current || current.documentId !== id
       || current.claimToken !== token || current.status !== 'claimed') return;
+    // A newer click may have arrived while this claim was in flight. Once
+    // the old writer has stopped, unlock the newest version immediately.
     return { ...current, status:'pending', claimToken:'', claimedUntilMs:0 };
   }, { applyLocally:false });
 };

@@ -199,21 +199,35 @@ export const subscribeStudioHeartHandoffs = (
 ): Unsubscribe => {
   if (!uid) return () => {};
   const location = ref(realtimeDb, rootPath(uid) + '/slots');
+  // Replacing a slot in one parent transaction emits child_changed, not
+  // necessarily child_removed followed by child_added. Retire the old song's
+  // timer and cached location before registering its replacement.
+  const documentBySlot = new Map<string, string>();
   const receive = (snapshot: any) => {
     const item = normalize(snapshot.val());
-    if (item && snapshot.key && Number(snapshot.key) >= 0 && Number(snapshot.key) < MAX_SLOTS) {
-      rememberSlot(uid,item.documentId,snapshot.key);
-      callback(item);
+    const slot = String(snapshot.key || '');
+    if (!item || !/^(0|[1-9]|1[0-9])$/.test(slot)) return;
+    const previousId = documentBySlot.get(slot);
+    if (previousId && previousId !== item.documentId) {
+      if (slotByDocument.get(cachedKey(uid, previousId)) === slot)
+        slotByDocument.delete(cachedKey(uid, previousId));
+      onRemoved?.(previousId);
     }
+    documentBySlot.set(slot, item.documentId);
+    rememberSlot(uid, item.documentId, slot);
+    callback(item);
   };
-  const offAdd = onChildAdded(location,receive);
-  const offChange = onChildChanged(location,receive);
-  const offRemove = onChildRemoved(location,(snapshot) => {
-    const item = normalize(snapshot.val());
-    if (item) {
-      slotByDocument.delete(cachedKey(uid,item.documentId));
-      onRemoved?.(item.documentId);
+  const offAdd = onChildAdded(location, receive);
+  const offChange = onChildChanged(location, receive);
+  const offRemove = onChildRemoved(location, (snapshot) => {
+    const slot = String(snapshot.key || '');
+    const previousId = documentBySlot.get(slot) || normalize(snapshot.val())?.documentId;
+    documentBySlot.delete(slot);
+    if (previousId) {
+      if (slotByDocument.get(cachedKey(uid, previousId)) === slot)
+        slotByDocument.delete(cachedKey(uid, previousId));
+      onRemoved?.(previousId);
     }
   });
-  return () => { offAdd(); offChange(); offRemove(); };
+  return () => { offAdd(); offChange(); offRemove(); documentBySlot.clear(); };
 };

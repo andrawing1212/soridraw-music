@@ -5475,7 +5475,19 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     // No background reads, all-song scan, storage rewrite, or data migration.
     if (activeUid && sourceTrackId && !isSharedSource) {
       try {
-        const snapshot = await getDocFromServer(doc(db, 'suno_tracks', activeUid, 'tracks', sourceTrackId));
+        let snapshot;
+        try {
+          snapshot = await getDocFromServer(doc(db, 'suno_tracks', activeUid, 'tracks', sourceTrackId));
+        } catch (firstError) {
+          const code = String((firstError as { code?: string } | null)?.code || '')
+            .toLowerCase().replace(/^firestore\//, '');
+          if (!['unavailable', 'deadline-exceeded', 'network-request-failed'].includes(code)) {
+            throw firstError;
+          }
+          // Explicit click only: one more read of the same owned original.
+          // Never scan other songs or use a generated prompt as the user's input.
+          snapshot = await getDocFromServer(doc(db, 'suno_tracks', activeUid, 'tracks', sourceTrackId));
+        }
         if (snapshot.exists()) {
           const fullTrack: any = { id: sourceTrackId, ...(snapshot.data() || {}) };
           const ownerUid = String(fullTrack.ownerUid || fullTrack.uid || '').trim();

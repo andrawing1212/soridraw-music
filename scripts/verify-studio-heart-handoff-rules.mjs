@@ -99,6 +99,23 @@ try{
      ? {...current,status:'pending',claimToken:'',claimedUntilMs:0}:undefined,
    undefined,false);
  assert.equal(releaseOld.committed,true,'old writer releases new version without deleting it');
+ // The other client must receive the released lease before attempting its
+ // next transaction; the emulator delivers that value asynchronously.
+ await new Promise((resolve,reject)=>{
+   let timer;
+   const handle=snapshot=>{
+     const state=snapshot.val();
+     if(state?.seq!==11 || state?.status!=='pending') return;
+     clearTimeout(timer);
+     refB.off('value',handle);
+     resolve();
+   };
+   timer=setTimeout(()=>{
+     refB.off('value',handle);
+     reject(new Error('NEW_VERSION_RELEASE_NOT_VISIBLE_ON_OTHER_DEVICE'));
+   },5000);
+   refB.on('value',handle);
+ });
  const newClaim=await claim(refB,'device-B-new-claim');
  assert.equal(newClaim.committed,true,'other device can take latest version');
  assert.equal(newClaim.snapshot.val().seq,11);

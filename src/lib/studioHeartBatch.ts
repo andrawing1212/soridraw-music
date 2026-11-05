@@ -10,6 +10,7 @@ export type StudioHeartPendingIntent = {
   updatedAtMs: number;
   signalVersion: number;
   pendingRemotePreviewVersion: number;
+  pendingRemotePreviewSaved?: boolean | null;
   retryCount: number;
 };
 
@@ -37,6 +38,7 @@ const normalizeIntent = (uid: string, value: any): StudioHeartPendingIntent | nu
     updatedAtMs: Math.max(0, Math.floor(Number(value.updatedAtMs || 0))),
     signalVersion: Math.max(0, Math.floor(Number(value.signalVersion || 0))),
     pendingRemotePreviewVersion: Math.max(0, Math.floor(Number(value.pendingRemotePreviewVersion || 0))),
+    pendingRemotePreviewSaved: typeof value.pendingRemotePreviewSaved === 'boolean' ? value.pendingRemotePreviewSaved : null,
     retryCount: Math.max(0, Math.min(2, Math.floor(Number(value.retryCount || 0)))),
   };
 };
@@ -96,6 +98,7 @@ export const writeStudioHeartPendingIntent = (intent: StudioHeartPendingIntent):
     updatedAtMs: Math.max(1, Math.floor(Number(intent.updatedAtMs || Date.now()))),
     signalVersion: Math.max(0, Math.floor(Number(intent.signalVersion || 0))),
     pendingRemotePreviewVersion: Math.max(0, Math.floor(Number(intent.pendingRemotePreviewVersion || 0))),
+    pendingRemotePreviewSaved: typeof intent.pendingRemotePreviewSaved === 'boolean' ? intent.pendingRemotePreviewSaved : null,
     retryCount: Math.max(0, Math.min(2, Math.floor(Number(intent.retryCount || 0)))),
   };
   writeAll(uid, [normalized, ...existing]);
@@ -128,6 +131,7 @@ export const writeStudioHeartPendingIntentChecked = (
     && confirmed.baselineSaved === intent.baselineSaved
     && confirmed.signalVersion === intent.signalVersion
     && confirmed.pendingRemotePreviewVersion === intent.pendingRemotePreviewVersion
+    && confirmed.pendingRemotePreviewSaved === (typeof intent.pendingRemotePreviewSaved === 'boolean' ? intent.pendingRemotePreviewSaved : null)
     && confirmed.retryCount === intent.retryCount
     && JSON.stringify(confirmed.song) === JSON.stringify(intent.song)
     && JSON.stringify(confirmed.baselineFavorite) === JSON.stringify(intent.baselineFavorite)

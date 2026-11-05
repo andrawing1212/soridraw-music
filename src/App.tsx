@@ -34,6 +34,11 @@ import {
   isStudioHeartOptimisticFavorite,
   type StudioHeartPendingIntent,
 } from './lib/studioHeartBatch';
+import {
+  canRetireStudioHeartPendingFromCanonical,
+  isStudioHeartRemoteSuperseded,
+  rebaseStudioHeartPendingAfterCommit,
+} from './lib/studioHeartConflictRecovery';
 
 const SORIDRAW_EXPLORE_8C_THEME_STATUS_FINAL_951 = true;
 const getLiveSoridrawSongId = (song: any): string | null => {
@@ -5883,6 +5888,9 @@ function App() {
   const recentHeartAuthorityRef = useRef<Map<string, RecentHeartAuthorityEntry>>(new Map());
   const recentHeartAuthorityUidRef = useRef('');
   const studioHeartIntentTimersRef = useRef<Map<string, number>>(new Map());
+  // Serialize writes for the SAME favorite only. Ten different songs still settle independently.
+  const studioHeartCommitInFlightRef = useRef<Set<string>>(new Set());
+  const studioHeartConflictRecheckOnceRef = useRef<Set<string>>(new Set());
   const studioHeartRemotePreviewRef = useRef<Map<string, {
     documentId: string;
     identityKey: string;
@@ -5923,6 +5931,7 @@ function App() {
   )) || null;
 
   clearStudioHeartIntentTimer(safeDocumentId);
+  studioHeartConflictRecheckOnceRef.current.delete(safeDocumentId);
   removeStudioHeartPendingIntent(safeUid, safeDocumentId);
 
   if (!settlingIntent) {
@@ -5979,6 +5988,7 @@ function App() {
     remoteItem: any,
     remoteFavoriteId: string,
     remoteSaved: boolean,
+    remoteVersion: number,
   ) => {
     const safeUid = String(uid || '').trim();
     const safeRemoteId = String(remoteFavoriteId || '').trim();
@@ -5991,7 +6001,10 @@ function App() {
       const sameDocument = Boolean(safeRemoteId && pending.documentId === safeRemoteId);
       const sameIdentity = Boolean(remoteIdentityKey && pending.identityKey === remoteIdentityKey);
       if (!sameDocument && !sameIdentity) continue;
-      if (pending.desiredSaved !== remoteSaved) continue;
+      const preview = studioHeartRemotePreviewRef.current.get(pending.documentId);
+      // A canonical event older than a newer unconfirmed preview is not an ACK.
+      // Require an ordered, matching canonical result before dropping that outbox.
+      if (!canRetireStudioHeartPendingFromCanonical(pending, remoteVersion, remoteSaved, preview)) continue;
       removeStudioHeartIntentLocal(safeUid, pending.documentId);
     }
   };
@@ -6019,15 +6032,21 @@ function App() {
     // Preserve this device's durable pending intent until canonical settlement.
   };
 
-  const supersedeStudioHeartIntentFromRemotePreview = (uid: string, documentId: string, remoteVersion: number) => {
+  const supersedeStudioHeartIntentFromRemotePreview = (
+    uid: string, documentId: string, remoteVersion: number, remoteSaved: boolean,
+  ) => {
     if (!uid || !documentId || !Number.isFinite(remoteVersion) || remoteVersion <= 0) return;
     const pending = readStudioHeartPendingIntent(uid, documentId);
-    if (!pending) return;
-    if (remoteVersion <= pending.signalVersion) return;
+    if (!pending || remoteVersion <= pending.signalVersion
+      || remoteVersion <= pending.pendingRemotePreviewVersion) return;
     updateStudioHeartPendingIntent(uid, documentId, (current) => ({
       ...current,
-      pendingRemotePreviewVersion: Math.max(current.pendingRemotePreviewVersion || 0, Math.floor(remoteVersion)),
+      pendingRemotePreviewVersion: Math.floor(remoteVersion),
+      // Persist direction so a reload can distinguish an actual ACK from an
+      // older in-flight canonical write, without reading the server.
+      pendingRemotePreviewSaved: remoteSaved,
     }));
+    studioHeartConflictRecheckOnceRef.current.delete(documentId);
   };
 
   const persistRecentHeartAuthority = (uid: string) => {
@@ -11048,7 +11067,7 @@ const toggleCycleVariantSelection = (
       // Record ordering before rendering, otherwise the older pending overlay
       // repaints on top of this newer cross-device preview.
       if (remoteFavoriteId) {
-        supersedeStudioHeartIntentFromRemotePreview(uid, remoteFavoriteId, remoteVersion);
+        supersedeStudioHeartIntentFromRemotePreview(uid, remoteFavoriteId, remoteVersion, isHeartPreviewSave);
       }
       applyRemoteStudioHeartPreview(
         uid,
@@ -11077,15 +11096,8 @@ const toggleCycleVariantSelection = (
             && Boolean(remoteItem && !isFavoriteSoftRemoved(remoteItem));
           const confirmedId = remoteFavoriteId || exactDocumentIds[0] || '';
           const newestPreview = studioHeartRemotePreviewRef.current.get(confirmedId);
-          const olderPending = readStudioHeartPendingIntent(uid, confirmedId);
-          // Only a later confirmed canonical state can retire superseded pending.
-          if (olderPending && newestPreview && remoteVersion > newestPreview.version
-            && olderPending.pendingRemotePreviewVersion > olderPending.signalVersion
-            && newestPreview.desiredSaved === canonicalRemoteSaved) {
-            removeStudioHeartPendingIntent(uid, confirmedId);
-          }
           reconcileStudioHeartPendingFromCanonicalSignal(
-            uid, remoteItem, confirmedId, canonicalRemoteSaved,
+            uid, remoteItem, confirmedId, canonicalRemoteSaved, remoteVersion,
           );
           if (!newestPreview || newestPreview.desiredSaved === canonicalRemoteSaved) {
             clearRemoteStudioHeartPreviewFromCanonical(uid, exactDocumentIds, remoteItem);
@@ -11975,23 +11987,31 @@ const toggleCycleVariantSelection = (
     const safeDocumentId = String(documentId || '').trim();
     if (!uid || !safeDocumentId) return;
 
+    // An earlier write for this song must finish before a newer click settles.
+    // Different songs do not share this lock (10-song bursts retain concurrency).
+    if (studioHeartCommitInFlightRef.current.has(safeDocumentId)) return;
     clearStudioHeartIntentTimer(safeDocumentId);
     const intent = readStudioHeartPendingIntent(uid, safeDocumentId);
     if (!intent) return;
 
-    if (intent.pendingRemotePreviewVersion > intent.signalVersion) {
-      // A newer device's preview may still be uncommitted. Hold this older
-      // writer's outbox, not its Firestore write, until canonical resolution.
+    if (isStudioHeartRemoteSuperseded(intent)) {
+      // An uncommitted preview is NOT permission to erase local durable pending.
+      // One bounded local timer rechecks after normal canonical settlement; if
+      // no ACK arrives, retain the outbox for reload or a deliberate new click.
+      // No Firestore read, polling loop or stale overwrite is permitted here.
+      if (!studioHeartConflictRecheckOnceRef.current.has(safeDocumentId)) {
+        studioHeartConflictRecheckOnceRef.current.add(safeDocumentId);
+        scheduleStudioHeartPendingIntent(safeDocumentId, STUDIO_HEART_RETRY_MS);
+      }
       return;
     }
 
-    // Multiple toggles inside the trailing window collapse to their final state.
-    // If the final state equals the canonical baseline, there is nothing to write.
     if (intent.desiredSaved === intent.baselineSaved) {
       removeStudioHeartIntentLocal(uid, safeDocumentId);
       return;
     }
 
+    studioHeartCommitInFlightRef.current.add(safeDocumentId);
     try {
       const commitSong = normalizeFavoriteTitleFields({
         ...(intent.song || {}),
@@ -12009,8 +12029,25 @@ const toggleCycleVariantSelection = (
       });
 
       const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
-      if (latest && latest.updatedAtMs === intent.updatedAtMs && latest.desiredSaved === intent.desiredSaved) {
+      if (!latest) return;
+      const sameClick = latest.updatedAtMs === intent.updatedAtMs
+        && latest.desiredSaved === intent.desiredSaved;
+      if (sameClick && !isStudioHeartRemoteSuperseded(latest)) {
         removeStudioHeartIntentLocal(uid, safeDocumentId);
+      } else {
+        // Another click may have arrived while the first Firestore write was
+        // in flight. Rebase its canonical starting state to the write that
+        // actually completed; otherwise save→unsave can be mistaken for W0.
+        const confirmedFavorite = intent.desiredSaved
+          ? (favoritesStore.getFavorites().find((item: any) => (
+              String(item?.firestoreId || item?.id || '').trim() === safeDocumentId
+              && !isFavoriteHidden(item)
+            )) || commitSong)
+          : null;
+        updateStudioHeartPendingIntent(uid, safeDocumentId, (current) =>
+          rebaseStudioHeartPendingAfterCommit(current, intent, confirmedFavorite)
+        );
+        scheduleStudioHeartPendingIntent(safeDocumentId, 1_000);
       }
     } catch (error) {
       console.warn('Studio heart canonical batch commit failed.', error);
@@ -12020,11 +12057,15 @@ const toggleCycleVariantSelection = (
       const retryCount = Math.min(2, previousRetryCount + 1);
       writeStudioHeartPendingIntent({ ...latest, retryCount });
       if (previousRetryCount < 2) {
-        const retryTimer = window.setTimeout(() => {
-          studioHeartIntentTimersRef.current.delete(safeDocumentId);
-          void flushStudioHeartPendingIntent(safeDocumentId);
-        }, STUDIO_HEART_RETRY_MS);
-        studioHeartIntentTimersRef.current.set(safeDocumentId, retryTimer);
+        scheduleStudioHeartPendingIntent(safeDocumentId, STUDIO_HEART_RETRY_MS);
+      }
+    } finally {
+      studioHeartCommitInFlightRef.current.delete(safeDocumentId);
+      const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
+      // A second click can already be queued while the first was in flight.
+      if (latest && latest.updatedAtMs !== intent.updatedAtMs
+        && !studioHeartIntentTimersRef.current.has(safeDocumentId)) {
+        scheduleStudioHeartPendingIntent(safeDocumentId, 1_000);
       }
     }
   };
@@ -12053,7 +12094,7 @@ const toggleCycleVariantSelection = (
     if (!uid || !safeDocumentId || !identityKey) return false;
 
     const existing = readStudioHeartPendingIntent(uid, safeDocumentId);
-    const now = Date.now();
+    const now = Math.max(Date.now(), (existing?.updatedAtMs || 0) + 1);
     const intent: StudioHeartPendingIntent = {
       schemaVersion: 1,
       uid,
@@ -12071,6 +12112,7 @@ const toggleCycleVariantSelection = (
       signalVersion: 0,
       // A later local click supersedes an earlier remote preview.
       pendingRemotePreviewVersion: 0,
+      pendingRemotePreviewSaved: null,
       retryCount: 0,
     };
     const durableIntentResult = writeStudioHeartPendingIntentChecked(intent);
@@ -12085,6 +12127,7 @@ const toggleCycleVariantSelection = (
       // No optimistic "saved" toast or phantom Music Note row is published.
       return false;
     }
+    studioHeartConflictRecheckOnceRef.current.delete(safeDocumentId);
     scheduleStudioHeartPendingIntent(safeDocumentId);
 
     // app302 option-2:

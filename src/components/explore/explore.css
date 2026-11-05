@@ -306,3 +306,37 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
   .soridraw-explore-cover-wrap > .soridraw-explore-more-button{top:5px;right:5px;width:27px;height:27px}
   .soridraw-explore-cover-wrap > .soridraw-explore-more-button svg{width:16px;height:16px}
 }
+
+
+/* Profile-only cover More size correction (2026-11-05) */
+/* Explore feeds keep their approved sizes. Only cards inside public profiles
+   receive a slightly smaller overlay, including the featured pinned cover. */
+.soridraw-explore-page--profile .soridraw-explore-cover-wrap > .soridraw-explore-more-button{
+  width:27px;height:27px;
+}
+.soridraw-explore-page--profile .soridraw-explore-cover-wrap > .soridraw-explore-more-button svg{
+  width:16px;height:16px;
+}
+.soridraw-explore-page--profile .soridraw-explore-pinned-actions-255 > .soridraw-explore-pinned-more-255{
+  left:calc(35.714% - 37px);width:30px;height:30px;
+}
+.soridraw-explore-page--profile .soridraw-explore-pinned-actions-255 > .soridraw-explore-pinned-more-255 svg{
+  width:17px;height:17px;
+}
+@media (max-width:720px){
+  .soridraw-explore-page--profile .soridraw-explore-cover-wrap > .soridraw-explore-more-button{
+    width:24px;height:24px;
+  }
+  .soridraw-explore-page--profile .soridraw-explore-cover-wrap > .soridraw-explore-more-button svg{
+    width:14px;height:14px;
+  }
+  .soridraw-explore-page--profile .soridraw-explore-card--profile-list .soridraw-explore-cover-wrap > .soridraw-explore-more-button{
+    width:23px;height:23px;
+  }
+  .soridraw-explore-page--profile .soridraw-explore-pinned-actions-255 > .soridraw-explore-pinned-more-255{
+    left:calc(35.714% - 32px);width:27px;height:27px;
+  }
+  .soridraw-explore-page--profile .soridraw-explore-pinned-actions-255 > .soridraw-explore-pinned-more-255 svg{
+    width:16px;height:16px;
+  }
+}

@@ -700,6 +700,20 @@ assert.match(css, /\.soridraw-explore-card-actions \.soridraw-explore-like-butto
 assert.match(css, /\.soridraw-explore-grid--feed \.soridraw-explore-card-actions \.soridraw-explore-quick-action[\s\S]*?width:29px;height:29px/,
   'three-column mobile feed should use compact but enlarged actions');
 
+// Profile-only smaller More overlays: leave Explore feed controls untouched.
+assert.match(css, /\.soridraw-explore-page--profile \.soridraw-explore-cover-wrap > \.soridraw-explore-more-button\{\s*width:27px;height:27px;/,
+  'profile grid More must be slightly smaller than the 31px Explore base');
+assert.match(css, /\.soridraw-explore-page--profile \.soridraw-explore-pinned-actions-255 > \.soridraw-explore-pinned-more-255\{\s*left:calc\(35\.714% - 37px\);width:30px;height:30px;/,
+  'profile pinned More must be smaller but stay at the cover right edge');
+assert.match(css, /@media \(max-width:720px\)[\s\S]*?\.soridraw-explore-page--profile \.soridraw-explore-cover-wrap > \.soridraw-explore-more-button\{\s*width:24px;height:24px;/,
+  'profile mobile grid More must be smaller');
+assert.match(css, /\.soridraw-explore-page--profile \.soridraw-explore-card--profile-list \.soridraw-explore-cover-wrap > \.soridraw-explore-more-button\{\s*width:23px;height:23px;/,
+  'profile compact list More must remain smaller');
+assert.match(css, /\.soridraw-explore-cover-wrap > \.soridraw-explore-more-button\{[\s\S]*?width:31px;height:31px/,
+  'Explore feed More base dimensions must remain untouched');
+assert.match(css, /\.soridraw-explore-cover-wrap > \.soridraw-explore-more-button\{[\s\S]*?background:rgba\(17,17,20,\.56\)!important/,
+  'transparent More presentation must remain the same');
+
 console.log('APP221_EXPLORE_LATEST_EIGHT_COLUMN_MAX_SCREEN=PASS');
 console.log('APP221_EXPLORE_RECOMMENDED_SEVEN_CARD_RAIL=PASS');
 console.log('APP221_EXPLORE_RAIL_EDGE_ARROWS=PASS');

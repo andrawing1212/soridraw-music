@@ -62,19 +62,29 @@ try{
  const pending={...version2,seq:10,updatedAtMs:Date.now()-7_000,
    status:'pending',claimToken:'',claimedUntilMs:0};
  await assertSucceeds(refA.set(pending));
- // Real receiver devices have already received the receipt via child_added.
- // Warm each isolated client cache before transaction: RTDB transactions
- // otherwise see initial local null and correctly abort without a claim.
- const [seenA,seenB]=await Promise.all([refA.get(),refB.get()]);
- assert.equal(seenA.val()?.seq,10);
- assert.equal(seenB.val()?.seq,10);
+ // Real receivers have active child listeners. Keep a value listener active
+ // on each isolated client so RTDB transactions see the subscribed receipt.
+ const observe=reference=>new Promise(resolve=>{
+   const handler=snapshot=>{
+     if(snapshot.val()?.seq===10 && snapshot.val()?.status==='pending')
+       resolve(handler);
+   };
+   reference.on('value',handler);
+ });
+ const [watchA,watchB]=await Promise.all([observe(refA),observe(refB)]);
+ const claimSeen=[];
  const claim=(reference,token)=>reference.transaction((current)=>{
+   claimSeen.push({device:token,status:current?.status||'missing'});
    if(!current || current.status!=='pending') return;
    return {...current,status:'claimed',claimToken:token,
      claimedUntilMs:Date.now()+30_000};
  },undefined,false);
  const [claimA,claimB]=await Promise.all([claim(refA,'device-A-claim'),claim(refB,'device-B-claim')]);
+ console.log('STUDIO_HEART_CLAIM_EMULATOR_TRACE='+JSON.stringify({claimSeen,
+   winnerA:claimA.committed,winnerB:claimB.committed}));
  assert.equal(Number(claimA.committed)+Number(claimB.committed),1,'one winning claimant');
+ refA.off('value',watchA);
+ refB.off('value',watchB);
  const winningToken=claimA.committed?'device-A-claim':'device-B-claim';
  const claimed=(await refA.get()).val();
  assert.equal(claimed.claimToken,winningToken);

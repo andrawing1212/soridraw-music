@@ -7,6 +7,8 @@ on:
       - 'src/lib/studioHeartBatch.ts'
       - 'src/lib/studioHeartConflictRecovery.ts'
       - 'scripts/verify-studio-heart-ten-song-conflict.mjs'
+      - 'scripts/verify-349-studio-heart-settlement-media.mjs'
+      - 'scripts/verify-520-recent-login-recovery.mjs'
       - '.github/workflows/verify-studio-heart-ten-song-conflict.yml'
   workflow_dispatch:
 permissions:
@@ -26,11 +28,9 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Ten-song conflict and recovery fixtures
         run: node scripts/verify-studio-heart-ten-song-conflict.mjs
-      - name: Existing heart protected regressions
+      - name: Existing complete preview and post-settlement media regressions
         run: |
-          node scripts/verify-290-studio-heart-batch.mjs
-          node scripts/verify-302-studio-heart-local-first-delayed-remote.mjs
-          node scripts/verify-347-studio-heart-reconcile.mjs
+          node scripts/verify-529-heart-preview-complete.mjs
           node scripts/verify-349-studio-heart-settlement-media.mjs
       - name: TypeScript and Vite build
         run: |

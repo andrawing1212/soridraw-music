@@ -6,6 +6,7 @@ import { rememberLibraryColorReceipts } from '../lib/libraryColorReceipts';
 import { readColorPending } from '../lib/colorPendingOutbox';
 import { appendBoundedMusicNoteMediaFallback452 } from '../lib/musicNoteCompactMediaSync452';
 import { buildStudioHeartPreviewItem } from '../lib/studioHeartPreviewPayload.js';
+import { isUnconfirmedStudioHeartPreview, shouldApplyStudioHeartSignalOnAttach } from '../lib/studioHeartConflictRecovery';
 import {
   addV1MutationPostSuccessHook,
   type V1MutationBoundaryContext,
@@ -859,6 +860,9 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
   if (typeof window === 'undefined') return;
 
   if (kind === 'musicNote') {
+    // An offline recipient may receive a retained preview from a browser
+    // that closed before Firestore commit. Keep live previews immediate.
+    if (!shouldApplyStudioHeartSignalOnAttach(signal.operation, initialRetained)) return;
     if (signal.operation === 'color-preview') {
       // Preserve Music Note's proven behavior. Only Library scopes get a
       // durable, UID-local receipt; it is never a canonical Firestore write.
@@ -916,7 +920,11 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
       } catch {}
     }
     writeLocalNumberMax(scopedVersionKey(MUSIC_NOTE_REMOTE_VERSION_BASE, uid), signal.version);
-    rememberMusicNotePendingSignal(uid, signal);
+    // Replayable local signals must be canonical (or another established
+    // domain operation), never an unconfirmed heart-preview from a closed tab.
+    if (!isUnconfirmedStudioHeartPreview(signal.operation)) {
+      rememberMusicNotePendingSignal(uid, signal);
+    }
     if (
       signal.originDeviceId === getDeviceId('musicNote')
       && signal.operation !== 'heart-preview-save'

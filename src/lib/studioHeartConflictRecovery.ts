@@ -1,5 +1,15 @@
 import type { StudioHeartPendingIntent } from './studioHeartBatch';
 
+// A first retained RTDB event is the last *attempted* action, not proof
+// that its originating tab survived the +30s canonical settlement.
+export const isUnconfirmedStudioHeartPreview = (operation: string): boolean =>
+  operation === 'heart-preview-save' || operation === 'heart-preview-unsave';
+
+export const shouldApplyStudioHeartSignalOnAttach = (
+  operation: string,
+  retainedOrReplayed: boolean,
+): boolean => !(retainedOrReplayed && isUnconfirmedStudioHeartPreview(operation));
+
 // Pure decisions shared by the recovery path and the ten-song regression.
 // A preview is never a canonical Firestore acknowledgement.
 export const isStudioHeartRemoteSuperseded = (

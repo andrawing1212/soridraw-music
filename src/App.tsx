@@ -38,6 +38,7 @@ import {
   canRetireStudioHeartPendingFromCanonical,
   isStudioHeartRemoteSuperseded,
   rebaseStudioHeartPendingAfterCommit,
+  shouldApplyStudioHeartSignalOnAttach,
 } from './lib/studioHeartConflictRecovery';
 
 const SORIDRAW_EXPLORE_8C_THEME_STATUS_FINAL_951 = true;
@@ -5883,6 +5884,7 @@ function App() {
     saved: boolean;
     favoriteId: string;
     version: number;
+    confirmed: boolean;
   };
   const RECENT_HEART_AUTHORITY_STORAGE_BASE = 'soridraw_recent_heart_authority_v1';
   const recentHeartAuthorityRef = useRef<Map<string, RecentHeartAuthorityEntry>>(new Map());
@@ -6053,6 +6055,7 @@ function App() {
     if (!uid || typeof window === 'undefined') return;
     try {
       const entries = Array.from(recentHeartAuthorityRef.current.entries())
+        .filter(([, value]) => value.confirmed === true)
         .map(([key, value]) => ({ key, ...value }))
         .sort((left, right) => right.version - left.version)
         .slice(0, 120);
@@ -6069,6 +6072,7 @@ function App() {
     saved: boolean,
     favoriteId = '',
     version = Date.now(),
+    confirmed = false,
   ) => {
     if (!uid || !song) return;
     const identityKey = buildRecentSongSyncKey(song);
@@ -6080,6 +6084,7 @@ function App() {
       saved,
       favoriteId: String(favoriteId || previous?.favoriteId || '').trim(),
       version: safeVersion,
+      confirmed,
     });
     persistRecentHeartAuthority(uid);
     setFavoriteUiVersion((current) => current + 1);
@@ -6103,11 +6108,14 @@ function App() {
         parsed.slice(0, 120).forEach((entry: any) => {
           const key = String(entry?.key || '').trim();
           const version = Math.floor(Number(entry?.version || 0));
-          if (!key || !Number.isFinite(version) || version <= 0 || typeof entry?.saved !== 'boolean') return;
+          // Earlier releases stored optimistic previews without a canonical receipt.
+          if (!key || !Number.isFinite(version) || version <= 0
+            || typeof entry?.saved !== 'boolean' || entry?.confirmed !== true) return;
           recentHeartAuthorityRef.current.set(key, {
             saved: entry.saved,
             favoriteId: String(entry?.favoriteId || '').trim(),
             version,
+            confirmed: true,
           });
         });
       }
@@ -10816,6 +10824,7 @@ const toggleCycleVariantSelection = (
         Boolean(activeFavorite),
         String(activeFavorite?.firestoreId || activeFavorite?.id || linkedFavoriteId || '').trim(),
         authorityVersion,
+        true,
       );
     }
 
@@ -10988,6 +10997,7 @@ const toggleCycleVariantSelection = (
           remoteHeartSaved,
           remoteFavoriteId,
           remoteVersion,
+          !isHeartPreview,
         );
       }
 
@@ -11033,13 +11043,15 @@ const toggleCycleVariantSelection = (
           nextSong.favoriteFirestoreId = remoteFavoriteId;
           nextSong.musicNoteFavoriteId = remoteFavoriteId;
 
-          if (isRemovalOperation || isHeartPreviewUnsave) {
+          // A live preview belongs in memory until canonical confirmation.
+          // Do not persist its UNSAVE marker to Recent Songs' durable cache.
+          if (isRemovalOperation) {
             if (recentLegacySourceId) {
               nextSong.recentFavoriteExplicitlyUnsavedAt = Number(
                 remoteItem?.favoriteRemovedAt || remoteItem?.unsavedAt || remoteVersion || Date.now(),
               );
             }
-          } else {
+          } else if (!isHeartPreview) {
             delete nextSong.recentFavoriteExplicitlyUnsavedAt;
             delete nextSong.recentFavoriteDetachedAt;
           }
@@ -11251,15 +11263,19 @@ const toggleCycleVariantSelection = (
     // document ids and fall back to a route-gated legacy refresh.
     const pendingSignal = readPendingMusicNoteSyncSignal(currentUser.uid);
     if (pendingSignal?.version) {
-      void syncMusicNoteIncrementalFromRemoteVersion(
-        pendingSignal.version,
-        pendingSignal.originDeviceId,
-        pendingSignal.documentIds,
-        pendingSignal.truncated,
-        pendingSignal.operation,
-        pendingSignal.itemJson || '',
-        pendingSignal.removed === true,
-      );
+      // An old app version may have persisted a heart preview. Replaying that
+      // after restart can falsely UNSAVE Recent while Firestore still has the song.
+      if (shouldApplyStudioHeartSignalOnAttach(pendingSignal.operation, true)) {
+        void syncMusicNoteIncrementalFromRemoteVersion(
+          pendingSignal.version,
+          pendingSignal.originDeviceId,
+          pendingSignal.documentIds,
+          pendingSignal.truncated,
+          pendingSignal.operation,
+          pendingSignal.itemJson || '',
+          pendingSignal.removed === true,
+        );
+      }
     } else {
       const pendingRemoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, currentUser.uid);
       if (pendingRemoteVersion > 0) {
@@ -12034,6 +12050,7 @@ const toggleCycleVariantSelection = (
         && latest.desiredSaved === intent.desiredSaved;
       if (sameClick && !isStudioHeartRemoteSuperseded(latest)) {
         removeStudioHeartIntentLocal(uid, safeDocumentId);
+        showToast(intent.desiredSaved ? '저장이 완료되었습니다.' : '저장 해제가 완료되었습니다.');
       } else {
         // Another click may have arrived while the first Firestore write was
         // in flight. Rebase its canonical starting state to the write that
@@ -12058,6 +12075,8 @@ const toggleCycleVariantSelection = (
       writeStudioHeartPendingIntent({ ...latest, retryCount });
       if (previousRetryCount < 2) {
         scheduleStudioHeartPendingIntent(safeDocumentId, STUDIO_HEART_RETRY_MS);
+      } else {
+        showToast('저장 확인 실패 · 같은 기기에서 재접속 시 복구를 시도합니다.');
       }
     } finally {
       studioHeartCommitInFlightRef.current.delete(safeDocumentId);
@@ -16908,7 +16927,9 @@ ${normalizePromptForDisplay(result.prompt)}
                 latestGenerationBatchId: (nextHistory[0]?.appliedKeywords as any)?.generationBatchId || latestGenerationBatchId || null,
               });
             }
-            showToast(intendedFavoriteAction === 'save' ? '저장되었습니다.' : '저장이 해제되었습니다.');
+            showToast(intendedFavoriteAction === 'save'
+              ? '저장 처리 중 · 서버 저장은 약 30초 후'
+              : '저장 해제 처리 중 · 서버 반영은 약 30초 후');
             return;
           }
           }
@@ -16978,6 +16999,7 @@ ${normalizePromptForDisplay(result.prompt)}
             ? (linkedFavoriteId || favoriteLinkBeforeToggle)
             : favoriteLinkBeforeToggle,
           Date.now(),
+          true,
         );
       }
 

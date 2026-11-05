@@ -195,6 +195,18 @@ export const nextStudioHeartHandoffRecoveryAttempt = (
   return { version, attempts: attempts + 1, retryAfterMs: now + 60_000 };
 };
 
+/** Retry only a still-pending, exact-version server receipt. Never poll healthy accounts. */
+export const studioHeartHandoffRecoveryDelay = (
+  attempt: StudioHeartHandoffRecoveryAttempt | null,
+  latest: { seq: number; desiredSaved: boolean } | null,
+  expected: { seq: number; desiredSaved: boolean },
+  now: number,
+): number | null => {
+  if (!attempt || attempt.attempts >= 3 || attempt.version !== expected.seq
+    || !latest || latest.seq !== expected.seq || latest.desiredSaved !== expected.desiredSaved) return null;
+  return Math.max(500, attempt.retryAfterMs - now);
+};
+
 export const computeStudioHeartSettleDelay = (
   intent: Pick<StudioHeartPendingIntent, 'updatedAtMs' | 'firstQueuedAtMs'>,
   now: number,

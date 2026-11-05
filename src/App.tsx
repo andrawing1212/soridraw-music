@@ -38,6 +38,7 @@ import {
   type StudioHeartPendingIntent,
   computeStudioHeartSettleDelay,
   nextStudioHeartHandoffRecoveryAttempt,
+  studioHeartHandoffRecoveryDelay,
   type StudioHeartHandoffRecoveryAttempt,
 } from './lib/studioHeartBatch';
 import { admitStudioHeartClick } from './lib/studioHeartClickGuard';
@@ -12390,6 +12391,7 @@ const toggleCycleVariantSelection = (
     const scheduled = new Map<string, ReturnType<typeof setTimeout>>();
     const processing = new Set<string>();
     const recoverAttempts = new Map<string, StudioHeartHandoffRecoveryAttempt>();
+    const latestReceipts = new Map<string, import('./services/studioHeartHandoff').StudioHeartHandoffReceipt>();
     const clearScheduled = (id: string) => {
       const timer = scheduled.get(id);
       if (timer !== undefined) clearTimeout(timer);
@@ -12456,11 +12458,28 @@ const toggleCycleVariantSelection = (
           void releaseStudioHeartHandoff(uid, documentId, version, claim.token).catch(() => {});
         }
         processing.delete(documentId);
+        // A rejected/failed claim may produce NO child_changed event.
+        // Reschedule only this outstanding exact receipt, at most twice
+        // more in this session; no idle-account polling or extra reads.
+        const retryDelay = studioHeartHandoffRecoveryDelay(
+          recoverAttempts.get(documentId) || null,
+          latestReceipts.get(documentId) || null,
+          { seq: version, desiredSaved },
+          Date.now(),
+        );
+        if (!settled && !closed && retryDelay !== null) {
+          clearScheduled(documentId);
+          scheduled.set(documentId, setTimeout(() => {
+            scheduled.delete(documentId);
+            void recover(documentId, version, desiredSaved);
+          }, retryDelay));
+        }
       }
     };
     const receive = (receipt: import('./services/studioHeartHandoff').StudioHeartHandoffReceipt) => {
       if (closed) return;
       const id = receipt.documentId;
+      latestReceipts.set(id, receipt);
       clearScheduled(id);
       const previousAttempt = recoverAttempts.get(id);
       if (previousAttempt && previousAttempt.version !== receipt.seq) recoverAttempts.delete(id);
@@ -12479,15 +12498,30 @@ const toggleCycleVariantSelection = (
       }, delay));
     };
     const stop = subscribeStudioHeartHandoffs(uid, receive, (id) => {
+      latestReceipts.delete(id);
       clearScheduled(id);
       recoverAttempts.delete(id);
     });
+    // A real network reconnection can reopen a bounded retry budget.
+    // No heartbeat, interval or Firestore read is added to the idle path.
+    const onReconnected = () => {
+      if (closed || auth.currentUser?.uid !== uid) return;
+      for (const receipt of latestReceipts.values()) {
+        const previous = recoverAttempts.get(receipt.documentId);
+        if (previous?.version === receipt.seq && previous.attempts >= 3
+          && Date.now() >= previous.retryAfterMs) recoverAttempts.delete(receipt.documentId);
+        receive(receipt);
+      }
+    };
+    window.addEventListener('online', onReconnected);
     return () => {
       closed = true;
+      window.removeEventListener('online', onReconnected);
       stop();
       for (const timer of scheduled.values()) clearTimeout(timer);
       scheduled.clear();
       recoverAttempts.clear();
+      latestReceipts.clear();
     };
   }, [user?.uid]);
 

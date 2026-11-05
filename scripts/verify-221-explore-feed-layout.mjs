@@ -361,9 +361,10 @@ assert.match(
 );
 assert.match(
   social,
-  /\.soridraw-explore-card--profile-list \.soridraw-explore-card-quick-actions\{flex:1 1 auto[\s\S]*?\.soridraw-explore-card--profile-list \.soridraw-explore-more-button\{margin-left:auto\}/,
-  'list actions must keep like/apply/share together while more stays at the far right',
+  /\.soridraw-explore-card--profile-list \.soridraw-explore-card-quick-actions\{flex:1 1 auto/,
+  'profile list must keep like/apply/share in the original action area',
 );
+
 assert.match(
   social,
   /@media \(max-width:720px\)\{[\s\S]*?\.soridraw-explore-card--profile-list\{grid-template-columns:84px minmax\(0,1fr\)/,
@@ -517,9 +518,10 @@ assert.match(
 );
 assert.match(
   page,
-  /variant === 'profilePinnedBanner'[\s\S]*?soridraw-explore-pinned-top-actions-259[\s\S]*?soridraw-explore-pinned-apply-255[\s\S]*?soridraw-explore-pinned-share-255[\s\S]*?soridraw-explore-pinned-more-255[\s\S]*?soridraw-explore-like-button soridraw-explore-pinned-like-255/,
-  'pinned top row must be apply then share then More while like stays separately anchored at bottom-right',
+  /variant === 'profilePinnedBanner'[\s\S]*?soridraw-explore-pinned-top-actions-259[\s\S]*?soridraw-explore-pinned-apply-255[\s\S]*?soridraw-explore-pinned-share-255[\s\S]*?<\/div>[\s\S]*?soridraw-explore-pinned-more-255[\s\S]*?soridraw-explore-like-button soridraw-explore-pinned-like-255/,
+  'pinned apply/share must stay in the banner top row; More must move onto the cover',
 );
+
 assert.match(
   page,
   /\{variant !== 'profilePinnedBanner' && \([\s\S]*?className="soridraw-explore-card-actions"/,
@@ -527,9 +529,15 @@ assert.match(
 );
 assert.match(
   social,
-  /\.soridraw-explore-pinned-top-actions-259\{position:absolute;right:6px;top:6px;display:flex;height:38px;align-items:center;gap:3px[\s\S]*?\.soridraw-explore-pinned-like-255\{position:absolute!important;right:6px;bottom:6px[\s\S]*?height:38px!important[\s\S]*?\.soridraw-explore-pinned-share-255,\.soridraw-explore-pinned-more-255\{position:static/,
-  'desktop/tablet pinned apply/share/More must share the top-right row while like stays bottom-right',
+  /\.soridraw-explore-pinned-top-actions-259\{position:absolute;right:6px;top:6px;display:flex;height:38px;align-items:center;gap:3px[\s\S]*?\.soridraw-explore-pinned-like-255\{position:absolute!important;right:6px;bottom:6px/,
+  'pinned apply/share stay at top-right and like stays bottom-right',
 );
+assert.match(
+  css,
+  /\.soridraw-explore-pinned-actions-255 > \.soridraw-explore-pinned-more-255\{[\s\S]*?left:calc\(35\.714% - 41px\)/,
+  'pinned More must overlay the left-side cover image',
+);
+
 assert.match(
   social,
   /\.soridraw-explore-pinned-action-255\{[\s\S]*?width:38px;height:38px[\s\S]*?border:1px solid transparent!important[\s\S]*?background:transparent!important[\s\S]*?box-shadow:none!important/,
@@ -671,6 +679,26 @@ assert.match(
   /\.soridraw-explore-quick-action,\.soridraw-explore-more-button\{width:32px;height:32px\}/,
   'PC apply/share/more actions must be slightly larger',
 );
+
+// Current public cards use the same markup across Explore, public profile,
+// profile list, and curation rails. Do not move callback behavior with the UI.
+const coverStart = page.indexOf('<div className="soridraw-explore-cover-wrap">', page.indexOf('function ExploreTrackCard'));
+const copyStart = page.indexOf('<div className="soridraw-explore-card-copy">', coverStart);
+const bottomStart = page.indexOf('<div className="soridraw-explore-card-actions"', copyStart);
+const bottomEnd = page.indexOf('</article>', bottomStart);
+assert.ok(coverStart >= 0 && copyStart > coverStart && bottomStart > copyStart && bottomEnd > bottomStart);
+assert.match(page.slice(coverStart,copyStart), /variant !== 'profilePinnedBanner'[\s\S]*?className="soridraw-explore-more-button"[\s\S]*?onOpenMore\(track\)/,
+  'regular public card More must be a child of the cover wrap');
+assert.doesNotMatch(page.slice(bottomStart,bottomEnd), /soridraw-explore-more-button|soridraw-explore-pinned-more-255/,
+  'below-cover action row must contain only like, apply and share');
+assert.match(css, /\.soridraw-explore-cover-wrap > \.soridraw-explore-more-button\{[\s\S]*?position:absolute;z-index:8;top:6px;right:6px;[\s\S]*?background:rgba\(17,17,20,\.56\)!important;[\s\S]*?opacity:1;visibility:visible/,
+  'the cover More button must always be visible with actual translucent background');
+assert.match(css, /\.soridraw-explore-card-actions \.soridraw-explore-quick-action\{width:36px;height:36px\}/,
+  'apply/share button targets must be slightly bigger');
+assert.match(css, /\.soridraw-explore-card-actions \.soridraw-explore-like-button svg:not\(\.soridraw-explore-spinner\)\{width:20px;height:20px\}/,
+  'like icon should be larger without changing the like handler');
+assert.match(css, /\.soridraw-explore-grid--feed \.soridraw-explore-card-actions \.soridraw-explore-quick-action[\s\S]*?width:29px;height:29px/,
+  'three-column mobile feed should use compact but enlarged actions');
 
 console.log('APP221_EXPLORE_LATEST_EIGHT_COLUMN_MAX_SCREEN=PASS');
 console.log('APP221_EXPLORE_RECOMMENDED_SEVEN_CARD_RAIL=PASS');

@@ -248,3 +248,61 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 .soridraw-explore-publication-track-meta strong { color:rgba(255,255,255,.82); font-size:11px; font-weight:900; }
 .soridraw-explore-publication-track-meta small { margin-top:4px; color:rgba(255,255,255,.34); font-size:9px; font-weight:800; }
 @media (max-width:520px) { .soridraw-explore-publication-track-grid { gap:8px; } .soridraw-explore-publication-track-meta { padding:9px 10px 10px; } }
+
+
+/* Shared public song card actions: Explore grids, recommendations and profiles.
+ * More overlays the real cover permanently; action callbacks and liking stay as-is. */
+.soridraw-explore-cover-wrap > .soridraw-explore-more-button{
+  position:absolute;z-index:8;top:6px;right:6px;display:grid;place-items:center;
+  width:31px;height:31px;padding:0;border:0!important;outline:0!important;border-radius:50%;
+  background:rgba(17,17,20,.56)!important;box-shadow:0 2px 9px rgba(0,0,0,.22)!important;
+  backdrop-filter:blur(5px);color:rgba(255,255,255,.93);
+  opacity:1;visibility:visible;pointer-events:auto;
+}
+.soridraw-explore-cover-wrap > .soridraw-explore-more-button svg{width:18px;height:18px}
+.soridraw-explore-cover-wrap > .soridraw-explore-more-button:hover,
+.soridraw-explore-cover-wrap > .soridraw-explore-more-button:focus-visible{
+  background:rgba(17,17,20,.72)!important;color:#fff;
+}
+/* Featured profile banner has a wide cover: More belongs inside its LEFT image. */
+.soridraw-explore-pinned-actions-255 > .soridraw-explore-pinned-more-255{
+  position:absolute;z-index:10;left:calc(35.714% - 41px);top:7px;
+  width:34px;height:34px;border:0!important;outline:0!important;
+  background:rgba(17,17,20,.56)!important;box-shadow:0 2px 9px rgba(0,0,0,.22)!important;
+  backdrop-filter:blur(5px);opacity:1;visibility:visible;pointer-events:auto;color:#fff;
+}
+.soridraw-explore-pinned-actions-255 > .soridraw-explore-pinned-more-255 svg{width:19px;height:19px}
+.soridraw-explore-pinned-actions-255 > .soridraw-explore-pinned-more-255:hover{
+  background:rgba(17,17,20,.72)!important;color:#fff;
+}
+/* Slightly larger like, apply and share in the remaining three-button row. */
+.soridraw-explore-card-actions .soridraw-explore-like-button{min-height:34px}
+.soridraw-explore-card-actions .soridraw-explore-like-button svg:not(.soridraw-explore-spinner){width:20px;height:20px}
+.soridraw-explore-card-actions .soridraw-explore-quick-action{width:36px;height:36px}
+.soridraw-explore-card-actions .soridraw-explore-quick-action svg{width:20px;height:20px}
+.soridraw-explore-pinned-top-actions-259 .soridraw-explore-pinned-action-255{width:42px;height:42px}
+.soridraw-explore-pinned-top-actions-259 .soridraw-explore-pinned-action-255 svg{width:25px;height:25px}
+.soridraw-explore-pinned-like-255 svg:not(.soridraw-explore-spinner){width:26px;height:26px}
+@media (max-width:720px){
+  .soridraw-explore-grid--feed .soridraw-explore-card-actions .soridraw-explore-quick-action,
+  .soridraw-explore-recommend-track:not(.soridraw-explore-recommend-track--creators) .soridraw-explore-card-actions .soridraw-explore-quick-action{width:29px;height:29px}
+  .soridraw-explore-grid--feed .soridraw-explore-card-actions .soridraw-explore-quick-action svg,
+  .soridraw-explore-recommend-track:not(.soridraw-explore-recommend-track--creators) .soridraw-explore-card-actions .soridraw-explore-quick-action svg{width:16px;height:16px}
+  .soridraw-explore-grid--feed .soridraw-explore-card-actions .soridraw-explore-like-button svg:not(.soridraw-explore-spinner),
+  .soridraw-explore-recommend-track:not(.soridraw-explore-recommend-track--creators) .soridraw-explore-card-actions .soridraw-explore-like-button svg:not(.soridraw-explore-spinner){width:17px;height:17px}
+  .soridraw-explore-grid--feed .soridraw-explore-card-actions .soridraw-explore-like-button,
+  .soridraw-explore-recommend-track:not(.soridraw-explore-recommend-track--creators) .soridraw-explore-card-actions .soridraw-explore-like-button{min-height:29px}
+  .soridraw-explore-card--profile-list .soridraw-explore-card-actions .soridraw-explore-quick-action{width:32px;height:32px}
+  .soridraw-explore-card--profile-list .soridraw-explore-card-actions .soridraw-explore-quick-action svg{width:18px;height:18px}
+  .soridraw-explore-card--profile-list .soridraw-explore-card-actions .soridraw-explore-like-button svg:not(.soridraw-explore-spinner){width:19px;height:19px}
+  .soridraw-explore-card--profile-list .soridraw-explore-cover-wrap > .soridraw-explore-more-button{top:4px;right:4px;width:25px;height:25px}
+  .soridraw-explore-card--profile-list .soridraw-explore-cover-wrap > .soridraw-explore-more-button svg{width:15px;height:15px}
+  .soridraw-explore-pinned-actions-255 > .soridraw-explore-pinned-more-255{top:5px;left:calc(35.714% - 36px);width:31px;height:31px}
+  .soridraw-explore-pinned-top-actions-259 .soridraw-explore-pinned-action-255{width:38px;height:38px}
+  .soridraw-explore-pinned-top-actions-259 .soridraw-explore-pinned-action-255 svg{width:23px;height:23px}
+  .soridraw-explore-pinned-like-255 svg:not(.soridraw-explore-spinner){width:24px;height:24px}
+}
+@media (max-width:420px){
+  .soridraw-explore-cover-wrap > .soridraw-explore-more-button{top:5px;right:5px;width:27px;height:27px}
+  .soridraw-explore-cover-wrap > .soridraw-explore-more-button svg{width:16px;height:16px}
+}

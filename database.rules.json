@@ -295,6 +295,50 @@
         },
         "$other": {
           ".validate": false
+        },
+        "studioHeartHandoffs": {
+          ".validate": "newData.hasChild('version')",
+          "version": {
+            ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 9007199254740991"
+          },
+          "slots": {
+            "$slot": {
+              ".validate": "$slot.matches(/^(0|[1-9]|1[0-9])$/) && newData.hasChildren(['documentId','seq','desiredSaved','originDeviceId','updatedAtMs','status','claimToken','claimedUntilMs','songJson']) && (!data.exists() || (newData.child('documentId').val() === data.child('documentId').val() && (newData.child('seq').val() > data.child('seq').val() || (newData.child('seq').val() === data.child('seq').val() && newData.child('desiredSaved').val() === data.child('desiredSaved').val() && newData.child('originDeviceId').val() === data.child('originDeviceId').val() && newData.child('updatedAtMs').val() === data.child('updatedAtMs').val() && newData.child('songJson').val() === data.child('songJson').val()))))",
+              "documentId": {
+                ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 256"
+              },
+              "seq": {
+                ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 9007199254740991"
+              },
+              "desiredSaved": {
+                ".validate": "newData.isBoolean()"
+              },
+              "originDeviceId": {
+                ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 96"
+              },
+              "updatedAtMs": {
+                ".validate": "newData.isNumber() && newData.val() > 0"
+              },
+              "status": {
+                ".validate": "newData.isString() && (newData.val() === 'pending' || newData.val() === 'claimed')"
+              },
+              "claimToken": {
+                ".validate": "newData.isString() && newData.val().length <= 96"
+              },
+              "claimedUntilMs": {
+                ".validate": "newData.isNumber() && newData.val() >= 0"
+              },
+              "songJson": {
+                ".validate": "newData.isString() && newData.val().length <= 24000"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
         }
       }
     },

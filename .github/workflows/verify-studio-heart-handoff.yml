@@ -1,0 +1,98 @@
+name: SORIDRAW Studio Heart Handoff - Emulator and Product Safety
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'database.rules.json'
+      - 'src/services/studioHeartHandoff.ts'
+      - 'src/App.tsx'
+      - 'src/lib/studioHeartBatch.ts'
+      - 'scripts/verify-studio-heart-handoff-rules.mjs'
+      - '.github/workflows/verify-studio-heart-handoff.yml'
+permissions:
+  contents: read
+jobs:
+  handoff-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: |
+          npm ci --no-audit --no-fund
+          npm install --no-save --package-lock=false --legacy-peer-deps --no-audit --no-fund @firebase/rules-unit-testing@5 firebase-tools@14
+      - name: Exact additive live-rules candidate safety (self-test; never PUT)
+        run: node scripts/verify-studio-heart-handoff-live-additive.mjs --self-test
+      - name: Isolated RTDB emulator (no shared data)
+        run: |
+          node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/heart-rtdb-emulator.json',
+            JSON.stringify({database:{rules:process.cwd()+'/database.rules.json'},
+              emulators:{database:{host:'127.0.0.1',port:9000},ui:{enabled:false}}}));
+          JS
+          ./node_modules/.bin/firebase emulators:exec --only database \
+            --project demo-soridraw-studio-heart-handoff \
+            --config "$RUNNER_TEMP/heart-rtdb-emulator.json" \
+            "node scripts/verify-studio-heart-handoff-rules.mjs"
+      - name: Authenticate Firebase for read-only source gate
+        if: ${{ github.event.pull_request.number == 816 && github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      - name: Check live shared rules (GET only, never PUT)
+        if: ${{ github.event.pull_request.number == 816 && github.event.pull_request.head.repo.full_name == github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import requests
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          credential = os.environ.get('GOOGLE_GHA_CREDS_PATH') or os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+          if not credential:
+              raise SystemExit('STUDIO_HEART_LIVE_READONLY_CREDENTIAL_MISSING')
+          creds = service_account.Credentials.from_service_account_file(
+              credential, scopes=['https://www.googleapis.com/auth/firebase.database',
+                                  'https://www.googleapis.com/auth/userinfo.email'])
+          creds.refresh(Request())
+          url = 'https://soridraw-app-866a5-default-rtdb.firebaseio.com/.settings/rules.json'
+          response = requests.get(url, params={'access_token': creds.token}, timeout=30)
+          if response.status_code != 200:
+              raise SystemExit('STUDIO_HEART_LIVE_READONLY_GET_HTTP_'+str(response.status_code))
+          Path(os.environ['RUNNER_TEMP'], 'studio-heart-live-rules.json').write_text(
+              response.text,encoding='utf-8')
+          print('STUDIO_HEART_LIVE_SHARED_RTDB_RULES_READONLY=PASS')
+          PY
+          node scripts/verify-studio-heart-handoff-live-additive.mjs --candidate \
+            "$RUNNER_TEMP/studio-heart-live-rules.json" \
+            "$RUNNER_TEMP/studio-heart-candidate.json" \
+            "$RUNNER_TEMP/studio-heart-mode.txt"
+          test "$(cat "$RUNNER_TEMP/studio-heart-mode.txt")" = 'ADD_ONLY_STUDIO_HEART_HANDOFF' -o \
+            "$(cat "$RUNNER_TEMP/studio-heart-mode.txt")" = 'ALREADY_EXACT'
+          echo 'STUDIO_HEART_SHARED_RULES_EXACT_ADDITIVE_LIVE_PREFLIGHT=PASS'
+          echo 'SHARED_RTD_B_RULES_DEPLOY=NOT_RUN'
+          echo 'USER_DATA_WRITES=0'
+      - name: Existing Studio ten-song 5s restart protections
+        run: |
+          node scripts/verify-studio-heart-five-second-click-guard.mjs
+          node scripts/verify-studio-heart-ten-song-conflict.mjs
+          node scripts/verify-studio-heart-close-reconnect.mjs
+          node scripts/verify-349-studio-heart-settlement-media.mjs
+      - name: Types and build
+        run: |
+          npx tsc --noEmit
+          npm run build
+      - run: echo "EMULATOR_ONLY;SHARED_RULES_DEPLOY=0;FIRESTORE_DATA_WRITES=0"

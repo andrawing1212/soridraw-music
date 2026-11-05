@@ -70,7 +70,12 @@ const withoutSplit450 = (rules) => {
   delete x.rules.publicSync.splitFrameModes;
   return x;
 };
-const variants = [
+const beforeStudioHeartHandoff = rules => {
+  const next = structuredClone(rules);
+  delete next.rules.userSync.$uid.studioHeartHandoffs;
+  return next;
+};
+const withExistingStudioHandoff = [
   ['STAGE416_DORMANT', source],
   ['STAGE416_ALREADY_LIVE', sourceWithStage416],
   ...(split450 ? [
@@ -78,6 +83,12 @@ const variants = [
     ['STAGE416_ALREADY_LIVE_BEFORE_450', withoutSplit450(sourceWithStage416)],
   ] : []),
 ];
+// Historical publication release cannot install the new Studio handoff node.
+const variants = source.rules.userSync.$uid.studioHeartHandoffs
+  ? withExistingStudioHandoff.flatMap(([stage, approved]) => [
+      [stage, approved],
+      [stage + '_BEFORE_STUDIO_HEART_HANDOFF', beforeStudioHeartHandoff(approved)],
+    ]) : withExistingStudioHandoff;
 
 function classify(live) {
   for (const [stage, approved] of variants) {

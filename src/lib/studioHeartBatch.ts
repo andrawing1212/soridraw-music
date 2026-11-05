@@ -9,6 +9,7 @@ export type StudioHeartPendingIntent = {
   song: any;
   updatedAtMs: number;
   firstQueuedAtMs?: number;
+  handoffSeq?: number;
   signalVersion: number;
   pendingRemotePreviewVersion: number;
   pendingRemotePreviewSaved?: boolean | null;
@@ -38,6 +39,7 @@ const normalizeIntent = (uid: string, value: any): StudioHeartPendingIntent | nu
     song: value.song && typeof value.song === 'object' ? value.song : null,
     updatedAtMs: Math.max(0, Math.floor(Number(value.updatedAtMs || 0))),
     firstQueuedAtMs: Math.max(0, Math.floor(Number(value.firstQueuedAtMs || value.updatedAtMs || 0))),
+    handoffSeq: Math.max(0, Math.floor(Number(value.handoffSeq || 0))),
     signalVersion: Math.max(0, Math.floor(Number(value.signalVersion || 0))),
     pendingRemotePreviewVersion: Math.max(0, Math.floor(Number(value.pendingRemotePreviewVersion || 0))),
     pendingRemotePreviewSaved: typeof value.pendingRemotePreviewSaved === 'boolean' ? value.pendingRemotePreviewSaved : null,
@@ -99,6 +101,7 @@ export const writeStudioHeartPendingIntent = (intent: StudioHeartPendingIntent):
     documentId,
     updatedAtMs: Math.max(1, Math.floor(Number(intent.updatedAtMs || Date.now()))),
     firstQueuedAtMs: Math.max(1, Math.floor(Number(intent.firstQueuedAtMs || intent.updatedAtMs || Date.now()))),
+    handoffSeq: Math.max(0, Math.floor(Number(intent.handoffSeq || 0))),
     signalVersion: Math.max(0, Math.floor(Number(intent.signalVersion || 0))),
     pendingRemotePreviewVersion: Math.max(0, Math.floor(Number(intent.pendingRemotePreviewVersion || 0))),
     pendingRemotePreviewSaved: typeof intent.pendingRemotePreviewSaved === 'boolean' ? intent.pendingRemotePreviewSaved : null,
@@ -173,6 +176,25 @@ export const isStudioHeartOptimisticFavorite = (favorite: any): boolean => (
 );
 
 /** Per-song trailing quiet period with a hard cap from the first accepted click. */
+// A remote device may claim a durable handoff at most three times per app
+// session. Failed Firestore recovery is event-driven with a 60s cooldown,
+// never a 250ms retry loop while a receipt remains pending.
+export type StudioHeartHandoffRecoveryAttempt = {
+  version: number;
+  attempts: number;
+  retryAfterMs: number;
+};
+export const nextStudioHeartHandoffRecoveryAttempt = (
+  previous: StudioHeartHandoffRecoveryAttempt | null,
+  version: number,
+  now: number,
+): StudioHeartHandoffRecoveryAttempt | null => {
+  if (!Number.isSafeInteger(version) || version < 1) return null;
+  const attempts = previous?.version === version ? previous.attempts : 0;
+  if (attempts >= 3) return null;
+  return { version, attempts: attempts + 1, retryAfterMs: now + 60_000 };
+};
+
 export const computeStudioHeartSettleDelay = (
   intent: Pick<StudioHeartPendingIntent, 'updatedAtMs' | 'firstQueuedAtMs'>,
   now: number,

@@ -1,0 +1,233 @@
+import { get, onChildAdded, onChildChanged, onChildRemoved, ref, runTransaction, type Unsubscribe } from 'firebase/database';
+import { realtimeDb } from '../firebase';
+
+export type StudioHeartHandoffReceipt = {
+  documentId: string;
+  seq: number;
+  desiredSaved: boolean;
+  originDeviceId: string;
+  updatedAtMs: number;
+  status: 'pending' | 'claimed';
+  claimToken: string;
+  claimedUntilMs: number;
+  songJson: string;
+};
+
+const MAX_SONG_JSON = 24000;
+const MAX_SLOTS = 20;
+const CLAIM_LEASE_MS = 30_000;
+const QUIET_MS = 5_000;
+const slotByDocument = new Map<string, string>();
+let fallbackDeviceId = '';
+const safeKey = (value: string): string => {
+  const id = String(value || '').trim();
+  return id.length > 0 && id.length <= 256 && !/[.#$\[\]/]/.test(id) ? id : '';
+};
+const rootPath = (uid: string) => 'userSync/' + uid + '/studioHeartHandoffs';
+const rootRef = (uid: string) => ref(realtimeDb, rootPath(uid));
+const slotRef = (uid: string, slot: string) => ref(realtimeDb, rootPath(uid) + '/slots/' + slot);
+const cachedKey = (uid: string, documentId: string) => uid + '|' + documentId;
+const normalize = (input: unknown): StudioHeartHandoffReceipt | null => {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const x = input as Record<string, any>;
+  const id = safeKey(String(x.documentId || ''));
+  const seq = Number(x.seq || 0);
+  const updated = Number(x.updatedAtMs || 0);
+  if (!id || !Number.isSafeInteger(seq) || seq < 1 || !Number.isFinite(updated)
+    || updated <= 0 || typeof x.desiredSaved !== 'boolean'
+    || (x.status !== 'pending' && x.status !== 'claimed')) return null;
+  return {
+    documentId: id, seq, desiredSaved: x.desiredSaved,
+    originDeviceId: String(x.originDeviceId || '').slice(0, 96),
+    updatedAtMs: updated, status: x.status,
+    claimToken: String(x.claimToken || '').slice(0, 96),
+    claimedUntilMs: Math.max(0, Number(x.claimedUntilMs || 0)),
+    songJson: typeof x.songJson === 'string' && x.songJson.length <= MAX_SONG_JSON ? x.songJson : '',
+  };
+};
+const getOrigin = (): string => {
+  try {
+    const key = 'soridraw_studio_heart_handoff_device_v1';
+    const existing = localStorage.getItem(key);
+    if (existing) return existing;
+    const id = 'sh_' + Math.random().toString(36).slice(2, 12) + '_' + Date.now().toString(36);
+    localStorage.setItem(key, id);
+    return id;
+  } catch {
+    if (!fallbackDeviceId) fallbackDeviceId = 'sh_session_' + Math.random().toString(36).slice(2, 12);
+    return fallbackDeviceId;
+  }
+};
+export const studioHeartHandoffDeviceId = getOrigin;
+const findSlot = (raw: any, id: string): string | null => {
+  const slots = raw?.slots && typeof raw.slots === 'object' ? raw.slots : {};
+  for (let index = 0; index < MAX_SLOTS; index += 1) {
+    const key = String(index);
+    if (normalize(slots[key])?.documentId === id) return key;
+  }
+  return null;
+};
+const rememberSlot = (uid: string, id: string, slot: string) => slotByDocument.set(cachedKey(uid, id), slot);
+const resolveSlot = async (uid: string, id: string): Promise<string | null> => {
+  const cached = slotByDocument.get(cachedKey(uid, id));
+  if (cached !== undefined) return cached;
+  const snapshot = await get(rootRef(uid));
+  const slot = findSlot(snapshot.val(), id);
+  if (slot !== null) rememberSlot(uid, id, slot);
+  return slot;
+};
+
+/** At most twenty named slots can ever exist: enforceable by RTDB Rules. */
+export const publishStudioHeartHandoff = async (
+  uid: string, documentId: string, desiredSaved: boolean, song: unknown,
+  updatedAtMs: number,
+): Promise<StudioHeartHandoffReceipt | null> => {
+  const id = safeKey(documentId);
+  if (!uid || !id || typeof desiredSaved !== 'boolean') return null;
+  let songJson = '';
+  if (desiredSaved) {
+    try { songJson = JSON.stringify(song); }
+    catch { throw new Error('STUDIO_HEART_HANDOFF_SONG_NOT_SERIALIZABLE'); }
+    if (!songJson || songJson.length > MAX_SONG_JSON)
+      throw new Error('STUDIO_HEART_HANDOFF_SONG_TOO_LARGE');
+  }
+  const originDeviceId = getOrigin();
+  const outcome = await runTransaction(rootRef(uid), (current: any) => {
+    const snapshot = current && typeof current === 'object' ? current : {};
+    const slots = snapshot.slots && typeof snapshot.slots === 'object' ? { ...snapshot.slots } : {};
+    let slot = findSlot({ slots }, id);
+    if (slot === null) {
+      for (let index = 0; index < MAX_SLOTS; index += 1) {
+        if (!slots[String(index)]) { slot = String(index); break; }
+      }
+    }
+    if (slot === null) return; // Never evict another unfinished song.
+    const previous = normalize(slots[slot]);
+    if (previous && previous.documentId === id
+      && previous.originDeviceId === originDeviceId && previous.updatedAtMs > updatedAtMs) return;
+    const seq = Math.max(Date.now(), (previous?.seq || 0) + 1);
+    // Keep the prior claim's lease while a newer click replaces its desired
+    // state. The old writer must finish/release before the new version commits.
+    const activeClaim = previous?.status === 'claimed'
+      && previous.claimedUntilMs > Date.now();
+    slots[slot] = {
+      documentId: id, seq, desiredSaved, originDeviceId, updatedAtMs,
+      status: activeClaim ? 'claimed' : 'pending',
+      claimToken: activeClaim ? previous.claimToken : '',
+      claimedUntilMs: activeClaim ? previous.claimedUntilMs : 0,
+      songJson,
+    };
+    return { version:Math.max(seq,Number(snapshot.version || 0)+1), slots };
+  }, { applyLocally:false });
+  if (!outcome.committed) return null;
+  const raw = outcome.snapshot.val();
+  const slot = findSlot(raw, id);
+  if (slot === null) return null;
+  rememberSlot(uid, id, slot);
+  return normalize(raw?.slots?.[slot]);
+};
+
+export const claimStudioHeartHandoff = async (
+  uid: string, documentId: string,
+  expected?: { seq: number; desiredSaved: boolean } | null,
+): Promise<{ receipt: StudioHeartHandoffReceipt; token: string } | null> => {
+  const id = safeKey(documentId);
+  if (!uid || !id) return null;
+  const slot = await resolveSlot(uid, id);
+  if (slot === null) return null;
+  const token = getOrigin() + '_' + Math.random().toString(36).slice(2, 13);
+  const now = Date.now();
+  const outcome = await runTransaction(slotRef(uid,slot), (value: any) => {
+    const current = normalize(value);
+    if (!current || current.documentId !== id) return;
+    if (expected && (current.seq !== expected.seq || current.desiredSaved !== expected.desiredSaved)) return;
+    if (current.updatedAtMs + QUIET_MS > now) return;
+    if (current.status === 'claimed' && current.claimedUntilMs > now) return;
+    return { ...current, status:'claimed', claimToken:token, claimedUntilMs:now+CLAIM_LEASE_MS };
+  }, { applyLocally:false });
+  const receipt = normalize(outcome.snapshot.val());
+  return outcome.committed && receipt?.claimToken === token ? { receipt, token } : null;
+};
+
+export const settleStudioHeartHandoff = async (uid: string, documentId: string, seq: number, token: string): Promise<boolean> => {
+  const id = safeKey(documentId);
+  if (!uid || !id || !token) return false;
+  const slot = await resolveSlot(uid, id);
+  if (slot === null) return false;
+  const outcome = await runTransaction(slotRef(uid,slot), (value: any) => {
+    const current = normalize(value);
+    if (!current || current.documentId !== id || current.seq !== seq
+      || current.claimToken !== token || current.status !== 'claimed') return;
+    return null;
+  }, { applyLocally:false });
+  if (outcome.committed) slotByDocument.delete(cachedKey(uid,id));
+  return outcome.committed;
+};
+
+export const releaseStudioHeartHandoff = async (uid: string, documentId: string, seq: number, token: string): Promise<void> => {
+  const id = safeKey(documentId);
+  if (!uid || !id || !token) return;
+  const slot = await resolveSlot(uid, id);
+  if (slot === null) return;
+  await runTransaction(slotRef(uid,slot), (value: any) => {
+    const current = normalize(value);
+    if (!current || current.documentId !== id
+      || current.claimToken !== token || current.status !== 'claimed') return;
+    // A newer click may have arrived while this claim was in flight. Once
+    // the old writer has stopped, unlock the newest version immediately.
+    return { ...current, status:'pending', claimToken:'', claimedUntilMs:0 };
+  }, { applyLocally:false });
+};
+
+export const readStudioHeartHandoff = async (uid: string, documentId: string): Promise<StudioHeartHandoffReceipt | null> => {
+  const id = safeKey(documentId);
+  if (!uid || !id) return null;
+  let slot = await resolveSlot(uid, id);
+  if (slot === null) return null;
+  let receipt = normalize((await get(slotRef(uid,slot))).val());
+  if (receipt?.documentId === id) return receipt;
+  slotByDocument.delete(cachedKey(uid,id));
+  slot = await resolveSlot(uid,id);
+  if (slot === null) return null;
+  receipt = normalize((await get(slotRef(uid,slot))).val());
+  return receipt?.documentId === id ? receipt : null;
+};
+
+export const subscribeStudioHeartHandoffs = (
+  uid: string, callback: (receipt: StudioHeartHandoffReceipt) => void,
+  onRemoved?: (documentId: string) => void,
+): Unsubscribe => {
+  if (!uid) return () => {};
+  const location = ref(realtimeDb, rootPath(uid) + '/slots');
+  // Replacing a slot in one parent transaction emits child_changed, not
+  // necessarily child_removed followed by child_added. Retire the old song's
+  // timer and cached location before registering its replacement.
+  const documentBySlot = new Map<string, string>();
+  const receive = (snapshot: any) => {
+    const item = normalize(snapshot.val());
+    const slot = String(snapshot.key || '');
+    if (!item || !/^(0|[1-9]|1[0-9])$/.test(slot)) return;
+    const previousId = documentBySlot.get(slot);
+    if (previousId && previousId !== item.documentId) {
+      if (slotByDocument.get(cachedKey(uid, previousId)) === slot)
+        slotByDocument.delete(cachedKey(uid, previousId));
+      onRemoved?.(previousId);
+    }
+    documentBySlot.set(slot, item.documentId);
+    rememberSlot(uid, item.documentId, slot);
+    callback(item);
+  };
+  const offAdd = onChildAdded(location, receive);
+  const offChange = onChildChanged(location, receive);
+  const offRemove = onChildRemoved(location, (snapshot) => {
+    const slot = String(snapshot.key || '');
+    const previousId = documentBySlot.get(slot) || normalize(snapshot.val())?.documentId;
+    documentBySlot.delete(slot);
+    if (previousId) {
+      if (slotByDocument.get(cachedKey(uid, previousId)) === slot)
+        slotByDocument.delete(cachedKey(uid, previousId));
+      onRemoved?.(previousId);
+    }
+  });
+  return () => { offAdd(); offChange(); offRemove(); documentBySlot.clear(); };
+};

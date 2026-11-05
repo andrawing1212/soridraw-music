@@ -120,6 +120,19 @@ const withoutSplitFrame450 = source => {
   delete out.rules.publicSync.splitFrameModes;
   return out;
 };
+// New Studio receipt must never be installed by an unrelated shared-rule release.
+// Its exact subtree may be missing from the live baseline until its own approved rollout.
+const withoutStudioHeartHandoff = source => {
+  const out = structuredClone(source);
+  delete out.rules.userSync.$uid.studioHeartHandoffs;
+  return out;
+};
+const studioHandoff = local.rules.userSync.$uid.studioHeartHandoffs;
+if (studioHandoff) {
+  assert.equal(studioHandoff['.validate'], "newData.hasChild('version')");
+  assert.ok(String(studioHandoff.slots?.$slot?.['.validate'] || '').includes('$slot.matches'));
+  assert.equal(studioHandoff.slots?.$slot?.$other?.['.validate'], false);
+}
 
 const withoutPublicPublication429 = source => {
   const out = structuredClone(source);
@@ -160,8 +173,13 @@ const exact450Variants = split450
       [status+'-without-split-frame-450', withoutSplitFrame450(candidate)],
     ])
   : exact435Variants;
+const exactHandoffVariants = studioHandoff
+  ? exact450Variants.flatMap(([status, candidate]) => [
+      [status, candidate],
+      [status + '-before-studio-heart-handoff', withoutStudioHeartHandoff(candidate)],
+    ]) : exact450Variants;
 const variants = [...new Map(
-  exact450Variants.map(([status,candidate]) => [stable(candidate), [status,candidate]]),
+  exactHandoffVariants.map(([status,candidate]) => [stable(candidate), [status,candidate]]),
 ).values()];
 const compare = remote => {
   const key = stable(remote);

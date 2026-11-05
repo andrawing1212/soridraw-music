@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { transform } from 'esbuild';
 const loadTs=async p=>import('data:text/javascript;base64,'+Buffer.from((await transform(readFileSync(p,'utf8'),{loader:'ts',format:'esm'})).code).toString('base64'));
-const {computeStudioHeartSettleDelay}=await loadTs('src/lib/studioHeartBatch.ts');
+const {computeStudioHeartSettleDelay,nextStudioHeartHandoffRecoveryAttempt}=await loadTs('src/lib/studioHeartBatch.ts');
 const {admitStudioHeartClick}=await loadTs('src/lib/studioHeartClickGuard.ts');
 assert.equal(computeStudioHeartSettleDelay({updatedAtMs:1000,firstQueuedAtMs:1000},1000),5000);
 assert.equal(computeStudioHeartSettleDelay({updatedAtMs:5000,firstQueuedAtMs:1000},5000),5000);
@@ -10,6 +10,14 @@ assert.equal(computeStudioHeartSettleDelay({updatedAtMs:14000,firstQueuedAtMs:10
 assert.equal(computeStudioHeartSettleDelay({updatedAtMs:15800,firstQueuedAtMs:1000},15800),200);
 assert.equal(computeStudioHeartSettleDelay({updatedAtMs:17000,firstQueuedAtMs:1000},17000),1);
 assert.equal(computeStudioHeartSettleDelay({updatedAtMs:4000,firstQueuedAtMs:1000},7000),2000);
+let remoteAttempt=null;
+for(let n=0;n<3;n++){
+  remoteAttempt=nextStudioHeartHandoffRecoveryAttempt(remoteAttempt,11,1000+n*60000);
+  assert.equal(remoteAttempt.attempts,n+1);
+  assert.equal(remoteAttempt.retryAfterMs,61000+n*60000);
+}
+assert.equal(nextStudioHeartHandoffRecoveryAttempt(remoteAttempt,11,190000),null,'bounded remote retries');
+assert.equal(nextStudioHeartHandoffRecoveryAttempt(remoteAttempt,12,190000).attempts,1,'new click reopens recovery');
 const uid='abuse-test';
 for(let n=0;n<5;n++)assert.equal(admitStudioHeartClick(uid,'song-a',10000+n*200).allowed,true);
 const firstBlock=admitStudioHeartClick(uid,'song-a',11000);

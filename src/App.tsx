@@ -34,8 +34,15 @@ import {
   isStudioHeartOptimisticFavorite,
   type StudioHeartPendingIntent,
   computeStudioHeartSettleDelay,
+  nextStudioHeartHandoffRecoveryAttempt,
+  type StudioHeartHandoffRecoveryAttempt,
 } from './lib/studioHeartBatch';
 import { admitStudioHeartClick } from './lib/studioHeartClickGuard';
+import {
+  publishStudioHeartHandoff, claimStudioHeartHandoff, settleStudioHeartHandoff,
+  releaseStudioHeartHandoff, readStudioHeartHandoff, subscribeStudioHeartHandoffs,
+  studioHeartHandoffDeviceId,
+} from './services/studioHeartHandoff';
 import {
   canRetireStudioHeartPendingFromCanonical,
   isStudioHeartRemoteSuperseded,
@@ -12005,19 +12012,13 @@ const toggleCycleVariantSelection = (
     const uid = String(user?.uid || '').trim();
     const safeDocumentId = String(documentId || '').trim();
     if (!uid || !safeDocumentId) return;
-
-    // An earlier write for this song must finish before a newer click settles.
-    // Different songs do not share this lock (10-song bursts retain concurrency).
+    // One in-flight mutation per song; independent songs may still settle in parallel.
     if (studioHeartCommitInFlightRef.current.has(safeDocumentId)) return;
     clearStudioHeartIntentTimer(safeDocumentId);
     const intent = readStudioHeartPendingIntent(uid, safeDocumentId);
     if (!intent) return;
 
     if (isStudioHeartRemoteSuperseded(intent)) {
-      // An uncommitted preview is NOT permission to erase local durable pending.
-      // One bounded local timer rechecks after normal canonical settlement; if
-      // no ACK arrives, retain the outbox for reload or a deliberate new click.
-      // No Firestore read, polling loop or stale overwrite is permitted here.
       if (!studioHeartConflictRecheckOnceRef.current.has(safeDocumentId)) {
         studioHeartConflictRecheckOnceRef.current.add(safeDocumentId);
         scheduleStudioHeartPendingIntent(safeDocumentId, STUDIO_HEART_RETRY_MS);
@@ -12025,13 +12026,81 @@ const toggleCycleVariantSelection = (
       return;
     }
 
-    if (intent.desiredSaved === intent.baselineSaved) {
-      removeStudioHeartIntentLocal(uid, safeDocumentId);
-      return;
-    }
-
     studioHeartCommitInFlightRef.current.add(safeDocumentId);
+    let handoffClaim: Awaited<ReturnType<typeof claimStudioHeartHandoff>> = null;
+    let handoffSettled = false;
     try {
+      // A fast local click may have reached the timer before its RTDB receipt
+      // returned. One exact-node read is needed only in that exceptional case.
+      let handoffSeq = Number(intent.handoffSeq || 0);
+      if (!handoffSeq) {
+        try {
+          const late = await readStudioHeartHandoff(uid, safeDocumentId);
+          if (late?.originDeviceId === studioHeartHandoffDeviceId()
+            && late.updatedAtMs === intent.updatedAtMs && late.desiredSaved === intent.desiredSaved) {
+            handoffSeq = late.seq;
+          } else if (late) {
+            // A different song version is already recorded as latest.
+            // Never replay this older local click on top of its new owner.
+            if (!studioHeartConflictRecheckOnceRef.current.has(safeDocumentId)) {
+              studioHeartConflictRecheckOnceRef.current.add(safeDocumentId);
+              scheduleStudioHeartPendingIntent(safeDocumentId, STUDIO_HEART_RETRY_MS);
+            }
+            return;
+          }
+        } catch {}
+      }
+      if (handoffSeq) {
+        handoffClaim = await claimStudioHeartHandoff(uid, safeDocumentId, {
+          seq: handoffSeq, desiredSaved: intent.desiredSaved,
+        });
+        if (!handoffClaim) {
+          // Another device may have finished; NEVER replay an unverified old
+          // receipt over a newer canonical favorite. Only retire if an exact
+          // Firestore read confirms this desired state already settled.
+          const state = await readStudioHeartHandoff(uid, safeDocumentId);
+          if (state) {
+            if (state.seq > handoffSeq || state.desiredSaved !== intent.desiredSaved) {
+              if (!studioHeartConflictRecheckOnceRef.current.has(safeDocumentId)) {
+                studioHeartConflictRecheckOnceRef.current.add(safeDocumentId);
+                scheduleStudioHeartPendingIntent(safeDocumentId, STUDIO_HEART_RETRY_MS);
+              }
+              return;
+            }
+            scheduleStudioHeartPendingIntent(safeDocumentId, 30_000);
+            return;
+          }
+          const serverSnap = await getDoc(doc(db, 'favorites', safeDocumentId));
+          const serverFavorite = serverSnap.exists() ? mapFavoriteFirestoreDoc(serverSnap) : null;
+          if (serverFavorite && serverFavorite.uid !== uid) return;
+          if (Boolean(serverFavorite && !isFavoriteSoftRemoved(serverFavorite)) === intent.desiredSaved) {
+            removeStudioHeartIntentLocal(uid, safeDocumentId);
+          } else {
+            // Missing receipt plus conflicting canonical is ambiguous, and
+            // blindly replaying it could overwrite a newer other-device click.
+            showToast('저장 충돌 확인 필요 · 서버 기록을 보호했습니다.');
+          }
+          return;
+        }
+      }
+
+      // The local user may have clicked again while the async claim ran.
+      const beforeWrite = readStudioHeartPendingIntent(uid, safeDocumentId);
+      if (!beforeWrite || beforeWrite.updatedAtMs !== intent.updatedAtMs) {
+        if (handoffClaim) await releaseStudioHeartHandoff(uid, safeDocumentId, handoffClaim.receipt.seq, handoffClaim.token);
+        scheduleStudioHeartPendingIntent(safeDocumentId, 1_000);
+        return;
+      }
+
+      if (intent.desiredSaved === intent.baselineSaved) {
+        if (handoffClaim) {
+          handoffSettled = await settleStudioHeartHandoff(uid, safeDocumentId, handoffClaim.receipt.seq, handoffClaim.token);
+          if (!handoffSettled) return;
+        }
+        removeStudioHeartIntentLocal(uid, safeDocumentId);
+        return;
+      }
+
       const commitSong = normalizeFavoriteTitleFields({
         ...(intent.song || {}),
         favoriteFirestoreId: safeDocumentId,
@@ -12047,6 +12116,14 @@ const toggleCycleVariantSelection = (
         suppressSuccessToast: true,
       });
 
+      if (handoffClaim) {
+        handoffSettled = await settleStudioHeartHandoff(uid, safeDocumentId, handoffClaim.receipt.seq, handoffClaim.token);
+        if (!handoffSettled) {
+          // Receipt was replaced by a newer cross-device click. The later
+          // owner must settle the final state; never acknowledge the old one.
+          return;
+        }
+      }
       const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
       if (!latest) return;
       const sameClick = latest.updatedAtMs === intent.updatedAtMs
@@ -12055,9 +12132,7 @@ const toggleCycleVariantSelection = (
         removeStudioHeartIntentLocal(uid, safeDocumentId);
         showToast(intent.desiredSaved ? '저장이 완료되었습니다.' : '저장 해제가 완료되었습니다.');
       } else {
-        // Another click may have arrived while the first Firestore write was
-        // in flight. Rebase its canonical starting state to the write that
-        // actually completed; otherwise save→unsave can be mistaken for W0.
+        // Same-song click while a prior canonical write was in flight.
         const confirmedFavorite = intent.desiredSaved
           ? (favoritesStore.getFavorites().find((item: any) => (
               String(item?.firestoreId || item?.id || '').trim() === safeDocumentId
@@ -12082,9 +12157,12 @@ const toggleCycleVariantSelection = (
         showToast('저장 확인 실패 · 같은 기기에서 재접속 시 복구를 시도합니다.');
       }
     } finally {
+      if (handoffClaim && !handoffSettled) {
+        void releaseStudioHeartHandoff(uid, safeDocumentId, handoffClaim.receipt.seq, handoffClaim.token)
+          .catch(() => {});
+      }
       studioHeartCommitInFlightRef.current.delete(safeDocumentId);
       const latest = readStudioHeartPendingIntent(uid, safeDocumentId);
-      // A second click can already be queued while the first was in flight.
       if (latest && latest.updatedAtMs !== intent.updatedAtMs
         && !studioHeartIntentTimersRef.current.has(safeDocumentId)) {
         scheduleStudioHeartPendingIntent(safeDocumentId, 1_000);
@@ -12136,6 +12214,7 @@ const toggleCycleVariantSelection = (
       },
       updatedAtMs: now,
       firstQueuedAtMs: existing?.firstQueuedAtMs || existing?.updatedAtMs || now,
+      handoffSeq: 0,
       signalVersion: 0,
       // A later local click supersedes an earlier remote preview.
       pendingRemotePreviewVersion: 0,
@@ -12164,6 +12243,20 @@ const toggleCycleVariantSelection = (
     // desiredSaved, so final == baseline still settles at W0.
     rememberRecentHeartAuthority(uid, intent.song, desiredSaved, safeDocumentId, now);
     setFavorites((previous) => previous);
+    // Publish a durable, per-song receipt immediately. If this browser is
+    // closed before the 5s canonical flush, another signed-in device can claim it.
+    void publishStudioHeartHandoff(uid, safeDocumentId, desiredSaved, intent.song, now)
+      .then((receipt) => {
+        if (!receipt) return;
+        updateStudioHeartPendingIntent(uid, safeDocumentId, (latest) =>
+          latest.updatedAtMs === now && latest.desiredSaved === desiredSaved
+            ? { ...latest, handoffSeq: receipt.seq } : latest
+        );
+      })
+      .catch((error) => {
+        console.warn('Studio heart durable cross-device handoff not confirmed.', error);
+        showToast('기기 간 저장 인계를 확인하지 못했습니다. 저장 완료 전 앱을 종료하지 마세요.');
+      });
     void publishMusicNoteHeartPreviewDelta(uid, safeDocumentId, intent.song, desiredSaved)
       .then((version) => {
         if (version > 0) rememberStudioHeartPreviewVersion(
@@ -12196,6 +12289,112 @@ const toggleCycleVariantSelection = (
         musicNoteCanonicalRecoveryTimerRef.current = null;
       }
       musicNoteCanonicalRecoveryRequestRef.current = null;
+    };
+  }, [user?.uid]);
+
+
+  // Account-private child events carry durable requests, unlike one retained
+  // musicNote preview signal. No polling and no Firestore read on an empty inbox.
+  useEffect(() => {
+    const uid = String(user?.uid || '').trim();
+    if (!uid) return;
+    let closed = false;
+    const scheduled = new Map<string, ReturnType<typeof setTimeout>>();
+    const processing = new Set<string>();
+    const recoverAttempts = new Map<string, StudioHeartHandoffRecoveryAttempt>();
+    const clearScheduled = (id: string) => {
+      const timer = scheduled.get(id);
+      if (timer !== undefined) clearTimeout(timer);
+      scheduled.delete(id);
+    };
+    const recover = async (documentId: string, version: number, desiredSaved: boolean) => {
+      if (closed || processing.has(documentId) || auth.currentUser?.uid !== uid) return;
+      // The originating device already has its exact durable local outbox.
+      if (readStudioHeartPendingIntent(uid, documentId)) return;
+      const nextAttempt = nextStudioHeartHandoffRecoveryAttempt(
+        recoverAttempts.get(documentId) || null, version, Date.now(),
+      );
+      if (!nextAttempt) return;
+      recoverAttempts.set(documentId, nextAttempt);
+      processing.add(documentId);
+      let claim: Awaited<ReturnType<typeof claimStudioHeartHandoff>> = null;
+      let settled = false;
+      try {
+        claim = await claimStudioHeartHandoff(uid, documentId, { seq: version, desiredSaved });
+        if (!claim || closed || auth.currentUser?.uid !== uid) return;
+        const snapshot = await getDoc(doc(db, 'favorites', documentId));
+        const serverFavorite = snapshot.exists() ? mapFavoriteFirestoreDoc(snapshot) : null;
+        if (serverFavorite && String(serverFavorite.uid || '') !== uid) return;
+        const actualSaved = Boolean(serverFavorite && !isFavoriteSoftRemoved(serverFavorite));
+        if (actualSaved !== desiredSaved) {
+          // A stale receipt must not overwrite a later request.
+          const current = await readStudioHeartHandoff(uid, documentId);
+          if (!current || current.seq !== version || current.claimToken !== claim.token
+            || closed || auth.currentUser?.uid !== uid) return;
+          let song: any = serverFavorite || {};
+          if (desiredSaved) {
+            if (!claim.receipt.songJson) return;
+            const parsed = JSON.parse(claim.receipt.songJson);
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)
+              || (parsed.uid && parsed.uid !== uid)) return;
+            song = parsed;
+          }
+          song = normalizeFavoriteTitleFields({
+            ...song, uid, favoriteFirestoreId: documentId, musicNoteFavoriteId: documentId,
+          } as SongResult);
+          await toggleFavorite(song, {
+            trustedRecentStudio: true,
+            intendedAction: desiredSaved ? 'save' : 'unsave',
+            canonicalBaseline: { saved: actualSaved, favorite: serverFavorite },
+            suppressSuccessToast: true,
+          });
+          // Exceptional recovery only: verify canonical before ACK. A stale
+          // local cache/locked song must never be reported as settled.
+          const confirmed = await getDoc(doc(db, 'favorites', documentId));
+          const confirmedFavorite = confirmed.exists() ? mapFavoriteFirestoreDoc(confirmed) : null;
+          if (Boolean(confirmedFavorite && !isFavoriteSoftRemoved(confirmedFavorite)) !== desiredSaved) return;
+        }
+        settled = await settleStudioHeartHandoff(uid, documentId, version, claim.token);
+        if (settled) clearScheduled(documentId);
+      } catch (error) {
+        console.warn('Studio heart remote handoff remains pending.', error);
+      } finally {
+        if (claim && !settled) {
+          void releaseStudioHeartHandoff(uid, documentId, version, claim.token).catch(() => {});
+        }
+        processing.delete(documentId);
+      }
+    };
+    const receive = (receipt: import('./services/studioHeartHandoff').StudioHeartHandoffReceipt) => {
+      if (closed) return;
+      const id = receipt.documentId;
+      clearScheduled(id);
+      const previousAttempt = recoverAttempts.get(id);
+      if (previousAttempt && previousAttempt.version !== receipt.seq) recoverAttempts.delete(id);
+      const retry = recoverAttempts.get(id);
+      // A failed claim/recovery may emit another pending child_changed. Limit
+      // that signal to a cooldown instead of repeated Firestore reads/writes.
+      if (retry && retry.attempts >= 3) return;
+      const boundary = receipt.status === 'claimed'
+        ? receipt.claimedUntilMs + 500
+        : receipt.updatedAtMs + STUDIO_HEART_BATCH_MS + 500;
+      const delay = Math.max(250, Math.min(60_500,
+        Math.max(boundary, retry?.retryAfterMs || 0) - Date.now()));
+      scheduled.set(id, setTimeout(() => {
+        scheduled.delete(id);
+        void recover(id, receipt.seq, receipt.desiredSaved);
+      }, delay));
+    };
+    const stop = subscribeStudioHeartHandoffs(uid, receive, (id) => {
+      clearScheduled(id);
+      recoverAttempts.delete(id);
+    });
+    return () => {
+      closed = true;
+      stop();
+      for (const timer of scheduled.values()) clearTimeout(timer);
+      scheduled.clear();
+      recoverAttempts.clear();
     };
   }, [user?.uid]);
 

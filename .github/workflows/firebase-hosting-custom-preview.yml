@@ -195,6 +195,53 @@ jobs:
           # the ONLY permitted changes are the exact approved additive fields/nodes.
           # app435 adds two bounded UID-private like result fields only in a
           # separately approved shared-Rules release; never loosen parent ACLs.
+          # Explicitly approved Studio handoff rollout: exact one account-private
+          # RTDB child only. Never route it through the older 434 publication gate.
+          if grep -Fxq 'release=studio_heart_durable_handoff_preview_20261106' .deploy/preview-app-release.trigger; then
+            grep -Fxq 'source_pr=816' .deploy/preview-app-release.trigger
+            grep -Fxq 'approval=director_yes_studio_heart_shared_rules_and_preview_hosting' .deploy/preview-app-release.trigger
+            node scripts/verify-studio-heart-handoff-live-additive.mjs --self-test
+            node scripts/verify-studio-heart-handoff-live-additive.mjs --candidate \
+              "$RUNNER_TEMP/rtdb-rules-before.json" \
+              "$RUNNER_TEMP/rtdb-studio-candidate.json" \
+              "$RUNNER_TEMP/rtdb-studio-mode.txt"
+            code="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/rtdb-studio-recheck.json" -w '%{http_code}' "$auth_url")"
+            test "$code" = '200'
+            node scripts/verify-studio-heart-handoff-live-additive.mjs --candidate \
+              "$RUNNER_TEMP/rtdb-studio-recheck.json" \
+              "$RUNNER_TEMP/rtdb-studio-preput-candidate.json" \
+              "$RUNNER_TEMP/rtdb-studio-recheck-mode.txt"
+            cmp "$RUNNER_TEMP/rtdb-studio-candidate.json" "$RUNNER_TEMP/rtdb-studio-preput-candidate.json"
+            cmp "$RUNNER_TEMP/rtdb-studio-mode.txt" "$RUNNER_TEMP/rtdb-studio-recheck-mode.txt"
+            mode="$(cat "$RUNNER_TEMP/rtdb-studio-mode.txt")"
+            if [ "$mode" = 'ADD_ONLY_STUDIO_HEART_HANDOFF' ]; then
+              code="$(curl -sS --max-time 30 -X PUT -H 'Content-Type: application/json' \
+                --data-binary @"$RUNNER_TEMP/rtdb-studio-preput-candidate.json" \
+                -o "$RUNNER_TEMP/rtdb-studio-put.json" -w '%{http_code}' "$auth_url")"
+              test "$code" = '200'
+            elif [ "$mode" = 'ALREADY_EXACT' ]; then
+              echo 'STUDIO_HEART_SHARED_RTDB_RULES_ALREADY_EXACT=PASS'
+            else
+              echo "STUDIO_HEART_SHARED_RTDB_UNKNOWN_MODE=$mode"
+              exit 2
+            fi
+            code="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/rtdb-studio-after.json" -w '%{http_code}' "$auth_url")"
+            test "$code" = '200'
+            python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          path=Path(os.environ['RUNNER_TEMP'])
+          approved=json.loads((path/'rtdb-studio-candidate.json').read_text(encoding='utf-8'))
+          live=json.loads((path/'rtdb-studio-after.json').read_text(encoding='utf-8'))
+          if live != approved:
+              raise SystemExit('STUDIO_HEART_SHARED_RTDB_POST_DEPLOY_DRIFT_STOP')
+          print('STUDIO_HEART_SHARED_RTDB_EXACT_ONE_CHILD=PASS')
+          PY
+            rm -f "$RUNNER_TEMP/rtdb-access-token"
+            echo 'SHARED_RTDB_RULES_DEPLOY=PASS'
+            echo 'NO_USER_DATA_MIGRATION=true'
+            exit 0
+          fi
           node scripts/verify-418-rtdb-rules-delta.mjs "$RUNNER_TEMP/rtdb-rules-before.json"
           node scripts/verify-434-publication-rtdb-additive.mjs --self-test
           node scripts/verify-434-publication-rtdb-additive.mjs \

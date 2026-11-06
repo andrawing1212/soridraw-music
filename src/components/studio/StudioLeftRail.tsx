@@ -18,6 +18,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { SORIDRAW_PROFILE_AVATAR_EVENT } from '../../services/profileAvatarAuthority';
+import NotificationPanel from './NotificationPanel';
 
 export type StudioWorkspaceView = 'create' | 'recent' | 'music-note' | 'library';
 
@@ -83,6 +84,8 @@ export default function StudioLeftRail({
 }: StudioLeftRailProps) {
   const profileInitial = String(profileName || 'S').trim().charAt(0).toUpperCase() || 'S';
   const profileButtonRef = useRef<HTMLButtonElement>(null);
+  const notificationButtonRef = useRef<HTMLButtonElement>(null);
+  const [notificationOpen, setNotificationOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<MenuPosition>({ top: 0, left: 0 });
@@ -416,6 +419,14 @@ export default function StudioLeftRail({
               type="button"
               className="soridraw-studio-rail-item soridraw-studio-rail-bottom-item"
               aria-label="알림"
+              ref={notificationButtonRef}
+              aria-expanded={notificationOpen}
+              aria-haspopup="dialog"
+              onClick={() => {
+                hideRailTooltip();
+                closeProfileMenu();
+                setNotificationOpen(value => !value);
+              }}
               onMouseEnter={(event) => showRailTooltip(event.currentTarget, '알림')}
               onMouseLeave={hideRailTooltip}
             >
@@ -437,6 +448,8 @@ export default function StudioLeftRail({
         </div>
       </aside>
       {profileMenu}
+      <NotificationPanel open={notificationOpen} anchorRef={notificationButtonRef}
+        onClose={() => setNotificationOpen(false)} />
       {railTooltipPortal}
     </>
   );

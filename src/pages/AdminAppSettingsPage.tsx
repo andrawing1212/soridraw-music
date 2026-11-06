@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { doc, getDoc, setDoc, serverTimestamp } from '../lib/firestoreMeasured';
 import { Compass, FlaskConical, Heart, Home, Library, Loader2, ShieldAlert, SlidersHorizontal, User as UserIcon, Zap } from 'lucide-react';
 import AdminPageLayout from '../components/AdminPageLayout';
+import NotificationAdminSchedule from '../components/NotificationAdminSchedule';
 import MasterSplitFramePanel from '../components/MasterSplitFramePanel';
 import ExploreLikeAbuseMasterPanel420 from '../components/ExploreLikeAbuseMasterPanel420';
 import Stage416LikeBatchMasterPanel from '../components/Stage416LikeBatchMasterPanel';
@@ -395,6 +396,7 @@ export default function AdminAppSettingsPage() {
           </div>
         </div>
 
+        <NotificationAdminSchedule />
         {STAGE416_LIKE_BATCH_MASTER_PANEL_ACTIVE && <Stage416LikeBatchMasterPanel />}
         {STAGE420_MASTER_PANEL_ACTIVE && <ExploreLikeAbuseMasterPanel420 />}
 

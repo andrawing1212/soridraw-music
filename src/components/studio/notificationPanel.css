@@ -1,0 +1,85 @@
+
+.soridraw-notification-panel{
+  position:fixed;z-index:3500;width:min(418px,calc(100vw - 24px));
+  max-height:calc(100dvh - 78px);overflow:hidden;
+  display:flex;flex-direction:column;
+  color:#f1f1f3;background:#202022;border-radius:22px;
+  box-shadow:0 18px 70px rgba(0,0,0,.48);
+  font-size:13px;font-family:inherit;
+}
+.soridraw-notification-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:17px 18px 13px;flex-shrink:0;
+}
+.soridraw-notification-heading{display:flex;align-items:center;gap:10px;font-size:19px}
+.soridraw-notification-heading svg{color:#ffbb22}
+.soridraw-notification-header-actions{display:flex;gap:4px;align-items:center}
+.soridraw-notification-header-button{
+  display:grid;place-items:center;width:34px;height:34px;color:#d4d4d8;
+  background:transparent;border:none;border-radius:11px;cursor:pointer;
+}
+.soridraw-notification-header-button:hover{background:#323235;color:white}
+.soridraw-notification-list,.soridraw-notification-settings{
+  overflow:auto;overscroll-behavior:contain;padding:2px 12px 14px;min-height:0;
+}
+.soridraw-notification-row{
+  display:flex;align-items:center;gap:12px;min-height:83px;
+  border-radius:13px;padding:11px 8px;
+}
+.soridraw-notification-row:hover{background:#29292c}
+.soridraw-notification-avatar{
+  flex:none;display:grid;place-items:center;width:42px;height:42px;border-radius:50%;
+  overflow:hidden;border:0;color:#e6e3f2;background:#45404f;font-weight:700;cursor:pointer;
+}
+.soridraw-notification-avatar img{width:100%;height:100%;object-fit:cover}
+.soridraw-notification-avatar:disabled{cursor:default}
+.soridraw-notification-content{flex:1;min-width:0;line-height:1.42;color:#dddde0}
+.soridraw-notification-content strong{color:#fff;font-weight:700}
+.soridraw-notification-content span{display:block;overflow-wrap:anywhere}
+.soridraw-notification-content small{display:block;color:#929298;margin-top:3px;font-size:11px}
+.soridraw-notification-content .soridraw-notification-song-title{
+  color:#bcbcc2;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+}
+.soridraw-notification-follow{
+  flex:none;font-weight:700;font-size:12px;border:0;border-radius:13px;
+  padding:9px 12px;background:#b089ef;color:#17121b;cursor:pointer;
+}
+.soridraw-notification-follow:disabled{opacity:.55;cursor:default}
+.soridraw-notification-cover{
+  width:48px;height:48px;position:relative;overflow:hidden;border:0;border-radius:10px;
+  background:#393539;color:#ffbb22;display:grid;place-items:center;flex:none;cursor:pointer;
+}
+.soridraw-notification-cover img{width:100%;height:100%;object-fit:cover}
+.soridraw-notification-play{
+  position:absolute;right:2px;bottom:2px;width:19px;height:19px;display:grid;place-items:center;
+  border-radius:50%;background:#141416bd;color:#fff;font-size:10px;
+}
+.soridraw-notification-cover:disabled{cursor:default}
+.soridraw-notification-end-icon{width:40px;color:#91889f;display:grid;place-items:center}
+.soridraw-notification-sample-label{
+  font-size:11px;color:#c9bad7;background:#2b2930;border-radius:10px;
+  margin:1px 5px 6px;padding:9px 10px;
+}
+.soridraw-notification-footnote{
+  padding:12px 10px 5px;margin:0;color:#93939b;font-size:11px;line-height:1.6;
+}
+.soridraw-notification-empty{text-align:center;color:#a9a9ae;padding:44px 10px}
+.soridraw-notification-setting-row{
+  display:flex;align-items:center;gap:12px;padding:15px 7px;cursor:pointer;
+}
+.soridraw-notification-category-icon{width:37px;height:37px;display:grid;place-items:center;
+  border-radius:12px;background:#303036;color:#ad90dc;flex:none}
+.soridraw-notification-category-icon[data-type="like"]{color:#ee7da2}
+.soridraw-notification-category-icon[data-type="complete"]{color:#ffbb22}
+.soridraw-notification-category-icon[data-type="announcement"]{color:#77b4ee}
+.soridraw-notification-setting-copy{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.soridraw-notification-setting-copy strong{font-size:13px}
+.soridraw-notification-setting-copy small{font-size:11px;color:#9999a0}
+.soridraw-notification-setting-row input{
+  accent-color:#ffbb22;width:17px;height:17px;cursor:pointer;flex:none;
+}
+.soridraw-notification-error{padding:10px 16px;color:#ffb6b6;font-size:12px;background:#38292b}
+@media (max-width:640px){
+  .soridraw-notification-panel{left:12px!important;top:12px!important;width:calc(100vw - 24px);max-height:calc(100dvh - 24px)}
+  .soridraw-notification-row{gap:10px}
+}

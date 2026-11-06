@@ -29,5 +29,32 @@ assert.match(adminPanel,/intervalHours: hours/);
 assert.match(rules,/match \/app_settings\/\{docId\}/);
 assert.match(rules,/allow write: if hasAdminPermission\('appSettings'\)/);
 assert.doesNotMatch(panel,/좋아요 해제.*알림|팔로우 해제.*알림/);
+
+// Compact mobile account menu opens the same user-scoped panel as the PC rail.
+const app = file('src/App.tsx');
+const compactBarStart = app.indexOf('{/* Mobile Top Icon Bar */}');
+const compactBarEnd = app.indexOf('const CLOUD_FUNCTIONS_BASE_URL', compactBarStart);
+assert.ok(compactBarStart >= 0 && compactBarEnd > compactBarStart);
+const compactBar = app.slice(compactBarStart, compactBarEnd);
+const mobileAccountStart = compactBar.indexOf('soridraw-profile-menu soridraw-account-menu-surface absolute right-0 top-full');
+const mobileAccountEnd = compactBar.indexOf('</motion.div>', mobileAccountStart);
+assert.ok(mobileAccountStart >= 0 && mobileAccountEnd > mobileAccountStart);
+const mobileAccount = compactBar.slice(mobileAccountStart, mobileAccountEnd);
+assert.match(mobileAccount, /data-soridraw-mobile-profile-notifications="true"/);
+assert.match(mobileAccount, /aria-label="알림 열기"/);
+assert.match(mobileAccount, /absolute right-3 top-3/);
+assert.match(mobileAccount, /<Bell className="h-5 w-5"/);
+assert.match(mobileAccount, /setIsProfileOpen\(false\);\s*setIsExpanded\(false\);\s*setIsMobileNotificationOpen\(true\);/);
+assert.ok(mobileAccount.indexOf('aria-label="알림 열기"') < mobileAccount.indexOf('className="soridraw-account-menu-row"'),
+  'bell must appear before account actions');
+assert.match(compactBar, /ref=\{mobileProfileButtonRef\}/);
+assert.match(compactBar, /<NotificationPanel\s+open=\{isMobileNotificationOpen && Boolean\(user\?\.uid\)\}/);
+assert.match(compactBar, /anchorRef=\{mobileProfileButtonRef\}/);
+assert.match(compactBar, /onClose=\{\(\) => setIsMobileNotificationOpen\(false\)\}/);
+assert.doesNotMatch(app.slice(0,compactBarStart), /data-soridraw-mobile-profile-notifications/);
+assert.match(app, /setIsMobileNotificationOpen\(false\); \}, \[location.pathname, user\?\.uid\]\)/);
+console.log('NOTIFICATION_MOBILE_PROFILE_MENU_BELL_AND_SHARED_PANEL=PASS');
+console.log('NOTIFICATION_MOBILE_OPEN_CLOSE_HAS_NO_NEW_BACKEND_IO=PASS');
+
 console.log('NOTIFICATION_PANEL_UI_AND_ADMIN_SCHEDULE_SOURCE=PASS');
 console.log('NOTIFICATION_PANEL_NO_POLLING_OR_REAL_USER_EVENTS=PASS');

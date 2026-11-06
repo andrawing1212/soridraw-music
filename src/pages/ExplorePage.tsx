@@ -19,6 +19,7 @@ import { GENRES, GENRE_HIERARCHY } from '../constants';
 import { doc, getDoc, updateDoc } from '../lib/firestoreMeasured';
 import { favoritesStore } from '../hooks/useFavoritesStore';
 import { formatExploreDisplayTitle } from '../lib/exploreTitleDisplay';
+import { admitExploreLikeClick, recordExploreLikeAcceptedClick } from '../lib/exploreLikeClickGuard';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache } from '../lib/userProfileCache';
@@ -4167,13 +4168,25 @@ export default function ExplorePage() {
         return;
       }
     }
+    // Same-UID, same-track browser-only friction. Block before any optimistic
+    // UI, durable outbox, RTDB or Cloudflare mutation; keep other tracks usable.
+    const desiredLiked420 = legacyPending420?.desiredLiked ?? !currentLiked;
+    const isStateChangingClick = desiredLiked420 !== currentLiked;
+    const acceptedAt = Date.now();
+    if (isStateChangingClick) {
+      const decision = admitExploreLikeClick(user.uid, track.id, acceptedAt, false);
+      if (!decision.allowed) {
+        if (decision.notify) window.alert('좋아요에 문제가 있다면\n관리자에게 문의하세요.');
+        return;
+      }
+    }
     likeInteractionVersionRef090.current += 1;
     setLikeBusyTrackId(track.id);
     try {
-      // Confirm the OLD user's intended final state, not its inverse.
-      // A normal fresh click retains the original toggle behavior.
-      const desiredLiked420 = legacyPending420?.desiredLiked ?? !currentLiked;
       const result = await setExploreTrackLike(user, track.id, desiredLiked420, track.likeCount, track.ownerUid);
+      // Count only accepted state changes, never failed/ignored/same-state taps.
+      if (isStateChangingClick && result.liked === desiredLiked420)
+        recordExploreLikeAcceptedClick(user.uid, track.id, acceptedAt);
       const optimisticTrack = { ...track, likeCount: result.likeCount };
       const patchOptimisticCount120 = (previous: ExploreTrack[]) => previous.map((item) => (
         item.id === track.id ? { ...item, likeCount: result.likeCount } : item

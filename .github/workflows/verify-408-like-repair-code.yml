@@ -399,6 +399,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          node scripts/verify-explore-like-click-guard.mjs
           node scripts/verify-127-atomic-personal-like.mjs
           node scripts/verify-175-explore-like-catalog-reentry.mjs
           node scripts/verify-180-like-live-signal-and-cached-paint.mjs

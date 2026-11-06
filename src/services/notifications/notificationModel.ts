@@ -27,23 +27,29 @@ export const NOTIFICATION_PREFERENCES_DEFAULT: NotificationPreferences = {
   like: true, follow: true, complete: true, announcement: true, message: true,
 };
 
-/** All five user-facing notification types are controlled together. A mixed
- * selection becomes all-on with one click; the next click turns all off.
- * This is local UI state only, not a backend delivery master switch. */
-export function areAllNotificationPreferencesEnabled(data: NotificationPreferences): boolean {
-  return (Object.keys(NOTIFICATION_PREFERENCES_DEFAULT) as NotificationCategory[])
-    .every((category) => data[category]);
-}
-
-export function toggleAllNotificationPreferences(data: NotificationPreferences): NotificationPreferences {
-  const nextEnabled = !areAllNotificationPreferencesEnabled(data);
-  return Object.fromEntries(
-    (Object.keys(NOTIFICATION_PREFERENCES_DEFAULT) as NotificationCategory[])
-      .map((category) => [category, nextEnabled]),
-  ) as NotificationPreferences;
-}
-
+// Keep the existing per-category v1 record unchanged. The master is an
+// independent local gate: turning it off never destroys five saved choices.
 const keyFor = (uid: string) => 'soridraw:notification-preferences:v1:' + encodeURIComponent(uid);
+const masterKeyFor = (uid: string) => 'soridraw:notification-master:v1:' + encodeURIComponent(uid);
+
+export function readNotificationMasterEnabled(uid: string, preferences: NotificationPreferences): boolean {
+  if (!uid || typeof window === 'undefined') return true;
+  try {
+    const stored = window.localStorage.getItem(masterKeyFor(uid));
+    if (stored === 'true') return true;
+    if (stored === 'false') return false;
+  } catch { /* fall through without changing existing saved settings */ }
+  // Backwards compatibility: the old master wrote every category false.
+  // Respect that legacy all-off state without creating any new write on read.
+  return (Object.keys(NOTIFICATION_PREFERENCES_DEFAULT) as NotificationCategory[])
+    .some((category) => preferences[category]);
+}
+
+export function saveNotificationMasterEnabled(uid: string, enabled: boolean): void {
+  if (!uid || typeof window === 'undefined') return;
+  try { window.localStorage.setItem(masterKeyFor(uid), String(enabled)); }
+  catch { /* in-memory state remains usable if storage is full */ }
+}
 
 /** Local UI preference during the initial panel release.
  * Account-wide settings and actual notifications require the approved backend;

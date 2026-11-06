@@ -28,33 +28,63 @@ const { code: modelCode } = await transform(model, { loader: 'ts', format: 'esm'
 const preferenceModule = await import('data:text/javascript;base64,' + Buffer.from(modelCode).toString('base64'));
 const defaults = { ...preferenceModule.NOTIFICATION_PREFERENCES_DEFAULT };
 const off = Object.fromEntries(Object.keys(defaults).map((key) => [key, false]));
-const mixed = { ...off, follow: true };
-assert.equal(Object.keys(defaults).length, 5, 'all five notification categories must be included');
-assert.equal(preferenceModule.areAllNotificationPreferencesEnabled(defaults), true);
-assert.equal(preferenceModule.areAllNotificationPreferencesEnabled(mixed), false);
-assert.deepEqual(preferenceModule.toggleAllNotificationPreferences(defaults), off, 'all on -> all off');
-assert.deepEqual(preferenceModule.toggleAllNotificationPreferences(off), defaults, 'all off -> all on');
-assert.deepEqual(preferenceModule.toggleAllNotificationPreferences(mixed), defaults, 'mixed -> all on');
-assert.equal(mixed.follow, true, 'all toggle must not mutate the previous state');
+const mixed = { ...defaults, complete: false, message: false };
+assert.equal(Object.keys(defaults).length, 5);
+const stored = new Map();
+const previousWindow = globalThis.window;
+globalThis.window = { localStorage: {
+  getItem: (key) => stored.get(key) ?? null,
+  setItem: (key, value) => { stored.set(key, value); },
+} };
+try {
+  const uid = 'notification-master-qa-user';
+  preferenceModule.saveNotificationPreferences(uid, mixed);
+  assert.equal(preferenceModule.readNotificationMasterEnabled(uid, mixed), true,
+    'legacy partially checked preferences must keep master on');
+  preferenceModule.saveNotificationMasterEnabled(uid, false);
+  assert.equal(preferenceModule.readNotificationMasterEnabled(uid, mixed), false);
+  assert.deepEqual(preferenceModule.readNotificationPreferences(uid), mixed,
+    'master off MUST NOT mutate checked/unchecked categories');
+  preferenceModule.saveNotificationMasterEnabled(uid, true);
+  assert.deepEqual(preferenceModule.readNotificationPreferences(uid), mixed,
+    'master on restores exact previous checked category choices');
+  assert.equal(preferenceModule.readNotificationMasterEnabled(uid, mixed), true);
+  assert.deepEqual(preferenceModule.readNotificationPreferences(uid + '-other'), defaults,
+    'another account must not inherit master or preferences');
+  assert.equal(preferenceModule.readNotificationMasterEnabled(uid + '-other', defaults), true);
+  assert.equal(preferenceModule.readNotificationMasterEnabled(uid + '-legacy-off', off), false,
+    'old all-off preferences must remain off on first upgrade');
+  assert.deepEqual(preferenceModule.readNotificationPreferences(uid), mixed);
+  assert.equal([...stored.keys()].filter((key) => key.includes('notification-preferences')).length, 1,
+    'master changes cannot write any extra category preference records');
+} finally {
+  if (typeof previousWindow === 'undefined') delete globalThis.window;
+  else globalThis.window = previousWindow;
+}
 assert.match(panel, /className="soridraw-notification-setting-master"/);
 assert.match(panel, /className="soridraw-notification-settings-divider"/);
-assert.match(panel, /<NotificationSwitch checked=\{allEnabled\} onChange=\{toggleAllPreferences\}/);
-assert.match(panel, /<NotificationSwitch checked=\{prefs\[item.key\]\}/);
-assert.match(panel, /role="switch" className="soridraw-notification-switch-input"/);
-assert.match(panel, /checked=\{checked\} onChange=\{onChange\}/);
+assert.match(panel, /<NotificationSwitch checked=\{masterEnabled\} onChange=\{toggleMaster\}/);
+assert.match(panel, /<NotificationSwitch checked=\{prefs\[item.key\]\} disabled=\{!masterEnabled\}/);
+assert.match(panel, /checked=\{checked\} onChange=\{onChange\} disabled=\{disabled\}/);
+assert.match(panel, /aria-disabled=\{!masterEnabled\}/);
+assert.match(panel, /if \(!masterEnabled\) return;/);
+assert.match(panel, /saveNotificationMasterEnabled\(uid, nextEnabled\)/);
 assert.match(panel, /saveNotificationPreferences\(uid, next\)/);
+assert.match(panel, /masterEnabled && prefs\[row.category\]/);
 assert.ok(panel.indexOf('className="soridraw-notification-setting-master"') <
   panel.indexOf('TYPES.map((item)'), 'master toggle must be above individual preferences');
 const switchCss = file('src/components/studio/notificationPanel.css');
-assert.match(switchCss, /\.soridraw-notification-switch-control\{/);
+assert.match(switchCss, /\.soridraw-notification-switch-control\{\s*width:44px;height:26px/);
+assert.match(switchCss, /width:20px;height:20px;border-radius:50%/);
+assert.match(switchCss, /transform:translateX\(18px\)/);
+assert.match(switchCss, /\.soridraw-notification-setting-row\.is-disabled\{[\s\S]*?pointer-events:none;/);
+assert.match(switchCss, /\.soridraw-notification-switch-input:disabled\{cursor:default\}/);
 assert.match(switchCss, /\.soridraw-notification-switch-input:checked \+ \.soridraw-notification-switch-track\{\s*background:#ffbb22;/);
-assert.match(switchCss, /\.soridraw-notification-switch-thumb\{[\s\S]*?transition:transform/);
 assert.match(switchCss, /\.soridraw-notification-switch-input:focus-visible/);
 assert.match(switchCss, /prefers-reduced-motion:reduce/);
-assert.doesNotMatch(switchCss, /\.soridraw-notification-setting-row input\{[\s\S]*?accent-color/);
-assert.doesNotMatch(panel, /soridraw-notification-master-button|aria-pressed=\{allEnabled\}/);
-console.log('NOTIFICATION_MASTER_AND_FIVE_ANIMATED_SWITCHES=PASS');
-console.log('NOTIFICATION_MASTER_ALL_ON_OFF_MIXED_AND_LOCAL_SAVE=PASS');
+assert.doesNotMatch(panel, /toggleAllNotificationPreferences|areAllNotificationPreferencesEnabled/);
+console.log('NOTIFICATION_MASTER_OFF_PRESERVES_FIVE_AND_DISALLOWS_INTERACTION=PASS');
+console.log('NOTIFICATION_SMALLER_SWITCHES_AND_EXISTING_LOCAL_SAVES=PASS');
 assert.doesNotMatch(panel,/setInterval\(|onSnapshot\(|getDocs\(|getDoc\(/);
 assert.doesNotMatch(panel,/saveNotificationPreferences\(uid, next\)[\s\S]*?setDoc\(/);
 assert.match(admin,/NotificationAdminSchedule/);

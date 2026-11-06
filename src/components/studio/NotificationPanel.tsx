@@ -7,9 +7,9 @@ import { useGlobalPlayerControls } from '../../contexts/GlobalPlayerContext';
 import { setExploreFollow } from '../../services/exploreSocialService';
 import {
   NOTIFICATION_EXAMPLE_ROWS, NOTIFICATION_PREFERENCES_DEFAULT,
-  areAllNotificationPreferencesEnabled, isNotificationVisualPreview,
-  readNotificationPreferences, saveNotificationPreferences,
-  toggleAllNotificationPreferences, type InboxNotification, type NotificationCategory,
+  isNotificationVisualPreview, readNotificationMasterEnabled,
+  readNotificationPreferences, saveNotificationMasterEnabled, saveNotificationPreferences,
+  type InboxNotification, type NotificationCategory,
   type NotificationPreferences,
 } from '../../services/notifications/notificationModel';
 import './notificationPanel.css';
@@ -37,13 +37,13 @@ const iconFor = (type: NotificationCategory) => {
 };
 // One native checkbox drives the visual sliding switch for the master setting
 // and for every category. Keyboard, touch and screen readers share its state.
-function NotificationSwitch({ checked, onChange, label }: {
-  checked: boolean; onChange: () => void; label: string;
+function NotificationSwitch({ checked, onChange, label, disabled = false }: {
+  checked: boolean; onChange: () => void; label: string; disabled?: boolean;
 }) {
   return (
     <span className="soridraw-notification-switch-control">
       <input type="checkbox" role="switch" className="soridraw-notification-switch-input"
-        checked={checked} onChange={onChange} aria-label={label} />
+        checked={checked} onChange={onChange} disabled={disabled} aria-label={label} />
       <span className="soridraw-notification-switch-track" aria-hidden="true">
         <span className="soridraw-notification-switch-thumb" />
       </span>
@@ -70,6 +70,7 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
   const { playTrack } = useGlobalPlayerControls();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [prefs, setPrefs] = useState<NotificationPreferences>(NOTIFICATION_PREFERENCES_DEFAULT);
+  const [masterEnabled, setMasterEnabled] = useState(true);
   const [position, setPosition] = useState({ left: 80, top: 12 });
   const [followBusy, setFollowBusy] = useState<string | null>(null);
   const [followed, setFollowed] = useState<Record<string, boolean>>({});
@@ -79,7 +80,9 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
 
   useEffect(() => {
     if (!open) return;
-    setPrefs(readNotificationPreferences(uid));
+    const savedPreferences = readNotificationPreferences(uid);
+    setPrefs(savedPreferences);
+    setMasterEnabled(readNotificationMasterEnabled(uid, savedPreferences));
     setSettingsOpen(false);
     setNotice('');
     setSelectedMessage(null);
@@ -144,16 +147,15 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
   // activation gate. PREVIEW examples are explicitly labelled as examples.
   const visualExample = isNotificationVisualPreview();
   const rows = useMemo(() => (visualExample ? NOTIFICATION_EXAMPLE_ROWS : [])
-    .filter((row) => prefs[row.category]), [visualExample, prefs]);
+    .filter((row) => masterEnabled && prefs[row.category]), [visualExample, prefs, masterEnabled]);
 
-  const allEnabled = areAllNotificationPreferencesEnabled(prefs);
-  const anyEnabled = TYPES.some(({ key }) => prefs[key]);
-  const toggleAllPreferences = () => {
-    const next = toggleAllNotificationPreferences(prefs);
-    setPrefs(next);
-    saveNotificationPreferences(uid, next);
+  const toggleMaster = () => {
+    const nextEnabled = !masterEnabled;
+    setMasterEnabled(nextEnabled);
+    saveNotificationMasterEnabled(uid, nextEnabled);
   };
   const updatePreference = (category: NotificationCategory) => {
+    if (!masterEnabled) return;
     const next = { ...prefs, [category]: !prefs[category] };
     setPrefs(next);
     saveNotificationPreferences(uid, next);
@@ -234,15 +236,17 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
             </span>
             <span className="soridraw-notification-setting-copy">
               <strong>전체 알림</strong>
-              <small>{allEnabled ? '모든 알림이 켜져 있습니다' :
-                anyEnabled ? '일부 알림만 켜져 있습니다' : '모든 알림이 꺼져 있습니다'}</small>
+              <small>{masterEnabled ? '선택한 알림이 켜져 있습니다' :
+                '전체 알림이 꺼져 있습니다'}</small>
             </span>
-            <NotificationSwitch checked={allEnabled} onChange={toggleAllPreferences}
+            <NotificationSwitch checked={masterEnabled} onChange={toggleMaster}
               label="전체 알림" />
           </label>
           <div className="soridraw-notification-settings-divider" aria-hidden="true" />
           {TYPES.map((item) => (
-            <label key={item.key} className="soridraw-notification-setting-row">
+            <label key={item.key}
+              className={`soridraw-notification-setting-row${masterEnabled ? '' : ' is-disabled'}`}
+              aria-disabled={!masterEnabled}>
               <span className="soridraw-notification-category-icon" data-type={item.key}>
                 {iconFor(item.key)}
               </span>
@@ -250,7 +254,7 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
                 <strong>{item.label}</strong>
                 <small>{item.detail}</small>
               </span>
-              <NotificationSwitch checked={prefs[item.key]}
+              <NotificationSwitch checked={prefs[item.key]} disabled={!masterEnabled}
                 onChange={() => updatePreference(item.key)} label={item.label} />
             </label>
           ))}

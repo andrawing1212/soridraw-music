@@ -50,6 +50,7 @@ import {
   publishStudioHeartHandoff, claimStudioHeartHandoff, settleStudioHeartHandoff,
   releaseStudioHeartHandoff, readStudioHeartHandoff, subscribeStudioHeartHandoffs,
   studioHeartHandoffDeviceId,
+  type StudioHeartHandoffReceipt,
 } from './services/studioHeartHandoff';
 import {
   canRetireStudioHeartPendingFromCanonical,
@@ -5924,6 +5925,9 @@ function App() {
   // Serialize writes for the SAME favorite only. Ten different songs still settle independently.
   const studioHeartCommitInFlightRef = useRef<Set<string>>(new Set());
   const studioHeartConflictRecheckOnceRef = useRef<Set<string>>(new Set());
+  // Account-scoped, in-memory last SERVER-ACCEPTED unsettled click per exact song.
+  // Cleared when its durable RTDB slot is removed; never stored as canonical.
+  const studioHeartAcceptedReceiptsRef = useRef<Map<string, StudioHeartHandoffReceipt>>(new Map());
   const studioHeartRemotePreviewRef = useRef<Map<string, {
     documentId: string;
     identityKey: string;
@@ -6455,6 +6459,13 @@ function App() {
     for (const intent of pending) {
       const documentId = String(intent.documentId || '').trim();
       if (!documentId) continue;
+      // The server has accepted a later click on the exact same song.
+      // Do not overlay this browser's older ACKed intent while B settles it;
+      // keep the outbox for crash-safe recovery until canonical ACK.
+      const accepted = studioHeartAcceptedReceiptsRef.current.get(documentId);
+      if (canStudioHeartReceiptTakeOverOlderLocal(
+        intent, accepted || null, studioHeartHandoffDeviceId(),
+      )) continue;
       // Show a newer remote heart immediately without deleting local pending.
       if (intent.pendingRemotePreviewVersion > intent.signalVersion
         && studioHeartRemotePreviewRef.current.get(documentId)?.version === intent.pendingRemotePreviewVersion) continue;
@@ -6558,6 +6569,18 @@ function App() {
         ? [...studioHeartRemotePreviewRef.current.values()]
           .find((preview) => preview.identityKey === identityKey) || null
         : null;
+    const acceptedReceipt = linkedFavoriteId
+      ? studioHeartAcceptedReceiptsRef.current.get(linkedFavoriteId) || null
+      : remotePreview
+        ? studioHeartAcceptedReceiptsRef.current.get(remotePreview.documentId) || null
+        : null;
+    // Only the server-accepted latest order may override a past device-local
+    // confirmed heart. A fresh unACKed local click still takes precedence.
+    const acceptedServerSaved = acceptedReceipt && (
+      !pending || canStudioHeartReceiptTakeOverOlderLocal(
+        pending, acceptedReceipt, studioHeartHandoffDeviceId(),
+      )
+    ) ? acceptedReceipt.desiredSaved : null;
     // An edited Recent song intentionally detaches from its prior Music Note.
     // Do not relight that original through a historic favorite ID.
     if ((song as any)?.recentFavoriteDetachedAt && !pending && !remotePreview) return false;
@@ -6584,6 +6607,7 @@ function App() {
       catalogVerified,
       musicNoteMembership,
       recentHeartSaved: recentHeartAuthority?.saved ?? null,
+      acceptedServerSaved,
       legacyUnsaved: Boolean((song as any)?.recentFavoriteExplicitlyUnsavedAt),
     });
   }, []);
@@ -12439,8 +12463,10 @@ const toggleCycleVariantSelection = (
   // musicNote preview signal. No polling and no Firestore read on an empty inbox.
   useEffect(() => {
     const uid = String(user?.uid || '').trim();
+    studioHeartAcceptedReceiptsRef.current.clear();
     if (!uid) return;
     let closed = false;
+    const acceptedPreviewVersions = new Map<string, number>();
     const scheduled = new Map<string, ReturnType<typeof setTimeout>>();
     const processing = new Set<string>();
     const recoverAttempts = new Map<string, StudioHeartHandoffRecoveryAttempt>();
@@ -12593,10 +12619,43 @@ const toggleCycleVariantSelection = (
         }
       }
     };
-    const receive = (receipt: import('./services/studioHeartHandoff').StudioHeartHandoffReceipt) => {
-      if (closed) return;
+    const receive = (receipt: StudioHeartHandoffReceipt) => {
+      if (closed || auth.currentUser?.uid !== uid) return;
       const id = receipt.documentId;
+      const previousServerReceipt = latestReceipts.get(id);
+      // Out-of-order listener callbacks cannot turn a newer accepted click
+      // back into an older SAVE/UNSAVE. The root RTDB sequence is monotonic.
+      if (previousServerReceipt && previousServerReceipt.seq > receipt.seq) return;
       latestReceipts.set(id, receipt);
+      const alreadyProjected = studioHeartAcceptedReceiptsRef.current.get(id);
+      if (!alreadyProjected || alreadyProjected.seq < receipt.seq) {
+        const localPending = readStudioHeartPendingIntent(uid, id);
+        const mayProject = !localPending || canStudioHeartReceiptTakeOverOlderLocal(
+          localPending, receipt, studioHeartHandoffDeviceId(),
+        );
+        let source: any = { id, firestoreId:id, favoriteFirestoreId:id, musicNoteFavoriteId:id };
+        if (receipt.desiredSaved) {
+          try {
+            const parsed = JSON.parse(receipt.songJson || 'null');
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)
+              || (parsed.uid && parsed.uid !== uid)
+              || (parsed.favoriteFirestoreId && parsed.favoriteFirestoreId !== id)
+              || (parsed.musicNoteFavoriteId && parsed.musicNoteFavoriteId !== id)) source = null;
+            else source = { ...parsed, ...source, uid };
+          } catch { source = null; }
+        }
+        if (source) {
+          studioHeartAcceptedReceiptsRef.current.set(id, receipt);
+          if (mayProject) {
+            // Keep the existing Music Note non-canonical overlay mechanism.
+            // No Firestore read/write or new RTDB subscription on first entry.
+            const previousPreview = studioHeartRemotePreviewRef.current.get(id);
+            const presentationVersion = Math.max(receipt.seq, (previousPreview?.version || 0) + 1);
+            acceptedPreviewVersions.set(id, presentationVersion);
+            applyRemoteStudioHeartPreview(uid, source, id, receipt.desiredSaved, presentationVersion);
+          }
+        }
+      }
       clearScheduled(id);
       const previousAttempt = recoverAttempts.get(id);
       if (previousAttempt && previousAttempt.version !== receipt.seq) recoverAttempts.delete(id);
@@ -12616,9 +12675,19 @@ const toggleCycleVariantSelection = (
     };
     const stop = subscribeStudioHeartHandoffs(uid, receive, (id) => {
       latestReceipts.delete(id);
+      studioHeartAcceptedReceiptsRef.current.delete(id);
       localCommitDeferrals.delete(id);
       clearScheduled(id);
       recoverAttempts.delete(id);
+      const projectedVersion = acceptedPreviewVersions.get(id);
+      acceptedPreviewVersions.delete(id);
+      // Slot removal ends only that exact non-canonical projection. Do not
+      // clear a later live preview or touch any saved original.
+      if (projectedVersion && studioHeartRemotePreviewRef.current.get(id)?.version === projectedVersion) {
+        clearRemoteStudioHeartPreviewFromCanonical(uid, [id]);
+      } else {
+        setFavoriteUiVersion((version) => version + 1);
+      }
     });
     // A real network reconnection can reopen a bounded retry budget.
     // No heartbeat, interval or Firestore read is added to the idle path.
@@ -12640,6 +12709,8 @@ const toggleCycleVariantSelection = (
       scheduled.clear();
       recoverAttempts.clear();
       latestReceipts.clear();
+      studioHeartAcceptedReceiptsRef.current.clear();
+      acceptedPreviewVersions.clear();
       localCommitDeferrals.clear();
     };
   }, [user?.uid]);

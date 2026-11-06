@@ -3,7 +3,21 @@ import { readFileSync } from 'node:fs';
 import { transform } from 'esbuild';
 const loadTs=async p=>import('data:text/javascript;base64,'+Buffer.from((await transform(readFileSync(p,'utf8'),{loader:'ts',format:'esm'})).code).toString('base64'));
 const {computeStudioHeartSettleDelay,nextStudioHeartHandoffRecoveryAttempt,studioHeartHandoffRecoveryDelay}=await loadTs('src/lib/studioHeartBatch.ts');
+const {nextStudioHeartServerAcceptedSeq}=await loadTs('src/lib/studioHeartServerAcceptedOrder.ts');
 const {admitStudioHeartClick}=await loadTs('src/lib/studioHeartClickGuard.ts');
+assert.equal(nextStudioHeartServerAcceptedSeq(0,0,1000),1001);
+assert.equal(nextStudioHeartServerAcceptedSeq(5100,0,900),5101,
+  'a new song after the old slot was removed must follow persistent root order');
+assert.equal(nextStudioHeartServerAcceptedSeq(5000,7000,3000),7001,
+  'prior same-song seq beats a skewed client clock and root');
+assert.equal(nextStudioHeartServerAcceptedSeq(5100,0,9000),9001,
+  'current clock can advance the global server-accepted sequence');
+assert.throws(()=>nextStudioHeartServerAcceptedSeq(Number.MAX_SAFE_INTEGER,0,1),
+  /STUDIO_HEART_SERVER_SEQUENCE_EXHAUSTED/);
+const handoffService=readFileSync('src/services/studioHeartHandoff.ts','utf8');
+assert.match(handoffService,/const seq = nextStudioHeartServerAcceptedSeq\(/);
+assert.match(handoffService,/return \{ version: seq, slots \}/);
+console.log('STUDIO_HEART_UID_WIDE_SERVER_ACCEPTED_SEQUENCE_AFTER_SLOT_REMOVAL=PASS');
 assert.equal(computeStudioHeartSettleDelay({updatedAtMs:1000,firstQueuedAtMs:1000},1000),5000);
 assert.equal(computeStudioHeartSettleDelay({updatedAtMs:5000,firstQueuedAtMs:1000},5000),5000);
 assert.equal(computeStudioHeartSettleDelay({updatedAtMs:14000,firstQueuedAtMs:1000},14000),2000);
@@ -31,6 +45,11 @@ assert.equal(studioHeartHandoffRecoveryDelay(waiting,null,{seq:19,desiredSaved:t
   'removed server receipt is not replayed');
 const recoverSource=readFileSync('src/App.tsx','utf8').split('// Account-private child events carry durable requests')[1].split('const updateFavorite = async')[0];
 assert.match(recoverSource,/latestReceipts\.set\(id, receipt\)/);
+assert.match(recoverSource,/studioHeartAcceptedReceiptsRef\.current\.set\(id, receipt\)/);
+assert.match(recoverSource,/applyRemoteStudioHeartPreview\(uid, source, id, receipt\.desiredSaved, presentationVersion\)/);
+assert.match(recoverSource,/clearRemoteStudioHeartPreviewFromCanonical\(uid, \[id\]\)/);
+assert.match(recoverSource,/previousServerReceipt\.seq > receipt\.seq/);
+console.log('STUDIO_HEART_RETAINED_ACCEPTED_RECEIPT_INITIAL_MEMBERSHIP=PASS');
 assert.match(recoverSource,/if \(!settled && !closed && retryDelay !== null\)/);
 assert.match(recoverSource,/window\.addEventListener\('online', onReconnected\)/);
 assert.match(recoverSource,/window\.removeEventListener\('online', onReconnected\)/);

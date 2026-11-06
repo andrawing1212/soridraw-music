@@ -46,6 +46,10 @@ const heart = (overrides = {}) => resolveStudioHeartVisibleSaved({
 assert.equal(heart(), true, 'unverified/withheld Catalog never erases known Recent state');
 assert.equal(heart({catalogVerified:true}), false,
   'a verified complete Music Note membership beats stale persisted saved=true');
+assert.equal(heart({catalogVerified:true,acceptedServerSaved:true}), true,
+  'latest server-accepted SAVE beats a stale verified Music Note list on B initial entry');
+assert.equal(heart({catalogVerified:true,musicNoteMembership:true,acceptedServerSaved:false}), false,
+  'latest server-accepted UNSAVE beats a stale Catalog SAVE on B initial entry');
 assert.equal(heart({catalogVerified:true,musicNoteMembership:true,recentHeartSaved:false}), true,
   'verified saved Membership beats stale persisted saved=false');
 assert.equal(heart({catalogVerified:true,pending:{
@@ -69,6 +73,10 @@ const savedFn = app.slice(app.indexOf('  const isSongFavorited = useCallback('),
 assert.match(savedFn,/linkedFavoriteId\s*\?\s*statusMap\.has\(linkedFavoriteId\)/,
   'exact linked Music Note doc is the heart lookup');
 assert.match(savedFn,/resolveStudioHeartVisibleSaved\(/);
+assert.match(savedFn,/studioHeartAcceptedReceiptsRef\.current\.get\(/);
+assert.match(savedFn,/acceptedServerSaved,/);
+assert.match(app,/if \(canStudioHeartReceiptTakeOverOlderLocal\(\s*intent, accepted \|\| null, studioHeartHandoffDeviceId\(\),\s*\)\) continue;/);
+console.log('STUDIO_HEART_SERVER_ACCEPTED_ORDER_WINS_WITHOUT_REPLACING_PENDING=PASS');
 assert.match(savedFn,/gate\.catalogSourceVerified/);
 assert.match(savedFn,/listStudioHeartPendingIntents\(uid\)/);
 assert.doesNotMatch(savedFn,/\b(getDoc|getDocs|setDoc|updateDoc|fetch)\s*\(/);

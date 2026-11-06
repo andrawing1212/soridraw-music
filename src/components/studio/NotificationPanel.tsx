@@ -79,13 +79,16 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
       setPosition({ left: Math.round(left), top: Math.min(65, Math.max(12, window.innerHeight - 240)) });
     };
     update();
-    window.addEventListener('resize', update);
+    // Resizing an external browser window invalidates the anchoring viewport.
+    // Close instead of allowing a stale fixed panel at the wrong location.
+    window.addEventListener('resize', onClose);
+    // The Studio split-bar only moves the rail: reposition without closing.
     window.addEventListener('soridraw-studio-frame-resize', update as EventListener);
     return () => {
-      window.removeEventListener('resize', update);
+      window.removeEventListener('resize', onClose);
       window.removeEventListener('soridraw-studio-frame-resize', update as EventListener);
     };
-  }, [open, anchorRef]);
+  }, [open, anchorRef, onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -159,6 +162,7 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
         <div className="soridraw-notification-heading">
           <Bell size={20} aria-hidden="true" />
           <strong>{settingsOpen ? '알림 설정' : '알림'}</strong>
+          {visualExample && !settingsOpen && <span className="soridraw-notification-preview-tag">예시</span>}
         </div>
         <div className="soridraw-notification-header-actions">
           {settingsOpen ? (
@@ -192,17 +196,10 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
                 onChange={() => updatePreference(item.key)} aria-label={item.label} />
             </label>
           ))}
-          <p className="soridraw-notification-footnote">
-            알림 종류 선택은 현재 이 기기에 저장됩니다. 알림 취합 주기는 관리자만 변경할 수 있습니다.
-          </p>
+
         </div>
       ) : (
         <div className="soridraw-notification-list">
-          {visualExample && (
-            <div className="soridraw-notification-sample-label">
-              화면 미리보기 · 실제 사용자 알림이 아닙니다
-            </div>
-          )}
           {rows.length ? rows.map((row) => (
             <div className="soridraw-notification-row" key={row.id}>
               <button className="soridraw-notification-avatar" type="button"
@@ -234,12 +231,6 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
           )) : (
             <p className="soridraw-notification-empty">아직 표시할 알림이 없습니다.</p>
           )}
-          {visualExample && (
-            <p className="soridraw-notification-footnote">
-              실제 좋아요·팔로우·곡 완성·관리자 알림은 서버 취합 기능 연결 후 표시됩니다.
-            </p>
-          )}
-          {!visualExample && <p className="soridraw-notification-footnote">알림 전달 기능은 준비 중입니다.</p>}
         </div>
       )}
       {notice && <div role="status" className="soridraw-notification-error">{notice}</div>}

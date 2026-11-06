@@ -118,6 +118,13 @@ assert.doesNotMatch(panelCss,/#b089ef|#ee7da2|#ad90dc|#77b4ee|#FFB400/,
   'unrequested colorful notification accents must remain removed');
 assert.match(panel,/visualExample && !settingsOpen && <span className="soridraw-notification-preview-tag">예시<\/span>/,
   'preview samples must still be distinguishable from actual user notifications');
+// Only social notifications show the actor name. System/admin items show their content alone.
+assert.match(panel, /\) : row\.text\}/,
+  'completion, announcement and message notifications render their body without the SORIDRAW sender prefix');
+assert.doesNotMatch(panel, /<strong>\{row\.actorName\}<\/strong>/,
+  'system notification rows must not prepend SORIDRAW');
+assert.match(panel, /\{' '\}\{row\.text\}/,
+  'likes and follows still show the actor name followed by notification text');
 assert.match(panel,/row.category === 'like' \|\| row.category === 'follow'/,
   'only likes and follows should link the sending username');
 assert.match(panel,/className="soridraw-notification-actor-link"/);

@@ -275,14 +275,16 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
               <div className="soridraw-notification-content">
                 <span>
                   {row.category === 'like' || row.category === 'follow' ? (
-                    <button type="button" className="soridraw-notification-actor-link"
-                      disabled={!visualExample && !row.actorUid}
-                      aria-label={row.actorName + ' 공개 프로필 열기'}
-                      onClick={() => openProfile(row)}>
-                      {row.actorName}
-                    </button>
-                  ) : <strong>{row.actorName}</strong>}
-                  {' '}{row.text}
+                    <>
+                      <button type="button" className="soridraw-notification-actor-link"
+                        disabled={!visualExample && !row.actorUid}
+                        aria-label={row.actorName + ' 공개 프로필 열기'}
+                        onClick={() => openProfile(row)}>
+                        {row.actorName}
+                      </button>
+                      {' '}{row.text}
+                    </>
+                  ) : row.text}
                 </span>
                 {row.song && <small className="soridraw-notification-song-title">{row.song.title}</small>}
                 <small>{timeLabel(row.createdAt)}</small>

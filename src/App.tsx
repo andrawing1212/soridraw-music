@@ -190,7 +190,8 @@ import {
   PenTool,
   Palette,
   FlaskConical,
-  AlertTriangle
+  AlertTriangle,
+  Bell,
 } from 'lucide-react';
 import { Compass as ExploreCompass } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -216,6 +217,7 @@ import { SORIDRAW_PROFILE_AVATAR_EVENT } from './services/profileAvatarAuthority
 import { recoverFromStaleChunkError } from './services/chunkLoadRecovery';
 import StudioPageFrame from './components/studio/StudioPageFrame';
 import StudioLeftRail, { type StudioWorkspaceView } from './components/studio/StudioLeftRail';
+import NotificationPanel from './components/studio/NotificationPanel';
 import StudioRightRail from './components/studio/StudioRightRail';
 import StudioSplitWorkspace, { StudioBuilderPane, StudioResultPane } from './components/studio/StudioSplitWorkspace';
 import SplitPerformanceDiagnostics from './components/studio/SplitPerformanceDiagnostics';
@@ -3940,8 +3942,11 @@ function Navigation({
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isMobileNotificationOpen, setIsMobileNotificationOpen] = useState(false);
+  const mobileProfileButtonRef = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
+  useEffect(() => { setIsMobileNotificationOpen(false); }, [location.pathname, user?.uid]);
   const menuRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const profileTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -4478,8 +4483,10 @@ function Navigation({
               {headerIdentity ? (
                 <button
                   type="button"
+                  ref={mobileProfileButtonRef}
                   onClick={() => {
                     if (!user || !isAuthReady) return;
+                    setIsMobileNotificationOpen(false);
                     setIsProfileOpen((prev) => !prev);
                     setIsExpanded(false);
                   }}
@@ -4528,6 +4535,20 @@ function Navigation({
                   >
                     <div className="soridraw-account-menu-header">
                       <p className="soridraw-account-menu-kicker">계정 메뉴</p>
+                      <button
+                        type="button"
+                        data-soridraw-mobile-profile-notifications="true"
+                        aria-label="알림 열기"
+                        title="알림"
+                        onClick={() => {
+                          setIsProfileOpen(false);
+                          setIsExpanded(false);
+                          setIsMobileNotificationOpen(true);
+                        }}
+                        className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-xl text-[#bcbcc2] transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#ffbb22]"
+                      >
+                        <Bell className="h-5 w-5" aria-hidden="true" />
+                      </button>
                       <p className="soridraw-account-menu-name">{headerIdentity.displayName || 'SORIDRAW User'}</p>
                       <p className="soridraw-account-menu-email">{user.email || ''}</p>
                     </div>
@@ -4706,7 +4727,11 @@ function Navigation({
           </div>
         </div>
       </div>
-
+      <NotificationPanel
+        open={isMobileNotificationOpen && Boolean(user?.uid)}
+        anchorRef={mobileProfileButtonRef}
+        onClose={() => setIsMobileNotificationOpen(false)}
+      />
     </>
   );
 }

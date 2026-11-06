@@ -19,6 +19,13 @@ As of 2026-10-03 KST, the user also confirmed the **PREVIEW app302 Studio save-h
 
 **Default for SORIDRAW: protect-only, NO code changes and NO like deployment.** Do not refactor, optimize, replace, or quietly alter likes in client/Worker/RTDB/R2/D1/Rules/cache/notifications/UI. An unrelated change to a common file must preserve all like code paths and pass a targeted regression. A concrete new defect/security issue plus explicit user instruction is required to reopen; never infer permission from a generic optimization request. TEST/PRODUCTION promotion is a separate explicit release request; preserve the same verified features and do not copy user data.
 
+## Explore 좋아요 동일 곡 반복 클릭 보호 (2026-11-06 승인, 현행)
+- Studio 저장하트와 **별도** 브라우저 메모리 카운터. 같은 UID·같은 곡 기준으로 5초 내 성공 6회 후 7번째 시도 10초, 30초 내 성공 19회 후 20번째 시도 60초, 5분 내 성공 49회 후 50번째 시도 10분 차단.
+- 실패·무시·차단된 클릭, 상태 변경 없는 기존 작업 재확인은 기록하지 않는다. 다른 곡/계정은 독립. 차단 시 한 번만 alert: `좋아요에 문제가 있다면\\n관리자에게 문의하세요.`.
+- 가드는 UI/로컬 outbox/RTDB 변경 **전** 검사하고, 실제 상태를 바꾼 local-first setter 성공 **후** 카운트한다. 기존 pending 요청은 취소하지 않는다. 재시작하면 브라우저 세션 기록이 초기화될 수 있으므로 서버 측 완전한 방어라고 주장하지 않는다.
+- Cloudflare `LIKE_RATE_LIMITER` 60회/60초 API 요청 보호 및 기존 5초 묶음·하트/숫자·PC↔모바일·D1 비용 경로는 변경 금지. 새 서버 read/write/RTDB 0건.
+- 코드/검사: `src/lib/exploreLikeClickGuard.ts`, `src/pages/ExplorePage.tsx`, `scripts/verify-090-like-live-display.mjs`. Studio 별도 정책은 song-save 스킬에 보존.
+
 ## 1. Choose the mode first
 
 If the repository is `andrawing1212/soridraw-music`, or the user explicitly says SORIDRAW, use **SORIDRAW mode** and read `references/soridraw-app141-baseline.md` before changing code.

@@ -1,3 +1,12 @@
+## CURRENT — 알림 패널 첫 구현 PREVIEW Hosting PASS / 이벤트 전달 백엔드 미구현 (2026-11-07 KST)
+- **디렉터 승인:** 영상 참고, 왼쪽 메뉴 '알림' 클릭 시 메뉴 오른쪽 간결한 세로 패널. 각 알림은 왼쪽 보낸 사람 프로필 사진, 가운데 내용, 오른쪽 팔로우 또는 곡 썸네일. 곡 썸네일은 실제 검증된 `audioUrl`이 있을 때 기존 GlobalPlayer로 재생, 그렇지 않으면 허용된 곡 페이지 경로로만 이동. 알림 종류는 좋아요(해제 제외)·신규 팔로우(해제 제외)·곡 생성 완료·관리자 공지·개인 메시지. 알림 주기 기본 2시간(하루 12회), 변경 권한은 관리자 메뉴 전용.
+- **1차 실제 구현:** #846 merge `883d58b0c0ccd670966706a1bd078dd757fcd99e` — StudioLeftRail에 알림 팝오버, 별도 NotificationPanel/CSS, 개인별 유형 설정(현 단계 브라우저 로컬 저장), 관리자 App Settings의 수집 주기 설정(기존 `app_settings/notification_schedule`, 관리자 명시 저장 시에만 1 write; 기존 Rules의 `appSettings` 권한 적용). 기존 탐색 좋아요·팔로우/곡 저장 UI·RTDB 흐름 변경 없음.
+- **강제 구분:** 사용자 원본·실제 좋아요/팔로우/완성/관리자 메시지의 발송 이벤트는 **아직 생성·수집·전달하지 않음**. PREVIEW 주소에서만 *'화면 미리보기 · 실제 사용자 알림이 아닙니다'*라고 표시된 예시가 보이며, 다른 환경에는 실제 알림처럼 가짜 행을 제공하지 않음. 일반 사용자에게 취합 주기 변경 UI 없음. 백엔드 전달 기능이 붙기 전 관리자 저장 값은 서버 취합 실행에 실제 영향을 주지 않음. 사용자 유형 설정도 계정 간 동기화 미구현.
+- **검사·배포:** #846 최종 SHA `ef9ac6018274a0309141bb6bfb86ec0df2704766`, [quality run 42257711125](https://github.com/andrawing1212/soridraw-music/actions/runs/42257711125) SUCCESS (Notification UI 계약, 관리자 권한 경계, TS, Build, Like/Studio 관련). PREVIEW Hosting-only #847 merge `e676efc247929877af30ccefd17464a35bb2e8e2`, [run 42258260521](https://github.com/andrawing1212/soridraw-music/actions/runs/42258260521) SUCCESS: `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`. Worker/Functions/D1/R2/Rules 원본 변경 없음.
+- **OPEN (기능 전체 완료 아님):** 좋아요·팔로우 확정 이벤트의 server-side actor/owner 검증, 곡 완료 이벤트, 관리자 공지·개인 메시지 발행, 수신자별 권한·영속 알림함·읽음 처리, 2시간 모음 전송 worker/scheduler와 전달 비용/멱등성, 브라우저별 선호도 계정 동기화를 설계·구현·검증 후 별도 고위험 공유 백엔드 배포 승인 필요. 이번 UI는 실기기 PC/모바일 아직 미검증. **일반 Preview Hosting 자동 승인으로 공유 서버 자원을 변경하지 않는다.**
+
+---
+
 ## CURRENT — Studio 저장·해제 ‘서버 접수 마지막 클릭’ 순서 및 첫 진입 미완료 인계: PREVIEW PASS / 실기기 OPEN (2026-11-06 KST)
 - **디렉터 요청:** 앱 업데이트/재실행 직후 PC·모바일의 Studio 하트와 Music Note membership 불일치. 화면 캐시만 맞추지 말고 **서버가 마지막으로 접수한 SAVE/UNSAVE 클릭**을 최종 사용자의 의도로 판단해 두 기기가 복구되도록 승인.
 - **확인한 기존 한계:** 인계 RTDB slot seq는 `Date.now()`·이전 같은 slot seq 기반으로만 생성해 20곡/slot 정리 뒤 계정 내 최종 접수 순서를 복구하지 못할 수 있었음. 다른 기기 `onChildAdded`가 서버에 남아 있는 미완료 인계를 받아도 복구 타이머 위주이며 Studio/Music Note 첫 표시에는 투영하지 않았음.

@@ -15,6 +15,44 @@ Use this skill whenever work touches any of these paths:
 
 Current user instruction and `DOCS/CURRENT_RELEASE_STATE.md` always override this skill.
 
+## Studio 저장 하트 — 악성 반복 클릭 보호 기준 (2026-11-06 디렉터 승인)
+
+이 절이 Studio 저장/해제 하트의 **현행 승인 규칙**이다. 다른 오래된 +30초 대기·지연 수신 설명과 충돌할 때는 최신 실제 코드 및 이 절을 우선한다. Explore 공개 좋아요, Music Note 내부의 다른 동작, Library에 임의로 적용하지 않는다.
+
+**범위와 횟수:** 같은 UID·같은 곡 identity의 **브라우저 실행 세션**에서 이동 시간 창으로 판단한다. 버튼을 눌렀다는 사실이나 Firestore write 수가 아니라, **실제로 접수되어 저장/해제 하트 상태 변경을 일으킨 클릭**만 기록한다. 입력이 무시되었거나, 저장이 실패했거나, 로컬 pending 저장 공간이 거절되었거나, 잠긴 곡이거나, 이미 차단된 클릭은 기록하지 않는다.
+
+| 같은 곡에 접수된 이전 변경 | 다음 시도 차단 기준 | 차단 기간 |
+| --- | --- | --- |
+| 5초 안에 **6회** | **7번째 클릭 시도** | **10초** |
+| 30초 안에 **19회** | **20번째 클릭 시도** | **60초** |
+| 5분 안에 **49회** | **50번째 클릭 시도** | **10분** |
+
+7·20·50번째는 **허용 횟수가 아니라 차단되는 시도**이며, 차단 시도는 카운트에 더하지 않는다. 여러 시간 창이 동시에 해당하면 5분 → 30초 → 5초의 더 강한 차단 우선. 이전 적발 횟수에 따른 추가 가중(strikes) 없음. 다른 곡은 계속 사용 가능.
+
+**판정/기존 요청 보호:**
+- UI·outbox·RTDB 변경 **전에** `admitStudioHeartClick(..., false)`로 허용 여부를 검사한다.
+- 저장/해제의 로컬 pending이 안전하게 접수되거나, 직접 canonical fallback이 성공한 **뒤에만** `recordStudioHeartAcceptedClick`으로 한 건 기록한다.
+- 차단 시 하트 상태 변경 및 새로운 outbox·RTDB·Firestore 요청 없음. **이미 접수된 pending 작업은 취소하거나 삭제하지 않는다.**
+- **브라우저 한 세션에 국한된 1차 남용 억제**이며, 새로고침/종료 후 기록이 사라질 수 있다. 계정 전체에 영구 적용되는 서버 보안 rate-limit인 것처럼 설명하지 않는다.
+
+**경고/성공 안내:**
+- 차단 시작 시 **딱 한 번** 브라우저 `window.alert`을 사용한다. 차단된 클릭을 반복해도 경고창을 계속 띄우지 않는다.
+- 경고 문구는 줄바꿈 포함 정확히 다음 내용:
+
+```text
+저장에 문제가 있다면
+관리자에게 문의하세요.
+```
+
+- 정상 저장 클릭 직후: **`뮤직노트에 저장되었습니다`**, 정상 저장 해제 클릭 직후: **`저장이 해제되었습니다`**를 **즉시 한 번** 토스트로 보여준다.
+- "저장 처리 중 · 약 5초 후" 같은 기술적 성공 대기 문구와 5초 후 중복 완료 토스트는 노출하지 않는다. 단, **실제 실패·복구 오류 안내는 유지한다**.
+- 실제 곡별 canonical 저장은 최신 코드의 **마지막 클릭 후 5초 묶음(최초 클릭 후 최대 15초)** 구조를 유지한다. 사용자 성공 안내의 시점과 서버 정본 저장 완료 시점은 별개다.
+
+**수정 시 절대 보호:** Studio Recent ↔ Music Note 로컬 즉시 상태, PC↔모바일 RTDB 인계 및 최종 클릭 순서, 기존 저장곡/미디어, W0/W1 묶음 비용 목표, 데이터 원본, 다른 기능을 보존한다. 불필요한 서버 읽기/쓰기·전체 목록 조회·무한 재시도·공유 Rules/Worker 변경 금지. 임계값·횟수 정의·경고 및 성공 문구는 사용자 새 지시 없이 임의 변경하지 않는다.
+
+**코드/검사 근거:** `src/lib/studioHeartClickGuard.ts`, `src/App.tsx`의 `handleToggleCurrentStudioFavorite` 및 `flushStudioHeartPendingIntent`. 회귀: `scripts/verify-studio-heart-five-second-click-guard.mjs`와 `scripts/verify-studio-heart-close-reconnect.mjs`. PR #839(차단 기준), #841(즉시 단일 알림), #842(PREVIEW Hosting 배포, SHA `6408f22fb78138e93f8436eaf48f3707ffc4f726`). 디렉터는 배포 후 저장·해제 알림 적용을 실사용 확인(2026-11-06). 과거 수동으로 맞춘 PC↔모바일 하트 상태가 **다음 업데이트에도 유지되는지**는 별도 미검증이다.
+
+
 ## 1. Product behavior is non-negotiable
 
 Cost reduction must never make a working feature feel delayed or incorrect.

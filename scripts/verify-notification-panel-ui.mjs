@@ -63,24 +63,24 @@ try {
 }
 assert.match(panel, /className="soridraw-notification-setting-master"/);
 assert.match(panel, /className="soridraw-notification-settings-divider"/);
-assert.match(panel, /<NotificationSwitch checked=\\{masterEnabled\\} onChange=\\{toggleMaster\\}/);
-assert.match(panel, /<NotificationSwitch checked=\\{prefs\\[item.key\\]\\} disabled=\\{!masterEnabled\\}/);
-assert.match(panel, /checked=\\{checked\\} onChange=\\{onChange\\} disabled=\\{disabled\\}/);
-assert.match(panel, /aria-disabled=\\{!masterEnabled\\}/);
-assert.match(panel, /if \\(!masterEnabled\\) return;/);
-assert.match(panel, /saveNotificationMasterEnabled\\(uid, nextEnabled\\)/);
-assert.match(panel, /saveNotificationPreferences\\(uid, next\\)/);
-assert.match(panel, /masterEnabled && prefs\\[row.category\\]/);
+assert.match(panel, /<NotificationSwitch checked=\{masterEnabled\} onChange=\{toggleMaster\}/);
+assert.match(panel, /<NotificationSwitch checked=\{prefs\[item.key\]\} disabled=\{!masterEnabled\}/);
+assert.match(panel, /checked=\{checked\} onChange=\{onChange\} disabled=\{disabled\}/);
+assert.match(panel, /aria-disabled=\{!masterEnabled\}/);
+assert.match(panel, /if \(!masterEnabled\) return;/);
+assert.match(panel, /saveNotificationMasterEnabled\(uid, nextEnabled\)/);
+assert.match(panel, /saveNotificationPreferences\(uid, next\)/);
+assert.match(panel, /masterEnabled && prefs\[row.category\]/);
 assert.ok(panel.indexOf('className="soridraw-notification-setting-master"') <
   panel.indexOf('TYPES.map((item)'), 'master toggle must be above individual preferences');
 const switchCss = file('src/components/studio/notificationPanel.css');
-assert.match(switchCss, /\\.soridraw-notification-switch-control\\{\\s*width:44px;height:26px/);
+assert.match(switchCss, /\.soridraw-notification-switch-control\{\s*width:44px;height:26px/);
 assert.match(switchCss, /width:20px;height:20px;border-radius:50%/);
-assert.match(switchCss, /transform:translateX\\(18px\\)/);
-assert.match(switchCss, /\\.soridraw-notification-setting-row\\.is-disabled\\{[\\s\\S]*?pointer-events:none;/);
-assert.match(switchCss, /\\.soridraw-notification-switch-input:disabled\\{cursor:default\\}/);
-assert.match(switchCss, /\\.soridraw-notification-switch-input:checked \\+ \\.soridraw-notification-switch-track\\{\\s*background:#ffbb22;/);
-assert.match(switchCss, /\\.soridraw-notification-switch-input:focus-visible/);
+assert.match(switchCss, /transform:translateX\(18px\)/);
+assert.match(switchCss, /\.soridraw-notification-setting-row\.is-disabled\{[\s\S]*?pointer-events:none;/);
+assert.match(switchCss, /\.soridraw-notification-switch-input:disabled\{cursor:default\}/);
+assert.match(switchCss, /\.soridraw-notification-switch-input:checked \+ \.soridraw-notification-switch-track\{\s*background:#ffbb22;/);
+assert.match(switchCss, /\.soridraw-notification-switch-input:focus-visible/);
 assert.match(switchCss, /prefers-reduced-motion:reduce/);
 assert.doesNotMatch(panel, /toggleAllNotificationPreferences|areAllNotificationPreferencesEnabled/);
 console.log('NOTIFICATION_MASTER_OFF_PRESERVES_FIVE_AND_DISALLOWS_INTERACTION=PASS');

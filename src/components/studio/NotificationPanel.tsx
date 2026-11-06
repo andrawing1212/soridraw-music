@@ -226,7 +226,7 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
                     <Music2 size={22} aria-hidden="true" />}
                   <span className="soridraw-notification-play">▶</span>
                 </button>
-              ) : <span className="soridraw-notification-end-icon" aria-hidden="true">{iconFor(row.category)}</span>}
+              ) : <span className="soridraw-notification-end-icon" data-type={row.category} aria-hidden="true">{iconFor(row.category)}</span>}
             </div>
           )) : (
             <p className="soridraw-notification-empty">아직 표시할 알림이 없습니다.</p>

@@ -72,14 +72,19 @@ for (const selector of [
   '.soridraw-notification-category-icon',
   '.soridraw-notification-end-icon',
 ]) assert.ok(panelCss.includes(selector), 'missing notification selector: ' + selector);
-assert.match(panelCss,/\.soridraw-notification-follow\{[\s\S]*?background:#353538;color:#f5f5f5/);
+assert.match(panelCss,/\.soridraw-notification-follow\{[\s\S]*?background:#d7d7db;color:#151517/);
+assert.match(panelCss,/\.soridraw-notification-follow:disabled\{opacity:1;cursor:default\}/);
 assert.match(panelCss,/\.soridraw-notification-cover\{[\s\S]*?background:#363638;color:#fff/);
 assert.match(panelCss,/\.soridraw-notification-category-icon\{[^}]*color:#fff/);
 assert.match(panelCss,/\.soridraw-notification-end-icon\{[^}]*color:#f5f5f5/);
-assert.doesNotMatch(panelCss,/#b089ef|#ee7da2|#ad90dc|#77b4ee|#ffbb22|#FFB400/,
-  'notification-specific UI must remain monochrome');
+assert.match(panelCss,/accent-color:#ffbb22/,'checked notification categories are visibly highlighted');
+assert.match(panelCss,/\.soridraw-notification-end-icon\[data-type="announcement"\],[\s\S]*?\.soridraw-notification-category-icon\[data-type="announcement"\]\{color:#84b9ee\}/);
+assert.match(panelCss,/\.soridraw-notification-end-icon\[data-type="message"\],[\s\S]*?\.soridraw-notification-category-icon\[data-type="message"\]\{color:#c4adf4\}/);
+assert.match(panel,/<span className="soridraw-notification-end-icon" data-type=\{row.category\}/);
+assert.doesNotMatch(panelCss,/#b089ef|#ee7da2|#ad90dc|#77b4ee|#FFB400/,
+  'unrequested colorful notification accents must remain removed');
 assert.match(panel,/visualExample && !settingsOpen && <span className="soridraw-notification-preview-tag">예시<\/span>/,
   'preview samples must still be distinguishable from actual user notifications');
-console.log('NOTIFICATION_MONOCHROME_AND_RESIZE_CLOSE=PASS');
+console.log('NOTIFICATION_NEUTRAL_WITH_SELECTED_ACCENTS_AND_RESIZE_CLOSE=PASS');
 console.log('NOTIFICATION_PANEL_UI_AND_ADMIN_SCHEDULE_SOURCE=PASS');
 console.log('NOTIFICATION_PANEL_NO_POLLING_OR_REAL_USER_EVENTS=PASS');

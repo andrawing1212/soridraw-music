@@ -12,7 +12,7 @@
   padding:17px 18px 13px;flex-shrink:0;
 }
 .soridraw-notification-heading{display:flex;align-items:center;gap:10px;font-size:19px}
-.soridraw-notification-heading svg{color:#ffbb22}
+.soridraw-notification-heading svg{color:#f5f5f5}
 .soridraw-notification-header-actions{display:flex;gap:4px;align-items:center}
 .soridraw-notification-header-button{
   display:grid;place-items:center;width:34px;height:34px;color:#d4d4d8;
@@ -29,7 +29,7 @@
 .soridraw-notification-row:hover{background:#29292c}
 .soridraw-notification-avatar{
   flex:none;display:grid;place-items:center;width:42px;height:42px;border-radius:50%;
-  overflow:hidden;border:0;color:#e6e3f2;background:#45404f;font-weight:700;cursor:pointer;
+  overflow:hidden;border:0;color:#f5f5f5;background:#454548;font-weight:700;cursor:pointer;
 }
 .soridraw-notification-avatar img{width:100%;height:100%;object-fit:cover}
 .soridraw-notification-avatar:disabled{cursor:default}
@@ -42,12 +42,12 @@
 }
 .soridraw-notification-follow{
   flex:none;font-weight:700;font-size:12px;border:0;border-radius:13px;
-  padding:9px 12px;background:#b089ef;color:#17121b;cursor:pointer;
+  padding:9px 12px;background:#353538;color:#f5f5f5;cursor:pointer;
 }
 .soridraw-notification-follow:disabled{opacity:.55;cursor:default}
 .soridraw-notification-cover{
   width:48px;height:48px;position:relative;overflow:hidden;border:0;border-radius:10px;
-  background:#393539;color:#ffbb22;display:grid;place-items:center;flex:none;cursor:pointer;
+  background:#363638;color:#fff;display:grid;place-items:center;flex:none;cursor:pointer;
 }
 .soridraw-notification-cover img{width:100%;height:100%;object-fit:cover}
 .soridraw-notification-play{
@@ -55,28 +55,22 @@
   border-radius:50%;background:#141416bd;color:#fff;font-size:10px;
 }
 .soridraw-notification-cover:disabled{cursor:default}
-.soridraw-notification-end-icon{width:40px;color:#91889f;display:grid;place-items:center}
-.soridraw-notification-sample-label{
-  font-size:11px;color:#c9bad7;background:#2b2930;border-radius:10px;
-  margin:1px 5px 6px;padding:9px 10px;
-}
-.soridraw-notification-footnote{
-  padding:12px 10px 5px;margin:0;color:#93939b;font-size:11px;line-height:1.6;
+.soridraw-notification-end-icon{width:40px;color:#f5f5f5;display:grid;place-items:center}
+.soridraw-notification-preview-tag{
+  font-size:10px;font-weight:500;color:#a5a5a8;
+  margin-left:3px;
 }
 .soridraw-notification-empty{text-align:center;color:#a9a9ae;padding:44px 10px}
 .soridraw-notification-setting-row{
   display:flex;align-items:center;gap:12px;padding:15px 7px;cursor:pointer;
 }
 .soridraw-notification-category-icon{width:37px;height:37px;display:grid;place-items:center;
-  border-radius:12px;background:#303036;color:#ad90dc;flex:none}
-.soridraw-notification-category-icon[data-type="like"]{color:#ee7da2}
-.soridraw-notification-category-icon[data-type="complete"]{color:#ffbb22}
-.soridraw-notification-category-icon[data-type="announcement"]{color:#77b4ee}
+  border-radius:12px;background:#303033;color:#fff;flex:none}
 .soridraw-notification-setting-copy{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .soridraw-notification-setting-copy strong{font-size:13px}
 .soridraw-notification-setting-copy small{font-size:11px;color:#9999a0}
 .soridraw-notification-setting-row input{
-  accent-color:#ffbb22;width:17px;height:17px;cursor:pointer;flex:none;
+  accent-color:#66666b;width:17px;height:17px;cursor:pointer;flex:none;
 }
 .soridraw-notification-error{padding:10px 16px;color:#ffb6b6;font-size:12px;background:#38292b}
 @media (max-width:640px){

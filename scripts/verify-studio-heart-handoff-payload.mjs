@@ -13,13 +13,15 @@ const song={
   soridrawSongId:'soridraw-test',recentSongSyncKey:'song-key',
   audioUrl:'https://example.invalid/audio.mp3',
   sunoShareUrl:'https://example.invalid/share',
+  sourceType:'suno_track',sourceTrackId:'owned-track',sourceTaskId:'task-proof',ownerUid:'test-owner',
   unrelatedUiDebugTrace:'z'.repeat(30000),
 };
 const json=buildStudioHeartHandoffSongJson(song);
 assert.ok(json.length<=24000,'existing RTDB Rules unchanged');
 const parsed=JSON.parse(json);
 for(const field of ['title','lyrics','prompt','appliedKeywords','userInput','situationSummary',
-  'soridrawSongId','favoriteFirestoreId','recentSongSyncKey','audioUrl','sunoShareUrl'])
+  'soridrawSongId','favoriteFirestoreId','recentSongSyncKey','audioUrl','sunoShareUrl',
+  'sourceType','sourceTrackId','sourceTaskId','ownerUid'])
   assert.deepEqual(parsed[field],song[field],'canonical field preserved: '+field);
 assert.equal(parsed.unrelatedUiDebugTrace,undefined,'oversized UI diagnostics are not sent');
 const normal={title:'unchanged',lyrics:{korean:'k',english:'e'},prompt:'p',appliedKeywords:{},someLegacyField:42};

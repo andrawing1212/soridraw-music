@@ -7,6 +7,9 @@ const RECOVERY_CANONICAL_KEYS = [
   'lyrics','prompt','appliedKeywords','userInput','situationSummary',
   'soridrawSongId','recentSongSyncKey','recentLegacySourceId','recentLegacyCreatedAtMs',
   'favoriteFirestoreId','musicNoteFavoriteId','createdAt','updatedAt','createdAtMs','updatedAtMs',
+  // Keep the exact-owner Suno source-link fence and legacy identity evidence.
+  'sourceType','isSharedView','isSharedMusicNote','sharedReadOnly','recentFavoriteDetachedAt',
+  'editedInStudio','ownerUid','sourceTrackId','sourceId','trackId','sourceTaskId','taskId',
   'audioUrl','audio_url','streamAudioUrl','stream_audio_url','sourceAudioUrl','sourceStreamAudioUrl',
   'imageUrl','image_url','coverUrl','thumbnailUrl','audioUrls',
   'sunoAudioUrl','sunoCoverUrl','sunoImageUrl','sunoArtworkUrl',

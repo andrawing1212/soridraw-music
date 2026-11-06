@@ -12488,7 +12488,26 @@ const toggleCycleVariantSelection = (
           )) {
             clearStudioHeartIntentTimer(documentId);
             removeStudioHeartPendingIntent(uid, documentId);
-            setFavorites((previous) => previous);
+            // If canonical already matched (another device finished first),
+            // toggleFavorite never ran on B. Replace B's stale optimistic row
+            // with the exact canonical snapshot we already read: no new I/O.
+            if (actualSaved === desiredSaved) {
+              if (desiredSaved) forgetFavoriteDeletedTombstones(uid, [documentId]);
+              else rememberFavoriteDeletedTombstones(uid, [documentId]);
+              setFavorites((previous) => {
+                const withoutOlder = (previous || []).filter((favorite) => (
+                  String(favorite?.firestoreId || favorite?.id || '').trim() !== documentId
+                ));
+                const next = desiredSaved && serverFavorite
+                  ? mergeFavoritePages([serverFavorite], withoutOlder)
+                  : withoutOlder;
+                const sorted = sortFavoriteList(next);
+                writeFavoritesCache(uid, sorted);
+                return sorted;
+              });
+            } else {
+              setFavorites((previous) => previous);
+            }
           }
           confirmStudioHeartRecentFromCanonical(uid, documentId, desiredSaved, settledRecentSource);
           clearScheduled(documentId);

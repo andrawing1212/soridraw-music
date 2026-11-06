@@ -196,6 +196,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { buildPreviewSongIntent, renderPreviewCards } from './services/songPreviewEngine';
 import { favoritesStore, useFavorites, useIsSongFavorited } from './hooks/useFavoritesStore';
+import { resolveStudioHeartVisibleSaved } from './lib/studioHeartVisibleSaved';
 import {
   readUserProfileCache,
   readUserProfileCacheStoredAt,
@@ -5612,6 +5613,9 @@ function App() {
     uid: string;
     warmVerified: boolean;
     catalogReceived: boolean;
+    // A cached Catalog without a matching revision cannot override a newer
+    // already-confirmed Recent heart; wait for a verified full snapshot.
+    catalogSourceVerified: boolean;
   } | null>(null);
   const FAVORITES_PAGE_SIZE = 20;
   const favoritePaginationCursorRef = useRef<any>(null);
@@ -6534,27 +6538,54 @@ function App() {
 
   const isSongFavorited = useCallback((song: any) => {
     if (!song) return false;
-    // Canonical RTDB heart state from another device outranks stale device-local
-    // Recent/Music Note cache. app302 no longer emits pre-canonical Studio-heart
-    // previews; legacy preview signals remain readable during mixed-version rollout.
+    const uid = String(auth.currentUser?.uid || '').trim();
     const recentHeartAuthority = readRecentHeartAuthority(song);
-    if (recentHeartAuthority) return recentHeartAuthority.saved;
-    if ((song as any)?.recentFavoriteDetachedAt || (song as any)?.recentFavoriteExplicitlyUnsavedAt) return false;
     const statusMap = favoritesStore.getStatusMap();
-    const linkedFavoriteId = String((song as any)?.favoriteFirestoreId || '').trim();
-    // app284 — Once a Recent Song carries an explicit Music Note document link,
-    // that exact document is the heart authority. Do not let an older duplicate
-    // with the same generation/recent key relight the heart after the linked row
-    // was unsaved. Normal songs already follow this one-link/one-active-row shape.
-    if (linkedFavoriteId) return statusMap.has(linkedFavoriteId);
-    if (song.id && statusMap.has(song.id)) return true;
+    const linkedFavoriteId = String(
+      (song as any)?.favoriteFirestoreId || (song as any)?.musicNoteFavoriteId || '',
+    ).trim();
     const stableSongId = getLiveSoridrawSongId(song);
-    if (stableSongId && statusMap.has(`soridraw:${stableSongId}`)) return true;
     const recentSongSyncKey = buildRecentSongSyncKey(song);
-    if (recentSongSyncKey && statusMap.has(`recent:${recentSongSyncKey}`)) return true;
-    const key = buildFavoriteIdentityKey(song);
-    if (key && statusMap.has(key)) return true;
-    return false;
+    const identityKey = String(recentSongSyncKey || stableSongId || '').trim();
+    const pending = uid ? listStudioHeartPendingIntents(uid).find((intent) => (
+      linkedFavoriteId
+        ? intent.documentId === linkedFavoriteId
+        : Boolean(identityKey && intent.identityKey === identityKey)
+    )) || null : null;
+    const remotePreview = linkedFavoriteId
+      ? studioHeartRemotePreviewRef.current.get(linkedFavoriteId) || null
+      : identityKey
+        ? [...studioHeartRemotePreviewRef.current.values()]
+          .find((preview) => preview.identityKey === identityKey) || null
+        : null;
+    // An edited Recent song intentionally detaches from its prior Music Note.
+    // Do not relight that original through a historic favorite ID.
+    if ((song as any)?.recentFavoriteDetachedAt && !pending && !remotePreview) return false;
+    // An explicit document link outranks a same-title/generation duplicate.
+    // Use the SAME visible membership map that drives Music Note; do not
+    // infer a save from the older persisted Recent authority on each update.
+    const musicNoteMembership = linkedFavoriteId
+      ? statusMap.has(linkedFavoriteId)
+      : Boolean(
+        (song.id && statusMap.has(song.id))
+        || (stableSongId && statusMap.has(`soridraw:${stableSongId}`))
+        || (recentSongSyncKey && statusMap.has(`recent:${recentSongSyncKey}`))
+        || (buildFavoriteIdentityKey(song) && statusMap.has(buildFavoriteIdentityKey(song)))
+      );
+    const gate = musicNoteFirstPaintGateRef.current;
+    const catalogVerified = Boolean(
+      uid && gate?.uid === uid && gate.catalogReceived && gate.catalogSourceVerified
+      && musicNoteFullCatalogReadyUids.has(uid)
+      && (isMusicNoteInitialLiveReady(uid) || isMusicNoteInitialLiveUnavailable(uid))
+    );
+    return resolveStudioHeartVisibleSaved({
+      pending,
+      preview: remotePreview,
+      catalogVerified,
+      musicNoteMembership,
+      recentHeartSaved: recentHeartAuthority?.saved ?? null,
+      legacyUnsaved: Boolean((song as any)?.recentFavoriteExplicitlyUnsavedAt),
+    });
   }, []);
 
   const getFavoriteTitleFingerprint = (song: any): string => normalizeFavoriteSearchValue([
@@ -10593,6 +10624,7 @@ const toggleCycleVariantSelection = (
           uid: currentUser.uid,
           warmVerified: hasVerifiedWarmMusicNoteList,
           catalogReceived: false,
+          catalogSourceVerified: false,
         };
         setIsFavoritesLoading(true);
 
@@ -10731,7 +10763,18 @@ const toggleCycleVariantSelection = (
               }
               markCacheDiagnostic('musicNote', meta.fromCache ? 'CACHE' : 'SYNC', meta.fromCache ? 0 : 1);
               if (musicNoteFirstPaintGateRef.current?.uid === currentUser.uid) {
-                musicNoteFirstPaintGateRef.current.catalogReceived = true;
+                const gate = musicNoteFirstPaintGateRef.current;
+                gate.catalogReceived = true;
+                // A legacy/stale IndexedDB Catalog is not proof that an old
+                // saved heart was unsaved. Verify existing revision evidence,
+                // or accept the already-validated remote Catalog result.
+                gate.catalogSourceVerified = isFullMusicNoteCatalog && (
+                  !meta.fromCache || canUseWarmCatalogWithoutRemote({
+                    localRevision: Number(bundle.catalogRevision || 0),
+                    profileRevision: readCatalogProfileRevision('musicNote', cachedMusicNoteProfile),
+                    sessionValidated: false,
+                  })
+                );
               }
               // A Catalog-only event may still precede the retained RTDB
               // canonical item signal. Render both together rather than
@@ -10741,6 +10784,8 @@ const toggleCycleVariantSelection = (
             },
             onMissing: (meta) => {
               if (meta.fromCache) return;
+              if (musicNoteFirstPaintGateRef.current?.uid === currentUser.uid)
+                musicNoteFirstPaintGateRef.current.catalogSourceVerified = false;
               if (preferVerifiedCatalog) setFavorites(sortFavoriteList(cachedFavs));
               musicNoteBundleMissingHandled = true;
               musicNoteFullCatalogReadyUids.delete(currentUser.uid);
@@ -10750,6 +10795,8 @@ const toggleCycleVariantSelection = (
               console.warn('Music Note catalog unavailable; refusing legacy 20-row server pagination.');
             },
             onError: (error) => {
+              if (musicNoteFirstPaintGateRef.current?.uid === currentUser.uid)
+                musicNoteFirstPaintGateRef.current.catalogSourceVerified = false;
               if (preferVerifiedCatalog) setFavorites(sortFavoriteList(cachedFavs));
               musicNoteFullCatalogReadyUids.delete(currentUser.uid);
               setHasMoreFavorites(false);

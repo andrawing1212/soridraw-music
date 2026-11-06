@@ -35,6 +35,21 @@ const iconFor = (type: NotificationCategory) => {
   if (type === 'announcement') return <Megaphone size={18} />;
   return <Mail size={18} />;
 };
+// One native checkbox drives the visual sliding switch for the master setting
+// and for every category. Keyboard, touch and screen readers share its state.
+function NotificationSwitch({ checked, onChange, label }: {
+  checked: boolean; onChange: () => void; label: string;
+}) {
+  return (
+    <span className="soridraw-notification-switch-control">
+      <input type="checkbox" role="switch" className="soridraw-notification-switch-input"
+        checked={checked} onChange={onChange} aria-label={label} />
+      <span className="soridraw-notification-switch-track" aria-hidden="true">
+        <span className="soridraw-notification-switch-thumb" />
+      </span>
+    </span>
+  );
+}
 const timeLabel = (millisecondsAgo: number): string => {
   if (millisecondsAgo < 60 * 60 * 1000) return '방금 전';
   const hours = Math.floor(millisecondsAgo / (60 * 60 * 1000));
@@ -213,7 +228,7 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
 
       {settingsOpen ? (
         <div className="soridraw-notification-settings">
-          <div className="soridraw-notification-setting-master">
+          <label className="soridraw-notification-setting-master">
             <span className="soridraw-notification-category-icon" aria-hidden="true">
               <Bell size={18} />
             </span>
@@ -222,12 +237,9 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
               <small>{allEnabled ? '모든 알림이 켜져 있습니다' :
                 anyEnabled ? '일부 알림만 켜져 있습니다' : '모든 알림이 꺼져 있습니다'}</small>
             </span>
-            <button type="button" className="soridraw-notification-master-button"
-              aria-label={allEnabled ? '전체 알림 끄기' : '전체 알림 켜기'}
-              aria-pressed={allEnabled} onClick={toggleAllPreferences}>
-              {allEnabled ? '전체 끄기' : '전체 켜기'}
-            </button>
-          </div>
+            <NotificationSwitch checked={allEnabled} onChange={toggleAllPreferences}
+              label="전체 알림" />
+          </label>
           <div className="soridraw-notification-settings-divider" aria-hidden="true" />
           {TYPES.map((item) => (
             <label key={item.key} className="soridraw-notification-setting-row">
@@ -238,8 +250,8 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
                 <strong>{item.label}</strong>
                 <small>{item.detail}</small>
               </span>
-              <input type="checkbox" checked={prefs[item.key]}
-                onChange={() => updatePreference(item.key)} aria-label={item.label} />
+              <NotificationSwitch checked={prefs[item.key]}
+                onChange={() => updatePreference(item.key)} label={item.label} />
             </label>
           ))}
 

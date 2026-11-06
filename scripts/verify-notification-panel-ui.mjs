@@ -38,11 +38,22 @@ assert.deepEqual(preferenceModule.toggleAllNotificationPreferences(mixed), defau
 assert.equal(mixed.follow, true, 'all toggle must not mutate the previous state');
 assert.match(panel, /className="soridraw-notification-setting-master"/);
 assert.match(panel, /className="soridraw-notification-settings-divider"/);
-assert.match(panel, /aria-pressed=\{allEnabled\} onClick=\{toggleAllPreferences\}/);
+assert.match(panel, /<NotificationSwitch checked=\{allEnabled\} onChange=\{toggleAllPreferences\}/);
+assert.match(panel, /<NotificationSwitch checked=\{prefs\[item.key\]\}/);
+assert.match(panel, /role="switch" className="soridraw-notification-switch-input"/);
+assert.match(panel, /checked=\{checked\} onChange=\{onChange\}/);
 assert.match(panel, /saveNotificationPreferences\(uid, next\)/);
 assert.ok(panel.indexOf('className="soridraw-notification-setting-master"') <
   panel.indexOf('TYPES.map((item)'), 'master toggle must be above individual preferences');
-assert.match(file('src/components/studio/notificationPanel.css'), /\.soridraw-notification-master-button\{/);
+const switchCss = file('src/components/studio/notificationPanel.css');
+assert.match(switchCss, /\.soridraw-notification-switch-control\{/);
+assert.match(switchCss, /\.soridraw-notification-switch-input:checked \+ \.soridraw-notification-switch-track\{\s*background:#ffbb22;/);
+assert.match(switchCss, /\.soridraw-notification-switch-thumb\{[\s\S]*?transition:transform/);
+assert.match(switchCss, /\.soridraw-notification-switch-input:focus-visible/);
+assert.match(switchCss, /prefers-reduced-motion:reduce/);
+assert.doesNotMatch(switchCss, /\.soridraw-notification-setting-row input\{[\s\S]*?accent-color/);
+assert.doesNotMatch(panel, /soridraw-notification-master-button|aria-pressed=\{allEnabled\}/);
+console.log('NOTIFICATION_MASTER_AND_FIVE_ANIMATED_SWITCHES=PASS');
 console.log('NOTIFICATION_MASTER_ALL_ON_OFF_MIXED_AND_LOCAL_SAVE=PASS');
 assert.doesNotMatch(panel,/setInterval\(|onSnapshot\(|getDocs\(|getDoc\(/);
 assert.doesNotMatch(panel,/saveNotificationPreferences\(uid, next\)[\s\S]*?setDoc\(/);
@@ -98,7 +109,8 @@ assert.match(panelCss,/\.soridraw-notification-follow:disabled\{opacity:1;cursor
 assert.match(panelCss,/\.soridraw-notification-cover\{[\s\S]*?background:#363638;color:#fff/);
 assert.match(panelCss,/\.soridraw-notification-category-icon\{[^}]*color:#fff/);
 assert.match(panelCss,/\.soridraw-notification-end-icon\{[^}]*color:#f5f5f5/);
-assert.match(panelCss,/accent-color:#ffbb22/,'checked notification categories are visibly highlighted');
+assert.match(panelCss,/\.soridraw-notification-switch-input:checked \+ \.soridraw-notification-switch-track\{\s*background:#ffbb22;/,
+  'checked notification switches use SORIDRAW yellow');
 assert.match(panelCss,/\.soridraw-notification-end-icon\[data-type="announcement"\],[\s\S]*?\.soridraw-notification-category-icon\[data-type="announcement"\]\{color:#84b9ee\}/);
 assert.match(panelCss,/\.soridraw-notification-end-icon\[data-type="message"\],[\s\S]*?\.soridraw-notification-category-icon\[data-type="message"\]\{color:#c4adf4\}/);
 assert.match(panel,/<span className="soridraw-notification-end-icon" data-type=\{row.category\}/);

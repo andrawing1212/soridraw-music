@@ -1,3 +1,13 @@
+## CURRENT — Studio 하트 빠른 종료 후 기기 간 불일치: 이전 outbox 차단·최신 인계 복구 수정, PREVIEW 배포 PASS / 실기기 QA OPEN (2026-11-06 KST)
+- **새 디렉터 실사용 FAIL:** PR #827 배포 후에도 A가 하트 저장/해제 후 약 1초에 종료하면 B가 약 3초 뒤 실행해도 최종 상태가 맞지 않는 경우 발생. 양쪽 기기를 함께 다시 실행하면 그제야 `저장되었습니다.` 알림 후 일치. 첫 화면 목록 지연 문제는 별도로 이미 사용자 PASS.
+- **코드에서 확인한 원인·보완:** B에 같은 곡의 오래된 로컬 pending outbox가 존재하면 새 A 영속 RTDB receipt를 무조건 건너뛰던 경로. **B의 이전 요청이 서버 ACK된 seq**보다 A의 영속 영수증 seq가 정확히 더 최신이고 다른 기기일 때만 B가 해당 receipt를 이어받도록 수정. 미확정 최신 로컬 클릭·다른 곡·같은/오래된 seq는 그대로 보호. 예전 in-flight 처리가 새 영수증 이벤트를 삼키는 경우 재예약. 정본 이미 일치할 때 새 Firestore 쓰기 없이 기존 exact read 결과로 B 캐시/하트 교정.
+- **큰 곡 인계 보호:** 기존 24k RTDB receipt 제한을 넘는 전체 Studio UI 스냅샷은 가사·프롬프트·키워드·Suno 소유권/미디어와 음악 저장에 필요한 필드는 보존하고 UI 비필수 메타만 제외한 **구버전도 읽을 수 있는 일반 JSON**으로 대체. 필수 내용이 여전히 큰 경우 잘라 저장하지 않음. RTDB 수신 실패/인계 미접수 시 성공으로 간주하지 않음.
+- **검사:** #830 마지막 검증 SHA `a563158ea0b7d2fb55021691d29f4a8faef33231`, PR CI **6/6 PASS** (RTDB emulator, 10-song, Recent, Music Note, Auth, TS/build). 소스 merge `1e30420fd2e4fc2a2a7668a20547dd999141506b`.
+- **PREVIEW Hosting 배포:** #831 merge `cda9e1f6e0358b4502f582f202c72fe39211137d`, [Actions 42202832481](https://github.com/andrawing1212/soridraw-music/actions/runs/42202832481) **completed SUCCESS**. `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`. RTDB Rules/Functions/Workers/D1/R2/공유 원본 변경 없음. 기존 5초 묶음 저장·정상 W0/W1 목표 유지, 예외 복구에는 bounded 비용 가능(실측 아님).
+- **OPEN / 합격 기준:** 로그인된 PC↔모바일에서 A 저장 및 해제 각각 1초 뒤 종료 → B 3초 뒤 실행 → 추가 A 실행 없이 B의 Recent 하트·Music Note가 최종 일치하는지 실기기 검증 필요. 서버 **ACK 전에 A가 종료되어 RTDB 영수증 자체가 미접수된 경우 B 단독 복구 불가능**(현재 설계 한계), 따라서 사용자 기능을 전체 PASS라고 보고하지 않음. 정상 기능이 다시 FAIL이면 무리한 반복 재시도/서버 전체 스캔 대신 실제 접수/ACK/로컬 pending 증거로 경로 판별 후 최소 조치.
+
+---
+
 ## CURRENT — Studio 하트 빠른 종료 후 다른 기기 인계: 재시도 경로 수정·PREVIEW Hosting PASS / 실사용 OPEN (2026-11-06 KST)
 - **디렉터 실사용 확인:** 앞선 Music Note 첫 진입 목록 표시 지연은 해결(PASS). 새 문제는 A에서 하트 저장/해제 직후 1초 만에 앱 종료, 약 3초 뒤 B 실행 시 최종 상태 불일치가 생길 수 있음. 5초 이전 B 진입도 늦게라도 일치해야 한다는 목표.
 - **확인한 코드 원인:** 다른 기기의 RTDB 영속 인계 receipt에 대한 claim/저장 실패가 child_changed를 발생시키지 않을 때 B가 다시 시도하지 않아 미완료 요청이 멈출 수 있었음. 서버 ACK 이전 A 종료로 receipt 자체가 도착하지 않은 경우는 별개이며 B에서 복구 불가능.

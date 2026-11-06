@@ -382,6 +382,8 @@ jobs:
         run: node scripts/verify-498-auth-storage-recovery.mjs
       - name: Verify app501 quota-safe Recent Studio heart to Music Note save
         run: npx tsx scripts/verify-501-studio-heart-quota-safe.ts
+      - name: Verify notification rail UI and admin-only schedule scope
+        run: node scripts/verify-notification-panel-ui.mjs
       - name: TypeScript
         run: npm run lint
       - name: Build

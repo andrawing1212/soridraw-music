@@ -1,4 +1,11 @@
 export type NotificationCategory = 'like' | 'follow' | 'complete' | 'announcement' | 'message';
+export type NotificationSection = 'activity' | 'creation';
+
+/** Classify only notification presentation. No new generation history
+ * database or user-scoped scan is needed to render either tab. */
+export function notificationSectionFor(category: NotificationCategory): NotificationSection {
+  return category === 'complete' ? 'creation' : 'activity';
+}
 
 export interface InboxNotification {
   id: string;

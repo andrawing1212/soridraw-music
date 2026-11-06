@@ -125,8 +125,14 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
     navigate(path);
   };
   const openProfile = (row: InboxNotification) => {
-    if (visualExample) return;
-    if (row.actorUid) closeAndNavigate('/explore?profile=' + encodeURIComponent(row.actorUid));
+    // PREVIEW examples are not real people. Never invent a UID or redirect
+    // to a different user's profile to simulate a notification.
+    if (visualExample) {
+      setNotice('예시 사용자에게 연결된 실제 공개 프로필은 없습니다.');
+      return;
+    }
+    const actorUid = String(row.actorUid || '').trim();
+    if (actorUid) closeAndNavigate('/explore?profile=' + encodeURIComponent(actorUid));
   };
   const follow = async (row: InboxNotification) => {
     if (visualExample || !row.actorUid || !auth.currentUser ||
@@ -209,7 +215,17 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
                   <span>{row.actorName.slice(0, 1)}</span>}
               </button>
               <div className="soridraw-notification-content">
-                <span><strong>{row.actorName}</strong> {row.text}</span>
+                <span>
+                  {row.category === 'like' || row.category === 'follow' ? (
+                    <button type="button" className="soridraw-notification-actor-link"
+                      disabled={!visualExample && !row.actorUid}
+                      aria-label={row.actorName + ' 공개 프로필 열기'}
+                      onClick={() => openProfile(row)}>
+                      {row.actorName}
+                    </button>
+                  ) : <strong>{row.actorName}</strong>}
+                  {' '}{row.text}
+                </span>
                 {row.song && <small className="soridraw-notification-song-title">{row.song.title}</small>}
                 <small>{timeLabel(row.createdAt)}</small>
               </div>

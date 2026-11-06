@@ -85,6 +85,19 @@ assert.doesNotMatch(panelCss,/#b089ef|#ee7da2|#ad90dc|#77b4ee|#FFB400/,
   'unrequested colorful notification accents must remain removed');
 assert.match(panel,/visualExample && !settingsOpen && <span className="soridraw-notification-preview-tag">예시<\/span>/,
   'preview samples must still be distinguishable from actual user notifications');
+assert.match(panel,/row.category === 'like' \|\| row.category === 'follow'/,
+  'only likes and follows should link the sending username');
+assert.match(panel,/className="soridraw-notification-actor-link"/);
+assert.match(panel,/aria-label=\{row.actorName \+ ' 공개 프로필 열기'\}/);
+assert.match(panel,/onClick=\{\(\) => openProfile\(row\)\}/);
+assert.match(panel,/closeAndNavigate\('\/explore\?profile=' \+ encodeURIComponent\(actorUid\)\)/,
+  'use the same UID-based public profile route as Explore');
+assert.match(panel,/if \(visualExample\) \{\s*setNotice\('예시 사용자에게 연결된 실제 공개 프로필은 없습니다\.'\);\s*return;/,
+  'fake sample actors must never navigate to an invented profile');
+assert.match(panelCss,/\.soridraw-notification-actor-link\{[\s\S]*?color:#fff/);
+assert.doesNotMatch(panelCss,/\.soridraw-notification-actor-link\{[^}]*#ffbb22/,
+  'actor link must keep neutral color');
+console.log('NOTIFICATION_SENDER_NAME_TO_PUBLIC_PROFILE=PASS');
 console.log('NOTIFICATION_NEUTRAL_WITH_SELECTED_ACCENTS_AND_RESIZE_CLOSE=PASS');
 console.log('NOTIFICATION_PANEL_UI_AND_ADMIN_SCHEDULE_SOURCE=PASS');
 console.log('NOTIFICATION_PANEL_NO_POLLING_OR_REAL_USER_EVENTS=PASS');

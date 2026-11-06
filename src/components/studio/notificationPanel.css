@@ -35,6 +35,13 @@
 .soridraw-notification-avatar:disabled{cursor:default}
 .soridraw-notification-content{flex:1;min-width:0;line-height:1.42;color:#dddde0}
 .soridraw-notification-content strong{color:#fff;font-weight:700}
+.soridraw-notification-actor-link{
+  display:inline;padding:0;border:0;background:transparent;color:#fff;
+  font:inherit;font-weight:700;text-align:left;cursor:pointer;
+}
+.soridraw-notification-actor-link:hover{text-decoration:underline}
+.soridraw-notification-actor-link:focus-visible{outline:2px solid #d7d7db;outline-offset:3px;border-radius:2px}
+.soridraw-notification-actor-link:disabled{cursor:default;text-decoration:none}
 .soridraw-notification-content span{display:block;overflow-wrap:anywhere}
 .soridraw-notification-content small{display:block;color:#929298;margin-top:3px;font-size:11px}
 .soridraw-notification-content .soridraw-notification-song-title{

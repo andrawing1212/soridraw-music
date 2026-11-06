@@ -1,6 +1,7 @@
 import { get, onChildAdded, onChildChanged, onChildRemoved, ref, runTransaction, type Unsubscribe } from 'firebase/database';
 import { realtimeDb } from '../firebase';
 import { buildStudioHeartHandoffSongJson } from '../lib/studioHeartHandoffPayload';
+import { nextStudioHeartServerAcceptedSeq } from '../lib/studioHeartServerAcceptedOrder';
 
 export type StudioHeartHandoffReceipt = {
   documentId: string;
@@ -102,7 +103,9 @@ export const publishStudioHeartHandoff = async (
     const previous = normalize(slots[slot]);
     if (previous && previous.documentId === id
       && previous.originDeviceId === originDeviceId && previous.updatedAtMs > updatedAtMs) return;
-    const seq = Math.max(Date.now(), (previous?.seq || 0) + 1);
+    const seq = nextStudioHeartServerAcceptedSeq(
+      Number(snapshot.version || 0), previous?.seq || 0, Date.now(),
+    );
     // Keep the prior claim's lease while a newer click replaces its desired
     // state. The old writer must finish/release before the new version commits.
     const activeClaim = previous?.status === 'claimed'
@@ -114,7 +117,7 @@ export const publishStudioHeartHandoff = async (
       claimedUntilMs: activeClaim ? previous.claimedUntilMs : 0,
       songJson,
     };
-    return { version:Math.max(seq,Number(snapshot.version || 0)+1), slots };
+    return { version: seq, slots };
   }, { applyLocally:false });
   if (!outcome.committed) return null;
   const raw = outcome.snapshot.val();

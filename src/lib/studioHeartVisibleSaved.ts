@@ -14,6 +14,7 @@ export const resolveStudioHeartVisibleSaved = ({
   catalogVerified,
   musicNoteMembership,
   recentHeartSaved,
+  acceptedServerSaved = null,
   legacyUnsaved = false,
 }: {
   pending?: StudioHeartDisplayPending | null;
@@ -21,8 +22,11 @@ export const resolveStudioHeartVisibleSaved = ({
   catalogVerified: boolean;
   musicNoteMembership: boolean;
   recentHeartSaved?: boolean | null;
+  /** Accepted per-song RTDB receipt outranks Catalog/caches unless a newer local click is pending. */
+  acceptedServerSaved?: boolean | null;
   legacyUnsaved?: boolean;
 }): boolean => {
+  if (typeof acceptedServerSaved === 'boolean') return acceptedServerSaved;
   if (pending) {
     // The same existing source-order guard used by the Music Note overlay.
     // A later LOCAL click resets pendingRemotePreviewVersion, so stale remote

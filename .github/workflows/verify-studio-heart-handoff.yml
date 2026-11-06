@@ -6,6 +6,8 @@ on:
       - 'database.rules.json'
       - 'src/services/studioHeartHandoff.ts'
       - 'src/lib/studioHeartRecentConfirmation.ts'
+      - 'src/lib/studioHeartServerAcceptedOrder.ts'
+      - 'src/lib/studioHeartVisibleSaved.ts'
       - 'scripts/verify-studio-heart-recent-confirmation.mjs'
       - 'src/App.tsx'
       - 'src/lib/studioHeartBatch.ts'

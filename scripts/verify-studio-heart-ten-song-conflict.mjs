@@ -73,6 +73,8 @@ assert.match(app,/if \(localPending && !takeoverOlderLocal\) return/);
 assert.match(app,/if \(takeoverOlderLocal && studioHeartCommitInFlightRef\.current\.has\(documentId\)\)/);
 assert.match(app,/if \(takeoverOlderLocal && canStudioHeartReceiptTakeOverOlderLocal\(/);
 assert.match(app,/removeStudioHeartPendingIntent\(uid, documentId\)/);
+assert.match(app,/if \(!closed && newest && \(newest\.seq !== version \|\| newest\.desiredSaved !== desiredSaved\)\) \{\s*receive\(newest\)/,
+  'an in-flight older claim must not swallow a later opposite receipt');
 assert.match(app,/if \(actualSaved === desiredSaved\) \{[\s\S]*?mergeFavoritePages\(\[serverFavorite\], withoutOlder\)/,
   'B must reflect already-settled canonical membership without a redundant Firestore write');
 console.log('STUDIO_HEART_10_INDEPENDENT_OUTBOX=PASS');

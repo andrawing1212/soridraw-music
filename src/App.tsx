@@ -12519,6 +12519,15 @@ const toggleCycleVariantSelection = (
           void releaseStudioHeartHandoff(uid, documentId, version, claim.token).catch(() => {});
         }
         processing.delete(documentId);
+        // A second device can publish a newer opposite click while this
+        // slower Firestore claim is in flight. Its timer may have fired during
+        // processing.has(...), so re-arm the latest event after the old work
+        // releases the per-song lock rather than silently losing that click.
+        const newest = latestReceipts.get(documentId);
+        if (!closed && newest && (newest.seq !== version || newest.desiredSaved !== desiredSaved)) {
+          receive(newest);
+          return;
+        }
         // A rejected/failed claim may produce NO child_changed event.
         // Reschedule only this outstanding exact receipt, at most twice
         // more in this session; no idle-account polling or extra reads.

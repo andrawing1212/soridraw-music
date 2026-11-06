@@ -7,6 +7,8 @@ export interface InboxNotification {
   actorName: string;
   actorAvatarUrl?: string;
   text: string;
+  /** Complete body of an administrator announcement or private message. */
+  body?: string;
   createdAt: number;
   read?: boolean;
   song?: {
@@ -68,7 +70,11 @@ export const NOTIFICATION_EXAMPLE_ROWS: InboxNotification[] = [
     text: '새로운 곡 생성이 완료되었습니다.', createdAt: 4 * 60 * 60 * 1000,
     song: { id: '', title: 'Night Window' } },
   { id: 'example-notice', category: 'announcement', actorName: 'SORIDRAW',
-    text: '[공지] 서비스 업데이트 안내', createdAt: 6 * 60 * 60 * 1000 },
+    text: '[공지] 서비스 업데이트 안내',
+    body: '서비스 업데이트 공지의 전체 내용을 이곳에서 확인할 수 있습니다.',
+    createdAt: 6 * 60 * 60 * 1000 },
   { id: 'example-message', category: 'message', actorName: 'SORIDRAW',
-    text: '관리자가 보낸 개인 메시지입니다.', createdAt: 6 * 60 * 60 * 1000 },
+    text: '관리자가 보낸 개인 메시지입니다.',
+    body: '관리자가 보낸 개인 메시지의 전체 내용을 이곳에서 확인할 수 있습니다.',
+    createdAt: 6 * 60 * 60 * 1000 },
 ];

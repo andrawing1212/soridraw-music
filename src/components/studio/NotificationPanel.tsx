@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Check, Heart, Mail, Megaphone, Music2, Settings2, UserRoundPlus, X } from 'lucide-react';
+import { Bell, Check, ChevronRight, Heart, Mail, Megaphone, Music2, Settings2, UserRoundPlus, X } from 'lucide-react';
 import { auth } from '../../firebase';
 import { useGlobalPlayerControls } from '../../contexts/GlobalPlayerContext';
 import { setExploreFollow } from '../../services/exploreSocialService';
@@ -50,6 +50,7 @@ const validInternalSharePath = (path: string | undefined): string | null => {
 export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
   const navigate = useNavigate();
   const panelRef = useRef<HTMLDivElement>(null);
+  const detailCloseRef = useRef<HTMLButtonElement>(null);
   const { playTrack } = useGlobalPlayerControls();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [prefs, setPrefs] = useState<NotificationPreferences>(NOTIFICATION_PREFERENCES_DEFAULT);
@@ -57,6 +58,7 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
   const [followBusy, setFollowBusy] = useState<string | null>(null);
   const [followed, setFollowed] = useState<Record<string, boolean>>({});
   const [notice, setNotice] = useState('');
+  const [selectedMessage, setSelectedMessage] = useState<InboxNotification | null>(null);
   const uid = auth.currentUser?.uid || '';
 
   useEffect(() => {
@@ -64,6 +66,7 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
     setPrefs(readNotificationPreferences(uid));
     setSettingsOpen(false);
     setNotice('');
+    setSelectedMessage(null);
   }, [open, uid]);
 
   useLayoutEffect(() => {
@@ -91,14 +94,26 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
   }, [open, anchorRef, onClose]);
 
   useEffect(() => {
+    if (selectedMessage) detailCloseRef.current?.focus();
+  }, [selectedMessage]);
+
+  useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: MouseEvent) => {
+      // Modal backdrop owns dismissal while a message is being read.
+      if (selectedMessage) return;
       const target = event.target as Node;
       if (panelRef.current?.contains(target) || anchorRef.current?.contains(target)) return;
       onClose();
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key !== 'Escape') return;
+      if (selectedMessage) {
+        event.stopImmediatePropagation();
+        setSelectedMessage(null);
+      } else {
+        onClose();
+      }
     };
     document.addEventListener('mousedown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
@@ -106,7 +121,7 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
       document.removeEventListener('mousedown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [open, anchorRef, onClose]);
+  }, [open, anchorRef, onClose, selectedMessage]);
 
   // No live subscription, polling, per-user list scan, or backend writes in
   // the UI release. A verified recipient-scoped backend inbox is a separate
@@ -162,6 +177,7 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
 
   if (!open || typeof document === 'undefined') return null;
   return createPortal(
+    <>
     <div ref={panelRef} className="soridraw-notification-panel" style={position}
       role="dialog" aria-modal="false" aria-label={settingsOpen ? '알림 설정' : '알림'}>
       <div className="soridraw-notification-header">
@@ -208,12 +224,18 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
         <div className="soridraw-notification-list">
           {rows.length ? rows.map((row) => (
             <div className="soridraw-notification-row" key={row.id}>
-              <button className="soridraw-notification-avatar" type="button"
-                aria-label={row.actorName + ' 프로필'} onClick={() => openProfile(row)}
-                disabled={visualExample || !row.actorUid}>
-                {row.actorAvatarUrl ? <img src={row.actorAvatarUrl} alt="" referrerPolicy="no-referrer" /> :
-                  <span>{row.actorName.slice(0, 1)}</span>}
-              </button>
+              {row.category === 'announcement' || row.category === 'message' ? (
+                <span className="soridraw-notification-avatar-icon" data-type={row.category} aria-hidden="true">
+                  {iconFor(row.category)}
+                </span>
+              ) : (
+                <button className="soridraw-notification-avatar" type="button"
+                  aria-label={row.actorName + ' 프로필'} onClick={() => openProfile(row)}
+                  disabled={visualExample || !row.actorUid}>
+                  {row.actorAvatarUrl ? <img src={row.actorAvatarUrl} alt="" referrerPolicy="no-referrer" /> :
+                    <span>{row.actorName.slice(0, 1)}</span>}
+                </button>
+              )}
               <div className="soridraw-notification-content">
                 <span>
                   {row.category === 'like' || row.category === 'follow' ? (
@@ -229,7 +251,13 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
                 {row.song && <small className="soridraw-notification-song-title">{row.song.title}</small>}
                 <small>{timeLabel(row.createdAt)}</small>
               </div>
-              {row.category === 'follow' ? (
+              {row.category === 'announcement' || row.category === 'message' ? (
+                <button type="button" className="soridraw-notification-detail-open"
+                  aria-label={row.category === 'announcement' ? '공지사항 자세히 보기' : '개인 메시지 자세히 보기'}
+                  onClick={() => setSelectedMessage(row)}>
+                  <ChevronRight size={20} aria-hidden="true" />
+                </button>
+              ) : row.category === 'follow' ? (
                 <button type="button" className="soridraw-notification-follow"
                   disabled={visualExample || !row.actorUid || followed[row.actorUid] || followBusy === row.actorUid}
                   onClick={() => void follow(row)}>
@@ -250,7 +278,41 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
         </div>
       )}
       {notice && <div role="status" className="soridraw-notification-error">{notice}</div>}
-    </div>,
+    </div>
+    {selectedMessage && (selectedMessage.category === 'announcement' || selectedMessage.category === 'message') && (
+      <div className="soridraw-notification-detail-backdrop"
+        onMouseDown={(event) => {
+          // Do not let the panel's outside-click listener close the inbox too.
+          event.stopPropagation();
+          if (event.target === event.currentTarget) setSelectedMessage(null);
+        }}>
+        <div className="soridraw-notification-detail-modal" role="dialog" aria-modal="true"
+          aria-label={selectedMessage.category === 'announcement' ? '공지사항 내용' : '개인 메시지 내용'}>
+          <div className="soridraw-notification-detail-header">
+            <span className="soridraw-notification-detail-type" data-type={selectedMessage.category}>
+              {iconFor(selectedMessage.category)}
+              {selectedMessage.category === 'announcement' ? '공지사항' : '개인 메시지'}
+              {visualExample && <small className="soridraw-notification-preview-tag">예시</small>}
+            </span>
+            <button type="button" ref={detailCloseRef} className="soridraw-notification-detail-close"
+              aria-label="메시지 닫기" onClick={() => setSelectedMessage(null)}>
+              <X size={20} aria-hidden="true" />
+            </button>
+          </div>
+          <div className="soridraw-notification-detail-content">
+            <h2>{selectedMessage.text}</h2>
+            <div className="soridraw-notification-detail-body">
+              {selectedMessage.body?.trim() || selectedMessage.text}
+            </div>
+          </div>
+          <div className="soridraw-notification-detail-footer">
+            <button type="button" className="soridraw-notification-detail-confirm"
+              onClick={() => setSelectedMessage(null)}>확인</button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>,
     document.body,
   );
 }

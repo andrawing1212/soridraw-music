@@ -99,5 +99,31 @@ assert.doesNotMatch(panelCss,/\.soridraw-notification-actor-link\{[^}]*#ffbb22/,
   'actor link must keep neutral color');
 console.log('NOTIFICATION_SENDER_NAME_TO_PUBLIC_PROFILE=PASS');
 console.log('NOTIFICATION_NEUTRAL_WITH_SELECTED_ACCENTS_AND_RESIZE_CLOSE=PASS');
+
+assert.match(panel,/row.category === 'announcement' \|\| row.category === 'message' \? \(/,
+  'announcement and private message must use icon instead of avatar');
+assert.match(panel,/className="soridraw-notification-avatar-icon" data-type=\{row.category\}/);
+assert.match(panel,/className="soridraw-notification-detail-open"/);
+assert.match(panel,/<ChevronRight size=\{20\} aria-hidden="true" \/>/);
+assert.match(panel,/onClick=\{\(\) => setSelectedMessage\(row\)\}/);
+assert.match(panel,/className="soridraw-notification-detail-backdrop"/);
+assert.match(panel,/className="soridraw-notification-detail-modal" role="dialog" aria-modal="true"/);
+assert.match(panel,/aria-label="메시지 닫기"/);
+assert.match(panel,/className="soridraw-notification-detail-body"/);
+assert.match(panel,/selectedMessage.body\?\.trim\(\) \|\| selectedMessage.text/);
+assert.match(panel,/className="soridraw-notification-detail-confirm"/);
+assert.match(panel,/>확인<\/button>/);
+assert.match(panel,/if \(selectedMessage\) \{\s*event.stopImmediatePropagation\(\);\s*setSelectedMessage\(null\);/);
+assert.match(panel,/event.stopPropagation\(\);\s*if \(event.target === event.currentTarget\) setSelectedMessage\(null\);/);
+assert.match(model,/body\?: string/);
+assert.match(panelCss,/\.soridraw-notification-avatar-icon\[data-type="announcement"\]\{color:#84b9ee\}/);
+assert.match(panelCss,/\.soridraw-notification-avatar-icon\[data-type="message"\]\{color:#c4adf4\}/);
+assert.match(panelCss,/\.soridraw-notification-detail-backdrop\{[\s\S]*?backdrop-filter:blur\(5px\)/);
+assert.match(panelCss,/\.soridraw-notification-detail-modal\{[\s\S]*?width:min\(460px,100%\)/);
+assert.match(panelCss,/\.soridraw-notification-detail-footer\{[\s\S]*?justify-content:center/);
+assert.doesNotMatch(panel,/fetch\(|onSnapshot\(|setInterval\(/,
+  'notification modal should add no network calls or polling');
+console.log('NOTIFICATION_ADMIN_MESSAGE_DETAIL_MODAL=PASS');
+
 console.log('NOTIFICATION_PANEL_UI_AND_ADMIN_SCHEDULE_SOURCE=PASS');
 console.log('NOTIFICATION_PANEL_NO_POLLING_OR_REAL_USER_EVENTS=PASS');

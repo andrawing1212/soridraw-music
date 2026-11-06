@@ -89,5 +89,15 @@ assert.match(app,/admitStudioHeartClick\(user\.uid, clickIdentity, favoriteToggl
 assert.match(app,/recordStudioHeartAcceptedClick\(user\.uid, clickIdentity, favoriteToggleStartedAt\)/);
 assert.match(app,/window\.alert\('저장에 문제가 있다면\\n관리자에게 문의하세요\.'\)/);
 console.log('STUDIO_HEART_5S_TRAILING_AND_15S_MAX_WAIT=PASS');
+// Studio local-first notification is immediate and only once per click.
+// Canonical settlement is silent; retry/storage failures still use existing warnings.
+assert.match(app,/showToast\(intendedFavoriteAction === 'save'\s*\? '뮤직노트에 저장되었습니다'\s*:\s*'저장이 해제되었습니다'\)/);
+assert.doesNotMatch(app,/저장 처리 중 · 서버 저장은 약 5초 후|저장 해제 처리 중 · 서버 반영은 약 5초 후/);
+const settlementBlock=app.split('const flushStudioHeartPendingIntent = async')[1]?.split('const scheduleStudioHeartPendingIntent = ')[0] || '';
+assert.match(settlementBlock,/removeStudioHeartIntentLocal\(uid, safeDocumentId\)/);
+assert.doesNotMatch(settlementBlock,/showToast\(intent.desiredSaved\s*\?/);
+assert.match(app,/if \(options\?\.trustedRecentStudio && options.intendedAction\)/);
+assert.match(app,/showToast\('저장 확인 실패 · 같은 기기에서/);
+console.log('STUDIO_HEART_IMMEDIATE_SINGLE_SUCCESS_TOAST=PASS');
 console.log('STUDIO_HEART_MULTI_WINDOW_CLICK_GUARD=PASS');
 console.log('STUDIO_HEART_OTHER_SONGS_UNBLOCKED=PASS');

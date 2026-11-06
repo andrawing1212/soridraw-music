@@ -11609,7 +11609,17 @@ const toggleCycleVariantSelection = (
     }
 
     const notifyFavoriteSuccess = (message: string) => {
-      if (!options?.suppressSuccessToast) showToast(message);
+      if (options?.suppressSuccessToast) return;
+      // Direct (non-batched) Studio fallback keeps its canonical success
+      // boundary; use the same user-facing copy without touching other
+      // Music Note and Library callers.
+      if (options?.trustedRecentStudio && options.intendedAction) {
+        showToast(options.intendedAction === 'save'
+          ? '뮤직노트에 저장되었습니다'
+          : '저장이 해제되었습니다');
+        return;
+      }
+      showToast(message);
     };
 
     const favoriteDeleteId = (song as any)?.favoriteFirestoreId || (song as any)?.firestoreId || (song as any)?.id;
@@ -12290,8 +12300,9 @@ const toggleCycleVariantSelection = (
       const sameClick = latest.updatedAtMs === intent.updatedAtMs
         && latest.desiredSaved === intent.desiredSaved;
       if (sameClick && !isStudioHeartRemoteSuperseded(latest)) {
+        // The initiating click already showed one immediate toast.
+        // Do not repeat a success notification after canonical settlement.
         removeStudioHeartIntentLocal(uid, safeDocumentId);
-        showToast(intent.desiredSaved ? '저장이 완료되었습니다.' : '저장 해제가 완료되었습니다.');
       } else {
         // Same-song click while a prior canonical write was in flight.
         const confirmedFavorite = intent.desiredSaved
@@ -17466,9 +17477,11 @@ ${normalizePromptForDisplay(result.prompt)}
             // The local heart/pending save was accepted. Rejected storage and
             // locked-song attempts never contribute to the abuse counter.
             recordStudioHeartAcceptedClick(user.uid, clickIdentity, favoriteToggleStartedAt);
+            // Immediate local-first feedback after the pending mutation is
+            // durably accepted; the 5-second background commit stays silent.
             showToast(intendedFavoriteAction === 'save'
-              ? '저장 처리 중 · 서버 저장은 약 5초 후'
-              : '저장 해제 처리 중 · 서버 반영은 약 5초 후');
+              ? '뮤직노트에 저장되었습니다'
+              : '저장이 해제되었습니다');
             return;
           }
           }

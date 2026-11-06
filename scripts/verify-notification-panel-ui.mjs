@@ -18,7 +18,7 @@ assert.match(panel,/validInternalSharePath/);
 assert.match(panel,/aria-label="알림 설정 열기"/);
 assert.match(panel,/visualExample &&/);
 assert.match(model,/isNotificationVisualPreview/);
-assert.match(model,/화면 미리보기/);
+assert.match(panel,/화면 미리보기/);
 assert.match(model,/NOTIFICATION_PREFERENCES_DEFAULT/);
 assert.doesNotMatch(panel,/setInterval\(|onSnapshot\(|getDocs\(|getDoc\(/);
 assert.doesNotMatch(panel,/saveNotificationPreferences\(uid, next\)[\s\S]*?setDoc\(/);

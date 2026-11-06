@@ -233,6 +233,7 @@ jobs:
           node scripts/verify-478-curated-race-rollback.mjs
           node --check scripts/verify-482-preview-writer-release-gate.mjs
           node scripts/verify-482-preview-writer-release-gate.mjs --self-test
+          node scripts/verify-492-release-partial-failure-guard.mjs
           # app487: prevent stale app427 empty-command semantics in any later release
           node scripts/verify-427-legacy-next-song-parity.mjs
       - name: Reproduce exact app434 legacy-to-app487 predeploy verifier pin offline

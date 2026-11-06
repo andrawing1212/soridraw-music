@@ -123,22 +123,27 @@ jobs:
           MODE: ${{ steps.request.outputs.mode }}
           TARGET: ${{ steps.request.outputs.target }}
           MANIFEST_TAG: ${{ steps.request.outputs.manifest_tag }}
+          SORIDRAW_RELEASE_ATTESTATION_KEY: ${{ secrets.SORIDRAW_RELEASE_ATTESTATION_KEY }}
         run: |
           set -euo pipefail
           if [ "$MODE" = production ]; then
             mkdir -p "$RUNNER_TEMP/manifest"
             gh release download "$MANIFEST_TAG" --repo "$GITHUB_REPOSITORY" --pattern soridraw-release-manifest.json --dir "$RUNNER_TEMP/manifest"
             gh release download "$MANIFEST_TAG" --repo "$GITHUB_REPOSITORY" --pattern production-environment-contract.json --dir "$RUNNER_TEMP/manifest"
+            # app497: automated TEST checks are not physical owner acceptance.
+            # Missing/forged/stale approval blocks before any remote mutation.
+            gh release download "$MANIFEST_TAG" --repo "$GITHUB_REPOSITORY" --pattern soridraw-test-acceptance.json --dir "$RUNNER_TEMP/manifest"
+            node "$GITHUB_WORKSPACE/scripts/verify-497-owner-acceptance-cli.mjs" "$RUNNER_TEMP/manifest/soridraw-release-manifest.json" "$RUNNER_TEMP/manifest/soridraw-test-acceptance.json" "$GITHUB_REPOSITORY_OWNER"
             node - "$RUNNER_TEMP/manifest/soridraw-release-manifest.json" "$MANIFEST_TAG" <<'NODE'
           const fs=require('fs'); const [path,tag]=process.argv.slice(2); const m=JSON.parse(fs.readFileSync(path));
-          if(m.schema<4||m.state!=='TEST_VERIFIED'||m.tag!==tag) throw Error('manifest is not TEST_VERIFIED');
-          for(const k of ['appVersion','sourcePreviewSha','sourcePreviewTree','promotedMainSha','mainTree','distIndexSha256','testWorkerBundleSha256','testWorkerCodeSha256','testWorkerVersionId','testMediaWorkerBundleSha256','testMediaWorkerCodeSha256','testMediaWorkerVersionId','browserUpgradeContractSha256','productionEnvironmentContract','controllerIdentity','verifiedAt','workflowRunId']) if(!m[k]) throw Error(`manifest missing ${k}`);
+          if(m.schema!==5||m.state!=='TEST_AUTO_CHECKED'||m.tag!==tag) throw Error('missing automated TEST pending manifest');
+          for(const k of ['appVersion','sourcePreviewSha','sourcePreviewTree','promotedMainSha','mainTree','distIndexSha256','testWorkerBundleSha256','testWorkerCodeSha256','testWorkerVersionId','testMediaWorkerBundleSha256','testMediaWorkerCodeSha256','testMediaWorkerVersionId','browserUpgradeContractSha256','productionEnvironmentContract','controllerIdentity','testAutoCheckedAt','workflowRunId']) if(!m[k]) throw Error(`manifest missing ${k}`);
           for(const k of ['sourcePreviewSha','sourcePreviewTree','promotedMainSha','mainTree','distIndexSha256','testWorkerBundleSha256','testWorkerCodeSha256','testMediaWorkerBundleSha256','testMediaWorkerCodeSha256','browserUpgradeContractSha256']) if(!/^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(String(m[k]))) throw Error(`manifest invalid identity ${k}`);
           if(!m.controllerIdentity||typeof m.controllerIdentity!=='object') throw Error('manifest invalid controller identity');
           for(const k of ['workflowSha256','workerRuntimeSha256','mediaWorkerRuntimeSha256','controllerVerifierSha256']) if(!/^[0-9a-f]{64}$/.test(String(m.controllerIdentity[k]))) throw Error(`manifest invalid controller identity ${k}`);
           if(!/^[0-9a-f-]{36}$/i.test(String(m.testWorkerVersionId))) throw Error('manifest invalid TEST Worker version id');
           if(!/^[0-9a-f-]{36}$/i.test(String(m.testMediaWorkerVersionId))) throw Error('manifest invalid TEST Media Worker version id');
-          if(m.canonical?.d1!=='soridraw-explore-db'||m.canonical?.profileMedia!=='soridraw-profile-media'||m.canonical?.userCatalog!=='soridraw-user-catalog'||m.parity?.status!=='PASS') throw Error('manifest canonical/parity invariant failed');
+          if(m.canonical?.d1!=='soridraw-explore-db'||m.canonical?.profileMedia!=='soridraw-profile-media'||m.canonical?.userCatalog!=='soridraw-user-catalog'||m.parity?.status!=='PENDING_OWNER_ACCEPTANCE') throw Error('manifest canonical/parity invariant failed');
           if(!m.productionEnvironmentContract||m.productionEnvironmentContract.policy!=='soridraw-production-first-2026-10-06'||!/^[0-9a-f]{64}$/.test(String(m.productionEnvironmentContract.sha256||''))) throw Error('manifest missing production environment contract');
           const contractPath=process.env.RUNNER_TEMP+'/manifest/production-environment-contract.json'; const contractRaw=fs.readFileSync(contractPath); const contractSha=require('crypto').createHash('sha256').update(contractRaw).digest('hex'); if(contractSha!==m.productionEnvironmentContract.sha256) throw Error('production environment contract asset hash mismatch');
           if(m.testHosting?.site!=='soridraw-test'||!m.testHosting?.release||!m.testHosting?.version) throw Error('manifest missing exact TEST Hosting identity'); fs.appendFileSync(process.env.GITHUB_ENV,`RELEASE_TARGET=${m.sourcePreviewSha}\nMANIFEST_MAIN=${m.promotedMainSha}\nRELEASE_APP_VERSION=${m.appVersion}\nRELEASE_INDEX_SHA=${m.distIndexSha256}\nEXPECTED_WORKER_BUNDLE_SHA256=${m.testWorkerBundleSha256}\nEXPECTED_WORKER_CODE_SHA256=${m.testWorkerCodeSha256}\nTEST_WORKER_VERSION_ID=${m.testWorkerVersionId}\nEXPECTED_MEDIA_WORKER_BUNDLE_SHA256=${m.testMediaWorkerBundleSha256}\nEXPECTED_MEDIA_WORKER_CODE_SHA256=${m.testMediaWorkerCodeSha256}\nTEST_MEDIA_WORKER_VERSION_ID=${m.testMediaWorkerVersionId}\nEXPECTED_BROWSER_UPGRADE_CONTRACT_SHA256=${m.browserUpgradeContractSha256}\nEXPECTED_PRODUCTION_ENVIRONMENT_CONTRACT_SHA256=${m.productionEnvironmentContract.sha256}\nTEST_HOSTING_RELEASE=${m.testHosting.release}\nTEST_HOSTING_VERSION=${m.testHosting.version}\n`);
@@ -162,6 +167,7 @@ jobs:
           npx tsc --noEmit
           npm run build
           node scripts/verify-release-promotion-system.mjs
+          node scripts/verify-492-release-partial-failure-guard.mjs
           node scripts/verify-release-controller.mjs
           node scripts/verify-366-cross-environment-profile-like-parity.mjs
           npx tsx scripts/verify-367-production-browser-upgrade-contract.ts
@@ -301,9 +307,9 @@ jobs:
           media_code="$(sed -n 's/^TEST_MEDIA_WORKER_CODE_SHA256=//p' "$RUNNER_TEMP/test-media-upload"|tail -1)"; test -n "$media_code"
           echo "$version" > "$RUNNER_TEMP/test-worker-version"; echo "$bundle" > "$RUNNER_TEMP/worker-bundle"; echo "$code" > "$RUNNER_TEMP/worker-code"
           echo "$media_version" > "$RUNNER_TEMP/test-media-worker-version"; echo "$media_bundle" > "$RUNNER_TEMP/media-worker-bundle"; echo "$media_code" > "$RUNNER_TEMP/media-worker-code"
-          RELEASE_WORKER_VERSION="$version" node .deploy/release-worker-runtime.mjs test activate; printf true > "$RUNNER_TEMP/test-worker-mutated"
-          RELEASE_MEDIA_WORKER_VERSION="$media_version" node .deploy/release-media-worker-runtime.mjs test activate; printf true > "$RUNNER_TEMP/test-media-worker-mutated"
-          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-test.json --non-interactive; printf true > "$RUNNER_TEMP/test-hosting-mutated"
+          printf true > "$RUNNER_TEMP/test-worker-mutated"; RELEASE_WORKER_VERSION="$version" node .deploy/release-worker-runtime.mjs test activate
+          printf true > "$RUNNER_TEMP/test-media-worker-mutated"; RELEASE_MEDIA_WORKER_VERSION="$media_version" node .deploy/release-media-worker-runtime.mjs test activate
+          printf true > "$RUNNER_TEMP/test-hosting-mutated"; npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-test.json --non-interactive
 
       - name: TEST_VERIFY and freeze durable manifest
         if: steps.request.outputs.mode == 'test'
@@ -342,17 +348,20 @@ jobs:
           export CONTROLLER_VERIFIER_SHA="$(jq -r .controllerVerifierSha256 <<<"$controller_identity")"
           tag="soridraw-test-v${RELEASE_APP_VERSION}-$(printf %.12s "$RELEASE_TARGET")"
           SOURCE_TREE="$(git rev-parse "$RELEASE_TARGET^{tree}")" MAIN_SHA="$(cat "$RUNNER_TEMP/main-promoted")" MAIN_TREE="$(git rev-parse "$(cat "$RUNNER_TEMP/main-promoted")^{tree}")" TAG="$tag" node - <<'NODE'
-          const fs=require('fs'); const m={schema:4,state:'TEST_VERIFIED',tag:process.env.TAG,appVersion:process.env.RELEASE_APP_VERSION,sourcePreviewSha:process.env.RELEASE_TARGET,sourcePreviewTree:process.env.SOURCE_TREE,promotedMainSha:process.env.MAIN_SHA,mainTree:process.env.MAIN_TREE,distIndexSha256:process.env.RELEASE_INDEX_SHA,testHosting:{site:'soridraw-test',channel:'live',release:process.env.TEST_HOSTING_RELEASE,version:process.env.TEST_HOSTING_VERSION,verified:true},testWorkerBundleSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/worker-bundle','utf8').trim(),testWorkerCodeSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/worker-code','utf8').trim(),testWorkerVersionId:fs.readFileSync(process.env.RUNNER_TEMP+'/test-worker-version','utf8').trim(),testMediaWorkerBundleSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/media-worker-bundle','utf8').trim(),testMediaWorkerCodeSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/media-worker-code','utf8').trim(),testMediaWorkerVersionId:fs.readFileSync(process.env.RUNNER_TEMP+'/test-media-worker-version','utf8').trim(),browserUpgradeContractSha256:process.env.BROWSER_UPGRADE_CONTRACT_SHA256,productionEnvironmentContract:{policy:'soridraw-production-first-2026-10-06',sha256:process.env.PRODUCTION_ENVIRONMENT_CONTRACT_SHA256},controllerIdentity:{workflowSha256:process.env.CONTROLLER_WORKFLOW_SHA,workerRuntimeSha256:process.env.CONTROLLER_RUNTIME_SHA,mediaWorkerRuntimeSha256:process.env.CONTROLLER_MEDIA_RUNTIME_SHA,controllerVerifierSha256:process.env.CONTROLLER_VERIFIER_SHA},canonical:{d1:'soridraw-explore-db',profileMedia:'soridraw-profile-media',userCatalog:'soridraw-user-catalog'},parity:{reference:'PREVIEW',status:'PASS'},workflowRunId:process.env.GITHUB_RUN_ID,verifiedAt:new Date().toISOString()}; fs.writeFileSync(process.env.RUNNER_TEMP+'/soridraw-release-manifest.json',JSON.stringify(m,null,2)+'\n');
+          const fs=require('fs'); const m={schema:5,state:'TEST_AUTO_CHECKED',tag:process.env.TAG,appVersion:process.env.RELEASE_APP_VERSION,sourcePreviewSha:process.env.RELEASE_TARGET,sourcePreviewTree:process.env.SOURCE_TREE,promotedMainSha:process.env.MAIN_SHA,mainTree:process.env.MAIN_TREE,distIndexSha256:process.env.RELEASE_INDEX_SHA,testHosting:{site:'soridraw-test',channel:'live',release:process.env.TEST_HOSTING_RELEASE,version:process.env.TEST_HOSTING_VERSION,verified:true},testWorkerBundleSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/worker-bundle','utf8').trim(),testWorkerCodeSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/worker-code','utf8').trim(),testWorkerVersionId:fs.readFileSync(process.env.RUNNER_TEMP+'/test-worker-version','utf8').trim(),testMediaWorkerBundleSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/media-worker-bundle','utf8').trim(),testMediaWorkerCodeSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/media-worker-code','utf8').trim(),testMediaWorkerVersionId:fs.readFileSync(process.env.RUNNER_TEMP+'/test-media-worker-version','utf8').trim(),browserUpgradeContractSha256:process.env.BROWSER_UPGRADE_CONTRACT_SHA256,productionEnvironmentContract:{policy:'soridraw-production-first-2026-10-06',sha256:process.env.PRODUCTION_ENVIRONMENT_CONTRACT_SHA256},controllerIdentity:{workflowSha256:process.env.CONTROLLER_WORKFLOW_SHA,workerRuntimeSha256:process.env.CONTROLLER_RUNTIME_SHA,mediaWorkerRuntimeSha256:process.env.CONTROLLER_MEDIA_RUNTIME_SHA,controllerVerifierSha256:process.env.CONTROLLER_VERIFIER_SHA},canonical:{d1:'soridraw-explore-db',profileMedia:'soridraw-profile-media',userCatalog:'soridraw-user-catalog'},parity:{reference:'PREVIEW',status:'PENDING_OWNER_ACCEPTANCE'},workflowRunId:process.env.GITHUB_RUN_ID,testAutoCheckedAt:new Date().toISOString()}; fs.writeFileSync(process.env.RUNNER_TEMP+'/soridraw-release-manifest.json',JSON.stringify(m,null,2)+'\n');
           NODE
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "TEST_RELEASE_TAG_ALREADY_EXISTS=$tag"
             exit 1
           fi
-          gh release create "$tag" "$RUNNER_TEMP/soridraw-release-manifest.json#soridraw-release-manifest.json" "$RUNNER_TEMP/production-environment-contract.json#production-environment-contract.json" --repo "$GITHUB_REPOSITORY" --target "$RELEASE_TARGET" --title "SORIDRAW TEST verified v$RELEASE_APP_VERSION" --notes "Immutable TEST_VERIFIED release manifest. Production must consume this asset; it must not rebuild PREVIEW or redeploy TEST."
-          echo "$tag" > "$RUNNER_TEMP/test-release-tag"; printf true > "$RUNNER_TEMP/test-release-mutated"
+          # A nonzero gh release create may still have published its assets.
+          # Save the one-time name and arm rollback BEFORE the remote call.
+          echo "$tag" > "$RUNNER_TEMP/test-release-tag"
+          printf true > "$RUNNER_TEMP/test-release-mutated"
+          gh release create "$tag" "$RUNNER_TEMP/soridraw-release-manifest.json#soridraw-release-manifest.json" "$RUNNER_TEMP/production-environment-contract.json#production-environment-contract.json" --repo "$GITHUB_REPOSITORY" --target "$RELEASE_TARGET" --title "SORIDRAW TEST auto-checked pending owner v$RELEASE_APP_VERSION" --notes "TEST_AUTO_CHECKED only. NOT TEST_VERIFIED. PRODUCTION is forbidden until a separately authorized, source-bound signed owner acceptance asset is published."
           test "$(git ls-remote origin refs/heads/main|cut -f1)" = "$(cat "$RUNNER_TEMP/main-before")"
-          git push origin "$(cat "$RUNNER_TEMP/main-promoted"):refs/heads/main"; printf true > "$RUNNER_TEMP/test-branch-mutated"
-          node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update TEST_VERIFIED || echo 'RELEASE_STATUS_TEST_VERIFIED_UPDATE=WARNING'
+          printf true > "$RUNNER_TEMP/test-branch-mutated"; git push origin "$(cat "$RUNNER_TEMP/main-promoted"):refs/heads/main"
+          node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update TEST_AUTO_CHECKED || echo 'RELEASE_STATUS_TEST_AUTO_CHECKED_UPDATE=WARNING'
 
       - name: PROD_PREFLIGHT revalidate TEST manifest and live release
         if: steps.request.outputs.mode == 'production'
@@ -401,12 +410,12 @@ jobs:
           echo "$promoted" > "$RUNNER_TEMP/production-promoted"
           version="$(sed -n 's/^PRODUCTION_WORKER_UPLOADED_VERSION=//p' "$RUNNER_TEMP/prod-upload"|tail -1)"; test -n "$version"
           media_version="$(sed -n 's/^PRODUCTION_MEDIA_WORKER_UPLOADED_VERSION=//p' "$RUNNER_TEMP/prod-media-upload"|tail -1)"; test -n "$media_version"
-          RELEASE_WORKER_VERSION="$version" EXPECTED_WORKER_BUNDLE_SHA256="$EXPECTED_WORKER_BUNDLE_SHA256" EXPECTED_WORKER_CODE_SHA256="$EXPECTED_WORKER_CODE_SHA256" node .deploy/release-worker-runtime.mjs production activate; printf true > "$RUNNER_TEMP/production-worker-mutated"
-          RELEASE_MEDIA_WORKER_VERSION="$media_version" EXPECTED_MEDIA_WORKER_BUNDLE_SHA256="$EXPECTED_MEDIA_WORKER_BUNDLE_SHA256" EXPECTED_MEDIA_WORKER_CODE_SHA256="$EXPECTED_MEDIA_WORKER_CODE_SHA256" node .deploy/release-media-worker-runtime.mjs production activate; printf true > "$RUNNER_TEMP/production-media-worker-mutated"
+          printf true > "$RUNNER_TEMP/production-worker-mutated"; RELEASE_WORKER_VERSION="$version" EXPECTED_WORKER_BUNDLE_SHA256="$EXPECTED_WORKER_BUNDLE_SHA256" EXPECTED_WORKER_CODE_SHA256="$EXPECTED_WORKER_CODE_SHA256" node .deploy/release-worker-runtime.mjs production activate
+          printf true > "$RUNNER_TEMP/production-media-worker-mutated"; RELEASE_MEDIA_WORKER_VERSION="$media_version" EXPECTED_MEDIA_WORKER_BUNDLE_SHA256="$EXPECTED_MEDIA_WORKER_BUNDLE_SHA256" EXPECTED_MEDIA_WORKER_CODE_SHA256="$EXPECTED_MEDIA_WORKER_CODE_SHA256" node .deploy/release-media-worker-runtime.mjs production activate
           test_hosting_version_id="${TEST_HOSTING_VERSION##*/}"
           test -n "$test_hosting_version_id"
-          npx --yes firebase-tools@latest hosting:clone "soridraw-test@$test_hosting_version_id" soridraw:live --project "$FIREBASE_PROJECT" --non-interactive
           printf true > "$RUNNER_TEMP/production-hosting-mutated"
+          npx --yes firebase-tools@latest hosting:clone "soridraw-test:@$test_hosting_version_id" soridraw:live --project "$FIREBASE_PROJECT" --non-interactive
           echo FIREBASE_PRODUCTION_HOSTING_CLONED_FROM_TEST=PASS
 
       - name: PROD_VERIFY
@@ -427,7 +436,7 @@ jobs:
           expected_test_hosting="$(printf '%s\t%s' "$TEST_HOSTING_RELEASE" "$TEST_HOSTING_VERSION")"
           test "$(curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/sites/soridraw-test/channels/live/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv')" = "$expected_test_hosting"
           test "$(git ls-remote origin refs/heads/production|cut -f1)" = "$(cat "$RUNNER_TEMP/production-before")"
-          git push origin "$(cat "$RUNNER_TEMP/production-promoted"):refs/heads/production"; printf true > "$RUNNER_TEMP/production-branch-mutated"
+          printf true > "$RUNNER_TEMP/production-branch-mutated"; git push origin "$(cat "$RUNNER_TEMP/production-promoted"):refs/heads/production"
           node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update RELEASED || echo 'RELEASE_STATUS_RELEASED_UPDATE=WARNING'
 
       - name: Rollback branch and Worker traffic after deployment failure
@@ -436,34 +445,102 @@ jobs:
         run: |
           set +e
           mutated=false
+          rollback_failed=false
           for flag in "$RUNNER_TEMP"/*-mutated; do
             [ -f "$flag" ] && [ "$(cat "$flag")" = true ] && mutated=true
           done
           [ "$mutated" = true ] && node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update ROLLED_BACK || true
           rollback_worker(){ stage="$1"; version="$2"; schedules="$3"; flag="$4"; [ "$(cat "$flag" 2>/dev/null)" = true ] || return; cd "$RELEASE_ROOT"; RELEASE_WORKER_VERSION="$version" RELEASE_WORKER_SCHEDULES_JSON="$(cat "$schedules")" node .deploy/release-worker-runtime.mjs "$stage" restore; }
           rollback_media_worker(){ stage="$1"; version="$2"; flag="$3"; [ "$(cat "$flag" 2>/dev/null)" = true ] || return; cd "$RELEASE_ROOT"; RELEASE_MEDIA_WORKER_VERSION="$version" node .deploy/release-media-worker-runtime.mjs "$stage" restore; }
-          rollback_release(){ flag="$1"; tag_file="$2"; [ "$(cat "$flag" 2>/dev/null)" = true ] || return; tag="$(cat "$tag_file" 2>/dev/null)"; [ -n "$tag" ] || return; gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag; }
-          rollback_branch(){ branch="$1"; original="$2"; promoted_file="$3"; flag="$4"; [ "$(cat "$flag" 2>/dev/null)" = true ] || return; [ -f "$promoted_file" ] || return; current="$(git ls-remote origin "refs/heads/$branch"|cut -f1)"; test "$current" = "$(cat "$promoted_file")" || return; tree="$(git rev-parse "$original^{tree}")"; rollback="$(printf 'rollback: restore %s after failed controlled release\n' "$branch"|git commit-tree "$tree" -p "$current")"; git push origin "$rollback:refs/heads/$branch"; }
-          if [ "${{ steps.request.outputs.mode }}" = test ]; then
-            rollback_worker test "$(cat "$RUNNER_TEMP/test-worker-before" 2>/dev/null)" "$RUNNER_TEMP/test-worker-schedules-before" "$RUNNER_TEMP/test-worker-mutated"
-            rollback_media_worker test "$(cat "$RUNNER_TEMP/test-media-worker-before" 2>/dev/null)" "$RUNNER_TEMP/test-media-worker-mutated"
-            rollback_release "$RUNNER_TEMP/test-release-mutated" "$RUNNER_TEMP/test-release-tag"
-            rollback_branch main "$(cat "$RUNNER_TEMP/main-before")" "$RUNNER_TEMP/main-promoted" "$RUNNER_TEMP/test-branch-mutated"
-            if [ "$(cat "$RUNNER_TEMP/test-hosting-mutated" 2>/dev/null)" = true ]; then
-              rm -rf "$RUNNER_TEMP/hosting-rollback"; git worktree add --detach "$RUNNER_TEMP/hosting-rollback" "$(cat "$RUNNER_TEMP/main-before")"
-              (cd "$RUNNER_TEMP/hosting-rollback" && npm ci --no-audit --no-fund && npm run build && npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-test.json --non-interactive)
+          rollback_release(){
+            local flag="$1" tag_file="$2" tag
+            [ "$(cat "$flag" 2>/dev/null)" = true ] || return 0
+            tag="$(cat "$tag_file" 2>/dev/null)" || return 1
+            [[ "$tag" =~ ^soridraw-test-v[0-9]+-[0-9a-f]{12}$ ]] || return 1
+            if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || return 1
             fi
+            # The tag itself may have been published before gh release create
+            # failed; never leave an orphan that blocks future TEST attempts.
+            if git ls-remote --tags origin "refs/tags/$tag" | grep -q .; then
+              git push origin ":refs/tags/$tag" || return 1
+            fi
+            ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 &&
+              ! git ls-remote --tags origin "refs/tags/$tag" | grep -q .
+          }
+          rollback_branch(){
+            local branch="$1" original="$2" promoted_file="$3" flag="$4" current tree rollback
+            [ "$(cat "$flag" 2>/dev/null)" = true ] || return 0
+            [ -f "$promoted_file" ] || { echo "ROLLBACK_BRANCH_MISSING_PROMOTED_SHA=$branch"; return 1; }
+            current="$(git ls-remote origin "refs/heads/$branch"|cut -f1)" || return 1
+            [ "$current" = "$original" ] && return 0
+            [ "$current" = "$(cat "$promoted_file")" ] || { echo "ROLLBACK_BRANCH_UNEXPECTED_HEAD=$branch"; return 1; }
+            tree="$(git rev-parse "$original^{tree}")" || return 1
+            rollback="$(printf 'rollback: restore %s after failed controlled release\n' "$branch"|git commit-tree "$tree" -p "$current")" || return 1
+            git push origin "$rollback:refs/heads/$branch" || return 1
+            [ "$(git ls-remote origin "refs/heads/$branch"|cut -f1)" = "$rollback" ] || return 1
+            echo "ROLLBACK_BRANCH_PREVIOUS_TREE=PASS branch=$branch"
+          }
+          # Restore the exact previously deployed Firebase Hosting VERSION, never
+          # a fresh rebuild from an old Git tree. A CLI can return nonzero after
+          # a successful remote clone; verify both live version and HTML bytes.
+          restore_hosting(){
+            local site="$1" expected_file="$2" hash_file="$3" flag="$4"
+            local expected version_id current clone_exit=0 verified=false expected_hash
+            [ "$(cat "$flag" 2>/dev/null)" = true ] || return 0
+            [ -s "$expected_file" ] && [ -s "$hash_file" ] || return 1
+            expected="$(cut -f2 "$expected_file")"
+            [[ "$expected" =~ ^sites/$site/versions/[A-Za-z0-9_-]+$ ]] || { echo "HOSTING_BACKUP_ID_MISSING=$site"; return 1; }
+            version_id="${expected##*/}"
+            expected_hash="$(cat "$hash_file")"
+            [[ "$expected_hash" =~ ^[a-f0-9]{64}$ ]] || return 1
+            hosting_current_version(){
+              curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" \
+                "https://firebasehosting.googleapis.com/v1beta1/sites/$site/channels/live/releases?pageSize=1" |
+                jq -er '.releases[0].version.name'
+            }
+            current="$(hosting_current_version)" || return 1
+            if [ "$current" != "$expected" ]; then
+              npx --yes firebase-tools@latest hosting:clone "$site:@$version_id" "$site:live" \
+                --project "$FIREBASE_PROJECT" --non-interactive || clone_exit=$?
+              echo "HOSTING_RESTORE_CLI_EXIT=$site:$clone_exit"
+            fi
+            # Exact artifact + fresh CDN responses must match saved live baseline;
+            # bounded retry handles CDN propagation without hiding divergence.
+            for attempt in $(seq 1 12); do
+              current="$(hosting_current_version)" || current=UNVERIFIED
+              if [ "$current" = "$expected" ]; then
+                hash="$(curl -fsS -H 'Cache-Control: no-cache, no-store' "https://$site.web.app/" | sha256sum | cut -d' ' -f1)" || hash=UNVERIFIED
+                if [ "$hash" = "$expected_hash" ]; then verified=true; break; fi
+              fi
+              [ "$attempt" = 12 ] || sleep 5
+            done
+            [ "$verified" = true ] || { echo "HOSTING_PREVIOUS_VERSION_OR_BYTES_UNVERIFIED=$site"; return 1; }
+            echo "HOSTING_EXACT_PREVIOUS_VERSION_AND_INDEX=PASS site=$site"
+          }
+          if [ "${{ steps.request.outputs.mode }}" = test ]; then
+            rollback_worker test "$(cat "$RUNNER_TEMP/test-worker-before" 2>/dev/null)" "$RUNNER_TEMP/test-worker-schedules-before" "$RUNNER_TEMP/test-worker-mutated" || rollback_failed=true
+            rollback_media_worker test "$(cat "$RUNNER_TEMP/test-media-worker-before" 2>/dev/null)" "$RUNNER_TEMP/test-media-worker-mutated" || rollback_failed=true
+            rollback_release "$RUNNER_TEMP/test-release-mutated" "$RUNNER_TEMP/test-release-tag" || rollback_failed=true
+            rollback_branch main "$(cat "$RUNNER_TEMP/main-before")" "$RUNNER_TEMP/main-promoted" "$RUNNER_TEMP/test-branch-mutated" || rollback_failed=true
+            restore_hosting soridraw-test "$RUNNER_TEMP/test-hosting-before" "$RUNNER_TEMP/test-host-before" "$RUNNER_TEMP/test-hosting-mutated" || rollback_failed=true
           fi
           if [ "${{ steps.request.outputs.mode }}" = production ]; then
-            rollback_worker production "$(cat "$RUNNER_TEMP/production-worker-before" 2>/dev/null)" "$RUNNER_TEMP/production-worker-schedules-before" "$RUNNER_TEMP/production-worker-mutated"
-            rollback_media_worker production "$(cat "$RUNNER_TEMP/production-media-worker-before" 2>/dev/null)" "$RUNNER_TEMP/production-media-worker-mutated"
-            rollback_branch production "$(cat "$RUNNER_TEMP/production-before")" "$RUNNER_TEMP/production-promoted" "$RUNNER_TEMP/production-branch-mutated"
-            if [ "$(cat "$RUNNER_TEMP/production-hosting-mutated" 2>/dev/null)" = true ]; then
-              rm -rf "$RUNNER_TEMP/hosting-rollback"; git worktree add --detach "$RUNNER_TEMP/hosting-rollback" "$(cat "$RUNNER_TEMP/production-before")"
-              (cd "$RUNNER_TEMP/hosting-rollback" && npm ci --no-audit --no-fund && npm run build && npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-production.json --non-interactive)
-            fi
+            rollback_worker production "$(cat "$RUNNER_TEMP/production-worker-before" 2>/dev/null)" "$RUNNER_TEMP/production-worker-schedules-before" "$RUNNER_TEMP/production-worker-mutated" || rollback_failed=true
+            rollback_media_worker production "$(cat "$RUNNER_TEMP/production-media-worker-before" 2>/dev/null)" "$RUNNER_TEMP/production-media-worker-mutated" || rollback_failed=true
+            rollback_branch production "$(cat "$RUNNER_TEMP/production-before")" "$RUNNER_TEMP/production-promoted" "$RUNNER_TEMP/production-branch-mutated" || rollback_failed=true
+            restore_hosting soridraw "$RUNNER_TEMP/production-hosting-before" "$RUNNER_TEMP/production-host-before" "$RUNNER_TEMP/production-hosting-mutated" || rollback_failed=true
           fi
           [ "$mutated" = true ] && node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update FAILED || true
+          if [ "$rollback_failed" = true ]; then
+            echo 'RELEASE_ROLLBACK_INCOMPLETE_MANUAL_HOLD=FAIL'
+            exit 1
+          fi
+          if [ "$mutated" = true ]; then
+            echo 'RELEASE_ROLLBACK_ATTEMPTED_COMPONENTS_VERIFIED=PASS'
+          else
+            echo 'RELEASE_PREFLIGHT_FAILED_NO_MUTATION=PASS'
+          fi
 
       - name: Record pre-mutation failure as BLOCKED
         if: failure()

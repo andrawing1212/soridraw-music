@@ -27,6 +27,22 @@ export const NOTIFICATION_PREFERENCES_DEFAULT: NotificationPreferences = {
   like: true, follow: true, complete: true, announcement: true, message: true,
 };
 
+/** All five user-facing notification types are controlled together. A mixed
+ * selection becomes all-on with one click; the next click turns all off.
+ * This is local UI state only, not a backend delivery master switch. */
+export function areAllNotificationPreferencesEnabled(data: NotificationPreferences): boolean {
+  return (Object.keys(NOTIFICATION_PREFERENCES_DEFAULT) as NotificationCategory[])
+    .every((category) => data[category]);
+}
+
+export function toggleAllNotificationPreferences(data: NotificationPreferences): NotificationPreferences {
+  const nextEnabled = !areAllNotificationPreferencesEnabled(data);
+  return Object.fromEntries(
+    (Object.keys(NOTIFICATION_PREFERENCES_DEFAULT) as NotificationCategory[])
+      .map((category) => [category, nextEnabled]),
+  ) as NotificationPreferences;
+}
+
 const keyFor = (uid: string) => 'soridraw:notification-preferences:v1:' + encodeURIComponent(uid);
 
 /** Local UI preference during the initial panel release.

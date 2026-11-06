@@ -72,6 +72,20 @@
   margin-left:3px;
 }
 .soridraw-notification-empty{text-align:center;color:#a9a9ae;padding:44px 10px}
+.soridraw-notification-setting-master{
+  display:flex;align-items:center;gap:12px;padding:14px 7px;
+  background:#29292b;border-radius:13px;margin:3px 0 0;
+}
+.soridraw-notification-master-button{
+  flex:none;min-width:74px;min-height:36px;padding:0 11px;
+  border:0;border-radius:11px;background:#414144;color:#f7f7f8;
+  font:inherit;font-size:12px;font-weight:700;cursor:pointer;
+}
+.soridraw-notification-master-button:hover{background:#515154}
+.soridraw-notification-master-button:focus-visible{outline:2px solid #eee;outline-offset:2px}
+.soridraw-notification-settings-divider{
+  height:1px;background:#39393c;margin:15px 7px 5px;
+}
 .soridraw-notification-setting-row{
   display:flex;align-items:center;gap:12px;padding:15px 7px;cursor:pointer;
 }

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { transform } from 'esbuild';
 const file = (p) => readFileSync(p, 'utf8');
 const rail = file('src/components/studio/StudioLeftRail.tsx');
 const panel = file('src/components/studio/NotificationPanel.tsx');
@@ -23,6 +24,26 @@ assert.doesNotMatch(panel,/화면 미리보기 · 실제 사용자 알림이 아
 assert.doesNotMatch(panel,/알림 종류 선택은 현재 이 기기에 저장됩니다/);
 assert.doesNotMatch(panel,/알림 취합 주기는 관리자만 변경할 수 있습니다/);
 assert.match(model,/NOTIFICATION_PREFERENCES_DEFAULT/);
+const { code: modelCode } = await transform(model, { loader: 'ts', format: 'esm', target: 'es2022' });
+const preferenceModule = await import('data:text/javascript;base64,' + Buffer.from(modelCode).toString('base64'));
+const defaults = { ...preferenceModule.NOTIFICATION_PREFERENCES_DEFAULT };
+const off = Object.fromEntries(Object.keys(defaults).map((key) => [key, false]));
+const mixed = { ...off, follow: true };
+assert.equal(Object.keys(defaults).length, 5, 'all five notification categories must be included');
+assert.equal(preferenceModule.areAllNotificationPreferencesEnabled(defaults), true);
+assert.equal(preferenceModule.areAllNotificationPreferencesEnabled(mixed), false);
+assert.deepEqual(preferenceModule.toggleAllNotificationPreferences(defaults), off, 'all on -> all off');
+assert.deepEqual(preferenceModule.toggleAllNotificationPreferences(off), defaults, 'all off -> all on');
+assert.deepEqual(preferenceModule.toggleAllNotificationPreferences(mixed), defaults, 'mixed -> all on');
+assert.equal(mixed.follow, true, 'all toggle must not mutate the previous state');
+assert.match(panel, /className="soridraw-notification-setting-master"/);
+assert.match(panel, /className="soridraw-notification-settings-divider"/);
+assert.match(panel, /aria-pressed=\{allEnabled\} onClick=\{toggleAllPreferences\}/);
+assert.match(panel, /saveNotificationPreferences\(uid, next\)/);
+assert.ok(panel.indexOf('className="soridraw-notification-setting-master"') <
+  panel.indexOf('TYPES.map((item)'), 'master toggle must be above individual preferences');
+assert.match(file('src/components/studio/notificationPanel.css'), /\.soridraw-notification-master-button\{/);
+console.log('NOTIFICATION_MASTER_ALL_ON_OFF_MIXED_AND_LOCAL_SAVE=PASS');
 assert.doesNotMatch(panel,/setInterval\(|onSnapshot\(|getDocs\(|getDoc\(/);
 assert.doesNotMatch(panel,/saveNotificationPreferences\(uid, next\)[\s\S]*?setDoc\(/);
 assert.match(admin,/NotificationAdminSchedule/);

@@ -7,8 +7,9 @@ import { useGlobalPlayerControls } from '../../contexts/GlobalPlayerContext';
 import { setExploreFollow } from '../../services/exploreSocialService';
 import {
   NOTIFICATION_EXAMPLE_ROWS, NOTIFICATION_PREFERENCES_DEFAULT,
-  isNotificationVisualPreview, readNotificationPreferences,
-  saveNotificationPreferences, type InboxNotification, type NotificationCategory,
+  areAllNotificationPreferencesEnabled, isNotificationVisualPreview,
+  readNotificationPreferences, saveNotificationPreferences,
+  toggleAllNotificationPreferences, type InboxNotification, type NotificationCategory,
   type NotificationPreferences,
 } from '../../services/notifications/notificationModel';
 import './notificationPanel.css';
@@ -130,6 +131,13 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
   const rows = useMemo(() => (visualExample ? NOTIFICATION_EXAMPLE_ROWS : [])
     .filter((row) => prefs[row.category]), [visualExample, prefs]);
 
+  const allEnabled = areAllNotificationPreferencesEnabled(prefs);
+  const anyEnabled = TYPES.some(({ key }) => prefs[key]);
+  const toggleAllPreferences = () => {
+    const next = toggleAllNotificationPreferences(prefs);
+    setPrefs(next);
+    saveNotificationPreferences(uid, next);
+  };
   const updatePreference = (category: NotificationCategory) => {
     const next = { ...prefs, [category]: !prefs[category] };
     setPrefs(next);
@@ -205,6 +213,22 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
 
       {settingsOpen ? (
         <div className="soridraw-notification-settings">
+          <div className="soridraw-notification-setting-master">
+            <span className="soridraw-notification-category-icon" aria-hidden="true">
+              <Bell size={18} />
+            </span>
+            <span className="soridraw-notification-setting-copy">
+              <strong>전체 알림</strong>
+              <small>{allEnabled ? '모든 알림이 켜져 있습니다' :
+                anyEnabled ? '일부 알림만 켜져 있습니다' : '모든 알림이 꺼져 있습니다'}</small>
+            </span>
+            <button type="button" className="soridraw-notification-master-button"
+              aria-label={allEnabled ? '전체 알림 끄기' : '전체 알림 켜기'}
+              aria-pressed={allEnabled} onClick={toggleAllPreferences}>
+              {allEnabled ? '전체 끄기' : '전체 켜기'}
+            </button>
+          </div>
+          <div className="soridraw-notification-settings-divider" aria-hidden="true" />
           {TYPES.map((item) => (
             <label key={item.key} className="soridraw-notification-setting-row">
               <span className="soridraw-notification-category-icon" data-type={item.key}>

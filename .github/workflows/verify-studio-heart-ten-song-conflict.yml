@@ -7,6 +7,8 @@ on:
       - 'src/lib/studioHeartBatch.ts'
       - 'src/lib/studioHeartClickGuard.ts'
       - 'src/lib/studioHeartConflictRecovery.ts'
+      - 'src/lib/studioHeartVisibleSaved.ts'
+      - 'scripts/verify-studio-heart-recent-confirmation.mjs'
       - 'src/lib/studioHeartHandoffPayload.ts'
       - 'src/services/studioHeartHandoff.ts'
       - 'scripts/verify-studio-heart-handoff-payload.mjs'

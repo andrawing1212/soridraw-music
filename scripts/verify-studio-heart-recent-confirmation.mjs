@@ -33,6 +33,49 @@ assert.match(app,/confirmStudioHeartRecentFromCanonical\(uid, safeDocumentId, in
 assert.match(app,/confirmStudioHeartRecentFromCanonical\(uid, documentId, desiredSaved, settledRecentSource\)/);
 assert.match(app,/if \(settled\) \{\s*\/\/ The receipt is now canonical\.[\s\S]{0,1900}confirmStudioHeartRecentFromCanonical/,
   'recent heart authority is updated only after the exact receipt settles canonically');
+
+const displaySource = readFileSync('src/lib/studioHeartVisibleSaved.ts','utf8');
+const displayCode = (await transform(displaySource, { loader: 'ts', format: 'esm' })).code;
+const { resolveStudioHeartVisibleSaved } =
+  await import('data:text/javascript;base64,'+Buffer.from(displayCode).toString('base64'));
+const heart = (overrides = {}) => resolveStudioHeartVisibleSaved({
+  catalogVerified: false, musicNoteMembership: false, recentHeartSaved: true, ...overrides,
+});
+// Reproduced update mismatch: an old confirmed saved heart survived while
+// the verified same-UID Music Note list no longer contained that exact doc.
+assert.equal(heart(), true, 'unverified/withheld Catalog never erases known Recent state');
+assert.equal(heart({catalogVerified:true}), false,
+  'a verified complete Music Note membership beats stale persisted saved=true');
+assert.equal(heart({catalogVerified:true,musicNoteMembership:true,recentHeartSaved:false}), true,
+  'verified saved Membership beats stale persisted saved=false');
+assert.equal(heart({catalogVerified:true,pending:{
+  desiredSaved:true,signalVersion:3,pendingRemotePreviewVersion:0,
+}}), true, 'new local save outranks older canonical list');
+assert.equal(heart({catalogVerified:true,musicNoteMembership:true,pending:{
+  desiredSaved:false,signalVersion:3,pendingRemotePreviewVersion:0,
+}}), false, 'new local unsave outranks older canonical list');
+assert.equal(heart({catalogVerified:true,pending:{
+  desiredSaved:true,signalVersion:3,pendingRemotePreviewVersion:4,
+},preview:{desiredSaved:false,version:4}}), false,
+  'explicitly newer remote preview outranks older local pending');
+assert.equal(heart({catalogVerified:true,pending:{
+  desiredSaved:true,signalVersion:3,pendingRemotePreviewVersion:0,
+},preview:{desiredSaved:false,version:4}}), true,
+  'newer local click reset must not be reversed by stale remote preview');
+assert.equal(heart({catalogVerified:false,recentHeartSaved:null,legacyUnsaved:true}),false,
+  'legacy recent unsaved marker survives until Catalog becomes verified');
+const savedFn = app.slice(app.indexOf('  const isSongFavorited = useCallback('),
+  app.indexOf('  const getFavoriteTitleFingerprint =', app.indexOf('  const isSongFavorited = useCallback(')));
+assert.match(savedFn,/linkedFavoriteId \?\s*statusMap\.has\(linkedFavoriteId\)/,
+  'exact linked Music Note doc is the heart lookup');
+assert.match(savedFn,/resolveStudioHeartVisibleSaved\(/);
+assert.match(savedFn,/gate\.catalogSourceVerified/);
+assert.match(savedFn,/listStudioHeartPendingIntents\(uid\)/);
+assert.doesNotMatch(savedFn,/\b(getDoc|getDocs|setDoc|updateDoc|fetch)\s*\(/);
+assert.match(app,/gate\.catalogSourceVerified = isFullMusicNoteCatalog && \(/);
+console.log('STUDIO_HEART_VERIFIED_MUSIC_NOTE_VISIBLE_MEMBERSHIP_AGREEMENT=PASS');
+console.log('STUDIO_HEART_PENDING_AND_REMOTE_PREVIEW_PRIORITY_PRESERVED=PASS');
+console.log('STUDIO_HEART_RESTART_NO_EXTRA_SERVER_IO=PASS');
 console.log('STUDIO_HEART_EXACT_RECENT_LINK_ONLY=PASS');
 console.log('STUDIO_HEART_NEWER_LOCAL_REMOTE_PREVIEW_PROTECTED=PASS');
 console.log('STUDIO_HEART_CROSS_DEVICE_HANDOFF_CANONICAL_RECENT_AUTHORITY=PASS');

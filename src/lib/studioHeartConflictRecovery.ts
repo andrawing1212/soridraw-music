@@ -10,6 +10,22 @@ export const shouldApplyStudioHeartSignalOnAttach = (
   retainedOrReplayed: boolean,
 ): boolean => !(retainedOrReplayed && isUnconfirmedStudioHeartPreview(operation));
 
+// A verified, newer RTDB receipt can supersede a *previously ACKed*
+// local outbox from another device. Never discard a locally newer/unACKed click.
+export const canStudioHeartReceiptTakeOverOlderLocal = (
+  pending: Pick<StudioHeartPendingIntent, 'documentId' | 'handoffSeq'> | null,
+  receipt: { documentId: string; seq: number; originDeviceId: string } | null,
+  localDeviceId: string,
+): boolean => Boolean(
+  pending && receipt && localDeviceId
+  && pending.documentId === receipt.documentId
+  && Number.isSafeInteger(receipt.seq)
+  && receipt.seq > 0
+  && Number(pending.handoffSeq || 0) > 0
+  && receipt.seq > Number(pending.handoffSeq)
+  && receipt.originDeviceId !== localDeviceId
+);
+
 // Pure decisions shared by the recovery path and the ten-song regression.
 // A preview is never a canonical Firestore acknowledgement.
 export const isStudioHeartRemoteSuperseded = (

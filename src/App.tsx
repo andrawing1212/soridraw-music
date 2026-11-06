@@ -54,6 +54,7 @@ import {
 import {
   canRetireStudioHeartPendingFromCanonical,
   isStudioHeartRemoteSuperseded,
+  canStudioHeartReceiptTakeOverOlderLocal,
   rebaseStudioHeartPendingAfterCommit,
   shouldApplyStudioHeartSignalOnAttach,
 } from './lib/studioHeartConflictRecovery';
@@ -12336,7 +12337,12 @@ const toggleCycleVariantSelection = (
     // closed before the 5s canonical flush, another signed-in device can claim it.
     void publishStudioHeartHandoff(uid, safeDocumentId, desiredSaved, intent.song, now)
       .then((receipt) => {
-        if (!receipt) return;
+        if (!receipt) {
+          // A full receipt inbox or a rejected transaction is NOT an ACK.
+          // Preserve the durable local outbox; never imply cross-device safety.
+          showToast('기기 간 저장 인계를 확인하지 못했습니다. 저장 완료 전 앱을 종료하지 마세요.');
+          return;
+        }
         updateStudioHeartPendingIntent(uid, safeDocumentId, (latest) =>
           latest.updatedAtMs === now && latest.desiredSaved === desiredSaved
             ? { ...latest, handoffSeq: receipt.seq } : latest
@@ -12392,6 +12398,7 @@ const toggleCycleVariantSelection = (
     const processing = new Set<string>();
     const recoverAttempts = new Map<string, StudioHeartHandoffRecoveryAttempt>();
     const latestReceipts = new Map<string, import('./services/studioHeartHandoff').StudioHeartHandoffReceipt>();
+    const localCommitDeferrals = new Map<string, number>();
     const clearScheduled = (id: string) => {
       const timer = scheduled.get(id);
       if (timer !== undefined) clearTimeout(timer);
@@ -12399,8 +12406,31 @@ const toggleCycleVariantSelection = (
     };
     const recover = async (documentId: string, version: number, desiredSaved: boolean) => {
       if (closed || processing.has(documentId) || auth.currentUser?.uid !== uid) return;
-      // The originating device already has its exact durable local outbox.
-      if (readStudioHeartPendingIntent(uid, documentId)) return;
+      const localPending = readStudioHeartPendingIntent(uid, documentId);
+      const received = latestReceipts.get(documentId) || null;
+      // The old rule skipped ALL other-device recoveries when this browser
+      // retained a prior outbox. That deadlocked two-device fast-close tests:
+      // B had an older ACKed click, while A had already published newer intent.
+      const takeoverOlderLocal = canStudioHeartReceiptTakeOverOlderLocal(
+        localPending, received, studioHeartHandoffDeviceId(),
+      );
+      if (localPending && !takeoverOlderLocal) return;
+      if (takeoverOlderLocal && studioHeartCommitInFlightRef.current.has(documentId)) {
+        // Let an older same-song local writer stop before the new owner claims.
+        // Only an already-received receipt is eligible; no server polling.
+        const count = localCommitDeferrals.get(documentId) || 0;
+        if (count < 15) {
+          localCommitDeferrals.set(documentId, count + 1);
+          clearScheduled(documentId);
+          scheduled.set(documentId, setTimeout(() => {
+            scheduled.delete(documentId);
+            void recover(documentId, version, desiredSaved);
+          }, 2_000));
+        }
+        return;
+      }
+      localCommitDeferrals.delete(documentId);
+      if (takeoverOlderLocal) clearStudioHeartIntentTimer(documentId);
       const nextAttempt = nextStudioHeartHandoffRecoveryAttempt(
         recoverAttempts.get(documentId) || null, version, Date.now(),
       );
@@ -12421,7 +12451,10 @@ const toggleCycleVariantSelection = (
           // A stale receipt must not overwrite a later request.
           const current = await readStudioHeartHandoff(uid, documentId);
           if (!current || current.seq !== version || current.claimToken !== claim.token
-            || closed || auth.currentUser?.uid !== uid) return;
+            || closed || auth.currentUser?.uid !== uid
+            || (takeoverOlderLocal && !canStudioHeartReceiptTakeOverOlderLocal(
+              readStudioHeartPendingIntent(uid, documentId), claim.receipt, studioHeartHandoffDeviceId(),
+            ))) return;
           let song: any = serverFavorite || {};
           if (desiredSaved) {
             if (!claim.receipt.songJson) return;
@@ -12448,6 +12481,34 @@ const toggleCycleVariantSelection = (
         }
         settled = await settleStudioHeartHandoff(uid, documentId, version, claim.token);
         if (settled) {
+          // The receipt is now canonical. Retire only the proven older local
+          // outbox, not a fresh unsent click or unrelated pending song.
+          if (takeoverOlderLocal && canStudioHeartReceiptTakeOverOlderLocal(
+            readStudioHeartPendingIntent(uid, documentId), claim.receipt, studioHeartHandoffDeviceId(),
+          )) {
+            clearStudioHeartIntentTimer(documentId);
+            removeStudioHeartPendingIntent(uid, documentId);
+            // If canonical already matched (another device finished first),
+            // toggleFavorite never ran on B. Replace B's stale optimistic row
+            // with the exact canonical snapshot we already read: no new I/O.
+            if (actualSaved === desiredSaved) {
+              if (desiredSaved) forgetFavoriteDeletedTombstones(uid, [documentId]);
+              else rememberFavoriteDeletedTombstones(uid, [documentId]);
+              setFavorites((previous) => {
+                const withoutOlder = (previous || []).filter((favorite) => (
+                  String(favorite?.firestoreId || favorite?.id || '').trim() !== documentId
+                ));
+                const next = desiredSaved && serverFavorite
+                  ? mergeFavoritePages([serverFavorite], withoutOlder)
+                  : withoutOlder;
+                const sorted = sortFavoriteList(next);
+                writeFavoritesCache(uid, sorted);
+                return sorted;
+              });
+            } else {
+              setFavorites((previous) => previous);
+            }
+          }
           confirmStudioHeartRecentFromCanonical(uid, documentId, desiredSaved, settledRecentSource);
           clearScheduled(documentId);
         }
@@ -12458,6 +12519,15 @@ const toggleCycleVariantSelection = (
           void releaseStudioHeartHandoff(uid, documentId, version, claim.token).catch(() => {});
         }
         processing.delete(documentId);
+        // A second device can publish a newer opposite click while this
+        // slower Firestore claim is in flight. Its timer may have fired during
+        // processing.has(...), so re-arm the latest event after the old work
+        // releases the per-song lock rather than silently losing that click.
+        const newest = latestReceipts.get(documentId);
+        if (!closed && newest && (newest.seq !== version || newest.desiredSaved !== desiredSaved)) {
+          receive(newest);
+          return;
+        }
         // A rejected/failed claim may produce NO child_changed event.
         // Reschedule only this outstanding exact receipt, at most twice
         // more in this session; no idle-account polling or extra reads.
@@ -12499,6 +12569,7 @@ const toggleCycleVariantSelection = (
     };
     const stop = subscribeStudioHeartHandoffs(uid, receive, (id) => {
       latestReceipts.delete(id);
+      localCommitDeferrals.delete(id);
       clearScheduled(id);
       recoverAttempts.delete(id);
     });
@@ -12522,6 +12593,7 @@ const toggleCycleVariantSelection = (
       scheduled.clear();
       recoverAttempts.clear();
       latestReceipts.clear();
+      localCommitDeferrals.clear();
     };
   }, [user?.uid]);
 

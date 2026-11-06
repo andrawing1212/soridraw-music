@@ -7,6 +7,9 @@ on:
       - 'src/lib/studioHeartBatch.ts'
       - 'src/lib/studioHeartClickGuard.ts'
       - 'src/lib/studioHeartConflictRecovery.ts'
+      - 'src/lib/studioHeartHandoffPayload.ts'
+      - 'src/services/studioHeartHandoff.ts'
+      - 'scripts/verify-studio-heart-handoff-payload.mjs'
       - 'scripts/verify-studio-heart-ten-song-conflict.mjs'
       - 'scripts/verify-studio-heart-close-reconnect.mjs'
       - 'scripts/verify-studio-heart-five-second-click-guard.mjs'
@@ -30,8 +33,10 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: Ten-song conflict and recovery fixtures
-        run: node scripts/verify-studio-heart-ten-song-conflict.mjs
+      - name: Ten-song conflict, older-outbox handoff, and compact receipt fixtures
+        run: |
+          node scripts/verify-studio-heart-ten-song-conflict.mjs
+          node scripts/verify-studio-heart-handoff-payload.mjs
       - name: Reconnect after closing a pending Studio heart
         run: node scripts/verify-studio-heart-close-reconnect.mjs
       - name: Five-second batch and click guard

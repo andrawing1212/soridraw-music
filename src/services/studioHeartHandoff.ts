@@ -1,5 +1,6 @@
 import { get, onChildAdded, onChildChanged, onChildRemoved, ref, runTransaction, type Unsubscribe } from 'firebase/database';
 import { realtimeDb } from '../firebase';
+import { buildStudioHeartHandoffSongJson } from '../lib/studioHeartHandoffPayload';
 
 export type StudioHeartHandoffReceipt = {
   documentId: string;
@@ -84,13 +85,9 @@ export const publishStudioHeartHandoff = async (
 ): Promise<StudioHeartHandoffReceipt | null> => {
   const id = safeKey(documentId);
   if (!uid || !id || typeof desiredSaved !== 'boolean') return null;
-  let songJson = '';
-  if (desiredSaved) {
-    try { songJson = JSON.stringify(song); }
-    catch { throw new Error('STUDIO_HEART_HANDOFF_SONG_NOT_SERIALIZABLE'); }
-    if (!songJson || songJson.length > MAX_SONG_JSON)
-      throw new Error('STUDIO_HEART_HANDOFF_SONG_TOO_LARGE');
-  }
+  // Original full snapshot is used where it fits; oversized UI metadata
+  // falls back to a complete canonical save snapshot without a schema change.
+  const songJson = desiredSaved ? buildStudioHeartHandoffSongJson(song, MAX_SONG_JSON) : '';
   const originDeviceId = getOrigin();
   const outcome = await runTransaction(rootRef(uid), (current: any) => {
     const snapshot = current && typeof current === 'object' ? current : {};

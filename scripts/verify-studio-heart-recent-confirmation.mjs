@@ -31,7 +31,8 @@ assert.match(app,/const confirmStudioHeartRecentFromCanonical = \(/);
 assert.match(app,/rememberRecentHeartAuthority\(uid, recentSong, desiredSaved, documentId, confirmationVersion, true\)/);
 assert.match(app,/confirmStudioHeartRecentFromCanonical\(uid, safeDocumentId, intent\.desiredSaved, intent\.song \|\| serverFavorite\)/);
 assert.match(app,/confirmStudioHeartRecentFromCanonical\(uid, documentId, desiredSaved, settledRecentSource\)/);
-assert.match(app,/if \(settled\) \{[\s\S]{0,140}confirmStudioHeartRecentFromCanonical/);
+assert.match(app,/if \(settled\) \{\s*\/\/ The receipt is now canonical\.[\s\S]{0,1900}confirmStudioHeartRecentFromCanonical/,
+  'recent heart authority is updated only after the exact receipt settles canonically');
 console.log('STUDIO_HEART_EXACT_RECENT_LINK_ONLY=PASS');
 console.log('STUDIO_HEART_NEWER_LOCAL_REMOTE_PREVIEW_PROTECTED=PASS');
 console.log('STUDIO_HEART_CROSS_DEVICE_HANDOFF_CANONICAL_RECENT_AUTHORITY=PASS');

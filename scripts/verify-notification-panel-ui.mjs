@@ -72,14 +72,58 @@ for (const selector of [
   '.soridraw-notification-category-icon',
   '.soridraw-notification-end-icon',
 ]) assert.ok(panelCss.includes(selector), 'missing notification selector: ' + selector);
-assert.match(panelCss,/\.soridraw-notification-follow\{[\s\S]*?background:#353538;color:#f5f5f5/);
+assert.match(panelCss,/\.soridraw-notification-follow\{[\s\S]*?background:#d7d7db;color:#151517/);
+assert.match(panelCss,/\.soridraw-notification-follow:disabled\{opacity:1;cursor:default\}/);
 assert.match(panelCss,/\.soridraw-notification-cover\{[\s\S]*?background:#363638;color:#fff/);
 assert.match(panelCss,/\.soridraw-notification-category-icon\{[^}]*color:#fff/);
 assert.match(panelCss,/\.soridraw-notification-end-icon\{[^}]*color:#f5f5f5/);
-assert.doesNotMatch(panelCss,/#b089ef|#ee7da2|#ad90dc|#77b4ee|#ffbb22|#FFB400/,
-  'notification-specific UI must remain monochrome');
+assert.match(panelCss,/accent-color:#ffbb22/,'checked notification categories are visibly highlighted');
+assert.match(panelCss,/\.soridraw-notification-end-icon\[data-type="announcement"\],[\s\S]*?\.soridraw-notification-category-icon\[data-type="announcement"\]\{color:#84b9ee\}/);
+assert.match(panelCss,/\.soridraw-notification-end-icon\[data-type="message"\],[\s\S]*?\.soridraw-notification-category-icon\[data-type="message"\]\{color:#c4adf4\}/);
+assert.match(panel,/<span className="soridraw-notification-end-icon" data-type=\{row.category\}/);
+assert.doesNotMatch(panelCss,/#b089ef|#ee7da2|#ad90dc|#77b4ee|#FFB400/,
+  'unrequested colorful notification accents must remain removed');
 assert.match(panel,/visualExample && !settingsOpen && <span className="soridraw-notification-preview-tag">예시<\/span>/,
   'preview samples must still be distinguishable from actual user notifications');
-console.log('NOTIFICATION_MONOCHROME_AND_RESIZE_CLOSE=PASS');
+assert.match(panel,/row.category === 'like' \|\| row.category === 'follow'/,
+  'only likes and follows should link the sending username');
+assert.match(panel,/className="soridraw-notification-actor-link"/);
+assert.match(panel,/aria-label=\{row.actorName \+ ' 공개 프로필 열기'\}/);
+assert.match(panel,/onClick=\{\(\) => openProfile\(row\)\}/);
+assert.match(panel,/closeAndNavigate\('\/explore\?profile=' \+ encodeURIComponent\(actorUid\)\)/,
+  'use the same UID-based public profile route as Explore');
+assert.match(panel,/if \(visualExample\) \{\s*setNotice\('예시 사용자에게 연결된 실제 공개 프로필은 없습니다\.'\);\s*return;/,
+  'fake sample actors must never navigate to an invented profile');
+assert.match(panelCss,/\.soridraw-notification-actor-link\{[\s\S]*?color:#fff/);
+assert.doesNotMatch(panelCss,/\.soridraw-notification-actor-link\{[^}]*#ffbb22/,
+  'actor link must keep neutral color');
+console.log('NOTIFICATION_SENDER_NAME_TO_PUBLIC_PROFILE=PASS');
+console.log('NOTIFICATION_NEUTRAL_WITH_SELECTED_ACCENTS_AND_RESIZE_CLOSE=PASS');
+
+assert.match(panel,/row.category === 'announcement' \|\| row.category === 'message' \? \(/,
+  'announcement and private message must use icon instead of avatar');
+assert.match(panel,/className="soridraw-notification-avatar-icon" data-type=\{row.category\}/);
+assert.match(panel,/className="soridraw-notification-detail-open"/);
+assert.match(panel,/<ChevronRight size=\{20\} aria-hidden="true" \/>/);
+assert.match(panel,/onClick=\{\(\) => setSelectedMessage\(row\)\}/);
+assert.match(panel,/className="soridraw-notification-detail-backdrop"/);
+assert.match(panel,/className="soridraw-notification-detail-modal" role="dialog" aria-modal="true"/);
+assert.match(panel,/aria-label="메시지 닫기"/);
+assert.match(panel,/className="soridraw-notification-detail-body"/);
+assert.match(panel,/selectedMessage.body\?\.trim\(\) \|\| selectedMessage.text/);
+assert.match(panel,/className="soridraw-notification-detail-confirm"/);
+assert.match(panel,/>확인<\/button>/);
+assert.match(panel,/if \(selectedMessage\) \{\s*event.stopImmediatePropagation\(\);\s*setSelectedMessage\(null\);/);
+assert.match(panel,/event.stopPropagation\(\);\s*if \(event.target === event.currentTarget\) setSelectedMessage\(null\);/);
+assert.match(model,/body\?: string/);
+assert.match(panelCss,/\.soridraw-notification-avatar-icon\[data-type="announcement"\]\{color:#84b9ee\}/);
+assert.match(panelCss,/\.soridraw-notification-avatar-icon\[data-type="message"\]\{color:#c4adf4\}/);
+assert.match(panelCss,/\.soridraw-notification-detail-backdrop\{[\s\S]*?backdrop-filter:blur\(5px\)/);
+assert.match(panelCss,/\.soridraw-notification-detail-modal\{[\s\S]*?width:min\(460px,100%\)/);
+assert.match(panelCss,/\.soridraw-notification-detail-footer\{[\s\S]*?justify-content:center/);
+assert.doesNotMatch(panel,/fetch\(|onSnapshot\(|setInterval\(/,
+  'notification modal should add no network calls or polling');
+console.log('NOTIFICATION_ADMIN_MESSAGE_DETAIL_MODAL=PASS');
+
 console.log('NOTIFICATION_PANEL_UI_AND_ADMIN_SCHEDULE_SOURCE=PASS');
 console.log('NOTIFICATION_PANEL_NO_POLLING_OR_REAL_USER_EVENTS=PASS');

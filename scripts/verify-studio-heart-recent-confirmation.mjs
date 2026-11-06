@@ -66,7 +66,7 @@ assert.equal(heart({catalogVerified:false,recentHeartSaved:null,legacyUnsaved:tr
   'legacy recent unsaved marker survives until Catalog becomes verified');
 const savedFn = app.slice(app.indexOf('  const isSongFavorited = useCallback('),
   app.indexOf('  const getFavoriteTitleFingerprint =', app.indexOf('  const isSongFavorited = useCallback(')));
-assert.match(savedFn,/linkedFavoriteId \?\s*statusMap\.has\(linkedFavoriteId\)/,
+assert.match(savedFn,/linkedFavoriteId\s*\?\s*statusMap\.has\(linkedFavoriteId\)/,
   'exact linked Music Note doc is the heart lookup');
 assert.match(savedFn,/resolveStudioHeartVisibleSaved\(/);
 assert.match(savedFn,/gate\.catalogSourceVerified/);

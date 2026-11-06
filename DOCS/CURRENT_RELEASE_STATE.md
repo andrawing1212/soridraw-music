@@ -1,3 +1,13 @@
+## CURRENT — Studio 저장 하트↔Music Note 표시 불일치: 검증된 목록 기준 수정·PREVIEW Hosting PASS / 실기기 확인 OPEN (2026-11-06 KST)
+- **디렉터 보고:** 앱 업데이트 후 스튜디오에서 노란색 저장 하트로 표시되지만 Music Note 목록과 저장 상태가 맞지 않는 현상이 반복. 사진에서 스튜디오 제목 `깊어지는 시간의 궤적` 하트 저장 상태 확인; Music Note 사진은 일부 목록만 보여 서버 원본 누락 여부 불명.
+- **확인한 원인:** Studio `isSongFavorited`가 브라우저의 영속 `recentHeartAuthority` 값을 먼저 반환하는 반면 Music Note는 독립 `favoritesStore`와 UID별 Catalog 갱신 목록을 사용. 과거 `confirmed:true` 하트 영수증이 지금 화면의 정확 문서 membership과 다르더라도 하트에 남을 수 있었음.
+- **최소 수정:** #833 검증 SHA `ccd68a3599cedd68b3c40e60b2eb2d188ea64eab`, 소스 merge `6d9006cc86cd266c7fa5c0c44e20af99b3130b1f`. 같은 UID의 전체 Catalog가 검증된 R2 결과이거나 cache/profile revision 영수증 일치 + 기존 RTDB initial-ready 상태인 경우, Studio 하트를 **Music Note와 동일한 활성 `favoritesStore.statusMap`**의 정확한 `favoriteFirestoreId` / `musicNoteFavoriteId` 기준으로 표시. 미검증 Catalog는 과거 하트를 지우는 근거로 쓰지 않음. 아직 확정 전 로컬 pending은 우선, 더 최신으로 명시된 remote preview는 그보다 우선. 편집으로 분리된 Recent Song은 기존 단독 저장 의미 유지. 사용자 원본/카탈로그/하트 데이터를 별도로 재작성하지 않음.
+- **검사:** #833 PR CI **6/6 PASS** (Studio 10곡 / RTDB handoff 에뮬레이터 / Music Note Catalog / Recent 복원 / Auth / TS+Build). 과거 confirmed=true/실제 표시 없음, confirmed=false/표시 있음, pending save/unsave, 순서가 보장된 remote preview 및 기존 비용 보호 회귀 포함.
+- **배포:** Hosting-only #834 merge `e279b6a66dec8c30cef284dd4bd437c160f84da3`, [PREVIEW run #42211215658](https://github.com/andrawing1212/soridraw-music/actions/runs/42211215658) SUCCESS: `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`. 공유 Rules/Functions/Workers/D1/R2 및 사용자 원본 변경 0, 추가 페이지 방문 서버 read/write 없음(코드 계약).
+- **실사용 OPEN:** 인증 PC·모바일에서 동일 곡의 Studio 하트와 Music Note 목록이 앱 업데이트, 재접속, 저장 및 해제 확정 후 일치하는지 사용자 확인 필요. 실제 Firestore 원본이 누락됐는지 여부는 이 코드 검사로 판단 불가. 별도 빠른 종료/서버 ACK 전 클릭 손실 문제는 여전히 미해결 가능; 이 표시 전용 수정으로 전체 동기화 완료 처리 금지.
+
+---
+
 ## CURRENT — Studio 하트 빠른 종료 후 기기 간 불일치: 이전 outbox 차단·최신 인계 복구 수정, PREVIEW 배포 PASS / 실기기 QA OPEN (2026-11-06 KST)
 - **새 디렉터 실사용 FAIL:** PR #827 배포 후에도 A가 하트 저장/해제 후 약 1초에 종료하면 B가 약 3초 뒤 실행해도 최종 상태가 맞지 않는 경우 발생. 양쪽 기기를 함께 다시 실행하면 그제야 `저장되었습니다.` 알림 후 일치. 첫 화면 목록 지연 문제는 별도로 이미 사용자 PASS.
 - **코드에서 확인한 원인·보완:** B에 같은 곡의 오래된 로컬 pending outbox가 존재하면 새 A 영속 RTDB receipt를 무조건 건너뛰던 경로. **B의 이전 요청이 서버 ACK된 seq**보다 A의 영속 영수증 seq가 정확히 더 최신이고 다른 기기일 때만 B가 해당 receipt를 이어받도록 수정. 미확정 최신 로컬 클릭·다른 곡·같은/오래된 seq는 그대로 보호. 예전 in-flight 처리가 새 영수증 이벤트를 삼키는 경우 재예약. 정본 이미 일치할 때 새 Firestore 쓰기 없이 기존 exact read 결과로 B 캐시/하트 교정.

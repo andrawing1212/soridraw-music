@@ -41,7 +41,7 @@ import {
   studioHeartHandoffRecoveryDelay,
   type StudioHeartHandoffRecoveryAttempt,
 } from './lib/studioHeartBatch';
-import { admitStudioHeartClick } from './lib/studioHeartClickGuard';
+import { admitStudioHeartClick, recordStudioHeartAcceptedClick } from './lib/studioHeartClickGuard';
 import {
   canProjectStudioHeartCanonicalToRecent,
   matchStudioHeartCanonicalRecentSongs,
@@ -17301,21 +17301,22 @@ ${normalizePromptForDisplay(result.prompt)}
     const snapshot = getStudioFavoriteSaveSnapshot();
     if (!snapshot) return;
 
-    // Stop excessive same-song clicks before changing UI, outbox or RTDB.
-    // This is browser friction, not a substitute for backend authorization.
-    if (user?.uid) {
-      const clickIdentity = buildRecentSongSyncKey(snapshot)
+    // Check before UI/outbox/RTDB changes, but count only toggles that succeed.
+    const favoriteToggleStartedAt = Date.now();
+    const clickIdentity = user?.uid ? (
+      buildRecentSongSyncKey(snapshot)
         || getLiveSoridrawSongId(snapshot)
-        || String((snapshot as any).favoriteFirestoreId || (snapshot as any).id || '').trim();
-      const clickDecision = admitStudioHeartClick(user.uid, clickIdentity);
+        || String((snapshot as any).favoriteFirestoreId || (snapshot as any).id || '').trim()
+    ) : '';
+    if (user?.uid) {
+      const clickDecision = admitStudioHeartClick(user.uid, clickIdentity, favoriteToggleStartedAt, false);
       if (!clickDecision.allowed) {
-        if (clickDecision.notify) showToast('저장에 문제가 있으신가요? 잠시 후 다시 시도해 주세요.');
+        if (clickDecision.notify) window.alert('저장에 문제가 있다면\n관리자에게 문의하세요.');
         return;
       }
     }
 
     setIsTogglingCurrentStudioFavorite(true);
-    const favoriteToggleStartedAt = Date.now();
     const currentIndex = historyIndexRef.current;
     if (recentSongEditDraft && currentIndex >= 0) {
       const nextHistory = historyRef.current.map((song, index) => index === currentIndex ? snapshot : song);
@@ -17462,6 +17463,9 @@ ${normalizePromptForDisplay(result.prompt)}
                 latestGenerationBatchId: (nextHistory[0]?.appliedKeywords as any)?.generationBatchId || latestGenerationBatchId || null,
               });
             }
+            // The local heart/pending save was accepted. Rejected storage and
+            // locked-song attempts never contribute to the abuse counter.
+            recordStudioHeartAcceptedClick(user.uid, clickIdentity, favoriteToggleStartedAt);
             showToast(intendedFavoriteAction === 'save'
               ? '저장 처리 중 · 서버 저장은 약 5초 후'
               : '저장 해제 처리 중 · 서버 반영은 약 5초 후');
@@ -17537,6 +17541,7 @@ ${normalizePromptForDisplay(result.prompt)}
           true,
         );
       }
+      if (user?.uid) recordStudioHeartAcceptedClick(user.uid, clickIdentity, favoriteToggleStartedAt);
 
       if (currentIndex >= 0) {
         const currentSongAfterToggle = (historyRef.current[currentIndex] || heartSnapshot) as any;

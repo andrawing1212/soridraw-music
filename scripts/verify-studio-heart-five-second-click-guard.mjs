@@ -4,7 +4,7 @@ import { transform } from 'esbuild';
 const loadTs=async p=>import('data:text/javascript;base64,'+Buffer.from((await transform(readFileSync(p,'utf8'),{loader:'ts',format:'esm'})).code).toString('base64'));
 const {computeStudioHeartSettleDelay,nextStudioHeartHandoffRecoveryAttempt,studioHeartHandoffRecoveryDelay}=await loadTs('src/lib/studioHeartBatch.ts');
 const {nextStudioHeartServerAcceptedSeq}=await loadTs('src/lib/studioHeartServerAcceptedOrder.ts');
-const {admitStudioHeartClick}=await loadTs('src/lib/studioHeartClickGuard.ts');
+const {admitStudioHeartClick,recordStudioHeartAcceptedClick}=await loadTs('src/lib/studioHeartClickGuard.ts');
 assert.equal(nextStudioHeartServerAcceptedSeq(0,0,1000),1001);
 assert.equal(nextStudioHeartServerAcceptedSeq(5100,0,900),5101,
   'a new song after the old slot was removed must follow persistent root order');
@@ -55,20 +55,39 @@ assert.match(recoverSource,/window\.addEventListener\('online', onReconnected\)/
 assert.match(recoverSource,/window\.removeEventListener\('online', onReconnected\)/);
 console.log('STUDIO_HEART_HANDOFF_FAILED_CLAIM_RETRY_AND_RECONNECT=PASS');
 const uid='abuse-test';
-for(let n=0;n<5;n++)assert.equal(admitStudioHeartClick(uid,'song-a',10000+n*200).allowed,true);
-const firstBlock=admitStudioHeartClick(uid,'song-a',11000);
-assert.equal(firstBlock.allowed,false);assert.equal(firstBlock.retryAfterMs,20000);
-assert.equal(admitStudioHeartClick(uid,'song-a',12500).notify,false,'do not spam popup');
-assert.equal(admitStudioHeartClick(uid,'song-b',12500).allowed,true,'other song not blocked');
-let blocked=false;
-for(let n=0;n<30;n++){if(!admitStudioHeartClick(uid,'slow-macro',50000+n*3000).allowed){blocked=true;break;}}
-assert.equal(blocked,true,'slow macro blocked by 30s/5m window');
+for(let n=0;n<6;n++)assert.equal(admitStudioHeartClick(uid,'song-a',10000+n*200).allowed,true);
+const firstBlock=admitStudioHeartClick(uid,'song-a',11200);
+assert.equal(firstBlock.allowed,false);assert.equal(firstBlock.retryAfterMs,10000);
+assert.equal(firstBlock.notify,true,'show exactly one blocking alert');
+assert.equal(admitStudioHeartClick(uid,'song-a',12500).notify,false,'do not spam blocking alerts');
+assert.equal(admitStudioHeartClick(uid,'song-b',12500).allowed,true,'another song stays usable');
+// The Studio handler uses a preflight check, and records only after the
+// visible/save action was accepted. Ignored/failed clicks never consume quota.
+for(let n=0;n<30;n++)assert.equal(
+  admitStudioHeartClick(uid,'failed-clicks',30000+n*100,false).allowed,true,
+  'a rejected/ignored save cannot count toward the click threshold');
+for(let n=0;n<6;n++){
+  const at=35000+n*200;
+  assert.equal(admitStudioHeartClick(uid,'accepted-clicks',at,false).allowed,true);
+  recordStudioHeartAcceptedClick(uid,'accepted-clicks',at);
+}
+assert.equal(admitStudioHeartClick(uid,'accepted-clicks',36400,false).retryAfterMs,10000);
+// Spread clicks past the five-second burst, but within thirty seconds.
+for(let n=0;n<19;n++)assert.equal(admitStudioHeartClick(uid,'medium-clicks',100000+n*1000).allowed,true);
+assert.equal(admitStudioHeartClick(uid,'medium-clicks',119000).retryAfterMs,60000);
+// Spread clicks past both shorter windows: only 5-minute threshold fires.
+for(let n=0;n<49;n++)assert.equal(admitStudioHeartClick(uid,'long-clicks',200000+n*5500).allowed,true);
+assert.equal(admitStudioHeartClick(uid,'long-clicks',200000+49*5500).retryAfterMs,600000);
+assert.equal(admitStudioHeartClick(uid,'song-a',25000).allowed,true,'10-second block expires');
+
 const app=readFileSync('src/App.tsx','utf8');
 assert.match(app,/const STUDIO_HEART_BATCH_MS = 5_000/);
 assert.match(app,/const STUDIO_HEART_MAX_WAIT_MS = 15_000/);
 assert.match(app,/firstQueuedAtMs: existing\?\.firstQueuedAtMs \|\| existing\?\.updatedAtMs \|\| now/);
 assert.match(app,/computeStudioHeartSettleDelay\(pending, Date\.now\(\), STUDIO_HEART_BATCH_MS, STUDIO_HEART_MAX_WAIT_MS\)/);
-assert.match(app,/admitStudioHeartClick\(user\.uid, clickIdentity\)/);
+assert.match(app,/admitStudioHeartClick\(user\.uid, clickIdentity, favoriteToggleStartedAt, false\)/);
+assert.match(app,/recordStudioHeartAcceptedClick\(user\.uid, clickIdentity, favoriteToggleStartedAt\)/);
+assert.match(app,/window\.alert\('저장에 문제가 있다면\\n관리자에게 문의하세요\.'\)/);
 console.log('STUDIO_HEART_5S_TRAILING_AND_15S_MAX_WAIT=PASS');
 console.log('STUDIO_HEART_MULTI_WINDOW_CLICK_GUARD=PASS');
 console.log('STUDIO_HEART_OTHER_SONGS_UNBLOCKED=PASS');

@@ -1,3 +1,12 @@
+## CURRENT — Studio 저장·해제 ‘서버 접수 마지막 클릭’ 순서 및 첫 진입 미완료 인계: PREVIEW PASS / 실기기 OPEN (2026-11-06 KST)
+- **디렉터 요청:** 앱 업데이트/재실행 직후 PC·모바일의 Studio 하트와 Music Note membership 불일치. 화면 캐시만 맞추지 말고 **서버가 마지막으로 접수한 SAVE/UNSAVE 클릭**을 최종 사용자의 의도로 판단해 두 기기가 복구되도록 승인.
+- **확인한 기존 한계:** 인계 RTDB slot seq는 `Date.now()`·이전 같은 slot seq 기반으로만 생성해 20곡/slot 정리 뒤 계정 내 최종 접수 순서를 복구하지 못할 수 있었음. 다른 기기 `onChildAdded`가 서버에 남아 있는 미완료 인계를 받아도 복구 타이머 위주이며 Studio/Music Note 첫 표시에는 투영하지 않았음.
+- **소스 수정:** PR #836 검증 `c3e008bd10954903eb89e8f44574c8ca557d0cd1`, merge `dd8c79db4052a3348b378a939afba23c12732232`. 기존 영속 UID root `userSync/$uid/studioHeartHandoffs.version`을 쓰는 동일 transaction에서 `seq = max(root.version, previous.seq, Date.now())+1`으로 단조 증가하는 서버 접수 순서 부여(새 쓰기 아님). 기존 account-private RTDB slot listener에서 UID·정확 documentId·유효 곡 JSON 확인한 미완료 receipt를 기존 비정본 Music Note/Studio 하트 미리보기 레이어에 바로 표시. 미확정 최신 로컬 클릭 우선, 과거 서버 ACK local outbox보다 최신 seq일 때만 새 서버 요청 우선. 처리된 slot 제거 시 해당 비정본 미리보기만 정리. 곡별 5초 묶음·W0/W1 유지, 추가 Firestore read/write·전체 재조회·캐시 강제 초기화 없음.
+- **검사·배포:** #836 CI **6/6 PASS** (RTDB emulator/ACL/20슬롯, Studio 10곡, Music Note Catalog, Recent·Auth, TS/Build 및 접수 순서/첫 진입 회귀). Hosting-only #837 merge `f6566f4314f59c09ab2f73bb23f919eea0caccfb`. [PREVIEW run #42230782362](https://github.com/andrawing1212/soridraw-music/actions/runs/42230782362) SUCCESS, `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`. 공유 데이터·Rules·Functions·Workers·D1/R2/TEST/PROD 변경 없음.
+- **OPEN(제품 합격 금지):** RTDB slot은 완료 뒤 삭제되므로 **처리 완료된 모든 곡에 대한 영구적인 서버 마지막 클릭 원장은 아님**. 서버 접수 전 A 종료도 B에서 원격 복구 불가. 이미 R2 Music Note Catalog가 누락된 정본을 자동 복구하는 기능도 아니며, 공유 영구 원장/백엔드/Rules 변경은 이번 Hosting-only 승인 범위 밖으로 별도 승인·안전 검토 필요. PC↔모바일 재실행 초기 일치와 저장·해제 1초 종료 실사용 미확인. GitHub CI PASS와 PREVIEW Hosting PASS를 실제 사용자 PASS로 취급하지 않음.
+
+---
+
 ## CURRENT — Studio 저장 하트↔Music Note 표시 불일치: 검증된 목록 기준 수정·PREVIEW Hosting PASS / 실기기 확인 OPEN (2026-11-06 KST)
 - **디렉터 보고:** 앱 업데이트 후 스튜디오에서 노란색 저장 하트로 표시되지만 Music Note 목록과 저장 상태가 맞지 않는 현상이 반복. 사진에서 스튜디오 제목 `깊어지는 시간의 궤적` 하트 저장 상태 확인; Music Note 사진은 일부 목록만 보여 서버 원본 누락 여부 불명.
 - **확인한 원인:** Studio `isSongFavorited`가 브라우저의 영속 `recentHeartAuthority` 값을 먼저 반환하는 반면 Music Note는 독립 `favoritesStore`와 UID별 Catalog 갱신 목록을 사용. 과거 `confirmed:true` 하트 영수증이 지금 화면의 정확 문서 membership과 다르더라도 하트에 남을 수 있었음.

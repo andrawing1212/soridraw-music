@@ -22,6 +22,22 @@
 .soridraw-notification-list,.soridraw-notification-settings{
   overflow:auto;overscroll-behavior:contain;padding:2px 12px 14px;min-height:0;
 }
+.soridraw-notification-tabs{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;
+  flex:none;margin:0 15px 8px;padding:4px;border-radius:13px;background:#29292b;
+}
+.soridraw-notification-tab{
+  min-height:37px;border:0;border-radius:10px;
+  background:transparent;color:#aaaab0;font:inherit;font-size:13px;
+  font-weight:700;cursor:pointer;
+}
+.soridraw-notification-tab.is-active{
+  background:#424245;color:#f7f7f8;
+}
+.soridraw-notification-tab:hover:not(.is-active){background:#323235;color:#ededf0}
+.soridraw-notification-tab:focus-visible{
+  outline:2px solid #f4f4f5;outline-offset:2px;
+}
 .soridraw-notification-row{
   display:flex;align-items:center;gap:12px;min-height:83px;
   border-radius:13px;padding:11px 8px;

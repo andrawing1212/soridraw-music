@@ -27,6 +27,16 @@ assert.match(model,/NOTIFICATION_PREFERENCES_DEFAULT/);
 const { code: modelCode } = await transform(model, { loader: 'ts', format: 'esm', target: 'es2022' });
 const preferenceModule = await import('data:text/javascript;base64,' + Buffer.from(modelCode).toString('base64'));
 const defaults = { ...preferenceModule.NOTIFICATION_PREFERENCES_DEFAULT };
+const expectedSections = {
+  like: 'activity', follow: 'activity', complete: 'creation',
+  announcement: 'activity', message: 'activity',
+};
+assert.deepEqual(
+  Object.fromEntries(Object.keys(expectedSections).map((key) =>
+    [key, preferenceModule.notificationSectionFor(key)])),
+  expectedSections,
+  'only generation-complete alerts belong in creation history; announcements are shared activity'
+);
 const off = Object.fromEntries(Object.keys(defaults).map((key) => [key, false]));
 const mixed = { ...defaults, complete: false, message: false };
 assert.equal(Object.keys(defaults).length, 5);
@@ -62,6 +72,16 @@ try {
   else globalThis.window = previousWindow;
 }
 assert.match(panel, /className="soridraw-notification-setting-master"/);
+assert.match(panel, /useState<NotificationSection>\('activity'\)/);
+assert.match(panel, /setActiveSection\('activity'\)/);
+assert.match(panel, /notificationSectionFor\(row.category\) === activeSection/);
+assert.match(panel, /role="group" aria-label="알림 카테고리"/);
+assert.match(panel, /aria-pressed=\{activeSection === 'activity'\}/);
+assert.match(panel, /aria-pressed=\{activeSection === 'creation'\}/);
+assert.match(panel, />\s*활동·소식\s*<\/button>/);
+assert.match(panel, />\s*생성 기록\s*<\/button>/);
+assert.match(panel, /activeSection === 'creation' \? '아직 표시할 생성 알림이 없습니다\.'/);
+console.log('NOTIFICATION_TWO_SECTIONS_ACTIVITY_CREATION=PASS');
 assert.match(panel, /className="soridraw-notification-settings-divider"/);
 assert.match(panel, /<NotificationSwitch checked=\{masterEnabled\} onChange=\{toggleMaster\}/);
 assert.match(panel, /<NotificationSwitch checked=\{prefs\[item.key\]\} disabled=\{!masterEnabled\}/);
@@ -74,6 +94,8 @@ assert.match(panel, /masterEnabled && prefs\[row.category\]/);
 assert.ok(panel.indexOf('className="soridraw-notification-setting-master"') <
   panel.indexOf('TYPES.map((item)'), 'master toggle must be above individual preferences');
 const switchCss = file('src/components/studio/notificationPanel.css');
+assert.match(switchCss, /\.soridraw-notification-tabs\{/);
+assert.match(switchCss, /\.soridraw-notification-tab\.is-active\{/);
 assert.match(switchCss, /\.soridraw-notification-switch-control\{\s*width:44px;height:26px/);
 assert.match(switchCss, /width:20px;height:20px;border-radius:50%/);
 assert.match(switchCss, /transform:translateX\(18px\)/);

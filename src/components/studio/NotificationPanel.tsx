@@ -9,8 +9,8 @@ import {
   NOTIFICATION_EXAMPLE_ROWS, NOTIFICATION_PREFERENCES_DEFAULT,
   isNotificationVisualPreview, readNotificationMasterEnabled,
   readNotificationPreferences, saveNotificationMasterEnabled, saveNotificationPreferences,
-  type InboxNotification, type NotificationCategory,
-  type NotificationPreferences,
+  notificationSectionFor, type InboxNotification, type NotificationCategory,
+  type NotificationPreferences, type NotificationSection,
 } from '../../services/notifications/notificationModel';
 import './notificationPanel.css';
 
@@ -69,6 +69,7 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
   const detailCloseRef = useRef<HTMLButtonElement>(null);
   const { playTrack } = useGlobalPlayerControls();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<NotificationSection>('activity');
   const [prefs, setPrefs] = useState<NotificationPreferences>(NOTIFICATION_PREFERENCES_DEFAULT);
   const [masterEnabled, setMasterEnabled] = useState(true);
   const [position, setPosition] = useState({ left: 80, top: 12 });
@@ -84,6 +85,7 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
     setPrefs(savedPreferences);
     setMasterEnabled(readNotificationMasterEnabled(uid, savedPreferences));
     setSettingsOpen(false);
+    setActiveSection('activity');
     setNotice('');
     setSelectedMessage(null);
   }, [open, uid]);
@@ -147,7 +149,9 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
   // activation gate. PREVIEW examples are explicitly labelled as examples.
   const visualExample = isNotificationVisualPreview();
   const rows = useMemo(() => (visualExample ? NOTIFICATION_EXAMPLE_ROWS : [])
-    .filter((row) => masterEnabled && prefs[row.category]), [visualExample, prefs, masterEnabled]);
+    .filter((row) => masterEnabled && prefs[row.category] &&
+      notificationSectionFor(row.category) === activeSection),
+    [visualExample, prefs, masterEnabled, activeSection]);
 
   const toggleMaster = () => {
     const nextEnabled = !masterEnabled;
@@ -261,8 +265,21 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
 
         </div>
       ) : (
-        <div className="soridraw-notification-list">
-          {rows.length ? rows.map((row) => (
+        <>
+        <div className="soridraw-notification-tabs" role="group" aria-label="알림 카테고리">
+          <button type="button"
+            className={`soridraw-notification-tab${activeSection === 'activity' ? ' is-active' : ''}`}
+            aria-pressed={activeSection === 'activity'} onClick={() => setActiveSection('activity')}>
+            활동·소식
+          </button>
+          <button type="button"
+            className={`soridraw-notification-tab${activeSection === 'creation' ? ' is-active' : ''}`}
+            aria-pressed={activeSection === 'creation'} onClick={() => setActiveSection('creation')}>
+            생성 기록
+          </button>
+        </div>
+        <div className="soridraw-notification-list" aria-label={activeSection === 'activity' ? '활동·소식 알림' : '생성 기록 알림'}>
+          {rows.length ? rows.map((row) => ( 
             <div className="soridraw-notification-row" key={row.id}>
               {row.category === 'announcement' || row.category === 'message' ? (
                 <span className="soridraw-notification-avatar-icon" data-type={row.category} aria-hidden="true">
@@ -315,9 +332,12 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
               ) : <span className="soridraw-notification-end-icon" data-type={row.category} aria-hidden="true">{iconFor(row.category)}</span>}
             </div>
           )) : (
-            <p className="soridraw-notification-empty">아직 표시할 알림이 없습니다.</p>
+            <p className="soridraw-notification-empty">
+              {activeSection === 'creation' ? '아직 표시할 생성 알림이 없습니다.' : '아직 표시할 알림이 없습니다.'}
+            </p>
           )}
         </div>
+        </>
       )}
       {notice && <div role="status" className="soridraw-notification-error">{notice}</div>}
     </div>

@@ -134,3 +134,23 @@ export async function publishSharedAnnouncement004({
   await publishSharedSnapshot(snapshot.items);
   return {status:stored.status,rowsWritten:stored.rowsWritten,snapshotSize:snapshot.items.length};
 }
+
+
+// Explicitly invoked from an approved central retention job; never from
+// a user's inbox open. One bounded indexed batch, no account fanout.
+export async function cleanupExpiredDirectMessages004({
+  db,enabled=false,now=Date.now(),limit=100
+}={}){
+  if(!enabled)return {status:'inactive',rowsDeleted:0};
+  if(!db?.prepare || !bounded(now,30*86400000+1,Number.MAX_SAFE_INTEGER) ||
+      !bounded(limit,1,200))throw deny('NOTIFICATION_DIRECT_CLEANUP_INVALID');
+  const result=await db.prepare(
+    'DELETE FROM soridraw_notification_direct_messages_004 '
+    +'WHERE (receiver_uid,id) IN (SELECT receiver_uid,id '
+    +'FROM soridraw_notification_direct_messages_004 '
+    +'WHERE created_at<? ORDER BY created_at LIMIT ?)'
+  ).bind(now-30*86400000,limit).run();
+  const changes=result?.meta?.changes;
+  if(!bounded(changes,0,limit))throw deny('NOTIFICATION_DIRECT_CLEANUP_INVALID_ACK');
+  return {status:'ok',rowsDeleted:changes};
+}

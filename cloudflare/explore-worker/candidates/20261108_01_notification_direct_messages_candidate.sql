@@ -11,3 +11,7 @@ CREATE TABLE IF NOT EXISTS soridraw_notification_direct_messages_004 (
 ) WITHOUT ROWID;
 -- Primary key prefix enforces owner-local lookup. No hot global index/cron.
 -- A future bounded retention pass is required before production release.
+
+-- Rare direct messages use one bounded global expiry index; no per-user scans.
+CREATE INDEX IF NOT EXISTS idx_soridraw_direct_expiry_004
+  ON soridraw_notification_direct_messages_004(created_at);

@@ -84,7 +84,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   // Account-wide settings are staged behind the approved shared-backend
   // activation flag. Until then, keep existing local switches untouched.
   const [accountSettings, setAccountSettings] = useState<NotificationAccountSettings003 | null>(null);
-  const [remoteRows, setRemoteRows] = useState<InboxNotification[]>([]);
+  const [remoteInbox, setRemoteInbox] = useState<{uid:string;items:InboxNotification[]}>({uid:'',items:[]});
   const [remoteLoading, setRemoteLoading] = useState(false);
   const [settingsSyncBusy, setSettingsSyncBusy] = useState(false);
   const syncGenerationRef = useRef(0);
@@ -156,7 +156,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
     setRemoteLoading(true);
     void loadOwnNotifications004(current).then((items) => {
       if (!live || auth.currentUser?.uid !== uid) return;
-      setRemoteRows(items);
+      setRemoteInbox({uid:current.uid,items});
     }).catch(() => {
       if (live) setNotice('알림을 불러오지 못했습니다. 다시 열어 확인해 주세요.');
     }).finally(() => {
@@ -224,11 +224,12 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   // activation gate. PREVIEW examples are explicitly labelled as examples.
   const visualExample = isNotificationVisualPreview() && !NOTIFICATION_INBOX_ENABLED_004;
   const rows = useMemo(() => (NOTIFICATION_INBOX_ENABLED_004
-    ? [...remoteRows, ...projectCompletedExistingGenerations004(recentHistory)]
+    ? [...(remoteInbox.uid === uid ? remoteInbox.items : []),
+      ...projectCompletedExistingGenerations004(recentHistory)]
     : (visualExample ? NOTIFICATION_EXAMPLE_ROWS : []))
     .filter((row) => masterEnabled && prefs[row.category] &&
       notificationSectionFor(row.category) === activeSection),
-    [visualExample, remoteRows, recentHistory, prefs, masterEnabled, activeSection]);
+    [visualExample, remoteInbox, uid, recentHistory, prefs, masterEnabled, activeSection]);
 
   const accountSyncLocked = NOTIFICATION_ACCOUNT_SYNC_ENABLED_003 &&
     (settingsSyncBusy || !accountSettings);

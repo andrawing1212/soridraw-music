@@ -1,4 +1,4 @@
--- SOURCE-ONLY CANDIDATE: NEVER APPLY TO SHARED D1 WITHOUT SEPARATE APPROVAL.
+-- SOURCE-ONLY CANDIDATE ONLY: NEVER APPLY TO SHARED D1 WITHOUT SEPARATE APPROVAL.
 -- No existing relation, profile, like, follower or user rows are modified.
 -- The activation latch starts OFF. No periodic user scanning or user backfill.
 CREATE TABLE IF NOT EXISTS soridraw_notification_activation_002 (

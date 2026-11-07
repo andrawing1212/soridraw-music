@@ -1,3 +1,11 @@
+## CURRENT — 알림 저비용 정본 트리거·UID별 설정 CAS·30일 보관 후보 / 활성화 금지 (2026-11-07 KST)
+- **승인 범위:** 사용자 YES로 기존 좋아요·팔로우 서버 확정 변화와 알림 기록 연결 후보, 수신자 권한·보관기간·비용 검증. 실사용/공유 DB·Worker 배포는 승인 범위 밖.
+- **실제 코드 확인:** 좋아요 요청 `/v1/me/likes/batch` 응답은 legacy queue ACK이며 확정 아님. 정본 `likes` INSERT만 알림 후보. 팔로우 legacy `follows` INSERT 및 overlay `explore_follow_overrides_348`의 net-new/0→1만 후보. 서버에서 owner와 actor 도출, 중복·해제·비공개·본인 제외.
+- **코드 후보:** PR #866. 기존 Worker/Writer·기존 원본 변경 없이 `cloudflare/explore-worker/candidates/20261107_01_notification_inbox_candidate.sql`의 기본 OFF 래치와 추가 D1 테이블/트리거/만료 인덱스 후보, 서버별 UID 알림 조회·개인 설정 CAS 및 30일 bounded cleanup 함수. 일반 알림 UI·생성 기록 탭 그대로 유지.
+- **주의:** 아직 UI→서버 설정 이동·JWT/AppCheck HTTP 바인딩·관리자 권한 연결·물리 cleanup schedule·비용 실측 미완료. 소스 SQLite PASS여도 배포·실사용 PASS가 아님. 공유 D1 migration/Worker/Rules/Functions/TEST/PROD 절대 자동 배포 금지. 별도 승인 전 실 알림 0.
+
+---
+
 ## CURRENT — 알림 패널 첫 구현 PREVIEW Hosting PASS / 이벤트 전달 백엔드 미구현 (2026-11-07 KST)
 - **디렉터 승인:** 영상 참고, 왼쪽 메뉴 '알림' 클릭 시 메뉴 오른쪽 간결한 세로 패널. 각 알림은 왼쪽 보낸 사람 프로필 사진, 가운데 내용, 오른쪽 팔로우 또는 곡 썸네일. 곡 썸네일은 실제 검증된 `audioUrl`이 있을 때 기존 GlobalPlayer로 재생, 그렇지 않으면 허용된 곡 페이지 경로로만 이동. 알림 종류는 좋아요(해제 제외)·신규 팔로우(해제 제외)·곡 생성 완료·관리자 공지·개인 메시지. 알림 주기 기본 2시간(하루 12회), 변경 권한은 관리자 메뉴 전용.
 - **1차 실제 구현:** #846 merge `883d58b0c0ccd670966706a1bd078dd757fcd99e` — StudioLeftRail에 알림 팝오버, 별도 NotificationPanel/CSS, 개인별 유형 설정(현 단계 브라우저 로컬 저장), 관리자 App Settings의 수집 주기 설정(기존 `app_settings/notification_schedule`, 관리자 명시 저장 시에만 1 write; 기존 Rules의 `appSettings` 권한 적용). 기존 탐색 좋아요·팔로우/곡 저장 UI·RTDB 흐름 변경 없음.

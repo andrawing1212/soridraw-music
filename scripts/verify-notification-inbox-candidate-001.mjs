@@ -10,7 +10,16 @@ const sql = readFileSync('cloudflare/explore-worker/candidates/20261107_01_notif
 assert.match(sql,/CANDIDATE ONLY/);
 assert.match(sql,/PRIMARY KEY\(receiver_uid, bucket_ms, category, actor_uid, subject_id\)/);
 assert.match(sql,/WITHOUT ROWID/);
-assert.doesNotMatch(sql,/CREATE INDEX|TRIGGER|DROP TABLE|DELETE FROM|INSERT INTO/);
+// The first candidate had no triggers. The approved second stage now
+// contains source-only triggers, but the activation latch must be OFF.
+assert.match(sql,/SOURCE-ONLY CANDIDATE/);
+assert.match(sql,/INSERT INTO soridraw_notification_activation_002\(id, enabled\)/);
+assert.match(sql,/VALUES\(1, 0\) ON CONFLICT\(id\) DO NOTHING/);
+assert.match(sql,/AFTER INSERT ON likes/);
+assert.match(sql,/AFTER INSERT ON follows/);
+assert.match(sql,/AFTER INSERT ON explore_follow_overrides_348/);
+assert.match(sql,/AFTER UPDATE OF following ON explore_follow_overrides_348/);
+assert.doesNotMatch(sql,/DROP TABLE|DELETE FROM likes|DELETE FROM follows|UPDATE likes|UPDATE follows/);
 assert.equal(NOTIFICATION_SHARED_ANNOUNCEMENT_KEY_001,
   'internal/notifications/global-announcements-v1.json');
 class FakeDb {

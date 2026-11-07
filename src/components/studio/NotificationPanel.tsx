@@ -12,6 +12,11 @@ import {
   notificationSectionFor, type InboxNotification, type NotificationCategory,
   type NotificationPreferences, type NotificationSection,
 } from '../../services/notifications/notificationModel';
+import {
+  NOTIFICATION_ACCOUNT_SYNC_ENABLED_003,
+  loadNotificationAccountSettings003, saveNotificationAccountSettings003,
+  type NotificationAccountSettings003,
+} from '../../services/notifications/notificationAccountSync003';
 import './notificationPanel.css';
 
 type Props = {
@@ -72,6 +77,11 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
   const [activeSection, setActiveSection] = useState<NotificationSection>('activity');
   const [prefs, setPrefs] = useState<NotificationPreferences>(NOTIFICATION_PREFERENCES_DEFAULT);
   const [masterEnabled, setMasterEnabled] = useState(true);
+  // Account-wide settings are staged behind the approved shared-backend
+  // activation flag. Until then, keep existing local switches untouched.
+  const [accountSettings, setAccountSettings] = useState<NotificationAccountSettings003 | null>(null);
+  const [settingsSyncBusy, setSettingsSyncBusy] = useState(false);
+  const syncGenerationRef = useRef(0);
   const [position, setPosition] = useState({ left: 80, top: 12 });
   const [followBusy, setFollowBusy] = useState<string | null>(null);
   const [followed, setFollowed] = useState<Record<string, boolean>>({});
@@ -84,11 +94,52 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
     const savedPreferences = readNotificationPreferences(uid);
     setPrefs(savedPreferences);
     setMasterEnabled(readNotificationMasterEnabled(uid, savedPreferences));
+    setAccountSettings(null);
+    setSettingsSyncBusy(false);
+    syncGenerationRef.current += 1;
     setSettingsOpen(false);
     setActiveSection('activity');
     setNotice('');
     setSelectedMessage(null);
   }, [open, uid]);
+
+  useEffect(() => {
+    if (!open || !settingsOpen || !NOTIFICATION_ACCOUNT_SYNC_ENABLED_003) return;
+    const user = auth.currentUser;
+    if (!user || user.uid !== uid) return;
+    const generation = ++syncGenerationRef.current;
+    let live = true;
+    setSettingsSyncBusy(true);
+    setAccountSettings(null);
+    setNotice('');
+    const local = readNotificationPreferences(uid);
+    const localMaster = readNotificationMasterEnabled(uid, local);
+    // Exactly one GET on explicit settings-open; old custom local OFF values
+    // migrate only if the server still has revision 0. No interval/polling.
+    void loadNotificationAccountSettings003(user, {master:localMaster,...local})
+      .then(result => {
+        if (!live || generation !== syncGenerationRef.current ||
+            auth.currentUser?.uid !== uid) return;
+        const {revision: _revision, master, ...choices} = result.settings;
+        const next=choices as NotificationPreferences;
+        setAccountSettings(result.settings);
+        setPrefs(next);
+        setMasterEnabled(master);
+        saveNotificationPreferences(uid, next);
+        saveNotificationMasterEnabled(uid, master);
+        if(result.status === 'conflict')
+          setNotice('다른 기기에서 먼저 저장한 알림 설정을 불러왔습니다. 필요한 항목을 다시 선택해 주세요.');
+      })
+      .catch(() => {
+        if (live && generation === syncGenerationRef.current)
+          setNotice('알림 설정 서버 연결에 실패했습니다. 설정을 다시 열어 주세요.');
+      })
+      .finally(() => {
+        if(live && generation === syncGenerationRef.current)
+          setSettingsSyncBusy(false);
+      });
+    return () => { live=false; syncGenerationRef.current+=1; };
+  }, [open, settingsOpen, uid]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -153,14 +204,55 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
       notificationSectionFor(row.category) === activeSection),
     [visualExample, prefs, masterEnabled, activeSection]);
 
+  const accountSyncLocked = NOTIFICATION_ACCOUNT_SYNC_ENABLED_003 &&
+    (settingsSyncBusy || !accountSettings);
+  const commitRemoteSetting = (nextMaster: boolean, nextPrefs: NotificationPreferences) => {
+    if (accountSyncLocked || !accountSettings) return;
+    const user = auth.currentUser;
+    if (!user || user.uid !== uid) return;
+    const generation = syncGenerationRef.current;
+    setSettingsSyncBusy(true);
+    setNotice('');
+    // A single in-flight CAS PUT. Never retry an outdated revision, and
+    // never claim the local value was saved before the server acknowledges.
+    void saveNotificationAccountSettings003(user,
+      {master:nextMaster,...nextPrefs},accountSettings.revision)
+      .then(result => {
+        if(generation !== syncGenerationRef.current || auth.currentUser?.uid !== uid)return;
+        const {revision: _revision, master, ...choices} = result.settings;
+        const confirmed=choices as NotificationPreferences;
+        setAccountSettings(result.settings);
+        setMasterEnabled(master);
+        setPrefs(confirmed);
+        saveNotificationMasterEnabled(uid, master);
+        saveNotificationPreferences(uid, confirmed);
+        if(result.status==='conflict')
+          setNotice('다른 기기에서 변경한 알림 설정을 먼저 적용했습니다. 다시 원하는 항목을 선택해 주세요.');
+      })
+      .catch(() => {
+        if(generation===syncGenerationRef.current)
+          setNotice('서버에 설정을 저장하지 못했습니다. 현재 선택을 유지하고 다시 시도해 주세요.');
+      })
+      .finally(() => {
+        if(generation === syncGenerationRef.current) setSettingsSyncBusy(false);
+      });
+  };
   const toggleMaster = () => {
     const nextEnabled = !masterEnabled;
+    if(NOTIFICATION_ACCOUNT_SYNC_ENABLED_003){
+      commitRemoteSetting(nextEnabled, prefs);
+      return;
+    }
     setMasterEnabled(nextEnabled);
     saveNotificationMasterEnabled(uid, nextEnabled);
   };
   const updatePreference = (category: NotificationCategory) => {
-    if (!masterEnabled) return;
+    if (!masterEnabled || accountSyncLocked) return;
     const next = { ...prefs, [category]: !prefs[category] };
+    if(NOTIFICATION_ACCOUNT_SYNC_ENABLED_003){
+      commitRemoteSetting(masterEnabled, next);
+      return;
+    }
     setPrefs(next);
     saveNotificationPreferences(uid, next);
   };
@@ -244,13 +336,13 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
                 '전체 알림이 꺼져 있습니다'}</small>
             </span>
             <NotificationSwitch checked={masterEnabled} onChange={toggleMaster}
-              label="전체 알림" />
+              disabled={accountSyncLocked} label="전체 알림" />
           </label>
           <div className="soridraw-notification-settings-divider" aria-hidden="true" />
           {TYPES.map((item) => (
             <label key={item.key}
-              className={`soridraw-notification-setting-row${masterEnabled ? '' : ' is-disabled'}`}
-              aria-disabled={!masterEnabled}>
+              className={`soridraw-notification-setting-row${masterEnabled && !accountSyncLocked ? '' : ' is-disabled'}`}
+              aria-disabled={!masterEnabled || accountSyncLocked}>
               <span className="soridraw-notification-category-icon" data-type={item.key}>
                 {iconFor(item.key)}
               </span>
@@ -258,7 +350,7 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
                 <strong>{item.label}</strong>
                 <small>{item.detail}</small>
               </span>
-              <NotificationSwitch checked={prefs[item.key]} disabled={!masterEnabled}
+              <NotificationSwitch checked={prefs[item.key]} disabled={!masterEnabled || accountSyncLocked}
                 onChange={() => updatePreference(item.key)} label={item.label} />
             </label>
           ))}

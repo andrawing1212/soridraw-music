@@ -66,31 +66,33 @@ export async function saveOwnNotificationPreferences002({
     return {status:'unchanged',rowsWritten:0,preferences:{
       revision:0,...NOTIFICATION_DEFAULT_PREFS_002}};
   const bools=keys.map(k=>wanted[k]?1:0);
-  const updated = await db.prepare(`INSERT INTO soridraw_notification_preferences_002(
-    user_uid,master_enabled,like_enabled,follow_enabled,complete_enabled,
-    announcement_enabled,message_enabled,revision,operation_id,updated_at)
-    SELECT ?,?,?,?,?,?,?,1,?,? WHERE ?=0
-    ON CONFLICT(user_uid) DO UPDATE SET
-      master_enabled=excluded.master_enabled,
-      like_enabled=excluded.like_enabled,
-      follow_enabled=excluded.follow_enabled,
-      complete_enabled=excluded.complete_enabled,
-      announcement_enabled=excluded.announcement_enabled,
-      message_enabled=excluded.message_enabled,
-      revision=soridraw_notification_preferences_002.revision+1,
-      operation_id=excluded.operation_id,updated_at=excluded.updated_at
-    WHERE soridraw_notification_preferences_002.revision=?
-      AND soridraw_notification_preferences_002.operation_id<>excluded.operation_id
-      AND (soridraw_notification_preferences_002.master_enabled<>excluded.master_enabled
-        OR soridraw_notification_preferences_002.like_enabled<>excluded.like_enabled
-        OR soridraw_notification_preferences_002.follow_enabled<>excluded.follow_enabled
-        OR soridraw_notification_preferences_002.complete_enabled<>excluded.complete_enabled
-        OR soridraw_notification_preferences_002.announcement_enabled<>excluded.announcement_enabled
-        OR soridraw_notification_preferences_002.message_enabled<>excluded.message_enabled)
-    RETURNING revision,master_enabled,like_enabled,follow_enabled,
-      complete_enabled,announcement_enabled,message_enabled`)
-    .bind(uid,...bools,requested.operationId,now,
-      requested.expectedRevision,requested.expectedRevision).all();
+  // New account and existing account use different atomic statements.
+  // A SELECT gated on expectedRevision=0 cannot execute an UPSERT for
+  // revision>0: ON CONFLICT is never reached when the SELECT yields zero rows.
+  // INSERT OR IGNORE and revision-fenced UPDATE each cost one D1 statement
+  // on the successful changed-value path; no pre-read and no lost updates.
+  const returning=` RETURNING revision,master_enabled,like_enabled,follow_enabled,
+      complete_enabled,announcement_enabled,message_enabled`;
+  let query;
+  let args;
+  if (requested.expectedRevision === 0) {
+    query=`INSERT OR IGNORE INTO soridraw_notification_preferences_002(
+      user_uid,master_enabled,like_enabled,follow_enabled,complete_enabled,
+      announcement_enabled,message_enabled,revision,operation_id,updated_at)
+      VALUES (?,?,?,?,?,?,?,1,?,?)`+returning;
+    args=[uid,...bools,requested.operationId,now];
+  } else {
+    query=`UPDATE soridraw_notification_preferences_002 SET
+      master_enabled=?,like_enabled=?,follow_enabled=?,complete_enabled=?,
+      announcement_enabled=?,message_enabled=?,revision=revision+1,
+      operation_id=?,updated_at=?
+      WHERE user_uid=? AND revision=? AND operation_id<>?
+      AND (master_enabled<>? OR like_enabled<>? OR follow_enabled<>?
+        OR complete_enabled<>? OR announcement_enabled<>? OR message_enabled<>?)`+returning;
+    args=[...bools,requested.operationId,now,uid,requested.expectedRevision,
+      requested.operationId,...bools];
+  }
+  const updated=await db.prepare(query).bind(...args).all();
   if (!Array.isArray(updated?.results) || updated.results.length>1)
     throw fail('NOTIFICATION_PREFERENCES_WRITE_UNVERIFIED');
   if (updated.results.length===1)

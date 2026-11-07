@@ -12,6 +12,8 @@ import {
 import baseWorker from './preview-worker.js';
 import {handleNotificationPreferencesApi003}
  from '../runtime/notification-preferences-api-003.mjs';
+import {handleUnifiedNotificationsApi004}
+ from '../runtime/notification-unified-api-004.mjs';
 import {verifyPrivateHmac416,validatePrivateHandoff416,acceptPrivateHandoff416} from '../runtime/like-private-batch-handoff-416.mjs';
 import {finalizePrivateHandoff416} from '../runtime/like-private-finalize-416.mjs';
 import {ackPublicLikeEventStorage416,registerPublicLikeEventStorage416,
@@ -3348,6 +3350,32 @@ export default {
       return handleNotificationPreferencesApi003({
         request,db:env?.DB,enabled:true,cors,
         verifyAuthenticatedUid:async()=>actor.uid,
+      });
+    }
+    // Shared Worker/D1 activation requires separate release approval.
+    // Environment variables alone cannot switch this on.
+    const NOTIFICATION_INBOX_004_COMPILED_OPEN = false;
+    if(NOTIFICATION_INBOX_004_COMPILED_OPEN &&
+       env?.SORIDRAW_NOTIFICATION_INBOX_004 === '1' &&
+       (url.pathname==='/v1/me/notifications/inbox' ||
+        url.pathname==='/v1/admin/notifications/message' ||
+        url.pathname==='/v1/admin/notifications/announcement')){
+      const origin=request.headers.get('Origin')||'';
+      const cors=curationCors307(request);
+      if(origin && !RELEASE_ALLOWED_ORIGINS_036.has(origin))
+        return Response.json({ok:false,error:{code:'ORIGIN_FORBIDDEN'}},{status:403});
+      if(request.method==='OPTIONS')
+        return handleUnifiedNotificationsApi004({request,enabled:true,cors});
+      const actor=await validateExploreAuth307(request,env,ctx);
+      if(!actor.ok)return actor.response;
+      return handleUnifiedNotificationsApi004({
+        request,db:env.DB,cache:curatedBucket307(env),enabled:true,cors,
+        verifyUid:async()=>actor.uid,
+        verifyAdmin:async()=>{
+          const staff=await readOwnStaffProfile307(actor);
+          return staff.staffRole==='master'||staff.staffRole==='admin'||
+            staff.role==='admin';
+        }
       });
     }
     if(STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE&&

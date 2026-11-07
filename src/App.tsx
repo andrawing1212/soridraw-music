@@ -3923,6 +3923,7 @@ function Navigation({
   studioCompactMobileLayout = false,
   studioWorkspaceView = 'create',
   onStudioWorkspaceSelect,
+  recentHistory,
 }: {
   user: User | null;
   cachedHeaderIdentity: CachedHeaderIdentity | null;
@@ -3939,6 +3940,7 @@ function Navigation({
   studioCompactMobileLayout?: boolean;
   studioWorkspaceView?: StudioWorkspaceView;
   onStudioWorkspaceSelect?: (view: StudioWorkspaceView) => void;
+  recentHistory?: readonly SongResult[];
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -4729,6 +4731,7 @@ function Navigation({
       </div>
       <NotificationPanel
         open={isMobileNotificationOpen && Boolean(user?.uid)}
+        recentHistory={recentHistory}
         anchorRef={mobileProfileButtonRef}
         onClose={() => setIsMobileNotificationOpen(false)}
       />
@@ -19701,6 +19704,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
       </AnimatePresence>
 
       <Navigation
+        recentHistory={history}
         user={user}
         cachedHeaderIdentity={cachedHeaderIdentity}
         isAuthReady={isAuthReady}
@@ -19733,7 +19737,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         } />
         <Route path="/explore" element={
           canAccessNavigationMenu('explore') ? (
-            <ExploreShellLazy isAdminUser={isAdminUser} />
+            <ExploreShellLazy isAdminUser={isAdminUser} recentHistory={history} />
           ) : (
             <FeatureUnavailablePage label="익스플로어" fallbackPath={navigationFallbackPath} />
           )
@@ -19746,6 +19750,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             leftRail={
               <StudioLeftRail
                 activeWorkspace={studioRailActiveWorkspace}
+                recentHistory={history}
                 onCreate={() => {
                   navigateStudioWorkspaceView('create');
                   window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: window.scrollX, behavior: 'auto' }));

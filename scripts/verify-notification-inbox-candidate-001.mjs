@@ -1,3 +1,4 @@
+import './verify-notification-canonical-triggers-002.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {

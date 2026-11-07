@@ -1,3 +1,4 @@
+import './verify-notification-inbox-candidate-001.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { transform } from 'esbuild';

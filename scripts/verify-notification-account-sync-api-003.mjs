@@ -99,6 +99,12 @@ assert.equal(pcStale.body.error.code,'NOTIFICATION_REVISION_CONFLICT');
 assert.equal(pcStale.body.data.preferences.revision,2);
 assert.equal(pcStale.body.data.preferences.master,false,
   'old PC must not undo mobile OFF');
+const staleDefault=await send('PUT','owner',{
+  ...original,expectedRevision:0,operationId:'accountoperation00000005'});
+assert.equal(staleDefault.status,409,
+  'default-state request must not incorrectly ACK a newer saved OFF');
+assert.equal(staleDefault.body.data.preferences.revision,2);
+
 assert.equal((await send('PUT','owner',{
  ...original,expectedRevision:0,operationId:'accountoperation00000004',uid:'other'})).status,400,
   'body cannot impersonate another UID');

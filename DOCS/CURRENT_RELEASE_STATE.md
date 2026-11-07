@@ -1,3 +1,12 @@
+## CURRENT — 알림 계정 설정 API·PC↔모바일 동기화 CODE CANDIDATE / 서버 활성화 금지 (2026-11-07 KST)
+- **디렉터 승인:** 2026-11-07 "YES" — 인증 API와 PC·모바일 알림 설정 동기화 **코드·검사까지만 진행**. 공유 D1/Worker/Rules/Functions 실제 배포는 별도 승인.
+- **후보 PR #867:** `GET/PUT /v1/me/notifications/preferences` (인증된 Firebase UID만 사용, 기존 Worker `/auth-test` 경유 JWT·AppCheck 검증), 타인 UID 지정 거부, no-store/Origin 허용, 요청 크기 제한 및 실패 시 쓰기 재시도 없음. D1 설정 CAS revision으로 PC/모바일 stale overwrite 방지(409 최신 설정 제공).
+- **계정 동기화 코드:** 알림 설정 화면을 *명시적으로 열 때만* 본인 설정 GET, 실제 토글 변경 시만 PUT. 이전 브라우저별 로컬 OFF/개별 값은 서버 revision=0인 첫 연결에만 1회 이관; 서버에 기존 변경이 있으면 그 값을 우선하고 충돌 시 구형 로컬 설정으로 덮지 않음. 기본값 그대로인 계정은 열기만으로 W0. 서버 ACK 후에만 로컬 저장 확정하며 in-flight 중 개별 토글 잠금. 상시 polling/앱 로딩 시 추가 서버 읽기·쓰기 없음. **다른 기기 변경은 설정창 재진입 시 반영**하며 실시간 푸시 동기화라고 주장하지 않음.
+- **2중 릴리스 차단:** 클라이언트 `NOTIFICATION_ACCOUNT_SYNC_ENABLED_003=false`, Worker `NOTIFICATION_PREFS_003_COMPILED_OPEN=false` + 환경 플래그 확인. 현재 사용자는 기존 로컬 알림 설정 UI만 사용하며 실제 계정 API 요청·D1 비용 0. 기존 좋아요·팔로우 Writer, DB 원본, 캐시·Music Note/Library/Recent 유지.
+- **잔여 필수:** D1 후보 마이그레이션/활성 Worker 실인증·구형 Worker 호환·기기별 localStorage 충돌 이행·소규모 실사용/비용 측정·보안/백엔드 배포 허가. 코드 검사 PASS는 사용자 PC·모바일 실사용 PASS가 아님.
+
+---
+
 ## CURRENT — 알림 저비용 정본 트리거·UID별 설정 CAS·30일 보관 후보 / 활성화 금지 (2026-11-07 KST)
 - **승인 범위:** 사용자 YES로 기존 좋아요·팔로우 서버 확정 변화와 알림 기록 연결 후보, 수신자 권한·보관기간·비용 검증. 실사용/공유 DB·Worker 배포는 승인 범위 밖.
 - **실제 코드 확인:** 좋아요 요청 `/v1/me/likes/batch` 응답은 legacy queue ACK이며 확정 아님. 정본 `likes` INSERT만 알림 후보. 팔로우 legacy `follows` INSERT 및 overlay `explore_follow_overrides_348`의 net-new/0→1만 후보. 서버에서 owner와 actor 도출, 중복·해제·비공개·본인 제외.

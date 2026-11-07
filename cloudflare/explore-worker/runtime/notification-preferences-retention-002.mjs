@@ -62,9 +62,18 @@ export async function saveOwnNotificationPreferences002({
     throw fail('NOTIFICATION_PREFERENCES_INVALID');
   const wanted = Object.fromEntries(keys.map(k=>[k, requested[k]]));
   if (requested.expectedRevision === 0 &&
-      keys.every(k=>wanted[k] === NOTIFICATION_DEFAULT_PREFS_002[k]))
-    return {status:'unchanged',rowsWritten:0,preferences:{
-      revision:0,...NOTIFICATION_DEFAULT_PREFS_002}};
+      keys.every(k=>wanted[k] === NOTIFICATION_DEFAULT_PREFS_002[k])) {
+    // Never report a stale default as saved while another device has a
+    // revisioned OFF record. This branch is an explicit PUT, not a page
+    // visit: one targeted account read is sufficient and changes no rows.
+    const current=await readOwnNotificationPreferences002({
+      db,authenticate:async()=>uid,activated:true});
+    if(current.preferences.revision === 0)
+      return {status:'unchanged',rowsWritten:0,preferences:current.preferences};
+    if(keys.every(k=>current.preferences[k]===wanted[k]))
+      return {status:'unchanged',rowsWritten:0,preferences:current.preferences};
+    return {status:'conflict',rowsWritten:0,preferences:current.preferences};
+  }
   const bools=keys.map(k=>wanted[k]?1:0);
   // New account and existing account use different atomic statements.
   // A SELECT gated on expectedRevision=0 cannot execute an UPSERT for

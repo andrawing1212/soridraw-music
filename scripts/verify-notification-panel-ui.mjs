@@ -1,3 +1,4 @@
+import './verify-notification-account-sync-api-003.mjs';
 import './verify-notification-inbox-candidate-001.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -85,10 +86,10 @@ assert.match(panel, /activeSection === 'creation' \? '아직 표시할 생성 �
 console.log('NOTIFICATION_TWO_SECTIONS_ACTIVITY_CREATION=PASS');
 assert.match(panel, /className="soridraw-notification-settings-divider"/);
 assert.match(panel, /<NotificationSwitch checked=\{masterEnabled\} onChange=\{toggleMaster\}/);
-assert.match(panel, /<NotificationSwitch checked=\{prefs\[item.key\]\} disabled=\{!masterEnabled\}/);
+assert.match(panel, /<NotificationSwitch checked=\{prefs\[item.key\]\} disabled=\{!masterEnabled \|\| accountSyncLocked\}/);
 assert.match(panel, /checked=\{checked\} onChange=\{onChange\} disabled=\{disabled\}/);
-assert.match(panel, /aria-disabled=\{!masterEnabled\}/);
-assert.match(panel, /if \(!masterEnabled\) return;/);
+assert.match(panel, /aria-disabled=\{!masterEnabled \|\| accountSyncLocked\}/);
+assert.match(panel, /if \(!masterEnabled \|\| accountSyncLocked\) return;/);
 assert.match(panel, /saveNotificationMasterEnabled\(uid, nextEnabled\)/);
 assert.match(panel, /saveNotificationPreferences\(uid, next\)/);
 assert.match(panel, /masterEnabled && prefs\[row.category\]/);

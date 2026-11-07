@@ -28,3 +28,12 @@
 5. 독립된 공유 DB 권한/트리거 안전성·이전 Writer 호환 검증 후 **별도 디렉터 승인**을 받고 D1 migration/Worker 실행. 일반적인 PREVIEW Hosting 배포 승인으로 공유 환경 변경 금지.
 
 **완료 기준:** 실제 PC·모바일에서 정확한 확정 알림 전달과 기존 좋아요·팔로우 정상 동작, 설정 OFF의 서버 적용, 저장·읽기·삭제 비용 측정이 모두 PASS여야 실제 백엔드 완료.
+
+
+## Stage003 — Authenticated account-preferences sync (source only, activation blocked)
+- API adapter: `cloudflare/explore-worker/runtime/notification-preferences-api-003.mjs`. Auth via active Worker `validateExploreAuth307` -> `/auth-test` verifying ID token + AppCheck; server takes verified UID, ignores arbitrary caller UID, responds 401/400/409/503 with no-store and origin allowlist. The exact existing middleware must also be checked in a real supported deployment before enablement.
+- Current compiled Worker route gate: `NOTIFICATION_PREFS_003_COMPILED_OPEN=false`, requires extra environment flag even after future source activation.
+- Client: `src/services/notifications/notificationAccountSyncCore003.ts`, `notificationAccountSync003.ts`; default disabled; old local preferences kept, first explicit settings open only fetches server after later activation; legacy OFF values migrate on server revision 0 only. No background poll, no page-load write.
+- CAS PUT blocks old PC overwriting later mobile settings. 409 returns current authoritative account settings. UI displays conflict and only writes to browser storage after acknowledged server result.
+- Test: `scripts/verify-notification-account-sync-api-003.mjs`, existing panel verifier invokes it. Default open W0, legacy OFF one-time migration, foreign UID forbidden, stale OFF/default repair, 409 conflict, request bound, feature-disabled R0/W0.
+- Active server, client, shared D1, physical cost, PC/mobile verified sync are **not** claimed; separate deployment/real-device approval remains mandatory.

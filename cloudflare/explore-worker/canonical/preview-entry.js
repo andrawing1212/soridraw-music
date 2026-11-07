@@ -10,6 +10,8 @@ import {
   CURATED_REPAIR_WAKE_MS_468, CURATED_REPAIR_PREPARE_GRACE_MS_468,
 } from '../runtime/curated-projection-repair-468.mjs';
 import baseWorker from './preview-worker.js';
+import {handleNotificationPreferencesApi003}
+ from '../runtime/notification-preferences-api-003.mjs';
 import {verifyPrivateHmac416,validatePrivateHandoff416,acceptPrivateHandoff416} from '../runtime/like-private-batch-handoff-416.mjs';
 import {finalizePrivateHandoff416} from '../runtime/like-private-finalize-416.mjs';
 import {ackPublicLikeEventStorage416,registerPublicLikeEventStorage416,
@@ -3324,6 +3326,30 @@ export default {
 
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // Notification preferences remain strictly OFF until shared D1 schema,
+    // three-environment auth compatibility and release approval are proven.
+    // A deployment env variable alone cannot activate this route.
+    const NOTIFICATION_PREFS_003_COMPILED_OPEN = false;
+    if(NOTIFICATION_PREFS_003_COMPILED_OPEN &&
+       env?.SORIDRAW_NOTIFICATION_PREFS_003 === '1' &&
+       url.pathname === '/v1/me/notifications/preferences'){
+      const cors = curationCors307(request);
+      const origin=request.headers.get('Origin')||'';
+      if(origin && !RELEASE_ALLOWED_ORIGINS_036.has(origin))
+        return Response.json({ok:false,error:{code:'ORIGIN_FORBIDDEN'}},{status:403});
+      if(request.method==='OPTIONS')
+        return handleNotificationPreferencesApi003({
+          request,db:env?.DB,enabled:true,cors,
+        });
+      // Existing baseWorker /auth-test verifies Firebase JWT + AppCheck;
+      // auth failure must not read or write the shared D1 preference table.
+      const actor=await validateExploreAuth307(request,env,ctx);
+      if(!actor.ok)return actor.response;
+      return handleNotificationPreferencesApi003({
+        request,db:env?.DB,enabled:true,cors,
+        verifyAuthenticatedUid:async()=>actor.uid,
+      });
+    }
     if(STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE&&
        url.pathname===PUBLIC_LIKE_MANIFEST_ROUTE_416){
       return handlePublicLikeManifestIntersect416(request,env);

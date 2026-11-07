@@ -315,7 +315,10 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
             </button>
           ) : (
             <button type="button" className="soridraw-notification-header-button"
-              onClick={() => setSettingsOpen(true)} aria-label="알림 설정 열기">
+              onClick={() => {
+                if (NOTIFICATION_ACCOUNT_SYNC_ENABLED_003) setAccountSettings(null);
+                setSettingsOpen(true);
+              }} aria-label="알림 설정 열기">
               <Settings2 size={19} />
             </button>
           )}

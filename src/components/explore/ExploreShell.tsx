@@ -9,9 +9,10 @@ import { flushSoridrawPageSync } from '../../lib/pageSyncCoordinator';
 
 type ExploreShellProps = {
   isAdminUser?: boolean;
+  recentHistory?: readonly unknown[];
 };
 
-export default function ExploreShell({ isAdminUser = false }: ExploreShellProps) {
+export default function ExploreShell({ isAdminUser = false, recentHistory }: ExploreShellProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
@@ -49,6 +50,7 @@ export default function ExploreShell({ isAdminUser = false }: ExploreShellProps)
   const leftRail = (
     <StudioLeftRail
       activeWorkspace={'__explore__' as StudioWorkspaceView}
+      recentHistory={recentHistory}
       onCreate={() => go('/studio')}
       onRecentSongs={() => go('/studio?view=recent')}
       onMusicNote={() => go('/history')}

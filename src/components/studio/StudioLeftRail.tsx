@@ -24,6 +24,7 @@ export type StudioWorkspaceView = 'create' | 'recent' | 'music-note' | 'library'
 
 type StudioLeftRailProps = {
   activeWorkspace: StudioWorkspaceView;
+  recentHistory?: readonly unknown[];
   onCreate: () => void;
   onRecentSongs: () => void;
   onMusicNote: () => void;
@@ -62,6 +63,7 @@ const PROFILE_MENU_GAP = 8;
 // SORIDRAW_NAV_PERMISSION_RAIL_953
 export default function StudioLeftRail({
   activeWorkspace,
+  recentHistory,
   onCreate,
   onRecentSongs,
   onMusicNote,
@@ -448,7 +450,7 @@ export default function StudioLeftRail({
         </div>
       </aside>
       {profileMenu}
-      <NotificationPanel open={notificationOpen} anchorRef={notificationButtonRef}
+      <NotificationPanel open={notificationOpen} recentHistory={recentHistory} anchorRef={notificationButtonRef}
         onClose={() => setNotificationOpen(false)} />
       {railTooltipPortal}
     </>

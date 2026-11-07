@@ -17,12 +17,16 @@ import {
   loadNotificationAccountSettings003, saveNotificationAccountSettings003,
   type NotificationAccountSettings003,
 } from '../../services/notifications/notificationAccountSync003';
+import {NOTIFICATION_INBOX_ENABLED_004,loadOwnNotifications004,
+  projectCompletedExistingGenerations004}
+  from '../../services/notifications/notificationInbox004';
 import './notificationPanel.css';
 
 type Props = {
   open: boolean;
   anchorRef: React.RefObject<HTMLButtonElement | null>;
   onClose: () => void;
+  recentHistory?: readonly unknown[];
 };
 
 const TYPES: Array<{ key: NotificationCategory; label: string; detail: string }> = [
@@ -68,7 +72,7 @@ const validInternalSharePath = (path: string | undefined): string | null => {
   return path;
 };
 
-export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
+export default function NotificationPanel({ open, anchorRef, onClose, recentHistory = [] }: Props) {
   const navigate = useNavigate();
   const panelRef = useRef<HTMLDivElement>(null);
   const detailCloseRef = useRef<HTMLButtonElement>(null);
@@ -80,6 +84,8 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
   // Account-wide settings are staged behind the approved shared-backend
   // activation flag. Until then, keep existing local switches untouched.
   const [accountSettings, setAccountSettings] = useState<NotificationAccountSettings003 | null>(null);
+  const [remoteRows, setRemoteRows] = useState<InboxNotification[]>([]);
+  const [remoteLoading, setRemoteLoading] = useState(false);
   const [settingsSyncBusy, setSettingsSyncBusy] = useState(false);
   const syncGenerationRef = useRef(0);
   const [position, setPosition] = useState({ left: 80, top: 12 });
@@ -141,6 +147,24 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
     return () => { live=false; syncGenerationRef.current+=1; };
   }, [open, settingsOpen, uid]);
 
+  // One account-scoped GET only on explicit inbox open; tab changes reuse rows.
+  useEffect(() => {
+    if (!open || !NOTIFICATION_INBOX_ENABLED_004) return;
+    const current = auth.currentUser;
+    if (!current || current.uid !== uid) return;
+    let live = true;
+    setRemoteLoading(true);
+    void loadOwnNotifications004(current).then((items) => {
+      if (!live || auth.currentUser?.uid !== uid) return;
+      setRemoteRows(items);
+    }).catch(() => {
+      if (live) setNotice('알림을 불러오지 못했습니다. 다시 열어 확인해 주세요.');
+    }).finally(() => {
+      if (live) setRemoteLoading(false);
+    });
+    return () => { live = false; };
+  }, [open, uid]);
+
   useLayoutEffect(() => {
     if (!open) return;
     const update = () => {
@@ -198,11 +222,13 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
   // No live subscription, polling, per-user list scan, or backend writes in
   // the UI release. A verified recipient-scoped backend inbox is a separate
   // activation gate. PREVIEW examples are explicitly labelled as examples.
-  const visualExample = isNotificationVisualPreview();
-  const rows = useMemo(() => (visualExample ? NOTIFICATION_EXAMPLE_ROWS : [])
+  const visualExample = isNotificationVisualPreview() && !NOTIFICATION_INBOX_ENABLED_004;
+  const rows = useMemo(() => (NOTIFICATION_INBOX_ENABLED_004
+    ? [...remoteRows, ...projectCompletedExistingGenerations004(recentHistory)]
+    : (visualExample ? NOTIFICATION_EXAMPLE_ROWS : []))
     .filter((row) => masterEnabled && prefs[row.category] &&
       notificationSectionFor(row.category) === activeSection),
-    [visualExample, prefs, masterEnabled, activeSection]);
+    [visualExample, remoteRows, recentHistory, prefs, masterEnabled, activeSection]);
 
   const accountSyncLocked = NOTIFICATION_ACCOUNT_SYNC_ENABLED_003 &&
     (settingsSyncBusy || !accountSettings);
@@ -428,7 +454,8 @@ export default function NotificationPanel({ open, anchorRef, onClose }: Props) {
             </div>
           )) : (
             <p className="soridraw-notification-empty">
-              {activeSection === 'creation' ? '아직 표시할 생성 알림이 없습니다.' : '아직 표시할 알림이 없습니다.'}
+              {remoteLoading ? '알림을 불러오는 중입니다.' :
+                activeSection === 'creation' ? '아직 표시할 생성 알림이 없습니다.' : '아직 표시할 알림이 없습니다.'}
             </p>
           )}
         </div>

@@ -47,10 +47,29 @@ db.exec('CREATE TABLE tracks(id TEXT PRIMARY KEY,owner_uid TEXT,title TEXT,is_pu
   +'CREATE TABLE explore_follow_overrides_348(follower_uid TEXT,following_uid TEXT,following INTEGER,baseline_following INTEGER,updated_at INTEGER,mutation_id TEXT,PRIMARY KEY(follower_uid,following_uid));');
 db.exec(sql);db.exec(directSql);
 const counts={read:0,write:0};
-const d1={prepare(q){return{bind(...v){const stmt=db.prepare(q);
-return {async first(){counts.read++;return stmt.get(...v)||null;},
- async all(){counts.read++;return {results:stmt.all(...v)};},
- async run(){counts.write++;return {meta:{changes:stmt.run(...v).changes}};}};}}};
+const d1={
+  prepare(q){
+    return {
+      bind(...values){
+        const stmt=db.prepare(q);
+        return {
+          async first(){
+            counts.read++;
+            return stmt.get(...values)||null;
+          },
+          async all(){
+            counts.read++;
+            return {results:stmt.all(...values)};
+          },
+          async run(){
+            counts.write++;
+            return {meta:{changes:stmt.run(...values).changes}};
+          },
+        };
+      },
+    };
+  },
+};
 const put=(q,...v)=>db.prepare(q).run(...v);
 const count=q=>db.prepare('SELECT COUNT(*) AS n FROM '+q).get().n;
 const now=Date.now();

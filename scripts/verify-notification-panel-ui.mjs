@@ -89,7 +89,7 @@ assert.match(panel, /<NotificationSwitch checked=\{masterEnabled\} onChange=\{to
 assert.match(panel, /<NotificationSwitch checked=\{prefs\[item.key\]\} disabled=\{!masterEnabled \|\| accountSyncLocked\}/);
 assert.match(panel, /checked=\{checked\} onChange=\{onChange\} disabled=\{disabled\}/);
 assert.match(panel, /aria-disabled=\{!masterEnabled \|\| accountSyncLocked\}/);
-assert.match(panel, /if \(!masterEnabled\) return;/);
+assert.match(panel, /if \(!masterEnabled \|\| accountSyncLocked\) return;/);
 assert.match(panel, /saveNotificationMasterEnabled\(uid, nextEnabled\)/);
 assert.match(panel, /saveNotificationPreferences\(uid, next\)/);
 assert.match(panel, /masterEnabled && prefs\[row.category\]/);

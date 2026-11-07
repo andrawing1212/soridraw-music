@@ -49,20 +49,25 @@ export async function recordConfirmedSocialNotification001({
 // authenticate MUST return the verified JWT user UID. Never trust a
 // client-chosen recipient UID or list every user to discover alerts.
 export async function readOwnNotificationInbox001({
-  db, authenticate, activated = false, limit = 30,
+  db, authenticate, activated = false, limit = 30, now=Date.now(),
 } = {}) {
   if (!activated) return {status: 'inactive', items: []};
   if (!db?.prepare || typeof authenticate !== 'function' ||
-      !Number.isSafeInteger(limit) || limit < 1 || limit > 30)
+      !Number.isSafeInteger(limit) || limit < 1 || limit > 30 ||
+      !Number.isSafeInteger(now) || now<=0)
     throw invalid('NOTIFICATION_READ_UNAVAILABLE');
   const uid = await authenticate();
   if (!id(uid, 256)) throw invalid('NOTIFICATION_NOT_AUTHENTICATED');
+  // Primary-key prefix is the signed-in UID. The 24h margin covers every
+  // allowed digest bucket (1-24 hours) while the exact 30d cutoff hides old rows.
+  const cutoff = now - 30*24*60*60*1000;
   const result = await db.prepare(`SELECT category, actor_uid AS actorUid,
     subject_id AS subjectId, actor_name AS actorName,
     subject_title AS subjectTitle, created_at AS createdAt
     FROM soridraw_notification_inbox_001
-    WHERE receiver_uid = ? ORDER BY bucket_ms DESC LIMIT ?`)
-    .bind(uid, limit).all();
+    WHERE receiver_uid = ? AND bucket_ms >= ? AND created_at >= ?
+    ORDER BY bucket_ms DESC LIMIT ?`)
+    .bind(uid, cutoff-24*60*60*1000, cutoff, limit).all();
   if (!Array.isArray(result?.results) || result.results.length > limit)
     throw invalid('NOTIFICATION_READ_INVALID');
   return {status: 'ok', items: result.results};

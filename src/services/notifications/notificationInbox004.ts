@@ -15,7 +15,7 @@ const timestamp=(v:unknown):number|null=>
 type ExistingGeneration004={
   id?:unknown;taskId?:unknown;title?:unknown;status?:unknown;
   createdAt?:unknown;updatedAt?:unknown;audioUrl?:unknown;
-  imageUrl?:unknown;coverUrl?:unknown;
+  imageUrl?:unknown;coverUrl?:unknown;prompt?:unknown;lyrics?:unknown;
 };
 
 /** Project already-loaded Recent Studio history, not a second server copy.
@@ -29,19 +29,28 @@ export function projectCompletedExistingGenerations004(
   for(const item of history.slice(0,Math.min(history.length,200))){
     if(!item||typeof item!=='object')continue;
     const song=item as ExistingGeneration004;
-    if(song.status!=='completed')continue;
-    const id=limitText(song.id||song.taskId,256);
+    // Recent Studio keeps *completed* prompt/lyrics SongResult entries
+    // without a status field or a Suno track id. Never mark a draft pending
+    // Suno response as complete; the existing canonical history is the proof.
+    const recentResult=typeof song.status==='undefined' &&
+      typeof song.prompt==='string' && !!song.prompt.trim() &&
+      !!song.lyrics && typeof song.lyrics==='object';
+    if(song.status!=='completed' && !recentResult)continue;
     const title=limitText(song.title,150);
     const at=timestamp(song.updatedAt)||timestamp(song.createdAt);
-    if(!id||!title||!at||at>now+300000||
-       at<now-30*24*60*60*1000||seen.has(id))continue;
-    seen.add(id);
+    if(!title||!at||at>now+300000||
+       at<now-30*24*60*60*1000)continue;
+    const stable=limitText(song.id||song.taskId,256)||
+      ('recent-'+at+'-'+title);
+    if(seen.has(stable))continue;
+    seen.add(stable);
     const audio=limitText(song.audioUrl,4096);
     const image=limitText(song.imageUrl||song.coverUrl,4096);
-    out.push({id:'generated:'+id,category:'complete',actorName:'SORIDRAW',
-      text:'새로운 곡 생성이 완료되었습니다.',createdAt:at,
-      song:{id,title,...(/^https:\/\//i.test(audio)?{audioUrl:audio}:{}),
-        ...(/^https:\/\//i.test(image)?{coverUrl:image}:{})}});
+    out.push({id:'generated:'+stable,category:'complete',actorName:'SORIDRAW',
+      text:title+' 생성이 완료되었습니다.',createdAt:at,
+      ...(song.status==='completed' && /^https:\/\//i.test(audio)
+        ? {song:{id:stable,title,audioUrl:audio,
+          ...(/^https:\/\//i.test(image)?{coverUrl:image}:{})}}:{})});
     if(out.length===limit)break;
   }
   return out.sort((a,b)=>b.createdAt-a.createdAt);

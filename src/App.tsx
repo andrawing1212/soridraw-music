@@ -4730,8 +4730,8 @@ function Navigation({
         </div>
       </div>
       <NotificationPanel
-        recentHistory={recentHistory}
         open={isMobileNotificationOpen && Boolean(user?.uid)}
+        recentHistory={recentHistory}
         anchorRef={mobileProfileButtonRef}
         onClose={() => setIsMobileNotificationOpen(false)}
       />

@@ -1,3 +1,13 @@
+## CURRENT — 알림 D1 Stage009 트리거 4개 실제 설치 PASS / 활성화 OFF 유지 (2026-11-08 KST)
+- **사용자 승인:** 2026-11-08 YES — 공유 canonical D1에 알림 트리거 4개(좋아요 INSERT, legacy 팔로우 INSERT, overlay 팔로우 INSERT 및 following UPDATE)만 추가. 활성화 래치 OFF(0) 고정, 기존 사용자 원본·Worker/Hosting/Functions/R2 변경 금지.
+- **정본 후보:** #879 격리 31개 이벤트, 추가 논리적 알림 쓰기 7건(이벤트당 W0~W1); #880 source-only SQL blob `69c7be8779cf8b6b22aee023d41a1fc50b4f41a4`, 원본 001 4문 그대로 추출. 코드 릴리스 경로 #880 + 메타 조회 5개 테이블 수정 #882.
+- **처음 실패:** #881 [42483830668](https://github.com/andrawing1212/soridraw-music/actions/runs/42483830668) 은 사전 검사에 3개 테이블만 조회해 기존 17개 트리거 중 6개만 확인한 **검증기 오류**로 D1 변경 전에 차단. 실패한 릴리스 재실행 없음.
+- **실제 완료:** #883 trigger-only PR 병합 `cc387e00cf04349bc9369763ebd06327d6f36e2b`; [Stage009 live run 42484117688](https://github.com/andrawing1212/soridraw-music/actions/runs/42484117688) 1회 **SUCCESS**. 소유자 exact PR HEAD 승인, fixed source/SQL pin, 사전 Stage007 8객체·latch OFF·신규 4개 부재 확인, 기존 core 트리거 17개 스키마 lock 및 세 환경 Worker 버전·DB 바인딩 확인 후 설치. Cloudflare 실행 **4 CREATE TRIGGER SQL / rows written=4**, rows read=0(DDL 실행 보고). 설치 후 신규 4개 정확한 SQL + 기존 17개/Stage007 전부 불변 + latch OFF(0) + PREVIEW·TEST·PRODUCTION 활성 Worker/binding 불변 PASS. 사후 조회 rows written=0.
+- **기능·비용 미검증:** 실제 좋아요·팔로우 이벤트가 발생할 때의 Cloudflare `rows_read/rows_written`·CPU·청구 비용은 **미측정**; OFF 트리거의 활성화 래치 조건 조회가 실 이벤트 비용에 미치는 영향은 별도 실측 필요. 사용자 데이터에 인공 테스트 쓰기를 하지 않았으므로 기존 사용자 기능의 **운영 실사용 PASS를 주장하지 않음**. 알림 API/클라이언트는 OFF, 알림 생성/전달·실 PC↔모바일 수신 미검증.
+- **다음 단계:** 트리거를 설치한 상태지만 알림 수집 및 사용자는 **계속 비활성화(NO-GO)**. 정본 수집 활성화/Worker API 배포/실사용/30일 cleanup schedule/실비용 측정은 단계별 별도 승인과 안전성 검증 후에만 진행. 자동 DROP/기존 원본 되돌림 없음.
+
+---
+
 ## CURRENT — 알림 D1 Stage007 실제 공유 스키마 설치 PASS / 알림 기능 OFF 유지 (2026-11-08 KST)
 - **명시 승인:** 디렉터 2026-11-08 YES — 공유 D1에 알림용 **테이블 5개·인덱스 3개·초기 OFF 활성화 1행만 실제 추가**. 좋아요/팔로우 알림 트리거, 활성화, Worker·Hosting·Functions 배포, 사용자 원본 마이그레이션·삭제는 승인 범위에서 제외.
 - **소스 기준:** #876 병합 `8684f0708a17993085c13fba0ecf63d18b403f92`; 고정 Stage007 SQL blob `d20f09f596032822f21ae279c59bce835b802469`. 기존 공용 D1 릴리스 시스템을 변경하지 않고 소유자 서명·1회 PR용 경로를 별도 구현.

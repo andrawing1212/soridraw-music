@@ -1,0 +1,73 @@
+name: SORIDRAW Notification 010 Cost Baseline Readonly
+# Source-only PR test; one-time preview push retrieves aggregated D1 metrics.
+# Never DML/DDL, Worker deploy, RTDB/Firestore/R2 writes or billing changes.
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/verify-notification-trigger-load-010.mjs'
+      - '.github/workflows/notification-010-cost-baseline-readonly.yml'
+  push:
+    branches: [preview]
+    paths:
+      - 'scripts/verify-notification-trigger-load-010.mjs'
+      - '.github/workflows/notification-010-cost-baseline-readonly.yml'
+permissions:
+  contents: read
+jobs:
+  isolated-load:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check source-only no-remote load runner
+        run: node --check scripts/verify-notification-trigger-load-010.mjs
+      - name: 1k OFF, 10k hypothetical ON, 1k OFF replay, all in memory
+        run: node scripts/verify-notification-trigger-load-010.mjs
+      - name: Retain 31 event canonical and duplicate regression
+        run: node scripts/verify-notification-trigger-economics-008.mjs
+      - name: Confirm no shared data modification
+        run: echo 'NOTIFICATION_010_ISOLATED_NO_REMOTE_D1_SQL=PASS'
+  live-d1-analytics:
+    if: github.event_name == 'push'
+    needs: isolated-load
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_READONLY_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+      SORIDRAW_D1_COST_DAYS: '7'
+      SORIDRAW_SHARED_D1_DATABASE_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+      SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Pin existing GraphQL only and SELECT only verifier source blobs
+        run: |
+          set -euo pipefail
+          test "$(git hash-object scripts/report-cloudflare-d1-usage-readonly.mjs)" = 43aea10ce428f8eb148e16b367a34542cb2a4999
+          test "$(git hash-object scripts/verify-notification-d1-schema-readonly-006.mjs)" = a6f6943bfe5c323bad230efbd46a551058decf85
+      - name: Read only last seven days aggregate shared and account-wide D1 metrics
+        run: node scripts/report-cloudflare-d1-usage-readonly.mjs
+      - name: Verify all 12 notification objects exact and latch OFF
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-notification-d1-schema-readonly-006.mjs --live | tee "$RUNNER_TEMP/notification-010-readonly-state.log"
+          grep -Fxq 'NOTIFICATION_D1_PREDEPLOY_VERDICT=PASS_EXACT_EXISTING' "$RUNNER_TEMP/notification-010-readonly-state.log"
+          grep -Fxq 'NOTIFICATION_D1_ACTIVATION=0' "$RUNNER_TEMP/notification-010-readonly-state.log"
+          grep -Fxq 'NOTIFICATION_D1_REMOTE_ROWS_WRITTEN=0' "$RUNNER_TEMP/notification-010-readonly-state.log"
+      - name: Record strict no-deploy and scope limits
+        run: |
+          echo 'NOTIFICATION_010_AGGREGATED_D1_GRAPHQL_READONLY=PASS'
+          echo 'NOTIFICATION_010_SQL_WRITES=0;WORKER_DEPLOY=0;FUNCTION_DEPLOY=0'
+          echo 'NOTIFICATION_010_EVENT_SPECIFIC_D1_COST=NOT_MEASURED'

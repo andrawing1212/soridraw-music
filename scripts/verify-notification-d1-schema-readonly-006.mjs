@@ -80,6 +80,17 @@ assert.equal(review(baseRows.filter(x=>x.name!=='likes'),baseCols,null).verdict,
 assert.equal(review([...baseRows,expected.soridraw_notification_activation_002],baseCols,0).verdict,'NO_GO');
 assert.equal(review([...baseRows,{...expected.soridraw_notification_inbox_001,sql:'CREATE TABLE soridraw_notification_inbox_001(id TEXT)'}],baseCols,0).verdict,'NO_GO');
 console.log('NOTIFICATION_D1_LOCAL_SCHEMA_CANDIDATE_AND_COLLISION=PASS');
+// Assemble the exact remote lookup once and compile it with local SQLite
+// before any live request; missing parentheses must fail the PR self-test.
+const names=[...Object.keys(core),...Object.keys(objects)],baseNames=Object.keys(core);
+const safeName=n=>{if(!/^[a-z][a-z0-9_]*$/.test(n))throw Error('UNSAFE_METADATA_IDENTIFIER');return "'"+n+"'";};
+const liveSchemaSql=
+ "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE type IN ('table','index','trigger') AND (name IN ("+
+ names.map(safeName).join(',')+") OR (type='trigger' AND tbl_name IN ("+
+ baseNames.map(safeName).join(',')+"))) ORDER BY type,name";
+assert.ok(sqlite.prepare(liveSchemaSql).all().length>0);
+assert.equal(sqlite.prepare('SELECT name,type,pk FROM pragma_table_info(?)').all('likes').length>0);
+console.log('NOTIFICATION_D1_LOCAL_LIVE_SQL_COMPILE=PASS');
 if(process.argv.includes('--self-test'))process.exit(0);
 if(!process.argv.includes('--live'))throw Error('REQUIRE_EXPLICIT_LIVE_OR_SELFTEST');
 const a=process.env.CLOUDFLARE_ACCOUNT_ID,t=process.env.CLOUDFLARE_API_TOKEN,d=process.env.SHARED_D1_ID;
@@ -98,7 +109,7 @@ async function select(sql,params=[]){
   const error=x.errors?.[0]||x.result?.[0]?.error||{};
   const code=String(error.code||'NONE').slice(0,16).replace(/[^A-Za-z0-9_-]/g,'');
   const detail=String(error.message||'').slice(0,180)
-    .replace(/Bearer\\s+\\S+/gi,'[REDACTED]').replace(/[\\r\\n]/g,' ');
+    .replace(/Bearer\s+\S+/gi,'[REDACTED]').replace(/[\r\n]/g,' ');
   throw Error('NOTIFICATION_D1_METADATA_READ_FAILED_HTTP_'+response.status+'_CODE_'+code+'_DETAIL_'+detail);
  }
  const n=Number(x.result[0].meta?.rows_written);
@@ -106,15 +117,7 @@ async function select(sql,params=[]){
  written+=n;
  return x.result[0].results;
 }
-// Schema identifiers are repository-owned fixed strings. Use literal allowed
-// identifiers, avoiding a large parameterized sqlite_schema lookup.
-const names=[...Object.keys(core),...Object.keys(objects)],baseNames=Object.keys(core);
-const safeName=n=>{if(!/^[a-z][a-z0-9_]*$/.test(n))throw Error('UNSAFE_METADATA_IDENTIFIER');return "'"+n+"'";};
-const rows=await select(
- "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE type IN ('table','index','trigger') AND (name IN ("+
- names.map(safeName).join(',')+") OR (type='trigger' AND tbl_name IN ("+
- baseNames.map(safeName).join(',')+")) ORDER BY type,name"
-);
+const rows=await select(liveSchemaSql);
 const cols={};
 for(const n of baseNames)cols[n]=await select('SELECT name,type,pk FROM pragma_table_info(?)',[n]);
 for(const n of Object.keys(objects))if(objects[n]==='table'&&rows.some(x=>String(x.name).toLowerCase()===n))

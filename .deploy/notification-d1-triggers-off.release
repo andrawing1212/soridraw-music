@@ -1,0 +1,4 @@
+approval_pr=0
+product_code_sha=ff882166b6b94bfb594ce4a3ae59629e354e4b03
+triggers_only_off=true
+no_drop_rollback=true

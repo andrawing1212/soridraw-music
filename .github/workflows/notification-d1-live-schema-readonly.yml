@@ -1,0 +1,38 @@
+name: SORIDRAW Notification D1 Live Schema Readonly
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/notification-d1-live-schema-readonly.yml'
+      - 'scripts/verify-notification-d1-schema-readonly-006.mjs'
+      - 'cloudflare/explore-worker/candidates/20261107_01_notification_inbox_candidate.sql'
+      - 'cloudflare/explore-worker/candidates/20261108_01_notification_direct_messages_candidate.sql'
+      - 'cloudflare/explore-worker/candidates/20261108_02_notification_announcement_expiry_candidate.sql'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  schema-readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check isolated schema and collision examples
+        run: node scripts/verify-notification-d1-schema-readonly-006.mjs --self-test
+      - name: Inspect shared D1 metadata (guarded SELECT only)
+        run: node scripts/verify-notification-d1-schema-readonly-006.mjs --live
+      - name: Confirm no deployment
+        run: |
+          echo 'NOTIFICATION_D1_SCHEMA_PREFLIGHT=PASS'
+          echo 'WORKER_DEPLOY=0;SHARED_D1_MIGRATION=0;USER_ROWS_QUERIED=0'

@@ -1,0 +1,63 @@
+name: SORIDRAW Notification 011 Owned Ephemeral D1 Physical Cost
+# Only push of the verified source runs one owned synthetic D1 creation.
+# No shared database references or Worker deployment commands are accepted.
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/measure-notification-ephemeral-d1-011.mjs'
+      - '.github/workflows/notification-011-ephemeral-d1-cost.yml'
+  push:
+    branches: [preview]
+    paths:
+      - 'scripts/measure-notification-ephemeral-d1-011.mjs'
+      - '.github/workflows/notification-011-ephemeral-d1-cost.yml'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-notification-011-one-owned-ephemeral-d1
+  cancel-in-progress: false
+jobs:
+  offline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check and source-pinned isolated SQLite validation
+        run: |
+          set -euo pipefail
+          node --check scripts/measure-notification-ephemeral-d1-011.mjs
+          node scripts/measure-notification-ephemeral-d1-011.mjs --self-test
+          node scripts/verify-notification-trigger-economics-008.mjs
+      - name: No shared D1 or Cloudflare operations
+        run: echo 'NOTIFICATION_011_PR_OFFLINE_ONLY=PASS'
+  physical:
+    if: github.event_name == 'push'
+    needs: offline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run-owned ephemeral D1 only, physical rows_read/written, delete in finally
+        run: node scripts/measure-notification-ephemeral-d1-011.mjs
+      - name: Always repeat owned-only cleanup if any error occurred
+        if: always()
+        run: node scripts/measure-notification-ephemeral-d1-011.mjs cleanup
+      - name: Record preservation of real services
+        run: |
+          echo 'NOTIFICATION_011_SHARED_D1_WRITES=0'
+          echo 'NOTIFICATION_011_WORKER_DEPLOY=0'
+          echo 'NOTIFICATION_011_REAL_LATCH_TOGGLES=0'

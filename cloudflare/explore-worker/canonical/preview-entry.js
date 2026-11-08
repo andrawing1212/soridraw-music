@@ -14,6 +14,8 @@ import {handleNotificationPreferencesApi003}
  from '../runtime/notification-preferences-api-003.mjs';
 import {handleUnifiedNotificationsApi004}
  from '../runtime/notification-unified-api-004.mjs';
+import {NOTIFICATION_RETENTION_CRON_013,runNotificationScheduled013}
+ from '../runtime/notification-retention-scheduler-013.mjs';
 import {verifyPrivateHmac416,validatePrivateHandoff416,acceptPrivateHandoff416} from '../runtime/like-private-batch-handoff-416.mjs';
 import {finalizePrivateHandoff416} from '../runtime/like-private-finalize-416.mjs';
 import {ackPublicLikeEventStorage416,registerPublicLikeEventStorage416,
@@ -3296,6 +3298,14 @@ async function handleSignedPublicLikeWindowAck416(request,env){
 
 export default {
   async scheduled(controller, env, ctx) {
+    // Stage013: source-connected, COMPILE-TIME OFF and no Wrangler cron.
+    // Reserved notification cron must never fall through into existing
+    // public-like scheduled/repair work, even while this feature is OFF.
+    if(controller?.cron === NOTIFICATION_RETENTION_CRON_013) {
+      const NOTIFICATION_RETENTION_013_COMPILED_OPEN = false;
+      if(!NOTIFICATION_RETENTION_013_COMPILED_OPEN) return;
+      return runNotificationScheduled013({controller,env,compiledOpen:true});
+    }
     // SORIDRAW_PREDEPLOY_PENDING_LIKE_DRAIN_192_20260924
     // Release-only escape hatch for a queue row accepted by the previous Worker
     // but left without a live alarm. No production cron uses this label.

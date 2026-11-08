@@ -1,3 +1,12 @@
+## CURRENT — 알림 Stage012 격리 Cloudflare D1 만료 삭제 실제 비용 측정 PASS / DB 삭제 확인 (2026-11-08 KST)
+- **디렉터 승인:** 2026-11-08 YES — 30일 만료 알림 정리를 단일 임시 Cloudflare D1에서 실제 물리적 R/W·실행시간 측정하고 그 DB만 삭제. 공유 D1/사용자 원본/활성화 설정/Worker/Hosting/Functions/운영 R2 변경 금지.
+- **소스·검사:** #889 병합 `06741808244a21093b1c6a6afc82f5add7a0d727` (Stage012 source SHA `7cf07d8fd711ca0d28bb3909c7084caf0d8d9812`). PR 사전 SQLite 및 기존 제품 품질·TS·Build PASS. [실제 물리 측정 #42489430117](https://github.com/andrawing1212/soridraw-music/actions/runs/42489430117) **SUCCESS**. Stage007 스키마/Stage009 OFF 트리거, 별도 source-only 개인 메시지·전체 공지 만료 인덱스, 정확한 005 정리 함수를 임시 DB에만 적용.
+- **실제 Cloudflare D1 쿼리 meta (청구 행수 기준 측정, 인덱스 비용 포함):** 105건×3종 만료 + 경계 1건씩. 1차 종류별 100건(합계 300 삭제): **R1202/W300**, SQL 총 2.04ms / 네트워크 포함 1.31s. 2차 종류별 5건(합계 15 삭제): **R64/W15**, SQL 총 1.695ms / 1.25s. 3차 만료 없음: **R10/W0**, SQL 총 1.058ms / 1.24s. 30일 정확한 경계 3건은 보존. 합성 R2 캐시는 최초 1회 갱신, 재실행 시 추가 갱신 W0 (실제 R2 비용 측정 아님).
+- **자원 정리:** 임시 D1 `soridraw-notify-retention-012-42489430117-1` 소유 이름·UUID 대조 후 삭제, GET 404 존재하지 않음 **PASS**. GitHub always cleanup에서 소유 DB 기록 없음 **PASS**. 운영 공유 D1·Worker·Hosting에 접근/변경하는 실행 경로 없음; 실제 알림 활성화 latch는 계속 **OFF**. 일회성 자동 재실행 워크플로는 측정 후 제거.
+- **한계 및 판단:** 격리 작은 합성 D1이며 운영 공유 D1의 기존 트리거 17개, 실사용 Worker batch/동시성·실제 사용자 10만명·실 청구서·실제 R2 비용은 재현하지 않음. 코드·격리 비용 **PASS**, 운영 알림 실제 수집/30일 스케줄·PC↔모바일 수신 **미완료 / NO-GO**. 서버 활성화와 운영 스케줄은 별도 승인 필요.
+
+---
+
 ## CURRENT — 알림 Stage011 임시 격리 Cloudflare D1 실제 행당 비용 실측 PASS / 임시 DB 삭제 PASS (2026-11-08 KST)
 - **디렉터 승인:** 2026-11-08 YES — 실제 사용자 원본을 건드리지 않고 단일 임시 Cloudflare D1 생성, 기존 Stage007 8개 객체와 Stage009 4개 트리거의 물리적 R/W를 측정하고 종료 시 해당 임시 D1만 삭제. 공유 D1 latch는 OFF, Worker/Hosting/Functions 배포 및 사용자 데이터 변경 금지.
 - **코드/검사:** PR #887 병합 `20f444ffeb99d96aac1bae6fb492d2601f0a9043`. [측정 run #42486971704](https://github.com/andrawing1212/soridraw-music/actions/runs/42486971704) **SUCCESS**, 오프라인 source hash/SQLite·제품 품질 PASS. 임시 D1 고유 이름 `soridraw-notify-cost-011-42486971704-1`, 공유 D1 UUID는 코드에서 접근 차단.

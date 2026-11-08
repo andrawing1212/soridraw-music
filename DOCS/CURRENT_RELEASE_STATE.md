@@ -1,3 +1,20 @@
+## CURRENT — 알림 Stage011 임시 격리 Cloudflare D1 실제 행당 비용 실측 PASS / 임시 DB 삭제 PASS (2026-11-08 KST)
+- **디렉터 승인:** 2026-11-08 YES — 실제 사용자 원본을 건드리지 않고 단일 임시 Cloudflare D1 생성, 기존 Stage007 8개 객체와 Stage009 4개 트리거의 물리적 R/W를 측정하고 종료 시 해당 임시 D1만 삭제. 공유 D1 latch는 OFF, Worker/Hosting/Functions 배포 및 사용자 데이터 변경 금지.
+- **코드/검사:** PR #887 병합 `20f444ffeb99d96aac1bae6fb492d2601f0a9043`. [측정 run #42486971704](https://github.com/andrawing1212/soridraw-music/actions/runs/42486971704) **SUCCESS**, 오프라인 source hash/SQLite·제품 품질 PASS. 임시 D1 고유 이름 `soridraw-notify-cost-011-42486971704-1`, 공유 D1 UUID는 코드에서 접근 차단.
+- **실제 Cloudflare D1 `query.meta.rows_read / rows_written` (각 종류·상태별 3회 모두 동일):**
+  | 정본 변경 1회 | 트리거 없음 | 트리거 설치·OFF | 격리 DB에서만 ON |
+  |---|---|---|---|
+  | 좋아요 INSERT | R0 W2 | R1 W2 | R3 W4 |
+  | 기존 팔로우 INSERT | R0 W2 | R1 W2 | R3 W4 |
+  | 팔로우 오버레이 INSERT | R0 W2 | R1 W2 | R3 W4 |
+  | 오버레이 0→1 UPDATE | R1 W1 | R2 W1 | R4 W3 |
+  - **증분 해석:** 설치·OFF만으로 이벤트당 R+1, **W+0**. 가상 ON 시 기존 무트리거 정본 대비 **R+3, W+2**. 이 W2 증분에는 알림 inbox 및 만료 보조 인덱스 갱신이 포함됨. 총 36개 측정 이벤트, ON으로 12개 합성 알림 생성, 중복 좋아요 W0 / legacy 팔로우+오버레이의 중복 알림 행 0.
+- **자원 복구:** 메인 작업의 소유 DB명·ID 대조 후 DELETE **PASS**; GitHub `always()` 별도 cleanup에서 **소유 DB 기록 없음 PASS**. 임시 D1 삭제 확인, 운영 공유 D1/user source 변경·Worker 배포·사용자 알림 수집 0.
+- **검증 한계:** 5개 가상 canonical 테이블 기준 독립 D1 **물리적** D1 계량값이지만, 운영 공유 D1 기존 17개 트리거·실제 Worker batch/네트워크·동시성·실제 유저 규모·Cloudflare 전체 청구서까지 재현하지 않음. 특히 W4 총량을 운영 실제 좋아요 Writer 1회 과금으로 일반화 금지. 격리 ON은 임시 D1 안에서만 수행; 실제 수집 latch는 OFF. 사용자 PC↔모바일 수신/보존 처리 아직 미검증.
+- **판정:** 소스 수준 격리 호환 및 임시 D1 물리적 증분 비용 측정 **PASS**. 알림 실제 수집 ON·Worker 릴리스·실사용 **별도 승인과 검증 전까지 NO-GO**.
+
+---
+
 ## CURRENT — 알림 Stage010 실제 공유 D1 비용 기준값 + 격리 부하 PASS / 수집 OFF (2026-11-08 KST)
 - **디렉터 승인:** 2026-11-08 YES — 기존 공유 D1 사용자 데이터를 변경하지 않고 운영 비용 기준값(읽기 전용)과 격리 알림 트리거 부하·구형 Writer 호환을 검증. 알림 활성화·Worker/Hosting/Functions 배포 금지.
 - **코드/검사:** PR #885 병합 `733aac5dd3810b99920142892ea02929d4e79eae`; [Actions #42485238752](https://github.com/andrawing1212/soridraw-music/actions/runs/42485238752) PASS. PR 제품 품질 CI PASS. 기존 GraphQL-only 비용 스크립트 `scripts/report-cloudflare-d1-usage-readonly.mjs`를 그대로 재사용.

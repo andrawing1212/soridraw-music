@@ -1,5 +1,10 @@
 name: SORIDRAW Notification D1 Live Schema Readonly
 on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - '.github/workflows/notification-d1-live-schema-readonly.yml'
+      - 'scripts/verify-notification-d1-schema-readonly-006.mjs'
   push:
     branches: [preview]
     paths:
@@ -31,8 +36,10 @@ jobs:
       - name: Check isolated schema and collision examples
         run: node scripts/verify-notification-d1-schema-readonly-006.mjs --self-test
       - name: Inspect shared D1 metadata (guarded SELECT only)
+        if: github.event_name != 'pull_request'
         run: node scripts/verify-notification-d1-schema-readonly-006.mjs --live
       - name: Confirm no deployment
+        if: github.event_name != 'pull_request'
         run: |
           echo 'NOTIFICATION_D1_SCHEMA_PREFLIGHT=PASS'
           echo 'WORKER_DEPLOY=0;SHARED_D1_MIGRATION=0;USER_ROWS_QUERIED=0'

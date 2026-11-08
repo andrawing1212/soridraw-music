@@ -139,7 +139,7 @@ latch(0);
 like('song','actor5',t+2*windowMs,0);
 assert.equal(count(candidate),emitted);
 assert.equal(count(baseline),0);
-assert.deepEqual(candidate.prepare('SELECT DISTINCT receiver_uid FROM soridraw_notification_inbox_001').all(),[{receiver_uid:'owner'}]);
+assert.deepEqual(candidate.prepare('SELECT DISTINCT receiver_uid FROM soridraw_notification_inbox_001').all().map(x=>x.receiver_uid),['owner']);
 const duplicates=candidate.prepare('SELECT COUNT(*) AS n FROM (SELECT 1 FROM soridraw_notification_inbox_001 GROUP BY receiver_uid,bucket_ms,category,actor_uid,subject_id HAVING COUNT(*)>1)').get();
 assert.equal(duplicates.n,0);
 

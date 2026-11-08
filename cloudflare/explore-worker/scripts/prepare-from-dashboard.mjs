@@ -9,6 +9,14 @@ import {
 import { dirname, join, normalize } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
+// Cloudflare Workers Builds is not an authorized Worker release path.
+// Never fetch active production code or replay legacy patches in native Git builds.
+// Approved manual/readonly preparation remains unchanged outside Workers Builds.
+if (String(process.env.WORKERS_CI || '') === '1') {
+  console.log('SORIDRAW_NATIVE_BUILD_PREPARE=SKIPPED; LEGACY_PATCH_REPLAY=SKIPPED; DEPLOY=NOT_REQUESTED');
+  process.exit(0);
+}
+
 const WORKER_NAME = 'soridraw-explore-api';
 const D1_DATABASE_NAME = 'soridraw-explore-db';
 const D1_DATABASE_ID = '217ef5b1-5d80-4f7c-afc7-9e07eb05c06b';

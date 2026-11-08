@@ -1,0 +1,30 @@
+name: SORIDRAW Notification 012 Retention Isolated
+# PR-only: in-memory SQLite and source syntax; no secrets or deployment.
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/verify-notification-release-readiness-005.mjs'
+      - 'cloudflare/explore-worker/runtime/notification-retention-coordinator-005.mjs'
+      - '.github/workflows/notification-012-retention-isolated.yml'
+permissions:
+  contents: read
+jobs:
+  isolated:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and offline retention check
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/runtime/notification-retention-coordinator-005.mjs
+          node --check scripts/verify-notification-release-readiness-005.mjs
+          node scripts/verify-notification-release-readiness-005.mjs
+      - name: No shared writes or releases
+        run: echo 'NOTIFICATION_012_SQLITE_MEMORY_ONLY=PASS;NO_D1_WORKER_HOSTING_DEPLOY'

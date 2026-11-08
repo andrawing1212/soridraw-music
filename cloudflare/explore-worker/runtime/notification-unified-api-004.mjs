@@ -2,6 +2,8 @@
 import {readUnifiedNotificationInbox004,publishPrivateNotification004,
   publishSharedAnnouncement004} from './notification-unified-inbox-004.mjs';
 import {NOTIFICATION_SHARED_ANNOUNCEMENT_KEY_001} from './notification-inbox-001.mjs';
+import {reconcileGlobalAnnouncementSnapshot005}
+  from './notification-retention-coordinator-005.mjs';
 
 const noCache=cors=>({...cors,'Cache-Control':'private, no-store',
   'Content-Type':'application/json; charset=utf-8','Vary':'Origin, Authorization'});
@@ -40,12 +42,6 @@ export async function handleUnifiedNotificationsApi004({
     if(value?.schema!==1||!Array.isArray(value.items))throw Error('CACHE_INVALID');
     return value.items;
   };
-  const writeCommon=async(items)=>{
-    if(!cache?.put)throw Error('CACHE_NOT_READY');
-    await cache.put(NOTIFICATION_SHARED_ANNOUNCEMENT_KEY_001,
-      JSON.stringify({schema:1,items}),{
-        httpMetadata:{contentType:'application/json'}});
-  };
   try{
     if(path===inbox){
       const data=await readUnifiedNotificationInbox004({
@@ -79,7 +75,7 @@ export async function handleUnifiedNotificationsApi004({
       return fail('INVALID_BODY',cors,400);
     const written=await publishSharedAnnouncement004({
       db,announcement:body,verifyAdmin:async()=>true,
-      publishSharedSnapshot:writeCommon,enabled:true
+      reconcileSharedSnapshot:()=>reconcileGlobalAnnouncementSnapshot005({db,cache}),enabled:true
     });
     return result(200,{ok:true,data:written},cors);
   }catch(error){

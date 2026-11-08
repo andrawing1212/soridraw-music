@@ -353,6 +353,7 @@ async function readOwnStaffProfile307(actor) {
   return {
     role: String(fields?.role?.stringValue || '').trim().toLowerCase(),
     staffRole: String(fields?.staffRole?.stringValue || '').trim().toLowerCase(),
+    staffRolePresent: Object.prototype.hasOwnProperty.call(fields,'staffRole'),
   };
 }
 
@@ -3374,7 +3375,7 @@ export default {
         verifyAdmin:async()=>{
           const staff=await readOwnStaffProfile307(actor);
           return staff.staffRole==='master'||staff.staffRole==='admin'||
-            staff.role==='admin';
+            (staff.role==='admin' && staff.staffRolePresent===false);
         }
       });
     }

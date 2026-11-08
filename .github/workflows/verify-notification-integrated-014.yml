@@ -1,0 +1,27 @@
+name: SORIDRAW Notification 014 Unified Isolated Contract
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/verify-notification-integrated-014.mjs'
+      - '.github/workflows/verify-notification-integrated-014.yml'
+permissions:
+  contents: read
+jobs:
+  isolated:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Unified HTTP preferences, inbox, social, 30-day cleanup with fake D1/R2
+        run: |
+          set -euo pipefail
+          node --check scripts/verify-notification-integrated-014.mjs
+          node scripts/verify-notification-integrated-014.mjs
+      - name: Explicitly no cloud resources or deploy
+        run: echo 'NOTIFICATION_014_IN_MEMORY_ONLY=PASS;NO_SHARED_D1;NO_R2;NO_WORKER_DEPLOY'

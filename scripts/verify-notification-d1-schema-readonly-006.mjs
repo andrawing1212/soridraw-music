@@ -89,7 +89,7 @@ const liveSchemaSql=
  names.map(safeName).join(',')+") OR (type='trigger' AND tbl_name IN ("+
  baseNames.map(safeName).join(',')+"))) ORDER BY type,name";
 assert.ok(sqlite.prepare(liveSchemaSql).all().length>0);
-assert.equal(sqlite.prepare('SELECT name,type,pk FROM pragma_table_info(?)').all('likes').length>0);
+assert.ok(sqlite.prepare('SELECT name,type,pk FROM pragma_table_info(?)').all('likes').length>0);
 console.log('NOTIFICATION_D1_LOCAL_LIVE_SQL_COMPILE=PASS');
 if(process.argv.includes('--self-test'))process.exit(0);
 if(!process.argv.includes('--live'))throw Error('REQUIRE_EXPLICIT_LIVE_OR_SELFTEST');

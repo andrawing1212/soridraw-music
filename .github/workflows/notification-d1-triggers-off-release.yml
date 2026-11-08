@@ -74,7 +74,7 @@ jobs:
         run: |
           set -euo pipefail
           git merge-base --is-ancestor HEAD "$GITHUB_SHA"
-          test "$(git hash-object scripts/verify-notification-d1-triggers-off-009.mjs)" = 7ec25a14f2af09d87e258eacd1eb7b340f0601e8
+          test "$(git hash-object scripts/verify-notification-d1-triggers-off-009.mjs)" = a8f66f7bc555cec55b09526a31f6f00066d9de5d
           test "$(git hash-object scripts/verify-notification-d1-release-gate-009.mjs)" = 2a44d35138307746ee5382af096a27c5d41230c8
           test "$(git hash-object cloudflare/explore-worker/candidates/20261108_04_notification_triggers_off_release.sql)" = 69c7be8779cf8b6b22aee023d41a1fc50b4f41a4
           test "$(git hash-object cloudflare/explore-worker/candidates/20261108_03_notification_inert_schema_release.sql)" = d20f09f596032822f21ae279c59bce835b802469

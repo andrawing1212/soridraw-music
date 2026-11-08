@@ -388,6 +388,7 @@ jobs:
           node scripts/verify-notification-account-sync-api-003.mjs
           node scripts/verify-notification-release-readiness-005.mjs
           node scripts/verify-notification-unified-inbox-004.mjs
+          node scripts/verify-notification-trigger-economics-008.mjs
       - name: TypeScript
         run: npm run lint
       - name: Build

@@ -136,6 +136,100 @@ assert.equal(cache.value.payload.items.length,3);
 
 const unready=await runNotificationRetention005({db:d1,cache,enabled:false,now});
 assert.equal(unready.status,'inactive');
+
+// 012 — in-memory-only 30-day cutoff, indexed incremental expiry, R2 recovery.
+const {readUnifiedNotificationInbox004} = await import(
+ '../cloudflare/explore-worker/runtime/notification-unified-inbox-004.mjs');
+const cutoff012=now-30*86400000;
+const expiry012=[
+ ['soridraw_notification_inbox_001','idx_soridraw_notification_expiry_002','created_at'],
+ ['soridraw_notification_direct_messages_004','idx_soridraw_direct_expiry_004','created_at'],
+ ['soridraw_global_announcements_001','idx_soridraw_global_expiry_005','published_at'],
+];
+for(const [table,index,column] of expiry012){
+ const plan=db.prepare('EXPLAIN QUERY PLAN SELECT '+column+' FROM '+table+
+  ' WHERE '+column+'<? ORDER BY '+column+' ASC LIMIT 2').all(cutoff012);
+ assert.ok(plan.some(row=>String(row.detail).includes(index)),index+' not indexed');
+}
+const addSocial012=(key,at)=>db.prepare(
+ 'INSERT INTO soridraw_notification_inbox_001 VALUES(?,?,?,?,?,?,?,?)')
+ .run('owner',Math.floor(at/7200000)*7200000,'like',
+  'actor-'+key,'song-'+key,'Actor','Title',at);
+const addDirect012=(key,at)=>db.prepare(
+ 'INSERT INTO soridraw_notification_direct_messages_004 VALUES(?,?,?,?,?)')
+ .run('owner',key,'Title','Body',at);
+const addGlobal012=(key,at)=>db.prepare(
+ 'INSERT INTO soridraw_global_announcements_001 VALUES(?,?,?,?)')
+ .run(key,'Title','Body',at);
+for(let i=0;i<5;i++){
+ addSocial012('old-'+i,cutoff012-1000-i);
+ addDirect012('old-'+i,cutoff012-1000-i);
+ addGlobal012('old-'+i,cutoff012-1000-i);
+}
+addSocial012('too-old',cutoff012-1);addDirect012('too-old',cutoff012-1);
+addGlobal012('too-old',cutoff012-1);
+addSocial012('at-cutoff',cutoff012);addDirect012('at-cutoff',cutoff012);
+addGlobal012('at-cutoff',cutoff012);
+const visible012=await readUnifiedNotificationInbox004({
+ db:d1,enabled:true,authenticate:async()=> 'owner',now,
+ readSharedAnnouncements:async()=>[
+  {id:'cache-expired',title:'Old',body:'Old',publishedAt:cutoff012-1},
+  {id:'cache-edge',title:'Edge',body:'Edge',publishedAt:cutoff012}],
+});
+assert.ok(visible012.items.length>0);
+assert.ok(visible012.items.every(row=>row.createdAt>=cutoff012));
+assert.ok(visible012.items.some(row=>row.id==='direct:at-cutoff'));
+assert.ok(!visible012.items.some(row=>row.id==='direct:too-old'));
+assert.ok(visible012.items.some(row=>row.id==='global:cache-edge'));
+assert.ok(!visible012.items.some(row=>row.id==='global:cache-expired'));
+const core012=['tracks','likes','follows','public_profiles',
+ 'soridraw_notification_preferences_002'];
+const coreCounts012=core012.map(t=>count(t));
+const latch012=db.prepare('SELECT enabled FROM soridraw_notification_activation_002 WHERE id=1').get().enabled;
+const originalPut012=cache.put;
+let injectFailure012=true;
+cache.put=async function(...parts){
+ if(injectFailure012){injectFailure012=false;throw Error('R2_UNAVAILABLE_012');}
+ return originalPut012.apply(this,parts);
+};
+const bounded012={...args,limit:2};
+await assert.rejects(runNotificationRetention005(bounded012),/R2_UNAVAILABLE_012/);
+cache.put=originalPut012;
+const expired012=(table,column)=>db.prepare(
+ 'SELECT COUNT(*) AS n FROM '+table+' WHERE '+column+'<?').get(cutoff012).n;
+for(const [table,,column] of expiry012)assert.equal(expired012(table,column),4);
+const deleted012={social:2,direct:2,announcement:2};
+let finished012=false;
+for(let pass=0;pass<6;pass++){
+ const result=await runNotificationRetention005(bounded012);
+ for(const key of Object.keys(deleted012)){
+  assert.ok(result.byCategory[key]>=0&&result.byCategory[key]<=2);
+  deleted012[key]+=result.byCategory[key];
+ }
+ if(result.status==='ok'){finished012=true;break;}
+ assert.equal(result.status,'more-possible');
+}
+assert.equal(finished012,true);
+assert.deepEqual(deleted012,{social:6,direct:6,announcement:6});
+for(const [table,,column] of expiry012){
+ assert.equal(expired012(table,column),0);
+ assert.equal(db.prepare('SELECT COUNT(*) AS n FROM '+table+
+  ' WHERE '+column+'=?').get(cutoff012).n,1);
+}
+assert.ok(cache.value.payload.items.some(item=>item.id==='at-cutoff'));
+assert.ok(!cache.value.payload.items.some(item=>item.id.startsWith('old-')));
+const priorPuts012=reads.put;
+const repeated012=await runNotificationRetention005(bounded012);
+assert.equal(repeated012.rowsDeleted,0);
+assert.equal(repeated012.r2Writes,0);
+assert.equal(reads.put,priorPuts012);
+assert.deepEqual(core012.map(t=>count(t)),coreCounts012);
+assert.equal(db.prepare('SELECT enabled FROM soridraw_notification_activation_002 WHERE id=1').get().enabled,latch012);
+console.log('NOTIFICATION_012_30DAY_EXACT_BOUNDARY_READ_FILTER=PASS');
+console.log('NOTIFICATION_012_INDEXED_BOUNDED_DRAIN_3_TABLES=PASS');
+console.log('NOTIFICATION_012_R2_FAILURE_RETRY_W0=PASS');
+console.log('NOTIFICATION_012_CANONICAL_AND_LATCH_UNCHANGED=PASS');
+
 console.log('NOTIFICATION_005_SOURCE_ONLY_FLAGS_AUTH_ADMIN=PASS');
 console.log('NOTIFICATION_005_THREE_INDEXED_30DAY_EXPIRY_NO_FANOUT=PASS');
 console.log('NOTIFICATION_005_R2_CAS_RETRY_AND_IDEMPOTENT_W0=PASS');

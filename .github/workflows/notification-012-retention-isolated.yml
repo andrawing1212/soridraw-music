@@ -1,0 +1,61 @@
+name: SORIDRAW Notification 012 Retention Isolated
+# PR runs offline; one source-verified preview merge creates a disposable D1.
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/verify-notification-release-readiness-005.mjs'
+      - 'scripts/measure-notification-retention-012.mjs'
+      - '.github/workflows/notification-012-retention-isolated.yml'
+  push:
+    branches: [preview]
+    paths:
+      - 'scripts/measure-notification-retention-012.mjs'
+      - '.github/workflows/notification-012-retention-isolated.yml'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-notification-012-owned-ephemeral
+  cancel-in-progress: false
+jobs:
+  isolated:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Source-pinned SQLite, syntax and exact retention boundary
+        run: |
+          set -euo pipefail
+          node --check scripts/measure-notification-retention-012.mjs
+          node scripts/measure-notification-retention-012.mjs --self-test
+          node scripts/verify-notification-release-readiness-005.mjs
+      - name: PR never reads Cloudflare secrets
+        if: github.event_name == 'pull_request'
+        run: echo 'NOTIFICATION_012_PR_SQLITE_ONLY=PASS'
+  physical:
+    if: github.event_name == 'push'
+    needs: isolated
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Owned temporary D1 only, measure real rows read and written
+        run: node scripts/measure-notification-retention-012.mjs
+      - name: Always cleanup the exact owned temporary D1
+        if: always()
+        run: node scripts/measure-notification-retention-012.mjs cleanup
+      - name: Prohibit release and shared mutations
+        run: echo 'NOTIFICATION_012_SHARED_D1_UNCHANGED;WORKER_HOSTING_UNDEPLOYED'

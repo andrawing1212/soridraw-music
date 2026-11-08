@@ -353,6 +353,7 @@ async function readOwnStaffProfile307(actor) {
   return {
     role: String(fields?.role?.stringValue || '').trim().toLowerCase(),
     staffRole: String(fields?.staffRole?.stringValue || '').trim().toLowerCase(),
+    staffRolePresent: Object.prototype.hasOwnProperty.call(fields,'staffRole'),
   };
 }
 
@@ -3369,12 +3370,12 @@ export default {
       const actor=await validateExploreAuth307(request,env,ctx);
       if(!actor.ok)return actor.response;
       return handleUnifiedNotificationsApi004({
-        request,db:env.DB,cache:curatedBucket307(env),enabled:true,cors,
+        request,db:env.DB,cache:env?.PROFILE_MEDIA,enabled:true,cors,
         verifyUid:async()=>actor.uid,
         verifyAdmin:async()=>{
           const staff=await readOwnStaffProfile307(actor);
           return staff.staffRole==='master'||staff.staffRole==='admin'||
-            staff.role==='admin';
+            (staff.role==='admin' && staff.staffRolePresent===false);
         }
       });
     }

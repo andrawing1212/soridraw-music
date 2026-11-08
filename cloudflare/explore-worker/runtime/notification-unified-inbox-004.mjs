@@ -1,7 +1,7 @@
 // SORIDRAW unified notification projection candidate (dormant).
 // Runs only after deliberate inbox open. Shared D1 and Worker not activated.
-import {readOwnNotificationInbox001, publishGlobalAnnouncement001,
-  readGlobalAnnouncements001} from './notification-inbox-001.mjs';
+import {readOwnNotificationInbox001, publishGlobalAnnouncement001}
+  from './notification-inbox-001.mjs';
 import {readOwnNotificationPreferences002, NOTIFICATION_RETENTION_MS_002}
   from './notification-preferences-retention-002.mjs';
 
@@ -117,22 +117,24 @@ export async function publishPrivateNotification004({
   return {status:result.meta.changes?'published':'skipped',rowsWritten:result.meta.changes};
 }
 
-/** Single global announcement write + one common R2 snapshot update.
- * Cache update failure is returned as failure, not a false successful delivery;
- * retrying the same id is W0 and republishes the bounded snapshot. */
+/** One global canonical D1 row + CAS-protected shared R2 snapshot.
+ * Failed R2 publish reports failure; retrying the same ID is D1 W0 and repairs
+ * the snapshot without producing per-recipient writes. */
 export async function publishSharedAnnouncement004({
-  db,announcement,verifyAdmin,publishSharedSnapshot,enabled=false
+  db,announcement,verifyAdmin,reconcileSharedSnapshot,enabled=false,
 }={}){
   if(!enabled)return {status:'inactive',rowsWritten:0};
-  if(typeof publishSharedSnapshot!=='function')
+  if(typeof reconcileSharedSnapshot!=='function')
     throw deny('NOTIFICATION_SHARED_CACHE_REQUIRED');
   const stored=await publishGlobalAnnouncement001({
     db,announcement,verifyAdmin,activated:true
   });
-  const snapshot=await readGlobalAnnouncements001({db,activated:true,limit:10});
-  if(snapshot.status!=='ok')throw deny('NOTIFICATION_GLOBAL_SNAPSHOT_FAILED');
-  await publishSharedSnapshot(snapshot.items);
-  return {status:stored.status,rowsWritten:stored.rowsWritten,snapshotSize:snapshot.items.length};
+  const snapshot=await reconcileSharedSnapshot();
+  if(!snapshot||!['updated','unchanged'].includes(snapshot.status)||
+     !bounded(snapshot.snapshotSize,0,10))
+    throw deny('NOTIFICATION_GLOBAL_SNAPSHOT_FAILED');
+  return {status:stored.status,rowsWritten:stored.rowsWritten,
+    snapshotSize:snapshot.snapshotSize};
 }
 
 

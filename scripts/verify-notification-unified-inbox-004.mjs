@@ -86,14 +86,19 @@ const announcement={id:'global-1',title:'업데이트',body:'전체공지',publi
 let common=[],publishes=0,commonReads=0;
 const putCommon=async x=>{common=x;publishes++};
 const readCommon=async()=>{commonReads++;return common};
+const reconcileSharedSnapshot=async()=>{
+  await putCommon([{id:announcement.id,title:announcement.title,
+    body:announcement.body,publishedAt:announcement.publishedAtMs}]);
+  return {status:'updated',snapshotSize:1};
+};
 await assert.rejects(publishSharedAnnouncement004({
- db:d1,announcement,verifyAdmin:no,publishSharedSnapshot:putCommon,enabled:true
+ db:d1,announcement,verifyAdmin:no,reconcileSharedSnapshot,enabled:true
 }),/NOTIFICATION_ADMIN_DENIED/);
 assert.equal((await publishSharedAnnouncement004({
- db:d1,announcement,verifyAdmin:yes,publishSharedSnapshot:putCommon,enabled:true
+ db:d1,announcement,verifyAdmin:yes,reconcileSharedSnapshot,enabled:true
 })).rowsWritten,1);
 assert.equal((await publishSharedAnnouncement004({
- db:d1,announcement,verifyAdmin:yes,publishSharedSnapshot:putCommon,enabled:true
+ db:d1,announcement,verifyAdmin:yes,reconcileSharedSnapshot,enabled:true
 })).rowsWritten,0);
 assert.equal(count('soridraw_global_announcements_001'),1);
 assert.equal(publishes,2,'one shared snapshot repair, never user fanout');

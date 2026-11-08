@@ -94,15 +94,27 @@ async function select(sql,params=[]){
   body:JSON.stringify({sql,params})});
  const x=await response.json();
  if(!response.ok||x.success!==true||!Array.isArray(x.result)||x.result.length!==1||
-    x.result[0].success!==true||!Array.isArray(x.result[0].results))
-  throw Error('NOTIFICATION_D1_METADATA_READ_FAILED_HTTP_'+response.status);
+    x.result[0].success!==true||!Array.isArray(x.result[0].results)){
+  const error=x.errors?.[0]||x.result?.[0]?.error||{};
+  const code=String(error.code||'NONE').slice(0,16).replace(/[^A-Za-z0-9_-]/g,'');
+  const detail=String(error.message||'').slice(0,180)
+    .replace(/Bearer\\s+\\S+/gi,'[REDACTED]').replace(/[\\r\\n]/g,' ');
+  throw Error('NOTIFICATION_D1_METADATA_READ_FAILED_HTTP_'+response.status+'_CODE_'+code+'_DETAIL_'+detail);
+ }
  const n=Number(x.result[0].meta?.rows_written);
  if(!Number.isFinite(n)||n!==0)throw Error('NOTIFICATION_D1_WRITE_STATUS_INVALID');
  written+=n;
  return x.result[0].results;
 }
+// Schema identifiers are repository-owned fixed strings. Use literal allowed
+// identifiers, avoiding a large parameterized sqlite_schema lookup.
 const names=[...Object.keys(core),...Object.keys(objects)],baseNames=Object.keys(core);
-const rows=await select("SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE type IN ('table','index','trigger') AND (name IN ("+names.map(()=>'?').join(',')+") OR (type='trigger' AND tbl_name IN ("+baseNames.map(()=>'?').join(',')+")) ORDER BY type,name",[...names,...baseNames]);
+const safeName=n=>{if(!/^[a-z][a-z0-9_]*$/.test(n))throw Error('UNSAFE_METADATA_IDENTIFIER');return "'"+n+"'";};
+const rows=await select(
+ "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE type IN ('table','index','trigger') AND (name IN ("+
+ names.map(safeName).join(',')+") OR (type='trigger' AND tbl_name IN ("+
+ baseNames.map(safeName).join(',')+")) ORDER BY type,name"
+);
 const cols={};
 for(const n of baseNames)cols[n]=await select('SELECT name,type,pk FROM pragma_table_info(?)',[n]);
 for(const n of Object.keys(objects))if(objects[n]==='table'&&rows.some(x=>String(x.name).toLowerCase()===n))

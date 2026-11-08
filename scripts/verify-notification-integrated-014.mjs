@@ -9,6 +9,8 @@ import {handleUnifiedNotificationsApi004}
   from '../cloudflare/explore-worker/runtime/notification-unified-api-004.mjs';
 import {reconcileGlobalAnnouncementSnapshot005}
   from '../cloudflare/explore-worker/runtime/notification-retention-coordinator-005.mjs';
+import {readUnifiedNotificationInbox004}
+  from '../cloudflare/explore-worker/runtime/notification-unified-inbox-004.mjs';
 import {runNotificationScheduled013,NOTIFICATION_RETENTION_CRON_013}
   from '../cloudflare/explore-worker/runtime/notification-retention-scheduler-013.mjs';
 
@@ -255,8 +257,19 @@ const globalRow=(name,time)=>sqlite.prepare(
  'INSERT INTO soridraw_global_announcements_001 VALUES(?,?,?,?)')
  .run(name,'Title','Public',time);
 socialRow('expired',tooOld);directRow('expired',tooOld);globalRow('expired',tooOld);
-socialRow('edge',cutoff);directRow('edge',cutoff);globalRow('edge',cutoff);
+// Exact boundary is measured at a fixed clock. The HTTP API uses a later
+// Date.now(); keep a separate +60s visible row to avoid millisecond races.
+socialRow('exact',cutoff);directRow('exact',cutoff);globalRow('exact',cutoff);
+socialRow('edge',cutoff+60000);directRow('edge',cutoff+60000);globalRow('edge',cutoff+60000);
 await reconcileGlobalAnnouncementSnapshot005({db,cache,now});
+const exactBoundary=await readUnifiedNotificationInbox004({
+ db,authenticate:async()=> 'alice',
+ readSharedAnnouncements:async()=>cache.value.payload.items,
+ enabled:true,now,
+});
+assert.equal(exactBoundary.items.some(x=>x.id==='direct:exact'),true);
+assert.equal(exactBoundary.items.some(x=>x.id==='global:exact'),true);
+assert.equal(exactBoundary.items.some(x=>x.id==='direct:expired'),false);
 const preCleanup=mutationSnapshot();
 const edgeView=await unified(inboxUrl,'alice');
 assert.equal(edgeView.code,200);
@@ -279,9 +292,9 @@ const post=await unified(inboxUrl,'alice');
 assert.equal(post.code,200);
 assert.equal(post.body.data.items.some(x=>x.id==='direct:edge'),true);
 assert.equal(post.body.data.items.some(x=>x.id==='global:edge'),true);
-assert.equal(inboxCount(),3,'two settled social + one cutoff boundary');
-assert.equal(directCount(),2,'one recipient direct + one boundary');
-assert.equal(globalCount(),2,'one shared + one boundary');
+assert.equal(inboxCount(),4,'two settled social + exact cutoff + visible edge');
+assert.equal(directCount(),3,'one recipient direct + exact cutoff + visible edge');
+assert.equal(globalCount(),3,'one shared + exact cutoff + visible edge');
 const writesAfter=metrics.changed,r2After=cache.writes;
 const again=await runNotificationScheduled013({controller,env,compiledOpen:true,now});
 assert.equal(again.rowsDeleted,0);

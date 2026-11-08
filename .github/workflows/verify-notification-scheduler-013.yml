@@ -1,0 +1,32 @@
+name: SORIDRAW Notification 013 Dormant Scheduler Quality
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'cloudflare/explore-worker/canonical/preview-entry.js'
+      - 'cloudflare/explore-worker/runtime/notification-retention-scheduler-013.mjs'
+      - 'scripts/verify-notification-scheduler-013.mjs'
+      - '.github/workflows/verify-notification-scheduler-013.yml'
+permissions:
+  contents: read
+jobs:
+  isolated:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Source-only SQLite and cron gates
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/canonical/preview-entry.js
+          node --check cloudflare/explore-worker/runtime/notification-retention-scheduler-013.mjs
+          node --check scripts/verify-notification-scheduler-013.mjs
+          node scripts/verify-notification-scheduler-013.mjs
+          node scripts/verify-notification-release-readiness-005.mjs
+      - name: Confirm no live cron or deployment
+        run: echo 'NOTIFICATION_013_NO_LIVE_CRON;NO_WORKER_RELEASE;MEMORY_ONLY=PASS'

@@ -17,6 +17,8 @@ const migration=source('cloudflare/explore-worker/candidates/20261108_02_notific
 assert.match(migration,/SOURCE-ONLY CANDIDATE/);
 assert.match(entry,/NOTIFICATION_INBOX_004_COMPILED_OPEN = false/);
 assert.match(entry,/NOTIFICATION_PREFS_003_COMPILED_OPEN = false/);
+assert.match(entry,/cache:env\?\.PROFILE_MEDIA,enabled:true,cors/,
+  'announcements must use the shared PROFILE_MEDIA, not per-env Explore cache');
 assert.match(client,/NOTIFICATION_INBOX_ENABLED_004=false/);
 assert.match(settings,/NOTIFICATION_ACCOUNT_SYNC_ENABLED_003 = false/);
 assert.match(entry,/staffRolePresent: Object\.prototype\.hasOwnProperty\.call\(fields,'staffRole'\)/);

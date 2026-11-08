@@ -121,7 +121,7 @@ const coreNames=Object.keys(baseTables),looked=[...coreNames,...stageNames,...na
 const quoted=n=>{assert.match(n,/^[a-z][a-z0-9_]*$/);return "'"+n+"'";};
 const schemaSql="SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND type IN ('table','index','trigger') AND (name IN ("+
  looked.map(quoted).join(',')+") OR (type='trigger' AND tbl_name IN ("+
- ['likes','follows','explore_follow_overrides_348'].map(quoted).join(',')+"))) ORDER BY name";
+ coreNames.map(quoted).join(',')+"))) ORDER BY name";
 mem.prepare(schemaSql).all(); // exact SQL locally compiled before live
 const remoteRows=await select(schemaSql);
 const live=new Map(remoteRows.map(x=>[x.name,x]));

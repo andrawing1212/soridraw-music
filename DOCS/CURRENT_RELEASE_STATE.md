@@ -1,3 +1,13 @@
+## CURRENT — 알림 Stage010 실제 공유 D1 비용 기준값 + 격리 부하 PASS / 수집 OFF (2026-11-08 KST)
+- **디렉터 승인:** 2026-11-08 YES — 기존 공유 D1 사용자 데이터를 변경하지 않고 운영 비용 기준값(읽기 전용)과 격리 알림 트리거 부하·구형 Writer 호환을 검증. 알림 활성화·Worker/Hosting/Functions 배포 금지.
+- **코드/검사:** PR #885 병합 `733aac5dd3810b99920142892ea02929d4e79eae`; [Actions #42485238752](https://github.com/andrawing1212/soridraw-music/actions/runs/42485238752) PASS. PR 제품 품질 CI PASS. 기존 GraphQL-only 비용 스크립트 `scripts/report-cloudflare-d1-usage-readonly.mjs`를 그대로 재사용.
+- **Cloudflare GraphQL 실측(2026-11-02~11-08 UTC, 총 7개 일별 집계 구간, 마지막 날짜 일부):** 공유 D1 `rowsRead=5,996`, `rowsWritten=56`, `readQueries=98`, `writeQueries=18`. 계정 전체 D1 `rowsRead=5,997`, `rowsWritten=59`, `readQueries=98`, `writeQueries=19`. 이는 실제 사용량 총계이며 현재 Stage007/009 DDL 비용 등 기존 기능 전체가 섞여 있어 알림 트리거 **이벤트별 증분 비용이 아님**. 30일 단순 환산·과금 예측은 미확정이며 플랜 비용·Workers/R2/Firebase는 포함되지 않음.
+- **격리 SQLite 부하:** Stage009 원본 4 트리거 pinned SHA 기준, 기존 Writer 대 후보의 사용자 정본 결과 비교. OFF 1,000×3=3,000건 → 추가 논리적 쓰기 **0건**. 테스트 환경 ON 10,000×3=30,000건 → 추가 논리적 쓰기 **20,000건** (각 이벤트 W0~W1, legacy + overlay 동일 버킷 중복 방지). OFF 재전환·중복 재생 3,000건 → **0건**. 정본 내용 변화·중복 알림 키 없음. 테스트 실행 시간 1,351.4ms는 로컬 SQLite에 한정, Cloudflare CPU/과금·17개 다른 운영 트리거 부하가 아님.
+- **운영 상태 확인:** 12개 알림 객체(5 테이블·3 인덱스·4 트리거) 스키마 일치, `activation.enabled=0`, 실제 공유 D1 SQL 쓰기 0, 클라이언트/Worker 미활성화 유지. GraphQL 집계 및 SELECT-only 메타데이터 외 사용자 행 조회 없음.
+- **판정:** 격리 호환성 PASS / 운영 전체 비용 기준값 확보. **실제 알림 활성화 GO는 아직 아님.** 활성화된 트리거의 실제 Cloudflare 이벤트당 `rows_read/written`·CPU 및 PC↔모바일 수신·30일 보존/정리·공유 데이터 안전 검증이 남음. 비승인 원본 변경·인공 운영 사용자 이벤트를 만들지 않음.
+
+---
+
 ## CURRENT — 알림 D1 Stage009 트리거 4개 실제 설치 PASS / 활성화 OFF 유지 (2026-11-08 KST)
 - **사용자 승인:** 2026-11-08 YES — 공유 canonical D1에 알림 트리거 4개(좋아요 INSERT, legacy 팔로우 INSERT, overlay 팔로우 INSERT 및 following UPDATE)만 추가. 활성화 래치 OFF(0) 고정, 기존 사용자 원본·Worker/Hosting/Functions/R2 변경 금지.
 - **정본 후보:** #879 격리 31개 이벤트, 추가 논리적 알림 쓰기 7건(이벤트당 W0~W1); #880 source-only SQL blob `69c7be8779cf8b6b22aee023d41a1fc50b4f41a4`, 원본 001 4문 그대로 추출. 코드 릴리스 경로 #880 + 메타 조회 5개 테이블 수정 #882.

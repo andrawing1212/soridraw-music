@@ -87,7 +87,8 @@ let common=[],publishes=0,commonReads=0;
 const putCommon=async x=>{common=x;publishes++};
 const readCommon=async()=>{commonReads++;return common};
 const reconcileSharedSnapshot=async()=>{
-  await putCommon([announcement]);
+  await putCommon([{id:announcement.id,title:announcement.title,
+    body:announcement.body,publishedAt:announcement.publishedAtMs}]);
   return {status:'updated',snapshotSize:1};
 };
 await assert.rejects(publishSharedAnnouncement004({

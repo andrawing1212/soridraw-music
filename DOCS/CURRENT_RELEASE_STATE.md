@@ -1,3 +1,13 @@
+## CURRENT — 알림 D1 Stage007 실제 공유 스키마 설치 PASS / 알림 기능 OFF 유지 (2026-11-08 KST)
+- **명시 승인:** 디렉터 2026-11-08 YES — 공유 D1에 알림용 **테이블 5개·인덱스 3개·초기 OFF 활성화 1행만 실제 추가**. 좋아요/팔로우 알림 트리거, 활성화, Worker·Hosting·Functions 배포, 사용자 원본 마이그레이션·삭제는 승인 범위에서 제외.
+- **소스 기준:** #876 병합 `8684f0708a17993085c13fba0ecf63d18b403f92`; 고정 Stage007 SQL blob `d20f09f596032822f21ae279c59bce835b802469`. 기존 공용 D1 릴리스 시스템을 변경하지 않고 소유자 서명·1회 PR용 경로를 별도 구현.
+- **실행 결과:** #877 승인 트리거만 병합한 `preview` SHA `d287ed5cab68bcef4c3f8936c1b4c8b7b50eb6ce`. [release run 42480911910](https://github.com/andrawing1212/soridraw-music/actions/runs/42480911910) **SUCCESS** (2026-11-08 21:35 KST). 적용 전 `NOTIFICATION_D1_PREDEPLOY_VERDICT=PASS_ABSENT`, 세 Worker 활성 버전·공유 D1 바인딩 일치. Wrangler D1 실행 **9 SQL문 / Cloudflare 과금 지표 rows written=14**, 기존 사용자 레코드 backfill/delete 없음.
+- **실제 설치 후:** 5개 테이블 + 3개 인덱스 정확한 스키마 PASS, 알림용 트리거 4개 미설치, `soridraw_notification_activation_002(id=1).enabled=0` PASS, PREVIEW/TEST/PRODUCTION Worker 활성 버전·DB 바인딩 변경 없음. Postflight 읽기 쓰기 0, 자동 DROP 롤백 없음.
+- **사용자 기능:** 알림 클라이언트/Worker API 활성화 스위치 계속 OFF. PC·모바일 실제 알림 생성/수신 **미검증(기능 비활성)**. 기존 Explore/좋아요·팔로우/Music Note/Library/Recent 기능 변경 없음.
+- **향후 별도 승인:** 알림 트리거 추가 및 정본 수집 활성화, 30일 정리 스케줄, Worker API 배포/실인증·실사용, 비용/호환 검증은 아직 NO-GO. 이 기록은 아래 11월 7일 코드 후보 및 'D1 미배포' 역사 상태보다 우선한다.
+
+---
+
 ## CURRENT — 알림 계정 설정 API·PC↔모바일 동기화 CODE CANDIDATE / 서버 활성화 금지 (2026-11-07 KST)
 - **디렉터 승인:** 2026-11-07 "YES" — 인증 API와 PC·모바일 알림 설정 동기화 **코드·검사까지만 진행**. 공유 D1/Worker/Rules/Functions 실제 배포는 별도 승인.
 - **후보 PR #867:** `GET/PUT /v1/me/notifications/preferences` (인증된 Firebase UID만 사용, 기존 Worker `/auth-test` 경유 JWT·AppCheck 검증), 타인 UID 지정 거부, no-store/Origin 허용, 요청 크기 제한 및 실패 시 쓰기 재시도 없음. D1 설정 CAS revision으로 PC/모바일 stale overwrite 방지(409 최신 설정 제공).

@@ -17,8 +17,16 @@ Existing `userSync/$uid` rule permits owner reads while `$other: .validate=false
 
 ## Release blockers
 
-Both `EXPLORE_OWNER_FOLLOW_REALTIME_526_ENABLED` and `OWNER_FOLLOW_RELAY_526_ENABLED` are `false`; no production Worker imports the relay. The trusted server function/Worker call and its durable retry are NOT implemented/deployed. This source is not a working cross-account push feature.
+Both `EXPLORE_OWNER_FOLLOW_REALTIME_526_ENABLED` and `OWNER_FOLLOW_RELAY_526_ENABLED` are `false`; no production Worker imports the relay. The signed Worker relay and selective Firebase HTTPS receiver are now staged in source (no deployed secrets or server versions). No durable outbox/retry exists, so NO-GO activation. This source is not a working cross-account push feature.
 
 Activation needs an authenticated Worker→Firebase Admin path; confirmed server-owned count/R2 freshness; RTDB monotonic transaction; replay and concurrent follow ordering; read-only rule/emulator verification; physical write and 100k-user subscription cost; real two-account PC/mobile checks including >30 followers; and separate shared backend authorization. TEST/PRODUCTION untouched.
 
 Acceptance: B immediate local display, A only after canonical settled change without focus, failed/no-op/duplicate does not move A, bursts converge to final count, no D1/Firestore polling or page-entry writes, no shared originals damaged. Status: CODE CANDIDATE only / NO-GO runtime.
+
+
+## APP526 server relay candidate (2026-11-09)
+- Cloudflare preview entry imports an OFF-gated relay. If ever enabled, first verify the authenticated actor's effective pre-edge state, execute existing canonical follow mutation, and verify the resulting public profile R2 count. Only a changed accepted edge gets a signed HMAC receipt. On failure, no new signal and existing app525 focus recheck remains usable.
+- Isolated Firebase HTTPS Function `publishExploreOwnerFollower526` (source export, **not deployed**) verifies timestamped raw-body HMAC using `defineSecret('SORIDRAW_OWNER_FOLLOW_HMAC_526')`. Caller cannot supply an unsigned count; receiver never edits D1, profiles or follower membership. A tiny owner-private RTDB marker uses a monotonic transaction; B's last receipt is acknowledged **after** A marker to allow retries.
+- There is no present Cloudflare secret `SORIDRAW_OWNER_FOLLOW_HMAC_526` or Firebase Secret Manager copy known to be configured, and no secure one-use deployment workflow for the two services. These must be provisioned without exposing the key. PREVIEW env opt-in `SORIDRAW_OWNER_FOLLOW_PUSH_526=1` does not exist. Client and Worker compile gates remain OFF.
+- Two-phase failure hazard: the canonical follow write can succeed but async webhook may fail; the current at-most-two-attempt delivery is **not durable**. Avoid claiming full background real-time convergence until a bounded persistent retry/outbox is implemented and verified. Additional GET per successful candidate mutation (one pre-state, one materialized profile) plus Firebase Function and RTDB marker/ack must be physically costed before live switch.
+- Shared Firebase Functions deployment affects all environments; restrict function invocation to HMAC-signed PREVIEW Worker and check exact Function name. No shared Rules changes required: Admin SDK writes target-private existing userSync branch, client reads only own userSync.

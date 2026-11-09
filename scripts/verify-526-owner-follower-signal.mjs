@@ -72,7 +72,22 @@ assert.match(relay,/OWNER_FOLLOW_RELAY_526_ENABLED = false/);
 assert.match(relay,/receipt\.canonicalCommitted !== true/);
 assert.match(relay,/receipt\.materializedProfileReady !== true/);
 assert.match(relay,/receipt\.changed !== true/);
-assert.doesNotMatch(worker,/owner-follower-relay-526/);
+assert.match(worker,/owner-follower-relay-526/);
+assert.match(worker,/OWNER_FOLLOW_RELAY_526_ENABLED && isOwnerFollow526/);
+assert.match(worker,/confirmed526!==beforeOwnerFollow526.wasFollowing/);
+assert.match(worker,/materialized526===count526/);
+assert.ok(worker.indexOf('let response = await baseWorker.fetch(request, env, ctx);') <
+  worker.indexOf('const delivery526=invokeOwnerFollowRelay526'));
+const webhook=readFileSync('functions/src/exploreOwnerFollowerWebhook526.ts','utf8');
+assert.match(webhook,/verifyOwnerFollowSignature526/);
+assert.match(webhook,/timingSafeEqual/);
+assert.match(webhook,/receipt.at!==Number\(atHeader\)/);
+assert.match(webhook,/userSync\/.*exploreFollowerOwner526/);
+assert.match(webhook,/ownerRef\.transaction/);
+assert.match(webhook,/actorRef\.transaction/);
+assert.ok(webhook.indexOf('ownerRef.transaction')<webhook.indexOf('actorRef.transaction'),
+  'publish before ACK to keep retry possible');
+assert.match(readFileSync('functions/src/index.ts','utf8'),/publishExploreOwnerFollower526/);
 console.log('APP526_OWNER_LIVE_SIGNAL_DUPLICATE_RACE_UNMOUNT=PASS');
 console.log('APP526_NO_IDLE_READ_NO_PRECOMMIT_SHARED_WRITE=PASS');
 console.log('APP526_CLIENT_SERVER_ACTIVATION_OFF=PASS');

@@ -62,8 +62,11 @@ assert.equal(calls,1,'repeat uses newly persisted list, not a server loop');
 assert.match(page,/direction === 'followers' && targetUid === user\?\.uid/);
 assert.match(page,/OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 15_000/);
 assert.match(page,/getExploreProfileConnections\(targetUid, direction, null, refreshOwn523\)/);
-assert.match(page,/profileConnectionsOpen376 !== 'followers' \|\| !user\?\.uid/);
-assert.match(page,/window\.addEventListener\('focus', onOwnFollowersFocus523\)/);
-assert.match(page,/document\.addEventListener\('visibilitychange', onOwnFollowersFocus523\)/);
+// app525: keep app523 on-demand popup refresh, plus owner header focus
+// reconciliation when the modal is closed. No idle cross-user polling.
+assert.match(page,/if\(profileConnectionsOpen376==='followers'\)/);
+assert.match(page,/void openProfileConnections376\('followers'\)/);
+assert.match(page,/window\.addEventListener\('focus',onOwnFollowersFocus525\)/);
+assert.match(page,/document\.addEventListener\('visibilitychange',onOwnFollowersFocus525\)/);
 console.log('APP523_CROSS_ACCOUNT_UNFOLLOW_OWNER_EXPLICIT_LIST_REFRESH=PASS');
 console.log('APP523_NO_IDLE_POLL_OR_SHARED_RESOURCE_CHANGE=PASS');

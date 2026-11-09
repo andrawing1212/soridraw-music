@@ -562,6 +562,24 @@ const safeExternalSocialHref244 = (value: unknown) => {
   }
 };
 
+// APP525: provisional follower count belongs only to the actor's UI.
+const computeFollowTargetDisplay525 = (
+  baseCount: number, wasFollowing: boolean, willFollow: boolean,
+): number => Math.max(0, Math.floor(Number(baseCount || 0))
+  + Number(willFollow) - Number(wasFollowing));
+
+const readPendingTargetFollowerCount525 = (
+  viewerUid: string, targetUid: string,
+): number | null => {
+  const viewer=String(viewerUid || '').trim();
+  const target=String(targetUid || '').trim();
+  if(!viewer || !target || viewer===target)return null;
+  const pending=readPendingExploreFollowIntents380(viewer)
+    .find(row=>row.targetUid===target);
+  return pending ? computeFollowTargetDisplay525(
+    pending.baseTargetFollowerCount,pending.baseFollowing,pending.desiredFollowing) : null;
+};
+
 const safeCount = (value: unknown) => {
   const count = Number(value ?? 0);
   return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
@@ -1960,6 +1978,9 @@ export default function ExplorePage() {
   const profileConnectionsCache376Ref = useRef<Map<string, { items: ExploreProfileConnection[]; nextCursor: string | null }>>(new Map());
   const profileConnectionsRequest376Ref = useRef(0);
   const ownFollowersLastCheck523Ref = useRef<Map<string, number>>(new Map());
+  // One exact owner-only header refresh on a real focus/foreground return.
+  const ownFollowersHeaderLastCheck525Ref = useRef<Map<string,number>>(new Map());
+  const ownFollowersHeaderInflight525Ref = useRef<Set<string>>(new Set());
   const OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 15_000;
   const followSignalVersion377Ref = useRef(0);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
@@ -3391,6 +3412,11 @@ export default function ExplorePage() {
         }
       }
 
+      // An async cached profile response cannot erase B's unsent follow intent.
+      const pendingFollowerCount525 = user?.uid
+        ? readPendingTargetFollowerCount525(user.uid,displayProfile379.uid) : null;
+      if(pendingFollowerCount525!==null)
+        displayProfile379={...displayProfile379,followerCount:pendingFollowerCount525};
       setProfile(displayProfile379);
       setProfileTracks(displayTracks);
       if (user?.uid === displayProfile379.uid) {
@@ -3427,7 +3453,17 @@ export default function ExplorePage() {
         if (user && user.uid !== nextProfile.uid) {
           try {
             const nextFollowState = await getExploreFollowState(user, nextProfile.uid);
-            if (!cancelled) setFollowState(nextFollowState);
+            if (!cancelled) {
+              const pending525=readPendingExploreFollowIntents380(user.uid)
+                .find(row=>row.targetUid===nextProfile.uid);
+              setFollowState(pending525 ? {
+                ...nextFollowState,
+                isFollowing:pending525.desiredFollowing,
+                followerCount:computeFollowTargetDisplay525(
+                  pending525.baseTargetFollowerCount,
+                  pending525.baseFollowing,pending525.desiredFollowing),
+              } : nextFollowState);
+            }
           } catch (reason) {
             console.warn('Explore follow state load failed:', reason);
             if (!cancelled) setFollowState(null);
@@ -3730,6 +3766,11 @@ export default function ExplorePage() {
               patchExplorePublicProfileFirstViewProfile(refreshedProfile.uid, socialPatch379);
             }
           }
+          const pending525=user?.uid
+            ? readPendingTargetFollowerCount525(user.uid,displayRefreshedProfile379.uid)
+            : null;
+          if(pending525!==null)
+            displayRefreshedProfile379={...displayRefreshedProfile379,followerCount:pending525};
           setProfile(displayRefreshedProfile379);
           setProfileTracks(overlayActorLikeCounts120(normalizedTracks));
         },
@@ -4107,22 +4148,48 @@ export default function ExplorePage() {
     }
   };
 
-  // An already-open owner follower popup is rechecked on real focus/foreground
-  // only, without any timer or broader profile/Feed refresh.
+  // APP525: B's private follow signal does not reach A. On a real return to
+  // A's already-open own profile, recheck just A's bounded follower list.
+  // Never poll, reread on page entry, or change shared transport/rules.
   useEffect(() => {
-    if (profileConnectionsOpen376 !== 'followers' || !user?.uid ||
-        profile?.uid !== user.uid) return;
-    const onOwnFollowersFocus523 = () => {
-      if (document.visibilityState !== 'visible') return;
-      void openProfileConnections376('followers');
+    const ownerUid=String(user?.uid||'').trim();
+    if(!ownerUid || profile?.uid!==ownerUid)return;
+    const onOwnFollowersFocus525=()=>{
+      if(document.visibilityState!=='visible')return;
+      if(profileConnectionsOpen376==='followers'){
+        void openProfileConnections376('followers');
+        return;
+      }
+      const now=Date.now();
+      const last=ownFollowersHeaderLastCheck525Ref.current.get(ownerUid)||0;
+      if(now-last<OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 ||
+          ownFollowersHeaderInflight525Ref.current.has(ownerUid))return;
+      ownFollowersHeaderLastCheck525Ref.current.set(ownerUid,now);
+      ownFollowersHeaderInflight525Ref.current.add(ownerUid);
+      void getExploreProfileConnections(ownerUid,'followers',null,true)
+        .then((page525)=>{
+          if(auth.currentUser?.uid!==ownerUid ||
+              activeProfileUidRef.current!==ownerUid)return;
+          profileConnectionsCache376Ref.current.set(ownerUid+':followers',page525);
+          if(page525.nextCursor)return; // 30 cards cannot imply a larger exact count
+          const exact=page525.items.length;
+          patchExplorePublicProfileFirstViewProfile(ownerUid,{followerCount:exact});
+          setProfile(previous=>previous?.uid===ownerUid && previous.followerCount!==exact
+            ? {...previous,followerCount:exact}:previous);
+        })
+        .catch((reason)=>{
+          ownFollowersHeaderLastCheck525Ref.current.delete(ownerUid);
+          console.warn('[app525] own follower header focus recheck deferred:',reason);
+        })
+        .finally(()=>ownFollowersHeaderInflight525Ref.current.delete(ownerUid));
     };
-    window.addEventListener('focus', onOwnFollowersFocus523);
-    document.addEventListener('visibilitychange', onOwnFollowersFocus523);
-    return () => {
-      window.removeEventListener('focus', onOwnFollowersFocus523);
-      document.removeEventListener('visibilitychange', onOwnFollowersFocus523);
+    window.addEventListener('focus',onOwnFollowersFocus525);
+    document.addEventListener('visibilitychange',onOwnFollowersFocus525);
+    return ()=>{
+      window.removeEventListener('focus',onOwnFollowersFocus525);
+      document.removeEventListener('visibilitychange',onOwnFollowersFocus525);
     };
-  }, [profileConnectionsOpen376, profile?.uid, user?.uid]);
+  },[profileConnectionsOpen376,profile?.uid,user?.uid]);
 
   const loadMoreProfileConnections376 = async () => {
     const targetUid = String(profile?.uid || '').trim();
@@ -4315,6 +4382,9 @@ export default function ExplorePage() {
       0,
       Math.floor(Number(previousProfile380.followingCount || 0)),
     );
+    const optimisticTargetFollowerCount525=computeFollowTargetDisplay525(
+      canonicalTargetFollowerCount380,previousMembership380,nextShouldFollow380,
+    );
 
     // app380: local-first. Paint and patch only this device immediately. The
     // final desired state for this viewer/target pair is sent once after 30s.
@@ -4336,7 +4406,7 @@ export default function ExplorePage() {
 
     setFollowState({
       isFollowing: nextShouldFollow380,
-      followerCount: canonicalTargetFollowerCount380,
+      followerCount: optimisticTargetFollowerCount525,
       followingCount: canonicalTargetFollowing380,
       ...(optimisticActorFollowing380 === null
         ? {}
@@ -4355,11 +4425,15 @@ export default function ExplorePage() {
         followingCount: optimisticActorFollowing380,
       });
     }
-    // Public/target counters stay canonical until the final accepted state.
-    // Only this account's own following cache/count is optimistic during batching.
-    setProfile((previous) => previous?.uid === viewerUid && optimisticActorFollowing380 !== null
-      ? { ...previous, followingCount: optimisticActorFollowing380 }
-      : previous);
+    // Show the provisional target count on B's screen immediately. Do NOT
+    // persist or broadcast that count as canonical before the 30s commit.
+    setProfile((previous) => {
+      if(previous?.uid===targetUid)
+        return {...previous,followerCount:optimisticTargetFollowerCount525};
+      if(previous?.uid===viewerUid && optimisticActorFollowing380!==null)
+        return {...previous,followingCount:optimisticActorFollowing380};
+      return previous;
+    });
 
     queueExploreFollowFinalState380({
       viewerUid,

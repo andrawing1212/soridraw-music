@@ -41,9 +41,10 @@ const buildAuthHeaders = async (user: User) => {
   };
 };
 
-const requestPublic = async (path: string) => {
+const requestPublic = async (path: string, cache: RequestCache = 'default') => {
   const response = await fetch(`${EXPLORE_API_BASE}${path}`, {
     method: 'GET',
+    cache,
     headers: { Accept: 'application/json' },
   });
   recordCloudflareResponse(response, path);
@@ -543,6 +544,7 @@ export const getExploreProfileConnections = async (
   if (normalizedCursor) params.set('cursor', normalizedCursor);
   const payload = await requestPublic(
     `/v1/profiles/${encodeURIComponent(normalizedRef)}/${normalizedDirection}?${params.toString()}`,
+    forceServer ? 'no-store' : 'default',
   );
   const rows = Array.isArray(payload?.data?.items) ? payload.data.items : [];
   const page: ExploreProfileConnectionPage = {

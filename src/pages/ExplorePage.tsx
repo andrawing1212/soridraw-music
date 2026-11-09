@@ -139,6 +139,7 @@ import {
   getExploreCurationAccess307,
   getManagedSoridrawCuratedTracks307,
   getSoridrawCuratedTracks307,
+  patchSoridrawCuratedPublishedLikeCount523,
   readCachedSoridrawCuratedTracks307,
   revalidateSoridrawCuratedTracks335,
   setSoridrawCuratedTrack307,
@@ -1956,6 +1957,8 @@ export default function ExplorePage() {
   const [profileConnectionsError376, setProfileConnectionsError376] = useState('');
   const profileConnectionsCache376Ref = useRef<Map<string, { items: ExploreProfileConnection[]; nextCursor: string | null }>>(new Map());
   const profileConnectionsRequest376Ref = useRef(0);
+  const ownFollowersLastCheck523Ref = useRef<Map<string, number>>(new Map());
+  const OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 15_000;
   const followSignalVersion377Ref = useRef(0);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
 
@@ -2252,6 +2255,9 @@ export default function ExplorePage() {
               user.uid, row.trackId, row.at,
             );
             const ownerUid = card.ownerUid || row.ownerUid;
+            // This is a settled public R2 card, never an account-private
+            // optimistic number; also fix the curated cache used on reload.
+            patchSoridrawCuratedPublishedLikeCount523(row.trackId, card.likeCount);
             patchExploreFeedSessionCachesRow(row.trackId, { likeCount: card.likeCount });
             if (ownerUid) {
               patchExplorePublicProfileFirstViewTrack(ownerUid, row.trackId, { likeCount: card.likeCount });
@@ -4041,19 +4047,30 @@ export default function ExplorePage() {
     setProfileConnectionsError376('');
     const key = profileConnectionCacheKey376(targetUid, direction);
     const cached = profileConnectionsCache376Ref.current.get(key);
+    // B's unfollow reaches B's own RTDB channel, not A's. Only A's
+    // explicit own-followers popup can recheck this exact public list.
+    const ownFollowers523 = direction === 'followers' && targetUid === user?.uid;
+    const lastCheck523 = ownFollowersLastCheck523Ref.current.get(key) || 0;
+    const refreshOwn523 = ownFollowers523 &&
+      (lastCheck523 === 0 || Date.now() - lastCheck523 >= OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523);
     if (cached) {
       setProfileConnectionsItems376(cached.items);
       setProfileConnectionsNextCursor376(cached.nextCursor);
-      setProfileConnectionsLoading376(false);
-      return;
+      if (!refreshOwn523) {
+        setProfileConnectionsLoading376(false);
+        return;
+      }
     }
+    if (refreshOwn523) ownFollowersLastCheck523Ref.current.set(key, Date.now());
 
     const requestId = ++profileConnectionsRequest376Ref.current;
-    setProfileConnectionsItems376([]);
-    setProfileConnectionsNextCursor376(null);
+    if (!cached) {
+      setProfileConnectionsItems376([]);
+      setProfileConnectionsNextCursor376(null);
+    }
     setProfileConnectionsLoading376(true);
     try {
-      const page = await getExploreProfileConnections(targetUid, direction);
+      const page = await getExploreProfileConnections(targetUid, direction, null, refreshOwn523);
       if (
         requestId !== profileConnectionsRequest376Ref.current
         || activeProfileUidRef.current !== targetUid
@@ -4074,6 +4091,7 @@ export default function ExplorePage() {
           : previous);
       }
     } catch (reason) {
+      if (refreshOwn523) ownFollowersLastCheck523Ref.current.delete(key);
       if (requestId !== profileConnectionsRequest376Ref.current) return;
       console.warn('[app376] profile connections load failed:', reason);
       setProfileConnectionsError376(
@@ -4085,6 +4103,23 @@ export default function ExplorePage() {
       }
     }
   };
+
+  // An already-open owner follower popup is rechecked on real focus/foreground
+  // only, without any timer or broader profile/Feed refresh.
+  useEffect(() => {
+    if (profileConnectionsOpen376 !== 'followers' || !user?.uid ||
+        profile?.uid !== user.uid) return;
+    const onOwnFollowersFocus523 = () => {
+      if (document.visibilityState !== 'visible') return;
+      void openProfileConnections376('followers');
+    };
+    window.addEventListener('focus', onOwnFollowersFocus523);
+    document.addEventListener('visibilitychange', onOwnFollowersFocus523);
+    return () => {
+      window.removeEventListener('focus', onOwnFollowersFocus523);
+      document.removeEventListener('visibilitychange', onOwnFollowersFocus523);
+    };
+  }, [profileConnectionsOpen376, profile?.uid, user?.uid]);
 
   const loadMoreProfileConnections376 = async () => {
     const targetUid = String(profile?.uid || '').trim();

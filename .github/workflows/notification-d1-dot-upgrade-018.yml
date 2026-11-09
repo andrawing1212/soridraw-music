@@ -1,0 +1,141 @@
+name: SORIDRAW Notification D1 Dot-Only Four Trigger Replacement OFF
+# Exact owner-commented, one-use trigger-only PR may replace four currently installed OFF-latched triggers.
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - '.github/workflows/notification-d1-dot-upgrade-018.yml'
+      - 'scripts/verify-notification-d1-dot-upgrade-018.mjs'
+      - 'scripts/verify-notification-d1-release-gate-018.mjs'
+      - 'cloudflare/explore-worker/candidates/20261109_017_notification_dot_only_triggers_candidate.sql'
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/notification-dot-only-off.release'
+permissions:
+  contents: read
+  actions: read
+  issues: read
+  pull-requests: read
+concurrency:
+  group: soridraw-notification-dot-only-018-release
+  cancel-in-progress: false
+jobs:
+  offline:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test exact OFF schema and owner release gate (NO NETWORK WRITES)
+        run: |
+          node scripts/verify-notification-d1-dot-upgrade-018.mjs --self-test
+          node scripts/verify-notification-d1-release-gate-018.mjs --self-test
+          node scripts/verify-notification-trigger-economics-008.mjs
+      - name: Safe source-only status
+        run: echo 'NOTIFICATION_018_SOURCE_ONLY=PASS;D1_WRITES=0;WORKER_DEPLOY=0'
+  future-owner-approved-trigger-ddl:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+    steps:
+      - name: Checkout audited workflow revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify exact one-use owner approval bound to trigger-only merge
+        id: gate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git fetch origin preview --no-tags
+          git show "$GITHUB_SHA:.deploy/notification-dot-only-off.release" > .deploy/notification-dot-only-off.release
+          node scripts/verify-notification-d1-release-gate-018.mjs --self-test
+          node scripts/verify-notification-d1-release-gate-018.mjs --verify-approval
+      - name: Checkout exactly approved source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.gate.outputs.source_sha }}
+          fetch-depth: 0
+      - name: Pin exactly four dormant trigger SQL statements and source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor HEAD "$GITHUB_SHA"
+          test "$(git hash-object scripts/verify-notification-d1-dot-upgrade-018.mjs)" = 6aa1186564e08db96bde5eddce478d3216ff4d07
+          test "$(git hash-object scripts/verify-notification-d1-release-gate-018.mjs)" = 3ceceb778fd4599d3e3296c5e759b5eaebfb0493
+          test "$(git hash-object cloudflare/explore-worker/candidates/20261109_017_notification_dot_only_triggers_candidate.sql)" = 741166506e6dc0886a25a41ed0f3161fa334af5e
+          test "$(git hash-object cloudflare/explore-worker/candidates/20261108_03_notification_inert_schema_release.sql)" = d20f09f596032822f21ae279c59bce835b802469
+          node scripts/verify-notification-d1-dot-upgrade-018.mjs --self-test
+          node scripts/verify-notification-d1-release-gate-018.mjs --self-test
+          node scripts/verify-notification-trigger-economics-008.mjs
+          node scripts/verify-notification-d1-dot-upgrade-018.mjs --emit "$RUNNER_TEMP/notification-018.sql" --self-test
+      - name: Require exact Stage009 four old triggers and Stage007 with latch OFF
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-notification-d1-dot-upgrade-018.mjs --live-before
+      - name: Capture three active Worker versions and shared DB bindings (GET only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/notification-worker-check.mjs" <<'NODE'
+          import {readFileSync,writeFileSync} from 'node:fs';
+          import assert from 'node:assert/strict';
+          const a=process.env.CLOUDFLARE_ACCOUNT_ID,t=process.env.CLOUDFLARE_API_TOKEN,id=process.env.SHARED_D1_ID;
+          const root='https://api.cloudflare.com/client/v4/accounts/'+a+'/workers/scripts/';
+          const get=async url=>{
+            const r=await fetch(url,{headers:{Authorization:'Bearer '+t,Accept:'application/json'}});
+            const x=await r.json();assert.ok(r.ok&&x.success===true,'CF_WORKER_GET_'+r.status);return x.result;
+          };
+          const current={};
+          for(const name of ['soridraw-explore-preview','soridraw-explore-test','soridraw-explore-api']){
+            const ds=await get(root+name+'/deployments'),d=(ds.deployments||ds||[])[0];
+            const active=d?.versions?.find(v=>Number(v.percentage)>=99.99);
+            assert.ok(active?.version_id,'UNSTABLE_ACTIVE_WORKER_'+name);
+            const settings=await get(root+name+'/settings');
+            const db=(settings.bindings||[]).find(b=>b.name==='DB');
+            assert.equal(String(db?.id||db?.database_id||db?.uuid||''),id,'D1_DRIFT_'+name);
+            current[name]=active.version_id;
+          }
+          const file=process.env.RUNNER_TEMP+'/notification-018-worker-before.json';
+          if(process.argv[2]==='after')
+            assert.deepEqual(current,JSON.parse(readFileSync(file,'utf8')),'WORKER_CHANGED_DURING_RELEASE');
+          else writeFileSync(file,JSON.stringify(current));
+          console.log('NOTIFICATION_018_THREE_WORKERS_BINDINGS_VERSION_STABLE=PASS');
+          NODE
+          node "$RUNNER_TEMP/notification-worker-check.mjs" before
+      - name: Install pinned repository Wrangler tooling (not deploy)
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Replace exactly four OFF-latched notification triggers (OWNER APPROVED)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # If partially failed, HOLD; do not retry or auto-rollback. Keep latch OFF. No artificial user writes.
+          cd cloudflare/explore-worker
+          cat > .notification-dot-only-018-wrangler.jsonc <<JSON
+          {"name":"soridraw-notification-dot-only-off","main":"./placeholder.js","compatibility_date":"2026-08-28","d1_databases":[{"binding":"DB","database_name":"soridraw-explore-db","database_id":"${SHARED_D1_ID}"}]}
+          JSON
+          node node_modules/wrangler/bin/wrangler.js d1 execute DB --remote --config .notification-dot-only-018-wrangler.jsonc --file "$RUNNER_TEMP/notification-018.sql" --yes
+      - name: Live postflight exact four new triggers, all original 17 retained, latch OFF
+        run: |
+          node scripts/verify-notification-d1-dot-upgrade-018.mjs --live-after
+          node "$RUNNER_TEMP/notification-worker-check.mjs" after
+      - name: Record no service activation
+        run: |
+          echo 'NOTIFICATION_018_FOUR_DOT_ONLY_TRIGGERS_REPLACED=PASS'
+          echo 'TRIGGER_ACTIVATION=0;WORKER_DEPLOY=0;USER_DATA_BACKFILL=0'
+          echo 'AUTO_DROP_ROLLBACK=FORBIDDEN'

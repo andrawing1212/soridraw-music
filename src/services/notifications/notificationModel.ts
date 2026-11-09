@@ -93,6 +93,18 @@ export function isNotificationVisualPreview(): boolean {
      window.location.hostname === '127.0.0.1');
 }
 
+/** Stage023: clearly marked PREVIEW examples fill only empty notification
+ * sections. Genuine user rows always take priority; TEST/PRODUCTION get none. */
+export function withPreviewNotificationExamples023(
+  realRows:readonly InboxNotification[],isVisualPreview:boolean,
+):InboxNotification[]{
+  const genuine=[...realRows];
+  if(!isVisualPreview)return genuine;
+  const populated=new Set(genuine.map(row=>notificationSectionFor(row.category)));
+  return [...genuine,...NOTIFICATION_EXAMPLE_ROWS.filter(row=>
+    !populated.has(notificationSectionFor(row.category)))];
+}
+
 export const NOTIFICATION_EXAMPLE_ROWS: InboxNotification[] = [
   { id: 'example-like', category: 'like', actorName: 'LunaBeat', text: '내 곡에 좋아요를 눌렀습니다.',
     createdAt: 2 * 60 * 60 * 1000, song: { id: '', title: '깊어지는 시간의 궤적' } },

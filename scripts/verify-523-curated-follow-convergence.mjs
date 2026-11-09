@@ -16,7 +16,10 @@ const update=load(body(curated,'export const patchSoridrawCuratedPublishedLikeCo
  'patchSoridrawCuratedPublishedLikeCount523',{readCuratedCache307:()=>cache,
  writeCuratedCache307:(items,revision,checkedAt,published)=>{
   writes++;
-  cache={...cache,items,revision,checkedAt,
+  cache={...cache,
+   items:items.map(row=>row.id===published.trackId
+    ? {...row,likeCount:published.likeCount}:row),
+   revision,checkedAt,
    settledPublicLikes524:{...cache.settledPublicLikes524,
     [published.trackId]:{likeCount:published.likeCount,updatedAt:published.updatedAt}}};
  }});

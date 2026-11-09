@@ -7,7 +7,7 @@ import { useGlobalPlayerControls } from '../../contexts/GlobalPlayerContext';
 import { setExploreFollow } from '../../services/exploreSocialService';
 import {
   NOTIFICATION_EXAMPLE_ROWS, NOTIFICATION_PREFERENCES_DEFAULT,
-  isNotificationVisualPreview, readNotificationMasterEnabled,
+  isNotificationVisualPreview, withPreviewNotificationExamples023, readNotificationMasterEnabled,
   readNotificationPreferences, saveNotificationMasterEnabled, saveNotificationPreferences,
   notificationSectionFor, type InboxNotification, type NotificationCategory,
   type NotificationPreferences, type NotificationSection,
@@ -239,7 +239,9 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   // No live subscription, polling, per-user list scan, or backend writes in
   // the UI release. A verified recipient-scoped backend inbox is a separate
   // activation gate. PREVIEW examples are explicitly labelled as examples.
-  const visualExample = isNotificationVisualPreview() && !NOTIFICATION_INBOX_ENABLED_004;
+  // Preview-only samples remain testable even though the shared collector is
+  // OFF. Never present them as actual users or mix them into real sections.
+  const visualExample = isNotificationVisualPreview();
   // Keep real local generation history when the authenticated inbox is enabled.
   // The server inbox carries social/admin records, not the Recent metadata log.
   const localGenerationEnabled = visualExample || NOTIFICATION_INBOX_ENABLED_004;
@@ -265,8 +267,6 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
           readCompletedGenerationLog016(uid))
       : []
   ), [localGenerationEnabled, uid, recentHistory, open, localLogVersion]);
-  const sampleHeader = visualExample &&
-    (activeSection !== 'creation' || localCompletions.length === 0);
   // The already-authenticated inbox read includes canonical account preferences
   // at no additional D1 query. Never hide its valid rows behind a stale local
   // setting from a different device. Confirmed changes win by revision.
@@ -281,15 +281,15 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   // Pink-dot settings never hide stored notifications or stop delivery.
   // Backend unavailable/slow? Keep the user's genuine local creations.
   // Never reuse remote rows belonging to a different account.
-  const allRows=useMemo(()=>NOTIFICATION_INBOX_ENABLED_004
-    ? (remoteInbox.uid===uid ? [...remoteInbox.items,...localCompletions] : [...localCompletions])
-    : (visualExample ? [
-      ...NOTIFICATION_EXAMPLE_ROWS.filter(row =>
-        row.category!=='complete'||localCompletions.length===0),
-      ...localCompletions,
-    ]:[]),[visualExample,localCompletions,remoteInbox,uid]);
+  const allRows=useMemo(()=>{
+    const genuineRows=NOTIFICATION_INBOX_ENABLED_004
+      ? (remoteInbox.uid===uid ? [...remoteInbox.items,...localCompletions] : [...localCompletions])
+      : [...localCompletions];
+    return withPreviewNotificationExamples023(genuineRows,visualExample);
+  },[visualExample,localCompletions,remoteInbox,uid]);
   const rows=useMemo(()=>allRows.filter(row=>
     notificationSectionFor(row.category)===activeSection),[allRows,activeSection]);
+  const sampleHeader = visualExample && rows.some(isPreviewSample);
   const {dots,acknowledge}=useNotificationDots017(
     uid,recentHistory,remoteInbox.uid===uid?remoteInbox.items:[],effectivePreferences);
   useEffect(()=>{

@@ -181,17 +181,38 @@ console.log('NOTIFICATION_MOBILE_OPEN_CLOSE_HAS_NO_NEW_BACKEND_IO=PASS');
 
 assert.match(panel,/localGenerationEnabled && uid && auth\.currentUser\?\.uid === uid/);
 assert.match(panel,/projectCompletedExistingGenerations004\(recentHistory\)/);
-assert.match(panel,/row\.category!=='complete'\|\|localCompletions\.length===0/,
-  'real PREVIEW generation rows replace sample creation notices only');
+assert.match(panel,/withPreviewNotificationExamples023\(genuineRows,visualExample\)/,
+  'PREVIEW samples fill empty sections without replacing real records');
 assert.match(panel,/isPreviewSample\(row\) \? row\.createdAt : Math\.max\(0, Date\.now\(\) - row\.createdAt\)/,
-  'mock samples store elapsed milliseconds, real server and local rows store epoch');
+  'sample elapsed-time labels and actual epoch timestamps stay distinct');
 assert.match(panel,/disabled=\{\(visualExample && isPreviewSample\(row\)\) \|\| !hasPlayableSong\(row\)\}/,
-  'only fake samples or rows without a valid playback target are disabled');
-assert.match(panel,/sampleHeader = visualExample &&/,
-  'genuine completion notice must not be globally marked as a demo');
-assert.match(panel,/localCompletions\.length === 0/,
-  'retain existing creation demo only when no genuine completion exists');
-assert.match(panel,/activeSection !== 'creation' \|\| localCompletions\.length === 0/);
+  'fake sample songs and invalid playback targets cannot be played');
+assert.match(panel,/sampleHeader = visualExample && rows\.some\(isPreviewSample\)/,
+  'only tabs containing PREVIEW examples are labelled as examples');
+const previewSamples=preferenceModule.NOTIFICATION_EXAMPLE_ROWS;
+assert.equal(previewSamples.length,5);
+assert.deepEqual(preferenceModule.withPreviewNotificationExamples023([],true),previewSamples,
+  'original 5 visual test rows must be restored to empty PREVIEW inbox');
+const liveLike={id:'live-like',category:'like',actorName:'real user',text:'actual like',createdAt:Date.now()};
+const liveCreation={id:'generated:local',category:'complete',actorName:'SORIDRAW',
+  text:'real generation',createdAt:Date.now()};
+const liveAnnouncement={id:'global:current',category:'announcement',actorName:'SORIDRAW',
+  text:'real announcement',createdAt:Date.now()};
+const actualRows=[liveLike,liveCreation,liveAnnouncement];
+assert.deepEqual(preferenceModule.withPreviewNotificationExamples023(actualRows,true),actualRows,
+  'actual notification rows displace all same-section fake examples');
+assert.deepEqual(preferenceModule.withPreviewNotificationExamples023([liveCreation],true)
+  .filter(x=>x.id.startsWith('example-')).map(x=>x.id),
+  ['example-like','example-follow','example-notice','example-message'],
+  'real local completed creations displace only fake creation');
+assert.deepEqual(preferenceModule.withPreviewNotificationExamples023([liveLike],true)
+  .filter(x=>x.id.startsWith('example-')).map(x=>x.id),
+  ['example-complete','example-notice'],
+  'real activity must not mix with example likes/followers/messages');
+assert.deepEqual(preferenceModule.withPreviewNotificationExamples023([],false),[],
+  'TEST/PRODUCTION cannot show fake user activity or admin notices');
+assert.deepEqual(preferenceModule.withPreviewNotificationExamples023([liveLike],false),[liveLike],
+  'existing genuine notifications remain unchanged outside PREVIEW');
 assert.doesNotMatch(panel,/setInterval\(|onSnapshot\(|getDocs\(|getDoc\(/);
 console.log('NOTIFICATION_PREVIEW_GENUINE_CREATION_HISTORY_NO_EXTRA_SERVER_IO=PASS');
 

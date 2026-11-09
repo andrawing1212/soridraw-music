@@ -93,7 +93,7 @@ vm.runInNewContext(compile(readFileSync('src/services/explorePublicLikeSyncServi
 // must request 50+30 from R2, not silently truncate at the endpoint's cap.
 let screen=[...rows.map(row=>({id:row.trackId,likeCount:0,liked:false})),
  {id:'unrelated',likeCount:9,liked:true}];
-const timers=[],cachePatches=[];
+const timers=[],cachePatches=[],curatedPatches523=[];
 const page=readFileSync('src/pages/ExplorePage.tsx','utf8');
 const effectStart=page.lastIndexOf('  useEffect(() => {',page.indexOf('const scheduleRefresh192'));
 const effectEnd=page.indexOf('  }, [user?.uid]);',effectStart)+'  }, [user?.uid]);'.length;
@@ -108,6 +108,7 @@ vm.runInNewContext(compile(page.slice(effectStart,effectEnd)),{
  replayPublicLikeWhenVisibleRef423:{current:null},
  publicLikeRefreshAttemptsRef192:{current:new Map()},publicLikeRefreshTimerRef192:{current:null},
  patchExploreFeedSessionCachesRow:(id,patch)=>cachePatches.push({id,...patch}),
+ patchSoridrawCuratedPublishedLikeCount523:(id,count)=>curatedPatches523.push({id,count}),
  patchExplorePublicProfileFirstViewTrack(){},patchExploreLikedTrackCachedCount091(){},
  // B is another UID; a public changed-card event has no private actor lock to retire.
  retireExploreLikeDisplayLockAfterPublicCount420:()=>false,
@@ -146,6 +147,8 @@ assert(screen.slice(0,80).every((row,i)=>row.likeCount===i+1),
 assert.equal(publicRequests,2,'80 changed cards fetched in 50+30 requests');
 assert.equal(publicR2Reads,80);
 assert.equal(cachePatches.length,80);
+assert.equal(curatedPatches523.length,80,'published like patches recommendation too');
+assert.equal(curatedPatches523[0].count,1);
 assert.equal(lastClaim.rows.length,80);
 for(let i=0;i<80;i++){
  const row=lastClaim.rows.find(x=>x.trackId==='song-'+i);
@@ -176,6 +179,8 @@ await drainScreen();
 assert.equal(screen[0].likeCount,0,'settled unlike delivers zero to B');
 assert.equal(screen[0].liked,false);assert.equal(screen[80].liked,true);
 assert.equal(publicRequests,3);assert.equal(publicR2Reads,81);
+assert.equal(curatedPatches523.length,81);
+assert.equal(curatedPatches523.at(-1).count,0,'published unlike updates recommendation too');
 assert.equal(timers.length,0,'no idle polling remains');
 console.log('STAGE416_SIGNED_FINAL_PUBLIC_BUS_R2_ENDPOINT_B_SCREEN_LIKE_UNLIKE=PASS');
 console.log('STAGE416_B_PERSONAL_HEART_UNCHANGED_NO_FEED_NO_D1_NO_IDLE_POLL=PASS');

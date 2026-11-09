@@ -166,8 +166,12 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
     const current = auth.currentUser;
     if (!current || current.uid !== uid) return;
     let live = true;
+    const controller = new AbortController();
+    // Do not display cached social rows after a re-open or account switch.
+    // Local 30-day generation metadata remains independently available.
+    setRemoteInbox({uid:'',items:[],preferences:null});
     setRemoteLoading(true);
-    void loadOwnNotifications004(current).then(({items,preferences}) => {
+    void loadOwnNotifications004(current,controller.signal).then(({items,preferences}) => {
       if (!live || auth.currentUser?.uid !== uid) return;
       setRemoteInbox({uid:current.uid,items,preferences});
     }).catch(() => {
@@ -175,7 +179,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
     }).finally(() => {
       if (live) setRemoteLoading(false);
     });
-    return () => { live = false; };
+    return () => { live = false; controller.abort(); };
   }, [open, uid, remoteRefreshKey]);
 
   useLayoutEffect(() => {
@@ -267,14 +271,18 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   // at no additional D1 query. Never hide its valid rows behind a stale local
   // setting from a different device. Confirmed changes win by revision.
   const serverPreferences = remoteInbox.uid === uid ? remoteInbox.preferences : null;
-  const effectivePreferences = NOTIFICATION_INBOX_ENABLED_004
+  // Account settings sync is still OFF: server defaults must not overwrite
+  // previously saved device-local pink-dot preferences.
+  const effectivePreferences = NOTIFICATION_INBOX_ENABLED_004 && NOTIFICATION_ACCOUNT_SYNC_ENABLED_003
     ? (accountSettings && (!serverPreferences ||
         accountSettings.revision >= serverPreferences.revision)
         ? accountSettings : serverPreferences)
     : null;
   // Pink-dot settings never hide stored notifications or stop delivery.
+  // Backend unavailable/slow? Keep the user's genuine local creations.
+  // Never reuse remote rows belonging to a different account.
   const allRows=useMemo(()=>NOTIFICATION_INBOX_ENABLED_004
-    ? (remoteInbox.uid===uid ? [...remoteInbox.items,...localCompletions] : [])
+    ? (remoteInbox.uid===uid ? [...remoteInbox.items,...localCompletions] : [...localCompletions])
     : (visualExample ? [
       ...NOTIFICATION_EXAMPLE_ROWS.filter(row =>
         row.category!=='complete'||localCompletions.length===0),

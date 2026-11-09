@@ -1,0 +1,54 @@
+name: SORIDRAW 530 Owned Inline Follower D1 Cost
+# Exactly one PR-owned ephemeral D1 verification. No releases or shared resources.
+on:
+  pull_request:
+    branches: [preview]
+    types: [opened, reopened, synchronize]
+    paths:
+      - 'scripts/measure-530-inline-owner-d1.mjs'
+      - '.github/workflows/measure-530-owned-inline-d1.yml'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-530-owned-d1
+  cancel-in-progress: false
+jobs:
+  offline:
+    if: github.event.pull_request.number == 914 && github.event.pull_request.head.repo.full_name == 'andrawing1212/soridraw-music' && github.event.pull_request.head.ref == 'candidate/app526-owner-follower-live-signal'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: APP530 SQLite, runtime syntax and source safety
+        run: |
+          set -euo pipefail
+          node --check scripts/measure-530-inline-owner-d1.mjs
+          node --check cloudflare/explore-worker/runtime/owner-follow-inline-530.mjs
+          node scripts/measure-530-inline-owner-d1.mjs --self-test
+  physical:
+    if: github.event.pull_request.number == 914 && github.event.pull_request.head.repo.full_name == 'andrawing1212/soridraw-music' && github.event.pull_request.head.ref == 'candidate/app526-owner-follower-live-signal'
+    needs: offline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Isolated physical Cloudflare D1 inline vs outbox comparison
+        run: node scripts/measure-530-inline-owner-d1.mjs
+      - name: Always delete ONLY run-owned D1
+        if: always()
+        run: node scripts/measure-530-inline-owner-d1.mjs cleanup
+      - name: No shared changes
+        run: echo 'APP530_SYNTHETIC_ONLY;NO_SHARED_D1;NO_DEPLOYMENT;COMPILE_GATES_OFF'

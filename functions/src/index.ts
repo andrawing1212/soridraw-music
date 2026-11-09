@@ -1,5 +1,7 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
+// APP529 source-only owner signal receiver; no Functions deploy in this release.
+export { publishExploreOwnerFollower529 } from "./exploreOwnerFollowerWebhook529";
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import { consumeGeminiInteractionSse } from "./geminiInteractionSse";

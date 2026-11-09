@@ -86,6 +86,7 @@ import {
   getExploreFollowState,
   getExploreFollowingUids312,
   getExploreProfileConnections,
+  invalidateExploreProfileConnections377,
   patchExploreFollowLocalState377,
   readExploreFollowMembership379,
   readExploreFollowingExactCount379,
@@ -104,6 +105,14 @@ import {
   publishExploreFollowSync377,
   subscribeExploreFollowSync377,
 } from '../services/exploreFollowSyncService';
+import { createOwnerFollowerGate529 } from '../services/exploreOwnerFollowerSyncCore529';
+import {
+  EXPLORE_OWNER_FOLLOW_REALTIME_529_ENABLED,
+  readOwnerFollowerSeenVersion529,
+  rememberOwnerFollowerSeenVersion529,
+  subscribeExploreOwnerFollower529,
+} from '../services/exploreOwnerFollowerSync529';
+
 import {
   EXPLORE_FOLLOW_IDLE_FLUSH_MS_380,
   queueExploreFollowFinalState380,
@@ -1980,6 +1989,8 @@ export default function ExplorePage() {
   const profileConnectionsCache376Ref = useRef<Map<string, { items: ExploreProfileConnection[]; nextCursor: string | null }>>(new Map());
   const profileConnectionsRequest376Ref = useRef(0);
   const ownFollowersLastCheck523Ref = useRef<Map<string, number>>(new Map());
+  // APP529: source-only until trusted server/outbox deployment is approved.
+  const ownerFollowerConfirmed529Ref = useRef<{uid:string;count:number;version:number}|null>(null);
   // APP528: one bounded explicit canonical check per two minutes, even after
   // reload. A real changed-follow signal still invalidates its list immediately.
   const OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 120_000;
@@ -4157,6 +4168,43 @@ export default function ExplorePage() {
       }
     }
   };
+
+  // APP529: A sees only a server-confirmed owner-private scalar; no list
+  // request, no D1/R2 polling, no focus observer and no background write.
+  useEffect(()=>{
+    if(!EXPLORE_OWNER_FOLLOW_REALTIME_529_ENABLED)return;
+    const ownerUid=String(user?.uid||'').trim();
+    if(!ownerUid||profile?.uid!==ownerUid)return;
+    const gate=createOwnerFollowerGate529(
+      ownerUid,
+      (count,version)=>{
+        if(auth.currentUser?.uid!==ownerUid||
+           activeProfileUidRef.current!==ownerUid)return;
+        ownerFollowerConfirmed529Ref.current={uid:ownerUid,count,version};
+        invalidateExploreProfileConnections377(ownerUid,'followers');
+        profileConnectionsCache376Ref.current.delete(ownerUid+':followers');
+        patchExplorePublicProfileFirstViewProfile(ownerUid,{followerCount:count});
+        setProfile(prev=>prev?.uid===ownerUid&&prev.followerCount!==count
+          ?{...prev,followerCount:count}:prev);
+      },
+      Date.now,readOwnerFollowerSeenVersion529(ownerUid),
+      version=>rememberOwnerFollowerSeenVersion529(ownerUid,version),
+    );
+    const stop=subscribeExploreOwnerFollower529(ownerUid,gate.receive);
+    return ()=>{gate.dispose();stop();ownerFollowerConfirmed529Ref.current=null;};
+  },[profile?.uid,user?.uid]);
+
+  // Prevent a delayed older public-profile response from replacing a newer
+  // signed D1-derived RTDB count. This effect is completely dormant in APP529 OFF.
+  useEffect(()=>{
+    if(!EXPLORE_OWNER_FOLLOW_REALTIME_529_ENABLED)return;
+    const row=ownerFollowerConfirmed529Ref.current;
+    if(row&&row.uid===user?.uid&&profile?.uid===row.uid&&
+       profile.followerCount!==row.count){
+      patchExplorePublicProfileFirstViewProfile(row.uid,{followerCount:row.count});
+      setProfile(prev=>prev?.uid===row.uid?{...prev,followerCount:row.count}:prev);
+    }
+  },[profile?.uid,profile?.followerCount,user?.uid]);
 
   // APP527: A's profile must not spend D1/R2 on window focus, blank-space
   // clicks or visibility changes. The app525 15-second fallback previously

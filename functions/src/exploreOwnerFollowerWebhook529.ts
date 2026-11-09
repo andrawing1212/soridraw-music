@@ -36,6 +36,17 @@ export const verifyOwnerFollowRequest529=(
   return provided.length===expected.length&&timingSafeEqual(expected,provided);
 };
 
+// Pure replay/ordering gate: a later D1 event cannot be undone by a delayed
+// webhook. Cancellation (undefined) is an idempotent successful ACK.
+export const nextOwnerFollowerMarker529=(
+  current: unknown, receipt: Receipt529, now: number,
+) => {
+  const version=Number((current as {version?:unknown}|null)?.version||0);
+  if(Number.isSafeInteger(version)&&version>=receipt.eventId)return undefined;
+  return {ownerUid:receipt.ownerUid,version:receipt.eventId,
+    followerCount:receipt.followerCount,receiptId:String(receipt.eventId),at:now};
+};
+
 export const publishExploreOwnerFollower529=onRequest({
   region:'asia-northeast3',secrets:[SECRET_529],cors:false,
   timeoutSeconds:15,maxInstances:3,
@@ -52,15 +63,9 @@ export const publishExploreOwnerFollower529=onRequest({
   }
   try{
     const owner=admin.database().ref('userSync/'+receipt.ownerUid+'/exploreFollowerOwner529');
-    const transaction=await owner.transaction(current=>{
-      const existing=Number(current?.version||0);
-      // D1 AUTOINCREMENT is the commit-ordered event identity. Never
-      // substitute delivery Date.now, which could reverse follower counts.
-      if(Number.isSafeInteger(existing)&&existing>=receipt.eventId)return;
-      return {ownerUid:receipt.ownerUid,version:receipt.eventId,
-        followerCount:receipt.followerCount,receiptId:String(receipt.eventId),
-        at:Date.now()};
-    },undefined,false);
+    const transaction=await owner.transaction(current=>
+      nextOwnerFollowerMarker529(current,receipt,Date.now())
+    ,undefined,false);
     // An older/duplicate receipt is a successful no-op (ACK), not a retry.
     res.status(200).json({ok:true,applied:transaction.committed});
   }catch(error){

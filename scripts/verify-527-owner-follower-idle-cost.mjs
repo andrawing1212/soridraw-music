@@ -17,6 +17,9 @@ assert.match(page,/APP527: A's profile must not spend D1\/R2 on window focus/);
 assert.doesNotMatch(page,/onOwnFollowersFocus525|ownFollowersHeaderLastCheck525Ref|ownFollowersHeaderInflight525Ref/);
 assert.doesNotMatch(rest,/getExploreProfileConnections\(ownerUid,'followers',null,true\)/);
 assert.match(explicit,/const refreshOwn523 = ownFollowers523 &&/);
+assert.match(explicit,/readExploreProfileConnectionLastServerAt528\(targetUid, direction\)/);
+assert.match(explicit,/shouldRefreshOwnerFollowersOnOpen528\(/);
+assert.match(page,/OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 120_000/);
 assert.match(explicit,/Date\.now\(\) - lastCheck523 >= OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523/);
 assert.match(explicit,/getExploreProfileConnections\(targetUid, direction, null, refreshOwn523\)/);
 // Only 3 potential call sites survive: user-requested list, user-requested

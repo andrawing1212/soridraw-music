@@ -1,0 +1,164 @@
+name: SORIDRAW Notification 021 PREVIEW GET Only One-Use Release
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - '.github/workflows/notification-preview-get-release-021.yml'
+      - 'scripts/verify-notification-preview-release-021.mjs'
+      - 'scripts/verify-notification-preview-smoke-021.mjs'
+      - 'scripts/verify-notification-preview-release-gate-021.mjs'
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/notification-preview-get-021.release'
+permissions:
+  contents: read
+  actions: read
+  issues: read
+  pull-requests: read
+concurrency:
+  group: soridraw-preview-explore-worker-release
+  cancel-in-progress: false
+jobs:
+  source-only:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify release source contract and one-use owner gate (offline)
+        run: |
+          set -euo pipefail
+          node --check scripts/verify-notification-preview-release-021.mjs
+          node --check scripts/verify-notification-preview-smoke-021.mjs
+          node scripts/verify-notification-preview-release-gate-021.mjs --self-test
+          node scripts/verify-notification-preview-release-021.mjs --self-test
+          node scripts/verify-notification-minimal-preview-020.mjs --self-test
+          node scripts/verify-notification-auth-boundary-015.mjs
+          echo 'NOTIFICATION_021_SOURCE_ONLY=PASS;NO_WORKER_OR_D1_WRITE'
+  owner-approved-preview:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - name: Checkout approved release guard revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Enforce exact one-use owner consent for single-file release PR
+        id: gate
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git fetch origin preview --no-tags
+          git show "$GITHUB_SHA:.deploy/notification-preview-get-021.release" > .deploy/notification-preview-get-021.release
+          node scripts/verify-notification-preview-release-gate-021.mjs --self-test
+          node scripts/verify-notification-preview-release-gate-021.mjs --verify-approval
+      - name: Checkout exactly approved source commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.gate.outputs.source_sha }}
+          fetch-depth: 0
+      - name: Pin verified source SHA and run offline auth/route checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor HEAD "$GITHUB_SHA"
+          test "$(git hash-object scripts/verify-notification-preview-release-gate-021.mjs)" = dd66468d57600aae43636dd7a7c7f16b9e3f1242
+          test "$(git hash-object scripts/verify-notification-preview-release-021.mjs)" = de443179f78d368724342f60baecdaa28d997f6c
+          test "$(git hash-object scripts/verify-notification-preview-smoke-021.mjs)" = b9b97abc420ce00b6054724c69ac06a9764bf2d4
+          test "$(git hash-object scripts/verify-notification-minimal-preview-020.mjs)" = ff91025014bbf641d24696ae55bc40a5474cc019
+          node scripts/verify-notification-preview-release-gate-021.mjs --self-test
+          node scripts/verify-notification-preview-release-021.mjs --self-test
+          node scripts/verify-notification-minimal-preview-020.mjs --self-test
+          node scripts/verify-notification-auth-boundary-015.mjs
+          node scripts/verify-notification-minimal-preview-020.mjs --emit "$RUNNER_TEMP/notification-021-get.js"
+      - name: Build frozen active Worker then exact GET-only candidate in temp (DRY RUN)
+        shell: bash
+        run: |
+          set -euo pipefail
+          FROZEN="$RUNNER_TEMP/notification-021-frozen"
+          git worktree add --detach "$FROZEN" 5bf84dee4c9db7f0ce8296a57781be9161d8e59f
+          cd "$FROZEN/cloudflare/explore-worker"
+          npm install --no-audit --no-fund --package-lock=false
+          node node_modules/wrangler/bin/wrangler.js deploy --config canonical/wrangler.preview.jsonc --dry-run --outdir "$RUNNER_TEMP/notification-021-base"
+          test "$(git -C "$FROZEN" status --porcelain | wc -l)" -eq 0
+          cd "$GITHUB_WORKSPACE"
+          for name in notification-unified-api-004.mjs notification-unified-inbox-004.mjs notification-inbox-001.mjs notification-preferences-retention-002.mjs notification-retention-coordinator-005.mjs; do
+            test ! -e "$FROZEN/cloudflare/explore-worker/runtime/$name"
+            cp "cloudflare/explore-worker/runtime/$name" "$FROZEN/cloudflare/explore-worker/runtime/$name"
+          done
+          cp "$RUNNER_TEMP/notification-021-get.js" "$FROZEN/cloudflare/explore-worker/canonical/preview-entry.js"
+          node - "$FROZEN/cloudflare/explore-worker/canonical/wrangler.preview.jsonc" <<'NODE'
+          const fs=require('fs'),assert=require('node:assert/strict'),p=process.argv[2];
+          const old=JSON.parse(fs.readFileSync(p,'utf8'));
+          assert.equal(old.name,'soridraw-explore-preview');
+          assert.equal(old.vars.SORIDRAW_ENVIRONMENT,'preview');
+          assert.equal(old.vars.SORIDRAW_NOTIFICATION_INBOX_READ_ONLY_019,undefined);
+          assert.equal(old.keep_vars,true);
+          const next={...old,vars:{...old.vars,SORIDRAW_NOTIFICATION_INBOX_READ_ONLY_019:'1'}};
+          assert.deepEqual(Object.keys(next).sort(),Object.keys(old).sort());
+          assert.deepEqual(Object.keys(next.vars).sort(),[...Object.keys(old.vars),'SORIDRAW_NOTIFICATION_INBOX_READ_ONLY_019'].sort());
+          fs.writeFileSync(p,JSON.stringify(next,null,2)+'\n');
+          console.log('NOTIFICATION_021_PREVIEW_RUNTIME_OPT_IN_ONLY=PASS');
+          NODE
+          test "$(git -C "$FROZEN" diff --name-only)" = "$(printf 'cloudflare/explore-worker/canonical/preview-entry.js\ncloudflare/explore-worker/canonical/wrangler.preview.jsonc')"
+          cd "$FROZEN/cloudflare/explore-worker"
+          node node_modules/wrangler/bin/wrangler.js deploy --config canonical/wrangler.preview.jsonc --dry-run --outdir "$RUNNER_TEMP/notification-021-new"
+          cd "$GITHUB_WORKSPACE"
+          node scripts/verify-notification-preview-release-021.mjs --bundles "$RUNNER_TEMP/notification-021-base" "$RUNNER_TEMP/notification-021-new"
+          echo 'NOTIFICATION_021_EXACT_OLD_AND_NEW_MINIMAL_BUNDLE=PASS'
+      - name: Read-only preflight live Worker versions/bindings, D1 OFF and trigger SQL
+        run: |
+          node scripts/verify-notification-preview-release-021.mjs --before
+      - name: Deploy only PREVIEW GET route (one attempt, rollback on failure)
+        shell: bash
+        run: |
+          set -euo pipefail
+          FROZEN="$RUNNER_TEMP/notification-021-frozen"
+          cd "$FROZEN/cloudflare/explore-worker"
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          attempted=0
+          rollback_failure() {
+            status=$?
+            if [ "$status" -ne 0 ] && [ "$attempted" -eq 1 ]; then
+              cd "$GITHUB_WORKSPACE"
+              if node scripts/verify-notification-preview-release-021.mjs --rollback-precheck; then
+                echo 'NOTIFICATION_021_SAFE_PREVIEW_ROLLBACK_ATTEMPT'
+                cd "$FROZEN/cloudflare/explore-worker"
+                if node "$WRANGLER" rollback 2960d485-fe66-4136-9f84-41ce3e0d4b58 --name soridraw-explore-preview --config "$CFG" --message 'Stage021 GET-only failed, return original'; then
+                  cd "$GITHUB_WORKSPACE"
+                  node scripts/verify-notification-preview-release-021.mjs --rollback-postcheck || echo 'NOTIFICATION_021_ROLLBACK_POSTCHECK_MANUAL_HOLD'
+                else
+                  echo 'NOTIFICATION_021_ROLLBACK_COMMAND_FAILED_MANUAL_HOLD'
+                fi
+              else
+                echo 'NOTIFICATION_021_UNRELATED_VERSION_MOVED_MANUAL_HOLD'
+              fi
+            fi
+            exit "$status"
+          }
+          trap rollback_failure EXIT
+          attempted=1
+          node "$WRANGLER" deploy --config "$CFG"
+          cd "$GITHUB_WORKSPACE"
+          node scripts/verify-notification-preview-release-021.mjs --after
+          node scripts/verify-notification-preview-smoke-021.mjs
+          echo 'NOTIFICATION_021_PREVIEW_GET_ONLY_DEPLOYED_POSTFLIGHT=PASS'
+          echo 'D1_COLLECTION_OFF=PASS;TEST_PRODUCTION_UNCHANGED=PASS;HOSTING_DEPLOY=0'

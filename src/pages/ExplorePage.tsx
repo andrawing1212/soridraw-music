@@ -90,6 +90,8 @@ import {
   readExploreFollowMembership379,
   readExploreFollowingExactCount379,
   readExploreProfileConnectionExactCount379,
+  readExploreProfileConnectionLastServerAt528,
+  shouldRefreshOwnerFollowersOnOpen528,
   getExplorePublicProfile,
   getExplorePublicProfileTracks,
   setExploreFollow,
@@ -1978,7 +1980,9 @@ export default function ExplorePage() {
   const profileConnectionsCache376Ref = useRef<Map<string, { items: ExploreProfileConnection[]; nextCursor: string | null }>>(new Map());
   const profileConnectionsRequest376Ref = useRef(0);
   const ownFollowersLastCheck523Ref = useRef<Map<string, number>>(new Map());
-  const OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 15_000;
+  // APP528: one bounded explicit canonical check per two minutes, even after
+  // reload. A real changed-follow signal still invalidates its list immediately.
+  const OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 120_000;
   const followSignalVersion377Ref = useRef(0);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
 
@@ -4091,9 +4095,18 @@ export default function ExplorePage() {
     // B's unfollow reaches B's own RTDB channel, not A's. Only A's
     // explicit own-followers popup can recheck this exact public list.
     const ownFollowers523 = direction === 'followers' && targetUid === user?.uid;
-    const lastCheck523 = ownFollowersLastCheck523Ref.current.get(key) || 0;
+    // Do not use an in-memory-only timer: a plain reload used to reset this
+    // gate and force the same unchanged D1 list query again.
+    const lastCheck523 = ownFollowers523
+      ? Math.max(
+          ownFollowersLastCheck523Ref.current.get(key) || 0,
+          readExploreProfileConnectionLastServerAt528(targetUid, direction),
+        )
+      : 0;
     const refreshOwn523 = ownFollowers523 &&
-      (lastCheck523 === 0 || Date.now() - lastCheck523 >= OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523);
+      shouldRefreshOwnerFollowersOnOpen528(
+        lastCheck523, Date.now(), OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523,
+      );
     if (cached) {
       setProfileConnectionsItems376(cached.items);
       setProfileConnectionsNextCursor376(cached.nextCursor);

@@ -1,5 +1,5 @@
 // APP529 canonical follower count is written only by signed Admin callback.
-// RTDB version is the D1 AUTOINCREMENT outbox event sequence, not delivery time.
+// RTDB version is the monotonic owner-scoped D1 outbox revision, not delivery time.
 export type ExploreOwnerFollowerSignal529 = {
  ownerUid:string; version:number; followerCount:number; at:number; receiptId:string;
 };

@@ -8,20 +8,20 @@ import { createHmac, timingSafeEqual } from 'crypto';
 const SECRET_529=defineSecret('SORIDRAW_OWNER_FOLLOW_HMAC_529');
 const UID_529=/^[a-zA-Z0-9_-]{1,128}$/;
 const HEX_529=/^[0-9a-f]{64}$/;
-type Receipt529={version:1;eventId:number;ownerUid:string;followerCount:number;createdAt:number;at:number};
+type Receipt529={version:1;revision:number;ownerUid:string;followerCount:number;updatedAt:number;at:number};
 export const parseOwnerFollowReceipt529=(raw:Buffer):Receipt529|null=>{
   if(!raw||raw.length<40||raw.length>512)return null;
   let value:Record<string,unknown>;
   try{value=JSON.parse(raw.toString('utf8'))}catch{return null;}
   if(!value||typeof value!=='object'||Array.isArray(value))return null;
   if(Object.keys(value).sort().join(',')!==
-     'at,createdAt,eventId,followerCount,ownerUid,version')return null;
-  const eventId=Number(value.eventId),count=Number(value.followerCount);
-  const at=Number(value.at),createdAt=Number(value.createdAt);
+     'at,followerCount,ownerUid,revision,updatedAt,version')return null;
+  const revision=Number(value.revision),count=Number(value.followerCount);
+  const at=Number(value.at),updatedAt=Number(value.updatedAt);
   if(value.version!==1||!UID_529.test(String(value.ownerUid||''))||
-     !Number.isSafeInteger(eventId)||eventId<=0||
+     !Number.isSafeInteger(revision)||revision<=0||
      !Number.isSafeInteger(count)||count<0||count>1_000_000_000||
-     !Number.isSafeInteger(createdAt)||createdAt<=0||
+     !Number.isSafeInteger(updatedAt)||updatedAt<=0||
      !Number.isSafeInteger(at)||at<=0)return null;
   return value as Receipt529;
 };
@@ -42,9 +42,9 @@ export const nextOwnerFollowerMarker529=(
   current: unknown, receipt: Receipt529, now: number,
 ) => {
   const version=Number((current as {version?:unknown}|null)?.version||0);
-  if(Number.isSafeInteger(version)&&version>=receipt.eventId)return undefined;
-  return {ownerUid:receipt.ownerUid,version:receipt.eventId,
-    followerCount:receipt.followerCount,receiptId:String(receipt.eventId),at:now};
+  if(Number.isSafeInteger(version)&&version>=receipt.revision)return undefined;
+  return {ownerUid:receipt.ownerUid,version:receipt.revision,
+    followerCount:receipt.followerCount,receiptId:String(receipt.revision),at:now};
 };
 
 export const publishExploreOwnerFollower529=onRequest({

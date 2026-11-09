@@ -23,6 +23,8 @@ import {
   resumeMusicNoteFavoriteCountDelta,
 } from './services/musicNoteFavoriteCountBatch';
 import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck, canAcknowledgeRecentSongsInlineSignal, needsRecentSongsRetainedDraftGapRead460, shouldDeferRecentSongsServerReadForPendingText } from './lib/recentSongsSyncGate';
+import {projectCompletedExistingGenerations004} from './services/notifications/notificationInbox004';
+import {rememberCompletedGenerationLog016} from './services/notifications/notificationRecentLog016';
 import { planRecentUnconfirmedRecovery436, patchExactRecentTextRow436 } from './lib/recentUnconfirmedRecovery436';
 import { protectRecentCanonicalSnapshotFromPreview453, pickRecentSongLiveTextPreview457, pickRecentSongLiveAppliedKeywords457 } from './lib/recentSongCanonicalPreviewGuard453';
 import './data/v2PreviewShadowMirror';
@@ -15831,6 +15833,11 @@ const saveRecentSong = async (newSong: any) => saveRecentSongsBatch([newSong]);
         generatedResults.forEach((song) => ensureLiveSoridrawSongId(song));
         markRecentGeneratedUnconfirmed(user.uid, generatedResults);
         const existingLocal = loadRecentSongsCache(user.uid)?.history || [];
+        // Only on a completed generation: persist tiny creation notices before
+        // Recent Studio discards entries beyond ten. Never store lyrics/prompts
+        // or increase Firestore reads/writes for notification history.
+        rememberCompletedGenerationLog016(user.uid,
+          projectCompletedExistingGenerations004([...generatedResults,...existingLocal]));
         const localHistory = [...generatedResults, ...existingLocal].slice(0, 10);
         if (!saveRecentSongsCache(user.uid, {
           history: localHistory,

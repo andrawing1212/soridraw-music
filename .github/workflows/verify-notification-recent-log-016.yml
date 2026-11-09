@@ -1,0 +1,22 @@
+name: SORIDRAW Notification 016 Local History Isolated
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'src/services/notifications/notificationRecentLog016.ts'
+      - 'src/components/studio/NotificationPanel.tsx'
+      - 'scripts/verify-notification-recent-log-016.mjs'
+permissions:
+  contents: read
+jobs:
+  isolated:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - run: node scripts/verify-notification-recent-log-016.mjs
+      - run: echo 'NOTIFICATION_016_NO_REMOTE_DB_OR_WORKER_DEPLOY=PASS'

@@ -20,6 +20,8 @@ import {
 import {NOTIFICATION_INBOX_ENABLED_004,loadOwnNotifications004,
   projectCompletedExistingGenerations004}
   from '../../services/notifications/notificationInbox004';
+import {readCompletedGenerationLog016,mergeCompletedGenerationNotices016,
+  notificationRecentLogKey016} from '../../services/notifications/notificationRecentLog016';
 import './notificationPanel.css';
 
 type Props = {
@@ -236,10 +238,25 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   // PREVIEW-only genuine creation history: derived from the already-loaded
   // account's Recent Studio snapshot, never from an extra remote query.
   // Shared social/administrator notification delivery remains disabled.
+  const [localLogVersion,setLocalLogVersion]=useState(0);
+  useEffect(()=>{
+    if(!open||!visualExample||!uid)return;
+    // Other tabs on this browser can finish generating while this inbox is
+    // open. Storage events are local-only; they issue no server requests.
+    const onStorage=(event:StorageEvent)=>{
+      if(event.key===notificationRecentLogKey016(uid))
+        setLocalLogVersion(value=>value+1);
+    };
+    window.addEventListener('storage',onStorage);
+    return ()=>window.removeEventListener('storage',onStorage);
+  },[open,visualExample,uid]);
   const localCompletions = useMemo(() => (
     visualExample && uid && auth.currentUser?.uid === uid
-      ? projectCompletedExistingGenerations004(recentHistory) : []
-  ), [visualExample, uid, recentHistory]);
+      ? mergeCompletedGenerationNotices016(
+          projectCompletedExistingGenerations004(recentHistory),
+          readCompletedGenerationLog016(uid))
+      : []
+  ), [visualExample, uid, recentHistory, open, localLogVersion]);
   const sampleHeader = visualExample &&
     (activeSection === 'activity' || localCompletions.length === 0);
   // The already-authenticated inbox read includes canonical account preferences
@@ -497,11 +514,6 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
             </p>
           )}
         </div>
-        {activeSection === 'creation' && (
-          <p className="soridraw-notification-creation-limit" role="note">
-            생성기록은 최대 10곡이 표시됩니다.
-          </p>
-        )}
         </>
       )}
       {notice && <div role="status" className="soridraw-notification-error">{notice}</div>}

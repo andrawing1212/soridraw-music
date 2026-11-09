@@ -32,13 +32,13 @@ const preferenceModule = await import('data:text/javascript;base64,' + Buffer.fr
 const defaults = { ...preferenceModule.NOTIFICATION_PREFERENCES_DEFAULT };
 const expectedSections = {
   like: 'activity', follow: 'activity', complete: 'creation',
-  announcement: 'activity', message: 'activity',
+  announcement: 'announcement', message: 'activity',
 };
 assert.deepEqual(
   Object.fromEntries(Object.keys(expectedSections).map((key) =>
     [key, preferenceModule.notificationSectionFor(key)])),
   expectedSections,
-  'only generation-complete alerts belong in creation history; announcements are shared activity'
+  'creation and announcements each have separate tabs; private messages stay in activity'
 );
 const off = Object.fromEntries(Object.keys(defaults).map((key) => [key, false]));
 const mixed = { ...defaults, complete: false, message: false };
@@ -77,12 +77,12 @@ try {
 assert.match(panel, /className="soridraw-notification-setting-master"/);
 assert.match(panel, /useState<NotificationSection>\('activity'\)/);
 assert.match(panel, /setActiveSection\('activity'\)/);
-assert.match(panel, /notificationSectionFor\(row.category\) === activeSection/);
+assert.match(panel, /notificationSectionFor\(row.category\)===activeSection/);
 assert.match(panel, /role="group" aria-label="알림 카테고리"/);
-assert.match(panel, /aria-pressed=\{activeSection === 'activity'\}/);
-assert.match(panel, /aria-pressed=\{activeSection === 'creation'\}/);
-assert.match(panel, />\s*활동·소식\s*<\/button>/);
-assert.match(panel, />\s*생성 기록\s*<\/button>/);
+assert.match(panel, /aria-pressed=\{activeSection===section\}/);
+assert.match(panel, /\['announcement','공지'\]/);
+assert.match(panel, /\['activity','활동·소식'\]/);
+assert.match(panel, /\['creation','생성 기록'\]/);
 assert.match(panel, /activeSection === 'creation' \? '아직 표시할 생성 알림이 없습니다\.'/);
 assert.doesNotMatch(panel,/soridraw-notification-creation-limit|생성기록은 최대 10곡이 표시됩니다\./,
   'no artificial ten-song notice remains');
@@ -90,7 +90,7 @@ assert.doesNotMatch(file('src/components/studio/notificationPanel.css'),
   /\.soridraw-notification-creation-limit\{/);
 assert.match(panel,/mergeCompletedGenerationNotices016\(/);
 assert.match(panel,/readCompletedGenerationLog016\(uid\)/);
-console.log('NOTIFICATION_TWO_SECTIONS_ACTIVITY_CREATION=PASS');
+console.log('NOTIFICATION_THREE_TABS_ACTIVITY_CREATION_ANNOUNCEMENT=PASS');
 assert.match(panel, /className="soridraw-notification-settings-divider"/);
 assert.match(panel, /<NotificationSwitch checked=\{masterEnabled\} onChange=\{toggleMaster\}/);
 assert.match(panel, /<NotificationSwitch checked=\{prefs\[item.key\]\} disabled=\{!masterEnabled \|\| accountSyncLocked\}/);
@@ -99,8 +99,8 @@ assert.match(panel, /aria-disabled=\{!masterEnabled \|\| accountSyncLocked\}/);
 assert.match(panel, /if \(!masterEnabled \|\| accountSyncLocked\) return;/);
 assert.match(panel, /saveNotificationMasterEnabled\(uid, nextEnabled\)/);
 assert.match(panel, /saveNotificationPreferences\(uid, next\)/);
-assert.match(panel, /effectivePreferences\?\.master \?\? masterEnabled/);
-assert.match(panel, /effectivePreferences\?\.\[row.category\] \?\? prefs\[row.category\]/);
+assert.doesNotMatch(panel, /effectivePreferences\?\.master \?\? masterEnabled/);
+assert.doesNotMatch(panel, /effectivePreferences\?\.\[row.category\] \?\? prefs\[row.category\]/);
 assert.match(panel, /const effectivePreferences = NOTIFICATION_INBOX_ENABLED_004/);
 assert.ok(panel.indexOf('className="soridraw-notification-setting-master"') <
   panel.indexOf('TYPES.map((item)'), 'master toggle must be above individual preferences');
@@ -117,6 +117,22 @@ assert.match(switchCss, /\.soridraw-notification-switch-input:focus-visible/);
 assert.match(switchCss, /prefers-reduced-motion:reduce/);
 assert.doesNotMatch(panel, /toggleAllNotificationPreferences|areAllNotificationPreferencesEnabled/);
 console.log('NOTIFICATION_MASTER_OFF_PRESERVES_FIVE_AND_DISALLOWS_INTERACTION=PASS');
+
+assert.match(panel,/useNotificationDots017\(/);
+assert.match(panel,/acknowledge\(activeSection\)/);
+assert.match(panel,/dots\[section\]/);
+assert.match(panel,/const allRows=useMemo/);
+assert.match(panel,/핑크 점만 숨깁니다 · 알림 내용은 유지됩니다/);
+assert.match(panel,/새 알림의 핑크 점이 표시됩니다/);
+assert.match(switchCss,/grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+assert.match(switchCss,/\.soridraw-notification-pink-dot\{/);
+assert.match(switchCss,/#ff59b5/);
+assert.match(switchCss,/prefers-reduced-motion:reduce/);
+assert.match(rail,/soridraw-notification-rail-dot/);
+assert.match(file('src/App.tsx'),/soridraw-notification-mobile-dot/);
+assert.doesNotMatch(panel,/\.filter\(\(row\) => \(effectivePreferences/);
+console.log('NOTIFICATION_PINK_DOTS_VISIBILITY_ONLY_THREE_EQUAL_TABS=PASS');
+
 console.log('NOTIFICATION_SMALLER_SWITCHES_AND_EXISTING_LOCAL_SAVES=PASS');
 assert.doesNotMatch(panel,/setInterval\(|onSnapshot\(|getDocs\(|getDoc\(/);
 assert.doesNotMatch(panel,/saveNotificationPreferences\(uid, next\)[\s\S]*?setDoc\(/);
@@ -166,7 +182,7 @@ assert.match(panel,/sampleHeader = visualExample &&/,
   'genuine completion notice must not be globally marked as a demo');
 assert.match(panel,/localCompletions\.length === 0/,
   'retain existing creation demo only when no genuine completion exists');
-assert.match(panel,/activeSection === 'activity' \|\| localCompletions\.length === 0/);
+assert.match(panel,/activeSection !== 'creation' \|\| localCompletions\.length === 0/);
 assert.doesNotMatch(panel,/setInterval\(|onSnapshot\(|getDocs\(|getDoc\(/);
 console.log('NOTIFICATION_PREVIEW_GENUINE_CREATION_HISTORY_NO_EXTRA_SERVER_IO=PASS');
 

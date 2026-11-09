@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { SORIDRAW_PROFILE_AVATAR_EVENT } from '../../services/profileAvatarAuthority';
 import NotificationPanel from './NotificationPanel';
+import {auth} from '../../firebase';
+import {useNotificationDots017} from '../../services/notifications/useNotificationDots017';
 
 export type StudioWorkspaceView = 'create' | 'recent' | 'music-note' | 'library';
 
@@ -88,6 +90,7 @@ export default function StudioLeftRail({
   const profileButtonRef = useRef<HTMLButtonElement>(null);
   const notificationButtonRef = useRef<HTMLButtonElement>(null);
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const {dots:railDots017}=useNotificationDots017(auth.currentUser?.uid||'',recentHistory);
   const menuRef = useRef<HTMLDivElement>(null);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<MenuPosition>({ top: 0, left: 0 });
@@ -419,7 +422,7 @@ export default function StudioLeftRail({
             </button>
             <button
               type="button"
-              className="soridraw-studio-rail-item soridraw-studio-rail-bottom-item"
+              className="soridraw-studio-rail-item soridraw-studio-rail-bottom-item soridraw-notification-rail-trigger"
               aria-label="알림"
               ref={notificationButtonRef}
               aria-expanded={notificationOpen}
@@ -434,6 +437,9 @@ export default function StudioLeftRail({
             >
               <Bell className="h-5 w-5" />
               <span>알림</span>
+              {(railDots017.activity||railDots017.creation||railDots017.announcement)&&
+                <span className="soridraw-notification-pink-dot soridraw-notification-rail-dot"
+                  aria-label="새 알림" />}
             </button>
             <button
               type="button"

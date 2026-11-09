@@ -1,10 +1,10 @@
 export type NotificationCategory = 'like' | 'follow' | 'complete' | 'announcement' | 'message';
-export type NotificationSection = 'activity' | 'creation';
+export type NotificationSection = 'activity' | 'creation' | 'announcement';
 
 /** Classify only notification presentation. No new generation history
  * database or user-scoped scan is needed to render either tab. */
 export function notificationSectionFor(category: NotificationCategory): NotificationSection {
-  return category === 'complete' ? 'creation' : 'activity';
+  return category === 'complete' ? 'creation' : category === 'announcement' ? 'announcement' : 'activity';
 }
 
 export interface InboxNotification {
@@ -54,11 +54,13 @@ export function readNotificationMasterEnabled(uid: string, preferences: Notifica
 
 export function saveNotificationMasterEnabled(uid: string, enabled: boolean): void {
   if (!uid || typeof window === 'undefined') return;
-  try { window.localStorage.setItem(masterKeyFor(uid), String(enabled)); }
+  try { window.localStorage.setItem(masterKeyFor(uid), String(enabled));
+    window.dispatchEvent?.(new Event('soridraw:notification-dot-change')); }
   catch { /* in-memory state remains usable if storage is full */ }
 }
 
-/** Local UI preference during the initial panel release.
+/** Pink-dot visibility only: message delivery and lists ignore these settings.
+ * Local UI preference during the initial panel release.
  * Account-wide settings and actual notifications require the approved backend;
  * this intentionally makes NO new server request, mutation, or listener. */
 export function readNotificationPreferences(uid: string): NotificationPreferences {
@@ -78,7 +80,8 @@ export function readNotificationPreferences(uid: string): NotificationPreference
 
 export function saveNotificationPreferences(uid: string, data: NotificationPreferences): void {
   if (!uid || typeof window === 'undefined') return;
-  try { window.localStorage.setItem(keyFor(uid), JSON.stringify(data)); } catch { /* memory state stays usable */ }
+  try { window.localStorage.setItem(keyFor(uid), JSON.stringify(data));
+    window.dispatchEvent?.(new Event('soridraw:notification-dot-change')); } catch { /* memory state stays usable */ }
 }
 
 /** No fake user activity in production. PREVIEW's explicitly labelled visual

@@ -23,6 +23,7 @@ import {
   resumeMusicNoteFavoriteCountDelta,
 } from './services/musicNoteFavoriteCountBatch';
 import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck, canAcknowledgeRecentSongsInlineSignal, needsRecentSongsRetainedDraftGapRead460, shouldDeferRecentSongsServerReadForPendingText } from './lib/recentSongsSyncGate';
+import {useNotificationDots017} from './services/notifications/useNotificationDots017';
 import {projectCompletedExistingGenerations004} from './services/notifications/notificationInbox004';
 import {rememberCompletedGenerationLog016} from './services/notifications/notificationRecentLog016';
 import { planRecentUnconfirmedRecovery436, patchExactRecentTextRow436 } from './lib/recentUnconfirmedRecovery436';
@@ -3947,6 +3948,7 @@ function Navigation({
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileNotificationOpen, setIsMobileNotificationOpen] = useState(false);
+  const {dots:mobileDots017}=useNotificationDots017(user?.uid||'',recentHistory);
   const mobileProfileButtonRef = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -4552,6 +4554,9 @@ function Navigation({
                         className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-xl text-[#bcbcc2] transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#ffbb22]"
                       >
                         <Bell className="h-5 w-5" aria-hidden="true" />
+                        {(mobileDots017.activity||mobileDots017.creation||mobileDots017.announcement)&&
+                          <span className="soridraw-notification-pink-dot soridraw-notification-mobile-dot"
+                            aria-label="새 알림" />}
                       </button>
                       <p className="soridraw-account-menu-name">{headerIdentity.displayName || 'SORIDRAW User'}</p>
                       <p className="soridraw-account-menu-email">{user.email || ''}</p>

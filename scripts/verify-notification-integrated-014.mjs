@@ -38,6 +38,8 @@ sqlite.exec(read('cloudflare/explore-worker/candidates/20261108_03_notification_
 sqlite.exec(read('cloudflare/explore-worker/candidates/20261108_01_notification_direct_messages_candidate.sql'));
 sqlite.exec(read('cloudflare/explore-worker/candidates/20261108_02_notification_announcement_expiry_candidate.sql'));
 sqlite.exec(read('cloudflare/explore-worker/candidates/20261108_04_notification_triggers_off_release.sql'));
+// Disposable SQLite only: new trigger contract is never installed on shared D1.
+sqlite.exec(read('cloudflare/explore-worker/candidates/20261109_017_notification_dot_only_triggers_candidate.sql'));
 const now=Date.now();
 const cutoff=now-30*86400000;
 const metrics={reads:0,changed:0,mutating:0};
@@ -172,13 +174,13 @@ const like=sqlite.prepare('INSERT OR IGNORE INTO likes VALUES(?,?,?)');
 like.run('song-alice','actor',now-3000);
 like.run('song-alice','actor',now-3000);
 like.run('song-bob','actor',now-3000);
-assert.equal(inboxCount(),1,'one Alice like; Bob opted out');
+assert.equal(inboxCount(),2,'both likes recorded although Bob dots OFF');
 const follow=sqlite.prepare('INSERT OR IGNORE INTO follows VALUES(?,?,?)');
 follow.run('actor','alice',now-2000);
 follow.run('actor','alice',now-2000);
 sqlite.prepare('INSERT OR IGNORE INTO explore_follow_overrides_348 VALUES(?,?,?,?,?,?)')
  .run('actor','alice',1,0,now-2000,'same-final-follow');
-assert.equal(inboxCount(),2,'legacy and overlay same follow must be deduplicated');
+assert.equal(inboxCount(),3,'legacy and overlay same follow must be deduplicated');
 const denial=await unified(adminMsgUrl,'alice','POST',{
   id:'direct-1',receiverUid:'alice',title:'Private',body:'Secret'});
 assert.equal(denial.code,403);
@@ -191,8 +193,8 @@ const msgAgain=await unified(adminMsgUrl,'admin','POST',{
   id:'direct-1',receiverUid:'alice',title:'Private',body:'Secret'});
 assert.equal(msgAgain.body.data.rowsWritten,0);
 assert.equal((await unified(adminMsgUrl,'admin','POST',{
-  id:'direct-2',receiverUid:'bob',title:'Private',body:'Blocked'})).body.data.rowsWritten,0);
-assert.equal(directCount(),1,'private messages must be exactly one receiver');
+  id:'direct-2',receiverUid:'bob',title:'Private',body:'Still delivered'})).body.data.rowsWritten,1);
+assert.equal(directCount(),2,'both direct messages must be recorded despite dots OFF');
 const notice={id:'global-1',title:'News',body:'Release',publishedAtMs:now-1000};
 assert.equal((await unified(adminGlobalUrl,'alice','POST',notice)).code,403);
 const global=await unified(adminGlobalUrl,'admin','POST',notice);
@@ -216,18 +218,20 @@ assert.deepEqual(otherView.body.data.items.map(x=>x.category),['announcement'],
   'other account only sees genuinely shared announcement');
 const bobView=await unified(inboxUrl,'bob');
 assert.equal(bobView.body.data.preferences.master,false);
-assert.deepEqual(bobView.body.data.items,[],
-  'Bob master OFF hides all notifications');
+assert.deepEqual(new Set(bobView.body.data.items.map(x=>x.category)),
+  new Set(['like','message','announcement']),
+  'Bob master OFF hides dots, not incoming messages');
 console.log('NOTIFICATION_014_AUTH_ADMIN_PRIVATE_NO_CROSS_ACCOUNT_LEAK=PASS');
 console.log('NOTIFICATION_014_LIKE_FOLLOW_DIGEST_AND_R2_IDEMPOTENCE=PASS');
 
-// Change settings across PC/mobile; hide already-stored categories immediately.
+// Change settings across PC/mobile; stored categories remain visible.
 const reduced={...defaults,like:false,message:false,announcement:false};
 const aliceOff=await preference('PUT','alice',{...reduced,expectedRevision:0,operationId:op(4)});
 assert.equal(aliceOff.code,200);
 assert.equal(aliceOff.body.data.preferences.revision,1);
-const onlyFollow=(await unified(inboxUrl,'alice')).body.data.items;
-assert.deepEqual(onlyFollow.map(x=>x.category),['follow']);
+const allAfterDotOff=(await unified(inboxUrl,'alice')).body.data.items;
+assert.deepEqual(new Set(allAfterDotOff.map(x=>x.category)),
+  new Set(['like','follow','message','announcement']));
 assert.equal((await unified(inboxUrl,'alice')).body.data.preferences.like,false);
 const staleAlice=await preference('PUT','alice',{...defaults,expectedRevision:0,operationId:op(5)});
 assert.equal(staleAlice.code,409);
@@ -296,8 +300,8 @@ const post=await unified(inboxUrl,'alice');
 assert.equal(post.code,200);
 assert.equal(post.body.data.items.some(x=>x.id==='direct:edge'),true);
 assert.equal(post.body.data.items.some(x=>x.id==='global:edge'),true);
-assert.equal(inboxCount(),4,'two settled social + exact cutoff + visible edge');
-assert.equal(directCount(),3,'one recipient direct + exact cutoff + visible edge');
+assert.equal(inboxCount(),5,'three settled social + exact cutoff + visible edge');
+assert.equal(directCount(),4,'two recipient direct + exact cutoff + visible edge');
 assert.equal(globalCount(),3,'one shared + exact cutoff + visible edge');
 const writesAfter=metrics.changed,r2After=cache.writes;
 const again=await runNotificationScheduled013({controller,env,compiledOpen:true,now});

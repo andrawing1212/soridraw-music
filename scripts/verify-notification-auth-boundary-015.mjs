@@ -48,6 +48,13 @@ const corsFn=between(entry,
 const route=between(entry,
  '    // Notification preferences remain strictly OFF until',
  '    if(STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE&&');
+const previewReadOnly=between(entry,
+ '    // Stage019: PREVIEW-only authenticated inbox GET candidate.',
+ '    // Notification preferences remain strictly OFF until');
+assert.match(previewReadOnly,/NOTIFICATION_PREVIEW_INBOX_019_COMPILED_OPEN = true/);
+assert.match(previewReadOnly,/SORIDRAW_ENVIRONMENT === 'preview'/);
+assert.match(previewReadOnly,/SORIDRAW_NOTIFICATION_INBOX_READ_ONLY_019 === '1'/);
+assert.doesNotMatch(previewReadOnly,/publishPrivateNotification004|publishSharedAnnouncement004|saveOwnNotificationPreferences002/);
 const prefsGate='const NOTIFICATION_PREFS_003_COMPILED_OPEN = false;';
 const inboxGate='const NOTIFICATION_INBOX_004_COMPILED_OPEN = false;';
 assert.equal(route.split(prefsGate).length,2);
@@ -62,6 +69,8 @@ assert.ok(route.indexOf('const actor=await validateExploreAuth307(request,env,ct
   route.indexOf('verifyUid:async()=>actor.uid'));
 assert.equal(wrangler.vars?.SORIDRAW_NOTIFICATION_PREFS_003,undefined);
 assert.equal(wrangler.vars?.SORIDRAW_NOTIFICATION_INBOX_004,undefined);
+assert.equal(wrangler.vars?.SORIDRAW_NOTIFICATION_INBOX_READ_ONLY_019,undefined);
+
 assert.equal(wrangler.triggers?.crons?.length||0,0);
 
 const dbLocal=new DatabaseSync(':memory:');
@@ -278,5 +287,62 @@ assert.equal(forbiddenGlobal.status,403);
 console.log('NOTIFICATION_015_STAFF_ROLE_FIRESTORE_FAIL_CLOSED_AND_ADMIN_ONLY=PASS');
 assert.equal(dbLocal.prepare('SELECT enabled FROM soridraw_notification_activation_002').get().enabled,0);
 assert.equal(io.r2,2,'only authorized inbox GETs read R2; refused requests R2 0');
+// PREVIEW route is source-connected but runtime OFF until an independently
+// approved Worker release and opt-in. Exercise the exact guarded fetch block
+// with the real source's /auth-test adapter and simulated signed identities.
+const previewRoute=makeRoute(previewReadOnly);
+const previewEnv={...env,SORIDRAW_ENVIRONMENT:'preview',
+  SORIDRAW_NOTIFICATION_INBOX_READ_ONLY_019:'1'};
+const previewStart=same();
+assert.equal((await call(previewRoute,req(inbox),env)).status,null,
+ 'missing explicit preview opt-in stays outside the handler');
+assert.equal((await call(previewRoute,req(inbox),{...previewEnv,
+ SORIDRAW_ENVIRONMENT:'production'})).status,null,
+ 'production Worker cannot activate a preview-only endpoint');
+assert.equal((await call(previewRoute,req(inbox),{...previewEnv,
+ SORIDRAW_ENVIRONMENT:'test'})).status,null,
+ 'TEST Worker cannot activate a preview-only endpoint');
+assert.equal((await call(previewRoute,req(msg,'POST','admin',{body:payload}),previewEnv)).status,null,
+ 'admin message writes cannot be activated by a read-only route');
+assert.equal((await call(previewRoute,req(notice,'POST','admin',{body:payload}),previewEnv)).status,null,
+ 'global announcement writes cannot be activated by a read-only route');
+assert.deepEqual(same(),previewStart,'disabled/other routes must use R0/W0');
+
+const blockedOrigin=await call(previewRoute,req(inbox,'GET','alice',
+ {origin:'https://soridraw.com'}),previewEnv);
+assert.equal(blockedOrigin.status,403,'production origin forbidden on PREVIEW route');
+assert.equal((await call(previewRoute,req(inbox,'GET','alice',
+ {origin:false}),previewEnv)).status,403,'missing Origin forbidden');
+assert.equal((await call(previewRoute,req(inbox,'POST','alice'),previewEnv)).status,405,
+ 'inbox POST blocked before authentication and D1');
+const previewPreflight019=await call(previewRoute,req(inbox,'OPTIONS',null),previewEnv);
+assert.equal(previewPreflight019.status,204);
+assert.equal(previewPreflight019.headers.get('Access-Control-Allow-Origin'),origin);
+assert.equal(io.authCalls,previewStart.authCalls);
+assert.equal(io.reads,previewStart.reads);
+assert.equal(io.writes,previewStart.writes);
+assert.equal((await call(previewRoute,req(inbox,'GET',null),previewEnv)).status,401);
+assert.equal((await call(previewRoute,req(inbox,'GET','alice',
+ {appcheck:false}),previewEnv)).status,401);
+assert.equal((await call(previewRoute,req(inbox,'GET','alice',
+ {appCheckToken:'app-bob'}),previewEnv)).status,401);
+assert.equal(io.reads,previewStart.reads,'invalid JWT/AppCheck never opens private D1');
+assert.equal(io.r2,previewStart.r2,'invalid JWT/AppCheck never opens R2');
+assert.equal(io.writes,previewStart.writes);
+const alicePreview=await call(previewRoute,req(inbox+'?uid=bob','GET','alice'),previewEnv);
+assert.equal(alicePreview.status,200);
+assert.ok(alicePreview.body.data.items.some(x=>x.category==='follow'),
+ 'verified Alice receives her own existing follow');
+assert.ok(!alicePreview.body.data.items.some(x=>x.actorName==='Bob'),
+ 'foreign recipient must not be included');
+assert.equal(alicePreview.headers.get('Cache-Control'),'private, no-store');
+const bobPreview=await call(previewRoute,req(inbox+'?uid=alice','GET','bob'),previewEnv);
+assert.equal(bobPreview.status,200);
+assert.deepEqual(bobPreview.body.data.items,[],
+ 'verified Bob never receives Alice inbox via forged query UID');
+assert.equal(io.writes,previewStart.writes,'all PREVIEW inbox requests are D1 W0');
+assert.equal(dbLocal.prepare('SELECT enabled FROM soridraw_notification_activation_002').get().enabled,0);
+console.log('NOTIFICATION_019_PREVIEW_READ_ONLY_ORIGIN_AUTH_UID_W0=PASS');
+console.log('NOTIFICATION_019_RUNTIME_OPT_IN_ABSENT_SHARED_LATCH_OFF=PASS');
 dbLocal.close();
 console.log('NOTIFICATION_015_NO_LIVE_FIREBASE_CREDENTIAL_OR_WORKER_DEPLOY=PASS');

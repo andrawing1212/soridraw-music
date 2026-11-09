@@ -86,6 +86,7 @@ export const drainOwnerFollowOutbox529=async({
        .bind(attempts,dead?0:nextOwnerFollowRetryAt529(attempts,now()),
          dead,ev.ownerUid,ev.version,ev.attempts,ev.version).run();
      failed++;
+     if(dead)console.warn('[529] OWNER_FOLLOW_DELIVERY_DEAD_HOLD_REQUIRES_ADMIN_REPLAY');
    }
  }
  return {skipped:false,selected:rows.length,delivered,failed};

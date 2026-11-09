@@ -10,6 +10,7 @@
 5. **우선순위:** 중요한 안전 제약은 생략하지 않되, 문서 전체 읽기 대신 파일명·절·필요한 줄만 선택한다. 작업이 새로 시작됐다는 이유만으로 긴 기록을 다시 불러오지 않는다.
 
 ## 기능별 스킬
+- **팔로우/언팔로우, A↔B 공개 팔로워 수·목록, RTDB 변경 신호, D1/R2 비용 및 동기화 수정 전에** `.agents/skills/follow-sync-cost/SKILL.md`와 해당 `references/release-matrix.md`를 읽는다. 검토된 외부 이벤트/Workers 스킬은 그 파일의 출처 링크에서 필요할 때만 읽고, 기존 정상 코드·APP527/528 비용 보호·30초 팔로우 저장·공유 서버 승인 경계를 우선한다.
 - 좋아요/해제, 개인 좋아요 카탈로그, PC↔모바일 동기화, Explore 좋아요 비용 최적화 작업 전에는 반드시 `.agents/skills/local-first-like-sync/SKILL.md`를 읽는다.
 - **현재 좋아요 동결 기준은 `.agents/skills/local-first-like-sync/references/soridraw-app410-like-convergence-frozen.md`** (PC↔모바일 초기 불일치 및 same-version retained 하트 drift 사용자 실기기 PASS)이다. `references/soridraw-app164-worker195-frozen.md`와 `references/soridraw-app160-worker195-frozen.md`는 각각 신규곡 초기판정·이전 양방향 동기화의 역사적 보호 기준, `references/soridraw-app141-baseline.md`는 수신 저장 순서 기준이다. app410의 Stage416 client OFF + legacy canonical batch 복구 + pending Auth-ready recovery + exact retained local-only repair는 새 오류와 사용자 명시 수정 지시 없이 다시 켜거나 우회하지 않는다.
 - 분할바/분할모드/Studio Black pane resize/PC·태블릿 경계/생성바 split tracking/분할 성능 작업 전에는 반드시 `.agents/skills/studio-split-behavior/SKILL.md`를 읽는다. 현재 보호 기준은 `.agents/skills/studio-split-behavior/references/soridraw-app198-split-frozen.md`이며, 현재 정상 분할 동작은 구체 오류나 사용자 명시 변경 지시 없이 리팩터링·대체하지 않는다.

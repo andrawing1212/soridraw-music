@@ -60,13 +60,49 @@ assert.equal(calls,1);
 assert.equal((await get('A','followers')).items.length,0);
 assert.equal(calls,1,'repeat uses newly persisted list, not a server loop');
 assert.match(page,/direction === 'followers' && targetUid === user\?\.uid/);
-assert.match(page,/OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 15_000/);
+assert.match(page,/OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 120_000/);
 assert.match(page,/getExploreProfileConnections\(targetUid, direction, null, refreshOwn523\)/);
-// app525: keep app523 on-demand popup refresh, plus owner header focus
-// reconciliation when the modal is closed. No idle cross-user polling.
-assert.match(page,/if\(profileConnectionsOpen376==='followers'\)/);
-assert.match(page,/void openProfileConnections376\('followers'\)/);
-assert.match(page,/window\.addEventListener\('focus',onOwnFollowersFocus525\)/);
-assert.match(page,/document\.addEventListener\('visibilitychange',onOwnFollowersFocus525\)/);
+// app527: app525's 15-second focus/visibility list fetch was measured as
+// repeated D1 reads even when there was no actual follow mutation.
+// Preserve the verified explicit popup refresh path; no idle/focus fetch.
+assert.match(page,/APP527: A's profile must not spend D1\/R2 on window focus/);
+assert.doesNotMatch(page,/onOwnFollowersFocus525/);
+assert.doesNotMatch(page,/getExploreProfileConnections\(ownerUid,'followers',null,true\)/);
+const explicitBegin=page.indexOf("  const openProfileConnections376 = async ");
+const explicitEnd=page.indexOf('  // APP527:',explicitBegin);
+const explicit=page.slice(explicitBegin,explicitEnd);
+assert.ok(explicitBegin>0 && explicitEnd>explicitBegin);
+assert.match(explicit,/const refreshOwn523 = ownFollowers523 &&/);
+assert.match(explicit,/readExploreProfileConnectionLastServerAt528\(targetUid, direction\)/);
+assert.match(explicit,/shouldRefreshOwnerFollowersOnOpen528\(/);
+assert.match(explicit,/getExploreProfileConnections\(targetUid, direction, null, refreshOwn523\)/);
+
+const stampSource=body(social,
+ 'export const readExploreProfileConnectionLastServerAt528 =',
+ 'export const readExploreProfileConnectionExactCount379 =')
+ .replace(/export const /g,'const ');
+const now528=Date.now();
+let persistent528={data:{items:[{uid:'B'}],nextCursor:null},syncedAt:now528-45_000};
+const stampApi528=load(stampSource,
+ '({read:readExploreProfileConnectionLastServerAt528,should:shouldRefreshOwnerFollowersOnOpen528})',
+ {
+  readSoridrawPersistentCache:()=>persistent528,
+  profileConnectionCacheKey377:(uid,direction)=>uid+':'+direction,
+  EXPLORE_PROFILE_CONNECTION_CACHE_SOURCE_TYPE_377:'connections',
+  EXPLORE_PROFILE_CONNECTION_CACHE_SCHEMA_VERSION_377:1,
+  Date,
+ });
+assert.equal(stampApi528.read('A','followers'),persistent528.syncedAt);
+assert.equal(stampApi528.should(stampApi528.read('A','followers'),now528,120_000),false,
+ 'REOPEN_WITHIN_2M_WORKER0_D1_R0');
+assert.equal(stampApi528.should(stampApi528.read('A','followers'),now528+90_000,120_000),true,
+ 'EXPLICIT_RETURN_AFTER_2M_MAY_RECHECK_FOR_CROSS_ACCOUNT_FALLBACK');
+persistent528=null;
+assert.equal(stampApi528.read('A','followers'),0,'INVALIDATED_CACHE_RECHECK_ALLOWED');
+assert.equal(stampApi528.should(stampApi528.read('A','followers'),now528,120_000),true);
+persistent528={data:{items:[]},syncedAt:now528+30_000};
+assert.equal(stampApi528.read('A','followers'),0,'FUTURE_CLOCK_STAMP_MUST_NOT_HIDE_RECHECK');
+console.log('APP528_PERSISTED_FOLLOWERS_SERVER_STAMP_ACROSS_RELOAD=PASS');
+console.log('APP528_BOUND_2MIN_EXPLICIT_FALLBACK_NO_IDLE_QUERY=PASS');
 console.log('APP523_CROSS_ACCOUNT_UNFOLLOW_OWNER_EXPLICIT_LIST_REFRESH=PASS');
 console.log('APP523_NO_IDLE_POLL_OR_SHARED_RESOURCE_CHANGE=PASS');

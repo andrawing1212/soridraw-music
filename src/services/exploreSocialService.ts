@@ -173,6 +173,40 @@ const readProfileConnectionCache377 = (
   };
 };
 
+// APP528: reuse the server validation stamp already persisted with the bounded
+// follower list. Reloads/tabs do not reset the explicit refresh cooldown.
+// No new storage entry, revision poll, or network request is created here.
+export const readExploreProfileConnectionLastServerAt528 = (
+  profileUid: string,
+  direction: ExploreProfileConnectionDirection,
+): number => {
+  const uid = String(profileUid || '').trim();
+  if (!uid) return 0;
+  const cached = readSoridrawPersistentCache<ExploreProfileConnectionPage>({
+    cacheKey: profileConnectionCacheKey377(uid, direction),
+    sourceType: EXPLORE_PROFILE_CONNECTION_CACHE_SOURCE_TYPE_377,
+    schemaVersion: EXPLORE_PROFILE_CONNECTION_CACHE_SCHEMA_VERSION_377,
+    uid: null,
+  });
+  if (!Array.isArray(cached?.data?.items)) return 0;
+  const syncedAt = Number(cached?.syncedAt || 0);
+  return Number.isSafeInteger(syncedAt) && syncedAt > 0 && syncedAt <= Date.now()
+    ? syncedAt : 0;
+};
+
+// A confirmed cross-account mutation cannot reach the owner until the
+// separately guarded app526 transport is live. Preserve a bounded explicit
+// fallback rather than silently hiding changed followers indefinitely.
+export const shouldRefreshOwnerFollowersOnOpen528 = (
+  lastServerAt: number,
+  now: number,
+  intervalMs = 120_000,
+): boolean => (
+  !Number.isSafeInteger(lastServerAt) || lastServerAt <= 0 ||
+  !Number.isSafeInteger(now) || lastServerAt > now ||
+  now - lastServerAt >= intervalMs
+);
+
 export const readExploreProfileConnectionExactCount379 = (
   profileUid: string,
   direction: ExploreProfileConnectionDirection,
@@ -507,10 +541,10 @@ const normalizeProfile = (row: any, fallbackRef = ''): ExplorePublicProfile => (
   trackCount: toCount(row?.trackCount ?? row?.track_count),
 });
 
-export const getExplorePublicProfile = async (profileRef: string, forceServer = false): Promise<ExplorePublicProfile> => {
+export const getExplorePublicProfile = async (profileRef: string): Promise<ExplorePublicProfile> => {
   const normalizedRef = String(profileRef || '').trim();
   if (!normalizedRef) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
-  const payload = await requestPublic(`/v1/profiles/${encodeURIComponent(normalizedRef)}`, forceServer ? 'no-store' : 'default');
+  const payload = await requestPublic(`/v1/profiles/${encodeURIComponent(normalizedRef)}`);
   return normalizeProfile(payload?.data?.profile || payload?.data || {}, normalizedRef);
 };
 

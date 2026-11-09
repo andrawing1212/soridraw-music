@@ -86,11 +86,12 @@ import {
   getExploreFollowState,
   getExploreFollowingUids312,
   getExploreProfileConnections,
-  invalidateExploreProfileConnections377,
   patchExploreFollowLocalState377,
   readExploreFollowMembership379,
   readExploreFollowingExactCount379,
   readExploreProfileConnectionExactCount379,
+  readExploreProfileConnectionLastServerAt528,
+  shouldRefreshOwnerFollowersOnOpen528,
   getExplorePublicProfile,
   getExplorePublicProfileTracks,
   setExploreFollow,
@@ -103,11 +104,6 @@ import {
   publishExploreFollowSync377,
   subscribeExploreFollowSync377,
 } from '../services/exploreFollowSyncService';
-import { createExploreOwnerFollowerGate526 } from '../services/exploreOwnerFollowerSyncCore526';
-import {
-  EXPLORE_OWNER_FOLLOW_REALTIME_526_ENABLED,
-  subscribeExploreOwnerFollowerSync526,
-} from '../services/exploreOwnerFollowerSync526';
 import {
   EXPLORE_FOLLOW_IDLE_FLUSH_MS_380,
   queueExploreFollowFinalState380,
@@ -1984,10 +1980,9 @@ export default function ExplorePage() {
   const profileConnectionsCache376Ref = useRef<Map<string, { items: ExploreProfileConnection[]; nextCursor: string | null }>>(new Map());
   const profileConnectionsRequest376Ref = useRef(0);
   const ownFollowersLastCheck523Ref = useRef<Map<string, number>>(new Map());
-  // One exact owner-only header refresh on a real focus/foreground return.
-  const ownFollowersHeaderLastCheck525Ref = useRef<Map<string,number>>(new Map());
-  const ownFollowersHeaderInflight525Ref = useRef<Set<string>>(new Set());
-  const OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 15_000;
+  // APP528: one bounded explicit canonical check per two minutes, even after
+  // reload. A real changed-follow signal still invalidates its list immediately.
+  const OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 120_000;
   const followSignalVersion377Ref = useRef(0);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
 
@@ -4100,9 +4095,18 @@ export default function ExplorePage() {
     // B's unfollow reaches B's own RTDB channel, not A's. Only A's
     // explicit own-followers popup can recheck this exact public list.
     const ownFollowers523 = direction === 'followers' && targetUid === user?.uid;
-    const lastCheck523 = ownFollowersLastCheck523Ref.current.get(key) || 0;
+    // Do not use an in-memory-only timer: a plain reload used to reset this
+    // gate and force the same unchanged D1 list query again.
+    const lastCheck523 = ownFollowers523
+      ? Math.max(
+          ownFollowersLastCheck523Ref.current.get(key) || 0,
+          readExploreProfileConnectionLastServerAt528(targetUid, direction),
+        )
+      : 0;
     const refreshOwn523 = ownFollowers523 &&
-      (lastCheck523 === 0 || Date.now() - lastCheck523 >= OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523);
+      shouldRefreshOwnerFollowersOnOpen528(
+        lastCheck523, Date.now(), OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523,
+      );
     if (cached) {
       setProfileConnectionsItems376(cached.items);
       setProfileConnectionsNextCursor376(cached.nextCursor);
@@ -4154,75 +4158,12 @@ export default function ExplorePage() {
     }
   };
 
-  // APP525: B's private follow signal does not reach A. On a real return to
-  // A's already-open own profile, recheck just A's bounded follower list.
-  // Never poll, reread on page entry, or change shared transport/rules.
-  useEffect(() => {
-    const ownerUid=String(user?.uid||'').trim();
-    if(!ownerUid || profile?.uid!==ownerUid)return;
-    const onOwnFollowersFocus525=()=>{
-      if(document.visibilityState!=='visible')return;
-      if(profileConnectionsOpen376==='followers'){
-        void openProfileConnections376('followers');
-        return;
-      }
-      const now=Date.now();
-      const last=ownFollowersHeaderLastCheck525Ref.current.get(ownerUid)||0;
-      if(now-last<OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 ||
-          ownFollowersHeaderInflight525Ref.current.has(ownerUid))return;
-      ownFollowersHeaderLastCheck525Ref.current.set(ownerUid,now);
-      ownFollowersHeaderInflight525Ref.current.add(ownerUid);
-      void getExploreProfileConnections(ownerUid,'followers',null,true)
-        .then((page525)=>{
-          if(auth.currentUser?.uid!==ownerUid ||
-              activeProfileUidRef.current!==ownerUid)return;
-          profileConnectionsCache376Ref.current.set(ownerUid+':followers',page525);
-          if(page525.nextCursor)return; // 30 cards cannot imply a larger exact count
-          const exact=page525.items.length;
-          patchExplorePublicProfileFirstViewProfile(ownerUid,{followerCount:exact});
-          setProfile(previous=>previous?.uid===ownerUid && previous.followerCount!==exact
-            ? {...previous,followerCount:exact}:previous);
-        })
-        .catch((reason)=>{
-          ownFollowersHeaderLastCheck525Ref.current.delete(ownerUid);
-          console.warn('[app525] own follower header focus recheck deferred:',reason);
-        })
-        .finally(()=>ownFollowersHeaderInflight525Ref.current.delete(ownerUid));
-    };
-    window.addEventListener('focus',onOwnFollowersFocus525);
-    document.addEventListener('visibilitychange',onOwnFollowersFocus525);
-    return ()=>{
-      window.removeEventListener('focus',onOwnFollowersFocus525);
-      document.removeEventListener('visibilitychange',onOwnFollowersFocus525);
-    };
-  },[profileConnectionsOpen376,profile?.uid,user?.uid]);
-
-  // APP526 owner-follow push candidate. Both relay and client are OFF until
-  // the trusted server release is approved; no entry read or idle polling.
-  useEffect(() => {
-    if (!EXPLORE_OWNER_FOLLOW_REALTIME_526_ENABLED) return;
-    const ownerUid526 = String(user?.uid || '').trim();
-    if (!ownerUid526 || profile?.uid !== ownerUid526) return;
-    const gate526 = createExploreOwnerFollowerGate526(
-      ownerUid526,
-      () => getExplorePublicProfile(ownerUid526, true).then(row => row.followerCount),
-      (count) => {
-        if (auth.currentUser?.uid !== ownerUid526 ||
-            activeProfileUidRef.current !== ownerUid526) return;
-        // A's cached exact followers list predates this confirmed remote edge.
-        // Invalidate only A's one followers page, never all profile caches.
-        invalidateExploreProfileConnections377(ownerUid526, 'followers');
-        profileConnectionsCache376Ref.current.delete(ownerUid526 + ':followers');
-        patchExplorePublicProfileFirstViewProfile(ownerUid526, { followerCount: count });
-        setProfile(previous => previous?.uid === ownerUid526 && previous.followerCount !== count
-          ? { ...previous, followerCount: count } : previous);
-      },
-      Date.now,
-      reason => console.warn('[526] canonical owner refresh deferred:', reason),
-    );
-    const stop526 = subscribeExploreOwnerFollowerSync526(ownerUid526, gate526.receive);
-    return () => { gate526.dispose(); stop526(); };
-  }, [profile?.uid, user?.uid]);
+  // APP527: A's profile must not spend D1/R2 on window focus, blank-space
+  // clicks or visibility changes. The app525 15-second fallback previously
+  // repeated forced follower-list queries without any confirmed relation
+  // change. A direct click on the Followers counter still uses the existing
+  // bounded explicit recheck above; remote confirmed push is separately
+  // staged in OFF-gated app526 and must not be impersonated by polling.
 
   const loadMoreProfileConnections376 = async () => {
     const targetUid = String(profile?.uid || '').trim();

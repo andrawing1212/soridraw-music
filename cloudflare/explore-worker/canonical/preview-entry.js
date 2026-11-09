@@ -10,7 +10,6 @@ import {
   CURATED_REPAIR_WAKE_MS_468, CURATED_REPAIR_PREPARE_GRACE_MS_468,
 } from '../runtime/curated-projection-repair-468.mjs';
 import baseWorker from './preview-worker.js';
-import { OWNER_FOLLOW_RELAY_526_ENABLED, invokeOwnerFollowRelay526 } from '../runtime/owner-follower-relay-526.mjs';
 import {handleNotificationPreferencesApi003}
  from '../runtime/notification-preferences-api-003.mjs';
 import {handleUnifiedNotificationsApi004}
@@ -3635,84 +3634,7 @@ export default {
         }, { status: 503 });
       }
     }
-    // APP526: this is read-only pre-state verification, never a new mutation.
-    // Source OFF and missing explicit PREVIEW env/secret keep this path cost R0.
-    const followPath526=url.pathname.split('/');
-    const isOwnerFollow526 = followPath526.length===5 &&
-      followPath526[1]==='v1' && followPath526[2]==='profiles' &&
-      Boolean(followPath526[3]) && followPath526[4]==='follow' &&
-      (request.method==='PUT' || request.method==='DELETE');
-    let beforeOwnerFollow526 = null;
-    if (OWNER_FOLLOW_RELAY_526_ENABLED && isOwnerFollow526 &&
-        env?.SORIDRAW_ENVIRONMENT==='preview' &&
-        env?.SORIDRAW_OWNER_FOLLOW_PUSH_526==='1' &&
-        typeof env?.SORIDRAW_OWNER_FOLLOW_HMAC_526==='string' &&
-        env.SORIDRAW_OWNER_FOLLOW_HMAC_526.length>=32) {
-      try{
-        const verified526=await validateExploreAuth307(request,env,ctx);
-        if(verified526.ok){
-          const targetUid526=decodeURIComponent(url.pathname.split('/')[3]||'');
-          if(targetUid526 && targetUid526!==verified526.uid){
-            const stateUrl526=new URL(url);
-            stateUrl526.pathname=url.pathname.slice(0,-'/follow'.length)+'/follow-state';
-            const previous526=await baseWorker.fetch(new Request(stateUrl526,{
-              method:'GET',headers:request.headers,
-            }),env,ctx);
-            const previousPayload526=previous526.ok
-              ? await previous526.json().catch(()=>null) : null;
-            const wasFollowing526=previousPayload526?.data?.isFollowing
-              ?? previousPayload526?.data?.following;
-            if(typeof wasFollowing526==='boolean')
-              beforeOwnerFollow526={actorUid:verified526.uid,
-                targetUid:targetUid526,wasFollowing:wasFollowing526};
-          }
-        }
-      }catch(error){console.warn('[526] canonical follow precheck unavailable',String(error?.message||error));}
-    }
-    const ownerFollowRequest526=beforeOwnerFollow526 ? request.clone() : null;
     let response = await baseWorker.fetch(request, env, ctx);
-    // Signed owner invalidation occurs ONLY after the canonical follow response
-    // and the materialized target profile both agree with the new count.
-    // The webhook is separate from the actor's existing personal RTDB marker.
-    if(beforeOwnerFollow526 && response.ok){
-      try{
-        const committed526=await response.clone().json();
-        const row526=committed526?.data||{};
-        const confirmed526=row526.isFollowing ?? row526.following;
-        const count526=Number(row526.followerCount ?? row526.follower_count);
-        if(committed526?.ok===true && typeof confirmed526==='boolean' &&
-            confirmed526!==beforeOwnerFollow526.wasFollowing &&
-            Number.isSafeInteger(count526) && count526>=0){
-          const profileUrl526=new URL(url);
-          profileUrl526.pathname='/v1/profiles/'+encodeURIComponent(beforeOwnerFollow526.targetUid);
-          const profileResponse526=await baseWorker.fetch(new Request(profileUrl526,{
-            method:'GET',headers:{Origin:request.headers.get('Origin')||''},
-            cache:'no-store',
-          }),env,ctx);
-          const profilePayload526=profileResponse526.ok
-            ? await profileResponse526.json().catch(()=>null) : null;
-          const materialized526=Number(
-            profilePayload526?.data?.profile?.followerCount
-            ?? profilePayload526?.data?.profile?.follower_count);
-          if(profilePayload526?.ok===true && materialized526===count526){
-            const original526=ownerFollowRequest526 ? await ownerFollowRequest526.json().catch(()=>null) : null;
-            const op526=String(original526?.followOperationId||crypto.randomUUID()).trim();
-            const delivery526=invokeOwnerFollowRelay526({
-              canonicalCommitted:true,materializedProfileReady:true,changed:true,
-              actorUid:beforeOwnerFollow526.actorUid,targetUid:beforeOwnerFollow526.targetUid,
-              operationId:op526,following:confirmed526,canonicalFollowerCount:count526,
-            },{
-              secret:env.SORIDRAW_OWNER_FOLLOW_HMAC_526,
-              endpoint:env.SORIDRAW_OWNER_FOLLOW_ENDPOINT_526,
-            }).then(result=>{
-              if(result?.delivered===false)console.warn('[526] signed owner delivery deferred');
-            });
-            ctx.waitUntil(delivery526);
-          }
-        }
-      }catch(error){console.warn('[526] confirmed follower signal deferred',String(error?.message||error));}
-    }
-
     if (response.ok && curatedRepairTicket468) {
       try {
         await curatedRepairTicket468.stub.fetch('https://soridraw.internal/curated-repair-468/confirm', {

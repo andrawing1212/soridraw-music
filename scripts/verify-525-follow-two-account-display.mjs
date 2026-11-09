@@ -44,23 +44,19 @@ assert.doesNotMatch(click.slice(0,click.indexOf('queueExploreFollowFinalState380
 assert.match(page,/readPendingTargetFollowerCount525\(user\.uid,displayProfile379\.uid\)/);
 assert.match(page,/readPendingTargetFollowerCount525\(user\.uid,displayRefreshedProfile379\.uid\)/);
 
-const owner=slice(page,
- '  // APP525: B\'s private follow signal does not reach A.',
- '  const loadMoreProfileConnections376 =');
-assert.match(owner,/profile\?\.uid!==ownerUid/);
-assert.match(owner,/document\.visibilityState!=='visible'/);
-assert.match(owner,/window\.addEventListener\('focus',onOwnFollowersFocus525\)/);
-assert.match(owner,/document\.addEventListener\('visibilitychange',onOwnFollowersFocus525\)/);
-assert.match(owner,/ownFollowersHeaderLastCheck525Ref\.current\.get\(ownerUid\)/);
-assert.match(owner,/OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523/);
-assert.match(owner,/ownFollowersHeaderInflight525Ref\.current\.has\(ownerUid\)/);
-assert.match(owner,/getExploreProfileConnections\(ownerUid,'followers',null,true\)/);
-assert.match(owner,/if\(page525\.nextCursor\)return/);
-assert.match(owner,/patchExplorePublicProfileFirstViewProfile\(ownerUid,\{followerCount:exact\}\)/);
-assert.match(owner,/setProfile\(previous=>previous\?\.uid===ownerUid/);
-assert.doesNotMatch(owner,/setInterval\(|setTimeout\(|runTransaction\(/);
+// APP527 regression: no implicit follower-list request on focus/visibility.
+const explicit=slice(page,
+ '  const openProfileConnections376 = async (direction: ExploreProfileConnectionDirection) => {',
+ '  // APP527: A\'s profile must not spend D1/R2 on window focus, blank-space');
+assert.match(explicit,/const ownFollowers523 = direction === 'followers' && targetUid === user\?\.uid/);
+assert.match(explicit,/if \(cached\) \{[\s\S]*?if \(!refreshOwn523\) \{[\s\S]*?return;/);
+assert.match(explicit,/getExploreProfileConnections\(targetUid, direction, null, refreshOwn523\)/);
+assert.match(explicit,/if \(!page.nextCursor\) \{/);
+assert.doesNotMatch(page,/onOwnFollowersFocus525|ownFollowersHeaderLastCheck525Ref|ownFollowersHeaderInflight525Ref/);
+assert.doesNotMatch(page,/getExploreProfileConnections\(ownerUid,'followers',null,true\)/);
+assert.doesNotMatch(page,/window\.addEventListener\('focus',onOwnFollowersFocus525\)/);
 assert.match(social,/forceServer \? 'no-store' : 'default'/);
 assert.match(social,/if \(!normalizedCursor && !forceServer\)/);
 console.log('APP525_ACTOR_B_INSTANT_FOLLOWER_COUNT_PENDING_RELOAD=PASS');
-console.log('APP525_OWNER_A_FOCUS_ONE_BOUNDED_FRESH_LIST_RECHECK=PASS');
+console.log('APP527_OWNER_A_EXPLICIT_ONLY_NO_FOCUS_LIST_READ=PASS');
 console.log('APP525_NO_BACKGROUND_POLL_NO_PRECOMMIT_PUBLIC_WRITE=PASS');

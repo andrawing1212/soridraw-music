@@ -84,6 +84,13 @@ assert.match(panel, /aria-pressed=\{activeSection === 'creation'\}/);
 assert.match(panel, />\s*활동·소식\s*<\/button>/);
 assert.match(panel, />\s*생성 기록\s*<\/button>/);
 assert.match(panel, /activeSection === 'creation' \? '아직 표시할 생성 알림이 없습니다\.'/);
+assert.match(panel, /activeSection === 'creation' && \([\s\S]*?className="soridraw-notification-creation-limit"[\s\S]*?생성기록은 최대 10곡이 표시됩니다\./,
+  'only generation tab displays the fixed 10-song notice');
+const limitStyle = file('src/components/studio/notificationPanel.css');
+assert.match(limitStyle, /\.soridraw-notification-creation-limit\{[^}]*flex:none;[^}]*background:#d7d7db;color:#151517;/,
+  'limit footer must stay below scrolling rows with gray background and black text');
+assert.doesNotMatch(panel, /activeSection === 'activity' && \([\s\S]*?className="soridraw-notification-creation-limit"/,
+  'activity tab must not display generation count footer');
 console.log('NOTIFICATION_TWO_SECTIONS_ACTIVITY_CREATION=PASS');
 assert.match(panel, /className="soridraw-notification-settings-divider"/);
 assert.match(panel, /<NotificationSwitch checked=\{masterEnabled\} onChange=\{toggleMaster\}/);

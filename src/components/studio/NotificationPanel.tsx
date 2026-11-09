@@ -497,6 +497,11 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
             </p>
           )}
         </div>
+        {activeSection === 'creation' && (
+          <p className="soridraw-notification-creation-limit" role="note">
+            생성기록은 최대 10곡이 표시됩니다.
+          </p>
+        )}
         </>
       )}
       {notice && <div role="status" className="soridraw-notification-error">{notice}</div>}

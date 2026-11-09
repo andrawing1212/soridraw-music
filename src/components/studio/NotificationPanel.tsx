@@ -22,6 +22,7 @@ import {NOTIFICATION_INBOX_ENABLED_004,loadOwnNotifications004,
   from '../../services/notifications/notificationInbox004';
 import {readCompletedGenerationLog016,mergeCompletedGenerationNotices016,
   notificationRecentLogKey016} from '../../services/notifications/notificationRecentLog016';
+import {useNotificationDots017} from '../../services/notifications/useNotificationDots017';
 import './notificationPanel.css';
 
 type Props = {
@@ -32,11 +33,11 @@ type Props = {
 };
 
 const TYPES: Array<{ key: NotificationCategory; label: string; detail: string }> = [
-  { key: 'like', label: '내 곡 좋아요', detail: '내 공개곡에 새로운 좋아요가 눌렸을 때' },
-  { key: 'follow', label: '새 팔로워', detail: '누군가 나를 새로 팔로우했을 때' },
-  { key: 'complete', label: '곡 생성 완료', detail: '내가 생성한 곡이 완성되었을 때' },
-  { key: 'announcement', label: '공지사항', detail: 'SORIDRAW 관리자의 공지' },
-  { key: 'message', label: '개인 메시지', detail: '관리자가 나에게 보낸 메시지' },
+  { key: 'like', label: '내 곡 좋아요', detail: '좋아요 알림 핑크 점 표시' },
+  { key: 'follow', label: '새 팔로워', detail: '새 팔로워 핑크 점 표시' },
+  { key: 'complete', label: '곡 생성 완료', detail: '생성 완료 핑크 점 표시' },
+  { key: 'announcement', label: '공지사항', detail: '운영 공지 핑크 점 표시' },
+  { key: 'message', label: '개인 메시지', detail: '개인 메시지 핑크 점 표시' },
 ];
 
 const iconFor = (type: NotificationCategory) => {
@@ -258,7 +259,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
       : []
   ), [visualExample, uid, recentHistory, open, localLogVersion]);
   const sampleHeader = visualExample &&
-    (activeSection === 'activity' || localCompletions.length === 0);
+    (activeSection !== 'creation' || localCompletions.length === 0);
   // The already-authenticated inbox read includes canonical account preferences
   // at no additional D1 query. Never hide its valid rows behind a stale local
   // setting from a different device. Confirmed changes win by revision.
@@ -268,19 +269,22 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
         accountSettings.revision >= serverPreferences.revision)
         ? accountSettings : serverPreferences)
     : null;
-  const rows = useMemo(() => (NOTIFICATION_INBOX_ENABLED_004
-    ? (effectivePreferences ? [...(remoteInbox.uid === uid ? remoteInbox.items : []),
-      ...projectCompletedExistingGenerations004(recentHistory)] : [])
+  // Pink-dot settings never hide stored notifications or stop delivery.
+  const allRows=useMemo(()=>NOTIFICATION_INBOX_ENABLED_004
+    ? (remoteInbox.uid===uid ? [...remoteInbox.items,...localCompletions] : [])
     : (visualExample ? [
       ...NOTIFICATION_EXAMPLE_ROWS.filter(row =>
-        row.category !== 'complete' || localCompletions.length === 0),
+        row.category!=='complete'||localCompletions.length===0),
       ...localCompletions,
-    ] : []))
-    .filter((row) => (effectivePreferences?.master ?? masterEnabled) &&
-      (effectivePreferences?.[row.category] ?? prefs[row.category]) &&
-      notificationSectionFor(row.category) === activeSection),
-    [visualExample, localCompletions, remoteInbox, uid, recentHistory, prefs, masterEnabled,
-      activeSection, effectivePreferences]);
+    ]:[]),[visualExample,localCompletions,remoteInbox,uid]);
+  const rows=useMemo(()=>allRows.filter(row=>
+    notificationSectionFor(row.category)===activeSection),[allRows,activeSection]);
+  const {dots,acknowledge}=useNotificationDots017(
+    uid,recentHistory,remoteInbox.uid===uid?remoteInbox.items:[],effectivePreferences);
+  useEffect(()=>{
+    // Acknowledging a tab only clears its pink point, never its messages.
+    if(open&&!settingsOpen&&uid)acknowledge(activeSection);
+  },[open,settingsOpen,uid,activeSection,allRows]);
 
   const accountSyncLocked = NOTIFICATION_ACCOUNT_SYNC_ENABLED_003 &&
     (settingsSyncBusy || !accountSettings);
@@ -416,8 +420,8 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
             </span>
             <span className="soridraw-notification-setting-copy">
               <strong>전체 알림</strong>
-              <small>{masterEnabled ? '선택한 알림이 켜져 있습니다' :
-                '전체 알림이 꺼져 있습니다'}</small>
+              <small>{masterEnabled ? '새 알림의 핑크 점이 표시됩니다' :
+                '핑크 점만 숨깁니다 · 알림 내용은 유지됩니다'}</small>
             </span>
             <NotificationSwitch checked={masterEnabled} onChange={toggleMaster}
               disabled={accountSyncLocked} label="전체 알림" />
@@ -443,18 +447,23 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
       ) : (
         <>
         <div className="soridraw-notification-tabs" role="group" aria-label="알림 카테고리">
-          <button type="button"
-            className={`soridraw-notification-tab${activeSection === 'activity' ? ' is-active' : ''}`}
-            aria-pressed={activeSection === 'activity'} onClick={() => setActiveSection('activity')}>
-            활동·소식
-          </button>
-          <button type="button"
-            className={`soridraw-notification-tab${activeSection === 'creation' ? ' is-active' : ''}`}
-            aria-pressed={activeSection === 'creation'} onClick={() => setActiveSection('creation')}>
-            생성 기록
-          </button>
+          {([
+            ['activity','활동·소식'],
+            ['creation','생성 기록'],
+            ['announcement','공지'],
+          ] as const).map(([section,label])=>(
+            <button key={section} type="button"
+              className={`soridraw-notification-tab${activeSection===section?' is-active':''}`}
+              aria-pressed={activeSection===section}
+              onClick={()=>setActiveSection(section)}>
+              {label}
+              {dots[section] && <span className="soridraw-notification-pink-dot" aria-label="새 알림" />}
+            </button>
+          ))}
         </div>
-        <div className="soridraw-notification-list" aria-label={activeSection === 'activity' ? '활동·소식 알림' : '생성 기록 알림'}>
+        <div className="soridraw-notification-list"
+          aria-label={activeSection==='activity'?'활동·소식 알림':
+            activeSection==='creation'?'생성 기록 알림':'공지 알림'}>
           {rows.length ? rows.map((row) => ( 
             <div className="soridraw-notification-row" key={row.id}>
               {row.category === 'announcement' || row.category === 'message' ? (

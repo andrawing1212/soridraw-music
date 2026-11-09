@@ -5,6 +5,14 @@ on:
     paths:
       - 'scripts/verify-notification-integrated-014.mjs'
       - '.github/workflows/verify-notification-integrated-014.yml'
+      - 'scripts/verify-notification-panel-ui.mjs'
+      - 'scripts/verify-notification-unified-inbox-004.mjs'
+      - 'scripts/verify-notification-pink-dots-017.mjs'
+      - 'src/services/notifications/**'
+      - 'src/components/studio/NotificationPanel.tsx'
+      - 'src/components/studio/notificationPanel.css'
+      - 'cloudflare/explore-worker/runtime/notification-unified-inbox-004.mjs'
+      - 'cloudflare/explore-worker/candidates/20261109_017_notification_dot_only_triggers_candidate.sql'
 permissions:
   contents: read
 jobs:
@@ -18,10 +26,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Unified HTTP preferences, inbox, social, 30-day cleanup with fake D1/R2
+      - name: Unified fake D1/R2 inbox, visual dots, categories and account settings
         run: |
           set -euo pipefail
+          npm ci --ignore-scripts
           node --check scripts/verify-notification-integrated-014.mjs
           node scripts/verify-notification-integrated-014.mjs
+          node scripts/verify-notification-pink-dots-017.mjs
+          node scripts/verify-notification-panel-ui.mjs
+          node scripts/verify-notification-unified-inbox-004.mjs
       - name: Explicitly no cloud resources or deploy
         run: echo 'NOTIFICATION_014_IN_MEMORY_ONLY=PASS;NO_SHARED_D1;NO_R2;NO_WORKER_DEPLOY'

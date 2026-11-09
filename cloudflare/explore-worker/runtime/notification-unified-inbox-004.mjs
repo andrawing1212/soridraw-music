@@ -37,34 +37,25 @@ export async function readUnifiedNotificationInbox004({
     db,authenticate:own,activated:true
   });
   if(pref.status!=='ok'||!pref.preferences)throw deny('NOTIFICATION_SETTINGS_UNKNOWN');
-  const settings=pref.preferences;
-  if(!settings.master)return {status:'ok',items:[],preferences:settings,queries:1};
+  const settings=pref.preferences; // Dot preferences only; never suppress delivery.
   const cutoff=now-NOTIFICATION_RETENTION_MS_002;
-  const social= (settings.like||settings.follow)
-    ? await readOwnNotificationInbox001({
-      db,authenticate:own,activated:true,limit,now})
-    : {status:'ok',items:[]};
+  const social=await readOwnNotificationInbox001({
+    db,authenticate:own,activated:true,limit,now});
   if(social.status!=='ok')throw deny('NOTIFICATION_SOCIAL_READ_FAILED');
-  const direct=settings.message
-    ? await db.prepare('SELECT id,title,body,created_at AS createdAt '
+  const direct=await db.prepare('SELECT id,title,body,created_at AS createdAt '
       +'FROM soridraw_notification_direct_messages_004 '
       +'WHERE receiver_uid=? AND created_at>=? '
-      +'ORDER BY created_at DESC LIMIT ?').bind(uid,cutoff,limit).all()
-    : {results:[]};
+      +'ORDER BY created_at DESC LIMIT ?').bind(uid,cutoff,limit).all();
   if(!Array.isArray(direct.results)||direct.results.length>limit)
     throw deny('NOTIFICATION_DIRECT_READ_FAILED');
-  let global=[];
-  if(settings.announcement){
-    if(typeof readSharedAnnouncements!=='function')
-      throw deny('NOTIFICATION_PUBLIC_CACHE_UNAVAILABLE');
-    const read=await readSharedAnnouncements();
-    if(!Array.isArray(read)||read.length>20)
-      throw deny('NOTIFICATION_PUBLIC_CACHE_INVALID');
-    global=read;
-  }
+  if(typeof readSharedAnnouncements!=='function')
+    throw deny('NOTIFICATION_PUBLIC_CACHE_UNAVAILABLE');
+  const global=await readSharedAnnouncements();
+  if(!Array.isArray(global)||global.length>20)
+    throw deny('NOTIFICATION_PUBLIC_CACHE_INVALID');
   const items=[];
   for(const x of social.items){
-    if(!settings[x.category] || !good(x.actorUid,256) ||
+    if(!good(x.actorUid,256) ||
        !good(x.subjectId,512) || !bounded(x.createdAt,cutoff,now+300000))continue;
     items.push({
       id:'social:'+x.category+':'+x.actorUid+':'+x.subjectId+':'+x.createdAt,
@@ -90,7 +81,7 @@ export async function readUnifiedNotificationInbox004({
   }
   items.sort((a,b)=>b.createdAt-a.createdAt||a.id.localeCompare(b.id));
   return {status:'ok',items:filterRecords(items,limit),preferences:settings,
-    queries:1+(settings.like||settings.follow?1:0)+(settings.message?1:0)};
+    queries:3};
 }
 
 /** Exactly one named recipient. Caller must use canonical admin-role proof;
@@ -108,10 +99,8 @@ export async function publishPrivateNotification004({
   const result=await db.prepare(
     'INSERT OR IGNORE INTO soridraw_notification_direct_messages_004 '
     +'(receiver_uid,id,title,body,created_at) '
-    +'SELECT ?,?,?,?,? '
-    +'WHERE NOT EXISTS (SELECT 1 FROM soridraw_notification_preferences_002 '
-    +'WHERE user_uid=? AND (master_enabled=0 OR message_enabled=0))'
-  ).bind(receiverUid,message.id,message.title,message.body,now,receiverUid).run();
+    +'VALUES (?,?,?,?,?)'
+  ).bind(receiverUid,message.id,message.title,message.body,now).run();
   if(![0,1].includes(result?.meta?.changes))
     throw deny('NOTIFICATION_MESSAGE_ACK_UNKNOWN');
   return {status:result.meta.changes?'published':'skipped',rowsWritten:result.meta.changes};

@@ -30,10 +30,10 @@ assert.match(client,/status!=='completed'/);
 assert.match(client,/getFirebaseAppCheckToken/);
 assert.match(client,/cache:'no-store'/);
 assert.match(panel,/loadOwnNotifications004\(current\)/);
-assert.match(panel,/effectivePreferences\?\.master \?\? masterEnabled/);
-assert.match(panel,/effectivePreferences\?\.\[row\.category\] \?\? prefs\[row\.category\]/);
+assert.doesNotMatch(panel,/effectivePreferences\?\.master \?\? masterEnabled/);
+assert.doesNotMatch(panel,/effectivePreferences\?\.\[row\.category\] \?\? prefs\[row\.category\]/);
 assert.match(panel,/if\(result\.status==='saved'\)setRemoteRefreshKey/);
-assert.match(panel,/remoteInbox\.uid === uid \? remoteInbox\.items : \[\]/);
+assert.match(panel,/remoteInbox\.uid===uid\?remoteInbox\.items:\[\]/);
 assert.match(panel,/projectCompletedExistingGenerations004\(recentHistory\)/);
 assert.match(panel,/localCompletions = useMemo/);
 assert.match(app,/<Navigation[\s\S]*?recentHistory=\{history\}/);
@@ -164,12 +164,14 @@ commonReads=0;counts.read=0;
 const off=await readUnifiedNotificationInbox004({
  db:d1,authenticate:async()=> 'owner',readSharedAnnouncements:readCommon,
  enabled:true,now});
-assert.equal(off.items.length,0);
-assert.equal(commonReads,0);
-assert.equal(counts.read,1);
+assert.deepEqual(new Set(off.items.map(x=>x.category)),
+ new Set(['like','message','announcement']));
+assert.equal(off.preferences.master,false,'master OFF controls dots only');
+assert.equal(commonReads,1);
+assert.equal(counts.read,3);
 assert.equal((await publishPrivateNotification004({
  db:d1,receiverUid:'owner',message:{...msg,id:'new2'},
- verifyAdmin:yes,enabled:true,now})).rowsWritten,0);
+ verifyAdmin:yes,enabled:true,now})).rowsWritten,1);
 put('INSERT INTO soridraw_notification_direct_messages_004 VALUES (?,?,?,?,?)',
  'owner','old','old','old',now-31*86400000);
 const plan=db.prepare('EXPLAIN QUERY PLAN SELECT receiver_uid,id FROM '

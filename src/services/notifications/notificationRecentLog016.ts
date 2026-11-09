@@ -86,7 +86,8 @@ export function rememberCompletedGenerationLog016(
   if(!additions.length)return;
   const merged=combine([...additions,...old]);
   if(JSON.stringify(merged)===JSON.stringify(old))return;
-  try{window.localStorage.setItem(notificationRecentLogKey016(uid),JSON.stringify(merged));}
+  try{window.localStorage.setItem(notificationRecentLogKey016(uid),JSON.stringify(merged));
+    window.dispatchEvent?.(new Event('soridraw:notification-dot-change'));}
   catch{/* Quota or disabled storage: Recent Studio remains canonical and untouched. */}
 }
 

@@ -35,6 +35,7 @@ assert.match(panel,/effectivePreferences\?\.\[row\.category\] \?\? prefs\[row\.c
 assert.match(panel,/if\(result\.status==='saved'\)setRemoteRefreshKey/);
 assert.match(panel,/remoteInbox\.uid === uid \? remoteInbox\.items : \[\]/);
 assert.match(panel,/projectCompletedExistingGenerations004\(recentHistory\)/);
+assert.match(panel,/localCompletions = useMemo/);
 assert.match(app,/<Navigation[\s\S]*?recentHistory=\{history\}/);
 assert.match(app,/activeWorkspace=\{studioRailActiveWorkspace\}\s+recentHistory=\{history\}/);
 assert.match(app,/<ExploreShellLazy isAdminUser=\{isAdminUser\} recentHistory=\{history\}/);

@@ -236,8 +236,8 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
         ? accountSettings : serverPreferences)
     : null;
   const rows = useMemo(() => (NOTIFICATION_INBOX_ENABLED_004
-    ? [...(remoteInbox.uid === uid ? remoteInbox.items : []),
-      ...projectCompletedExistingGenerations004(recentHistory)]
+    ? (effectivePreferences ? [...(remoteInbox.uid === uid ? remoteInbox.items : []),
+      ...projectCompletedExistingGenerations004(recentHistory)] : [])
     : (visualExample ? NOTIFICATION_EXAMPLE_ROWS : []))
     .filter((row) => (effectivePreferences?.master ?? masterEnabled) &&
       (effectivePreferences?.[row.category] ?? prefs[row.category]) &&

@@ -172,7 +172,7 @@ console.log('NOTIFICATION_MOBILE_OPEN_CLOSE_HAS_NO_NEW_BACKEND_IO=PASS');
 
 assert.match(panel,/visualExample && uid && auth\.currentUser\?\.uid === uid/);
 assert.match(panel,/projectCompletedExistingGenerations004\(recentHistory\)/);
-assert.match(panel,/row\.category !== 'complete' \|\| localCompletions\.length === 0/,
+assert.match(panel,/row\.category!=='complete'\|\|localCompletions\.length===0/,
   'real PREVIEW generation rows replace sample creation notices only');
 assert.match(panel,/isPreviewSample\(row\) \? row\.createdAt : Math\.max\(0, Date\.now\(\) - row\.createdAt\)/,
   'mock samples store elapsed milliseconds, real server and local rows store epoch');

@@ -1,0 +1,27 @@
+name: SORIDRAW Notification 015 Auth Boundary Isolated
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/verify-notification-auth-boundary-015.mjs'
+      - '.github/workflows/verify-notification-auth-boundary-015.yml'
+permissions:
+  contents: read
+jobs:
+  isolated:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exercise dormant canonical notification routes and verified-auth adapter
+        run: |
+          set -euo pipefail
+          node --check scripts/verify-notification-auth-boundary-015.mjs
+          node scripts/verify-notification-auth-boundary-015.mjs
+      - name: Confirm no cloud writes or deployment
+        run: echo 'NOTIFICATION_015_FAKE_AUTH_SQLITE_ONLY=PASS;NO_SHARED_D1_OR_WORKER_DEPLOY'

@@ -85,7 +85,7 @@ result=await outbox.drainOwnerFollowOutbox529({enabled:true,db,deliver,now:()=>c
 assert.equal(result.delivered,1);assert.deepEqual(deliveredOrder,[17,18,18]);
 assert.equal((await outbox.drainOwnerFollowOutbox529({enabled:true,db,deliver,now:()=>clock})).selected,0);
 assert.equal(writes,3);assert.equal(reads,4);
-assert.equal(outbox.nextOwnerFollowRetryAt529(20,clock),clock+60*60_000);
+assert.equal(outbox.nextOwnerFollowRetryAt529(20,clock),clock+32*60_000);
 
 const compiled=(source,append='')=>ts.transpileModule(source+append,{
  compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},
@@ -95,14 +95,16 @@ runInNewContext(compiled(readFileSync('src/services/exploreOwnerFollowerSyncCore
  {module:gateModule,exports:gateModule.exports,Date,Number,String,Object,Array});
 const gateApi=gateModule.exports;
 const values=[],versions=[];
-const gate=gateApi.createOwnerFollowerGate529('A',(count,ver)=>values.push([count,ver]),
+const gate=gateApi.createOwnerFollowerGate529('A',(count,ver,isNew)=>values.push([count,ver,isNew]),
  ()=>clock,16,version=>versions.push(version));
 gate.receive(null);
 gate.receive({ownerUid:'A',version:17,followerCount:2,at:n,receiptId:'17'});
 gate.receive({ownerUid:'A',version:16,followerCount:100,at:n,receiptId:'16'});
 gate.receive({ownerUid:'B',version:19,followerCount:99,at:n,receiptId:'19'});
 gate.receive({ownerUid:'A',version:18,followerCount:1,at:n,receiptId:'18'});
-assert.deepEqual(values,[[2,17],[1,18]]);
+assert.deepEqual(values,[[2,17,true],[1,18,true]]);
+gate.receive({ownerUid:'A',version:18,followerCount:99,at:n,receiptId:'18'});
+assert.equal(values.length,2,'same D1 event cannot change its canonical count');
 assert.deepEqual(versions,[17,18]);
 gate.dispose();
 gate.receive({ownerUid:'A',version:19,followerCount:3,at:n,receiptId:'19'});
@@ -149,6 +151,7 @@ assert.match(bridge,/EXPLORE_OWNER_FOLLOW_REALTIME_529_ENABLED=false/);
 assert.match(page,/OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 120_000/);
 assert.doesNotMatch(page,/onOwnFollowersFocus525/);
 assert.match(page,/createOwnerFollowerGate529/);
+assert.match(page,/const changedList=isNewEvent\|\|\(!previousMarker&&profile\?\.followerCount!==count\)/);
 assert.match(sql,/enabled INTEGER NOT NULL DEFAULT 0/);
 assert.match(sql,/NEW\.follower_count IS NOT OLD\.follower_count/);
 assert.doesNotMatch(worker,/beforeOwnerFollow526|followOperationId\|\|crypto\.randomUUID/);

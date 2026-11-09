@@ -4177,12 +4177,18 @@ export default function ExplorePage() {
     if(!ownerUid||profile?.uid!==ownerUid)return;
     const gate=createOwnerFollowerGate529(
       ownerUid,
-      (count,version)=>{
+      (count,version,isNewEvent)=>{
         if(auth.currentUser?.uid!==ownerUid||
            activeProfileUidRef.current!==ownerUid)return;
+        const previousMarker=ownerFollowerConfirmed529Ref.current;
+        // Warm retained signal + already correct count = zero fresh list GET.
+        // A new event (even with equal count) can change list membership.
+        const changedList=isNewEvent||(!previousMarker&&profile?.followerCount!==count);
         ownerFollowerConfirmed529Ref.current={uid:ownerUid,count,version};
-        invalidateExploreProfileConnections377(ownerUid,'followers');
-        profileConnectionsCache376Ref.current.delete(ownerUid+':followers');
+        if(changedList){
+          invalidateExploreProfileConnections377(ownerUid,'followers');
+          profileConnectionsCache376Ref.current.delete(ownerUid+':followers');
+        }
         patchExplorePublicProfileFirstViewProfile(ownerUid,{followerCount:count});
         setProfile(prev=>prev?.uid===ownerUid&&prev.followerCount!==count
           ?{...prev,followerCount:count}:prev);

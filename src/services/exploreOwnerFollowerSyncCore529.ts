@@ -18,24 +18,30 @@ export const normalizeOwnerFollowerSignal529=(
 };
 export const createOwnerFollowerGate529=(
  ownerUid:string,
- applyCount:(count:number,version:number)=>void,
+ applyCount:(count:number,version:number,isNewEvent:boolean)=>void,
  now:()=>number=Date.now,
  knownVersion=0,
  rememberVersion:(version:number)=>void=()=>{},
 )=>{
  let latestVersion=Number.isSafeInteger(knownVersion)&&knownVersion>0?knownVersion:0;
  let disposed=false;
+ let seenCount:number|null=null;
  const receive=(raw:unknown)=>{
    if(disposed)return;
    const signal=normalizeOwnerFollowerSignal529(raw,ownerUid);
    if(!signal||signal.at>now()+60_000)return;
    if(signal.version<latestVersion)return;
-   // Replayed identical owner marker repairs a stale profile cache without
-   // requiring any D1/R2 GET. Neither NULL snapshot nor duplicate adds reads.
+   // A D1 outbox identity maps to exactly one committed count. Never repaint
+   // from a forged/malformed same-version event with a different value.
+   if(signal.version===latestVersion&&seenCount!==null&&
+      seenCount!==signal.followerCount)return;
+   // Retained identical marker may repair the current profile display, but
+   // must not invalidate the followers-list cache on every page reload.
    const increased=signal.version>latestVersion;
    latestVersion=signal.version;
+   seenCount=signal.followerCount;
    if(increased)rememberVersion(signal.version);
-   applyCount(signal.followerCount,signal.version);
+   applyCount(signal.followerCount,signal.version,increased);
  };
  return {receive,dispose:()=>{disposed=true;},version:()=>latestVersion};
 };

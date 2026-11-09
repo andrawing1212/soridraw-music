@@ -237,11 +237,11 @@ console.log('NOTIFICATION_015_ONLY_VERIFIED_UID_ACCOUNT_PREFERENCES=PASS');
 const at=Date.now()-2000;
 dbLocal.prepare('INSERT INTO soridraw_notification_inbox_001 VALUES (?,?,?,?,?,?,?,?)')
  .run('alice',Math.floor(at/7200000)*7200000,'follow','sender','alice','Sender','',at);
-const owner=await call(candidateRoute,req(inbox+'?uid=bob','alice'));
+const owner=await call(candidateRoute,req(inbox+'?uid=bob','GET','alice'));
 assert.equal(owner.status,200);
 assert.equal(owner.body.data.items.length,1);
 assert.equal(owner.body.data.items[0].category,'follow');
-const other=await call(candidateRoute,req(inbox+'?uid=alice','bob'));
+const other=await call(candidateRoute,req(inbox+'?uid=alice','GET','bob'));
 assert.equal(other.status,200);
 assert.deepEqual(other.body.data.items,[],'client query cannot switch recipient');
 assert.equal(owner.headers.get('Cache-Control'),'private, no-store');

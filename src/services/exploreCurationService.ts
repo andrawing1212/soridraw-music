@@ -219,6 +219,13 @@ export const readCachedSoridrawCuratedTracks307 = (): Array<Record<string, unkno
    items, readCuratedCache307()?.settledPublicLikes524 || {},
  );
 
+// A real settled R2 card outranks any independently cached curated/Feed row.
+export const readSoridrawCuratedPublishedLikeCount524 = (trackId: string): number | null => {
+  const id = String(trackId || '').trim();
+  const value = readCuratedCache307()?.settledPublicLikes524?.[id]?.likeCount;
+  return Number.isSafeInteger(value) && (value as number) >= 0 ? value as number : null;
+};
+
 // APP523_PUBLIC_CURATED_COUNT_PUBLISHED_ONLY
 // A curation membership revision does not change when an actual public like
 // count is published. Preserve the latest settled R2 card in the existing

@@ -141,6 +141,7 @@ import {
   getSoridrawCuratedTracks307,
   patchSoridrawCuratedPublishedLikeCount523,
   projectSoridrawCuratedPublishedLikeCounts524,
+  readSoridrawCuratedPublishedLikeCount524,
   readCachedSoridrawCuratedTracks307,
   revalidateSoridrawCuratedTracks335,
   setSoridrawCuratedTrack307,
@@ -5066,12 +5067,15 @@ export default function ExplorePage() {
       if (track?.id && Number.isSafeInteger(track.likeCount) && track.likeCount >= 0)
         onScreenCounts.set(track.id, track.likeCount);
     }
-    return curatedTracks307.map((track) => {
-      const otherCount = onScreenCounts.get(track.id);
+    const neutral = curatedTracks307.map((track) => {
+      const confirmed = readSoridrawCuratedPublishedLikeCount524(track.id);
+      const otherCount = confirmed ?? onScreenCounts.get(track.id);
       return otherCount === undefined || otherCount === track.likeCount
         ? track : { ...track, likeCount: otherCount };
     });
-  }, [curatedTracks307, tracks, popularTracks]);
+    const viewerUid = auth.currentUser?.uid || user?.uid || '';
+    return viewerUid ? overlayExploreLikeDisplayCounts(viewerUid, neutral) : neutral;
+  }, [curatedTracks307, tracks, popularTracks, user?.uid]);
 
   const recommendationModel221 = sort === 'recommended' && !submittedQuery
     ? { ...buildExploreRecommendationModel221(visibleFeedTracks, user?.uid || ''), creators: recommendedCreators345 }

@@ -58,12 +58,15 @@ assert.equal(network,0,'NO_NEW_SERVER_GET_FOR_CURATED_PUBLIC_LIKE');
 const vStart='  const visibleCuratedTracks524 = useMemo(() => {';
 const vEnd='  const recommendationModel221 =';
 const vSrc=part(page,vStart,vEnd);
-const compile=rows=>runInNewContext(ts.transpileModule(
+const compile=(rows,confirmed=null)=>runInNewContext(ts.transpileModule(
  vSrc+'\nvisibleCuratedTracks524;', {compilerOptions:{
  target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None,
  }}).outputText,{
  useMemo:fn=>fn(),curatedTracks307:[{id:'song-A',likeCount:1,title:'A',liked:false}],
  tracks:[],popularTracks:rows,
+ readSoridrawCuratedPublishedLikeCount524:()=>confirmed,
+ auth:{currentUser:null},user:null,
+ overlayExploreLikeDisplayCounts:(_uid,rows)=>rows,
 });
 const painted=compile([{id:'song-A',likeCount:2,title:'A',liked:false}]);
 assert.equal(painted[0].likeCount,2,'POPULAR_2_MUST_REPAINT_CURATED_1');
@@ -71,6 +74,12 @@ assert.equal(painted[0].liked,false,'PERSONAL_HEART_IS_UNCHANGED');
 assert.equal(compile([{id:'song-A',likeCount:0}])[0].likeCount,0,
  'TRUE_UNLIKE_CAN_DECREASE_TO_ZERO');
 assert.equal(compile([])[0].likeCount,1,'NO_OTHER_FEED_FALLBACK_TO_CURATED');
+assert.equal(compile([{id:'song-A',likeCount:1}],2)[0].likeCount,2,
+ 'R2_CONFIRMED_2_OUTRANKS_OLDER_POPULAR_1');
+assert.equal(compile([{id:'song-A',likeCount:2}],0)[0].likeCount,0,
+ 'R2_CONFIRMED_UNLIKE_0_OUTRANKS_OLDER_POPULAR_2');
+assert.match(page,/readSoridrawCuratedPublishedLikeCount524\(track\.id\)/);
+assert.match(page,/confirmed \?\? onScreenCounts\.get\(track\.id\)/);
 assert.match(page,/visibleCuratedTracks524\.slice\(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304\)/);
 assert.match(page,/patchSoridrawCuratedPublishedLikeCount523\(row\.trackId, card\.likeCount, card\.updatedAt\)/);
 assert.match(page,/projectSoridrawCuratedPublishedLikeCounts524\(rows\)/);

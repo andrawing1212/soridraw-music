@@ -7,6 +7,7 @@ on:
       - '.github/workflows/verify-notification-integrated-014.yml'
       - 'scripts/verify-notification-panel-ui.mjs'
       - 'scripts/verify-notification-unified-inbox-004.mjs'
+      - 'scripts/verify-notification-preview-connect-022.mjs'
       - 'scripts/verify-notification-pink-dots-017.mjs'
       - 'src/services/notifications/**'
       - 'src/components/studio/NotificationPanel.tsx'
@@ -35,5 +36,6 @@ jobs:
           node scripts/verify-notification-pink-dots-017.mjs
           node scripts/verify-notification-panel-ui.mjs
           node scripts/verify-notification-unified-inbox-004.mjs
+          node scripts/verify-notification-preview-connect-022.mjs
       - name: Explicitly no cloud resources or deploy
         run: echo 'NOTIFICATION_014_IN_MEMORY_ONLY=PASS;NO_SHARED_D1;NO_R2;NO_WORKER_DEPLOY'

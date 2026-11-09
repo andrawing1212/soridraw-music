@@ -1,13 +1,17 @@
 import type {User} from 'firebase/auth';
 import {getFirebaseAppCheckToken} from '../../firebase';
 import {EXPLORE_API_BASE} from '../../config/exploreEnvironment';
+import {canUsePreviewInbox022} from './notificationPreviewHost022';
 import type {InboxNotification} from './notificationModel';
 import {parseNotificationAccountSettings003,
   type NotificationAccountSettings003} from './notificationAccountSyncCore003';
 
-// Global release hold: PREVIEW app remains exactly as before until a
-// reviewed shared backend exists. No app-entry GET, timer or subscription.
-export const NOTIFICATION_INBOX_ENABLED_004=false;
+// Stage022: the already deployed PREVIEW Worker permits authenticated inbox
+// GET only. TEST/PRODUCTION and an overridden API base remain OFF.
+// This constant never triggers a request until the notification panel opens.
+export const NOTIFICATION_INBOX_ENABLED_004=
+  typeof window!=='undefined' &&
+  canUsePreviewInbox022(window.location.hostname,EXPLORE_API_BASE);
 const LIMIT_004=30;
 const limitText=(value:unknown,max:number)=>
   typeof value==='string'?value.trim().slice(0,max):'';
@@ -59,7 +63,7 @@ export function projectCompletedExistingGenerations004(
 }
 
 /** One authenticated GET on explicit inbox open; no polling/tab-reads. */
-export async function loadOwnNotifications004(user:User):
+export async function loadOwnNotifications004(user:User,signal?:AbortSignal):
   Promise<{items:InboxNotification[];preferences:NotificationAccountSettings003}>{
   if(!NOTIFICATION_INBOX_ENABLED_004)
     throw Error('NOTIFICATION_INBOX_NOT_ACTIVATED');
@@ -68,7 +72,7 @@ export async function loadOwnNotifications004(user:User):
   ]);
   if(!jwt||!appCheck)throw Error('NOTIFICATION_INBOX_AUTH_UNAVAILABLE');
   const response=await fetch(EXPLORE_API_BASE+'/v1/me/notifications/inbox',{
-    method:'GET',cache:'no-store',
+    method:'GET',cache:'no-store',signal,
     headers:{Authorization:'Bearer '+jwt,'X-Firebase-AppCheck':appCheck,
       'Accept':'application/json'}
   });

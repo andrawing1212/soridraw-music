@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHmac, webcrypto } from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {runInNewContext} from 'node:vm';
@@ -74,6 +75,7 @@ assert.match(relay,/receipt\.materializedProfileReady !== true/);
 assert.match(relay,/receipt\.changed !== true/);
 assert.match(worker,/owner-follower-relay-526/);
 assert.match(worker,/OWNER_FOLLOW_RELAY_526_ENABLED && isOwnerFollow526/);
+assert.match(worker,/ownerFollowRequest526=beforeOwnerFollow526 \? request\.clone\(\)/);
 assert.match(worker,/confirmed526!==beforeOwnerFollow526.wasFollowing/);
 assert.match(worker,/materialized526===count526/);
 assert.ok(worker.indexOf('let response = await baseWorker.fetch(request, env, ctx);') <
@@ -91,3 +93,26 @@ assert.match(readFileSync('functions/src/index.ts','utf8'),/publishExploreOwnerF
 console.log('APP526_OWNER_LIVE_SIGNAL_DUPLICATE_RACE_UNMOUNT=PASS');
 console.log('APP526_NO_IDLE_READ_NO_PRECOMMIT_SHARED_WRITE=PASS');
 console.log('APP526_CLIENT_SERVER_ACTIVATION_OFF=PASS');
+
+const oldCrypto=globalThis.crypto;
+if(!oldCrypto)globalThis.crypto=webcrypto;
+const server=await import('../cloudflare/explore-worker/runtime/owner-follower-relay-526.mjs');
+const operation={actorUid:'B',targetUid:'A',operationId:'realCanonicalOperation_526',
+  following:false,canonicalFollowerCount:1,changed:true,
+  canonicalCommitted:true,materializedProfileReady:true};
+assert.equal(server.prepareOwnerFollowRelay526({...operation,changed:false}),null);
+assert.equal(server.prepareOwnerFollowRelay526({...operation,canonicalCommitted:false}),null);
+assert.equal(server.prepareOwnerFollowRelay526({...operation,materializedProfileReady:false}),null);
+assert.equal(server.prepareOwnerFollowRelay526({...operation,actorUid:'../bad'}),null);
+const payload=await server.buildOwnerFollowEnvelope526(operation,1800000000000);
+assert.equal(payload?.ownerUid,'A');
+assert.match(payload.receiptId,/^[0-9a-f]{64}$/);
+const body526=JSON.stringify(payload);
+const secret526='unit-test-32-byte-shared-secret-NEVER-DEPLOY';
+const signature526=await server.signOwnerFollowEnvelope526(body526,secret526,payload.at);
+assert.equal(signature526,createHmac('sha256',secret526)
+  .update(String(payload.at)+'.'+body526).digest('hex'));
+assert.notEqual(signature526,createHmac('sha256',secret526)
+  .update(String(payload.at)+'.'+body526.replace('"following":false','"following":true')).digest('hex'));
+assert.equal((await server.invokeOwnerFollowRelay526(operation,{secret:secret526,endpoint:'https://invalid.test'})).skipped,true);
+console.log('APP526_SIGNED_SERVER_RELAY_HMAC_TAMPER_AND_PRECOMMIT_GATES=PASS');

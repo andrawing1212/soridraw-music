@@ -1,0 +1,54 @@
+name: SORIDRAW 532 Owned Auth Incarnation D1 Cost
+# Temporary authorized one-PR, owned synthetic D1. No service deployment.
+on:
+  pull_request:
+    branches: [preview]
+    types: [synchronize,opened,reopened]
+    paths:
+      - 'scripts/measure-532-isolated-auth-generation-d1.mjs'
+      - '.github/workflows/measure-532-owned-auth-epoch-d1.yml'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-532-owned-one-time-d1
+  cancel-in-progress: false
+jobs:
+  offline:
+    if: github.event.pull_request.number == 914 && github.event.pull_request.head.repo.full_name == 'andrawing1212/soridraw-music' && github.event.pull_request.head.ref == 'candidate/app526-owner-follower-live-signal'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test Auth incarnation, D1 SQL, fail closed, and signing
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/runtime/owner-follow-auth-epoch-532.mjs
+          node --check scripts/measure-532-isolated-auth-generation-d1.mjs
+          node scripts/measure-532-isolated-auth-generation-d1.mjs --self-test
+  physical:
+    if: github.event.pull_request.number == 914 && github.event.pull_request.head.repo.full_name == 'andrawing1212/soridraw-music' && github.event.pull_request.head.ref == 'candidate/app526-owner-follower-live-signal'
+    needs: offline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Isolated physical D1 W2 and no-retained-UID proof
+        run: node scripts/measure-532-isolated-auth-generation-d1.mjs
+      - name: Always cleanup ONLY run-created D1
+        if: always()
+        run: node scripts/measure-532-isolated-auth-generation-d1.mjs cleanup
+      - name: Show no shared operations
+        run: echo '532_OWNED_D1_ONLY;NO_SHARED_D1;NO_WORKER_FUNCTIONS_RULES_HOSTING;GATES_OFF'

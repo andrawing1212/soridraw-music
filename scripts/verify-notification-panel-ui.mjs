@@ -148,6 +148,23 @@ assert.match(app, /setIsMobileNotificationOpen\(false\); \}, \[location.pathname
 console.log('NOTIFICATION_MOBILE_PROFILE_MENU_BELL_AND_SHARED_PANEL=PASS');
 console.log('NOTIFICATION_MOBILE_OPEN_CLOSE_HAS_NO_NEW_BACKEND_IO=PASS');
 
+assert.match(panel,/visualExample && uid && auth\.currentUser\?\.uid === uid/);
+assert.match(panel,/projectCompletedExistingGenerations004\(recentHistory\)/);
+assert.match(panel,/row\.category !== 'complete' \|\| localCompletions\.length === 0/,
+  'real PREVIEW generation rows replace sample creation notices only');
+assert.match(panel,/isPreviewSample\(row\) \? row\.createdAt : Math\.max\(0, Date\.now\(\) - row\.createdAt\)/,
+  'mock samples store elapsed milliseconds, real server and local rows store epoch');
+assert.match(panel,/disabled=\{\(visualExample && isPreviewSample\(row\)\) \|\| !hasPlayableSong\(row\)\}/,
+  'only fake samples or rows without a valid playback target are disabled');
+assert.match(panel,/sampleHeader = visualExample &&/,
+  'genuine completion notice must not be globally marked as a demo');
+assert.match(panel,/localCompletions\.length === 0/,
+  'retain existing creation demo only when no genuine completion exists');
+assert.match(panel,/activeSection === 'activity' \|\| localCompletions\.length === 0/);
+assert.doesNotMatch(panel,/setInterval\(|onSnapshot\(|getDocs\(|getDoc\(/);
+console.log('NOTIFICATION_PREVIEW_GENUINE_CREATION_HISTORY_NO_EXTRA_SERVER_IO=PASS');
+
+
 const panelCss = file('src/components/studio/notificationPanel.css');
 assert.match(panel,/window\.addEventListener\('resize', onClose\)/,
   'browser viewport resize should close panel, not keep a stale anchor');
@@ -173,7 +190,7 @@ assert.match(panelCss,/\.soridraw-notification-end-icon\[data-type="message"\],[
 assert.match(panel,/<span className="soridraw-notification-end-icon" data-type=\{row.category\}/);
 assert.doesNotMatch(panelCss,/#b089ef|#ee7da2|#ad90dc|#77b4ee|#FFB400/,
   'unrequested colorful notification accents must remain removed');
-assert.match(panel,/visualExample && !settingsOpen && <span className="soridraw-notification-preview-tag">예시<\/span>/,
+assert.match(panel,/sampleHeader && !settingsOpen && <span className="soridraw-notification-preview-tag">예시<\/span>/,
   'preview samples must still be distinguishable from actual user notifications');
 // Only social notifications show the actor name. System/admin items show their content alone.
 assert.match(panel, /\) : row\.text\}/,
@@ -189,7 +206,7 @@ assert.match(panel,/aria-label=\{row.actorName \+ ' 공개 프로필 열기'\}/)
 assert.match(panel,/onClick=\{\(\) => openProfile\(row\)\}/);
 assert.match(panel,/closeAndNavigate\('\/explore\?profile=' \+ encodeURIComponent\(actorUid\)\)/,
   'use the same UID-based public profile route as Explore');
-assert.match(panel,/if \(visualExample\) \{\s*setNotice\('예시 사용자에게 연결된 실제 공개 프로필은 없습니다\.'\);\s*return;/,
+assert.match(panel,/if \(visualExample && isPreviewSample\(row\)\) \{\s*setNotice\('예시 사용자에게 연결된 실제 공개 프로필은 없습니다\.'\);\s*return;/,
   'fake sample actors must never navigate to an invented profile');
 assert.match(panelCss,/\.soridraw-notification-actor-link\{[\s\S]*?color:#fff/);
 assert.doesNotMatch(panelCss,/\.soridraw-notification-actor-link\{[^}]*#ffbb22/,

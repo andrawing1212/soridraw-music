@@ -59,6 +59,13 @@ function NotificationSwitch({ checked, onChange, label, disabled = false }: {
     </span>
   );
 }
+const isPreviewSample = (row: InboxNotification): boolean => row.id.startsWith('example-');
+const displayElapsedMs = (row: InboxNotification): number =>
+  isPreviewSample(row) ? row.createdAt : Math.max(0, Date.now() - row.createdAt);
+const hasPlayableSong = (row: InboxNotification): boolean =>
+  Boolean(row.song && (/^https:\/\//i.test(row.song.audioUrl || '') ||
+    validInternalSharePath(row.song.sharePath)));
+
 const timeLabel = (millisecondsAgo: number): string => {
   if (millisecondsAgo < 60 * 60 * 1000) return '방금 전';
   const hours = Math.floor(millisecondsAgo / (60 * 60 * 1000));
@@ -226,6 +233,15 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   // the UI release. A verified recipient-scoped backend inbox is a separate
   // activation gate. PREVIEW examples are explicitly labelled as examples.
   const visualExample = isNotificationVisualPreview() && !NOTIFICATION_INBOX_ENABLED_004;
+  // PREVIEW-only genuine creation history: derived from the already-loaded
+  // account's Recent Studio snapshot, never from an extra remote query.
+  // Shared social/administrator notification delivery remains disabled.
+  const localCompletions = useMemo(() => (
+    visualExample && uid && auth.currentUser?.uid === uid
+      ? projectCompletedExistingGenerations004(recentHistory) : []
+  ), [visualExample, uid, recentHistory]);
+  const sampleHeader = visualExample &&
+    (activeSection === 'activity' || localCompletions.length === 0);
   // The already-authenticated inbox read includes canonical account preferences
   // at no additional D1 query. Never hide its valid rows behind a stale local
   // setting from a different device. Confirmed changes win by revision.
@@ -238,11 +254,15 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   const rows = useMemo(() => (NOTIFICATION_INBOX_ENABLED_004
     ? (effectivePreferences ? [...(remoteInbox.uid === uid ? remoteInbox.items : []),
       ...projectCompletedExistingGenerations004(recentHistory)] : [])
-    : (visualExample ? NOTIFICATION_EXAMPLE_ROWS : []))
+    : (visualExample ? [
+      ...NOTIFICATION_EXAMPLE_ROWS.filter(row =>
+        row.category !== 'complete' || localCompletions.length === 0),
+      ...localCompletions,
+    ] : []))
     .filter((row) => (effectivePreferences?.master ?? masterEnabled) &&
       (effectivePreferences?.[row.category] ?? prefs[row.category]) &&
       notificationSectionFor(row.category) === activeSection),
-    [visualExample, remoteInbox, uid, recentHistory, prefs, masterEnabled,
+    [visualExample, localCompletions, remoteInbox, uid, recentHistory, prefs, masterEnabled,
       activeSection, effectivePreferences]);
 
   const accountSyncLocked = NOTIFICATION_ACCOUNT_SYNC_ENABLED_003 &&
@@ -307,7 +327,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   const openProfile = (row: InboxNotification) => {
     // PREVIEW examples are not real people. Never invent a UID or redirect
     // to a different user's profile to simulate a notification.
-    if (visualExample) {
+    if (visualExample && isPreviewSample(row)) {
       setNotice('예시 사용자에게 연결된 실제 공개 프로필은 없습니다.');
       return;
     }
@@ -315,7 +335,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
     if (actorUid) closeAndNavigate('/explore?profile=' + encodeURIComponent(actorUid));
   };
   const follow = async (row: InboxNotification) => {
-    if (visualExample || !row.actorUid || !auth.currentUser ||
+    if ((visualExample && isPreviewSample(row)) || !row.actorUid || !auth.currentUser ||
         row.actorUid === auth.currentUser.uid || followBusy) return;
     setFollowBusy(row.actorUid);
     setNotice('');
@@ -327,7 +347,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
     } finally { setFollowBusy(null); }
   };
   const playSong = (row: InboxNotification) => {
-    if (visualExample || !row.song) return;
+    if ((visualExample && isPreviewSample(row)) || !row.song) return;
     const audioUrl = String(row.song.audioUrl || '').trim();
     if (/^https:\/\//i.test(audioUrl)) {
       playTrack({ id: row.song.id, url: audioUrl, audioUrl, title: row.song.title,
@@ -349,7 +369,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
         <div className="soridraw-notification-heading">
           <Bell size={20} aria-hidden="true" />
           <strong>{settingsOpen ? '알림 설정' : '알림'}</strong>
-          {visualExample && !settingsOpen && <span className="soridraw-notification-preview-tag">예시</span>}
+          {sampleHeader && !settingsOpen && <span className="soridraw-notification-preview-tag">예시</span>}
         </div>
         <div className="soridraw-notification-header-actions">
           {settingsOpen ? (
@@ -427,7 +447,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
               ) : (
                 <button className="soridraw-notification-avatar" type="button"
                   aria-label={row.actorName + ' 프로필'} onClick={() => openProfile(row)}
-                  disabled={visualExample || !row.actorUid}>
+                  disabled={(visualExample && isPreviewSample(row)) || !row.actorUid}>
                   {row.actorAvatarUrl ? <img src={row.actorAvatarUrl} alt="" referrerPolicy="no-referrer" /> :
                     <span>{row.actorName.slice(0, 1)}</span>}
                 </button>
@@ -437,7 +457,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
                   {row.category === 'like' || row.category === 'follow' ? (
                     <>
                       <button type="button" className="soridraw-notification-actor-link"
-                        disabled={!visualExample && !row.actorUid}
+                        disabled={!(visualExample && isPreviewSample(row)) && !row.actorUid}
                         aria-label={row.actorName + ' 공개 프로필 열기'}
                         onClick={() => openProfile(row)}>
                         {row.actorName}
@@ -447,7 +467,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
                   ) : row.text}
                 </span>
                 {row.song && <small className="soridraw-notification-song-title">{row.song.title}</small>}
-                <small>{timeLabel(row.createdAt)}</small>
+                <small>{timeLabel(displayElapsedMs(row))}</small>
               </div>
               {row.category === 'announcement' || row.category === 'message' ? (
                 <button type="button" className="soridraw-notification-detail-open"
@@ -457,13 +477,13 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
                 </button>
               ) : row.category === 'follow' ? (
                 <button type="button" className="soridraw-notification-follow"
-                  disabled={visualExample || !row.actorUid || followed[row.actorUid] || followBusy === row.actorUid}
+                  disabled={(visualExample && isPreviewSample(row)) || !row.actorUid || followed[row.actorUid] || followBusy === row.actorUid}
                   onClick={() => void follow(row)}>
                   {row.actorUid && followed[row.actorUid] ? '팔로잉' : '팔로우'}
                 </button>
               ) : row.song ? (
                 <button type="button" className="soridraw-notification-cover" onClick={() => playSong(row)}
-                  disabled={visualExample} aria-label={row.song.title + ' 재생'}>
+                  disabled={(visualExample && isPreviewSample(row)) || !hasPlayableSong(row)} aria-label={row.song.title + ' 재생'}>
                   {row.song.coverUrl ? <img src={row.song.coverUrl} alt="" referrerPolicy="no-referrer" /> :
                     <Music2 size={22} aria-hidden="true" />}
                   <span className="soridraw-notification-play">▶</span>
@@ -494,7 +514,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
             <span className="soridraw-notification-detail-type" data-type={selectedMessage.category}>
               {iconFor(selectedMessage.category)}
               {selectedMessage.category === 'announcement' ? '공지사항' : '개인 메시지'}
-              {visualExample && <small className="soridraw-notification-preview-tag">예시</small>}
+              {visualExample && isPreviewSample(selectedMessage) && <small className="soridraw-notification-preview-tag">예시</small>}
             </span>
             <button type="button" ref={detailCloseRef} className="soridraw-notification-detail-close"
               aria-label="메시지 닫기" onClick={() => setSelectedMessage(null)}>

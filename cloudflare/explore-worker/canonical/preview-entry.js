@@ -3339,6 +3339,39 @@ export default {
 
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // Stage019: PREVIEW-only authenticated inbox GET candidate. Explicit
+    // runtime opt-in is absent from Wrangler; source alone does not activate.
+    // No settings PUT, admin POST, announcement publish, or retention scheduler.
+    const NOTIFICATION_PREVIEW_INBOX_019_COMPILED_OPEN = true;
+    if (NOTIFICATION_PREVIEW_INBOX_019_COMPILED_OPEN &&
+        env?.SORIDRAW_ENVIRONMENT === 'preview' &&
+        env?.SORIDRAW_NOTIFICATION_INBOX_READ_ONLY_019 === '1' &&
+        url.pathname === '/v1/me/notifications/inbox') {
+      const origin = request.headers.get('Origin') || '';
+      const cors = curationCors307(request);
+      // PREVIEW origins only. Other allowed production/test origins must not
+      // become an alternative route to the shared recipient database.
+      if (origin !== 'https://preview.soridraw.com' &&
+          origin !== 'https://soridraw-preview.web.app' &&
+          origin !== 'https://soridraw-preview.firebaseapp.com')
+        return new Response(JSON.stringify({ok:false,error:{code:'ORIGIN_FORBIDDEN'}}),{
+          status:403,headers:{...cors,'Cache-Control':'private, no-store',
+            'Content-Type':'application/json; charset=utf-8'}});
+      if (request.method !== 'GET' && request.method !== 'OPTIONS')
+        return new Response(JSON.stringify({ok:false,error:{code:'METHOD_NOT_ALLOWED'}}),{
+          status:405,headers:{...cors,'Cache-Control':'private, no-store',
+            'Content-Type':'application/json; charset=utf-8'}});
+      if (request.method === 'OPTIONS')
+        return handleUnifiedNotificationsApi004({request,enabled:true,cors});
+      // Keep the existing Firebase JWT + AppCheck /auth-test verifier.
+      // The verified UID is the ONLY recipient; query-string UID is ignored.
+      const actor = await validateExploreAuth307(request,env,ctx);
+      if (!actor.ok) return actor.response;
+      return handleUnifiedNotificationsApi004({
+        request,db:env?.DB,cache:env?.PROFILE_MEDIA,enabled:true,cors,
+        verifyUid:async()=>actor.uid,verifyAdmin:async()=>false,
+      });
+    }
     // Notification preferences remain strictly OFF until shared D1 schema,
     // three-environment auth compatibility and release approval are proven.
     // A deployment env variable alone cannot activate this route.

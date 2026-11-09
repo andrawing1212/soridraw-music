@@ -116,3 +116,34 @@ assert.notEqual(signature526,createHmac('sha256',secret526)
   .update(String(payload.at)+'.'+body526.replace('"following":false','"following":true')).digest('hex'));
 assert.equal((await server.invokeOwnerFollowRelay526(operation,{secret:secret526,endpoint:'https://invalid.test'})).skipped,true);
 console.log('APP526_SIGNED_SERVER_RELAY_HMAC_TAMPER_AND_PRECOMMIT_GATES=PASS');
+
+// Execute the actual Firebase webhook's pure validation/signature logic,
+// not merely a source regex. No Firebase request, token or real database.
+const securitySource=webhook.slice(
+  webhook.indexOf('const UID_526 ='),
+  webhook.indexOf('export const publishExploreOwnerFollower526 ='),
+);
+const compiledSecurity=ts.transpileModule(
+  securitySource+'\nmodule.exports.parseReceipt526 = parseReceipt526;',
+  {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}},
+).outputText;
+const functionModule={exports:{}};
+runInNewContext(compiledSecurity,{
+  module:functionModule,exports:functionModule.exports,
+  Buffer,Number,String,JSON,Object,Math,createHmac,
+  timingSafeEqual:(await import('node:crypto')).timingSafeEqual,
+});
+const verify526=functionModule.exports.verifyOwnerFollowSignature526;
+const parse526=functionModule.exports.parseReceipt526;
+const raw526=Buffer.from(body526);
+assert.equal(parse526(raw526)?.ownerUid,'A');
+assert.equal(verify526(secret526,String(payload.at),raw526,signature526,payload.at),true);
+assert.equal(verify526(secret526,String(payload.at),raw526,signature526,payload.at+60_001),false);
+assert.equal(verify526(secret526,String(payload.at),raw526,'0'.repeat(64),payload.at),false);
+assert.equal(verify526(secret526,String(payload.at),
+  Buffer.from(body526.replace('"following":false','"following":true')),
+  signature526,payload.at),false);
+assert.equal(parse526(Buffer.from(JSON.stringify({...payload, unexpected:'x'}))),null);
+assert.equal(parse526(Buffer.from(JSON.stringify({...payload,actorUid:'../forged'}))),null);
+assert.equal(parse526(Buffer.from(JSON.stringify({...payload,canonicalFollowerCount:-1}))),null);
+console.log('APP526_FIREBASE_WEBHOOK_SIGNING_SECURITY_EXECUTABLE=PASS');

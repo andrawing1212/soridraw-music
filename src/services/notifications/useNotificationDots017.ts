@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useState} from 'react';
 import type {InboxNotification,NotificationPreferences,NotificationSection} from './notificationModel';
-import {readNotificationMasterEnabled,readNotificationPreferences} from './notificationModel';
+import {isNotificationVisualPreview,readNotificationMasterEnabled,readNotificationPreferences} from './notificationModel';
 import {projectCompletedExistingGenerations004} from './notificationInbox004';
 import {mergeCompletedGenerationNotices016,readCompletedGenerationLog016,
  notificationRecentLogKey016} from './notificationRecentLog016';
@@ -31,9 +31,9 @@ export function useNotificationDots017(uid:string,recentHistory:readonly unknown
  },[uid]);
  const rows=useMemo(()=>uid?[
   ...remoteItems,
-  ...mergeCompletedGenerationNotices016(
+  ...(isNotificationVisualPreview()?mergeCompletedGenerationNotices016(
    projectCompletedExistingGenerations004(recentHistory),
-   readCompletedGenerationLog016(uid)),
+   readCompletedGenerationLog016(uid)):[]),
  ]:[],[uid,remoteItems,recentHistory,version]);
  const preferences=useMemo(()=>{
   if(remoteSettings)return remoteSettings;

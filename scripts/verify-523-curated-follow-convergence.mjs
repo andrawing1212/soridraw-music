@@ -62,11 +62,17 @@ assert.equal(calls,1,'repeat uses newly persisted list, not a server loop');
 assert.match(page,/direction === 'followers' && targetUid === user\?\.uid/);
 assert.match(page,/OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 15_000/);
 assert.match(page,/getExploreProfileConnections\(targetUid, direction, null, refreshOwn523\)/);
-// app525: keep app523 on-demand popup refresh, plus owner header focus
-// reconciliation when the modal is closed. No idle cross-user polling.
-assert.match(page,/if\(profileConnectionsOpen376==='followers'\)/);
-assert.match(page,/void openProfileConnections376\('followers'\)/);
-assert.match(page,/window\.addEventListener\('focus',onOwnFollowersFocus525\)/);
-assert.match(page,/document\.addEventListener\('visibilitychange',onOwnFollowersFocus525\)/);
+// app527: app525's 15-second focus/visibility list fetch was measured as
+// repeated D1 reads even when there was no actual follow mutation.
+// Preserve the verified explicit popup refresh path; no idle/focus fetch.
+assert.match(page,/APP527: A's profile must not spend D1\/R2 on window focus/);
+assert.doesNotMatch(page,/onOwnFollowersFocus525/);
+assert.doesNotMatch(page,/getExploreProfileConnections\(ownerUid,'followers',null,true\)/);
+const explicitBegin=page.indexOf("  const openProfileConnections376 = async ");
+const explicitEnd=page.indexOf('  // APP527:',explicitBegin);
+const explicit=page.slice(explicitBegin,explicitEnd);
+assert.ok(explicitBegin>0 && explicitEnd>explicitBegin);
+assert.match(explicit,/const refreshOwn523 = ownFollowers523 &&/);
+assert.match(explicit,/getExploreProfileConnections\(targetUid, direction, null, refreshOwn523\)/);
 console.log('APP523_CROSS_ACCOUNT_UNFOLLOW_OWNER_EXPLICIT_LIST_REFRESH=PASS');
 console.log('APP523_NO_IDLE_POLL_OR_SHARED_RESOURCE_CHANGE=PASS');

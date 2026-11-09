@@ -92,3 +92,42 @@ An isolated administrator must first read only `owner_uid,revision,attempts,dead
 4. APP529, APP530 and APP531 remain **Draft / OFF / no live changes**. All temporary Cloudflare D1 resources were deleted. This one-time credentialed D1 measurement workflow was removed after PASS; the non-deploy test script and results remain in PR #914 for reproducibility without automatic D1 creation.
 
 **Decision:** a low-cost **source candidate** now handles deletion/recreation ordering while preserving isolated normal W2. **Full account-erasure safety and release readiness are not established**; do not merge, activate, or deploy from this proof.
+
+## 2026-11-09 — APP532 Auth-incarnation alternative (NO deleted UID tombstone; source-only)
+
+**Scope of approved work:** evaluate the APP531 unbounded retired-UID journal and actual Firebase Auth deletion/recreation contract, preserve isolated D1 normal changed-follow W2 and ordered delivery, build/test a bounded alternative. This section is a **candidate comparison**, not a service rollout or claim of full erasure.
+
+### Actual Firebase deletion contract (confirmed in `functions/src/index.ts` on `preview`)
+The existing `adminDeleteUserAccount` callable checks an admin caller and target, marks Firestore account status banned, revokes tokens and deletes the Firebase **Auth** user, deletes personal API key and request-guard docs, then marks the Firestore user `authDeleted` with `adminDeletionContentPolicy: 'retain-user-content'`. Its UI explicitly says generated songs, Music Note and playlists survive. It **does not DELETE `profile_stats` in D1 or remove all historical user data**. Therefore this existing action is **Auth-only forced removal**, not a right-to-erasure workflow. Do not silently transform it into one, nor assume old D1 rows disappear. It is not yet wired to APP532.
+
+### Safer non-retention candidate
+1. New `cloudflare/explore-worker/candidates/532-owner-auth-epoch-no-tombstone.sql` is an **alternative** built from APP530 shared base *before* APP531 retirement-table DDL, plus exactly one `profile_stats.owner_follow_auth_epoch_532` text column. It uses the existing APP530 due-index. **Do not install this on a shared database or run it on top of APP531.** No per-deleted-UID table exists in this candidate.
+2. A trusted, server-controlled Auth incarnation epoch is a fresh cryptographically random 128-bit ID, issued **once per Auth account incarnation** and stored in its protected Firebase Auth custom claim `soridrawFollowEpoch532` plus D1 canonical owner row. D1 Writer source must require that same epoch on each count change. Missing/mismatched epochs **fail closed**, without any new D1 work on idle/view. The generation-enrollment/admin custom-claim provisioning is **not implemented or authorized**.
+3. `cloudflare/explore-worker/runtime/owner-follow-auth-epoch-532.mjs` is a **compiler OFF** source module. The new atomic Writer remains R1/W2 on the synthetic D1; a changed-only operation includes `WHERE ... AND owner_follow_auth_epoch_532=?`. Indexed batch draining, all ACK CAS and failed-delivery CAS include **UID + Auth epoch + revision**. This addresses a deletion/recreation race where a stale ACK and a new user otherwise both have revision 1.
+4. The future Functions recipient would require the existing signed/HMAC payload check **and** a trusted Firebase Admin `getUser(uid)` on each delivered event to compare the protected custom claim to the signed `authEpoch` value; deleted Auth users and old generations must cause **no RTDB write**. A valid *new* incarnation may start its marker at revision 1 regardless of an earlier incarnation's retained marker, but it may do so **only after Auth verification**. No live Function or RTDB listener has been modified to do this. A Firebase Auth read per received event introduces new unmeasured network/latency/cost.
+5. Full D1 row deletion is a **separate future data-erasure workflow**: it must cancel outstanding writers, remove RTDB and other personally identifying state and coordinate the active Auth identity. With an Auth generation gate, no indefinitely retained D1 UID tombstone is necessary for stale-event rejection, but D1 row deletion **alone is not a full privacy erase** (SQLite backups, Auth logs, Firestore/R2 and cached data are not covered by this test). Do not add TTL to APP531 or enable both candidates.
+
+### Isolated actual Cloudflare D1 evidence
+[Run #42632621412](https://github.com/andrawing1212/soridraw-music/actions/runs/42632621412) tested the APP532 candidate in **one run-owned synthetic D1**, with synthetic Auth records (no actual Firebase Admin / RTDB access). Temporary D1 deleted and cleanup rechecked **PASS**.
+
+| Test operation | Real `query.meta.rows_read` | Real `query.meta.rows_written` |
+| --- | ---: | ---: |
+| Changed follower count with matching Auth epoch | 1 | **2** |
+| Canonical no-op | 1 | **0** |
+| Old/mismatched epoch count update | 1 | **0** |
+| D1 physical owner row DELETE (no tombstone) | 1 | **1** |
+| Same-UID new Auth incarnation INSERT | 0 | **2** |
+| Recreated owner's first follow | 1 | **2** |
+| Old in-flight ACK against same UID/revision but old Auth epoch | 1 | **0** |
+| Retry failure update | 1 | **2** |
+| Successful delivery ACK | 1 | **1** |
+
+Fake Auth-not-found rejects delivery, mismatched Auth claim rejects it, Auth API outage propagates as a retryable error rather than accidental ACK, a valid different generation can reset RTDB marker version in the **pure test helper**, and the old writer cannot change a recreated row with new epoch. Only synthetic HMAC round-trip was tested. New source code has **no active integration** with Firebase Custom Claims, the Worker dispatch or the HTTP receiver.
+
+### Release blockers and honest conclusion
+- **No Auth-enrollment implementation:** A real trusted custom-claim `soridrawFollowEpoch532` must be issued exactly once per incarnation, never overwritten by other auth-claim updates, and bound to canonical D1 without a partial-commit window. Legacy accounts need safe migration; old/new Workers share D1 across PREVIEW/TEST/PRODUCTION. Current old writers could bypass the epoch-aware WHERE clause. **Fail closed, do not activate**.
+- **Auth/RTDB race:** Firebase Auth `getUser` and RTDB transaction are separate resources, not one atomic transaction. A user could be deleted/recreated between the verification and RTDB write. The source-only helper does **not** prove that cross-service race safe. A deletion fence/approved lifecycle and actual A/B tests are needed.
+- **Privacy scope:** Admin Auth-only forced deletion intentionally retains Firestore user content. This test verifies **no APP531 indefinite D1 UID journal** in the new synthetic candidate, not that all personal information has been erased from Firebase, backups, R2, or every log. The legal retention/erasure policy still requires design and approval.
+- **Cross-environment and physical device checks:** Actual Firebase Auth custom-claim enrollment, authenticated Functions, RTDB Rules, R2 lag, active deployed Worker hashes, older clients, PC/mobile convergence and total 100k-user costs are untested. APP527/528 120s cached follower behavior and 30s local batch remain protected because nothing was merged or deployed.
+
+**Decision:** Prefer APP532 as the next source-only design direction for no-deleted-UID retention and unchanged normal W2. APP531 is kept *only as historical source comparison*, not as an acceptable full-erasure approach. PR #914 remains **Draft; APP529/530/531/532 OFF; NO-GO merge/deploy/enable**. After isolated PASS, the one-time credentialed measurement workflow was removed to prevent accidental repeat D1 creation; the guarded test source remains reproducible. No shared DB, Worker, Functions, Rules, Hosting or original user data were changed.

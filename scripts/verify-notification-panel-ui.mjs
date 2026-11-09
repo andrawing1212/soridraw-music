@@ -90,6 +90,15 @@ assert.doesNotMatch(file('src/components/studio/notificationPanel.css'),
   /\.soridraw-notification-creation-limit\{/);
 assert.match(panel,/mergeCompletedGenerationNotices016\(/);
 assert.match(panel,/readCompletedGenerationLog016\(uid\)/);
+assert.match(panel,/const localGenerationEnabled = visualExample \|\| NOTIFICATION_INBOX_ENABLED_004;/,
+  'server inbox must retain local creation history when the preview samples turn off');
+assert.match(panel,/\[\.\.\.remoteInbox\.items,\.\.\.localCompletions\]/,
+  'real social/admin inbox and local completed creations must merge');
+assert.match(panel,/if\(!open\|\|!localGenerationEnabled\|\|!uid\)return;/,
+  'real completed songs from another local browser tab remain visible after server inbox activation');
+assert.match(file('src/services/notifications/useNotificationDots017.ts'),
+  /isNotificationVisualPreview\(\) \|\| NOTIFICATION_INBOX_ENABLED_004/,
+  'creation pink dots must use same local history after server inbox activation');
 console.log('NOTIFICATION_THREE_TABS_ACTIVITY_CREATION_ANNOUNCEMENT=PASS');
 assert.match(panel, /className="soridraw-notification-settings-divider"/);
 assert.match(panel, /<NotificationSwitch checked=\{masterEnabled\} onChange=\{toggleMaster\}/);
@@ -170,7 +179,7 @@ assert.match(app, /setIsMobileNotificationOpen\(false\); \}, \[location.pathname
 console.log('NOTIFICATION_MOBILE_PROFILE_MENU_BELL_AND_SHARED_PANEL=PASS');
 console.log('NOTIFICATION_MOBILE_OPEN_CLOSE_HAS_NO_NEW_BACKEND_IO=PASS');
 
-assert.match(panel,/visualExample && uid && auth\.currentUser\?\.uid === uid/);
+assert.match(panel,/localGenerationEnabled && uid && auth\.currentUser\?\.uid === uid/);
 assert.match(panel,/projectCompletedExistingGenerations004\(recentHistory\)/);
 assert.match(panel,/row\.category!=='complete'\|\|localCompletions\.length===0/,
   'real PREVIEW generation rows replace sample creation notices only');

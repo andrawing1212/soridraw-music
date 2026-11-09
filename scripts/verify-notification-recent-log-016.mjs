@@ -9,6 +9,8 @@ assert.match(app,/rememberCompletedGenerationLog016\(user\.uid,[\s\S]*?projectCo
 assert.ok(app.indexOf('rememberCompletedGenerationLog016(user.uid,')<
           app.indexOf('const localHistory = [...generatedResults, ...existingLocal].slice(0, 10);'));
 assert.match(panel,/readCompletedGenerationLog016\(uid\)/);
+assert.match(panel,/const localGenerationEnabled = visualExample \|\| NOTIFICATION_INBOX_ENABLED_004;/,
+  'the server inbox must not drop independent local 30-day creation history');
 assert.match(panel,/localLogVersion/);
 assert.doesNotMatch(panel,/생성기록은 최대 10곡이 표시됩니다\./);
 const store=new Map();

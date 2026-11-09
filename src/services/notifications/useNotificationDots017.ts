@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useState} from 'react';
 import type {InboxNotification,NotificationPreferences,NotificationSection} from './notificationModel';
 import {isNotificationVisualPreview,readNotificationMasterEnabled,readNotificationPreferences} from './notificationModel';
-import {projectCompletedExistingGenerations004} from './notificationInbox004';
+import {NOTIFICATION_INBOX_ENABLED_004,projectCompletedExistingGenerations004} from './notificationInbox004';
 import {mergeCompletedGenerationNotices016,readCompletedGenerationLog016,
  notificationRecentLogKey016} from './notificationRecentLog016';
 import {NOTIFICATION_DOT_EVENT_017,notificationSeenKey017,
@@ -31,7 +31,7 @@ export function useNotificationDots017(uid:string,recentHistory:readonly unknown
  },[uid]);
  const rows=useMemo(()=>uid?[
   ...remoteItems,
-  ...(isNotificationVisualPreview()?mergeCompletedGenerationNotices016(
+  ...((isNotificationVisualPreview() || NOTIFICATION_INBOX_ENABLED_004)?mergeCompletedGenerationNotices016(
    projectCompletedExistingGenerations004(recentHistory),
    readCompletedGenerationLog016(uid)):[]),
  ]:[],[uid,remoteItems,recentHistory,version]);

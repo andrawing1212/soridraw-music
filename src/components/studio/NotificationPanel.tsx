@@ -236,12 +236,15 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   // the UI release. A verified recipient-scoped backend inbox is a separate
   // activation gate. PREVIEW examples are explicitly labelled as examples.
   const visualExample = isNotificationVisualPreview() && !NOTIFICATION_INBOX_ENABLED_004;
+  // Keep real local generation history when the authenticated inbox is enabled.
+  // The server inbox carries social/admin records, not the Recent metadata log.
+  const localGenerationEnabled = visualExample || NOTIFICATION_INBOX_ENABLED_004;
   // PREVIEW-only genuine creation history: derived from the already-loaded
   // account's Recent Studio snapshot, never from an extra remote query.
   // Shared social/administrator notification delivery remains disabled.
   const [localLogVersion,setLocalLogVersion]=useState(0);
   useEffect(()=>{
-    if(!open||!visualExample||!uid)return;
+    if(!open||!localGenerationEnabled||!uid)return;
     // Other tabs on this browser can finish generating while this inbox is
     // open. Storage events are local-only; they issue no server requests.
     const onStorage=(event:StorageEvent)=>{
@@ -250,14 +253,14 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
     };
     window.addEventListener('storage',onStorage);
     return ()=>window.removeEventListener('storage',onStorage);
-  },[open,visualExample,uid]);
+  },[open,localGenerationEnabled,uid]);
   const localCompletions = useMemo(() => (
-    visualExample && uid && auth.currentUser?.uid === uid
+    localGenerationEnabled && uid && auth.currentUser?.uid === uid
       ? mergeCompletedGenerationNotices016(
           projectCompletedExistingGenerations004(recentHistory),
           readCompletedGenerationLog016(uid))
       : []
-  ), [visualExample, uid, recentHistory, open, localLogVersion]);
+  ), [localGenerationEnabled, uid, recentHistory, open, localLogVersion]);
   const sampleHeader = visualExample &&
     (activeSection !== 'creation' || localCompletions.length === 0);
   // The already-authenticated inbox read includes canonical account preferences

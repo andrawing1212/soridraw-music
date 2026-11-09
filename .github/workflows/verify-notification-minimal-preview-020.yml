@@ -1,0 +1,63 @@
+name: SORIDRAW Notification 020 Frozen Worker Minimal Candidate QA
+# Read-only. Fetches Cloudflare active version + settings metadata, never deploys.
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/verify-notification-minimal-preview-020.mjs'
+      - '.github/workflows/verify-notification-minimal-preview-020.yml'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-notification-020-frozen-minimal
+  cancel-in-progress: true
+jobs:
+  isolated-and-live-readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify exact frozen baseline and two only source insertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/verify-notification-minimal-preview-020.mjs
+          node scripts/verify-notification-minimal-preview-020.mjs --self-test
+          node scripts/verify-notification-auth-boundary-015.mjs
+          node scripts/verify-notification-minimal-preview-020.mjs --emit "$RUNNER_TEMP/notification-minimal-020.js"
+      - name: Build exact frozen source and additive GET-only candidate (DRY RUN ONLY)
+        shell: bash
+        run: |
+          set -euo pipefail
+          FROZEN="$RUNNER_TEMP/notification-020-frozen"
+          git worktree add --detach "$FROZEN" 5bf84dee4c9db7f0ce8296a57781be9161d8e59f
+          cd "$FROZEN/cloudflare/explore-worker"
+          npm install --no-audit --no-fund --package-lock=false
+          node node_modules/wrangler/bin/wrangler.js deploy --config canonical/wrangler.preview.jsonc --dry-run --outdir "$RUNNER_TEMP/notification-020-baseline"
+          test "$(git -C "$FROZEN" status --porcelain | wc -l)" -eq 0
+          cd "$GITHUB_WORKSPACE"
+          for name in notification-unified-api-004.mjs notification-unified-inbox-004.mjs notification-inbox-001.mjs notification-preferences-retention-002.mjs notification-retention-coordinator-005.mjs; do
+            test ! -e "$FROZEN/cloudflare/explore-worker/runtime/$name"
+            cp "cloudflare/explore-worker/runtime/$name" "$FROZEN/cloudflare/explore-worker/runtime/$name"
+          done
+          cp "$RUNNER_TEMP/notification-minimal-020.js" "$FROZEN/cloudflare/explore-worker/canonical/preview-entry.js"
+          test "$(git -C "$FROZEN" diff --name-only)" = "cloudflare/explore-worker/canonical/preview-entry.js"
+          cd "$FROZEN/cloudflare/explore-worker"
+          node node_modules/wrangler/bin/wrangler.js deploy --config canonical/wrangler.preview.jsonc --dry-run --outdir "$RUNNER_TEMP/notification-020-candidate"
+          echo 'NOTIFICATION_020_TWO_INSERTION_FROZEN_CANDIDATE_DRYRUN=PASS'
+          echo 'USER_DATA_CHANGES=0;WORKER_DEPLOY=0;D1_WRITES=0'
+      - name: Compare live active module to exact frozen build (GET ONLY)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-notification-minimal-preview-020.mjs --verify-live "$RUNNER_TEMP/notification-020-baseline" "$RUNNER_TEMP/notification-020-candidate"
+          echo 'NOTIFICATION_020_LIVE_BASE_EXACT_BUILD_VERIFIED=PASS'

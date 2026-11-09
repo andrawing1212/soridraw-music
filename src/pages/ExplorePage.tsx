@@ -140,6 +140,8 @@ import {
   getManagedSoridrawCuratedTracks307,
   getSoridrawCuratedTracks307,
   patchSoridrawCuratedPublishedLikeCount523,
+  projectSoridrawCuratedPublishedLikeCounts524,
+  readSoridrawCuratedPublishedLikeCount524,
   readCachedSoridrawCuratedTracks307,
   revalidateSoridrawCuratedTracks335,
   setSoridrawCuratedTrack307,
@@ -2257,7 +2259,7 @@ export default function ExplorePage() {
             const ownerUid = card.ownerUid || row.ownerUid;
             // This is a settled public R2 card, never an account-private
             // optimistic number; also fix the curated cache used on reload.
-            patchSoridrawCuratedPublishedLikeCount523(row.trackId, card.likeCount);
+            patchSoridrawCuratedPublishedLikeCount523(row.trackId, card.likeCount, card.updatedAt);
             patchExploreFeedSessionCachesRow(row.trackId, { likeCount: card.likeCount });
             if (ownerUid) {
               patchExplorePublicProfileFirstViewTrack(ownerUid, row.trackId, { likeCount: card.likeCount });
@@ -2655,7 +2657,8 @@ export default function ExplorePage() {
     void getManagedSoridrawCuratedTracks307(user)
       .then((rows) => {
         if (cancelled) return;
-        const normalized = rows.map(normalizeTrack).filter((track) => Boolean(track.id));
+        const normalized = projectSoridrawCuratedPublishedLikeCounts524(rows)
+          .map(normalizeTrack).filter((track) => Boolean(track.id));
         const viewerCards405 = overlayExploreLikeDisplayCounts(user.uid, normalized);
         setManagedCuratedTracks307(viewerCards405);
         // SORIDRAW_CURATED_MANAGER_PUBLIC_STATE_PARITY_311_20261003
@@ -5055,6 +5058,25 @@ export default function ExplorePage() {
       avatarUrl: track.avatarUrl || null, track,
     }));
   }, [sort, submittedQuery, profileUid, user?.uid, profile, curatedTracks307, tracks, popularTracks, dislikedTrackIds, viewerGenresRevision346]);
+  // APP524: The admin-managed curated R2 snapshot includes old likeCount.
+  // For rendering, match already loaded Feed/Popular counts without any
+  // additional fetch, scan, timer, or persistent optimistic cache write.
+  const visibleCuratedTracks524 = useMemo(() => {
+    const onScreenCounts = new Map<string, number>();
+    for (const track of [...tracks, ...popularTracks]) {
+      if (track?.id && Number.isSafeInteger(track.likeCount) && track.likeCount >= 0)
+        onScreenCounts.set(track.id, track.likeCount);
+    }
+    const neutral = curatedTracks307.map((track) => {
+      const confirmed = readSoridrawCuratedPublishedLikeCount524(track.id);
+      const otherCount = confirmed ?? onScreenCounts.get(track.id);
+      return otherCount === undefined || otherCount === track.likeCount
+        ? track : { ...track, likeCount: otherCount };
+    });
+    const viewerUid = auth.currentUser?.uid || user?.uid || '';
+    return viewerUid ? overlayExploreLikeDisplayCounts(viewerUid, neutral) : neutral;
+  }, [curatedTracks307, tracks, popularTracks, user?.uid]);
+
   const recommendationModel221 = sort === 'recommended' && !submittedQuery
     ? { ...buildExploreRecommendationModel221(visibleFeedTracks, user?.uid || ''), creators: recommendedCreators345 }
     : { picks: [], genres: [], creators: [] };
@@ -5826,7 +5848,7 @@ export default function ExplorePage() {
                   trackClassName="soridraw-explore-recommend-track--picks"
                   mobileGroupSize={2}
                 >
-                  {curatedTracks307.slice(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304).map((track) => renderTrackCard(track))}
+                  {visibleCuratedTracks524.slice(0, EXPLORE_HOME_SECTION_VISIBLE_LIMIT_304).map((track) => renderTrackCard(track))}
                 </ExploreRecommendationRail>
               )}
               {curatedLoading307 && curatedTracks307.length === 0 && (

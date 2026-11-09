@@ -28,6 +28,8 @@ type CuratedCache307 = {
   revision: string;
   checkedAt: number;
   items: Array<Record<string, unknown>>;
+  // Last R2-settled PUBLIC likes, not a viewer's optimistic count.
+  settledPublicLikes524?: Record<string, { likeCount: number; updatedAt: number }>;
 };
 
 type ManagedCuratedCache309 = {
@@ -141,11 +143,20 @@ const readCuratedCache307 = (): CuratedCache307 | null => {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<CuratedCache307>;
     if (parsed?.schemaVersion !== 1 || !Array.isArray(parsed?.items)) return null;
+    const settledPublicLikes524: NonNullable<CuratedCache307['settledPublicLikes524']> = {};
+    for (const [id, raw] of Object.entries(parsed.settledPublicLikes524 || {})) {
+      if (!id || id.length > 512 || !raw ||
+          !Number.isSafeInteger(raw.likeCount) || raw.likeCount < 0 ||
+          !Number.isSafeInteger(raw.updatedAt) || raw.updatedAt <= 0) continue;
+      settledPublicLikes524[id] = { likeCount: raw.likeCount, updatedAt: raw.updatedAt };
+      if (Object.keys(settledPublicLikes524).length >= 20) break;
+    }
     memoryCache307 = {
       schemaVersion: 1,
       revision: String(parsed.revision || ''),
       checkedAt: Math.max(0, Number(parsed.checkedAt || 0)),
       items: parsed.items as Array<Record<string, unknown>>,
+      settledPublicLikes524,
     };
     return memoryCache307;
   } catch {
@@ -158,38 +169,83 @@ const readCuratedCache307 = (): CuratedCache307 | null => {
 export const readCachedSoridrawCuratedTracks307 = (): Array<Record<string, unknown>> =>
   readCuratedCache307()?.items || [];
 
-const writeCuratedCache307 = (
-  items: Array<Record<string, unknown>>,
-  revision: string,
-  checkedAt = Date.now(),
-) => {
-  const next: CuratedCache307 = { schemaVersion: 1, revision: String(revision || ''), checkedAt, items };
-  memoryCache307 = next;
-  if (typeof localStorage !== 'undefined') {
-    try { localStorage.setItem(SORIDRAW_CURATED_CACHE_KEY_307, JSON.stringify(next)); } catch {}
-  }
-  return next;
+
+ // APP524_CURATED_MEMBERSHIP_NEVER_OVERRIDES_PUBLISHED_LIKES
+ // Curation revision changes membership, not public likeCount.
+ // Keep R2-confirmed counts in the existing neutral cache, no new key/reads.
+ const overlayCuratedPublishedLikeCounts524 = (
+   items: Array<Record<string, unknown>>,
+   known: NonNullable<CuratedCache307['settledPublicLikes524']>,
+ ): Array<Record<string, unknown>> => items.map((item) => {
+   const count = known[String(item?.id || '').trim()]?.likeCount;
+   return count === undefined || Number(item.likeCount) === count
+     ? item : { ...item, likeCount: count };
+ });
+
+ const writeCuratedCache307 = (
+   items: Array<Record<string, unknown>>,
+   revision: string,
+   checkedAt = Date.now(),
+   published?: { trackId: string; likeCount: number; updatedAt: number },
+ ) => {
+   const prev = readCuratedCache307();
+   const known = { ...(prev?.settledPublicLikes524 || {}) };
+   if (published) {
+     const last = known[published.trackId];
+     if (!last || published.updatedAt >= last.updatedAt)
+       known[published.trackId] = { likeCount: published.likeCount, updatedAt: published.updatedAt };
+   }
+   const ids = new Set(items.map(row => String(row?.id || '').trim()).filter(Boolean));
+   const retained = Object.fromEntries(Object.entries(known)
+     .filter(([id]) => ids.has(id))
+     .sort((a,b) => b[1].updatedAt - a[1].updatedAt)
+     .slice(0,20)) as NonNullable<CuratedCache307['settledPublicLikes524']>;
+   const next: CuratedCache307 = {
+     schemaVersion: 1, revision: String(revision || ''), checkedAt,
+     items: overlayCuratedPublishedLikeCounts524(items, retained),
+     settledPublicLikes524: retained,
+   };
+   memoryCache307 = next;
+   if (typeof localStorage !== 'undefined') {
+     try { localStorage.setItem(SORIDRAW_CURATED_CACHE_KEY_307, JSON.stringify(next)); } catch {}
+   }
+   return next;
+ };
+ // Do not truncate the administrator's managed 50-song list to the public
+ // 20-song snapshot; reuse only confirmed per-song counts.
+ export const projectSoridrawCuratedPublishedLikeCounts524 = (
+   items: Array<Record<string, unknown>>,
+ ): Array<Record<string, unknown>> => overlayCuratedPublishedLikeCounts524(
+   items, readCuratedCache307()?.settledPublicLikes524 || {},
+ );
+
+// A real settled R2 card outranks any independently cached curated/Feed row.
+export const readSoridrawCuratedPublishedLikeCount524 = (trackId: string): number | null => {
+  const id = String(trackId || '').trim();
+  const value = readCuratedCache307()?.settledPublicLikes524?.[id]?.likeCount;
+  return Number.isSafeInteger(value) && (value as number) >= 0 ? value as number : null;
 };
 
 // APP523_PUBLIC_CURATED_COUNT_PUBLISHED_ONLY
 // A curation membership revision does not change when an actual public like
 // count is published. Preserve the latest settled R2 card in the existing
 // account-neutral curated snapshot, not an actor's optimistic count.
+
 export const patchSoridrawCuratedPublishedLikeCount523 = (
-  trackId: string, publishedCount: number,
+  trackId: string, publishedCount: number, updatedAt = Date.now(),
 ): boolean => {
   const id = String(trackId || '').trim();
-  if (!id || !Number.isSafeInteger(publishedCount) || publishedCount < 0) return false;
+  if (!id || !Number.isSafeInteger(publishedCount) || publishedCount < 0 ||
+      !Number.isSafeInteger(updatedAt) || updatedAt <= 0) return false;
   const cached = readCuratedCache307();
-  if (!cached) return false;
-  let changed = false;
-  const items = cached.items.map((item) => {
-    if (String(item.id || '').trim() !== id || Number(item.likeCount) === publishedCount) return item;
-    changed = true;
-    return { ...item, likeCount: publishedCount };
-  });
-  if (changed) writeCuratedCache307(items, cached.revision, cached.checkedAt);
-  return changed;
+  if (!cached || !cached.items.some((item) => String(item.id || '').trim() === id)) return false;
+  const prior = cached.settledPublicLikes524?.[id];
+  if (prior && (prior.updatedAt > updatedAt || prior.likeCount === publishedCount)) return false;
+  // Even an unchanged number must be recorded once when genuinely settled
+  // so a stale admin R2 membership snapshot cannot later override it.
+  writeCuratedCache307(cached.items, cached.revision, cached.checkedAt,
+    { trackId: id, likeCount: publishedCount, updatedAt });
+  return true;
 };
 
 export const invalidateSoridrawCuratedCache307 = () => {

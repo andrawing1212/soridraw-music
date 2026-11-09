@@ -9,24 +9,33 @@ const load=(source,name,ctx)=>runInNewContext(ts.transpileModule(source,{compile
  target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None,
 }}).outputText+'\n'+name+';',ctx);
 let cache={revision:'same-curation-revision',checkedAt:1234,items:[
- {id:'first',likeCount:1,title:'First'},{id:'second',likeCount:3,title:'Second'}]},writes=0;
+ {id:'first',likeCount:1,title:'First'},{id:'second',likeCount:3,title:'Second'}],
+ settledPublicLikes524:{}},writes=0;
 const update=load(body(curated,'export const patchSoridrawCuratedPublishedLikeCount523 =',
  'export const invalidateSoridrawCuratedCache307 ='),
  'patchSoridrawCuratedPublishedLikeCount523',{readCuratedCache307:()=>cache,
- writeCuratedCache307:(items,revision,checkedAt)=>{writes++;cache={items,revision,checkedAt};}});
-assert.equal(update('first',2),true);
+ writeCuratedCache307:(items,revision,checkedAt,published)=>{
+  writes++;
+  cache={...cache,
+   items:items.map(row=>row.id===published.trackId
+    ? {...row,likeCount:published.likeCount}:row),
+   revision,checkedAt,
+   settledPublicLikes524:{...cache.settledPublicLikes524,
+    [published.trackId]:{likeCount:published.likeCount,updatedAt:published.updatedAt}}};
+ }});
+assert.equal(update('first',2,2000),true);
 assert.equal(cache.items[0].likeCount,2);
 assert.equal(cache.items[1].likeCount,3);
 assert.equal(cache.revision,'same-curation-revision');
 assert.equal(cache.checkedAt,1234);
 assert.equal(writes,1);
-assert.equal(update('first',2),false);
+assert.equal(update('first',2,2000),false);
 assert.equal(update('first',1.5),false);
 assert.equal(update('unknown',100),false);
 assert.equal(writes,1);
-assert.equal(update('first',1),true,'unlikes may decrease published count');
+assert.equal(update('first',1,3000),true,'unlikes may decrease published count');
 assert.equal(cache.items[0].likeCount,1);
-assert.match(page,/patchSoridrawCuratedPublishedLikeCount523\(row\.trackId, card\.likeCount\)/);
+assert.match(page,/patchSoridrawCuratedPublishedLikeCount523\(row\.trackId, card\.likeCount, card\.updatedAt\)/);
 assert.match(page,/card\.updatedAt < row\.at/);
 assert.doesNotMatch(page,/patchSoridrawCuratedPublishedLikeCount523\(.*optimistic/);
 console.log('APP523_PUBLISHED_CURATED_COUNT_CACHE_1_2_1_AND_W0=PASS');

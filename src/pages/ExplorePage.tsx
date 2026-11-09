@@ -102,6 +102,11 @@ import {
   publishExploreFollowSync377,
   subscribeExploreFollowSync377,
 } from '../services/exploreFollowSyncService';
+import { createExploreOwnerFollowerGate526 } from '../services/exploreOwnerFollowerSyncCore526';
+import {
+  EXPLORE_OWNER_FOLLOW_REALTIME_526_ENABLED,
+  subscribeExploreOwnerFollowerSync526,
+} from '../services/exploreOwnerFollowerSync526';
 import {
   EXPLORE_FOLLOW_IDLE_FLUSH_MS_380,
   queueExploreFollowFinalState380,
@@ -4190,6 +4195,29 @@ export default function ExplorePage() {
       document.removeEventListener('visibilitychange',onOwnFollowersFocus525);
     };
   },[profileConnectionsOpen376,profile?.uid,user?.uid]);
+
+  // APP526 owner-follow push candidate. Both relay and client are OFF until
+  // the trusted server release is approved; no entry read or idle polling.
+  useEffect(() => {
+    if (!EXPLORE_OWNER_FOLLOW_REALTIME_526_ENABLED) return;
+    const ownerUid526 = String(user?.uid || '').trim();
+    if (!ownerUid526 || profile?.uid !== ownerUid526) return;
+    const gate526 = createExploreOwnerFollowerGate526(
+      ownerUid526,
+      () => getExplorePublicProfile(ownerUid526, true).then(row => row.followerCount),
+      (count) => {
+        if (auth.currentUser?.uid !== ownerUid526 ||
+            activeProfileUidRef.current !== ownerUid526) return;
+        patchExplorePublicProfileFirstViewProfile(ownerUid526, { followerCount: count });
+        setProfile(previous => previous?.uid === ownerUid526 && previous.followerCount !== count
+          ? { ...previous, followerCount: count } : previous);
+      },
+      Date.now,
+      reason => console.warn('[526] canonical owner refresh deferred:', reason),
+    );
+    const stop526 = subscribeExploreOwnerFollowerSync526(ownerUid526, gate526.receive);
+    return () => { gate526.dispose(); stop526(); };
+  }, [profile?.uid, user?.uid]);
 
   const loadMoreProfileConnections376 = async () => {
     const targetUid = String(profile?.uid || '').trim();

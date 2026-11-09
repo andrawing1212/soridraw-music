@@ -507,10 +507,10 @@ const normalizeProfile = (row: any, fallbackRef = ''): ExplorePublicProfile => (
   trackCount: toCount(row?.trackCount ?? row?.track_count),
 });
 
-export const getExplorePublicProfile = async (profileRef: string): Promise<ExplorePublicProfile> => {
+export const getExplorePublicProfile = async (profileRef: string, forceServer = false): Promise<ExplorePublicProfile> => {
   const normalizedRef = String(profileRef || '').trim();
   if (!normalizedRef) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
-  const payload = await requestPublic(`/v1/profiles/${encodeURIComponent(normalizedRef)}`);
+  const payload = await requestPublic(`/v1/profiles/${encodeURIComponent(normalizedRef)}`, forceServer ? 'no-store' : 'default');
   return normalizeProfile(payload?.data?.profile || payload?.data || {}, normalizedRef);
 };
 

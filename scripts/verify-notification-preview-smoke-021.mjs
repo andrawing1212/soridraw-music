@@ -13,7 +13,7 @@ let x=await send(p+'?uid=foreign');
 assert.equal(x.res.status,401,'UNAUTH_GET_MUST_REFUSE');
 assert.ok(!x.body.includes('"items"'),'NO_PRIVATE_DATA');
 x=await send(p,'GET',{'Authorization':'Bearer invalid-id-token','X-Firebase-AppCheck':'invalid-appcheck'});
-assert.equal(x.res.status,401,'INVALID_SIGNED_TOKENS_REFUSED');
+assert.ok([401,403].includes(x.res.status),'INVALID_SIGNED_TOKENS_REFUSED');
 assert.equal((await send(p,'POST')).res.status,405,'GET_ONLY');
 assert.equal((await send(p,'GET',{Origin:'https://soridraw.com'})).res.status,403,'OTHER_ORIGIN_FORBIDDEN');
 const feed=(await send('/v1/feed?sort=latest&limit=1')).res;

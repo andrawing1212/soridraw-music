@@ -81,7 +81,7 @@ jobs:
           git merge-base --is-ancestor HEAD "$GITHUB_SHA"
           test "$(git hash-object scripts/verify-notification-preview-release-gate-021.mjs)" = dd66468d57600aae43636dd7a7c7f16b9e3f1242
           test "$(git hash-object scripts/verify-notification-preview-release-021.mjs)" = de443179f78d368724342f60baecdaa28d997f6c
-          test "$(git hash-object scripts/verify-notification-preview-smoke-021.mjs)" = b9b97abc420ce00b6054724c69ac06a9764bf2d4
+          test "$(git hash-object scripts/verify-notification-preview-smoke-021.mjs)" = a0e6c8dc6aa0d3951e3152611ed13e17e17bf467
           test "$(git hash-object scripts/verify-notification-minimal-preview-020.mjs)" = ff91025014bbf641d24696ae55bc40a5474cc019
           node scripts/verify-notification-preview-release-gate-021.mjs --self-test
           node scripts/verify-notification-preview-release-021.mjs --self-test

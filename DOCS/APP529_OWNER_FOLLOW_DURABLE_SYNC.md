@@ -44,3 +44,32 @@ An isolated administrator must first read only `owner_uid,revision,attempts,dead
 - **Order/recovery:** SQLite transaction rollback on injected outbox error PASS; out-of-order in-flight ACK against a newer revision W0/PASS; newer version eventually ACKed/PASS; no-op does not emit/PASS; failed delivery deferred then retried/PASS; eight-attempt dead hold/PASS (directly preseeded attempt 7); exact-owner/manual replay/PASS; one durable outbox row per owner/PASS. HMAC/RTDB receiver logic is source-test-only: the physical test **stubs delivery** and does not establish real Firebase transmission or two-account PC/mobile convergence.
 - **Release decision:** APP529 remains **Draft / source OFF / NO-GO**. Its cost overhead is materially above the earlier estimated outbox W1 + ACK W1. Shared D1 has other triggers and multiple environment writers; their real compatibility/cost, the Function authentication path, physical RTDB charges and user devices still need evidence. Do **not** activate in shared D1 or merge/deploy this draft based on this test alone.
 - The temporary credentialed GitHub measurement workflow was removed from this PR after this successful one-time run; the non-deploy measurement script remains as reproducible source. Repeated automatic Cloudflare cost runs are not armed.
+
+## 2026-11-09 — APP530 in-place canonical-row alternative: measured W2, release HOLD
+
+**Source-only files:** `cloudflare/explore-worker/candidates/530-owner-follow-inline-stats.sql` (additive `profile_stats` columns, due index, old-writer fallback and delete fence), `cloudflare/explore-worker/runtime/owner-follow-inline-530.mjs` (new single-statement Writer SQL and bounded indexed drain), `scripts/measure-530-inline-owner-d1.mjs` (reproducible run-owned synthetic test). They are **not imported into a production Worker**, and compilation/feature enablement remains false. The earlier APP529 outbox implementation is retained OFF for comparison, not replaced on a live service.
+
+**Real Cloudflare isolated D1:** [Action #42622546416](https://github.com/andrawing1212/soridraw-music/actions/runs/42622546416), candidate source SHA `dddc827fc8ebe6830464edff336bcbe5f59bb33d`. This experiment created one uniquely named/UUID-verified temporary D1, measured `query.meta.rows_read/rows_written`, and deleted that same DB with postflight owner-only cleanup PASS. Nothing touched shared D1, RTDB, Worker, Functions, Hosting or user data.
+
+| Count-change case on isolated D1 | Rows read | Rows written |
+| --- | ---: | ---: |
+| Original profile_stats UPDATE before APP530 | 1 | 1 |
+| APP530 schema installed, control OFF (old writer) | 2 | 1 |
+| APP530 control ON in ephemeral D1, **old Writer fallback trigger** | 3 | 3 |
+| APP530 ephemeral ON, **new single-statement Writer** | 1 | 2 |
+| New Writer unchanged count, CAS predicate fails | 1 | 0 |
+| Stale revision ACK, CAS predicate fails | 1 | 0 |
+| Successful drain ACK (one observed row) | 1 | 1 |
+| Failed delivery next-attempt update (one observed row) | 1 | 2 |
+
+**Economics:** for the synthetic new Writer count update + successful ACK, APP529 measured W3+W1 = **W4**; APP530 measures W2+W1 = **W3** (one less billed row, 25% less within these two statements only). Old Writer fallback remains W3 for the changed-count statement and does **not** benefit. This is not the full follow-mutation cost; existing D1 side effects/indexes, RTDB, R2, Firebase Function, physical client flows and 100k-user billing are not measured.
+
+**Correctness evidence:** isolated old/new Writer transition preserves monotonically increasing revision; no-change and stale ACK W0; indexed bounded due search (EXPLAIN shows `idx_owner_follow_due_530`); injected old/new Writer failure rolls back canonical count with revision; delayed successful delivery cannot ACK newer revision; pending outbox survives until retry; backoff, dead hold and exact-owner replay pass. Delivery callback is **stubbed**, not proof of real Firebase/auth/PC-mobile convergence.
+
+**Hard release blockers — NO-GO:**
+1. This alternative modifies the shared canonical `profile_stats` schema. It needs a safe schema and Worker compatibility release plan across **PREVIEW/TEST/PRODUCTION**, unlike a PREVIEW-only Hosting change. No such deployment is authorized.
+2. Preserving monotonic per-owner ordering across account deletion currently uses `BEFORE DELETE ON profile_stats` while control is ON. **That would block legitimate account deletion.** Never enable this scheme without a proven tombstone or safe user deletion/recreation lifecycle that does not lose revision ordering or introduce disproportionate cost.
+3. Current three active Workers still use the existing follower-count writer; only a future coordinated Writer change would realize W2. Rollback across old/new Writer versions, shared D1 17+ unrelated triggers and migration preflight remain unverified.
+4. The tested D1 schema is synthetic, all authentication/HMAC/RTDB delivery is mocked or source-only, and real A/B PC/mobile functionality and per-user billing are unverified.
+
+**Decision:** keep PR #914 Draft, both APP529 and APP530 disabled; do not merge or deploy. Keep the source-only cost comparison for later design choice. The credentialed APP530 measurement workflow was removed after the successful one-off measurement to prevent repeats.

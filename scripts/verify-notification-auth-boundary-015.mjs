@@ -227,7 +227,8 @@ const spoof=await call(candidateRoute,req(pref,'PUT','bob',{body:{
  ...changed,expectedRevision:0,operationId:'stage015-account-02',uid:'alice',
 }}));
 assert.equal(spoof.status,400,'forged body UID rejected');
-const sql=dbLocal.prepare('SELECT user_uid,like_enabled FROM soridraw_notification_preferences_002').all();
+const sql=dbLocal.prepare('SELECT user_uid,like_enabled FROM soridraw_notification_preferences_002').all()
+ .map(row=>({user_uid:row.user_uid,like_enabled:row.like_enabled}));
 assert.deepEqual(sql,[{user_uid:'alice',like_enabled:0}]);
 const aliceVerify=await call(candidateRoute,req(pref,'GET','alice'));
 assert.equal(aliceVerify.body.data.preferences.like,false);

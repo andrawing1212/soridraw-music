@@ -1,3 +1,12 @@
+## CURRENT — 알림 Stage018 공유 D1 기존 트리거 4개 분홍 점 정책으로 교체 PASS / 수집 OFF (2026-11-09 KST)
+- **디렉터 승인:** 2026-11-09 YES — 공유 canonical D1의 기존 Stage009 알림 트리거 4개만 교체. 알림 수집 래치 OFF 유지, 기존 사용자 원본/캐시/Worker·Hosting·Functions·R2·TEST·PRODUCTION 변경 금지.
+- **소스·검사:** source PR #900 merge `ee2d2f3ac1297637abd4ab08aa64203508ae1f42`, 기존 Stage017 후보 SQL blob `741166506e6dc0886a25a41ed0f3161fa334af5e`. 이전 Stage009 SQL과 비교하여 4개 트리거의 알림 설정(master/like/follow) 필터만 제거. 기존 소유자·공개·본인제외·중복방지·활성화 OFF 조건을 유지. 격리 SQLite 교체/계정·알림 통합 및 제품 품질·TypeScript·Build PASS.
+- **실제 공유 D1 실행:** 1회 owner-account exact-HEAD 승인 기록을 요구하는 단일 트리거 PR #901 merge `deef111e709ad4f38983fb9be9d9f69fdf20bed8`. [Stage018 live run 42565040201](https://github.com/andrawing1212/soridraw-music/actions/runs/42565040201) **SUCCESS**. 배포 전 정확한 기존 4개, Stage007 객체, 기존 17개 core 트리거, `activation.enabled=0`, 세 Worker 활성 버전 및 공유 DB 바인딩 PASS. 기존 4 DROP + 새 4 CREATE (Wrangler 1회 파일 실행) 결과 D1 query.meta **rows_read=1,242 / rows_written=4**. 사용자 원본 행 조회·백필·삭제 없음.
+- **실행 후:** 새 4개 트리거 SQL 정확 일치 PASS, 기존 17개 및 Stage007 메타데이터 원형 PASS, `activation.enabled=0` PASS, PREVIEW/TEST/PRODUCTION Worker 버전·DB 바인딩 불변 PASS. 사전·사후 SELECT-only 검사 모두 rows_written=0. 공유 Worker/Hosting/Functions/R2/Rules 배포 및 알림 수집 활성화 없음. 1회 실행 Workflow는 완료 후 제거하여 재실행 경로를 닫음.
+- **미완료:** 실제 알림 생성·조회·좋아요/팔로우 이벤트 비용, 사용자 PC↔모바일 수신·미확인 동기화, 30일 서버 정리 스케줄 및 정식 환경의 실제 동작은 **미검증/NO-GO**. 수집 ON/Worker·Client 활성화 및 공유 리소스 추가 변경은 별도 승인 필요. PREVIEW 이전 알림 UI가 보이는 것과 실제 서버 알림 수신은 구분한다.
+
+---
+
 ## CURRENT — 알림 Stage012 격리 Cloudflare D1 만료 삭제 실제 비용 측정 PASS / DB 삭제 확인 (2026-11-08 KST)
 - **디렉터 승인:** 2026-11-08 YES — 30일 만료 알림 정리를 단일 임시 Cloudflare D1에서 실제 물리적 R/W·실행시간 측정하고 그 DB만 삭제. 공유 D1/사용자 원본/활성화 설정/Worker/Hosting/Functions/운영 R2 변경 금지.
 - **소스·검사:** #889 병합 `06741808244a21093b1c6a6afc82f5add7a0d727` (Stage012 source SHA `7cf07d8fd711ca0d28bb3909c7084caf0d8d9812`). PR 사전 SQLite 및 기존 제품 품질·TS·Build PASS. [실제 물리 측정 #42489430117](https://github.com/andrawing1212/soridraw-music/actions/runs/42489430117) **SUCCESS**. Stage007 스키마/Stage009 OFF 트리거, 별도 source-only 개인 메시지·전체 공지 만료 인덱스, 정확한 005 정리 함수를 임시 DB에만 적용.

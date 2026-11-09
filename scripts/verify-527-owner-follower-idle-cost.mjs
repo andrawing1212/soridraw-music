@@ -20,7 +20,7 @@ assert.match(explicit,/const refreshOwn523 = ownFollowers523 &&/);
 assert.match(explicit,/readExploreProfileConnectionLastServerAt528\(targetUid, direction\)/);
 assert.match(explicit,/shouldRefreshOwnerFollowersOnOpen528\(/);
 assert.match(page,/OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 120_000/);
-assert.match(explicit,/Date\.now\(\) - lastCheck523 >= OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523/);
+assert.match(explicit,/shouldRefreshOwnerFollowersOnOpen528\([\s\S]*?lastCheck523, Date\.now\(\), OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523/);
 assert.match(explicit,/getExploreProfileConnections\(targetUid, direction, null, refreshOwn523\)/);
 // Only 3 potential call sites survive: user-requested list, user-requested
 // pagination, confirmed same-account follow event; none idle or focus.

@@ -22,7 +22,9 @@ const connections = service.slice(
 // requests a fresh bounded followers page after an external account change.
 assert.match(connections, /if \(!normalizedCursor && !forceServer\) \{[\s\S]*?readProfileConnectionCache377/);
 assert.match(page, /direction === 'followers' && targetUid === user\?\.uid/);
-assert.match(page, /OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 15_000/);
+assert.match(page, /OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 120_000/);
+assert.match(page, /readExploreProfileConnectionLastServerAt528\(targetUid, direction\)/);
+assert.match(page, /shouldRefreshOwnerFollowersOnOpen528\(/);
 assert.match(page, /getExploreProfileConnections\(targetUid, direction, null, refreshOwn523\)/);
 assert.match(connections, /if \(!normalizedCursor\) writeProfileConnectionCache377/);
 assert.equal((connections.match(/requestPublic\(/g) || []).length, 1, 'cold relation list must use one bounded request');

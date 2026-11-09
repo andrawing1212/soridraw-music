@@ -93,7 +93,9 @@ assert.match(panel, /aria-disabled=\{!masterEnabled \|\| accountSyncLocked\}/);
 assert.match(panel, /if \(!masterEnabled \|\| accountSyncLocked\) return;/);
 assert.match(panel, /saveNotificationMasterEnabled\(uid, nextEnabled\)/);
 assert.match(panel, /saveNotificationPreferences\(uid, next\)/);
-assert.match(panel, /masterEnabled && prefs\[row.category\]/);
+assert.match(panel, /effectivePreferences\?\.master \?\? masterEnabled/);
+assert.match(panel, /effectivePreferences\?\.\[row.category\] \?\? prefs\[row.category\]/);
+assert.match(panel, /const effectivePreferences = NOTIFICATION_INBOX_ENABLED_004/);
 assert.ok(panel.indexOf('className="soridraw-notification-setting-master"') <
   panel.indexOf('TYPES.map((item)'), 'master toggle must be above individual preferences');
 const switchCss = file('src/components/studio/notificationPanel.css');

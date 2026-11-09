@@ -1,3 +1,12 @@
+## CURRENT — 알림 Stage021 PREVIEW Worker GET 전용 최소 릴리스 PASS / 실제 인증 사용자 200 미검증 (2026-11-09 KST)
+- **디렉터 승인:** 2026-11-09 YES. Stage020에서 검증한 현재 활성 PREVIEW Worker 동일 소스(`5bf84dee4c9db7f0ce8296a57781be9161d8e59f`)에 Stage019의 알림 GET 전용 import·route만 삽입. PREVIEW Worker 외 TEST·PRODUCTION, 공유 D1/Functions/Rules/Hosting/R2/사용자 원본은 변경 금지.
+- **코드·승인:** 전용 안전 릴리스 코드 PR #905 병합 `240aa385635d8f14d6bf0db7af37ebb3ca1502df`; 1회 owner-account exact-HEAD 승인 기록의 단일 트리거 PR #906 병합 `c5e0d9a5d773b63a4ae49131f655bea809be2f78`. [실제 배포 Actions 42569346089](https://github.com/andrawing1212/soridraw-music/actions/runs/42569346089) **SUCCESS**.
+- **실행물 동등성:** 기존 활성 Worker `2960d485-fe66-4136-9f84-41ce3e0d4b58`, 이전 모듈 SHA256 `ac2e5ffb9abbb530a0ae5bd99a6b5e86fc066281985a5b8cb5fb95fe45b4b9e3`, 최소 GET 후보 SHA256 `c0b500d3b14bdc767dc601fb07b865c54af20835abb3a9d3937551fa08f08216` 사전검사 PASS. 실제 새 PREVIEW 버전 `e8772114-3f75-4143-90f3-b321592b2e74`. 다른 Worker 구성·바인딩 유지, PREVIEW GET opt-in `SORIDRAW_NOTIFICATION_INBOX_READ_ONLY_019=1`만 신규. 공유 D1 notification activation enabled=0 및 기존 4 트리거 불변 PASS. TEST/PRODUCTION Worker 버전 불변 PASS, 기존 cron 비활성/불변 PASS.
+- **실제 HTTP 검증:** 알림 GET 전용 OPTIONS=204, 인증 없는 GET=401, POST=405, 금지 Origin=403; 기존 Explore Feed HTTP 200, D1 쓰기 W0 **PASS**. 이 검사는 실제 운영 요청이며 사용자 개인정보 토큰·원본 곡 변경 없이 실행함. 동작 실패 시 이전 버전 rollback 절차를 마련했으나 본 배포는 PASS하여 rollback 실행하지 않음. 1회 실행 Workflow는 완료 후 GitHub에서 제거.
+- **제한:** 유효한 실제 Firebase ID token+AppCheck를 가진 사용자 세션이 없어서 **실제 로그인 사용자의 GET 200/수신 데이터, PC·모바일 동기화는 미검증**. 알림 D1 수집은 계속 OFF이며, 사용자에게 새 알림이 실시간 생성되는 상태 아님. 앱 Hosting의 서버 inbox 연결 기능 활성화·정식 배포는 별도 작업. 최초 GET은 사용자가 수신함을 직접 열 때만 하도록 설계되어 상시 폴링 없음.
+
+---
+
 ## CURRENT — 알림 Stage018 공유 D1 기존 트리거 4개 분홍 점 정책으로 교체 PASS / 수집 OFF (2026-11-09 KST)
 - **디렉터 승인:** 2026-11-09 YES — 공유 canonical D1의 기존 Stage009 알림 트리거 4개만 교체. 알림 수집 래치 OFF 유지, 기존 사용자 원본/캐시/Worker·Hosting·Functions·R2·TEST·PRODUCTION 변경 금지.
 - **소스·검사:** source PR #900 merge `ee2d2f3ac1297637abd4ab08aa64203508ae1f42`, 기존 Stage017 후보 SQL blob `741166506e6dc0886a25a41ed0f3161fa334af5e`. 이전 Stage009 SQL과 비교하여 4개 트리거의 알림 설정(master/like/follow) 필터만 제거. 기존 소유자·공개·본인제외·중복방지·활성화 OFF 조건을 유지. 격리 SQLite 교체/계정·알림 통합 및 제품 품질·TypeScript·Build PASS.

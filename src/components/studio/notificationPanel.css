@@ -88,11 +88,6 @@
   margin-left:3px;
 }
 .soridraw-notification-empty{text-align:center;color:#a9a9ae;padding:44px 10px}
-.soridraw-notification-creation-limit{
-  flex:none;margin:0;padding:12px 14px;
-  background:#d7d7db;color:#151517;
-  font-size:12px;font-weight:600;text-align:center;line-height:1.5;
-}
 .soridraw-notification-setting-master{
   display:flex;align-items:center;gap:12px;padding:14px 7px;
   background:#29292b;border-radius:13px;margin:3px 0 0;cursor:pointer;

@@ -18,7 +18,12 @@ const connections = service.slice(
   service.indexOf('export const getExploreProfileConnections'),
   service.indexOf('export const getExplorePublicProfileTracks'),
 );
-assert.match(connections, /if \(!normalizedCursor\) \{[\s\S]*?readProfileConnectionCache377/);
+// app523: warm relation views stay local/R0 unless the owner explicitly
+// requests a fresh bounded followers page after an external account change.
+assert.match(connections, /if \\(!normalizedCursor && !forceServer\\) \\{[\\s\\S]*?readProfileConnectionCache377/);
+assert.match(page, /direction === 'followers' && targetUid === user\\?\\.uid/);
+assert.match(page, /OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 15_000/);
+assert.match(page, /getExploreProfileConnections\\(targetUid, direction, null, refreshOwn523\\)/);
 assert.match(connections, /if \(!normalizedCursor\) writeProfileConnectionCache377/);
 assert.equal((connections.match(/requestPublic\(/g) || []).length, 1, 'cold relation list must use one bounded request');
 

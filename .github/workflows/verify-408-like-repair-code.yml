@@ -419,6 +419,7 @@ jobs:
           node scripts/verify-191-bounded-public-like-convergence.mjs
           node scripts/verify-192-cross-account-public-like-live.mjs
           node scripts/verify-523-curated-follow-convergence.mjs
+          node scripts/verify-525-follow-two-account-display.mjs
           node scripts/verify-524-curated-public-count-fence.mjs
           node scripts/verify-197-new-public-track-like.mjs
           node scripts/verify-390-like-acceptance-receipt.mjs

@@ -9,15 +9,18 @@ const ENDPOINT_529='https://asia-northeast3-soridraw-app-866a5.cloudfunctions.ne
 export const validateOwnerFollowOutboxEvent529=row=>{
  const ownerUid=String(row?.owner_uid||'').trim();
  const version=Number(row?.revision),followerCount=Number(row?.follower_count);
+ const retired=row?.retired===true;
  const updatedAt=Number(row?.updated_at),attempts=Number(row?.attempts),
    ackedRevision=Number(row?.acked_revision);
  if(!UID_529.test(ownerUid)||!Number.isSafeInteger(version)||version<=0||
     !Number.isSafeInteger(followerCount)||followerCount<0||followerCount>1_000_000_000||
+    (retired&&followerCount!==0)||
     !Number.isSafeInteger(updatedAt)||updatedAt<=0||
     !Number.isSafeInteger(attempts)||attempts<0||attempts>=MAX_ATTEMPTS_529||
     !Number.isSafeInteger(ackedRevision)||ackedRevision<0||ackedRevision>=version)
     return null;
- return {ownerUid,version,followerCount,updatedAt,attempts,ackedRevision};
+ return {ownerUid,version,followerCount,updatedAt,attempts,ackedRevision,
+   ...(retired?{retired:true}:{})};
 };
 const hex529=b=>Array.from(new Uint8Array(b),x=>x.toString(16).padStart(2,'0')).join('');
 export const signOwnerFollowPayload529=async(body,at,secret)=>{
@@ -36,6 +39,7 @@ export const sendOwnerFollowOutboxEvent529=async(row,{endpoint,secret,send=fetch
  const body=JSON.stringify({
    version:1,revision:event.version,ownerUid:event.ownerUid,
    followerCount:event.followerCount,updatedAt:event.updatedAt,at,
+   ...(event.retired?{retired:true}:{}),
  });
  const signature=await signOwnerFollowPayload529(body,at,secret);
  const response=await send(endpoint,{method:'POST',

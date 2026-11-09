@@ -1,0 +1,61 @@
+name: SORIDRAW 531 Owned Lifecycle D1 Cost and Delete-Recreate
+# Director-approved isolated source check only. This workflow never deploys.
+# Physical job is allowed ONLY for PR 914 on its existing same-repo branch.
+on:
+  pull_request:
+    branches: [preview]
+    types: [opened, reopened, synchronize]
+    paths:
+      - 'scripts/measure-530-inline-owner-d1.mjs'
+      - 'scripts/verify-529-owner-sync.mjs'
+      - 'cloudflare/explore-worker/candidates/530-owner-follow-inline-stats.sql'
+      - 'cloudflare/explore-worker/runtime/owner-follow-retired-531.mjs'
+      - '.github/workflows/measure-531-owned-lifecycle-d1.yml'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-531-owned-ephemeral-d1
+  cancel-in-progress: false
+jobs:
+  offline:
+    if: github.event.pull_request.number == 914 && github.event.pull_request.head.repo.full_name == 'andrawing1212/soridraw-music' && github.event.pull_request.head.ref == 'candidate/app526-owner-follower-live-signal'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 531 synthetic delete-recreate plus exact signed retirement
+        run: |
+          set -euo pipefail
+          node --check scripts/measure-530-inline-owner-d1.mjs
+          node --check cloudflare/explore-worker/runtime/owner-follow-retired-531.mjs
+          node --check cloudflare/explore-worker/runtime/owner-follow-outbox-529.mjs
+          node scripts/measure-530-inline-owner-d1.mjs --self-test
+          npm ci --ignore-scripts --no-audit --no-fund
+          node scripts/verify-529-owner-sync.mjs
+  physical:
+    if: github.event.pull_request.number == 914 && github.event.pull_request.head.repo.full_name == 'andrawing1212/soridraw-music' && github.event.pull_request.head.ref == 'candidate/app526-owner-follower-live-signal'
+    needs: offline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: One temporary owned D1 only, preserve W2 and delete-recreate order
+        run: node scripts/measure-530-inline-owner-d1.mjs
+      - name: Always cleanup ONLY the run-owned D1 by exact name and UUID
+        if: always()
+        run: node scripts/measure-530-inline-owner-d1.mjs cleanup
+      - name: No shared operations
+        run: echo '531_SYNTHETIC_ONLY;NO_SHARED_D1;NO_FUNCTIONS_WORKER_RULES_HOSTING;GATES_OFF'

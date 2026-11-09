@@ -31,6 +31,20 @@ await assert.rejects(()=>outbox.sendOwnerFollowOutboxEvent529(a,{
  endpoint:'https://evil.example',secret,now:()=>n,send:async()=>({ok:true}),
 }),/ENDPOINT_NOT_PINNED/);
 assert.equal((await outbox.drainOwnerFollowOutbox529({enabled:false})).skipped,true);
+assert.equal(outbox.validateOwnerFollowOutboxEvent529({...a,retired:true,follower_count:2}),null,
+  'retirement must be signed with zero count');
+let signedRetiredPayload=null;
+assert.equal(await outbox.sendOwnerFollowOutboxEvent529(
+  {...a,retired:true,follower_count:0},
+  {endpoint,secret,now:()=>n,send:async(_url,init)=>{
+    signedRetiredPayload=JSON.parse(init.body);
+    assert.equal(signedRetiredPayload.retired,true);
+    assert.equal(signedRetiredPayload.followerCount,0);
+    assert.equal(init.headers['X-Soridraw-Follow-Relay529-Signature'],
+      createHmac('sha256',secret).update(String(n)+'.'+init.body).digest('hex'));
+    return {ok:true};
+  }}
+),true);
 
 // One row per owner: old successful delivery races with a newer revision.
 // CAS must not acknowledge that newer revision; stale delivery remains harmless.
@@ -138,6 +152,28 @@ assert.equal(receiver.nextOwnerFollowerMarker529(owner,rec(17,2),clock),undefine
 assert.equal(receiver.nextOwnerFollowerMarker529(owner,rec(18,1),clock),undefined);
 owner=receiver.nextOwnerFollowerMarker529(owner,rec(19,2),clock);
 assert.equal(owner.version,19);assert.equal(owner.followerCount,2);
+// Delete/recreate: retirement uses the next durable canonical version and
+// recreation MUST have a strictly greater source version even for same UID.
+const deletion={...signedRetiredPayload,revision:20};
+assert.equal(receiver.parseOwnerFollowReceipt529(Buffer.from(JSON.stringify(deletion)))?.retired,true);
+assert.equal(receiver.parseOwnerFollowReceipt529(Buffer.from(JSON.stringify({...deletion,followerCount:1}))),null);
+assert.equal(receiver.parseOwnerFollowReceipt529(Buffer.from(JSON.stringify({...deletion,retired:false}))),null);
+owner=receiver.nextOwnerFollowerMarker529(owner,deletion,clock);
+assert.equal(owner.version,20);assert.equal(owner.followerCount,0);
+assert.equal(owner.retired,true);
+const reborn={...deletion,revision:21,retired:undefined,followerCount:0};
+delete reborn.retired;
+owner=receiver.nextOwnerFollowerMarker529(owner,reborn,clock);
+assert.equal(owner.version,21);assert.equal(owner.followerCount,0);
+assert.equal(owner.retired,undefined);
+assert.equal(receiver.nextOwnerFollowerMarker529(owner,deletion,clock),undefined);
+const retireGateEvents=[];
+const retireGate=ui.createOwnerFollowerGate529('A',
+ (count,version,isNew)=>retireGateEvents.push([count,version,isNew]),()=>clock,19);
+retireGate.receive({...deletion,ownerUid:'A',version:20,at:n,receiptId:'20'});
+retireGate.receive({...reborn,ownerUid:'A',version:21,at:n,receiptId:'21'});
+assert.deepEqual(retireGateEvents,[[0,20,true],[0,21,true]]);
+retireGate.dispose();
 
 const worker=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
 const page=readFileSync('src/pages/ExplorePage.tsx','utf8');
@@ -158,3 +194,4 @@ assert.doesNotMatch(worker,/beforeOwnerFollow526|followOperationId\|\|crypto\.ra
 console.log('APP529_COALESCED_CAS_ACK_AND_RETRY=PASS');
 console.log('APP529_RTDB_CANONICAL_OWNER_REVISION_AND_HMAC=PASS');
 console.log('APP529_WARM_RETAINED_NO_D1_AND_COMPILED_OFF=PASS');
+console.log('APP531_SIGNED_RETIREMENT_RECREATE_AND_STALE_RECEIPT=PASS');

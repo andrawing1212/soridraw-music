@@ -2,6 +2,7 @@
 // RTDB version is the monotonic owner-scoped D1 outbox revision, not delivery time.
 export type ExploreOwnerFollowerSignal529 = {
  ownerUid:string; version:number; followerCount:number; at:number; receiptId:string;
+ retired?:true;
 };
 export const normalizeOwnerFollowerSignal529=(
   raw:unknown,ownerUid:string,
@@ -12,9 +13,11 @@ export const normalizeOwnerFollowerSignal529=(
     at=Number(row.at), receiptId=String(row.receiptId||'');
   if(row.ownerUid!==ownerUid||!Number.isSafeInteger(version)||version<=0||
      !Number.isSafeInteger(count)||count<0||count>1_000_000_000||
-     !Number.isSafeInteger(at)||at<=0||receiptId!==String(version))
+     !Number.isSafeInteger(at)||at<=0||receiptId!==String(version)||
+     ('retired' in row&&row.retired!==true)||(row.retired===true&&count!==0))
     return null;
-  return {ownerUid,version,followerCount:count,at,receiptId};
+  return {ownerUid,version,followerCount:count,at,receiptId,
+    ...(row.retired===true?{retired:true as const}:{})};
 };
 export const createOwnerFollowerGate529=(
  ownerUid:string,

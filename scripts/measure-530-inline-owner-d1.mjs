@@ -8,8 +8,13 @@ import {
  INLINE_OWNER_FOLLOW_530_COMPILED_OPEN,INLINE_OWNER_FOLLOW_530_UPDATE_SQL,
  INLINE_OWNER_FOLLOW_530_SELECT_SQL,drainOwnerFollowInline530,
 } from '../cloudflare/explore-worker/runtime/owner-follow-inline-530.mjs';
+import {
+ OWNER_FOLLOW_RETIRED_531_COMPILED_OPEN,OWNER_FOLLOW_RETIRED_531_SELECT_SQL,
+ drainOwnerFollowRetired531,
+} from '../cloudflare/explore-worker/runtime/owner-follow-retired-531.mjs';
 const source=readFileSync('cloudflare/explore-worker/candidates/530-owner-follow-inline-stats.sql','utf8');
 assert.equal(INLINE_OWNER_FOLLOW_530_COMPILED_OPEN,false);
+assert.equal(OWNER_FOLLOW_RETIRED_531_COMPILED_OPEN,false);
 assert.match(readFileSync('cloudflare/explore-worker/runtime/owner-follow-outbox-529.mjs','utf8'),
  /OWNER_FOLLOW_OUTBOX_529_COMPILED_OPEN=false/);
 assert.match(readFileSync('src/services/exploreOwnerFollowerSync529.ts','utf8'),
@@ -18,14 +23,20 @@ const before=source.slice(0,source.indexOf('CREATE TRIGGER IF NOT EXISTS'))
  .replace(/^\s*--.*$/gm,'').split(';').map(s=>s.trim()).filter(Boolean);
 const triggers=[...source.matchAll(/CREATE TRIGGER IF NOT EXISTS[\s\S]*?\bEND;/g)].map(m=>m[0]);
 assert.equal(before.length,9,'530_SOURCE_ONLY_CONTROL_6_ALTER_INDEX');
-assert.equal(triggers.length,2,'530_TWO_TRIGGERS');
+assert.equal(triggers.length,3,'531_FALLBACK_RETIRE_RECREATE_TRIGGERS');
+const between=source.slice(
+ source.indexOf(triggers[0])+triggers[0].length,source.indexOf(triggers[1]))
+ .replace(/^\s*--.*$/gm,'').split(';').map(s=>s.trim()).filter(Boolean);
+assert.equal(between.length,2,'531_TOMBSTONE_TABLE_AND_INDEX');
 assert.ok(before.every(s=>/^(CREATE TABLE IF NOT EXISTS|INSERT INTO explore_owner_follow_control_530|ALTER TABLE profile_stats ADD COLUMN|CREATE INDEX IF NOT EXISTS)/.test(s)));
 assert.equal(before.filter(s=>s.startsWith('ALTER TABLE')).length,6);
 assert.ok(triggers[0].includes('NEW.owner_follow_revision_530=OLD.owner_follow_revision_530'));
-assert.ok(triggers[1].includes('BEFORE DELETE ON profile_stats'));
+assert.ok(triggers[1].includes('AFTER DELETE ON profile_stats'));
+assert.ok(triggers[2].includes('AFTER INSERT ON profile_stats'));
+assert.doesNotMatch(source,/CREATE TRIGGER IF NOT EXISTS explore_owner_follow_delete_fence_530/);
 assert.doesNotMatch(source,/^\s*DROP TABLE|^\s*DELETE FROM/im);
 const createStats='CREATE TABLE profile_stats(uid TEXT PRIMARY KEY NOT NULL,follower_count INTEGER NOT NULL CHECK(follower_count>=0),following_count INTEGER NOT NULL DEFAULT 0,updated_at INTEGER NOT NULL)';
-const ddl=[...before,...triggers];
+const ddl=[...before,triggers[0],...between,triggers[1],triggers[2]];
 const local=new DatabaseSync(':memory:');
 local.exec(createStats);
 local.exec("INSERT INTO profile_stats VALUES('A',0,0,1)");
@@ -40,6 +51,20 @@ assert.equal(local.prepare("SELECT owner_follow_revision_530 AS r FROM profile_s
 const plan=local.prepare('EXPLAIN QUERY PLAN '+INLINE_OWNER_FOLLOW_530_SELECT_SQL).all(100,12);
 assert.ok(plan.some(r=>String(r.detail).includes('idx_owner_follow_due_530')),'DUE_INDEX_NOT_USED');
 assert.equal((await drainOwnerFollowInline530({})).skipped,true);
+assert.equal((await drainOwnerFollowRetired531({})).skipped,true);
+// Physical D1 row deletion must succeed, and same-UID creation re-bases higher.
+local.exec("DELETE FROM profile_stats WHERE uid='A'");
+const localRetired=local.prepare(
+ "SELECT revision FROM explore_owner_follow_retired_531 WHERE owner_uid='A'").get();
+assert.equal(Number(localRetired?.revision),3);
+local.exec("INSERT INTO profile_stats(uid,follower_count,updated_at) VALUES('A',0,5)");
+const resurrected=local.prepare(
+ "SELECT owner_follow_revision_530 AS rev,owner_follow_acked_revision_530 AS ack FROM profile_stats WHERE uid='A'").get();
+assert.equal(Number(resurrected?.rev),4);
+assert.equal(Number(resurrected?.ack),3);
+const retiredPlan=local.prepare('EXPLAIN QUERY PLAN '+OWNER_FOLLOW_RETIRED_531_SELECT_SQL)
+ .all(100,12);
+assert.ok(retiredPlan.some(x=>String(x.detail).includes('idx_owner_follow_retired_due_531')));
 local.close();
 console.log('APP530_LOCAL_INLINE_LEGACY_AND_NEW_WRITER_SEQUENCE_AND_INDEX=PASS');
 if(process.argv[2]==='--self-test')process.exit(0);
@@ -175,8 +200,50 @@ try{
  await query('UPDATE profile_stats SET owner_follow_attempts_530=0,owner_follow_next_at_530=0,owner_follow_dead_at_530=0 WHERE uid=? AND owner_follow_revision_530=? AND owner_follow_acked_revision_530<owner_follow_revision_530 AND owner_follow_dead_at_530>0',['B',2],'530_owned_replay');
  const fixed=await drainOwnerFollowInline530({db,enabled:true,now:()=>clock+64000,deliver:async()=>true});
  assert.equal(fixed.delivered,1);assert.equal((await state('B')).acked,2);
- let deleteBlocked=false;try{await query("DELETE FROM profile_stats WHERE uid='C'");}catch{deleteBlocked=true;}
- assert.ok(deleteBlocked,'REVISION_RESET_GUARD_NOT_PRESENT');
+ // Real D1 physical deletion: no more global DELETE veto.
+ const aBefore=await state('A'),latestBeforeDelete=Number(aBefore.revision);
+ const retiredA=await query("DELETE FROM profile_stats WHERE uid='A'",[],'531_delete_active_A');
+ assert.ok(retiredA.write>=1,'PHYSICAL_DELETE_NOT_CHARGED');
+ const tomb=async(uid)=>await first(
+  'SELECT owner_uid,revision,acked_revision,deleted_at,attempts,dead_at FROM explore_owner_follow_retired_531 WHERE owner_uid=?',[uid]);
+ const tombA=await tomb('A');
+ assert.equal(Number(tombA.revision),latestBeforeDelete+1,'RETIRE_VERSION_NOT_MONOTONIC');
+ assert.equal((await first("SELECT uid FROM profile_stats WHERE uid='A'")),undefined);
+ let retiredDelivered=[];
+ const retire=await drainOwnerFollowRetired531({db,enabled:true,now:()=>clock+100000,
+   deliver:async e=>{retiredDelivered.push(e);return true;}});
+ assert.equal(retire.delivered,1);
+ assert.equal(retiredDelivered[0].retired,true);
+ assert.equal(retiredDelivered[0].followerCount,0);
+ assert.equal(Number((await tomb('A')).acked_revision),tombA.revision);
+ await query("INSERT INTO profile_stats(uid,follower_count,updated_at) VALUES('A',0,100)",[],'531_same_uid_recreate');
+ const aAgain=await state('A');
+ assert.equal(Number(aAgain.revision),Number(tombA.revision)+1);
+ assert.equal(Number(aAgain.acked),Number(tombA.revision));
+ const staleAfterRecreate=await query(
+  'UPDATE profile_stats SET owner_follow_acked_revision_530=? WHERE uid=? AND owner_follow_revision_530=?',
+  [latestBeforeDelete,'A',latestBeforeDelete],'531_old_ack_after_recreate');
+ assert.equal(staleAfterRecreate.write,0,'STALE_ACK_CROSSED_ACCOUNT_BOUNDARY');
+ const noChangeRecreate=await update('A',0,101,'531_recreate_noop');
+ assert.equal(noChangeRecreate.write,0);
+ const firstNew=await update('A',1,102,'531_recreated_first_follow');
+ assert.equal(firstNew.write,2,'RECREATED_FOLLOW_MUST_RETAIN_W2');
+ const aFollowing=await state('A');
+ assert.equal(Number(aFollowing.revision),Number(tombA.revision)+2);
+ // Physical deletion while no signal has been ACKed: tombstone is durable.
+ const deletedC=await query("DELETE FROM profile_stats WHERE uid='C'",[],'531_delete_C_pending');
+ assert.ok(deletedC.write>=1);
+ const tombC=await tomb('C');
+ assert.ok(Number(tombC.revision)>0);
+ await query("INSERT INTO profile_stats(uid,follower_count,updated_at) VALUES('C',0,103)",[],'531_recreate_C_before_retire_ack');
+ const noGhost=await drainOwnerFollowRetired531({db,enabled:true,now:()=>clock+110000,
+   deliver:async()=>{throw Error('retired sender MUST NOT publish after same UID recreated');}});
+ assert.equal(noGhost.selected,0,'STALE_TOMBSTONE_DELIVERED_AFTER_RECREATION');
+ await query("DELETE FROM profile_stats WHERE uid='C'",[],'531_second_delete_C');
+ const tombSecond=await tomb('C');
+ assert.ok(Number(tombSecond.revision)>Number(tombC.revision),'SECOND_DELETE_RESET_REVISION');
+ assert.ok(old.write>optimized.write,'OPTIMIZED_PATH_DID_NOT_REDUCE_PHYSICAL_WRITES');
+ assert.ok(optimized.write<=(baseline.write+1),'NEW_WRITER_TOO_EXPENSIVE');
  assert.ok(old.write>optimized.write,'OPTIMIZED_PATH_DID_NOT_REDUCE_PHYSICAL_WRITES');
  assert.ok(optimized.write<=(baseline.write+1),'NEW_WRITER_TOO_EXPENSIVE');
  console.log(JSON.stringify({kind:'APP530_ISOLATED_PHYSICAL_D1',metrics:measures,
@@ -184,9 +251,11 @@ try{
    atomicNewWriter:optimized.write,newWriterNoop:noChange.write},
   verdicts:{atomicity:'PASS',indexDueNoScan:'PASS',oldWriterFallback:'PASS',
    revisionCAS:'PASS',lostDeliveryRetry:'PASS',deadHoldReplay:'PASS',
-   revisionDeletionFence:'PASS-BLOCKS-ACCOUNT-DELETE'},
-  limitations:'Synthetic only; changes canonical profile_stats schema. Full three-env writer migration and account-deletion lifecycle are release blockers; no Firebase/RTDB physical test.'
+   deleteAndRecreate:'PASS',tombstoneRelayAndAck:'PASS',
+   retiredRecreateRaceSuppressed:'PASS',recreatedW2:'PASS'},
+  limitations:'Synthetic only; lifetime UID tombstone retention needs privacy/erasure policy. Live Firebase/Auth/delete lifecycle, 3-env migration and RTDB delivery remain unverified.'
  },null,2));
+ console.log('APP531_DELETE_RECREATE_REVISION_AND_W2=PASS');
  console.log('APP530_INLINE_D1_COST_COMPARISON=PASS');
  console.log('APP530_SHARED_D1_WRITES=0;WORKER_FUNCTIONS_RULES_HOSTING_DEPLOY=0');
 }finally{if(owned)await deleteOwned(owned);}

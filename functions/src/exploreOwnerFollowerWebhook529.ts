@@ -8,19 +8,22 @@ import { createHmac, timingSafeEqual } from 'crypto';
 const SECRET_529=defineSecret('SORIDRAW_OWNER_FOLLOW_HMAC_529');
 const UID_529=/^[a-zA-Z0-9_-]{1,128}$/;
 const HEX_529=/^[0-9a-f]{64}$/;
-type Receipt529={version:1;revision:number;ownerUid:string;followerCount:number;updatedAt:number;at:number};
+type Receipt529={version:1;revision:number;ownerUid:string;followerCount:number;updatedAt:number;at:number;retired?:true};
 export const parseOwnerFollowReceipt529=(raw:Buffer):Receipt529|null=>{
   if(!raw||raw.length<40||raw.length>512)return null;
   let value:Record<string,unknown>;
   try{value=JSON.parse(raw.toString('utf8'))}catch{return null;}
   if(!value||typeof value!=='object'||Array.isArray(value))return null;
-  if(Object.keys(value).sort().join(',')!==
-     'at,followerCount,ownerUid,revision,updatedAt,version')return null;
+  const keys=Object.keys(value).sort().join(',');
+  if(keys!=='at,followerCount,ownerUid,revision,updatedAt,version' &&
+     keys!=='at,followerCount,ownerUid,retired,revision,updatedAt,version')return null;
+  if('retired' in value&&value.retired!==true)return null;
   const revision=Number(value.revision),count=Number(value.followerCount);
   const at=Number(value.at),updatedAt=Number(value.updatedAt);
   if(value.version!==1||!UID_529.test(String(value.ownerUid||''))||
      !Number.isSafeInteger(revision)||revision<=0||
      !Number.isSafeInteger(count)||count<0||count>1_000_000_000||
+     (value.retired===true&&count!==0)||
      !Number.isSafeInteger(updatedAt)||updatedAt<=0||
      !Number.isSafeInteger(at)||at<=0)return null;
   return value as Receipt529;
@@ -44,7 +47,8 @@ export const nextOwnerFollowerMarker529=(
   const version=Number((current as {version?:unknown}|null)?.version||0);
   if(Number.isSafeInteger(version)&&version>=receipt.revision)return undefined;
   return {ownerUid:receipt.ownerUid,version:receipt.revision,
-    followerCount:receipt.followerCount,receiptId:String(receipt.revision),at:now};
+    followerCount:receipt.followerCount,receiptId:String(receipt.revision),at:now,
+    ...(receipt.retired===true?{retired:true}:{})};
 };
 
 export const publishExploreOwnerFollower529=onRequest({

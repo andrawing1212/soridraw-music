@@ -521,13 +521,14 @@ export const getExploreProfileConnections = async (
   profileRef: string,
   direction: ExploreProfileConnectionDirection,
   cursor: string | null = null,
+  forceServer = false,
 ): Promise<ExploreProfileConnectionPage> => {
   const normalizedRef = String(profileRef || '').trim();
   if (!normalizedRef) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
   const normalizedDirection: ExploreProfileConnectionDirection = direction === 'following' ? 'following' : 'followers';
   const normalizedCursor = String(cursor || '').trim();
 
-  if (!normalizedCursor) {
+  if (!normalizedCursor && !forceServer) {
     const cached = readProfileConnectionCache377(normalizedRef, normalizedDirection);
     if (cached) {
       recordCloudflareLocalCacheHit(

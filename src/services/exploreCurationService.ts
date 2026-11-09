@@ -171,6 +171,27 @@ const writeCuratedCache307 = (
   return next;
 };
 
+// APP523_PUBLIC_CURATED_COUNT_PUBLISHED_ONLY
+// A curation membership revision does not change when an actual public like
+// count is published. Preserve the latest settled R2 card in the existing
+// account-neutral curated snapshot, not an actor's optimistic count.
+export const patchSoridrawCuratedPublishedLikeCount523 = (
+  trackId: string, publishedCount: number,
+): boolean => {
+  const id = String(trackId || '').trim();
+  if (!id || !Number.isSafeInteger(publishedCount) || publishedCount < 0) return false;
+  const cached = readCuratedCache307();
+  if (!cached) return false;
+  let changed = false;
+  const items = cached.items.map((item) => {
+    if (String(item.id || '').trim() !== id || Number(item.likeCount) === publishedCount) return item;
+    changed = true;
+    return { ...item, likeCount: publishedCount };
+  });
+  if (changed) writeCuratedCache307(items, cached.revision, cached.checkedAt);
+  return changed;
+};
+
 export const invalidateSoridrawCuratedCache307 = () => {
   memoryCache307 = null;
   if (typeof localStorage !== 'undefined') {

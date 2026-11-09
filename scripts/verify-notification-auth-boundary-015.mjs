@@ -315,9 +315,9 @@ assert.equal((await call(previewRoute,req(inbox,'GET','alice',
  {origin:false}),previewEnv)).status,403,'missing Origin forbidden');
 assert.equal((await call(previewRoute,req(inbox,'POST','alice'),previewEnv)).status,405,
  'inbox POST blocked before authentication and D1');
-const preflight=await call(previewRoute,req(inbox,'OPTIONS',null),previewEnv);
-assert.equal(preflight.status,204);
-assert.equal(preflight.headers.get('Access-Control-Allow-Origin'),origin);
+const previewPreflight019=await call(previewRoute,req(inbox,'OPTIONS',null),previewEnv);
+assert.equal(previewPreflight019.status,204);
+assert.equal(previewPreflight019.headers.get('Access-Control-Allow-Origin'),origin);
 assert.equal(io.authCalls,previewStart.authCalls);
 assert.equal(io.reads,previewStart.reads);
 assert.equal(io.writes,previewStart.writes);

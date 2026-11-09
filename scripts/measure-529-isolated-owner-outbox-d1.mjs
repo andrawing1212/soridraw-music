@@ -19,7 +19,7 @@ const sql=[
  get(/INSERT INTO explore_owner_follow_control_529[\s\S]*?;/,'INIT_OFF'),
  get(/CREATE TABLE IF NOT EXISTS explore_owner_follow_outbox_529[\s\S]*?\) WITHOUT ROWID;/,'OUTBOX'),
  get(/CREATE INDEX IF NOT EXISTS idx_explore_owner_follow_pending_529[\s\S]*?;/,'PENDING_INDEX'),
- ...[...source.matchAll(/CREATE TRIGGER IF NOT EXISTS [\s\S]*?\nEND;/g)].map(x=>x[0]),
+ ...[...source.matchAll(/CREATE TRIGGER IF NOT EXISTS [\s\S]*?\bEND;/g)].map(x=>x[0]),
 ];
 assert.equal(sql.length,6,'EXACT_529_DDL_ONLY');
 assert.equal((source.match(/CREATE TRIGGER IF NOT EXISTS/g)||[]).length,2);

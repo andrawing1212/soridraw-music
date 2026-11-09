@@ -38,7 +38,7 @@ export async function readUnifiedNotificationInbox004({
   });
   if(pref.status!=='ok'||!pref.preferences)throw deny('NOTIFICATION_SETTINGS_UNKNOWN');
   const settings=pref.preferences;
-  if(!settings.master)return {status:'ok',items:[],queries:1};
+  if(!settings.master)return {status:'ok',items:[],preferences:settings,queries:1};
   const cutoff=now-NOTIFICATION_RETENTION_MS_002;
   const social= (settings.like||settings.follow)
     ? await readOwnNotificationInbox001({
@@ -89,7 +89,7 @@ export async function readUnifiedNotificationInbox004({
       actorName:'SORIDRAW',text:a.title,body:a.body,createdAt:a.publishedAt});
   }
   items.sort((a,b)=>b.createdAt-a.createdAt||a.id.localeCompare(b.id));
-  return {status:'ok',items:filterRecords(items,limit),
+  return {status:'ok',items:filterRecords(items,limit),preferences:settings,
     queries:1+(settings.like||settings.follow?1:0)+(settings.message?1:0)};
 }
 

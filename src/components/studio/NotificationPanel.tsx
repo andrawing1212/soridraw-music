@@ -84,7 +84,10 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   // Account-wide settings are staged behind the approved shared-backend
   // activation flag. Until then, keep existing local switches untouched.
   const [accountSettings, setAccountSettings] = useState<NotificationAccountSettings003 | null>(null);
-  const [remoteInbox, setRemoteInbox] = useState<{uid:string;items:InboxNotification[]}>({uid:'',items:[]});
+  const [remoteInbox, setRemoteInbox] = useState<{
+    uid:string;items:InboxNotification[];preferences:NotificationAccountSettings003|null
+  }>({uid:'',items:[],preferences:null});
+  const [remoteRefreshKey,setRemoteRefreshKey] = useState(0);
   const [remoteLoading, setRemoteLoading] = useState(false);
   const [settingsSyncBusy, setSettingsSyncBusy] = useState(false);
   const syncGenerationRef = useRef(0);
@@ -154,16 +157,16 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
     if (!current || current.uid !== uid) return;
     let live = true;
     setRemoteLoading(true);
-    void loadOwnNotifications004(current).then((items) => {
+    void loadOwnNotifications004(current).then(({items,preferences}) => {
       if (!live || auth.currentUser?.uid !== uid) return;
-      setRemoteInbox({uid:current.uid,items});
+      setRemoteInbox({uid:current.uid,items,preferences});
     }).catch(() => {
       if (live) setNotice('알림을 불러오지 못했습니다. 다시 열어 확인해 주세요.');
     }).finally(() => {
       if (live) setRemoteLoading(false);
     });
     return () => { live = false; };
-  }, [open, uid]);
+  }, [open, uid, remoteRefreshKey]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -223,13 +226,24 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   // the UI release. A verified recipient-scoped backend inbox is a separate
   // activation gate. PREVIEW examples are explicitly labelled as examples.
   const visualExample = isNotificationVisualPreview() && !NOTIFICATION_INBOX_ENABLED_004;
+  // The already-authenticated inbox read includes canonical account preferences
+  // at no additional D1 query. Never hide its valid rows behind a stale local
+  // setting from a different device. Confirmed changes win by revision.
+  const serverPreferences = remoteInbox.uid === uid ? remoteInbox.preferences : null;
+  const effectivePreferences = NOTIFICATION_INBOX_ENABLED_004
+    ? (accountSettings && (!serverPreferences ||
+        accountSettings.revision >= serverPreferences.revision)
+        ? accountSettings : serverPreferences)
+    : null;
   const rows = useMemo(() => (NOTIFICATION_INBOX_ENABLED_004
-    ? [...(remoteInbox.uid === uid ? remoteInbox.items : []),
-      ...projectCompletedExistingGenerations004(recentHistory)]
+    ? (effectivePreferences ? [...(remoteInbox.uid === uid ? remoteInbox.items : []),
+      ...projectCompletedExistingGenerations004(recentHistory)] : [])
     : (visualExample ? NOTIFICATION_EXAMPLE_ROWS : []))
-    .filter((row) => masterEnabled && prefs[row.category] &&
+    .filter((row) => (effectivePreferences?.master ?? masterEnabled) &&
+      (effectivePreferences?.[row.category] ?? prefs[row.category]) &&
       notificationSectionFor(row.category) === activeSection),
-    [visualExample, remoteInbox, uid, recentHistory, prefs, masterEnabled, activeSection]);
+    [visualExample, remoteInbox, uid, recentHistory, prefs, masterEnabled,
+      activeSection, effectivePreferences]);
 
   const accountSyncLocked = NOTIFICATION_ACCOUNT_SYNC_ENABLED_003 &&
     (settingsSyncBusy || !accountSettings);
@@ -253,6 +267,9 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
         setPrefs(confirmed);
         saveNotificationMasterEnabled(uid, master);
         saveNotificationPreferences(uid, confirmed);
+        // Refresh only after an actual confirmed user change. This is not
+        // a panel-open loop, timer, or cross-account polling.
+        if(result.status==='saved')setRemoteRefreshKey(value=>value+1);
         if(result.status==='conflict')
           setNotice('다른 기기에서 변경한 알림 설정을 먼저 적용했습니다. 다시 원하는 항목을 선택해 주세요.');
       })

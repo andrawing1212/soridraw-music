@@ -206,6 +206,7 @@ assert.equal(cache.writes,1,'replay must use R2 W0');
 assert.equal(globalCount(),1);
 const aliceView=await unified(inboxUrl,'alice');
 assert.equal(aliceView.code,200);
+assert.deepEqual(aliceView.body.data.preferences,{revision:0,...defaults});
 assert.equal(aliceView.cache,'private, no-store');
 assert.deepEqual(new Set(aliceView.body.data.items.map(x=>x.category)),
   new Set(['like','follow','message','announcement']));
@@ -213,7 +214,9 @@ const otherView=await unified(inboxUrl+'?uid=alice','actor');
 assert.equal(otherView.code,200);
 assert.deepEqual(otherView.body.data.items.map(x=>x.category),['announcement'],
   'other account only sees genuinely shared announcement');
-assert.deepEqual((await unified(inboxUrl,'bob')).body.data.items,[],
+const bobView=await unified(inboxUrl,'bob');
+assert.equal(bobView.body.data.preferences.master,false);
+assert.deepEqual(bobView.body.data.items,[],
   'Bob master OFF hides all notifications');
 console.log('NOTIFICATION_014_AUTH_ADMIN_PRIVATE_NO_CROSS_ACCOUNT_LEAK=PASS');
 console.log('NOTIFICATION_014_LIKE_FOLLOW_DIGEST_AND_R2_IDEMPOTENCE=PASS');
@@ -225,6 +228,7 @@ assert.equal(aliceOff.code,200);
 assert.equal(aliceOff.body.data.preferences.revision,1);
 const onlyFollow=(await unified(inboxUrl,'alice')).body.data.items;
 assert.deepEqual(onlyFollow.map(x=>x.category),['follow']);
+assert.equal((await unified(inboxUrl,'alice')).body.data.preferences.like,false);
 const staleAlice=await preference('PUT','alice',{...defaults,expectedRevision:0,operationId:op(5)});
 assert.equal(staleAlice.code,409);
 assert.equal(staleAlice.body.data.preferences.like,false);

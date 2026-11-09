@@ -2,6 +2,8 @@ import type {User} from 'firebase/auth';
 import {getFirebaseAppCheckToken} from '../../firebase';
 import {EXPLORE_API_BASE} from '../../config/exploreEnvironment';
 import type {InboxNotification} from './notificationModel';
+import {parseNotificationAccountSettings003,
+  type NotificationAccountSettings003} from './notificationAccountSyncCore003';
 
 // Global release hold: PREVIEW app remains exactly as before until a
 // reviewed shared backend exists. No app-entry GET, timer or subscription.
@@ -57,7 +59,8 @@ export function projectCompletedExistingGenerations004(
 }
 
 /** One authenticated GET on explicit inbox open; no polling/tab-reads. */
-export async function loadOwnNotifications004(user:User):Promise<InboxNotification[]>{
+export async function loadOwnNotifications004(user:User):
+  Promise<{items:InboxNotification[];preferences:NotificationAccountSettings003}>{
   if(!NOTIFICATION_INBOX_ENABLED_004)
     throw Error('NOTIFICATION_INBOX_NOT_ACTIVATED');
   const [jwt,appCheck]=await Promise.all([
@@ -75,7 +78,8 @@ export async function loadOwnNotifications004(user:User):Promise<InboxNotificati
   if(value?.ok!==true||!Array.isArray(items)||items.length>LIMIT_004)
     throw Error('NOTIFICATION_INBOX_INVALID_DATA');
   const allow=new Set(['like','follow','message','announcement']);
-  return items.map((item:unknown)=>{
+  const preferences=parseNotificationAccountSettings003(value.data.preferences);
+  const parsed=items.map((item:unknown)=>{
     if(!item||typeof item!=='object')throw Error('NOTIFICATION_INBOX_INVALID_ROW');
     const x=item as Record<string,unknown>;
     const id=limitText(x.id,512),actorName=limitText(x.actorName,80);
@@ -92,4 +96,5 @@ export async function loadOwnNotifications004(user:User):Promise<InboxNotificati
         ? {song:{id:subject.id.slice(0,512),title:subject.title.slice(0,150)}}:{})
     } as InboxNotification;
   });
+  return {items:parsed,preferences};
 }

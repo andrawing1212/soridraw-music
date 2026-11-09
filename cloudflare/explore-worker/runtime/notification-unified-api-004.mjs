@@ -49,7 +49,7 @@ export async function handleUnifiedNotificationsApi004({
         enabled:true
       });
       if(data.status!=='ok')throw Error('INBOX_UNVERIFIED');
-      return result(200,{ok:true,data:{items:data.items}},cors);
+      return result(200,{ok:true,data:{items:data.items,preferences:data.preferences}},cors);
     }
     if(typeof verifyAdmin!=='function'||await verifyAdmin(request,uid)!==true)
       return fail('ADMIN_REQUIRED',cors,403);

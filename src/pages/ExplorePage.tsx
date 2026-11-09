@@ -86,6 +86,7 @@ import {
   getExploreFollowState,
   getExploreFollowingUids312,
   getExploreProfileConnections,
+  invalidateExploreProfileConnections377,
   patchExploreFollowLocalState377,
   readExploreFollowMembership379,
   readExploreFollowingExactCount379,
@@ -4208,6 +4209,10 @@ export default function ExplorePage() {
       (count) => {
         if (auth.currentUser?.uid !== ownerUid526 ||
             activeProfileUidRef.current !== ownerUid526) return;
+        // A's cached exact followers list predates this confirmed remote edge.
+        // Invalidate only A's one followers page, never all profile caches.
+        invalidateExploreProfileConnections377(ownerUid526, 'followers');
+        profileConnectionsCache376Ref.current.delete(ownerUid526 + ':followers');
         patchExplorePublicProfileFirstViewProfile(ownerUid526, { followerCount: count });
         setProfile(previous => previous?.uid === ownerUid526 && previous.followerCount !== count
           ? { ...previous, followerCount: count } : previous);

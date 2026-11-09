@@ -58,6 +58,8 @@ assert.match(page,/EXPLORE_OWNER_FOLLOW_REALTIME_526_ENABLED/);
 assert.match(page,/createExploreOwnerFollowerGate526/);
 assert.match(page,/subscribeExploreOwnerFollowerSync526/);
 assert.match(page,/getExplorePublicProfile\(ownerUid526, true\)/);
+assert.match(page,/invalidateExploreProfileConnections377\(ownerUid526, 'followers'\)/);
+assert.match(page,/profileConnectionsCache376Ref\.current\.delete\(ownerUid526 \+ ':followers'\)/);
 assert.match(social,/getExplorePublicProfile = async \(profileRef: string, forceServer = false\)/);
 assert.match(social,/forceServer \? 'no-store' : 'default'/);
 assert.match(bridge,/EXPLORE_OWNER_FOLLOW_REALTIME_526_ENABLED = false/);

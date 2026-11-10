@@ -1,10 +1,12 @@
-## CURRENT — 알림 Stage027 PREVIEW 실인증 GET 상태 표시 Hosting 배포 PASS / 실제 계정 200 아직 미검증 (2026-11-10 KST)
+## CURRENT — 알림 Stage027 PREVIEW 실인증 GET 상태 표시 Hosting 배포 PASS / 사용자 PC 조회 PASS·실알림 수집 OFF (2026-11-10 KST)
 - **현재 승인:** 기존 좋아요·팔로우 W1~W2/동기화 보호, 실알림 비용 최소화와 실제 로그인 수신 검증. PR #914(APP547)는 Draft/OFF·보류. 사용자 원본·공유 D1 수집 활성화·TEST/PRODUCTION Hosting 금지.
 - **구현:** [PR #924](https://github.com/andrawing1212/soridraw-music/pull/924) merge `680b292377232f34704420857dfdd65fc2e993a3`. 기존 PREVIEW 알림 패널에서 본래 **사용자 명시 열기 1회** 발생하는 Firebase ID token+AppCheck GET의 결과만 표시: 확인 중/검증된 본인 수신함 건수/HTTP 오류 코드. 요청·폴링·토큰 로그·브라우저 저장·새 D1 쓰기 **추가 없음**. 계정 전환/닫기/응답 지연 시 이전 사용자 결과 표시 차단. 기존 예시 알림은 실제 인증된 건수에 합산하지 않음.
 - **검사·Hosting:** PR 알림 통합 격리·로컬 기록 격리·공통 제품 품질/TS/Build 모두 PASS. [실제 PREVIEW Hosting 배포 run #42774788583](https://github.com/andrawing1212/soridraw-music/actions/runs/42774788583) **SUCCESS**. 정확한 release source SHA `680b292377232f34704420857dfdd65fc2e993a3`, `https://preview.soridraw.com/` 검증 PASS. 공유 RTDB Rules SKIPPED, TEST/PRODUCTION 불변 PASS. 기존 PREVIEW Worker `332ca384-725d-46aa-8824-e19a3543bed8` (Stage026) 변경 없음.
 - **실인증 검증 아직 미완료:** 검증 UI는 배포됐으나 이 세션에서 실제 사용자의 서명된 JWT+AppCheck 요청을 직접 실행하지 않음. 디렉터가 PREVIEW에 로그인해 알림 패널을 1회 열면 `PREVIEW 서버 인증 연결 정상 · 본인 수신함 N건 조회` 표시로 실제 HTTP 200 확인 가능(개인정보·토큰 제출 불필요). 수집 OFF이므로 0건은 정상일 수 있으며, 이 메시지는 좋아요·팔로우 실수신 PASS가 아님.
 - **비용 차단:** 이미 물리 측정된 Stage011 고유 알림 1건의 추가 `D1 R 약 +3/W+2`는 기본키 수신함 조회와 만료 인덱스 유지를 위한 구조. 현재 2시간 단위 배우·대상·수신자 중복 W0, 수집 OFF W0, 탐색·알림 패널 단순 방문 쓰기 W0. **기존 좋아요·팔로우 전체 W1~W2 합산 기준 초과 위험 때문에 공유 D1 래치 계속 OFF**. 인덱스를 빼서 30일 만료 전체 스캔을 유발하는 값싼 편법 금지.
 - **남은 작업:** 실계정 인증 200 확인→실제 A→B 좋아요·팔로우 전달 경로 비용 W1~W2를 만족하는 독립 설계 또는 디렉터 제품 선택→세 Worker/공유 D1 롤백 경로 재검증→수집 ON 및 PREVIEW PC·모바일 실사용. Stage027은 사용자 1차 실알림 출시 완료가 아님.
+
+- **PC 실사용 증거 추가 (2026-11-10 16:45 KST):** 디렉터가 로그인한 PREVIEW 알림 패널의 스크린샷을 제공했고, `PREVIEW 서버 인증 연결 정상 · 본인 수신함 0건 조회` 표시 확인. Stage027 클라이언트는 기존 Firebase ID Token + AppCheck GET 성공 및 본인 수신함 데이터 검증 후 이 상태를 표시하므로 **사용자 PC의 실인증 서버 조회 PASS** (사용자 제공 화면 기준). 별도 관리자 HTTP 로그나 모바일 환경은 검증하지 않음. 화면의 좋아요·팔로우·관리자 개인 메시지는 `예시` 표기가 있는 샘플이며 실제 소셜 알림 수신 0건. A→B 실알림 송수신, 30일 실제 삭제, 모바일 동작은 미확인. 공유 D1 수집 OFF, 사용자 원본 변경 없음.
 
 ---
 

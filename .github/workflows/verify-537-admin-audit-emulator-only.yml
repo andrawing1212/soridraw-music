@@ -1,0 +1,60 @@
+name: SORIDRAW 537 Isolated Admin Audit and Failure Hold
+# One-time, demo Firebase emulators only. No deployment or shared credentials.
+on:
+  pull_request:
+    branches: [preview]
+    types: [opened, reopened, synchronize]
+    paths:
+      - 'functions/src/ownerFollowManualReview536.ts'
+      - 'functions/src/ownerFollowAdminAdapter537.ts'
+      - 'scripts/test-537-owner-admin-audit.mjs'
+      - '.github/workflows/verify-537-admin-audit-emulator-only.yml'
+permissions: {contents: read}
+concurrency:
+  group: soridraw-537-one-time-emulator
+  cancel-in-progress: false
+jobs:
+  emulator:
+    if: github.event.pull_request.number == 914 && github.event.pull_request.head.repo.full_name == 'andrawing1212/soridraw-music' && github.event.pull_request.head.ref == 'candidate/app526-owner-follower-live-signal'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      APP534_ISOLATED_ONLY: 'yes'
+      GCLOUD_PROJECT: demo-soridraw-owner-534
+      FIREBASE_PROJECT_ID: demo-soridraw-owner-534
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Source and isolation gates
+        run: |
+          set -euo pipefail
+          test "$GCLOUD_PROJECT" = "demo-soridraw-owner-534"
+          node --check scripts/test-537-owner-admin-audit.mjs
+          grep -q 'APP537_ADMIN_RECOVERY_COMPILED_OPEN=false' functions/src/ownerFollowAdminAdapter537.ts
+          node -e "const c=JSON.parse(require('fs').readFileSync('scripts/emulator/app534.firebase.json'));if(c.firestore.rules!=='app534.firestore.rules'||c.database.rules!=='app533.database.rules.json')process.exit(3)"
+      - name: Install source dependencies (no scripts)
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm --prefix functions ci --ignore-scripts --no-audit --no-fund
+      - name: Strict Functions compile only
+        run: ./functions/node_modules/.bin/tsc --noEmit --project functions/tsconfig.json
+      - name: Real isolated Auth Firestore RTDB audit/approval tests
+        run: |
+          set -euo pipefail
+          env -u GOOGLE_APPLICATION_CREDENTIALS -u FIREBASE_TOKEN npx --yes firebase-tools@14.23.0 emulators:exec \
+            --project demo-soridraw-owner-534 \
+            --config scripts/emulator/app534.firebase.json \
+            --only auth,database,firestore \
+            'env -u GOOGLE_APPLICATION_CREDENTIALS -u FIREBASE_TOKEN node --import tsx scripts/test-537-owner-admin-audit.mjs'
+      - name: No shared environments altered
+        if: always()
+        run: echo 'APP537_ISOLATED_ONLY_COMPILED_OFF_NO_SHARED_DB_WORKER_FUNCTIONS_RULES_HOSTING_DEPLOY'

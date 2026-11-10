@@ -128,9 +128,11 @@ export async function inspectOwnerFollowAdmin536(ctx:Context){
  };
  return {...result,ticket:sign(permit,ctx.signingKey)};
 }
-export async function confirmOwnerFollowAdmin536(ctx:Context&{
- ticket:string;confirmation:string;
-}){
+type ConfirmContext=Context&{ticket:string;confirmation:string};
+// APP537 uses this *read-only* verifier before reserving a durable private
+// audit slot. The original confirmation calls it AGAIN after slot reservation.
+// Never use an approval-ticket nonce as authorization without these checks.
+export async function verifyOwnerFollowAdminConfirmation536(ctx:ConfirmContext){
  assertSecret(ctx.signingKey);
  if(ctx.confirmation!==APP536_EXPLICIT_CONFIRMATION)
   throw Error("APP536_EXPLICIT_CONFIRMATION_REQUIRED");
@@ -145,12 +147,16 @@ export async function confirmOwnerFollowAdmin536(ctx:Context&{
  if(!actionOf(current.decision)||current.decision.action!==permit.action||
     current.fingerprint!==permit.fingerprint)
   throw Error("APP536_APPROVAL_STALE_OR_HELD");
+ return {actor,targetUid:ctx.targetUid,action:permit.action,fingerprint:permit.fingerprint};
+}
+export async function confirmOwnerFollowAdmin536(ctx:ConfirmContext){
+ const permitted=await verifyOwnerFollowAdminConfirmation536(ctx);
  // APP535 inspects again and APP534 uses a generation/phase transaction.
  // Confirmation is ONLY a gate; no forced release or deletion path exists.
  const result=await recoverOwnerFollowHold535({
   firestore:ctx.firestore,auth:ctx.auth,database:ctx.database,uid:ctx.targetUid,
  });
- if(!result.recovered||result.action!==permit.action)
+ if(!result.recovered||result.action!==permitted.action)
   throw Error("APP536_RECOVERY_REFUSED_OR_RACED");
  return {recovered:true,action:result.action,targetUid:ctx.targetUid};
 }

@@ -67,7 +67,17 @@ assert.match(page,/getExploreProfileConnections\(targetUid, direction, null, ref
 // Preserve the verified explicit popup refresh path; no idle/focus fetch.
 assert.match(page,/APP527: A's profile must not spend D1\/R2 on window focus/);
 assert.doesNotMatch(page,/onOwnFollowersFocus525/);
-assert.doesNotMatch(page,/getExploreProfileConnections\(ownerUid,'followers',null,true\)/);
+// APP548: exactly one NEW server-confirmed owner signal may fetch the open
+// owner's follower page. Retained RTDB snapshots and closed modals stay D1 R0.
+const ownerStart548=page.indexOf('  // APP542:');
+const ownerEnd548=page.indexOf('  // APP527:',ownerStart548);
+assert.ok(ownerStart548>0&&ownerEnd548>ownerStart548);
+const ownerLive548=page.slice(ownerStart548,ownerEnd548);
+assert.match(ownerLive548,/const confirmedNewEvent=isNewEvent&&initialSnapshotHandled/);
+assert.match(ownerLive548,/if\(confirmedNewEvent&&profileConnectionsOpen376Ref\.current==='followers'\)/);
+assert.match(ownerLive548,/getExploreProfileConnections\(ownerUid,'followers',null,true\)/);
+assert.doesNotMatch(page.slice(0,ownerStart548)+page.slice(ownerEnd548),
+ /getExploreProfileConnections\(ownerUid,'followers',null,true\)/);
 const explicitBegin=page.indexOf("  const openProfileConnections376 = async ");
 const explicitEnd=page.indexOf('  // APP527:',explicitBegin);
 const explicit=page.slice(explicitBegin,explicitEnd);

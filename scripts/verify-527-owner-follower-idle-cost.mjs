@@ -25,7 +25,18 @@ assert.match(explicit,/getExploreProfileConnections\(targetUid, direction, null,
 // Only 3 potential call sites survive: user-requested list, user-requested
 // pagination, confirmed same-account follow event; none idle or focus.
 const calls=[...page.matchAll(/getExploreProfileConnections\(/g)];
-assert.equal(calls.length,3, 'unexpected implicit list-fetch path');
+// Four bounded sites: explicit popup, explicit pagination, actor's real
+// same-account accepted event, and NEW authenticated owner event with OPEN popup.
+assert.equal(calls.length,4,'unexpected implicit list-fetch path');
+const ownerStart548=explicit.indexOf('  // APP542:');
+const ownerEnd548=explicit.indexOf('  // APP527:',ownerStart548);
+assert.ok(ownerStart548>=0&&ownerEnd548>ownerStart548);
+const ownerLive548=explicit.slice(ownerStart548,ownerEnd548);
+assert.match(ownerLive548,/if\(confirmedNewEvent&&profileConnectionsOpen376Ref\.current==='followers'\)/);
+assert.match(ownerLive548,/getExploreProfileConnections\(ownerUid,'followers',null,true\)/);
+assert.match(ownerLive548,/gate\.receive\(signal\);\s*initialSnapshotHandled=true/);
+assert.doesNotMatch(explicit.slice(0,ownerStart548)+explicit.slice(ownerEnd548),
+ /getExploreProfileConnections\(ownerUid,'followers',null,true\)/);
 const eventTriggered=page.slice(page.indexOf('  // app377: same-account PC/mobile'),
   page.indexOf('  // app335: warm public-profile entry'));
 assert.match(eventTriggered,/subscribeExploreFollowSync377\(/);

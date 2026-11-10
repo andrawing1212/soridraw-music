@@ -4188,8 +4188,6 @@ export default function ExplorePage() {
     // event. On a cold device it must never cause a canonical D1 list GET.
     let initialSnapshotHandled=false;
     void subscribeExploreOwnerFollower542(ownerUid,(signal,epoch)=>{
-      const hadInitialSnapshot=initialSnapshotHandled;
-      initialSnapshotHandled=true;
       if(stopped||auth.currentUser?.uid!==ownerUid||
          activeProfileUidRef.current!==ownerUid)return;
       if(!gate){
@@ -4201,7 +4199,7 @@ export default function ExplorePage() {
             const previousMarker=ownerFollowerConfirmed529Ref.current;
             // The same retained signal is allowed to repaint without a new
             // followers-list read; new canonical revisions invalidate only A.
-            const confirmedNewEvent=isNewEvent&&hadInitialSnapshot;
+            const confirmedNewEvent=isNewEvent&&initialSnapshotHandled;
             const changedList=confirmedNewEvent||
               (!previousMarker&&profile?.followerCount!==count);
             ownerFollowerConfirmed529Ref.current={uid:ownerUid,count,version};
@@ -4248,6 +4246,7 @@ export default function ExplorePage() {
         });
       }
       gate.receive(signal);
+      initialSnapshotHandled=true;
     }).then(stop=>{
       if(stopped)stop();else unsubscribe=stop;
     }).catch(()=>{/* No background canonical GET or polling on failure. */});

@@ -46,7 +46,23 @@ const dispatch = bounded('const isTrackVisibilityMutation307 = request.method',
   'const publicLikeAcceptedAt193 = Date.now();');
 assert.match(dispatch, /request\.method === 'PATCH'\s*&&\s*\/\^\\\/v1\\\/tracks/);
 assert.match(dispatch, /request\.method === 'POST'\s*&&\s*url\.pathname === '\/v1\/me\/music-note-publications\/batch'/);
-const dispatchBase = dispatch.indexOf('let response = await baseWorker.fetch(request, env, ctx);');
+// APP557 is source-only. The alternate authenticated boundary is permitted
+// for /follow only; publication, likes and Music Note must still reach base.
+const legacyBase=dispatch.indexOf('let response = await baseWorker.fetch(request, env, ctx);');
+const app557Base=dispatch.indexOf('response=await baseWorker.fetch(request,env,ctx);');
+if(legacyBase<0){
+ for(const invariant of [
+  'APP557_OWNER_PRECOMMIT_COMPILED_OPEN &&',
+  "url.pathname.startsWith('/v1/profiles/')",
+  "url.pathname.endsWith('/follow')",
+  '!APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN',
+  '!OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN',
+  'response=await runOwnerFollowPrecommit557(',
+  'callCanonical:()=>baseWorker.fetch(request,env,ctx)',
+  'response=await baseWorker.fetch(request,env,ctx);',
+ ]) assert(dispatch.includes(invariant), 'APP557 follow-only canonical isolation: '+invariant);
+}
+const dispatchBase=legacyBase>=0?legacyBase:app557Base;
 const dispatchGuard = dispatch.indexOf('if ((isTrackVisibilityMutation307 || isPublicationBatch307) && response.ok)');
 const dispatchSync = dispatch.indexOf('await syncCuratedPublicationResults307(request, env, results307, ctx);');
 assert(dispatchBase >= 0 && dispatchGuard > dispatchBase && dispatchSync > dispatchGuard,

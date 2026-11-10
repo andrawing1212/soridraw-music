@@ -33,6 +33,8 @@ const stateOf = (data:Record<string,unknown>|undefined):State|null => {
   throw Error("APP534_CORRUPT_LIFECYCLE_HOLD");
  return s as State;
 };
+// Read-only validation reused by APP535 controlled hold recovery.
+export const readOwnerFollowLifecycleState534=stateOf;
 const docFor = (db:Firestore,uid:string) => db.collection("users").doc(uid);
 const assertAccount = (user:UserRecord,uid:string) => {
  if(user.uid!==uid||!Number.isSafeInteger(created(user))||created(user)<=0)
@@ -54,6 +56,13 @@ export async function enrollOwnerFollowEpoch534({
  const reservation=await firestore.runTransaction(async tx=>{
   const snapshot=await tx.get(ref);
   const old=stateOf(snapshot.data());
+  // Never issue or finalize a claim while the real admin deletion status
+  // is in progress. A future account-restore flow must clear these fields
+  // deliberately; no implicit reactivation from an Auth recreation.
+  if(snapshot.get("authDeletionPendingAt")||
+     snapshot.get("authDeleted")===true||
+     snapshot.get("accountStatus")==="banned")
+   throw Error("APP534_ACCOUNT_DELETION_STATUS_HOLD");
   if(old?.phase==="deleting")throw Error("APP534_DELETION_FENCE_ACTIVE");
   if(old?.phase==="active")return {kind:"existing" as const,state:old};
   if(old?.phase==="reserved")return {kind:"held" as const,state:old};
@@ -157,8 +166,9 @@ export async function finishOwnerFollowDeletion534({
  if(before.phase!=="deleting")throw Error("APP534_DELETE_NOT_PREPARED");
  const authNow=await getCurrentOrNull(auth,uid);
  // A surviving old Auth incarnation means deletion is not complete.
- if(authNow?.customClaims?.[APP534_OWNER_CLAIM]===epoch)
-  throw Error("APP534_OLD_AUTH_STILL_EXISTS");
+ // A newly recreated SAME UID with different claim is ALSO a live account.
+ // Never finish the old deletion if *any* Auth user currently exists.
+ if(authNow)throw Error("APP534_AUTH_USER_STILL_EXISTS");
  await cleanupExactOwnerMarker534(database,uid,epoch);
  await firestore.runTransaction(async tx=>{
   const snap=await tx.get(ref);

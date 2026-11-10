@@ -10,6 +10,11 @@ import {getFirestore} from 'firebase-admin/firestore';
 // The existing Functions tsconfig emits CommonJS. Node's ESM test runner
 // imports its namespace via the default CJS interop binding.
 const module534=await import('../functions/src/ownerFollowLifecycle534.ts');
+const module535=await import('../functions/src/ownerFollowHoldRecovery535.ts');
+const {
+ APP535_HOLD_RECOVERY_COMPILED_OPEN,
+ inspectOwnerFollowHold535,recoverOwnerFollowHold535,
+}=module535.default||module535;
 const {
  APP534_LIFECYCLE_DELETE_HOOK_COMPILED_OPEN,APP534_OWNER_CLAIM,
  enrollOwnerFollowEpoch534,prepareOwnerFollowDeletion534,
@@ -30,6 +35,7 @@ assert.equal(process.env.FIREBASE_PROJECT_ID,PROJECT);
 assert.equal(process.env.GOOGLE_APPLICATION_CREDENTIALS,undefined);
 assert.equal(process.env.FIREBASE_TOKEN,undefined);
 assert.equal(APP534_LIFECYCLE_DELETE_HOOK_COMPILED_OPEN,false);
+assert.equal(APP535_HOLD_RECOVERY_COMPILED_OPEN,false);
 const source=readFileSync('functions/src/index.ts','utf8');
 const trigger=source.indexOf('export const adminDeleteUserAccount = onCall(');
 const scope=source.slice(trigger,source.indexOf('const APP_CHECK_STATUS_HEADER',trigger));
@@ -132,7 +138,7 @@ try{
   /APP534_DELETION_FENCE_ACTIVE/);
  await assertHold(finishOwnerFollowDeletion534({
   firestore,auth,database,uid:UID,epoch:plan.epoch,
- }),/APP534_OLD_AUTH_STILL_EXISTS/);
+ }),/APP534_AUTH_USER_STILL_EXISTS/);
  // Contract: deletion of Auth user does not alter Music Note / other user data.
  await auth.deleteUser(UID);
  const finished=await finishOwnerFollowDeletion534({
@@ -194,7 +200,137 @@ try{
  await finishOwnerFollowDeletion534({firestore,auth,database,uid:RACE,epoch:during.epoch});
  assert.equal((await doc(RACE).get()).get('ownerFollowLifecycle534.phase'),'deleted');
  stats.deleteDuringClaimReservation='PASS';
- console.log('APP534_FIREBASE_AUTH_FIRESTORE_RTDB_ISOLATED=PASS');
+
+ // APP535: reserved recovery is permitted only for an exact, already-issued
+ // Auth claim. An unclaimed reservation must not auto expire/reissue.
+ const HOLD='unclaimed535',EXACT='claimed535';
+ for(const uid of [HOLD,EXACT]){
+  await auth.createUser({uid,email:uid+'@example.test',password:PASSWORD});
+  const stamp=Date.parse((await auth.getUser(uid)).metadata.creationTime);
+  await doc(uid).set({favoriteCount:67,ownerFollowLifecycle534:{
+   phase:'reserved',epoch:randomBytes(16).toString('hex'),
+   createdAtMs:stamp,changedAtMs:Date.now(),
+  }});
+ }
+ const heldInspection=await inspectOwnerFollowHold535({firestore,auth,uid:HOLD});
+ assert.equal(heldInspection.action,'hold');
+ assert.equal(heldInspection.reason,'RESERVATION_UNCLAIMED');
+ const heldResult=await recoverOwnerFollowHold535({firestore,auth,database,uid:HOLD});
+ assert.equal(heldResult.recovered,false);
+ assert.equal((await doc(HOLD).get()).get('ownerFollowLifecycle534.phase'),'reserved');
+ assert.equal((await auth.getUser(HOLD)).customClaims?.[APP534_OWNER_CLAIM],undefined);
+ const exactEpoch=(await doc(EXACT).get()).get('ownerFollowLifecycle534.epoch');
+ await auth.setCustomUserClaims(EXACT,{plan:'pro',[APP534_OWNER_CLAIM]:exactEpoch});
+ assert.equal((await inspectOwnerFollowHold535({firestore,auth,uid:EXACT})).action,'recover-reserved');
+ const resumed=await recoverOwnerFollowHold535({firestore,auth,database,uid:EXACT});
+ assert.equal(resumed.recovered,true);
+ assert.equal((await doc(EXACT).get()).get('ownerFollowLifecycle534.phase'),'active');
+ assert.equal((await auth.getUser(EXACT)).customClaims.plan,'pro');
+ assert.equal((await doc(EXACT).get()).get('favoriteCount'),67);
+ assert.equal((await recoverOwnerFollowHold535({firestore,auth,database,uid:EXACT})).recovered,false);
+ stats.reservedHeldAndExactRecovery535='PASS';
+
+ // Auth vanished while a reservation is unclaimed: no time-based or
+ // unauthorized recovery, even if a re-created Auth has same UID.
+ await auth.deleteUser(HOLD);
+ assert.equal((await inspectOwnerFollowHold535({firestore,auth,uid:HOLD})).reason,'RESERVED_AUTH_MISSING');
+ await auth.createUser({uid:HOLD,email:HOLD+'@example.test',password:PASSWORD});
+ assert.equal((await recoverOwnerFollowHold535({firestore,auth,database,uid:HOLD})).recovered,false);
+ assert.equal((await doc(HOLD).get()).get('ownerFollowLifecycle534.phase'),'reserved');
+ stats.reservedRecreationHeld535='PASS';
+
+ // The existing admin path commits Auth deletion, personal API-key removal and
+ // the retained-content policy BEFORE APP534 optional owner-signal cleanup.
+ // Recovery cannot assume that an absent Auth user proves these writes.
+ const PENDING='deleting535';
+ await auth.createUser({uid:PENDING,email:PENDING+'@example.test',password:PASSWORD});
+ await doc(PENDING).set({musicNote:'keep',favoriteCount:14,accountStatus:'active'});
+ const enrolledPending=await enrollOwnerFollowEpoch534({firestore,auth,uid:PENDING});
+ assert.equal((await deliverOwnerFollower533(receipt(PENDING,enrolledPending.authEpoch))).accepted,true);
+ const pendingPlan=await prepareOwnerFollowDeletion534({firestore,auth,uid:PENDING});
+ await auth.deleteUser(PENDING);
+ const noCommit=await recoverOwnerFollowHold535({firestore,auth,database,uid:PENDING});
+ assert.equal(noCommit.recovered,false);
+ assert.equal(noCommit.reason,'ADMIN_DELETE_NOT_COMMITTED');
+ assert.equal((await marker(PENDING).get()).exists(),true);
+ await doc(PENDING).set({authDeleted:true,adminDeletionContentPolicy:'retain-user-content'},{merge:true});
+ const completed=await recoverOwnerFollowHold535({firestore,auth,database,uid:PENDING});
+ assert.equal(completed.recovered,true);
+ assert.equal((await marker(PENDING).get()).exists(),false);
+ assert.equal((await doc(PENDING).get()).get('ownerFollowLifecycle534.phase'),'deleted');
+ assert.equal((await doc(PENDING).get()).get('favoriteCount'),14);
+ assert.equal((await doc(PENDING).get()).get('musicNote'),'keep');
+ const completedAgain=await recoverOwnerFollowHold535({firestore,auth,database,uid:PENDING});
+ assert.equal(completedAgain.recovered,false);
+ assert.equal(completedAgain.action,'settled');
+ assert.equal(pendingPlan.epoch,enrolledPending.authEpoch);
+ stats.deletingAdminCommitRequired535='PASS';
+
+ // Even an Auth record with a *different* generation blocks finish. It may
+ // be a recreated account after an uncoordinated delete; never erase its
+ // marker or claim on behalf of the previous incarnation.
+ const RECREATE='recreated535';
+ await auth.createUser({uid:RECREATE,email:RECREATE+'@example.test',password:PASSWORD});
+ await doc(RECREATE).set({favoriteCount:22});
+ const firstGen=await enrollOwnerFollowEpoch534({firestore,auth,uid:RECREATE});
+ await deliverOwnerFollower533(receipt(RECREATE,firstGen.authEpoch,1,11));
+ await prepareOwnerFollowDeletion534({firestore,auth,uid:RECREATE});
+ await doc(RECREATE).set({authDeleted:true,adminDeletionContentPolicy:'retain-user-content'},{merge:true});
+ assert.equal((await inspectOwnerFollowHold535({firestore,auth,uid:RECREATE})).reason,'AUTH_PRESENT_AFTER_DELETE');
+ await assertHold(finishOwnerFollowDeletion534({
+  firestore,auth,database,uid:RECREATE,epoch:firstGen.authEpoch,
+ }),/APP534_AUTH_USER_STILL_EXISTS/);
+ await auth.deleteUser(RECREATE);
+ await auth.createUser({uid:RECREATE,email:RECREATE+'@example.test',password:PASSWORD});
+ const externalEpoch=randomBytes(16).toString('hex');
+ await auth.setCustomUserClaims(RECREATE,{[APP534_OWNER_CLAIM]:externalEpoch});
+ await marker(RECREATE).set({
+  ownerUid:RECREATE,authEpoch:externalEpoch,version:1,followerCount:17,
+  authCreatedAtMs:Date.parse((await auth.getUser(RECREATE)).metadata.creationTime),
+ });
+ assert.equal((await recoverOwnerFollowHold535({firestore,auth,database,uid:RECREATE})).recovered,false);
+ await assertHold(finishOwnerFollowDeletion534({
+  firestore,auth,database,uid:RECREATE,epoch:firstGen.authEpoch,
+ }),/APP534_AUTH_USER_STILL_EXISTS/);
+ assert.equal((await marker(RECREATE).get()).val().authEpoch,externalEpoch);
+ stats.recreatedAuthCannotFinishOldDeletion535='PASS';
+
+ // An external claim writer can overwrite APP534's whole custom-claims map.
+ // Detect drift read-only and never auto replace the external writer's data.
+ const DRIFT='claimdrift535';
+ await auth.createUser({uid:DRIFT,email:DRIFT+'@example.test',password:PASSWORD});
+ const ownedDrift=await enrollOwnerFollowEpoch534({firestore,auth,uid:DRIFT});
+ await auth.setCustomUserClaims(DRIFT,{role:'admin-only-test'});
+ const drift=await inspectOwnerFollowHold535({firestore,auth,uid:DRIFT});
+ assert.equal(drift.action,'hold');
+ assert.equal(drift.reason,'ACTIVE_AUTH_DRIFT');
+ assert.equal((await recoverOwnerFollowHold535({firestore,auth,database,uid:DRIFT})).recovered,false);
+ assert.equal((await auth.getUser(DRIFT)).customClaims.role,'admin-only-test');
+ assert.equal((await doc(DRIFT).get()).get('ownerFollowLifecycle534.epoch'),ownedDrift.authEpoch);
+ stats.otherClaimWriterDriftHeld535='PASS';
+
+ // The app's current admin Auth operations are revokeRefreshTokens,
+ // emailVerified updateUser, and Auth deletion; no custom-claim writer
+ // is present in preview index. The current product callable stays OFF.
+ const idx=readFileSync('functions/src/index.ts','utf8');
+ assert.ok(idx.includes('admin.auth().updateUser(targetUid, { emailVerified: false })'));
+ assert.ok(idx.includes('admin.auth().revokeRefreshTokens(targetUid)'));
+ assert.ok(idx.includes('admin.auth().deleteUser(targetUid)'));
+ assert.ok(!idx.includes('setCustomUserClaims('));
+ stats.existingAuthWriterInventory535='PASS';
+
+ // Admin Auth-only deletion leaves banned/disabled status. Auto login/claim
+ // issuance must never revive that retained account without a deliberate
+ // approved account-restoration contract.
+ const BLOCK='banned535';
+ await auth.createUser({uid:BLOCK,email:BLOCK+'@example.test',password:PASSWORD});
+ await doc(BLOCK).set({accountStatus:'banned'});
+ await assertHold(enrollOwnerFollowEpoch534({firestore,auth,uid:BLOCK}),
+  /APP534_ACCOUNT_DELETION_STATUS_HOLD/);
+ assert.equal((await auth.getUser(BLOCK)).customClaims?.[APP534_OWNER_CLAIM],undefined);
+ stats.bannedAccountEnrollmentHeld535='PASS';
+
+ console.log('APP535_FIREBASE_AUTH_FIRESTORE_RTDB_HOLD_RECOVERY=PASS');
  console.log(JSON.stringify({kind:'APP534_EMULATOR_LIFECYCLE',project:PROJECT,checks:stats,
   sharedWrites:0,hostingDeploys:0,d1W2:'unchanged previously verified APP532',
   caveats:['Current product deletion callable not invoked: compile-time guard OFF; source anchor order checked',

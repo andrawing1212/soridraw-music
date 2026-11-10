@@ -6,6 +6,8 @@ import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
+import {composeOwnerFollowWorker543,CANONICAL_SHA_543} from
+ '../cloudflare/explore-worker/candidates/compose-follow-worker-543.mjs';
 import {resolveOwnerFollowWriter543,
  OWNER_FOLLOW_INLINE_543_COMPILED_OPEN} from
  '../cloudflare/explore-worker/runtime/owner-follow-writer-543.mjs';
@@ -22,7 +24,10 @@ assert.equal(OWNER_FOLLOW_INLINE_543_COMPILED_OPEN,false);
 assert.equal(APP544_OWNER_EPOCH_BIND_COMPILED_OPEN,false);
 assert.equal(APP540_INLINE_CANONICAL_COMPILED_OPEN,false);
 assert.equal(APP544_ENROLLMENT_COMPILED_OPEN,false);
-const canonical=readFileSync('cloudflare/explore-worker/canonical/preview-worker.js','utf8');
+const baseline=readFileSync('cloudflare/explore-worker/canonical/preview-worker.js','utf8');
+const canonical=composeOwnerFollowWorker543(baseline);
+assert.ok(!baseline.includes('resolveOwnerFollowWriter543'));
+assert.equal(CANONICAL_SHA_543,'916550ff8534e5c0e0fb2378c1648e736b184854258b626113c7ad8f2f041f88');
 const entry=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
 const functionsIndex=readFileSync('functions/src/index.ts','utf8');
 assert.match(canonical,/const ownerEpoch543 = await resolveOwnerFollowWriter543/);

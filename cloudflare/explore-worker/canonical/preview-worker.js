@@ -1,5 +1,3 @@
-import {resolveOwnerFollowWriter543} from '../runtime/owner-follow-writer-543.mjs';
-import {adjustExploreFollowCountersDelta540} from '../runtime/owner-follow-inline-canonical-540.mjs';
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -13072,18 +13070,7 @@ async function handleFollowR2Core(request, env, cors, targetUid, shouldFollow) {
   }
 
   const now = Date.now();
-  // APP543: no additional query until separately approved, deployed and
-  // per-owner Firebase Admin enrollment is durably bound to canonical D1.
-  // The overlay354 path returns above; historical unenrolled accounts use
-  // the original counter writer unchanged.
-  const ownerEpoch543 = await resolveOwnerFollowWriter543({
-    env, targetUid, mode: followCutover348.mode,
-  });
-  const stats = ownerEpoch543
-    ? await adjustExploreFollowCountersDelta540(
-        env, authContext.uid, targetUid, shouldFollow, now, ownerEpoch543)
-    : await adjustExploreFollowCountersDelta(
-        env, authContext.uid, targetUid, shouldFollow, now);
+  const stats = await adjustExploreFollowCountersDelta(env, authContext.uid, targetUid, shouldFollow, now);
   await patchExploreFirstViewFollowCounts(env, authContext.uid, targetUid, stats, now);
   // SORIDRAW_FOLLOW_ACTOR_COUNT_RESPONSE_096_20261007
   return json({ ok: true, data: {

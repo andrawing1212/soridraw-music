@@ -42,7 +42,7 @@ assert.match(cron,/runNotificationScheduled013\(\{controller,env,compiledOpen:tr
 const scheduled="  async scheduled(controller, env, ctx) {\n";
 const fetch="  async fetch(request, env, ctx) {\n    const url = new URL(request.url);\n";
 const previously=inject(inject(orig,baseImport,getImport),fetch,get);
-const candidate=inject(inject(previously,baseImport,getImport==='unused'? '' : cronImport),scheduled,cron);
+const candidate=inject(inject(previously,baseImport,cronImport),scheduled,cron);
 assert.equal(candidate.replace(cronImport,'').replace(cron,'').replace(getImport,'').replace(get,''),orig,
  'FROZEN_NON_NOTIFICATION_CODE_CHANGED');
 assert.equal(candidate.replace(cronImport,'').replace(cron,''),previously,
@@ -53,7 +53,7 @@ const runtime={
  'notification-unified-api-004.mjs':'7b43f7d6533b80d6aa2adbefbe6f8db5fadbb8b2',
  'notification-unified-inbox-004.mjs':'149d56a4da7ff3c8154f8977f8713def89405fc5',
  'notification-inbox-001.mjs':'7b555a4fe1654cb8021f9a9e7d46797bd720fcd8',
- 'notification-preferences-retention-002.mjs':'1e13ff61b6f2f25ca99385750f9c1c826c82d909',
+ 'notification-preferences-retention-002.mjs':'1e13ff61b6f2f25ca99385750f9f1c826c82d909',
  'notification-retention-coordinator-005.mjs':'262567341819f0abc8c47e5c73b257244f774a57',
  'notification-retention-scheduler-013.mjs':'8484602448591566de20cbcd2edb1eb1fca508d9',
 };

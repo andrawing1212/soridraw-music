@@ -11,10 +11,10 @@ import {
 assert.equal(APP540_INLINE_CANONICAL_COMPILED_OPEN,false);
 const source=readFileSync("cloudflare/explore-worker/canonical/preview-worker.js","utf8");
 const start=source.indexOf("async function adjustExploreFollowCountersDelta(");
-const end=source.indexOf("\\n__name(",start);
+const end=source.indexOf("\n__name(",start);
 assert.ok(start>=0&&end>start&&end-start<8000);
 const canonicalSource=source.slice(start,end);
-const canonical=new Function(canonicalSource+"\\nreturn adjustExploreFollowCountersDelta;")();
+const canonical=new Function(canonicalSource+"\nreturn adjustExploreFollowCountersDelta;")();
 const candidateSource=readFileSync("cloudflare/explore-worker/runtime/owner-follow-inline-canonical-540.mjs","utf8");
 assert.match(candidateSource,/APP540_INLINE_CANONICAL_COMPILED_OPEN = false/);
 assert.doesNotMatch(source,/adjustExploreFollowCountersDelta540/);
@@ -55,7 +55,7 @@ function wrap(d){
   async batch(statements){d.exec("BEGIN IMMEDIATE");try{
    const out=[];for(const item of statements){
     const stmt=d.prepare(item.query);
-    if(/\\bRETURNING\\b/i.test(item.query))out.push({results:stmt.all(...item.params)});
+    if(/\bRETURNING\b/i.test(item.query))out.push({results:stmt.all(...item.params)});
     else {const x=stmt.run(...item.params);out.push({results:[],meta:{changes:x.changes}})}
    }
    d.exec("COMMIT");return out;

@@ -4212,6 +4212,7 @@ export default function ExplorePage() {
               if(confirmedNewEvent&&profileConnectionsOpen376Ref.current==='followers'){
                 const requestId=++profileConnectionsRequest376Ref.current;
                 setProfileConnectionsLoading376(true);
+                setProfileConnectionsLoadingMore376(false);
                 setProfileConnectionsError376('');
                 void getExploreProfileConnections(ownerUid,'followers',null,true)
                   .then(page=>{
@@ -4280,12 +4281,14 @@ export default function ExplorePage() {
     const direction = profileConnectionsOpen376;
     const cursor = profileConnectionsNextCursor376;
     if (!targetUid || !direction || !cursor || profileConnectionsLoadingMore376) return;
+    const requestId = profileConnectionsRequest376Ref.current;
 
     setProfileConnectionsLoadingMore376(true);
     setProfileConnectionsError376('');
     try {
       const page = await getExploreProfileConnections(targetUid, direction, cursor);
-      if (activeProfileUidRef.current !== targetUid || profileConnectionsOpen376 !== direction) return;
+      if (activeProfileUidRef.current !== targetUid || profileConnectionsOpen376 !== direction ||
+          requestId !== profileConnectionsRequest376Ref.current) return;
       const seen = new Set(profileConnectionsItems376.map((item) => item.uid));
       const merged = [...profileConnectionsItems376];
       page.items.forEach((item) => {
@@ -4305,7 +4308,8 @@ export default function ExplorePage() {
         reason instanceof Error ? reason.message : '팔로우 목록을 더 불러오지 못했어요.',
       );
     } finally {
-      setProfileConnectionsLoadingMore376(false);
+      if (requestId === profileConnectionsRequest376Ref.current)
+        setProfileConnectionsLoadingMore376(false);
     }
   };
 

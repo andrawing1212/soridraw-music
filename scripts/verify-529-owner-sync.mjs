@@ -196,6 +196,8 @@ assert.match(page,/let initialSnapshotHandled=false/);
 assert.match(page,/getExploreProfileConnections\(ownerUid,'followers',null,true\)/);
 assert.match(page,/requestId!==profileConnectionsRequest376Ref\.current/);
 assert.match(page,/Page length is never the canonical follower COUNT/);
+assert.match(page,/setProfileConnectionsLoadingMore376\(false\);\s*setProfileConnectionsError376/);
+assert.match(page,/requestId !== profileConnectionsRequest376Ref\.current\) return;/);
 assert.match(sql,/owner_uid TEXT PRIMARY KEY/);
 assert.match(sql,/ON CONFLICT\(owner_uid\) DO UPDATE/);
 assert.match(sql,/enabled INTEGER NOT NULL DEFAULT 0/);

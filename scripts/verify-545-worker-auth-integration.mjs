@@ -136,11 +136,15 @@ try{
  assert.equal(owner.authEpoch,epochA);
  const row=()=>db.prepare('SELECT * FROM profile_stats WHERE uid=?').get('A');
  assert.equal(row().owner_follow_auth_epoch_532,epochA);
- const firstQueries=counters.queries;
+ const beforeIdempotentReads=counters.queries;
+ const beforeIdempotentWrites=db.prepare('SELECT total_changes() AS n').get().n;
  await enrollAndBindOwner544({firestore,auth,uid:'A',secret,now:()=>when,send,
   enroll:async()=>({uid:'A',authEpoch:epochA,createdAtMs:authBirth,reused:true})});
  assert.equal(row().owner_follow_auth_epoch_532,epochA);
- assert.equal(counters.queries-firstQueries,1,'idempotent bind may only do one confirmation SELECT');
+ assert.equal(counters.queries-beforeIdempotentReads,2,
+  'one INSERT-OR-CONFLICT no-op followed by one confirmation SELECT');
+ assert.equal(db.prepare('SELECT total_changes() AS n').get().n-beforeIdempotentWrites,0,
+  'duplicate binding must physically write zero rows');
  const enrolled=await resolveOwnerFollowWriter543({env:cloud,targetUid:'A',mode:'legacy',enabled:true});
  assert.equal(enrolled,epochA);
  // The actual APP540 function writes edge + actor + canonical owner revision

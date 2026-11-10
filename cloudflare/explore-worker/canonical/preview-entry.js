@@ -3298,12 +3298,14 @@ async function handleSignedPublicLikeWindowAck416(request,env){
 
 export default {
   async scheduled(controller, env, ctx) {
-    // Stage013: source-connected, COMPILE-TIME OFF and no Wrangler cron.
-    // Reserved notification cron must never fall through into existing
-    // public-like scheduled/repair work, even while this feature is OFF.
+    // Stage025: PREVIEW-only registered 30-day retention cron candidate.
+    // Runtime flags and shared-D1 activation remain OFF; no user/event reads
+    // until separately approved enablement. Never run on TEST/PRODUCTION.
+    // A reserved cron must not fall through to like/other scheduled handlers.
     if(controller?.cron === NOTIFICATION_RETENTION_CRON_013) {
-      const NOTIFICATION_RETENTION_013_COMPILED_OPEN = false;
-      if(!NOTIFICATION_RETENTION_013_COMPILED_OPEN) return;
+      const NOTIFICATION_RETENTION_013_COMPILED_OPEN = true;
+      if(!NOTIFICATION_RETENTION_013_COMPILED_OPEN ||
+         env?.SORIDRAW_ENVIRONMENT !== 'preview') return;
       return runNotificationScheduled013({controller,env,compiledOpen:true});
     }
     // SORIDRAW_PREDEPLOY_PENDING_LIKE_DRAIN_192_20260924

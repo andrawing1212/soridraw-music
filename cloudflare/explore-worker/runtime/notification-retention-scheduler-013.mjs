@@ -28,6 +28,9 @@ export async function runNotificationScheduled013({
 }={}) {
   if(controller?.cron!==NOTIFICATION_RETENTION_CRON_013)
     return zero('not-notification-cron');
+  // Defense in depth: even if another environment imports this module,
+  // it must not run shared retention or touch shared R2/D1.
+  if(env?.SORIDRAW_ENVIRONMENT!=='preview')return zero('non-preview');
   if(compiledOpen!==true ||
      env?.SORIDRAW_NOTIFICATION_RETENTION_013!=='1' ||
      env?.SORIDRAW_NOTIFICATION_SCHEMA_READY_013!=='1')

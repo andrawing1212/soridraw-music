@@ -121,7 +121,7 @@ export const verifyOwnerFollowEpoch547Candidate=onRequest({
  const result=await handleOwnerAuthProof547(
   new Request('https://owner-proof.internal/verify',{
    method:req.method,headers:req.headers as Record<string,string>,
-   body:req.method==='POST'?req.rawBody:undefined,
+   body:req.method==='POST'?req.rawBody?.toString('utf8'):undefined,
   }),{auth:getAuth(),firestore:getFirestore(),secret:SECRET.value()});
  res.status(result.status);
  result.headers.forEach((v,k)=>res.set(k,v));

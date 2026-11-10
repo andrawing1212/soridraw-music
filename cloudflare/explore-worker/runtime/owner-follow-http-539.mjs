@@ -38,6 +38,6 @@ export async function sendOwnerFollowHttp539(event,{
  const payload=await response?.json?.().catch(()=>null);
  // Canonical ACK is true for an idempotent duplicate (HTTP 200).
  // Actual RTDB application is separately reported as applied:false.
- return {ok:response?.ok===true,status:response?.status||0,
+ return {ok:response?.ok===true&&payload?.ok===true,status:response?.status||0,
   applied:response?.ok===true&&payload?.applied===true};
 }

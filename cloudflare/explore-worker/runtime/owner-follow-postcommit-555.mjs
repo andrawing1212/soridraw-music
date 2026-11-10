@@ -1,10 +1,6 @@
-// APP555: OWNER-ONLY follower update from already-settled overlay R2.
-// SOURCE ONLY, compile- and environment-OFF; no active Worker route.
-// Reuses the exact canonical follow receipt and settled profile R2 revision.
-// No extra D1 mutation; the read-only Auth epoch is the current Firebase
-// generation fence. A failed push must never change the follow HTTP result.
-// This fast path alone is NOT a durable retry queue. Enable only with a
-// proven delayed-delivery recovery path and approved shared backend release.
+// APP555/556: owner-only settled follower delivery and a narrowly scoped replay
+// entrypoint for a FUTURE authenticated durable pre-commit reservation.
+// SOURCE ONLY; neither the replay scheduler nor its reservation is live.
 import {sendOwnerFollowHttp539} from './owner-follow-http-539.mjs';
 export const APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN=false;
 const UID=/^[A-Za-z0-9_-]{1,128}$/;
@@ -15,75 +11,96 @@ const pathUid=path=>{
  return p.length===5&&p[0]===''&&p[1]==='v1'&&p[2]==='profiles'&&
    p[4]==='follow'&&UID.test(p[3])?p[3]:null;
 };
-export async function deliverOwnerFollowPostcommit555({
- request,response,env,now=Date.now,send=fetch,
- enabled=APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN,
+const off=(env,enabled)=>!enabled||env?.SORIDRAW_ENVIRONMENT!=='preview'||
+ env?.SORIDRAW_OWNER_FOLLOW_W2_PUSH_555!=='1';
+const outcome=(status,other={})=>({status,d1Writes:0,...other});
+
+// Both initial delivery and a persisted reservation replay MUST resolve the
+// latest settled OWNER revision, never a cached actor-pair operation version.
+async function deliverSettledOwner555({
+ ownerUid,expectedEpoch=null,afterRevision=0,
+ env,now=Date.now,send=fetch,enabled,
 }={}){
- if(!enabled||env?.SORIDRAW_ENVIRONMENT!=='preview'||
-    env?.SORIDRAW_OWNER_FOLLOW_W2_PUSH_555!=='1')
-  return {status:'disabled',d1Writes:0};
- if(!request||!response?.ok||
-    response.headers?.get('X-Soridraw-Follow-Protocol')!=='354')
-  return {status:'ineligible',d1Writes:0};
- const method=request.method,uid=pathUid(new URL(request.url).pathname);
- if(!uid||(method!=='PUT'&&method!=='DELETE'))
-  return {status:'ineligible',d1Writes:0};
- const desired=method==='PUT';
- let result;
- try{result=await response.clone().json()}catch{return {status:'invalid-ack',d1Writes:0}}
- const data=result?.data;
- if(result?.ok!==true||data?.uid!==uid||
-    data?.following!==desired||data?.duplicate!==false||
-    !Number.isSafeInteger(data?.revision)||data.revision<=0)
-  return {status:'unchanged-or-invalid',d1Writes:0};
- // A settled, CAS-confirmed R2 profile revision is global to this OWNER,
- // unlike the actor-pair follow operation revision. Delayed mixed events
- // therefore cannot overwrite newer recipient counts.
- const key='internal/explore/shared-profile-v113/'+encodeURIComponent(uid)+'.json';
+ if(off(env,enabled))return outcome('disabled');
+ if(!UID.test(String(ownerUid||'')))return outcome('invalid-owner');
+ const key='internal/explore/shared-profile-v113/'+encodeURIComponent(ownerUid)+'.json';
  let bundle;
  try{
   const file=await env?.PROFILE_MEDIA?.get(key);
-  if(!file)return {status:'r2-unavailable',d1Writes:0};
+  if(!file)return outcome('r2-unavailable');
   bundle=JSON.parse(await file.text());
- }catch{return {status:'r2-unavailable',d1Writes:0}}
+ }catch{return outcome('r2-unavailable')}
  const count=bundle?.body?.data?.profile?.followerCount;
  const version=bundle?.revision;
  const sync=bundle?.followSync354;
- if(bundle?.body?.data?.profile?.uid!==uid||
+ if(bundle?.body?.data?.profile?.uid!==ownerUid||
     !Number.isSafeInteger(version)||version<=0||
     !Number.isSafeInteger(count)||count<0||count>maxCount||
     sync?.exact!==true||
-    !sync.pending||typeof sync.pending!=='object'||
+    !sync.pending||typeof sync.pending!=='object'||Array.isArray(sync.pending)||
     Object.keys(sync.pending).length!==0)
-  return {status:'r2-unsettled',d1Writes:0};
- // Auth epoch is bound by the separately authenticated Firebase Admin
- // enrollment, NEVER supplied by the follower or the follow request body.
+  return outcome('r2-unsettled');
+ // A pre-commit reservation carries the R2 version seen BEFORE the mutation.
+ // Without this lower bound an alarm could sign and deliver pre-mutation data.
+ if(version<=afterRevision)return outcome('r2-not-advanced');
  let epoch='';
  try{
   const owner=await env.DB.prepare(
    'SELECT owner_follow_auth_epoch_532 AS epoch FROM profile_stats WHERE uid=? LIMIT 1'
-  ).bind(uid).first();
+  ).bind(ownerUid).first();
   epoch=String(owner?.epoch||'');
- }catch{return {status:'epoch-unavailable',d1Writes:0}}
- if(!EPOCH.test(epoch))return {status:'owner-not-enrolled',d1Writes:0};
+ }catch{return outcome('epoch-unavailable')}
+ if(!EPOCH.test(epoch))return outcome('owner-not-enrolled');
+ if(expectedEpoch!==null&&epoch!==expectedEpoch)
+  return outcome('rejected-generation');
  const secret=env.SORIDRAW_OWNER_FOLLOW_HMAC_539;
  const endpoint=env.SORIDRAW_OWNER_FOLLOW_ENDPOINT_539;
- // Canonical R2 count can already include a newer parallel actor mutation.
- // Publish that newer revision (never an actor-provided count).
- const event={ownerUid:uid,authEpoch:epoch,version,
+ const event={ownerUid,authEpoch:epoch,version,
   followerCount:count,updatedAt:Math.max(1,Number(now()))};
- // Two bounded delivery attempts have no extra D1 read/write and run
- // exclusively in ctx.waitUntil, never delaying the actor's commit ACK.
- // A signed 409/403 means an invalid/revoked Auth generation: fail closed.
  for(let attempt=0;attempt<2;attempt++){
   try{
-   const sent=await sendOwnerFollowHttp539(event,{
-    endpoint,secret,send,now,
-   });
-   if(sent.ok)return {status:'delivered',d1Writes:0,deliveredRevision:version};
+   const sent=await sendOwnerFollowHttp539(event,{endpoint,secret,send,now});
+   if(sent.ok)return outcome('delivered',{deliveredRevision:version});
    if(sent.status===403||sent.status===409)
-    return {status:'rejected-generation',d1Writes:0};
-  }catch{/* Unavailable transport may be retried once in this waitUntil. */}
+    return outcome('rejected-generation');
+  }catch{/* A failed transport is never acknowledged. */}
  }
- return {status:'relay-failed',d1Writes:0}
+ return outcome('relay-failed');
+}
+
+export async function deliverOwnerFollowPostcommit555({
+ request,response,env,now=Date.now,send=fetch,
+ enabled=APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN,
+}={}){
+ if(off(env,enabled))return outcome('disabled');
+ if(!request||!response?.ok||
+    response.headers?.get('X-Soridraw-Follow-Protocol')!=='354')
+  return outcome('ineligible');
+ const method=request.method,uid=pathUid(new URL(request.url).pathname);
+ if(!uid||(method!=='PUT'&&method!=='DELETE'))return outcome('ineligible');
+ let result;
+ try{result=await response.clone().json()}catch{return outcome('invalid-ack')}
+ const data=result?.data;
+ if(result?.ok!==true||data?.uid!==uid||
+    data?.following!==(method==='PUT')||data?.duplicate!==false||
+    !Number.isSafeInteger(data?.revision)||data.revision<=0)
+  return outcome('unchanged-or-invalid');
+ return deliverSettledOwner555({ownerUid:uid,env,now,send,enabled});
+}
+
+// NOT a public HTTP endpoint. A future durable per-owner alarm may call it
+// only with a reservation committed BEFORE the canonical mutation. No durable
+// store is wired today, so this is a testable recovery primitive, NOT a live
+// crash-recovery guarantee. Reservations are tied to the verified Auth epoch.
+export async function replayOwnerFollowReservation556({
+ reservation,env,now=Date.now,send=fetch,
+ enabled=APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN,
+}={}){
+ if(off(env,enabled))return outcome('disabled');
+ const {ownerUid,authEpoch,priorR2Revision}=(reservation||{});
+ if(!UID.test(String(ownerUid||''))||!EPOCH.test(String(authEpoch||''))||
+    !Number.isSafeInteger(priorR2Revision)||priorR2Revision<0)
+  return outcome('invalid-reservation');
+ return deliverSettledOwner555({ownerUid,expectedEpoch:authEpoch,
+  afterRevision:priorR2Revision,env,now,send,enabled});
 }

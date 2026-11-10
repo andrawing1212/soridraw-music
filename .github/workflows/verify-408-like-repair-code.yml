@@ -496,5 +496,14 @@ jobs:
           git show f521b9c8808397d47b596f840ff816cac374dd91:.github/workflows/soridraw-release-promotion.yml > "$RUNNER_TEMP/app497-frozen-controller.yml"
           node scripts/audit-497-release-attestation-gaps.mjs --workflow "$RUNNER_TEMP/app497-frozen-controller.yml"
           echo 'APP497_EXPECTED_RELEASE_GATE=HOLD;THIS_IS_NOT_A_DEPLOYMENT_PASS'
+      - name: APP556 durable-owner recovery source-only regression
+        run: |
+          node --check cloudflare/explore-worker/runtime/owner-follow-http-539.mjs
+          node --check cloudflare/explore-worker/runtime/owner-follow-postcommit-555.mjs
+          node --check cloudflare/explore-worker/runtime/owner-follow-recovery-556.mjs
+          node scripts/verify-555-owner-follow-postcommit-w2.mjs
+          node scripts/verify-556-owner-replay.mjs
+          node scripts/verify-556-owner-replay-reservation.mjs
+          echo 'APP556_SOURCE_RECOVERY_ONLY=PASS;SHARED_RELEASE=NO_GO'
       - name: Confirm no product deployment
         run: echo '408_QUALITY=PASS;NO_DEPLOYMENT;NO_SHARED_DATA_CHANGE'

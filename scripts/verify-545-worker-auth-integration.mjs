@@ -37,6 +37,11 @@ const core=canonical.slice(canonical.indexOf('async function handleFollowR2Core(
  canonical.indexOf('__name(handleFollowR2Core'));
 assert.ok(core.indexOf('return handleFollowOverlay354(')>=0);
 assert.ok(core.indexOf('return handleFollowOverlay354(')<core.indexOf('resolveOwnerFollowWriter543('));
+assert.match(entry,/from '..\/runtime\/owner-follow-auth-epoch-532.mjs'/);
+assert.match(entry,/from '..\/runtime\/owner-follow-http-539.mjs'/);
+assert.match(entry,/from '..\/runtime\/owner-follow-enrollment-544.mjs'/);
+assert.match(entry,/APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN &&/);
+assert.match(entry,/!OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN &&/);
 assert.match(entry,/APP544_OWNER_EPOCH_BIND_COMPILED_OPEN &&/);
 assert.match(entry,/handleOwnerEpochBinding544\(\{request,env\}\)/);
 assert.doesNotMatch(functionsIndex,/export\s*\{\s*enrollOwnerFollow544Candidate/);

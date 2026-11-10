@@ -33,6 +33,14 @@ import {registerPrivateClick416,commitPrivateWindow416} from '../runtime/private
 import { createCandidateLikeBatch422 } from '../runtime/like-batch-composition-422.mjs';
 import { readAuthoritativeLikeIntents433 } from '../runtime/like-legacy-intent-reconcile-433.mjs';
 import { verifyGuardedLikeBatch420 } from '../runtime/like-guard-permit-420.mjs';
+import {OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN,drainOwnerFollowAuthEpoch532}
+ from '../runtime/owner-follow-auth-epoch-532.mjs';
+import {APP539_WORKER_HTTP_BRIDGE_COMPILED_OPEN,sendOwnerFollowHttp539}
+ from '../runtime/owner-follow-http-539.mjs';
+import {APP544_OWNER_EPOCH_BIND_COMPILED_OPEN,handleOwnerEpochBinding544}
+ from '../runtime/owner-follow-enrollment-544.mjs';
+import {APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN,deliverOwnerFollowPostcommit555}
+ from '../runtime/owner-follow-postcommit-555.mjs';
 
 // SORIDRAW_EXPLORE_REVISION_HEAD_ONLY_036_20260911
 // SORIDRAW_EXPLORE_REVISION_HEAD_LOW_READ_037_20260911
@@ -3672,6 +3680,18 @@ export default {
       }
     }
     let response = await baseWorker.fetch(request, env, ctx);
+    // APP555 candidate: existing overlay commit + R2 settled CAS provides an
+    // owner-global version and count without ANY additional D1 write. The
+    // old APP530/551 queue (W4) must be OFF; both transports never run.
+    if(APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN &&
+       !OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN &&
+       env?.SORIDRAW_ENVIRONMENT==='preview' &&
+       env?.SORIDRAW_OWNER_FOLLOW_W2_PUSH_555==='1' &&
+       response?.ok && /\/v1\/profiles\/[^/]+\/follow$/.test(url.pathname) &&
+       (request.method==='PUT'||request.method==='DELETE')){
+      ctx.waitUntil(deliverOwnerFollowPostcommit555({request,response,env,enabled:true})
+        .catch(()=>console.warn('[555] owner follower event retry required')));
+    }
     // APP542 source-only: only an HTTP-successful canonical follow can wake
     // the durable epoch queue. No wake is armed in any deployed Worker today.
     if(OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN &&

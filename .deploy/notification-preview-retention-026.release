@@ -1,0 +1,5 @@
+approval_pr=1
+product_code_sha=e3d5d16b9322c34a39258b56b50168eda9e7b7a5
+preview_cron_only=true
+collection_off=true
+rollback_to_pinned_version=true

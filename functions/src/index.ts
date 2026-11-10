@@ -4,6 +4,11 @@ import { defineSecret } from "firebase-functions/params";
 export { publishExploreOwnerFollower529 } from "./exploreOwnerFollowerWebhook529";
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
+import {
+  APP534_LIFECYCLE_DELETE_HOOK_COMPILED_OPEN,
+  prepareOwnerFollowDeletion534,
+  finishOwnerFollowDeletion534,
+} from "./ownerFollowLifecycle534";
 import { consumeGeminiInteractionSse } from "./geminiInteractionSse";
 import {
   buildLibraryOversizeFallbackMarker,
@@ -909,9 +914,23 @@ export const adminDeleteUserAccount = onCall(
       authDeletionPendingBy: requesterUid,
     }, { merge: true });
 
+    // APP534: SOURCE-ONLY lifecycle hook; compile-time OFF.
+    // Never enable before an approved Auth/RTDB/Firestore cross-service rollout.
+    // Preserve this callable's existing "retain-user-content" contract.
+    const ownerFollowDeletion534 = APP534_LIFECYCLE_DELETE_HOOK_COMPILED_OPEN
+      ? await prepareOwnerFollowDeletion534({
+          firestore: db, auth: admin.auth(), uid: targetUid,
+        })
+      : null;
     if (authUser) {
       await admin.auth().revokeRefreshTokens(targetUid);
       await admin.auth().deleteUser(targetUid);
+    }
+    if (ownerFollowDeletion534 && !ownerFollowDeletion534.skipped) {
+      await finishOwnerFollowDeletion534({
+        firestore: db, auth: admin.auth(), database: admin.database(),
+        uid: targetUid, epoch: ownerFollowDeletion534.epoch,
+      });
     }
 
     const cleanupBatch = db.batch();

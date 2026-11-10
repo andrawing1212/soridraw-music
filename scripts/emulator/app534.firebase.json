@@ -1,0 +1,11 @@
+{
+  "firestore": {"rules": "app534.firestore.rules"},
+  "database": {"rules": "app533.database.rules.json"},
+  "emulators": {
+    "auth": {"host": "127.0.0.1", "port": 9099},
+    "database": {"host": "127.0.0.1", "port": 9000},
+    "firestore": {"host": "127.0.0.1", "port": 8080},
+    "ui": {"enabled": false},
+    "singleProjectMode": true
+  }
+}

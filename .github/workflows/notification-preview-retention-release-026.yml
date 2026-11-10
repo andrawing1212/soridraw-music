@@ -7,6 +7,7 @@ on:
       - 'scripts/verify-notification-preview-retention-026.mjs'
       - 'scripts/verify-notification-preview-retention-live-026.mjs'
       - 'scripts/verify-notification-preview-retention-gate-026.mjs'
+      - 'scripts/release-notification-preview-retention-026.mjs'
   push:
     branches: [preview]
     paths:
@@ -38,8 +39,58 @@ jobs:
           node --check scripts/verify-notification-preview-retention-026.mjs
           node --check scripts/verify-notification-preview-retention-live-026.mjs
           node --check scripts/verify-notification-preview-retention-gate-026.mjs
+          node --check scripts/release-notification-preview-retention-026.mjs
           node scripts/verify-notification-preview-retention-026.mjs
           node scripts/verify-notification-preview-retention-live-026.mjs --self-test
           node scripts/verify-notification-preview-retention-gate-026.mjs --self-test
           node scripts/verify-notification-scheduler-013.mjs
-          echo 'NOTIFICATION_026_SOURCE_ONLY=PASS;WORKER_DEPLOY=0;SHARED_D1_WRITES=0'
+          node scripts/release-notification-preview-retention-026.mjs --prepare
+          echo 'NOTIFICATION_026_FROZEN_EXACT_BUILD=PASS;WORKER_DEPLOY=0;SHARED_D1_WRITES=0'
+  owner-approved-preview:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - name: Checkout approved release guard revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify one-use owner approval for exact merged trigger-only PR
+        id: gate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git fetch origin preview --no-tags
+          git show "$GITHUB_SHA:.deploy/notification-preview-retention-026.release" > .deploy/notification-preview-retention-026.release
+          node scripts/verify-notification-preview-retention-gate-026.mjs --self-test
+          node scripts/verify-notification-preview-retention-gate-026.mjs --verify-approval
+      - name: Checkout exactly approved PREVIEW source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.gate.outputs.source_sha }}
+          fetch-depth: 0
+      - name: Pin immutable source and validate OFF/30-day cleanup
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor HEAD "$GITHUB_SHA"
+          node scripts/verify-notification-preview-retention-026.mjs
+          node scripts/verify-notification-preview-retention-live-026.mjs --self-test
+          node scripts/verify-notification-preview-retention-gate-026.mjs --self-test
+          node scripts/verify-notification-scheduler-013.mjs
+          echo 'NOTIFICATION_026_PINNED_SOURCE_AND_GATED_30DAY_CLEANUP=PASS'
+      - name: Rebuild frozen current GET-only bundle and minimal cron diff (dry-run)
+        run: |
+          set -euo pipefail
+          node scripts/release-notification-preview-retention-026.mjs --prepare
+      - name: PREVIEW-only guarded deploy with exact rollback, D1 OFF and live smoke
+        run: |
+          set -euo pipefail
+          node scripts/release-notification-preview-retention-026.mjs --deploy

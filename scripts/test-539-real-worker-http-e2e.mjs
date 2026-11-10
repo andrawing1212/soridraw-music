@@ -9,6 +9,8 @@ import {join} from "node:path";
 import {createServer} from "node:http";
 import {APP539_FUNCTIONS_HTTP_COMPILED_OPEN,createOwnerFollowHttp539}
  from "../functions/experiments/owner-follow-http-539.mjs";
+import {APP540_INLINE_CANONICAL_COMPILED_OPEN,adjustExploreFollowCountersDelta540}
+ from "../cloudflare/explore-worker/runtime/owner-follow-inline-canonical-540.mjs";
 import {APP539_WORKER_HTTP_BRIDGE_COMPILED_OPEN,sendOwnerFollowHttp539}
  from "../cloudflare/explore-worker/runtime/owner-follow-http-539.mjs";
 import {initializeApp as initAdmin,deleteApp as deleteAdmin} from "firebase-admin/app";
@@ -42,6 +44,7 @@ const REVIEW_SECRET="local-538-admin-manual-approval-signing-only-key";
 const MARKER="ownerFollowerSync532/"+A;
 assert.equal(APP539_FUNCTIONS_HTTP_COMPILED_OPEN,false);
 assert.equal(APP539_WORKER_HTTP_BRIDGE_COMPILED_OPEN,false);
+assert.equal(APP540_INLINE_CANONICAL_COMPILED_OPEN,false);
 // Use the checked-out ACTUAL canonical Worker function, not a copy. No
 // production runtime/bindings are instantiated by this isolated harness.
 const workerSourceFile=readFileSync("cloudflare/explore-worker/canonical/preview-worker.js","utf8");
@@ -159,12 +162,18 @@ const workerDb={
   }catch(e){sql.exec("ROLLBACK");throw e;}
  },
 };
-async function canonicalCommitB(actorToken,desired,epoch){
+async function canonicalCommitB(actorToken,desired,epoch,writer="optimized"){
  const verified=await auth.verifyIdToken(actorToken,true);
  assert.equal(verified.uid,B);
  assert.equal(canonicalRow().epoch,epoch);
  const before=canonicalRow();
- const result=await existingWorkerFollow({DB:workerDb},B,A,desired,Date.now());
+ const totalBefore=sql.prepare("SELECT total_changes() AS n").get().n;
+ const result=writer==="legacy"
+  ?await existingWorkerFollow({DB:workerDb},B,A,desired,Date.now())
+  :await adjustExploreFollowCountersDelta540({DB:workerDb},B,A,desired,Date.now(),epoch);
+ const logicalChanges=sql.prepare("SELECT total_changes() AS n").get().n-totalBefore;
+ if(result.delta!==0)assert.equal(logicalChanges,writer==="legacy"?4:3,
+   "EXACT_CANONICAL_EDGE_ACTOR_OWNER_LOGICAL_WRITE_COUNT");
  const after=canonicalRow(),changed=result.delta!==0;
  assert.equal(after.count,changed?before.count+(desired?1:-1):before.count);
  assert.equal(after.rev,changed?before.rev+1:before.rev);
@@ -298,7 +307,7 @@ try{
 
  // Committed unfollow and re-follow must produce versions 2 and 3; a
  // delayed old signed event cannot regress the real RTDB owner signal.
- assert.equal((await canonicalCommitB(actorToken,false,e1)).revision,2);
+ assert.equal((await canonicalCommitB(actorToken,false,e1,"legacy")).revision,2);
  assert.equal((await drain()).delivered,1);
  await waitUntil(()=>views.some(v=>v.epoch===e1&&v.version===2&&v.count===0),"OWNER_REALTIME_V2");
  assert.equal((await canonicalCommitB(actorToken,true,e1)).revision,3);
@@ -313,7 +322,7 @@ try{
 
  // Signed delivery reaches owner, then relay fails before ACK. Durable
  // canonical revision remains and retry is idempotent; no second edge.
- assert.equal((await canonicalCommitB(actorToken,false,e1)).revision,4);
+ assert.equal((await canonicalCommitB(actorToken,false,e1,"legacy")).revision,4);
  const lostAck=await drain({raiseAfterDelivery:true});
  assert.equal(lostAck.failed,1);assert.equal(canonicalRow().ack,3);
  await waitUntil(()=>views.some(v=>v.epoch===e1&&v.version===4&&v.count===0),"OWNER_CRASH_BEFORE_ACK");
@@ -408,6 +417,13 @@ try{
  assert.equal(canonicalRow().ack,1);
  assert.equal(invalidated.filter(v=>v.epoch===e2).length,1);
  assert.ok(clientNew.values.some(v=>v?.authEpoch===e2));
+ const previous=canonicalRow();
+ await assert.rejects(
+  ()=>adjustExploreFollowCountersDelta540({DB:workerDb},B,A,false,Date.now(),e1),
+  /APP540_OWNER_EPOCH_MISMATCH/
+ );
+ assert.deepEqual(canonicalRow(),previous,"old Auth incarnation cannot alter recreated owner");
+ tests.oldNewWorkerAndEpochFencedOwnerWrites="PASS";
  tests.sameUidRecreationNewEpochRevisionReset="PASS";
 
  console.log("APP539_REAL_WORKER_SOURCE_FUNCTION_HTTP_A_RECEIVER=PASS");
@@ -419,7 +435,7 @@ try{
   receiverHttpCode:"createOwnerFollowHttp539 local Node HTTP using Firebase Functions onRequest candidate",
   caveats:[
    "B follow uses exact checked-out canonical Worker function over SQLite-compatible D1 adapter; not deployed Worker",
-   "Existing canonical Worker has NOT been updated to APP532 inline W2 and uses fallback 530 trigger when enabled in emulator; W2 physical compatibility NO-GO",
+   "APP540 OFF candidate uses one inline owner UPDATE; legacy Worker still uses fallback; only isolated D1 metering can establish physical W2",
    "A received via actual Firebase JS SDK onValue and Auth emulator token against RTDB Rules",
    "APP534+APP537 deletion and audit reconciliation used actual Firebase emulators",
    "Same-UID recreation required explicit isolated Firestore account restore + local canonical erasure/rebootstrap; no live reactivation contract",

@@ -4,6 +4,9 @@
  */
 import assert from 'node:assert/strict';
 import {createHmac,timingSafeEqual} from 'node:crypto';
+import {
+ APP540_INLINE_CANONICAL_COMPILED_OPEN,adjustExploreFollowCountersDelta540,
+} from '../cloudflare/explore-worker/runtime/owner-follow-inline-canonical-540.mjs';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync,writeFileSync,existsSync,unlinkSync} from 'node:fs';
 import {join} from 'node:path';
@@ -15,6 +18,7 @@ import {
 const candidate=readFileSync('cloudflare/explore-worker/candidates/530-owner-follow-inline-stats.sql','utf8');
 const migration=readFileSync('cloudflare/explore-worker/candidates/532-owner-auth-epoch-no-tombstone.sql','utf8');
 assert.equal(OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN,false);
+assert.equal(APP540_INLINE_CANONICAL_COMPILED_OPEN,false);
 assert.match(readFileSync('src/services/exploreOwnerFollowerSync529.ts','utf8'),
  /EXPLORE_OWNER_FOLLOW_REALTIME_529_ENABLED=false/);
 assert.match(readFileSync('cloudflare/explore-worker/runtime/owner-follow-inline-530.mjs','utf8'),
@@ -208,6 +212,53 @@ try{
   assert.equal((await authorizeOwnerFollowEpoch532(ev,{getAuthUser:async()=>user(E2)})).allowed,true);
   return true;}});
  assert.equal(d2.delivered,1);assert.equal((await row()).ack,1);
+
+ // APP541: meter EXACT owner SQL emitted from the unchanged legacy Worker
+ // and the OFF APP540 Worker-shaped candidate in this same owned D1.
+ // It does NOT execute the entire live Worker route or cloud transaction.
+ const source=readFileSync('cloudflare/explore-worker/canonical/preview-worker.js','utf8');
+ const begin=source.indexOf('async function adjustExploreFollowCountersDelta(');
+ const end=source.indexOf('\\n__name(',begin);
+ assert.ok(begin>0&&end>begin&&end-begin<8000);
+ const legacy=new Function(source.slice(begin,end)+'\\nreturn adjustExploreFollowCountersDelta;')();
+ async function captured(fn,follow,epoch,at){
+  let saved=null;const stop='APP541_CAPTURE_STATEMENTS';
+  const facade={DB:{
+   prepare(sql){return {bind(...params){return {query:sql,params}}}},
+   async batch(rows){saved=rows;throw Error(stop)},
+  }};
+  await assert.rejects(()=>fn(facade,'B','A',follow,at,epoch),new RegExp(stop));
+  assert.equal(saved?.length,3);
+  return saved;
+ }
+ const at=541000;
+ await query('CREATE TABLE follows (follower_uid TEXT, following_uid TEXT, created_at INTEGER, PRIMARY KEY(follower_uid,following_uid))');
+ await query('INSERT INTO follows(follower_uid,following_uid,created_at) VALUES(?,?,?)',['B','A',at]);
+ const nf=(await captured(adjustExploreFollowCountersDelta540,true,E2,at))[2];
+ const of=(await captured(legacy,true,E2,at))[2];
+ const nu=(await captured(adjustExploreFollowCountersDelta540,false,E2,at))[1];
+ const ou=(await captured(legacy,false,E2,at))[1];
+ assert.match(nf.query,/UPDATE profile_stats[\\s\\S]*owner_follow_revision_530/);
+ assert.match(of.query,/INSERT INTO profile_stats/);
+ const n1=await query(nf.query,nf.params,'541_real_candidate_follow_target');
+ assert.equal(n1.w,2,'APP541_EXACT_FOLLOW_WRITER_MUST_BE_W2');
+ const stale=(await captured(adjustExploreFollowCountersDelta540,true,E1,at))[2];
+ assert.equal((await query(stale.query,stale.params,'541_stale_auth_epoch')).w,0);
+ const noop=(await captured(adjustExploreFollowCountersDelta540,true,E2,at+1))[2];
+ assert.equal((await query(noop.query,noop.params,'541_no_edge_noop')).w,0);
+ const o1=await query(of.query,of.params,'541_exact_legacy_follow_target');
+ assert.ok(o1.w>=n1.w);
+ const n2=await query(nu.query,nu.params,'541_real_candidate_unfollow_target');
+ assert.equal(n2.w,2,'APP541_EXACT_UNFOLLOW_WRITER_MUST_BE_W2');
+ const o2=await query(ou.query,ou.params,'541_exact_legacy_unfollow_target');
+ assert.ok(o2.w>=n2.w);
+ const current=await row();
+ assert.equal(current.epoch,E2);
+ console.log('APP541_EXACT_TARGET_D1_COST=PASS '+JSON.stringify({
+  candidateFollow:{R:n1.r,W:n1.w},legacyFollow:{R:o1.r,W:o1.w},
+  candidateUnfollow:{R:n2.r,W:n2.w},legacyUnfollow:{R:o2.r,W:o2.w},
+  staleEpochW0:true,noEdgeW0:true,
+ }));
  // Erase again, leave no D1 record; no permanent UID retention even after ACK.
  await query("DELETE FROM profile_stats WHERE uid='A'",[],'second_complete_erasure');
  assert.equal(await row(),undefined);

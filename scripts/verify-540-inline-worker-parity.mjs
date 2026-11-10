@@ -68,22 +68,25 @@ async function sequence(fn,optimized){
  const d=createDb(),env=wrap(d);
  try{
   let before=changes(d);
-  const first=await fn(env,"B","A",true,1000);
+  const run=(desired,at)=>optimized
+    ?fn(env,"B","A",desired,at,who)
+    :fn(env,"B","A",desired,at);
+  const first=await run(true,1000);
   assert.equal(first.delta,1);assert.equal(first.following.follower_count,1);
   assert.deepEqual([row(d).count,row(d).rev,row(d,"B").following],[1,1,1]);
   const firstChanges=changes(d)-before;
   assert.equal(firstChanges,optimized?3:4,"one follower count row, actor count row and edge; old writer also trigger");
   before=changes(d);
-  const duplicate=await fn(env,"B","A",true,1001);
+  const duplicate=await run(true,1001);
   assert.equal(duplicate.delta,0);assert.equal(changes(d)-before,0);
   assert.equal(row(d).rev,1);
   before=changes(d);
-  const removed=await fn(env,"B","A",false,1002);
+  const removed=await run(false,1002);
   assert.equal(removed.delta,-1);
   assert.deepEqual([row(d).count,row(d).rev,row(d,"B").following],[0,2,0]);
   assert.equal(changes(d)-before,optimized?3:4);
   before=changes(d);
-  const noOp=await fn(env,"B","A",false,1003);
+  const noOp=await run(false,1003);
   assert.equal(noOp.delta,0);assert.equal(changes(d)-before,0);assert.equal(row(d).rev,2);
   return {firstChanges,after:row(d)};
  }finally{d.close()}
@@ -93,20 +96,39 @@ const newer=await sequence(adjustExploreFollowCountersDelta540,true);
 assert.deepEqual(old.after,newer.after);
 {
  const d=createDb({ownerExists:false});try{
-  const result=await adjustExploreFollowCountersDelta540(wrap(d),"B","A",true,1100);
-  assert.equal(result.delta,1);assert.equal(row(d).count,1);
-  assert.equal(row(d).rev,1,"first insert must carry revision in same statement");
-  assert.equal(row(d,"B").following,1);
+  await assert.rejects(
+   ()=>adjustExploreFollowCountersDelta540(wrap(d),"B","A",true,1100,who),
+   /APP540_OWNER_EPOCH_MISMATCH/
+  );
+  assert.equal(d.prepare("SELECT count(*) AS n FROM follows").get().n,0);
+  assert.equal(row(d),null);
+  assert.equal(row(d,"B").following,0);
  }finally{d.close()}
 }
 {
  const d=createDb(),env=wrap(d);try{
   d.exec(`CREATE TRIGGER abort_owner_540 BEFORE UPDATE OF follower_count ON profile_stats
   WHEN NEW.follower_count<>OLD.follower_count BEGIN SELECT RAISE(ABORT,'injected'); END;`);
-  await assert.rejects(()=>adjustExploreFollowCountersDelta540(env,"B","A",true,1200),/injected/);
+  await assert.rejects(()=>adjustExploreFollowCountersDelta540(env,"B","A",true,1200,who),/injected/);
   assert.equal(d.prepare("SELECT COUNT(*) AS n FROM follows").get().n,0);
   assert.equal(row(d).count,0);assert.equal(row(d).rev,0);
   assert.equal(row(d,"B").following,0);
+ }finally{d.close()}
+}
+{
+ const d=createDb(),env=wrap(d);try{
+  const before=changes(d);
+  await assert.rejects(()=>adjustExploreFollowCountersDelta540(env,"B","A",true,1200),/APP540_TRUSTED_OWNER_EPOCH_REQUIRED/);
+  await assert.rejects(()=>adjustExploreFollowCountersDelta540(env,"B","A",true,1201,"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),/APP540_OWNER_EPOCH_MISMATCH/);
+  await assert.rejects(()=>adjustExploreFollowCountersDelta540(env,"B","A",false,1202,"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),/APP540_OWNER_EPOCH_MISMATCH/);
+  assert.equal(changes(d),before,"stale or missing Auth incarnation must not mutate edge/counters");
+  assert.equal(row(d).rev,0);
+  d.prepare("UPDATE profile_stats SET owner_follow_auth_epoch_532=? WHERE uid='A'").run("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+  const fresh=await adjustExploreFollowCountersDelta540(env,"B","A",true,1300,"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+  assert.equal(fresh.delta,1);assert.equal(row(d).rev,1);
+  const snap=changes(d);
+  await assert.rejects(()=>adjustExploreFollowCountersDelta540(env,"B","A",false,1301,who),/APP540_OWNER_EPOCH_MISMATCH/);
+  assert.equal(changes(d),snap);assert.equal(row(d).count,1);
  }finally{d.close()}
 }
 console.log("APP540_INLINE_CANONICAL_LOGICAL_PARITY=PASS; canonical+candidate counts equal, fallback avoided on owner UPDATE, rollbacks PASS, live gate OFF");

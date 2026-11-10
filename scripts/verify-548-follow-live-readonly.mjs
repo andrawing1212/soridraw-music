@@ -17,7 +17,8 @@ const requiredColumns=[
 const sql=[
  "SELECT name FROM pragma_table_info('profile_stats') WHERE name LIKE 'owner_follow_%' ORDER BY name LIMIT 40",
  "SELECT type,name FROM sqlite_master WHERE (type='trigger' AND name LIKE 'explore_owner_follow_%') OR (type='table' AND name='explore_owner_follow_control_530') ORDER BY type,name LIMIT 40",
- "SELECT name FROM sqlite_master WHERE type='trigger' LIMIT 100"
+ "SELECT name FROM sqlite_master WHERE type='trigger' LIMIT 100",
+ "SELECT id,phase FROM explore_follow_cutover_control_348 WHERE id=1 LIMIT 1"
 ];
 assert.equal(Object.keys(workers).length,3);
 for(const q of sql)assert.ok(q.startsWith('SELECT ')&&!/\b(?:UPDATE|DELETE|INSERT|DROP|ALTER|CREATE)\b/i.test(q),'ONLY_READONLY_METADATA_SQL');
@@ -66,9 +67,19 @@ async function query(q){
 const columns=(await query(sql[0])).map(x=>x.name).sort();
 const objects=await query(sql[1]);
 const existingTriggers=await query(sql[2]);
+const followControl=await query(sql[3]);
+assert.ok(followControl.length===1 &&
+ Number(followControl[0].id)===1 &&
+ ['legacy','armed','overlay','readonly'].includes(followControl[0].phase),
+ 'FOLLOW_CONTROL_PHASE_UNVERIFIED');
+const effectiveFollowPhase=followControl[0].phase;
 const migrationPresent=requiredColumns.every(x=>columns.includes(x));
 const controlPresent=objects.some(x=>x.type==='table'&&x.name==='explore_owner_follow_control_530');
 const legacyTriggerPresent=objects.some(x=>x.type==='trigger'&&x.name==='explore_owner_follow_legacy_546');
+console.log('APP548_FOLLOW_AUTHORITY_PHASE='+effectiveFollowPhase);
+console.log('APP548_OWNER_REVISION_COVERAGE='+(
+ effectiveFollowPhase==='legacy'?'LEGACY_PROFILE_STATS_SUPPORTED':
+ 'HOLD_NONLEGACY_OVERLAY_OR_READONLY_UNSUPPORTED'));
 console.log('APP548_CURRENT_LIVE_WORKER_COMPAT='+JSON.stringify(snapshots));
 console.log('APP548_CANONICAL_D1_OWNER_SCHEMA_METADATA='+JSON.stringify({
  columnsPresent:columns,requiredColumnCount:requiredColumns.length,migrationPresent,
@@ -76,7 +87,7 @@ console.log('APP548_CANONICAL_D1_OWNER_SCHEMA_METADATA='+JSON.stringify({
 }));
 console.log('APP548_PREDEPLOY_STATUS='+(
  snapshots.every(x=>x.sharedD1Bound&&x.knownVersionUnchanged)&&
- migrationPresent&&controlPresent&&legacyTriggerPresent
+ migrationPresent&&controlPresent&&legacyTriggerPresent&&effectiveFollowPhase==='legacy'
  ? 'SCHEMA_PRESENT_RECHECK_AUTH_RULES_AND_ROLLBACK'
  : 'NO_GO_SHARED_OWNER_BACKEND_NOT_READY'));
 console.log('APP548_USER_DATA_READS_ZERO_SHARED_D1_WRITES_ZERO_NO_DEPLOY=PASS');

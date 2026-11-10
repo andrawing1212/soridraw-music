@@ -44,11 +44,16 @@ export async function adjustExploreFollowCountersDelta540(env, followerUid, foll
           SELECT 1 FROM follows
           WHERE follower_uid = ? AND following_uid = ? AND created_at = ?
         )
+          AND EXISTS (
+            SELECT 1 FROM profile_stats
+            WHERE uid = ? AND owner_follow_auth_epoch_532 = ?
+          )
         ON CONFLICT(uid) DO UPDATE SET
           following_count = profile_stats.following_count + 1,
           updated_at = excluded.updated_at
         RETURNING uid, follower_count, following_count
-      `).bind(followerUid, now, followerUid, followingUid, now),
+      `).bind(followerUid, now, followerUid, followingUid, now,
+        followingUid, expectedOwnerEpoch),
       env.DB.prepare(`
         UPDATE profile_stats SET
           follower_count = follower_count + 1,

@@ -131,4 +131,18 @@ assert.deepEqual(old.after,newer.after);
   assert.equal(changes(d),snap);assert.equal(row(d).count,1);
  }finally{d.close()}
 }
+{
+ // An old edge can carry the same millisecond timestamp. A stale Auth
+ // generation must not accidentally update the actor's following_count.
+ const d=createDb(),env=wrap(d);try{
+  d.prepare("INSERT INTO follows(follower_uid,following_uid,created_at) VALUES('B','A',1201)").run();
+  const snapshot=changes(d);
+  await assert.rejects(
+   ()=>adjustExploreFollowCountersDelta540(env,"B","A",true,1201,"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+   /APP540_OWNER_EPOCH_MISMATCH/
+  );
+  assert.equal(changes(d),snapshot,"old-timestamp edge must not permit stale actor counter write");
+  assert.equal(row(d,"B").following,0);assert.equal(row(d).count,0);assert.equal(row(d).rev,0);
+ }finally{d.close()}
+}
 console.log("APP540_INLINE_CANONICAL_LOGICAL_PARITY=PASS; canonical+candidate counts equal, fallback avoided on owner UPDATE, rollbacks PASS, live gate OFF");

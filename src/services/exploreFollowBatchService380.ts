@@ -1,7 +1,7 @@
 // SORIDRAW_EXPLORE_FOLLOW_LOCAL_FIRST_BATCH_380_20261007
-// One viewer/target pair keeps only its latest desired state for 30 seconds.
-// The current device may paint immediately; the canonical Worker is called once
-// for the final state. Returning to the original state costs zero server writes.
+// Existing legacy batches retain their 30-second final-state window.
+// Visible Follow/Unfollow clicks opt into immediate server settlement, while
+// reusing the same in-flight last-choice guard and net-zero write protection.
 //
 // This module intentionally owns only timing/settlement orchestration. Product
 // caches and RTDB convergence remain in ExplorePage/exploreSocialService.
@@ -26,6 +26,7 @@ export type ExploreFollowPendingRecord380 = ExploreFollowBatchBase380 & {
   viewerUid: string;
   targetUid: string;
   desiredFollowing: boolean;
+  immediate?: boolean;
   targetProfile: {
     uid: string;
     nickname: string;
@@ -62,6 +63,7 @@ type ExploreFollowBatchRequest380 = ExploreFollowBatchBase380 & {
   viewerUid: string;
   targetUid: string;
   desiredFollowing: boolean;
+  immediate?: boolean;
   targetProfile: {
     uid: string;
     nickname: string;
@@ -137,6 +139,7 @@ const toRecord380 = (entry: ExploreFollowBatchEntry380): ExploreFollowPendingRec
   baseTargetFollowingCount: entry.baseTargetFollowingCount,
   baseActorFollowingCount: entry.baseActorFollowingCount,
   desiredFollowing: entry.desiredFollowing,
+  immediate: entry.immediate === true,
   targetProfile: { ...entry.targetProfile },
   updatedAt: entry.updatedAt,
   notBefore: entry.notBefore,
@@ -208,7 +211,7 @@ const failExploreFollowPending380 = (entry: ExploreFollowBatchEntry380, error: u
 const followRateLimitFailure380 = () =>
   new Error('팔로우 변경을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.');
 
-const schedule380 = (entry: ExploreFollowBatchEntry380, delayMs = EXPLORE_FOLLOW_IDLE_FLUSH_MS_380) => {
+const schedule380 = (entry: ExploreFollowBatchEntry380, delayMs = entry.immediate ? 0 : EXPLORE_FOLLOW_IDLE_FLUSH_MS_380) => {
   clearTimer380(entry);
   if (entry.suspended) return;
   const requestedDelay = Math.max(0, delayMs);
@@ -225,7 +228,7 @@ const schedule380 = (entry: ExploreFollowBatchEntry380, delayMs = EXPLORE_FOLLOW
 export const flushExploreFollowPair380 = async (key: string): Promise<void> => {
   const entry = pending380.get(key);
   if (!entry || entry.inflight || entry.suspended) return;
-  const dueAt = Math.max(entry.updatedAt + EXPLORE_FOLLOW_IDLE_FLUSH_MS_380,
+  const dueAt = Math.max(entry.updatedAt + (entry.immediate ? 0 : EXPLORE_FOLLOW_IDLE_FLUSH_MS_380),
     entry.desiredFollowing === entry.baseFollowing ? 0 : entry.notBefore);
   if (Date.now() < dueAt) { schedule380(entry, dueAt - Date.now()); return; }
 
@@ -290,7 +293,7 @@ export const flushExploreFollowPair380 = async (key: string): Promise<void> => {
       current.notBefore = 0;
       persistEntry380(current);
       current.onBusy?.(false);
-      schedule380(current, Math.max(0, current.updatedAt + EXPLORE_FOLLOW_IDLE_FLUSH_MS_380 - Date.now()));
+      schedule380(current, Math.max(0, current.updatedAt + (current.immediate ? 0 : EXPLORE_FOLLOW_IDLE_FLUSH_MS_380) - Date.now()));
       return;
     }
 
@@ -309,6 +312,13 @@ export const flushExploreFollowPair380 = async (key: string): Promise<void> => {
         removeStored380(current.viewerUid, current.targetUid);
         current.inflight = false;
         current.onBusy?.(false);
+        return;
+      }
+      // An immediately requested follow rejected by server cooldown must not
+      // linger for minutes with an unconfirmed count or retry storm.
+      if (current.immediate) {
+        failExploreFollowPending380(current,
+          new Error('서버에서 팔로우 변경을 제한하고 있습니다. 잠시 후 다시 시도해 주세요.'));
         return;
       }
       if (current.retryUsed) {
@@ -352,6 +362,7 @@ export const queueExploreFollowFinalState380 = (request: ExploreFollowBatchReque
     // Remount/re-entry only refreshes callbacks; it is not another user click.
     if (request.restoredUpdatedAt !== undefined) return;
     existing.desiredFollowing = request.desiredFollowing === true;
+    existing.immediate = request.immediate === true;
     existing.targetProfile = { ...request.targetProfile };
     existing.version += 1;
     existing.updatedAt = Date.now();
@@ -367,6 +378,7 @@ export const queueExploreFollowFinalState380 = (request: ExploreFollowBatchReque
     viewerUid,
     targetUid,
     desiredFollowing: request.desiredFollowing === true,
+    immediate: request.immediate === true,
     baseFollowing: request.baseFollowing === true,
     baseTargetFollowerCount: safeCount380(request.baseTargetFollowerCount),
     baseTargetFollowingCount: safeCount380(request.baseTargetFollowingCount),
@@ -391,7 +403,7 @@ export const queueExploreFollowFinalState380 = (request: ExploreFollowBatchReque
     return;
   }
   persistEntry380(entry);
-  schedule380(entry, request.initialDelayMs ?? EXPLORE_FOLLOW_IDLE_FLUSH_MS_380);
+  schedule380(entry, request.initialDelayMs ?? (entry.immediate ? 0 : EXPLORE_FOLLOW_IDLE_FLUSH_MS_380));
 };
 
 export const getPendingExploreFollowMutationCount380 = (viewerUid = '') => {

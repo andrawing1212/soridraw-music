@@ -122,7 +122,7 @@ export async function inspectOwnerFollowAdmin536(ctx:Context){
  const now=(ctx.now||Date.now)();
  if(!Number.isSafeInteger(now)||now<=0)throw Error("APP536_INVALID_CLOCK");
  const permit:Permit={
-  v:1,actor,target:ctx.targetUid,action:observed.decision.action,
+  v:1,actor,target:ctx.targetUid,action:observed.decision.action as Action,
   fingerprint:observed.fingerprint,issued:now,expires:now+REVIEW_MS,
   nonce:randomBytes(16).toString("hex"),
  };

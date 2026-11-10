@@ -2,6 +2,10 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
+import {
+ INLINE_OWNER_FOLLOW_551_SELECT_SQL,normalizeOwnerFollowEpochEvent532,
+ drainOwnerFollowAuthEpoch532,
+} from '../cloudflare/explore-worker/runtime/owner-follow-auth-epoch-532.mjs';
 const migration=readFileSync('cloudflare/explore-worker/candidates/546-owner-follow-epoch-floor-legacy-off.sql','utf8');
 const upgrade=readFileSync('cloudflare/explore-worker/candidates/551-owner-follow-overlay-revision-off.sql','utf8');
 assert.match(upgrade,/SOURCE-ONLY.*DO NOT APPLY TO SHARED D1/);
@@ -21,7 +25,7 @@ try {
   baseline_following INTEGER NOT NULL CHECK(baseline_following IN(0,1)),
   updated_at INTEGER,mutation_id TEXT,PRIMARY KEY(follower_uid,following_uid)
  );
- INSERT INTO profile_stats(uid,follower_count) VALUES('A',3),('Z',0);
+ INSERT INTO profile_stats(uid,follower_count,updated_at) VALUES('A',3,1800000000000),('Z',0,1);
  INSERT INTO follows VALUES ('B','A',1),('E','A',1);`);
  db.exec(migration); db.exec(upgrade);
  const get=uid=>db.prepare('SELECT * FROM profile_stats WHERE uid=?').get(uid);
@@ -58,7 +62,7 @@ try {
  owner_follow_overlay_delta_551=(
   SELECT COALESCE(SUM(following-baseline_following),0)
   FROM explore_follow_overrides_348 WHERE following_uid='A')
- WHERE uid='A' AND follower_count=?`).run(epoch,baseline);
+ WHERE uid='A'`).run(epoch);
  assert.deepEqual(stats(),{rev:0,count:1});
  db.prepare('UPDATE explore_owner_follow_control_530 SET enabled=1 WHERE id=1').run();
  remove('B');assert.deepEqual(stats(),{rev:1,count:2});
@@ -81,6 +85,35 @@ try {
  db.prepare("UPDATE profile_stats SET follower_count=4 WHERE uid='A'").run();
  assert.deepEqual(stats(),{rev:6,count:3});
  assert.equal(stats().count,truth());
+
+ // Owner webhook must receive the reconstructed effective canonical count,
+ // never a stale legacy profile_stats value after the overlay cutover.
+ const raw=db.prepare(INLINE_OWNER_FOLLOW_551_SELECT_SQL).get(1800000000200,12);
+ assert.equal(raw.follower_count,3);
+ const normalized=normalizeOwnerFollowEpochEvent532(raw);
+ assert.equal(normalized?.followerCount,3);
+ assert.equal(normalized?.version,6);
+ assert.equal(normalized?.authEpoch,epoch);
+ const adapter={prepare:sql=>({bind:(...args)=>({
+  all:async()=>({results:db.prepare(sql).all(...args)}),
+  run:async()=>({meta:{changes:db.prepare(sql).run(...args).changes}}),
+ })})};
+ const delivered=[];
+ const settled=await drainOwnerFollowAuthEpoch532({
+  db:adapter,enabled:true,overlayRevisionSource:true,
+  now:()=>1800000000300,
+  deliver:async event=>{delivered.push(event);return true;},
+ });
+ assert.equal(settled.selected,1);
+ assert.equal(settled.delivered,1);
+ assert.equal(delivered[0].followerCount,3);
+ assert.equal(get('A').owner_follow_acked_revision_530,6);
+ const idle=await drainOwnerFollowAuthEpoch532({
+  db:adapter,enabled:true,overlayRevisionSource:true,
+  now:()=>1800000000400,deliver:async()=>{throw Error('duplicate send');},
+ });
+ assert.equal(idle.selected,0,'old owner event must not be replayed');
+
  console.log('APP551_ACTUAL_OVERLAY_INSERT_UPDATE_DELETE_CHANGED_ONLY=PASS');
  console.log('APP551_ENROLLED_LEGACY_AND_OVERLAY_REVISION_COHERENCE=PASS');
  console.log('APP551_UNENROLLED_AND_NOOP_NO_OWNER_SIGNAL=PASS');

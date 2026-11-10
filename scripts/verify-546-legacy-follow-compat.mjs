@@ -85,4 +85,5 @@ try{
  assert.equal(change()-before,1,'revoked old writer adds no extra revision');
  assert.equal(db.prepare("SELECT name FROM sqlite_schema WHERE name LIKE '%retired_531%'").all().length,0);
  console.log('APP546_LEGACY_FOLLOW_CHANGED_ONLY_ENROLLED_OFF_AND_NEW_INLINE_PARITY=PASS');
+ await import('./verify-551-owner-follow-overlay-delta.mjs');
 }finally{db.close()}

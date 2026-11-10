@@ -142,7 +142,7 @@ try{
  assert.ok(g2.createdAtMs>g1.createdAtMs,'AUTH_CREATION_TIME_MONOTONIC');
  const freshToken=await token(EMAIL,PASS);
  assert.equal(freshToken.claims[CLAIM_533],g2.authEpoch);
- denied(await clientRequest(freshToken.value)); // no matching marker yet
+ assert.deepEqual(await clientRequest(freshToken.value),{status:200,data:null}); // no marker is readable only by claimed owner
  const newEvent=await send(record(g2.authEpoch,1,2));
  assert.equal(newEvent.accepted,true);
  assert.equal((await clientRequest(freshToken.value)).status,200);
@@ -216,7 +216,7 @@ try{
  await auth.deleteUser(UID);
  await clearRetiredGeneration533({auth,database,uid:UID,authEpoch:g3.authEpoch});
  assert.equal((await ref.get()).exists(),false);
- denied(await clientRequest(freshToken.value));
+ assert.deepEqual(await clientRequest(freshToken.value),{status:200,data:null}); // no retained marker after deletion
  stats.authDeleteMarkerCleanup='PASS';
  console.log('APP533_FIREBASE_AUTH_RTDB_EMULATOR_E2E=PASS');
  console.log(JSON.stringify({kind:'APP533_ISOLATED_AUTH_RTDB',project:PROJECT,

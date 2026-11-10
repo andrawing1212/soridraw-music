@@ -60,23 +60,37 @@ await c.advance(0);
 await c.advance(19_999); assert.equal(calls.length, 1);
 await c.advance(1); assert.deepEqual(calls, [true, false]);
 
-// 429 schedules only one retry; re-entry/reload cannot reset that budget.
-let rejected = 0;
+// 429 schedules only one retry. After a second rejection the server has not
+// changed the canonical edge, so the app must rollback visibly instead of
+// persisting a suspended optimistic state forever. An old suspended record
+// recovered from storage must also fail safely without a new server write.
+let rejected = 0, terminalErrors = [], deferred = [];
 const limited = { ...request('limited'), commit: async () => { rejected++;
-  throw Object.assign(Error('limited'), { code: 'RATE_LIMITED', retryAfterMs: 86_400_000 }); } };
+  throw Object.assign(Error('limited'), { code: 'RATE_LIMITED', retryAfterMs: 86_400_000 }); },
+  onError: value => terminalErrors.push(value),
+  onDeferred: delay => deferred.push(delay),
+};
 c.queueExploreFollowFinalState380(limited);
 await c.advance(30_000); assert.equal(rejected, 1);
-let record = c.readPendingExploreFollowIntents380('viewer')[0];
+const record = c.readPendingExploreFollowIntents380('viewer')[0];
 assert.equal(record.notBefore - now, 86_400_000, 'daily Retry-After must not be capped to one hour');
+assert.equal(record.suspended, false);
+assert.deepEqual(deferred, [86_400_000], 'cooldown must be shown as pending');
 const restored = client();
-const restore = () => ({ ...limited, ...record, restoredNotBefore: record.notBefore,
-  restoredUpdatedAt: record.updatedAt, restoredRetryUsed: record.retryUsed, restoredSuspended: record.suspended,
-  initialDelayMs: Math.max(0, record.notBefore - now) });
-restored.queueExploreFollowFinalState380(restore());
+const restore = row => ({ ...limited, ...row, restoredNotBefore: row.notBefore,
+  restoredUpdatedAt: row.updatedAt, restoredRetryUsed: row.retryUsed, restoredSuspended: row.suspended,
+  initialDelayMs: Math.max(0, row.notBefore - now) });
+restored.queueExploreFollowFinalState380(restore(record));
 await restored.advance(86_400_000 - 1); assert.equal(rejected, 1);
 await restored.advance(1); assert.equal(rejected, 2);
-record = restored.readPendingExploreFollowIntents380('viewer')[0]; assert.equal(record.suspended, true);
-const reloadAgain = client(); reloadAgain.queueExploreFollowFinalState380(restore());
+assert.equal(terminalErrors.length, 1, 'exhausted retry must be surfaced');
+assert.equal(terminalErrors[0].baseFollowing, false);
+assert.equal(restored.readPendingExploreFollowIntents380('viewer').length, 0,
+  'must not keep a false optimistic state suspended forever');
+const reloadAgain = client();
+reloadAgain.queueExploreFollowFinalState380(restore({ ...record, suspended: true, retryUsed: true }));
+assert.equal(terminalErrors.length, 2, 'legacy suspended state must be restored to base');
+assert.equal(reloadAgain.readPendingExploreFollowIntents380('viewer').length, 0);
 await reloadAgain.advance(2 * 86_400_000); assert.equal(rejected, 2);
 await reloadAgain.flushPendingExploreFollowsForPageExit380(); assert.equal(rejected, 2);
 reloadAgain.queueExploreFollowFinalState380({ ...request('limited'), desiredFollowing: false });
@@ -146,5 +160,6 @@ await assert.rejects(() => protocolContext.exports.requestOrderedExploreFollow35
 await protocolContext.exports.requestOrderedExploreFollow354('v', 't', false, protocolRequest);
 assert.deepEqual(methods, ['PUT', 'DELETE']);
 console.log('APP380_FOLLOW_TIMERS_NET_ZERO_INFLIGHT_RELOAD_RETRY_BUDGET=PASS');
+console.log('APP380_389_EXHAUSTED_429_ROLLBACK_AND_LEGACY_SUSPENDED_REPAIR=PASS');
 if (!followOnly389) console.log('APP380_LIKE_NET_ZERO_AND_DETERMINISTIC_429_NO_FALSE_REBASE=PASS');
 console.log('APP380_NAVIGATION_FLUSH_ZERO=PASS');

@@ -218,9 +218,9 @@ try{
  // It does NOT execute the entire live Worker route or cloud transaction.
  const source=readFileSync('cloudflare/explore-worker/canonical/preview-worker.js','utf8');
  const begin=source.indexOf('async function adjustExploreFollowCountersDelta(');
- const end=source.indexOf('\\n__name(',begin);
+ const end=source.indexOf(String.fromCharCode(10)+'__name(',begin);
  assert.ok(begin>0&&end>begin&&end-begin<8000);
- const legacy=new Function(source.slice(begin,end)+'\\nreturn adjustExploreFollowCountersDelta;')();
+ const legacy=new Function(source.slice(begin,end)+String.fromCharCode(10)+'return adjustExploreFollowCountersDelta;')();
  async function captured(fn,follow,epoch,at){
   let saved=null;const stop='APP541_CAPTURE_STATEMENTS';
   const facade={DB:{
@@ -238,7 +238,7 @@ try{
  const of=(await captured(legacy,true,E2,at))[2];
  const nu=(await captured(adjustExploreFollowCountersDelta540,false,E2,at))[1];
  const ou=(await captured(legacy,false,E2,at))[1];
- assert.match(nf.query,/UPDATE profile_stats[\\s\\S]*owner_follow_revision_530/);
+ assert.ok(nf.query.includes('UPDATE profile_stats') && nf.query.includes('owner_follow_revision_530'));
  assert.match(of.query,/INSERT INTO profile_stats/);
  const n1=await query(nf.query,nf.params,'541_real_candidate_follow_target');
  assert.equal(n1.w,2,'APP541_EXACT_FOLLOW_WRITER_MUST_BE_W2');

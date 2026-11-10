@@ -94,7 +94,7 @@ advance548(key548('A','followers')); // New canonical owner event
 pending548[2]({data:{items:[{uid:'invalidated-member'}],nextCursor:null}});
 await invalidated548;
 assert.equal(persisted548.length,1,'INVALIDATED_INFLIGHT_REQUEST_CANNOT_RESTORE_CACHE');
-assert.match(social,/advanceProfileConnectionGeneration548\\(cacheKey\\);\\s*removeSoridrawPersistentCache/);
+assert.match(social,/advanceProfileConnectionGeneration548\(cacheKey\);\s*removeSoridrawPersistentCache/);
 console.log('APP548_STALE_FOLLOWER_RESPONSE_PERSISTENT_CACHE_FENCE=PASS');
 assert.match(page,/direction === 'followers' && targetUid === user\?\.uid/);
 assert.match(page,/OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 120_000/);

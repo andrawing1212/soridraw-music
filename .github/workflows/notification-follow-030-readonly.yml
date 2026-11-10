@@ -1,0 +1,33 @@
+name: SORIDRAW Follow 030 Two-account Readonly Diagnostic
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/diagnose-follow-notification-030.mjs'
+      - '.github/workflows/notification-follow-030-readonly.yml'
+permissions:
+  contents: read
+jobs:
+  two-account-readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check exact bounded SQL and guard
+        run: |
+          set -euo pipefail
+          node --check scripts/diagnose-follow-notification-030.mjs
+          node scripts/diagnose-follow-notification-030.mjs --self-test
+      - name: Inspect only two screenshot accounts' canonical edge and alert timing
+        run: |
+          set -euo pipefail
+          node scripts/diagnose-follow-notification-030.mjs --live
+          echo 'D1_USER_DATA_WRITES=0;WORKER_DEPLOY=0;TEST_PRODUCTION_UNCHANGED=PASS'

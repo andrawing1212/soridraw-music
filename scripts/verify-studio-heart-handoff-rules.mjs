@@ -11,6 +11,13 @@ assert.equal(inbox?.['.validate'],"newData.hasChild('version')");
 assert.match(inbox?.slots?.$slot?.['.validate']||'',/\$slot\.matches/);
 assert.equal(inbox?.slots?.$slot?.$other?.['.validate'],false);
 const old=structuredClone(rules);
+// APP548 adds ONLY the already isolated-tested owner-private root child.
+// Check its exact ACL before removing it from the prior legacy-Rules blob hash.
+const ownerReference=JSON.parse(
+  readFileSync('scripts/emulator/app533.database.rules.json','utf8'));
+assert.deepEqual(old.rules.ownerFollowerSync532,
+  ownerReference.rules.ownerFollowerSync532);
+delete old.rules.ownerFollowerSync532;
 delete old.rules.userSync.$uid.studioHeartHandoffs;
 const oldSource=JSON.stringify(old,null,2)+'\n';
 const hash=createHash('sha1').update('blob '+Buffer.byteLength(oldSource)+'\0'+oldSource).digest('hex');

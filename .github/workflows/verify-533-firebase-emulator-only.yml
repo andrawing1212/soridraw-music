@@ -1,0 +1,57 @@
+name: SORIDRAW 533 Isolated Firebase Auth RTDB Emulator Lifecycle
+# One-time source-only test; never deploys or touches connected resources.
+on:
+  pull_request:
+    branches: [preview]
+    types: [opened, reopened, synchronize]
+    paths:
+      - 'scripts/test-533-owner-auth-rtdb-emulator.mjs'
+      - 'functions/experiments/owner-follow-auth-533.mjs'
+      - 'scripts/emulator/app533.database.rules.json'
+      - 'scripts/emulator/app533.firebase.json'
+      - '.github/workflows/verify-533-firebase-emulator-only.yml'
+permissions: {contents: read}
+concurrency:
+  group: soridraw-533-firebase-emulator-only
+  cancel-in-progress: false
+jobs:
+  auth-rtdb-emulator:
+    if: github.event.pull_request.number == 914 && github.event.pull_request.head.repo.full_name == 'andrawing1212/soridraw-music' && github.event.pull_request.head.ref == 'candidate/app526-owner-follower-live-signal'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    env:
+      APP533_ISOLATED_ONLY: 'yes'
+      GCLOUD_PROJECT: demo-soridraw-owner-533
+      FIREBASE_PROJECT_ID: demo-soridraw-owner-533
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Isolation guards / source syntax
+        run: |
+          set -euo pipefail
+          test "${GCLOUD_PROJECT}" = "demo-soridraw-owner-533"
+          node --check functions/experiments/owner-follow-auth-533.mjs
+          node --check scripts/test-533-owner-auth-rtdb-emulator.mjs
+          node -e "const fs=require('fs');let c=JSON.parse(fs.readFileSync('scripts/emulator/app533.firebase.json'));if(c.database.rules!=='scripts/emulator/app533.database.rules.json'||!c.emulators.auth||!c.emulators.database)process.exit(2)"
+      - name: Install source dependencies only (no backend build/deploy)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run isolated demo-project Auth + Database emulators
+        run: |
+          set -euo pipefail
+          env -u GOOGLE_APPLICATION_CREDENTIALS -u FIREBASE_TOKEN npx --yes firebase-tools@14.23.1 emulators:exec \
+            --project demo-soridraw-owner-533 \
+            --config scripts/emulator/app533.firebase.json \
+            --only auth,database \
+            'env -u GOOGLE_APPLICATION_CREDENTIALS -u FIREBASE_TOKEN node scripts/test-533-owner-auth-rtdb-emulator.mjs'
+      - name: Confirm no deployment
+        if: always()
+        run: echo 'APP533_DEMO_PROJECT_EMULATOR_ONLY;NO_SHARED_DB_WORKER_FUNCTIONS_RULES_HOSTING;NO_DEPLOY'

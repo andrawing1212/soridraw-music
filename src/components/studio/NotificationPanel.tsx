@@ -99,6 +99,11 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   }>({uid:'',items:[],preferences:null});
   const [remoteRefreshKey,setRemoteRefreshKey] = useState(0);
   const [remoteLoading, setRemoteLoading] = useState(false);
+  // PREVIEW only: explicit user-opened GET reports real verified server success.
+  // This status makes no additional network request and stores no credentials.
+  const [remoteAuthProof027,setRemoteAuthProof027] = useState<{
+    uid:string;state:'idle'|'checking'|'verified'|'failed';count:number;httpCode:string
+  }>({uid:'',state:'idle',count:0,httpCode:''});
   const [settingsSyncBusy, setSettingsSyncBusy] = useState(false);
   const syncGenerationRef = useRef(0);
   const [position, setPosition] = useState({ left: 80, top: 12 });
@@ -120,6 +125,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
     setActiveSection('activity');
     setNotice('');
     setSelectedMessage(null);
+    setRemoteAuthProof027({uid:'',state:'idle',count:0,httpCode:''});
   }, [open, uid]);
 
   useEffect(() => {
@@ -171,11 +177,19 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
     // Local 30-day generation metadata remains independently available.
     setRemoteInbox({uid:'',items:[],preferences:null});
     setRemoteLoading(true);
+    setRemoteAuthProof027({uid:current.uid,state:'checking',count:0,httpCode:''});
     void loadOwnNotifications004(current,controller.signal).then(({items,preferences}) => {
       if (!live || auth.currentUser?.uid !== uid) return;
       setRemoteInbox({uid:current.uid,items,preferences});
-    }).catch(() => {
-      if (live) setNotice('알림을 불러오지 못했습니다. 다시 열어 확인해 주세요.');
+      // Reached only after Firebase ID token + AppCheck GET 200 and JSON
+      // owner-scoped payload validation. Sample rows are NOT included here.
+      setRemoteAuthProof027({uid:current.uid,state:'verified',count:items.length,httpCode:''});
+    }).catch((error:unknown) => {
+      if (!live || auth.currentUser?.uid !== uid) return;
+      const message=error instanceof Error?error.message:'';
+      const httpCode=/^NOTIFICATION_INBOX_HTTP_([1-5][0-9]{2})$/.exec(message)?.[1]||'';
+      setRemoteAuthProof027({uid:current.uid,state:'failed',count:0,httpCode});
+      setNotice('알림을 불러오지 못했습니다. 다시 열어 확인해 주세요.');
     }).finally(() => {
       if (live) setRemoteLoading(false);
     });
@@ -423,6 +437,17 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
         </div>
       </div>
 
+      {!settingsOpen && NOTIFICATION_INBOX_ENABLED_004 &&
+        remoteAuthProof027.uid === uid && remoteAuthProof027.state !== 'idle' && (
+        <div className="soridraw-notification-server-status"
+          data-state={remoteAuthProof027.state} role="status" aria-live="polite">
+          {remoteAuthProof027.state === 'checking' ? 'PREVIEW 서버 인증 연결 확인 중' :
+            remoteAuthProof027.state === 'verified'
+              ? `PREVIEW 서버 인증 연결 정상 · 본인 수신함 ${remoteAuthProof027.count}건 조회`
+              : `PREVIEW 서버 조회 확인 필요${remoteAuthProof027.httpCode?
+                ` (HTTP ${remoteAuthProof027.httpCode})`:''}`}
+        </div>
+      )}
       {settingsOpen ? (
         <div className="soridraw-notification-settings">
           <label className="soridraw-notification-setting-master">

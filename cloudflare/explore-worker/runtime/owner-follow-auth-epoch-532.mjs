@@ -35,7 +35,13 @@ export const INLINE_OWNER_FOLLOW_532_SELECT_SQL=`
 export const INLINE_OWNER_FOLLOW_551_SELECT_SQL=
  INLINE_OWNER_FOLLOW_532_SELECT_SQL.replace(
   'follower_count,updated_at,',
-  '(follower_count+owner_follow_baseline_offset_551+owner_follow_overlay_delta_551) AS follower_count,updated_at,'
+  // Existing legacy stats rows can have updated_at=0 while a changed
+  // overlay edge has a valid revision. This field is NOT the ordering key;
+  // use the delivery-side server clock only as a positive protocol fallback.
+  // Never mutate original profile timestamps to repair this metadata.
+  `(follower_count+owner_follow_baseline_offset_551+owner_follow_overlay_delta_551) AS follower_count,
+   CASE WHEN updated_at>0 THEN updated_at
+    ELSE CAST(strftime('%s','now') AS INTEGER)*1000 END AS updated_at,`
  );
 export const normalizeOwnerFollowEpochEvent532=raw=>{
  const ev=validateOwnerFollowOutboxEvent529(raw);

@@ -25,7 +25,7 @@ try {
   baseline_following INTEGER NOT NULL CHECK(baseline_following IN(0,1)),
   updated_at INTEGER,mutation_id TEXT,PRIMARY KEY(follower_uid,following_uid)
  );
- INSERT INTO profile_stats(uid,follower_count,updated_at) VALUES('A',3,1800000000000),('Z',0,1);
+ INSERT INTO profile_stats(uid,follower_count,updated_at) VALUES('A',3,0),('Z',0,1);
  INSERT INTO follows VALUES ('B','A',1),('E','A',1);`);
  db.exec(migration); db.exec(upgrade);
  const get=uid=>db.prepare('SELECT * FROM profile_stats WHERE uid=?').get(uid);
@@ -89,7 +89,9 @@ try {
  // Owner webhook must receive the reconstructed effective canonical count,
  // never a stale legacy profile_stats value after the overlay cutover.
  const raw=db.prepare(INLINE_OWNER_FOLLOW_551_SELECT_SQL).get(1800000000200,12);
+ assert.equal(get('A').updated_at,0,'original stale timestamp stays unchanged');
  assert.equal(raw.follower_count,3);
+ assert.ok(raw.updated_at>0,'legacy timestamp zero must not invalidate a real owner revision');
  const normalized=normalizeOwnerFollowEpochEvent532(raw);
  assert.equal(normalized?.followerCount,3);
  assert.equal(normalized?.version,6);

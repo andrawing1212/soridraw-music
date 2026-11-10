@@ -72,11 +72,18 @@ export async function deliverOwnerFollowPostcommit555({
  // Publish that newer revision (never an actor-provided count).
  const event={ownerUid:uid,authEpoch:epoch,version,
   followerCount:count,updatedAt:Math.max(1,Number(now()))};
- try{
-  const sent=await sendOwnerFollowHttp539(event,{
-   endpoint,secret,send,now,
-  });
-  return {status:sent.ok?'delivered':'relay-failed',d1Writes:0,
-   deliveredRevision:sent.ok?version:0};
- }catch{return {status:'relay-failed',d1Writes:0}}
+ // Two bounded delivery attempts have no extra D1 read/write and run
+ // exclusively in ctx.waitUntil, never delaying the actor's commit ACK.
+ // A signed 409/403 means an invalid/revoked Auth generation: fail closed.
+ for(let attempt=0;attempt<2;attempt++){
+  try{
+   const sent=await sendOwnerFollowHttp539(event,{
+    endpoint,secret,send,now,
+   });
+   if(sent.ok)return {status:'delivered',d1Writes:0,deliveredRevision:version};
+   if(sent.status===403||sent.status===409)
+    return {status:'rejected-generation',d1Writes:0};
+  }catch{/* Unavailable transport may be retried once in this waitUntil. */}
+ }
+ return {status:'relay-failed',d1Writes:0}
 }

@@ -69,8 +69,25 @@ assert.equal((await attempt()).status,'r2-unsettled');
 assert.equal(counters.d1Read,1,'pending profile never reads owner epoch or relays');
 waiting=false;
 const storedBefore=counters.d1Write;
-assert.equal((await attempt({send:async()=>{throw Error('outage')}})).status,'relay-failed');
+let retryCount=0;
+assert.equal((await attempt({send:async()=>{retryCount++;throw Error('outage')}})).status,
+ 'relay-failed');
+assert.equal(retryCount,2,'RETRY_BOUNDED_2');
 assert.equal(counters.d1Write,storedBefore,'HTTP failure never changes canonical D1');
+let temporary=0;
+const recovered=await attempt({send:async(endpoint,options)=>{
+ temporary++;
+ return temporary===1
+  ?{ok:false,status:503,json:async()=>({ok:false})}
+  :relay(endpoint,options);
+}});
+assert.equal(recovered.status,'delivered');
+assert.equal(temporary,2,'TRANSIENT_RETRY_SUCCEEDED');
+let permanent=0;
+assert.equal((await attempt({send:async()=>{
+ permanent++;return {ok:false,status:409,json:async()=>({ok:false})};
+}})).status,'rejected-generation');
+assert.equal(permanent,1,'OLD_AUTH_EPOCH_NEVER_RETRIED');
 assert.equal((await attempt({env:{...env,SORIDRAW_ENVIRONMENT:'test'}})).status,'disabled');
 assert.equal((await attempt({env:{...env,SORIDRAW_OWNER_FOLLOW_W2_PUSH_555:'0'}})).status,'disabled');
 console.log('APP555_CANONICAL_SETTLED_R2_OWNER_REVISION_HMAC_FENCE=PASS');

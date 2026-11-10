@@ -10,7 +10,6 @@ import {
  inspectOwnerFollowAdmin536,confirmOwnerFollowAdmin536,
  verifyOwnerFollowAdminConfirmation536,APP536_EXPLICIT_CONFIRMATION,
 } from "./ownerFollowManualReview536";
-import {inspectOwnerFollowHold535} from "./ownerFollowHoldRecovery535";
 
 export const APP537_ADMIN_RECOVERY_COMPILED_OPEN=false;
 export const APP537_AUDIT_COLLECTION="admin_owner_follow_recovery_audit_537";
@@ -46,8 +45,9 @@ const checkRequest=async(request:AppRequest,deps:Resources)=>{
  const actor=request.auth?.uid;
  const uid=request.data?.targetUid;
  const token=request.data?.adminIdToken;
- if(!actor||!UID.test(actor)||!uid||!UID.test(uid)||typeof token!=="string")
-  fail("APP537_AUTHENTICATED_CALLABLE_REQUIRED");
+ if(typeof actor!=="string"||!UID.test(actor)||
+    typeof uid!=="string"||!UID.test(uid)||typeof token!=="string")
+  throw Error("APP537_AUTHENTICATED_CALLABLE_REQUIRED");
  const decoded=await deps.auth.verifyIdToken(token,true);
  if(decoded.uid!==actor)fail("APP537_CALLABLE_PRINCIPAL_MISMATCH");
  return {targetUid:uid,adminIdToken:token};
@@ -104,7 +104,7 @@ export async function confirmOwnerFollowCallable537(request:AppRequest,deps:Reso
  const ticket=request.data?.ticket;
  const confirmation=request.data?.confirmation;
  if(typeof ticket!=="string"||typeof confirmation!=="string")
-  fail("APP537_APPROVAL_TICKET_AND_CONFIRMATION_REQUIRED");
+  throw Error("APP537_APPROVAL_TICKET_AND_CONFIRMATION_REQUIRED");
  const ctx={...context(deps,claims),ticket,confirmation};
  // Full APP536 validation must happen before ANY audit write.
  const permit=await verifyOwnerFollowAdminConfirmation536(ctx);
@@ -128,7 +128,7 @@ export async function confirmOwnerFollowCallable537(request:AppRequest,deps:Reso
   // lifecycle commit. No retry is safe without separate operator triage.
   try{await finalizeAudit537(deps,record,"needs-review",errorCode(e));}
   catch{fail("APP537_AUDIT_OUTCOME_UNKNOWN");}
-  fail("APP537_RECOVERY_FAILED_HELD");
+  throw Error("APP537_RECOVERY_FAILED_HELD");
  }
  try{await finalizeAudit537(deps,record,"succeeded");}
  catch{fail("APP537_AUDIT_OUTCOME_UNKNOWN");}
@@ -148,7 +148,7 @@ export async function inspectOwnerFollowAttempt537(request:AppRequest&{
   .doc(claims.targetUid).get();
  const latestId=gate.get("attemptId");
  const attemptId=id||latestId;
- if(!attemptId||!DIGEST.test(attemptId))
+ if(typeof attemptId!=="string"||!DIGEST.test(attemptId))
   return {status:"none",targetUid:claims.targetUid,reviewAction:reviewed.action};
  if(attemptId!==latestId)fail("APP537_ATTEMPT_NOT_CURRENT");
  const audit=await deps.firestore.collection(APP537_AUDIT_COLLECTION).doc(attemptId).get();

@@ -93,14 +93,20 @@ const auth={
 };
 const liveState=()=>({ownerFollowLifecycle534:{
  phase:'active',epoch:activeEpoch,createdAtMs:authBirth,changedAtMs:when}});
-const firestore={collection(name){assert.equal(name,'users');return {doc(uid){
- assert.equal(uid,'A');return {async get(){return {
-  data:liveState,get(key){
-   if(key==='authDeleted')return false;
-   if(key==='authDeletionPendingAt')return undefined;
-   if(key==='accountStatus')return 'active';
-   return undefined;
-  }};}}};}}};
+const firestore={
+ collection(name){
+  assert.equal(name,'users');
+  return {
+   doc(uid){
+    assert.equal(uid,'A');
+    return {get:async()=>({
+      data:liveState,
+      get:key=>key==='authDeleted'?false:key==='accountStatus'?'active':undefined,
+    })};
+   },
+  };
+ },
+};
 const send=async (endpoint,options)=>{
  assert.equal(endpoint,
   'https://soridraw-explore-preview.andrawing1212.workers.dev/internal/owner-follow/epoch-544');

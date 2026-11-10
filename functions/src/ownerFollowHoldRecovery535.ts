@@ -82,6 +82,8 @@ export async function recoverOwnerFollowHold535(
   return {recovered:false,...inspected};
  if(inspected.action==="hold")
   return {recovered:false,...inspected};
+ if(inspected.action!=="recover-reserved"&&
+    inspected.action!=="recover-deleting")throw Error("APP535_UNEXPECTED_INSPECTION_ACTION");
  if(!EPOCH.test(inspected.epoch))throw Error("APP535_INVALID_RECOVERY_EPOCH");
  if(inspected.action==="recover-reserved"){
   // Existing APP534 helper checks Auth generation and Firestore phase twice;

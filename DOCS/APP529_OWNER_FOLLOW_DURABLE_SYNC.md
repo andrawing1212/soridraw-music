@@ -189,3 +189,35 @@ The temporary scoped GitHub emulator-workflow file has been **removed after PASS
 5. Existing account deletion intentionally retains Firestore `users/{uid}` and user-generated content. This source-only approach avoids a NEW permanent deleted-UID journal but **is not a full GDPR/privacy erasure solution**. An approved true-erase process must clean that original data, and release readiness/100k-user billing remains NO-GO.
 
 **Decision:** APP534 isolated source+emulator PASS, APP529–APP534 remain OFF and Draft. No merge, deployment, activation or shared user-data changes.
+
+## 2026-11-10 — APP535 existing Auth writer inventory and fail-closed hold recovery (isolated PASS)
+
+**Director-approved scope:** inspect existing Firebase account/claim writers, add minimal safe `reserved` / `deleting` recovery source, verify only in isolated emulators. No shared Auth, Firestore, D1, Workers, RTDB Rules, Functions, Hosting or activation.
+
+### Existing Auth writers checked
+- `functions/src/index.ts` on `preview`: `adminForceLogoutUser` calls `revokeRefreshTokens`; `adminResetEmailVerification` calls `updateUser(targetUid,{emailVerified:false})` and revokes tokens; `adminDeleteUserAccount` deletes Auth and intentionally retains user content. No `setCustomUserClaims` call was found in this production index. A GitHub code search against the repository's current indexed `preview` found no other `setCustomUserClaims` writer. **This does not prove that out-of-repo admin scripts or later versions cannot write Auth claims**.
+- APP534 source-only `setCustomUserClaims` is the new proposed epoch issuer, **not active**. Firebase custom claim mutation replaces the whole map, so any future independent issuer must use the same reservation/authority. Existing Firestore `role` and subscription updates are different from Firebase Auth custom claims and are not evidence of safe concurrent claim updates.
+
+### APP535 changes and minimal recovery contract
+- `functions/src/ownerFollowHoldRecovery535.ts` is **source only, `APP535_HOLD_RECOVERY_COMPILED_OPEN=false`**, with no callable endpoint, scheduler or import from live Functions. `inspectOwnerFollowHold535` reads one existing `users/{uid}` lifecycle field and current Auth record only on explicitly invoked recovery (never per follow or page entry).
+- `reserved` with an **exact already-applied Auth claim and identical creation metadata** invokes the existing APP534 finalization transaction. `reserved` without a claim, with mismatched claim or missing Auth stays **HOLD** with no new claim, no deletion and no automatic TTL takeover. A crash between reservation and custom-claim issuance is intentionally not released without a separate authorized lifecycle policy.
+- `deleting` may resume only when the original administrator action's **`authDeleted=true` plus `adminDeletionContentPolicy='retain-user-content'`** is already stored in Firestore, and **no Auth user exists for that UID**. It calls APP534's generation-CAS cleanup for the previous private RTDB marker, then atomically marks `deleted` in the existing retained user document. If the Auth user is still present — even with another claim — cleanup stays HOLD to protect an externally recreated account. Network errors never stand in for Auth-not-found.
+- A claim drift on `active` is detected without repair writes. Existing `accountStatus='banned'`, `authDeleted` or `authDeletionPendingAt` suppress automatic enrollment. APP534 `finishOwnerFollowDeletion534` was tightened to refuse completion if **any** Auth account currently exists, not merely the same-epoch account.
+- No new deleted-UID table, bulk mutation, automatic retry schedule or shared server read/write was introduced. All recovery endpoints remain deliberately unimplemented; any future one must enforce the existing authenticated `userManagement` admin permissions, operator audit, and approved rollback.
+
+### Test evidence
+[GitHub Actions #42733332558](https://github.com/andrawing1212/soridraw-music/actions/runs/42733332558) **SUCCESS**, source SHA `e82c23114f828620980653dee99e1126af689eb2`. Full Functions TypeScript `--noEmit` PASS and true `demo-soridraw-owner-534` Firebase Auth + Firestore + RTDB emulator run PASS (127.0.0.1 only; no live credentials). Existing APP534 scenarios plus seven APP535 scenarios passed:
+1. exact previously issued `reserved` completion / unclaimed reservation HOLD;
+2. reserved Auth delete and same-UID recreation still HOLD;
+3. `deleting` Auth missing but original admin-delete completion absent: HOLD without marker removal; after recorded admin-delete completion: old marker removed, retained Music Note and favorites preserved, repeat idempotent;
+4. old `deleting` recovery cannot finish while Auth exists, including an **externally recreated same-UID new-claim account**;
+5. another claim writer overwriting epoch is detected as active drift and does not silently repair;
+6. current index admin Auth writer inventory matched actual index source;
+7. banned account enrollment does not issue any claim.
+
+The one-time GitHub emulator workflow was removed after PASS; source/test artifacts remain. All three emulators stopped. APP532 previously measured **normal changed follow D1 R1/W2** still stands because APP535 made no D1/Worker changes; it was not remeasured here.
+
+### Known blocking limits
+A `reserved` record with no applied Auth claim remains unresolved by design: an in-flight old issuer could still write later, and a timer-based takeover or forced cleanup would be unsafe. A `deleting` record with no admin Auth-deleted proof likewise remains HOLD. There is no authorized operator recovery UI/callable yet. Auth/Firestore/RTDB do not support a cross-service atomic commit; checks reduce tested races but are not a global linearizability guarantee. Same-UID re-registration after the actual admin ban remains deliberately blocked by retained `accountStatus='banned'`/`authDeleted` until an explicitly approved account-restoration contract is established. No real A/B PC↔mobile or end-to-end deployed signal testing has been done.
+
+**Release decision: NO-GO.** PR #914 Draft/OFF, no merge/deploy/enable, and no shared resource alteration.

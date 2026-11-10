@@ -30,6 +30,23 @@ assert.match(model,/NOTIFICATION_PREFERENCES_DEFAULT/);
 const { code: modelCode } = await transform(model, { loader: 'ts', format: 'esm', target: 'es2022' });
 const preferenceModule = await import('data:text/javascript;base64,' + Buffer.from(modelCode).toString('base64'));
 const defaults = { ...preferenceModule.NOTIFICATION_PREFERENCES_DEFAULT };
+const inputFollow554 = [
+  {id:'follow-old',category:'follow',actorUid:'u1',actorName:'Andy.J',text:'followed',createdAt:10},
+  {id:'like-unchanged',category:'like',actorUid:'u1',actorName:'Andy.J',text:'liked',createdAt:11},
+  {id:'follow-other',category:'follow',actorUid:'u2',actorName:'Andy.J',text:'followed',createdAt:12},
+  {id:'follow-new',category:'follow',actorUid:'u1',actorName:'Andy.J',text:'followed',createdAt:13},
+  {id:'follow-no-uid',category:'follow',actorName:'Andy.J',text:'followed',createdAt:9},
+  {id:'follow-tie-a',category:'follow',actorUid:'u3',actorName:'Alex',text:'followed',createdAt:20},
+  {id:'follow-tie-b',category:'follow',actorUid:'u3',actorName:'Alex',text:'followed',createdAt:20},
+  {id:'notice',category:'announcement',actorName:'SORIDRAW',text:'update',createdAt:8},
+];
+assert.deepEqual(preferenceModule.collapseRepeatedFollowNoticesByActor554(inputFollow554)
+  .map(row=>row.id),
+ ['like-unchanged','follow-other','follow-new','follow-no-uid','follow-tie-b','notice'],
+ 'APP554_ONLY_LATEST_FOLLOW_PER_STABLE_ACTOR_UID');
+assert.equal(inputFollow554.length,8,'APP554_NO_INBOX_DATA_MUTATION');
+assert.match(panel,/collapseRepeatedFollowNoticesByActor554\(genuineRows\)/);
+console.log('APP554_FOLLOW_NOTICES_LATEST_PER_ACTOR_ONLY=PASS');
 const expectedSections = {
   like: 'activity', follow: 'activity', complete: 'creation',
   announcement: 'announcement', message: 'activity',
@@ -181,7 +198,7 @@ console.log('NOTIFICATION_MOBILE_OPEN_CLOSE_HAS_NO_NEW_BACKEND_IO=PASS');
 
 assert.match(panel,/localGenerationEnabled && uid && auth\.currentUser\?\.uid === uid/);
 assert.match(panel,/projectCompletedExistingGenerations004\(recentHistory\)/);
-assert.match(panel,/withPreviewNotificationExamples023\(genuineRows,visualExample\)/,
+assert.match(panel,/withPreviewNotificationExamples023\(collapseRepeatedFollowNoticesByActor554\(genuineRows\),visualExample\)/,
   'PREVIEW samples fill empty sections without replacing real records');
 assert.match(panel,/isPreviewSample\(row\) \? row\.createdAt : Math\.max\(0, Date\.now\(\) - row\.createdAt\)/,
   'sample elapsed-time labels and actual epoch timestamps stay distinct');

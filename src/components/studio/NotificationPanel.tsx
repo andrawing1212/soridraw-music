@@ -7,7 +7,7 @@ import { useGlobalPlayerControls } from '../../contexts/GlobalPlayerContext';
 import { setExploreFollow } from '../../services/exploreSocialService';
 import {
   NOTIFICATION_EXAMPLE_ROWS, NOTIFICATION_PREFERENCES_DEFAULT,
-  isNotificationVisualPreview, withPreviewNotificationExamples023, readNotificationMasterEnabled,
+  isNotificationVisualPreview, withPreviewNotificationExamples023, collapseRepeatedFollowNoticesByActor554, readNotificationMasterEnabled,
   readNotificationPreferences, saveNotificationMasterEnabled, saveNotificationPreferences,
   notificationSectionFor, type InboxNotification, type NotificationCategory,
   type NotificationPreferences, type NotificationSection,
@@ -299,7 +299,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
     const genuineRows=NOTIFICATION_INBOX_ENABLED_004
       ? (remoteInbox.uid===uid ? [...remoteInbox.items,...localCompletions] : [...localCompletions])
       : [...localCompletions];
-    return withPreviewNotificationExamples023(genuineRows,visualExample);
+    return withPreviewNotificationExamples023(collapseRepeatedFollowNoticesByActor554(genuineRows),visualExample);
   },[visualExample,localCompletions,remoteInbox,uid]);
   const rows=useMemo(()=>allRows.filter(row=>
     notificationSectionFor(row.category)===activeSection),[allRows,activeSection]);

@@ -1,30 +1,24 @@
-// APP548: exact additive owner-private rule in OFF candidate.
-// Verifies all existing live-protection rules remain byte-identical to the
-// current PREVIEW source. Does NOT deploy shared Firebase Rules.
+// APP548 owner-only RTDB rule candidate. This is source-only, NOT installed.
+// Preserve the exact current shared Rules and verify the separately isolated
+// root rule's owner claim + server-only write contract without deploying.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
-
-const raw=readFileSync('database.rules.json','utf8');
-const root=JSON.parse(raw);
-const reference=JSON.parse(readFileSync('scripts/emulator/app533.database.rules.json','utf8'));
-const owner=root.rules?.ownerFollowerSync532;
-assert.deepEqual(owner,reference.rules.ownerFollowerSync532,
- 'OWNER_532_RULE_MUST_MATCH_ISOLATED_EMULATOR_PROVEN_RULE');
-assert.equal(root.rules['.read'],false);
-assert.equal(root.rules['.write'],false);
-assert.equal(owner?.$uid?.['.write'],false,
- 'CLIENT_CANNOT_WRITE_SERVER_CONFIRMED_FOLLOWER_COUNT');
-assert.ok(String(owner?.$uid?.['.read']||'').includes('auth.uid === $uid'));
-assert.ok(String(owner?.$uid?.['.read']||'').includes('auth.token.soridrawFollowEpoch532'));
-const start=raw.indexOf('    "ownerFollowerSync532": {');
-const end=raw.indexOf('    "presence": {',start);
-assert.ok(start>0&&end>start&&raw.indexOf('    "ownerFollowerSync532": {',start+1)<0);
-const prior=raw.slice(0,start)+raw.slice(end);
-const gitBlob=createHash('sha1').update(
- 'blob '+Buffer.byteLength(prior)+'\0').update(prior).digest('hex');
-assert.equal(gitBlob,'f2b14a26e5c5a46cfc65d455f60ed81f97b9cad0',
- 'EXISTING_SHARED_RULES_CHANGED');
-console.log('APP548_ONLY_EXACT_OWNER_PRIVATE_ROOT_CHILD_ADDED=PASS');
-console.log('APP548_OTHER_SHARED_RULES_EXACT_PREVIEW_BLOB_UNCHANGED=PASS');
-console.log('APP548_OWNER_CLAIM_READ_ONLY_SERVER_WRITE_ONLY=PASS');
+const shared=readFileSync('database.rules.json','utf8');
+const sha=createHash('sha1').update('blob '+Buffer.byteLength(shared)+'\0').update(shared).digest('hex');
+assert.equal(sha,'f2b14a26e5c5a46cfc65d455f60ed81f97b9cad0','SHARED_LIVE_SOURCE_RULES_MUST_BE_UNCHANGED');
+const rules=JSON.parse(shared).rules;
+assert.equal(Object.hasOwn(rules,'ownerFollowerSync532'),false,
+ 'NO_NEW_OWNER_RULE_IN_REAL_SHARED_DATABASE_RULES');
+const proposal=JSON.parse(readFileSync('scripts/emulator/app533.database.rules.json','utf8')).rules;
+assert.equal(proposal['.read'],false);
+assert.equal(proposal['.write'],false);
+const owner=proposal.ownerFollowerSync532?.$uid;
+assert.ok(owner,'ISOLATED_OWNER_RULE_MISSING');
+assert.equal(owner['.write'],false,'CLIENT_WRITE_MUST_BE_DENIED');
+assert.match(owner['.read'],/auth\.uid === \$uid/);
+assert.match(owner['.read'],/auth\.token\.soridrawFollowEpoch532/);
+assert.match(owner['.read'],/!data\.exists\(\)/);
+assert.match(owner['.read'],/data\.child\('authEpoch'\)\.val\(\)/);
+console.log('APP548_CURRENT_SHARED_RTDB_SOURCE_EXACT_PREVIEW_ORIGINAL=PASS');
+console.log('APP548_OWNER_PRIVATE_RULE_ISOLATED_NOT_DEPLOYED=PASS');

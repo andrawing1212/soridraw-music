@@ -130,8 +130,10 @@ try{
  });
  await hold1.reached;
  await auth.deleteUser(UID);
- assert.equal((await clearRetiredGeneration533({
-  auth,database,uid:UID,authEpoch:g1.authEpoch})).removed,true);
+ const cleanup1=await clearRetiredGeneration533({auth,database,uid:UID,authEpoch:g1.authEpoch});
+ console.log('APP533_FIRST_CLEANUP',JSON.stringify(cleanup1),
+  'marker',(await ref.get()).val()?.authEpoch||'null');
+ assert.equal(cleanup1.removed,true);
  assert.equal((await ref.get()).exists(),false);
  await sleep(35);
  await auth.createUser({uid:UID,email:EMAIL,password:PASS});

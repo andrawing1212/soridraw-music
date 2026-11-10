@@ -96,7 +96,7 @@ try{
  assert.equal(result.recoverable,false);
  assert.equal(result.ticket,null);
  assert.equal((await user(UNCLAIMED).get()).updateTime.toMillis(),preUser);
- assert.equal((await gate(UNCLAIMED).get()).exists(),false);
+ assert.equal((await gate(UNCLAIMED).get()).exists,false);
  checks.readOnlyPermissionAndProtectedTargets="PASS";
 
  // Explicit two-phase callback creates NO audit until a fully verified
@@ -107,12 +107,12 @@ try{
  const inspected=await inspectOwnerFollowCallable537(inspectReq,deps);
  assert.equal(inspected.action,"recover-reserved");
  assert.ok(inspected.ticket);
- assert.equal((await gate(RES).get()).exists(),false);
+ assert.equal((await gate(RES).get()).exists,false);
  const confirmReq=confirmRequest(operator,RES,actorToken,inspected.ticket);
  await reject(confirmOwnerFollowCallable537({...confirmReq,
   data:{...confirmReq.data,confirmation:"yes"}},deps),
   /APP536_EXPLICIT_CONFIRMATION_REQUIRED/);
- assert.equal((await gate(RES).get()).exists(),false);
+ assert.equal((await gate(RES).get()).exists,false);
  const accepted=await confirmOwnerFollowCallable537(confirmReq,deps);
  assert.equal(accepted.recovered,true);
  assert.equal(accepted.action,"recover-reserved");
@@ -151,7 +151,7 @@ try{
   AUDITDOWN,actorToken,downTicket),{...deps,firestore:unavailableDb}),
   /AUDIT_UNAVAILABLE_537/);
  assert.equal((await user(AUDITDOWN).get()).get("ownerFollowLifecycle534.phase"),"reserved");
- assert.equal((await gate(AUDITDOWN).get()).exists(),false);
+ assert.equal((await gate(AUDITDOWN).get()).exists,false);
  checks.auditWriteFailurePreventsRecovery="PASS";
 
  // Force a crash inside APP535 recovery AFTER audit start but BEFORE any

@@ -72,6 +72,7 @@ type ExploreFollowBatchRequest380 = ExploreFollowBatchBase380 & {
   onBusy?: (busy: boolean) => void;
   onSettled: (settlement: ExploreFollowBatchSettlement380) => void;
   onError: (failure: ExploreFollowBatchError380) => void;
+  onDeferred?: (retryDelayMs: number) => void;
   initialDelayMs?: number;
   restoredNotBefore?: number;
   restoredUpdatedAt?: number;
@@ -185,6 +186,28 @@ const retryAfterMs380 = (error: unknown) => {
   return 60_000;
 };
 
+const failExploreFollowPending380 = (entry: ExploreFollowBatchEntry380, error: unknown) => {
+  clearTimer380(entry);
+  pending380.delete(entry.key);
+  removeStored380(entry.viewerUid, entry.targetUid);
+  entry.inflight = false;
+  entry.onBusy?.(false);
+  entry.onError({
+    viewerUid: entry.viewerUid,
+    targetUid: entry.targetUid,
+    desiredFollowing: entry.desiredFollowing,
+    baseFollowing: entry.baseFollowing,
+    baseTargetFollowerCount: safeCount380(entry.baseTargetFollowerCount),
+    baseTargetFollowingCount: safeCount380(entry.baseTargetFollowingCount),
+    baseActorFollowingCount: entry.baseActorFollowingCount === null
+      ? null : safeCount380(entry.baseActorFollowingCount),
+    error,
+  });
+};
+
+const followRateLimitFailure380 = () =>
+  new Error('팔로우 변경을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+
 const schedule380 = (entry: ExploreFollowBatchEntry380, delayMs = EXPLORE_FOLLOW_IDLE_FLUSH_MS_380) => {
   clearTimer380(entry);
   if (entry.suspended) return;
@@ -277,33 +300,34 @@ export const flushExploreFollowPair380 = async (key: string): Promise<void> => {
     const current = pending380.get(key) || entry;
     const code = String((error as { code?: unknown })?.code || '').trim();
     if (code === 'RATE_LIMITED') {
-      // Abuse/cooldown rejection happens before D1 mutation. Keep the newest
-      // desired state local and retry only after the server-provided window.
+      // The server rejected this write BEFORE the canonical mutation.
+      // A second rejection must not leave an optimistic unfollow painted as
+      // successful forever (previous code persisted suspended=true forever).
+      if (current.desiredFollowing === current.baseFollowing) {
+        clearTimer380(current);
+        pending380.delete(key);
+        removeStored380(current.viewerUid, current.targetUid);
+        current.inflight = false;
+        current.onBusy?.(false);
+        return;
+      }
+      if (current.retryUsed) {
+        failExploreFollowPending380(current, followRateLimitFailure380());
+        return;
+      }
       const retryDelay = retryAfterMs380(error);
       current.inflight = false;
       current.notBefore = Date.now() + retryDelay;
-      current.suspended = current.retryUsed;
+      current.suspended = false;
       current.retryUsed = true;
       persistEntry380(current);
       current.onBusy?.(false);
+      current.onDeferred?.(retryDelay);
       schedule380(current, retryDelay);
       return;
     }
 
-    pending380.delete(key);
-    removeStored380(current.viewerUid, current.targetUid);
-    current.onError({
-      viewerUid: current.viewerUid,
-      targetUid: current.targetUid,
-      desiredFollowing: current.desiredFollowing,
-      baseFollowing: current.baseFollowing,
-      baseTargetFollowerCount: safeCount380(current.baseTargetFollowerCount),
-      baseTargetFollowingCount: safeCount380(current.baseTargetFollowingCount),
-      baseActorFollowingCount: current.baseActorFollowingCount === null
-        ? null
-        : safeCount380(current.baseActorFollowingCount),
-      error,
-    });
+    failExploreFollowPending380(current, error);
   } finally {
     const current = pending380.get(key);
     if (!current || current.version === sentVersion) {
@@ -360,6 +384,12 @@ export const queueExploreFollowFinalState380 = (request: ExploreFollowBatchReque
     suspended: request.restoredSuspended === true,
   };
   pending380.set(key, entry);
+  // Existing persisted suspended intents from the old app never had a timer.
+  // They cannot be treated as completed canonical state after an update.
+  if (entry.suspended) {
+    failExploreFollowPending380(entry, followRateLimitFailure380());
+    return;
+  }
   persistEntry380(entry);
   schedule380(entry, request.initialDelayMs ?? EXPLORE_FOLLOW_IDLE_FLUSH_MS_380);
 };

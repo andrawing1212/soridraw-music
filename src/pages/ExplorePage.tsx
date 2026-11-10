@@ -3599,6 +3599,11 @@ export default function ExplorePage() {
             console.warn('[app380] resumed follow final-state live sync deferred:', reason);
           });
         },
+        onDeferred: () => {
+          if (auth.currentUser?.uid === viewerUid380 && activeProfileUidRef.current === targetUid380) {
+            setSocialNotice('팔로우 변경이 서버 보호 제한으로 대기 중입니다. 아직 저장되지 않았습니다.');
+          }
+        },
         onError: (failure380) => {
           patchExploreFollowLocalState377(
             viewerUid380,
@@ -4516,6 +4521,11 @@ export default function ExplorePage() {
         }).catch((reason) => {
           console.warn('[app380] follow final-state live sync deferred:', reason);
         });
+      },
+      onDeferred: () => {
+        if (auth.currentUser?.uid === viewerUid && activeProfileUidRef.current === targetUid) {
+          setSocialNotice('팔로우 변경이 서버 보호 제한으로 대기 중입니다. 아직 저장되지 않았습니다.');
+        }
       },
       onError: (failure380) => {
         // Hard failure: return only this local optimistic edge to the state that
@@ -5618,7 +5628,10 @@ export default function ExplorePage() {
                         className={`soridraw-explore-follow-button${followState?.isFollowing ? ' is-following' : ''}`}
                       >
                         {followState?.isFollowing ? <UserCheck aria-hidden="true" /> : <UserPlus aria-hidden="true" />}
-                        {followState?.isFollowing ? '팔로잉' : '팔로우'}
+                        {user && readPendingExploreFollowIntents380(user.uid)
+                          .some(row => row.targetUid === profile.uid)
+                          ? (followState?.isFollowing ? '팔로우 저장 대기' : '해제 저장 대기')
+                          : (followState?.isFollowing ? '팔로잉' : '팔로우')}
                       </button>
                     )}
                   </div>

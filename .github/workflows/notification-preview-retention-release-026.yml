@@ -46,6 +46,27 @@ jobs:
           node scripts/verify-notification-scheduler-013.mjs
           node scripts/release-notification-preview-retention-026.mjs --prepare
           echo 'NOTIFICATION_026_FROZEN_EXACT_BUILD=PASS;WORKER_DEPLOY=0;SHARED_D1_WRITES=0'
+  current-live-readonly:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check three current Workers, exact active GET module, OFF D1 (no writes)
+        run: |
+          set -euo pipefail
+          node scripts/verify-notification-d1-dot-upgrade-018.mjs --live-existing
+          node scripts/verify-notification-preview-retention-live-026.mjs --before
+          echo 'NOTIFICATION_026_LIVE_PREFLIGHT_GET_ONLY_W0=PASS'
   owner-approved-preview:
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04

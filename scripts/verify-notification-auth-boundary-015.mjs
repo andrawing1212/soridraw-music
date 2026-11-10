@@ -71,7 +71,9 @@ assert.equal(wrangler.vars?.SORIDRAW_NOTIFICATION_PREFS_003,undefined);
 assert.equal(wrangler.vars?.SORIDRAW_NOTIFICATION_INBOX_004,undefined);
 assert.equal(wrangler.vars?.SORIDRAW_NOTIFICATION_INBOX_READ_ONLY_019,undefined);
 
-assert.equal(wrangler.triggers?.crons?.length||0,0);
+assert.deepEqual(wrangler.triggers?.crons,['37 * * * *']);
+assert.equal(wrangler.vars?.SORIDRAW_NOTIFICATION_RETENTION_013,undefined);
+assert.equal(wrangler.vars?.SORIDRAW_NOTIFICATION_SCHEMA_READY_013,undefined);
 
 const dbLocal=new DatabaseSync(':memory:');
 dbLocal.exec(source('cloudflare/explore-worker/candidates/20261108_03_notification_inert_schema_release.sql'));

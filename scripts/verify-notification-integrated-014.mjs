@@ -21,11 +21,12 @@ const prefsClient=read('src/services/notifications/notificationAccountSyncCore00
 const wrangler=JSON.parse(read('cloudflare/explore-worker/canonical/wrangler.preview.jsonc'));
 assert.match(worker,/NOTIFICATION_PREFS_003_COMPILED_OPEN = false/);
 assert.match(worker,/NOTIFICATION_INBOX_004_COMPILED_OPEN = false/);
-assert.match(worker,/NOTIFICATION_RETENTION_013_COMPILED_OPEN = false/);
+assert.match(worker,/NOTIFICATION_RETENTION_013_COMPILED_OPEN = true/);
+assert.match(worker,/env\?\.SORIDRAW_ENVIRONMENT !== 'preview'/);
 assert.match(client,/canUsePreviewInbox022\(window.location.hostname,EXPLORE_API_BASE\)/);
 assert.doesNotMatch(client,/NOTIFICATION_INBOX_ENABLED_004=false/);
 assert.match(prefsClient,/NOTIFICATION_ACCOUNT_SYNC_ENABLED_003 = false/);
-assert.equal(wrangler.triggers?.crons?.length||0,0);
+assert.deepEqual(wrangler.triggers?.crons,[NOTIFICATION_RETENTION_CRON_013]);
 assert.equal(wrangler.vars?.SORIDRAW_NOTIFICATION_RETENTION_013,undefined);
 assert.equal(wrangler.vars?.SORIDRAW_NOTIFICATION_SCHEMA_READY_013,undefined);
 
@@ -288,6 +289,7 @@ assert.equal(edgeView.body.data.items.some(x=>x.id==='global:expired'),false);
 assert.equal(edgeView.body.data.items.some(x=>x.id==='global:edge'),true);
 assert.deepEqual(mutationSnapshot(),preCleanup,'inbox read must never perform cleanup');
 const env={DB:db,PROFILE_MEDIA:cache,
+ SORIDRAW_ENVIRONMENT:'preview',
  SORIDRAW_NOTIFICATION_RETENTION_013:'1',
  SORIDRAW_NOTIFICATION_SCHEMA_READY_013:'1'};
 const controller={cron:NOTIFICATION_RETENTION_CRON_013};

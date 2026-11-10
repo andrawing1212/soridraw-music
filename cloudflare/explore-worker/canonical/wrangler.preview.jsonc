@@ -4,6 +4,7 @@
   "compatibility_date": "2026-08-28",
   "workers_dev": true,
   "keep_vars": true,
+  "triggers": {"crons": ["37 * * * *"]},
   "d1_databases": [
     {
       "binding": "DB",

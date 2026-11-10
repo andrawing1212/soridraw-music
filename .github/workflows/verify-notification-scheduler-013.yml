@@ -1,9 +1,10 @@
-name: SORIDRAW Notification 013 Dormant Scheduler Quality
+name: SORIDRAW Notification 025 Preview Gated 30-Day Scheduler Quality
 on:
   pull_request:
     branches: [preview]
     paths:
       - 'cloudflare/explore-worker/canonical/preview-entry.js'
+      - 'cloudflare/explore-worker/canonical/wrangler.preview.jsonc'
       - 'cloudflare/explore-worker/runtime/notification-retention-scheduler-013.mjs'
       - 'scripts/verify-notification-scheduler-013.mjs'
       - '.github/workflows/verify-notification-scheduler-013.yml'
@@ -28,5 +29,5 @@ jobs:
           node --check scripts/verify-notification-scheduler-013.mjs
           node scripts/verify-notification-scheduler-013.mjs
           node scripts/verify-notification-release-readiness-005.mjs
-      - name: Confirm no live cron or deployment
-        run: echo 'NOTIFICATION_013_NO_LIVE_CRON;NO_WORKER_RELEASE;MEMORY_ONLY=PASS'
+      - name: Confirm PREVIEW source candidate, no live Worker deployment
+        run: echo 'NOTIFICATION_025_PREVIEW_CRON_SOURCE_READY=PASS;RUNTIME_FLAGS_ABSENT=PASS;NO_WORKER_RELEASE=PASS'

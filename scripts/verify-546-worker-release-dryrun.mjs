@@ -29,11 +29,12 @@ assert.match(entrySource,/APP544_OWNER_EPOCH_BIND_COMPILED_OPEN &&/);
 assert.match(entrySource,/OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN &&/);
 for(const name of [
  'owner-follow-writer-543.mjs','owner-follow-inline-canonical-540.mjs',
- 'owner-follow-enrollment-544.mjs','owner-follow-auth-epoch-532.mjs',
+ 'owner-follow-enrollment-544.mjs','owner-follow-current-auth-547.mjs',
+ 'owner-follow-auth-epoch-532.mjs',
  'owner-follow-http-539.mjs'
 ]){
  const s=readFileSync(join(src,'runtime',name),'utf8');
- if(/(?:OWNER_FOLLOW_INLINE_543_COMPILED_OPEN|APP540_INLINE_CANONICAL_COMPILED_OPEN|APP544_OWNER_EPOCH_BIND_COMPILED_OPEN|OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN|APP539_WORKER_HTTP_BRIDGE_COMPILED_OPEN)\s*=\s*true/.test(s))
+ if(/(?:OWNER_FOLLOW_INLINE_543_COMPILED_OPEN|APP540_INLINE_CANONICAL_COMPILED_OPEN|APP544_OWNER_EPOCH_BIND_COMPILED_OPEN|OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN|OWNER_FOLLOW_AUTH_PROOF_547_COMPILED_OPEN|APP539_WORKER_HTTP_BRIDGE_COMPILED_OPEN)\s*=\s*true/.test(s))
   throw Error('APP546_UNEXPECTED_ACTIVE_GATE_'+name);
 }
 const base=mkdtempSync(join(tmpdir(),'soridraw-546-dryrun-'));

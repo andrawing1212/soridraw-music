@@ -427,6 +427,7 @@ jobs:
           node --import tsx scripts/verify-542-owner-relay-source.mjs
           node --import tsx scripts/verify-545-worker-auth-integration.mjs
           node scripts/verify-546-legacy-follow-compat.mjs
+          node --import tsx scripts/verify-547-physical-recreation-auth-proof.mjs
           node scripts/verify-524-curated-public-count-fence.mjs
           node scripts/verify-197-new-public-track-like.mjs
           node scripts/verify-390-like-acceptance-receipt.mjs

@@ -119,7 +119,7 @@ const send=async (endpoint,options)=>{
  return handleOwnerEpochBinding544({
   request:new Request(endpoint,options),
   env:{...cloud,SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544:secret},
-  now:()=>when,enabled:true,
+  now:()=>when,enabled:true,verify:async()=>true,
  });
 };
 try{

@@ -4,6 +4,10 @@
 // follower relationships/profile originals. APP546 enforces a monotonic
 // Firebase Auth creation-time floor in the RETAINED canonical profile row.
 // A physical profile-row erase has NO automatic enrollment fallback.
+// APP547 verifies CURRENT Firebase Auth/Firebase lifecycle before and after
+// D1 registration, so a stale 60-second signed request cannot bind a newly
+// recreated profile row for a different Auth incarnation.
+import {verifyLiveOwnerEpoch547} from './owner-follow-current-auth-547.mjs';
 export const APP544_OWNER_EPOCH_BIND_COMPILED_OPEN=false;
 const UID=/^[A-Za-z0-9_-]{1,128}$/,EPOCH=/^[0-9a-f]{32}$/,HEX=/^[0-9a-f]{64}$/;
 const reply=(status,code)=>Response.json({ok:status===200,code},{status,
@@ -11,6 +15,7 @@ const reply=(status,code)=>Response.json({ok:status===200,code},{status,
 const hexBytes=h=>new Uint8Array(h.match(/../g).map(x=>parseInt(x,16)));
 export async function handleOwnerEpochBinding544({
  request,env,now=Date.now,enabled=APP544_OWNER_EPOCH_BIND_COMPILED_OPEN,
+ verify=verifyLiveOwnerEpoch547,
 }={}){
  if(!enabled||env?.SORIDRAW_ENVIRONMENT!=='preview'||
     env?.SORIDRAW_OWNER_FOLLOW_BIND_544!=='1')return reply(503,'DISABLED');
@@ -41,6 +46,12 @@ export async function handleOwnerEpochBinding544({
     !EPOCH.test(event.authEpoch)||event.at!==Number(at)||
     !Number.isSafeInteger(event.authCreatedAtMs)||event.authCreatedAtMs<=0)
   return reply(403,'INVALID_BODY');
+ // Signed *historical* events are not live Auth proof; fail closed if
+ // Firebase Admin is unreachable or identifies a newer/deleted generation.
+ let active;
+ try{active=await verify({event,env,now})}
+ catch{return reply(503,'AUTH_PROOF_UNAVAILABLE')}
+ if(active!==true)return reply(409,'AUTH_GENERATION_NOT_CURRENT');
  try{
   if(!env.DB)return reply(503,'DB_UNAVAILABLE');
   if(event.action==='bind'){
@@ -61,18 +72,34 @@ export async function handleOwnerEpochBinding544({
       owner_follow_auth_created_at_ms_544 AS created_at
    `).bind(event.authEpoch,event.authCreatedAtMs,event.uid,
       event.authCreatedAtMs).first();
-   if(result?.epoch===event.authEpoch&&
-      result.created_at===event.authCreatedAtMs)return reply(200,'BOUND');
-   const row=await env.DB.prepare(`
-     SELECT owner_follow_auth_epoch_532 AS epoch,
-       owner_follow_auth_created_at_ms_544 AS created_at
-     FROM profile_stats WHERE uid=?
-   `).bind(event.uid).first();
-   if(!row)return reply(409,'OWNER_PROFILE_MISSING_HOLD');
-   if(row.epoch===event.authEpoch&&
-      row.created_at===event.authCreatedAtMs)
-     return reply(200,'ALREADY_BOUND');
-   return reply(409,'AUTH_GENERATION_FLOOR_HOLD');
+   let bound=Boolean(result?.epoch===event.authEpoch&&
+      result.created_at===event.authCreatedAtMs);
+   if(!bound){
+    const row=await env.DB.prepare(`
+      SELECT owner_follow_auth_epoch_532 AS epoch,
+        owner_follow_auth_created_at_ms_544 AS created_at
+      FROM profile_stats WHERE uid=?
+    `).bind(event.uid).first();
+    if(!row)return reply(409,'OWNER_PROFILE_MISSING_HOLD');
+    if(row.epoch!==event.authEpoch||
+       row.created_at!==event.authCreatedAtMs)
+      return reply(409,'AUTH_GENERATION_FLOOR_HOLD');
+    bound=true;
+   }
+   // Cross-service Auth deletion may begin after the first proof. Verify again
+   // and undo ONLY this exact old generation if it was withdrawn meanwhile.
+   let stillCurrent=false,proofUnavailable=false;
+   try{stillCurrent=await verify({event,env,now})===true}
+   catch{proofUnavailable=true}
+   if(stillCurrent&&bound)return reply(200,result?.uid?'BOUND':'ALREADY_BOUND');
+   await env.DB.prepare(`
+     UPDATE profile_stats SET owner_follow_auth_epoch_532=''
+     WHERE uid=? AND owner_follow_auth_epoch_532=?
+       AND owner_follow_auth_created_at_ms_544=?
+   `).bind(event.uid,event.authEpoch,event.authCreatedAtMs).run();
+   // Preserve birth floor and social rows for the legitimate next incarnation.
+   return reply(proofUnavailable?503:409,
+     proofUnavailable?'AUTH_POSTPROOF_UNAVAILABLE':'AUTH_CHANGED_DURING_BIND');
   }
   const result=await env.DB.prepare(`
    UPDATE profile_stats SET owner_follow_auth_epoch_532=''

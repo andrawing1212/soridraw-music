@@ -1,3 +1,13 @@
+## CURRENT — 알림 Stage026 PREVIEW Worker 30일 예약 스케줄 실제 배포 PASS / 수집·정리 실행 OFF (2026-11-10 KST)
+- **승인 범위:** 디렉터는 알림 1차 출시를 우선하고 보관 30일 유지를 지시. PREVIEW Worker의 안전한 일반 배포만 진행하며 PR #914(APP547)는 Draft/OFF 유지, TEST·PRODUCTION Hosting/Worker 및 공유 사용자 원본 변경 금지.
+- **코드/배포:** Stage025 30일 예약 진입점 후보 PR #920 병합 `448708f218573af0d8fa67036a364916bf0b4399`. 실행 중이던 Stage021 알림 GET-only Worker의 빌드 SHA256 `c0b500d3b14bdc767dc601fb07b865c54af20835abb3a9d3937551fa08f08216` 정확 재현 후 새 스케줄 최소 삽입 후보 번들 SHA256 `da67be2c626b4dd47cd04625d0261fce96e9b107cce8ba5793434c804a2b2c28` 확인. 릴리스 게이트 PR #921 소스 merge `e3d5d16b9322c34a39258b56b50168eda9e7b7a5`, one-use 승인 트리거 PR #922 merge `d939b57b3d061f50eee9dcb6a5abeb44a58b7d44`. [실제 배포 Actions #42772177891](https://github.com/andrawing1212/soridraw-music/actions/runs/42772177891) SUCCESS. **새 활성 PREVIEW Worker version `332ca384-725d-46aa-8824-e19a3543bed8`**.
+- **실제 사후검증:** PREVIEW cron 정확히 `37 * * * *` (UTC) 하나만 등록. GET 옵션 204/미인증 401/POST 405/허용하지 않은 Origin 403, 기존 Explore Feed 200 및 D1 W0 PASS. PREVIEW Worker 번들 exact hash, TEST·PRODUCTION Worker 버전/바인딩 불변, 공유 D1 4개 알림 트리거 및 기존 17개 트리거 불변, 알림 `activation.enabled=0` PASS. 배포 성공으로 rollback 불필요.
+- **활성화 명확한 구분:** Worker 예약 실행은 등록됐으나 `SORIDRAW_NOTIFICATION_RETENTION_013` 및 `SORIDRAW_NOTIFICATION_SCHEMA_READY_013` 런타임 플래그는 둘 다 존재하지 않음. 따라서 매시간 스케줄 호출이 오더라도 **공유 D1/ R2 만료 정리는 실행되지 않음**. 알림 수집 래치 역시 OFF, 좋아요·팔로우 실알림 생성되지 않음. 알림 계정별 실제 Firebase JWT+AppCheck 인증 GET 200, PC↔모바일 실수신은 미검증.
+- **ON 전 필수 판단:** 기존 격리 물리비용 실측 Stage011에서 알림 트리거 ON은 정본 변경 1회당 약 `D1 R+3/W+2` 증가; 기존 팔로우/좋아요 쓰기 예산과 충돌 위험. 공유 D1 수집 ON은 TEST·PRODUCTION의 같은 DB Writer에도 영향. 실제 사용자 동작·비용 호환/복구가 확정되기 전 ON 금지.
+- **완료점:** 본 Stage026은 PREVIEW Worker 예약 **배포 PASS**, 알림 전체 기능·실제 자동 삭제·사용자 수신 **미완료**. 1회성 배포 워크플로는 후속 PR에서 제거해 재실행 경로를 폐쇄하고 기존 GET API·로컬 생성 기록 보호.
+
+---
+
 ## CURRENT — 알림 Stage021 PREVIEW Worker GET 전용 최소 릴리스 PASS / 실제 인증 사용자 200 미검증 (2026-11-09 KST)
 - **디렉터 승인:** 2026-11-09 YES. Stage020에서 검증한 현재 활성 PREVIEW Worker 동일 소스(`5bf84dee4c9db7f0ce8296a57781be9161d8e59f`)에 Stage019의 알림 GET 전용 import·route만 삽입. PREVIEW Worker 외 TEST·PRODUCTION, 공유 D1/Functions/Rules/Hosting/R2/사용자 원본은 변경 금지.
 - **코드·승인:** 전용 안전 릴리스 코드 PR #905 병합 `240aa385635d8f14d6bf0db7af37ebb3ca1502df`; 1회 owner-account exact-HEAD 승인 기록의 단일 트리거 PR #906 병합 `c5e0d9a5d773b63a4ae49131f655bea809be2f78`. [실제 배포 Actions 42569346089](https://github.com/andrawing1212/soridraw-music/actions/runs/42569346089) **SUCCESS**.

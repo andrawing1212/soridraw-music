@@ -25,7 +25,7 @@ type AppRequest={
 type State="started"|"succeeded"|"needs-review";
 type Audit={
  actorUid:string;targetUid:string;action:string;status:State;
- attemptId:string;startedAtMs:number;updatedAtMs:number;
+ attemptId:string;fingerprint:string;startedAtMs:number;updatedAtMs:number;
  errorCode?:string; // Only normalized non-personal program error codes.
 };
 
@@ -74,11 +74,18 @@ async function beginAudit537(deps:Resources,record:Audit){
   const [old,slot]=await Promise.all([tx.get(ref),tx.get(gate)]);
   if(old.exists)fail("APP537_APPROVAL_ALREADY_RECORDED");
   // A prior uncertain or failed attempt is NEVER silently unlocked.
-  if(slot.exists&&slot.get("status")!=="succeeded")
-   fail("APP537_PREVIOUS_ATTEMPT_REQUIRES_REVIEW");
+  if(slot.exists){
+   if(slot.get("status")!=="succeeded")
+    fail("APP537_PREVIOUS_ATTEMPT_REQUIRES_REVIEW");
+   // A second ticket issued against the SAME pre-recovery state cannot
+   // start after another operator has just committed that recovery.
+   if(slot.get("fingerprint")===record.fingerprint)
+    fail("APP537_SAME_STATE_ALREADY_COMPLETED");
+  }
   tx.create(ref,record);
   tx.set(gate,{
    targetUid:record.targetUid,attemptId:record.attemptId,
+   fingerprint:record.fingerprint,
    actorUid:record.actorUid,action:record.action,
    status:"started",updatedAtMs:record.startedAtMs,
   });
@@ -113,7 +120,7 @@ export async function confirmOwnerFollowCallable537(request:AppRequest,deps:Reso
  const attemptId=digestOfTicket(ticket);
  const record:Audit={
   actorUid:permit.actor,targetUid:permit.targetUid,
-  action:permit.action,attemptId,status:"started",
+  action:permit.action,attemptId,fingerprint:permit.fingerprint,status:"started",
   startedAtMs:time(deps),updatedAtMs:time(deps),
  };
  // This atomic audit + per-target lock must COMMIT before changing Auth,

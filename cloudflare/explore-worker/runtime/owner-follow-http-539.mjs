@@ -33,5 +33,9 @@ export async function sendOwnerFollowHttp539(event,{
   "X-Soridraw-Follow-Relay529-At":String(at),
   "X-Soridraw-Follow-Relay529-Signature":signature,
  },body:rawBody});
- return {ok:response?.ok===true,status:response?.status||0};
+ const payload=await response?.json?.().catch(()=>null);
+ // Canonical ACK is true for an idempotent duplicate (HTTP 200).
+ // Actual RTDB application is separately reported as applied:false.
+ return {ok:response?.ok===true,status:response?.status||0,
+  applied:response?.ok===true&&payload?.applied===true};
 }

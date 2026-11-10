@@ -7,11 +7,14 @@ import {initializeApp,deleteApp} from 'firebase-admin/app';
 import {getAuth} from 'firebase-admin/auth';
 import {getDatabase} from 'firebase-admin/database';
 import {getFirestore} from 'firebase-admin/firestore';
-import {
+// The existing Functions tsconfig emits CommonJS. Node's ESM test runner
+// imports its namespace via the default CJS interop binding.
+const module534=await import('../functions/src/ownerFollowLifecycle534.ts');
+const {
  APP534_LIFECYCLE_DELETE_HOOK_COMPILED_OPEN,APP534_OWNER_CLAIM,
  enrollOwnerFollowEpoch534,prepareOwnerFollowDeletion534,
  finishOwnerFollowDeletion534,
-} from '../functions/src/ownerFollowLifecycle534.ts';
+}=module534.default||module534;
 import {
  deliverOwnerFollower533,signReceiptForEmulator533,
 } from '../functions/experiments/owner-follow-auth-533.mjs';

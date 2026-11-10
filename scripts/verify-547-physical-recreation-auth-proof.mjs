@@ -36,18 +36,30 @@ const auth={async getUser(uid){
  return {uid,disabled,metadata:{creationTime:new Date(birth).toISOString()},
   customClaims:{soridrawFollowEpoch532:epoch}};
 }};
-const firestore={collection(n){
- assert.equal(n,'users');return {doc(uid){assert.equal(uid,'A');return {
- async get(){firestoreReads++;return {
-  data:()=>({ownerFollowLifecycle534:{
-   phase,epoch,createdAtMs:birth,changedAtMs:at,
-  }}),
-  get(key){return {
-   authDeleted:deleted,authDeletionPendingAt:pending,
-   accountStatus:deleted?'banned':'active',
-  }[key]},
- }},
- }};}}}};
+const firestore={
+ collection(name){
+  assert.equal(name,'users');
+  return {
+   doc(uid){
+    assert.equal(uid,'A');
+    return {
+     async get(){
+      firestoreReads++;
+      return {
+       data:()=>({ownerFollowLifecycle534:{
+        phase,epoch,createdAtMs:birth,changedAtMs:at,
+       }}),
+       get:key=>({
+        authDeleted:deleted,authDeletionPendingAt:pending,
+        accountStatus:deleted?'banned':'active',
+       })[key],
+      };
+     },
+    };
+   },
+  };
+ },
+};
 const realProof=async(uri,options)=>handleOwnerAuthProof547(
  new Request(uri,options),{auth,firestore,secret,now:()=>at});
 const db=new DatabaseSync(':memory:');

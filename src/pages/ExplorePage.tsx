@@ -4184,7 +4184,12 @@ export default function ExplorePage() {
     let stopped=false;
     let unsubscribe=()=>{};
     let gate:ReturnType<typeof createOwnerEpochGate538>|null=null;
+    // The first RTDB onValue response is retained history, not a new follow
+    // event. On a cold device it must never cause a canonical D1 list GET.
+    let initialSnapshotHandled=false;
     void subscribeExploreOwnerFollower542(ownerUid,(signal,epoch)=>{
+      const hadInitialSnapshot=initialSnapshotHandled;
+      initialSnapshotHandled=true;
       if(stopped||auth.currentUser?.uid!==ownerUid||
          activeProfileUidRef.current!==ownerUid)return;
       if(!gate){
@@ -4196,7 +4201,8 @@ export default function ExplorePage() {
             const previousMarker=ownerFollowerConfirmed529Ref.current;
             // The same retained signal is allowed to repaint without a new
             // followers-list read; new canonical revisions invalidate only A.
-            const changedList=isNewEvent||
+            const confirmedNewEvent=isNewEvent&&hadInitialSnapshot;
+            const changedList=confirmedNewEvent||
               (!previousMarker&&profile?.followerCount!==count);
             ownerFollowerConfirmed529Ref.current={uid:ownerUid,count,version};
             if(changedList){
@@ -4205,7 +4211,7 @@ export default function ExplorePage() {
               // Only a NEW authenticated server-confirmed revision may refresh
               // an already-open followers modal. The first retained RTDB value
               // must not produce a D1 GET, and a hidden modal never reads.
-              if(isNewEvent&&profileConnectionsOpen376Ref.current==='followers'){
+              if(confirmedNewEvent&&profileConnectionsOpen376Ref.current==='followers'){
                 const requestId=++profileConnectionsRequest376Ref.current;
                 setProfileConnectionsLoading376(true);
                 setProfileConnectionsError376('');

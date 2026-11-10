@@ -41,6 +41,10 @@ import {APP544_OWNER_EPOCH_BIND_COMPILED_OPEN,handleOwnerEpochBinding544}
  from '../runtime/owner-follow-enrollment-544.mjs';
 import {APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN,deliverOwnerFollowPostcommit555}
  from '../runtime/owner-follow-postcommit-555.mjs';
+import {APP557_OWNER_PRECOMMIT_COMPILED_OPEN,runOwnerFollowPrecommit557}
+ from '../runtime/owner-follow-precommit-557.mjs';
+import {reserveOwnerFollowViaDo557}
+ from '../runtime/owner-follow-do-557.mjs';
 
 // SORIDRAW_EXPLORE_REVISION_HEAD_ONLY_036_20260911
 // SORIDRAW_EXPLORE_REVISION_HEAD_LOW_READ_037_20260911
@@ -3679,7 +3683,25 @@ export default {
         }, { status: 503 });
       }
     }
-    let response = await baseWorker.fetch(request, env, ctx);
+    // APP557 authenticated precommit is source-wired, compile OFF / unbound.
+    // The original canonical Worker remains unchanged for all active traffic.
+    let response;
+    if(APP557_OWNER_PRECOMMIT_COMPILED_OPEN &&
+       !APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN &&
+       !OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN &&
+       env?.SORIDRAW_ENVIRONMENT==='preview' &&
+       env?.SORIDRAW_OWNER_FOLLOW_W2_PUSH_555==='1' &&
+       url.pathname.startsWith('/v1/profiles/') &&
+       url.pathname.endsWith('/follow') &&
+       (request.method==='PUT'||request.method==='DELETE')){
+      response=await runOwnerFollowPrecommit557({
+        request,env,ctx,authenticate:validateExploreAuth307,
+        callCanonical:()=>baseWorker.fetch(request,env,ctx),
+        reserve:reserveOwnerFollowViaDo557,enabled:true,
+      });
+    }else{
+      response=await baseWorker.fetch(request,env,ctx);
+    }
     // APP555 candidate: existing overlay commit + R2 settled CAS provides an
     // owner-global version and count without ANY additional D1 write. The
     // old APP530/551 queue (W4) must be OFF; both transports never run.

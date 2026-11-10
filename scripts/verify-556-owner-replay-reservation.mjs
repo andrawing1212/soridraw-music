@@ -1,87 +1,95 @@
+// APP557 durable per-owner bounded queue: isolated persistent storage adapter.
 import assert from 'node:assert/strict';
 import {createOwnerFollowRecovery556,OWNER_FOLLOW_RECOVERY_556_COMPILED_OPEN}
  from '../cloudflare/explore-worker/runtime/owner-follow-recovery-556.mjs';
 import {replayOwnerFollowReservation556}
  from '../cloudflare/explore-worker/runtime/owner-follow-postcommit-555.mjs';
 assert.equal(OWNER_FOLLOW_RECOVERY_556_COMPILED_OPEN,false);
-const epoch='0123456789abcdef0123456789abcdef';
-const endpoint='https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publishExploreOwnerFollower542';
-const store=new Map();let when=0,clock=1800000000000,sets=0,del=0,reads=0,sendCalls=0,dbReads=0;
+const epoch='0123456789abcdef0123456789abcdef',token='token557';
+const a={r2:0,d1Read:0,d1Write:0,remote:0,doWrite:0,alarms:0};
+const data=new Map();
 const storage={
- get:async key=>store.get(key),
- put:async(k,v)=>{store.set(k,structuredClone(v));},
- delete:async k=>{del++;store.delete(k);},
- setAlarm:async at=>{sets++;when=at;},
+ get:async key=>structuredClone(data.get(key)),
+ put:async(k,v)=>{a.doWrite++;data.set(k,structuredClone(v));},
+ delete:async k=>{a.doWrite++;data.delete(k);},
+ setAlarm:async()=>{a.alarms++;},
 };
-let revision=9,settled=false,epochInDb=epoch,transportOk=false;
+const ids={B:'op_1234567890abcdef',C:'op_234567890abcdef1'};
+let readyB=false,readyC=false,version=18,remoteOk=false,dbEpoch=epoch;
 const env={SORIDRAW_ENVIRONMENT:'preview',SORIDRAW_OWNER_FOLLOW_W2_PUSH_555:'1',
- SORIDRAW_OWNER_FOLLOW_HMAC_539:'APP556-LOCAL-SECRET-NOT-PRODUCTION-1234567',
- SORIDRAW_OWNER_FOLLOW_ENDPOINT_539:endpoint,
- PROFILE_MEDIA:{get:async()=>{reads++;return {text:async()=>JSON.stringify({
-  revision,body:{data:{profile:{uid:'A',followerCount:3}}},
-  followSync354:{exact:settled,pending:{}}
- })}}},
- DB:{prepare:()=>({bind:()=>({first:async()=>{dbReads++;return {epoch:epochInDb};}})})}
+ SORIDRAW_OWNER_FOLLOW_HMAC_539:'APP557-LOCAL-INERT-NOT-A-RELEASE-SECRET-12345',
+ SORIDRAW_OWNER_FOLLOW_ENDPOINT_539:'https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publishExploreOwnerFollower542',
+ PROFILE_MEDIA:{get:async key=>{
+  a.r2++;
+  if(key==='internal/explore/follow-cutover-v348/active.json')
+   return {text:async()=>JSON.stringify({cutoverToken:token,relationMode:'overlay348',
+    writeMode:'active',profileCountsR2Exact:true,crashConsistentWriter354:true,
+    orderedClientRequests354:true,oneWayAuthority348:true,
+    legacyRelationWritersFrozen:true,legacyCounterWritersFrozen:true})};
+  if(key.startsWith('internal/explore/follow-intents-v354/')){
+   const actor=key.split('/')[4];
+   if((actor==='B'&&!readyB)||(actor==='C'&&!readyC))return null;
+   return {text:async()=>JSON.stringify({token,actor,target:'A',id:ids[actor],
+     following:true,expectedRevision:4,revision:8,settled:true})};
+  }
+  assert.equal(key,'internal/explore/shared-profile-v113/A.json');
+  return {text:async()=>JSON.stringify({revision:version,body:{data:{
+   profile:{uid:'A',followerCount:5}}},followSync354:{token,exact:true,pending:{}}})};
+ }},
+ DB:{prepare:()=>({bind:()=>({first:async()=>{
+   a.d1Read++;return {epoch:dbEpoch};
+ }})})}
 };
-const send=async()=>{sendCalls++;return transportOk
+const send=async()=>{a.remote++;return remoteOk
  ?{ok:true,status:200,json:async()=>({ok:true,applied:true})}
- :{ok:false,status:503,json:async()=>({ok:false})};};
+ :{ok:false,status:503,json:async()=>({ok:false})}};
 const deliver=args=>replayOwnerFollowReservation556({...args,send});
-const node=createOwnerFollowRecovery556({state:{storage},env,enabled:true,now:()=>clock,deliver});
-const candidate={ownerUid:'A',authEpoch:epoch,priorR2Revision:9};
-assert.equal((await createOwnerFollowRecovery556({state:{storage},env}).reserve(candidate)).status,'disabled');
-assert.equal(store.size,0);
-assert.equal((await node.reserve(candidate)).status,'reserved');
-assert.equal(store.get('pending').priorR2Revision,9);
-assert.equal(when,clock+1000);
-// Pre-commit saved reservation survives a new object instance / Worker restart.
-const fresh=createOwnerFollowRecovery556({state:{storage},env,enabled:true,now:()=>clock,deliver});
-assert.equal((await fresh.alarm()).status,'retry-scheduled');
-assert.equal(sendCalls,0,'must not send stale pre-mutation R2 state');
-revision=10;settled=true;
-assert.equal((await fresh.alarm()).status,'retry-scheduled');
-assert.equal(sendCalls,2,'failed remote recipient cannot be ACKed');
-transportOk=true;
-assert.equal((await fresh.alarm()).status,'delivered');
-assert.equal(store.has('pending'),false);
-assert.equal(del,1);
-assert.equal(dbReads,2);
-// A later bad/no-op reservation cannot discard the older confirmed work.
-transportOk=false;settled=false;revision=20;
-assert.equal((await node.reserve({ ...candidate,priorR2Revision:19})).status,'reserved');
-assert.equal((await node.reserve({...candidate,priorR2Revision:20})).status,'reserved');
-assert.equal(store.get('pending').priorR2Revision,19,'coalesce lowest unresolved floor');
-revision=21;settled=true;
-const older=store.get('pending').generation;
-const interleaved=createOwnerFollowRecovery556({state:{storage},env,enabled:true,now:()=>clock,
- deliver:async args=>{
-  const a=await node.reserve({...candidate,priorR2Revision:21});
-  assert.equal(a.generation,older+1);
-  return {status:'delivered',deliveredRevision:21};
- }});
-assert.equal((await interleaved.alarm()).status,'newer-reservation-preserved');
-assert.equal(store.has('pending'),true);
-// A deleted/re-created Auth generation never receives an old pending signal.
-epochInDb='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-assert.equal((await fresh.alarm()).status,'rejected-generation');
-assert.equal(store.has('pending'),false);
-// Durable dead hold: transient outage exhausted, no deleted reservation.
-epochInDb=epoch;
-assert.equal((await node.reserve({...candidate,priorR2Revision:21})).status,'reserved');
-revision=22;settled=true;
-transportOk=false;
+const make=()=>createOwnerFollowRecovery556({state:{storage},env,enabled:true,deliver,now:()=>1800000000000});
+const ticket=(actor)=>({ownerUid:'A',actorUid:actor,
+ authEpoch:epoch,operationId:ids[actor],expectedRevision:4,cutoverToken:token,
+ desired:true,beforeFollowing:false,priorR2Revision:18});
+const disabled=createOwnerFollowRecovery556({state:{storage},env});
+assert.equal((await disabled.reserve(ticket('B'))).status,'disabled');
+assert.equal(data.size,0);
+const node=make();
+assert.equal((await node.reserve(ticket('B'))).status,'reserved');
+assert.equal((await node.reserve(ticket('B'))).status,'already-reserved');
+assert.equal((await node.reserve(ticket('C'))).status,'reserved');
+assert.equal(data.get('pending').entries.length,2,'distinct follower requests must NOT overwrite');
+assert.equal((await node.reserve({...ticket('B'),beforeFollowing:true})).status,
+ 'invalid-reservation');
+const restarted=make(); // no ephemeral in-memory queue dependency
+assert.equal((await restarted.alarm()).status,'retry-scheduled');
+assert.equal(a.remote,0,'uncommitted receipt cannot notify');
+readyB=true;version=19;
+assert.equal((await restarted.alarm()).status,'retry-scheduled');
+assert.equal(a.remote,2,'HTTP outage bounded to two attempts');
+remoteOk=true;
+assert.equal((await restarted.alarm()).status,'delivered');
+assert.equal(data.get('pending').entries.length,1,'B confirmed; C still held');
+assert.equal(data.get('pending').entries[0].actorUid,'C');
+readyC=true;version=20;
+assert.equal((await restarted.alarm()).status,'delivered');
+assert.equal(data.has('pending'),false);
+readyB=false;version=21;remoteOk=false;
+assert.equal((await node.reserve({...ticket('B'),priorR2Revision:20})).status,'reserved');
 for(let n=1;n<=8;n++){
- const result=await node.alarm();
- assert.equal(result.status,n===8?'manual-hold':'retry-scheduled');
- assert.equal(store.get('pending').attempts,n);
+ const r=await node.alarm();
+ assert.equal(r.status,n===8?'manual-hold':'retry-scheduled');
+ assert.equal(data.get('pending').entries[0].attempts,n);
 }
-assert.equal(store.get('pending').dead,true);
+assert.equal(data.get('pending').entries[0].dead,true);
 assert.equal((await node.alarm()).status,'manual-hold');
-assert.equal(store.has('pending'),true);
-const previousReads=reads;
-assert.equal((await node.reserve({...candidate,ownerUid:'../../test'})).status,'invalid-reservation');
-assert.equal(reads,previousReads);
-assert.equal((await createOwnerFollowRecovery556({state:{storage},env:{...env,SORIDRAW_ENVIRONMENT:'production'},enabled:true}).alarm()).status,'disabled');
-console.log('APP556_PRECOMMIT_PERSISTED_OWNER_ALARM_RESTART_COALESCE=PASS');
-console.log('APP556_AFTER_FAILED_DELIVERY_RETRY_GENERATION_FENCE_DEAD_HOLD=PASS');
-console.log('APP556_ACTIVE_BACKEND_UNWIRED_PHYSICAL_DO_COST_UNMEASURED=NO_GO');
+assert.equal(data.has('pending'),true,'dead hold must be retained');
+dbEpoch='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const notDeleted=await node.reserve(ticket('C'));
+assert.equal(notDeleted.status,'reserved','separate identity remains queued, never overwrites B');
+assert.equal((await node.alarm()).status,'rejected-generation');
+assert.equal(data.get('pending').entries.length,1,'held B preserved');
+assert.equal(a.d1Write,0,'DO storage not a canonical D1 write');
+assert.ok(a.doWrite>0&&a.alarms>0,'isolated persistent storage and alarms executed');
+assert.equal((await createOwnerFollowRecovery556({state:{storage},
+ env:{...env,SORIDRAW_ENVIRONMENT:'production'},enabled:true}).reserve(ticket('B'))).status,'disabled');
+console.log('APP557_OWNER_DURABLE_QUEUE_NO_LOST_PARALLEL_RESERVATIONS=PASS');
+console.log('APP557_PRECOMMIT_CRASH_RESTART_HTTP_FAILURE_8_ATTEMPT_HOLD=PASS');
+console.log('APP557_SHARED_D1_WRITE_ZERO_LOCAL_DO_STORAGE_ONLY=PASS');

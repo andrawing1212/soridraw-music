@@ -2,6 +2,7 @@
 // entrypoint for a FUTURE authenticated durable pre-commit reservation.
 // SOURCE ONLY; neither the replay scheduler nor its reservation is live.
 import {sendOwnerFollowHttp539} from './owner-follow-http-539.mjs';
+import {verifyOwnerFollowCommitProof557} from './owner-follow-commit-proof-557.mjs';
 export const APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN=false;
 const UID=/^[A-Za-z0-9_-]{1,128}$/;
 const EPOCH=/^[0-9a-f]{32}$/;
@@ -101,6 +102,8 @@ export async function replayOwnerFollowReservation556({
  if(!UID.test(String(ownerUid||''))||!EPOCH.test(String(authEpoch||''))||
     !Number.isSafeInteger(priorR2Revision)||priorR2Revision<0)
   return outcome('invalid-reservation');
+ const proof=await verifyOwnerFollowCommitProof557({reservation,env});
+ if(!proof.committed)return outcome(proof.status);
  return deliverSettledOwner555({ownerUid,expectedEpoch:authEpoch,
   afterRevision:priorR2Revision,env,now,send,enabled});
 }

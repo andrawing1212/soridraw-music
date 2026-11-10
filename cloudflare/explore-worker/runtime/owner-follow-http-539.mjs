@@ -7,12 +7,14 @@ import {isOwnerFollowAuthEpoch532} from "./owner-follow-auth-epoch-532.mjs";
 export const APP539_WORKER_HTTP_BRIDGE_COMPILED_OPEN=false;
 const UID=/^[A-Za-z0-9_-]{1,128}$/;
 const HTTP_LOCAL=/^http:\/\/(?:127\.0\.0\.1|localhost):[1-9][0-9]{1,4}\/owner-follow-539$/;
+const HTTP_RELEASE='https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publishExploreOwnerFollower542';
 export async function sendOwnerFollowHttp539(event,{
  endpoint,secret,send=fetch,now=Date.now,
  isolatedOnly=false,
 }={}){
- if(!isolatedOnly||!HTTP_LOCAL.test(String(endpoint||"")))
-  throw Error("APP539_ONLY_ISOLATED_LOOPBACK_ENDPOINT");
+ const target=String(endpoint||"");
+ if(isolatedOnly?!HTTP_LOCAL.test(target):target!==HTTP_RELEASE)
+  throw Error("APP539_ENDPOINT_NOT_PINNED");
  if(!event||!UID.test(String(event.ownerUid||""))||
    !isOwnerFollowAuthEpoch532(event.authEpoch)||
    !Number.isSafeInteger(event.version)||event.version<=0||

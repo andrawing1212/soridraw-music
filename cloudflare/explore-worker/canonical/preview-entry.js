@@ -11,10 +11,13 @@ import {
 } from '../runtime/curated-projection-repair-468.mjs';
 import baseWorker from './preview-worker.js';
 import {
- OWNER_FOLLOW_OUTBOX_529_COMPILED_OPEN,
- drainOwnerFollowOutbox529,
- sendOwnerFollowOutboxEvent529,
-} from '../runtime/owner-follow-outbox-529.mjs';
+ OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN,
+ drainOwnerFollowAuthEpoch532,
+} from '../runtime/owner-follow-auth-epoch-532.mjs';
+import {
+ APP539_WORKER_HTTP_BRIDGE_COMPILED_OPEN,
+ sendOwnerFollowHttp539,
+} from '../runtime/owner-follow-http-539.mjs';
 import {handleNotificationPreferencesApi003}
  from '../runtime/notification-preferences-api-003.mjs';
 import {handleUnifiedNotificationsApi004}
@@ -3301,25 +3304,31 @@ async function handleSignedPublicLikeWindowAck416(request,env){
  }
 }
 
-const runOwnerFollowDelivery529=async(env)=>{
- if(!OWNER_FOLLOW_OUTBOX_529_COMPILED_OPEN||
+// APP542: only the epoch-fenced canonical profile_stats queue is eligible.
+// These compile-time gates are false, and there is no Wrangler cron or live
+// endpoint configuration. Nothing is read, delivered, or mutated on page entry.
+const runOwnerFollowDelivery542=async(env)=>{
+ if(!OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN||
+    !APP539_WORKER_HTTP_BRIDGE_COMPILED_OPEN||
     env?.SORIDRAW_ENVIRONMENT!=='preview'||
-    env?.SORIDRAW_OWNER_FOLLOW_PUSH_529!=='1')return;
- await drainOwnerFollowOutbox529({
+    env?.SORIDRAW_OWNER_FOLLOW_PUSH_532!=='1')return;
+ await drainOwnerFollowAuthEpoch532({
    enabled:true,db:env.DB,
-   deliver:event=>sendOwnerFollowOutboxEvent529(event,{
-     endpoint:env.SORIDRAW_OWNER_FOLLOW_ENDPOINT_529,
-     secret:env.SORIDRAW_OWNER_FOLLOW_HMAC_529,
-   }),
+   deliver:async event=>{
+     const result=await sendOwnerFollowHttp539(event,{
+       endpoint:env.SORIDRAW_OWNER_FOLLOW_ENDPOINT_539,
+       secret:env.SORIDRAW_OWNER_FOLLOW_HMAC_539,
+     });
+     return result.ok===true;
+   },
  });
 };
 
 export default {
   async scheduled(controller, env, ctx) {
-    // APP529 retry cron is not configured. Never run during the existing
-    // public-like cron or page-entry paths. Shared backend stays OFF.
-    if(controller?.cron==='soridraw-owner-follow-retry-529'){
-      await runOwnerFollowDelivery529(env);
+    // APP542 epoch-only retry label; not scheduled in any live Wrangler config.
+    if(controller?.cron==='soridraw-owner-follow-retry-542'){
+      await runOwnerFollowDelivery542(env);
       return;
     }
     // Stage013: source-connected, COMPILE-TIME OFF and no Wrangler cron.
@@ -3659,19 +3668,18 @@ export default {
       }
     }
     let response = await baseWorker.fetch(request, env, ctx);
-    // APP529: zero extra GET, zero shared write while compile gate OFF.
-    // D1 trigger (when separately activated) creates durable outbox only
-    // on actual canonical follower_count changes, not optimistic requests.
-    if(OWNER_FOLLOW_OUTBOX_529_COMPILED_OPEN && response.ok &&
+    // APP542 source-only: only an HTTP-successful canonical follow can wake
+    // the durable epoch queue. No wake is armed in any deployed Worker today.
+    if(OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN &&
+       APP539_WORKER_HTTP_BRIDGE_COMPILED_OPEN && response.ok &&
        env?.SORIDRAW_ENVIRONMENT==='preview' &&
-       env?.SORIDRAW_OWNER_FOLLOW_PUSH_529==='1'){
-      const parts529=url.pathname.split('/');
-      if(parts529.length===5&&parts529[1]==='v1'&&
-         parts529[2]==='profiles'&&parts529[4]==='follow'&&
+       env?.SORIDRAW_OWNER_FOLLOW_PUSH_532==='1'){
+      const parts542=url.pathname.split('/');
+      if(parts542.length===5&&parts542[1]==='v1'&&
+         parts542[2]==='profiles'&&parts542[4]==='follow'&&
          (request.method==='PUT'||request.method==='DELETE')){
-        ctx.waitUntil(runOwnerFollowDelivery529(env).catch(error=>
-          console.warn('[529] durable owner follow delivery deferred',
-            String(error?.message||'error'))));
+        ctx.waitUntil(runOwnerFollowDelivery542(env).catch(()=>
+          console.warn('[542] bounded owner delivery deferred')));
       }
     }
 

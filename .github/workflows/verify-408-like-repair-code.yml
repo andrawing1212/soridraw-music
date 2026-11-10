@@ -423,6 +423,7 @@ jobs:
           python3 scripts/verify-529-owner-outbox-sql.py
           node scripts/verify-529-owner-sync.mjs
           node scripts/verify-540-inline-worker-parity.mjs
+          node --import tsx scripts/verify-542-owner-relay-source.mjs
           node scripts/verify-524-curated-public-count-fence.mjs
           node scripts/verify-197-new-public-track-like.mjs
           node scripts/verify-390-like-acceptance-receipt.mjs

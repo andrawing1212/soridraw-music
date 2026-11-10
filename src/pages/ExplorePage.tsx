@@ -105,13 +105,13 @@ import {
   publishExploreFollowSync377,
   subscribeExploreFollowSync377,
 } from '../services/exploreFollowSyncService';
-import { createOwnerFollowerGate529 } from '../services/exploreOwnerFollowerSyncCore529';
+import { createOwnerEpochGate538 } from '../services/exploreOwnerFollowerEpochCore538';
 import {
-  EXPLORE_OWNER_FOLLOW_REALTIME_529_ENABLED,
-  readOwnerFollowerSeenVersion529,
-  rememberOwnerFollowerSeenVersion529,
-  subscribeExploreOwnerFollower529,
-} from '../services/exploreOwnerFollowerSync529';
+  EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED,
+  readOwnerFollowerSeenVersion542,
+  rememberOwnerFollowerSeenVersion542,
+  subscribeExploreOwnerFollower542,
+} from '../services/exploreOwnerFollowerSync542';
 
 import {
   EXPLORE_FOLLOW_IDLE_FLUSH_MS_380,
@@ -4169,41 +4169,58 @@ export default function ExplorePage() {
     }
   };
 
-  // APP529: A sees only a server-confirmed owner-private scalar; no list
-  // request, no D1/R2 polling, no focus observer and no background write.
+  // APP542: the owner-only, Auth-epoch-fenced 532 signal is observed only
+  // while the owner's own profile is visible. Compile-time OFF until the
+  // separately approved RTDB Rules, Auth issuer and durable D1 writer ship.
   useEffect(()=>{
-    if(!EXPLORE_OWNER_FOLLOW_REALTIME_529_ENABLED)return;
+    if(!EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED)return;
     const ownerUid=String(user?.uid||'').trim();
     if(!ownerUid||profile?.uid!==ownerUid)return;
-    const gate=createOwnerFollowerGate529(
-      ownerUid,
-      (count,version,isNewEvent)=>{
-        if(auth.currentUser?.uid!==ownerUid||
-           activeProfileUidRef.current!==ownerUid)return;
-        const previousMarker=ownerFollowerConfirmed529Ref.current;
-        // Warm retained signal + already correct count = zero fresh list GET.
-        // A new event (even with equal count) can change list membership.
-        const changedList=isNewEvent||(!previousMarker&&profile?.followerCount!==count);
-        ownerFollowerConfirmed529Ref.current={uid:ownerUid,count,version};
-        if(changedList){
-          invalidateExploreProfileConnections377(ownerUid,'followers');
-          profileConnectionsCache376Ref.current.delete(ownerUid+':followers');
-        }
-        patchExplorePublicProfileFirstViewProfile(ownerUid,{followerCount:count});
-        setProfile(prev=>prev?.uid===ownerUid&&prev.followerCount!==count
-          ?{...prev,followerCount:count}:prev);
-      },
-      Date.now,readOwnerFollowerSeenVersion529(ownerUid),
-      version=>rememberOwnerFollowerSeenVersion529(ownerUid,version),
-    );
-    const stop=subscribeExploreOwnerFollower529(ownerUid,gate.receive);
-    return ()=>{gate.dispose();stop();ownerFollowerConfirmed529Ref.current=null;};
+    let stopped=false;
+    let unsubscribe=()=>{};
+    let gate:ReturnType<typeof createOwnerEpochGate538>|null=null;
+    void subscribeExploreOwnerFollower542(ownerUid,(signal,epoch)=>{
+      if(stopped||auth.currentUser?.uid!==ownerUid||
+         activeProfileUidRef.current!==ownerUid)return;
+      if(!gate){
+        gate=createOwnerEpochGate538({
+          ownerUid,authEpoch:epoch,
+          applyCount:(count,version,isNewEvent)=>{
+            if(auth.currentUser?.uid!==ownerUid||
+               activeProfileUidRef.current!==ownerUid)return;
+            const previousMarker=ownerFollowerConfirmed529Ref.current;
+            // The same retained signal is allowed to repaint without a new
+            // followers-list read; new canonical revisions invalidate only A.
+            const changedList=isNewEvent||
+              (!previousMarker&&profile?.followerCount!==count);
+            ownerFollowerConfirmed529Ref.current={uid:ownerUid,count,version};
+            if(changedList){
+              invalidateExploreProfileConnections377(ownerUid,'followers');
+              profileConnectionsCache376Ref.current.delete(ownerUid+':followers');
+            }
+            patchExplorePublicProfileFirstViewProfile(ownerUid,{followerCount:count});
+            setProfile(prev=>prev?.uid===ownerUid&&prev.followerCount!==count
+              ?{...prev,followerCount:count}:prev);
+          },
+          initialSeenVersion:readOwnerFollowerSeenVersion542(ownerUid,epoch),
+          rememberVersion:(version,seenEpoch)=>
+            rememberOwnerFollowerSeenVersion542(ownerUid,seenEpoch,version),
+        });
+      }
+      gate.receive(signal);
+    }).then(stop=>{
+      if(stopped)stop();else unsubscribe=stop;
+    }).catch(()=>{/* No background canonical GET or polling on failure. */});
+    return ()=>{
+      stopped=true;unsubscribe();gate?.dispose();
+      ownerFollowerConfirmed529Ref.current=null;
+    };
   },[profile?.uid,user?.uid]);
 
-  // Prevent a delayed older public-profile response from replacing a newer
-  // signed D1-derived RTDB count. This effect is completely dormant in APP529 OFF.
+  // A delayed R2 profile response must not overwrite the newest confirmed
+  // owner-private scalar. This effect has zero work while APP542 is OFF.
   useEffect(()=>{
-    if(!EXPLORE_OWNER_FOLLOW_REALTIME_529_ENABLED)return;
+    if(!EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED)return;
     const row=ownerFollowerConfirmed529Ref.current;
     if(row&&row.uid===user?.uid&&profile?.uid===row.uid&&
        profile.followerCount!==row.count){

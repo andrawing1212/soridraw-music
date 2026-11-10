@@ -4,7 +4,7 @@
     ".write": false,
     "ownerFollowerSync532": {
       "$uid": {
-        ".read": "auth != null && auth.uid === $uid && auth.token.soridrawFollowEpoch532 === data.child('authEpoch').val()",
+        ".read": "auth != null && auth.uid === $uid && auth.token.soridrawFollowEpoch532 != null && data.exists() && auth.token.soridrawFollowEpoch532 === data.child('authEpoch').val()",
         ".write": false
       }
     }

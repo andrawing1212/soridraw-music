@@ -105,6 +105,33 @@ export function withPreviewNotificationExamples023(
     !populated.has(notificationSectionFor(row.category)))];
 }
 
+/**
+ * Keep only the latest genuine follow notice for each stable actor UID.
+ * Historical delivery rows remain untouched in D1. A different account using
+ * the same display name is NEVER merged, and missing actor IDs are preserved.
+ * This is presentation-only: no extra reads, writes, listeners or re-fetches.
+ */
+export function collapseRepeatedFollowNoticesByActor554(
+  rows: readonly InboxNotification[],
+): InboxNotification[] {
+  const newest = new Map<string, InboxNotification>();
+  for (const row of rows) {
+    if (row.category !== 'follow') continue;
+    const uid = String(row.actorUid || '').trim();
+    if (!uid) continue;
+    const existing = newest.get(uid);
+    if (!existing || row.createdAt > existing.createdAt ||
+        (row.createdAt === existing.createdAt && row.id > existing.id)) {
+      newest.set(uid, row);
+    }
+  }
+  return rows.filter(row => {
+    if (row.category !== 'follow') return true;
+    const uid = String(row.actorUid || '').trim();
+    return !uid || newest.get(uid) === row;
+  });
+}
+
 export const NOTIFICATION_EXAMPLE_ROWS: InboxNotification[] = [
   { id: 'example-like', category: 'like', actorName: 'LunaBeat', text: '내 곡에 좋아요를 눌렀습니다.',
     createdAt: 2 * 60 * 60 * 1000, song: { id: '', title: '깊어지는 시간의 궤적' } },

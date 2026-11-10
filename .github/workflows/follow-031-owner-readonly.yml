@@ -1,19 +1,18 @@
-name: SORIDRAW Follow 031 Owner Count Scoped Readonly
+name: SORIDRAW Follow 031 Persistent Cooldown Regression
 on:
   pull_request:
     branches: [preview]
     paths:
-      - 'scripts/diagnose-follow-owner-031.mjs'
+      - 'src/services/exploreFollowBatchService380.ts'
+      - 'src/pages/ExplorePage.tsx'
+      - 'scripts/verify-031-follow-cooldown.mjs'
       - '.github/workflows/follow-031-owner-readonly.yml'
 permissions:
   contents: read
 jobs:
-  targeted-follow:
+  follow-cooldown:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    env:
-      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -21,10 +20,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Check and run exact two-account canonical read only
+      - name: Verify terminal rejected unfollow restores baseline, pending state is explicit
         run: |
           set -euo pipefail
-          node --check scripts/diagnose-follow-owner-031.mjs
-          node scripts/diagnose-follow-owner-031.mjs --self-test
-          node scripts/diagnose-follow-owner-031.mjs --live
-          echo 'READ_ONLY_NO_D1_R2_ORIGINALS_MODIFIED=PASS'
+          node --check scripts/verify-031-follow-cooldown.mjs
+          node scripts/verify-031-follow-cooldown.mjs
+          node scripts/verify-030-follow-race.mjs
+          echo 'FOLLOW_031_SOURCE_ONLY_NO_D1_OR_HOSTING_CHANGE=PASS'

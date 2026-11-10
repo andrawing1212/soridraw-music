@@ -1,0 +1,119 @@
+name: SORIDRAW Notification 026 PREVIEW Retention Minimal Release
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - '.github/workflows/notification-preview-retention-release-026.yml'
+      - 'scripts/verify-notification-preview-retention-026.mjs'
+      - 'scripts/verify-notification-preview-retention-live-026.mjs'
+      - 'scripts/verify-notification-preview-retention-gate-026.mjs'
+      - 'scripts/release-notification-preview-retention-026.mjs'
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/notification-preview-retention-026.release'
+permissions:
+  contents: read
+  actions: read
+  issues: read
+  pull-requests: read
+concurrency:
+  group: soridraw-preview-explore-worker-release
+  cancel-in-progress: false
+jobs:
+  source-only:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify minimal source, inactive flags and 30-day retention
+        run: |
+          set -euo pipefail
+          node --check scripts/verify-notification-preview-retention-026.mjs
+          node --check scripts/verify-notification-preview-retention-live-026.mjs
+          node --check scripts/verify-notification-preview-retention-gate-026.mjs
+          node --check scripts/release-notification-preview-retention-026.mjs
+          node scripts/verify-notification-preview-retention-026.mjs
+          node scripts/verify-notification-preview-retention-live-026.mjs --self-test
+          node scripts/verify-notification-preview-retention-gate-026.mjs --self-test
+          node scripts/verify-notification-scheduler-013.mjs
+          node scripts/release-notification-preview-retention-026.mjs --prepare
+          echo 'NOTIFICATION_026_FROZEN_EXACT_BUILD=PASS;WORKER_DEPLOY=0;SHARED_D1_WRITES=0'
+  current-live-readonly:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check three current Workers, exact active GET module, OFF D1 (no writes)
+        run: |
+          set -euo pipefail
+          node scripts/verify-notification-d1-dot-upgrade-018.mjs --live-existing
+          node scripts/verify-notification-preview-retention-live-026.mjs --before
+          echo 'NOTIFICATION_026_LIVE_PREFLIGHT_GET_ONLY_W0=PASS'
+  owner-approved-preview:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+    steps:
+      - name: Checkout approved release guard revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify one-use owner approval for exact merged trigger-only PR
+        id: gate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git fetch origin preview --no-tags
+          git show "$GITHUB_SHA:.deploy/notification-preview-retention-026.release" > .deploy/notification-preview-retention-026.release
+          node scripts/verify-notification-preview-retention-gate-026.mjs --self-test
+          node scripts/verify-notification-preview-retention-gate-026.mjs --verify-approval
+      - name: Checkout exactly approved PREVIEW source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.gate.outputs.source_sha }}
+          fetch-depth: 0
+      - name: Pin immutable source and validate OFF/30-day cleanup
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor HEAD "$GITHUB_SHA"
+          node scripts/verify-notification-preview-retention-026.mjs
+          node scripts/verify-notification-preview-retention-live-026.mjs --self-test
+          node scripts/verify-notification-preview-retention-gate-026.mjs --self-test
+          node scripts/verify-notification-scheduler-013.mjs
+          echo 'NOTIFICATION_026_PINNED_SOURCE_AND_GATED_30DAY_CLEANUP=PASS'
+      - name: Rebuild frozen current GET-only bundle and minimal cron diff (dry-run)
+        run: |
+          set -euo pipefail
+          node scripts/release-notification-preview-retention-026.mjs --prepare
+      - name: PREVIEW-only guarded deploy with exact rollback, D1 OFF and live smoke
+        run: |
+          set -euo pipefail
+          node scripts/release-notification-preview-retention-026.mjs --deploy

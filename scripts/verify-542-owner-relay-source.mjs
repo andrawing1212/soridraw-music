@@ -3,9 +3,12 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHmac} from 'node:crypto';
-import {
- APP542_OWNER_HTTP_COMPILED_OPEN,createOwnerFollowerHttp542,
-} from '../functions/src/exploreOwnerFollowerWebhook542.ts';
+import {createRequire} from 'node:module';
+// functions/ is a CommonJS package (unlike the Vite ESM app). tsx registers
+// a .ts require hook; load this source through that exact module shape.
+const require=createRequire(import.meta.url);
+const {APP542_OWNER_HTTP_COMPILED_OPEN,createOwnerFollowerHttp542}=
+ require('../functions/src/exploreOwnerFollowerWebhook542.ts');
 const read=path=>readFileSync(path,'utf8');
 const index=read('functions/src/index.ts');
 const entry=read('cloudflare/explore-worker/canonical/preview-entry.js');

@@ -8,7 +8,7 @@ const state=[
  '(SELECT created_at FROM follows WHERE follower_uid=? AND following_uid=? LIMIT 1) legacy_at,',
  '(SELECT following FROM explore_follow_overrides_348 WHERE follower_uid=? AND following_uid=? LIMIT 1) overlay_following,',
  '(SELECT baseline_following FROM explore_follow_overrides_348 WHERE follower_uid=? AND following_uid=? LIMIT 1) overlay_baseline,',
- '(SELECT updated_at FROM explore_follow_overrides_348 WHERE follower_uid=? AND following_uid=? LIMIT 1) overlay_at,'
+ '(SELECT updated_at FROM explore_follow_overrides_348 WHERE follower_uid=? AND following_uid=? LIMIT 1) overlay_at,',
  '(SELECT mutation_id FROM explore_follow_overrides_348 WHERE follower_uid=? AND following_uid=? LIMIT 1) overlay_mutation,',
  '(SELECT enabled FROM soridraw_notification_activation_002 WHERE id=1 LIMIT 1) collector_enabled'
 ].join(' ');

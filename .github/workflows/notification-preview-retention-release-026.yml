@@ -1,0 +1,45 @@
+name: SORIDRAW Notification 026 PREVIEW Retention Minimal Release
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - '.github/workflows/notification-preview-retention-release-026.yml'
+      - 'scripts/verify-notification-preview-retention-026.mjs'
+      - 'scripts/verify-notification-preview-retention-live-026.mjs'
+      - 'scripts/verify-notification-preview-retention-gate-026.mjs'
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/notification-preview-retention-026.release'
+permissions:
+  contents: read
+  actions: read
+  issues: read
+  pull-requests: read
+concurrency:
+  group: soridraw-preview-explore-worker-release
+  cancel-in-progress: false
+jobs:
+  source-only:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify minimal source, inactive flags and 30-day retention
+        run: |
+          set -euo pipefail
+          node --check scripts/verify-notification-preview-retention-026.mjs
+          node --check scripts/verify-notification-preview-retention-live-026.mjs
+          node --check scripts/verify-notification-preview-retention-gate-026.mjs
+          node scripts/verify-notification-preview-retention-026.mjs
+          node scripts/verify-notification-preview-retention-live-026.mjs --self-test
+          node scripts/verify-notification-preview-retention-gate-026.mjs --self-test
+          node scripts/verify-notification-scheduler-013.mjs
+          echo 'NOTIFICATION_026_SOURCE_ONLY=PASS;WORKER_DEPLOY=0;SHARED_D1_WRITES=0'

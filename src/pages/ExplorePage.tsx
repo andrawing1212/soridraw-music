@@ -1980,6 +1980,8 @@ export default function ExplorePage() {
   // Connection cards are fetched only after an explicit followers/following click.
   // Reopening the same list in this mounted Explore session reuses the bounded page.
   const [profileConnectionsOpen376, setProfileConnectionsOpen376] = useState<ExploreProfileConnectionDirection | null>(null);
+  const profileConnectionsOpen376Ref = useRef<ExploreProfileConnectionDirection | null>(null);
+  profileConnectionsOpen376Ref.current = profileConnectionsOpen376;
   const [profileConnectionsItems376, setProfileConnectionsItems376] = useState<ExploreProfileConnection[]>([]);
   const [profileConnectionsNextCursor376, setProfileConnectionsNextCursor376] = useState<string | null>(null);
   const [profileConnectionsLoading376, setProfileConnectionsLoading376] = useState(false);
@@ -4200,6 +4202,35 @@ export default function ExplorePage() {
             if(changedList){
               invalidateExploreProfileConnections377(ownerUid,'followers');
               profileConnectionsCache376Ref.current.delete(ownerUid+':followers');
+              // Only a NEW authenticated server-confirmed revision may refresh
+              // an already-open followers modal. The first retained RTDB value
+              // must not produce a D1 GET, and a hidden modal never reads.
+              if(isNewEvent&&profileConnectionsOpen376Ref.current==='followers'){
+                const requestId=++profileConnectionsRequest376Ref.current;
+                setProfileConnectionsLoading376(true);
+                setProfileConnectionsError376('');
+                void getExploreProfileConnections(ownerUid,'followers',null,true)
+                  .then(page=>{
+                    if(stopped||auth.currentUser?.uid!==ownerUid||
+                       activeProfileUidRef.current!==ownerUid||
+                       profileConnectionsOpen376Ref.current!=='followers'||
+                       requestId!==profileConnectionsRequest376Ref.current)return;
+                    profileConnectionsCache376Ref.current.set(ownerUid+':followers',page);
+                    setProfileConnectionsItems376(page.items);
+                    setProfileConnectionsNextCursor376(page.nextCursor);
+                    // Page length is never the canonical follower COUNT,
+                    // especially when the followers list has further pages.
+                  })
+                  .catch(reason=>{
+                    if(stopped||requestId!==profileConnectionsRequest376Ref.current)return;
+                    console.warn('[app542] owner followers live-page refresh failed:',reason);
+                    setProfileConnectionsError376('팔로워 목록을 새로 가져오지 못했습니다.');
+                  })
+                  .finally(()=>{
+                    if(!stopped&&requestId===profileConnectionsRequest376Ref.current)
+                      setProfileConnectionsLoading376(false);
+                  });
+              }
             }
             patchExplorePublicProfileFirstViewProfile(ownerUid,{followerCount:count});
             setProfile(prev=>prev?.uid===ownerUid&&prev.followerCount!==count

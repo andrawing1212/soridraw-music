@@ -237,8 +237,14 @@ export const flushExploreFollowPair380 = async (key: string): Promise<void> => {
       targetProfile: { ...entry.targetProfile },
       result,
     };
-    // A UI/notification callback failure must never replay a committed write.
-    try { entry.onSettled(settlement); } catch (error) { console.warn('[380] follow settled callback', error); }
+    // A later local choice may supersede an in-flight canonical result.
+    // Never paint or publish that stale intermediate follow state over the
+    // user's newest opposite choice. If they returned to the same desired
+    // state, the earlier commit is already the right final settlement.
+    if (!current || current.desiredFollowing === sentDesired) {
+      // A UI/notification callback failure must never replay a committed write.
+      try { entry.onSettled(settlement); } catch (error) { console.warn('[380] follow settled callback', error); }
+    }
 
     if (current && current.version !== sentVersion) {
       // A click landed while the canonical request was in flight. The settled

@@ -6,12 +6,14 @@ on:
       - '.github/workflows/notification-d1-live-schema-readonly.yml'
       - 'scripts/verify-notification-d1-schema-readonly-006.mjs'
       - 'scripts/verify-notification-d1-dot-upgrade-018.mjs'
+      - 'scripts/verify-notification-cost-headroom-028.mjs'
   push:
     branches: [preview]
     paths:
       - '.github/workflows/notification-d1-live-schema-readonly.yml'
       - 'scripts/verify-notification-d1-schema-readonly-006.mjs'
       - 'scripts/verify-notification-d1-dot-upgrade-018.mjs'
+      - 'scripts/verify-notification-cost-headroom-028.mjs'
       - 'cloudflare/explore-worker/candidates/20261107_01_notification_inbox_candidate.sql'
       - 'cloudflare/explore-worker/candidates/20261108_01_notification_direct_messages_candidate.sql'
       - 'cloudflare/explore-worker/candidates/20261108_02_notification_announcement_expiry_candidate.sql'
@@ -39,9 +41,12 @@ jobs:
         run: |
           node scripts/verify-notification-d1-schema-readonly-006.mjs --self-test
           node scripts/verify-notification-d1-dot-upgrade-018.mjs --self-test
+          node scripts/verify-notification-cost-headroom-028.mjs --self-test
       - name: Inspect shared D1 metadata (guarded SELECT only)
         if: github.event_name != 'pull_request'
         run: node scripts/verify-notification-d1-dot-upgrade-018.mjs --live-existing
+      - name: Read recent D1 usage aggregates (no user rows or writes)
+        run: node scripts/verify-notification-cost-headroom-028.mjs --live
       - name: Confirm no deployment
         if: github.event_name != 'pull_request'
         run: |

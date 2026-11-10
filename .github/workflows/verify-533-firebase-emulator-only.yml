@@ -41,7 +41,7 @@ jobs:
           test "${GCLOUD_PROJECT}" = "demo-soridraw-owner-533"
           node --check functions/experiments/owner-follow-auth-533.mjs
           node --check scripts/test-533-owner-auth-rtdb-emulator.mjs
-          node -e "const fs=require('fs');let c=JSON.parse(fs.readFileSync('scripts/emulator/app533.firebase.json'));if(c.database.rules!=='scripts/emulator/app533.database.rules.json'||!c.emulators.auth||!c.emulators.database)process.exit(2)"
+          node -e "const fs=require('fs');let c=JSON.parse(fs.readFileSync('scripts/emulator/app533.firebase.json'));if(c.database.rules!=='app533.database.rules.json'||!c.emulators.auth||!c.emulators.database)process.exit(2)"
       - name: Install source dependencies only (no backend build/deploy)
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Run isolated demo-project Auth + Database emulators

@@ -108,7 +108,9 @@ if(emit!==-1){
 }
 if(process.argv.includes('--self-test'))process.exit(0);
 const isBefore=process.argv.includes('--live-before'),isAfter=process.argv.includes('--live-after');
-if(isBefore===isAfter)throw Error('REQUIRE_EXPLICIT_LIVE_BEFORE_OR_AFTER');
+const isExisting=process.argv.includes('--live-existing');
+if(Number(isBefore)+Number(isAfter)+Number(isExisting)!==1)
+  throw Error('REQUIRE_EXPLICIT_LIVE_BEFORE_AFTER_OR_EXISTING');
 const account=process.env.CLOUDFLARE_ACCOUNT_ID,token=process.env.CLOUDFLARE_API_TOKEN,dbid=process.env.SHARED_D1_ID;
 assert.ok(account&&token&&dbid&&process.env.RUNNER_TEMP,'LIVE_READONLY_CREDENTIAL_UNAVAILABLE');
 let rowsWritten=0;
@@ -164,6 +166,19 @@ if(isBefore){
  writeFileSync(snapshotFile,serialize(remoteRows),{flag:'wx',mode:0o600});
  console.log('NOTIFICATION_018_LIVE_PRE_EXISTING_17_TRIGGER_SCHEMAS=LOCKED');
  console.log('NOTIFICATION_018_LIVE_STAGE007_EXACT_OFF_AND_FOUR_OLD_LOCKED=PASS');
+}else if(isExisting){
+ // Stage024: read-only snapshot after the already approved Stage018 replacement.
+ // Never reads user rows or depends on the obsolete before-file.
+ for(const n of names){
+  const observed=live.get(n),expected=expectedFull.get(n);
+  assert.equal(observed?.type,'trigger','NOTIFICATION_LIVE_TRIGGER_MISSING_'+n);
+  assert.equal(observed?.tbl_name,expected.tbl_name,'NOTIFICATION_LIVE_TARGET_DRIFT_'+n);
+  assert.equal(normalize(observed?.sql),normalize(expected.sql),
+    'NOTIFICATION_LIVE_STAGE018_TRIGGER_DRIFT_'+n);
+ }
+ console.log('NOTIFICATION_024_LIVE_STAGE018_FOUR_TRIGGERS_EXACT=PASS');
+ console.log('NOTIFICATION_024_LIVE_PREEXISTING_17_TRIGGER_COUNT=PASS');
+ console.log('NOTIFICATION_024_LIVE_STAGE007_EXACT_LATCH_OFF=PASS');
 }else{
  const old=JSON.parse(readFileSync(snapshotFile,'utf8'));
  const oldMap=new Map(old.map(x=>[x.name,x]));

@@ -1,0 +1,61 @@
+name: SORIDRAW 538 Isolated Canonical D1 to Real A Owner Signal
+# One-time strictly local SQLite + Firebase 3 emulator e2e; not deployed.
+on:
+  pull_request:
+    branches: [preview]
+    types: [opened, reopened, synchronize]
+    paths:
+      - 'src/services/exploreOwnerFollowerEpochCore538.ts'
+      - 'scripts/test-538-owner-full-isolated-e2e.mjs'
+      - '.github/workflows/verify-538-isolated-owner-e2e.yml'
+permissions: {contents: read}
+concurrency:
+  group: soridraw-538-isolated-owner-e2e
+  cancel-in-progress: false
+jobs:
+  auth-d1-rtdb:
+    if: github.event.pull_request.number == 914 && github.event.pull_request.head.repo.full_name == 'andrawing1212/soridraw-music' && github.event.pull_request.head.ref == 'candidate/app526-owner-follower-live-signal'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 19
+    env:
+      APP534_ISOLATED_ONLY: 'yes'
+      GCLOUD_PROJECT: demo-soridraw-owner-534
+      FIREBASE_PROJECT_ID: demo-soridraw-owner-534
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Strict demo project and no live integrations
+        run: |
+          set -euo pipefail
+          test "$GCLOUD_PROJECT" = "demo-soridraw-owner-534"
+          node --check scripts/test-538-owner-full-isolated-e2e.mjs
+          grep -q 'APP538_OWNER_CLIENT_GATE_COMPILED_OPEN=false' src/services/exploreOwnerFollowerEpochCore538.ts
+          node -e "const c=JSON.parse(require('fs').readFileSync('scripts/emulator/app534.firebase.json'));if(c.database.rules!=='app533.database.rules.json'||c.firestore.rules!=='app534.firestore.rules')process.exit(3)"
+      - name: Source-only dependency install
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm --prefix functions ci --ignore-scripts --no-audit --no-fund
+      - name: Both TypeScript builds static type checking
+        run: |
+          ./node_modules/.bin/tsc --noEmit
+          ./functions/node_modules/.bin/tsc --noEmit --project functions/tsconfig.json
+      - name: Actual Auth RTDB Firestore and persisted local SQLite
+        run: |
+          set -euo pipefail
+          env -u GOOGLE_APPLICATION_CREDENTIALS -u FIREBASE_TOKEN npx --yes firebase-tools@14.23.0 emulators:exec \
+            --project demo-soridraw-owner-534 \
+            --config scripts/emulator/app534.firebase.json \
+            --only auth,database,firestore \
+            'env -u GOOGLE_APPLICATION_CREDENTIALS -u FIREBASE_TOKEN node --import tsx scripts/test-538-owner-full-isolated-e2e.mjs'
+      - name: Confirm no shared resources
+        if: always()
+        run: echo 'APP538_LOCAL_SQLITE_AND_DEMO_FIREBASE_ONLY_NO_SHARED_AUTH_D1_WORKER_FUNCTIONS_RULES_HOSTING_DEPLOY'

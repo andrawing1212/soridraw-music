@@ -1,5 +1,10 @@
 name: SORIDRAW Notification 029 Emergency Collector OFF
 on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - '.github/workflows/notification-social-029-emergency-off.yml'
+      - 'scripts/disable-notification-collection-029.mjs'
   workflow_dispatch:
     inputs:
       confirm:
@@ -9,8 +14,23 @@ on:
 permissions:
   contents: read
 jobs:
+  source-only:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify manual OFF scope only
+        run: |
+          set -euo pipefail
+          node --check scripts/disable-notification-collection-029.mjs
+          node scripts/disable-notification-collection-029.mjs --self-test
+          echo 'NOTIFICATION_029_NO_LIVE_SERVER_ON_PR=PASS'
   emergency-off:
-    if: ${{ inputs.confirm == 'DISABLE_SORIDRAW_NOTIFICATION_COLLECTION' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.confirm == 'DISABLE_SORIDRAW_NOTIFICATION_COLLECTION' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     concurrency:

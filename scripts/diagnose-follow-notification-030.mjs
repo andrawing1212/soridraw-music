@@ -8,7 +8,8 @@ const state=[
  '(SELECT created_at FROM follows WHERE follower_uid=? AND following_uid=? LIMIT 1) legacy_at,',
  '(SELECT following FROM explore_follow_overrides_348 WHERE follower_uid=? AND following_uid=? LIMIT 1) overlay_following,',
  '(SELECT baseline_following FROM explore_follow_overrides_348 WHERE follower_uid=? AND following_uid=? LIMIT 1) overlay_baseline,',
- '(SELECT updated_at FROM explore_follow_overrides_348 WHERE follower_uid=? AND following_uid=? LIMIT 1) overlay_at,',
+ '(SELECT updated_at FROM explore_follow_overrides_348 WHERE follower_uid=? AND following_uid=? LIMIT 1) overlay_at,'
+ '(SELECT mutation_id FROM explore_follow_overrides_348 WHERE follower_uid=? AND following_uid=? LIMIT 1) overlay_mutation,',
  '(SELECT enabled FROM soridraw_notification_activation_002 WHERE id=1 LIMIT 1) collector_enabled'
 ].join(' ');
 const notices=[
@@ -27,7 +28,7 @@ assert.equal(process.env.CLOUDFLARE_ACCOUNT_ID,account);
 const token=process.env.CLOUDFLARE_API_TOKEN;
 assert.ok(token?.length>20,'CLOUDFLARE_TOKEN_REQUIRED');
 const query=async(sql,params)=>{
- assert.ok(readOnly(sql)&&params.length<=8);
+ assert.ok(readOnly(sql)&&params.length<=10);
  const res=await fetch('https://api.cloudflare.com/client/v4/accounts/'+account+
  '/d1/database/'+dbid+'/query',{method:'POST',headers:{
  Authorization:'Bearer '+token,'Content-Type':'application/json'},
@@ -46,7 +47,7 @@ const profile=async(handle)=>{
 };
 const actor=await profile('andy.j'),owner=await profile('soridraw');
 assert.notEqual(actor,owner);
-const row=(await query(state,[actor,owner,actor,owner,actor,owner,actor,owner]))[0];
+const row=(await query(state,[actor,owner,actor,owner,actor,owner,actor,owner,actor,owner]))[0];
 assert.ok(row&&[null,0,1].includes(row.overlay_following));
 assert.equal(Number(row.collector_enabled),1);
 const from=Math.floor((Date.now()-48*3600000)/7200000)*7200000;
@@ -60,6 +61,7 @@ console.log('FOLLOW_030_CANONICAL_TWO_ACCOUNT_READ_ONLY='+JSON.stringify({
  legacyRelationPresent:legacy!==null,
  overlayFollowing:row.overlay_following,
  overlayBaseline:row.overlay_baseline,
+ followMutationPath: /^[a-f0-9]{8}_[a-f0-9]{4}_[a-f0-9]{4}_[a-f0-9]{4}_[a-f0-9]{12}$/i.test(String(row.overlay_mutation||'')) ? 'ordered354' : String(row.overlay_mutation||'').includes(':') ? 'nonordered350' : 'unknown',
  overlayUpdatedAt:dated(overlay),legacyCreatedAt:dated(legacy),
  recentFollowNotificationCount:events.length,
  recentFollowNotificationAt:stamps.length?dated(Math.max(...stamps)):null,

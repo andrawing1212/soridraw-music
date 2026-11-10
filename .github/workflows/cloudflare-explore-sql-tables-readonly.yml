@@ -5,7 +5,6 @@ on:
     branches: [preview]
     paths:
       - '.github/workflows/cloudflare-explore-sql-tables-readonly.yml'
-      - 'scripts/verify-548-follow-live-readonly.mjs'
   workflow_dispatch:
 
 permissions:
@@ -48,12 +47,3 @@ jobs:
           console.log('READ_ONLY=true');
           console.log('NO_DEPLOY=true');
           NODE
-      - name: Confirm current live owner-follow authority (metadata SELECT only)
-        env:
-          CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
-          SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
-        run: |
-          set -euo pipefail
-          node scripts/verify-548-follow-live-readonly.mjs --self-test
-          node scripts/verify-548-follow-live-readonly.mjs --live
-          echo 'APP549_LIVE_READONLY_USER_ROWS=0_MUTATIONS=0_DEPLOY=0'

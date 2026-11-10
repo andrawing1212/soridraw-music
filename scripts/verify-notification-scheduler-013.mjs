@@ -9,12 +9,14 @@ import {
 const read=p=>readFileSync(p,'utf8');
 const entry=read('cloudflare/explore-worker/canonical/preview-entry.js');
 const wrangler=JSON.parse(read('cloudflare/explore-worker/canonical/wrangler.preview.jsonc'));
-assert.match(entry,/NOTIFICATION_RETENTION_013_COMPILED_OPEN = false/);
+assert.match(entry,/NOTIFICATION_RETENTION_013_COMPILED_OPEN = true/);
+assert.match(entry,/env\?\.SORIDRAW_ENVIRONMENT !== 'preview'/);
 assert.match(entry,/controller\?\.cron === NOTIFICATION_RETENTION_CRON_013/);
 assert.match(entry,/runNotificationScheduled013\(\{controller,env,compiledOpen:true\}\)/);
 assert.ok(entry.indexOf('runNotificationScheduled013(') <
   entry.indexOf("controller?.cron === '* * * * *'"));
-assert.equal(wrangler.triggers?.crons?.length||0,0,'cron must remain unregistered');
+assert.deepEqual(wrangler.triggers?.crons,[NOTIFICATION_RETENTION_CRON_013],
+  'PREVIEW must register exactly one bounded retention cron');
 assert.equal(wrangler.vars?.SORIDRAW_NOTIFICATION_RETENTION_013,undefined);
 assert.equal(wrangler.vars?.SORIDRAW_NOTIFICATION_SCHEMA_READY_013,undefined);
 assert.equal(NOTIFICATION_RETENTION_CRON_013,'37 * * * *');
@@ -64,6 +66,7 @@ const cache={
  },
 };
 const env={DB:db,PROFILE_MEDIA:cache,
+ SORIDRAW_ENVIRONMENT:'preview',
  SORIDRAW_NOTIFICATION_RETENTION_013:'1',
  SORIDRAW_NOTIFICATION_SCHEMA_READY_013:'1'};
 const controller={cron:NOTIFICATION_RETENTION_CRON_013};
@@ -79,6 +82,12 @@ const tables=[
 const snapshot=()=>({...metrics,cacheReads:cache.reads,cacheWrites:cache.writes});
 const before=snapshot();
 assert.equal((await runNotificationScheduled013({controller,env,now})).status,'inactive');
+assert.equal((await runNotificationScheduled013({
+ controller,env:{...env,SORIDRAW_ENVIRONMENT:'test'},compiledOpen:true,now
+})).status,'non-preview');
+assert.equal((await runNotificationScheduled013({
+ controller,env:{...env,SORIDRAW_ENVIRONMENT:'production'},compiledOpen:true,now
+})).status,'non-preview');
 assert.equal((await runNotificationScheduled013({
  controller:{cron:'* * * * *'},env,compiledOpen:true,now})).status,'not-notification-cron');
 assert.equal((await runNotificationScheduled013({
@@ -163,7 +172,8 @@ assert.ok(cache.stored.body.items.some(x=>x.id==='fresh-announcement'),
  'next cron repairs failed announcement snapshot');
 assert.deepEqual(sourceCounts(),originalCounts);
 sqlite.close();
-console.log('NOTIFICATION_013_PREVIEW_CRON_NOT_REGISTERED_COMPILE_OFF_R0_W0=PASS');
+console.log('NOTIFICATION_025_PREVIEW_ONLY_CRON_CODE_READY_FLAGS_OFF_R0_W0=PASS');
+console.log('NOTIFICATION_025_TEST_PRODUCTION_SCHEDULED_NOOP_R0_W0=PASS');
 console.log('NOTIFICATION_013_WRONG_CRON_AND_FLAGS_R0_W0=PASS');
 console.log('NOTIFICATION_013_INDEX_AND_LATCH_FAIL_CLOSED=PASS');
 console.log('NOTIFICATION_013_BOUNDED_BACKLOG_DRAIN_30DAY_EDGE=PASS');

@@ -36,6 +36,15 @@ assert.match(panel,/readCompletedGenerationLog016\(uid\)/);
 assert.match(panel,/visualExample = isNotificationVisualPreview\(\)/);
 assert.match(panel,/withPreviewNotificationExamples023\(genuineRows,visualExample\)/);
 assert.match(panel,/sampleHeader = visualExample && rows\.some\(isPreviewSample\)/);
+// Stage027: real signed-account GET result is visible, but never requests
+// additional endpoints or mistakes clearly labelled sample rows as genuine.
+assert.match(panel,/setRemoteAuthProof027\(\{uid:current\.uid,state:'checking'/);
+assert.match(panel,/setRemoteAuthProof027\(\{uid:current\.uid,state:'verified',count:items\.length/);
+assert.match(panel,/setRemoteAuthProof027\(\{uid:current\.uid,state:'failed',count:0,httpCode\}/);
+assert.match(panel,/remoteAuthProof027\.uid === uid && remoteAuthProof027\.state !== 'idle'/);
+assert.match(panel,/PREVIEW 서버 인증 연결 정상/);
+assert.match(panel,/NOTIFICATION_INBOX_HTTP_\(\[1-5\]/);
+assert.doesNotMatch(panel,/console\.log\(.*(?:IdToken|AppCheck|jwt|Authorization)/);
 assert.match(dots,/isNotificationVisualPreview\(\) \|\| NOTIFICATION_INBOX_ENABLED_004/);
 assert.match(sync,/NOTIFICATION_ACCOUNT_SYNC_ENABLED_003 = false/);
 assert.doesNotMatch(panel,/setInterval\(|onSnapshot\(|getDocs\(|getDoc\(/);

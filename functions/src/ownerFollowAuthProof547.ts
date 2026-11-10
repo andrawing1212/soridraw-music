@@ -10,7 +10,7 @@ import {getFirestore,type Firestore} from 'firebase-admin/firestore';
 import {readOwnerFollowLifecycleState534} from './ownerFollowLifecycle534';
 export const APP547_AUTH_PROOF_COMPILED_OPEN=false;
 const SECRET=defineSecret('SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544');
-const UID=/^[A-Za-z0-9_-]{1,128}$/,EPOCH=/^[0-9a-f]{32}$/,HEX=/^[0-9a-f]{64}$/;
+const UID=/^[A-Za-z0-9_-]{1,128}$/,EPOCH=/^[0-9a-f]{32}$/,HEX=/^[0-9a-f]{64}$/,NONCE=/^[0-9a-f]{32}$/;
 type Action='bind'|'revoke';
 type Subject={action:Action;uid:string;authEpoch:string;authCreatedAtMs:number;at:number;nonce:string};
 type AuthGetter=Pick<Auth,'getUser'>;
@@ -96,7 +96,7 @@ export async function handleOwnerAuthProof547(request:Request,{
     'action,at,authCreatedAtMs,authEpoch,nonce,uid'||
     !['bind','revoke'].includes(subject.action)||
     !UID.test(subject.uid)||!EPOCH.test(subject.authEpoch)||
-    !HEX.test(subject.nonce)||subject.nonce.length!==32||
+    !NONCE.test(subject.nonce)||
     subject.at!==Number(atText)||
     !Number.isSafeInteger(subject.authCreatedAtMs)||subject.authCreatedAtMs<=0)
   return response(403,'{"ok":false}');

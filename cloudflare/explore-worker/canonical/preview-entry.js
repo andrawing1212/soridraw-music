@@ -3303,9 +3303,13 @@ const runOwnerFollowDelivery542=async(env)=>{
  if(!OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN||
     !APP539_WORKER_HTTP_BRIDGE_COMPILED_OPEN||
     env?.SORIDRAW_ENVIRONMENT!=='preview'||
-    env?.SORIDRAW_OWNER_FOLLOW_PUSH_532!=='1')return;
+    env?.SORIDRAW_OWNER_FOLLOW_PUSH_532!=='1'||
+    // The active shared D1 cutover is overlay. Never send a stale legacy
+    // follower_count until APP551 changed-only triggers and enrolled offsets
+    // have been verified and enabled in an approved coordinated release.
+    env?.SORIDRAW_OWNER_FOLLOW_OVERLAY_551!=='1')return;
  await drainOwnerFollowAuthEpoch532({
-   enabled:true,db:env.DB,
+   enabled:true,db:env.DB,overlayRevisionSource:true,
    deliver:async event=>{
      const result=await sendOwnerFollowHttp539(event,{
        endpoint:env.SORIDRAW_OWNER_FOLLOW_ENDPOINT_539,

@@ -55,6 +55,15 @@ export async function handleOwnerEpochBinding544({
  try{
   if(!env.DB)return reply(503,'DB_UNAVAILABLE');
   if(event.action==='bind'){
+   // APP551: only the globally active overlay phase may use the derived
+   // effective-count anchor. No implicit enrollment or whole-user backfill.
+   const overlayMode=env?.SORIDRAW_OWNER_FOLLOW_OVERLAY_551==='1';
+   if(overlayMode){
+    const control=await env.DB.prepare(
+      'SELECT phase FROM explore_follow_cutover_control_348 WHERE id=1 LIMIT 1'
+    ).first();
+    if(control?.phase!=='overlay')return reply(409,'FOLLOW_AUTHORITY_PHASE_HOLD');
+   }
    // APP546: NEVER create a profile_stats row from a signed registration.
    // Store the Firebase Auth creation-time floor in the already-retained
    // canonical profile row. Revocation clears the epoch, NOT the floor.
@@ -62,7 +71,24 @@ export async function handleOwnerEpochBinding544({
  // removed incarnation cannot pass that live proof, even after row erasure.
    // Physical removal of this row requires a separately approved lifecycle:
    // do not enrol before its new generation has a verified durable anchor.
-   const result=await env.DB.prepare(`
+   const overlaySql=`
+    UPDATE profile_stats SET
+      owner_follow_auth_epoch_532=?,
+      owner_follow_auth_created_at_ms_544=?,
+      owner_follow_baseline_offset_551=(
+        SELECT COUNT(*) FROM follows WHERE following_uid=?
+      )-follower_count,
+      owner_follow_overlay_delta_551=(
+        SELECT COALESCE(SUM(following-baseline_following),0)
+        FROM explore_follow_overrides_348 WHERE following_uid=?
+      )
+    WHERE uid=? AND owner_follow_auth_epoch_532=''
+      AND (owner_follow_auth_created_at_ms_544=0
+        OR owner_follow_auth_created_at_ms_544 <= ?)
+    RETURNING uid,owner_follow_auth_epoch_532 AS epoch,
+      owner_follow_auth_created_at_ms_544 AS created_at
+   `;
+   const legacySql=`
     UPDATE profile_stats SET
       owner_follow_auth_epoch_532=?,
       owner_follow_auth_created_at_ms_544=?
@@ -71,8 +97,13 @@ export async function handleOwnerEpochBinding544({
         OR owner_follow_auth_created_at_ms_544 <= ?)
     RETURNING uid,owner_follow_auth_epoch_532 AS epoch,
       owner_follow_auth_created_at_ms_544 AS created_at
-   `).bind(event.authEpoch,event.authCreatedAtMs,event.uid,
-      event.authCreatedAtMs).first();
+   `;
+   const result=await env.DB.prepare(overlayMode?overlaySql:legacySql)
+     .bind(...(overlayMode
+       ?[event.authEpoch,event.authCreatedAtMs,event.uid,event.uid,
+         event.uid,event.authCreatedAtMs]
+       :[event.authEpoch,event.authCreatedAtMs,event.uid,
+         event.authCreatedAtMs])).first();
    let bound=Boolean(result?.epoch===event.authEpoch&&
       result.created_at===event.authCreatedAtMs);
    if(!bound){

@@ -21,12 +21,12 @@ try {
   baseline_following INTEGER NOT NULL CHECK(baseline_following IN(0,1)),
   updated_at INTEGER,mutation_id TEXT,PRIMARY KEY(follower_uid,following_uid)
  );
- INSERT INTO profile_stats(uid,follower_count) VALUES('A',2),('Z',0);
+ INSERT INTO profile_stats(uid,follower_count) VALUES('A',3),('Z',0);
  INSERT INTO follows VALUES ('B','A',1),('E','A',1);`);
  db.exec(migration); db.exec(upgrade);
  const get=uid=>db.prepare('SELECT * FROM profile_stats WHERE uid=?').get(uid);
  const stats=()=>({rev:get('A').owner_follow_revision_530,
-   count:get('A').follower_count+get('A').owner_follow_overlay_delta_551});
+   count:get('A').follower_count+get('A').owner_follow_baseline_offset_551+get('A').owner_follow_overlay_delta_551});
  const insert=(who,following,baseline,n)=>db.prepare(
   "INSERT INTO explore_follow_overrides_348 VALUES(?,'A',?,?,?,?)"
  ).run(who,following,baseline,n,'op'+n);
@@ -49,10 +49,12 @@ try {
  // In production it additionally MUST verify the original follows baseline
  // equals profile_stats.follower_count, or fail closed; NO bulk backfill.
  const baseline=db.prepare("SELECT COUNT(*) AS n FROM follows WHERE following_uid='A'").get().n;
- assert.equal(baseline,get('A').follower_count);
+ assert.equal(baseline,2); // historical stats=3; real follows baseline=2
  const epoch='0123456789abcdef0123456789abcdef';
  db.prepare(`UPDATE profile_stats SET owner_follow_auth_epoch_532=?,
  owner_follow_auth_created_at_ms_544=1800000000000,
+ owner_follow_baseline_offset_551=(
+   SELECT COUNT(*) FROM follows WHERE following_uid='A')-follower_count,
  owner_follow_overlay_delta_551=(
   SELECT COALESCE(SUM(following-baseline_following),0)
   FROM explore_follow_overrides_348 WHERE following_uid='A')
@@ -70,12 +72,13 @@ try {
  update('B',1);assert.deepEqual(stats(),{rev:5,count:2});
  remove('B');assert.deepEqual(stats(),{rev:5,count:2});
  assert.equal(stats().count,truth());
- assert.equal(get('A').follower_count,2,'canonical legacy baseline not rewritten');
+ assert.equal(get('A').follower_count,3,'historical profile stats not rewritten');
+ assert.equal(get('A').owner_follow_baseline_offset_551,-1);
  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM follows').get().n,2);
  db.prepare("INSERT INTO explore_follow_overrides_348 VALUES ('X','Z',1,0,4,'z4')").run();
  assert.equal(get('Z').owner_follow_revision_530,0);
  db.prepare("INSERT INTO follows VALUES ('F','A',5)").run();
- db.prepare("UPDATE profile_stats SET follower_count=3 WHERE uid='A'").run();
+ db.prepare("UPDATE profile_stats SET follower_count=4 WHERE uid='A'").run();
  assert.deepEqual(stats(),{rev:6,count:3});
  assert.equal(stats().count,truth());
  console.log('APP551_ACTUAL_OVERLAY_INSERT_UPDATE_DELETE_CHANGED_ONLY=PASS');

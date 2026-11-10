@@ -29,6 +29,14 @@ export const INLINE_OWNER_FOLLOW_532_SELECT_SQL=`
  AND owner_follow_auth_epoch_532<>''
  AND owner_follow_next_at_530<=?
  ORDER BY owner_follow_next_at_530 ASC,uid ASC LIMIT ?`;
+// APP551 overlay mode is explicitly opt-in. Never publish historical
+// profile_stats.follower_count alone after the real cutover became overlay.
+// The two enrolment offsets are built only after current Firebase Auth proof.
+export const INLINE_OWNER_FOLLOW_551_SELECT_SQL=
+ INLINE_OWNER_FOLLOW_532_SELECT_SQL.replace(
+  'follower_count,updated_at,',
+  '(follower_count+owner_follow_baseline_offset_551+owner_follow_overlay_delta_551) AS follower_count,updated_at,'
+ );
 export const normalizeOwnerFollowEpochEvent532=raw=>{
  const ev=validateOwnerFollowOutboxEvent529(raw);
  return ev&&isOwnerFollowAuthEpoch532(raw.auth_epoch)
@@ -75,13 +83,15 @@ export const nextOwnerFollowMarker532=(current,event,verifiedEpoch,now)=>{
 // Every state update is CAS-fenced by (uid, Auth epoch, revision).
 export const drainOwnerFollowAuthEpoch532=async({
  db,deliver,now=Date.now,enabled=OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN,
- limit=MAX_BATCH,
+ limit=MAX_BATCH,overlayRevisionSource=false,
 }={})=>{
  if(!enabled)return {skipped:true,selected:0,delivered:0,failed:0};
  if(!db||typeof db.prepare!=='function'||typeof deliver!=='function')
   throw Error('532_BACKEND_UNAVAILABLE');
  const at=now(),n=Math.max(1,Math.min(MAX_BATCH,Math.floor(Number(limit)||1)));
- const page=await db.prepare(INLINE_OWNER_FOLLOW_532_SELECT_SQL).bind(at,n).all();
+ const sql=overlayRevisionSource
+  ?INLINE_OWNER_FOLLOW_551_SELECT_SQL:INLINE_OWNER_FOLLOW_532_SELECT_SQL;
+ const page=await db.prepare(sql).bind(at,n).all();
  const rows=Array.isArray(page?.results)?page.results:[];
  let delivered=0,failed=0;
  for(const raw of rows){

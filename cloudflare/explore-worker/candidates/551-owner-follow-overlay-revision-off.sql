@@ -6,6 +6,10 @@
 -- authenticated and metered rollout passes.
 ALTER TABLE profile_stats ADD COLUMN owner_follow_overlay_delta_551
  INTEGER NOT NULL DEFAULT 0;
+-- Derived enrollment anchor for historical follower_count vs immutable
+-- follows baseline discrepancy. Never rewrite the original count.
+ALTER TABLE profile_stats ADD COLUMN owner_follow_baseline_offset_551
+ INTEGER NOT NULL DEFAULT 0;
 CREATE TRIGGER IF NOT EXISTS explore_owner_follow_overlay_insert_551
 AFTER INSERT ON explore_follow_overrides_348
 WHEN NEW.following<>NEW.baseline_following

@@ -47,7 +47,7 @@ jobs:
       - name: Run isolated demo-project Auth + Database emulators
         run: |
           set -euo pipefail
-          env -u GOOGLE_APPLICATION_CREDENTIALS -u FIREBASE_TOKEN npx --yes firebase-tools@14.23.1 emulators:exec \
+          env -u GOOGLE_APPLICATION_CREDENTIALS -u FIREBASE_TOKEN npx --yes firebase-tools@14.23.0 emulators:exec \
             --project demo-soridraw-owner-533 \
             --config scripts/emulator/app533.firebase.json \
             --only auth,database \

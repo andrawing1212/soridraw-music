@@ -88,6 +88,19 @@ export function nextOwnerFollowerMarker533(current,event,createdAtMs,now){
 // exercise both sides of the non-atomic Auth <-> RTDB boundary.
 // A second Auth read and generation-CAS cleanup compensate an in-flight
 // deletion; client rules/epoch still fail closed for any remaining race.
+// Realtime Database JS transaction() can start with a cold NULL local cache.
+// Returning undefined on that first callback would ABORT *before* fetching
+// the actual server value. Get the server snapshot first, and use a NULL
+// initial probe only to let the server's hash/CAS resolve the true value.
+async function deleteMarkerIfGeneration533(marker,matches){
+ const initial=(await marker.get()).val();
+ if(!matches(initial))return {removed:false,reason:initial?'different-generation':'absent'};
+ const tx=await marker.transaction(current=>{
+  if(current===null)return null;
+  return matches(current)?null:undefined;
+ },undefined,false);
+ return {removed:tx.committed};
+}
 export async function deliverOwnerFollower533({
  auth,database,rawBody,at,signature,secret,
  beforeTransaction=async()=>{},afterTransaction=async()=>{},now=Date.now,
@@ -105,10 +118,10 @@ export async function deliverOwnerFollower533({
  const last=await checkAuth(auth,event);
  if(!last.ok||last.createdAtMs!==first.createdAtMs){
   if(result.committed){
-   await marker.transaction(current=>
+   await deleteMarkerIfGeneration533(marker,current=>
     current?.authEpoch===event.authEpoch&&
     current?.authCreatedAtMs===first.createdAtMs&&
-    current?.version===event.version?null:undefined,undefined,false);
+    current?.version===event.version);
   }
   return {accepted:false,reason:'stale-during-delivery',stale:last.reason};
  }
@@ -124,9 +137,7 @@ export async function clearRetiredGeneration533({auth,database,uid,authEpoch}){
  if(current?.customClaims?.[CLAIM_533]===authEpoch)
   return {removed:false,reason:'still-active'};
  const marker=database.ref(MARKER_PATH_533+'/'+uid);
- const tx=await marker.transaction(value=>value?.authEpoch===authEpoch?
-  null:undefined,undefined,false);
- return {removed:tx.committed};
+ return deleteMarkerIfGeneration533(marker,value=>value?.authEpoch===authEpoch);
 }
 export const readMarkerForClaim533=(marker,uid,claimedEpoch)=>
  marker?.ownerUid===uid&&valid(claimedEpoch)&&marker?.authEpoch===claimedEpoch?

@@ -1,0 +1,60 @@
+name: SORIDRAW 539 Actual Worker Function and Functions HTTP Isolated
+# One-time local SQLite + Firebase Auth/RTDB/Firestore; never deploy.
+on:
+  pull_request:
+    branches: [preview]
+    types: [opened, reopened, synchronize]
+    paths:
+      - 'functions/experiments/owner-follow-http-539.mjs'
+      - 'cloudflare/explore-worker/runtime/owner-follow-http-539.mjs'
+      - 'scripts/test-539-real-worker-http-e2e.mjs'
+      - '.github/workflows/verify-539-isolated-worker-http.yml'
+permissions: {contents: read}
+concurrency:
+  group: soridraw-539-owner-http
+  cancel-in-progress: false
+jobs:
+  emulator:
+    if: github.event.pull_request.number == 914 && github.event.pull_request.head.repo.full_name == 'andrawing1212/soridraw-music' && github.event.pull_request.head.ref == 'candidate/app526-owner-follower-live-signal'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 19
+    env:
+      APP534_ISOLATED_ONLY: 'yes'
+      GCLOUD_PROJECT: demo-soridraw-owner-534
+      FIREBASE_PROJECT_ID: demo-soridraw-owner-534
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '21'}
+      - name: Demo-only source and routing guard
+        run: |
+          set -euo pipefail
+          test "$GCLOUD_PROJECT" = "demo-soridraw-owner-534"
+          node --check scripts/test-539-real-worker-http-e2e.mjs
+          grep -q 'APP539_FUNCTIONS_HTTP_COMPILED_OPEN=false' functions/experiments/owner-follow-http-539.mjs
+          grep -q 'APP539_WORKER_HTTP_BRIDGE_COMPILED_OPEN=false' cloudflare/explore-worker/runtime/owner-follow-http-539.mjs
+          node -e "const c=JSON.parse(require('fs').readFileSync('scripts/emulator/app534.firebase.json'));if(c.database.rules!=='app533.database.rules.json'||c.firestore.rules!=='app534.firestore.rules')process.exit(3)"
+      - name: Install source dependencies only
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm --prefix functions ci --ignore-scripts --no-audit --no-fund
+      - name: App and Functions type checking
+        run: |
+          ./node_modules/.bin/tsc --noEmit
+          ./functions/node_modules/.bin/tsc --noEmit --project functions/tsconfig.json
+      - name: Actual Worker function / local Functions HTTP and Firebase
+        run: |
+          set -euo pipefail
+          env -u GOOGLE_APPLICATION_CREDENTIALS -u FIREBASE_TOKEN npx --yes firebase-tools@14.23.0 emulators:exec \
+            --project demo-soridraw-owner-534 \
+            --config scripts/emulator/app534.firebase.json \
+            --only auth,database,firestore \
+            'env -u GOOGLE_APPLICATION_CREDENTIALS -u FIREBASE_TOKEN node --import tsx scripts/test-539-real-worker-http-e2e.mjs'
+      - name: Confirm no shared backend or deploy
+        if: always()
+        run: echo 'APP539_LOCAL_WORKER_SOURCE_AND_FUNCTIONS_HTTP_ONLY_NO_SHARED_DATA_OR_DEPLOY'

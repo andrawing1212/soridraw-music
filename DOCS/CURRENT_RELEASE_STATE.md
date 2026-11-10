@@ -1,3 +1,13 @@
+## CURRENT — 알림 Stage027 PREVIEW 실인증 GET 상태 표시 Hosting 배포 PASS / 실제 계정 200 아직 미검증 (2026-11-10 KST)
+- **현재 승인:** 기존 좋아요·팔로우 W1~W2/동기화 보호, 실알림 비용 최소화와 실제 로그인 수신 검증. PR #914(APP547)는 Draft/OFF·보류. 사용자 원본·공유 D1 수집 활성화·TEST/PRODUCTION Hosting 금지.
+- **구현:** [PR #924](https://github.com/andrawing1212/soridraw-music/pull/924) merge `680b292377232f34704420857dfdd65fc2e993a3`. 기존 PREVIEW 알림 패널에서 본래 **사용자 명시 열기 1회** 발생하는 Firebase ID token+AppCheck GET의 결과만 표시: 확인 중/검증된 본인 수신함 건수/HTTP 오류 코드. 요청·폴링·토큰 로그·브라우저 저장·새 D1 쓰기 **추가 없음**. 계정 전환/닫기/응답 지연 시 이전 사용자 결과 표시 차단. 기존 예시 알림은 실제 인증된 건수에 합산하지 않음.
+- **검사·Hosting:** PR 알림 통합 격리·로컬 기록 격리·공통 제품 품질/TS/Build 모두 PASS. [실제 PREVIEW Hosting 배포 run #42774788583](https://github.com/andrawing1212/soridraw-music/actions/runs/42774788583) **SUCCESS**. 정확한 release source SHA `680b292377232f34704420857dfdd65fc2e993a3`, `https://preview.soridraw.com/` 검증 PASS. 공유 RTDB Rules SKIPPED, TEST/PRODUCTION 불변 PASS. 기존 PREVIEW Worker `332ca384-725d-46aa-8824-e19a3543bed8` (Stage026) 변경 없음.
+- **실인증 검증 아직 미완료:** 검증 UI는 배포됐으나 이 세션에서 실제 사용자의 서명된 JWT+AppCheck 요청을 직접 실행하지 않음. 디렉터가 PREVIEW에 로그인해 알림 패널을 1회 열면 `PREVIEW 서버 인증 연결 정상 · 본인 수신함 N건 조회` 표시로 실제 HTTP 200 확인 가능(개인정보·토큰 제출 불필요). 수집 OFF이므로 0건은 정상일 수 있으며, 이 메시지는 좋아요·팔로우 실수신 PASS가 아님.
+- **비용 차단:** 이미 물리 측정된 Stage011 고유 알림 1건의 추가 `D1 R 약 +3/W+2`는 기본키 수신함 조회와 만료 인덱스 유지를 위한 구조. 현재 2시간 단위 배우·대상·수신자 중복 W0, 수집 OFF W0, 탐색·알림 패널 단순 방문 쓰기 W0. **기존 좋아요·팔로우 전체 W1~W2 합산 기준 초과 위험 때문에 공유 D1 래치 계속 OFF**. 인덱스를 빼서 30일 만료 전체 스캔을 유발하는 값싼 편법 금지.
+- **남은 작업:** 실계정 인증 200 확인→실제 A→B 좋아요·팔로우 전달 경로 비용 W1~W2를 만족하는 독립 설계 또는 디렉터 제품 선택→세 Worker/공유 D1 롤백 경로 재검증→수집 ON 및 PREVIEW PC·모바일 실사용. Stage027은 사용자 1차 실알림 출시 완료가 아님.
+
+---
+
 ## CURRENT — 알림 Stage026 PREVIEW Worker 30일 예약 스케줄 실제 배포 PASS / 수집·정리 실행 OFF (2026-11-10 KST)
 - **승인 범위:** 디렉터는 알림 1차 출시를 우선하고 보관 30일 유지를 지시. PREVIEW Worker의 안전한 일반 배포만 진행하며 PR #914(APP547)는 Draft/OFF 유지, TEST·PRODUCTION Hosting/Worker 및 공유 사용자 원본 변경 금지.
 - **코드/배포:** Stage025 30일 예약 진입점 후보 PR #920 병합 `448708f218573af0d8fa67036a364916bf0b4399`. 실행 중이던 Stage021 알림 GET-only Worker의 빌드 SHA256 `c0b500d3b14bdc767dc601fb07b865c54af20835abb3a9d3937551fa08f08216` 정확 재현 후 새 스케줄 최소 삽입 후보 번들 SHA256 `da67be2c626b4dd47cd04625d0261fce96e9b107cce8ba5793434c804a2b2c28` 확인. 릴리스 게이트 PR #921 소스 merge `e3d5d16b9322c34a39258b56b50168eda9e7b7a5`, one-use 승인 트리거 PR #922 merge `d939b57b3d061f50eee9dcb6a5abeb44a58b7d44`. [실제 배포 Actions #42772177891](https://github.com/andrawing1212/soridraw-music/actions/runs/42772177891) SUCCESS. **새 활성 PREVIEW Worker version `332ca384-725d-46aa-8824-e19a3543bed8`**.

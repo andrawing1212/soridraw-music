@@ -22,3 +22,16 @@ assert.match(owner['.read'],/!data\.exists\(\)/);
 assert.match(owner['.read'],/data\.child\('authEpoch'\)\.val\(\)/);
 console.log('APP548_CURRENT_SHARED_RTDB_SOURCE_EXACT_PREVIEW_ORIGINAL=PASS');
 console.log('APP548_OWNER_PRIVATE_RULE_ISOLATED_NOT_DEPLOYED=PASS');
+
+const mergedSource=JSON.parse(readFileSync('scripts/emulator/app550.additive.database.rules.json','utf8')).rules;
+assert.deepEqual(Object.keys(mergedSource).sort(),
+ [...Object.keys(rules),'ownerFollowerSync532'].sort(),
+ 'ONLY_ONE_NEW_OWNER_ROOT');
+for(const [key,value] of Object.entries(rules)){
+ assert.deepEqual(mergedSource[key],value,'EXISTING_SHARED_RULE_CHANGED_'+key);
+}
+assert.deepEqual(mergedSource.ownerFollowerSync532,proposal.ownerFollowerSync532,
+ 'OWNER_READ_WRITE_PROPOSAL_DRIFT');
+assert.equal(mergedSource.ownerFollowerSync532.$uid['.write'],false);
+console.log('APP550_OWNER_PRIVATE_RULES_EXACT_ADDITIVE_NO_OTHER_RULE_CHANGE=PASS');
+

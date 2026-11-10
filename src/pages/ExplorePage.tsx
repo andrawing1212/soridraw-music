@@ -114,7 +114,6 @@ import {
 } from '../services/exploreOwnerFollowerSync542';
 
 import {
-  EXPLORE_FOLLOW_IDLE_FLUSH_MS_380,
   queueExploreFollowFinalState380,
   readPendingExploreFollowIntents380,
 } from '../services/exploreFollowBatchService380';
@@ -3519,19 +3518,18 @@ export default function ExplorePage() {
         { deferTargetFollowers: true },
       );
 
-      const remainingIdle380 = Math.max(
-        0,
-        EXPLORE_FOLLOW_IDLE_FLUSH_MS_380 - Math.max(0, Date.now() - Number(record380.updatedAt || 0)),
-      );
-      const remainingCooldown380 = Math.max(0, Number(record380.notBefore || 0) - Date.now());
+      // Previously queued legacy clicks resume without another 30-second hold.
+      // Old rejected cooldowns must not keep an unconfirmed follower count.
+      const hadCooldown380 = Number(record380.notBefore || 0) > Date.now();
 
       queueExploreFollowFinalState380({
         ...record380,
-        initialDelayMs: Math.max(remainingIdle380, remainingCooldown380),
+        immediate: true,
+        initialDelayMs: 0,
         restoredNotBefore: record380.notBefore,
         restoredUpdatedAt: record380.updatedAt,
         restoredRetryUsed: record380.retryUsed,
-        restoredSuspended: record380.suspended,
+        restoredSuspended: record380.suspended || hadCooldown380,
         commit: (following380) => setExploreFollow(
           activeUser380,
           targetUid380,
@@ -4488,6 +4486,7 @@ export default function ExplorePage() {
     queueExploreFollowFinalState380({
       viewerUid,
       targetUid,
+      immediate: true,
       baseFollowing: previousMembership380,
       baseTargetFollowerCount: previousProfile380.followerCount,
       baseTargetFollowingCount: previousProfile380.followingCount,
@@ -5699,10 +5698,7 @@ export default function ExplorePage() {
                         className={`soridraw-explore-follow-button${followState?.isFollowing ? ' is-following' : ''}`}
                       >
                         {followState?.isFollowing ? <UserCheck aria-hidden="true" /> : <UserPlus aria-hidden="true" />}
-                        {user && readPendingExploreFollowIntents380(user.uid)
-                          .some(row => row.targetUid === profile.uid)
-                          ? (followState?.isFollowing ? '팔로우 저장 대기' : '해제 저장 대기')
-                          : (followState?.isFollowing ? '팔로잉' : '팔로우')}
+                        {followState?.isFollowing ? '팔로잉' : '팔로우'}
                       </button>
                     )}
                   </div>

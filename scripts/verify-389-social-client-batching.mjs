@@ -104,6 +104,39 @@ remount.queueExploreFollowFinalState380({ ...request('remount'), restoredUpdated
 await remount.advance(10_000); assert.equal(calls.at(-1), true);
 assert.equal(remount.readPendingExploreFollowIntents380('viewer').length, 0);
 
+
+ // Immediate mode: one user click requests a canonical commit at next tick.
+ const instant = client(), instantCalls = [];
+ const instantReq = (id, desired = true) => ({
+   ...request(id, desired), viewerUid: 'instant-actor', immediate: true,
+   commit: async value => { instantCalls.push([id, value]);
+     return {isFollowing: value, followerCount: 5, followingCount: 8}; },
+ });
+ instant.queueExploreFollowFinalState380(instantReq('now'));
+ await instant.advance(0);
+ assert.deepEqual(instantCalls, [['now', true]], 'IMMEDIATE_NO_30_SECOND_WAIT');
+ // Opposite taps before dispatch still net to the confirmed baseline W0.
+ instant.queueExploreFollowFinalState380(instantReq('undo', true));
+ instant.queueExploreFollowFinalState380(instantReq('undo', false));
+ await instant.advance(0);
+ assert.deepEqual(instantCalls, [['now', true]], 'IMMEDIATE_NET_ZERO_W0');
+ assert.equal(instant.readPendingExploreFollowIntents380('instant-actor').length, 0);
+ // A 429 must be an immediate, visible rollback, not a new waiting period.
+ const blocked = client(); let attempts = 0; const failures = [];
+ blocked.queueExploreFollowFinalState380({
+   ...instantReq('blocked'),
+   commit: async () => { attempts++; throw Object.assign(Error('blocked'),
+     {code: 'RATE_LIMITED', retryAfterMs: 86_400_000}); },
+   onError: value => failures.push(value),
+ });
+ await blocked.advance(0);
+ assert.equal(attempts, 1);
+ assert.equal(failures.length, 1, 'IMMEDIATE_RATE_LIMIT_ROLLBACK');
+ assert.match(failures[0].error.message, /서버에서 팔로우 변경을 제한/);
+ assert.equal(blocked.readPendingExploreFollowIntents380('instant-actor').length, 0);
+ await blocked.advance(86_400_000);
+ assert.equal(attempts, 1, 'IMMEDIATE_COOLDOWN_DOES_NOT_RETRY');
+
 const followOnly389 = process.argv.includes('--follow-only');
 if (!followOnly389) {
 // Execute the existing like flush with isolated dependencies. No production state-machine rewrite.

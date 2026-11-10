@@ -926,13 +926,6 @@ export const adminDeleteUserAccount = onCall(
       await admin.auth().revokeRefreshTokens(targetUid);
       await admin.auth().deleteUser(targetUid);
     }
-    if (ownerFollowDeletion534 && !ownerFollowDeletion534.skipped) {
-      await finishOwnerFollowDeletion534({
-        firestore: db, auth: admin.auth(), database: admin.database(),
-        uid: targetUid, epoch: ownerFollowDeletion534.epoch,
-      });
-    }
-
     const cleanupBatch = db.batch();
     cleanupBatch.delete(db.collection("user_api_keys").doc(targetUid));
     cleanupBatch.delete(db.collection("gemini_request_guards").doc(targetUid));
@@ -957,6 +950,16 @@ export const adminDeleteUserAccount = onCall(
       authDeletionPendingBy: admin.firestore.FieldValue.delete(),
     }, { merge: true });
     await cleanupBatch.commit();
+    // APP534 OFF: finish owner-only marker cleanup AFTER mandatory Auth/key
+    // removal and retained-content status are durably recorded. If this
+    // future opt-in hook fails, the "deleting" fence remains for controlled
+    // recovery, but the user's API keys are never left undeleted.
+    if (ownerFollowDeletion534 && !ownerFollowDeletion534.skipped) {
+      await finishOwnerFollowDeletion534({
+        firestore: db, auth: admin.auth(), database: admin.database(),
+        uid: targetUid, epoch: ownerFollowDeletion534.epoch,
+      });
+    }
 
     return {
       ok: true,

@@ -36,6 +36,7 @@ const scope=source.slice(trigger,source.indexOf('const APP_CHECK_STATUS_HEADER',
 assert.ok(trigger>0);
 assert.ok(scope.indexOf('prepareOwnerFollowDeletion534')<scope.indexOf('admin.auth().deleteUser(targetUid)'));
 assert.ok(scope.indexOf('admin.auth().deleteUser(targetUid)')<scope.indexOf('finishOwnerFollowDeletion534'));
+assert.ok(scope.indexOf('await cleanupBatch.commit()')<scope.indexOf('finishOwnerFollowDeletion534'));
 assert.match(scope,/APP534_LIFECYCLE_DELETE_HOOK_COMPILED_OPEN/);
 assert.match(source,/adminDeletionContentPolicy: "retain-user-content"/);
 const sql=readFileSync('cloudflare/explore-worker/runtime/owner-follow-auth-epoch-532.mjs','utf8');

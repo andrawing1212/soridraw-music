@@ -99,14 +99,46 @@ const rollback=async()=>{
  const script='scripts/verify-notification-activation-029.mjs';
  let deployedNew=false;
  try{node(script,'--after-worker');deployedNew=true;}catch(error){
-  const response=await fetch('https://api.cloudflare.com/client/v4/accounts/'+account+
-   '/workers/scripts/soridraw-explore-preview/deployments',{
-   headers:{Authorization:'Bearer '+process.env.CLOUDFLARE_API_TOKEN},
-   signal:AbortSignal.timeout(18000)});
-  const value=await response.json();
-  const versions=value?.result?.deployments?.[0]?.versions;
-  assert.ok(response.ok&&value.success===true&&versions?.length===1&&
-   versions[0].version_id===oldVersion,'UNRELATED_WORKER_CHANGE_MANUAL_HOLD');
+  const cf=async url=>{
+   const response=await fetch('https://api.cloudflare.com/client/v4/accounts/'+account+url,{
+    headers:{Authorization:'Bearer '+process.env.CLOUDFLARE_API_TOKEN},
+    signal:AbortSignal.timeout(18000)});
+   const payload=await response.json();
+   assert.ok(response.ok&&payload?.success===true&&payload.result,'RECOVERY_METADATA_UNAVAILABLE');
+   return payload.result;
+  };
+  const versions=(await cf('/workers/scripts/soridraw-explore-preview/deployments'))
+   .deployments?.[0]?.versions;
+  assert.ok(versions?.length===1&&Number(versions[0].percentage)===100,
+   'CONCURRENT_WORKER_DEPLOY_MANUAL_HOLD');
+  if(versions[0].version_id!==oldVersion){
+   // A partially applied flag deployment may need rollback too. But never
+   // replace an unrelated concurrent deploy; compare the exact module,
+   // schedule, remaining bindings and three-environment pinned versions.
+   const active=versions[0].version_id;
+   const moduleInfo=await cf('/workers/workers/soridraw-explore-preview/versions/'+
+    active+'?include=modules');
+   const module=moduleInfo.modules?.find(x=>String(x.name).endsWith('preview-entry.js'));
+   assert.ok(module?.content_base64,'RECOVERY_MODULE_UNAVAILABLE');
+   assert.equal(binsha(Buffer.from(module.content_base64,'base64')),expectedHash,
+    'UNRELATED_MODULE_MANUAL_HOLD');
+   const nowBindings=(await cf('/workers/scripts/soridraw-explore-preview/settings')).bindings;
+   const before=JSON.parse(readFileSync(join(resolve(temp),'notification-029-before.json'),'utf8'));
+   const optional=new Set(['SORIDRAW_NOTIFICATION_RETENTION_013',
+    'SORIDRAW_NOTIFICATION_SCHEMA_READY_013']);
+   const clean=list=>JSON.stringify(list.filter(x=>!optional.has(x.name))
+    .sort((a,b)=>a.name.localeCompare(b.name)));
+   assert.equal(clean(nowBindings),clean(before.bindings),'UNRELATED_BINDING_MANUAL_HOLD');
+   const crons=(await cf('/workers/scripts/soridraw-explore-preview/schedules'))
+    .schedules?.map(x=>x.cron);
+   assert.deepEqual(crons,['37 * * * *'],'UNRELATED_CRON_MANUAL_HOLD');
+   for(const name of ['soridraw-explore-test','soridraw-explore-api']){
+    const v=(await cf('/workers/scripts/'+name+'/deployments')).deployments?.[0]?.versions;
+    assert.ok(v?.length===1&&Number(v[0].percentage)===100&&
+     v[0].version_id===before.versions[name],'OTHER_ENVIRONMENT_MOVED_MANUAL_HOLD');
+   }
+   deployedNew=true;
+  }
  }
  if(deployedNew){
   run(process.execPath,[wrangler,'rollback',oldVersion,'--name',

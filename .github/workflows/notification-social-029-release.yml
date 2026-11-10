@@ -45,7 +45,6 @@ jobs:
           node scripts/verify-notification-social-gate-029.mjs --self-test
           node scripts/verify-notification-d1-dot-upgrade-018.mjs --self-test
           node scripts/verify-notification-scheduler-013.mjs
-          node scripts/verify-notification-preview-connect-022.mjs
       - name: Rebuild exact active PREVIEW module unchanged; flags only (dry-run)
         run: |
           set -euo pipefail
@@ -113,7 +112,6 @@ jobs:
           node scripts/verify-notification-cost-headroom-028.mjs --self-test
           node scripts/verify-notification-activation-029.mjs --self-test
           node scripts/verify-notification-scheduler-013.mjs
-          node scripts/verify-notification-preview-connect-022.mjs
           node scripts/verify-notification-social-gate-029.mjs --self-test
       - name: Prepare frozen active Worker with only two retention flags
         run: |

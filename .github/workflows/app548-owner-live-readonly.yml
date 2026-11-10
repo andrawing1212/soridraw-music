@@ -1,0 +1,87 @@
+name: APP548 Follow Owner Shared Backend Readonly Preflight
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/verify-548-follow-live-readonly.mjs'
+      - '.github/workflows/app548-owner-live-readonly.yml'
+permissions:
+  contents: read
+jobs:
+  cloudflare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Inspect three active Workers and shared D1 owner migration metadata
+        run: |
+          set -euo pipefail
+          node --check scripts/verify-548-follow-live-readonly.mjs
+          node scripts/verify-548-follow-live-readonly.mjs --self-test
+          node scripts/verify-548-follow-live-readonly.mjs --live
+          echo 'READONLY_NO_USER_ROWS_NO_MIGRATION_NO_DEPLOY=PASS'
+  firebase:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Authenticate read-only using existing Firebase service account
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      - name: Inspect actual shared RTDB owner rules and Functions exports (no writes)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import os,json,requests
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          path=os.environ.get('GOOGLE_GHA_CREDS_PATH') or os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+          if not path: raise RuntimeError('GOOGLE_CREDS_NOT_CONFIGURED')
+          creds=service_account.Credentials.from_service_account_file(path,scopes=[
+            'https://www.googleapis.com/auth/firebase.database',
+            'https://www.googleapis.com/auth/cloud-platform',
+          ])
+          creds.refresh(Request())
+          if not creds.token: raise RuntimeError('READONLY_AUTH_UNAVAILABLE')
+          headers={'Authorization':'Bearer '+creds.token}
+          url='https://soridraw-app-866a5-default-rtdb.firebaseio.com/.settings/rules.json'
+          resp=requests.get(url,headers=headers,timeout=20)
+          if resp.status_code!=200: raise RuntimeError('RTDB_READONLY_HTTP_'+str(resp.status_code))
+          rules=resp.json().get('rules',{})
+          owner=rules.get('ownerFollowerSync532',{})
+          safe=bool(isinstance(owner,dict) and '$uid' in owner)
+          allowed=owner.get('$uid',{}) if safe else {}
+          print('APP548_LIVE_SHARED_RTDB_OWNER_RULE='+json.dumps({
+            'present':safe,'ownerReadRulePresent':'.read' in allowed,
+            'serverOnlyWrite':allowed.get('.write') is False,
+          },sort_keys=True))
+          endpoint='https://cloudfunctions.googleapis.com/v2/projects/soridraw-app-866a5/locations/asia-northeast3/functions'
+          f=requests.get(endpoint,headers=headers,timeout=20)
+          if f.status_code==200:
+            names=[x.get('name','').rsplit('/',1)[-1] for x in f.json().get('functions',[])]
+            print('APP548_LIVE_FIREBASE_OWNER_FUNCTIONS='+json.dumps({
+              'listAuthorized':True,
+              'owner542Present':any('owner' in x.lower() and '542' in x for x in names),
+              'owner544Present':any('owner' in x.lower() and '544' in x for x in names),
+              'owner547Present':any('owner' in x.lower() and '547' in x for x in names),
+            },sort_keys=True))
+          else:
+            print('APP548_LIVE_FIREBASE_OWNER_FUNCTIONS='+json.dumps({
+              'listAuthorized':False,'http':f.status_code,'result':'UNVERIFIED_NO_GO'
+            },sort_keys=True))
+          print('APP548_FIREBASE_RULES_AND_FUNCTIONS_READONLY_NO_USER_CONTENT=PASS')
+          PY

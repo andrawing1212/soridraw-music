@@ -59,7 +59,9 @@ jobs:
           if not creds.token: raise RuntimeError('READONLY_AUTH_UNAVAILABLE')
           headers={'Authorization':'Bearer '+creds.token}
           url='https://soridraw-app-866a5-default-rtdb.firebaseio.com/.settings/rules.json'
-          resp=requests.get(url,headers=headers,timeout=20)
+          # Shared RTDB rules endpoint requires the same official OAuth query form
+          # already used by the existing PREVIEW Hosting release workflow.
+          resp=requests.get(url,params={'access_token':creds.token},timeout=20)
           if resp.status_code!=200: raise RuntimeError('RTDB_READONLY_HTTP_'+str(resp.status_code))
           rules=resp.json().get('rules',{})
           owner=rules.get('ownerFollowerSync532',{})

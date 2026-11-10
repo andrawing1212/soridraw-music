@@ -1,0 +1,27 @@
+name: SORIDRAW Follow 030 Latest Intent Race Regression
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - '.github/workflows/notification-follow-030-readonly.yml'
+      - 'src/services/exploreFollowBatchService380.ts'
+      - 'scripts/verify-030-follow-race.mjs'
+permissions:
+  contents: read
+jobs:
+  follow-race:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Execute latest-intent follow/unfollow race (no server I/O)
+        run: |
+          set -euo pipefail
+          node --check scripts/verify-030-follow-race.mjs
+          node scripts/verify-030-follow-race.mjs
+          echo 'FOLLOW_030_NO_SHARED_WORKER_OR_DATA_MODIFICATION=PASS'

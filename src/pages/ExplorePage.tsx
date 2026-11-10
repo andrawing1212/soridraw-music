@@ -105,7 +105,6 @@ import {
   subscribeExploreFollowSync377,
 } from '../services/exploreFollowSyncService';
 import {
-  EXPLORE_FOLLOW_IDLE_FLUSH_MS_380,
   queueExploreFollowFinalState380,
   readPendingExploreFollowIntents380,
 } from '../services/exploreFollowBatchService380';
@@ -3508,19 +3507,18 @@ export default function ExplorePage() {
         { deferTargetFollowers: true },
       );
 
-      const remainingIdle380 = Math.max(
-        0,
-        EXPLORE_FOLLOW_IDLE_FLUSH_MS_380 - Math.max(0, Date.now() - Number(record380.updatedAt || 0)),
-      );
-      const remainingCooldown380 = Math.max(0, Number(record380.notBefore || 0) - Date.now());
+      // Legacy persisted countdowns settle without a fresh 30-second wait.
+      // An already rejected cooldown is restored to its last confirmed state.
+      const hadCooldown380 = Number(record380.notBefore || 0) > Date.now();
 
       queueExploreFollowFinalState380({
         ...record380,
-        initialDelayMs: Math.max(remainingIdle380, remainingCooldown380),
+        immediate: true,
+        initialDelayMs: 0,
         restoredNotBefore: record380.notBefore,
         restoredUpdatedAt: record380.updatedAt,
         restoredRetryUsed: record380.retryUsed,
-        restoredSuspended: record380.suspended,
+        restoredSuspended: record380.suspended || hadCooldown380,
         commit: (following380) => setExploreFollow(
           activeUser380,
           targetUid380,
@@ -4365,8 +4363,8 @@ export default function ExplorePage() {
       canonicalTargetFollowerCount380,previousMembership380,nextShouldFollow380,
     );
 
-    // app380: local-first. Paint and patch only this device immediately. The
-    // final desired state for this viewer/target pair is sent once after 30s.
+    // Paint this device immediately and request server settlement without
+    // the previous 30-second hold. Never publish provisional owner counts.
     patchExploreFollowLocalState377(
       viewerUid,
       targetUid,
@@ -4417,6 +4415,7 @@ export default function ExplorePage() {
     queueExploreFollowFinalState380({
       viewerUid,
       targetUid,
+      immediate: true,
       baseFollowing: previousMembership380,
       baseTargetFollowerCount: previousProfile380.followerCount,
       baseTargetFollowingCount: previousProfile380.followingCount,
@@ -5628,10 +5627,7 @@ export default function ExplorePage() {
                         className={`soridraw-explore-follow-button${followState?.isFollowing ? ' is-following' : ''}`}
                       >
                         {followState?.isFollowing ? <UserCheck aria-hidden="true" /> : <UserPlus aria-hidden="true" />}
-                        {user && readPendingExploreFollowIntents380(user.uid)
-                          .some(row => row.targetUid === profile.uid)
-                          ? (followState?.isFollowing ? '팔로우 저장 대기' : '해제 저장 대기')
-                          : (followState?.isFollowing ? '팔로잉' : '팔로우')}
+                        {followState?.isFollowing ? '팔로잉' : '팔로우'}
                       </button>
                     )}
                   </div>

@@ -47,6 +47,9 @@ const get=load(body(social,'export const getExploreProfileConnections =',
  recordCloudflareLocalCacheHit:()=>{hits++;},
  EXPLORE_PROFILE_CONNECTION_DIAGNOSTIC_PATH_377:'connections',
  normalizeProfile:row=>({...row}),
+ profileConnectionCacheKey377:(uid,d)=>uid+':'+d,
+ advanceProfileConnectionGeneration548:()=>1,
+ isCurrentProfileConnectionGeneration548:()=>true,
  requestPublic:async path=>{
    calls++;assert.equal(path,'/v1/profiles/A/followers?limit=30');
    return {data:{items:[],nextCursor:null}};
@@ -59,6 +62,40 @@ assert.equal((await get('A','followers',null,true)).items.length,0);
 assert.equal(calls,1);
 assert.equal((await get('A','followers')).items.length,0);
 assert.equal(calls,1,'repeat uses newly persisted list, not a server loop');
+const staleSource=body(social,'export const getExploreProfileConnections =',
+ 'export const getExplorePublicProfileTracks =');
+const pending548=[],persisted548=[];
+let version548=0;const latest548=new Map();
+const key548=(uid,dir)=>uid+':'+dir;
+const advance548=k=>{const n=++version548;latest548.set(k,n);return n;};
+const staleGet548=load(staleSource,'getExploreProfileConnections',{
+ readProfileConnectionCache377:()=>null,
+ writeProfileConnectionCache377:(_uid,_dir,page)=>persisted548.push(page),
+ recordCloudflareLocalCacheHit:()=>{},
+ EXPLORE_PROFILE_CONNECTION_DIAGNOSTIC_PATH_377:'connections',
+ normalizeProfile:row=>({...row}),
+ profileConnectionCacheKey377:key548,
+ advanceProfileConnectionGeneration548:advance548,
+ isCurrentProfileConnectionGeneration548:(k,v)=>latest548.get(k)===v,
+ requestPublic:()=>new Promise(resolve=>pending548.push(resolve)),
+ URLSearchParams,
+});
+const older548=staleGet548('A','followers',null,true);
+const newer548=staleGet548('A','followers',null,true);
+assert.equal(pending548.length,2);
+pending548[1]({data:{items:[{uid:'new-member'}],nextCursor:null}});
+await newer548;
+pending548[0]({data:{items:[{uid:'old-member'}],nextCursor:null}});
+await older548;
+assert.equal(persisted548.length,1,'STALE_RESPONSE_CANNOT_OVERWRITE_PERSISTED_CACHE');
+assert.equal(persisted548[0].items[0].uid,'new-member');
+const invalidated548=staleGet548('A','followers',null,true);
+advance548(key548('A','followers')); // New canonical owner event
+pending548[2]({data:{items:[{uid:'invalidated-member'}],nextCursor:null}});
+await invalidated548;
+assert.equal(persisted548.length,1,'INVALIDATED_INFLIGHT_REQUEST_CANNOT_RESTORE_CACHE');
+assert.match(social,/advanceProfileConnectionGeneration548\(cacheKey\);\s*removeSoridrawPersistentCache/);
+console.log('APP548_STALE_FOLLOWER_RESPONSE_PERSISTENT_CACHE_FENCE=PASS');
 assert.match(page,/direction === 'followers' && targetUid === user\?\.uid/);
 assert.match(page,/OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 120_000/);
 assert.match(page,/getExploreProfileConnections\(targetUid, direction, null, refreshOwn523\)/);

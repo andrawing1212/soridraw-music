@@ -153,6 +153,25 @@ const profileConnectionCacheKey377 = (
   direction: ExploreProfileConnectionDirection,
 ) => `explore-profile-connections:377:${direction}:${String(profileUid || '').trim()}`;
 
+// APP548: a new verified owner revision may invalidate a follower page while
+// an older first-page GET is still in flight. Fence persisted cache writes by
+// the latest request/invalidating event, not by response arrival time.
+// Local-only and bounded: no additional D1/R2, RTDB or Firestore operations.
+const profileConnectionCacheGeneration548 = new Map<string, number>();
+let nextProfileConnectionGenerationValue548 = 0;
+const advanceProfileConnectionGeneration548 = (key: string): number => {
+  const version = ++nextProfileConnectionGenerationValue548;
+  profileConnectionCacheGeneration548.delete(key);
+  profileConnectionCacheGeneration548.set(key, version);
+  if (profileConnectionCacheGeneration548.size > 256) {
+    const oldest = profileConnectionCacheGeneration548.keys().next().value;
+    if (oldest) profileConnectionCacheGeneration548.delete(oldest);
+  }
+  return version;
+};
+const isCurrentProfileConnectionGeneration548 = (key: string, version: number): boolean =>
+  profileConnectionCacheGeneration548.get(key) === version;
+
 const readProfileConnectionCache377 = (
   profileUid: string,
   direction: ExploreProfileConnectionDirection,
@@ -223,8 +242,10 @@ const writeProfileConnectionCache377 = (
 ) => {
   const uid = String(profileUid || '').trim();
   if (!uid) return;
+  const cacheKey = profileConnectionCacheKey377(uid, direction);
+  advanceProfileConnectionGeneration548(cacheKey);
   writeSoridrawPersistentCache<ExploreProfileConnectionPage>({
-    cacheKey: profileConnectionCacheKey377(uid, direction),
+    cacheKey,
     sourceType: EXPLORE_PROFILE_CONNECTION_CACHE_SOURCE_TYPE_377,
     schemaVersion: EXPLORE_PROFILE_CONNECTION_CACHE_SCHEMA_VERSION_377,
     dataVersion: Date.now(),
@@ -248,7 +269,9 @@ export const invalidateExploreProfileConnections377 = (
 ) => {
   const uid = String(profileUid || '').trim();
   if (!uid) return;
-  removeSoridrawPersistentCache(profileConnectionCacheKey377(uid, direction), null);
+  const cacheKey = profileConnectionCacheKey377(uid, direction);
+  advanceProfileConnectionGeneration548(cacheKey);
+  removeSoridrawPersistentCache(cacheKey, null);
 };
 
 type ExploreProfileConnectionSeed378 = Pick<
@@ -574,6 +597,8 @@ export const getExploreProfileConnections = async (
     }
   }
 
+  const cacheKey548 = !normalizedCursor ? profileConnectionCacheKey377(normalizedRef, normalizedDirection) : '';
+  const requestGeneration548 = cacheKey548 ? advanceProfileConnectionGeneration548(cacheKey548) : 0;
   const params = new URLSearchParams({ limit: '30' });
   if (normalizedCursor) params.set('cursor', normalizedCursor);
   const payload = await requestPublic(
@@ -588,7 +613,9 @@ export const getExploreProfileConnections = async (
     })).filter((row: ExploreProfileConnection) => Boolean(row.uid)),
     nextCursor: String(payload?.data?.nextCursor || '').trim() || null,
   };
-  if (!normalizedCursor) writeProfileConnectionCache377(normalizedRef, normalizedDirection, page);
+  if (!normalizedCursor && isCurrentProfileConnectionGeneration548(cacheKey548, requestGeneration548)) {
+    writeProfileConnectionCache377(normalizedRef, normalizedDirection, page);
+  }
   return page;
 };
 

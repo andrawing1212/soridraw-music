@@ -1,7 +1,9 @@
 // APP544: Firebase Admin-authenticated owner epoch registration in shared D1.
 // OFF/unrouted. Server-only HMAC with fixed payload and idempotent CAS.
 // NEVER accept actor-provided epoch, overwrite another generation or delete
-// follower relationships/profile originals.
+// follower relationships/profile originals. APP546 enforces a monotonic
+// Firebase Auth creation-time floor in the RETAINED canonical profile row.
+// A physical profile-row erase has NO automatic enrollment fallback.
 export const APP544_OWNER_EPOCH_BIND_COMPILED_OPEN=false;
 const UID=/^[A-Za-z0-9_-]{1,128}$/,EPOCH=/^[0-9a-f]{32}$/,HEX=/^[0-9a-f]{64}$/;
 const reply=(status,code)=>Response.json({ok:status===200,code},{status,
@@ -42,26 +44,42 @@ export async function handleOwnerEpochBinding544({
  try{
   if(!env.DB)return reply(503,'DB_UNAVAILABLE');
   if(event.action==='bind'){
+   // APP546: NEVER create a profile_stats row from a signed registration.
+   // Store the Firebase Auth creation-time floor in the already-retained
+   // canonical profile row. Revocation clears the epoch, NOT the floor.
+   // A replay from the removed generation can never reuse its creation time.
+   // Physical removal of this row requires a separately approved lifecycle:
+   // do not enrol before its new generation has a verified durable anchor.
    const result=await env.DB.prepare(`
-    INSERT INTO profile_stats
-     (uid,follower_count,following_count,updated_at,owner_follow_auth_epoch_532)
-    VALUES (?,0,0,?,?)
-    ON CONFLICT(uid) DO UPDATE SET
-      owner_follow_auth_epoch_532=excluded.owner_follow_auth_epoch_532
-    WHERE profile_stats.owner_follow_auth_epoch_532=''
-    RETURNING uid,owner_follow_auth_epoch_532 AS epoch
-   `).bind(event.uid,event.at,event.authEpoch).first();
-   if(result?.epoch===event.authEpoch)return reply(200,'BOUND');
-   const row=await env.DB.prepare(
-     'SELECT owner_follow_auth_epoch_532 AS epoch FROM profile_stats WHERE uid=?'
-   ).bind(event.uid).first();
-   return reply(row?.epoch===event.authEpoch?200:409,
-    row?.epoch===event.authEpoch?'ALREADY_BOUND':'GENERATION_CONFLICT');
+    UPDATE profile_stats SET
+      owner_follow_auth_epoch_532=?,
+      owner_follow_auth_created_at_ms_544=?
+    WHERE uid=? AND owner_follow_auth_epoch_532=''
+      AND (owner_follow_auth_created_at_ms_544=0
+        OR owner_follow_auth_created_at_ms_544 < ?)
+    RETURNING uid,owner_follow_auth_epoch_532 AS epoch,
+      owner_follow_auth_created_at_ms_544 AS created_at
+   `).bind(event.authEpoch,event.authCreatedAtMs,event.uid,
+      event.authCreatedAtMs).first();
+   if(result?.epoch===event.authEpoch&&
+      result.created_at===event.authCreatedAtMs)return reply(200,'BOUND');
+   const row=await env.DB.prepare(`
+     SELECT owner_follow_auth_epoch_532 AS epoch,
+       owner_follow_auth_created_at_ms_544 AS created_at
+     FROM profile_stats WHERE uid=?
+   `).bind(event.uid).first();
+   if(!row)return reply(409,'OWNER_PROFILE_MISSING_HOLD');
+   if(row.epoch===event.authEpoch&&
+      row.created_at===event.authCreatedAtMs)
+     return reply(200,'ALREADY_BOUND');
+   return reply(409,'AUTH_GENERATION_FLOOR_HOLD');
   }
   const result=await env.DB.prepare(`
    UPDATE profile_stats SET owner_follow_auth_epoch_532=''
-   WHERE uid=? AND owner_follow_auth_epoch_532=? RETURNING uid
-  `).bind(event.uid,event.authEpoch).first();
+   WHERE uid=? AND owner_follow_auth_epoch_532=?
+     AND owner_follow_auth_created_at_ms_544=?
+   RETURNING uid
+  `).bind(event.uid,event.authEpoch,event.authCreatedAtMs).first();
   // The outbox drain excludes empty epoch; preserve all canonical rows.
   return reply(200,result?.uid?'REVOKED':'ALREADY_REVOKED');
  }catch{return reply(503,'DB_UNAVAILABLE')}

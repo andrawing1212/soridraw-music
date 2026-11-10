@@ -50,11 +50,12 @@ db.exec(`CREATE TABLE profile_stats (
  owner_follow_next_at_530 INTEGER NOT NULL DEFAULT 0,
  owner_follow_dead_at_530 INTEGER NOT NULL DEFAULT 0,
  owner_follow_delivered_at_530 INTEGER NOT NULL DEFAULT 0,
- owner_follow_auth_epoch_532 TEXT NOT NULL DEFAULT '');
+ owner_follow_auth_epoch_532 TEXT NOT NULL DEFAULT '',
+ owner_follow_auth_created_at_ms_544 INTEGER NOT NULL DEFAULT 0);
  CREATE TABLE follows (
  follower_uid TEXT NOT NULL,following_uid TEXT NOT NULL,created_at INTEGER NOT NULL,
  PRIMARY KEY(follower_uid,following_uid));
- INSERT INTO profile_stats(uid,updated_at) VALUES('B',1);`);
+ INSERT INTO profile_stats(uid,updated_at) VALUES('B',1),('A',1);`);
 const counters={queries:0,writes:0};
 function adaptStmt(query){
  return {bind(...args){
@@ -182,6 +183,20 @@ try{
   secret,now:()=>when,send});
  assert.equal(row().owner_follow_auth_epoch_532,'');
  assert.equal(row().follower_count,0,'revoke must retain canonical profile data');
+ // APP546: revocation is a durable generation fence on the retained row.
+ // A delayed, still-valid old signed BIND cannot re-arm its cleared epoch.
+ await assert.rejects(()=>sendOwnerEpochBinding544({
+  event:{uid:'A',authEpoch:epochA,authCreatedAtMs:authBirth,action:'bind'},
+  secret,now:()=>when,send}),/544_D1_BIND_HOLD_409/);
+ assert.equal(row().owner_follow_auth_epoch_532,'');
+ assert.equal(row().owner_follow_auth_created_at_ms_544,authBirth);
+ const beforeMissing=db.prepare('SELECT total_changes() AS n').get().n;
+ await assert.rejects(()=>sendOwnerEpochBinding544({
+  event:{uid:'MissingOwner',authEpoch:epochA,authCreatedAtMs:authBirth,action:'bind'},
+  secret,now:()=>when,send}),/544_D1_BIND_HOLD_409/);
+ assert.equal(db.prepare('SELECT COUNT(*) AS n FROM profile_stats WHERE uid=?')
+   .get('MissingOwner').n,0,'missing profile must never be recreated');
+ assert.equal(db.prepare('SELECT total_changes() AS n').get().n,beforeMissing);
  assert.equal(await resolveOwnerFollowWriter543({env:cloud,targetUid:'A',mode:'legacy',enabled:true}),null);
  // Old signed incarnation cannot overwrite a newly bound one.
  accountExists=true;activeEpoch=epochOld;authBirth+=100000;
@@ -192,6 +207,13 @@ try{
   event:{uid:'A',authEpoch:epochA,authCreatedAtMs:when-600000,action:'bind'},
   secret,now:()=>when,send}),/544_D1_BIND_HOLD_409/);
  assert.equal(row().owner_follow_auth_epoch_532,epochOld);
+ assert.equal(row().owner_follow_auth_created_at_ms_544,authBirth);
+ // A late REVOKE for the old epoch must not unbind a newly enrolled owner.
+ await sendOwnerEpochBinding544({
+  event:{uid:'A',authEpoch:epochA,authCreatedAtMs:when-600000,action:'revoke'},
+  secret,now:()=>when,send});
+ assert.equal(row().owner_follow_auth_epoch_532,epochOld);
+ assert.equal(row().owner_follow_auth_created_at_ms_544,authBirth);
  console.log('APP545_REAL_CANONICAL_WORKER_AUTH_ADMIN_D1_CONNECTOR=PASS');
  console.log('APP545_OFF_IDLE_D1_R0_WRITES0_EPOCH_BIND_CAS_REVOKE_NO_ERASURE=PASS');
 }finally{db.close()}

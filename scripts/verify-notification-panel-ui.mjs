@@ -198,7 +198,7 @@ console.log('NOTIFICATION_MOBILE_OPEN_CLOSE_HAS_NO_NEW_BACKEND_IO=PASS');
 
 assert.match(panel,/localGenerationEnabled && uid && auth\.currentUser\?\.uid === uid/);
 assert.match(panel,/projectCompletedExistingGenerations004\(recentHistory\)/);
-assert.match(panel,/withPreviewNotificationExamples023\(genuineRows,visualExample\)/,
+assert.match(panel,/withPreviewNotificationExamples023\(collapseRepeatedFollowNoticesByActor554\(genuineRows\),visualExample\)/,
   'PREVIEW samples fill empty sections without replacing real records');
 assert.match(panel,/isPreviewSample\(row\) \? row\.createdAt : Math\.max\(0, Date\.now\(\) - row\.createdAt\)/,
   'sample elapsed-time labels and actual epoch timestamps stay distinct');

@@ -186,7 +186,7 @@ async function deliverEpoch(event,{raiseAfterDelivery=false}={}){
   assert.equal(response.ok,true);
   throw Error("ISOLATED_CRASH_AFTER_DELIVERY_BEFORE_ACK");
  }
- return {accepted:response.ok,applied:response.ok,status:response.status};
+ return {accepted:response.ok,applied:response.applied,status:response.status};
 }
 
 async function drain(opts={}){

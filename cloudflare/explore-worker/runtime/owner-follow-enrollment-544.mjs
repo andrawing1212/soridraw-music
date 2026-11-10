@@ -58,7 +58,8 @@ export async function handleOwnerEpochBinding544({
    // APP546: NEVER create a profile_stats row from a signed registration.
    // Store the Firebase Auth creation-time floor in the already-retained
    // canonical profile row. Revocation clears the epoch, NOT the floor.
-   // A replay from the removed generation can never reuse its creation time.
+   // Current Auth proof (APP547) is mandatory for same-generation retries. A
+ // removed incarnation cannot pass that live proof, even after row erasure.
    // Physical removal of this row requires a separately approved lifecycle:
    // do not enrol before its new generation has a verified durable anchor.
    const result=await env.DB.prepare(`
@@ -67,7 +68,7 @@ export async function handleOwnerEpochBinding544({
       owner_follow_auth_created_at_ms_544=?
     WHERE uid=? AND owner_follow_auth_epoch_532=''
       AND (owner_follow_auth_created_at_ms_544=0
-        OR owner_follow_auth_created_at_ms_544 < ?)
+        OR owner_follow_auth_created_at_ms_544 <= ?)
     RETURNING uid,owner_follow_auth_epoch_532 AS epoch,
       owner_follow_auth_created_at_ms_544 AS created_at
    `).bind(event.authEpoch,event.authCreatedAtMs,event.uid,

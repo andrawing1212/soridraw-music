@@ -171,7 +171,16 @@ try{
  await sleep(35);
  await auth.createUser({uid:UID,email:EMAIL,password:PASS});
  const g3=await enrollAuthIncarnation533(auth,UID);
- assert.ok(g3.createdAtMs>g2.createdAtMs);
+ // Auth metadata.creationTime can have coarse timestamp precision even
+ // for distinct Auth incarnations. Epoch must disambiguate. Equal timestamps
+ // fail closed if an old different-generation marker still exists.
+ assert.ok(g3.createdAtMs>=g2.createdAtMs);
+ if(g3.createdAtMs===g2.createdAtMs){
+  assert.equal(nextOwnerFollowerMarker533({
+   authEpoch:g2.authEpoch,authCreatedAtMs:g2.createdAtMs,version:2
+  },{ownerUid:UID,authEpoch:g3.authEpoch,version:1,followerCount:7},
+  g3.createdAtMs,Date.now()),undefined);
+ }
  assert.equal((await send(record(g3.authEpoch,1,7))).accepted,true);
  hold2.release();
  const resultAfter=await pendingAfter;

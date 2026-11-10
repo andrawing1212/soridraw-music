@@ -18,6 +18,9 @@ import {
  APP539_WORKER_HTTP_BRIDGE_COMPILED_OPEN,
  sendOwnerFollowHttp539,
 } from '../runtime/owner-follow-http-539.mjs';
+import {
+ APP544_OWNER_EPOCH_BIND_COMPILED_OPEN,handleOwnerEpochBinding544,
+} from '../runtime/owner-follow-enrollment-544.mjs';
 import {handleNotificationPreferencesApi003}
  from '../runtime/notification-preferences-api-003.mjs';
 import {handleUnifiedNotificationsApi004}
@@ -3372,6 +3375,12 @@ export default {
 
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // APP544: HMAC-authenticated Firebase Admin epoch registration route.
+    // Compile gate OFF; no new Worker path, D1 access or secret in service.
+    if(APP544_OWNER_EPOCH_BIND_COMPILED_OPEN &&
+       url.pathname==='/internal/owner-follow/epoch-544'){
+      return handleOwnerEpochBinding544({request,env});
+    }
     // Stage019: PREVIEW-only authenticated inbox GET candidate. Explicit
     // runtime opt-in is absent from Wrangler; source alone does not activate.
     // No settings PUT, admin POST, announcement publish, or retention scheduler.

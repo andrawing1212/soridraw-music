@@ -221,3 +221,31 @@ The one-time GitHub emulator workflow was removed after PASS; source/test artifa
 A `reserved` record with no applied Auth claim remains unresolved by design: an in-flight old issuer could still write later, and a timer-based takeover or forced cleanup would be unsafe. A `deleting` record with no admin Auth-deleted proof likewise remains HOLD. There is no authorized operator recovery UI/callable yet. Auth/Firestore/RTDB do not support a cross-service atomic commit; checks reduce tested races but are not a global linearizability guarantee. Same-UID re-registration after the actual admin ban remains deliberately blocked by retained `accountStatus='banned'`/`authDeleted` until an explicitly approved account-restoration contract is established. No real A/B PC↔mobile or end-to-end deployed signal testing has been done.
 
 **Release decision: NO-GO.** PR #914 Draft/OFF, no merge/deploy/enable, and no shared resource alteration.
+
+## 2026-11-10 — APP536 manually approved admin read-only held-account review, isolated PASS
+
+**Director-approved scope:** no live admin endpoint, no automatic forced release, no shared Auth, Firestore, Worker, D1, Functions, Rules or Hosting mutation/deploy/activation. Extends APP535 source-only recovery rather than enabling it.
+
+### Code and authority
+- `functions/src/ownerFollowManualReview536.ts` is a standalone source candidate with `APP536_ADMIN_RECOVERY_COMPILED_OPEN=false`, **not imported into `functions/src/index.ts` or live endpoints**, no UI, scheduler, secret definition or persistent approval ledger.
+- `inspectOwnerFollowAdmin536` requires a **real Firebase Admin-verified ID token** (with revocation check), non-disabled Auth admin, an existing Firestore staff/master role and `adminPermissions.userManagement=true` for non-master administrators. An admin cannot target self or another staff/master. These constraints mirror or strengthen existing admin management controls; caller-supplied UID or boolean is not authority.
+- Manual diagnosis only reads the small target lifecycle metadata, current Auth user and its Firestore document. It returns redacted phase/action/reason and no raw epoch, user content, password, admin credential or signing key. `reserved` missing/mismatched claim and `deleting` missing admin-delete proof show **HOLD** with **no ticket and no writes**.
+- Only recoverable `recover-reserved` and `recover-deleting` decisions receive a **1-minute HMAC-signed ticket** bound to operator UID, exact target UID, action and observed Firestore update version/lifecycle fingerprint plus random nonce. A second explicit confirmation phrase must be submitted. Confirmation **reverifies authentication, administrative privileges, target eligibility and exact current state** before invoking APP535's existing generation-fenced recovery. Forged, expired, cross-operator, cross-target or post-mutation tickets are rejected, and the previous ticket cannot replay after a successful state transition.
+- APP536 makes **no new Auth custom claim writes**; the existing APP534/535 claim/marker logic remains the only candidate mutation on explicit approval. It neither clears reservations by TTL nor cleans arbitrary RTDB data. Signing key is supplied by a trusted future server handler; no production secret or callable exists in this PR.
+
+### Physical emulator proof
+
+[GitHub Actions #42734819195](https://github.com/andrawing1212/soridraw-music/actions/runs/42734819195): **SUCCESS** at tested SHA `7007d7e21efb8bd4d743aa16785f26535d2cc5af`. Functions strict TypeScript compiled successfully. Actual Firebase Auth + Firestore + RTDB emulators used isolated `demo-soridraw-owner-534` and localhost ports; real emulator ID tokens and Firestore permission records exercised:
+- unauthorized/non-admin, self-target, protected staff, bogus ID token denied; read-only diagnostics leave target Firestore document and private signal untouched;
+- explicit confirmation string required; tampered, expired, other operator/target and demoted admin permits denied; state-changed fingerprint and replay denied;
+- exact reserved claim can complete after approval while preserving unrelated Auth claims and Music Note data;
+- deleting without admin-delete completion cannot receive a ticket; after Auth removal + recorded retained-content policy, approved cleanup removes only previous-generation private marker, preserving retained user data;
+- old UID recreated with an active new Auth record becomes HOLD even when a deletion permit had been issued.
+
+All emulator processes stopped normally; `sharedWrites:0`, `liveFeaturesEnabled:false`, `approvalCallables:0` in test output. The one-shot scoped GitHub Actions workflow was removed after successful run; source and test remain.
+
+### Remaining release blockers
+
+No real operator UI, live callable, managed HMAC secret, audit logging, operation-rate guard, approval ledger or administration policy rollout. Production integration would require separate director authorization and a new audit/rollback plan. The ticket is state-bound and cannot replay after a successful lifecycle transition, but it does **not** create a global distributed transaction across Auth, Firestore and RTDB; concurrent external writes may still require HOLD/controlled recovery. APP532 canonical D1 changed-follow **R1/W2** was not touched or remeasured, and real owner A/B devices, cost at scale, same-UID Auth policy and shared deployed Rules/Worker compatibility remain unverified.
+
+**APP536 verdict: isolated diagnostic/explicit-approval candidate PASS; product release and real admin recovery NO-GO. PR #914 stays Draft/OFF, unmerged and undeployed.**

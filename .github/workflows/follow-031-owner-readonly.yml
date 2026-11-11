@@ -7,6 +7,8 @@ on:
       - 'src/pages/ExplorePage.tsx'
       - 'scripts/verify-031-follow-cooldown.mjs'
       - 'cloudflare/explore-worker/runtime/owner-follow-recovery-556.mjs'
+      - 'cloudflare/explore-worker/runtime/owner-follow-precommit-557.mjs'
+      - 'scripts/verify-569-owner-precommit-compat.mjs'
       - 'scripts/verify-556-owner-replay-reservation.mjs'
       - 'scripts/verify-560-owner-follow-full-isolated.mjs'
       - 'scripts/verify-561-owner-cost-reuse.mjs'
@@ -31,6 +33,7 @@ jobs:
           node scripts/verify-031-follow-cooldown.mjs
           node scripts/verify-030-follow-race.mjs
           node scripts/verify-556-owner-replay-reservation.mjs
+          node scripts/verify-569-owner-precommit-compat.mjs
           node scripts/verify-561-owner-cost-reuse.mjs
           npm ci --no-audit --no-fund
           node --no-warnings scripts/verify-560-owner-follow-full-isolated.mjs

@@ -53,6 +53,12 @@ export async function runOwnerFollowPrecommit557({
    FROM profile_stats WHERE uid=? LIMIT 1`)
    .bind(auth.uid,parts[3],auth.uid,parts[3],parts[3]).first();
  }catch{return fail('owner-enrollment-unavailable')}
+ // Unenrolled owners MUST keep the exact existing canonical follow Writer.
+ // A globally enabled PREVIEW push must not reject their normal follows.
+ if(!row||row.epoch==='')return callCanonical();
+ // Missing/corrupt non-empty epoch is not an opt-out: fail closed.
+ if(!/^[0-9a-f]{32}$/.test(String(row.epoch||'')))
+  return fail('owner-epoch-invalid');
  const beforeFollowing=row.override_following===null||
    row.override_following===undefined?Boolean(row.baseline):
    Number(row.override_following)===1;
@@ -104,8 +110,6 @@ export async function runOwnerFollowPrecommit557({
      Object.keys(v.pending).length!==0)return fail('profile-not-exact');
 
  }catch{return fail('preflight-read-unavailable')}
- if(!/^[0-9a-f]{32}$/.test(String(row?.epoch||'')))
-  return fail('owner-not-enrolled');
  const ticket={ownerUid:parts[3],actorUid:auth.uid,
    authEpoch:String(row.epoch),operationId:body.followOperationId,
    expectedRevision:body.followExpectedRevision,

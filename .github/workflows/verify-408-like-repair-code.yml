@@ -235,6 +235,11 @@ jobs:
           node scripts/verify-482-preview-writer-release-gate.mjs --self-test
           # app487: prevent stale app427 empty-command semantics in any later release
           node scripts/verify-427-legacy-next-song-parity.mjs
+      - name: APP562 canonical R2 PUT budget and late-crash isolated recovery
+        run: |
+          node --check scripts/verify-562-follow-r2-put-budget.mjs
+          SORIDRAW_CURRENT_FOLLOW_RUNTIME=1 node scripts/verify-562-follow-r2-put-budget.mjs
+          echo 'APP562_R2_LATE_CRASH_SOURCE_ONLY_OPTIMIZATION=PASS;CANONICAL_LIVE_PATH=OFF'
       - name: APP561 cost optimization source and bounded alarm reuse
         run: |
           node --check cloudflare/explore-worker/runtime/owner-follow-precommit-557.mjs

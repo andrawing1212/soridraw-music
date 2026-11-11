@@ -157,6 +157,9 @@ export async function runOwnerFollowPrecommit557({
  // generated stable operation envelope. No bypass for non-canary owners.
  if(!unversioned)return callCanonical();
  const headers=new Headers(request.headers);
+ // An old PUT with no body may carry Content-Length: 0. Never forward that
+ // stale transport length with the synthesized canonical operation payload.
+ headers.delete('Content-Length');
  headers.set('Content-Type','application/json');
  const canonicalRequest=new Request(request,{headers,
   body:JSON.stringify({followOperationId:operationId,

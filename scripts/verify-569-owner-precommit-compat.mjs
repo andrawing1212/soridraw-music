@@ -72,11 +72,12 @@ const compatEnv579={
   throw Error('UNEXPECTED_R2_KEY');
  }},
 };
-const invokeCompat579=async({method='PUT',body,enabled=true}={})=>
+const invokeCompat579=async({method='PUT',body,enabled=true,contentLength0=false}={})=>
  runOwnerFollowPrecommit557({
   request:new Request('https://local.invalid/v1/profiles/A/follow',{
    method,headers:{Authorization:'Bearer synthetic', 'X-Firebase-AppCheck':'synthetic',
-    ...(body===undefined?{}:{'Content-Type':'application/json'})},
+    ...(body===undefined?{}:{'Content-Type':'application/json'}),
+    ...(contentLength0?{'Content-Length':'0'}:{})},
    ...(body===undefined?{}:{body:JSON.stringify(body)}),
   }),env:compatEnv579,enabled,ctx:{},
   authenticate:async()=>({ok:true,uid:'B'}),
@@ -86,6 +87,7 @@ const invokeCompat579=async({method='PUT',body,enabled=true}={})=>
    auth:original?.headers?.get('Authorization')||'untouched',
    appcheck:original?.headers?.get('X-Firebase-AppCheck')||'untouched',
    contentType:original?.headers?.get('Content-Type')||'',
+   contentLength:original?.headers?.get('Content-Length')||null,
    body:original?await original.clone().text():'untouched',
   });return Response.json({ok:true});},
  });
@@ -104,11 +106,14 @@ assert.equal(ticket579.priorR2Revision,22);
 assert.equal(canonicalBodies579[0].auth,'Bearer synthetic');
 assert.equal(canonicalBodies579[0].appcheck,'synthetic');
 assert.match(canonicalBodies579[0].contentType,/application\/json/);
+assert.equal(canonicalBodies579[0].contentLength,null);
 assert.equal(dbReads579,1);
 assert.equal(r2Reads579.length,3,'ONLY_ENROLLED_CHANGED_R2_PREFLIGHT');
 reset579();
-response579=await invokeCompat579();
+response579=await invokeCompat579({contentLength0:true});
 assert.equal(response579.status,200);
+assert.equal(canonicalBodies579[0].contentLength,null,
+ 'SYNTHETIC_BODY_MUST_DROP_STALE_ZERO_CONTENT_LENGTH');
 assert.equal(tickets579[0].operationId,ticket579.operationId,
  'LEGACY_RETRY_MUST_REUSE_STABLE_CANONICAL_ID');
 assert.equal(tickets579[0].expectedRevision,ticket579.expectedRevision);

@@ -58,7 +58,7 @@ if(legacyBase<0){
   '!APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN',
   '!OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN',
   'response=await runOwnerFollowPrecommit557(',
-  'callCanonical:()=>baseWorker.fetch(request,env,ctx)',
+  'callCanonical:(canonicalRequest=request)=>baseWorker.fetch(canonicalRequest,env,ctx)',
   'response=await baseWorker.fetch(request,env,ctx);',
  ]) assert(dispatch.includes(invariant), 'APP557 follow-only canonical isolation: '+invariant);
 }

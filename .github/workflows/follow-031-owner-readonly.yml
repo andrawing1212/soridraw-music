@@ -52,3 +52,45 @@ jobs:
           node scripts/verify-561-owner-cost-reuse.mjs
           node --no-warnings scripts/verify-560-owner-follow-full-isolated.mjs
           echo 'FOLLOW_031_SOURCE_ONLY_NO_D1_OR_HOSTING_CHANGE=PASS'
+  owner-rules-emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned local Firebase emulator tooling
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm install --no-save --package-lock=false --legacy-peer-deps --no-audit --no-fund firebase-tools@14
+      - name: Assert only owner-private root was added to existing shared Rules
+        run: |
+          set -euo pipefail
+          node scripts/verify-548-owner-rules-source.mjs
+          git diff --exit-code -- database.rules.json
+      - name: Enforce A/B owner security on actual merged Rules in isolated emulators
+        env:
+          APP533_ISOLATED_ONLY: 'yes'
+          GCLOUD_PROJECT: demo-soridraw-owner-533
+          FIREBASE_PROJECT_ID: demo-soridraw-owner-533
+          FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+          FIREBASE_DATABASE_EMULATOR_HOST: 127.0.0.1:9000
+        run: |
+          set -euo pipefail
+          test -z "${GOOGLE_APPLICATION_CREDENTIALS:-}"
+          test -z "${FIREBASE_TOKEN:-}"
+          ./node_modules/.bin/firebase emulators:exec --only auth,database \
+            --project demo-soridraw-owner-533 \
+            --config scripts/emulator/app573.firebase.json \
+            "node scripts/test-533-owner-auth-rtdb-emulator.mjs"
+          echo 'FOLLOW_573_MERGED_RULES_AUTH_A_B_OWNER_ONLY_EMULATOR=PASS'
+      - name: Confirm shared Rules stayed pristine
+        run: git diff --exit-code -- database.rules.json

@@ -45,6 +45,10 @@ import {APP557_OWNER_PRECOMMIT_COMPILED_OPEN,runOwnerFollowPrecommit557}
  from '../runtime/owner-follow-precommit-557.mjs';
 import {reserveOwnerFollowViaDo557}
  from '../runtime/owner-follow-do-557.mjs';
+// APP572: export the previously isolated per-owner DO class for the PREVIEW
+// candidate bundle. Both the DO engine and follow precommit remain OFF by
+// default and require their explicit env gate for any write.
+export {OwnerFollowerRecovery557} from '../runtime/owner-follow-do-557.mjs';
 
 // SORIDRAW_EXPLORE_REVISION_HEAD_ONLY_036_20260911
 // SORIDRAW_EXPLORE_REVISION_HEAD_LOW_READ_037_20260911

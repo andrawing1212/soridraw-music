@@ -2,6 +2,7 @@
 // entrypoint for a FUTURE authenticated durable pre-commit reservation.
 // SOURCE ONLY; neither the replay scheduler nor its reservation is live.
 import {sendOwnerFollowHttp539} from './owner-follow-http-539.mjs';
+import {QA_OWNER_FOLLOW_FUNCTION_URL_577} from './owner-follow-qa-boundary-577.mjs';
 import {verifyOwnerFollowCommitProof557} from './owner-follow-commit-proof-557.mjs';
 export const APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN=false;
 const UID=/^[A-Za-z0-9_-]{1,128}$/;
@@ -24,6 +25,15 @@ async function deliverSettledOwner555({
 }={}){
  if(off(env,enabled))return outcome('disabled');
  if(!UID.test(String(ownerUid||'')))return outcome('invalid-owner');
+ // APP580: the independent QA worker must explicitly select the pinned QA
+ // receiver. Do not silently fall back to the operating Firebase endpoint.
+ // Invalid QA settings are rejected before any D1/R2 read or HTTP request.
+ const qaMode=env?.SORIDRAW_OWNER_FOLLOW_QA_ONLY_577;
+ if(qaMode!==undefined&&qaMode!=='0'&&qaMode!=='1')
+  return outcome('qa-relay-mode-invalid');
+ const qaOnly=qaMode==='1';
+ if(qaOnly&&env?.SORIDRAW_OWNER_FOLLOW_ENDPOINT_539!==QA_OWNER_FOLLOW_FUNCTION_URL_577)
+  return outcome('qa-target-hold');
  const key='internal/explore/shared-profile-v113/'+encodeURIComponent(ownerUid)+'.json';
  let bundle;
  try{
@@ -60,7 +70,7 @@ async function deliverSettledOwner555({
   followerCount:count,updatedAt:Math.max(1,Number(now()))};
  for(let attempt=0;attempt<2;attempt++){
   try{
-   const sent=await sendOwnerFollowHttp539(event,{endpoint,secret,send,now});
+   const sent=await sendOwnerFollowHttp539(event,{endpoint,secret,send,now,qaOnly});
    if(sent.ok)return outcome('delivered',{deliveredRevision:version});
    // APP564: Firebase 403 means invalid HMAC, not an Auth-incarnation
    // mismatch. Dropping a durable reservation here permanently loses an

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {deliverOwnerFollowPostcommit555,replayOwnerFollowReservation556,
  APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN}
  from '../cloudflare/explore-worker/runtime/owner-follow-postcommit-555.mjs';
+import {QA_OWNER_FOLLOW_FUNCTION_URL_577}
+ from '../cloudflare/explore-worker/runtime/owner-follow-qa-boundary-577.mjs';
 assert.equal(APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN,false);
 const epoch='0123456789abcdef0123456789abcdef';
 const operationId='op_1234567890abcdef';
@@ -87,3 +89,45 @@ assert.equal((await replayOwnerFollowReservation556({reservation:ticket,env:{...
 console.log('APP557_EXACT_COMMITTED_PAIR_AND_CUTOVER_REPLAY_GUARD=PASS');
 console.log('APP557_NO_UNRELATED_PROFILE_REVISION_FALSE_OWNER_SIGNAL=PASS');
 console.log('APP557_PREVIEW_ONLY_AUTH_EPOCH_FENCE=PASS;LIVE=NO_GO');
+
+// APP580: use the SAME existing durable precommit→replay path for isolated
+// QA, not a parallel direct client writer. All HTTP transports are stubs.
+// QA mode must never call the operating Firebase URL, including when a
+// rollback or configuration accidentally preserves an old endpoint.
+let qaSends580=0;
+const qaEnv580={...env,SORIDRAW_OWNER_FOLLOW_QA_ONLY_577:'1',
+ SORIDRAW_OWNER_FOLLOW_ENDPOINT_539:QA_OWNER_FOLLOW_FUNCTION_URL_577};
+const qaSend580=async(url,options)=>{
+ qaSends580++;
+ assert.equal(url,QA_OWNER_FOLLOW_FUNCTION_URL_577);
+ assert.equal(options.method,'POST');
+ const payload=JSON.parse(options.body);
+ assert.equal(payload.ownerUid,'A');assert.equal(payload.authEpoch,epoch);
+ return {ok:true,status:200,json:async()=>({ok:true,applied:true})};
+};
+assert.equal((await replayOwnerFollowReservation556({
+ reservation:ticket,env:qaEnv580,send:qaSend580,enabled:true,
+})).status,'delivered','EXACT_DO_REPLAY_MUST_REACH_QA_ONLY_RECEIVER');
+assert.equal(qaSends580,1,'ONE_HMAC_POST_TO_QA_ONLY');
+const beforeBad580={...c};
+const operatingEndpoint580=env.SORIDRAW_OWNER_FOLLOW_ENDPOINT_539;
+assert.equal((await replayOwnerFollowReservation556({
+ reservation:ticket,env:{...qaEnv580,SORIDRAW_OWNER_FOLLOW_ENDPOINT_539:operatingEndpoint580},
+ send:qaSend580,enabled:true,
+})).status,'qa-target-hold','QA_MUST_DENY_OPERATING_URL');
+assert.deepEqual(c,beforeBad580,'INVALID_QA_URL_ZERO_D1_R2_REQUESTS');
+assert.equal(qaSends580,1,'INVALID_QA_URL_NO_NETWORK');
+assert.equal((await replayOwnerFollowReservation556({
+ reservation:ticket,env:{...qaEnv580,SORIDRAW_OWNER_FOLLOW_QA_ONLY_577:'maybe'},
+ send:qaSend580,enabled:true,
+})).status,'qa-relay-mode-invalid','INVALID_QA_FLAG_MUST_NOT_FALLBACK');
+assert.deepEqual(c,beforeBad580,'INVALID_QA_FLAG_ZERO_D1_R2_REQUESTS');
+assert.equal(qaSends580,1,'INVALID_QA_MODE_NO_NETWORK');
+assert.equal((await replayOwnerFollowReservation556({
+ reservation:ticket,env:{...qaEnv580,SORIDRAW_ENVIRONMENT:'production'},
+ send:qaSend580,enabled:true,
+})).status,'disabled','PRODUCTION_QA_RELAY_FORBIDDEN');
+assert.equal(qaSends580,1);
+console.log('APP580_EXISTING_DO_REPLAY_QA_PINNED_RECEIVER_SOURCE_PASS=PASS');
+console.log('APP580_QA_WRONG_ENDPOINT_INVALID_MODE_ZERO_IO=PASS');
+console.log('APP580_QA_BILLING_AND_LIVE_DEPLOYMENT=NOT_PERFORMED');

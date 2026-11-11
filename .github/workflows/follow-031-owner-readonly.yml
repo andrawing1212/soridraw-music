@@ -7,6 +7,10 @@ on:
       - 'src/pages/ExplorePage.tsx'
       - 'scripts/verify-031-follow-cooldown.mjs'
       - 'scripts/verify-577-owner-qa-project-fence.mjs'
+      - 'scripts/verify-578-qa-only-function-entry.mjs'
+      - 'functions/qa577/**'
+      - 'functions/package.json'
+      - 'firebase.qa577.json'
       - 'cloudflare/explore-worker/runtime/owner-follow-qa-boundary-577.mjs'
       - 'cloudflare/explore-worker/runtime/owner-follow-http-539.mjs'
       - 'cloudflare/explore-worker/runtime/owner-follow-recovery-556.mjs'
@@ -50,6 +54,8 @@ jobs:
           node --no-warnings scripts/verify-570-owner-follow-minimal-schema.mjs
           npm ci --prefix functions --no-audit --no-fund
           npm --prefix functions run build
+          npm --prefix functions run build:qa578
+          node scripts/verify-578-qa-only-function-entry.mjs
           node scripts/verify-572-owner-do-preview-off.mjs
           npm install --prefix cloudflare/explore-worker --no-audit --no-fund --package-lock=false
           (cd cloudflare/explore-worker/canonical && node ../node_modules/wrangler/bin/wrangler.js deploy --config wrangler.preview.jsonc --dry-run)

@@ -1,0 +1,11 @@
+{
+  "name": "soridraw-owner-follow-qa578",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {"node": "22"},
+  "main": "lib/qa577/src/index.js",
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "firebase-functions": "^4.5.0"
+  }
+}

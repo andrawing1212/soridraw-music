@@ -140,23 +140,37 @@ for(let i=0;i<25;i++){
 assert.equal(auto,true,'TEMP_ACTUAL_ALARM_DID_NOT_RUN_IN_BOUNDED_WINDOW');
 console.log('APP559_REAL_DO_AUTONOMOUS_ALARM=PASS;HITS='+state.hits);
 assert.equal((await http('/proof/mode',{mode:'success'})).ok,true);
-for(let i=0;i<4;i++){
+// The real DO backs off failed reservations: immediate repeated /step calls
+// cannot lawfully clear entries with future nextAttemptAt deadlines.
+// Prove the deployed autonomous alarms eventually ACK both persisted entries.
+let settled=false;
+for(let i=0;i<65;i++){
  state=await http('/proof/status');
- if(!state.pending)break;
- await http('/proof/step',{});
+ if(!state.pending){settled=true;break;}
+ await new Promise(r=>setTimeout(r,300));
 }
-state=await http('/proof/status');
-assert.equal(state.pending,null,'TEMP_DELIVERED_QUEUE_NOT_ACKED');
+assert.equal(settled,true,'TEMP_DELIVERED_QUEUE_NOT_ACKED');
 console.log('APP559_REAL_DO_PERSISTED_ACK_AFTER_OUTAGE=PASS');
 await http('/proof/mode',{mode:'offline'});
 const d=ticket('D','op_34567890abcdef12');
 assert.equal((await http('/proof/reserve',d)).status,'reserved');
-for(let i=0;i<8;i++){
- const result=await http('/proof/step',{});
- assert.equal(result.status,i===7?'manual-hold':'retry-scheduled');
+// Each physical retry uses exponential backoff up to 64 seconds. Observe
+// the actual alarm schedule rather than bypassing deadlines with /proof/step.
+const holdUntil=Date.now()+190000;
+let previousAttempts=-1;
+while(Date.now()<holdUntil){
+ state=await http('/proof/status');
+ const current=state.pending?.entries?.[0];
+ assert.ok(current,'TEMP_HOLD_ENTRY_DISAPPEARED');
+ if(current.attempts!==previousAttempts){
+  console.log('APP559_REAL_DO_RETRY_ATTEMPTS='+current.attempts);
+  previousAttempts=current.attempts;
+ }
+ if(current.dead)break;
+ const remaining=Number(current.nextAttemptAt||0)-Date.now()+500;
+ await new Promise(r=>setTimeout(r,Math.max(700,Math.min(8000,remaining))));
 }
-state=await http('/proof/status');
-assert.equal(state.pending.entries[0].dead,true);
+assert.equal(state.pending?.entries?.[0]?.dead,true,'TEMP_MANUAL_HOLD_NOT_REACHED');
 assert.equal(state.pending.entries[0].attempts,8);
 console.log('APP559_REAL_DO_8_FAILURE_HOLD=PASS');
 await http('/proof/cleanup',{});

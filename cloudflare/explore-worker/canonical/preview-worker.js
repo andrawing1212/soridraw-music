@@ -14378,46 +14378,7 @@ async function completeFollowIntent354(env, operation, cutover, request = null) 
   return relation;
 }
 
-// APP562 source-only cost candidate: late-crash replay MAY settle only the
-// outstanding pair receipt when both materialized endpoint profiles already
-// have exact/no-pending fences and the D1 membership is the desired state.
-// The live caller does not opt in; this path is isolated-test-only until
-// a separately verified release gate and physical cost evidence exist.
-async function trySettleCompletedFollowIntent562(env, operation, cutover) {
-  if (!operation || operation.settled !== false ||
-      operation.token !== cutover?.cutoverToken ||
-      !operation.actor || !operation.target || operation.actor === operation.target ||
-      typeof operation.following !== "boolean") return false;
-  const actor = await readFollowProfile354(env, operation.actor, cutover);
-  const clean = state => state.sync?.exact === true &&
-    state.sync.token === cutover.cutoverToken &&
-    state.sync.pending && typeof state.sync.pending === "object" &&
-    !Array.isArray(state.sync.pending) &&
-    Object.keys(state.sync.pending).length === 0;
-  if (!clean(actor)) return false;
-  const target = await readFollowProfile354(env, operation.target, cutover);
-  if (!clean(target)) return false;
-  // The canonical edge is checked only after both exact profile fences. Never
-  // use R2 counters or arrival time as proof that a D1 relation committed.
-  const membership = await readEffectiveFollowMembership348(
-    env, operation.actor, operation.target, cutover);
-  if (membership.following !== operation.following) return false;
-  const receipt = await readFollowIntent354(
-    env, cutover, operation.actor, operation.target);
-  if (!receipt.object || receipt.value?.settled !== false ||
-      receipt.value.id !== operation.id ||
-      receipt.value.revision !== operation.revision ||
-      receipt.value.expectedRevision !== operation.expectedRevision ||
-      receipt.value.following !== operation.following) return false;
-  const saved = await env.PROFILE_MEDIA.put(receipt.key,
-    JSON.stringify({ ...receipt.value, settled: true }), {
-      onlyIf: { etagMatches: receipt.object.etag },
-      httpMetadata: { contentType: "application/json; charset=utf-8" },
-    });
-  return Boolean(saved);
-}
-
-async function orchestrateFollowOverlay354(env, actor, target, following, id, expectedRevision, cutover, request = null, isolatedReplay562 = false) {
+async function orchestrateFollowOverlay354(env, actor, target, following, id, expectedRevision, cutover, request = null) {
   if (cutover?.mode !== "overlay348" || !cutover.cutoverToken || !actor || !target || actor === target) {
     throwApi("FOLLOW_OVERLAY_WRITER_NOT_READY", "팔로우 저장 정보를 확인해 주세요.", 503);
   }
@@ -14432,20 +14393,7 @@ async function orchestrateFollowOverlay354(env, actor, target, following, id, ex
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const current = await readFollowIntent354(env, cutover, actor, target);
     const previous = current.value;
-    if (previous && !previous.settled) {
-      // Normally always use the exact frozen repair path. Only the isolated
-      // ninth-parameter test hook may evaluate the APP562 cost candidate.
-      // All live callers pass the original eight parameters.
-      let fastSettled562 = false;
-      if (isolatedReplay562 === true) {
-        try {
-          fastSettled562 = await trySettleCompletedFollowIntent562(env, previous, cutover);
-        } catch {
-          fastSettled562 = false;
-        }
-      }
-      if (!fastSettled562) await completeFollowIntent354(env, previous, cutover, request);
-    }
+    if (previous && !previous.settled) await completeFollowIntent354(env, previous, cutover, request);
     if (previous?.id === id) {
       if (previous.following !== following || previous.expectedRevision !== expectedRevision) {
         throwApi("FOLLOW_OPERATION_CONFLICT", "팔로우 요청 상태를 다시 확인해 주세요.", 409);

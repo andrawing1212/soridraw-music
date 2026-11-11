@@ -10,7 +10,7 @@ const ast = ts.createSourceFile('worker.js', source, ts.ScriptTarget.Latest, tru
 const names = [
   'readFollowCutoverControl348', 'readFollowCutoverState348', 'followIntentKey354', 'readFollowIntent354',
   'readFollowProfile354', 'saveFollowProfile354', 'registerFollowPending354',
-  'repairFollowProfile354', 'completeFollowIntent354', 'trySettleCompletedFollowIntent562', 'orchestrateFollowOverlay354',
+  'repairFollowProfile354', 'completeFollowIntent354', 'orchestrateFollowOverlay354',
   'handleFollowOverlay354', 'readFollowStateSnapshot354', 'mutateFollowOverlayRelation350', 'readEffectiveFollowMembership348',
   'patchSharedProfileFollowDelta352', 'readExactEffectiveFollowCounts351',
   'handleFollow', 'handleFollowR2Core', 'handleFollowState',

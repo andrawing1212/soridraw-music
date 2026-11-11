@@ -3,6 +3,17 @@
 // Exact canonical function declarations are provided by verify-354 fixture.
 import assert from 'node:assert/strict';
 import {fixture,cutover,id} from './verify-354-follow-orchestration.mjs';
+import {trySettleCompletedFollowIntent562,APP562_R2_REPLAY_FAST_SETTLE_COMPILED_OPEN}
+ from '../cloudflare/explore-worker/candidates/562-follow-r2-replay-fast-settle.mjs';
+assert.equal(APP562_R2_REPLAY_FAST_SETTLE_COMPILED_OPEN,false);
+const candidate=(f,operation,enabled=true)=>trySettleCompletedFollowIntent562({
+ env:f.env,operation,cutover,enabled,
+ readProfile:(env,uid,cutover)=>f.ctx.readFollowProfile354(env,uid,cutover),
+ readMembership:(env,actor,target,cutover)=>
+  f.ctx.readEffectiveFollowMembership348(env,actor,target,cutover),
+ readIntent:(env,cutover,actor,target)=>
+  f.ctx.readFollowIntent354(env,cutover,actor,target),
+});
 const measures=(before,after)=>({
  r2Put:after.writes-before.writes,r2Get:after.reads-before.reads,
  d1Changed:after.changed-before.changed,
@@ -77,8 +88,11 @@ const legacyReplay=measures(oldBefore,old.f.metrics());
 assert.equal(legacyReplay.r2Put,5,'frozen recovery dirties and rewrites two profiles again');
 assert.equal(JSON.parse(old.f.records.get(old.pair).body).settled,true);
 const fast=await beforeReceiptCrash(),fastBefore=fast.f.metrics();
-const fastResult=await fast.f.ctx.orchestrateFollowOverlay354(
- fast.f.env,'actor','target',true,id(911),0,cutover,null,true);
+const fastOp=JSON.parse(fast.f.records.get(fast.pair).body);
+const fastCandidate=await candidate(fast.f,fastOp);
+assert.equal(fastCandidate.settled,true);
+assert.equal(fastCandidate.r2Writes,1);
+const fastResult=await fast.f.call('actor','target',true,911);
 assert.equal(fastResult.duplicate,true);
 const newReplay=measures(fastBefore,fast.f.metrics());
 assert.equal(newReplay.r2Put,1,
@@ -106,8 +120,7 @@ actorBundle.followSync354.pending.someNewChange={id:'other_pending'};
 dirty.f.records.get('profiles/actor').body=JSON.stringify(actorBundle);
 const operation=JSON.parse(dirty.f.records.get(dirty.pair).body);
 let beforeDirty=dirty.f.metrics();
-assert.equal(await dirty.f.ctx.trySettleCompletedFollowIntent562(
- dirty.f.env,operation,cutover),false);
+assert.equal((await candidate(dirty.f,operation)).settled,false);
 assert.equal(measures(beforeDirty,dirty.f.metrics()).r2Put,0);
 console.log('APP562_DIRTY_PROFILE_FENCE_NO_EARLY_SETTLEMENT=PASS');
 const wrong=await beforeReceiptCrash();
@@ -116,8 +129,8 @@ const edge=wrong.f.db.prepare('UPDATE explore_follow_overrides_348 SET following
  .run('actor','target');
 assert.equal(edge.changes,1);
 const wrongBefore=wrong.f.metrics();
-assert.equal(await wrong.f.ctx.trySettleCompletedFollowIntent562(
- wrong.f.env,wrongOp,cutover),false);
+assert.equal((await candidate(wrong.f,wrongOp)).settled,false);
 assert.equal(measures(wrongBefore,wrong.f.metrics()).r2Put,0);
 console.log('APP562_D1_MEMBERSHIP_MISMATCH_NEVER_PUBLISHES_OR_SETTLES=PASS');
+assert.equal((await candidate(wrong.f,wrongOp,false)).status,'disabled');
 console.log('APP562_SOURCE_ONLY_CANDIDATE_NOT_LIVE=PASS');

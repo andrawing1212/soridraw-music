@@ -48,7 +48,7 @@ try{
  assert.equal(a().owner_follow_auth_epoch_532,'');
  assert.equal(db.prepare("SELECT count(*) AS n FROM follows").get().n,1);
  const e=db.prepare("SELECT owner_follow_auth_epoch_532 AS epoch,owner_follow_auth_created_at_ms_544 AS birth FROM profile_stats WHERE uid='E'").get();
- assert.deepEqual(e,{epoch:'',birth:0});
+ assert.equal(e.epoch,'');assert.equal(e.birth,0);
  // Only an explicit verified one-owner bind may write the generation fence.
  const epoch='0123456789abcdef0123456789abcdef',created=1800000000000;
  const bound=db.prepare(`UPDATE profile_stats SET
@@ -56,7 +56,7 @@ try{
    WHERE uid=? AND owner_follow_auth_epoch_532=''
      AND (owner_follow_auth_created_at_ms_544=0 OR owner_follow_auth_created_at_ms_544<=?)
    RETURNING uid,owner_follow_auth_epoch_532 AS epoch`).get(epoch,created,'A',created);
- assert.deepEqual(bound,{uid:'A',epoch});
+ assert.equal(bound.uid,'A');assert.equal(bound.epoch,epoch);
  assert.equal(a().follower_count,4);
  assert.equal(db.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type='trigger'").get().n,0);
  assert.equal(db.prepare("SELECT count(*) AS n FROM profile_stats").get().n,3);

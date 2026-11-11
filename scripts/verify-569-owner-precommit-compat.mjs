@@ -57,7 +57,7 @@ const profile579={body:{data:{profile:{uid:'A'}}},
  revision:22,followSync354:{token:'qa_cutover_579',exact:true,pending:{}}};
 const blob579=value=>({text:async()=>JSON.stringify(value)});
 let canonicalBodies579=[],tickets579=[],r2Reads579=[],dbReads579=0;
-let ownerBefore579=0;
+let ownerBefore579=0,storedIntent579=null;
 const compatEnv579={
  SORIDRAW_ENVIRONMENT:'preview',SORIDRAW_OWNER_FOLLOW_W2_PUSH_555:'1',
  DB:{prepare:()=>({bind:()=>({first:async()=>{
@@ -67,7 +67,7 @@ const compatEnv579={
  PROFILE_MEDIA:{get:async key=>{
   r2Reads579.push(key);
   if(key.endsWith('/active.json'))return blob579(manifest579);
-  if(key.includes('follow-intents-v354'))return null;
+  if(key.includes('follow-intents-v354'))return storedIntent579?blob579(storedIntent579):null;
   if(key.includes('shared-profile-v113'))return blob579(profile579);
   throw Error('UNEXPECTED_R2_KEY');
  }},
@@ -117,11 +117,26 @@ assert.equal(canonicalBodies579[0].contentLength,null,
 assert.equal(tickets579[0].operationId,ticket579.operationId,
  'LEGACY_RETRY_MUST_REUSE_STABLE_CANONICAL_ID');
 assert.equal(tickets579[0].expectedRevision,ticket579.expectedRevision);
+// A crash after canonical D1 acceptance but before R2 settlement leaves the
+// actor without the server-issued ID. The precise persisted intent recovers
+// the same operation without a second DO ticket or an unrelated owner signal.
+storedIntent579={token:'qa_cutover_579',actor:'B',target:'A',
+ id:ticket579.operationId,expectedRevision:0,revision:0,
+ following:true,settled:false};
+ownerBefore579=1;
+reset579();
+response579=await invokeCompat579();
+assert.equal(response579.status,200);
+assert.equal(tickets579.length,0,'OLD_UNVERSIONED_RETRY_REUSES_DURABLE_RESERVATION');
+assert.equal(r2Reads579.length,2,'SAME_STATE_LEGACY_REPLAY_ONLY_PAIR_INTENT_R2');
+assert.equal(JSON.parse(canonicalBodies579[0].body).followOperationId,
+ ticket579.operationId,'OLD_RETRY_ID_MUST_MATCH_ORIGINAL_RESERVATION');
+storedIntent579=null;ownerBefore579=0;
 reset579();
 response579=await invokeCompat579({method:'DELETE'});
 assert.equal(response579.status,200);
 assert.equal(tickets579.length,0,'SAME_STATE_MUST_NOT_RESERVE');
-assert.equal(r2Reads579.length,0,'SAME_STATE_MUST_NOT_FETCH_R2');
+assert.equal(r2Reads579.length,2,'SAME_STATE_UNVERSIONED_CAN_CHECK_ONLY_PAIR_INTENT');
 reset579();
 response579=await invokeCompat579({body:{followOperationId:'bad'}});
 assert.equal(response579.status,200);
@@ -142,3 +157,4 @@ assert.notEqual(tickets579[0].operationId,ticket579.operationId);
 assert.equal(JSON.parse(canonicalBodies579[0].body).followExpectedRevision,0);
 console.log('APP579_LEGACY_CHANGED_PRECOMMIT_RESERVES_STABLE_SERVER_OPERATION=PASS');
 console.log('APP579_AUTH_HEADERS_RETAINED_NOOP_PARTIAL_OFF_PRESERVED=PASS');
+console.log('APP579_UNVERSIONED_UNCERTAIN_COMMIT_RETRY_USES_EXACT_PERSISTED_ID=PASS');

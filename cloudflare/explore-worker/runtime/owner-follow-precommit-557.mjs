@@ -12,6 +12,25 @@ const readJson=async obj=>JSON.parse(await obj.text());
 const keyProfile=uid=>'internal/explore/shared-profile-v113/'+encodeURIComponent(uid)+'.json';
 const keyIntent=(token,actor,owner)=>'internal/explore/follow-intents-v354/'+
  encodeURIComponent(token)+'/'+encodeURIComponent(actor)+'/'+encodeURIComponent(owner)+'.json';
+// APP579: derive the same server operation ID for legacy retries from the
+// canonical pair revision. A replay must not invent a second mutation ID.
+const legacyOperationId579=async(token,actor,owner,revision,desired)=>{
+ try{
+  const key=JSON.stringify([token,actor,owner,revision,desired]);
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(key));
+  return 'owner_follow_579_'+Array.from(new Uint8Array(digest))
+    .map(b=>b.toString(16).padStart(2,'0')).join('');
+ }catch{return null}
+};
+const forwardLegacyFollow579=(request,callCanonical,operationId,expectedRevision)=>{
+ const headers=new Headers(request.headers);
+ // Stale Content-Length: 0 must never describe the new JSON body.
+ headers.delete('Content-Length');
+ headers.set('Content-Type','application/json');
+ return callCanonical(new Request(request,{headers,
+  body:JSON.stringify({followOperationId:operationId,
+   followExpectedRevision:expectedRevision})}));
+};
 export async function runOwnerFollowPrecommit557({
  request,env,ctx,authenticate,callCanonical,reserve,
  enabled=APP557_OWNER_PRECOMMIT_COMPILED_OPEN,
@@ -74,14 +93,19 @@ export async function runOwnerFollowPrecommit557({
    row.override_following===undefined?Boolean(row.baseline):
    Number(row.override_following)===1;
  const desired=request.method==='PUT';
- if(beforeFollowing===desired)return callCanonical(); // canonical still validates/repairs exact no-op
+ const sameState=beforeFollowing===desired;
+ // An ordered replay already knows its original ID. Unversioned retries do
+ // not, so an enrolled owner's same-state pair must check ONLY the one exact
+ // stored intent for a pending server-issued ID before falling back to base.
+ if(sameState&&!unversioned)return callCanonical();
 
  const media=env?.PROFILE_MEDIA;
- if(!media||typeof media.get!=='function')return fail('r2-unavailable');
+ if(!media||typeof media.get!=='function')
+  return sameState?callCanonical():fail('r2-unavailable');
  let manifest,profile,intent;
  try{
   const m=await media.get('internal/explore/follow-cutover-v348/active.json');
-  if(!m)return fail('cutover-unavailable');
+  if(!m)return sameState?callCanonical():fail('cutover-unavailable');
   manifest=await readJson(m);
   if(manifest?.relationMode!=='overlay348'||manifest?.writeMode!=='active'||
      manifest?.profileCountsR2Exact!==true||
@@ -90,7 +114,8 @@ export async function runOwnerFollowPrecommit557({
      manifest?.legacyRelationWritersFrozen!==true||
      manifest?.legacyCounterWritersFrozen!==true||
      typeof manifest.cutoverToken!=='string'||
-     !manifest.cutoverToken||manifest.cutoverToken.length>128)return fail('cutover-not-ready');
+     !manifest.cutoverToken||manifest.cutoverToken.length>128)
+   return sameState?callCanonical():fail('cutover-not-ready');
   // Check exact pair intent before reading owner profile. Canonical owns the
   // retry of an already reserved operation; no redundant owner R2 GET.
   const ip=await media.get(keyIntent(manifest.cutoverToken,auth.uid,parts[3]));
@@ -98,6 +123,19 @@ export async function runOwnerFollowPrecommit557({
   if(intent&&(!intent.token||intent.token!==manifest.cutoverToken||
      intent.actor!==auth.uid||intent.target!==parts[3]))
    return fail('intent-invalid');
+  // APP579: if the already-stored intent exactly matches our deterministic
+  // legacy ID, recover it with the SAME canonical identity. This also covers
+  // a D1-committed / R2-unsettled retry whose relation now looks like a no-op.
+  // A foreign or forged pending ID is never treated as a proven reservation.
+  if(unversioned&&intent&&
+     Number.isSafeInteger(intent.expectedRevision)&&intent.expectedRevision>=0&&
+     intent.following===desired){
+   const legacyId=await legacyOperationId579(manifest.cutoverToken,
+     auth.uid,parts[3],intent.expectedRevision,desired);
+   if(legacyId&&legacyId===intent.id)
+    return forwardLegacyFollow579(request,callCanonical,legacyId,
+      intent.expectedRevision);
+  }
   // A request already carrying the exact pair-intent identity was reserved
   // before the original canonical attempt. Route it to canonical idempotent
   // replay/recovery; do not allocate a second alarm or block an ambiguous ACK.
@@ -106,6 +144,7 @@ export async function runOwnerFollowPrecommit557({
      intent?.following===(request.method==='PUT')){
    return callCanonical();
   }
+  if(sameState)return callCanonical(); // no changed edge, no new reservation
   if(intent&&!intent.settled)return fail('intent-not-settled');
   // APP579: an unversioned client must receive a stable, server-issued
   // operation based on the exact canonical pair revision. Do not infer
@@ -126,21 +165,16 @@ export async function runOwnerFollowPrecommit557({
      !v.pending||typeof v.pending!=='object'||
      Object.keys(v.pending).length!==0)return fail('profile-not-exact');
 
- }catch{return fail('preflight-read-unavailable')}
- // APP579: hash the canonical token/pair/revision/choice. Equal legacy
- // retries share the same ID; opposite choices and later pair revisions do not.
- // The hash is only an idempotency key, never an authentication proof.
+ }catch{return sameState?callCanonical():fail('preflight-read-unavailable')}
+ // APP579: equal unversioned requests at one canonical pair revision get the
+ // same idempotency key. This is NOT a principal or Auth-generation proof.
  let operationId=body.followOperationId;
  let expectedRevision=body.followExpectedRevision;
  if(unversioned){
   expectedRevision=Number(intent?.revision||0);
-  try{
-   const key=JSON.stringify([manifest.cutoverToken,auth.uid,parts[3],
-     expectedRevision,desired]);
-   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(key));
-   operationId='owner_follow_579_'+Array.from(new Uint8Array(digest))
-     .map(b=>b.toString(16).padStart(2,'0')).join('');
-  }catch{return fail('legacy-operation-id-unavailable')}
+  operationId=await legacyOperationId579(manifest.cutoverToken,
+    auth.uid,parts[3],expectedRevision,desired);
+  if(!operationId)return fail('legacy-operation-id-unavailable');
  }
  const ticket={ownerUid:parts[3],actorUid:auth.uid,
    authEpoch:String(row.epoch),operationId,
@@ -153,16 +187,8 @@ export async function runOwnerFollowPrecommit557({
  // If canonical fails, do NOT infer no commit and clear this ticket. A 503
  // may occur after an R2/D1 change; alarm checks the exact settled pair ID.
  // Preserve Auth/AppCheck headers, request method and the exact canonical
- // Writer. Only unversioned, enrolled, actually changed requests get the
- // generated stable operation envelope. No bypass for non-canary owners.
+ // Writer. Only enrolled, actually changed operations reserve a new ticket;
+ // old exact-intent retries reuse it. No non-canary Worker path is modified.
  if(!unversioned)return callCanonical();
- const headers=new Headers(request.headers);
- // An old PUT with no body may carry Content-Length: 0. Never forward that
- // stale transport length with the synthesized canonical operation payload.
- headers.delete('Content-Length');
- headers.set('Content-Type','application/json');
- const canonicalRequest=new Request(request,{headers,
-  body:JSON.stringify({followOperationId:operationId,
-   followExpectedRevision:expectedRevision})});
- return callCanonical(canonicalRequest);
+ return forwardLegacyFollow579(request,callCanonical,operationId,expectedRevision);
 }

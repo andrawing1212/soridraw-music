@@ -44,7 +44,7 @@ export function createOwnerFollowRecovery556({
   if(entries.length>=MAX_QUEUE)return fail('owner-queue-full');
   const generation=Math.max(0,Number(current?.generation)||0)+1;
   const next={ownerUid:record.ownerUid,authEpoch:record.authEpoch,generation,
-   entries:[...entries,{...record,generation,attempts:0,dead:false}]};
+   entries:[...entries,{...record,generation,attempts:0,dead:false,nextAttemptAt:0}]};
   // SQLite-backed DO storage batches these consecutive writes. Both awaited
   // promises MUST succeed before the canonical mutation may begin.
   // Keep an already-earlier alarm instead of resetting its one-second timer
@@ -66,8 +66,22 @@ export function createOwnerFollowRecovery556({
   const current=await storage.get('pending');
   if(!current)return {ok:true,status:'empty'};
   const entries=Array.isArray(current.entries)?current.entries:[];
-  const item=entries.find(x=>valid(x)&&!x.dead);
-  if(!item)return fail('manual-hold');
+  const live=entries.filter(x=>valid(x)&&!x.dead);
+  if(!live.length)return fail('manual-hold');
+  // Per-entry deadlines prevent one uncommitted/crashed follow reservation
+  // from blocking an unrelated confirmed follow for the same owner.
+  // Historical DO entries without nextAttemptAt remain eligible.
+  const at=now();
+  const dueOf=x=>Number.isSafeInteger(x.nextAttemptAt)&&x.nextAttemptAt>0
+    ?x.nextAttemptAt:0;
+  const due=live.filter(x=>dueOf(x)<=at);
+  // Prefer fresh work over retried work, then preserve old-generation order.
+  const item=due.reduce((best,x)=>!best||x.attempts<best.attempts||
+    (x.attempts===best.attempts&&x.generation<best.generation)?x:best,null);
+  if(!item){
+   await storage.setAlarm(Math.max(at+INITIAL_MS,Math.min(...live.map(dueOf))));
+   return {ok:true,status:'retry-scheduled',attempts:0};
+  }
   let result;
   try{result=await deliver({reservation:item,env,now,enabled:true});}
   catch{result={status:'relay-failed'};}
@@ -84,14 +98,20 @@ export function createOwnerFollowRecovery556({
   const updated=done
    ?latest.entries.filter(x=>identity(x)!==identity(item))
    :latest.entries.map(x=>identity(x)===identity(item)
-     ?{...x,attempts,dead}:x);
+     ?{...x,attempts,dead,nextAttemptAt:dead?0:now()+backoff(attempts)}:x);
   if(updated.length===0){
    await storage.delete('pending');
    return {ok:true,status:result.status};
   }
   const put=storage.put('pending',{...latest,entries:updated});
-  const wake=updated.some(x=>!x.dead)
-   ?storage.setAlarm(now()+(!done?backoff(attempts):INITIAL_MS))
+  // One alarm per owner at the next eligible item; a stalled older item
+  // retains its durable retry budget, while newer settled work advances.
+  const pending=updated.filter(x=>valid(x)&&!x.dead);
+  const earliest=pending.length?Math.min(...pending.map(x=>
+    Number.isSafeInteger(x.nextAttemptAt)&&x.nextAttemptAt>0
+      ?x.nextAttemptAt:0)):0;
+  const wake=pending.length
+   ?storage.setAlarm(Math.max(now()+INITIAL_MS,earliest))
    :Promise.resolve();
   await Promise.all([put,wake]);
   return {ok:done,status:done?result.status:dead?'manual-hold':'retry-scheduled',

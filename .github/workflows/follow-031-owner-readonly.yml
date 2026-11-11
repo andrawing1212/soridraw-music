@@ -6,6 +6,10 @@ on:
       - 'src/services/exploreFollowBatchService380.ts'
       - 'src/pages/ExplorePage.tsx'
       - 'scripts/verify-031-follow-cooldown.mjs'
+      - 'cloudflare/explore-worker/runtime/owner-follow-recovery-556.mjs'
+      - 'scripts/verify-556-owner-replay-reservation.mjs'
+      - 'scripts/verify-560-owner-follow-full-isolated.mjs'
+      - 'scripts/verify-561-owner-cost-reuse.mjs'
       - '.github/workflows/follow-031-owner-readonly.yml'
 permissions:
   contents: read
@@ -26,4 +30,8 @@ jobs:
           node --check scripts/verify-031-follow-cooldown.mjs
           node scripts/verify-031-follow-cooldown.mjs
           node scripts/verify-030-follow-race.mjs
+          node scripts/verify-556-owner-replay-reservation.mjs
+          node scripts/verify-561-owner-cost-reuse.mjs
+          npm ci --no-audit --no-fund
+          node --no-warnings scripts/verify-560-owner-follow-full-isolated.mjs
           echo 'FOLLOW_031_SOURCE_ONLY_NO_D1_OR_HOSTING_CHANGE=PASS'

@@ -47,7 +47,7 @@ assert.equal(OWNER_FOLLOW_RECOVERY_556_COMPILED_OPEN,false);
 assert.equal(APP564_OWNER_FOLLOW_DO_BRIDGE_COMPILED_OPEN,false);
 assert.equal(APP542_OWNER_HTTP_COMPILED_OPEN,false);
 assert.equal(APP538_OWNER_CLIENT_GATE_COMPILED_OPEN,false);
-const clock=1800000000000, epoch='0123456789abcdef0123456789abcdef';
+let clock=1800000000000; const epoch='0123456789abcdef0123456789abcdef';
 const secret='APP560-ISOLATED-HMAC-SECRET-ONLY-00000000000000000';
 const endpoint='https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publishExploreOwnerFollower542';
 const cutoverToken='app560-isolated-overlay';
@@ -185,10 +185,12 @@ const responseAck=async(id,expected,following)=>{
   return Response.json({ok:false,error:{code:String(error.message)}},{status:error.status||503});
  }
 };
+let alarmDue=0;
 const store={
  async get(key){ledger.doRead++;return structuredClone(state.get(key))},
+ async getAlarm(){return alarmDue},
  async put(key,value){ledger.doPut++;state.set(key,structuredClone(value))},
- async setAlarm(){ledger.doAlarm++},
+ async setAlarm(at){ledger.doAlarm++;alarmDue=at},
  async delete(key){ledger.doDelete++;state.delete(key)},
 };
 const dbReceiver={
@@ -231,6 +233,7 @@ const doService=createOwnerFollowDoService564({
  state:{storage:store},env,enabled:true,now:()=>clock,
  deliver:opts=>replayOwnerFollowReservation556({...opts,send,now:()=>clock}),
 });
+const alarmStep=async()=>{clock=Math.max(clock,alarmDue);alarmDue=0;return doService.alarm()};
 // The exact Worker DO stub path is exercised, rather than the engine directly.
 let doStubCalls=0;
 env.OWNER_FOLLOW_RECOVERY_557={
@@ -282,7 +285,7 @@ assert.equal(file(ownerKey).value.body.data.profile.followerCount,1);
 assert.equal(reservationWrites,1);
 assert.equal(doStubCalls,1,'precommit must invoke the actual bound DO adapter');
 assert.equal(ownerMarker,null,'NO_EVENT_BEFORE_ALARM');
-assert.equal((await doService.alarm()).status,'delivered');
+assert.equal((await alarmStep()).status,'delivered');
 assert.equal(ownerMarker.followerCount,1);
 assert.equal(ownerMarker.version,19);
 assert.equal(ledger.rtdbWrite,1);
@@ -316,7 +319,7 @@ const ack2Revision=file(pairKey).value.revision;
 const removed=await follow({id:changed2,expected:ack2Revision,method:'DELETE'});
 assert.equal(removed.status,200);
 assert.equal(file(ownerKey).value.body.data.profile.followerCount,0);
-assert.equal((await doService.alarm()).status,'delivered');
+assert.equal((await alarmStep()).status,'delivered');
 assert.equal(ownerMarker.followerCount,0);
 assert.equal(ownerMarker.version,20);
 const ui=[],gate=createOwnerEpochGate538({
@@ -334,9 +337,9 @@ const ack3Revision=file(pairKey).value.revision;
 dropReceiver=2;
 const retry=await follow({id:changed3,expected:ack3Revision});
 assert.equal(retry.status,200);
-assert.equal((await doService.alarm()).status,'retry-scheduled');
+assert.equal((await alarmStep()).status,'retry-scheduled');
 assert.equal(state.get('pending').entries.length,1,'WEBHOOK_FAILURE_RETAIN_RESERVATION');
-assert.equal((await doService.alarm()).status,'delivered');
+assert.equal((await alarmStep()).status,'delivered');
 assert.equal(ownerMarker.followerCount,1);
 assert.equal(ownerMarker.version,21);
 assert.equal(ledger.rtdbWrite,3);
@@ -354,7 +357,7 @@ await assert.rejects(()=>follow({id:interruptedId,
  /SYNTHETIC_CRASH_AFTER_CANONICAL_D1_COMMIT/);
 const settledD1Writes=ledger.d1LogicalMutation;
 assert.equal(state.get('pending').entries.length,1);
-assert.equal((await doService.alarm()).status,'retry-scheduled');
+assert.equal((await alarmStep()).status,'retry-scheduled');
 assert.equal(ownerMarker.followerCount,priorOwnerCount,
  'PARTIAL_D1_COMMIT_CANNOT_PUBLISH_OLD_OWNER_R2_COUNT');
 const resume=await follow({id:interruptedId,
@@ -364,7 +367,7 @@ assert.equal((await resume.json()).data.duplicate,true);
 assert.equal(ledger.d1LogicalMutation,settledD1Writes,
  'AMBIGUOUS_CANONICAL_COMMIT_MUST_NOT_WRITE_EFFECTIVE_EDGE_TWICE');
 assert.equal(reservationWrites,4,'EXACT_OP_ID_RETRY_MUST_NOT_RESERVE_TWICE');
-assert.equal((await doService.alarm()).status,'delivered');
+assert.equal((await alarmStep()).status,'delivered');
 assert.equal(ownerMarker.followerCount,0);
 assert.equal(ownerMarker.version,22);
 console.log('APP560_D1_COMMITTED_R2_UNSETTLED_RESUME_SAME_ID_NO_DOUBLE_MUTATION=PASS');
@@ -381,7 +384,7 @@ const removedAgain=await follow({id:'op_7890abcdef123456',expected:latestRev,met
 assert.equal(removedAgain.status,200);
 incarnation='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const prevRtWrites=ledger.rtdbWrite;
-assert.equal((await doService.alarm()).status,'rejected-generation');
+assert.equal((await alarmStep()).status,'rejected-generation');
 assert.equal(ledger.rtdbWrite,prevRtWrites);
 assert.equal(state.has('pending'),false);
 console.log('APP560_UNAUTHENTICATED_AND_RECREATED_OWNER_NO_CROSS_GENERATION=PASS');

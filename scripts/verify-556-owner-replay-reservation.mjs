@@ -12,10 +12,12 @@ const storage={
  get:async key=>structuredClone(data.get(key)),
  put:async(k,v)=>{a.doWrite++;data.set(k,structuredClone(v));},
  delete:async k=>{a.doWrite++;data.delete(k);},
- setAlarm:async()=>{a.alarms++;},
+ getAlarm:async()=>alarmDue,
+ setAlarm:async at=>{a.alarms++;alarmDue=at;},
 };
 const ids={B:'op_1234567890abcdef',C:'op_234567890abcdef1'};
 let readyB=false,readyC=false,version=18,remoteOk=false,dbEpoch=epoch;
+let clock=1800000000000,alarmDue=0;
 const env={SORIDRAW_ENVIRONMENT:'preview',SORIDRAW_OWNER_FOLLOW_W2_PUSH_555:'1',
  SORIDRAW_OWNER_FOLLOW_HMAC_539:'APP557-LOCAL-INERT-NOT-A-RELEASE-SECRET-12345',
  SORIDRAW_OWNER_FOLLOW_ENDPOINT_539:'https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publishExploreOwnerFollower542',
@@ -44,7 +46,8 @@ const send=async()=>{a.remote++;return remoteOk
  ?{ok:true,status:200,json:async()=>({ok:true,applied:true})}
  :{ok:false,status:503,json:async()=>({ok:false})}};
 const deliver=args=>replayOwnerFollowReservation556({...args,send});
-const make=()=>createOwnerFollowRecovery556({state:{storage},env,enabled:true,deliver,now:()=>1800000000000});
+const make=()=>createOwnerFollowRecovery556({state:{storage},env,enabled:true,deliver,now:()=>clock});
+const advance=()=>{clock=Math.max(clock,alarmDue)};
 const ticket=(actor)=>({ownerUid:'A',actorUid:actor,
  authEpoch:epoch,operationId:ids[actor],expectedRevision:4,cutoverToken:token,
  desired:true,beforeFollowing:false,priorR2Revision:18});
@@ -59,21 +62,31 @@ assert.equal(data.get('pending').entries.length,2,'distinct follower requests mu
 assert.equal((await node.reserve({...ticket('B'),beforeFollowing:true})).status,
  'invalid-reservation');
 const restarted=make(); // no ephemeral in-memory queue dependency
+advance();
 assert.equal((await restarted.alarm()).status,'retry-scheduled');
-assert.equal(a.remote,0,'uncommitted receipt cannot notify');
+assert.equal(a.remote,0,'uncommitted first receipt cannot notify');
 readyB=true;version=19;
+advance();
+assert.equal((await restarted.alarm()).status,'retry-scheduled',
+ 'second uncommitted receipt is checked independently of B retry');
+assert.equal(a.remote,0);
+advance();
 assert.equal((await restarted.alarm()).status,'retry-scheduled');
 assert.equal(a.remote,2,'HTTP outage bounded to two attempts');
-remoteOk=true;
-assert.equal((await restarted.alarm()).status,'delivered');
-assert.equal(data.get('pending').entries.length,1,'B confirmed; C still held');
-assert.equal(data.get('pending').entries[0].actorUid,'C');
-readyC=true;version=20;
+remoteOk=true;readyC=true;version=20;
+advance();
+assert.equal((await restarted.alarm()).status,'delivered',
+ 'C must not be starved by B HTTP retry');
+assert.equal(data.get('pending').entries.length,1,'B retry remains durable');
+assert.equal(data.get('pending').entries[0].actorUid,'B');
+advance();
 assert.equal((await restarted.alarm()).status,'delivered');
 assert.equal(data.has('pending'),false);
+console.log('APP568_NEWER_CONFIRMED_FOLLOW_DELIVERED_WITH_OLD_RETRY_QUEUED=PASS');
 readyB=false;version=21;remoteOk=false;
 assert.equal((await node.reserve({...ticket('B'),priorR2Revision:20})).status,'reserved');
 for(let n=1;n<=8;n++){
+ advance();
  const r=await node.alarm();
  assert.equal(r.status,n===8?'manual-hold':'retry-scheduled');
  assert.equal(data.get('pending').entries[0].attempts,n);

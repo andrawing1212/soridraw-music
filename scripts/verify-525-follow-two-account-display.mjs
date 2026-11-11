@@ -60,12 +60,11 @@ const ownerSignal548=page.slice(ownerBegin548,ownerEnd548);
 assert.match(ownerSignal548,/if\(confirmedNewEvent&&profileConnectionsOpen376Ref\.current==='followers'\)/);
 assert.match(ownerSignal548,/getExploreProfileConnections\(ownerUid,'followers',null,true\)/);
 assert.match(ownerSignal548,/initialSnapshotHandled=true/);
-assert.match(ownerSignal548,/const changedList=isNewEvent\\|\\|/);
-assert.match(ownerSignal548,/if\\(confirmedNewEvent&&profileConnectionsOpen376Ref\\.current==='followers'\\)/);
+assert.ok(ownerSignal548.includes('const changedList=isNewEvent||'));
+assert.ok(ownerSignal548.includes('(!previousMarker&&profile?.followerCount!==count)'));
 assert.ok(ownerSignal548.indexOf('const changedList=isNewEvent')<
  ownerSignal548.indexOf("if(confirmedNewEvent&&profileConnectionsOpen376Ref.current"),
  'COLD_RETAINED_NEW_REVISION_INVALIDATES_LIST_WITHOUT_NETWORK_GET');
-assert.match(ownerSignal548,/(!previousMarker&&profile\\?\\.followerCount!==count)/);
 assert.doesNotMatch(page.slice(0,ownerBegin548)+page.slice(ownerEnd548),
  /getExploreProfileConnections\(ownerUid,'followers',null,true\)/);
 assert.doesNotMatch(page,/window\.addEventListener\('focus',onOwnFollowersFocus525\)/);

@@ -3687,10 +3687,17 @@ export default {
         }, { status: 503 });
       }
     }
+    // APP574: fail closed to one explicitly enrolled PREVIEW canary owner.
+    // Every other owner's follow still uses the frozen canonical writer;
+    // zero new D1/R2/DO cost on non-canary requests, even after activation.
+    const ownerFollowCanary574=String(env?.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||'');
+    const ownerFollowCanaryRoute574=/^[A-Za-z0-9_-]{1,128}$/.test(ownerFollowCanary574)&&
+      url.pathname===('/v1/profiles/'+ownerFollowCanary574+'/follow');
     // APP557 authenticated precommit is source-wired, compile OFF / unbound.
     // The original canonical Worker remains unchanged for all active traffic.
     let response;
     if(APP557_OWNER_PRECOMMIT_COMPILED_OPEN &&
+       ownerFollowCanaryRoute574 &&
        !APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN &&
        !OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN &&
        env?.SORIDRAW_ENVIRONMENT==='preview' &&
@@ -3710,6 +3717,7 @@ export default {
     // owner-global version and count without ANY additional D1 write. The
     // old APP530/551 queue (W4) must be OFF; both transports never run.
     if(APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN &&
+       ownerFollowCanaryRoute574 &&
        !OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN &&
        env?.SORIDRAW_ENVIRONMENT==='preview' &&
        env?.SORIDRAW_OWNER_FOLLOW_W2_PUSH_555==='1' &&

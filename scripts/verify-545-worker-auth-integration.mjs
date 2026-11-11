@@ -91,6 +91,7 @@ const cloud={DB:{
   db.exec('COMMIT');return out;
  }catch(e){db.exec('ROLLBACK');throw e}},
 },SORIDRAW_ENVIRONMENT:'preview',SORIDRAW_OWNER_FOLLOW_BIND_544:'1',
+ SORIDRAW_OWNER_FOLLOW_CANARY_UID_574:'A',
  SORIDRAW_OWNER_FOLLOW_INLINE_543:'1'};
 const epochA='0123456789abcdef0123456789abcdef';
 const epochOld='fedcba9876543210fedcba9876543210';

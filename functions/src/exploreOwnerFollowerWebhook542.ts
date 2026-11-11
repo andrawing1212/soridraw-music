@@ -24,7 +24,7 @@ type RelayResponse542={
 };
 type Dependencies542={
  auth:Pick<Auth,'getUser'>;database:Pick<Database,'ref'>;
- secret:string;now?:()=>number;
+ secret:string;now?:()=>number;canaryUid?:string;
 };
 const valid=(x:unknown):x is Receipt542=>{
  if(!x||typeof x!=='object'||Array.isArray(x))return false;
@@ -87,7 +87,7 @@ const sameMarker=(v:Marker542|null,r:Receipt542,created:number)=>
  v?.authEpoch===r.authEpoch&&v?.authCreatedAtMs===created&&
  v?.version===r.revision&&v?.receiptId===r.authEpoch+':'+r.revision;
 export const createOwnerFollowerHttp542=({
- auth,database,secret,now=Date.now,
+ auth,database,secret,now=Date.now,canaryUid,
 }:Dependencies542)=>async(req:RelayRequest542,res:RelayResponse542):Promise<void>=>{
  res.set('Cache-Control','private,no-store');
  if(req.method!=='POST'){res.status(405).json({ok:false});return}
@@ -97,6 +97,11 @@ export const createOwnerFollowerHttp542=({
  const receipt=Buffer.isBuffer(body)?
    verifiedBody(body,at,signature,secret,now()):null;
  if(!receipt){res.status(403).json({ok:false});return}
+ // APP574: do not look up Auth or write RTDB for a non-canary owner.
+ // Deployed endpoint always supplies canaryUid (empty means hard OFF).
+ if(canaryUid!==undefined && receipt.ownerUid!==canaryUid){
+  res.status(409).json({ok:false});return;
+ }
  try{
   const created=await verifyEpoch(auth,receipt);
   if(created===null){res.status(409).json({ok:false});return}
@@ -134,5 +139,6 @@ export const publishExploreOwnerFollower542=onRequest({
  }
  await createOwnerFollowerHttp542({
   auth:getAuth(),database:getDatabase(),secret:HMAC542.value(),
+  canaryUid:String(process.env.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||''),
  })(req,res);
 });

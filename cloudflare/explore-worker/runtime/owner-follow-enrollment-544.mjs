@@ -46,6 +46,10 @@ export async function handleOwnerEpochBinding544({
     !EPOCH.test(event.authEpoch)||event.at!==Number(at)||
     !Number.isSafeInteger(event.authCreatedAtMs)||event.authCreatedAtMs<=0)
   return reply(403,'INVALID_BODY');
+ // APP574: HMAC is necessary, but never sufficient to register other owners.
+ // An unset canary is an intentional hard OFF, before all D1/Auth reads.
+ if(event.uid!==String(env?.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||''))
+  return reply(409,'OWNER_CANARY_HOLD');
  // Signed *historical* events are not live Auth proof; fail closed if
  // Firebase Admin is unreachable or identifies a newer/deleted generation.
  let active;

@@ -77,6 +77,7 @@ const cloud={SORIDRAW_ENVIRONMENT:'preview',
  SORIDRAW_OWNER_FOLLOW_BIND_544:'1',
  SORIDRAW_OWNER_FOLLOW_AUTH_PROOF_547:'1',
  SORIDRAW_OWNER_FOLLOW_W2_PUSH_555:'1',
+ SORIDRAW_OWNER_FOLLOW_CANARY_UID_574:'A',
  SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544:secret,
  DB:{prepare(sql){return {bind(...args){return {
  async first(){selects++;const stmt=db.prepare(sql);
@@ -116,6 +117,13 @@ try{
  assert.equal(writes,beforeMixed,'TRANSPORT_CONFLICT_W0');
  delete cloud.SORIDRAW_OWNER_FOLLOW_OVERLAY_551;
  const q=selects,w=writes,a=authReads;
+ const deniedOwner=await handleOwnerEpochBinding544({
+  request:signer({action:'bind',uid:'A',authEpoch:oldEpoch,authCreatedAtMs:oldBirth}),
+  env:{...cloud,SORIDRAW_OWNER_FOLLOW_CANARY_UID_574:'B'},
+  now:()=>at,enabled:true,verify:async()=>{throw Error('CANARY_MUST_HOLD')},
+ });
+ assert.equal(deniedOwner.status,409);
+ assert.equal(selects,q);assert.equal(writes,w);assert.equal(authReads,a);
  const denied=await handleOwnerEpochBinding544({
   request:signer({action:'bind',uid:'A',authEpoch:oldEpoch,authCreatedAtMs:oldBirth}),
   env:{...cloud,SORIDRAW_OWNER_FOLLOW_AUTH_PROOF_547:'0'},now:()=>at,enabled:true,
@@ -181,4 +189,5 @@ try{
  console.log('APP547_PHYSICAL_PROFILE_DELETE_RECREATE_STALE_SIGNED_EVENT_DENIED=PASS');
  console.log('APP547_CURRENT_FIREBASE_ADMIN_HMAC_NONCE_PRE_POST_AUTH_PROOF=PASS');
  console.log('APP547_OFF_NO_D1_AUTH_READ_REPLAY_NO_ROW_RESURRECTION=PASS');
+ console.log('APP574_WRONG_CANARY_OWNER_D1_R0_W0_AUTH_R0=PASS');
 }finally{db.close()}

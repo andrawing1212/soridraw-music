@@ -65,9 +65,10 @@ export async function isCurrentOwnerEpoch547(
   current.customClaims?.soridrawFollowEpoch532===lifecycle.epoch;
 }
 export async function handleOwnerAuthProof547(request:Request,{
- auth,firestore,secret,now=Date.now,
+ auth,firestore,secret,now=Date.now,allowedUid,
 }:{
  auth:AuthGetter;firestore:FirestoreReader;secret:string;now?:()=>number;
+ allowedUid?:string;
 }):Promise<Response>{
  if(request.method!=='POST')return response(405,'{"ok":false}');
  if(typeof secret!=='string'||secret.length<32)
@@ -100,6 +101,9 @@ export async function handleOwnerAuthProof547(request:Request,{
     subject.at!==Number(atText)||
     !Number.isSafeInteger(subject.authCreatedAtMs)||subject.authCreatedAtMs<=0)
   return response(403,'{"ok":false}');
+ // APP574: old signed requests for any other UID cannot read Auth/Firestore.
+ if(allowedUid!==undefined&&subject.uid!==allowedUid)
+  return response(409,'{"ok":false}');
  try{
   if(!(await isCurrentOwnerEpoch547(subject,{auth,firestore})))
    return response(409,'{"ok":false}');
@@ -122,7 +126,8 @@ export const verifyOwnerFollowEpoch547Candidate=onRequest({
   new Request('https://owner-proof.internal/verify',{
    method:req.method,headers:req.headers as Record<string,string>,
    body:req.method==='POST'?req.rawBody?.toString('utf8'):undefined,
-  }),{auth:getAuth(),firestore:getFirestore(),secret:SECRET.value()});
+  }),{auth:getAuth(),firestore:getFirestore(),secret:SECRET.value(),
+    allowedUid:String(process.env.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||'')});
  res.status(result.status);
  result.headers.forEach((v,k)=>res.set(k,v));
  res.send(await result.text());

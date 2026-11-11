@@ -90,6 +90,9 @@ export const enrollOwnerFollow544Candidate=onCall({
  if(!APP544_ENROLLMENT_COMPILED_OPEN)
   throw new HttpsError('unavailable','OWNER_FOLLOW_OFF');
  if(!request.auth?.uid)throw new HttpsError('unauthenticated','LOGIN_REQUIRED');
+ // No implicit enrollment for ordinary logins or another tenant's user.
+ if(request.auth.uid!==String(process.env.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||''))
+  throw new HttpsError('permission-denied','OWNER_FOLLOW_CANARY_ONLY');
  return enrollAndBindOwner544({
   firestore:getFirestore(),auth:getAuth(),uid:request.auth.uid,secret:KEY.value(),
  });

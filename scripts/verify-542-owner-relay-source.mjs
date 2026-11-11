@@ -58,7 +58,8 @@ const slot={
 };
 const database={ref(key){assert.equal(key,'ownerFollowerSync532/A');return slot}};
 const handler=createOwnerFollowerHttp542({auth,database,secret,now:()=>at});
-const send=async ({revision=1,count=1,authEpoch=ep1,signatureInvalid=false,method='POST'}={})=>{
+const send=async ({revision=1,count=1,authEpoch=ep1,signatureInvalid=false,
+ method='POST',receiver=handler}={})=>{
  const body=Buffer.from(JSON.stringify({version:1,ownerUid:uid,authEpoch,
   revision,followerCount:count,updatedAt:at-100,at}));
  const signature=createHmac('sha256',secret).update(at+'.').update(body).digest('hex');
@@ -68,9 +69,21 @@ const send=async ({revision=1,count=1,authEpoch=ep1,signatureInvalid=false,metho
    if(name.endsWith('-Signature'))return signatureInvalid?'0'.repeat(64):signature;
    return undefined;}};
  const res={set(){return this},status(code){status=code;return {json(v){data=v}}}};
- await handler(req,res);return {status,data};
+ await receiver(req,res);return {status,data};
 };
 assert.equal((await send({signatureInvalid:true})).status,403);
+const noCanary=createOwnerFollowerHttp542({
+ auth:{getUser:async()=>{throw Error('CANARY_MUST_NOT_READ_AUTH')}},
+ database:{ref(){throw Error('CANARY_MUST_NOT_WRITE_RTDB')}},
+ secret,now:()=>at,canaryUid:'',
+});
+assert.equal((await send({receiver:noCanary})).status,409);
+const wrongCanary=createOwnerFollowerHttp542({
+ auth:{getUser:async()=>{throw Error('OTHER_OWNER_MUST_NOT_READ_AUTH')}},
+ database:{ref(){throw Error('OTHER_OWNER_MUST_NOT_WRITE_RTDB')}},
+ secret,now:()=>at,canaryUid:'B',
+});
+assert.equal((await send({receiver:wrongCanary})).status,409);
 assert.equal(changes,0);
 assert.equal((await send()).status,200);assert.equal(marker.version,1);
 assert.equal((await send()).data.applied,false);assert.equal(changes,1);
@@ -87,3 +100,4 @@ authFails=true;
 assert.equal((await send({revision:2,authEpoch:ep2})).status,503);
 assert.equal(marker.version,1);
 console.log('APP542_OWNER_HTTP_HMAC_EPOCH_REPLAY_OFF_AND_NO_LIVE_WIRING=PASS');
+console.log('APP574_FUNCTION_CANARY_UID_REQUIRED_BEFORE_AUTH_OR_RTDB=PASS');

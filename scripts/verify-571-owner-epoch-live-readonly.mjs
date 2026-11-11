@@ -14,8 +14,8 @@ const SQL=[
  "SELECT type,name,sql FROM sqlite_master WHERE (type='trigger' OR type='view') AND sql LIKE '%profile_stats%' ORDER BY type,name LIMIT 100",
  "SELECT id,phase FROM explore_follow_cutover_control_348 WHERE id=1 LIMIT 1",
 ];
-const forbidden=/\\b(?:UPDATE|DELETE|INSERT|ALTER|DROP|CREATE|REPLACE|ATTACH|VACUUM)\\b/i;
-const positional=/\\bINSERT\\s+(?:OR\\s+(?:REPLACE|IGNORE|ABORT|FAIL|ROLLBACK)\\s+)?INTO\\s+["'\x60\\[]?profile_stats["'\x60\\]]?\\s+VALUES\\s*\\(/i;
+const forbidden=/\b(?:UPDATE|DELETE|INSERT|ALTER|DROP|CREATE|REPLACE|ATTACH|VACUUM)\b/i;
+const positional=/\bINSERT\s+(?:OR\s+(?:REPLACE|IGNORE|ABORT|FAIL|ROLLBACK)\s+)?INTO\s+["'\x60\[]?profile_stats["'\x60\]]?\s+VALUES\s*\(/i;
 assert.equal(Object.keys(WORKERS).length,3);
 for(const q of SQL)assert.ok(q.startsWith('SELECT ')&&!forbidden.test(q),'APP571_READONLY_METADATA_SQL_ONLY');
 if(process.argv.includes('--self-test')){

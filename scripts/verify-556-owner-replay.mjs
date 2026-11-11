@@ -67,6 +67,17 @@ assert.equal((await replay()).status,'delivered');
 let fails=0;
 assert.equal((await replay(ticket,async()=>{fails++;throw Error('503')})).status,'relay-failed');
 assert.equal(fails,2);
+// APP564: signed HTTP 403 (bad HMAC) is never a safe generation ACK.
+// A transient secret rotation/config error cannot delete the durable ticket.
+let signed403=0;
+const mismatch=async()=>{signed403++;
+ return {ok:false,status:403,json:async()=>({ok:false})};
+};
+assert.equal((await replay(ticket,mismatch)).status,'relay-failed');
+assert.equal(signed403,2);
+const epochConflict=async()=>({ok:false,status:409,json:async()=>({ok:false})});
+assert.equal((await replay(ticket,epochConflict)).status,'rejected-generation');
+console.log('APP564_BAD_HMAC_403_RETAIN_RETRY_409_GENERATION_REJECT=PASS');
 const before={...c};
 assert.equal((await replay({...ticket,operationId:'bad'})).status,'invalid-reservation');
 assert.equal((await replay({...ticket,beforeFollowing:true})).status,'invalid-reservation');

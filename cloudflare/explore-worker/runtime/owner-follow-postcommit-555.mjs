@@ -62,7 +62,11 @@ async function deliverSettledOwner555({
   try{
    const sent=await sendOwnerFollowHttp539(event,{endpoint,secret,send,now});
    if(sent.ok)return outcome('delivered',{deliveredRevision:version});
-   if(sent.status===403||sent.status===409)
+   // APP564: Firebase 403 means invalid HMAC, not an Auth-incarnation
+   // mismatch. Dropping a durable reservation here permanently loses an
+   // otherwise committed follow event after transient secret/config skew.
+   // Only the receiver's explicit 409 generation mismatch is terminal.
+   if(sent.status===409)
     return outcome('rejected-generation');
   }catch{/* A failed transport is never acknowledged. */}
  }

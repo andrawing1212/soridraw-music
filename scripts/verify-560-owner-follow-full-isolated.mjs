@@ -11,8 +11,11 @@ import {createRequire} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {runOwnerFollowPrecommit557,APP557_OWNER_PRECOMMIT_COMPILED_OPEN}
  from '../cloudflare/explore-worker/runtime/owner-follow-precommit-557.mjs';
-import {createOwnerFollowRecovery556,OWNER_FOLLOW_RECOVERY_556_COMPILED_OPEN}
+import {OWNER_FOLLOW_RECOVERY_556_COMPILED_OPEN}
  from '../cloudflare/explore-worker/runtime/owner-follow-recovery-556.mjs';
+import {createOwnerFollowDoService564,reserveOwnerFollowViaDo557,OwnerFollowerRecovery557,
+ APP564_OWNER_FOLLOW_DO_BRIDGE_COMPILED_OPEN}
+ from '../cloudflare/explore-worker/runtime/owner-follow-do-557.mjs';
 import {replayOwnerFollowReservation556}
  from '../cloudflare/explore-worker/runtime/owner-follow-postcommit-555.mjs';
 const require=createRequire(import.meta.url);
@@ -41,6 +44,7 @@ const {createOwnerEpochGate538,APP538_OWNER_CLIENT_GATE_COMPILED_OPEN}=
  require('../src/services/exploreOwnerFollowerEpochCore538.ts');
 assert.equal(APP557_OWNER_PRECOMMIT_COMPILED_OPEN,false);
 assert.equal(OWNER_FOLLOW_RECOVERY_556_COMPILED_OPEN,false);
+assert.equal(APP564_OWNER_FOLLOW_DO_BRIDGE_COMPILED_OPEN,false);
 assert.equal(APP542_OWNER_HTTP_COMPILED_OPEN,false);
 assert.equal(APP538_OWNER_CLIENT_GATE_COMPILED_OPEN,false);
 const clock=1800000000000, epoch='0123456789abcdef0123456789abcdef';
@@ -223,10 +227,20 @@ const send=async(url,opts)=>{
  await receiver(req,res);
  return {status,ok:status>=200&&status<300,json:async()=>data};
 };
-const engine=createOwnerFollowRecovery556({
+const doService=createOwnerFollowDoService564({
  state:{storage:store},env,enabled:true,now:()=>clock,
  deliver:opts=>replayOwnerFollowReservation556({...opts,send,now:()=>clock}),
 });
+// The exact Worker DO stub path is exercised, rather than the engine directly.
+let doStubCalls=0;
+env.OWNER_FOLLOW_RECOVERY_557={
+ idFromName:uid=>{assert.equal(uid,'A');return uid},
+ get:uid=>{
+  assert.equal(uid,'A');
+  return {fetch:async(url,init)=>{doStubCalls++;
+   return doService.fetch(new Request(url,init));}};
+ },
+};
 let reservationWrites=0,canonicalCalls=0,principal='B';
 const authenticate=async()=>{
  if(principal===null)return {ok:false,response:new Response('401',{status:401})};
@@ -239,12 +253,26 @@ const follow=async({id,expected,method='PUT'}={})=>{
   body:JSON.stringify({followOperationId:id,followExpectedRevision:expected}),
  });
  return runOwnerFollowPrecommit557({request,env,authenticate,enabled:true,
-  reserve:async ticket=>{reservationWrites++;return engine.reserve(ticket)},
+  reserve:async ticket=>{reservationWrites++;
+   return reserveOwnerFollowViaDo557(ticket,env)},
   callCanonical:async()=>{canonicalCalls++;return responseAck(id,expected,following)},
  });
 };
 const changed1='op_1234567890abcdef',noopId='op_234567890abcdef',
  changed2='op_34567890abcdef12',changed3='op_4567890abcdef123';
+const exportedDO=new OwnerFollowerRecovery557({storage:store},env);
+assert.equal((await exportedDO.alarm()).status,'disabled');
+const offDo=createOwnerFollowDoService564({state:{storage:store},env});
+const endpointDo='https://soridraw.internal/owner-follow/reserve557';
+assert.equal((await offDo.fetch(new Request(endpointDo,{method:'POST',body:'{}'}))).status,503);
+assert.equal((await doService.fetch(new Request('https://soridraw.internal/no-route',{
+ method:'POST',body:'{}'}))).status,404);
+assert.equal((await doService.fetch(new Request(endpointDo,{
+ method:'POST',body:'x'.repeat(2048)}))).status,413);
+assert.equal((await doService.fetch(new Request(endpointDo,{
+ method:'POST',body:'not-json'}))).status,400);
+assert.equal(ledger.doPut,0,'bad or disabled DO requests cannot mutate storage');
+console.log('APP564_REAL_DO_HTTP_ADAPTER_OFF_AND_UNTRUSTED_INPUT=PASS');
 const baseline={...ledger};
 const first=await follow({id:changed1,expected:0});
 assert.equal(first.status,200);
@@ -252,8 +280,9 @@ const ack1=(await first.json()).data;
 assert.equal(ack1.duplicate,false);
 assert.equal(file(ownerKey).value.body.data.profile.followerCount,1);
 assert.equal(reservationWrites,1);
+assert.equal(doStubCalls,1,'precommit must invoke the actual bound DO adapter');
 assert.equal(ownerMarker,null,'NO_EVENT_BEFORE_ALARM');
-assert.equal((await engine.alarm()).status,'delivered');
+assert.equal((await doService.alarm()).status,'delivered');
 assert.equal(ownerMarker.followerCount,1);
 assert.equal(ownerMarker.version,19);
 assert.equal(ledger.rtdbWrite,1);
@@ -266,6 +295,7 @@ assert.equal(firstCosts.doAlarm,1);
 assert.equal(firstCosts.doDelete,1);
 assert.equal(firstCosts.rtdbWrite,1);
 console.log('APP560_CHANGED_FOLLOW_CANONICAL_PAIR_TO_SIGNED_RTDB_RECEIPT=PASS');
+console.log('APP564_WORKER_DO_STUB_ALARM_HMAC_OWNER_RTDB_COMPLETE=PASS');
 const beforeDuplicateReads=ledger.r2Read;
 const duplicated=await follow({id:changed1,expected:0});
 assert.equal(duplicated.status,200);
@@ -286,7 +316,7 @@ const ack2Revision=file(pairKey).value.revision;
 const removed=await follow({id:changed2,expected:ack2Revision,method:'DELETE'});
 assert.equal(removed.status,200);
 assert.equal(file(ownerKey).value.body.data.profile.followerCount,0);
-assert.equal((await engine.alarm()).status,'delivered');
+assert.equal((await doService.alarm()).status,'delivered');
 assert.equal(ownerMarker.followerCount,0);
 assert.equal(ownerMarker.version,20);
 const ui=[],gate=createOwnerEpochGate538({
@@ -304,9 +334,9 @@ const ack3Revision=file(pairKey).value.revision;
 dropReceiver=2;
 const retry=await follow({id:changed3,expected:ack3Revision});
 assert.equal(retry.status,200);
-assert.equal((await engine.alarm()).status,'retry-scheduled');
+assert.equal((await doService.alarm()).status,'retry-scheduled');
 assert.equal(state.get('pending').entries.length,1,'WEBHOOK_FAILURE_RETAIN_RESERVATION');
-assert.equal((await engine.alarm()).status,'delivered');
+assert.equal((await doService.alarm()).status,'delivered');
 assert.equal(ownerMarker.followerCount,1);
 assert.equal(ownerMarker.version,21);
 assert.equal(ledger.rtdbWrite,3);
@@ -324,7 +354,7 @@ await assert.rejects(()=>follow({id:interruptedId,
  /SYNTHETIC_CRASH_AFTER_CANONICAL_D1_COMMIT/);
 const settledD1Writes=ledger.d1LogicalMutation;
 assert.equal(state.get('pending').entries.length,1);
-assert.equal((await engine.alarm()).status,'retry-scheduled');
+assert.equal((await doService.alarm()).status,'retry-scheduled');
 assert.equal(ownerMarker.followerCount,priorOwnerCount,
  'PARTIAL_D1_COMMIT_CANNOT_PUBLISH_OLD_OWNER_R2_COUNT');
 const resume=await follow({id:interruptedId,
@@ -334,7 +364,7 @@ assert.equal((await resume.json()).data.duplicate,true);
 assert.equal(ledger.d1LogicalMutation,settledD1Writes,
  'AMBIGUOUS_CANONICAL_COMMIT_MUST_NOT_WRITE_EFFECTIVE_EDGE_TWICE');
 assert.equal(reservationWrites,4,'EXACT_OP_ID_RETRY_MUST_NOT_RESERVE_TWICE');
-assert.equal((await engine.alarm()).status,'delivered');
+assert.equal((await doService.alarm()).status,'delivered');
 assert.equal(ownerMarker.followerCount,0);
 assert.equal(ownerMarker.version,22);
 console.log('APP560_D1_COMMITTED_R2_UNSETTLED_RESUME_SAME_ID_NO_DOUBLE_MUTATION=PASS');
@@ -351,10 +381,28 @@ const removedAgain=await follow({id:'op_7890abcdef123456',expected:latestRev,met
 assert.equal(removedAgain.status,200);
 incarnation='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const prevRtWrites=ledger.rtdbWrite;
-assert.equal((await engine.alarm()).status,'rejected-generation');
+assert.equal((await doService.alarm()).status,'rejected-generation');
 assert.equal(ledger.rtdbWrite,prevRtWrites);
 assert.equal(state.has('pending'),false);
 console.log('APP560_UNAUTHENTICATED_AND_RECREATED_OWNER_NO_CROSS_GENERATION=PASS');
+// Even a valid authenticated owner cannot run a canonical mutation when its
+// required private DO namespace is missing. A failed precommit is fail-closed.
+const boundNS=env.OWNER_FOLLOW_RECOVERY_557,priorCanon=canonicalCalls;
+delete env.OWNER_FOLLOW_RECOVERY_557;
+const disconnected=await follow({id:'op_9876543210abcdef',
+ expected:file(pairKey).value.revision,method:'DELETE'});
+assert.equal(disconnected.status,503);
+assert.equal(canonicalCalls,priorCanon);
+env.OWNER_FOLLOW_RECOVERY_557=boundNS;
+// Public requests cannot reach a DO reserve route through the existing entry.
+const entry=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
+assert.match(entry,/APP557_OWNER_PRECOMMIT_COMPILED_OPEN &&/);
+assert.match(entry,/authenticate:validateExploreAuth307/);
+assert.match(entry,/reserve:reserveOwnerFollowViaDo557,enabled:true/);
+assert.match(entry,/response=await baseWorker.fetch\\(request,env,ctx\\)/);
+assert.equal(entry.includes("'/owner-follow/reserve557'"),false,
+ 'internal Durable Object route must not be registered as public HTTP API');
+console.log('APP564_MISSING_DO_BINDING_FAIL_CLOSED_AND_PUBLIC_ROUTE_ABSENT=PASS');
 assert.equal(db.prepare('SELECT COUNT(*) AS n FROM explore_follow_overrides_348').get().n,1,
  'REAL_CANONICAL_TOUCH_FENCE_STAYS_A_SINGLE_OVERLAY_ROW');
 console.log('APP560_ISOLATED_SOURCE_COST_LEDGER='+JSON.stringify({

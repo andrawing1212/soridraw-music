@@ -3707,7 +3707,7 @@ export default {
        (request.method==='PUT'||request.method==='DELETE')){
       response=await runOwnerFollowPrecommit557({
         request,env,ctx,authenticate:validateExploreAuth307,
-        callCanonical:()=>baseWorker.fetch(request,env,ctx),
+        callCanonical:(canonicalRequest=request)=>baseWorker.fetch(canonicalRequest,env,ctx),
         reserve:reserveOwnerFollowViaDo557,enabled:true,
       });
     }else{

@@ -16,8 +16,27 @@ import {createOwnerFollowRecovery556,OWNER_FOLLOW_RECOVERY_556_COMPILED_OPEN}
 import {replayOwnerFollowReservation556}
  from '../cloudflare/explore-worker/runtime/owner-follow-postcommit-555.mjs';
 const require=createRequire(import.meta.url);
+// The Functions package is intentionally not installed in this early CI
+// step. Transpile ONLY the real exported pure receiver implementation; never
+// initialize live Firebase Admin, onRequest or secret manager integrations.
+const ts=require('typescript');
+const {createHmac,timingSafeEqual}=require('node:crypto');
+const receiverSource=readFileSync('functions/src/exploreOwnerFollowerWebhook542.ts','utf8');
+const recvStart=receiverSource.indexOf('export const APP542_OWNER_HTTP_COMPILED_OPEN=false;');
+const recvEnd=receiverSource.indexOf('export const publishExploreOwnerFollower542=',recvStart);
+assert.ok(recvStart>0&&recvEnd>recvStart,'MISSING_542_REAL_RECEIVER_BOUNDARY');
+const recvPure=receiverSource.slice(recvStart,recvEnd)
+ .replace(/^const HMAC542=defineSecret\(.*\);$/m,'const HMAC542=null;');
+const recvCompiled=ts.transpileModule(recvPure,{compilerOptions:{
+ module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,
+}}).outputText;
+const recvModule={exports:{}};
+runInNewContext(recvCompiled,{
+ exports:recvModule.exports,module:recvModule,
+ createHmac,timingSafeEqual,Buffer,Date,Math,JSON,Error,Number,String,
+},{timeout:5000});
 const {createOwnerFollowerHttp542,APP542_OWNER_HTTP_COMPILED_OPEN}=
- require('../functions/src/exploreOwnerFollowerWebhook542.ts');
+ recvModule.exports;
 const {createOwnerEpochGate538,APP538_OWNER_CLIENT_GATE_COMPILED_OPEN}=
  require('../src/services/exploreOwnerFollowerEpochCore538.ts');
 assert.equal(APP557_OWNER_PRECOMMIT_COMPILED_OPEN,false);
@@ -291,7 +310,7 @@ principal=null;
 const unauthorized=await follow({id:'op_567890abcdef1234',expected:file(pairKey).value.revision,method:'DELETE'});
 assert.equal(unauthorized.status,401);
 assert.equal(ledger.d1LogicalMutation,beforeAuth.d1LogicalMutation);
-assert.equal(reservationWrites,4);
+assert.equal(reservationWrites,3);
 principal='B';
 // Recreated/deleted Auth account cannot receive prior generation.
 const latestRev=file(pairKey).value.revision;

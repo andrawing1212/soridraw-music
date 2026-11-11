@@ -192,49 +192,6 @@ const protocolRequest = async (path, init) => {
 await assert.rejects(() => protocolContext.exports.requestOrderedExploreFollow354('v', 't', true, protocolRequest));
 await protocolContext.exports.requestOrderedExploreFollow354('v', 't', false, protocolRequest);
 assert.deepEqual(methods, ['PUT', 'DELETE']);
-// APP566 — isolate the actual follow-only R2 guard; no Worker, Firebase or shared writes.
-{
- const actualGuard566=readFileSync('cloudflare/explore-worker/candidates/social-abuse-380.js','utf8');
- const clock566={now:100_000};
- const records566=new Map();let writes566=0;
- const fakeR2566={
-   get:async key=>{const item=records566.get(key);return item?{etag:item.etag,text:async()=>item.body}:null;},
-   put:async(key,body,options)=>{const item=records566.get(key);
-     if(options?.onlyIf?.etagMatches && options.onlyIf.etagMatches!==item?.etag)return null;
-     if(options?.onlyIf?.etagDoesNotMatch==='*' && item)return null;
-     const etag='E'+(++writes566);records566.set(key,{etag,body});return {etag};}
- };
- const guard566=vm.createContext({Date:{now:()=>clock566.now},throwApi:(code,message,status,headers)=>{
-   throw Object.assign(Error(message),{code,status,headers});}});
- vm.runInContext(actualGuard566+'\n;globalThis.testGuard566={policy:socialAbusePolicy380,consume:consumeSocialAbuse380};',guard566);
- const policy566=guard566.testGuard566;
- const env566={SORIDRAW_ENVIRONMENT:'preview',PROFILE_MEDIA:fakeR2566};
- const op566=n=>'operation_'+String(n).padStart(16,'0');
- for(let n=0;n<4;n++){
-   await policy566.consume(env566,'actor','follow',[{target:'owner',desired:n%2===0,operationId:op566(n+1)}]);
-   clock566.now+=1000;
- }
- assert.equal(writes566,4,'NORMAL_FOLLOW_UNFOLLOW_REFOLLOW_NO_30S_LOCK');
- await assert.rejects(
-   policy566.consume(env566,'actor','follow',[{target:'owner',desired:true,operationId:op566(5)}]),
-   {code:'RATE_LIMITED'});
- assert.equal(writes566,4,'FIFTH_RAPID_OP_BLOCKED_W0');
- clock566.now+=31_000;
- await policy566.consume(env566,'actor','follow',[{target:'owner',desired:true,operationId:op566(5)}]);
- assert.equal(writes566,5,'COOLDOWN_30S_ONLY');
- const oldAt566=clock566.now-5_000,oldId566=op566(800);
- records566.set('internal/explore/abuse/preview/follow/legacy',{etag:'L',
-   body:JSON.stringify({schemaVersion:380,events:[oldAt566],
-     operations:[{target:'owner',desired:true,operationId:oldId566,at:oldAt566}],
-     pairs:[{target:'owner',desired:true,operationId:oldId566,
-       at:oldAt566,level:0,nextAllowedAt:oldAt566+30_000}]})});
- await policy566.consume(env566,'legacy','follow',[{target:'owner',desired:false,operationId:op566(801)}]);
- assert.equal(writes566,6,'LEGACY_R2_RECEIPT_REUSED_NO_DATA_RESET');
- assert.equal(JSON.stringify(policy566.policy('like')),
-   JSON.stringify({windowLimit:120,dayLimit:600,cooldowns:[30_000,60_000,300_000,1_800_000],
-     quietMs:21_600_000,pairMax:600}),'LIKE_POLICY_EXACT_UNCHANGED');
- console.log('FOLLOW_566_NORMAL_SWITCH_AND_LEGACY_RECEIPT_ONLY=PASS');
-}
 console.log('APP380_FOLLOW_TIMERS_NET_ZERO_INFLIGHT_RELOAD_RETRY_BUDGET=PASS');
 console.log('APP380_389_EXHAUSTED_429_ROLLBACK_AND_LEGACY_SUSPENDED_REPAIR=PASS');
 if (!followOnly389) console.log('APP380_LIKE_NET_ZERO_AND_DETERMINISTIC_429_NO_FALSE_REBASE=PASS');

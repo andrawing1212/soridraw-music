@@ -235,6 +235,12 @@ jobs:
           node scripts/verify-482-preview-writer-release-gate.mjs --self-test
           # app487: prevent stale app427 empty-command semantics in any later release
           node scripts/verify-427-legacy-next-song-parity.mjs
+      - name: APP563 postcommit R2 alternative feasibility and reject unsafe legacy paths
+        run: |
+          node --check cloudflare/explore-worker/candidates/563-follow-r2-postcommit-feasibility.mjs
+          node --check scripts/verify-563-follow-r2-alternatives.mjs
+          SORIDRAW_CURRENT_FOLLOW_RUNTIME=1 node scripts/verify-563-follow-r2-alternatives.mjs
+          echo 'APP563_SOURCE_FEASIBILITY_ONLY=PASS;RELEASE=NO_GO;SHARED_BACKEND_UNCHANGED'
       - name: APP562 canonical R2 PUT budget and late-crash isolated recovery
         run: |
           node --check scripts/verify-562-follow-r2-put-budget.mjs

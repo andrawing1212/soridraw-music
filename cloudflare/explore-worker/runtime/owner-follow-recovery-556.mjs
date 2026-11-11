@@ -47,8 +47,17 @@ export function createOwnerFollowRecovery556({
    entries:[...entries,{...record,generation,attempts:0,dead:false}]};
   // SQLite-backed DO storage batches these consecutive writes. Both awaited
   // promises MUST succeed before the canonical mutation may begin.
+  // Keep an already-earlier alarm instead of resetting its one-second timer
+  // for every incoming follower. Avoids a billed setAlarm write on bursts and
+  // prevents starvation under constant follows. Never skip when absent,
+  // overdue, or beyond the desired wake-up deadline.
+  const at=now(),due=at+INITIAL_MS;
+  const scheduled=typeof storage.getAlarm==='function'
+   ?await storage.getAlarm():null;
+  const canReuse=Number.isSafeInteger(scheduled)&&
+   scheduled>at&&scheduled<=due;
   const put=storage.put('pending',next);
-  const wake=storage.setAlarm(now()+INITIAL_MS);
+  const wake=canReuse?Promise.resolve():storage.setAlarm(due);
   await Promise.all([put,wake]);
   return {ok:true,status:'reserved',generation};
  };

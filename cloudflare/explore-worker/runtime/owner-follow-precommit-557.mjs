@@ -38,6 +38,27 @@ export async function runOwnerFollowPrecommit557({
  if(!auth?.ok)return auth?.response||fail('authentication-failed');
  if(!UID.test(String(auth.uid||''))||auth.uid===parts[3])
   return callCanonical(); // canonical owns its SELF_FOLLOW validation
+ // A valid same-state request goes to the frozen canonical Writer. This
+ // exact relation query is already needed for changed reservations; putting it
+ // first saves cutover/profile/intent R2 GETs for the common no-op case.
+ let row;
+ try{
+  // One bounded indexed/current relation+enrollment read. The actor UID is
+  // verified by Firebase auth, never trusted from the request body.
+  row=await env.DB.prepare(`SELECT
+   owner_follow_auth_epoch_532 AS epoch,
+   EXISTS(SELECT 1 FROM follows WHERE follower_uid=? AND following_uid=?) AS baseline,
+   (SELECT following FROM explore_follow_overrides_348
+      WHERE follower_uid=? AND following_uid=? LIMIT 1) AS override_following
+   FROM profile_stats WHERE uid=? LIMIT 1`)
+   .bind(auth.uid,parts[3],auth.uid,parts[3],parts[3]).first();
+ }catch{return fail('owner-enrollment-unavailable')}
+ const beforeFollowing=row.override_following===null||
+   row.override_following===undefined?Boolean(row.baseline):
+   Number(row.override_following)===1;
+ const desired=request.method==='PUT';
+ if(beforeFollowing===desired)return callCanonical(); // canonical still validates/repairs exact no-op
+
  const media=env?.PROFILE_MEDIA;
  if(!media||typeof media.get!=='function')return fail('r2-unavailable');
  let manifest,profile,intent;
@@ -53,15 +74,8 @@ export async function runOwnerFollowPrecommit557({
      manifest?.legacyCounterWritersFrozen!==true||
      typeof manifest.cutoverToken!=='string'||
      !manifest.cutoverToken||manifest.cutoverToken.length>128)return fail('cutover-not-ready');
-  const p=await media.get(keyProfile(parts[3]));
-  if(!p)return fail('profile-unavailable');
-  profile=await readJson(p);
-  const v=profile?.followSync354;
-  if(profile?.body?.data?.profile?.uid!==parts[3]||
-     !Number.isSafeInteger(profile.revision)||profile.revision<=0||
-     v?.token!==manifest.cutoverToken||v?.exact!==true||
-     !v.pending||typeof v.pending!=='object'||
-     Object.keys(v.pending).length!==0)return fail('profile-not-exact');
+  // Check exact pair intent before reading owner profile. Canonical owns the
+  // retry of an already reserved operation; no redundant owner R2 GET.
   const ip=await media.get(keyIntent(manifest.cutoverToken,auth.uid,parts[3]));
   intent=ip?await readJson(ip):null;
   if(intent&&(!intent.token||intent.token!==manifest.cutoverToken||
@@ -77,27 +91,21 @@ export async function runOwnerFollowPrecommit557({
   }
   if(intent&&!intent.settled)return fail('intent-not-settled');
   if(Number(intent?.revision||0)!==body.followExpectedRevision)
-   return fail('intent-revision-stale');
+   return fail('intent-revision-stale'); 
+  // Only a new changed operation needs a pre-mutation revision floor.
+  const p=await media.get(keyProfile(parts[3]));
+  if(!p)return fail('profile-unavailable');
+  profile=await readJson(p);
+  const v=profile?.followSync354;
+  if(profile?.body?.data?.profile?.uid!==parts[3]||
+     !Number.isSafeInteger(profile.revision)||profile.revision<=0||
+     v?.token!==manifest.cutoverToken||v?.exact!==true||
+     !v.pending||typeof v.pending!=='object'||
+     Object.keys(v.pending).length!==0)return fail('profile-not-exact');
+
  }catch{return fail('preflight-read-unavailable')}
- let row;
- try{
-  // One bounded indexed/current relation+enrollment read. The actor UID is
-  // verified by Firebase auth, never trusted from the request body.
-  row=await env.DB.prepare(`SELECT
-   owner_follow_auth_epoch_532 AS epoch,
-   EXISTS(SELECT 1 FROM follows WHERE follower_uid=? AND following_uid=?) AS baseline,
-   (SELECT following FROM explore_follow_overrides_348
-      WHERE follower_uid=? AND following_uid=? LIMIT 1) AS override_following
-   FROM profile_stats WHERE uid=? LIMIT 1`)
-   .bind(auth.uid,parts[3],auth.uid,parts[3],parts[3]).first();
- }catch{return fail('owner-enrollment-unavailable')}
  if(!/^[0-9a-f]{32}$/.test(String(row?.epoch||'')))
   return fail('owner-not-enrolled');
- const beforeFollowing=row.override_following===null||
-   row.override_following===undefined?Boolean(row.baseline):
-   Number(row.override_following)===1;
- const desired=request.method==='PUT';
- if(beforeFollowing===desired)return callCanonical(); // noop: no DO write
  const ticket={ownerUid:parts[3],actorUid:auth.uid,
    authEpoch:String(row.epoch),operationId:body.followOperationId,
    expectedRevision:body.followExpectedRevision,

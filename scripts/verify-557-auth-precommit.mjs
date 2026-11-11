@@ -7,7 +7,7 @@ import {reserveOwnerFollowViaDo557}
  from '../cloudflare/explore-worker/runtime/owner-follow-do-557.mjs';
 assert.equal(APP557_OWNER_PRECOMMIT_COMPILED_OPEN,false);
 const id='op_1234567890abcdef',epoch='0123456789abcdef0123456789abcdef';
-let baseline=0,cutoverReady=true,profileExact=true,stale=false,authOK=true,doOK=true;
+let baseline=0,cutoverReady=true,profileExact=true,stale=false,sameId=false,authOK=true,doOK=true;
 const tally={auth:0,canonical:0,reserve:0,r2:0,d1R:0,d1W:0};
 const env={SORIDRAW_ENVIRONMENT:'preview',SORIDRAW_OWNER_FOLLOW_W2_PUSH_555:'1',
  PROFILE_MEDIA:{get:async key=>{
@@ -25,6 +25,10 @@ const env={SORIDRAW_ENVIRONMENT:'preview',SORIDRAW_OWNER_FOLLOW_W2_PUSH_555:'1',
   assert.equal(key,'internal/explore/follow-intents-v354/cutover-token/B/A.json');
   if(stale)return {text:async()=>JSON.stringify({token:'cutover-token',actor:'B',target:'A',
     revision:5,settled:true})};
+  if(sameId)return {text:async()=>JSON.stringify({
+    token:'cutover-token',actor:'B',target:'A',id,
+    following:true,expectedRevision:0,revision:5,settled:false,
+  })};
   return null; // fresh pair, expectedRevision=0
  }},
  DB:{prepare:sql=>{assert.match(sql,/explore_follow_overrides_348/);return {bind:(...args)=>{
@@ -56,10 +60,18 @@ assert.deepEqual({actor:lastTicket.actorUid,owner:lastTicket.ownerUid,
  {actor:'B',owner:'A',op:id,expected:0,desired:true,before:false,prior:18});
 assert.equal(tally.reserve,1);
 baseline=1;
-const writes=tally.reserve;
+const writes=tally.reserve,beforeNoopR2=tally.r2;
 assert.equal((await run()).status,200);
 assert.equal(tally.reserve,writes,'canonical no-op must NOT reserve a DO alarm');
-baseline=0;doOK=false;
+assert.equal(tally.r2,beforeNoopR2,'no-op admission must consume ZERO extra R2 GETs');
+// Existing exact operation may be pending after an ambiguous canonical ACK.
+// One manifest + one pair intent read suffices; no owner profile read, no DO.
+baseline=0;sameId=true;
+const beforeRetryR2=tally.r2,beforeRetryReserves=tally.reserve;
+assert.equal((await run()).status,200);
+assert.equal(tally.r2-beforeRetryR2,2,'same-id retry must skip owner R2 GET');
+assert.equal(tally.reserve,beforeRetryReserves,'same-id retry cannot reserve twice');
+sameId=false;doOK=false;
 const beforeCanonical=tally.canonical;
 assert.equal((await run()).status,503);
 assert.equal(tally.canonical,beforeCanonical,'DO persistence failure must block canonical mutation');

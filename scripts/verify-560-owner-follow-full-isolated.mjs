@@ -266,14 +266,20 @@ assert.equal(firstCosts.doAlarm,1);
 assert.equal(firstCosts.doDelete,1);
 assert.equal(firstCosts.rtdbWrite,1);
 console.log('APP560_CHANGED_FOLLOW_CANONICAL_PAIR_TO_SIGNED_RTDB_RECEIPT=PASS');
+const beforeDuplicateReads=ledger.r2Read;
 const duplicated=await follow({id:changed1,expected:0});
 assert.equal(duplicated.status,200);
 assert.equal((await duplicated.json()).data.duplicate,true);
+assert.equal(ledger.r2Read-beforeDuplicateReads,1,
+ 'same-state operation replay skips all precommit R2 and uses canonical pair GET');
 assert.equal(reservationWrites,1,'DUPLICATE_OPERATION_MUST_NOT_ALLOCATE_ALARM');
 assert.equal(ledger.d1LogicalMutation,1);
+const beforeNoopReads=ledger.r2Read;
 const noop=await follow({id:noopId,expected:ack1.revision});
 assert.equal(noop.status,200);
 assert.equal((await noop.json()).data.duplicate,true);
+assert.equal(ledger.r2Read-beforeNoopReads,4,
+ 'same-state intent uses ONLY original canonical 4 R2 GETs; precommit R2 zero');
 assert.equal(reservationWrites,1,'SAME_STATE_MUST_NOT_ALLOCATE_ALARM');
 assert.equal(ledger.d1LogicalMutation,1);
 const ack2Revision=file(pairKey).value.revision;

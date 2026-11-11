@@ -14,6 +14,7 @@ const index=read('functions/src/index.ts');
 const entry=read('cloudflare/explore-worker/canonical/preview-entry.js');
 const page=read('src/pages/ExplorePage.tsx');
 const client=read('src/services/exploreOwnerFollowerSync542.ts');
+const fb=read('src/firebase.js');
 const sender=read('cloudflare/explore-worker/runtime/owner-follow-http-539.mjs');
 const worker=read('cloudflare/explore-worker/canonical/preview-worker.js');
 assert.equal(APP542_OWNER_HTTP_COMPILED_OPEN,false);
@@ -34,6 +35,15 @@ assert.match(sender,/HTTP_RELEASE='https:\/\/asia-northeast3-soridraw-app-866a5.
 assert.match(client,/EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED=false/);
 assert.match(client,/ownerFollowerSync532/);
 assert.match(client,/soridrawFollowEpoch532/);
+// APP575: non-canary page visits and login remain completely inert.
+// A one-shot caller may refresh its own Auth token only on explicit QA URL.
+assert.match(client,/APP575_OWNER_CANARY_BOOTSTRAP_ENABLED=false/);
+assert.match(client,/hostname==='preview.soridraw.com'/);
+assert.match(client,/ownerFollowCanary/);
+assert.match(client,/enrollmentAttempts575=new Map/);
+assert.match(client,/getIdTokenResult\(principal,true\)/);
+assert.match(client,/await tryOwnerFollowCanaryEnrollment575\(uid,principal\)/);
+assert.match(fb,/ownerFollowCanaryFunctions575 = getFunctions\(app, "asia-northeast3"\)/);
 assert.doesNotMatch(page,/subscribeExploreOwnerFollower529|createOwnerFollowerGate529/);
 assert.match(page,/createOwnerEpochGate538/);
 assert.match(page,/subscribeExploreOwnerFollower542/);
@@ -101,3 +111,4 @@ assert.equal((await send({revision:2,authEpoch:ep2})).status,503);
 assert.equal(marker.version,1);
 console.log('APP542_OWNER_HTTP_HMAC_EPOCH_REPLAY_OFF_AND_NO_LIVE_WIRING=PASS');
 console.log('APP574_FUNCTION_CANARY_UID_REQUIRED_BEFORE_AUTH_OR_RTDB=PASS');
+console.log('APP575_PREVIEW_EXPLICIT_OWNER_ENROLLMENT_ONCE_DEFAULT_OFF=PASS');

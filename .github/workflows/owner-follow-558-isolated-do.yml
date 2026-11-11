@@ -44,7 +44,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: {node-version: '22'}
       - name: Install exact pinned Wrangler only
-        run: npm ci --prefix cloudflare/explore-worker --ignore-scripts --no-audit --no-fund
+        run: npm install --prefix cloudflare/explore-worker --ignore-scripts --no-save --package-lock=false --no-audit --no-fund
       - name: Real Cloudflare run-owned DO persistence alarm replay and cost bounds
         run: node scripts/measure-558-owner-do-physical.mjs
       - name: Always delete only exact run-owned synthetic DO class and Worker

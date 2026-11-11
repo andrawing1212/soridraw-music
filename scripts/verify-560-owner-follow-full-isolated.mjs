@@ -108,7 +108,7 @@ const env={SORIDRAW_ENVIRONMENT:'preview',SORIDRAW_OWNER_FOLLOW_W2_PUSH_555:'1',
      ledger.d1Read++;
      assert.deepEqual(args,['B','A','B','A','A']);
      const row=db.prepare('SELECT following FROM explore_follow_overrides_348 WHERE follower_uid=? AND following_uid=?').get('B','A');
-     return {epoch:ownerEpochRead().epoch,baseline:0,
+     return {epoch:db.prepare('SELECT owner_follow_auth_epoch_532 AS epoch FROM profile_stats WHERE uid=?').get('A')?.epoch,baseline:0,
       override_following:row?Number(row.following):null};
     }
     if(sql.includes('owner_follow_auth_epoch_532 AS epoch')){
@@ -305,16 +305,43 @@ assert.equal(ownerMarker.followerCount,1);
 assert.equal(ownerMarker.version,21);
 assert.equal(ledger.rtdbWrite,3);
 console.log('APP560_REAL_RECEIVER_HTTP503_THEN_DURABLE_REPLAY=PASS');
+// Crash after canonical D1 change but before profile R2 materialization/intent
+// settlement: the existing precommit reservation MUST survive. The exact
+// identical mutation ID retries through canonical repair, no new DO alarm or
+// second effective D1 mutation. Only then can the owner receive a count.
+const interruptedId='op_567890abcdef1234';
+const interruptedRevision=file(pairKey).value.revision;
+const priorOwnerCount=ownerMarker.followerCount;
+dropAfterD1=true;
+await assert.rejects(()=>follow({id:interruptedId,
+ expected:interruptedRevision,method:'DELETE'}),
+ /SYNTHETIC_CRASH_AFTER_CANONICAL_D1_COMMIT/);
+const settledD1Writes=ledger.d1LogicalMutation;
+assert.equal(state.get('pending').entries.length,1);
+assert.equal((await engine.alarm()).status,'retry-scheduled');
+assert.equal(ownerMarker.followerCount,priorOwnerCount,
+ 'PARTIAL_D1_COMMIT_CANNOT_PUBLISH_OLD_OWNER_R2_COUNT');
+const resume=await follow({id:interruptedId,
+ expected:interruptedRevision,method:'DELETE'});
+assert.equal(resume.status,200);
+assert.equal((await resume.json()).data.duplicate,true);
+assert.equal(ledger.d1LogicalMutation,settledD1Writes,
+ 'AMBIGUOUS_CANONICAL_COMMIT_MUST_NOT_WRITE_EFFECTIVE_EDGE_TWICE');
+assert.equal(reservationWrites,4,'EXACT_OP_ID_RETRY_MUST_NOT_RESERVE_TWICE');
+assert.equal((await engine.alarm()).status,'delivered');
+assert.equal(ownerMarker.followerCount,0);
+assert.equal(ownerMarker.version,22);
+console.log('APP560_D1_COMMITTED_R2_UNSETTLED_RESUME_SAME_ID_NO_DOUBLE_MUTATION=PASS');
 const beforeAuth={...ledger};
 principal=null;
 const unauthorized=await follow({id:'op_567890abcdef1234',expected:file(pairKey).value.revision,method:'DELETE'});
 assert.equal(unauthorized.status,401);
 assert.equal(ledger.d1LogicalMutation,beforeAuth.d1LogicalMutation);
-assert.equal(reservationWrites,3);
+assert.equal(reservationWrites,4);
 principal='B';
 // Recreated/deleted Auth account cannot receive prior generation.
 const latestRev=file(pairKey).value.revision;
-const removedAgain=await follow({id:'op_67890abcdef12345',expected:latestRev,method:'DELETE'});
+const removedAgain=await follow({id:'op_7890abcdef123456',expected:latestRev,method:'PUT'});
 assert.equal(removedAgain.status,200);
 incarnation='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const prevRtWrites=ledger.rtdbWrite;

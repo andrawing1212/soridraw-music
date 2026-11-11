@@ -44,7 +44,10 @@ assert.match(entry,/APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN &&/);
 assert.match(entry,/!OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN &&/);
 assert.match(entry,/APP544_OWNER_EPOCH_BIND_COMPILED_OPEN &&/);
 assert.match(entry,/handleOwnerEpochBinding544\(\{request,env\}\)/);
-assert.doesNotMatch(functionsIndex,/export\s*\{\s*enrollOwnerFollow544Candidate/);
+// APP572: exported candidate endpoint is still compiled OFF; never active.
+assert.ok(functionsIndex.includes('export {enrollOwnerFollow544Candidate} from "./ownerFollowEnrollment544";'));
+assert.ok(functionsIndex.includes('export {verifyOwnerFollowEpoch547Candidate} from "./ownerFollowAuthProof547";'));
+assert.equal(APP544_ENROLLMENT_COMPILED_OPEN,false);
 const db=new DatabaseSync(':memory:');
 db.exec(`CREATE TABLE profile_stats (
  uid TEXT PRIMARY KEY NOT NULL, follower_count INTEGER NOT NULL DEFAULT 0,

@@ -399,7 +399,7 @@ const entry=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js',
 assert.match(entry,/APP557_OWNER_PRECOMMIT_COMPILED_OPEN &&/);
 assert.match(entry,/authenticate:validateExploreAuth307/);
 assert.match(entry,/reserve:reserveOwnerFollowViaDo557,enabled:true/);
-assert.match(entry,/response=await baseWorker.fetch\\(request,env,ctx\\)/);
+assert.ok(entry.includes('response=await baseWorker.fetch(request,env,ctx)'), 'frozen canonical fallthrough must remain');
 assert.equal(entry.includes("'/owner-follow/reserve557'"),false,
  'internal Durable Object route must not be registered as public HTTP API');
 console.log('APP564_MISSING_DO_BINDING_FAIL_CLOSED_AND_PUBLIC_ROUTE_ABSENT=PASS');

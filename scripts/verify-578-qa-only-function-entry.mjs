@@ -16,8 +16,9 @@ const env={FIREBASE_CONFIG:config,GCLOUD_PROJECT:'soridraw-app',
  SORIDRAW_QA_RTDB_URL_578:'https://soridraw-app-default-rtdb.firebaseio.com/'};
 assert.deepEqual(plan(env),{ok:true,ownerUid:'ownerA578',
  databaseURL:'https://soridraw-app-default-rtdb.firebaseio.com'});
+assert.equal(plan({}).ok,false,'MISSING_CONFIG_MUST_FAIL_CLOSED');
 const bad=[
- {},{SORIDRAW_QA_OWNER_FOLLOW_578_ENABLED:'0'},
+ {SORIDRAW_QA_OWNER_FOLLOW_578_ENABLED:'0'},
  {FIREBASE_CONFIG:'{"projectId":"soridraw-app-866a5"}'},
  {GCP_PROJECT:'soridraw-app-866a5'},
  {GCP_PROJECT_NUMBER:'91309780603'},

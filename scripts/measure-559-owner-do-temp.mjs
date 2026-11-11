@@ -111,8 +111,16 @@ const ticket=(actor,id)=>({
 });
 const b=ticket('B','op_1234567890abcdef');
 const c=ticket('C','op_234567890abcdef');
-const unauthorized=await fetch(valid+'/proof/status');
-assert.equal(unauthorized.status,403);
+// Cloudflare temporary workers.dev propagation can initially respond 404.
+// Never interpret that as an app authentication failure or mutate account vars.
+let ready=false;
+for(let i=0;i<35;i++){
+ const ping=await fetch(valid+'/proof/status',{signal:AbortSignal.timeout(5000)});
+ if(ping.status===403){ready=true;break}
+ if(ping.status!==404)throw Error('TEMP_ROUTE_UNEXPECTED_HTTP_'+ping.status);
+ await new Promise(r=>setTimeout(r,1000));
+}
+assert.equal(ready,true,'TEMP_ROUTE_DID_NOT_BECOME_AVAILABLE');
 assert.equal((await http('/proof/reserve',b)).status,'reserved');
 assert.equal((await http('/proof/reserve',b)).status,'already-reserved');
 assert.equal((await http('/proof/reserve',c)).status,'reserved');

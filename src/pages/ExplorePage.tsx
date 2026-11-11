@@ -4200,7 +4200,11 @@ export default function ExplorePage() {
             // The same retained signal is allowed to repaint without a new
             // followers-list read; new canonical revisions invalidate only A.
             const confirmedNewEvent=isNewEvent&&initialSnapshotHandled;
-            const changedList=confirmedNewEvent||
+            // An initial retained snapshot can be newer than the browser's
+            // persisted seen revision even if the total count is unchanged
+            // (one unfollow plus one follow). Invalidate only the owner list
+            // cache; preserve the zero-GET cold-snapshot rule.
+            const changedList=isNewEvent||
               (!previousMarker&&profile?.followerCount!==count);
             ownerFollowerConfirmed529Ref.current={uid:ownerUid,count,version};
             if(changedList){

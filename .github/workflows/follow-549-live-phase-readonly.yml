@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/follow-549-live-phase-readonly.yml'
       - 'scripts/verify-567-owner-firebase-live-readonly.mjs'
+      - 'scripts/verify-571-owner-epoch-live-readonly.mjs'
   push:
     branches: [preview]
     paths:
@@ -40,6 +41,8 @@ jobs:
           set -euo pipefail
           node scripts/verify-548-follow-live-readonly.mjs --self-test
           node scripts/verify-548-follow-live-readonly.mjs --live
+          node scripts/verify-571-owner-epoch-live-readonly.mjs --self-test
+          node scripts/verify-571-owner-epoch-live-readonly.mjs --live
           echo 'FOLLOW_549_NO_DEPLOY_NO_USER_CONTENT_SHARED_D1_WRITES_ZERO=PASS'
       - name: Authenticate Firebase Admin project metadata (read-only, never write)
         if: github.event_name == 'pull_request'

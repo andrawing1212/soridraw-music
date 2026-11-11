@@ -17,7 +17,11 @@ const names = [
   'invalidateFollowProfiles355', 'enforceFollowEdgeRateLimit355',
 ];
 const functions = new Map(ast.statements.filter(ts.isFunctionDeclaration).map(n => [n.name?.text, n.getText(ast)]));
-const baseline = execFileSync('git',['show','9709c6f2ef06d40d6c780f07ec856c4a917449f6:cloudflare/explore-worker/canonical/preview-worker.js'],{ encoding: 'utf8',maxBuffer: 8*1024*1024 });
+// APP562 current-runtime replay fixture intentionally skips the unrelated
+// historical app379 freeze; the default legacy audit remains byte-identical.
+const baseline = process.env.SORIDRAW_CURRENT_FOLLOW_RUNTIME === '1'
+  ? source
+  : execFileSync('git',['show','9709c6f2ef06d40d6c780f07ec856c4a917449f6:cloudflare/explore-worker/canonical/preview-worker.js'],{ encoding: 'utf8',maxBuffer: 8*1024*1024 });
 const baselineAst = ts.createSourceFile('baseline.js',baseline,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
 const allowed = new Set(['readFollowCutoverState348','handleFollowR2Core','handleFollow',
   'adjustExploreFollowCountersDelta','syncExploreFollowingR2AfterMutation',

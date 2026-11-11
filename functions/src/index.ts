@@ -4473,3 +4473,11 @@ export {
   publicationRelease431Test,
   publicationRelease431Production,
 } from "./explorePublicationReleaseEndpoint431";
+
+// APP572: explicit owner-follower backend entrypoints, source-only/DORMANT.
+// Every endpoint retains its own compile-time OFF guard. No runtime enabling,
+// Firebase deployment, Auth claim issuance or shared Rules change here.
+// ONLY exact endpoint-scoped deployment after APP570 preflight and approval.
+export {publishExploreOwnerFollower542} from "./exploreOwnerFollowerWebhook542";
+export {enrollOwnerFollow544Candidate} from "./ownerFollowEnrollment544";
+export {verifyOwnerFollowEpoch547Candidate} from "./ownerFollowAuthProof547";

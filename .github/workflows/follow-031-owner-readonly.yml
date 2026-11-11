@@ -40,6 +40,7 @@ jobs:
           node scripts/verify-569-owner-precommit-compat.mjs
           node --no-warnings scripts/verify-570-owner-follow-minimal-schema.mjs
           npm ci --prefix functions --no-audit --no-fund
+          npm --prefix functions run build
           npm ci --no-audit --no-fund
           node --import tsx --no-warnings scripts/verify-547-physical-recreation-auth-proof.mjs
           node scripts/verify-561-owner-cost-reuse.mjs

@@ -16,6 +16,16 @@ const pathUid=path=>{
 const off=(env,enabled)=>!enabled||env?.SORIDRAW_ENVIRONMENT!=='preview'||
  env?.SORIDRAW_OWNER_FOLLOW_W2_PUSH_555!=='1';
 const outcome=(status,other={})=>({status,d1Writes:0,...other});
+// Block an invalid QA target before even the exact receipt proof performs an
+// R2 GET. This is a pure configuration check, not an extra backend lookup.
+const qaRelayHold580=env=>{
+ const mode=env?.SORIDRAW_OWNER_FOLLOW_QA_ONLY_577;
+ if(mode!==undefined&&mode!=='0'&&mode!=='1')
+  return 'qa-relay-mode-invalid';
+ if(mode==='1'&&env?.SORIDRAW_OWNER_FOLLOW_ENDPOINT_539!==QA_OWNER_FOLLOW_FUNCTION_URL_577)
+  return 'qa-target-hold';
+ return null;
+};
 
 // Both initial delivery and a persisted reservation replay MUST resolve the
 // latest settled OWNER revision, never a cached actor-pair operation version.
@@ -25,15 +35,10 @@ async function deliverSettledOwner555({
 }={}){
  if(off(env,enabled))return outcome('disabled');
  if(!UID.test(String(ownerUid||'')))return outcome('invalid-owner');
- // APP580: the independent QA worker must explicitly select the pinned QA
- // receiver. Do not silently fall back to the operating Firebase endpoint.
- // Invalid QA settings are rejected before any D1/R2 read or HTTP request.
- const qaMode=env?.SORIDRAW_OWNER_FOLLOW_QA_ONLY_577;
- if(qaMode!==undefined&&qaMode!=='0'&&qaMode!=='1')
-  return outcome('qa-relay-mode-invalid');
- const qaOnly=qaMode==='1';
- if(qaOnly&&env?.SORIDRAW_OWNER_FOLLOW_ENDPOINT_539!==QA_OWNER_FOLLOW_FUNCTION_URL_577)
-  return outcome('qa-target-hold');
+ // APP580: never use an operating Firebase URL for independent QA.
+ const qaHold=qaRelayHold580(env);
+ if(qaHold)return outcome(qaHold);
+ const qaOnly=env?.SORIDRAW_OWNER_FOLLOW_QA_ONLY_577==='1';
  const key='internal/explore/shared-profile-v113/'+encodeURIComponent(ownerUid)+'.json';
  let bundle;
  try{
@@ -112,6 +117,9 @@ export async function replayOwnerFollowReservation556({
  enabled=APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN,
 }={}){
  if(off(env,enabled))return outcome('disabled');
+ // The durable alarm checks target configuration BEFORE any receipt R2 read.
+ const qaHold=qaRelayHold580(env);
+ if(qaHold)return outcome(qaHold);
  const {ownerUid,authEpoch,priorR2Revision}=(reservation||{});
  if(!UID.test(String(ownerUid||''))||!EPOCH.test(String(authEpoch||''))||
     !Number.isSafeInteger(priorR2Revision)||priorR2Revision<0)

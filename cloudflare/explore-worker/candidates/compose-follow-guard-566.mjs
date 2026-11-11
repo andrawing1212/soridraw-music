@@ -19,7 +19,7 @@ export function composeFollowGuard566(frozen,modifiedGuard,expectedSha){
  if(at<0||at!==frozen.lastIndexOf(MARKER)||
    !frozen.slice(at).includes(OLD_POLICY)||
    !frozen.slice(at).includes(LIKE_POLICY)||
-   !frozen.slice(at).trimEnd().endsWith('socialAbuseUnavailable380();\\n}'))
+   !frozen.slice(at).trimEnd().endsWith('socialAbuseUnavailable380();\n}'))
   throw Error('APP566_FOLLOW_GUARD_BOUNDARY_DRIFT_HOLD');
  if(!modifiedGuard.startsWith(MARKER)||
    modifiedGuard.indexOf(MARKER)!==modifiedGuard.lastIndexOf(MARKER)||
@@ -27,9 +27,9 @@ export function composeFollowGuard566(frozen,modifiedGuard,expectedSha){
    !modifiedGuard.includes(LIKE_POLICY)||
    !modifiedGuard.includes('LEGACY_FOLLOW_COOLDOWNS_380')||
    !modifiedGuard.includes('if (domain === \'like\') blockedUntil')||
-   !modifiedGuard.trimEnd().endsWith('socialAbuseUnavailable380();\\n}'))
+   !modifiedGuard.trimEnd().endsWith('socialAbuseUnavailable380();\n}'))
   throw Error('APP566_REPLACEMENT_GUARD_INVALID_HOLD');
- const merged=frozen.slice(0,at)+modifiedGuard.trimEnd()+'\\n';
+ const merged=frozen.slice(0,at)+modifiedGuard.trimEnd()+'\n';
  if(merged===frozen||merged.indexOf(MARKER)!==merged.lastIndexOf(MARKER))
   throw Error('APP566_CANDIDATE_NOT_CHANGED_HOLD');
  return merged;

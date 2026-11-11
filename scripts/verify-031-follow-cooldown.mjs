@@ -150,8 +150,8 @@ try{
  assert.equal(compiled566.slice(0,index566),frozen566.slice(0,index566),
    'EVERY_PREEXISTING_WORKER_BYTE_STAYS_IDENTICAL');
  assert.match(compiled566.slice(index566),/LEGACY_FOLLOW_COOLDOWNS_380/);
- assert.match(compiled566.slice(index566),/cooldowns: \\[0, 0, 0, 30_000\\]/);
- assert.doesNotMatch(compiled566.slice(index566),/cooldowns: \\[30_000, 120_000, 600_000, 3_600_000\\]/);
+ assert.match(compiled566.slice(index566),/cooldowns: \[0, 0, 0, 30_000\]/);
+ assert.doesNotMatch(compiled566.slice(index566),/cooldowns: \[30_000, 120_000, 600_000, 3_600_000\]/);
  await assert.rejects(async()=>composeFollowGuard566(frozen566+' ',guardSource566,expected566),
    /FROZEN_CANONICAL_SHA_MISMATCH_HOLD/);
  const {spawnSync}=await import('node:child_process');

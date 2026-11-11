@@ -136,6 +136,29 @@ try{
  console.log('FOLLOW_566_NORMAL_SWITCH_AND_LEGACY_RECEIPT_ONLY=PASS');
 }
 
+ // APP566: test the exact 2MB canonical Worker composition, not only the
+ // unattached guard source. The byte-identical prefix protects all non-follow
+ // routes (likes, public songs, notifications, auth and legacy follow code).
+ const {composeFollowGuard566}=await import('../cloudflare/explore-worker/candidates/compose-follow-guard-566.mjs');
+ const frozen566=readFileSync('cloudflare/explore-worker/canonical/preview-worker.js','utf8');
+ const expected566=readFileSync('cloudflare/explore-worker/canonical/source-sha256.txt','utf8').trim();
+ const guardSource566=readFileSync('cloudflare/explore-worker/candidates/social-abuse-380.js','utf8');
+ const compiled566=composeFollowGuard566(frozen566,guardSource566,expected566);
+ const marker566='// SORIDRAW_SOCIAL_ABUSE_STATE_380_20261008';
+ const index566=frozen566.indexOf(marker566);
+ assert.ok(index566>0,'PINNED_WORKER_HAS_GUARD_SUFFIX');
+ assert.equal(compiled566.slice(0,index566),frozen566.slice(0,index566),
+   'EVERY_PREEXISTING_WORKER_BYTE_STAYS_IDENTICAL');
+ assert.match(compiled566.slice(index566),/LEGACY_FOLLOW_COOLDOWNS_380/);
+ assert.match(compiled566.slice(index566),/cooldowns: \\[0, 0, 0, 30_000\\]/);
+ assert.doesNotMatch(compiled566.slice(index566),/cooldowns: \\[30_000, 120_000, 600_000, 3_600_000\\]/);
+ await assert.rejects(async()=>composeFollowGuard566(frozen566+' ',guardSource566,expected566),
+   /FROZEN_CANONICAL_SHA_MISMATCH_HOLD/);
+ const {spawnSync}=await import('node:child_process');
+ const checked566=spawnSync(process.execPath,['--check','--input-type=module'],
+   {input:compiled566,encoding:'utf8',maxBuffer:4*1024*1024});
+ assert.equal(checked566.status,0,checked566.stderr||'CANDIDATE_SYNTAX_INVALID');
+ console.log('FOLLOW_566_COMPILED_WORKER_FOLLOW_ONLY_SUFFIX_AND_SYNTAX=PASS');
  console.log('FOLLOW_031_FIRST_RATE_LIMIT_SHOWS_PENDING_AND_SINGLE_RETRY=PASS');
  console.log('FOLLOW_031_EXHAUSTED_RATE_LIMIT_RESTORES_BASE_AND_ALERTS=PASS');
  console.log('FOLLOW_031_LEGACY_SUSPENDED_UNFOLLOW_REPAIRED_W0=PASS');

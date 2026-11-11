@@ -18,7 +18,10 @@ const sender=read('cloudflare/explore-worker/runtime/owner-follow-http-539.mjs')
 const worker=read('cloudflare/explore-worker/canonical/preview-worker.js');
 assert.equal(APP542_OWNER_HTTP_COMPILED_OPEN,false);
 assert.doesNotMatch(index,/export\s*\{\s*publishExploreOwnerFollower529\s*\}/);
-assert.doesNotMatch(index,/export\s*\{\s*publishExploreOwnerFollower542\s*\}/);
+// APP572 exports the modern HMAC-gated endpoint but leaves runtime OFF.
+assert.ok(index.includes('export {publishExploreOwnerFollower542} from "./exploreOwnerFollowerWebhook542";'));
+assert.ok(index.includes('export {enrollOwnerFollow544Candidate} from "./ownerFollowEnrollment544";'));
+assert.ok(index.includes('export {verifyOwnerFollowEpoch547Candidate} from "./ownerFollowAuthProof547";'));
 assert.doesNotMatch(entry,/OWNER_FOLLOW_OUTBOX_529_COMPILED_OPEN|runOwnerFollowDelivery529/);
 assert.match(entry,/OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN/);
 assert.match(entry,/APP539_WORKER_HTTP_BRIDGE_COMPILED_OPEN/);

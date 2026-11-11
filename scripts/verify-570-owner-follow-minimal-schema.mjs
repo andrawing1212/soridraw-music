@@ -7,6 +7,10 @@ const sql=readFileSync('cloudflare/explore-worker/candidates/570-owner-follow-do
 const clean=sql.replace(/--.*$/gm,'').trim();
 const parts=clean.split(';').map(x=>x.trim()).filter(Boolean);
 assert.equal(parts.length,2,'EXACTLY_TWO_DORMANT_ADDITIVE_COLUMNS');
+assert.doesNotMatch(clean,/\\bCHECK\\s*\\(/i,
+ 'APP570_FULL_PROFILE_STATS_SCAN_CHECK_CONSTRAINT_FORBIDDEN');
+assert.match(clean,/owner_follow_auth_epoch_532\\s+TEXT\\s+NOT NULL DEFAULT ''/i);
+assert.match(clean,/owner_follow_auth_created_at_ms_544\\s+INTEGER\\s+NOT NULL DEFAULT 0/i);
 assert.ok(parts.every(x=>/^ALTER TABLE profile_stats ADD COLUMN owner_follow_auth_(epoch_532|created_at_ms_544)\b/i.test(x)));
 assert.doesNotMatch(clean,/\b(CREATE TRIGGER|CREATE INDEX|UPDATE |INSERT |DELETE |DROP |PRAGMA |owner_follow_revision_530|owner_follow_overlay_delta_551)\b/i);
 const db=new DatabaseSync(':memory:');

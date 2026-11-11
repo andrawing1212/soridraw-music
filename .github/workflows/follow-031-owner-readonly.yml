@@ -40,8 +40,8 @@ jobs:
           node scripts/verify-569-owner-precommit-compat.mjs
           node --no-warnings scripts/verify-570-owner-follow-minimal-schema.mjs
           npm ci --prefix functions --no-audit --no-fund
-          node --no-warnings scripts/verify-547-physical-recreation-auth-proof.mjs
-          node scripts/verify-561-owner-cost-reuse.mjs
           npm ci --no-audit --no-fund
+          node --import tsx --no-warnings scripts/verify-547-physical-recreation-auth-proof.mjs
+          node scripts/verify-561-owner-cost-reuse.mjs
           node --no-warnings scripts/verify-560-owner-follow-full-isolated.mjs
           echo 'FOLLOW_031_SOURCE_ONLY_NO_D1_OR_HOSTING_CHANGE=PASS'

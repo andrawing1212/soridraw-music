@@ -7,8 +7,18 @@ const reply=(value,status=200)=>Response.json(value,{status});
 export class OwnerFollowIsolated558 {
  constructor(state,env){
   this.ctx=state;this.env=env;
+  // Count only genuine APP561 engine storage calls in this synthetic DO.
+  // In-memory counters do NOT add metering rows to real DO storage.
+  this.meter={put:0,getAlarm:0,setAlarm:0};
+  const wrapped={
+   get:(...args)=>state.storage.get(...args),
+   put:(...args)=>{this.meter.put++;return state.storage.put(...args)},
+   delete:(...args)=>state.storage.delete(...args),
+   getAlarm:(...args)=>{this.meter.getAlarm++;return state.storage.getAlarm(...args)},
+   setAlarm:(...args)=>{this.meter.setAlarm++;return state.storage.setAlarm(...args)},
+  };
   this.engine=createOwnerFollowRecovery556({
-   state,env,enabled:true,
+   state:{storage:wrapped},env,enabled:true,
    deliver:async()=>{
     const mode=await state.storage.get('synthetic-mode');
     if(mode==='success')return {status:'delivered'};
@@ -30,6 +40,22 @@ export class OwnerFollowIsolated558 {
   if(url.pathname==='/proof/reserve'&&request.method==='POST'){
    let ticket;try{ticket=await request.json()}catch{return reply({ok:false},400)}
    return reply(await this.engine.reserve(ticket));
+  }
+  if(url.pathname==='/proof/burst'&&request.method==='POST'){
+   // In one request, the real 1s owner alarm cannot fire between admissions.
+   // This validates one vs multiple BILLABLE setAlarm API invocations.
+   const records=await request.json().catch(()=>null);
+   if(!Array.isArray(records)||records.length!==2||
+      records.some(r=>r?.ownerUid!=='A'))
+    return reply({ok:false},400);
+   const before={...this.meter};
+   const first=await this.engine.reserve(records[0]);
+   const second=await this.engine.reserve(records[1]);
+   return reply({first,second,meter:{
+    put:this.meter.put-before.put,
+    getAlarm:this.meter.getAlarm-before.getAlarm,
+    setAlarm:this.meter.setAlarm-before.setAlarm,
+   }});
   }
   if(url.pathname==='/proof/mode'&&request.method==='POST'){
    const payload=await request.json().catch(()=>null);

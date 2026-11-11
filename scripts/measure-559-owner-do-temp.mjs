@@ -121,9 +121,13 @@ for(let i=0;i<35;i++){
  await new Promise(r=>setTimeout(r,1000));
 }
 assert.equal(ready,true,'TEMP_ROUTE_DID_NOT_BECOME_AVAILABLE');
-assert.equal((await http('/proof/reserve',b)).status,'reserved');
+const burst=await http('/proof/burst',[b,c]);
+assert.equal(burst.first.status,'reserved');
+assert.equal(burst.second.status,'reserved');
+assert.deepEqual(burst.meter,{put:2,getAlarm:2,setAlarm:1},
+ 'Cloudflare DO must reuse the first outstanding alarm under a hot owner');
+console.log('APP561_REAL_CLOUDFLARE_TWO_OWNER_QUEUE_PUTS_ONE_ALARM=PASS');
 assert.equal((await http('/proof/reserve',b)).status,'already-reserved');
-assert.equal((await http('/proof/reserve',c)).status,'reserved');
 let state=await http('/proof/status');
 assert.equal(state.pending?.entries?.length,2,'DISTINCT_OWNER_QUEUE_LOST');
 assert.ok(Number.isSafeInteger(state.alarmAt)&&state.alarmAt>0);

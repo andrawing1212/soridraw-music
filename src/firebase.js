@@ -195,7 +195,4 @@ try {
 export const db = firestoreDb;
 export const realtimeDb = getDatabase(app);
 export const functions = getFunctions(app, "us-central1");
-// APP575: owning one region-scoped Functions SDK handle is local-only.
-// No HTTP/function call occurs on import, login or ordinary page navigation.
-export const ownerFollowCanaryFunctions575 = getFunctions(app, "asia-northeast3");
 export { httpsCallable };

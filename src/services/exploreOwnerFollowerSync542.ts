@@ -2,9 +2,10 @@
 // No import from ExplorePage while the compile-time switch is OFF triggers a
 // listener, canonical GET, Firestore read or server write.
 import {getIdTokenResult} from 'firebase/auth';
-import {httpsCallable} from 'firebase/functions';
+import {getApp} from 'firebase/app';
+import {getFunctions,httpsCallable} from 'firebase/functions';
 import {onValue,ref as databaseRef,type Unsubscribe} from 'firebase/database';
-import {auth,realtimeDb,ownerFollowCanaryFunctions575} from '../firebase';
+import {auth,realtimeDb} from '../firebase';
 
 export const EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED=false;
 // APP575: PREVIEW explicit QA URL only, never a general login/page-entry
@@ -30,7 +31,9 @@ const tryOwnerFollowCanaryEnrollment575=(
  // not retried on focus/profile navigation; QA must explicitly reload.
  const task=(async()=>{
   try{
-   const callable=httpsCallable(ownerFollowCanaryFunctions575,'enrollOwnerFollow544Candidate');
+   // Region instance is created ONLY on the explicit canary test attempt.
+   const callable=httpsCallable(getFunctions(getApp(),'asia-northeast3'),
+     'enrollOwnerFollow544Candidate');
    await callable({});
    if(auth.currentUser!==principal)return false;
    const refreshed=await getIdTokenResult(principal,true);

@@ -139,7 +139,10 @@ try{
  await auth.createUser({uid:UID,email:EMAIL,password:PASS});
  const g2=await enrollAuthIncarnation533(auth,UID);
  assert.notEqual(g2.authEpoch,g1.authEpoch);
- assert.ok(g2.createdAtMs>g1.createdAtMs,'AUTH_CREATION_TIME_MONOTONIC');
+ // Auth emulator may return equal-millisecond creation times after a very
+ // fast same-UID delete/recreate; the random epoch must still fence stale
+ // tokens and receipts (asserted immediately below), never the clock alone.
+ assert.ok(g2.createdAtMs>=g1.createdAtMs,'AUTH_CREATION_TIME_NONDECREASING');
  const freshToken=await token(EMAIL,PASS);
  assert.equal(freshToken.claims[CLAIM_533],g2.authEpoch);
  assert.deepEqual(await clientRequest(freshToken.value),{status:200,data:null}); // no marker is readable only by claimed owner

@@ -1,5 +1,5 @@
 // APP547: source-only authenticated Firebase Admin Auth incarnation oracle.
-// NOT exported by functions/src/index.ts / securedIndex, no network route live.
+// APP572 export candidate only; compiled OFF, no network route live.
 // One current Auth + retained Firestore lifecycle check per explicit enrollment
 // or deletion request. No background reads, writes, user scans, or polling.
 import {createHmac,timingSafeEqual} from 'node:crypto';

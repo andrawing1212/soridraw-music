@@ -1,9 +1,9 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
-// APP542: the obsolete UID-only 529 owner relay is deliberately NOT exported.
-// An ordinary Functions build/deploy must never register its client-writable
-// userSync/$uid/exploreFollowerOwner529 endpoint. The epoch-aware 542 receiver
-// is also unexported until a separately approved shared-Functions rollout.
+// APP572: obsolete UID-only 529 owner relay remains NOT exported.
+// The epoch-aware 542 receiver / 544 enrollment / 547 Auth proof are exported
+// for the approved follow-only candidate, but EACH stays compiled OFF. No live
+// Firebase deployment, claim issuance, or RTDB rule change by this source edit.
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import {

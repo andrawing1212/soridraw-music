@@ -1,5 +1,5 @@
 // APP544: Firebase Admin is the ONLY issuer of enrolled owner epochs.
-// Source-only, unexported from securedIndex and disabled at runtime.
+// APP572 exported for candidate build only; compiled OFF and not deployed.
 // Controlled enrollment is an explicit mutation, never a page-entry write.
 import {createHmac} from 'node:crypto';
 import {onCall,HttpsError} from 'firebase-functions/v2/https';

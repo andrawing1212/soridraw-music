@@ -1,4 +1,4 @@
-// APP542: release-ready, OFF and NOT exported by functions/src/index.ts.
+// APP542: explicitly exported by APP572, still compiled OFF and NOT deployed.
 // A separately approved Functions rollout may register this ONE endpoint
 // after dedicated owner-only RTDB Rules, server enrollment, secret and shared
 // Worker rollout are verified. No module-import Firebase initialization.

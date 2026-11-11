@@ -17,7 +17,10 @@ assert.equal(OWNER_FOLLOW_AUTH_PROOF_547_COMPILED_OPEN,false);
 assert.equal(APP544_OWNER_EPOCH_BIND_COMPILED_OPEN,false);
 assert.equal(APP547_AUTH_PROOF_COMPILED_OPEN,false);
 const index=readFileSync('functions/src/index.ts','utf8');
-assert.doesNotMatch(index,/export.*verifyOwnerFollowEpoch547Candidate/);
+assert.match(index,/export \\{verifyOwnerFollowEpoch547Candidate\\} from "\\.\\/ownerFollowAuthProof547";/);
+assert.match(index,/export \\{publishExploreOwnerFollower542\\} from "\\.\\/exploreOwnerFollowerWebhook542";/);
+assert.match(index,/export \\{enrollOwnerFollow544Candidate\\} from "\\.\\/ownerFollowEnrollment544";/);
+assert.doesNotMatch(index,/export.*publishExploreOwnerFollower529/);
 const entry=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
 assert.match(entry,/APP544_OWNER_EPOCH_BIND_COMPILED_OPEN &&/);
 const config=JSON.parse(readFileSync(

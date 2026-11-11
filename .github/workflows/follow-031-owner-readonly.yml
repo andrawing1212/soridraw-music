@@ -6,6 +6,9 @@ on:
       - 'src/services/exploreFollowBatchService380.ts'
       - 'src/pages/ExplorePage.tsx'
       - 'scripts/verify-031-follow-cooldown.mjs'
+      - 'scripts/verify-577-owner-qa-project-fence.mjs'
+      - 'cloudflare/explore-worker/runtime/owner-follow-qa-boundary-577.mjs'
+      - 'cloudflare/explore-worker/runtime/owner-follow-http-539.mjs'
       - 'cloudflare/explore-worker/runtime/owner-follow-recovery-556.mjs'
       - 'cloudflare/explore-worker/runtime/owner-follow-precommit-557.mjs'
       - 'scripts/verify-569-owner-precommit-compat.mjs'
@@ -39,6 +42,7 @@ jobs:
           node --check scripts/verify-031-follow-cooldown.mjs
           node scripts/verify-031-follow-cooldown.mjs
           node scripts/verify-030-follow-race.mjs
+          node scripts/verify-577-owner-qa-project-fence.mjs
           npm ci --no-audit --no-fund
           node scripts/verify-389-social-client-batching.mjs --follow-only
           node scripts/verify-556-owner-replay-reservation.mjs

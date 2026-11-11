@@ -3,6 +3,7 @@
 // Local loopback HTTP is permitted strictly for the isolated emulator harness.
 import {signOwnerFollowPayload529} from "./owner-follow-outbox-529.mjs";
 import {isOwnerFollowAuthEpoch532} from "./owner-follow-auth-epoch-532.mjs";
+import {QA_OWNER_FOLLOW_FUNCTION_URL_577} from "./owner-follow-qa-boundary-577.mjs";
 
 export const APP539_WORKER_HTTP_BRIDGE_COMPILED_OPEN=false;
 const UID=/^[A-Za-z0-9_-]{1,128}$/;
@@ -10,10 +11,14 @@ const HTTP_LOCAL=/^http:\/\/(?:127\.0\.0\.1|localhost):[1-9][0-9]{1,4}\/owner-fo
 const HTTP_RELEASE='https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publishExploreOwnerFollower542';
 export async function sendOwnerFollowHttp539(event,{
  endpoint,secret,send=fetch,now=Date.now,
- isolatedOnly=false,
+ isolatedOnly=false,qaOnly=false,
 }={}){
+ // QA-only mode is explicit and *never* falls back to the shared release URL.
+ // Default production contract remains the byte-for-byte same pinned endpoint.
  const target=String(endpoint||"");
- if(isolatedOnly?!HTTP_LOCAL.test(target):target!==HTTP_RELEASE)
+ if((qaOnly&&isolatedOnly)||
+    !(qaOnly?target===QA_OWNER_FOLLOW_FUNCTION_URL_577:
+      isolatedOnly?HTTP_LOCAL.test(target):target===HTTP_RELEASE))
   throw Error("APP539_ENDPOINT_NOT_PINNED");
  if(!event||!UID.test(String(event.ownerUid||""))||
    !isOwnerFollowAuthEpoch532(event.authEpoch)||

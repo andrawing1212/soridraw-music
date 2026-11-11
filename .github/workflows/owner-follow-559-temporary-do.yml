@@ -1,0 +1,50 @@
+name: SORIDRAW 559 Cloudflare Temporary Account Durable Object Proof
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - '.github/workflows/owner-follow-559-temporary-do.yml'
+      - 'scripts/measure-559-owner-do-temp.mjs'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-owner559-temporary-proof
+  cancel-in-progress: false
+jobs:
+  offline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: node --check scripts/measure-559-owner-do-temp.mjs
+  temporary:
+    if: ${{ github.event.pull_request.number == 914 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'candidate/app526-owner-follower-live-signal' }}
+    needs: offline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      GITHUB_EVENT_PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Install pinned Wrangler for isolated temporary Cloudflare account
+        run: npm install --prefix cloudflare/explore-worker --ignore-scripts --no-save --package-lock=false --no-audit --no-fund
+      - name: Temporary account only (no real Cloudflare account tokens)
+        run: |
+          set -euo pipefail
+          node scripts/measure-559-owner-do-temp.mjs --self-test
+          node scripts/measure-559-owner-do-temp.mjs
+      - name: Always request deletion for exact run-owned temporary Worker
+        if: always()
+        run: node scripts/measure-559-owner-do-temp.mjs cleanup
+      - name: Shared backends unchanged
+        run: echo 'APP559_OWNED_TEMP_ACCOUNT_ONLY;NO_CUSTOMER_D1_R2_WORKERS_FUNCTIONS_RULES_HOSTING'

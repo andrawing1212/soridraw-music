@@ -190,7 +190,7 @@ assert.match(page,/createOwnerEpochGate538/);
 assert.doesNotMatch(page,/createOwnerFollowerGate529/);
 assert.match(page,/const confirmedNewEvent=isNewEvent&&initialSnapshotHandled/);
 assert.match(page,/gate\.receive\(signal\);\s*initialSnapshotHandled=true/);
-assert.match(page,/const changedList=confirmedNewEvent\|\|/);
+assert.ok(page.includes('const changedList=isNewEvent||'));
 assert.match(page,/if\(confirmedNewEvent&&profileConnectionsOpen376Ref\.current==='followers'\)/);
 assert.match(page,/let initialSnapshotHandled=false/);
 assert.match(page,/getExploreProfileConnections\(ownerUid,'followers',null,true\)/);

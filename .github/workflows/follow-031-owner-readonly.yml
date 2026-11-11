@@ -9,6 +9,10 @@ on:
       - 'cloudflare/explore-worker/runtime/owner-follow-recovery-556.mjs'
       - 'cloudflare/explore-worker/runtime/owner-follow-precommit-557.mjs'
       - 'scripts/verify-569-owner-precommit-compat.mjs'
+      - 'cloudflare/explore-worker/candidates/570-owner-follow-do-epoch-minimal-off.sql'
+      - 'cloudflare/explore-worker/runtime/owner-follow-enrollment-544.mjs'
+      - 'scripts/verify-547-physical-recreation-auth-proof.mjs'
+      - 'scripts/verify-570-owner-follow-minimal-schema.mjs'
       - 'scripts/verify-556-owner-replay-reservation.mjs'
       - 'scripts/verify-560-owner-follow-full-isolated.mjs'
       - 'scripts/verify-561-owner-cost-reuse.mjs'
@@ -34,6 +38,8 @@ jobs:
           node scripts/verify-030-follow-race.mjs
           node scripts/verify-556-owner-replay-reservation.mjs
           node scripts/verify-569-owner-precommit-compat.mjs
+          node --no-warnings scripts/verify-570-owner-follow-minimal-schema.mjs
+          node --no-warnings scripts/verify-547-physical-recreation-auth-proof.mjs
           node scripts/verify-561-owner-cost-reuse.mjs
           npm ci --no-audit --no-fund
           node --no-warnings scripts/verify-560-owner-follow-full-isolated.mjs

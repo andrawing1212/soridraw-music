@@ -58,6 +58,11 @@ export async function handleOwnerEpochBinding544({
    // APP551: only the globally active overlay phase may use the derived
    // effective-count anchor. No implicit enrollment or whole-user backfill.
    const overlayMode=env?.SORIDRAW_OWNER_FOLLOW_OVERLAY_551==='1';
+   // APP570: W2 durable-DO relay and the old APP530/551 D1 revision
+   // transport are mutually exclusive. A mixed release would add profile
+   // writes, duplicate delivery, and require absent 8-column schema.
+   if(overlayMode&&env?.SORIDRAW_OWNER_FOLLOW_W2_PUSH_555==='1')
+    return reply(503,'OWNER_FOLLOW_TRANSPORT_CONFLICT');
    if(overlayMode){
     const control=await env.DB.prepare(
       'SELECT phase FROM explore_follow_cutover_control_348 WHERE id=1 LIMIT 1'
@@ -88,7 +93,9 @@ export async function handleOwnerEpochBinding544({
     RETURNING uid,owner_follow_auth_epoch_532 AS epoch,
       owner_follow_auth_created_at_ms_544 AS created_at
    `;
-   const legacySql=`
+   // APP570 W2 path writes ONLY the Auth-generation pair. Global follow
+   // authority can remain overlay; the settled count comes from exact R2.
+   const epochOnlySql=`
     UPDATE profile_stats SET
       owner_follow_auth_epoch_532=?,
       owner_follow_auth_created_at_ms_544=?
@@ -98,7 +105,7 @@ export async function handleOwnerEpochBinding544({
     RETURNING uid,owner_follow_auth_epoch_532 AS epoch,
       owner_follow_auth_created_at_ms_544 AS created_at
    `;
-   const result=await env.DB.prepare(overlayMode?overlaySql:legacySql)
+   const result=await env.DB.prepare(overlayMode?overlaySql:epochOnlySql)
      .bind(...(overlayMode
        ?[event.authEpoch,event.authCreatedAtMs,event.uid,event.uid,
          event.uid,event.authCreatedAtMs]

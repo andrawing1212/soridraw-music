@@ -65,15 +65,15 @@ const realProof=async(uri,options)=>handleOwnerAuthProof547(
 const db=new DatabaseSync(':memory:');
 db.exec(`CREATE TABLE profile_stats (
  uid TEXT PRIMARY KEY, follower_count INTEGER NOT NULL DEFAULT 0,
- following_count INTEGER NOT NULL DEFAULT 0,updated_at INTEGER NOT NULL DEFAULT 0,
- owner_follow_auth_epoch_532 TEXT NOT NULL DEFAULT '',
- owner_follow_auth_created_at_ms_544 INTEGER NOT NULL DEFAULT 0
-);
-INSERT INTO profile_stats(uid,updated_at) VALUES('A',1)`);
+ following_count INTEGER NOT NULL DEFAULT 0,updated_at INTEGER NOT NULL DEFAULT 0
+);`);
+db.exec(readFileSync('cloudflare/explore-worker/candidates/570-owner-follow-do-epoch-minimal-off.sql','utf8'));
+db.exec("INSERT INTO profile_stats(uid,updated_at) VALUES('A',1)");
 let writes=0,selects=0;
 const cloud={SORIDRAW_ENVIRONMENT:'preview',
  SORIDRAW_OWNER_FOLLOW_BIND_544:'1',
  SORIDRAW_OWNER_FOLLOW_AUTH_PROOF_547:'1',
+ SORIDRAW_OWNER_FOLLOW_W2_PUSH_555:'1',
  SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544:secret,
  DB:{prepare(sql){return {bind(...args){return {
  async first(){selects++;const stmt=db.prepare(sql);
@@ -106,6 +106,12 @@ try{
  let r=await signed();assert.equal(r.status,200);
  assert.equal(owner().owner_follow_auth_epoch_532,oldEpoch);
  assert.equal(owner().owner_follow_auth_created_at_ms_544,oldBirth);
+ const beforeMixed=writes;
+ cloud.SORIDRAW_OWNER_FOLLOW_OVERLAY_551='1';
+ r=await signed();
+ assert.equal(r.status,503,'W2_DO_MUST_NOT_RUN_WITH_LEGACY_D1_OUTBOX');
+ assert.equal(writes,beforeMixed,'TRANSPORT_CONFLICT_W0');
+ delete cloud.SORIDRAW_OWNER_FOLLOW_OVERLAY_551;
  const q=selects,w=writes,a=authReads;
  const denied=await handleOwnerEpochBinding544({
   request:signer({action:'bind',uid:'A',authEpoch:oldEpoch,authCreatedAtMs:oldBirth}),

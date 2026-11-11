@@ -1,12 +1,12 @@
 // SORIDRAW_EXPLORE_FOLLOW_LOCAL_FIRST_BATCH_380_20261007
-// Existing legacy batches retain their 30-second final-state window.
-// Visible Follow/Unfollow clicks opt into immediate server settlement, while
-// reusing the same in-flight last-choice guard and net-zero write protection.
+// APP576: Only non-immediate legacy/background intents use an 8-second trailing
+// final-state window; visible Follow/Unfollow clicks already settle immediately.
+// Preserve in-flight last-choice guard, net-zero W0 and cooldown rollback.
 //
 // This module intentionally owns only timing/settlement orchestration. Product
 // caches and RTDB convergence remain in ExplorePage/exploreSocialService.
 
-export const EXPLORE_FOLLOW_IDLE_FLUSH_MS_380 = 30_000;
+export const EXPLORE_FOLLOW_IDLE_FLUSH_MS_380 = 8_000;
 
 export type ExploreFollowCommitResult380 = {
   isFollowing: boolean;

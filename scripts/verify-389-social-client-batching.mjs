@@ -33,31 +33,32 @@ const request = (targetUid = 'target', desiredFollowing = true) => ({
 });
 const c = client();
 c.queueExploreFollowFinalState380(request());
-await c.advance(29_000);
+assert.equal(c.EXPLORE_FOLLOW_IDLE_FLUSH_MS_380, 8_000);
+await c.advance(7_000);
 assert.equal(calls.length, 0);
 await c.flushPendingExploreFollowsForPageExit380('viewer');
 await c.flushExploreFollowPair380(JSON.stringify(['viewer', 'target']));
-assert.equal(calls.length, 0, 'navigation/manual flush must respect last click +30s');
+assert.equal(calls.length, 0, 'navigation/manual flush must respect last click +8s');
 c.queueExploreFollowFinalState380(request('target', false));
-await c.advance(29_999); assert.equal(calls.length, 0);
+await c.advance(7_999); assert.equal(calls.length, 0);
 await c.advance(1); assert.equal(calls.length, 0);
 assert.equal(c.readPendingExploreFollowIntents380('viewer').length, 0);
 c.queueExploreFollowFinalState380(request());
-await c.advance(20_000);
+await c.advance(5_000);
 c.queueExploreFollowFinalState380(request());
-await c.advance(10_000); assert.equal(calls.length, 0);
-await c.advance(20_000); assert.deepEqual(calls, [true]);
+await c.advance(3_000); assert.equal(calls.length, 0);
+await c.advance(5_000); assert.deepEqual(calls, [true]);
 assert.equal(settled[0].baseTargetFollowerCount, 4, 'stale server count is not the local authority');
 
 // In-flight last click gets a new baseline and keeps its own last-click deadline.
 let resolve;
 c.queueExploreFollowFinalState380({ ...request('flight'), commit: () => new Promise(r => { resolve = r; }) });
-await c.advance(30_000);
+await c.advance(8_000);
 c.queueExploreFollowFinalState380(request('flight', false));
-await c.advance(10_000);
+await c.advance(3_000);
 resolve({ isFollowing: true, followerCount: 0, followingCount: 0 });
 await c.advance(0);
-await c.advance(19_999); assert.equal(calls.length, 1);
+await c.advance(4_999); assert.equal(calls.length, 1);
 await c.advance(1); assert.deepEqual(calls, [true, false]);
 
 // 429 schedules only one retry. After a second rejection the server has not
@@ -71,7 +72,7 @@ const limited = { ...request('limited'), commit: async () => { rejected++;
   onDeferred: delay => deferred.push(delay),
 };
 c.queueExploreFollowFinalState380(limited);
-await c.advance(30_000); assert.equal(rejected, 1);
+await c.advance(8_000); assert.equal(rejected, 1);
 const record = c.readPendingExploreFollowIntents380('viewer')[0];
 assert.equal(record.notBefore - now, 86_400_000, 'daily Retry-After must not be capped to one hour');
 assert.equal(record.suspended, false);
@@ -94,14 +95,14 @@ assert.equal(reloadAgain.readPendingExploreFollowIntents380('viewer').length, 0)
 await reloadAgain.advance(2 * 86_400_000); assert.equal(rejected, 2);
 await reloadAgain.flushPendingExploreFollowsForPageExit380(); assert.equal(rejected, 2);
 reloadAgain.queueExploreFollowFinalState380({ ...request('limited'), desiredFollowing: false });
-await reloadAgain.advance(30_000); assert.equal(reloadAgain.readPendingExploreFollowIntents380('viewer').length, 0);
+await reloadAgain.advance(8_000); assert.equal(reloadAgain.readPendingExploreFollowIntents380('viewer').length, 0);
 
 // Re-entry without a new click does not move a pending deadline.
 const remount = client(); remount.queueExploreFollowFinalState380(request('remount'));
-await remount.advance(20_000);
+await remount.advance(4_000);
 const stored = remount.readPendingExploreFollowIntents380('viewer')[0];
 remount.queueExploreFollowFinalState380({ ...request('remount'), restoredUpdatedAt: stored.updatedAt });
-await remount.advance(10_000); assert.equal(calls.at(-1), true);
+await remount.advance(4_000); assert.equal(calls.at(-1), true);
 assert.equal(remount.readPendingExploreFollowIntents380('viewer').length, 0);
 
 
@@ -114,7 +115,7 @@ assert.equal(remount.readPendingExploreFollowIntents380('viewer').length, 0);
  });
  instant.queueExploreFollowFinalState380(instantReq('now'));
  await instant.advance(0);
- assert.deepEqual(instantCalls, [['now', true]], 'IMMEDIATE_NO_30_SECOND_WAIT');
+ assert.deepEqual(instantCalls, [['now', true]], 'IMMEDIATE_NO_8_SECOND_WAIT');
  // Opposite taps before dispatch still net to the confirmed baseline W0.
  instant.queueExploreFollowFinalState380(instantReq('undo', true));
  instant.queueExploreFollowFinalState380(instantReq('undo', false));
@@ -192,7 +193,7 @@ const protocolRequest = async (path, init) => {
 await assert.rejects(() => protocolContext.exports.requestOrderedExploreFollow354('v', 't', true, protocolRequest));
 await protocolContext.exports.requestOrderedExploreFollow354('v', 't', false, protocolRequest);
 assert.deepEqual(methods, ['PUT', 'DELETE']);
-console.log('APP380_FOLLOW_TIMERS_NET_ZERO_INFLIGHT_RELOAD_RETRY_BUDGET=PASS');
+console.log('APP576_FOLLOW_8S_LEGACY_TIMERS_NET_ZERO_INFLIGHT_RELOAD_RETRY_BUDGET=PASS');
 console.log('APP380_389_EXHAUSTED_429_ROLLBACK_AND_LEGACY_SUSPENDED_REPAIR=PASS');
 if (!followOnly389) console.log('APP380_LIKE_NET_ZERO_AND_DETERMINISTIC_429_NO_FALSE_REBASE=PASS');
 console.log('APP380_NAVIGATION_FLUSH_ZERO=PASS');

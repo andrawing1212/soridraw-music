@@ -3520,7 +3520,7 @@ export default function ExplorePage() {
         { deferTargetFollowers: true },
       );
 
-      // Previously queued legacy clicks resume without another 30-second hold.
+      // Previously queued legacy clicks resume without another trailing wait.
       // Old rejected cooldowns must not keep an unconfirmed follower count.
       const hadCooldown380 = Number(record380.notBefore || 0) > Date.now();
 
@@ -4479,7 +4479,8 @@ export default function ExplorePage() {
     );
 
     // app380: local-first. Paint and patch only this device immediately. The
-    // final desired state for this viewer/target pair is sent once after 30s.
+    // visible Follow/Unfollow uses immediate canonical settlement; only the
+    // non-immediate legacy fallback waits for its trailing 8-second window.
     patchExploreFollowLocalState377(
       viewerUid,
       targetUid,
@@ -4518,7 +4519,7 @@ export default function ExplorePage() {
       });
     }
     // Show the provisional target count on B's screen immediately. Do NOT
-    // persist or broadcast that count as canonical before the 30s commit.
+    // persist or broadcast that count as canonical before the server commit.
     setProfile((previous) => {
       if(previous?.uid===targetUid)
         return {...previous,followerCount:optimisticTargetFollowerCount525};
@@ -4624,7 +4625,7 @@ export default function ExplorePage() {
         }
 
         // Other devices/users see only the final accepted state, never the
-        // intermediate local taps inside the 30-second aggregation window.
+        // intermediate local taps before the canonical server settlement.
         const signalActorFollowing380 = resolvedActorFollowing380
           ?? Math.max(0, Math.floor(Number(settlement380.result.actorFollowingCount || 0)));
         void publishExploreFollowSync377(viewerUid, {

@@ -9,7 +9,7 @@ const like = readFileSync('src/services/exploreLikeService.ts', 'utf8');
 const likePatch = readFileSync('cloudflare/explore-worker/patches/054-explore-like-edge-rate-limit.mjs', 'utf8');
 const wrangler = JSON.parse(readFileSync('cloudflare/explore-worker/canonical/wrangler.preview.jsonc', 'utf8'));
 // app380 local-first final-state batching.
-assert.match(batch, /EXPLORE_FOLLOW_IDLE_FLUSH_MS_380 = 30_000/);
+assert.match(batch, /EXPLORE_FOLLOW_IDLE_FLUSH_MS_380 = 8_000/);
 assert.match(batch, /entry\.desiredFollowing === entry\.baseFollowing/);
 assert.match(batch, /No Worker request, R2 write, D1 read or D1 write is needed/);
 assert.match(batch, /soridraw:explore:follow-outbox:380:/);
@@ -103,7 +103,7 @@ if (generatedPath) {
   );
 }
 
-console.log('APP380_FOLLOW_LOCAL_FIRST_30S_FINAL_STATE=PASS');
+console.log('APP576_FOLLOW_8S_LEGACY_BATCH_IMMEDIATE_VISIBLE=PASS');
 console.log('APP380_FOLLOW_RETURN_TO_BASE_SERVER_W0=PASS');
 console.log('APP380_FOLLOW_PENDING_RELOAD_RECOVERY=PASS');
 console.log('APP380_PUBLIC_TARGET_FINAL_STATE_ONLY=PASS');

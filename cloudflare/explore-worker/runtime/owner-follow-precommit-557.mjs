@@ -64,8 +64,18 @@ export async function runOwnerFollowPrecommit557({
      Object.keys(v.pending).length!==0)return fail('profile-not-exact');
   const ip=await media.get(keyIntent(manifest.cutoverToken,auth.uid,parts[3]));
   intent=ip?await readJson(ip):null;
-  if(intent&&(!intent.settled||intent.token!==manifest.cutoverToken||
-     intent.actor!==auth.uid||intent.target!==parts[3]))return fail('intent-not-settled');
+  if(intent&&(!intent.token||intent.token!==manifest.cutoverToken||
+     intent.actor!==auth.uid||intent.target!==parts[3]))
+   return fail('intent-invalid');
+  // A request already carrying the exact pair-intent identity was reserved
+  // before the original canonical attempt. Route it to canonical idempotent
+  // replay/recovery; do not allocate a second alarm or block an ambiguous ACK.
+  if(intent?.id===body.followOperationId&&
+     intent?.expectedRevision===body.followExpectedRevision&&
+     intent?.following===(request.method==='PUT')){
+   return callCanonical();
+  }
+  if(intent&&!intent.settled)return fail('intent-not-settled');
   if(Number(intent?.revision||0)!==body.followExpectedRevision)
    return fail('intent-revision-stale');
  }catch{return fail('preflight-read-unavailable')}

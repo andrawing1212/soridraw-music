@@ -235,6 +235,11 @@ jobs:
           node scripts/verify-482-preview-writer-release-gate.mjs --self-test
           # app487: prevent stale app427 empty-command semantics in any later release
           node scripts/verify-427-legacy-next-song-parity.mjs
+      - name: APP560 actual canonical orchestration to signed receiver isolated integration
+        run: |
+          node --check scripts/verify-560-owner-follow-full-isolated.mjs
+          node --import tsx scripts/verify-560-owner-follow-full-isolated.mjs
+          echo 'APP560_RECEIVER_INTEGRATION_ISOLATED_ONLY=PASS;FULL_BILLING=NOT_PROVEN'
       - name: APP557 authenticated owner follow boundary and exact durable receipt
         run: |
           node --check cloudflare/explore-worker/runtime/owner-follow-http-539.mjs

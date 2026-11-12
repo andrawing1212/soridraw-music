@@ -1,0 +1,146 @@
+name: SORIDRAW Follow 592 Functions OFF Scoped Release
+
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - '.github/workflows/follow-592-owner-functions-off.yml'
+      - '.deploy/follow-592-functions-off.trigger'
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/follow-592-functions-off.trigger'
+
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-follow-592-functions-off
+  cancel-in-progress: false
+
+jobs:
+  source:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Preserve owner follow source OFF before shared backend release
+        run: |
+          set -euo pipefail
+          node scripts/verify-585-owner-shared-release-off.mjs --source-only
+          grep -Fxq 'functions_compiled_off=true' .deploy/follow-592-functions-off.trigger
+          grep -Fxq 'target_project=soridraw-app-866a5' .deploy/follow-592-functions-off.trigger
+          grep -Fxq 'worker_deploy=false' .deploy/follow-592-functions-off.trigger
+          grep -Fxq 'rules_deploy=false' .deploy/follow-592-functions-off.trigger
+          grep -Fxq 'user_data_change=false' .deploy/follow-592-functions-off.trigger
+          echo 'APP592_FUNCTIONS_SOURCE_OFF_NO_SHARED_MUTATION=PASS'
+
+  deploy:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      FIREBASE_PROJECT: soridraw-app-866a5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+      - name: Exact one-shot release fence (no Firebase change)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/preview'
+          test "$(git cat-file -p HEAD | grep -c '^parent ')" = 2
+          test "$(git rev-parse HEAD^1)" = '732cd3a982d7d568ebe35cbbd726711632ecb54b'
+          git diff --name-only HEAD^1 HEAD | grep -Fxq '.deploy/follow-592-functions-off.trigger'
+          grep -Fxq 'release=follow592_firebase_three_new_functions_off_20261113' .deploy/follow-592-functions-off.trigger
+          grep -Fxq 'target_project=soridraw-app-866a5' .deploy/follow-592-functions-off.trigger
+          grep -Fxq 'approval=director_yes_existing_one_owner_preview_backend_scope' .deploy/follow-592-functions-off.trigger
+          for required in 'functions_compiled_off=true' 'worker_deploy=false' 'rules_deploy=false' 'user_data_change=false' 'hosting_deploy=false' 'test_production_deploy=false'; do
+            grep -Fxq "$required" .deploy/follow-592-functions-off.trigger
+          done
+          node scripts/verify-585-owner-shared-release-off.mjs --source-only
+          echo 'APP592_EXACT_PREVIEW_FUNCTIONS_OFF_TRIGGER=PASS'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - name: Build exact existing Functions source before any cloud change
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix functions --no-audit --no-fund
+          npm run build --prefix functions
+          node - <<'NODE'
+          const f=require('./functions/lib/securedIndex.js');
+          for(const name of ['publishExploreOwnerFollower542','enrollOwnerFollow544Candidate','verifyOwnerFollowEpoch547Candidate']){
+            if(!f[name])throw Error('APP592_EXPECTED_NEW_EXPORT_MISSING_'+name);
+          }
+          console.log('APP592_EXACT_THREE_FUNCTIONS_BUILD=PASS');
+          NODE
+      - name: Authenticate existing shared Firebase project
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Check exact target project and Secret Manager permissions (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$(gcloud projects describe "$FIREBASE_PROJECT" --format='value(projectId)')"
+          test "$project" = 'soridraw-app-866a5'
+          gcloud secrets list --project "$FIREBASE_PROJECT" --format='value(name)' --limit=10000 > "$RUNNER_TEMP/follow592-secret-names.txt"
+          gcloud functions list --regions=asia-northeast3 --project "$FIREBASE_PROJECT" --format='value(name)' --limit=1000 > "$RUNNER_TEMP/follow592-functions-before.txt"
+          for name in publishExploreOwnerFollower542 enrollOwnerFollow544Candidate verifyOwnerFollowEpoch547Candidate; do
+            if grep -Eq "(^|/)${name}$" "$RUNNER_TEMP/follow592-functions-before.txt"; then
+              echo 'APP592_FUNCTION_ALREADY_EXISTS_HOLD' >&2
+              exit 2
+            fi
+          done
+          echo 'APP592_TARGETED_FUNCTIONS_ABSENT=PASS'
+          echo 'APP592_SHARED_PROJECT_AND_SECRET_LIST_ACCESS=PASS'
+      - name: Create only missing HMAC secrets (no plaintext logs)
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          for secret in SORIDRAW_OWNER_FOLLOW_HMAC_539 SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544; do
+            if grep -Eq "(^|/)${secret}$" "$RUNNER_TEMP/follow592-secret-names.txt"; then
+              # Existing secrets are never overwritten or given a new version.
+              gcloud secrets describe "$secret" --project "$FIREBASE_PROJECT" --format='value(name)' >/dev/null
+              if ! gcloud secrets versions list "$secret" --project "$FIREBASE_PROJECT" --format='value(state)' | grep -Fxq ENABLED; then
+                echo 'APP592_EXISTING_SECRET_HAS_NO_ENABLED_VERSION_HOLD' >&2
+                exit 2
+              fi
+              echo 'APP592_EXISTING_HMAC_PRESERVED'
+            else
+              # gcloud list succeeded first, so failure here does not bypass unknown IAM state.
+              openssl rand -hex 32 | tr -d '\n' | gcloud secrets create "$secret" --project "$FIREBASE_PROJECT" --replication-policy=automatic --data-file=- --quiet >/dev/null
+              echo 'APP592_NEW_PRIVATE_HMAC_CREATED'
+            fi
+          done
+          rm -f "$RUNNER_TEMP/follow592-secret-names.txt"
+      - name: Deploy only three NEW compiled-OFF Cloud Functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only 'functions:publishExploreOwnerFollower542,functions:enrollOwnerFollow544Candidate,functions:verifyOwnerFollowEpoch547Candidate' \
+            --project "$FIREBASE_PROJECT" --config firebase.json --non-interactive
+          echo 'APP592_ONLY_THREE_SHARED_FUNCTIONS_DEPLOYED_OFF=PASS'
+      - name: Verify exactly the three new Functions metadata only
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in publishExploreOwnerFollower542 enrollOwnerFollow544Candidate verifyOwnerFollowEpoch547Candidate; do
+            state="$(gcloud functions describe "$name" --gen2 --region=asia-northeast3 --project "$FIREBASE_PROJECT" --format='value(state)')"
+            test "$state" = ACTIVE || { echo 'APP592_FUNCTION_NOT_ACTIVE_HOLD' >&2; exit 2; }
+            echo 'APP592_EXPECTED_OFF_FUNCTION_EXISTS=PASS'
+          done
+          echo 'APP592_WORKER_RULES_D1_R2_HOSTING_USER_DATA_UNCHANGED_BY_WORKFLOW=PASS'

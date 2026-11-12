@@ -39,6 +39,24 @@ for(const change of bad)assert.equal(plan({...env,...change}).ok,false,
  'PRODUCTION_OR_INCOMPLETE_QA_CONFIG_MUST_FAIL '+JSON.stringify(change));
 const src=readFileSync('functions/qa577/src/index.ts','utf8');
 const compiled=readFileSync(main,'utf8');
+// Regression: Firebase discovery MUST NOT load the production webhook.
+// Its top-level defineSecret registers HMAC_539 and would prompt for a
+// production-named secret during a QA-only deployment.
+const qaHandler=readFileSync('functions/qa577/src/owner-follow-handler-qa578.ts','utf8');
+const prodWebhook=readFileSync('functions/src/exploreOwnerFollowerWebhook542.ts','utf8');
+const qaPure=qaHandler.slice(qaHandler.indexOf('const UID='));
+const prodPure=prodWebhook.slice(prodWebhook.indexOf('const UID='),
+ prodWebhook.indexOf('export const publishExploreOwnerFollower542=onRequest'));
+assert.equal(qaPure,prodPure,'QA_HMAC_VALIDATION_MUST_MATCH_PROVEN_PURE_HANDLER');
+assert.match(src,/from ['"]\.\/owner-follow-handler-qa578['"]/);
+assert.doesNotMatch(src,/exploreOwnerFollowerWebhook542|SORIDRAW_OWNER_FOLLOW_HMAC_539/);
+assert.doesNotMatch(qaPure,/onRequest\(|defineSecret\(|SORIDRAW_OWNER_FOLLOW_HMAC_539/);
+assert.doesNotMatch(compiled,/exploreOwnerFollowerWebhook542|SORIDRAW_OWNER_FOLLOW_HMAC_539/);
+const qaFunction=require('../'+main).publishExploreOwnerFollower542;
+assert.equal(typeof qaFunction,'function');
+const wiredSecrets=qaFunction.__endpoint?.secretEnvironmentVariables || [];
+assert.deepEqual(wiredSecrets.map(x=>x.key),['SORIDRAW_QA_OWNER_FOLLOW_HMAC_578']);
+console.log('APP578_QA_IMPORT_DOES_NOT_REGISTER_PRODUCTION_HMAC_539=PASS');
 const qaConfig=JSON.parse(readFileSync('firebase.qa577.json','utf8'));
 const qaPackage=JSON.parse(readFileSync('functions/qa577/package.json','utf8'));
 assert.equal(qaConfig.functions.length,1);

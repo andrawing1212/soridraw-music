@@ -95,7 +95,7 @@ const pc=device(),mobile=device();
 await Promise.all([pc.submit(),mobile.submit()]);
 assert.equal(persistence,2);
 for(const d of [pc,mobile]){
- assert(d.$('state').textContent.includes('QA Auth 성공'));
+ assert(d.$('state').textContent.includes('QA RTDB 구독 등록됨 · 첫 수신 대기'));
  assert.equal(d.$('password').value,'');
 }
 const emit=(v,c)=>{

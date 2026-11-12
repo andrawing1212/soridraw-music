@@ -61,7 +61,7 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
           token_format: access_token
-          access_token_scopes: 'https://www.googleapis.com/auth/cloud-platform'
+          access_token_scopes: 'https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/firebase.database'
       - name: Apply exact two dormant D1 columns and one owner-only RTDB rule
         env:
           FIREBASE_OWNER_RULES_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}

@@ -116,6 +116,23 @@ for(const d of [pc,mobile]){
  assert.equal(d.$('version').textContent,'4');
  assert.equal(d.$('count').textContent,'0');
 }
+// APP584 real-screen diagnostic regression: an invalid QA config must
+// identify the exact stage without echoing credentials or account identifiers.
+const invalidConfig=device();
+invalidConfig.$('config').value=JSON.stringify({...config,authDomain:'wrong.invalid'});
+await invalidConfig.submit();
+assert(invalidConfig.$('detail').textContent.includes('CONFIG_IDENTITY'));
+assert(invalidConfig.$('detail').textContent.includes('QA_PROJECT_OR_AUTH_DOMAIN_MISMATCH'));
+assert(!invalidConfig.$('detail').textContent.includes('mock-secret-not-real'));
+const missingPassword=device();
+missingPassword.$('password').value='';
+await missingPassword.submit();
+assert(missingPassword.$('detail').textContent.includes('AUTH_SIGN_IN'));
+assert(missingPassword.$('detail').textContent.includes('QA_PASSWORD_MISSING'));
+const malformed=device();
+malformed.$('config').value='{not-valid-json';
+await malformed.submit();
+assert(malformed.$('detail').textContent.includes('QA_JSON_SYNTAX'));
 const outside=device('preview.soridraw.com');
 assert.equal(outside.$('connect').disabled,true);
 assert(!outside.$('connectForm').events.has('submit'));

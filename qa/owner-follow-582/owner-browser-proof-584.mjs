@@ -69,19 +69,25 @@ if (!allowedOrigin) {
   const password = $('password').value;
   $('password').value = '';
   let pending = null;
+  let stage = 'CONFIG_JSON';
   try {
    const config = JSON.parse($('config').value);
    const ownerUid = $('ownerUid').value.trim();
-   // This check precedes any Firebase SDK initialization or request.
+   // Fail closed before SDK initialization or network access.
+   stage = 'CONFIG_IDENTITY';
    assertQaOwnerClient582(config,ownerUid);
+   stage = 'SDK_INIT';
    pending = await createQaOwnerClient582({config,ownerUid});
    if(mySession !== session) return;
+   stage = 'AUTH_PERSISTENCE';
    const [{getApp},{getAuth,setPersistence,inMemoryPersistence,getIdTokenResult}] =
     await Promise.all([import('firebase/app'),import('firebase/auth')]);
    const qaAuth = getAuth(getApp('soridraw-isolated-owner-qa582'));
    await setPersistence(qaAuth,inMemoryPersistence);
+   stage = 'AUTH_SIGN_IN';
    await pending.signInOwner('testa@example.com',password);
    if(mySession !== session) { await pending.signOut(); return; }
+   stage = 'OWNER_CLAIM';
    const identity = qaAuth.currentUser;
    const token = identity ? await getIdTokenResult(identity,true) : null;
    if(!token || !/^[0-9a-f]{32}$/.test(String(token.claims.soridrawFollowEpoch532||'')))
@@ -90,6 +96,7 @@ if (!allowedOrigin) {
    $('config').value = '';
    $('ownerUid').value = '';
    status('QA Auth 성공 · RTDB 기준값 대기','로그인만으로 실시간 수신이 통과한 것은 아닙니다.');
+   stage = 'RTDB_SUBSCRIBE';
    const detach = await pending.subscribeOwner(marker => {
     if(mySession !== session || client !== pending) return;
     if(!Number.isSafeInteger(marker.version) || marker.version < 1 ||
@@ -135,10 +142,30 @@ if (!allowedOrigin) {
    disconnect.disabled = false;
   } catch(error) {
    if(mySession !== session) return;
-   const code = typeof error?.code === 'string' && /^auth\/[a-z-]+$/.test(error.code)
-    ? error.code : 'QA_CONFIG_OR_AUTH_HOLD';
-   status('QA 연결 실패','오류 코드: '+code+'. QA 설정·인증·클레임을 확인하세요.');
-   log('연결 실패 · 개인정보 및 인증정보는 표시하지 않음');
+   // Explicitly classify only fixed known codes. Never display raw SDK error
+   // messages, URLs, UID, passwords, tokens, or Firebase configuration fields.
+   const codes = {
+    'APP582_QA_CLIENT_IDENTITY_HOLD':'QA_APP_ID_OR_UID_MISMATCH',
+    'APP577_QA_PROJECT_OR_ENTRY_MISMATCH_HOLD':'QA_PROJECT_OR_AUTH_DOMAIN_MISMATCH',
+    'APP577_QA_DATABASE_URL_MISMATCH_HOLD':'QA_DATABASE_URL_MISMATCH',
+    'APP577_QA_STORAGE_BUCKET_MISMATCH_HOLD':'QA_STORAGE_BUCKET_MISMATCH',
+    'APP582_QA_OWNER_UID_MISMATCH':'QA_OWNER_UID_MISMATCH',
+    'APP582_ONLY_QA_OWNER_A_EMAIL':'QA_PASSWORD_MISSING',
+    'QA_OWNER_CLAIM_HOLD':'QA_OWNER_CLAIM_MISSING'
+   };
+   const safeAuthCodes = new Set([
+    'auth/invalid-credential','auth/wrong-password','auth/user-not-found',
+    'auth/unauthorized-domain','auth/invalid-api-key',
+    'auth/network-request-failed','auth/operation-not-allowed',
+    'auth/user-disabled','auth/too-many-requests'
+   ]);
+   const code = codes[String(error?.message||'')] ||
+    (safeAuthCodes.has(error?.code) ? error.code :
+    (stage==='CONFIG_JSON' && error instanceof SyntaxError
+      ? 'QA_JSON_SYNTAX' : 'QA_'+stage+'_HOLD'));
+   status('QA 연결 실패','단계: '+stage+' · 오류: '+code+
+    '. 비밀번호는 자동 삭제됐으므로 재시도할 때 다시 입력하세요.');
+   log('연결 실패: '+stage+' / '+code+' (비밀정보 미표시)');
    if(pending) try { await pending.signOut(); } catch { /* no retry */ }
    client = null;
    connect.disabled = false;

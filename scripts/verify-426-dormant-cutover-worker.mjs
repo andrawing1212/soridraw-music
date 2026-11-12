@@ -15,7 +15,7 @@ assert.doesNotMatch(minimal,/proveLikeBatchCutover426\(env\)/,
   'existing Writer HMAC guard must never require absent 174/419 tables');
 const newFetch=entry.slice(entry.indexOf('  async fetch(request, env, ctx) {'));
 const guardPos=newFetch.indexOf('await verifySignedLegacyLikeIntake420(request, env, ctx)');
-const canonicalPos=newFetch.indexOf('await baseWorker.fetch(request, env, ctx)');
+const canonicalPos=newFetch.search(/await baseWorker\.fetch\(request,\s*env,\s*ctx\)/);
 assert(guardPos>=0&&canonicalPos>guardPos,
   'when guard is enabled, all 50 signed approvals must precede old canonical DB work');
 assert.match(newFetch,/if \(STAGE426_COMPILED_OPEN\)\s*return new Response/,

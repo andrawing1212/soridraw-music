@@ -23,6 +23,13 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
+  "include": [
+    "src/**/*",
+    "*.ts",
+    "*.tsx",
+    "*.mts",
+    "*.cts"
+  ],
   "exclude": [
     "functions"
   ]

@@ -23,6 +23,9 @@ on:
       - 'cloudflare/explore-worker/canonical/preview-entry.js'
       - 'cloudflare/explore-worker/canonical/wrangler.preview.jsonc'
       - 'cloudflare/explore-worker/wrangler.owner-qa-583.json'
+      - 'cloudflare/explore-worker/experiments/owner-follow-isolated-558-entry.mjs'
+      - 'cloudflare/explore-worker/experiments/owner-follow-qa-live-583.mjs'
+      - 'scripts/verify-583-qa-live-relay.mjs'
       - 'scripts/verify-572-owner-do-preview-off.mjs'
       - 'scripts/verify-556-owner-replay-reservation.mjs'
       - 'scripts/verify-560-owner-follow-full-isolated.mjs'
@@ -64,6 +67,7 @@ jobs:
           echo 'APP583_QA_SQLITE_DO_WRANGLER_DRY_RUN_ONLY_NO_DEPLOY=PASS'
           node --import tsx --no-warnings scripts/verify-547-physical-recreation-auth-proof.mjs
           node scripts/verify-561-owner-cost-reuse.mjs
+          node scripts/verify-583-qa-live-relay.mjs
           node --no-warnings scripts/verify-560-owner-follow-full-isolated.mjs
           echo 'FOLLOW_031_SOURCE_ONLY_NO_D1_OR_HOSTING_CHANGE=PASS'
   owner-rules-emulator:

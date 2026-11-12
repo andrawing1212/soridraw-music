@@ -1,0 +1,14 @@
+release=app588_owner_shared_off_20261113
+approval=director_yes_20261113_preview_shared_owner
+migration=two_dormant_columns_only
+rules=one_owner_private_root_only
+worker=OFF
+functions=OFF
+client=OFF
+user_rows=NO_CHANGE
+approval_scope=shared_d1_two_additive_columns_and_one_owner_only_rtdb_rule
+exclude=test_production_deploy_and_user_original_mutation
+expected_before_d1_columns=zero
+expected_before_preview_worker=350ce33d-ec83-49d0-a4ae-c25d2d90f59e
+expected_before_test_worker=ddd2255a-75cc-4db9-8905-b47338558cb0
+expected_before_production_worker=af81502a-298d-4ec6-bc2a-0c529d6dc29e

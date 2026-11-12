@@ -1,3 +1,18 @@
+## CURRENT — 검증 재사용 체크포인트: 소유자 팔로우 자동 동기화 (2026-11-13 KST)
+
+- **목적/우선순위:** 새 채팅에서는 이 섹션과 현재 `preview` HEAD·관련 PR/배포 버전만 확인한다. 이 아래 날짜의 `CURRENT`는 당시의 역사 기록이며 현재 릴리스 상태가 아니다. 유효한 과거 PASS를 재수행하지 않고 미완료 작업부터 시작한다.
+- **애플리케이션 기준:** 마지막 실제 PREVIEW Hosting 소스 SHA `b3b444616b5410146da0968cf0f34641cae61887` (PR #914 병합, 이후 #945/#946/#948/#949/#950/#951/#952/#953 관련 소스·보호·릴리스 정리). 이 문서만 변경·병합하는 것은 새 앱 실행물이나 새 Hosting 배포를 뜻하지 않는다. 확인: [PREVIEW Hosting Actions #43305621570](https://github.com/andrawing1212/soridraw-music/actions/runs/43305621570).
+- **PASS 재사용 ① 독립 QA:** 독립 QA에서 합성 팔로우→취소 Worker/DO→Functions→RTDB 수신 실전송 PASS(기록된 지연 3,103ms / 1,690ms). [PR #914 QA 진행 기록](https://github.com/andrawing1212/soridraw-music/pull/914), [격리 DO 실행 #43034099641](https://github.com/andrawing1212/soridraw-music/actions/runs/43034099641). **이는 공유 서버 및 실제 PREVIEW 로그인 PC·모바일 PASS가 아니며 실제 통합 청구 금액도 확인되지 않았다.** 구성 변화·신규 실패 없이 기존 DO/에뮬레이터/QA 시험을 반복하지 않는다.
+- **PASS 재사용 ② 공유 사전 준비:** [Actions #43301911627](https://github.com/andrawing1212/soridraw-music/actions/runs/43301911627) 실제 적용·사후 검사 SUCCESS. 공유 D1 `profile_stats`에 인증 관련 컬럼 `owner_follow_auth_epoch_532`, `owner_follow_auth_created_at_ms_544` **정확히 2개** 추가; RTDB `ownerFollowerSync532/$uid` 개인 소유자 전용 규칙 **1개** 추가. 기존 원본 행·기존 다른 RTDB Rules 보호, PREVIEW/TEST/PRODUCTION 3 Worker 활성 버전 유지. **일회성 APP588 마이그레이션과 구형 '컬럼 0개' 전제 검사를 다시 실행하지 않는다.**
+- **PASS 재사용 ③ Hosting:** [Actions #43305621570](https://github.com/andrawing1212/soridraw-music/actions/runs/43305621570) PREVIEW Hosting 및 실제 `preview.soridraw.com` 응답 PASS; 같은 릴리스에서 Functions/Worker/RTDB Rules/D1 변경 **없음**, TEST/PRODUCTION Hosting 변경 없음. Hosting PASS를 팔로우 자동 수신 PASS로 대체하지 않는다.
+- **현재 소스·활성화 경계:** 위 기준 SHA에서 소유자 신호 클라이언트/명시 카나리 진입, Functions 542/544/547, Worker precommit/postcommit/DO/HTTP 바인딩 기능 스위치 **컴파일 OFF**. Wrangler 체크인 구성에는 카나리 UID 및 전달 ON 변수가 없다. 기존 Worker 배포 workflow는 역사적 Worker hash를 핀하며 Hosting workflow는 Functions 배포를 제외한다. 현재 **실제 Firebase Functions 배포·HMAC 설정·PREVIEW Worker 연결 및 실사용 전달은 PASS 아님**; 소스 내 준비 상태와 실제 배포 상태를 구분한다.
+- **카나리 계정:** 디렉터가 PREVIEW 본인 계정의 UID를 한 명 시험 대상으로 제공했다. UID/계정 식별자, 토큰, 서버 비밀키는 공개 GitHub 문서·트리거·CI 로그에 저장하지 않는다. 실제 Auth 계정 존재/생성시각·보호 조건·서버 측 카나리 지정은 관리자 인증 기반으로 아직 검증하지 못했다.
+- **미완료/다음 실행점:** 안전한 공유 Firebase Auth 읽기 전용 실계정 확인 → PREVIEW 전용 1소유자 설정/독립 HMAC·Functions 3개와 Worker 정확한 bundle/바인딩/롤백 검증 → 승인 범위 안의 제한적 연결 → 다른 실제 계정의 팔로우/취소 후 카나리 A의 PC·모바일 자동 정본 수신 및 Cloudflare·Firebase 실제 비용 검증. 기존 좋아요·팔로우, APP527 불필요 조회 방지, APP528 120초 목록 캐시, 공유 사용자 원본 및 TEST/PRODUCTION 보호.
+- **재검사 조건:** 동일 소스 SHA + 동일 관련 실제 배포 Worker/Functions/Rules/D1 계약 + 신규 장애 없음 → 위 증거 재사용. 새 코드/활성 버전/규칙/비밀 설정/권한/인증 세대가 바뀌거나 실사용 실패가 발생한 **영향 경로만** 차등 검사한다. 보안·원본 영향 고위험 변경에는 기존 별도 승인/롤백 검증을 그대로 적용한다. 모든 보고에서 `소스 CI` / `실제 공유 서버 변경` / `Hosting` / `PC·모바일 실사용`의 PASS/HOLD를 분리한다.
+- **이번 체크포인트 변경:** 두 기존 문서만 수정. GitHub 문서-only 변경 자체는 코드·Worker/Functions·D1/R2·RTDB·사용자 원본·TEST/PRODUCTION 또는 Hosting 배포가 아니다.
+
+---
+
 ## CURRENT — 정식앱 Hosting 배포 사전 위임 / 독립 QA 팔로우 실연동 PASS (2026-11-12 KST)
 
 - **배포 권한 최신 확정:** 디렉터가 개발 책임자에게 PREVIEW 및 준비 완료된 PRODUCTION **일반 코드·Hosting 배포 판단/실행을 사전 위임**했다. 건별 승인을 반복하지 않고 실제 사용·환경 호환·롤백 안전을 확인한 뒤 기존 릴리스 경로로 배포한다. TEST 앱은 현재 사용하지 않으며 기존 리소스를 변경·삭제하지 않는다. 공유 Firebase·Cloudflare Worker/D1/R2·Rules·권한·사용자 원본 등 고위험 변경은 이 위임에 포함되지 않아 별도 범위 승인 필요. 특정 작업의 명시적 배포 금지는 우선한다. 상위 원칙은 `AGENTS.md`, 실행 지침은 `DOCS/WORKFLOW_GUARDRAILS.md`.

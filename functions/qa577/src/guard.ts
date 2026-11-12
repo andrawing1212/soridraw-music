@@ -3,7 +3,9 @@
 export const QA_PROJECT_ID_578='soridraw-app';
 export const QA_PROJECT_NUMBER_578='1083981050742';
 const UID_578=/^[A-Za-z0-9_-]{1,128}$/;
-const RTDB_578=/^soridraw-app-default-rtdb(?:\.[a-z0-9-]+)?\.(?:firebaseio\.com|firebasedatabase\.app)$/;
+// APP581: only the dedicated Singapore instance is an active QA target.
+const RTDB_578=/^soridraw-qa-sg\.asia-southeast1\.firebasedatabase\.app$/;
+const QA_DEFAULT_METADATA_578='https://soridraw-app-default-rtdb.firebaseio.com';
 type Env578=Record<string,string|undefined>;
 export type QaPlan578={ok:true;ownerUid:string;databaseURL:string}|{ok:false;reason:string};
 export function planQaOwnerFollowRuntime578(env:Env578):QaPlan578{
@@ -34,7 +36,10 @@ export function planQaOwnerFollowRuntime578(env:Env578):QaPlan578{
  if(meta.databaseURL){
   let declared:URL;
   try{declared=new URL(meta.databaseURL)}catch{return {ok:false,reason:'QA_FIREBASE_DB_MISMATCH'}}
-  if(declared.origin!==url.origin||
+  // The QA Firebase runtime may advertise its unused same-project US
+  // default database. Only that exact metadata origin can differ from the
+  // SG target; the Admin app is initialized from the pinned SG URL instead.
+  if((declared.origin!==url.origin&&declared.origin!==QA_DEFAULT_METADATA_578)||
      (declared.pathname!=='/'&&declared.pathname!==''))
    return {ok:false,reason:'QA_FIREBASE_DB_MISMATCH'};
  }

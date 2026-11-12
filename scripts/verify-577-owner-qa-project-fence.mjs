@@ -13,18 +13,22 @@ import {sendOwnerFollowHttp539,APP539_WORKER_HTTP_BRIDGE_COMPILED_OPEN} from
 assert.equal(APP539_WORKER_HTTP_BRIDGE_COMPILED_OPEN,false);
 const config={projectId:'soridraw-app',projectNumber:'1083981050742',
  authDomain:'soridraw-app.firebaseapp.com',
- databaseURL:'https://soridraw-app-default-rtdb.firebaseio.com/',
+ databaseURL:'https://soridraw-qa-sg.asia-southeast1.firebasedatabase.app/',
  storageBucket:'soridraw-app.firebasestorage.app',
  endpoint:QA_OWNER_FOLLOW_FUNCTION_URL_577,
  functionsEntry:'qa/owner-follow-functions/index.js'};
 assert.equal(assertQaOwnerFollowConfiguration577(config).projectId,'soridraw-app');
 assert.equal(assertQaOwnerFollowConfiguration577({...config,
- databaseURL:'https://soridraw-app-default-rtdb.asia-southeast1.firebasedatabase.app/'}).endpoint,QA_OWNER_FOLLOW_FUNCTION_URL_577);
+ databaseURL:'https://soridraw-qa-sg.asia-southeast1.firebasedatabase.app'}).endpoint,QA_OWNER_FOLLOW_FUNCTION_URL_577);
 const invalid=[
  {projectId:'soridraw-app-866a5'},
  {projectNumber:'91309780603'},
  {authDomain:'soridraw-app-866a5.firebaseapp.com'},
  {databaseURL:'https://soridraw-app-866a5-default-rtdb.firebaseio.com/'},
+ {databaseURL:'https://soridraw-app-default-rtdb.firebaseio.com/'},
+ {databaseURL:'https://soridraw-qa-sg.firebaseio.com/'},
+ {databaseURL:'https://soridraw-qa-sg.asia-east1.firebasedatabase.app/'},
+ {databaseURL:'https://soridraw-qa-sg.asia-southeast1.firebasedatabase.app.attacker.test/'},
  {databaseURL:'https://soridraw-app-default-rtdb.firebaseio.com.attacker.test/'},
  {databaseURL:'http://soridraw-app-default-rtdb.firebaseio.com/'},
  {databaseURL:'https://soridraw-app-default-rtdb.firebaseio.com/auth.json'},

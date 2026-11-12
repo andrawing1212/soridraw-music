@@ -5,7 +5,8 @@ export const QA_FIREBASE_PROJECT_ID_577='soridraw-app';
 export const QA_FIREBASE_PROJECT_NUMBER_577='1083981050742';
 export const QA_OWNER_FOLLOW_FUNCTION_URL_577=
  'https://asia-northeast3-soridraw-app.cloudfunctions.net/publishExploreOwnerFollower542';
-const QA_DB_HOST_577=/^soridraw-app-default-rtdb(?:\.[a-z0-9-]+)?\.(?:firebaseio\.com|firebasedatabase\.app)$/;
+// APP581: no wildcard, US-default or operating RTDB client target.
+const QA_DB_HOST_577=/^soridraw-qa-sg\.asia-southeast1\.firebasedatabase\.app$/;
 const QA_FUNCTION_ENTRY_577='qa/owner-follow-functions/index.js';
 
 // An explicit QA-only Firebase SDK initializer/harness MUST pass this guard.

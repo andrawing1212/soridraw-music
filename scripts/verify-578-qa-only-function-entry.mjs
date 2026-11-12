@@ -8,14 +8,15 @@ const path='functions/qa577/lib/qa577/src/guard.js';
 const main='functions/qa577/lib/qa577/src/index.js';
 assert.ok(existsSync(path)&&existsSync(main),'BUILD_QA_ONLY_NOT_PRESENT');
 const {planQaOwnerFollowRuntime578:plan}=require('../'+path);
+// Firebase-generated config may reference the unused same-project US default.
 const config=JSON.stringify({projectId:'soridraw-app',
  databaseURL:'https://soridraw-app-default-rtdb.firebaseio.com'});
 const env={FIREBASE_CONFIG:config,GCLOUD_PROJECT:'soridraw-app',
  SORIDRAW_QA_OWNER_FOLLOW_578_ENABLED:'1',
  SORIDRAW_QA_OWNER_UID_578:'ownerA578',
- SORIDRAW_QA_RTDB_URL_578:'https://soridraw-app-default-rtdb.firebaseio.com/'};
+ SORIDRAW_QA_RTDB_URL_578:'https://soridraw-qa-sg.asia-southeast1.firebasedatabase.app/'};
 assert.deepEqual(plan(env),{ok:true,ownerUid:'ownerA578',
- databaseURL:'https://soridraw-app-default-rtdb.firebaseio.com'});
+ databaseURL:'https://soridraw-qa-sg.asia-southeast1.firebasedatabase.app'});
 assert.equal(plan({}).ok,false,'MISSING_CONFIG_MUST_FAIL_CLOSED');
 const bad=[
  {SORIDRAW_QA_OWNER_FOLLOW_578_ENABLED:'0'},
@@ -24,10 +25,15 @@ const bad=[
  {GCP_PROJECT_NUMBER:'91309780603'},
  {GOOGLE_CLOUD_PROJECT:'soridraw-app-866a5'},
  {SORIDRAW_QA_RTDB_URL_578:'https://soridraw-app-866a5-default-rtdb.firebaseio.com'},
+ {SORIDRAW_QA_RTDB_URL_578:'https://soridraw-app-default-rtdb.firebaseio.com'},
+ {SORIDRAW_QA_RTDB_URL_578:'https://soridraw-qa-sg.firebaseio.com'},
+ {SORIDRAW_QA_RTDB_URL_578:'https://soridraw-qa-sg.asia-east1.firebasedatabase.app'},
+ {SORIDRAW_QA_RTDB_URL_578:'https://soridraw-qa-sg.asia-southeast1.firebasedatabase.app.attacker.test'},
  {SORIDRAW_QA_RTDB_URL_578:'https://soridraw-app-default-rtdb.firebaseio.com.attacker.test'},
  {SORIDRAW_QA_OWNER_UID_578:''},
  {SORIDRAW_QA_OWNER_UID_578:'../shared'},
  {FIREBASE_CONFIG:'{"projectId":"soridraw-app","databaseURL":"https://soridraw-app-866a5-default-rtdb.firebaseio.com"}'},
+ {FIREBASE_CONFIG:'{"projectId":"soridraw-app","databaseURL":"https://soridraw-qa-sg.other-region.firebasedatabase.app"}'},
 ];
 for(const change of bad)assert.equal(plan({...env,...change}).ok,false,
  'PRODUCTION_OR_INCOMPLETE_QA_CONFIG_MUST_FAIL '+JSON.stringify(change));

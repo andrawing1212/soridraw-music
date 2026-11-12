@@ -3,10 +3,12 @@
 // Does not bind shared D1/R2/Functions/RTDB or process actual user identities.
 import {createOwnerFollowRecovery556}
  from '../runtime/owner-follow-recovery-556.mjs';
+import {createQaOwnerRelay583,parseOwnerQaConfig583} from './owner-follow-qa-live-583.mjs';
 const reply=(value,status=200)=>Response.json(value,{status});
 export class OwnerFollowIsolated558 {
  constructor(state,env){
   this.ctx=state;this.env=env;
+  this.qa583=createQaOwnerRelay583({storage:state.storage,env});
   // Count only genuine APP561 engine storage calls in this synthetic DO.
   // In-memory counters do NOT add metering rows to real DO storage.
   this.meter={put:0,getAlarm:0,setAlarm:0};
@@ -28,7 +30,10 @@ export class OwnerFollowIsolated558 {
   });
  }
  async fetch(request){
-  if(request.headers.get('X-Owner558-Token')!==this.env.OWNER558_TEST_TOKEN)
+  if(new URL(request.url).pathname.startsWith('/qa583/'))
+   return this.qa583.fetch(request);
+  if(this.qa583.enabled()||!this.env.OWNER558_TEST_TOKEN||
+     request.headers.get('X-Owner558-Token')!==this.env.OWNER558_TEST_TOKEN)
    return reply({ok:false},403);
   const url=new URL(request.url);
   if(url.pathname==='/proof/status'&&request.method==='GET')
@@ -74,6 +79,7 @@ export class OwnerFollowIsolated558 {
   return reply({ok:false},404);
  }
  async alarm(){
+  if(await this.qa583.alarm())return;
   const hits=Number(await this.ctx.storage.get('synthetic-hits')||0);
   await this.ctx.storage.put('synthetic-hits',hits+1);
   await this.engine.alarm();
@@ -81,7 +87,13 @@ export class OwnerFollowIsolated558 {
 }
 export default {
  async fetch(request,env){
-  if(request.headers.get('X-Owner558-Token')!==env.OWNER558_TEST_TOKEN)
+  const qaRoute=new URL(request.url).pathname.startsWith('/qa583/');
+  if(qaRoute){
+   const cfg=parseOwnerQaConfig583(env.OWNER583_QA_CONFIG);
+   if(!cfg||request.headers.get('X-Owner583-Token')!==cfg.probeToken)
+    return reply({ok:false},403);
+  }else if(!env.OWNER558_TEST_TOKEN||
+   request.headers.get('X-Owner558-Token')!==env.OWNER558_TEST_TOKEN)
    return reply({ok:false},403);
   // Only one synthetic owner; never derive DO identities from the caller.
   const stub=env.OWNER558_DO.get(env.OWNER558_DO.idFromName('synthetic-owner-only'));

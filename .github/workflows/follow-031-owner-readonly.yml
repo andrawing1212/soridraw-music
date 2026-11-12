@@ -26,6 +26,8 @@ on:
       - 'cloudflare/explore-worker/experiments/owner-follow-isolated-558-entry.mjs'
       - 'cloudflare/explore-worker/experiments/owner-follow-qa-live-583.mjs'
       - 'scripts/verify-583-qa-live-relay.mjs'
+      - 'functions/qa577/qa-export-worker-config-583.cjs'
+      - 'functions/qa577/qa-run-live-follow-583.cjs'
       - 'scripts/verify-572-owner-do-preview-off.mjs'
       - 'scripts/verify-556-owner-replay-reservation.mjs'
       - 'scripts/verify-560-owner-follow-full-isolated.mjs'
@@ -68,6 +70,8 @@ jobs:
           node --import tsx --no-warnings scripts/verify-547-physical-recreation-auth-proof.mjs
           node scripts/verify-561-owner-cost-reuse.mjs
           node scripts/verify-583-qa-live-relay.mjs
+          node --check functions/qa577/qa-export-worker-config-583.cjs
+          node --check functions/qa577/qa-run-live-follow-583.cjs
           node --no-warnings scripts/verify-560-owner-follow-full-isolated.mjs
           echo 'FOLLOW_031_SOURCE_ONLY_NO_D1_OR_HOSTING_CHANGE=PASS'
   owner-rules-emulator:

@@ -6,6 +6,7 @@ import {QA_OWNER_FOLLOW_FUNCTION_URL_577} from '../runtime/owner-follow-qa-bound
 const UID=/^[A-Za-z0-9_-]{1,128}$/;
 const HEX32=/^[0-9a-f]{32}$/;
 const HEX64=/^[0-9a-f]{64}$/;
+const HMAC=/^[0-9a-f]{64}\\n?$/;
 const KEY='qa583-owner-state';
 const reply=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store'}});
 export function parseOwnerQaConfig583(source){
@@ -17,7 +18,7 @@ export function parseOwnerQaConfig583(source){
   cfg.projectId!=='soridraw-app'||cfg.projectNumber!=='1083981050742'||
   !UID.test(cfg.ownerUid||'')||!UID.test(cfg.actorUid||'')||
   cfg.ownerUid===cfg.actorUid||!HEX32.test(cfg.authEpoch||'')||
-  !HEX64.test(cfg.hmacSecret||'')||!HEX64.test(cfg.probeToken||'')||
+  !HMAC.test(cfg.hmacSecret||'')||!HEX64.test(cfg.probeToken||'')||
   cfg.hmacSecret===cfg.probeToken)return null;
  return cfg;
 }

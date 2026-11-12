@@ -20,6 +20,7 @@ on:
       - 'cloudflare/explore-worker/runtime/owner-follow-enrollment-544.mjs'
       - 'scripts/verify-547-physical-recreation-auth-proof.mjs'
       - 'scripts/verify-570-owner-follow-minimal-schema.mjs'
+      - 'scripts/verify-585-owner-shared-release-off.mjs'
       - 'cloudflare/explore-worker/canonical/preview-entry.js'
       - 'cloudflare/explore-worker/canonical/wrangler.preview.jsonc'
       - 'cloudflare/explore-worker/wrangler.owner-qa-583.json'
@@ -63,6 +64,7 @@ jobs:
           npm --prefix functions run build:qa578
           node scripts/verify-578-qa-only-function-entry.mjs
           node scripts/verify-572-owner-do-preview-off.mjs
+          node scripts/verify-585-owner-shared-release-off.mjs --source-only
           npm install --prefix cloudflare/explore-worker --no-audit --no-fund --package-lock=false
           (cd cloudflare/explore-worker/canonical && node ../node_modules/wrangler/bin/wrangler.js deploy --config wrangler.preview.jsonc --dry-run)
           (cd cloudflare/explore-worker && node node_modules/wrangler/bin/wrangler.js deploy --config wrangler.owner-qa-583.json --dry-run)

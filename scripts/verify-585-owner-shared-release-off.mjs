@@ -73,6 +73,17 @@ for(const [path,flag] of [
  ['ownerFollowEnrollment544.ts','APP544_ENROLLMENT_COMPILED_OPEN'],
  ['ownerFollowAuthProof547.ts','APP547_AUTH_PROOF_COMPILED_OPEN']
 ])off('functions/src/'+path,flag);
+const clientCanary=read('src/services/exploreOwnerFollowerSync542.ts');
+assert.ok(clientCanary.includes('!shouldAttemptOwnerFollowCanary575('),
+ 'APP591_PREVIEW_EXPLICIT_CANARY_GATE_MISSING');
+assert.ok(clientCanary.indexOf('!shouldAttemptOwnerFollowCanary575(')<
+ clientCanary.indexOf('const principal=auth.currentUser'),
+ 'APP591_CANARY_GATE_MUST_PRECEDE_AUTH_READ');
+assert.ok(clientCanary.includes("typeof window==='undefined'?'':window.location.hostname.toLowerCase()"),
+ 'APP591_PREVIEW_HOST_REQUIRED');
+assert.ok(clientCanary.includes("typeof window==='undefined'?'':window.location.search"),
+ 'APP591_EXPLICIT_URL_REQUIRED');
+console.log('APP591_PREVIEW_EXPLICIT_CANARY_BEFORE_AUTH=PASS');
 const index=read('functions/src/index.ts');
 assert.ok(index.includes('databaseURL: "https://soridraw-app-866a5-default-rtdb.firebaseio.com"'));
 for(const fn of ['publishExploreOwnerFollower542',

@@ -67,7 +67,14 @@ export const rememberOwnerFollowerSeenVersion542=(uid:string,epoch:string,versio
 export const subscribeExploreOwnerFollower542=async(
  uid:string,onSnapshot:(value:unknown,verifiedClaimEpoch:string)=>void,
 ):Promise<Unsubscribe>=>{
- if(!EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED||!UID.test(uid))return ()=>{};
+ // APP591: outside explicit PREVIEW QA opt-in, do not even inspect Auth.
+ // This protects ordinary owners from extra token requests when compiled ON.
+ if(!EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED||!UID.test(uid)||
+    !shouldAttemptOwnerFollowCanary575(
+      typeof window==='undefined'?'':window.location.hostname.toLowerCase(),
+      typeof window==='undefined'?'':window.location.search,
+      true,
+    ))return ()=>{};
  const principal=auth.currentUser;
  if(!principal||principal.uid!==uid)return ()=>{};
  let token;

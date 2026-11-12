@@ -70,7 +70,13 @@ assert.ok(!/\b(?:INSERT|UPDATE|DELETE|REPLACE)\b/i.test(
 ), 'cross-origin repair must not contain D1 mutation SQL');
 
 const fetchStart = entry.indexOf('async fetch(request, env, ctx)');
-const baseFetch = entry.indexOf('let response = await baseWorker.fetch(request, env, ctx)', fetchStart);
+// APP590: the guarded canary wrapper now declares response before the
+// conditional canonical dispatch. Keep the 358 route-order proof against
+// either the historical single-line let or the same canonical delegate.
+const canonicalDispatch=entry.slice(fetchStart).search(
+  /\b(?:let\s+)?response\s*=\s*await\s+baseWorker\.fetch\(\s*request,\s*env,\s*ctx\s*\)/
+);
+const baseFetch=canonicalDispatch<0?-1:fetchStart+canonicalDispatch;
 const profileRoute = entry.indexOf('PROFILE_PUBLICATION_SIGNAL_QUERY_358', fetchStart);
 const likeRoute = entry.indexOf('PERSONAL_LIKE_REPAIR_QUERY_358', fetchStart);
 assert.ok(fetchStart >= 0 && profileRoute > fetchStart && profileRoute < baseFetch,

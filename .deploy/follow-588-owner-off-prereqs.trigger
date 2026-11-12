@@ -12,3 +12,5 @@ expected_before_d1_columns=zero
 expected_before_preview_worker=350ce33d-ec83-49d0-a4ae-c25d2d90f59e
 expected_before_test_worker=ddd2255a-75cc-4db9-8905-b47338558cb0
 expected_before_production_worker=af81502a-298d-4ec6-bc2a-0c529d6dc29e
+
+retry=app588_metadata_quoted_reserved_notnull_once_20261113

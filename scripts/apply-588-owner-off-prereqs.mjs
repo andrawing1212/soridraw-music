@@ -82,7 +82,7 @@ if(process.argv[2]==='--source-only'){
   assert.ok(r.ok,'APP588_FIREBASE_'+method+'_'+r.status);
   return r.json();
  }
- const metadata="SELECT name,type,notnull,dflt_value FROM pragma_table_info('profile_stats') WHERE name LIKE 'owner_follow_%' ORDER BY cid LIMIT 20";
+ const metadata="SELECT name,type,\"notnull\" AS is_not_null,dflt_value FROM pragma_table_info('profile_stats') WHERE name LIKE 'owner_follow_%' ORDER BY cid LIMIT 20";
  const phase="SELECT id,phase FROM explore_follow_cutover_control_348 WHERE id=1 LIMIT 1";
  await workerVersions();
  assert.deepEqual((await d1(phase,true)).map(x=>({id:Number(x.id),phase:x.phase})),
@@ -100,7 +100,7 @@ if(process.argv[2]==='--source-only'){
  const cols=await d1(metadata,true);
  assert.deepEqual(cols.map(x=>x.name).sort(),
   ['owner_follow_auth_created_at_ms_544','owner_follow_auth_epoch_532']);
- assert.deepEqual(cols.map(x=>[x.name,x.type,Number(x.notnull),String(x.dflt_value)]).sort(),
+ assert.deepEqual(cols.map(x=>[x.name,x.type,Number(x.is_not_null),String(x.dflt_value)]).sort(),
   [['owner_follow_auth_created_at_ms_544','INTEGER',1,'0'],
    ['owner_follow_auth_epoch_532','TEXT',1,"''"]]);
  console.log('APP588_SHARED_D1_TWO_DORMANT_COLUMNS_PASS');

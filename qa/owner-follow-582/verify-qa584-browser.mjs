@@ -11,6 +11,19 @@ const hosting=JSON.parse(readFileSync(join(root,'firebase.qa584.json'),'utf8')).
 assert.equal(hosting.site,'soridraw-qa-owner-584');
 assert.equal(hosting.public,'qa/owner-follow-582/dist-qa584');
 assert(hosting.headers[0].headers.some(x=>x.key==='Content-Security-Policy'));
+const qaCsp=hosting.headers[0].headers.find(x=>
+ x.key==='Content-Security-Policy').value;
+// Firebase RTDB may replace the QA database hostname with an s-... shard
+// and fall back from WebSocket to script-in-iframe long polling. Do not
+// weaken the other production/origin fences or enable blanket script sources.
+assert(qaCsp.includes("script-src 'self' https://www.gstatic.com https://*.asia-southeast1.firebasedatabase.app;"));
+assert(qaCsp.includes('frame-src \'self\';'));
+assert(qaCsp.includes('https://*.asia-southeast1.firebasedatabase.app wss://*.asia-southeast1.firebasedatabase.app'));
+assert(!qaCsp.includes('soridraw-app-866a5'));
+assert(!qaCsp.includes('91309780603'));
+assert(!qaCsp.includes('firebaseio.com'));
+assert(!qaCsp.includes("script-src 'unsafe-inline'"));
+console.log('APP584_QA_CSP_RTDB_SHARD_AND_LONGPOLL_FALLBACK=PASS');
 const files=['index.html','qa/owner-follow-582/owner-browser-proof-584.mjs',
  'qa/owner-follow-582/owner-client.mjs',
  'cloudflare/explore-worker/runtime/owner-follow-qa-boundary-577.mjs'];

@@ -6,7 +6,7 @@ import {defineSecret} from 'firebase-functions/params';
 import {initializeApp,getApps} from 'firebase-admin/app';
 import {getAuth} from 'firebase-admin/auth';
 import {getDatabase} from 'firebase-admin/database';
-import {createOwnerFollowerHttp542} from '../../src/exploreOwnerFollowerWebhook542';
+import {createOwnerFollowerHttp542} from './owner-follow-handler-qa578';
 import {planQaOwnerFollowRuntime578} from './guard';
 
 const QA_SECRET_578=defineSecret('SORIDRAW_QA_OWNER_FOLLOW_HMAC_578');

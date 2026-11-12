@@ -104,6 +104,7 @@ if(process.argv[2]==='--source-only'){
   [['owner_follow_auth_created_at_ms_544','INTEGER',1,'0'],
    ['owner_follow_auth_epoch_532','TEXT',1,"''"]]);
  console.log('APP588_SHARED_D1_TWO_DORMANT_COLUMNS_PASS');
+ assert.deepEqual(await getRules(),before,'APP589_SHARED_RULES_CHANGED_BEFORE_PUT_HOLD');
  await getRules('PUT',after);
  assert.deepEqual(await getRules(),after,'APP588_RULES_POSTCHECK');
  console.log('APP588_ONLY_ONE_NEW_RTDB_OWNER_PRIVATE_ROOT=PASS');

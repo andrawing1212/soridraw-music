@@ -146,14 +146,38 @@ jobs:
           node scripts/apply-588-owner-off-prereqs.mjs --source-only
           node scripts/verify-585-owner-shared-release-off.mjs --source-only
           node scripts/verify-571-owner-epoch-live-readonly.mjs --live
-      - name: Authenticate shared Firebase service account
-        id: google
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Authenticate exact shared Firebase project
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
-          token_format: access_token
-          access_token_scopes: 'https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/firebase.database'
+          project_id: soridraw-app-866a5
+      - name: Create scoped Firebase REST token using verified read-only method
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import os
+          from google.auth.transport.requests import Request
+          from google.oauth2 import service_account
+          path=os.environ.get('GOOGLE_GHA_CREDS_PATH') or os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+          if not path:
+              raise SystemExit('APP589_SHARED_SERVICE_ACCOUNT_UNAVAILABLE')
+          creds=service_account.Credentials.from_service_account_file(
+              path,scopes=[
+                  'https://www.googleapis.com/auth/firebase.database',
+                  'https://www.googleapis.com/auth/userinfo.email',
+              ])
+          creds.refresh(Request())
+          if not creds.token or '\n' in creds.token:
+              raise SystemExit('APP589_SHARED_RTDB_OAUTH_UNAVAILABLE')
+          print('::add-mask::'+creds.token)
+          with open(os.environ['GITHUB_ENV'],'a',encoding='utf-8') as fh:
+              fh.write('FIREBASE_OWNER_RULES_ACCESS_TOKEN='+creds.token+'\n')
+          print('APP589_VERIFIED_SHARED_RTDB_OAUTH_REUSED=PASS')
+          PY
       - name: Apply exact two dormant D1 columns and one owner-only RTDB rule
-        env:
-          FIREBASE_OWNER_RULES_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
         run: node scripts/apply-588-owner-off-prereqs.mjs --apply-off

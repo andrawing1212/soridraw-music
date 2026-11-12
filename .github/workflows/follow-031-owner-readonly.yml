@@ -22,6 +22,7 @@ on:
       - 'scripts/verify-570-owner-follow-minimal-schema.mjs'
       - 'cloudflare/explore-worker/canonical/preview-entry.js'
       - 'cloudflare/explore-worker/canonical/wrangler.preview.jsonc'
+      - 'cloudflare/explore-worker/wrangler.owner-qa-583.json'
       - 'scripts/verify-572-owner-do-preview-off.mjs'
       - 'scripts/verify-556-owner-replay-reservation.mjs'
       - 'scripts/verify-560-owner-follow-full-isolated.mjs'
@@ -59,6 +60,8 @@ jobs:
           node scripts/verify-572-owner-do-preview-off.mjs
           npm install --prefix cloudflare/explore-worker --no-audit --no-fund --package-lock=false
           (cd cloudflare/explore-worker/canonical && node ../node_modules/wrangler/bin/wrangler.js deploy --config wrangler.preview.jsonc --dry-run)
+          (cd cloudflare/explore-worker && node node_modules/wrangler/bin/wrangler.js deploy --config wrangler.owner-qa-583.json --dry-run)
+          echo 'APP583_QA_SQLITE_DO_WRANGLER_DRY_RUN_ONLY_NO_DEPLOY=PASS'
           node --import tsx --no-warnings scripts/verify-547-physical-recreation-auth-proof.mjs
           node scripts/verify-561-owner-cost-reuse.mjs
           node --no-warnings scripts/verify-560-owner-follow-full-isolated.mjs

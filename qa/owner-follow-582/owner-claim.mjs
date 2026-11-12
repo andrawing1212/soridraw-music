@@ -12,7 +12,10 @@ export async function enrollQaOwnerClaim582({
  // provides *both* the exact QA target and an authorized one-owner request.
  if(!authorized||projectId!==QA||databaseURL!==DB||!UID.test(String(ownerUid||''))||
     !qaAdminAuth||typeof qaAdminAuth.getUser!=='function'||
-    typeof qaAdminAuth.setCustomUserClaims!=='function')
+    typeof qaAdminAuth.setCustomUserClaims!=='function'||
+    qaAdminAuth.app?.name!=='soridraw-owner-follow-qa578'||
+    qaAdminAuth.app?.options?.projectId!==QA||
+    qaAdminAuth.app?.options?.databaseURL!==DB)
   throw Error('APP582_QA_OWNER_ENROLLMENT_HOLD');
  const user=await qaAdminAuth.getUser(ownerUid);
  if(user.uid!==ownerUid||user.email!=='testa@example.com')

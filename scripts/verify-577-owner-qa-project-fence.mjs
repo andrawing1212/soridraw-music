@@ -91,7 +91,7 @@ assert.equal(candidate.rules['.write'],false);
 assert.deepEqual(Object.keys(candidate.rules).sort(),
  ['.read','.write','ownerFollowerSync532'].sort());
 assert.equal(candidate.rules.ownerFollowerSync532.$uid['.write'],false);
-assert.match(candidate.rules.ownerFollowerSync532.$uid['.read'],/auth.uid === \\$uid/);
+assert.ok(candidate.rules.ownerFollowerSync532.$uid['.read'].includes('auth.uid === $uid'));
 assert.match(candidate.rules.ownerFollowerSync532.$uid['.read'],/soridrawFollowEpoch532/);
 assert.equal(Object.hasOwn(parsed('firebase.qa577.json'),'database'),false,
  'QA_SG_RULES_MUST_NOT_AUTO_DEPLOY_TO_US_DEFAULT');
@@ -174,6 +174,9 @@ const user582={uid:'ownerA582',email:'testa@example.com',
  metadata:{creationTime:new Date(1800000000000).toUTCString()},
  customClaims:{existing:'protected'}};
 const qaAdmin582={
+ app:{name:'soridraw-owner-follow-qa578',options:{
+  projectId:'soridraw-app',databaseURL:QA_OWNER_FOLLOW_SG_URL_582,
+ }},
  async getUser(uid){claimReads582++;assert.equal(uid,user582.uid);return {...user582}},
  async setCustomUserClaims(uid,claims){
   claimWrites582++;assert.equal(uid,user582.uid);
@@ -185,6 +188,14 @@ await assert.rejects(()=>enrollQaOwnerClaim582({
  ownerUid:user582.uid,qaAdminAuth:qaAdmin582,authorized:true}),
  /APP582_QA_OWNER_ENROLLMENT_HOLD/);
 assert.equal(claimReads582,0,'NO_PROD_AUTH_LOOKUP');
+await assert.rejects(()=>enrollQaOwnerClaim582({
+ projectId:'soridraw-app',databaseURL:QA_OWNER_FOLLOW_SG_URL_582,
+ ownerUid:user582.uid,qaAdminAuth:{...qaAdmin582,
+  app:{name:'default',options:{projectId:'soridraw-app-866a5',
+   databaseURL:'https://soridraw-app-866a5-default-rtdb.firebaseio.com'}}},
+ authorized:true}),
+ /APP582_QA_OWNER_ENROLLMENT_HOLD/);
+assert.equal(claimReads582,0,'WRONG_ADMIN_APP_NO_AUTH_LOOKUP');
 await assert.rejects(()=>enrollQaOwnerClaim582({
  projectId:'soridraw-app',databaseURL:QA_OWNER_FOLLOW_SG_URL_582,
  ownerUid:user582.uid,qaAdminAuth:qaAdmin582}),

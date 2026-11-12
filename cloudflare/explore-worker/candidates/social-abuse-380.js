@@ -1,8 +1,11 @@
 // SORIDRAW_SOCIAL_ABUSE_STATE_380_20261008
 // Operational receipts only. Never return membership/counts from this object.
+// Previous follow cooldowns remain readable in R2, but normal rapid reversals
+// now settle without the 30s/2m/10m/1h lockout. Like policy is unchanged.
+const LEGACY_FOLLOW_COOLDOWNS_380 = [30_000, 120_000, 600_000, 3_600_000];
 function socialAbusePolicy380(domain) {
   if (domain === 'follow') return { windowLimit: 30, dayLimit: 120,
-    cooldowns: [30_000, 120_000, 600_000, 3_600_000], quietMs: 86_400_000, pairMax: 120 };
+    cooldowns: [0, 0, 0, 30_000], quietMs: 86_400_000, pairMax: 120 };
   if (domain === 'like') return { windowLimit: 120, dayLimit: 600,
     cooldowns: [30_000, 60_000, 300_000, 1_800_000], quietMs: 21_600_000, pairMax: 600 };
   throwApi('RATE_LIMIT_UNAVAILABLE', '요청 보호 설정을 확인 중입니다.', 503);
@@ -49,7 +52,8 @@ async function consumeSocialAbuse380(env, uid, domain, intents) {
         old.pairs.some(row => !row || typeof row.target !== 'string' || !row.target || row.target.length > 512 ||
           typeof row.desired !== 'boolean' || typeof row.operationId !== 'string' || !/^[a-zA-Z0-9_-]{16,128}$/.test(row.operationId) ||
           !integer(row.at) || row.at > now || !integer(row.level) || row.level > 3 ||
-          !integer(row.nextAllowedAt) || row.nextAllowedAt !== row.at + policy.cooldowns[row.level]) ||
+          !integer(row.nextAllowedAt) || (row.nextAllowedAt !== row.at + policy.cooldowns[row.level] &&
+          (domain !== 'follow' || row.nextAllowedAt !== row.at + LEGACY_FOLLOW_COOLDOWNS_380[row.level]))) ||
         new Set(old.pairs.map(row => row.target)).size !== old.pairs.length) socialAbuseUnavailable380();
     const events = old.events.filter(at => now - at < 86_400_000).sort((a, b) => a - b);
     const pairs = new Map(old.pairs.filter(row => now - row.at < policy.quietMs).map(row => [row.target, row]));
@@ -77,8 +81,16 @@ async function consumeSocialAbuse380(env, uid, domain, intents) {
         if (domain === 'like') blockedUntil = Math.max(blockedUntil, prior.at + policy.quietMs);
         continue;
       }
-      if (prior && prior.nextAllowedAt > now) blockedUntil = Math.max(blockedUntil, prior.nextAllowedAt);
-      const level = prior ? Math.min(3, prior.level + 1) : 0;
+      // Existing R2 pair receipts may contain the old hourly lockout. Apply the
+      // new policy to the saved timestamp without deleting or rewriting history.
+      const allowedAt = prior && domain === 'follow'
+        ? prior.at + policy.cooldowns[prior.level] : prior?.nextAllowedAt || 0;
+      if (prior && allowedAt > now) blockedUntil = Math.max(blockedUntil, allowedAt);
+      // Normal changes spaced a minute apart do not escalate a pair's level.
+      // The fifth rapid opposite click is bounded for 30 seconds; the existing
+      // actor-wide 30/10min, 120/day and native rate limits remain intact.
+      const level = prior && (domain !== 'follow' || now - prior.at < 60_000)
+        ? Math.min(3, prior.level + 1) : 0;
       changes.push({ ...intent, at: now, level, nextAllowedAt: now + policy.cooldowns[level] });
     }
     const recent = events.filter(at => now - at < 600_000);

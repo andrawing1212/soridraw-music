@@ -33,6 +33,22 @@ import {registerPrivateClick416,commitPrivateWindow416} from '../runtime/private
 import { createCandidateLikeBatch422 } from '../runtime/like-batch-composition-422.mjs';
 import { readAuthoritativeLikeIntents433 } from '../runtime/like-legacy-intent-reconcile-433.mjs';
 import { verifyGuardedLikeBatch420 } from '../runtime/like-guard-permit-420.mjs';
+import {OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN,drainOwnerFollowAuthEpoch532}
+ from '../runtime/owner-follow-auth-epoch-532.mjs';
+import {APP539_WORKER_HTTP_BRIDGE_COMPILED_OPEN,sendOwnerFollowHttp539}
+ from '../runtime/owner-follow-http-539.mjs';
+import {APP544_OWNER_EPOCH_BIND_COMPILED_OPEN,handleOwnerEpochBinding544}
+ from '../runtime/owner-follow-enrollment-544.mjs';
+import {APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN,deliverOwnerFollowPostcommit555}
+ from '../runtime/owner-follow-postcommit-555.mjs';
+import {APP557_OWNER_PRECOMMIT_COMPILED_OPEN,runOwnerFollowPrecommit557}
+ from '../runtime/owner-follow-precommit-557.mjs';
+import {reserveOwnerFollowViaDo557}
+ from '../runtime/owner-follow-do-557.mjs';
+// APP572: export the previously isolated per-owner DO class for the PREVIEW
+// candidate bundle. Both the DO engine and follow precommit remain OFF by
+// default and require their explicit env gate for any write.
+export {OwnerFollowerRecovery557} from '../runtime/owner-follow-do-557.mjs';
 
 // SORIDRAW_EXPLORE_REVISION_HEAD_ONLY_036_20260911
 // SORIDRAW_EXPLORE_REVISION_HEAD_LOW_READ_037_20260911
@@ -3296,8 +3312,37 @@ async function handleSignedPublicLikeWindowAck416(request,env){
  }
 }
 
+// APP542: only the epoch-fenced canonical profile_stats queue is eligible.
+// These compile-time gates are false, and there is no Wrangler cron or live
+// endpoint configuration. Nothing is read, delivered, or mutated on page entry.
+const runOwnerFollowDelivery542=async(env)=>{
+ if(!OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN||
+    !APP539_WORKER_HTTP_BRIDGE_COMPILED_OPEN||
+    env?.SORIDRAW_ENVIRONMENT!=='preview'||
+    env?.SORIDRAW_OWNER_FOLLOW_PUSH_532!=='1'||
+    // The active shared D1 cutover is overlay. Never send a stale legacy
+    // follower_count until APP551 changed-only triggers and enrolled offsets
+    // have been verified and enabled in an approved coordinated release.
+    env?.SORIDRAW_OWNER_FOLLOW_OVERLAY_551!=='1')return;
+ await drainOwnerFollowAuthEpoch532({
+   enabled:true,db:env.DB,overlayRevisionSource:true,
+   deliver:async event=>{
+     const result=await sendOwnerFollowHttp539(event,{
+       endpoint:env.SORIDRAW_OWNER_FOLLOW_ENDPOINT_539,
+       secret:env.SORIDRAW_OWNER_FOLLOW_HMAC_539,
+     });
+     return result.ok===true;
+   },
+ });
+};
+
 export default {
   async scheduled(controller, env, ctx) {
+    // APP542 epoch-only retry label; not scheduled in any live Wrangler config.
+    if(controller?.cron==='soridraw-owner-follow-retry-542'){
+      await runOwnerFollowDelivery542(env);
+      return;
+    }
     // Stage025: PREVIEW-only registered 30-day retention cron candidate.
     // Runtime flags and shared-D1 activation remain OFF; no user/event reads
     // until separately approved enablement. Never run on TEST/PRODUCTION.
@@ -3341,6 +3386,12 @@ export default {
 
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // APP544: HMAC-authenticated Firebase Admin epoch registration route.
+    // Compile gate OFF; no new Worker path, D1 access or secret in service.
+    if(APP544_OWNER_EPOCH_BIND_COMPILED_OPEN &&
+       url.pathname==='/internal/owner-follow/epoch-544'){
+      return handleOwnerEpochBinding544({request,env});
+    }
     // Stage019: PREVIEW-only authenticated inbox GET candidate. Explicit
     // runtime opt-in is absent from Wrangler; source alone does not activate.
     // No settings PUT, admin POST, announcement publish, or retention scheduler.
@@ -3636,7 +3687,60 @@ export default {
         }, { status: 503 });
       }
     }
-    let response = await baseWorker.fetch(request, env, ctx);
+    // APP574: fail closed to one explicitly enrolled PREVIEW canary owner.
+    // Every other owner's follow still uses the frozen canonical writer;
+    // zero new D1/R2/DO cost on non-canary requests, even after activation.
+    const ownerFollowCanary574=String(env?.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||'');
+    const ownerFollowCanaryRoute574=/^[A-Za-z0-9_-]{1,128}$/.test(ownerFollowCanary574)&&
+      url.pathname===('/v1/profiles/'+ownerFollowCanary574+'/follow');
+    // APP557 authenticated precommit is source-wired, compile OFF / unbound.
+    // The original canonical Worker remains unchanged for all active traffic.
+    let response;
+    if(APP557_OWNER_PRECOMMIT_COMPILED_OPEN &&
+       ownerFollowCanaryRoute574 &&
+       !APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN &&
+       !OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN &&
+       env?.SORIDRAW_ENVIRONMENT==='preview' &&
+       env?.SORIDRAW_OWNER_FOLLOW_W2_PUSH_555==='1' &&
+       url.pathname.startsWith('/v1/profiles/') &&
+       url.pathname.endsWith('/follow') &&
+       (request.method==='PUT'||request.method==='DELETE')){
+      response=await runOwnerFollowPrecommit557({
+        request,env,ctx,authenticate:validateExploreAuth307,
+        callCanonical:(canonicalRequest=request)=>baseWorker.fetch(canonicalRequest,env,ctx),
+        reserve:reserveOwnerFollowViaDo557,enabled:true,
+      });
+    }else{
+      response=await baseWorker.fetch(request,env,ctx);
+    }
+    // APP555 candidate: existing overlay commit + R2 settled CAS provides an
+    // owner-global version and count without ANY additional D1 write. The
+    // old APP530/551 queue (W4) must be OFF; both transports never run.
+    if(APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN &&
+       ownerFollowCanaryRoute574 &&
+       !OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN &&
+       env?.SORIDRAW_ENVIRONMENT==='preview' &&
+       env?.SORIDRAW_OWNER_FOLLOW_W2_PUSH_555==='1' &&
+       response?.ok && /\/v1\/profiles\/[^/]+\/follow$/.test(url.pathname) &&
+       (request.method==='PUT'||request.method==='DELETE')){
+      ctx.waitUntil(deliverOwnerFollowPostcommit555({request,response,env,enabled:true})
+        .catch(()=>console.warn('[555] owner follower event retry required')));
+    }
+    // APP542 source-only: only an HTTP-successful canonical follow can wake
+    // the durable epoch queue. No wake is armed in any deployed Worker today.
+    if(OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN &&
+       APP539_WORKER_HTTP_BRIDGE_COMPILED_OPEN && response.ok &&
+       env?.SORIDRAW_ENVIRONMENT==='preview' &&
+       env?.SORIDRAW_OWNER_FOLLOW_PUSH_532==='1'){
+      const parts542=url.pathname.split('/');
+      if(parts542.length===5&&parts542[1]==='v1'&&
+         parts542[2]==='profiles'&&parts542[4]==='follow'&&
+         (request.method==='PUT'||request.method==='DELETE')){
+        ctx.waitUntil(runOwnerFollowDelivery542(env).catch(()=>
+          console.warn('[542] bounded owner delivery deferred')));
+      }
+    }
+
     if (response.ok && curatedRepairTicket468) {
       try {
         await curatedRepairTicket468.stub.fetch('https://soridraw.internal/curated-repair-468/confirm', {

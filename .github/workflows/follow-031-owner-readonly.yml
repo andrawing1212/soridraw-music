@@ -6,6 +6,33 @@ on:
       - 'src/services/exploreFollowBatchService380.ts'
       - 'src/pages/ExplorePage.tsx'
       - 'scripts/verify-031-follow-cooldown.mjs'
+      - 'scripts/verify-577-owner-qa-project-fence.mjs'
+      - 'scripts/verify-578-qa-only-function-entry.mjs'
+      - 'functions/qa577/**'
+      - 'functions/package.json'
+      - 'firebase.qa577.json'
+      - 'cloudflare/explore-worker/runtime/owner-follow-qa-boundary-577.mjs'
+      - 'cloudflare/explore-worker/runtime/owner-follow-http-539.mjs'
+      - 'cloudflare/explore-worker/runtime/owner-follow-recovery-556.mjs'
+      - 'cloudflare/explore-worker/runtime/owner-follow-precommit-557.mjs'
+      - 'scripts/verify-569-owner-precommit-compat.mjs'
+      - 'cloudflare/explore-worker/candidates/570-owner-follow-do-epoch-minimal-off.sql'
+      - 'cloudflare/explore-worker/runtime/owner-follow-enrollment-544.mjs'
+      - 'scripts/verify-547-physical-recreation-auth-proof.mjs'
+      - 'scripts/verify-570-owner-follow-minimal-schema.mjs'
+      - 'scripts/verify-585-owner-shared-release-off.mjs'
+      - 'cloudflare/explore-worker/canonical/preview-entry.js'
+      - 'cloudflare/explore-worker/canonical/wrangler.preview.jsonc'
+      - 'cloudflare/explore-worker/wrangler.owner-qa-583.json'
+      - 'cloudflare/explore-worker/experiments/owner-follow-isolated-558-entry.mjs'
+      - 'cloudflare/explore-worker/experiments/owner-follow-qa-live-583.mjs'
+      - 'scripts/verify-583-qa-live-relay.mjs'
+      - 'functions/qa577/qa-export-worker-config-583.cjs'
+      - 'functions/qa577/qa-run-live-follow-583.cjs'
+      - 'scripts/verify-572-owner-do-preview-off.mjs'
+      - 'scripts/verify-556-owner-replay-reservation.mjs'
+      - 'scripts/verify-560-owner-follow-full-isolated.mjs'
+      - 'scripts/verify-561-owner-cost-reuse.mjs'
       - '.github/workflows/follow-031-owner-readonly.yml'
 permissions:
   contents: read
@@ -26,4 +53,68 @@ jobs:
           node --check scripts/verify-031-follow-cooldown.mjs
           node scripts/verify-031-follow-cooldown.mjs
           node scripts/verify-030-follow-race.mjs
+          node scripts/verify-577-owner-qa-project-fence.mjs
+          npm ci --no-audit --no-fund
+          node scripts/verify-389-social-client-batching.mjs --follow-only
+          node scripts/verify-556-owner-replay-reservation.mjs
+          node scripts/verify-569-owner-precommit-compat.mjs
+          node --no-warnings scripts/verify-570-owner-follow-minimal-schema.mjs
+          npm ci --prefix functions --no-audit --no-fund
+          npm --prefix functions run build
+          npm --prefix functions run build:qa578
+          node scripts/verify-578-qa-only-function-entry.mjs
+          node scripts/verify-572-owner-do-preview-off.mjs
+          node scripts/verify-585-owner-shared-release-off.mjs --source-only
+          npm install --prefix cloudflare/explore-worker --no-audit --no-fund --package-lock=false
+          (cd cloudflare/explore-worker/canonical && node ../node_modules/wrangler/bin/wrangler.js deploy --config wrangler.preview.jsonc --dry-run)
+          (cd cloudflare/explore-worker && node node_modules/wrangler/bin/wrangler.js deploy --config wrangler.owner-qa-583.json --dry-run)
+          echo 'APP583_QA_SQLITE_DO_WRANGLER_DRY_RUN_ONLY_NO_DEPLOY=PASS'
+          node --import tsx --no-warnings scripts/verify-547-physical-recreation-auth-proof.mjs
+          node scripts/verify-561-owner-cost-reuse.mjs
+          node scripts/verify-583-qa-live-relay.mjs
+          node --check functions/qa577/qa-export-worker-config-583.cjs
+          node --check functions/qa577/qa-run-live-follow-583.cjs
+          node --no-warnings scripts/verify-560-owner-follow-full-isolated.mjs
           echo 'FOLLOW_031_SOURCE_ONLY_NO_D1_OR_HOSTING_CHANGE=PASS'
+  owner-rules-emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned local Firebase emulator tooling
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm install --no-save --package-lock=false --legacy-peer-deps --no-audit --no-fund firebase-tools@14
+      - name: Assert only owner-private root was added to existing shared Rules
+        run: |
+          set -euo pipefail
+          node scripts/verify-548-owner-rules-source.mjs
+          git diff --exit-code -- database.rules.json
+      - name: Enforce A/B owner security on actual merged Rules in isolated emulators
+        env:
+          APP533_ISOLATED_ONLY: 'yes'
+          GCLOUD_PROJECT: demo-soridraw-owner-533
+          FIREBASE_PROJECT_ID: demo-soridraw-owner-533
+          FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+          FIREBASE_DATABASE_EMULATOR_HOST: 127.0.0.1:9000
+        run: |
+          set -euo pipefail
+          test -z "${GOOGLE_APPLICATION_CREDENTIALS:-}"
+          test -z "${FIREBASE_TOKEN:-}"
+          ./node_modules/.bin/firebase emulators:exec --only auth,database \
+            --project demo-soridraw-owner-533 \
+            --config scripts/emulator/app573.firebase.json \
+            "node scripts/test-533-owner-auth-rtdb-emulator.mjs"
+          echo 'FOLLOW_573_MERGED_RULES_AUTH_A_B_OWNER_ONLY_EMULATOR=PASS'
+      - name: Confirm shared Rules stayed pristine
+        run: git diff --exit-code -- database.rules.json

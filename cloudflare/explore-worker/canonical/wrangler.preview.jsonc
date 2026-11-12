@@ -42,6 +42,10 @@
       {
         "name": "EXPLORE_LIKE_BATCH_SCHEDULER",
         "class_name": "ExploreLikeBatchScheduler103"
+      },
+      {
+        "name": "OWNER_FOLLOW_RECOVERY_557",
+        "class_name": "OwnerFollowerRecovery557"
       }
     ]
   },
@@ -50,6 +54,12 @@
       "tag": "v1",
       "new_sqlite_classes": [
         "ExploreLikeBatchScheduler103"
+      ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": [
+        "OwnerFollowerRecovery557"
       ]
     }
   ],

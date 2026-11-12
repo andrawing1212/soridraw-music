@@ -16,7 +16,19 @@ const auth = preflight.indexOf('await validateExploreAuth307(');
 const unsigned = preflight.indexOf("code:'420_APP_UPGRADE_REQUIRED'");
 const signature = preflight.indexOf('await verifyGuardedLikeBatch420(');
 const delegate = worker.indexOf('const rejected = await verifySignedLegacyLikeIntake420(');
-const base = worker.indexOf('await baseWorker.fetch(request, env, ctx)', delegate);
+// The APP557 source-only branch wraps /follow only; signed like intake
+// MUST still fall through to the exact canonical Worker in its else path.
+const legacyBase = worker.indexOf('await baseWorker.fetch(request, env, ctx)', delegate);
+const branchBase = worker.indexOf('response=await baseWorker.fetch(request,env,ctx);', delegate);
+if(legacyBase<0){
+ for(const fragment of [
+  'APP557_OWNER_PRECOMMIT_COMPILED_OPEN &&',
+  "url.pathname.startsWith('/v1/profiles/')",
+  "url.pathname.endsWith('/follow')",
+  'response=await baseWorker.fetch(request,env,ctx);',
+ ]) assert(worker.includes(fragment),'APP557 must not intercept signed like intake: '+fragment);
+}
+const base=legacyBase>=0?legacyBase:branchBase;
 assert.ok(auth >= 0 && unsigned > auth && signature > unsigned,
   'unauthenticated users cannot bypass UID verification; unsigned intake fails before HMAC/canonical');
 assert.ok(delegate >= 0 && base > delegate,

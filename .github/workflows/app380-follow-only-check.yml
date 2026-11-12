@@ -112,6 +112,9 @@ jobs:
           run_check 377 node scripts/verify-377-follow-count-list-sync.mjs
           run_check 525 node scripts/verify-525-follow-two-account-display.mjs
           run_check 527 node scripts/verify-527-owner-follower-idle-cost.mjs
+          run_check 529_sql python3 scripts/verify-529-owner-outbox-sql.py
+          run_check 529_sync node scripts/verify-529-owner-sync.mjs
+          run_check 548_rules node scripts/verify-548-owner-rules-source.mjs
           run_check 386 node scripts/verify-386-follow-overlay-count-display.mjs
           run_check 387 env SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-387-follow-abuse-batching.mjs
           run_check 389 node scripts/verify-389-social-client-batching.mjs --follow-only

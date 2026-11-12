@@ -53,7 +53,20 @@ assert.match(explicit,/if \(cached\) \{[\s\S]*?if \(!refreshOwn523\) \{[\s\S]*?r
 assert.match(explicit,/getExploreProfileConnections\(targetUid, direction, null, refreshOwn523\)/);
 assert.match(explicit,/if \(!page.nextCursor\) \{/);
 assert.doesNotMatch(page,/onOwnFollowersFocus525|ownFollowersHeaderLastCheck525Ref|ownFollowersHeaderInflight525Ref/);
-assert.doesNotMatch(page,/getExploreProfileConnections\(ownerUid,'followers',null,true\)/);
+const ownerBegin548=page.indexOf('  // APP542:');
+const ownerEnd548=page.indexOf('  // APP527:',ownerBegin548);
+assert.ok(ownerBegin548>0&&ownerEnd548>ownerBegin548);
+const ownerSignal548=page.slice(ownerBegin548,ownerEnd548);
+assert.match(ownerSignal548,/if\(confirmedNewEvent&&profileConnectionsOpen376Ref\.current==='followers'\)/);
+assert.match(ownerSignal548,/getExploreProfileConnections\(ownerUid,'followers',null,true\)/);
+assert.match(ownerSignal548,/initialSnapshotHandled=true/);
+assert.ok(ownerSignal548.includes('const changedList=isNewEvent||'));
+assert.ok(ownerSignal548.includes('(!previousMarker&&profile?.followerCount!==count)'));
+assert.ok(ownerSignal548.indexOf('const changedList=isNewEvent')<
+ ownerSignal548.indexOf("if(confirmedNewEvent&&profileConnectionsOpen376Ref.current"),
+ 'COLD_RETAINED_NEW_REVISION_INVALIDATES_LIST_WITHOUT_NETWORK_GET');
+assert.doesNotMatch(page.slice(0,ownerBegin548)+page.slice(ownerEnd548),
+ /getExploreProfileConnections\(ownerUid,'followers',null,true\)/);
 assert.doesNotMatch(page,/window\.addEventListener\('focus',onOwnFollowersFocus525\)/);
 assert.match(social,/forceServer \? 'no-store' : 'default'/);
 assert.match(social,/if \(!normalizedCursor && !forceServer\)/);

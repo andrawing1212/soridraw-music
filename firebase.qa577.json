@@ -1,0 +1,7 @@
+{
+  "functions": [{
+    "source": "functions/qa577",
+    "codebase": "qa-owner-follow-578",
+    "predeploy": ["npm --prefix functions run build:qa578"]
+  }]
+}

@@ -98,6 +98,12 @@ jobs:
           node scripts/verify-349-studio-heart-settlement-media.mjs
       - name: Types and build
         run: |
+          # APP548's isolated rules emulator also type-checks candidate Firebase
+          # Functions modules. Resolve their own declared dependencies without
+          # altering the root application's lockfile or any server deployment.
+          if test -f functions/src/exploreOwnerFollowerWebhook542.ts; then
+            npm --prefix functions ci --no-audit --no-fund
+          fi
           npx tsc --noEmit
           npm run build
       - run: echo "EMULATOR_ONLY;SHARED_RULES_DEPLOY=0;FIRESTORE_DATA_WRITES=0"

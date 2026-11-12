@@ -235,6 +235,42 @@ jobs:
           node scripts/verify-482-preview-writer-release-gate.mjs --self-test
           # app487: prevent stale app427 empty-command semantics in any later release
           node scripts/verify-427-legacy-next-song-parity.mjs
+      - name: APP563 postcommit R2 alternative feasibility and reject unsafe legacy paths
+        run: |
+          node --check cloudflare/explore-worker/candidates/563-follow-r2-postcommit-feasibility.mjs
+          node --check scripts/verify-563-follow-r2-alternatives.mjs
+          SORIDRAW_CURRENT_FOLLOW_RUNTIME=1 node scripts/verify-563-follow-r2-alternatives.mjs
+          echo 'APP563_SOURCE_FEASIBILITY_ONLY=PASS;RELEASE=NO_GO;SHARED_BACKEND_UNCHANGED'
+      - name: APP562 canonical R2 PUT budget and late-crash isolated recovery
+        run: |
+          node --check scripts/verify-562-follow-r2-put-budget.mjs
+          SORIDRAW_CURRENT_FOLLOW_RUNTIME=1 node scripts/verify-562-follow-r2-put-budget.mjs
+          echo 'APP562_R2_LATE_CRASH_SOURCE_ONLY_OPTIMIZATION=PASS;CANONICAL_LIVE_PATH=OFF'
+      - name: APP561 cost optimization source and bounded alarm reuse
+        run: |
+          node --check cloudflare/explore-worker/runtime/owner-follow-precommit-557.mjs
+          node --check cloudflare/explore-worker/runtime/owner-follow-recovery-556.mjs
+          node --check scripts/verify-561-owner-cost-reuse.mjs
+          node scripts/verify-561-owner-cost-reuse.mjs
+          echo 'APP561_ALARM_BURST_REUSE=PASS;SHARED_RELEASE=OFF'
+      - name: APP560 actual canonical orchestration to signed receiver isolated integration
+        run: |
+          node --check scripts/verify-560-owner-follow-full-isolated.mjs
+          node --import tsx scripts/verify-560-owner-follow-full-isolated.mjs
+          echo 'APP560_RECEIVER_INTEGRATION_ISOLATED_ONLY=PASS;FULL_BILLING=NOT_PROVEN'
+      - name: APP557 authenticated owner follow boundary and exact durable receipt
+        run: |
+          node --check cloudflare/explore-worker/runtime/owner-follow-http-539.mjs
+          node --check cloudflare/explore-worker/runtime/owner-follow-postcommit-555.mjs
+          node --check cloudflare/explore-worker/runtime/owner-follow-recovery-556.mjs
+          node --check cloudflare/explore-worker/runtime/owner-follow-commit-proof-557.mjs
+          node --check cloudflare/explore-worker/runtime/owner-follow-precommit-557.mjs
+          node --check cloudflare/explore-worker/runtime/owner-follow-do-557.mjs
+          node scripts/verify-555-owner-follow-postcommit-w2.mjs
+          node scripts/verify-556-owner-replay.mjs
+          node scripts/verify-556-owner-replay-reservation.mjs
+          node scripts/verify-557-auth-precommit.mjs
+          echo 'APP557_SOURCE_RECOVERY_ONLY=PASS;SHARED_RELEASE=NO_GO'
       - name: Reproduce exact app434 legacy-to-app487 predeploy verifier pin offline
         shell: bash
         run: |
@@ -278,6 +314,7 @@ jobs:
           cd cloudflare/explore-worker
           npm install --no-package-lock --ignore-scripts --no-audit --no-fund
           node ./node_modules/wrangler/bin/wrangler.js deploy --config canonical/wrangler.preview.jsonc --dry-run
+          node ../../scripts/verify-546-worker-release-dryrun.mjs --dry-run
       - name: Stage419 isolated actual-171 SQL cutover regression
         run: |
           node --check cloudflare/explore-worker/runtime/like-d1only-batch-adapter-420.mjs
@@ -420,6 +457,15 @@ jobs:
           node scripts/verify-192-cross-account-public-like-live.mjs
           node scripts/verify-523-curated-follow-convergence.mjs
           node scripts/verify-525-follow-two-account-display.mjs
+          python3 scripts/verify-529-owner-outbox-sql.py
+          node scripts/verify-529-owner-sync.mjs
+          node scripts/verify-540-inline-worker-parity.mjs
+          node --import tsx scripts/verify-542-owner-relay-source.mjs
+          node --import tsx scripts/verify-545-worker-auth-integration.mjs
+          node scripts/verify-546-legacy-follow-compat.mjs
+          node scripts/verify-551-owner-follow-overlay-delta.mjs
+          node scripts/verify-555-owner-follow-postcommit-w2.mjs
+          node --import tsx scripts/verify-547-physical-recreation-auth-proof.mjs
           node scripts/verify-524-curated-public-count-fence.mjs
           node scripts/verify-197-new-public-track-like.mjs
           node scripts/verify-390-like-acceptance-receipt.mjs

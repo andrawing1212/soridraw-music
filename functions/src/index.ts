@@ -1,7 +1,16 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
+// APP572: obsolete UID-only 529 owner relay remains NOT exported.
+// The epoch-aware 542 receiver / 544 enrollment / 547 Auth proof are exported
+// for the approved follow-only candidate, but EACH stays compiled OFF. No live
+// Firebase deployment, claim issuance, or RTDB rule change by this source edit.
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
+import {
+  APP534_LIFECYCLE_DELETE_HOOK_COMPILED_OPEN,
+  prepareOwnerFollowDeletion534,
+  finishOwnerFollowDeletion534,
+} from "./ownerFollowLifecycle534";
 import { consumeGeminiInteractionSse } from "./geminiInteractionSse";
 import {
   buildLibraryOversizeFallbackMarker,
@@ -907,11 +916,18 @@ export const adminDeleteUserAccount = onCall(
       authDeletionPendingBy: requesterUid,
     }, { merge: true });
 
+    // APP534: SOURCE-ONLY lifecycle hook; compile-time OFF.
+    // Never enable before an approved Auth/RTDB/Firestore cross-service rollout.
+    // Preserve this callable's existing "retain-user-content" contract.
+    const ownerFollowDeletion534 = APP534_LIFECYCLE_DELETE_HOOK_COMPILED_OPEN
+      ? await prepareOwnerFollowDeletion534({
+          firestore: db, auth: admin.auth(), uid: targetUid,
+        })
+      : null;
     if (authUser) {
       await admin.auth().revokeRefreshTokens(targetUid);
       await admin.auth().deleteUser(targetUid);
     }
-
     const cleanupBatch = db.batch();
     cleanupBatch.delete(db.collection("user_api_keys").doc(targetUid));
     cleanupBatch.delete(db.collection("gemini_request_guards").doc(targetUid));
@@ -936,6 +952,16 @@ export const adminDeleteUserAccount = onCall(
       authDeletionPendingBy: admin.firestore.FieldValue.delete(),
     }, { merge: true });
     await cleanupBatch.commit();
+    // APP534 OFF: finish owner-only marker cleanup AFTER mandatory Auth/key
+    // removal and retained-content status are durably recorded. If this
+    // future opt-in hook fails, the "deleting" fence remains for controlled
+    // recovery, but the user's API keys are never left undeleted.
+    if (ownerFollowDeletion534 && !ownerFollowDeletion534.skipped) {
+      await finishOwnerFollowDeletion534({
+        firestore: db, auth: admin.auth(), database: admin.database(),
+        uid: targetUid, epoch: ownerFollowDeletion534.epoch,
+      });
+    }
 
     return {
       ok: true,
@@ -4447,3 +4473,11 @@ export {
   publicationRelease431Test,
   publicationRelease431Production,
 } from "./explorePublicationReleaseEndpoint431";
+
+// APP572: explicit owner-follower backend entrypoints, source-only/DORMANT.
+// Every endpoint retains its own compile-time OFF guard. No runtime enabling,
+// Firebase deployment, Auth claim issuance or shared Rules change here.
+// ONLY exact endpoint-scoped deployment after APP570 preflight and approval.
+export {publishExploreOwnerFollower542} from "./exploreOwnerFollowerWebhook542";
+export {enrollOwnerFollow544Candidate} from "./ownerFollowEnrollment544";
+export {verifyOwnerFollowEpoch547Candidate} from "./ownerFollowAuthProof547";

@@ -86,6 +86,7 @@ import {
   getExploreFollowState,
   getExploreFollowingUids312,
   getExploreProfileConnections,
+  invalidateExploreProfileConnections377,
   patchExploreFollowLocalState377,
   readExploreFollowMembership379,
   readExploreFollowingExactCount379,
@@ -104,6 +105,14 @@ import {
   publishExploreFollowSync377,
   subscribeExploreFollowSync377,
 } from '../services/exploreFollowSyncService';
+import { createOwnerEpochGate538 } from '../services/exploreOwnerFollowerEpochCore538';
+import {
+  EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED,
+  readOwnerFollowerSeenVersion542,
+  rememberOwnerFollowerSeenVersion542,
+  subscribeExploreOwnerFollower542,
+} from '../services/exploreOwnerFollowerSync542';
+
 import {
   queueExploreFollowFinalState380,
   readPendingExploreFollowIntents380,
@@ -1971,6 +1980,8 @@ export default function ExplorePage() {
   // Connection cards are fetched only after an explicit followers/following click.
   // Reopening the same list in this mounted Explore session reuses the bounded page.
   const [profileConnectionsOpen376, setProfileConnectionsOpen376] = useState<ExploreProfileConnectionDirection | null>(null);
+  const profileConnectionsOpen376Ref = useRef<ExploreProfileConnectionDirection | null>(null);
+  profileConnectionsOpen376Ref.current = profileConnectionsOpen376;
   const [profileConnectionsItems376, setProfileConnectionsItems376] = useState<ExploreProfileConnection[]>([]);
   const [profileConnectionsNextCursor376, setProfileConnectionsNextCursor376] = useState<string | null>(null);
   const [profileConnectionsLoading376, setProfileConnectionsLoading376] = useState(false);
@@ -1979,6 +1990,8 @@ export default function ExplorePage() {
   const profileConnectionsCache376Ref = useRef<Map<string, { items: ExploreProfileConnection[]; nextCursor: string | null }>>(new Map());
   const profileConnectionsRequest376Ref = useRef(0);
   const ownFollowersLastCheck523Ref = useRef<Map<string, number>>(new Map());
+  // APP529: source-only until trusted server/outbox deployment is approved.
+  const ownerFollowerConfirmed529Ref = useRef<{uid:string;count:number;version:number}|null>(null);
   // APP528: one bounded explicit canonical check per two minutes, even after
   // reload. A real changed-follow signal still invalidates its list immediately.
   const OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 120_000;
@@ -3507,8 +3520,8 @@ export default function ExplorePage() {
         { deferTargetFollowers: true },
       );
 
-      // Legacy persisted countdowns settle without a fresh 30-second wait.
-      // An already rejected cooldown is restored to its last confirmed state.
+      // Previously queued legacy clicks resume without another trailing wait.
+      // Old rejected cooldowns must not keep an unconfirmed follower count.
       const hadCooldown380 = Number(record380.notBefore || 0) > Date.now();
 
       queueExploreFollowFinalState380({
@@ -4161,6 +4174,134 @@ export default function ExplorePage() {
     }
   };
 
+  // APP542: the owner-only, Auth-epoch-fenced 532 signal is observed only
+  // while the owner's own profile AND browser tab are visible.
+  // Compile-time OFF until the
+  // separately approved RTDB Rules, Auth issuer and durable D1 writer ship.
+  useEffect(()=>{
+    if(!EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED)return;
+    const ownerUid=String(user?.uid||'').trim();
+    if(!ownerUid||profile?.uid!==ownerUid)return;
+    let stopped=false;
+    let visibleSubscription=false;
+    let subscriptionGeneration=0;
+    let unsubscribe=()=>{};
+    let gate:ReturnType<typeof createOwnerEpochGate538>|null=null;
+    // A hidden tab never keeps the owner RTDB listener or starts a D1 poll.
+    let initialSnapshotHandled=false;
+    const detachOwnerFollower542=()=>{
+      if(!visibleSubscription)return;
+      visibleSubscription=false;
+      subscriptionGeneration+=1;
+      unsubscribe();unsubscribe=()=>{};
+      gate?.dispose();gate=null;
+      initialSnapshotHandled=false;
+    };
+    const attachOwnerFollower542=()=>{
+      if(stopped||visibleSubscription||document.visibilityState!=='visible')return;
+      visibleSubscription=true;
+      const generation=++subscriptionGeneration;
+      // The first retained snapshot after each attach repairs the count,
+      // never forcing a canonical D1 list GET just because the tab resumed.
+      void subscribeExploreOwnerFollower542(ownerUid,(signal,epoch)=>{
+      if(stopped||!visibleSubscription||generation!==subscriptionGeneration||
+         document.visibilityState!=='visible'||auth.currentUser?.uid!==ownerUid||
+         activeProfileUidRef.current!==ownerUid)return;
+      if(!gate){
+        gate=createOwnerEpochGate538({
+          ownerUid,authEpoch:epoch,
+          applyCount:(count,version,isNewEvent)=>{
+            if(auth.currentUser?.uid!==ownerUid||
+               activeProfileUidRef.current!==ownerUid)return;
+            const previousMarker=ownerFollowerConfirmed529Ref.current;
+            // The same retained signal is allowed to repaint without a new
+            // followers-list read; new canonical revisions invalidate only A.
+            const confirmedNewEvent=isNewEvent&&initialSnapshotHandled;
+            // An initial retained snapshot can be newer than the browser's
+            // persisted seen revision even if the total count is unchanged
+            // (one unfollow plus one follow). Invalidate only the owner list
+            // cache; preserve the zero-GET cold-snapshot rule.
+            const changedList=isNewEvent||
+              (!previousMarker&&profile?.followerCount!==count);
+            ownerFollowerConfirmed529Ref.current={uid:ownerUid,count,version};
+            if(changedList){
+              invalidateExploreProfileConnections377(ownerUid,'followers');
+              profileConnectionsCache376Ref.current.delete(ownerUid+':followers');
+              // Only a NEW authenticated server-confirmed revision may refresh
+              // an already-open followers modal. The first retained RTDB value
+              // must not produce a D1 GET, and a hidden modal never reads.
+              if(confirmedNewEvent&&profileConnectionsOpen376Ref.current==='followers'){
+                const requestId=++profileConnectionsRequest376Ref.current;
+                setProfileConnectionsLoading376(true);
+                setProfileConnectionsLoadingMore376(false);
+                setProfileConnectionsError376('');
+                void getExploreProfileConnections(ownerUid,'followers',null,true)
+                  .then(page=>{
+                    if(stopped||auth.currentUser?.uid!==ownerUid||
+                       activeProfileUidRef.current!==ownerUid||
+                       profileConnectionsOpen376Ref.current!=='followers'||
+                       requestId!==profileConnectionsRequest376Ref.current)return;
+                    profileConnectionsCache376Ref.current.set(ownerUid+':followers',page);
+                    setProfileConnectionsItems376(page.items);
+                    setProfileConnectionsNextCursor376(page.nextCursor);
+                    // Page length is never the canonical follower COUNT,
+                    // especially when the followers list has further pages.
+                  })
+                  .catch(reason=>{
+                    if(stopped||requestId!==profileConnectionsRequest376Ref.current)return;
+                    console.warn('[app542] owner followers live-page refresh failed:',reason);
+                    setProfileConnectionsError376('팔로워 목록을 새로 가져오지 못했습니다.');
+                  })
+                  .finally(()=>{
+                    if(!stopped&&requestId===profileConnectionsRequest376Ref.current)
+                      setProfileConnectionsLoading376(false);
+                  });
+              }
+            }
+            patchExplorePublicProfileFirstViewProfile(ownerUid,{followerCount:count});
+            setProfile(prev=>prev?.uid===ownerUid&&prev.followerCount!==count
+              ?{...prev,followerCount:count}:prev);
+          },
+          initialSeenVersion:readOwnerFollowerSeenVersion542(ownerUid,epoch),
+          rememberVersion:(version,seenEpoch)=>
+            rememberOwnerFollowerSeenVersion542(ownerUid,seenEpoch,version),
+        });
+      }
+      gate.receive(signal);
+      initialSnapshotHandled=true;
+      }).then(stop=>{
+        // Async subscription completion after hide/unmount cannot leak a listener.
+        if(stopped||!visibleSubscription||generation!==subscriptionGeneration||
+           document.visibilityState!=='visible')stop();
+        else unsubscribe=stop;
+      }).catch(()=>{/* No background canonical GET or polling on failure. */});
+    };
+    const onOwnerVisibility542=()=>{
+      if(document.visibilityState==='visible')attachOwnerFollower542();
+      else detachOwnerFollower542();
+    };
+    document.addEventListener('visibilitychange',onOwnerVisibility542);
+    attachOwnerFollower542();
+    return ()=>{
+      stopped=true;
+      document.removeEventListener('visibilitychange',onOwnerVisibility542);
+      detachOwnerFollower542();
+      ownerFollowerConfirmed529Ref.current=null;
+    };
+  },[profile?.uid,user?.uid]);
+
+  // A delayed R2 profile response must not overwrite the newest confirmed
+  // owner-private scalar. This effect has zero work while APP542 is OFF.
+  useEffect(()=>{
+    if(!EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED)return;
+    const row=ownerFollowerConfirmed529Ref.current;
+    if(row&&row.uid===user?.uid&&profile?.uid===row.uid&&
+       profile.followerCount!==row.count){
+      patchExplorePublicProfileFirstViewProfile(row.uid,{followerCount:row.count});
+      setProfile(prev=>prev?.uid===row.uid?{...prev,followerCount:row.count}:prev);
+    }
+  },[profile?.uid,profile?.followerCount,user?.uid]);
+
   // APP527: A's profile must not spend D1/R2 on window focus, blank-space
   // clicks or visibility changes. The app525 15-second fallback previously
   // repeated forced follower-list queries without any confirmed relation
@@ -4173,12 +4314,14 @@ export default function ExplorePage() {
     const direction = profileConnectionsOpen376;
     const cursor = profileConnectionsNextCursor376;
     if (!targetUid || !direction || !cursor || profileConnectionsLoadingMore376) return;
+    const requestId = profileConnectionsRequest376Ref.current;
 
     setProfileConnectionsLoadingMore376(true);
     setProfileConnectionsError376('');
     try {
       const page = await getExploreProfileConnections(targetUid, direction, cursor);
-      if (activeProfileUidRef.current !== targetUid || profileConnectionsOpen376 !== direction) return;
+      if (activeProfileUidRef.current !== targetUid || profileConnectionsOpen376 !== direction ||
+          requestId !== profileConnectionsRequest376Ref.current) return;
       const seen = new Set(profileConnectionsItems376.map((item) => item.uid));
       const merged = [...profileConnectionsItems376];
       page.items.forEach((item) => {
@@ -4198,7 +4341,8 @@ export default function ExplorePage() {
         reason instanceof Error ? reason.message : '팔로우 목록을 더 불러오지 못했어요.',
       );
     } finally {
-      setProfileConnectionsLoadingMore376(false);
+      if (requestId === profileConnectionsRequest376Ref.current)
+        setProfileConnectionsLoadingMore376(false);
     }
   };
 
@@ -4363,8 +4507,9 @@ export default function ExplorePage() {
       canonicalTargetFollowerCount380,previousMembership380,nextShouldFollow380,
     );
 
-    // Paint this device immediately and request server settlement without
-    // the previous 30-second hold. Never publish provisional owner counts.
+    // app380: local-first. Paint and patch only this device immediately. The
+    // visible Follow/Unfollow uses immediate canonical settlement; only the
+    // non-immediate legacy fallback waits for its trailing 8-second window.
     patchExploreFollowLocalState377(
       viewerUid,
       targetUid,
@@ -4403,7 +4548,7 @@ export default function ExplorePage() {
       });
     }
     // Show the provisional target count on B's screen immediately. Do NOT
-    // persist or broadcast that count as canonical before the 30s commit.
+    // persist or broadcast that count as canonical before the server commit.
     setProfile((previous) => {
       if(previous?.uid===targetUid)
         return {...previous,followerCount:optimisticTargetFollowerCount525};
@@ -4509,7 +4654,7 @@ export default function ExplorePage() {
         }
 
         // Other devices/users see only the final accepted state, never the
-        // intermediate local taps inside the 30-second aggregation window.
+        // intermediate local taps before the canonical server settlement.
         const signalActorFollowing380 = resolvedActorFollowing380
           ?? Math.max(0, Math.floor(Number(settlement380.result.actorFollowingCount || 0)));
         void publishExploreFollowSync377(viewerUid, {

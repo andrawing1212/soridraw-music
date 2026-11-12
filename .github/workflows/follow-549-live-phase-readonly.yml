@@ -1,6 +1,12 @@
 name: SORIDRAW Follow 549 Live Authority Readonly
 
 on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - '.github/workflows/follow-549-live-phase-readonly.yml'
+      - 'scripts/verify-567-owner-firebase-live-readonly.mjs'
+      - 'scripts/verify-571-owner-epoch-live-readonly.mjs'
   push:
     branches: [preview]
     paths:
@@ -15,6 +21,7 @@ concurrency:
 
 jobs:
   inspect:
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'candidate/app526-owner-follower-live-signal')
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     env:
@@ -24,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -34,4 +41,23 @@ jobs:
           set -euo pipefail
           node scripts/verify-548-follow-live-readonly.mjs --self-test
           node scripts/verify-548-follow-live-readonly.mjs --live
+          node scripts/verify-571-owner-epoch-live-readonly.mjs --self-test
+          node scripts/verify-571-owner-epoch-live-readonly.mjs --live
           echo 'FOLLOW_549_NO_DEPLOY_NO_USER_CONTENT_SHARED_D1_WRITES_ZERO=PASS'
+      - name: Authenticate Firebase Admin project metadata (read-only, never write)
+        if: github.event_name == 'pull_request'
+        id: google-auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          token_format: access_token
+          access_token_scopes: 'https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/firebase.database,https://www.googleapis.com/auth/cloud-platform'
+      - name: Inspect deployed Functions and RTDB Rules only (no user rows)
+        if: github.event_name == 'pull_request'
+        env:
+          FIREBASE_READONLY_ACCESS_TOKEN: ${{ steps.google-auth.outputs.access_token }}
+        run: |
+          set -euo pipefail
+          node scripts/verify-567-owner-firebase-live-readonly.mjs --self-test
+          node scripts/verify-567-owner-firebase-live-readonly.mjs --live
+          echo 'FOLLOW_567_READONLY_NO_CUSTOMER_DATA_NO_DEPLOY=PASS'

@@ -1,116 +1,164 @@
-// APP584: isolated QA Firebase Web SDK browser proof. NEVER import src/firebase.js.
-// No canonical SORIDRAW backend or data writes. No synthetic secret sent to browser.
+// APP584 QA-only Web SDK proof. Never import the normal SORIDRAW Firebase app.
+// No Firebase database writes, Cloudflare secrets, or user data on this page.
 import {createQaOwnerClient582,assertQaOwnerClient582} from './owner-client.mjs';
 
 const $ = id => document.getElementById(id);
-const form = $('connectForm');
-const connectButton = $('connect');
-const disconnectButton = $('disconnect');
-const status = $('state');
-const result = $('events');
-const local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-const allowedHost = local || location.hostname.endsWith('.qa.soridraw.com') ||
- location.hostname.endsWith('.soridraw-qa.workers.dev');
-const qaOrigin = allowedHost && (location.protocol === 'https:' ||
- (local && location.protocol === 'http:'));
+const connect = $('connect');
+const disconnect = $('disconnect');
+const arm = $('arm');
+const proof = $('proof');
+const state = $('state');
+const logEl = $('events');
+const local = ['localhost','127.0.0.1'].includes(location.hostname);
+const site = /^soridraw-qa-owner-584(?:--[a-z0-9-]+)?\.(web\.app|firebaseapp\.com)$/.test(location.hostname);
+const allowedOrigin = (local && location.protocol === 'http:') ||
+ (site && location.protocol === 'https:');
+
 let client = null;
 let unsubscribe = null;
-let generation = 0;
-let lastVersion = 0;
-let entries = [];
+let session = 0;
+let version = 0;
+let count = null;
+let armVersion = null;
+let steps = 0;
+let lines = [];
 
-const setStatus = (value,detail) => {
- status.textContent = value;
- if(detail) $('detail').textContent = detail;
-};
-const log = message => {
- // Never log QA UID, config, password, token, claim or HMAC bytes.
- entries = [...entries.slice(-15),new Date().toLocaleTimeString()+' '+message];
- result.textContent = entries.join('\n');
-};
-const disconnect = async () => {
- generation += 1;
- if(unsubscribe) {unsubscribe();unsubscribe=null;}
- const closing=client;
- client=null;
- connectButton.disabled=!qaOrigin;
- disconnectButton.disabled=true;
- lastVersion=0;
- $('count').textContent='—';
- $('version').textContent='—';
- $('lastReceived').textContent='—';
- $('password').value='';
- if(closing)try{await closing.signOut();}catch{/* no retry */}
- setStatus('연결 해제','브라우저 세션 연결 해제. 서버 쓰기 없음.');
+function status(label, detail) {
+ state.textContent = label;
+ $('detail').textContent = detail;
+}
+function log(message) {
+ // Synthetic event metadata only. Never record UID, passwords, keys, claims or tokens.
+ lines = [...lines.slice(-14),new Date().toLocaleTimeString()+' '+message];
+ logEl.textContent = lines.join('\n');
+}
+function resetView() {
+ version = 0; count = null; armVersion = null; steps = 0;
+ arm.disabled = true;
+ proof.textContent = '미검증';
+ $('count').textContent = '—';
+ $('version').textContent = '—';
+ $('lastReceived').textContent = '—';
+ $('password').value = '';
+}
+async function disconnectOwner() {
+ session++;
+ if(unsubscribe) unsubscribe();
+ unsubscribe = null;
+ const old = client;
+ client = null;
+ resetView();
+ disconnect.disabled = true;
+ connect.disabled = !allowedOrigin;
+ if(old) try { await old.signOut(); } catch { /* no retry */ }
+ status('연결 해제','브라우저 메모리 세션만 종료했습니다. 서버에 쓰지 않습니다.');
  log('연결 해제');
-};
+}
 
-if(!qaOrigin){
- connectButton.disabled=true;
- setStatus('QA 출처 검증 실패','localhost 또는 독립 QA 도메인에서만 실행할 수 있습니다.');
-}else{
- form.addEventListener('submit',async event=>{
+if (!allowedOrigin) {
+ connect.disabled = true;
+ status('QA 출처 차단','독립 QA Firebase Hosting 주소 또는 localhost에서만 실행할 수 있습니다.');
+} else {
+ $('connectForm').addEventListener('submit',async event => {
   event.preventDefault();
-  if(client||connectButton.disabled)return;
-  const run=++generation;
-  connectButton.disabled=true;
-  disconnectButton.disabled=true;
-  let pending=null;
-  try{
-   const config=JSON.parse($('config').value);
-   const ownerUid=$('ownerUid').value.trim();
-   // Fail closed before SDK initialization or any network access.
+  if(connect.disabled || client) return;
+  const mySession = ++session;
+  connect.disabled = true;
+  disconnect.disabled = true;
+  arm.disabled = true;
+  const password = $('password').value;
+  $('password').value = '';
+  let pending = null;
+  try {
+   const config = JSON.parse($('config').value);
+   const ownerUid = $('ownerUid').value.trim();
+   // This check precedes any Firebase SDK initialization or request.
    assertQaOwnerClient582(config,ownerUid);
-   pending=await createQaOwnerClient582({config,ownerUid});
-   if(run!==generation)return;
-   // Synthetic credentials never persist across page reloads/browser sessions.
-   const [{getApp},{getAuth,setPersistence,inMemoryPersistence}]=await Promise.all([
-    import('firebase/app'),import('firebase/auth')]);
-   await setPersistence(getAuth(getApp('soridraw-isolated-owner-qa582')),
-    inMemoryPersistence);
-   const password=$('password').value;
-   $('password').value='';
+   pending = await createQaOwnerClient582({config,ownerUid});
+   if(mySession !== session) return;
+   const [{getApp},{getAuth,setPersistence,inMemoryPersistence,getIdTokenResult}] =
+    await Promise.all([import('firebase/app'),import('firebase/auth')]);
+   const qaAuth = getAuth(getApp('soridraw-isolated-owner-qa582'));
+   await setPersistence(qaAuth,inMemoryPersistence);
    await pending.signInOwner('testa@example.com',password);
-   if(run!==generation){await pending.signOut();return;}
-   client=pending;
-   $('config').value='';
-   $('ownerUid').value='';
-   setStatus('QA Auth 로그인 성공 · 첫 RTDB 수신 대기',
-    '로그인 성공은 수신 PASS가 아닙니다. 별도 QA 서버 도구로 B의 팔로우/취소를 발생시켜 확인합니다.');
-   const detach=await client.subscribeOwner(marker=>{
-    if(generation!==run||client!==pending)return;
-    if(!Number.isSafeInteger(marker.version)||marker.version<1||
-       !Number.isSafeInteger(marker.followerCount)||marker.followerCount<0)return;
-    if(marker.version<lastVersion){log('오래된 버전 수신 무시');return;}
-    const changed=marker.version>lastVersion;
-    lastVersion=marker.version;
-    $('count').textContent=String(marker.followerCount);
-    $('version').textContent=String(marker.version);
-    $('lastReceived').textContent=new Date().toLocaleString();
-    setStatus('QA Web SDK 수신 확인',
-     '기기별 Web SDK 수신입니다. 두 기기의 같은 버전/숫자 확인 후에만 교차기기 PASS로 판단합니다.');
-    if(changed)log('확정 수신: 버전 '+marker.version+', 수 '+marker.followerCount);
+   if(mySession !== session) { await pending.signOut(); return; }
+   const identity = qaAuth.currentUser;
+   const token = identity ? await getIdTokenResult(identity,true) : null;
+   if(!token || !/^[0-9a-f]{32}$/.test(String(token.claims.soridrawFollowEpoch532||'')))
+    throw Error('QA_OWNER_CLAIM_HOLD');
+   client = pending;
+   $('config').value = '';
+   $('ownerUid').value = '';
+   status('QA Auth 성공 · RTDB 기준값 대기','로그인만으로 실시간 수신이 통과한 것은 아닙니다.');
+   const detach = await pending.subscribeOwner(marker => {
+    if(mySession !== session || client !== pending) return;
+    if(!Number.isSafeInteger(marker.version) || marker.version < 1 ||
+       !Number.isSafeInteger(marker.followerCount) || marker.followerCount < 0) return;
+    if(marker.version < version) { log('이전 버전 수신 무시'); return; }
+    const changed = marker.version > version;
+    version = marker.version;
+    count = marker.followerCount;
+    $('count').textContent = String(count);
+    $('version').textContent = String(version);
+    $('lastReceived').textContent = new Date().toLocaleString();
+    if(changed) log('확정 수신: 버전 '+version+', 팔로워 '+count);
+    if(armVersion === null) {
+     arm.disabled = (count !== 0);
+     status('QA RTDB 기준값 수신','두 기기 모두 수신 검증 준비 후 합성 B의 팔로우·취소를 실행하세요.');
+     return;
+    }
+    if(!changed) return;
+    const expectedVersion = armVersion + steps + 1;
+    const expectedCount = steps === 0 ? 1 : 0;
+    if(version !== expectedVersion || count !== expectedCount) {
+     proof.textContent = 'FAIL · 누락 또는 예상값 불일치';
+     armVersion = null;
+     arm.disabled = (count !== 0);
+     status('QA 증거 불완전','변화 2건을 정확한 순서로 모두 수신해야 합니다.');
+     log('수신 검증 실패: 버전/팔로워 수 불일치');
+     return;
+    }
+    steps += 1;
+    proof.textContent = steps+'/2 단계';
+    if(steps === 2) {
+     proof.textContent = '이 브라우저 PASS · 팔로우/취소 2/2';
+     armVersion = null;
+     arm.disabled = false;
+     status('QA 단일 브라우저 수신 PASS',
+      '두 기기 각각 PASS와 동일 버전을 확인한 뒤에만 PC↔모바일 PASS로 판단합니다.');
+    } else {
+     status('QA 팔로우 수신 1/2','취소 수신을 기다립니다.');
+    }
    });
-   if(run!==generation){detach();return;}
-   unsubscribe=detach;
-   disconnectButton.disabled=false;
-  }catch(error){
-   if(run!==generation)return;
-   // Provider errors can contain identifiers: show only a sanitized code.
-   const code=typeof error?.code==='string' && /^auth\/[a-z-]+$/.test(error.code)
-    ?error.code:'QA_CONFIG_OR_AUTH_HOLD';
-   setStatus('QA 연결 실패','오류 코드: '+code+'. 설정·허용 도메인·QA 계정/클레임을 확인하세요.');
-   log('연결 실패 (비밀정보 표시 안 함)');
-   if(pending)try{await pending.signOut();}catch{/* no-op */}
-   client=null;
-   connectButton.disabled=false;
+   if(mySession !== session) {detach();return;}
+   unsubscribe = detach;
+   disconnect.disabled = false;
+  } catch(error) {
+   if(mySession !== session) return;
+   const code = typeof error?.code === 'string' && /^auth\/[a-z-]+$/.test(error.code)
+    ? error.code : 'QA_CONFIG_OR_AUTH_HOLD';
+   status('QA 연결 실패','오류 코드: '+code+'. QA 설정·인증·클레임을 확인하세요.');
+   log('연결 실패 · 개인정보 및 인증정보는 표시하지 않음');
+   if(pending) try { await pending.signOut(); } catch { /* no retry */ }
+   client = null;
+   connect.disabled = false;
+   arm.disabled = true;
   }
  });
- disconnectButton.addEventListener('click',disconnect);
- window.addEventListener('pagehide',()=>{
-  generation+=1;
+ arm.addEventListener('click',() => {
+  if(!client || count !== 0 || version < 1 || armVersion !== null) return;
+  armVersion = version;
+  steps = 0;
+  proof.textContent = '준비됨 · 기준 버전 '+armVersion;
+  arm.disabled = true;
+  status('QA 수신 검증 준비됨','이제 QA 서버에서 합성 B의 팔로우·취소를 1회 실행하세요.');
+  log('수신 검증 준비: 기준 버전 '+armVersion);
+ });
+ disconnect.addEventListener('click',disconnectOwner);
+ window.addEventListener('pagehide',() => {
+  session++;
   if(unsubscribe)unsubscribe();
-  unsubscribe=null;
-  // No unload writes or network cleanup calls.
+  unsubscribe = null;
+  // No unload writes, network cleanup or persistent cache.
  });
 }

@@ -6,17 +6,14 @@
   <meta name="robots" content="noindex,nofollow" />
   <title>SORIDRAW · 독립 QA 팔로워 수신 검증</title>
   <style>
-    :root {color-scheme:dark;font-family:system-ui,sans-serif;background:#171719;color:#eee}
-    body {margin:0 auto;max-width:720px;padding:20px;line-height:1.55}
-    h1 {font-size:1.3rem}.sub {color:#bbb}
-    label {display:block;margin-top:14px;font-weight:600}
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background:#171719; color:#eee; }
+    body { margin:0 auto; max-width:720px; padding:20px; line-height:1.55; }
+    h1 {font-size:1.3rem} .sub {color:#bbb} label {display:block; margin-top:14px; font-weight:600}
     textarea,input {display:block;box-sizing:border-box;width:100%;background:#27272b;color:#fff;border:1px solid #4c4c51;border-radius:8px;padding:10px;font:inherit}
-    textarea {min-height:140px}button {margin:15px 9px 0 0;border:0;border-radius:16px;padding:10px 15px;background:#ffbb22;color:#111;font:inherit;font-weight:700;cursor:pointer}
-    button:disabled {opacity:.4;cursor:default}#state {font-weight:700}
-    .number {font-variant-numeric:tabular-nums;font-size:1.8rem}
-    .output {border-radius:12px;background:#29292a;padding:15px;margin-top:18px}
-    pre {white-space:pre-wrap;overflow-wrap:anywhere;font-size:.85rem}
-    small {color:#aaa}.warning {color:#ffd27c}
+    textarea {min-height:140px} button {margin:15px 9px 0 0;border:0;border-radius:16px;padding:10px 15px;background:#ffbb22;color:#111;font:inherit;font-weight:700;cursor:pointer}
+    button:disabled {opacity:.4;cursor:default} #state {font-weight:700} .number {font-variant-numeric:tabular-nums;font-size:1.8rem}
+    .output {border-radius:12px;background:#29292a;padding:15px;margin-top:18px} pre {white-space:pre-wrap;overflow-wrap:anywhere;font-size:.85rem}
+    small {color:#aaa} .warning {color:#ffd27c}
   </style>
 </head>
 <body>
@@ -40,6 +37,7 @@
     <div>마지막 실제 Web SDK 수신 <strong id="lastReceived">—</strong></div>
     <small id="detail">초기 연결은 PASS가 아닙니다. B의 변경 뒤 두 기기에서 버전·숫자가 함께 바뀌어야 실제 검증입니다.</small>
   </section>
+  <section class="output"><button id="arm" type="button" disabled>수신 검증 준비</button><div>검증 상태 <strong id="proof">미검증</strong></div><small>두 기기에서 각각 준비한 뒤 서버에서 합성 B 팔로우·취소를 실행합니다. 최초 로딩 수신만으로는 PASS가 아닙니다.</small></section>
   <section class="output"><strong>이 세션의 수신 기록 (브라우저 메모리 전용)</strong><pre id="events" aria-live="polite">아직 수신 없음</pre></section>
   <script type="module" src="./owner-browser-proof-584.mjs"></script>
 </body>

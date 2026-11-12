@@ -18,6 +18,24 @@ const stable = (value) => {
 const same = (left, right) => JSON.stringify(stable(left)) === JSON.stringify(stable(right));
 const source = JSON.parse(readFileSync('database.rules.json', 'utf8'));
 const sourceWithStage416 = buildStage416ServerRulesCandidate(source);
+// Shared APP588 owner-private Auth-epoch signal is a separately approved
+// additive root. Historical app434 never creates or mutates this subtree.
+const ownerRule532=JSON.parse(
+  readFileSync('scripts/emulator/app550.additive.database.rules.json','utf8')
+).rules.ownerFollowerSync532;
+assert.equal(Object.hasOwn(source.rules,'ownerFollowerSync532'),false);
+assert.deepEqual(ownerRule532,{
+  '$uid':{
+    '.read': 'auth != null && auth.uid === $uid && auth.token.soridrawFollowEpoch532 != null && (!data.exists() || auth.token.soridrawFollowEpoch532 === data.child(\'authEpoch\').val())',
+    '.write': false,
+  }
+},'APP588_OWNER_RULE_EXACT_SOURCE');
+const withApprovedOwner532=rules=>{
+  const next=structuredClone(rules);
+  assert.equal(Object.hasOwn(next.rules,'ownerFollowerSync532'),false);
+  next.rules.ownerFollowerSync532=structuredClone(ownerRule532);
+  return next;
+};
 const publicRules = source?.rules?.publicSync;
 assert.equal(publicRules?.explorePublication?.['.write'], false);
 assert.equal(publicRules?.explorePublication?.['.read'], 'auth != null');
@@ -84,11 +102,15 @@ const withExistingStudioHandoff = [
   ] : []),
 ];
 // Historical publication release cannot install the new Studio handoff node.
-const variants = source.rules.userSync.$uid.studioHeartHandoffs
+const studioVariants = source.rules.userSync.$uid.studioHeartHandoffs
   ? withExistingStudioHandoff.flatMap(([stage, approved]) => [
       [stage, approved],
       [stage + '_BEFORE_STUDIO_HEART_HANDOFF', beforeStudioHeartHandoff(approved)],
     ]) : withExistingStudioHandoff;
+const variants=studioVariants.flatMap(([stage,approved])=>[
+  [stage,approved],
+  [stage+'_WITH_OWNER_PRIVATE_532',withApprovedOwner532(approved)],
+]);
 
 function classify(live) {
   for (const [stage, approved] of variants) {
@@ -115,6 +137,20 @@ function classify(live) {
 
 if (process.argv.includes('--self-test')) {
   for (const [stage, approved] of variants) {
+    if (stage.endsWith('_WITH_OWNER_PRIVATE_532')) {
+      const publicRead=structuredClone(approved);
+      publicRead.rules.ownerFollowerSync532.$uid['.read']='auth != null';
+      assert.throws(()=>classify(publicRead),/UNEXPECTED_DRIFT/,
+        'APP588_WEAK_OWNER_READ_MUST_FAIL');
+      const clientWrite=structuredClone(approved);
+      clientWrite.rules.ownerFollowerSync532.$uid['.write']=true;
+      assert.throws(()=>classify(clientWrite),/UNEXPECTED_DRIFT/,
+        'APP588_CLIENT_WRITABLE_OWNER_NODE_MUST_FAIL');
+      const extraOwnerChild=structuredClone(approved);
+      extraOwnerChild.rules.ownerFollowerSync532.$other={'.read':true};
+      assert.throws(()=>classify(extraOwnerChild),/UNEXPECTED_DRIFT/,
+        'APP588_OWNER_EXTRA_CHILD_MUST_FAIL');
+    }
     const exact = classify(approved);
     assert.equal(exact.mode, 'ALREADY_EXACT');
     assert.equal(exact.stage, stage);
@@ -173,6 +209,7 @@ if (process.argv.includes('--self-test')) {
   const unexpected = structuredClone(withoutPublic(source));
   unexpected.rules.publicSync.$other['.write'] = true;
   assert.throws(() => classify(unexpected), /UNEXPECTED_DRIFT/);
+  console.log('APP588_EXACT_OWNER_PRIVATE_ROOT_434_COMPAT_SELF_TEST=PASS');
   if (hasPrivate435) console.log('435_SHARED_RTDB_ONLY_TWO_TYPED_PRIVATE_LIKE_FIELDS_SELF_TEST=PASS');
   console.log('434_SHARED_RTDB_EXACT_TWO_ADDITIVE_NODES_SELF_TEST=PASS');
   console.log('434_STAGE416_DORMANT_OR_LIVE_PRESERVATION_SELF_TEST=PASS');

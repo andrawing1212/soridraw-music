@@ -149,7 +149,10 @@ const diagAuth={currentUser:{uid}};
 let onError, onSnapshot;
 const diagnosticSdk={
  initializeApp:()=>({}),getAuth:()=>diagAuth,getDatabase:()=>({}),
- getIdTokenResult:async()=>({claims:{soridrawFollowEpoch532:epoch}}),
+ getIdTokenResult:async(_principal,forceRefresh)=>{
+  assert.notEqual(forceRefresh,true,'subscribeOwner must reuse the UI verified token');
+  return {claims:{soridrawFollowEpoch532:epoch}};
+ },
  ref:()=>({}),onValue:(_ref,update,fail)=>{
   onSnapshot=update;onError=fail;return ()=>{};
  }
@@ -167,6 +170,9 @@ assert.deepEqual(qaErrors,[
  'QA_RTDB_MARKER_INVALID'
 ]);
 assert(!JSON.stringify(qaErrors).includes(uid));
+assert(!readFileSync(join(dir,'owner-client.mjs'),'utf8').includes(
+ 'getIdTokenResult(principal,true)'),'No duplicate forced refresh at subscribe');
+console.log('APP584_QA_NO_DUPLICATE_TOKEN_REFRESH=PASS');
 console.log('APP584_QA_RTDB_FAILURE_DIAGNOSTICS=PASS');
 console.log('APP584_QA_DEPLOY_ARTIFACT_ISOLATION=PASS');
 console.log('APP584_QA_OWNER_CONFIG_DENIALS=PASS');

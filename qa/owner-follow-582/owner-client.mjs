@@ -63,7 +63,7 @@ export async function createQaOwnerClient582({config,ownerUid,sdk}={}){
     return ()=>{};
    }
    let claims;
-   try{claims=(await api.getIdTokenResult(principal,true)).claims;}
+   try{claims=(await api.getIdTokenResult(principal)).claims;}
    catch{report('QA_OWNER_TOKEN_FAILED');return ()=>{}}
    const epoch=claims?.soridrawFollowEpoch532;
    if(typeof epoch!=='string'||!EPOCH.test(epoch)){

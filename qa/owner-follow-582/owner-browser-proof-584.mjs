@@ -100,6 +100,8 @@ if (!allowedOrigin) {
    status('QA Auth 성공 · RTDB 기준값 대기','로그인만으로 실시간 수신이 통과한 것은 아닙니다.');
    stage = 'RTDB_SUBSCRIBE';
    let firstReceipt = false;
+   let subscriptionCompleted = false;
+   let subscriptionIssue = false;
    const allowedDiagnostics = new Set([
     'QA_AUTH_SESSION_MISMATCH','QA_OWNER_TOKEN_FAILED',
     'QA_OWNER_CLAIM_MISSING','QA_AUTH_SESSION_CHANGED',
@@ -109,6 +111,7 @@ if (!allowedOrigin) {
    const onDiagnostic = code => {
     if(mySession!==session || client!==pending ||
        !allowedDiagnostics.has(code))return;
+    subscriptionIssue = true;
     if(initialTimer!==null){clearTimeout(initialTimer);initialTimer=null;}
     status('QA RTDB 수신 문제','진단 코드: '+code+
      '. 비밀번호와 설정값은 표시하지 않습니다.');
@@ -117,9 +120,12 @@ if (!allowedOrigin) {
    initialTimer=setTimeout(()=>{
     initialTimer=null;
     if(mySession===session && client===pending && !firstReceipt){
+     const code = subscriptionCompleted
+      ? 'QA_RTDB_NO_INITIAL_EVENT_12S'
+      : 'QA_RTDB_SUBSCRIBE_PENDING_12S';
      status('QA RTDB 초기 수신 지연',
-      '진단 코드: QA_RTDB_NO_INITIAL_EVENT_12S. 연결 상태 확인이 필요합니다.');
-     log('QA 수신 진단: QA_RTDB_NO_INITIAL_EVENT_12S');
+      '진단 코드: '+code+'. 연결 상태 확인이 필요합니다.');
+     log('QA 수신 진단: '+code);
     }
    },12000);
    const detach = await pending.subscribeOwner(marker => {
@@ -165,7 +171,11 @@ if (!allowedOrigin) {
     }
    },onDiagnostic);
    if(mySession !== session) {detach();return;}
+   subscriptionCompleted = true;
    unsubscribe = detach;
+   if(!firstReceipt&&!subscriptionIssue)
+    status('QA RTDB 구독 등록됨 · 첫 수신 대기',
+     '인증 확인 완료. 실시간 데이터 첫 수신을 기다립니다.');
    disconnect.disabled = false;
   } catch(error) {
    if(mySession !== session) return;

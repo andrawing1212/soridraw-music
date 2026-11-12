@@ -14,3 +14,9 @@ expected_before_test_worker=ddd2255a-75cc-4db9-8905-b47338558cb0
 expected_before_production_worker=af81502a-298d-4ec6-bc2a-0c529d6dc29e
 
 retry=app588_metadata_quoted_reserved_notnull_once_20261113
+release=after_app589_shared_auth_readonly_pass
+auth_readonly_run=43300915283
+firebase_auth=verified_same_service_account_scopes
+rules_compare_before_put=required
+no_user_content_mutation=true
+no_worker_functions_activation=true

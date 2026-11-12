@@ -9,9 +9,20 @@ import { buildStage416ServerRulesCandidate } from './build-416-private-server-ru
 // 3) Stage416 server-only privateLikeBatch416 + owner-readable final receipt,
 // 4) app432 server-only tiny public Feed + owner-profile publication signal nodes.
 // 5) app435 two typed, bounded optional accepted-like count metadata fields.
+// 6) APP588 ownerFollowerSync532 exact owner+Auth-epoch private read-only root.
 // The old live rules may lack BOTH 435 fields; partial/widened additions fail.
 // Every other permission/schema byte must remain equivalent to the live rules.
 const canonicalBase = JSON.parse(readFileSync('database.rules.json','utf8'));
+const ownerRule532 = JSON.parse(
+  readFileSync('scripts/emulator/app550.additive.database.rules.json','utf8')
+).rules.ownerFollowerSync532;
+assert.equal(Object.hasOwn(canonicalBase.rules,'ownerFollowerSync532'),false);
+assert.deepEqual(ownerRule532,{
+  '$uid':{
+    '.read': 'auth != null && auth.uid === $uid && auth.token.soridrawFollowEpoch532 != null && (!data.exists() || auth.token.soridrawFollowEpoch532 === data.child(\'authEpoch\').val())',
+    '.write': false,
+  },
+},'APP588_OWNER532_EXACT_OWNER_ONLY_RULE');
 const local = buildStage416ServerRulesCandidate(canonicalBase);
 const user = local?.rules?.userSync?.$uid;
 const accepted = user?.exploreLike?.results?.$index?.canonicalSettled417;
@@ -178,8 +189,19 @@ const exactHandoffVariants = studioHandoff
       [status, candidate],
       [status + '-before-studio-heart-handoff', withoutStudioHeartHandoff(candidate)],
     ]) : exact450Variants;
+const withApprovedOwner532 = source => {
+  const out = structuredClone(source);
+  assert.equal(Object.hasOwn(out.rules,'ownerFollowerSync532'),false,
+    'APP588_LOCAL_BASE_MUST_NOT_ALREADY_HAVE_OWNER_RULE');
+  out.rules.ownerFollowerSync532=structuredClone(ownerRule532);
+  return out;
+};
+const ownerVariants = exactHandoffVariants.flatMap(([status,candidate]) => [
+  [status,candidate],
+  [status+'-with-owner-private-532',withApprovedOwner532(candidate)],
+]);
 const variants = [...new Map(
-  exactHandoffVariants.map(([status,candidate]) => [stable(candidate), [status,candidate]]),
+  ownerVariants.map(([status,candidate]) => [stable(candidate), [status,candidate]]),
 ).values()];
 const compare = remote => {
   const key = stable(remote);
@@ -193,6 +215,20 @@ if (process.argv.includes('--self-test')) {
     malicious.rules.userSync.$uid['.read'] = 'auth != null';
     assert.equal(compare(malicious), null, 'weakened private permissions must fail');
   }
+  const installedOwner532=withApprovedOwner532(local);
+  assert.ok(compare(installedOwner532)?.endsWith('-with-owner-private-532'),
+    'APP588_EXACT_OWNER_NODE_NOT_ACCEPTED');
+  for(const property of ['.read','.write']){
+    const altered=structuredClone(installedOwner532);
+    altered.rules.ownerFollowerSync532.$uid[property] =
+      property==='.read' ? 'auth != null' : true;
+    assert.equal(compare(altered),null,
+      'APP588_WIDENED_OWNER_PRIVATE_RULE_MUST_FAIL_'+property);
+  }
+  const extraOwner=structuredClone(installedOwner532);
+  extraOwner.rules.ownerFollowerSync532.$other={'.read':true};
+  assert.equal(compare(extraOwner),null,'APP588_EXTRA_OWNER_RULE_CHILD_MUST_FAIL');
+  console.log('APP588_EXACT_OWNER_ONLY_RULE_LIVE_COMPAT_SELF_TEST=PASS');
   const oldLive435 = withoutAcceptedLikeMetadata435(local);
   assert.equal(compare(oldLive435), 'already-live-without-both-435-like-count-fields',
     'existing shared rules without both optional 435 fields remain a safe approved baseline');
@@ -266,7 +302,7 @@ if (process.argv.includes('--self-test')) {
   const remote = JSON.parse(readFileSync(path,'utf8'));
   const status = compare(remote);
   if (!status) throw new Error(
-    'Shared RTDB live/source divergence outside allowed 417/416/435 exact additive nodes: STOP before any PUT or PREVIEW Hosting deploy'
+    'Shared RTDB live/source divergence outside allowed 417/416/435/532 exact additive nodes: STOP before any PUT or PREVIEW Hosting deploy'
   );
   console.log('418_SHARED_RTDB_RULES_DELTA_PREFLIGHT=PASS '+status);
   console.log('416_PRIVATE_RTDB_ADDITIVE_PREFLIGHT=PASS');

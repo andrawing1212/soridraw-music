@@ -9,6 +9,7 @@ on:
     branches: [preview]
     paths:
       - '.deploy/follow-588-owner-off-prereqs.trigger'
+      - '.deploy/follow-588-auth-readonly.trigger'
 permissions:
   contents: read
 concurrency:
@@ -28,8 +29,98 @@ jobs:
           node --check scripts/apply-588-owner-off-prereqs.mjs
           node scripts/apply-588-owner-off-prereqs.mjs --source-only
           node scripts/verify-585-owner-shared-release-off.mjs --source-only
-  apply:
+  choose:
     if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      mode: ${{ steps.choice.outputs.mode }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+      - name: Fail closed on ambiguous trigger
+        id: choice
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/preview
+          test "$(git cat-file -p HEAD | grep -c '^parent ')" = 2
+          changed="$(git diff --name-only HEAD^1 HEAD)"
+          auth='.deploy/follow-588-auth-readonly.trigger'
+          release='.deploy/follow-588-owner-off-prereqs.trigger'
+          if grep -Fxq "$auth" <<< "$changed" && ! grep -Fxq "$release" <<< "$changed"; then
+            echo 'mode=readonly' >> "$GITHUB_OUTPUT"
+            echo 'APP589_AUTH_ONLY_NO_SHARED_WRITE=PASS'
+          elif grep -Fxq "$release" <<< "$changed" && ! grep -Fxq "$auth" <<< "$changed"; then
+            echo 'mode=apply' >> "$GITHUB_OUTPUT"
+            echo 'APP589_APPROVED_RELEASE_MARKER_SELECTED=PASS'
+          else
+            echo 'APP589_AMBIGUOUS_OR_MISSING_EXACT_TRIGGER=HOLD' >&2
+            exit 1
+          fi
+  auth_readonly:
+    needs: choose
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      FIREBASE_PROJECT: soridraw-app-866a5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Use existing shared Firebase service account (no mutation)
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+      - name: Verify Firebase RTDB Rules GET only with exact official scopes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import os
+          import requests
+          from google.auth.transport.requests import Request
+          from google.oauth2 import service_account
+          path = os.environ.get('GOOGLE_GHA_CREDS_PATH') or os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+          if not path:
+              raise SystemExit('APP589_SERVICE_ACCOUNT_CREDENTIAL_UNAVAILABLE')
+          creds = service_account.Credentials.from_service_account_file(
+              path, scopes=[
+                  'https://www.googleapis.com/auth/firebase.database',
+                  'https://www.googleapis.com/auth/userinfo.email',
+              ])
+          creds.refresh(Request())
+          if not creds.token:
+              raise SystemExit('APP589_SERVICE_ACCOUNT_OAUTH_TOKEN_MISSING')
+          url = 'https://soridraw-app-866a5-default-rtdb.firebaseio.com/.settings/rules.json'
+          response = requests.get(
+              url, headers={'Authorization':'Bearer '+creds.token},
+              timeout=25)
+          if response.status_code != 200:
+              raise SystemExit('APP589_SHARED_RULES_READONLY_HTTP_'+str(response.status_code))
+          data = response.json()
+          roots = data.get('rules') if isinstance(data, dict) else None
+          if not isinstance(roots, dict):
+              raise SystemExit('APP589_RULES_RESPONSE_SHAPE_HOLD')
+          if roots.get('.read') is not False or roots.get('.write') is not False:
+              raise SystemExit('APP589_SHARED_ROOT_PRIVACY_HOLD')
+          print('APP589_SHARED_RTDB_RULES_AUTH_READONLY=PASS')
+          print('APP589_PRIVATE_ROOTS_PRESERVED_CHECK=PASS')
+          print('APP589_OWNER_RULE_ALREADY_PRESENT='+str('ownerFollowerSync532' in roots).lower())
+          print('APP589_SHARED_DATA_WRITES_ZERO=PASS')
+          PY
+  apply:
+    needs: [choose, auth_readonly]
+    if: github.event_name == 'push' && needs.choose.outputs.mode == 'apply'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:

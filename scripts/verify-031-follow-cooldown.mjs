@@ -77,7 +77,7 @@ try{
  assert.equal(oldErrors[0].baseFollowing,true);
  assert.equal(m.readPendingExploreFollowIntents380('legacy-actor').length,0);
 
- // Final state returns to original before the trailing 8s timer: W0.
+ // Final state returns to original before the trailing 30s timer: W0.
  let noOpCalls=0;
  m.queueExploreFollowFinalState380({...seed('noop','owner',true,false),
   commit:async()=>{noOpCalls++;throw Error('must not write')},
@@ -88,7 +88,7 @@ try{
   commit:async()=>{noOpCalls++;throw Error('must not write')},
   onError:e=>{throw Error('unexpected '+e.error)},onSettled:()=>{},onBusy:()=>{}
  });
- clock+=8_001;
+ clock+=30_001;
  await m.flushExploreFollowPair380(key('noop','owner'));
  assert.equal(noOpCalls,0);
  assert.equal(m.readPendingExploreFollowIntents380('noop').length,0);

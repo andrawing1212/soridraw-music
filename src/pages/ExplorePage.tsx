@@ -4175,20 +4175,37 @@ export default function ExplorePage() {
   };
 
   // APP542: the owner-only, Auth-epoch-fenced 532 signal is observed only
-  // while the owner's own profile is visible. Compile-time OFF until the
+  // while the owner's own profile AND browser tab are visible.
+  // Compile-time OFF until the
   // separately approved RTDB Rules, Auth issuer and durable D1 writer ship.
   useEffect(()=>{
     if(!EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED)return;
     const ownerUid=String(user?.uid||'').trim();
     if(!ownerUid||profile?.uid!==ownerUid)return;
     let stopped=false;
+    let visibleSubscription=false;
+    let subscriptionGeneration=0;
     let unsubscribe=()=>{};
     let gate:ReturnType<typeof createOwnerEpochGate538>|null=null;
-    // The first RTDB onValue response is retained history, not a new follow
-    // event. On a cold device it must never cause a canonical D1 list GET.
+    // A hidden tab never keeps the owner RTDB listener or starts a D1 poll.
     let initialSnapshotHandled=false;
-    void subscribeExploreOwnerFollower542(ownerUid,(signal,epoch)=>{
-      if(stopped||auth.currentUser?.uid!==ownerUid||
+    const detachOwnerFollower542=()=>{
+      if(!visibleSubscription)return;
+      visibleSubscription=false;
+      subscriptionGeneration+=1;
+      unsubscribe();unsubscribe=()=>{};
+      gate?.dispose();gate=null;
+      initialSnapshotHandled=false;
+    };
+    const attachOwnerFollower542=()=>{
+      if(stopped||visibleSubscription||document.visibilityState!=='visible')return;
+      visibleSubscription=true;
+      const generation=++subscriptionGeneration;
+      // The first retained snapshot after each attach repairs the count,
+      // never forcing a canonical D1 list GET just because the tab resumed.
+      void subscribeExploreOwnerFollower542(ownerUid,(signal,epoch)=>{
+      if(stopped||!visibleSubscription||generation!==subscriptionGeneration||
+         document.visibilityState!=='visible'||auth.currentUser?.uid!==ownerUid||
          activeProfileUidRef.current!==ownerUid)return;
       if(!gate){
         gate=createOwnerEpochGate538({
@@ -4252,11 +4269,23 @@ export default function ExplorePage() {
       }
       gate.receive(signal);
       initialSnapshotHandled=true;
-    }).then(stop=>{
-      if(stopped)stop();else unsubscribe=stop;
-    }).catch(()=>{/* No background canonical GET or polling on failure. */});
+      }).then(stop=>{
+        // Async subscription completion after hide/unmount cannot leak a listener.
+        if(stopped||!visibleSubscription||generation!==subscriptionGeneration||
+           document.visibilityState!=='visible')stop();
+        else unsubscribe=stop;
+      }).catch(()=>{/* No background canonical GET or polling on failure. */});
+    };
+    const onOwnerVisibility542=()=>{
+      if(document.visibilityState==='visible')attachOwnerFollower542();
+      else detachOwnerFollower542();
+    };
+    document.addEventListener('visibilitychange',onOwnerVisibility542);
+    attachOwnerFollower542();
     return ()=>{
-      stopped=true;unsubscribe();gate?.dispose();
+      stopped=true;
+      document.removeEventListener('visibilitychange',onOwnerVisibility542);
+      detachOwnerFollower542();
       ownerFollowerConfirmed529Ref.current=null;
     };
   },[profile?.uid,user?.uid]);

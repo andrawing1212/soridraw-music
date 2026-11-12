@@ -35,6 +35,14 @@ const ownerLive548=explicit.slice(ownerStart548,ownerEnd548);
 assert.match(ownerLive548,/if\(confirmedNewEvent&&profileConnectionsOpen376Ref\.current==='followers'\)/);
 assert.match(ownerLive548,/getExploreProfileConnections\(ownerUid,'followers',null,true\)/);
 assert.match(ownerLive548,/gate\.receive\(signal\);\s*initialSnapshotHandled=true/);
+assert.match(ownerLive548,/document\.addEventListener\('visibilitychange',onOwnerVisibility542\)/);
+assert.match(ownerLive548,/document\.removeEventListener\('visibilitychange',onOwnerVisibility542\)/);
+assert.match(ownerLive548,/if\(document\.visibilityState==='visible'\)attachOwnerFollower542\(\)/);
+assert.match(ownerLive548,/else detachOwnerFollower542\(\)/);
+assert.match(ownerLive548,/subscriptionGeneration\+=1/);
+assert.match(ownerLive548,/generation!==subscriptionGeneration/);
+assert.match(ownerLive548,/initialSnapshotHandled=false;/);
+assert.doesNotMatch(ownerLive548,/setInterval\(|window\.addEventListener\('focus'/);
 assert.doesNotMatch(explicit.slice(0,ownerStart548)+explicit.slice(ownerEnd548),
  /getExploreProfileConnections\(ownerUid,'followers',null,true\)/);
 const eventTriggered=page.slice(page.indexOf('  // app377: same-account PC/mobile'),

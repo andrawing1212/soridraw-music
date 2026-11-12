@@ -22,6 +22,7 @@ let count = null;
 let armVersion = null;
 let steps = 0;
 let lines = [];
+let initialTimer = null;
 
 function status(label, detail) {
  state.textContent = label;
@@ -33,6 +34,7 @@ function log(message) {
  logEl.textContent = lines.join('\n');
 }
 function resetView() {
+ if(initialTimer!==null){clearTimeout(initialTimer);initialTimer=null;}
  version = 0; count = null; armVersion = null; steps = 0;
  arm.disabled = true;
  proof.textContent = '미검증';
@@ -97,8 +99,33 @@ if (!allowedOrigin) {
    $('ownerUid').value = '';
    status('QA Auth 성공 · RTDB 기준값 대기','로그인만으로 실시간 수신이 통과한 것은 아닙니다.');
    stage = 'RTDB_SUBSCRIBE';
+   let firstReceipt = false;
+   const allowedDiagnostics = new Set([
+    'QA_AUTH_SESSION_MISMATCH','QA_OWNER_TOKEN_FAILED',
+    'QA_OWNER_CLAIM_MISSING','QA_AUTH_SESSION_CHANGED',
+    'QA_RTDB_MARKER_ABSENT','QA_RTDB_MARKER_INVALID',
+    'QA_RTDB_PERMISSION_DENIED','QA_RTDB_LISTENER_FAILURE'
+   ]);
+   const onDiagnostic = code => {
+    if(mySession!==session || client!==pending ||
+       !allowedDiagnostics.has(code))return;
+    if(initialTimer!==null){clearTimeout(initialTimer);initialTimer=null;}
+    status('QA RTDB 수신 문제','진단 코드: '+code+
+     '. 비밀번호와 설정값은 표시하지 않습니다.');
+    log('QA 수신 진단: '+code);
+   };
+   initialTimer=setTimeout(()=>{
+    initialTimer=null;
+    if(mySession===session && client===pending && !firstReceipt){
+     status('QA RTDB 초기 수신 지연',
+      '진단 코드: QA_RTDB_NO_INITIAL_EVENT_12S. 연결 상태 확인이 필요합니다.');
+     log('QA 수신 진단: QA_RTDB_NO_INITIAL_EVENT_12S');
+    }
+   },12000);
    const detach = await pending.subscribeOwner(marker => {
     if(mySession !== session || client !== pending) return;
+    firstReceipt=true;
+    if(initialTimer!==null){clearTimeout(initialTimer);initialTimer=null;}
     if(!Number.isSafeInteger(marker.version) || marker.version < 1 ||
        !Number.isSafeInteger(marker.followerCount) || marker.followerCount < 0) return;
     if(marker.version < version) { log('이전 버전 수신 무시'); return; }
@@ -136,12 +163,13 @@ if (!allowedOrigin) {
     } else {
      status('QA 팔로우 수신 1/2','취소 수신을 기다립니다.');
     }
-   });
+   },onDiagnostic);
    if(mySession !== session) {detach();return;}
    unsubscribe = detach;
    disconnect.disabled = false;
   } catch(error) {
    if(mySession !== session) return;
+   if(initialTimer!==null){clearTimeout(initialTimer);initialTimer=null;}
    // Explicitly classify only fixed known codes. Never display raw SDK error
    // messages, URLs, UID, passwords, tokens, or Firebase configuration fields.
    const codes = {
@@ -184,6 +212,7 @@ if (!allowedOrigin) {
  disconnect.addEventListener('click',disconnectOwner);
  window.addEventListener('pagehide',() => {
   session++;
+  if(initialTimer!==null){clearTimeout(initialTimer);initialTimer=null;}
   if(unsubscribe)unsubscribe();
   unsubscribe = null;
   // No unload writes, network cleanup or persistent cache.

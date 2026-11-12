@@ -63,7 +63,7 @@ function device(host='soridraw-qa-owner-584.web.app'){
   getIdTokenResult:async()=>({claims:{soridrawFollowEpoch532:epoch}}),
   signOut:async()=>{auth.currentUser=null},
   ref:(_db,path)=>{assert.equal(path,'ownerFollowerSync532/'+uid);return path;},
-  onValue:(_ref,cb)=>{const rec={cb,live:true};listeners.push(rec);return ()=>{rec.live=false}}
+  onValue:(_ref,cb,onError)=>{const rec={cb,onError,live:true};listeners.push(rec);return ()=>{rec.live=false}}
  };
  const imports={
   'firebase/app':{getApp:()=>app},
@@ -83,7 +83,9 @@ function device(host='soridraw-qa-owner-584.web.app'){
     assertQaOwnerClient582:existing.assertQaOwnerClient582},
   fakeImport:async name=>imports[name],document:{getElementById:$},
   location:{hostname:host,protocol:'https:'},Date,console,
-  window:{addEventListener(){}}
+  window:{addEventListener(){}},
+  setTimeout:(_fn,ms)=>{assert.equal(ms,12000);return Symbol('fake-timer');},
+  clearTimeout:()=>{}
  };
  runInNewContext(code,ctx,{timeout:3000});
  return {$,submit:()=>$('connectForm').events.get('submit')({preventDefault(){}}),
@@ -140,6 +142,32 @@ const skipped=device();
 await skipped.submit();
 emit(5,0);skipped.arm();emit(7,0);
 assert(skipped.$('proof').textContent.includes('FAIL'));
+// App584 follow-up: silently swallowed Firebase onValue failures must now
+// produce fixed privacy-safe receipt diagnostics, not UI idle forever.
+const qaErrors=[];
+const diagAuth={currentUser:{uid}};
+let onError, onSnapshot;
+const diagnosticSdk={
+ initializeApp:()=>({}),getAuth:()=>diagAuth,getDatabase:()=>({}),
+ getIdTokenResult:async()=>({claims:{soridrawFollowEpoch532:epoch}}),
+ ref:()=>({}),onValue:(_ref,update,fail)=>{
+  onSnapshot=update;onError=fail;return ()=>{};
+ }
+};
+const diagnosticClient=await existing.createQaOwnerClient582({
+ config,ownerUid:uid,sdk:diagnosticSdk
+});
+await diagnosticClient.subscribeOwner(()=>{},code=>qaErrors.push(code));
+onError({code:'PERMISSION_DENIED'});
+onSnapshot({val:()=>null});
+onSnapshot({val:()=>({ownerUid:uid,authEpoch:epoch,version:4,
+ followerCount:-1})});
+assert.deepEqual(qaErrors,[
+ 'QA_RTDB_PERMISSION_DENIED','QA_RTDB_MARKER_ABSENT',
+ 'QA_RTDB_MARKER_INVALID'
+]);
+assert(!JSON.stringify(qaErrors).includes(uid));
+console.log('APP584_QA_RTDB_FAILURE_DIAGNOSTICS=PASS');
 console.log('APP584_QA_DEPLOY_ARTIFACT_ISOLATION=PASS');
 console.log('APP584_QA_OWNER_CONFIG_DENIALS=PASS');
 console.log('APP584_TWO_MOCK_BROWSERS_FOLLOW_UNFOLLOW_ORDER=PASS');

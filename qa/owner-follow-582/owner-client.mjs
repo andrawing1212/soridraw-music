@@ -51,22 +51,50 @@ export async function createQaOwnerClient582({config,ownerUid,sdk}={}){
    }
    return result.user.uid;
   },
-  async subscribeOwner(onUpdate){
-   if(typeof onUpdate!=='function')throw Error('APP582_CALLBACK_REQUIRED');
+  async subscribeOwner(onUpdate,onDiagnostic=()=>{}){
+   if(typeof onUpdate!=='function'||typeof onDiagnostic!=='function')
+    throw Error('APP582_CALLBACK_REQUIRED');
+   // The QA observer emits fixed diagnostic codes only, never raw Firebase
+   // errors, project configuration, UIDs, ID tokens or database contents.
+   const report=code=>onDiagnostic(code);
    const principal=auth.currentUser;
-   if(!principal||principal.uid!==ownerUid)return ()=>{};
+   if(!principal||principal.uid!==ownerUid){
+    report('QA_AUTH_SESSION_MISMATCH');
+    return ()=>{};
+   }
    let claims;
-   try{claims=(await api.getIdTokenResult(principal)).claims;}catch{return ()=>{}}
+   try{claims=(await api.getIdTokenResult(principal,true)).claims;}
+   catch{report('QA_OWNER_TOKEN_FAILED');return ()=>{}}
    const epoch=claims?.soridrawFollowEpoch532;
-   if(typeof epoch!=='string'||!EPOCH.test(epoch))return ()=>{};
+   if(typeof epoch!=='string'||!EPOCH.test(epoch)){
+    report('QA_OWNER_CLAIM_MISSING');
+    return ()=>{};
+   }
    return api.onValue(api.ref(database,'ownerFollowerSync532/'+ownerUid),
     snapshot=>{
-     if(auth.currentUser!==principal)return;
+     if(auth.currentUser!==principal){
+      report('QA_AUTH_SESSION_CHANGED');
+      return;
+     }
      const marker=snapshot?.val();
-     if(!marker||marker.ownerUid!==ownerUid||marker.authEpoch!==epoch||
-        !Number.isSafeInteger(marker.version)||marker.version<1)return;
+     if(marker===null||marker===undefined){
+      report('QA_RTDB_MARKER_ABSENT');
+      return;
+     }
+     if(marker.ownerUid!==ownerUid||marker.authEpoch!==epoch||
+        !Number.isSafeInteger(marker.version)||marker.version<1||
+        !Number.isSafeInteger(marker.followerCount)||marker.followerCount<0){
+      report('QA_RTDB_MARKER_INVALID');
+      return;
+     }
      onUpdate(marker);
-    },()=>{});
+    },error=>{
+     const rawCode=error?.code;
+     report(rawCode==='PERMISSION_DENIED'||
+      rawCode==='permission_denied'||
+      rawCode==='database/permission-denied'
+       ?'QA_RTDB_PERMISSION_DENIED':'QA_RTDB_LISTENER_FAILURE');
+    });
   },
   async signOut(){await api.signOut(auth);},
  };

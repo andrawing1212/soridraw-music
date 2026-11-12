@@ -1,0 +1,68 @@
+name: SORIDRAW Follow 588 Shared OFF Prerequisites
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/apply-588-owner-off-prereqs.mjs'
+      - '.github/workflows/follow-588-shared-off.yml'
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/follow-588-owner-off-prereqs.trigger'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-follow-588-shared-off
+  cancel-in-progress: false
+jobs:
+  source:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          node --check scripts/apply-588-owner-off-prereqs.mjs
+          node scripts/apply-588-owner-off-prereqs.mjs --source-only
+          node scripts/verify-585-owner-shared-release-off.mjs --source-only
+  apply:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+      FIREBASE_PROJECT: soridraw-app-866a5
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read-only live schema and pinned Worker preflight
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/preview
+          test "$GITHUB_EVENT_NAME" = push
+          git fetch origin preview --no-tags
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/preview)"
+          node scripts/apply-588-owner-off-prereqs.mjs --source-only
+          node scripts/verify-585-owner-shared-release-off.mjs --source-only
+          node scripts/verify-571-owner-epoch-live-readonly.mjs --live
+      - name: Authenticate shared Firebase service account
+        id: google
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          token_format: access_token
+          access_token_scopes: 'https://www.googleapis.com/auth/cloud-platform'
+      - name: Apply exact two dormant D1 columns and one owner-only RTDB rule
+        env:
+          FIREBASE_OWNER_RULES_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
+        run: node scripts/apply-588-owner-off-prereqs.mjs --apply-off

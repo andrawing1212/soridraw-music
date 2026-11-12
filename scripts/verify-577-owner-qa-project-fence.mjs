@@ -250,8 +250,8 @@ const onlySyntheticEntry583=readFileSync(
 assert.match(onlySyntheticEntry583,/class OwnerFollowIsolated558/);
 assert.match(onlySyntheticEntry583,/OWNER558_TEST_TOKEN/);
 assert.match(onlySyntheticEntry583,/idFromName\('synthetic-owner-only'\)/);
-assert.doesNotMatch(onlySyntheticEntry583,/env\\.DB|env\\.PROFILE_MEDIA|env\\.RATE_DB/);
-assert.doesNotMatch(onlySyntheticEntry583,/firebase-admin|functions\\.net|soridraw-app-866a5/);
+assert.doesNotMatch(onlySyntheticEntry583,/env\.DB|env\.PROFILE_MEDIA|env\.RATE_DB/);
+assert.doesNotMatch(onlySyntheticEntry583,/firebase-admin|functions\.net|soridraw-app-866a5/);
 assert.equal(Object.hasOwn(qaCloudflare583.vars,'OWNER558_TEST_TOKEN'),false);
 console.log('APP583_QA_FIXED_ACCOUNT_NO_D1_R2_FIREBASE_OR_PROD_BINDINGS=PASS');
 console.log('APP583_WORKERS_FREE_SQLITE_DO_SYNTHETIC_ONLY_NO_SECRET_IN_CONFIG=PASS');

@@ -6,7 +6,7 @@ import {QA_OWNER_FOLLOW_FUNCTION_URL_577} from '../runtime/owner-follow-qa-bound
 const UID=/^[A-Za-z0-9_-]{1,128}$/;
 const HEX32=/^[0-9a-f]{32}$/;
 const HEX64=/^[0-9a-f]{64}$/;
-const HMAC=/^[0-9a-f]{64}\\n?$/;
+const HMAC=/^[0-9a-f]{64}\n?$/;
 const KEY='qa583-owner-state';
 const reply=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store'}});
 export function parseOwnerQaConfig583(source){

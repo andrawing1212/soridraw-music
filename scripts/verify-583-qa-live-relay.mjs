@@ -8,6 +8,8 @@ const cfg={actorUid:'B',authEpoch:'a'.repeat(32),hmacSecret:'b'.repeat(64),
  projectNumber:'1083981050742'};
 assert.equal(parseOwnerQaConfig583(JSON.stringify({...cfg,projectId:'soridraw-app-866a5'})),null);
 assert.equal(parseOwnerQaConfig583(JSON.stringify({...cfg,probeToken:cfg.hmacSecret})),null);
+assert.ok(parseOwnerQaConfig583(JSON.stringify({...cfg,hmacSecret:cfg.hmacSecret+'\n'})),
+ 'hex signing secret with one original trailing newline must be accepted');
 let at=1800000000000,alarmAt=null,sends=0;
 const map=new Map();const meter={get:0,put:0,setAlarm:0};
 const storage={

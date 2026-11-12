@@ -74,3 +74,137 @@ console.log('APP577_QA_ONLY_FIREBASE_CONFIG_AND_FUNCTION_ENTRY_GUARD=PASS');
 console.log('APP577_QA_ONLY_HMAC_SENDER_ROUTE_AND_PROD_DENIAL=PASS');
 console.log('APP577_DEFAULT_PRODUCTION_ROUTE_OFF_UNCHANGED=PASS');
 console.log('APP577_REAL_QA_DEPLOYMENT_AND_COST=NOT_PERFORMED');
+
+ 
+// APP582: the Singapore rule artifact must be identical to the already
+// isolated Auth+RTDB emulator-proven owner-only root. It is NEVER attached to
+// the Firebase deploy config: rules must stay locked until separate rollout.
+import {createQaOwnerClient582,assertQaOwnerClient582,QA_OWNER_FOLLOW_SG_URL_582}
+ from '../qa/owner-follow-582/owner-client.mjs';
+import {enrollQaOwnerClaim582} from '../qa/owner-follow-582/owner-claim.mjs';
+const parsed=(p)=>JSON.parse(readFileSync(p,'utf8'));
+const candidate=parsed('qa/owner-follow-582/singapore.owner.rules.json');
+const proven=parsed('scripts/emulator/app533.database.rules.json');
+assert.deepEqual(candidate,proven,'APP582_ONLY_ALREADY_EMULATOR_PROVEN_OWNER_ROOT');
+assert.equal(candidate.rules['.read'],false);
+assert.equal(candidate.rules['.write'],false);
+assert.deepEqual(Object.keys(candidate.rules).sort(),
+ ['.read','.write','ownerFollowerSync532'].sort());
+assert.equal(candidate.rules.ownerFollowerSync532.$uid['.write'],false);
+assert.match(candidate.rules.ownerFollowerSync532.$uid['.read'],/auth.uid === \\$uid/);
+assert.match(candidate.rules.ownerFollowerSync532.$uid['.read'],/soridrawFollowEpoch532/);
+assert.equal(Object.hasOwn(parsed('firebase.qa577.json'),'database'),false,
+ 'QA_SG_RULES_MUST_NOT_AUTO_DEPLOY_TO_US_DEFAULT');
+assert.equal(QA_OWNER_FOLLOW_SG_URL_582,
+ 'https://soridraw-qa-sg.asia-southeast1.firebasedatabase.app');
+const sdkConfig582={
+ projectId:'soridraw-app',authDomain:'soridraw-app.firebaseapp.com',
+ databaseURL:QA_OWNER_FOLLOW_SG_URL_582,
+ appId:'1:1083981050742:web:0123456789abcdef',
+ messagingSenderId:'1083981050742',apiKey:'AIza'+'A'.repeat(35),
+ storageBucket:'soridraw-app.firebasestorage.app',
+};
+assert.equal(assertQaOwnerClient582(sdkConfig582,'ownerA582').projectId,'soridraw-app');
+for(const changed of [
+ {projectId:'soridraw-app-866a5'},
+ {authDomain:'soridraw-app-866a5.firebaseapp.com'},
+ {databaseURL:'https://soridraw-app-default-rtdb.firebaseio.com'},
+ {databaseURL:'https://soridraw-app-866a5-default-rtdb.firebaseio.com'},
+ {databaseURL:'https://soridraw-qa-sg.asia-east1.firebasedatabase.app'},
+ {appId:'1:91309780603:web:0123456789abcdef'},
+ {messagingSenderId:'91309780603'},
+ {apiKey:''},
+]){
+ assert.throws(()=>assertQaOwnerClient582({...sdkConfig582,...changed},'ownerA582'),
+ /APP577_QA_.*_HOLD|APP582_QA_CLIENT_IDENTITY_HOLD/);
+}
+let setup582=0,read582=0,updates582=0,logout582=0;
+const auth582={currentUser:null},owner582={uid:'ownerA582'};
+let sink582=null,epoch582='0123456789abcdef0123456789abcdef';
+const sdk582={
+ initializeApp(config,name){
+  setup582++;assert.equal(name,'soridraw-isolated-owner-qa582');
+  assert.equal(config.projectId,'soridraw-app');return {config,name};
+ },
+ getAuth(){return auth582},
+ getDatabase(app,db){assert.equal(db,QA_OWNER_FOLLOW_SG_URL_582);return {db}},
+ async signInWithEmailAndPassword(_,email){
+  assert.equal(email,'testa@example.com');auth582.currentUser=owner582;
+  return {user:owner582};
+ },
+ async getIdTokenResult(){return {claims:{soridrawFollowEpoch532:epoch582}}},
+ ref(_,path){assert.equal(path,'ownerFollowerSync532/ownerA582');return {path}},
+ onValue(_,callback){read582++;sink582=callback;return ()=>{sink582=null}},
+ async signOut(){logout582++;auth582.currentUser=null},
+};
+for(const bad of [{...sdkConfig582,projectId:'soridraw-app-866a5'},
+ {...sdkConfig582,databaseURL:'https://soridraw-app-default-rtdb.firebaseio.com'}]){
+ await assert.rejects(
+  ()=>createQaOwnerClient582({config:bad,ownerUid:'ownerA582',sdk:sdk582}),
+  /APP577_QA_.*_HOLD|APP582_QA_CLIENT_IDENTITY_HOLD/);
+}
+assert.equal(setup582,0,'BAD_QA_CLIENT_MUST_NOT_INITIALIZE_FIREBASE');
+const client582=await createQaOwnerClient582({
+ config:sdkConfig582,ownerUid:'ownerA582',sdk:sdk582,
+});
+const noAuthUnsub582=await client582.subscribeOwner(()=>updates582++);
+noAuthUnsub582();
+assert.equal(read582,0);
+await assert.rejects(()=>client582.signInOwner('testb@example.com','test-secret'),
+ /APP582_ONLY_QA_OWNER_A_EMAIL/);
+await client582.signInOwner('testa@example.com','only-synthetic-test');
+epoch582='';
+const noClaimUnsub582=await client582.subscribeOwner(()=>updates582++);
+noClaimUnsub582();
+assert.equal(read582,0,'NO_CLAIM_NO_QA_RDB_CONNECTION');
+epoch582='0123456789abcdef0123456789abcdef';
+const unsub582=await client582.subscribeOwner(()=>updates582++);
+assert.equal(read582,1);
+sink582({val:()=>null});
+sink582({val:()=>({ownerUid:'ownerA582',authEpoch:'f'.repeat(32),version:1})});
+sink582({val:()=>({ownerUid:'ownerA582',authEpoch:epoch582,version:1})});
+assert.equal(updates582,1,'ONLY_OWNER_MATCHED_EPOCH_DELIVERED');
+auth582.currentUser={uid:'ownerA582'};
+sink582({val:()=>({ownerUid:'ownerA582',authEpoch:epoch582,version:2})});
+assert.equal(updates582,1,'PRINCIPAL_SWITCH_NO_STALE_SIGNAL');
+unsub582();
+await client582.signOut();assert.equal(logout582,1);
+let claimReads582=0,claimWrites582=0;
+const user582={uid:'ownerA582',email:'testa@example.com',
+ metadata:{creationTime:new Date(1800000000000).toUTCString()},
+ customClaims:{existing:'protected'}};
+const qaAdmin582={
+ async getUser(uid){claimReads582++;assert.equal(uid,user582.uid);return {...user582}},
+ async setCustomUserClaims(uid,claims){
+  claimWrites582++;assert.equal(uid,user582.uid);
+  user582.customClaims=claims;
+ },
+};
+await assert.rejects(()=>enrollQaOwnerClaim582({
+ projectId:'soridraw-app-866a5',databaseURL:QA_OWNER_FOLLOW_SG_URL_582,
+ ownerUid:user582.uid,qaAdminAuth:qaAdmin582,authorized:true}),
+ /APP582_QA_OWNER_ENROLLMENT_HOLD/);
+assert.equal(claimReads582,0,'NO_PROD_AUTH_LOOKUP');
+await assert.rejects(()=>enrollQaOwnerClaim582({
+ projectId:'soridraw-app',databaseURL:QA_OWNER_FOLLOW_SG_URL_582,
+ ownerUid:user582.uid,qaAdminAuth:qaAdmin582}),
+ /APP582_QA_OWNER_ENROLLMENT_HOLD/);
+const assigned582=await enrollQaOwnerClaim582({
+ projectId:'soridraw-app',databaseURL:QA_OWNER_FOLLOW_SG_URL_582,
+ ownerUid:user582.uid,qaAdminAuth:qaAdmin582,authorized:true,
+ makeEpoch:()=>epoch582,
+});
+assert.equal(assigned582.epoch,epoch582);
+assert.equal(user582.customClaims.existing,'protected');
+assert.equal(claimWrites582,1);
+const reused582=await enrollQaOwnerClaim582({
+ projectId:'soridraw-app',databaseURL:QA_OWNER_FOLLOW_SG_URL_582,
+ ownerUid:user582.uid,qaAdminAuth:qaAdmin582,authorized:true,
+ makeEpoch:()=>{throw Error('NO_SECOND_EPOCH');},
+});
+assert.equal(reused582.reused,true);assert.equal(claimWrites582,1);
+console.log('APP582_QA_SINGAPORE_OWNER_ONLY_RULE_PROVEN_AND_AUTO_DEPLOY_DISABLED=PASS');
+console.log('APP582_QA_CLIENT_BEFORE_SDK_PROD_DENIAL_AND_OWNER_A_EPOCH_READ_ONLY=PASS');
+console.log('APP582_QA_OWNER_CLAIM_ONE_ACCOUNT_EXISTING_CLAIMS_SAFE_OFFLINE=PASS');
+console.log('APP582_NO_REAL_AUTH_RULES_FUNCTION_OR_WORKER_DEPLOYMENT=PASS');
+

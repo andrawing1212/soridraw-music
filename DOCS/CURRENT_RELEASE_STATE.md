@@ -1,3 +1,11 @@
+## CURRENT — 정식앱 Hosting 배포 사전 위임 / 독립 QA 팔로우 실연동 PASS (2026-11-12 KST)
+
+- **배포 권한 최신 확정:** 디렉터가 개발 책임자에게 PREVIEW 및 준비 완료된 PRODUCTION **일반 코드·Hosting 배포 판단/실행을 사전 위임**했다. 건별 승인을 반복하지 않고 실제 사용·환경 호환·롤백 안전을 확인한 뒤 기존 릴리스 경로로 배포한다. TEST 앱은 현재 사용하지 않으며 기존 리소스를 변경·삭제하지 않는다. 공유 Firebase·Cloudflare Worker/D1/R2·Rules·권한·사용자 원본 등 고위험 변경은 이 위임에 포함되지 않아 별도 범위 승인 필요. 특정 작업의 명시적 배포 금지는 우선한다. 상위 원칙은 `AGENTS.md`, 실행 지침은 `DOCS/WORKFLOW_GUARDRAILS.md`.
+- **팔로우 독립 QA (실제 전송만 확인):** QA Firebase `soridraw-app` (#1083981050742)의 Blaze 결제 연결 `True`, 전용 Cloudflare Worker Secret 설정 및 인증 `HTTP 200`을 디렉터가 Cloud Shell/콘솔로 확인. 합성 B→A 팔로우·취소를 한 번씩 실행한 결과 `APP583_QA_LIVE_FOLLOW_UNFOLLOW_RTDB_PASS`, 전달 지연 3,103ms / 1,690ms, 최종 버전 2. 예산 알림은 총지출 강제 차단이 아니며 실제 청구금액 미확인. 공유 운영 Firebase `soridraw-app-866a5`는 검증 대상 아님.
+- **실제 앱 릴리스 HOLD:** PR #914 `b31619db05c81e2e7c49ab990d911e7d575b0b36`는 Draft/기능 OFF/미병합. 기존 `preview` 기준 `3a2a6a5cc9e18b37e62e00a881bd429c81ef09b5`에서 코드·Hosting 변경 없음. 독립 QA Admin RTDB 수신 PASS는 실제 앱 Firebase Web SDK PC·모바일 자동 업데이트 또는 운영 정본 팔로우 경로 PASS가 아니다. 공유 백엔드 활성화 승인 전까지 무리한 병합·배포 금지. 아래 5,000명 기준의 오래된 'QA 결제 보류'·Spark 상태 서술은 당시 이력이며 현행 QA 상태로 사용하지 않는다.
+
+---
+
 ## CURRENT — 등록 사용자 5,000명 기준 / QA 결제 보류 / 팔로우 최소 구조 결정 (2026-11-12 KST)
 
 - **디렉터 최신 확정:** 100,000명→1,000명으로 변경했던 과거 기준을 **5,000명**으로 대체. DAU·동시 접속·팔로우 변경량을 분리해 비용과 구조를 판단. 원본 데이터·로컬 우선·PC↔모바일 정확성 보호.

@@ -2,7 +2,9 @@
 
 > 현재 구체 상태는 `DOCS/CURRENT_RELEASE_STATE.md`를 우선한다.
 
-> **최신 디렉터 운영 지시(2026-10-31, 이전 TEST 관련 운영 서술보다 우선):** 승인된 정상 개발 작업의 PREVIEW Hosting은 검사 후 고정 트리거로 즉시 배포하고 추가 승인을 요구하지 않는다. `test.soridraw.com` TEST 앱은 현재 개발·승격 단계에서 사용하지 않으며 기존 환경을 변경·삭제하지 않는다. `soridraw.com` PRODUCTION 배포만 디렉터의 명시 승인 대상이다. 아래 역사적 TEST→PRODUCTION 절차는 현재의 TEST 실행 허가가 아니다. 정식배포 시 TEST 경로를 생략한 상태에서도 검증·환경 호환·롤백 안전이 성립하는 릴리스 절차를 별도 확인해야 하며, 안전 검증 자체를 생략해서는 안 된다. 공유 Firebase Rules·Functions·Workers·D1/R2·사용자 데이터는 PREVIEW Hosting 자동 배포 범위 밖이다.
+> **최신 배포 위임 (2026-11-12 KST, 아래 2026-10-31 정식배포 단건 승인 조항보다 우선):** 디렉터는 개발 책임자에게 PREVIEW 및 준비 완료된 PRODUCTION의 **일반 코드·Hosting 배포 판단과 실행**을 사전 위임했다. 정식앱 Hosting 릴리스마다 새 승인을 요구하지 않는다. 단, 실제 기능·PC/모바일·환경 호환·복구 가능성을 필요한 수준으로 확인하고 안전한 기존 배포 경로를 따라야 하며 CI PASS만으로 GO를 선언하지 않는다. TEST는 사용하거나 수정하지 않는다. **사용자 원본, 공유 Firebase Auth/Functions/RTDB/Rules, Cloudflare Worker/D1/R2, 위험한 IAM·보안 변경·마이그레이션은 별도 범위 승인 대상**이며, 특정 작업의 배포 금지는 우선한다. 구형 워크플로에 `DEPLOY_PRODUCTION` 같은 기술적 릴리스 게이트가 있으면 검증된 안전한 경로 없이 우회하지 않는다.
+
+> **이전 운영 지시(2026-10-31; 정식앱 건별 승인 문구는 위의 2026-11-12 위임으로 대체):** 승인된 정상 개발 작업의 PREVIEW Hosting은 검사 후 고정 트리거로 즉시 배포하고 추가 승인을 요구하지 않는다. `test.soridraw.com` TEST 앱은 현재 개발·승격 단계에서 사용하지 않으며 기존 환경을 변경·삭제하지 않는다. `soridraw.com` PRODUCTION 배포만 디렉터의 명시 승인 대상이다. 아래 역사적 TEST→PRODUCTION 절차는 현재의 TEST 실행 허가가 아니다. 정식배포 시 TEST 경로를 생략한 상태에서도 검증·환경 호환·롤백 안전이 성립하는 릴리스 절차를 별도 확인해야 하며, 안전 검증 자체를 생략해서는 안 된다. 공유 Firebase Rules·Functions·Workers·D1/R2·사용자 데이터는 PREVIEW Hosting 자동 배포 범위 밖이다.
 
 ## 1. 판단 순서
 현재 사용자 지시
@@ -15,7 +17,7 @@
 ## 2. 브랜치와 환경
 - `preview` → PREVIEW → `preview.soridraw.com`
 - `main` → TEST → `test.soridraw.com`
-- 검증된 `main` + 명확한 사용자 승인 → PRODUCTION → `soridraw.com`
+- 검증된 릴리스 artifact + 2026-11-12 사전 위임에 따른 개발 책임자의 안전한 출시 판단 → PRODUCTION → `soridraw.com` (현재 TEST 미사용, 기존 승격 시스템과의 호환·복구 조건 충족 필수)
 - 기본 Hosting은 Firebase.
 - Vercel은 사용자가 명확히 요청한 경우만 사용.
 - PREVIEW와 main을 임의로 섞지 않는다.
@@ -214,7 +216,7 @@ PREVIEW는 눈으로 빠르게 확인하고 다시 수정하는 개발 환경이
 - 사용자가 **PREVIEW 배포를 명시 요청한 경우**, 합의한 범위의 필수 검사·최소 수정·GitHub 저장을 마치고 동일 작업에서 허용된 기존 배포 경로를 바로 실행한다. 별도의 형식적 재승인·무조건 독립 재감사를 반복하지 않는다.
 - 사용자가 단순히 `수정해`·`고쳐`라고 했거나 `소스만`·`배포 금지`라고 제한한 경우에는 GitHub 저장까지만 진행하며 배포하지 않는다.
 - 배포를 요청했더라도 브랜치 보호·공유 원본/구형 Writer 덮어쓰기 위험 등 **실제로 확인된** 기술 차단을 몰래 우회하지 않는다. 어떤 검사/권한이 막는지 한 가지로 좁혀 수정 가능한 최소 조치와 배포 미실행을 보고한다.
-- 일반 PREVIEW 기능 수정에 TEST/PRODUCTION 전체 승격용 계약·manifest 생성을 선행 요구하지 않는다. TEST·PRODUCTION 승격은 각 별도의 명시 승인, D1 migration/seed/파괴적 데이터 변경도 별도 승인이다.
+- 일반 PREVIEW 기능 수정에 TEST/PRODUCTION 전체 승격용 계약·manifest 생성을 선행 요구하지 않는다. PRODUCTION 일반 코드·Hosting 승격은 2026-11-12 사전 위임 정책에 따르며, 공유 D1 migration/seed/파괴적 데이터 변경과 공유 백엔드 활성화는 여전히 별도 승인이다.
 
 ### 실패 처리
 - 첫 배포 실패 후 즉시 재배포하지 않는다.

@@ -219,3 +219,40 @@ console.log('APP582_QA_CLIENT_BEFORE_SDK_PROD_DENIAL_AND_OWNER_A_EPOCH_READ_ONLY
 console.log('APP582_QA_OWNER_CLAIM_ONE_ACCOUNT_EXISTING_CLAIMS_SAFE_OFFLINE=PASS');
 console.log('APP582_NO_REAL_AUTH_RULES_FUNCTION_OR_WORKER_DEPLOYMENT=PASS');
 
+
+
+// APP583: permanent Cloudflare QA is a distinct account; this is SOURCE-ONLY.
+// Verify allowlisted fixed account + synthetic-only DO before any user-authorized deploy.
+const qaCloudflare583=JSON.parse(readFileSync(
+ 'cloudflare/explore-worker/wrangler.owner-qa-583.json','utf8'));
+assert.equal(qaCloudflare583.account_id,'b60fcd62c679c64db19f0b0e0c2f3429');
+assert.notEqual(qaCloudflare583.account_id,'e1a30fc9ef497fda1d34f4ab3dc1da45');
+assert.equal(qaCloudflare583.name,'soridraw-owner-qa-583');
+assert.equal(qaCloudflare583.main,
+ './experiments/owner-follow-isolated-558-entry.mjs');
+assert.equal(qaCloudflare583.workers_dev,true);
+assert.equal(qaCloudflare583.compatibility_date,'2026-11-01');
+assert.deepEqual(Object.keys(qaCloudflare583).sort(),[
+ 'account_id','name','main','compatibility_date','workers_dev',
+ 'durable_objects','migrations','vars',
+].sort());
+assert.deepEqual(qaCloudflare583.durable_objects,{
+ bindings:[{name:'OWNER558_DO',class_name:'OwnerFollowIsolated558'}],
+});
+assert.deepEqual(qaCloudflare583.migrations,[{
+ tag:'v1',new_sqlite_classes:['OwnerFollowIsolated558'],
+}]);
+assert.deepEqual(qaCloudflare583.vars,{
+ SORIDRAW_ENVIRONMENT:'preview',SORIDRAW_OWNER_FOLLOW_W2_PUSH_555:'1',
+});
+const onlySyntheticEntry583=readFileSync(
+ 'cloudflare/explore-worker/experiments/owner-follow-isolated-558-entry.mjs','utf8');
+assert.match(onlySyntheticEntry583,/class OwnerFollowIsolated558/);
+assert.match(onlySyntheticEntry583,/OWNER558_TEST_TOKEN/);
+assert.match(onlySyntheticEntry583,/idFromName\('synthetic-owner-only'\)/);
+assert.doesNotMatch(onlySyntheticEntry583,/env\\.DB|env\\.PROFILE_MEDIA|env\\.RATE_DB/);
+assert.doesNotMatch(onlySyntheticEntry583,/firebase-admin|functions\\.net|soridraw-app-866a5/);
+assert.equal(Object.hasOwn(qaCloudflare583.vars,'OWNER558_TEST_TOKEN'),false);
+console.log('APP583_QA_FIXED_ACCOUNT_NO_D1_R2_FIREBASE_OR_PROD_BINDINGS=PASS');
+console.log('APP583_WORKERS_FREE_SQLITE_DO_SYNTHETIC_ONLY_NO_SECRET_IN_CONFIG=PASS');
+console.log('APP583_QA_WORKER_NOT_DEPLOYED_FROM_SOURCE_TEST=PASS');

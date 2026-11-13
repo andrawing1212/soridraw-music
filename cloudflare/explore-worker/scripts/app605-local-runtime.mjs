@@ -54,6 +54,21 @@ async function response(m,test){
  return {status:res.status,contentType:res.headers.get('content-type')||'',
   cache:res.headers.get('cache-control')||'',bodySha:sha(b)};
 }
+async function probeLikeDo(m){
+ // Use one local-only object name, and an invalid GET path that is not a
+ // mutation command. This proves the exported Like DO class is resolvable.
+ const namespace=await m.getDurableObjectNamespace('EXPLORE_LIKE_BATCH_SCHEDULER');
+ assert.ok(namespace,'APP606_LIKE_DO_NAMESPACE_UNAVAILABLE');
+ const id=namespace.idFromName('APP606_SYNTHETIC_READ_ONLY_NOT_A_REAL_USER');
+ const stub=namespace.get(id);
+ const res=await stub.fetch(new Request(
+  'https://local.invalid/__app606_read_only_unrecognized_probe__',{method:'GET'}));
+ const bytes=Buffer.from(await res.arrayBuffer());
+ if(res.status<400||res.status>=500)
+  fail('LIKE_DO_READ_ONLY_PROBE_UNEXPECTED_STATUS_'+res.status);
+ return {status:res.status,bodySha:sha(bytes),
+  contentType:res.headers.get('content-type')||''};
+}
 try{
  const a=await launch(baseline),b=await launch(candidate);
  for(const t of cases){
@@ -63,6 +78,11 @@ try{
    fail('UNSAFE_ROUTE_STATUS_'+x.status);
   console.log('APP605_LOCAL_WORKER_RUNTIME_PARITY_'+t.method+'_REJECT=PASS');
  }
+ const likeBaseline=await probeLikeDo(a);
+ const likeCandidate=await probeLikeDo(b);
+ assert.deepEqual(likeBaseline,likeCandidate,
+  'APP606_LIKE_DO_BASELINE_VS_CANDIDATE_RESPONSE_DIVERGED');
+ console.log('APP606_LIKE_DO_CLASS_EXPORTED_AND_READONLY_PATH_PARITY=PASS');
  console.log('APP605_WORKER_COMPAT_DATE_2026_08_28=PASS');
  console.log('APP605_ACTIVE_PREFIX_BYTES_AND_DO_V1_UNCHANGED=PASS');
  console.log('APP605_NETWORK_DISABLED_AND_NO_REMOTE_MUTATION=PASS');

@@ -8,7 +8,7 @@ import {defineSecret} from 'firebase-functions/params';
 import {getAuth,type Auth} from 'firebase-admin/auth';
 import {getDatabase,type Database} from 'firebase-admin/database';
 
-export const APP542_OWNER_HTTP_COMPILED_OPEN=true;
+export const APP542_OWNER_HTTP_COMPILED_OPEN=false;
 const APP608_CANARY_SHA256='8b9cd603dc722a89765da05bfee9100b2645ecff290bf1f35ff4f0a1bf80fc2f';
 const HMAC542=defineSecret('SORIDRAW_OWNER_FOLLOW_HMAC_539');
 const UID=/^[A-Za-z0-9_-]{1,128}$/;

@@ -7,12 +7,12 @@ import {getFunctions,httpsCallable} from 'firebase/functions';
 import {onValue,ref as databaseRef,type Unsubscribe} from 'firebase/database';
 import {auth,realtimeDb} from '../firebase';
 
-export const EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED=true;
+export const EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED=false;
 export const APP608_APPROVED_CANARY_UID='rcZ2GZrBndOZzT8C635eiNBjYIJ2';
 // APP575: PREVIEW explicit QA URL only, never a general login/page-entry
 // registration, scan, poll or Firestore mutation. Kept OFF until server
 // canary UID, Rules, Functions and DO are safely installed and checked.
-export const APP575_OWNER_CANARY_BOOTSTRAP_ENABLED=true;
+export const APP575_OWNER_CANARY_BOOTSTRAP_ENABLED=false;
 export const shouldAttemptOwnerFollowCanary575=(
  hostname:string,search:string,enabled=APP575_OWNER_CANARY_BOOTSTRAP_ENABLED,
 )=>enabled&&hostname==='preview.soridraw.com'&&

@@ -80,11 +80,12 @@ async function inspectFrozenCanonical(){
 // APP basic Follow: one non-persistent historical query, no live mutation.
 // Do not log actor IDs, request headers, tokens, IPs, URLs or response bodies.
 // Permission failures are reported as HOLD, not silently bypassed.
-async function queryFollowTelemetryDry(){
+async function queryFollowTelemetryDry(postRollback=false){
  const q={
-  queryId:'soridraw-follow-once-20261113',
+  queryId:postRollback?'soridraw-follow-after-rollback-20261113':'soridraw-follow-video-20261113',
   dry:true,
-  timeframe:{from:Date.parse('2026-11-13T21:31:00Z'),
+  timeframe:postRollback?{from:Date.parse('2026-11-13T21:39:00Z'),
+    to:Date.parse('2026-11-13T22:09:00Z')}:{from:Date.parse('2026-11-13T21:31:00Z'),
     to:Date.parse('2026-11-13T21:36:00Z')},
   view:'events',limit:100,
   parameters:{
@@ -148,7 +149,7 @@ async function queryFollowTelemetryDry(){
    const exactDbCause=rawStructured.match(
     /(?:D1_ERROR|SQLITE_ERROR|SQLITE_BUSY|no such (?:table|column)|FOREIGN KEY constraint failed|UNIQUE constraint failed|CHECK constraint failed|NOT NULL constraint failed|database is locked|quota exceeded|SQLITE_CONSTRAINT)[^"\\n]{0,110}/i);
    const errorCause=exactDbCause?exactDbCause[0].replace(/[A-Za-z0-9_-]{25,}/g,'[id]'):'';
-   const version=String(x?.$workers?.scriptVersion||'').slice(0,70);
+   const version=String(x?.$workers?.scriptVersion?.id||x?.$workers?.scriptVersion?.versionId||'').slice(0,70);
    const timestamp=typeof x?.timestamp==='number'?new Date(x.timestamp).toISOString():'';
    compact.push({version,timestamp,status,method,outcome,error:err,dbFailure:extracted,
      errorCause,errorSummary:safeSummary,
@@ -157,7 +158,7 @@ async function queryFollowTelemetryDry(){
         Object.keys(x.source).slice(0,20):undefined,
      errorMessageAvailable:messages.some(v=>v.length>0)});
   }
-  console.log('BASIC_FOLLOW_HISTORY_OBSERVABILITY='+JSON.stringify({
+  console.log('BASIC_FOLLOW_HISTORY_OBSERVABILITY_'+(postRollback?'AFTER_ROLLBACK':'VIDEO')+'='+JSON.stringify({
    status:data.result?.run?.status,eventsReturned:events.length,
    followEvents:found,details:compact.slice(0,20)
   }));
@@ -266,6 +267,7 @@ async function run(){
  await inspectFollowMutationSqlAndSchema();
  await explainExactFollowUpsertReadonly();
  await queryFollowTelemetryDry();
+ await queryFollowTelemetryDry(true);
  console.log('BASIC_FOLLOW_NO_USER_MUTATIONS_NO_BACKEND_DEPLOYS=PASS');
  if(!p||!d)throw Error('BASIC_FOLLOW_BROWSER_PREFLIGHT_FAIL');
  if(cutover==='readonly')throw Error('BASIC_FOLLOW_CUTOVER_READONLY');

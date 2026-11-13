@@ -36,7 +36,7 @@ jobs:
           node scripts/verify-607-private-owner-wrapper.mjs --self-test
           node scripts/verify-605-active-off-sidecar.mjs --prepare
           node scripts/verify-607-private-owner-wrapper.mjs --prepare
-          node --check "$RUNNER_TEMP/app607/preview-entry.js"
+          node --check "$RUNNER_TEMP/app607/preview-entry.mjs"
           node --check "$RUNNER_TEMP/app607/owner-follow-entry-607.mjs"
       - name: Install exact-date local Cloudflare runtime only
         run: |

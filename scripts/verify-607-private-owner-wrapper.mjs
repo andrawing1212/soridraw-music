@@ -75,7 +75,7 @@ function prepare(){
  // APP601 service module that adds a fail-closed canary check.
  mkdirSync(OUT,{recursive:true});mkdirSync(join(OUT,'app605'),{recursive:true});
  mkdirSync(join(OUT,'app607'),{recursive:true});
- writeFileSync(join(OUT,'preview-entry.js'),authExported,{mode:0o600});
+ writeFileSync(join(OUT,'preview-entry.mjs'),authExported,{mode:0o600});
  const main=load('experiments/owner-follow-entry-607.mjs');
  writeFileSync(join(OUT,'owner-follow-entry-607.mjs'),main,{mode:0o600});
  for(const path of PARTS){
@@ -87,7 +87,7 @@ function prepare(){
   precommit,{mode:0o600});
  const all=[
   ['owner-follow-entry-607.mjs',main],
-  ['preview-entry.js',authExported],
+  ['preview-entry.mjs',authExported],
   ...PARTS.map(path=>['app605/'+path,load('runtime/'+path)]),
   ['app607/owner-follow-precommit-557.mjs',precommit],
  ];
@@ -106,7 +106,7 @@ function prepare(){
    if(!path.startsWith('./')&&!path.startsWith('../'))continue;
    // Import-scanning is for source files written in the repo. Baseline
    // compiled code may include strings that are not import specifiers.
-   if(item.name==='preview-entry.js')continue;
+   if(item.name==='preview-entry.mjs')continue;
    const resolved=join(dirname(item.name),path).replaceAll('\\','/');
    need(nameSet.has(resolved),'UNRESOLVED_IMPORT_'+item.name);
   }

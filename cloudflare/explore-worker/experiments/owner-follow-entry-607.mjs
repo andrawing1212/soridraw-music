@@ -4,7 +4,7 @@
 import {WorkerEntrypoint} from 'cloudflare:workers';
 import original, {
   ExploreLikeBatchScheduler103,validateExploreAuth307,
-} from './preview-entry.js';
+} from './preview-entry.mjs';
 import {runOwnerFollowPrecommit557}
   from './app607/owner-follow-precommit-557.mjs';
 import {reserveOwnerFollowViaService601,handleOwnerFollowReplayService601}

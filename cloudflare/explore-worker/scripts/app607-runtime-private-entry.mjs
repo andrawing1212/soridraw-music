@@ -10,7 +10,7 @@ const root=join(process.env.RUNNER_TEMP||'/no-app607','app607');
 const baseline=join(process.env.RUNNER_TEMP||'/no-app607','app605',
  'baseline','preview-entry.js');
 const wrapper=join(root,'owner-follow-entry-607.mjs');
-const original=join(root,'preview-entry.js');
+const original=join(root,'preview-entry.mjs');
 const proof=JSON.parse(readFileSync(join(root,'candidate-proof.json'),'utf8'));
 const active=readFileSync(baseline);
 const injected=readFileSync(original);

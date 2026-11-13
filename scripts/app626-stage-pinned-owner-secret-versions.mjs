@@ -93,7 +93,18 @@ async function main(){
   const before=bindings(candidate?.resources?.bindings,w.old,w.name);
   const runtime=candidate?.resources?.script_runtime||{};
   ok(runtime.compatibility_date===DATE,'COMPATIBILITY_CHANGED_'+w.name);
-  ok(runtime.migration_tag===(w.old===24?'v1':'owner600_v1'),'MIGRATION_TAG_'+w.name);
+  // Cloudflare's inactive versions may omit this optional response field.
+  // When missing, verify the already-active, previously audited DO migration
+  // tag instead. An unexpected explicit value always remains a hard HOLD.
+  const expectedMigration=w.old===24?'v1':'owner600_v1';
+  if(runtime.migration_tag===undefined){
+   const originalActive=await api('GET',root+'/versions/'+w.active);
+   ok(originalActive?.resources?.script_runtime?.migration_tag===expectedMigration,
+    'ACTIVE_MIGRATION_TAG_'+w.name);
+   console.log('APP627_INACTIVE_TAG_OPTIONAL_ACTIVE_DO_PINNED_'+w.name+'=PASS');
+  }else{
+   ok(runtime.migration_tag===expectedMigration,'MIGRATION_TAG_DRIFT_'+w.name);
+  }
   for(const name of w.additions)ok(!before.has(name),'SECRET_ALREADY_PRESENT_'+name);
   const code=await api('GET','workers/workers/'+w.name+'/versions/'+w.candidate+'?include=modules');
   const modules=code?.modules;

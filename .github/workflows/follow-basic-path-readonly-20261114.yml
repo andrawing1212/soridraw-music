@@ -23,5 +23,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: {node-version: 22}
       - run: node --check scripts/diagnose-basic-follow-readonly-20261114.mjs
+      - name: Check D1 account daily write quota, read-only analytics
+        env: { SORIDRAW_D1_COST_DAYS: '2' }
+        run: node scripts/report-cloudflare-d1-usage-readonly.mjs
       - name: Validate actual ordinary Follow/Unfollow browser preflight and global release mode
         run: node scripts/diagnose-basic-follow-readonly-20261114.mjs --live

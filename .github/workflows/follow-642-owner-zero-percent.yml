@@ -1,21 +1,21 @@
-name: SORIDRAW APP642 PREVIEW One-Owner Bridge Zero Traffic
+name: SORIDRAW Owner Canary Version Routing (APP643)
 
 on:
   pull_request:
     branches: [preview]
     paths:
-      - 'scripts/app642-preview-owner-0pct-bridge.mjs'
+      - 'scripts/app643-preview-owner-cors.mjs'
       - '.github/workflows/follow-642-owner-zero-percent.yml'
   push:
     branches: [preview]
     paths:
-      - '.deploy/app642-owner-zero-percent.trigger'
+      - '.deploy/app643-owner-override-cors.trigger'
 
 permissions:
   contents: read
 
 concurrency:
-  group: soridraw-app642-owner-zero-percent
+  group: soridraw-owner-canary-version-routing
   cancel-in-progress: false
 
 jobs:
@@ -27,12 +27,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: {node-version: 22}
-      - name: Verify 0-percent one-owner staging source
+      - name: Validate exactly one safe-Worker browser preflight addition
         run: |
-          node --check scripts/app642-preview-owner-0pct-bridge.mjs
-          node scripts/app642-preview-owner-0pct-bridge.mjs --self-test
+          node --check scripts/app643-preview-owner-cors.mjs
+          node scripts/app643-preview-owner-cors.mjs --self-test
 
-  stage:
+  release:
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 12
@@ -46,23 +46,24 @@ jobs:
           fetch-depth: 3
       - uses: actions/setup-node@v4
         with: {node-version: 22}
-      - name: Enforce exact one-shot scope, safe OFF baseline
+      - name: Enforce previously approved one-canary exact scope
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = 'refs/heads/preview'
-          test "$(git rev-parse HEAD^1)" = 'b64c722dfdb64f43ac0cd3683b83ddde55396ea0'
-          node --check scripts/app642-preview-owner-0pct-bridge.mjs
-          node scripts/app642-preview-owner-0pct-bridge.mjs --self-test
-          file='.deploy/app642-owner-zero-percent.trigger'
+          test "$(git rev-parse HEAD^1)" = '4a3ef425b2573fb0928842020d2a5f466db04d78'
+          node --check scripts/app643-preview-owner-cors.mjs
+          node scripts/app643-preview-owner-cors.mjs --self-test
+          file='.deploy/app643-owner-override-cors.trigger'
           test -f "$file"
-          grep -Fxq 'mode=existing-safe-off-100-plus-one-owner-zero-percent' "$file"
-          grep -Fxq 'approved_preview_parent=b64c722dfdb64f43ac0cd3683b83ddde55396ea0' "$file"
+          grep -Fxq 'mode=safe-off-preflight-cors-100-and-owner-candidate-0' "$file"
+          grep -Fxq 'approved_preview_parent=4a3ef425b2573fb0928842020d2a5f466db04d78' "$file"
           grep -Fxq 'safe_off_version=73f64a79-6cac-441b-9906-9ea9e32db66d' "$file"
-          expected="$(printf '%s\n' "$file" '.github/workflows/follow-642-owner-zero-percent.yml' 'scripts/app642-preview-owner-0pct-bridge.mjs' | LC_ALL=C sort)"
+          grep -Fxq 'candidate_version=6b13cde4-4a53-42d2-873f-361f7cf5a931' "$file"
+          expected="$(printf '%s\n' "$file" '.github/workflows/follow-642-owner-zero-percent.yml' 'scripts/app643-preview-owner-cors.mjs' | LC_ALL=C sort)"
           actual="$(git diff --name-only HEAD^1 HEAD | LC_ALL=C sort)"
           test "$actual" = "$expected"
-          echo 'APP642_EXACT_SCOPE_AND_PARENT=PASS'
-          echo 'APP642_PARENT=b64c722dfdb64f43ac0cd3683b83ddde55396ea0' >> "$GITHUB_ENV"
-      - name: Upload exact source once, deploy 0 percent only
-        run: node scripts/app642-preview-owner-0pct-bridge.mjs --stage-zero
+          echo 'APP643_EXACT_SCOPE_AND_PARENT=PASS'
+          echo 'APP643_PARENT=4a3ef425b2573fb0928842020d2a5f466db04d78' >> "$GITHUB_ENV"
+      - name: Stage exact safe CORS-only version and retain 0-percent owner version
+        run: node scripts/app643-preview-owner-cors.mjs --apply-once

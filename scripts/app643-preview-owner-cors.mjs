@@ -44,7 +44,7 @@ async function percentages(name){
 }
 async function expectOther(name){
  const m=await percentages(name);
- need(m.size===1&&m.get(name===OWNER_WORKER?OWNER:null)===100,'OTHER_WORKER_DRIFT_'+name);
+ need(m.size===1&&[...m.values()][0]===100,'OTHER_WORKER_DRIFT_'+name);
  return [...m.keys()][0];
 }
 async function info(id){

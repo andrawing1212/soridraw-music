@@ -4,8 +4,6 @@ import { getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareLocalCacheHit, recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { readSoridrawPersistentCache, removeSoridrawPersistentCache, writeSoridrawPersistentCache } from '../lib/soridrawPersistentCache';
 import { requestOrderedExploreFollow354 } from './exploreFollowOrdering354';
-import { ownerFollowOverrideHeaders644 } from '../lib/ownerFollowRequestOverride644';
-import { APP608_APPROVED_CANARY_UID } from './exploreOwnerFollowerSync542';
 import {
   getExplorePersonalSocialSnapshot,
   patchExplorePersonalSocialFollow,
@@ -674,30 +672,9 @@ export const setExploreFollow = async (
 ): Promise<ExploreFollowState> => {
   const normalizedUid = String(uid || '').trim();
   if (!normalizedUid) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
-  // APP644: Only deliberate PREVIEW canary tabs following the pinned owner
-  // select the 0%-traffic version. Never add this header for ordinary users,
-  // other profile targets or non-follow API operations.
-  const versionOverrideHeaders644 = (() => {
-    if (typeof window === 'undefined') return {};
-    try {
-      return ownerFollowOverrideHeaders644(
-        window.location.hostname.toLowerCase(),
-        window.location.search,
-        window.sessionStorage,
-        normalizedUid,
-        APP608_APPROVED_CANARY_UID,
-      );
-    } catch {
-      return {};
-    }
-  })();
-  const hasCanaryOverride644 = Object.keys(versionOverrideHeaders644).length === 1;
   const payload = await requestOrderedExploreFollow354(
     user.uid, normalizedUid, follow,
-    (path, init) => requestAuthed(user, path,
-      hasCanaryOverride644
-        ? { ...init, headers: { ...(init.headers || {}), ...versionOverrideHeaders644 } }
-        : init),
+    (path, init) => requestAuthed(user, path, init),
   );
   const row = payload?.data || {};
   const result = {

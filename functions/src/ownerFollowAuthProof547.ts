@@ -8,7 +8,7 @@ import {defineSecret} from 'firebase-functions/params';
 import {getAuth,type Auth} from 'firebase-admin/auth';
 import {getFirestore,type Firestore} from 'firebase-admin/firestore';
 import {readOwnerFollowLifecycleState534} from './ownerFollowLifecycle534';
-export const APP547_AUTH_PROOF_COMPILED_OPEN=false;
+export const APP547_AUTH_PROOF_COMPILED_OPEN=true;
 const APP608_CANARY_SHA256='8b9cd603dc722a89765da05bfee9100b2645ecff290bf1f35ff4f0a1bf80fc2f';
 const SECRET=defineSecret('SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544');
 const UID=/^[A-Za-z0-9_-]{1,128}$/,EPOCH=/^[0-9a-f]{32}$/,HEX=/^[0-9a-f]{64}$/,NONCE=/^[0-9a-f]{32}$/;

@@ -36,6 +36,10 @@ jobs:
         run: |
           set -euo pipefail
           npx tsx scripts/verify-608-one-owner-receiver.mjs
+          npx tsx scripts/verify-542-owner-relay-source.mjs
+          npx tsx scripts/verify-547-physical-recreation-auth-proof.mjs
+          node scripts/verify-585-owner-shared-release-off.mjs --source-only
+          node scripts/verify-577-owner-qa-project-fence.mjs
           node scripts/verify-527-owner-follower-idle-cost.mjs
           echo APP608_CANARY_ONLY_AND_APP528_120S_CACHE=PASS
       - name: Compile app and targeted shared Functions source without deploying

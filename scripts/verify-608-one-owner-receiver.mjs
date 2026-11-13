@@ -16,7 +16,7 @@ const page=read('src/pages/ExplorePage.tsx');
 const client=read('src/services/exploreOwnerFollowerSync542.ts');
 const sender=read('cloudflare/explore-worker/runtime/owner-follow-http-539.mjs');
 const worker=read('cloudflare/explore-worker/canonical/preview-worker.js');
-assert.equal(APP542_OWNER_HTTP_COMPILED_OPEN,false);
+assert.equal(APP542_OWNER_HTTP_COMPILED_OPEN,true);
 const compiledReceiver=read('functions/src/exploreOwnerFollowerWebhook542.ts');
 const compiledEnrollment=read('functions/src/ownerFollowEnrollment544.ts');
 const compiledProof=read('functions/src/ownerFollowAuthProof547.ts');
@@ -25,8 +25,8 @@ for(const source of [compiledReceiver,compiledEnrollment,compiledProof]){
  assert.match(source,/process\.env\.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574/);
  assert.match(source,/APP608_CANARY_SHA256/);
 }
-assert.match(compiledEnrollment,/APP544_ENROLLMENT_COMPILED_OPEN=false/);
-assert.match(compiledProof,/APP547_AUTH_PROOF_COMPILED_OPEN=false/);
+assert.match(compiledEnrollment,/APP544_ENROLLMENT_COMPILED_OPEN=true/);
+assert.match(compiledProof,/APP547_AUTH_PROOF_COMPILED_OPEN=true/);
 assert.doesNotMatch(index,/export\s*\{\s*publishExploreOwnerFollower529\s*\}/);
 // APP572 exports the modern HMAC-gated endpoint but leaves runtime OFF.
 assert.ok(index.includes('export {publishExploreOwnerFollower542} from "./exploreOwnerFollowerWebhook542";'));
@@ -41,7 +41,7 @@ assert.doesNotMatch(read('cloudflare/explore-worker/canonical/wrangler.preview.j
  /soridraw-owner-follow-retry-542|SORIDRAW_OWNER_FOLLOW_PUSH_532/);
 assert.doesNotMatch(worker,/adjustExploreFollowCountersDelta540/);
 assert.match(sender,/HTTP_RELEASE='https:\/\/asia-northeast3-soridraw-app-866a5.cloudfunctions.net\/publishExploreOwnerFollower542'/);
-assert.match(client,/EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED=false/);
+assert.match(client,/EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED=true/);
 assert.match(client,/APP608_APPROVED_CANARY_UID='rcZ2GZrBndOZzT8C635eiNBjYIJ2'/);
 assert.match(client,/isApp608OwnerCanaryVisible\(uid\)/);
 assert.match(page,/!isApp608OwnerCanaryVisible\(ownerUid\)/);
@@ -49,7 +49,7 @@ assert.match(client,/ownerFollowerSync532/);
 assert.match(client,/soridrawFollowEpoch532/);
 // APP575: non-canary page visits and login remain completely inert.
 // A one-shot caller may refresh its own Auth token only on explicit QA URL.
-assert.match(client,/APP575_OWNER_CANARY_BOOTSTRAP_ENABLED=false/);
+assert.match(client,/APP575_OWNER_CANARY_BOOTSTRAP_ENABLED=true/);
 assert.match(client,/hostname==='preview.soridraw.com'/);
 assert.match(client,/ownerFollowCanary/);
 assert.match(client,/enrollmentAttempts575=new Map/);

@@ -15,7 +15,7 @@ const {handleOwnerAuthProof547,isCurrentOwnerEpoch547,
  APP547_AUTH_PROOF_COMPILED_OPEN}=require('../functions/src/ownerFollowAuthProof547.ts');
 assert.equal(OWNER_FOLLOW_AUTH_PROOF_547_COMPILED_OPEN,false);
 assert.equal(APP544_OWNER_EPOCH_BIND_COMPILED_OPEN,false);
-assert.equal(APP547_AUTH_PROOF_COMPILED_OPEN,false);
+assert.equal(APP547_AUTH_PROOF_COMPILED_OPEN,true);
 const index=readFileSync('functions/src/index.ts','utf8');
 assert.ok(index.includes('export {verifyOwnerFollowEpoch547Candidate} from "./ownerFollowAuthProof547";'));
 assert.ok(index.includes('export {publishExploreOwnerFollower542} from "./exploreOwnerFollowerWebhook542";'));

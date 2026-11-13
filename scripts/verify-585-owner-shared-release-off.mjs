@@ -65,14 +65,27 @@ for(const [path,flag] of [
  ['owner-follow-enrollment-544.mjs','APP544_OWNER_EPOCH_BIND_COMPILED_OPEN'],
  ['owner-follow-current-auth-547.mjs','OWNER_FOLLOW_AUTH_PROOF_547_COMPILED_OPEN']
 ])off('cloudflare/explore-worker/runtime/'+path,flag);
+// APP614: Compile the explicit PREVIEW canary, but the server READY_608
+// environment gate is still absent, and no Cloudflare routes are active.
+const canaryOn=(path,flag)=>assert.match(read(path),
+ new RegExp('export const '+flag+'\\s*=\\s*true\\s*;'),
+ 'APP614_CANARY_COMPILED_GATE_NOT_READY_'+flag);
 for(const flag of ['EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED',
  'APP575_OWNER_CANARY_BOOTSTRAP_ENABLED'])
- off('src/services/exploreOwnerFollowerSync542.ts',flag);
+ canaryOn('src/services/exploreOwnerFollowerSync542.ts',flag);
 for(const [path,flag] of [
  ['exploreOwnerFollowerWebhook542.ts','APP542_OWNER_HTTP_COMPILED_OPEN'],
  ['ownerFollowEnrollment544.ts','APP544_ENROLLMENT_COMPILED_OPEN'],
  ['ownerFollowAuthProof547.ts','APP547_AUTH_PROOF_COMPILED_OPEN']
-])off('functions/src/'+path,flag);
+])canaryOn('functions/src/'+path,flag);
+for(const path of ['exploreOwnerFollowerWebhook542.ts',
+ 'ownerFollowEnrollment544.ts','ownerFollowAuthProof547.ts']){
+ const code=read('functions/src/'+path);
+ assert.ok(code.includes("process.env.SORIDRAW_OWNER_FOLLOW_READY_608!=='1'"),
+  'APP614_SERVER_READY_GATE_MISSING');
+ assert.ok(code.includes('SORIDRAW_OWNER_FOLLOW_CANARY_UID_574')&&
+  code.includes('APP608_CANARY_SHA256'),'APP614_PINNED_OWNER_GATE_MISSING');
+}
 const clientCanary=read('src/services/exploreOwnerFollowerSync542.ts');
 assert.ok(clientCanary.includes('!isApp608OwnerCanaryVisible(uid)'),
  'APP591_PREVIEW_EXPLICIT_CANARY_GATE_MISSING');
@@ -95,7 +108,7 @@ assert.doesNotMatch(qa,/from ['"].*\.\.\/\.\.\/src\/index/);
 const sender=read('cloudflare/explore-worker/runtime/owner-follow-http-539.mjs');
 assert.ok(sender.includes(
  'https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publishExploreOwnerFollower542'));
-console.log('APP585_CLIENT_WORKER_FUNCTIONS_AND_CANARY_OFF=PASS');
+console.log('APP614_CLIENT_FUNCTIONS_SOURCE_ON_SERVER_RUNTIME_HELD=PASS');
 console.log('APP585_QA_AND_SHARED_PROJECTS_SEPARATE=PASS');
 console.log('APP585_SOURCE_CANDIDATE_VALID=PASS');
 console.log('APP585_SHARED_RELEASE=NO_GO_REQUIRES_LIVE_VERIFICATION_APPROVAL');

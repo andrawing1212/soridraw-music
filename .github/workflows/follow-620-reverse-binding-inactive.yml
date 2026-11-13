@@ -1,0 +1,61 @@
+name: SORIDRAW APP620 Reverse Private Binding Inactive One Shot
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - 'scripts/stage-620-reverse-binding-inactive.mjs'
+      - '.github/workflows/follow-620-reverse-binding-inactive.yml'
+      - '.deploy/app620-reverse-binding-inactive.trigger'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app620-reverse-inactive-single
+  cancel-in-progress: false
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Guard exactly one immutable inactive version upload
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only HEAD^ HEAD)"
+          if [ "$changed" != '.deploy/app620-reverse-binding-inactive.trigger' ]; then
+            echo 'stage=false' >> "$GITHUB_OUTPUT"
+            echo APP620_NO_TRIGGER_NO_UPLOAD=PASS
+            exit 0
+          fi
+          printf 'approved_parent=%s\n' "$(git rev-parse HEAD^)" | cmp -s - .deploy/app620-reverse-binding-inactive.trigger
+          diff="$(git diff --name-only 6fa047b68bd108ee5294150933695bf5d3e3ae4a HEAD^)"
+          for file in 'scripts/stage-620-reverse-binding-inactive.mjs' '.github/workflows/follow-620-reverse-binding-inactive.yml'; do
+            grep -Fxq "$file" <<< "$diff"
+          done
+          test "$(printf '%s\n' "$diff" | wc -l)" -eq 2
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = 028e51a2d52b50e1f021dd6d689268518077c2e1
+          echo "parent=$(git rev-parse HEAD^)" >> "$GITHUB_OUTPUT"
+          echo 'stage=true' >> "$GITHUB_OUTPUT"
+      - name: Source and syntax gate with no remote mutation
+        run: |
+          set -euo pipefail
+          node --check scripts/stage-620-reverse-binding-inactive.mjs
+          node scripts/stage-620-reverse-binding-inactive.mjs --source-only
+      - name: Add reverse binding only to unused owner Worker version
+        if: steps.gate.outputs.stage == 'true'
+        env:
+          APP620_APPROVED_PARENT: ${{ steps.gate.outputs.parent }}
+        run: |
+          set -euo pipefail
+          node scripts/stage-620-reverse-binding-inactive.mjs --stage-once
+          echo APP620_NO_CLOUDFLARE_TRAFFIC_OR_DATA_MUTATION=PASS

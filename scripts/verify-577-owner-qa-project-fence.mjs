@@ -48,7 +48,9 @@ assert.match(code,/admin\.initializeApp\(\{\s*databaseURL:\s*"https:\/\/soridraw
 const receiver=readFileSync('functions/src/exploreOwnerFollowerWebhook542.ts','utf8');
 assert.match(receiver,/APP542_OWNER_HTTP_COMPILED_OPEN=false/);
 const client=readFileSync('src/services/exploreOwnerFollowerSync542.ts','utf8');
-assert.match(client,/EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED=false/);
+assert.match(client,/EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED=true/);
+assert.match(client,/uid===APP608_APPROVED_CANARY_UID/);
+assert.match(client,/hostname==='preview.soridraw.com'/);
 const qaEndpoint=QA_OWNER_FOLLOW_FUNCTION_URL_577;
 const liveEndpoint='https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publishExploreOwnerFollower542';
 const event={ownerUid:'ownerA577',authEpoch:'0123456789abcdef0123456789abcdef',

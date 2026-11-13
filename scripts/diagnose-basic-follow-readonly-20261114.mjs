@@ -158,7 +158,7 @@ async function inspectDeployedFollowStack(){
  assert(entry?.content_base64&&result.modules?.length===12,'ACTIVE_MODULE_STACK_UNAVAILABLE');
  const {Buffer}=await import('node:buffer');
  const source=Buffer.from(entry.content_base64,'base64').toString('utf8');
- const lines=source.split('\\n');
+ const lines=source.split(String.fromCharCode(10));
  console.log('BASIC_FOLLOW_DEPLOYED_SOURCE_LINES='+lines.length);
  for(const at of [724,14445,14501,14537,14572,14690]){
   const lower=Math.max(0,at-9),upper=Math.min(lines.length,at+10);

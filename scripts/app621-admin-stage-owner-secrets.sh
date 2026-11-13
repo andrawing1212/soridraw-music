@@ -34,54 +34,30 @@ print('APP621_GCP_SECRET_FORMAT_'+os.environ['SECRET']+'=PASS')
 PY
 done
 echo APP621_HUMAN_ADMIN_EXACT_GCP_SECRETS_READABLE=PASS
-# APP622: The generic 'wrangler whoami' table is not authoritative for
-# account membership. Use an explicit target account plus an actual read-only
-# deployment listing for BOTH existing Workers before any secret staging.
-# Never use a different account or rely on a previously cached selection.
+# APP624: One browser approval is enough. Do NOT auto-start OAuth again.
+# If login is incomplete, ask the human to finish it separately and preserve
+# the original reason for failure. Never stage secrets to an unverified account.
 export CLOUDFLARE_ACCOUNT_ID="$ACCOUNT"
-cloudflare_target_read_only() {
-  npx --yes "$WRANGLER" whoami --account "$ACCOUNT" --json > "$DIR/whoami-target.json" 2>/dev/null &&
-  npx --yes "$WRANGLER" deployments list --name "$EXPLORE" --json > "$DIR/explore-active.json" 2>/dev/null &&
-  npx --yes "$WRANGLER" deployments list --name "$OWNER" --json > "$DIR/owner-active.json" 2>/dev/null
-}
-if ! cloudflare_target_read_only; then
-  if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]]; then
-    hold ACCOUNT_TOKEN_OVERRIDES_OAUTH_CHECK_TOKEN_SCOPE
+if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+  hold CONFLICTING_CLOUDFLARE_API_TOKEN
+fi
+if ! npx --yes "$WRANGLER" whoami --json > "$DIR/whoami.json" 2>/dev/null; then
+  hold WRANGLER_LOGIN_NOT_SAVED_NO_AUTO_REAUTH
+fi
+echo APP624_CLOUDFLARE_CLI_LOGIN_SAVED=PASS
+if ! npx --yes "$WRANGLER" whoami --account "$ACCOUNT" --json > "$DIR/target-account.json" 2>/dev/null; then
+  hold TARGET_CLOUDFLARE_ACCOUNT_NOT_VERIFIED_NO_AUTO_REAUTH
+fi
+echo APP624_EXACT_ACCOUNT_MEMBERSHIP=PASS
+# Explicit Worker membership via GET-only Wrangler commands, not whoami text.
+for worker in "$EXPLORE" "$OWNER"; do
+  if ! npx --yes "$WRANGLER" deployments status --name "$worker" --json > "$DIR/$worker-active.json" 2>/dev/null; then
+    hold "TARGET_WORKER_READ_$worker"
   fi
-  echo APP622_CORRECT_CLOUDFLARE_ACCOUNT_LOGIN_REQUIRED
-  npx --yes "$WRANGLER" login --device --browser=false || hold CLOUDFLARE_DEVICE_LOGIN_FAILED
-  cloudflare_target_read_only || hold CORRECT_CLOUDFLARE_ACCOUNT_NOT_ACCESSIBLE
-fi
-echo APP622_EXACT_ACCOUNT_AND_BOTH_WORKERS_READ_ONLY=PASS
-# Official 'versions secret put' creates a new UNUSED version; 'secret put'
-# (without 'versions') would immediately deploy and is strictly prohibited.
-if ! npx --yes "$WRANGLER" versions secret put SORIDRAW_OWNER_FOLLOW_HMAC_539 \
-  --name "$EXPLORE" --message 'APP621 canary receiver HMAC, no deployment' \
-  < "$DIR/SORIDRAW_OWNER_FOLLOW_HMAC_539" > "$DIR/cf1.log" 2>&1; then
-  hold RECEIVER_HMAC_STAGE_FAILED_NO_DEPLOY
-fi
-echo APP621_EXPLORE_RECEIVER_HMAC_INACTIVE_VERSION=PASS
-if ! npx --yes "$WRANGLER" versions secret put SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544 \
-  --name "$EXPLORE" --message 'APP621 canary enrollment HMAC, no deployment' \
-  < "$DIR/SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544" > "$DIR/cf2.log" 2>&1; then
-  hold ENROLL_HMAC_STAGE_FAILED_NO_DEPLOY
-fi
-echo APP621_EXPLORE_ENROLL_HMAC_INACTIVE_VERSION=PASS
-# Generate one fresh shared internal capability, never echo its value.
-openssl rand -hex 32 > "$DIR/owner-bridge"
-test "$(wc -c < "$DIR/owner-bridge")" -ge 64 || hold BRIDGE_RANDOM_FAILED
-if ! npx --yes "$WRANGLER" versions secret put SORIDRAW_OWNER_DO_BRIDGE_SECRET_600 \
-  --name "$EXPLORE" --message 'APP621 private bridge capability, no deployment' \
-  < "$DIR/owner-bridge" > "$DIR/cf3.log" 2>&1; then
-  hold EXPLORE_BRIDGE_STAGE_FAILED_NO_DEPLOY
-fi
-echo APP621_EXPLORE_PRIVATE_BRIDGE_INACTIVE_VERSION=PASS
-if ! npx --yes "$WRANGLER" versions secret put SORIDRAW_OWNER_DO_BRIDGE_SECRET_600 \
-  --name "$OWNER" --message 'APP621 matching owner capability, no deployment' \
-  < "$DIR/owner-bridge" > "$DIR/cf4.log" 2>&1; then
-  hold OWNER_BRIDGE_STAGE_FAILED_NO_DEPLOY
-fi
-echo APP621_STANDALONE_PRIVATE_BRIDGE_INACTIVE_VERSION=PASS
-echo APP621_ONLY_NONDEPLOYED_CLOUDFLARE_VERSIONS=PASS
-echo APP621_SECRET_BYTES_NOT_PRINTED_OR_GITHUB_STORED=PASS
-echo APP621_USER_DATA_FUNCTIONS_RULES_HOSTING_CHANGES=ZERO
+done
+echo APP624_BOTH_WORKERS_READ_ONLY_ACCESS=PASS
+# APP624 does NOT upload yet. The previous APP621 staged each secret into a
+# DIFFERENT unused version and could lose the prepared Service Bindings.
+# A version-locked atomic secret staging strategy must be checked first.
+echo APP624_SECRETS_STAGE=HOLD_PENDING_ATOMIC_VERSION_BINDING_PROOF
+echo APP624_NO_CLOUDFLARE_WRITE_OR_USER_DATA_CHANGE=PASS

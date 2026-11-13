@@ -1,3 +1,14 @@
+## CURRENT — APP645 사용자 실영상 팔로우 저장 실패 → 시험 요청 분기 긴급 철회·PREVIEW Hosting 복구 PASS / 실제 저장 재확인 HOLD (2026-11-14 KST)
+
+- **실사용 실패 확정:** 디렉터가 제공한 약 34초 동영상 `20261113-2132-45.9939437.mp4`에서 두 브라우저가 SORIDRAW 프로필을 띄운 상태로, 오른쪽 계정 팔로우 버튼이 최종 `팔로우`에 머물고 왼쪽 소유자 팔로워 숫자가 변하지 않음. **팔로우 정본 저장 실제 PASS 부재 / owner PC·모바일 자동 동기화 FAIL/HOLD.** 비디오 화면만으로 네트워크 실패 HTTP 코드·Cloudflare 시험 버전 실제 선택 여부는 확인되지 않으므로 고장 원인을 확정하지 않음.
+- **긴급 최소 복구:** [PR #989](https://github.com/andrawing1212/soridraw-music/pull/989) 병합 `f27ced7261dc6498bc9229a52bc741599b327679`. APP644에서 팔로우 PUT/DELETE에 넣었던 `Cloudflare-Workers-Version-Overrides` 동작을 **완전 제거**. `src/services/exploreSocialService.ts`와 기존 quality workflow를 APP643 기준 알려진 원본 blob으로 바이트 완전 복구; APP644 전용 두 파일만 삭제. 로그인/Auth/AppCheck·기존 canonical ordered/idempotent follow·좋아요·APP527/528·다른 기능/데이터 보존.
+- **실제 Hosting 복구:** [PR #990](https://github.com/andrawing1212/soridraw-music/pull/990) 병합 후 [Actions #43512346494](https://github.com/andrawing1212/soridraw-music/actions/runs/43512346494) SUCCESS: `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`, `TEST_PRODUCTION_UNCHANGED=PASS`. 실제 PREVIEW Hosting source SHA **`c82ce6f0357634f531b523de0e47cf41846a0b6c`**. 사용자 원본·Firebase Functions/Rules·Cloudflare Worker/D1/R2 재배포 없음.
+- **현재 서버 경로:** APP643 안전 bridge OFF Worker `962ee432-fadb-456e-8836-50675aa76b84` 일반 트래픽 100%, ON 시험 Worker `6b13cde4-4a53-42d2-873f-361f7cf5a931` 0%은 Cloudflare에 남아 있지만 APP645 앱에서 요청 헤더가 제거되어 **클라이언트가 선택하지 않음**. 기존 Like DO v1 및 모든 바인딩 그대로. 공개 일반 사용자에게 ON 후보 확대 금지.
+- **원인 분리 / 다음 검증:** APP644 시험 분기가 개입했을 가능성은 있으나 **실제 요청 헤더·응답·정본 저장 여부의 네트워크 증거가 없어 확정 금지**. 앞선 APP638/641 기본 canonical B→A 실제 재시험도 PASS된 이력은 없음. 사용자에게 같은 실패 클릭 반복을 요구하지 않는다. 안전한 관리자 읽기 전용으로 정확한 요청 시간의 status/route/actor 제한/DO reservation 여부만 확인 가능한 경우 진단하고, 새 사용자 변경을 일으키는 재시도나 기능 재활성은 금지. 영상/CI/Hosting에서 실제 B의 정상 팔로우 재성공을 추론하지 않는다.
+- **최종 상태:** PREVIEW 앱 긴급 되돌리기·배포는 PASS, **실제 팔로우 저장·PC/모바일 실사용 PASS는 미확인**, 비용 실측 PASS 아님. 과거 독립 QA·35 bindings/12 modules PASS 중복 재실행 금지. PR #970 Draft는 그대로 보호. 이번 문서 갱신은 코드·인프라 재배포 없음.
+
+---
+
 ## CURRENT — APP642–644 한 계정 전용 PREVIEW 팔로우 0% 시험 연결·Hosting PASS / 실제 A↔B 자동 갱신 HOLD (2026-11-14 KST)
 
 - **승인 범위:** 이전 디렉터 YES로 기존 안전 Worker를 일반 요청에 100% 유지하면서, 승인된 소유자 UID 한 명과 PREVIEW 명시 시험 탭에만 0% Worker 버전 선택 요청을 연결. 기존 정상 팔로우 정본·인증·좋아요·APP527 유휴 조회 제거·APP528 120초 목록 캐시, TEST/PRODUCTION 및 공유 사용자 원본 보호.

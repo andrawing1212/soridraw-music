@@ -183,7 +183,7 @@ assert.match(worker,/OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN/);
 assert.doesNotMatch(worker,/OWNER_FOLLOW_OUTBOX_529_COMPILED_OPEN/);
 assert.match(worker,/controller\?\.cron==='soridraw-owner-follow-retry-542'/);
 assert.match(worker,/ctx\.waitUntil\(runOwnerFollowDelivery542/);
-assert.match(bridge,/EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED=false/);
+assert.match(bridge,/EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED=true/);
 assert.match(page,/OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 120_000/);
 assert.doesNotMatch(page,/onOwnFollowersFocus525/);
 assert.match(page,/createOwnerEpochGate538/);

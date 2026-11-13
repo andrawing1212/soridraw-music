@@ -1,5 +1,12 @@
 name: SORIDRAW APP601 Owner Service Local Isolated
 on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - '.github/workflows/follow-601-owner-service-isolated.yml'
+      - 'cloudflare/explore-worker/runtime/owner-follow-service-601.mjs'
+      - 'cloudflare/explore-worker/canonical/preview-entry.js'
+      - 'scripts/verify-601-owner-service-integration.mjs'
   pull_request:
     branches: [preview]
     paths:

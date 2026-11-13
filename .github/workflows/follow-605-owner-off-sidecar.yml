@@ -41,9 +41,11 @@ jobs:
       - name: Install local Workers simulator only
         run: |
           set -euo pipefail
+          npm --prefix cloudflare/explore-worker pkg set overrides.workerd=1.20261110.1
           npm --prefix cloudflare/explore-worker install --ignore-scripts --no-audit --no-fund --package-lock=false
-          npm --prefix cloudflare/explore-worker install --no-save --ignore-scripts --no-audit --no-fund --package-lock=false miniflare@latest workerd@1.20261110.1
-          node -e "const p=require('./cloudflare/explore-worker/node_modules/workerd/package.json'); console.log('APP605_WORKERD_VERSION='+p.version)"
+          npm --prefix cloudflare/explore-worker install --no-save --ignore-scripts --no-audit --no-fund --package-lock=false miniflare@latest
+          npm --prefix cloudflare/explore-worker ls workerd --all
+          echo APP605_WORKERD_FORCED_RUNTIME=1.20261110.1
       - name: Check real 2026-08-28 runtime locally, no network
         shell: bash
         run: |

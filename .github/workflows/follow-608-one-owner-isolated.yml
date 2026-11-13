@@ -9,6 +9,7 @@ on:
       - 'src/services/exploreOwnerFollowerSync542.ts'
       - 'src/pages/ExplorePage.tsx'
       - 'scripts/verify-608-one-owner-receiver.mjs'
+      - 'scripts/verify-529-owner-sync.mjs'
       - '.github/workflows/follow-608-one-owner-isolated.yml'
 permissions:
   contents: read
@@ -40,6 +41,7 @@ jobs:
           npx tsx scripts/verify-547-physical-recreation-auth-proof.mjs
           node scripts/verify-585-owner-shared-release-off.mjs --source-only
           node scripts/verify-577-owner-qa-project-fence.mjs
+          node scripts/verify-529-owner-sync.mjs
           node scripts/verify-527-owner-follower-idle-cost.mjs
           echo APP608_CANARY_ONLY_AND_APP528_120S_CACHE=PASS
       - name: Compile app and targeted shared Functions source without deploying

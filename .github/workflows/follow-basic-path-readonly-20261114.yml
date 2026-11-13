@@ -1,0 +1,27 @@
+name: SORIDRAW Basic Follow Blocker Readonly (one-shot)
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/diagnose-basic-follow-readonly-20261114.mjs'
+      - '.github/workflows/follow-basic-path-readonly-20261114.yml'
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.head_ref == 'audit/follow-basic-path-readonly-20261114'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - run: node --check scripts/diagnose-basic-follow-readonly-20261114.mjs
+      - name: Validate actual ordinary Follow/Unfollow browser preflight and global release mode
+        run: node scripts/diagnose-basic-follow-readonly-20261114.mjs --live

@@ -1,0 +1,9 @@
+mode=reuse-existing-staged-version-only
+approved_preview_parent=72641805eae483592219e27ac4fbc4cd98fd17b8
+required_original_active=5d0f74b1-84bf-4f96-a9e4-51bea25736fa
+no_version_upload=true
+one_approved_preview_owner_bridge_off=true
+no_force_rollback=true
+no_d1_r2_firestore_rtdb_user_writes=true
+test_production_unchanged=true
+approval=director_yes_follow_recovery_and_minimize_limits_20261114

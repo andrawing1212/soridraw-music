@@ -22,9 +22,13 @@ function command(name,args,max=8192){
  catch{bad('COMMAND_'+name.toUpperCase().replace(/\W/g,'_'))}
 }
 function sec(name){
- const s=command('gcloud',['secrets','versions','access','latest','--project='+PROJECT,'--secret='+name],4096);
- ok(s.length>=32&&s.length<=256&&!/[\u0000-\u001f\u007f]/.test(s),'GCP_SECRET_FORMAT_'+name);
- return s;
+ let raw;
+ try{raw=execFileSync('gcloud',['secrets','versions','access','latest',
+  '--project='+PROJECT,'--secret='+name],{stdio:['ignore','pipe','ignore'],
+  timeout:30000,maxBuffer:4096})}catch{bad('GCP_SECRET_READ_'+name)}
+ ok(raw.length>=32&&raw.length<=256&&
+  [...raw].every(byte=>byte>=32&&byte<=126),'GCP_SECRET_FORMAT_'+name);
+ return raw.toString('utf8');
 }
 async function main(){
  ok(process.argv.length===3&&process.argv[2]==='--stage','MODE');

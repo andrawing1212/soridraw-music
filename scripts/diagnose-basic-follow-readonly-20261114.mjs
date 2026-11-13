@@ -128,7 +128,18 @@ async function queryFollowTelemetryDry(){
    const rawErr=String(x?.$metadata?.error||x?.$workers?.event?.error||'');
    const err=rawErr.includes('://')?'[redacted]':
      rawErr.replace(/[A-Za-z0-9_-]{20,}/g,'[redacted]').slice(0,100);
-   compact.push({status,outcome,error:err});
+   const messages=[
+     typeof x?.source==='string'?x.source:'',
+     typeof x?.source?.message==='string'?x.source.message:'',
+     typeof x?.$metadata?.message==='string'?x.$metadata.message:'',
+     typeof x?.$workers?.event?.error==='string'?x.$workers.event.error:'',
+   ];
+   const category=messages.join(' ').match(
+    /(?:D1_ERROR|SQLITE_ERROR|SQLITE_BUSY|no such column|no such table|constraint failed|FOREIGN KEY constraint failed|binding parameter|missing column|database is locked|query failed)[^\n]{0,180}/i);
+   const extracted=category?category[0].split('https://').join('[url]')
+     .replace(/[A-Za-z0-9_-]{28,}/g,'[id]').slice(0,190):'';
+   compact.push({status,outcome,error:err,dbFailure:extracted,
+     errorMessageAvailable:messages.some(v=>v.length>0)});
   }
   console.log('BASIC_FOLLOW_HISTORY_OBSERVABILITY='+JSON.stringify({
    status:data.result?.run?.status,eventsReturned:events.length,

@@ -1,0 +1,18 @@
+{
+  "name": "soridraw-owner-follow-preview-candidate",
+  "main": "./worker.mjs",
+  "compatibility_date": "2026-08-28",
+  "workers_dev": false,
+  "triggers": {"crons": []},
+  "durable_objects": {
+    "bindings": [{
+      "name": "OWNER_FOLLOW_DO_600",
+      "class_name": "OwnerFollowerStandalone600"
+    }]
+  },
+  "migrations": [{
+    "tag": "owner600_v1",
+    "new_sqlite_classes": ["OwnerFollowerStandalone600"]
+  }],
+  "vars": {"SORIDRAW_ENVIRONMENT": "preview"}
+}

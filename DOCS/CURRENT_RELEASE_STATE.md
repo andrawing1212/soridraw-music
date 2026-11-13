@@ -1,3 +1,12 @@
+## CURRENT — APP607 내부 전용 Worker 연결 코드·비배포 버전 PASS / 실사용 활성화 HOLD (2026-11-13 KST)
+
+- **소스 및 workerd 검사 PASS:** [APP607 Actions #43434152083](https://github.com/andrawing1212/soridraw-music/actions/runs/43434152083). 활성 Explore Worker 2,440,556바이트 정확 보존, 기존 Auth307/Like DO v1 재사용, 전용 `OwnerFollowReplayEntrypoint607` named Service Binding (공개 HTTP 라우트 없음), 기존 GET/OPTIONS/POST 경로 동작 및 Like DO 격리 비교 PASS. APP557 정본 precommit·APP601 private replay 재사용, canary UID 해시·PREVIEW·수신점 준비·HMAC/Service Binding/ON 명시 가드. 현재 실제 바인딩·환경변수 미설정이므로 기능 OFF.
+- **비배포 Cloudflare 후보 생성 PASS:** [APP607 Actions #43434820980](https://github.com/andrawing1212/soridraw-music/actions/runs/43434820980). 새 Explore Worker **비활성** 버전 `ff21c3f1-bd28-45a9-845d-31b37d78636a` (`deploy=false`), 10개 모듈 SHA 검사, 기존 바인딩 23개 Active 버전 고정 상속, Like DO v1 유지, DO 새 마이그레이션 없음, 기존 Active `350ce33d-ec83-49d0-a4ae-c25d2d90f59e` 100% 유지. APP603 독립 owner Worker `e274388f-8075-473d-b3a0-6e78eb67f353` 그대로 OFF. 사용자 데이터·공유 D1/R2/RTDB/Firebase/TEST/PRODUCTION/Hosting 설정 변경 0.
+- **핵심 실사용 차단:** 공유 Firebase Function `exploreOwnerFollowerWebhook542.ts`의 `APP542_OWNER_HTTP_COMPILED_OPEN=false` 및 등록 `ownerFollowEnrollment544.ts`의 `APP544_ENROLLMENT_COMPILED_OPEN=false`, 클라이언트 `exploreOwnerFollowerSync542.ts`의 RTDB 구독 및 명시 카나리 등록 2개 상수 모두 `false`. 공유 Firebase Functions 배포/보안/RTDB·Hosting 등은 APP607의 PREVIEW Worker 연결 승인에 자동 포함되지 않는다. 실제 PC↔모바일 소유자 팔로워 자동 동기화 OFF/미완료. **APP607 후보 트래픽 승격 및 서비스 바인딩·Secret만 선행 생성하는 활성화 금지**; 별도 승인된 수신점·클라이언트 릴리스 준비/검증 후 복구 가능한 순서로 연결.
+- **재검사·재생성 방지:** APP601~606 PASS, APP607 #43434152083 및 #43434820980 PASS 재사용. 새 Worker·APP604/605/607 비배포 후보 중복 생성 금지. [PR #970](https://github.com/andrawing1212/soridraw-music/pull/970)은 Draft, `preview` 코드 미병합. 다음 독립 작업은 shared Firebase Function/one-owner RTDB 수신+클라이언트 준비, 비용·복구 증거 확보 후 카나리 ON 가능성을 판단한다.
+
+---
+
 ## CURRENT — APP606 workerd 실행 비교 PASS / APP605 비배포 후보 1개 생성 PASS (2026-11-13 KST)
 
 - **로컬 실행 문제 해결:** 기존 APP605의 모듈 `../` 파일시스템 root 오류는 실제 활성 Worker 코드 변경 없이 Miniflare의 `rootPath=dirname(script)`, `modulesRoot=dirname(script)`, `scriptPath='preview-entry.js'`로 해결. 공식 workerd `1.20261110.1`, 실제 LIVE 호환 날짜 `2026-08-28`에서 정본과 OFF 후보의 합성 GET/OPTIONS 거절 경로 응답 같음 [Actions #43429916356](https://github.com/andrawing1212/soridraw-music/actions/runs/43429916356) PASS. 기존 Like DO `ExploreLikeBatchScheduler103`를 로컬 격리 스텁으로 불러 안전한 미인식 GET의 응답 동일성도 [Actions #43430394569](https://github.com/andrawing1212/soridraw-music/actions/runs/43430394569) PASS. 이 검증은 일부 로컬 경로에 한정되고 실사용 전체 회귀/배포 롤백 PASS는 아님.

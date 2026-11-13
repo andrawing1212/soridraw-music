@@ -1,3 +1,13 @@
+## CURRENT — APP608 한 계정 전용 수신·클라이언트 코드 준비 PASS / 공유 Firebase IAM 배포 HOLD (2026-11-13 KST)
+
+- **정확한 범위:** 디렉터 승인 PREVIEW 소유자 Firebase Auth UID `rcZ2GZrBndOZzT8C635eiNBjYIJ2` 한 계정만. 기존 `functions/src/exploreOwnerFollowerWebhook542.ts`·`ownerFollowEnrollment544.ts`·`ownerFollowAuthProof547.ts`에 준비 플래그 `SORIDRAW_OWNER_FOLLOW_READY_608`와 대상 UID 해시 고정 검증 추가. `src/services/exploreOwnerFollowerSync542.ts`·`ExplorePage.tsx`는 승인 UID + PREVIEW 주소 + 명시 `?ownerFollowCanary=1`일 때만 Auth/RTDB 경로 접근. APP527·528 120초 목록 캐시 보호.
+- **현재 컴파일 OFF 유지:** 실제 공유 Firebase 업데이트 권한이 막혀, 위 3개 Functions 소스·클라이언트 2개 스위치 모두 `false`로 최종 복원. 기능 ON, 실사용 PC·모바일 PASS 주장 금지. [APP608 최신 격리 코드 검사 #43440935002](https://github.com/andrawing1212/soridraw-music/actions/runs/43440935002) SUCCESS — 실제 HMAC/Auth epoch/RTDB 순서 가짜 의존성 검사, APP527, 앱·Functions 빌드. 실행 중인 서비스에 변경 없음.
+- **실제 배포 IAM 차단:** [첫 GHA #43437954103](https://github.com/andrawing1212/soridraw-music/actions/runs/43437954103) Secret Manager `secretmanager.versions.list` 권한 부족으로 배포 전 차단. [다음 GHA #43438560057](https://github.com/andrawing1212/soridraw-music/actions/runs/43438560057)는 공유 Firebase `soridraw-app-866a5`의 기존 Functions 세 개 ACTIVE·HMAC 연결·서버 준비 플래그 미활성 읽기 전용 PASS 후, Firebase CLI 대상 세 개 배포 시 전체 코드 분석에서 **팔로워와 무관한 기존 좋아요 Secret `SORIDRAW_LIKE_GUARD_HMAC_V1_SECRET`의 `secretmanager.secrets.get` 403**으로 실제 Function 수정 전 FAIL. GitHub 계정 권한 확장·Secret 값 제출/회전·배포 재시도 금지. 이전 Cloud Shell 관리자 권한을 활용한 정확히 세 Function 범위 배포가 필요한 남은 인프라 의존성.
+- **상태 구분:** GitHub [Draft PR #970](https://github.com/andrawing1212/soridraw-music/pull/970) 미병합, 실제 `preview` HEAD `028e51a2d52b50e1f021dd6d689268518077c2e1` 유지. Functions **코드 수정 배포 0**, PREVIEW Hosting 배포 0, Explore Worker 활성 버전 `350ce33d-ec83-49d0-a4ae-c25d2d90f59e` 100% 불변, APP607 비배포 버전 `ff21c3f1-bd28-45a9-845d-31b37d78636a` 및 독립 OFF Worker `e274388f-8075-473d-b3a0-6e78eb67f353` 재사용. 공유 D1/R2/Auth/RTDB/Rules 및 TEST/PRODUCTION 변경 없음. GHA CI 실패 ≠ 실제 사용자 장애.
+- **다음 필요 작업:** 관리자 Cloud Shell의 기존 권한으로 세 Functions만 좁게 배포할 수 있는 안전한 경로를 확인해 복구 가능하고 단일 대상만 활성화되는 조건을 검증한 뒤 PREVIEW Hosting·실제 소유자 A PC/모바일 수신과 B 팔로우·취소를 확인. 권한 확보 전에는 Functions/Hosting/Workers 카나리 ON 강행 금지. APP601~607 및 APP608 과거 PASS 불필요 재검사 금지.
+
+---
+
 ## CURRENT — APP607 내부 전용 Worker 연결 코드·비배포 버전 PASS / 실사용 활성화 HOLD (2026-11-13 KST)
 
 - **소스 및 workerd 검사 PASS:** [APP607 Actions #43434152083](https://github.com/andrawing1212/soridraw-music/actions/runs/43434152083). 활성 Explore Worker 2,440,556바이트 정확 보존, 기존 Auth307/Like DO v1 재사용, 전용 `OwnerFollowReplayEntrypoint607` named Service Binding (공개 HTTP 라우트 없음), 기존 GET/OPTIONS/POST 경로 동작 및 Like DO 격리 비교 PASS. APP557 정본 precommit·APP601 private replay 재사용, canary UID 해시·PREVIEW·수신점 준비·HMAC/Service Binding/ON 명시 가드. 현재 실제 바인딩·환경변수 미설정이므로 기능 OFF.

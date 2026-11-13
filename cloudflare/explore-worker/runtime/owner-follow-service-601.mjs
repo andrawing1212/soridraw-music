@@ -85,7 +85,7 @@ export async function reserveOwnerFollowViaService601(ticket,env,{
 // Worker must not forward arbitrary client requests or bind public routes.
 export async function handleOwnerFollowReplayService601({
  request,env,enabled=APP601_OWNER_SERVICE_WIRING_COMPILED_OPEN,
- now=Date.now,send=fetch,
+ now=Date.now,send=fetch,allowedCanaryUid=null,
 }={}){
  if(!active(env,enabled))return reply(503,{ok:false,status:'disabled'});
  const url=new URL(request.url);
@@ -95,6 +95,11 @@ export async function handleOwnerFollowReplayService601({
  const parsed=await readBounded(request,MAX_REPLAY_BYTES);
  if(!parsed.value)return reply(parsed.status,{ok:false});
  if(!validTicket(parsed.value))return reply(400,{ok:false,status:'invalid-reservation'});
+ // APP607: a named, internal-only entrypoint MUST never replay a ticket
+ // for a noncanary even if an internal token/service identity is compromised.
+ // This check precedes all D1/R2/Function operations.
+ if(allowedCanaryUid!==null&&parsed.value.ownerUid!==allowedCanaryUid)
+  return reply(403,{ok:false,status:'wrong-owner'});
  // APP557 validates the exact R2 settled pair identity; APP555 validates
  // settled owner R2, incarnation in D1, and signed Firebase response.
  let result;

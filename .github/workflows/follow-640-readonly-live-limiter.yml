@@ -1,0 +1,65 @@
+name: SORIDRAW APP640 READONLY Live Follow Limiter Source
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/follow-640-readonly-live-limiter.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: GET-only inspect actual PREVIEW follow limiter function
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          import {createHash} from 'node:crypto';
+          const ACCOUNT='e1a30fc9ef497fda1d34f4ab3dc1da45';
+          const NAME='soridraw-explore-preview';
+          const EXPECTED='6437d86a-09c5-4ff0-8be5-ecfabd4a1f77';
+          const token=String(process.env.CLOUDFLARE_API_TOKEN||'');
+          const halt=x=>{throw Error('APP640_HOLD_'+x)};
+          if(process.env.GITHUB_REF!=='refs/heads/preview'||
+             process.env.CLOUDFLARE_ACCOUNT_ID!==ACCOUNT||token.length<20)halt('CONTEXT');
+          async function get(p){
+           const r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+ACCOUNT+'/'+p,{
+            headers:{Authorization:'Bearer '+token,Accept:'application/json'},
+            signal:AbortSignal.timeout(25000)});
+           const j=await r.json();
+           if(!r.ok||j.success!==true)halt('GET_'+r.status);
+           return j.result;
+          }
+          const d=await get('workers/scripts/'+NAME+'/deployments?per_page=1');
+          const v=d?.deployments?.[0]?.versions;
+          if(v?.length!==1||v[0]?.version_id!==EXPECTED||Number(v[0].percentage)!==100)
+           halt('PREVIEW_ACTIVE_VERSION_DRIFT');
+          const w=await get('workers/workers/'+NAME+'/versions/'+EXPECTED+'?include=modules');
+          if(w?.modules?.length!==12)halt('MODULE_SET');
+          const terms=['enforceFollowEdgeRateLimit355','consumeSocialAbuse380','socialAbuseLimited380',
+           'FOLLOW_ABUSE_GUARD_380','RATE_LIMITED','follow:'];
+          for(const m of w.modules){
+           const t=Buffer.from(m.content_base64||'','base64').toString('utf8');
+           const matches=terms.map(x=>[x,t.split(x).length-1]).filter(x=>x[1]>0);
+           if(matches.length===0)continue;
+           console.log('APP640_MODULE='+m.name+';MATCHES='+JSON.stringify(matches));
+           for(const term of ['enforceFollowEdgeRateLimit355','consumeSocialAbuse380']){
+            const p=t.indexOf(term);
+            if(p<0)continue;
+            const chunk=t.slice(Math.max(0,p-80),Math.min(t.length,p+1150))
+             .replace(/[A-Za-z0-9_-]{30,}/g,'<redacted>');
+            console.log('APP640_SOURCE_CONTEXT_'+term+'='+JSON.stringify(chunk));
+           }
+           console.log('APP640_MODULE_SHA256='+createHash('sha256').update(t).digest('hex'));
+          }
+          console.log('APP640_GET_ONLY_SOURCE_INSPECTION=PASS');
+          console.log('APP640_NO_DATA_OR_WORKER_MUTATION=PASS');
+          NODE

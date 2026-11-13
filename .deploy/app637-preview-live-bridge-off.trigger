@@ -1,0 +1,10 @@
+mode=stage-from-current-live-and-disable-only-bridge
+approved_preview_parent=2c1211d4a74f81b743f7dac110b1ed9731377eb9
+live_version=5d0f74b1-84bf-4f96-a9e4-51bea25736fa
+preview_only=true
+force_rollback=false
+inherit_current_live_secrets=true
+change_only=SORIDRAW_OWNER_FOLLOW_BRIDGE_READY_607:1_to_0
+approved_by=director_yes_follow_restore_and_simplify_2026-11-14
+shared_data_change=false
+test_production_deploy=false

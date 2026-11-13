@@ -1,0 +1,8 @@
+mode=safe-off-preflight-cors-100-and-owner-candidate-0
+approved_preview_parent=4a3ef425b2573fb0928842020d2a5f466db04d78
+safe_off_version=73f64a79-6cac-441b-9906-9ea9e32db66d
+candidate_version=6b13cde4-4a53-42d2-873f-361f7cf5a931
+app643_preflight_only_for_owner_route_and_preview_origin=true
+auth_canonical_like_and_billing_guards_unchanged=true
+no_migrations_no_data_changes=true
+director_approval=YES_20261114_single_owner_test_connection

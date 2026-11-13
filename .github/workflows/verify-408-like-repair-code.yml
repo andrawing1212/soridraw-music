@@ -426,6 +426,8 @@ jobs:
           node scripts/verify-notification-release-readiness-005.mjs
           node scripts/verify-notification-unified-inbox-004.mjs
           node scripts/verify-notification-trigger-economics-008.mjs
+      - name: APP644 one-owner version override opt-in gate (no network)
+        run: npx tsx scripts/verify-644-owner-version-override.ts
       - name: TypeScript
         run: npm run lint
       - name: Build

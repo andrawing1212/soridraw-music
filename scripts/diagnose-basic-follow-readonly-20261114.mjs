@@ -201,6 +201,38 @@ async function inspectFollowMutationSqlAndSchema(){
   console.log('BASIC_FOLLOW_SCHEMA_'+i+'='+JSON.stringify(x.results).slice(0,13000));
  }
 }
+async function explainExactFollowUpsertReadonly(){
+ const sql=`EXPLAIN WITH baseline(following) AS (
+ SELECT EXISTS(SELECT 1 FROM follows WHERE follower_uid=? AND following_uid=?)
+ ) INSERT INTO explore_follow_overrides_348(
+ follower_uid,following_uid,following,baseline_following,updated_at,mutation_id
+ ) SELECT ?,?,?,baseline.following,?,? FROM baseline
+ WHERE baseline.following <> ? OR EXISTS(
+ SELECT 1 FROM explore_follow_overrides_348 WHERE follower_uid=? AND following_uid=?
+ ) ON CONFLICT(follower_uid,following_uid) DO UPDATE SET
+ following=excluded.following,updated_at=excluded.updated_at,
+ mutation_id=excluded.mutation_id
+ WHERE explore_follow_overrides_348.updated_at < excluded.updated_at
+ AND explore_follow_overrides_348.following <> excluded.following`;
+ const params=['synthetic_actor','synthetic_target','synthetic_actor',
+ 'synthetic_target',1,1,'synthetic_probe_0123456789',1,
+ 'synthetic_actor','synthetic_target'];
+ assert(sql.startsWith('EXPLAIN ')&&params.length===10,'EXPLAIN_NO_WRITE_SCOPE');
+ const r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+account+
+ '/d1/database/'+db+'/query',{method:'POST',
+ headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+ body:JSON.stringify({sql,params}),signal:AbortSignal.timeout(25000)});
+ let j;try{j=await r.json()}catch{j={}};
+ const result=j?.result?.[0],error=j?.errors?.[0]?.message||result?.error||'';
+ const allowed=String(error).replace(/[A-Za-z0-9_-]{25,}/g,'[id]').slice(0,250);
+ console.log('BASIC_FOLLOW_EXACT_UPSERT_EXPLAIN='+JSON.stringify({
+  http:r.status,success:j?.success===true,sqlPrepared:result?.success===true,
+  metaWritten:result?.meta?.rows_written??null,opcodeRows:result?.results?.length||0,
+  error:allowed
+ }));
+ assert(!result||result.meta?.rows_written===0||result.success!==true,
+  'EXPLAIN_WRITES_NOT_ALLOWED');
+}
 async function run(){
  assert(process.argv[2]==='--live'&&process.env.GITHUB_ACTIONS==='true'&&
   process.env.CLOUDFLARE_ACCOUNT_ID===account&&token.length>20,'ACTION_CONTEXT');
@@ -221,6 +253,7 @@ async function run(){
  await inspectFrozenCanonical();
  await inspectDeployedFollowStack();
  await inspectFollowMutationSqlAndSchema();
+ await explainExactFollowUpsertReadonly();
  await queryFollowTelemetryDry();
  console.log('BASIC_FOLLOW_NO_USER_MUTATIONS_NO_BACKEND_DEPLOYS=PASS');
  if(!p||!d)throw Error('BASIC_FOLLOW_BROWSER_PREFLIGHT_FAIL');

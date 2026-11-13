@@ -45,7 +45,7 @@ gcloud secrets list --project="$PROJECT" --format='value(name)' --limit=10000 >"
 for secret in "${SECRETS[@]}"; do
   if awk -F/ -v n="$secret" '$NF==n{found=1} END{exit !found}' "$TMP/secrets"; then
     gcloud secrets describe "$secret" --project="$PROJECT" --format='value(name)' >/dev/null || fail "EXISTING_SECRET_INACCESSIBLE_${secret}"
-    gcloud secrets versions list "$secret" --project="$PROJECT" --format='value(state)' | grep -Fxq ENABLED || fail "EXISTING_SECRET_VERSION_NOT_ENABLED_${secret}"
+    gcloud secrets versions list "$secret" --project="$PROJECT" --format='value(state)' | grep -Fxiq ENABLED || fail "EXISTING_SECRET_VERSION_NOT_ENABLED_${secret}"
     say "APP593_EXISTING_SECRET_PRESERVED_${secret}=PASS"
   else
     say "APP593_MISSING_SECRET_TO_CREATE_${secret}=READY"

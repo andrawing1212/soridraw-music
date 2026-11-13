@@ -1,0 +1,54 @@
+name: SORIDRAW APP630 One Owner PREVIEW Canonical Explore Rollout
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - 'scripts/deploy-630-one-owner-explore.mjs'
+      - '.github/workflows/follow-630-explore-one-owner.yml'
+      - '.deploy/app630-one-owner-explore.trigger'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app630-exclusive-preview-explore
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exact one-trigger and source pin
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only HEAD^ HEAD)"
+          if [ "$changed" != '.deploy/app630-one-owner-explore.trigger' ]; then
+            echo release=false >> "$GITHUB_OUTPUT"
+            echo APP630_NO_TRIGGER_NO_MUTATION=PASS
+            exit 0
+          fi
+          printf 'approved_parent=%s\n' "$(git rev-parse HEAD^)" | cmp -s - .deploy/app630-one-owner-explore.trigger
+          diff="$(git diff --name-only 765143bdad5eed514b444bb95338ead0d06d23d6 HEAD^)"
+          for p in 'scripts/deploy-630-one-owner-explore.mjs' '.github/workflows/follow-630-explore-one-owner.yml'; do grep -Fxq "$p" <<< "$diff"; done
+          test "$(printf '%s\n' "$diff" | wc -l)" -eq 2
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = 028e51a2d52b50e1f021dd6d689268518077c2e1
+          echo release=true >> "$GITHUB_OUTPUT"
+      - name: Only source syntax, no backend call
+        run: |
+          node --check scripts/deploy-630-one-owner-explore.mjs
+          node scripts/deploy-630-one-owner-explore.mjs --source-only
+      - name: Promote one-owner wrapper with original 23 bindings, same Like DO
+        if: steps.gate.outputs.release == 'true'
+        env:
+          APP630_APPROVED_PARENT: ${{ github.event.before }}
+        run: node scripts/deploy-630-one-owner-explore.mjs --apply-once

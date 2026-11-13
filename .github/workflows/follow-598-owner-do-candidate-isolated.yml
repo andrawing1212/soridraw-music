@@ -10,6 +10,7 @@ on:
     branches: [preview]
     paths:
       - '.github/workflows/follow-598-owner-do-candidate-isolated.yml'
+      - 'scripts/app598-owner-do-off-candidate.mjs'
 permissions:
   contents: read
 concurrency:

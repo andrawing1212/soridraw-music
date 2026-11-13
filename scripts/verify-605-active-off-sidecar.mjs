@@ -287,8 +287,31 @@ async function upload(){
  console.log('APP605_EXISTING_WORKER_ACTIVE_STILL_100_PERCENT=PASS');
  console.log('APP605_REAL_USER_FOLLOW_SYNC=HOLD_OFF');
 }
+function auditStructure(){
+ const root=tempDir();
+ const original=readFileSync(join(root,'baseline',MAIN),'utf8');
+ const candidate=readFileSync(join(root,'candidate',MAIN),'utf8');
+ need(candidate.startsWith(original),'NOT_ACTUAL_ORIGINAL_PREFIX');
+ // Textual import path inventory, never print source/module paths.
+ // Counts are diagnostic, not full AST or runtime equivalence proof.
+ const paths=src=>[...src.matchAll(/(?:\bfrom\s*|\bimport\s*\(|\bimport\s*)(['"])([^'"]+)\1/g)]
+  .map(m=>m[2]);
+ const originalImports=paths(original);
+ const relativeUp=originalImports.filter(x=>x.startsWith('../'));
+ const relativeAny=originalImports.filter(x=>x.startsWith('./')||x.startsWith('../'));
+ const originalLikeClass=original.includes('ExploreLikeBatchScheduler103');
+ const candidateOwnerClasses=(candidate.match(/OwnerFollowerRecovery557/g)||[]).length;
+ console.log('APP605_ACTIVE_TEXTUAL_IMPORTS='+originalImports.length);
+ console.log('APP605_ACTIVE_TEXTUAL_UPLEVEL_IMPORTS='+relativeUp.length);
+ console.log('APP605_ACTIVE_TEXTUAL_RELATIVE_IMPORTS='+relativeAny.length);
+ console.log('APP605_ACTIVE_REFERENCES_LIKE_DO_CLASS='+originalLikeClass);
+ console.log('APP605_CANDIDATE_TEXTUAL_LEGACY_OWNER_REFERENCES='+candidateOwnerClasses);
+ console.log('APP605_OFF_SOURCE_BYTE_IDENTICAL_PREFIX=PASS');
+ console.log('APP605_MINIFLARE_WORKERD_FULL_PARITY=HOLD_PREVIOUS_FAILURE');
+}
 const mode=process.argv[2];
 if(mode==='--self-test')offline();
 else if(mode==='--prepare')await inspect();
+else if(mode==='--audit-structure')auditStructure();
 else if(mode==='--upload-once')await upload();
 else throw Error('APP605_UNAUTHORIZED_MODE');

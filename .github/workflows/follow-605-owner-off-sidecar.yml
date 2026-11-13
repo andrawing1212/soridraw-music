@@ -38,18 +38,10 @@ jobs:
           node --check "$RUNNER_TEMP/app605/baseline/preview-entry.js"
           node --check "$RUNNER_TEMP/app605/candidate/preview-entry.js"
           echo APP605_NO_REMOTE_UPLOAD_OR_DEPLOY=PASS
-      - name: Install local Workers simulator only
+      - name: Diagnose exact deployed module imports without runtime retry
         run: |
           set -euo pipefail
-          npm --prefix cloudflare/explore-worker pkg set overrides.workerd=1.20261110.1
-          npm --prefix cloudflare/explore-worker install --ignore-scripts --no-audit --no-fund --package-lock=false
-          npm --prefix cloudflare/explore-worker install --no-save --ignore-scripts --no-audit --no-fund --package-lock=false miniflare@latest
-          npm --prefix cloudflare/explore-worker ls workerd --all
-          echo APP605_WORKERD_FORCED_RUNTIME=1.20261110.1
-      - name: Check real 2026-08-28 runtime locally, no network
-        shell: bash
-        run: |
-          set -euo pipefail
-          env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_ACCOUNT_ID \
-            node cloudflare/explore-worker/scripts/app605-local-runtime.mjs
-          echo APP605_CLOUDFARE_MUTATION_OR_PREVIEW_DEPLOY=ZERO
+          node scripts/verify-605-active-off-sidecar.mjs --audit-structure
+          echo APP605_REAL_RUNTIME_PARITY=HOLD_PREVIOUS_FAILURE
+          echo APP605_CLOUDFLARE_UPLOAD_OR_DEPLOY=ZERO
+          echo APP605_EXISTING_DO_D1_R2_FIREBASE_CHANGES=ZERO

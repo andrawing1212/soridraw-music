@@ -111,6 +111,7 @@ import {
   readOwnerFollowerSeenVersion542,
   rememberOwnerFollowerSeenVersion542,
   subscribeExploreOwnerFollower542,
+  isApp608OwnerCanaryVisible,
 } from '../services/exploreOwnerFollowerSync542';
 
 import {
@@ -4181,7 +4182,8 @@ export default function ExplorePage() {
   useEffect(()=>{
     if(!EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED)return;
     const ownerUid=String(user?.uid||'').trim();
-    if(!ownerUid||profile?.uid!==ownerUid)return;
+    if(!ownerUid||profile?.uid!==ownerUid||
+       !isApp608OwnerCanaryVisible(ownerUid))return;
     let stopped=false;
     let visibleSubscription=false;
     let subscriptionGeneration=0;

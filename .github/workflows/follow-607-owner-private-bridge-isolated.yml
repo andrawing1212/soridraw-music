@@ -1,0 +1,53 @@
+name: SORIDRAW APP607 Private Two Worker Source Isolated
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - 'scripts/verify-607-private-owner-wrapper.mjs'
+      - 'cloudflare/explore-worker/experiments/owner-follow-entry-607.mjs'
+      - 'cloudflare/explore-worker/runtime/owner-follow-service-601.mjs'
+      - 'cloudflare/explore-worker/scripts/app607-runtime-private-entry.mjs'
+      - '.github/workflows/follow-607-owner-private-bridge-isolated.yml'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app607-private-bridge-no-deploy
+  cancel-in-progress: false
+jobs:
+  local:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Source safety and exact active Worker read-only preparation
+        run: |
+          set -euo pipefail
+          node --check scripts/verify-607-private-owner-wrapper.mjs
+          node --check cloudflare/explore-worker/experiments/owner-follow-entry-607.mjs
+          node --check cloudflare/explore-worker/scripts/app607-runtime-private-entry.mjs
+          node scripts/verify-607-private-owner-wrapper.mjs --self-test
+          node scripts/verify-605-active-off-sidecar.mjs --prepare
+          node scripts/verify-607-private-owner-wrapper.mjs --prepare
+          node --check "$RUNNER_TEMP/app607/preview-entry.mjs"
+          node --check "$RUNNER_TEMP/app607/owner-follow-entry-607.mjs"
+      - name: Install exact-date local Cloudflare runtime only
+        run: |
+          set -euo pipefail
+          npm --prefix cloudflare/explore-worker pkg set overrides.workerd=1.20261110.1
+          npm --prefix cloudflare/explore-worker install --ignore-scripts --no-audit --no-fund --package-lock=false
+          npm --prefix cloudflare/explore-worker install --no-save --ignore-scripts --no-audit --no-fund --package-lock=false miniflare@latest
+      - name: Test named private binding, Like DO and original public routes
+        run: |
+          set -euo pipefail
+          env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_ACCOUNT_ID \
+            node cloudflare/explore-worker/scripts/app607-runtime-private-entry.mjs
+          echo APP607_NO_CLOUDFLARE_UPLOAD_OR_DEPLOY=PASS
+          echo APP607_SHARED_D1_R2_FUNCTIONS_RULES_USER_DATA_CHANGES=ZERO

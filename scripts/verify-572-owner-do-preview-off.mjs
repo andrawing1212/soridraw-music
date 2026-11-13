@@ -22,7 +22,9 @@ const entry=readFileSync(root+'canonical/preview-entry.js','utf8');
 assert.ok(entry.includes("export {OwnerFollowerRecovery557} from '../runtime/owner-follow-do-557.mjs';"));
 assert.ok(entry.includes("APP557_OWNER_PRECOMMIT_COMPILED_OPEN &&"));
 assert.ok(entry.includes('const ownerFollowCanaryRoute574='));
-assert.ok(entry.includes('APP557_OWNER_PRECOMMIT_COMPILED_OPEN &&\n       ownerFollowCanaryRoute574 &&'));
+assert.ok(entry.includes('APP557_OWNER_PRECOMMIT_COMPILED_OPEN &&\n       APP601_OWNER_SERVICE_WIRING_COMPILED_OPEN &&\n       ownerFollowCanaryRoute574 &&'));
+assert.ok(readFileSync(root+'runtime/owner-follow-service-601.mjs','utf8')
+ .includes('export const APP601_OWNER_SERVICE_WIRING_COMPILED_OPEN=false;'));
 assert.ok(entry.includes('APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN &&\n       ownerFollowCanaryRoute574 &&'));
 assert.equal(entry.includes("'/owner-follow/reserve557'"),false,
  'DO_INTERNAL_ENDPOINT_MUST_NOT_BE_PUBLIC');

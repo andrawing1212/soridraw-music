@@ -1,0 +1,67 @@
+name: SORIDRAW APP632 Firebase One-Owner READY Env Only
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - '.github/workflows/follow-632-single-owner-functions-ready.yml'
+      - 'scripts/app631-activate-three-functions-env.mjs'
+      - '.deploy/app632-functions-ready.trigger'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app632-exact-3-functions-ready
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exact one-time approved release source and PREVIEW pin
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only HEAD^ HEAD)"
+          if [ "$changed" != '.deploy/app632-functions-ready.trigger' ]; then
+            echo release=false >> "$GITHUB_OUTPUT"
+            echo APP632_NO_TRIGGER_NO_SERVER_WRITE=PASS
+            exit 0
+          fi
+          printf 'approved_parent=%s\n' "$(git rev-parse HEAD^)" | cmp -s - .deploy/app632-functions-ready.trigger
+          diff="$(git diff --name-only 181ee10c3e1ea640f505ba0e03b55f740a0eb797 HEAD^)"
+          for path in 'scripts/app631-activate-three-functions-env.mjs' '.github/workflows/follow-632-single-owner-functions-ready.yml'; do
+            grep -Fxq "$path" <<< "$diff"
+          done
+          test "$(printf '%s\n' "$diff" | wc -l)" -eq 2
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = 028e51a2d52b50e1f021dd6d689268518077c2e1
+          echo "parent=$(git rev-parse HEAD^)" >> "$GITHUB_OUTPUT"
+          echo release=true >> "$GITHUB_OUTPUT"
+      - name: Verify source and current exact three-scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/app631-activate-three-functions-env.mjs
+          node scripts/app631-activate-three-functions-env.mjs --self-test
+      - uses: google-github-actions/auth@v2
+        if: steps.gate.outputs.release == 'true'
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+      - uses: google-github-actions/setup-gcloud@v2
+        if: steps.gate.outputs.release == 'true'
+      - name: Attempt exact three existing Functions env patch with same secret bindings
+        if: steps.gate.outputs.release == 'true'
+        env:
+          APP632_APPROVED_PARENT: ${{ steps.gate.outputs.parent }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/app631-activate-three-functions-env.mjs --apply-ci
+          echo APP632_NO_CLOUDFLARE_FIREBASE_AUTH_RTDB_RULES_D1_R2_USER_DATA_CHANGES=PASS

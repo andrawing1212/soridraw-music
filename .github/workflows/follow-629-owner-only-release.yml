@@ -1,0 +1,55 @@
+name: SORIDRAW APP629 Nonpublic Owner Worker Release
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - 'scripts/deploy-629-owner-only.mjs'
+      - '.github/workflows/follow-629-owner-only-release.yml'
+      - '.deploy/app629-owner-only.trigger'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app629-single-owner-release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exact one-shot pin, only owner Worker target
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only HEAD^ HEAD)"
+          if [ "$changed" != '.deploy/app629-owner-only.trigger' ]; then
+            echo release=false >> "$GITHUB_OUTPUT"
+            echo APP629_NO_TRIGGER_NO_RELEASE=PASS
+            exit 0
+          fi
+          printf 'approved_parent=%s\n' "$(git rev-parse HEAD^)" | cmp -s - .deploy/app629-owner-only.trigger
+          diff="$(git diff --name-only bd7a047e98d6b2921db1265446ab9d91ca5a6cb4 HEAD^)"
+          for path in 'scripts/deploy-629-owner-only.mjs' '.github/workflows/follow-629-owner-only-release.yml'; do grep -Fxq "$path" <<< "$diff"; done
+          test "$(printf '%s\n' "$diff" | wc -l)" -eq 2
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = 028e51a2d52b50e1f021dd6d689268518077c2e1
+          echo release=true >> "$GITHUB_OUTPUT"
+      - name: Source-only verification
+        run: |
+          set -euo pipefail
+          node --check scripts/deploy-629-owner-only.mjs
+          node scripts/deploy-629-owner-only.mjs --source-only
+      - name: Deploy isolated owner Worker only, no Explore modification
+        if: steps.gate.outputs.release == 'true'
+        env:
+          APP629_APPROVED_PARENT: ${{ github.event.before }}
+        run: node scripts/deploy-629-owner-only.mjs --deploy-once

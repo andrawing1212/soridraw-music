@@ -1,0 +1,44 @@
+name: SORIDRAW APP604 Exact Active Worker Readonly Attestation
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - 'scripts/verify-604-active-version-candidate.mjs'
+      - '.github/workflows/follow-604-active-worker-readonly.yml'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app604-immutable-active-readonly
+  cancel-in-progress: false
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Source-only negative controls
+        run: |
+          set -euo pipefail
+          node --check scripts/verify-604-active-version-candidate.mjs
+          node scripts/verify-604-active-version-candidate.mjs --self-test
+      - name: Inspect exact active module, DO v1, 23 LIVE bindings using GET only
+        run: |
+          set -euo pipefail
+          node scripts/verify-604-active-version-candidate.mjs --inspect
+          echo 'APP604_CLOUDFLARE_POST_UPLOAD_DEPLOY=ZERO'
+          echo 'APP604_SHARED_WORKER_DO_D1_R2_FIREBASE_WRITE=ZERO'
+      - name: Retain only non-secret source and metadata attestation
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app604-active-module-readonly-proof
+          path: ${{ runner.temp }}/app604-source-proof.json
+          retention-days: 1

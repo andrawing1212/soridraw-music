@@ -1,0 +1,62 @@
+name: SORIDRAW APP631 Admin Firebase Canary Env Only Source
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - 'scripts/app631-activate-three-functions-env.mjs'
+      - '.github/workflows/follow-631-admin-env-source.yml'
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Source-only exact function scope and API mask
+        run: |
+          set -euo pipefail
+          node --check scripts/app631-activate-three-functions-env.mjs
+          node scripts/app631-activate-three-functions-env.mjs --self-test
+          grep -Fq 'updateMask=serviceConfig.environmentVariables' scripts/app631-activate-three-functions-env.mjs
+          grep -Fq 'CONCURRENT_FUNCTION_CONFIG_DRIFT_' scripts/app631-activate-three-functions-env.mjs
+          grep -Fq 'APP631_THREE_FUNCTIONS_READY_ONE_OWNER=PASS' scripts/app631-activate-three-functions-env.mjs
+          echo APP631_BACKEND_NOT_MUTATED_IN_CI=PASS
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Read-only exact three Function states and required PATCH etags
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in publishExploreOwnerFollower542 enrollOwnerFollow544Candidate verifyOwnerFollowEpoch547Candidate; do
+            gcloud functions describe "$name" --gen2 --project soridraw-app-866a5 --region asia-northeast3 --format=json > "$RUNNER_TEMP/$name.json"
+            NAME="$name" python3 - <<'PY'
+          import json,os
+          name=os.environ['NAME']
+          data=json.load(open(os.environ['RUNNER_TEMP']+'/'+name+'.json'))
+          cfg=data.get('serviceConfig') or {}
+          env=cfg.get('environmentVariables') or {}
+          secrets=cfg.get('secretEnvironmentVariables') or []
+          secret='SORIDRAW_OWNER_FOLLOW_HMAC_539' if name=='publishExploreOwnerFollower542' else 'SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544'
+          if data.get('state')!='ACTIVE' or data.get('environment')!='GEN_2':
+            raise SystemExit('APP631_HOLD_STATE_OR_GENERATION_'+name)
+          if not isinstance(data.get('updateTime'),str) or len(data['updateTime'])<20:
+            raise SystemExit('APP631_HOLD_MISSING_UPDATE_TIME_'+name)
+          if env.get('SORIDRAW_OWNER_FOLLOW_READY_608')=='1':
+            raise SystemExit('APP631_HOLD_ALREADY_READY_'+name)
+          if not any(s.get('key')==secret or s.get('secret')==secret for s in secrets):
+            raise SystemExit('APP631_HOLD_HMAC_METADATA_'+name)
+          if not str(cfg.get('uri','')).startswith('https://'):
+            raise SystemExit('APP631_HOLD_URI_'+name)
+          print('APP631_READONLY_CLOUD_FUNCTION_API_SHAPE_'+name+'=PASS')
+          PY
+          done
+          echo APP631_READONLY_NO_FUNCTION_ENV_CHANGE=PASS

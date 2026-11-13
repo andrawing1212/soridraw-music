@@ -43,8 +43,9 @@ import {APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN,deliverOwnerFollowPostcommit555
  from '../runtime/owner-follow-postcommit-555.mjs';
 import {APP557_OWNER_PRECOMMIT_COMPILED_OPEN,runOwnerFollowPrecommit557}
  from '../runtime/owner-follow-precommit-557.mjs';
-import {reserveOwnerFollowViaDo557}
- from '../runtime/owner-follow-do-557.mjs';
+import {APP601_OWNER_SERVICE_WIRING_COMPILED_OPEN,
+ reserveOwnerFollowViaService601,handleOwnerFollowReplayService601}
+ from '../runtime/owner-follow-service-601.mjs';
 // APP572: export the previously isolated per-owner DO class for the PREVIEW
 // candidate bundle. Both the DO engine and follow precommit remain OFF by
 // default and require their explicit env gate for any write.
@@ -3386,6 +3387,11 @@ export default {
 
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // APP601: private reverse service-bound replay route. Source-gated OFF;
+    // no publicly callable replay, canonical R2 lookup or Firebase send.
+    if(APP601_OWNER_SERVICE_WIRING_COMPILED_OPEN &&
+       url.pathname==='/owner-follow/replay557-internal')
+      return handleOwnerFollowReplayService601({request,env,enabled:true});
     // APP544: HMAC-authenticated Firebase Admin epoch registration route.
     // Compile gate OFF; no new Worker path, D1 access or secret in service.
     if(APP544_OWNER_EPOCH_BIND_COMPILED_OPEN &&
@@ -3697,6 +3703,7 @@ export default {
     // The original canonical Worker remains unchanged for all active traffic.
     let response;
     if(APP557_OWNER_PRECOMMIT_COMPILED_OPEN &&
+       APP601_OWNER_SERVICE_WIRING_COMPILED_OPEN &&
        ownerFollowCanaryRoute574 &&
        !APP555_OWNER_POSTCOMMIT_W2_COMPILED_OPEN &&
        !OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN &&
@@ -3708,7 +3715,8 @@ export default {
       response=await runOwnerFollowPrecommit557({
         request,env,ctx,authenticate:validateExploreAuth307,
         callCanonical:(canonicalRequest=request)=>baseWorker.fetch(canonicalRequest,env,ctx),
-        reserve:reserveOwnerFollowViaDo557,enabled:true,
+        reserve:(ticket)=>reserveOwnerFollowViaService601(ticket,env,{enabled:true}),
+        enabled:true,
       });
     }else{
       response=await baseWorker.fetch(request,env,ctx);

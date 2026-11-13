@@ -1,0 +1,57 @@
+name: SORIDRAW APP602 Existing Worker Safe Release Readonly
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - 'scripts/verify-602-owner-release-readonly.mjs'
+      - '.github/workflows/follow-602-owner-release-readonly.yml'
+      - 'cloudflare/owner-follow-worker/APP602_RELEASE_PLAN.md'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app602-branch-only-readonly
+  cancel-in-progress: false
+jobs:
+  local:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate only the existing Worker rollback-safe source candidate
+        run: |
+          set -euo pipefail
+          node --check scripts/verify-602-owner-release-readonly.mjs
+          node scripts/verify-602-owner-release-readonly.mjs --self-test
+  live:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feat/app600-owner-standalone-isolated'
+    needs: local
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compare pinned active version, exact bindings and rollback target (GET only)
+        run: |
+          set -euo pipefail
+          node scripts/verify-602-owner-release-readonly.mjs --live-readonly
+          echo APP602_WORKER_VERSION_UPLOAD_OR_DEPLOY=ZERO
+          echo APP602_DO_MIGRATION_OR_SHARED_DATA_WRITE=ZERO
+      - name: Retain sanitized non-secret read-only evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app602-owner-release-safe-readonly
+          path: ${{ runner.temp }}/app602-readonly-evidence.json
+          retention-days: 1

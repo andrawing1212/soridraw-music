@@ -1,0 +1,126 @@
+name: SORIDRAW APP615 Three Existing Owner Functions Code Ready OFF
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - '.github/workflows/follow-615-three-functions-code-only.yml'
+      - '.deploy/app615-three-functions-code-only.trigger'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app615-one-shot-three-functions
+  cancel-in-progress: false
+jobs:
+  scoped:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      FIREBASE_PROJECT: soridraw-app-866a5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exactly one guarded release from APP614 tested source
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only HEAD^ HEAD)"
+          if [ "$changed" != '.deploy/app615-three-functions-code-only.trigger' ]; then
+            echo 'stage=false' >> "$GITHUB_OUTPUT"
+            echo APP615_NO_TRIGGER_NO_FIREBASE_WRITE=PASS
+            exit 0
+          fi
+          printf 'approved_parent=%s\n' "$(git rev-parse HEAD^)" | cmp -s - .deploy/app615-three-functions-code-only.trigger
+          source_diff="$(git diff --name-only 9ee92e5319c8e6dd923748532ac6d73948515e8f HEAD^)"
+          test "$(printf '%s\n' "$source_diff" | wc -l)" -eq 2
+          grep -Fxq '.github/workflows/follow-615-three-functions-code-only.yml' <<< "$source_diff"
+          grep -Fxq 'scripts/app615-scoped-functions-main.mjs' <<< "$source_diff"
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = '028e51a2d52b50e1f021dd6d689268518077c2e1'
+          echo 'stage=true' >> "$GITHUB_OUTPUT"
+          echo APP615_EXACT_SOURCE_AND_PREVIEW_PROVEN=PASS
+      - name: Build and isolate only three compiled-on but runtime-off functions
+        if: steps.gate.outputs.stage == 'true'
+        run: |
+          set -euo pipefail
+          npm ci --prefix functions --no-audit --no-fund
+          npm run build --prefix functions
+          node scripts/app615-scoped-functions-main.mjs
+          node - <<'NODE'
+          const assert=require('node:assert/strict');
+          const pkg=require('./functions/package.json');
+          assert.equal(pkg.main,'lib/ownerFollowOnlyEntry615.js');
+          const exports=require('./functions/'+pkg.main);
+          const names=['enrollOwnerFollow544Candidate','publishExploreOwnerFollower542','verifyOwnerFollowEpoch547Candidate'];
+          assert.deepEqual(Object.keys(exports).sort(),names);
+          assert.equal(Object.keys(require.cache).some(x=>x.endsWith('/securedIndex.js')),false);
+          console.log('APP615_EPHEMERAL_THREE_EXPORTS_UNRELATED_SECRET_IMPORT_ZERO=PASS');
+          NODE
+      - uses: google-github-actions/auth@v2
+        if: steps.gate.outputs.stage == 'true'
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+      - uses: google-github-actions/setup-gcloud@v2
+        if: steps.gate.outputs.stage == 'true'
+      - name: Read-only three function revisions, READY OFF and attached owner secrets
+        if: steps.gate.outputs.stage == 'true'
+        run: |
+          set -euo pipefail
+          test "$(gcloud projects describe "$FIREBASE_PROJECT" --format='value(projectId)')" = "$FIREBASE_PROJECT"
+          for name in publishExploreOwnerFollower542 enrollOwnerFollow544Candidate verifyOwnerFollowEpoch547Candidate; do
+            gcloud functions describe "$name" --gen2 --region asia-northeast3 --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/app615-$name-before.json"
+            NAME="$name" python3 - <<'PY'
+          import json,os
+          name=os.environ['NAME']
+          p=json.load(open(os.environ['RUNNER_TEMP']+'/app615-'+name+'-before.json'))
+          if p.get('state')!='ACTIVE':raise SystemExit('APP615_ORIGINAL_NOT_ACTIVE_HOLD')
+          if p.get('serviceConfig',{}).get('environmentVariables',{}).get('SORIDRAW_OWNER_FOLLOW_READY_608')=='1':
+            raise SystemExit('APP615_UNEXPECTED_ALREADY_ACTIVE_HOLD')
+          secret='SORIDRAW_OWNER_FOLLOW_HMAC_539' if name=='publishExploreOwnerFollower542' else 'SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544'
+          if not any(x.get('key')==secret or x.get('secret')==secret for x in p.get('serviceConfig',{}).get('secretEnvironmentVariables',[])):
+            raise SystemExit('APP615_MISSING_OWNER_SECRET_METADATA_HOLD')
+          if not p.get('updateTime'):raise SystemExit('APP615_MISSING_OLD_REVISION_TIME_HOLD')
+          print('APP615_EXISTING_FUNCTION_AND_OWNER_SECRET_READONLY_'+name+'=PASS')
+          PY
+          done
+      - name: Deploy only exact three functions without --force and inspect all revisions
+        if: steps.gate.outputs.stage == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          npx --yes firebase-tools@latest deploy \
+            --only 'functions:publishExploreOwnerFollower542,functions:enrollOwnerFollow544Candidate,functions:verifyOwnerFollowEpoch547Candidate' \
+            --project "$FIREBASE_PROJECT" --config firebase.json --non-interactive
+          cli_status=$?
+          set -e
+          echo "APP615_FIREBASE_CLI_EXIT=$cli_status"
+          for name in publishExploreOwnerFollower542 enrollOwnerFollow544Candidate verifyOwnerFollowEpoch547Candidate; do
+            gcloud functions describe "$name" --gen2 --region asia-northeast3 --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/app615-$name-after.json"
+            NAME="$name" python3 - <<'PY'
+          import json,os
+          name=os.environ['NAME']
+          root=os.environ['RUNNER_TEMP']+'/app615-'+name
+          a=json.load(open(root+'-before.json'))
+          b=json.load(open(root+'-after.json'))
+          if b.get('state')!='ACTIVE':raise SystemExit('APP615_POST_ACTIVE_STATE_HOLD')
+          if b.get('updateTime','')<=a.get('updateTime',''):
+            raise SystemExit('APP615_FUNCTION_NOT_UPDATED_HOLD')
+          if b.get('serviceConfig',{}).get('environmentVariables',{}).get('SORIDRAW_OWNER_FOLLOW_READY_608')=='1':
+            raise SystemExit('APP615_SERVER_READY_MUST_REMAIN_OFF_HOLD')
+          s='SORIDRAW_OWNER_FOLLOW_HMAC_539' if name=='publishExploreOwnerFollower542' else 'SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544'
+          if not any(x.get('key')==s or x.get('secret')==s for x in b.get('serviceConfig',{}).get('secretEnvironmentVariables',[])):
+            raise SystemExit('APP615_EXISTING_HMAC_BINDING_LOST_HOLD')
+          print('APP615_THREE_FUNCTION_UPDATED_READY_OFF_'+name+'=PASS')
+          PY
+          done
+          echo APP615_SHARED_FIREBASE_THREE_FUNCTIONS_CODE_ONLY=PASS
+          echo APP615_CLOUDFLARE_RULES_D1_R2_AUTH_HOSTING_USER_DATA_CHANGES=ZERO
+          if [ "$cli_status" != 0 ]; then
+            echo APP615_FIREBASE_CLI_ERROR_AFTER_REVISION_UPDATES_REVIEW_ARTIFACT_POLICY=HOLD
+          fi

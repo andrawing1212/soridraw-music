@@ -1,7 +1,7 @@
 // APP544: Firebase Admin is the ONLY issuer of enrolled owner epochs.
 // APP572 exported for candidate build only; compiled OFF and not deployed.
 // Controlled enrollment is an explicit mutation, never a page-entry write.
-import {createHmac} from 'node:crypto';
+import {createHmac,createHash} from 'node:crypto';
 import {onCall,HttpsError} from 'firebase-functions/v2/https';
 import {defineSecret} from 'firebase-functions/params';
 import {getAuth,type Auth} from 'firebase-admin/auth';
@@ -9,7 +9,8 @@ import {getFirestore,type Firestore} from 'firebase-admin/firestore';
 import {
  enrollOwnerFollowEpoch534,readOwnerFollowLifecycleState534,
 } from './ownerFollowLifecycle534';
-export const APP544_ENROLLMENT_COMPILED_OPEN=false;
+export const APP544_ENROLLMENT_COMPILED_OPEN=true;
+const APP608_CANARY_SHA256='8b9cd603dc722a89765da05bfee9100b2645ecff290bf1f35ff4f0a1bf80fc2f';
 const KEY=defineSecret('SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544');
 const ENDPOINT='https://soridraw-explore-preview.andrawing1212.workers.dev/internal/owner-follow/epoch-544';
 const UID=/^[A-Za-z0-9_-]{1,128}$/,EPOCH=/^[0-9a-f]{32}$/;
@@ -87,7 +88,8 @@ export async function revokeDeletedOwnerBinding544({
 export const enrollOwnerFollow544Candidate=onCall({
  region:'asia-northeast3',enforceAppCheck:true,secrets:[KEY],
 },async request=>{
- if(!APP544_ENROLLMENT_COMPILED_OPEN)
+ if(!APP544_ENROLLMENT_COMPILED_OPEN||process.env.SORIDRAW_OWNER_FOLLOW_READY_608!=='1'||
+    createHash('sha256').update(String(process.env.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||'')).digest('hex')!==APP608_CANARY_SHA256)
   throw new HttpsError('unavailable','OWNER_FOLLOW_OFF');
  if(!request.auth?.uid)throw new HttpsError('unauthenticated','LOGIN_REQUIRED');
  // No implicit enrollment for ordinary logins or another tenant's user.

@@ -1,0 +1,133 @@
+name: SORIDRAW APP608 Shared Firebase Three Functions Canary Runtime OFF One-shot
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - '.github/workflows/follow-608-functions-canary-release.yml'
+      - '.deploy/app608-functions-canary-release-v2.trigger'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app608-three-functions-once
+  cancel-in-progress: false
+jobs:
+  scoped:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      FIREBASE_PROJECT: soridraw-app-866a5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: One-shot approved source lock and current protected app HEAD
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          FROZEN=ae3e0ea094d3d7405ed80f6eda95d0a56e834846
+          if [ "$(git diff --name-only HEAD^ HEAD)" != '.deploy/app608-functions-canary-release-v2.trigger' ]; then
+            echo 'stage=false' >> "$GITHUB_OUTPUT"
+            echo 'APP608_NO_FUNCTION_RELEASE_TRIGGER_NO_FIREBASE_WRITE=PASS'
+            exit 0
+          fi
+          printf 'approved_parent=%s\n' "$(git rev-parse HEAD^)" | cmp -s - .deploy/app608-functions-canary-release-v2.trigger
+          changed="$(git diff --name-only "$FROZEN" HEAD^)"
+          test "$(printf '%s\n' "$changed" | wc -l)" -eq 2
+          grep -Fxq '.deploy/app608-functions-canary-release.trigger' <<< "$changed"
+          grep -Fxq '.github/workflows/follow-608-functions-canary-release.yml' <<< "$changed"
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = '028e51a2d52b50e1f021dd6d689268518077c2e1'
+          echo 'stage=true' >> "$GITHUB_OUTPUT"
+          echo 'APP608_PINNED_APPROVED_SOURCE_AND_EXISTING_PREVIEW=PASS'
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.stage == 'true'
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - name: Build exactly audited Functions source
+        if: steps.gate.outputs.stage == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix functions --no-audit --no-fund
+          npm run build --prefix functions
+          node - <<'NODE'
+          const assert=require('node:assert/strict');
+          const fs=require('node:fs');
+          const {createHash}=require('node:crypto');
+          const SHA='8b9cd603dc722a89765da05bfee9100b2645ecff290bf1f35ff4f0a1bf80fc2f';
+          const names=['exploreOwnerFollowerWebhook542','ownerFollowEnrollment544','ownerFollowAuthProof547'];
+          for(const x of names){
+            const path='functions/src/'+x+'.ts',s=fs.readFileSync(path,'utf8');
+            assert.ok(s.includes("process.env.SORIDRAW_OWNER_FOLLOW_READY_608!=='1'"));
+            assert.ok(s.includes("process.env.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574"));
+            assert.ok(s.includes(SHA));
+          }
+          const exports=require('./functions/lib/securedIndex.js');
+          for(const name of ['publishExploreOwnerFollower542',
+            'enrollOwnerFollow544Candidate','verifyOwnerFollowEpoch547Candidate'])
+            assert.equal(typeof exports[name],'function',name);
+          console.log('APP608_BUILT_THREE_CANARY_GATED_FUNCTIONS=PASS');
+          NODE
+      - uses: google-github-actions/auth@v2
+        if: steps.gate.outputs.stage == 'true'
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+      - uses: google-github-actions/setup-gcloud@v2
+        if: steps.gate.outputs.stage == 'true'
+      - name: GET-only preflight exact shared project three existing OFF Functions and secrets
+        if: steps.gate.outputs.stage == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gcloud projects describe "$FIREBASE_PROJECT" --format='value(projectId)')" = "$FIREBASE_PROJECT"
+          for name in publishExploreOwnerFollower542 enrollOwnerFollow544Candidate verifyOwnerFollowEpoch547Candidate; do
+            gcloud functions describe "$name" --gen2 --region asia-northeast3 \
+              --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/app608-${name}-before.json"
+            NAME="$name" python3 - <<'PY'
+          import json,os
+          name=os.environ['NAME']
+          p=json.load(open(os.environ['RUNNER_TEMP']+f'/app608-{name}-before.json'))
+          if p.get('state')!='ACTIVE':
+            raise SystemExit('APP608_EXISTING_FUNCTION_NOT_ACTIVE_HOLD')
+          ev=p.get('serviceConfig',{}).get('environmentVariables',{})
+          if ev.get('SORIDRAW_OWNER_FOLLOW_READY_608')=='1':
+            raise SystemExit('APP608_UNEXPECTED_FUNCTION_ALREADY_ON_HOLD')
+          secret_links=p.get('serviceConfig',{}).get('secretEnvironmentVariables',[])
+          required='SORIDRAW_OWNER_FOLLOW_HMAC_539' if name=='publishExploreOwnerFollower542' else 'SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544'
+          if not any(x.get('key')==required or x.get('secret')==required for x in secret_links):
+            raise SystemExit('APP608_EXISTING_HMAC_ATTACHMENT_NOT_FOUND_HOLD')
+          print('APP608_EXISTING_FUNCTION_SECRET_ATTACHED_AND_READY_OFF_'+name+'=PASS')
+          PY
+          done
+          echo 'APP608_SHARED_FIREBASE_EXISTING_HMAC_METADATA_READONLY=PASS'
+      - name: Deploy ONLY exact three already-existing owner Functions (runtime OFF)
+        if: steps.gate.outputs.stage == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only 'functions:publishExploreOwnerFollower542,functions:enrollOwnerFollow544Candidate,functions:verifyOwnerFollowEpoch547Candidate' \
+            --project "$FIREBASE_PROJECT" --config firebase.json --non-interactive
+          echo APP608_THREE_OWNER_FUNCTIONS_DEPLOY_COMMAND_SUCCESS=PASS
+      - name: GET-only postflight ensure all are ACTIVE but runtime OFF
+        if: steps.gate.outputs.stage == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in publishExploreOwnerFollower542 enrollOwnerFollow544Candidate verifyOwnerFollowEpoch547Candidate; do
+            gcloud functions describe "$name" --gen2 --region asia-northeast3 \
+              --project "$FIREBASE_PROJECT" --format=json > "$RUNNER_TEMP/app608-${name}-after.json"
+            NAME="$name" python3 - <<'PY'
+          import json,os
+          p=json.load(open(os.environ['RUNNER_TEMP']+'/app608-'+os.environ['NAME']+'-after.json'))
+          assert p.get('state')=='ACTIVE','APP608_FUNCTION_INACTIVE'
+          ev=p.get('serviceConfig',{}).get('environmentVariables',{})
+          assert ev.get('SORIDRAW_OWNER_FOLLOW_READY_608')!='1','APP608_UNEXPECTED_RECEIVER_ENABLED'
+          print('APP608_FUNCTION_ACTIVE_AND_SERVER_READY_GATE_OFF=PASS')
+          PY
+          done
+          echo APP608_SHARED_DATA_RULES_WORKER_AND_TEST_PRODUCTION_DEPLOY=ZERO

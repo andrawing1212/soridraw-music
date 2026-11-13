@@ -1,0 +1,77 @@
+name: SORIDRAW APP604 Inactive Exact Explore Version One-shot
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - 'scripts/upload-604-inactive-version.mjs'
+      - '.github/workflows/follow-604-inactive-version-upload.yml'
+      - '.deploy/app604-inactive-version.trigger'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app604-inactive-once-no-deploy
+  cancel-in-progress: false
+jobs:
+  local:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify no-DO-migration and exact-inherit upload code
+        run: |
+          set -euo pipefail
+          node --check scripts/upload-604-inactive-version.mjs
+          node scripts/upload-604-inactive-version.mjs --self-test
+  staged-version:
+    needs: local
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require one-time approval commit and exact frozen preview
+        id: gate
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only HEAD^ HEAD)"
+          if [ "$changed" != '.deploy/app604-inactive-version.trigger' ]; then
+            echo 'stage=false' >> "$GITHUB_OUTPUT"
+            echo 'APP604_NO_ONE_SHOT_TRIGGER_NO_UPLOAD=PASS'
+            exit 0
+          fi
+          test -f .deploy/app604-inactive-version.trigger
+          parent="$(git rev-parse HEAD^)"
+          printf 'approved_source_commit=%s\n' "$parent" | cmp -s - .deploy/app604-inactive-version.trigger
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = '028e51a2d52b50e1f021dd6d689268518077c2e1'
+          echo "approved_parent=$parent" >> "$GITHUB_OUTPUT"
+          echo 'stage=true' >> "$GITHUB_OUTPUT"
+          echo 'APP604_ONE_SHOT_TRIGGER_EXACT_PARENT=PASS'
+      - name: Single nondeployed version upload, postflight byte and binding verification
+        if: steps.gate.outputs.stage == 'true'
+        env:
+          APP604_APPROVED_PARENT: ${{ steps.gate.outputs.approved_parent }}
+        run: |
+          set -euo pipefail
+          node scripts/upload-604-inactive-version.mjs --upload-once
+          echo 'APP604_TRAFFIC_DEPLOY_OR_DO_MIGRATION=ZERO'
+          echo 'APP604_SHARED_DATA_D1_R2_FIREBASE_WRITE=ZERO'
+      - name: Retain non-secret candidate proof (no source)
+        if: steps.gate.outputs.stage == 'true' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app604-nondeployed-version
+          path: ${{ runner.temp }}/app604-inactive-version.json
+          retention-days: 1

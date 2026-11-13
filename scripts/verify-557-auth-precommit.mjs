@@ -95,7 +95,12 @@ assert.equal(tally.d1W,0);
 const preview=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
 assert.match(preview,/APP557_OWNER_PRECOMMIT_COMPILED_OPEN &&/);
 assert.match(preview,/authenticate:validateExploreAuth307/);
-assert.match(preview,/reserve:reserveOwnerFollowViaDo557,enabled:true/);
+assert.match(preview,/APP601_OWNER_SERVICE_WIRING_COMPILED_OPEN &&/);
+assert.match(preview,/reserve:\(ticket\)=>reserveOwnerFollowViaService601\(ticket,env,\{enabled:true\}\)/);
+assert.doesNotMatch(preview,/reserve:reserveOwnerFollowViaDo557,enabled:true/,
+ 'legacy same-Worker DO must not be selected by the entry');
+assert.match(readFileSync('cloudflare/explore-worker/runtime/owner-follow-service-601.mjs','utf8'),
+ /export const APP601_OWNER_SERVICE_WIRING_COMPILED_OPEN=false;/);
 assert.match(preview,/response=await baseWorker.fetch\(request,env,ctx\)/);
 console.log('APP557_AUTHENTICATED_PRECOMMIT_BEFORE_CANONICAL=PASS');
 console.log('APP557_DISABLED_ZERO_IO_NOOP_NO_RESERVATION_AND_FAIL_CLOSED=PASS');

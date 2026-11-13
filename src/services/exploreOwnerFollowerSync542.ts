@@ -7,23 +7,27 @@ import {getFunctions,httpsCallable} from 'firebase/functions';
 import {onValue,ref as databaseRef,type Unsubscribe} from 'firebase/database';
 import {auth,realtimeDb} from '../firebase';
 
-export const EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED=false;
+export const EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED=true;
+export const APP608_APPROVED_CANARY_UID='rcZ2GZrBndOZzT8C635eiNBjYIJ2';
 // APP575: PREVIEW explicit QA URL only, never a general login/page-entry
 // registration, scan, poll or Firestore mutation. Kept OFF until server
 // canary UID, Rules, Functions and DO are safely installed and checked.
-export const APP575_OWNER_CANARY_BOOTSTRAP_ENABLED=false;
+export const APP575_OWNER_CANARY_BOOTSTRAP_ENABLED=true;
 export const shouldAttemptOwnerFollowCanary575=(
  hostname:string,search:string,enabled=APP575_OWNER_CANARY_BOOTSTRAP_ENABLED,
 )=>enabled&&hostname==='preview.soridraw.com'&&
  new URLSearchParams(search).get('ownerFollowCanary')==='1';
+export const isApp608OwnerCanaryVisible=(uid:string):boolean=>
+ uid===APP608_APPROVED_CANARY_UID&&
+ shouldAttemptOwnerFollowCanary575(
+   typeof window==='undefined'?'':window.location.hostname.toLowerCase(),
+   typeof window==='undefined'?'':window.location.search,
+ );
 const enrollmentAttempts575=new Map<string,Promise<boolean>>();
 const tryOwnerFollowCanaryEnrollment575=(
  uid:string,principal:NonNullable<typeof auth.currentUser>,
 ):Promise<boolean>=>{
- if(!shouldAttemptOwnerFollowCanary575(
-   typeof window==='undefined'?'':window.location.hostname.toLowerCase(),
-   typeof window==='undefined'?'':window.location.search,
- )||auth.currentUser!==principal)return Promise.resolve(false);
+ if(!isApp608OwnerCanaryVisible(uid)||auth.currentUser!==principal)return Promise.resolve(false);
  const key=uid;
  const prior=enrollmentAttempts575.get(key);
  if(prior)return prior;
@@ -70,11 +74,7 @@ export const subscribeExploreOwnerFollower542=async(
  // APP591: outside explicit PREVIEW QA opt-in, do not even inspect Auth.
  // This protects ordinary owners from extra token requests when compiled ON.
  if(!EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED||!UID.test(uid)||
-    !shouldAttemptOwnerFollowCanary575(
-      typeof window==='undefined'?'':window.location.hostname.toLowerCase(),
-      typeof window==='undefined'?'':window.location.search,
-      true,
-    ))return ()=>{};
+    !isApp608OwnerCanaryVisible(uid))return ()=>{};
  const principal=auth.currentUser;
  if(!principal||principal.uid!==uid)return ()=>{};
  let token;

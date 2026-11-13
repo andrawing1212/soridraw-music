@@ -25,7 +25,7 @@ const require=createRequire(import.meta.url);
 const ts=require('typescript');
 const {createHmac,timingSafeEqual}=require('node:crypto');
 const receiverSource=readFileSync('functions/src/exploreOwnerFollowerWebhook542.ts','utf8');
-const recvStart=receiverSource.indexOf('export const APP542_OWNER_HTTP_COMPILED_OPEN=false;');
+const recvStart=receiverSource.indexOf('export const APP542_OWNER_HTTP_COMPILED_OPEN=true;');
 const recvEnd=receiverSource.indexOf('export const publishExploreOwnerFollower542=',recvStart);
 assert.ok(recvStart>0&&recvEnd>recvStart,'MISSING_542_REAL_RECEIVER_BOUNDARY');
 const recvPure=receiverSource.slice(recvStart,recvEnd)
@@ -45,7 +45,7 @@ const {createOwnerEpochGate538,APP538_OWNER_CLIENT_GATE_COMPILED_OPEN}=
 assert.equal(APP557_OWNER_PRECOMMIT_COMPILED_OPEN,false);
 assert.equal(OWNER_FOLLOW_RECOVERY_556_COMPILED_OPEN,false);
 assert.equal(APP564_OWNER_FOLLOW_DO_BRIDGE_COMPILED_OPEN,false);
-assert.equal(APP542_OWNER_HTTP_COMPILED_OPEN,false);
+assert.equal(APP542_OWNER_HTTP_COMPILED_OPEN,true);
 assert.equal(APP538_OWNER_CLIENT_GATE_COMPILED_OPEN,false);
 let clock=1800000000000; const epoch='0123456789abcdef0123456789abcdef';
 const secret='APP560-ISOLATED-HMAC-SECRET-ONLY-00000000000000000';
@@ -401,7 +401,12 @@ env.OWNER_FOLLOW_RECOVERY_557=boundNS;
 const entry=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
 assert.match(entry,/APP557_OWNER_PRECOMMIT_COMPILED_OPEN &&/);
 assert.match(entry,/authenticate:validateExploreAuth307/);
-assert.match(entry,/reserve:reserveOwnerFollowViaDo557,enabled:true/);
+assert.match(entry,/APP601_OWNER_SERVICE_WIRING_COMPILED_OPEN &&/);
+assert.match(entry,/reserve:\(ticket\)=>reserveOwnerFollowViaService601\(ticket,env,\{enabled:true\}\)/);
+assert.doesNotMatch(entry,/reserve:reserveOwnerFollowViaDo557,enabled:true/,
+ 'unsafe same-Worker DO v2 must never be selected by the active entry');
+assert.match(readFileSync('cloudflare/explore-worker/runtime/owner-follow-service-601.mjs','utf8'),
+ /export const APP601_OWNER_SERVICE_WIRING_COMPILED_OPEN=false;/);
 assert.ok(entry.includes('response=await baseWorker.fetch(request,env,ctx)'), 'frozen canonical fallthrough must remain');
 assert.equal(entry.includes("'/owner-follow/reserve557'"),false,
  'internal Durable Object route must not be registered as public HTTP API');

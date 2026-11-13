@@ -1,0 +1,31 @@
+name: SORIDRAW APP616 Admin Three-Function Shell Syntax
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - 'scripts/app616-admin-three-owner-functions.sh'
+      - '.github/workflows/follow-616-admin-script-lint.yml'
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify administrator runbook shell without deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/app616-admin-three-owner-functions.sh
+          grep -Fq "SOURCE='763844501b1097fae54630bf88ee9c04620f8268'" scripts/app616-admin-three-owner-functions.sh
+          grep -Fq "PREVIEW='028e51a2d52b50e1f021dd6d689268518077c2e1'" scripts/app616-admin-three-owner-functions.sh
+          grep -Fq "APP616_ALL_THREE_NEW_REVISIONS_READY_OFF=PASS" scripts/app616-admin-three-owner-functions.sh
+          if grep -Eq '^[[:space:]]*(firebase|gcloud)[[:space:]].*(--force|secrets create|secrets versions access|add-iam-policy-binding)' scripts/app616-admin-three-owner-functions.sh; then
+            echo APP616_UNSAFE_MUTATION_IN_RUNBOOK_HOLD >&2
+            exit 1
+          fi
+          echo APP616_AUTHORIZED_HUMAN_SOURCE_AND_BASH_SYNTAX=PASS
+          echo APP616_NO_REMOTE_FOUNDRY_OR_BACKEND_WRITE=PASS

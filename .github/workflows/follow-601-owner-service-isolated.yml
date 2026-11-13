@@ -1,0 +1,44 @@
+name: SORIDRAW APP601 Owner Service Local Isolated
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - '.github/workflows/follow-601-owner-service-isolated.yml'
+      - 'cloudflare/explore-worker/runtime/owner-follow-service-601.mjs'
+      - 'cloudflare/explore-worker/canonical/preview-entry.js'
+      - 'scripts/verify-601-owner-service-integration.mjs'
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'cloudflare/explore-worker/runtime/owner-follow-service-601.mjs'
+      - 'cloudflare/explore-worker/canonical/preview-entry.js'
+      - 'cloudflare/owner-follow-worker/**'
+      - 'scripts/verify-600-owner-standalone-isolated.mjs'
+      - 'scripts/verify-601-owner-service-integration.mjs'
+      - '.github/workflows/follow-601-owner-service-isolated.yml'
+permissions:
+  contents: read
+jobs:
+  local:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check isolated module syntax
+        run: |
+          set -euo pipefail
+          node --check cloudflare/owner-follow-worker/worker.mjs
+          node --check cloudflare/explore-worker/runtime/owner-follow-service-601.mjs
+          node --check cloudflare/explore-worker/canonical/preview-entry.js
+          node --check scripts/verify-601-owner-service-integration.mjs
+      - name: Execute offline synthetic follow integration
+        run: |
+          set -euo pipefail
+          node scripts/verify-600-owner-standalone-isolated.mjs
+          node scripts/verify-601-owner-service-integration.mjs
+          echo APP601_ACTUAL_WORKER_OR_FIREBASE_DEPLOY=ZERO

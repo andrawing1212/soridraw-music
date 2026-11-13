@@ -1,0 +1,59 @@
+name: SORIDRAW APP613 Owner Private Service Binding Inactive
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - '.github/workflows/follow-613-private-binding-inactive.yml'
+      - '.deploy/app613-private-binding-inactive.trigger'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app613-once-private-binding-inactive
+  cancel-in-progress: false
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check one-use source and approved unchanged preview
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only HEAD^ HEAD)"
+          if [ "$changed" != '.deploy/app613-private-binding-inactive.trigger' ]; then
+            echo 'stage=false' >> "$GITHUB_OUTPUT"
+            echo APP613_NO_TRIGGER_NO_UPLOAD=PASS
+            exit 0
+          fi
+          printf 'approved_parent=%s\n' "$(git rev-parse HEAD^)" | cmp -s - .deploy/app613-private-binding-inactive.trigger
+          source_diff="$(git diff --name-only b3d0819dda63b4b428993391ffeb80a87d4fb316 HEAD^)"
+          test "$(printf '%s\n' "$source_diff" | wc -l)" -eq 2
+          grep -Fxq '.github/workflows/follow-613-private-binding-inactive.yml' <<< "$source_diff"
+          grep -Fxq 'scripts/stage-613-service-binding-inactive.mjs' <<< "$source_diff"
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = '028e51a2d52b50e1f021dd6d689268518077c2e1'
+          echo "parent=$(git rev-parse HEAD^)" >> "$GITHUB_OUTPUT"
+          echo 'stage=true' >> "$GITHUB_OUTPUT"
+      - name: Confirm no deployment in source
+        if: steps.gate.outputs.stage == 'true'
+        run: |
+          set -euo pipefail
+          node --check scripts/stage-613-service-binding-inactive.mjs
+          node scripts/stage-613-service-binding-inactive.mjs --source-only
+      - name: Upload exactly one version, never promote to traffic
+        if: steps.gate.outputs.stage == 'true'
+        env:
+          APP613_APPROVED_PARENT: ${{ steps.gate.outputs.parent }}
+        run: |
+          node scripts/stage-613-service-binding-inactive.mjs --stage-once
+          echo APP613_FIREBASE_D1_R2_AUTH_RTDB_HOSTING_MUTATIONS=ZERO

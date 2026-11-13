@@ -46,9 +46,13 @@ for(const change of invalid)assert.throws(
 const code=readFileSync('functions/src/index.ts','utf8');
 assert.match(code,/admin\.initializeApp\(\{\s*databaseURL:\s*"https:\/\/soridraw-app-866a5-default-rtdb\.firebaseio\.com"/);
 const receiver=readFileSync('functions/src/exploreOwnerFollowerWebhook542.ts','utf8');
-assert.match(receiver,/APP542_OWNER_HTTP_COMPILED_OPEN=false/);
+assert.match(receiver,/APP542_OWNER_HTTP_COMPILED_OPEN=true/);
+assert.match(receiver,/process\.env\.SORIDRAW_OWNER_FOLLOW_READY_608!=='1'/);
+assert.match(receiver,/APP608_CANARY_SHA256/);
 const client=readFileSync('src/services/exploreOwnerFollowerSync542.ts','utf8');
-assert.match(client,/EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED=false/);
+assert.match(client,/EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED=true/);
+assert.match(client,/isApp608OwnerCanaryVisible/);
+assert.match(client,/APP608_APPROVED_CANARY_UID/);
 const qaEndpoint=QA_OWNER_FOLLOW_FUNCTION_URL_577;
 const liveEndpoint='https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publishExploreOwnerFollower542';
 const event={ownerUid:'ownerA577',authEpoch:'0123456789abcdef0123456789abcdef',

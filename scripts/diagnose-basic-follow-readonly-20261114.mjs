@@ -148,7 +148,9 @@ async function queryFollowTelemetryDry(){
    const exactDbCause=rawStructured.match(
     /(?:D1_ERROR|SQLITE_ERROR|SQLITE_BUSY|no such (?:table|column)|FOREIGN KEY constraint failed|UNIQUE constraint failed|CHECK constraint failed|NOT NULL constraint failed|database is locked|quota exceeded|SQLITE_CONSTRAINT)[^"\\n]{0,110}/i);
    const errorCause=exactDbCause?exactDbCause[0].replace(/[A-Za-z0-9_-]{25,}/g,'[id]'):'';
-   compact.push({status,method,outcome,error:err,dbFailure:extracted,
+   const version=String(x?.$workers?.scriptVersion||'').slice(0,70);
+   const timestamp=typeof x?.timestamp==='number'?new Date(x.timestamp).toISOString():'';
+   compact.push({version,timestamp,status,method,outcome,error:err,dbFailure:extracted,
      errorCause,errorSummary:safeSummary,
      sourceType:status===0?typeof x?.source:undefined,
      sourceKeys:status===0&&x?.source&&typeof x.source==='object'?

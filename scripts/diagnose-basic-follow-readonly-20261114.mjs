@@ -77,6 +77,55 @@ async function inspectFrozenCanonical(){
   }));
  }
 }
+// APP basic Follow: one non-persistent historical query, no live mutation.
+// Do not log actor IDs, request headers, tokens, IPs, URLs or response bodies.
+// Permission failures are reported as HOLD, not silently bypassed.
+async function queryFollowTelemetryDry(){
+ const q={
+  queryId:'soridraw-follow-once-20261113',
+  dry:true,
+  timeframe:{from:Date.parse('2026-11-13T21:31:00Z'),
+    to:Date.parse('2026-11-13T21:36:00Z')},
+  view:'events',limit:100,
+  parameters:{
+   datasets:['cloudflare-workers'],
+   filters:[{key:'$metadata.service',operation:'eq',type:'string',
+    value:'soridraw-explore-preview'}],
+   needle:{value:'/v1/profiles/',isRegex:false,matchCase:false}
+  }
+ };
+ try{
+  const r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+account+
+    '/workers/observability/telemetry/query',{
+   method:'POST',headers:{Authorization:'Bearer '+token,
+    'Content-Type':'application/json'},
+   body:JSON.stringify(q),signal:AbortSignal.timeout(25000)
+  });
+  const data=await r.json();
+  if(!r.ok||data.success!==true){
+   console.log('BASIC_FOLLOW_HISTORY_OBSERVABILITY=HOLD_HTTP_'+r.status+
+    '_NO_LOG_PRIVILEGE_OR_DATA');
+   return;
+  }
+  const events=data.result?.events?.events||[];
+  let found=0;
+  const compact=[];
+  for(const x of events){
+   const uri=String(x?.$workers?.url||x.url||x?.$metadata?.url||'');
+   if(!uri.includes('/follow'))continue;
+   found++;
+   const status=Number(x?.$workers?.statusCode||x.statusCode||
+     x?.$metadata?.statusCode||0);
+   const outcome=String(x?.$workers?.outcome||'').slice(0,35);
+   const err=String(x?.$metadata?.error||'').replace(/[A-Za-z0-9_-]{28,}/g,'[redacted]').slice(0,100);
+   compact.push({status,outcome,error:err});
+  }
+  console.log('BASIC_FOLLOW_HISTORY_OBSERVABILITY='+JSON.stringify({
+   status:data.result?.run?.status,eventsReturned:events.length,
+   followEvents:found,details:compact.slice(0,20)
+  }));
+ }catch(e){console.log('BASIC_FOLLOW_HISTORY_OBSERVABILITY=HOLD_UNAVAILABLE')}
+}
 async function run(){
  assert(process.argv[2]==='--live'&&process.env.GITHUB_ACTIONS==='true'&&
   process.env.CLOUDFLARE_ACCOUNT_ID===account&&token.length>20,'ACTION_CONTEXT');
@@ -95,6 +144,7 @@ async function run(){
  const [p,d] = await Promise.all([preflight('PUT'),preflight('DELETE')]);
  const cutover=await phase();
  await inspectFrozenCanonical();
+ await queryFollowTelemetryDry();
  console.log('BASIC_FOLLOW_NO_USER_MUTATIONS_NO_BACKEND_DEPLOYS=PASS');
  if(!p||!d)throw Error('BASIC_FOLLOW_BROWSER_PREFLIGHT_FAIL');
  if(cutover==='readonly')throw Error('BASIC_FOLLOW_CUTOVER_READONLY');

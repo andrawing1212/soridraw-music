@@ -14,6 +14,8 @@
 
 APP599 showed 23 active settings bindings, 14 checked-in existing bindings **after excluding** the undeployed owner DO binding, and nine dashboard-only items. APP602 compares **two different GET sources**: the script-level `/settings` response and the pinned active deployed version `/versions/{version_id}` `resources.bindings`. Exact names/types, D1/R2 targets, Like DO and rate limiter are checked. Version identity, active migration tag and compatibility date/flags are checked. A changed active deployment at either end causes HOLD. A historical version being retrievable is **not** proof of a safe rollback.
 
+**APP602 planned preservation strategy (source-only):** derive 23 `{name, type: "inherit", version_id: <exact active version>}` entries using the **beta Workers Versions API only**. Cloudflare documents that the older Workers Script/Version upload endpoints do *not* accept a pinned version ID and may inherit from a different, recently uploaded `latest` version; they are excluded. Nothing was POSTed, uploaded or deployed. This plan cannot guarantee successful secret/resource inheritance until a separately authorized staged version test and complete post-upload verification.
+
 No secret values are logged or retained; the Inspector stores only metadata and unresolved names. `keep_vars:true` **does not prove** that the nine dashboard-only values, resource permissions, or active binding inheritance survive a future upload. Do not create a shared Worker release from a 14-binding Wrangler manifest while these remain unresolved.
 
 ## Recovery and activation HOLD

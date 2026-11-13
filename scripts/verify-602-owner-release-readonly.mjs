@@ -117,6 +117,14 @@ const versionRuntime=(metadata)=>{
  return {bindings,compatibilityDate:runtime.compatibility_date,
   compatibilityFlags:runtime.compatibility_flags??[],migrationTag};
 };
+function pinnedInheritPlan602(names){
+ check(Array.isArray(names)&&names.length===23,'INHERIT_SOURCE_23_REQUIRED');
+ check(new Set(names).size===23,'INHERIT_DUPLICATE');
+ // The beta Workers version API permits exact version_id inheritance.
+ // The legacy /workers/scripts versions upload silently uses "latest"
+ // and is NOT valid for this pinned rollback-safe plan.
+ return sorted(names).map(name=>({name,type:'inherit',version_id:ACTIVE}));
+}
 function selfTest(){
  const conf=JSON.parse(readFileSync(new URL(
   '../cloudflare/explore-worker/canonical/wrangler.preview.jsonc',import.meta.url),'utf8'));
@@ -137,6 +145,10 @@ function selfTest(){
  assert.equal(result.configuredBindingCount,14);
  assert.equal(result.undeclaredCount,9);
  assert.equal(result.baselineBindingCount,23);
+ const inherit=pinnedInheritPlan602(result.requiredInheritFromActive);
+ assert.equal(inherit.length,23);
+ assert.ok(inherit.every(x=>x.type==='inherit'&&x.version_id===ACTIVE));
+ assert.equal(inherit.find(x=>x.name==='EXPLORE_LIKE_BATCH_SCHEDULER')?.version_id,ACTIVE);
  assert.deepEqual(result.missingFromCheckin,EXTRAS);
  const drift=structuredClone(items);drift[0].type='secret_text';
  assert.throws(()=>compareBindings(conf,items,drift),/SCRIPT_SETTINGS_DIFFER_FROM_ACTIVE_VERSION/);
@@ -157,6 +169,7 @@ function selfTest(){
  console.log('APP602_OFFLINE_NO_V2_MIGRATION_SOURCE_CANDIDATE=PASS');
  console.log('APP602_OFFLINE_23_BINDING_INHERIT_CONTRACT=PASS');
  console.log('APP602_OFFLINE_DRIFT_AND_RUNTIME_FAIL_CLOSED=PASS');
+ console.log('APP602_OFFLINE_PINNED_VERSION_23_BINDING_INHERIT_PLAN=PASS');
 }
 async function cfGet(path,token){
  const uri='https://api.cloudflare.com/client/v4/accounts/'+ACCOUNT+'/'+path;
@@ -208,6 +221,9 @@ async function live(){
   // Only names, never values. No authorization or secret material.
   unresolvedBindingNames:compared.missingFromCheckin,
   preserveBindingIdentitiesByExactActiveVersion:true,
+  futureBetaVersionUploadOnly:true,
+  pinnedBindingInheritancePlan:pinnedInheritPlan602(compared.requiredInheritFromActive),
+  inheritedBindingValuesNotMaterialized:true,
   liveSecretValuesVerified:false,
   upgradeRunnable:false,
   existingWorkerDoLifecycleMigration:'NONE_PLANNED',
@@ -225,6 +241,7 @@ async function live(){
  console.log('APP602_ACTIVE_VERSION_METADATA_AND_SETTINGS_NAME_TYPE_PARITY=PASS');
  console.log('APP602_ACTIVE_BINDING_COUNT='+evidence.activeBindingCount);
  console.log('APP602_DASHBOARD_ONLY_BINDINGS_UNRESOLVED='+evidence.dashboardOnlyUnresolved);
+ console.log('APP602_PINNED_23_BINDING_INHERIT_SOURCE_PLAN=PASS_NOT_UPLOADED');
  console.log('APP602_EXISTING_LIKE_DO_V1_NO_OWNER_V2=PASS');
  console.log('APP602_ACTIVE_COMPAT_DATE='+evidence.activeCompatibilityDate);
  console.log('APP602_ROLLBACK_PREVIOUS_VERSION_EXISTS_NOT_EXECUTED=PASS');

@@ -152,6 +152,22 @@ async function queryFollowTelemetryDry(){
   }));
  }catch(e){console.log('BASIC_FOLLOW_HISTORY_OBSERVABILITY=HOLD_UNAVAILABLE')}
 }
+async function inspectDeployedFollowStack(){
+ const result=await cfGet('workers/workers/'+worker+'/versions/'+safe+'?include=modules');
+ const entry=result.modules?.find(m=>m.name==='preview-entry.mjs');
+ assert(entry?.content_base64&&result.modules?.length===12,'ACTIVE_MODULE_STACK_UNAVAILABLE');
+ const {Buffer}=await import('node:buffer');
+ const source=Buffer.from(entry.content_base64,'base64').toString('utf8');
+ const lines=source.split('\\n');
+ console.log('BASIC_FOLLOW_DEPLOYED_SOURCE_LINES='+lines.length);
+ for(const at of [724,14445,14501,14537,14572,14690]){
+  const lower=Math.max(0,at-9),upper=Math.min(lines.length,at+10);
+  // Code only; never output source secrets, user payloads or bearer headers.
+  const section=lines.slice(lower,upper).map((text,i)=>
+   (lower+i+1)+':'+text.slice(0,230)).join(' | ');
+  console.log('BASIC_FOLLOW_DEPLOYED_STACK_'+at+'='+section.slice(0,3900));
+ }
+}
 async function run(){
  assert(process.argv[2]==='--live'&&process.env.GITHUB_ACTIONS==='true'&&
   process.env.CLOUDFLARE_ACCOUNT_ID===account&&token.length>20,'ACTION_CONTEXT');
@@ -170,6 +186,7 @@ async function run(){
  const [p,d] = await Promise.all([preflight('PUT'),preflight('DELETE')]);
  const cutover=await phase();
  await inspectFrozenCanonical();
+ await inspectDeployedFollowStack();
  await queryFollowTelemetryDry();
  console.log('BASIC_FOLLOW_NO_USER_MUTATIONS_NO_BACKEND_DEPLOYS=PASS');
  if(!p||!d)throw Error('BASIC_FOLLOW_BROWSER_PREFLIGHT_FAIL');

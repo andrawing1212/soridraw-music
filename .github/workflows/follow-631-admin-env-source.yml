@@ -24,7 +24,7 @@ jobs:
           node --check scripts/app631-activate-three-functions-env.mjs
           node scripts/app631-activate-three-functions-env.mjs --self-test
           grep -Fq 'updateMask=serviceConfig.environmentVariables' scripts/app631-activate-three-functions-env.mjs
-          grep -Fq 'etag:b.value.etag' scripts/app631-activate-three-functions-env.mjs
+          grep -Fq 'CONCURRENT_FUNCTION_CONFIG_DRIFT_' scripts/app631-activate-three-functions-env.mjs
           grep -Fq 'APP631_THREE_FUNCTIONS_READY_ONE_OWNER=PASS' scripts/app631-activate-three-functions-env.mjs
           echo APP631_BACKEND_NOT_MUTATED_IN_CI=PASS
       - uses: google-github-actions/auth@v2
@@ -48,8 +48,8 @@ jobs:
           secret='SORIDRAW_OWNER_FOLLOW_HMAC_539' if name=='publishExploreOwnerFollower542' else 'SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544'
           if data.get('state')!='ACTIVE' or data.get('environment')!='GEN_2':
             raise SystemExit('APP631_HOLD_STATE_OR_GENERATION_'+name)
-          if not isinstance(data.get('etag'),str) or len(data['etag'])<8:
-            raise SystemExit('APP631_HOLD_MISSING_ETAG_'+name)
+          if not isinstance(data.get('updateTime'),str) or len(data['updateTime'])<20:
+            raise SystemExit('APP631_HOLD_MISSING_UPDATE_TIME_'+name)
           if env.get('SORIDRAW_OWNER_FOLLOW_READY_608')=='1':
             raise SystemExit('APP631_HOLD_ALREADY_READY_'+name)
           if not any(s.get('key')==secret or s.get('secret')==secret for s in secrets):

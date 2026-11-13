@@ -44,7 +44,7 @@ async function main(){
   const value=await api('GET',uri(name),token);
   check(value.name===uri(name)&&value.state==='ACTIVE'&&value.environment==='GEN_2','FUNCTION_STATE_'+name);
   const sc=value.serviceConfig||{},vars=sc.environmentVariables||{};
-  check(typeof value.etag==='string'&&value.etag.length>=8,'FUNCTION_ETAG_'+name);
+  check(typeof value.updateTime==='string'&&value.updateTime.length>=20,'FUNCTION_UPDATE_TIME_'+name);
   check(vars.SORIDRAW_OWNER_FOLLOW_READY_608!=='1','ALREADY_ENABLED_'+name);
   check(!vars.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||
    vars.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574===UID,'OTHER_CANARY_'+name);
@@ -61,7 +61,14 @@ async function main(){
   const environmentVariables={...b.vars,
    SORIDRAW_OWNER_FOLLOW_READY_608:'1',
    SORIDRAW_OWNER_FOLLOW_CANARY_UID_574:UID};
-  const body={name:uri(name),etag:b.value.etag,serviceConfig:{environmentVariables}};
+  // GCFv2 Function has updateTime but no top-level etag. Reject any
+  // intervening update or environment/secret drift immediately before PATCH.
+  const current=await api('GET',uri(name),token);
+  check(current.updateTime===b.value.updateTime &&
+   JSON.stringify(current.serviceConfig?.environmentVariables||{})===JSON.stringify(b.vars) &&
+   JSON.stringify(current.serviceConfig?.secretEnvironmentVariables||[])===JSON.stringify(b.secret),
+   'CONCURRENT_FUNCTION_CONFIG_DRIFT_'+name);
+  const body={name:uri(name),serviceConfig:{environmentVariables}};
   const request=uri(name)+'?updateMask=serviceConfig.environmentVariables';
   const operation=await api('PATCH',request,token,body);
   check(typeof operation.name==='string'&&operation.name.startsWith('projects/'+PROJECT+'/locations/'+REGION+'/operations/'),

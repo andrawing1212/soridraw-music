@@ -61,8 +61,7 @@ async function probeLikeDo(m){
  assert.ok(namespace,'APP606_LIKE_DO_NAMESPACE_UNAVAILABLE');
  const id=namespace.idFromName('APP606_SYNTHETIC_READ_ONLY_NOT_A_REAL_USER');
  const stub=namespace.get(id);
- const res=await stub.fetch(new Request(
-  'https://local.invalid/__app606_read_only_unrecognized_probe__',{method:'GET'}));
+ const res=await stub.fetch('https://local.invalid/__app606_read_only_unrecognized_probe__');
  const bytes=Buffer.from(await res.arrayBuffer());
  if(res.status<400||res.status>=500)
   fail('LIKE_DO_READ_ONLY_PROBE_UNEXPECTED_STATUS_'+res.status);

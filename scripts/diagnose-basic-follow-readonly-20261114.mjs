@@ -181,7 +181,12 @@ async function inspectFollowMutationSqlAndSchema(){
   "SELECT name,type,sql FROM sqlite_master WHERE name IN ('explore_follow_overrides_348','explore_follow_cutover_control_348','follows') ORDER BY name LIMIT 4",
   "SELECT name,type,sql FROM sqlite_master WHERE type='trigger' AND tbl_name='explore_follow_overrides_348' ORDER BY name LIMIT 30",
   "SELECT name,type,sql FROM sqlite_master WHERE type='index' AND tbl_name='explore_follow_overrides_348' ORDER BY name LIMIT 30",
-  "SELECT name,type FROM pragma_table_info('explore_follow_overrides_348') ORDER BY cid LIMIT 30"
+  "SELECT name,type FROM pragma_table_info('explore_follow_overrides_348') ORDER BY cid LIMIT 30",
+  "SELECT name,type,sql FROM sqlite_master WHERE name IN ('soridraw_notification_inbox_001','soridraw_notification_activation_002','public_profiles') ORDER BY name LIMIT 5",
+  "SELECT name,type FROM pragma_table_info('soridraw_notification_inbox_001') ORDER BY cid LIMIT 35",
+  "SELECT name,type FROM pragma_table_info('soridraw_notification_activation_002') ORDER BY cid LIMIT 15",
+  "SELECT name,type FROM pragma_table_info('public_profiles') ORDER BY cid LIMIT 50",
+  "SELECT id,enabled FROM soridraw_notification_activation_002 WHERE id=1 LIMIT 1"
  ];
  for(let i=0;i<queries.length;i++){
   const sql=queries[i];

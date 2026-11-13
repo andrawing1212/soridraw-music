@@ -14,10 +14,21 @@ import { startAppUpdateNotice } from './services/appUpdateNotice';
 import { installChunkLoadRecovery } from './services/chunkLoadRecovery';
 import { installExploreRevisionRequestCache } from './services/exploreRevisionRequestCache';
 import { installExploreDormantResumeClock424 } from './services/exploreDormantResume424';
+import { captureOwnerFollowCanaryOptIn634 } from './lib/ownerFollowCanaryTab634';
 
 installChunkLoadRecovery();
 installExploreRevisionRequestCache();
 installExploreDormantResumeClock424();
+
+// Preserve an explicit QA URL before App navigation drops its query parameters.
+// No Auth, Firebase reads/writes, or cross-tab persistence.
+if(typeof window!=='undefined'){
+ try{
+  captureOwnerFollowCanaryOptIn634(
+   window.location.hostname.toLowerCase(),window.location.search,window.sessionStorage,
+  );
+ }catch{/* Storage-disabled browsers retain exact-URL opt-in only. */}
+}
 void startPreviewVersionSignal();
 startAppUpdateNotice();
 

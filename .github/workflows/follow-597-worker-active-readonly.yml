@@ -37,12 +37,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 7
     env:
-      CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: \${{ github.sha }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -55,5 +55,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app597-worker-release-metadata
-          path: \${{ runner.temp }}/app597-readonly.json
+          path: ${{ runner.temp }}/app597-readonly.json
           retention-days: 1

@@ -40,6 +40,7 @@ const db={prepare(sql){return {bind(...args){return {async first(){d1Read++;
 const flags={SORIDRAW_ENVIRONMENT:'preview',
  SORIDRAW_OWNER_FOLLOW_W2_PUSH_555:'1',
  SORIDRAW_OWNER_DO_STANDALONE_600:'1',
+ SORIDRAW_OWNER_FOLLOW_CANARY_UID_574:'A',
  SORIDRAW_OWNER_DO_BRIDGE_SECRET_600:secret};
 const canonicalEnv={...flags,DB:db,PROFILE_MEDIA:r2,
  SORIDRAW_OWNER_FOLLOW_HMAC_539:'app601-isolated-signing-secret-aaaaaaaaaaaaaaaaaa',
@@ -69,13 +70,13 @@ standaloneEnv.OWNER_FOLLOW_CANONICAL_REPLAY_600={fetch:request=>{
   enabled:true,now:()=>clock,send:signedSend});
 }};
 const doService=createOwnerDoService600({state:{storage},env:standaloneEnv,
- enabled:true,now:()=>clock});
+ enabled:true,syntheticOwnerUid:'A',now:()=>clock});
 standaloneEnv.OWNER_FOLLOW_DO_600={
  idFromName(uid){assert.equal(uid,'A');return uid;},
  get(uid){assert.equal(uid,'A');return {fetch:req=>doService.fetch(req)};},
 };
 canonicalEnv.OWNER_FOLLOW_RESERVATION_SERVICE_600={fetch:request=>
- handleOwnerWorker600(request,standaloneEnv,{enabled:true})};
+ handleOwnerWorker600(request,standaloneEnv,{enabled:true,syntheticOwnerUid:'A'})};
 const requestFor=(operationId,method='PUT',expected=operationRevision)=>
  new Request('https://preview.local/v1/profiles/A/follow',{
   method,headers:{'Content-Type':'application/json'},
@@ -151,7 +152,7 @@ assert.equal(alarmStorage.has('pending'),true);
 callbackEnabled=true;
 clock=Math.max(clock,alarmAt||clock);alarmAt=null;
 const restarted=createOwnerDoService600({state:{storage},env:standaloneEnv,
- enabled:true,now:()=>clock});
+ enabled:true,syntheticOwnerUid:'A',now:()=>clock});
 assert.equal((await restarted.alarm()).status,'delivered');
 assert.equal(alarmStorage.has('pending'),false);
 console.log('APP601_SERVICE_DOWN_DURABLE_RETRY_AFTER_RESTART=PASS');

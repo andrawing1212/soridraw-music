@@ -27,6 +27,7 @@ const secret = 'standalone600_local-only-test-secret_1234567890';
 const env = {
   SORIDRAW_ENVIRONMENT: 'preview', SORIDRAW_OWNER_DO_STANDALONE_600: '1',
   SORIDRAW_OWNER_FOLLOW_W2_PUSH_555: '1',
+  SORIDRAW_OWNER_FOLLOW_CANARY_UID_574: 'A',
   SORIDRAW_OWNER_DO_BRIDGE_SECRET_600: secret,
 };
 const memory = new Map(); let scheduled = null;
@@ -54,7 +55,7 @@ env.OWNER_FOLLOW_CANONICAL_REPLAY_600 = {
   },
 };
 const doService = createOwnerDoService600({state, env, enabled: true,
-  now: () => clock});
+  syntheticOwnerUid: 'A', now: () => clock});
 const doNames = [];
 env.OWNER_FOLLOW_DO_600 = {
   idFromName(name) { doNames.push(name); return name; },
@@ -71,7 +72,7 @@ const call = (ticket, {key = secret, enabled = true, method = 'POST', path = url
   json = null} = {}) => handleOwnerWorker600(new Request(path, {
   method, headers: {['X-Soridraw-Owner-Bridge-600']: key},
   ...(method !== 'POST' ? {} : {body: json ?? JSON.stringify(ticket)}),
-}), env, {enabled});
+}), env, {enabled, syntheticOwnerUid: 'A'});
 const runAlarm = async () => {
   if (scheduled !== null) clock = Math.max(clock, scheduled);
   scheduled = null;
@@ -86,6 +87,9 @@ assert.equal(writes, baseline);
 console.log('APP600_COMPILED_OFF_NO_DO_WRITE=PASS');
 
 assert.equal((await call(make(), {key: 'wrong'})).status, 403);
+assert.equal((await call(make('op_wrong_owner_600_123', {ownerUid: 'C'})).status, 403);
+assert.equal(writes, 0);
+assert.deepEqual(doNames, []);
 assert.equal((await call(make(), {method: 'GET'})).status, 404);
 assert.equal((await call(make(), {path: 'https://owner-follow.internal/public/follow'})).status, 404);
 assert.equal((await call(make(), {json: '{bad'})).status, 400);
@@ -128,7 +132,8 @@ replayStatus = () => ++attempt === 1
 assert.equal((await call(make('op_4567890abcdef123', {expectedRevision: 1}))).status, 200);
 assert.equal((await runAlarm()).status, 'retry-scheduled');
 assert.equal(memory.get('pending').entries[0].attempts, 1);
-const restarted = createOwnerDoService600({state, env, enabled: true, now: () => clock});
+const restarted = createOwnerDoService600({state, env, enabled: true,
+  syntheticOwnerUid: 'A', now: () => clock});
 clock = Math.max(clock, scheduled); scheduled = null;
 assert.equal((await restarted.alarm()).status, 'retry-scheduled');
 assert.equal(memory.get('pending').entries[0].attempts, 2);

@@ -4,6 +4,18 @@ import {createOwnerFollowRecovery556} from '../explore-worker/runtime/owner-foll
 
 export const APP600_OWNER_WORKER_COMPILED_OPEN = false;
 const UID = /^[A-Za-z0-9_-]{1,128}$/;
+const APPROVED_CANARY_SHA256_600 = '8b9cd603dc722a89765da05bfee9100b2645ecff290bf1f35ff4f0a1bf80fc2f';
+// The synthetic override is passed ONLY by direct offline tests. Production
+// entrypoints never pass it, and must match BOTH server configuration and
+// the pinned approved Auth UID hash before any Durable Object access.
+async function approvedOwner600(uid, env, syntheticOwnerUid) {
+  if (!UID.test(String(uid || ''))) return false;
+  if (syntheticOwnerUid !== undefined) return uid === syntheticOwnerUid;
+  if (String(env?.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574 || '') !== uid) return false;
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(uid));
+  const hash = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
+  return hash === APPROVED_CANARY_SHA256_600;
+}
 const MAX_BODY_BYTES = 1024;
 const INTERNAL_RESERVE = '/internal/owner-follow/reserve600';
 const INTERNAL_REPLAY = 'https://owner-follow.internal/owner-follow/replay557-internal';
@@ -72,7 +84,7 @@ export async function replayThroughService600({reservation, env} = {}) {
 }
 
 export function createOwnerDoService600({state, env, enabled = APP600_OWNER_WORKER_COMPILED_OPEN,
-  now = Date.now, deliver = replayThroughService600} = {}) {
+  now = Date.now, deliver = replayThroughService600, syntheticOwnerUid} = {}) {
   const engine = createOwnerFollowRecovery556({state, env, enabled, now, deliver});
   return {
     async fetch(request) {
@@ -82,10 +94,17 @@ export function createOwnerDoService600({state, env, enabled = APP600_OWNER_WORK
       if (!capabilityValid(request, env)) return reply(403, {ok: false});
       const parsed = await limitedTicket(request);
       if (!parsed.ticket) return reply(parsed.status, {ok: false});
+      if (!(await approvedOwner600(parsed.ticket.ownerUid, env, syntheticOwnerUid)))
+        return reply(403, {ok: false, status: 'owner-not-approved'});
       const result = await engine.reserve(parsed.ticket).catch(() => ({ok: false, status: 'storage-unavailable'}));
       return reply(result.ok ? 200 : 503, result);
     },
-    alarm: () => engine.alarm(),
+    alarm: async () => {
+      if (!active(env, enabled) ||
+          !(await approvedOwner600(String(env?.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574 || ''), env, syntheticOwnerUid)))
+        return {ok: false, status: 'disabled'};
+      return engine.alarm();
+    },
   };
 }
 
@@ -98,7 +117,7 @@ export class OwnerFollowerStandalone600 {
 }
 
 export async function handleOwnerWorker600(request, env, {
-  enabled = APP600_OWNER_WORKER_COMPILED_OPEN,
+  enabled = APP600_OWNER_WORKER_COMPILED_OPEN, syntheticOwnerUid,
 } = {}) {
   if (!active(env, enabled)) return reply(503, {ok: false, status: 'disabled'});
   if (request.method !== 'POST' || new URL(request.url).pathname !== INTERNAL_RESERVE)
@@ -106,6 +125,8 @@ export async function handleOwnerWorker600(request, env, {
   if (!capabilityValid(request, env)) return reply(403, {ok: false});
   const parsed = await limitedTicket(request);
   if (!parsed.ticket) return reply(parsed.status, {ok: false});
+  if (!(await approvedOwner600(parsed.ticket.ownerUid, env, syntheticOwnerUid)))
+    return reply(403, {ok: false, status: 'owner-not-approved'});
   const namespace = env?.OWNER_FOLLOW_DO_600;
   if (typeof namespace?.idFromName !== 'function' || typeof namespace?.get !== 'function')
     return reply(503, {ok: false, status: 'missing-do-binding'});

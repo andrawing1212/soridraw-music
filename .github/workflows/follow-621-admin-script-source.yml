@@ -1,0 +1,27 @@
+name: SORIDRAW APP621 Human Admin Secret Staging Script Syntax
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - 'scripts/app621-admin-stage-owner-secrets.sh'
+      - '.github/workflows/follow-621-admin-script-source.yml'
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prove only inactive secret version operations and syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/app621-admin-stage-owner-secrets.sh
+          grep -Fq 'versions secret put SORIDRAW_OWNER_FOLLOW_HMAC_539' scripts/app621-admin-stage-owner-secrets.sh
+          grep -Fq 'versions secret put SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544' scripts/app621-admin-stage-owner-secrets.sh
+          grep -Fq 'versions secret put SORIDRAW_OWNER_DO_BRIDGE_SECRET_600' scripts/app621-admin-stage-owner-secrets.sh
+          if grep -Eq '^[[:space:]]*(npx|wrangler).* secret put (?!.*versions)' scripts/app621-admin-stage-owner-secrets.sh; then exit 3; fi
+          echo APP621_BASH_AND_NONDEPLOY_SECRET_SOURCE=PASS

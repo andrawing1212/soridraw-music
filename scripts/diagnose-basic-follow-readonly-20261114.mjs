@@ -56,6 +56,27 @@ async function preflight(method){
  }));
  return ok;
 }
+// Inspect the exact canonical SOURCE ONLY. No requests or mutations.
+async function inspectFrozenCanonical(){
+ const {readFileSync}=await import('node:fs');
+ const x=readFileSync('cloudflare/explore-worker/canonical/preview-worker.js','utf8');
+ assert(x.length>100000,'FROZEN_CANONICAL_SOURCE_MISSING');
+ const searches=[
+  '서버 처리 중 오류가 발생했습니다.',
+  'async function handleFollowOverlay354(',
+  'async function handleFollow(',
+  'async function enforceFollowEdgeRateLimit355(',
+  'follow-cutover-v348/active.json',
+  'FOLLOW_ORDER_REQUIRED'
+ ];
+ for(const key of searches){
+  const i=x.indexOf(key);
+  console.log('BASIC_FOLLOW_SOURCE_MARKER_'+searches.indexOf(key)+'='+JSON.stringify({
+   exists:i>=0,count:i<0?0:x.split(key).length-1,
+   context:i<0?'':x.slice(Math.max(0,i-380),i+520).replace(/\\s+/g,' ').slice(0,900)
+  }));
+ }
+}
 async function run(){
  assert(process.argv[2]==='--live'&&process.env.GITHUB_ACTIONS==='true'&&
   process.env.CLOUDFLARE_ACCOUNT_ID===account&&token.length>20,'ACTION_CONTEXT');
@@ -73,6 +94,7 @@ async function run(){
  console.log('BASIC_FOLLOW_WORKER_SAFE100_BRIDGE_OFF_LIKE_DO_UNCHANGED=PASS');
  const [p,d] = await Promise.all([preflight('PUT'),preflight('DELETE')]);
  const cutover=await phase();
+ await inspectFrozenCanonical();
  console.log('BASIC_FOLLOW_NO_USER_MUTATIONS_NO_BACKEND_DEPLOYS=PASS');
  if(!p||!d)throw Error('BASIC_FOLLOW_BROWSER_PREFLIGHT_FAIL');
  if(cutover==='readonly')throw Error('BASIC_FOLLOW_CUTOVER_READONLY');

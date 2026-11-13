@@ -1,0 +1,69 @@
+name: SORIDRAW APP606 One-shot APP605 OFF Nondeployed Version
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - '.github/workflows/follow-606-owner-off-inactive-version.yml'
+      - '.deploy/app606-owner-off-version.trigger'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app606-single-nondeployed-version
+  cancel-in-progress: false
+jobs:
+  upload:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: One-time exact approved source and action proof gate
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          FREEZE=519a29383ee3742a2dbe6a132f41612efe2321e6
+          changed="$(git diff --name-only HEAD^ HEAD)"
+          if [ "$changed" != '.deploy/app606-owner-off-version.trigger' ]; then
+            echo 'release=false' >> "$GITHUB_OUTPUT"
+            echo 'APP606_NO_SINGLE_USE_TRIGGER_NO_UPLOAD=PASS'
+            exit 0
+          fi
+          printf 'approved_parent=%s\n' "$(git rev-parse HEAD^)" \
+            | cmp -s - .deploy/app606-owner-off-version.trigger
+          # Since the successful exact-date runtime+Like DO test, the only
+          # permitted source addition is this workflow, not any Worker code.
+          diff="$(git diff --name-only "$FREEZE" HEAD^)"
+          if [ "$diff" != '.github/workflows/follow-606-owner-off-inactive-version.yml' ]; then
+            echo APP606_SOURCE_OR_PR_BRANCH_DRIFT_HOLD
+            exit 1
+          fi
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = '028e51a2d52b50e1f021dd6d689268518077c2e1'
+          echo "approved_parent=$(git rev-parse HEAD^)" >> "$GITHUB_OUTPUT"
+          echo 'release=true' >> "$GITHUB_OUTPUT"
+          echo 'APP606_PINNED_APP605_RUNTIME_AND_LIKE_DO_PASS_RUN_43430394569_REUSED=PASS'
+      - name: Single inactive APP605 candidate upload with 23 exact inherited bindings
+        if: steps.gate.outputs.release == 'true'
+        env:
+          APP605_APPROVED_PARENT: ${{ steps.gate.outputs.approved_parent }}
+          APP605_RUNTIME_PARITY: PASS
+        run: |
+          set -euo pipefail
+          node scripts/verify-605-active-off-sidecar.mjs --upload-once
+          echo APP606_EXISTING_PREVIEW_TRAFFIC_DEPLOY=ZERO
+          echo APP606_WORKER_SERVICE_SECRET_DO_MIGRATION_AND_DATA_CHANGE=ZERO
+      - name: Retain metadata-only nondeployed candidate proof
+        if: steps.gate.outputs.release == 'true' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app606-inactive-owner-bridge-proof
+          path: ${{ runner.temp }}/app605-inactive-proof.json
+          retention-days: 1

@@ -54,15 +54,23 @@ async function stage(){
  const modules=code?.modules;
  fail(Array.isArray(modules)&&modules.length>=1&&modules.length<=12,'MODULE_LIST');
  const moduleNames=new Set(modules.map(m=>m.name));
- fail(moduleNames.size===modules.length&&moduleNames.has('worker.mjs'),
-  'ENTRY_MODULE_NOT_IDENTIFIED');
+ fail(moduleNames.size===modules.length,'DUPLICATE_MODULE_NAMES');
+ const main=moduleNames.has('worker.mjs')?'worker.mjs':
+  (typeof code?.main_module==='string'&&moduleNames.has(code.main_module)?code.main_module:
+   (typeof runtime.main_module==='string'&&moduleNames.has(runtime.main_module)?runtime.main_module:
+    (modules.length===1?modules[0].name:null)));
+ if(!main){
+  console.log('APP620_SOURCE_MODULE_NAMES='+[...moduleNames].join(',').slice(0,300));
+  throw Error('APP620_HOLD_AMBIGUOUS_ENTRY_MODULE');
+ }
+ console.log('APP620_SOURCE_ENTRY_MODULE='+main);
  const saved=modules.map(m=>{
   fail(typeof m.content_base64==='string'&&m.content_base64.length>20,'MODULE_BYTES_MISSING');
   return {name:m.name,content_type:m.content_type||'application/javascript+module',
    content_base64:m.content_base64};
  });
  const payload={
-  main_module:'worker.mjs',
+  main_module:main,
   compatibility_date:'2026-08-28',
   compatibility_flags:runtime.compatibility_flags||[],
   annotations:{'workers/message':'APP620 reverse owner service binding, not deployed and runtime OFF',

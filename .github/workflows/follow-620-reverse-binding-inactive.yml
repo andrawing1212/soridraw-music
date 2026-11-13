@@ -39,10 +39,10 @@ jobs:
           fi
           printf 'approved_parent=%s\n' "$(git rev-parse HEAD^)" | cmp -s - .deploy/app620-reverse-binding-inactive.trigger
           diff="$(git diff --name-only 6fa047b68bd108ee5294150933695bf5d3e3ae4a HEAD^)"
-          for file in 'scripts/stage-620-reverse-binding-inactive.mjs' '.github/workflows/follow-620-reverse-binding-inactive.yml'; do
+          for file in 'scripts/stage-620-reverse-binding-inactive.mjs' '.github/workflows/follow-620-reverse-binding-inactive.yml' '.deploy/app620-reverse-binding-inactive.trigger'; do
             grep -Fxq "$file" <<< "$diff"
           done
-          test "$(printf '%s\n' "$diff" | wc -l)" -eq 2
+          test "$(printf '%s\n' "$diff" | wc -l)" -eq 3
           test "$(git ls-remote origin refs/heads/preview | cut -f1)" = 028e51a2d52b50e1f021dd6d689268518077c2e1
           echo "parent=$(git rev-parse HEAD^)" >> "$GITHUB_OUTPUT"
           echo 'stage=true' >> "$GITHUB_OUTPUT"

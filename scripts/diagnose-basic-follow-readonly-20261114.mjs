@@ -142,7 +142,7 @@ async function queryFollowTelemetryDry(){
    const rawSummary=String(x?.source?.message||x?.$metadata?.message||
       (typeof x?.source==='string'?x.source:'')).split('\\n')[0];
    const safeSummary=rawSummary.includes('://')?'[url-redacted]':
-     rawSummary.replace(/[A-Za-z0-9_-]{25,}/g,'[id]').slice(0,150);
+     rawSummary.replace(/[A-Za-z0-9_-]{25,}/g,'[id]').slice(0,status===0?920:140);
    compact.push({status,method,outcome,error:err,dbFailure:extracted,
      errorSummary:safeSummary,errorMessageAvailable:messages.some(v=>v.length>0)});
   }

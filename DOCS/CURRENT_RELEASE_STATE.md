@@ -1,3 +1,12 @@
+## CURRENT — APP606 workerd 실행 비교 PASS / APP605 비배포 후보 1개 생성 PASS (2026-11-13 KST)
+
+- **로컬 실행 문제 해결:** 기존 APP605의 모듈 `../` 파일시스템 root 오류는 실제 활성 Worker 코드 변경 없이 Miniflare의 `rootPath=dirname(script)`, `modulesRoot=dirname(script)`, `scriptPath='preview-entry.js'`로 해결. 공식 workerd `1.20261110.1`, 실제 LIVE 호환 날짜 `2026-08-28`에서 정본과 OFF 후보의 합성 GET/OPTIONS 거절 경로 응답 같음 [Actions #43429916356](https://github.com/andrawing1212/soridraw-music/actions/runs/43429916356) PASS. 기존 Like DO `ExploreLikeBatchScheduler103`를 로컬 격리 스텁으로 불러 안전한 미인식 GET의 응답 동일성도 [Actions #43430394569](https://github.com/andrawing1212/soridraw-music/actions/runs/43430394569) PASS. 이 검증은 일부 로컬 경로에 한정되고 실사용 전체 회귀/배포 롤백 PASS는 아님.
+- **실제 비배포 후보 생성:** [Actions #43430811877](https://github.com/andrawing1212/soridraw-music/actions/runs/43430811877) PASS, 신규 Cloudflare Explore Worker **비활성** 버전 `120b698a-203c-4837-8e7b-2baa5e27a43b` (`deploy=false`). 활성 `350ce33d-ec83-49d0-a4ae-c25d2d90f59e` 코드 2,440,556바이트를 변경 없이 접두 보존하고 APP601 OFF import + 7개 의존 모듈을 추가. 업로드된 모든 모듈 SHA 및 원본 23개 바인딩의 고정 상속 이름·유형·D1/R2/Like DO identity 확인. DO v2 마이그레이션·신규 서비스 바인딩·시크릿·권한 변경 없음. **기존 활성 Worker 100% 트래픽 유지**, 앱 Hosting/TEST/PRODUCTION/공유 데이터 변경 없음.
+- **여전히 기능 OFF/NO-GO:** 이 후보의 APP605/601 내부 연결 코드는 `APP605_ACTIVE_BRIDGE_COMPILED_OPEN=false`, `APP601_OWNER_SERVICE_WIRING_COMPILED_OPEN=false`이며 기존 canonical route에 실제 연결/ON하지 않았다. 별도 APP603 owner DO Worker `e274388f-8075-473d-b3a0-6e78eb67f353` 역시 OFF/비공개. 실제 A↔B 팔로우·취소 PC↔모바일 자동 동기화 미완료. 기존 사용자 데이터, RTDB, D1/R2, Likes 보존. 신버전 트래픽 승격·테스트 환경 전환·자동 배포 금지.
+- **재사용/다음 경계:** APP606 두 로컬 실행 PASS·실제 비배포 업로드 PASS **반복 금지**. APP604 비활성 순수복사본 `f8ab4c5b-e037-4109-a635-604f3e3769b0`와 APP605 비활성 후보 `120b698a-203c-4837-8e7b-2baa5e27a43b`를 새로 만들지 않는다. 다음에는 실제 canonical handler의 사설 연결·서비스 Binding/Secret 및 rollback을 별도 승인 범위로 증명해야 하며, 이전 PASS를 실사용 PASS로 해석하지 않는다. [Draft PR #970](https://github.com/andrawing1212/soridraw-music/pull/970)만 보관, `preview` 앱 코드 미병합.
+
+---
+
 ## CURRENT — APP605 활성 Worker OFF 사이드카 후보 / 로컬 실행 비교 HOLD (2026-11-13 KST)
 
 - **GitHub 후보:** [Draft PR #970](https://github.com/andrawing1212/soridraw-music/pull/970)에 APP605 활성 Explore Worker 실제 2,440,556바이트 코드를 100% 접두 보존하고 APP601 원본 내부 서비스 연결 + 7개 의존 모듈만 독립적으로 추가하는 **임시 후보 생성 코드**를 저장. `APP605_ACTIVE_BRIDGE_COMPILED_OPEN=false`, `APP601_OWNER_SERVICE_WIRING_COMPILED_OPEN=false`; 기존 fetch/cron·좋아요 DO export·23 바인딩·기존 사용자 경로 변경 없음. 후보는 **트래픽에 등록되지 않고 Cloudflare 새 버전에도 업로드되지 않음**. 정확한 내부 연결을 ON할 수 있는 실제 Worker 릴리스는 아직 준비되지 않았음.

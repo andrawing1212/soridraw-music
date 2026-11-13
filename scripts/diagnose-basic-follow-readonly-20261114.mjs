@@ -143,8 +143,17 @@ async function queryFollowTelemetryDry(){
       (typeof x?.source==='string'?x.source:'')).split('\\n')[0];
    const safeSummary=rawSummary.includes('://')?'[url-redacted]':
      rawSummary.replace(/[A-Za-z0-9_-]{25,}/g,'[id]').slice(0,status===0?920:140);
+   const rawStructured=JSON.stringify({source:x?.source,metadata:x?.$metadata,
+     exception:x?.$workers?.exception})||'';
+   const exactDbCause=rawStructured.match(
+    /(?:D1_ERROR|SQLITE_ERROR|SQLITE_BUSY|no such (?:table|column)|FOREIGN KEY constraint failed|UNIQUE constraint failed|CHECK constraint failed|NOT NULL constraint failed|database is locked|quota exceeded|SQLITE_CONSTRAINT)[^"\\n]{0,110}/i);
+   const errorCause=exactDbCause?exactDbCause[0].replace(/[A-Za-z0-9_-]{25,}/g,'[id]'):'';
    compact.push({status,method,outcome,error:err,dbFailure:extracted,
-     errorSummary:safeSummary,errorMessageAvailable:messages.some(v=>v.length>0)});
+     errorCause,errorSummary:safeSummary,
+     sourceType:status===0?typeof x?.source:undefined,
+     sourceKeys:status===0&&x?.source&&typeof x.source==='object'?
+        Object.keys(x.source).slice(0,20):undefined,
+     errorMessageAvailable:messages.some(v=>v.length>0)});
   }
   console.log('BASIC_FOLLOW_HISTORY_OBSERVABILITY='+JSON.stringify({
    status:data.result?.run?.status,eventsReturned:events.length,

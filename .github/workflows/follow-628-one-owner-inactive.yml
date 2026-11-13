@@ -1,0 +1,61 @@
+name: SORIDRAW APP628 One Owner Runtime Config Inactive
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - 'scripts/stage-628-one-owner-config-inactive.mjs'
+      - '.github/workflows/follow-628-one-owner-inactive.yml'
+      - '.deploy/app628-one-owner-inactive.trigger'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app628-owner-inactive-only
+  cancel-in-progress: false
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exact one-use source version and approved trigger
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only HEAD^ HEAD)"
+          if [ "$changed" != '.deploy/app628-one-owner-inactive.trigger' ]; then
+            echo stage=false >> "$GITHUB_OUTPUT"
+            echo APP628_NO_TRIGGER_NO_MUTATION=PASS
+            exit 0
+          fi
+          printf 'approved_parent=%s\n' "$(git rev-parse HEAD^)" | cmp -s - .deploy/app628-one-owner-inactive.trigger
+          diff="$(git diff --name-only a7bc0a80fd66d8801faf1638e48722bc34082cdb HEAD^)"
+          for file in 'scripts/stage-628-one-owner-config-inactive.mjs' '.github/workflows/follow-628-one-owner-inactive.yml'; do
+            grep -Fxq "$file" <<< "$diff"
+          done
+          test "$(printf '%s\n' "$diff" | wc -l)" -eq 2
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = 028e51a2d52b50e1f021dd6d689268518077c2e1
+          echo "parent=$(git rev-parse HEAD^)" >> "$GITHUB_OUTPUT"
+          echo stage=true >> "$GITHUB_OUTPUT"
+      - name: Validate exact source without network mutation
+        run: |
+          set -euo pipefail
+          node --check scripts/stage-628-one-owner-config-inactive.mjs
+          node scripts/stage-628-one-owner-config-inactive.mjs --source-only
+      - name: Stage two inactive candidates only, preserve all original bindings
+        if: steps.gate.outputs.stage == 'true'
+        env:
+          APP628_APPROVED_PARENT: ${{ steps.gate.outputs.parent }}
+        run: |
+          set -euo pipefail
+          node scripts/stage-628-one-owner-config-inactive.mjs --stage-once
+          echo APP628_NO_ACTIVE_ROUTING_CHANGES=PASS

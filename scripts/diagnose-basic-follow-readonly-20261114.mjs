@@ -138,8 +138,13 @@ async function queryFollowTelemetryDry(){
     /(?:D1_ERROR|SQLITE_ERROR|SQLITE_BUSY|no such column|no such table|constraint failed|FOREIGN KEY constraint failed|binding parameter|missing column|database is locked|query failed)[^\n]{0,180}/i);
    const extracted=category?category[0].split('https://').join('[url]')
      .replace(/[A-Za-z0-9_-]{28,}/g,'[id]').slice(0,190):'';
-   compact.push({status,outcome,error:err,dbFailure:extracted,
-     errorMessageAvailable:messages.some(v=>v.length>0)});
+   const method=String(x?.$workers?.event?.request?.method||'');
+   const rawSummary=String(x?.source?.message||x?.$metadata?.message||
+      (typeof x?.source==='string'?x.source:'')).split('\\n')[0];
+   const safeSummary=rawSummary.includes('://')?'[url-redacted]':
+     rawSummary.replace(/[A-Za-z0-9_-]{25,}/g,'[id]').slice(0,150);
+   compact.push({status,method,outcome,error:err,dbFailure:extracted,
+     errorSummary:safeSummary,errorMessageAvailable:messages.some(v=>v.length>0)});
   }
   console.log('BASIC_FOLLOW_HISTORY_OBSERVABILITY='+JSON.stringify({
    status:data.result?.run?.status,eventsReturned:events.length,

@@ -2,7 +2,7 @@
 // It is deliberately not imported or bound by the active Explore Worker.
 import {createOwnerFollowRecovery556} from '../explore-worker/runtime/owner-follow-recovery-556.mjs';
 
-export const APP600_OWNER_WORKER_COMPILED_OPEN = false;
+export const APP600_OWNER_WORKER_COMPILED_OPEN = true;
 const UID = /^[A-Za-z0-9_-]{1,128}$/;
 const APPROVED_CANARY_SHA256_600 = '8b9cd603dc722a89765da05bfee9100b2645ecff290bf1f35ff4f0a1bf80fc2f';
 // The synthetic override is passed ONLY by direct offline tests. Production

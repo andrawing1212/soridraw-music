@@ -19,7 +19,7 @@ assert.deepEqual(Object.keys(candidate.vars), ['SORIDRAW_ENVIRONMENT']);
 for (const forbidden of ['d1_databases', 'r2_buckets', 'services', 'routes',
   'secrets', 'route', 'zone_id', 'keep_vars'])
   assert.equal(candidate[forbidden], undefined, forbidden);
-assert.equal(APP600_OWNER_WORKER_COMPILED_OPEN, false);
+assert.equal(APP600_OWNER_WORKER_COMPILED_OPEN, true);
 console.log('APP600_SEPARATE_WORKER_CONFIG_INERT_NO_SHARED_BINDINGS=PASS');
 
 let clock = 1810000000000, writes = 0, alarms = 0, outbound = 0;
@@ -80,11 +80,12 @@ const runAlarm = async () => {
 };
 
 const baseline = writes;
+const runtimeOffEnv = {...env, SORIDRAW_OWNER_DO_STANDALONE_600: '0'};
 assert.equal((await handleOwnerWorker600(new Request(url, {method: 'POST',
-  headers: {'X-Soridraw-Owner-Bridge-600': secret},body: JSON.stringify(make())}), env)).status, 503);
+  headers: {'X-Soridraw-Owner-Bridge-600': secret},body: JSON.stringify(make())}), runtimeOffEnv)).status, 503);
 assert.equal((await call(make(), {enabled: false})).status, 503);
 assert.equal(writes, baseline);
-console.log('APP600_COMPILED_OFF_NO_DO_WRITE=PASS');
+console.log('APP618_PREPARED_CODE_RUNTIME_OFF_NO_DO_WRITE=PASS');
 
 assert.equal((await call(make(), {key: 'wrong'})).status, 403);
 assert.equal((await call(make('op_wrong_owner_600_123', {ownerUid: 'C'}))).status, 403);

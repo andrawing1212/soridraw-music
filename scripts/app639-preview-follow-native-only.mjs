@@ -8,10 +8,10 @@ import {createHash} from 'node:crypto';
 const ACCOUNT='e1a30fc9ef497fda1d34f4ab3dc1da45';
 const EX='soridraw-explore-preview',OW='soridraw-owner-follow-preview-candidate';
 const TEST='soridraw-explore-test',PROD='soridraw-explore-api';
-const EXPECTED_PARENT='b91f084d992ca8312f9c1bd0c273e2873fd7b51c';
+const EXPECTED_PARENT='caaedcaa73671bfde42ea13af0893e1dc4c8fcfe';
 const OFF='6437d86a-09c5-4ff0-8be5-ecfabd4a1f77';
 const OWNER='e679a602-44fb-4b4d-9e4d-7878c00b68c3';
-const NEEDLE="await consumeSocialAbuse380(env, uid, 'follow', [{ target: targetUid, desired: following, operationId }]);";
+const NEEDLE='await consumeSocialAbuse380(env, uid, "follow", [{ target: targetUid, desired: following, operationId }]);';
 const PATCH="/* APP639: follow retains native actor limiter; no redundant R2 cooldown receipt. */";
 const token=String(process.env.CLOUDFLARE_API_TOKEN||'');
 const sha=b=>createHash('sha256').update(b).digest('hex');
@@ -106,8 +106,8 @@ async function main(){
   const functionStart=source.lastIndexOf('async function enforceFollowEdgeRateLimit355(',loc);
   need(functionStart>=0&&loc-functionStart<1800,'PATCH_NOT_IN_NATIVE_FOLLOW_LIMITER');
   const segment=source.slice(functionStart,loc);
-  need(segment.includes("limiter.limit({ key: 'follow:' + uid })")&&
-       segment.includes('socialAbuseLimited380(60_000)'),'NATIVE_LIMITER_NOT_PRESERVED');
+  need(segment.includes('limiter.limit({ key: "follow:" + uid })')&&
+       segment.includes('socialAbuseLimited380(6e4)'),'NATIVE_LIMITER_NOT_PRESERVED');
   const patched=source.replace(NEEDLE,PATCH);
   need(patched.length>source.length-160&&patched.includes(PATCH),'SINGLE_PATCH');
   changed++;

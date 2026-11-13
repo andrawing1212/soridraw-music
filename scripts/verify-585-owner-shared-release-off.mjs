@@ -65,20 +65,32 @@ for(const [path,flag] of [
  ['owner-follow-enrollment-544.mjs','APP544_OWNER_EPOCH_BIND_COMPILED_OPEN'],
  ['owner-follow-current-auth-547.mjs','OWNER_FOLLOW_AUTH_PROOF_547_COMPILED_OPEN']
 ])off('cloudflare/explore-worker/runtime/'+path,flag);
+// APP608: source is compiled ON only for explicit one-owner PREVIEW opt-in.
+// Every shared Function remains runtime OFF before authenticated input handling.
+const sourceOn=(path,name)=>assert.match(read(path),
+ new RegExp('export const '+name+'\\s*=\\s*true\\s*;'),
+ 'APP608_SOURCE_COMPILED_GATE_NOT_READY_'+name);
 for(const flag of ['EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED',
  'APP575_OWNER_CANARY_BOOTSTRAP_ENABLED'])
- off('src/services/exploreOwnerFollowerSync542.ts',flag);
+ sourceOn('src/services/exploreOwnerFollowerSync542.ts',flag);
 for(const [path,flag] of [
  ['exploreOwnerFollowerWebhook542.ts','APP542_OWNER_HTTP_COMPILED_OPEN'],
  ['ownerFollowEnrollment544.ts','APP544_ENROLLMENT_COMPILED_OPEN'],
  ['ownerFollowAuthProof547.ts','APP547_AUTH_PROOF_COMPILED_OPEN']
-])off('functions/src/'+path,flag);
+]){
+ const full='functions/src/'+path;
+ sourceOn(full,flag);
+ const body=read(full);
+ assert.ok(body.includes("process.env.SORIDRAW_OWNER_FOLLOW_READY_608!=='1'"),
+  'APP608_FUNCTION_RUNTIME_OFF_MISSING_'+path);
+ assert.ok(body.includes('APP608_CANARY_SHA256'),'APP608_OWNER_SHA_GUARD_MISSING_'+path);
+}
 const clientCanary=read('src/services/exploreOwnerFollowerSync542.ts');
-assert.ok(clientCanary.includes('!shouldAttemptOwnerFollowCanary575('),
- 'APP591_PREVIEW_EXPLICIT_CANARY_GATE_MISSING');
-assert.ok(clientCanary.indexOf('!shouldAttemptOwnerFollowCanary575(')<
+assert.ok(clientCanary.includes('!isApp608OwnerCanaryVisible(uid)'),
+ 'APP608_EXPLICIT_ONE_OWNER_GATE_MISSING');
+assert.ok(clientCanary.indexOf('!isApp608OwnerCanaryVisible(uid)')<
  clientCanary.indexOf('const principal=auth.currentUser'),
- 'APP591_CANARY_GATE_MUST_PRECEDE_AUTH_READ');
+ 'APP608_OWNER_GATE_MUST_PRECEDE_AUTH_READ');
 assert.ok(clientCanary.includes("typeof window==='undefined'?'':window.location.hostname.toLowerCase()"),
  'APP591_PREVIEW_HOST_REQUIRED');
 assert.ok(clientCanary.includes("typeof window==='undefined'?'':window.location.search"),
@@ -95,7 +107,7 @@ assert.doesNotMatch(qa,/from ['"].*\.\.\/\.\.\/src\/index/);
 const sender=read('cloudflare/explore-worker/runtime/owner-follow-http-539.mjs');
 assert.ok(sender.includes(
  'https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publishExploreOwnerFollower542'));
-console.log('APP585_CLIENT_WORKER_FUNCTIONS_AND_CANARY_OFF=PASS');
+console.log('APP608_CLIENT_ONE_OWNER_AND_FUNCTIONS_RUNTIME_OFF=PASS');
 console.log('APP585_QA_AND_SHARED_PROJECTS_SEPARATE=PASS');
 console.log('APP585_SOURCE_CANDIDATE_VALID=PASS');
-console.log('APP585_SHARED_RELEASE=NO_GO_REQUIRES_LIVE_VERIFICATION_APPROVAL');
+console.log('APP608_SHARED_FUNCTIONS_RELEASE_HOLD_RUNTIME_OFF_UNTIL_PROVEN');

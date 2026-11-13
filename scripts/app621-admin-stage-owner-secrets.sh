@@ -34,15 +34,25 @@ print('APP621_GCP_SECRET_FORMAT_'+os.environ['SECRET']+'=PASS')
 PY
 done
 echo APP621_HUMAN_ADMIN_EXACT_GCP_SECRETS_READABLE=PASS
-# OAuth Device Grant works from remote Google Cloud Shell without a local callback.
-# The owner signs in directly with Cloudflare. Credentials and codes never go to ChatGPT.
-if ! npx --yes "$WRANGLER" whoami > "$DIR/whoami" 2>/dev/null; then
-  echo APP621_CLOUDFLARE_DEVICE_AUTHORIZATION_REQUIRED
+# APP622: The generic 'wrangler whoami' table is not authoritative for
+# account membership. Use an explicit target account plus an actual read-only
+# deployment listing for BOTH existing Workers before any secret staging.
+# Never use a different account or rely on a previously cached selection.
+export CLOUDFLARE_ACCOUNT_ID="$ACCOUNT"
+cloudflare_target_read_only() {
+  npx --yes "$WRANGLER" whoami --account "$ACCOUNT" --json > "$DIR/whoami-target.json" 2>/dev/null &&
+  npx --yes "$WRANGLER" deployments list --name "$EXPLORE" --json > "$DIR/explore-active.json" 2>/dev/null &&
+  npx --yes "$WRANGLER" deployments list --name "$OWNER" --json > "$DIR/owner-active.json" 2>/dev/null
+}
+if ! cloudflare_target_read_only; then
+  if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+    hold ACCOUNT_TOKEN_OVERRIDES_OAUTH_CHECK_TOKEN_SCOPE
+  fi
+  echo APP622_CORRECT_CLOUDFLARE_ACCOUNT_LOGIN_REQUIRED
   npx --yes "$WRANGLER" login --device --browser=false || hold CLOUDFLARE_DEVICE_LOGIN_FAILED
-  npx --yes "$WRANGLER" whoami > "$DIR/whoami" 2>/dev/null || hold CLOUDFLARE_NOT_AUTHENTICATED
+  cloudflare_target_read_only || hold CORRECT_CLOUDFLARE_ACCOUNT_NOT_ACCESSIBLE
 fi
-grep -Fq "$ACCOUNT" "$DIR/whoami" || hold WRONG_CLOUDFLARE_ACCOUNT
-echo APP621_EXACT_CLOUDFLARE_ACCOUNT=PASS
+echo APP622_EXACT_ACCOUNT_AND_BOTH_WORKERS_READ_ONLY=PASS
 # Official 'versions secret put' creates a new UNUSED version; 'secret put'
 # (without 'versions') would immediately deploy and is strictly prohibited.
 if ! npx --yes "$WRANGLER" versions secret put SORIDRAW_OWNER_FOLLOW_HMAC_539 \

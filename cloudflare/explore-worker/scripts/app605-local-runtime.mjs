@@ -1,0 +1,68 @@
+// APP605: compare original deployed bytes versus OFF-sidecar candidate
+// in local workerd. External network disabled. Only two forbidden-origin
+// routes are checked; this does not prove all user flows or full rollback.
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {createHash} from 'node:crypto';
+import {Miniflare,createFetchMock} from 'miniflare';
+const sha=b=>createHash('sha256').update(b).digest('hex');
+const fail=why=>{throw Error('APP605_RUNTIME_HOLD_'+why)};
+const root=join(process.env.RUNNER_TEMP||'/missing-app605','app605');
+const baseline=join(root,'baseline','preview-entry.js');
+const candidate=join(root,'candidate','preview-entry.js');
+const proof=JSON.parse(readFileSync(join(root,'candidate-proof.json'),'utf8'));
+const before=readFileSync(baseline),after=readFileSync(candidate);
+if(proof.prefixBytes!==before.length||!after.subarray(0,before.length).equals(before))
+ fail('ACTIVE_CODE_BYTES_NOT_PRESERVED');
+if(sha(before)!==proof.sourceSha||sha(after)!==proof.candidateSha)
+ fail('SOURCE_HASH_DRIFT');
+if(proof.compatibilityDate!=='2026-08-28'||!proof.compiledOff)
+ fail('COMPAT_OR_OFF_DRIFT');
+const cases=[
+ {method:'GET',path:'/v1/me/notifications/inbox',origin:'https://invalid.invalid'},
+ {method:'OPTIONS',path:'/v1/me/notifications/inbox',origin:'https://invalid.invalid'},
+];
+const started=[];
+async function launch(script){
+ const mock=createFetchMock();
+ mock.disableNetConnect();
+ const m=new Miniflare({
+  modules:true,scriptPath:script,
+  compatibilityDate:'2026-08-28',
+  bindings:{
+   SORIDRAW_ENVIRONMENT:'preview',ENV_NAME:'preview',
+   BOOTSTRAP_TOKEN:'APP605_LOCAL_DUMMY_NOT_REAL',
+   SORIDRAW_NOTIFICATION_INBOX_READ_ONLY_019:'1',
+  },
+  fetchMock:mock,d1Databases:['DB','RATE_DB'],
+  r2Buckets:['PROFILE_MEDIA','EXPLORE_CACHE'],
+  durableObjects:{
+   EXPLORE_LIKE_BATCH_SCHEDULER:'ExploreLikeBatchScheduler103',
+  },
+ });
+ started.push(m);return m;
+}
+async function response(m,test){
+ const res=await m.dispatchFetch('https://preview.soridraw.com'+test.path,{
+  method:test.method,headers:{Origin:test.origin},
+ });
+ const b=Buffer.from(await res.arrayBuffer());
+ return {status:res.status,contentType:res.headers.get('content-type')||'',
+  cache:res.headers.get('cache-control')||'',bodySha:sha(b)};
+}
+try{
+ const a=await launch(baseline),b=await launch(candidate);
+ for(const t of cases){
+  const x=await response(a,t),y=await response(b,t);
+  assert.deepEqual(x,y,'APP605_EXISTING_PATH_RESPONSE_DIVERGED');
+  if(!(x.status>=400&&x.status<500)&&x.status!==204)
+   fail('UNSAFE_ROUTE_STATUS_'+x.status);
+  console.log('APP605_LOCAL_WORKER_RUNTIME_PARITY_'+t.method+'_REJECT=PASS');
+ }
+ console.log('APP605_WORKER_COMPAT_DATE_2026_08_28=PASS');
+ console.log('APP605_ACTIVE_PREFIX_BYTES_AND_DO_V1_UNCHANGED=PASS');
+ console.log('APP605_NETWORK_DISABLED_AND_NO_REMOTE_MUTATION=PASS');
+}finally{
+ await Promise.allSettled(started.map(x=>x.dispose()));
+}

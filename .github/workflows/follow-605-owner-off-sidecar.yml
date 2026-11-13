@@ -1,0 +1,52 @@
+name: SORIDRAW APP605 Live Bundle Plus APP601 OFF Sidecar Isolated
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - 'scripts/verify-605-active-off-sidecar.mjs'
+      - 'cloudflare/explore-worker/scripts/app605-local-runtime.mjs'
+      - '.github/workflows/follow-605-owner-off-sidecar.yml'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app605-runtime-compat-no-upload
+  cancel-in-progress: false
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test OFF source contract and graph completeness
+        run: |
+          set -euo pipefail
+          node --check scripts/verify-605-active-off-sidecar.mjs
+          node --check cloudflare/explore-worker/scripts/app605-local-runtime.mjs
+          node scripts/verify-605-active-off-sidecar.mjs --self-test
+      - name: Build from exact Cloudflare ACTIVE source in runner temp (GET only)
+        run: |
+          set -euo pipefail
+          node scripts/verify-605-active-off-sidecar.mjs --prepare
+          node --check "$RUNNER_TEMP/app605/baseline/preview-entry.js"
+          node --check "$RUNNER_TEMP/app605/candidate/preview-entry.js"
+          echo APP605_NO_REMOTE_UPLOAD_OR_DEPLOY=PASS
+      - name: Install local Workers simulator only
+        run: |
+          set -euo pipefail
+          npm --prefix cloudflare/explore-worker install --ignore-scripts --no-audit --no-fund --package-lock=false
+          npm --prefix cloudflare/explore-worker install --no-save --ignore-scripts --no-audit --no-fund --package-lock=false miniflare
+      - name: Check real 2026-08-28 runtime locally, no network
+        shell: bash
+        run: |
+          set -euo pipefail
+          env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_ACCOUNT_ID \
+            node cloudflare/explore-worker/scripts/app605-local-runtime.mjs
+          echo APP605_CLOUDFARE_MUTATION_OR_PREVIEW_DEPLOY=ZERO

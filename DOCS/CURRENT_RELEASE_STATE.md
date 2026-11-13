@@ -1,3 +1,13 @@
+## CURRENT — APP638/641 PREVIEW 팔로우 저장 긴급 복구·제한 간소화 실제 Worker PASS / 소유자 자동 수신 OFF (2026-11-14 KST)
+
+- **새 실사용 실패 증거:** B의 팔로우·해제에서 서버 처리 오류/변경 제한 반복, B의 해제는 나중에 정본 반영됐지만 A는 수동 팔로워 창을 눌러야 갱신. 이전 APP634 Hosting PASS는 실패를 해결하지 못함. 별도 사용자 실제 계정 재시험·PC/모바일 자동 수신 아직 FAIL/HOLD.
+- **복구(공유 Cloudflare PREVIEW Worker만):** APP635 구버전 `d5d14cf8...`로의 직접 전환은 Cloudflare HTTP400이라 **트래픽 전환 전 HOLD** (Actions #43500909012). APP637는 당시 활성 `5d0f74b1...` 35개 바인딩/12개 소스 모듈 및 Secret/좋아요 DO v1을 그대로 상속하고 owner bridge 플래그 `SORIDRAW_OWNER_FOLLOW_BRIDGE_READY_607` 하나만 `0`으로 바꾼 비활성 버전 생성 PASS, 직후 GET 404로 배포 전 HOLD (#43501732907). **APP638는 해당 비활성 버전만 재조회·검증 후 100% PREVIEW 활성화 PASS** [Actions #43502517618](https://github.com/andrawing1212/soridraw-music/actions/runs/43502517618), 안전 OFF 버전 `6437d86a-09c5-4ff0-8be5-ecfabd4a1f77`. 강제 rollback·새 DO 마이그레이션·기존 Secret 교체 없음. 이를 통해 새 소유자 전달 예약이 기존 팔로우 정본 Writer를 가로막지 않음.
+- **과잉 제한 축소:** GitHub 원본 APP380 Source와 실제 esbuild Worker 모듈의 따옴표/`6e4` 표기가 다르므로 APP639 1차 엄격 소스 탐색은 version create 이전 `TARGET_EXACT_ONE_MODULE` HOLD (Actions #43503323935). [APP640](https://github.com/andrawing1212/soridraw-music/actions/runs/43504064080) 실제 활성 소스 GET-only로 확인 후 [PR #981](https://github.com/andrawing1212/soridraw-music/pull/981) / [Actions #43504391637](https://github.com/andrawing1212/soridraw-music/actions/runs/43504391637)에서 **팔로우 추가 R2 이력·10분30회·하루120회·반대 클릭 쿨다운 호출 단 1곳 제거**. 최종 PREVIEW Worker 활성 버전 **`73f64a79-6cac-441b-9906-9ea9e32db66d`**. 기본 Cloudflare actor limit 분당 60회 + Firebase/Auth + 정본 ordered idempotency·replay 유지; 좋아요 및 기타 UI·데이터 구조 불변. 기존 R2 이력 삭제·재생성 0.
+- **실제 검증 경계:** 새 버전의 35개 바인딩, Like DO v1, 서버 비밀, owner bridge OFF, 대상 모듈 1개·한 호출만 차이, 다른 11개 소스 바이트 동일, TEST/PRODUCTION/별도 owner Worker 비변경, D1/R2/RTDB/Functions/Rules/사용자 원본 직접 변경 없음은 Actions PASS. 그러나 **B 실제 계정 팔로우·해제 재시험 / A 자동 반영 PASS 아니다**. Owner bridge가 의도적으로 OFF이므로 A의 타 사용자 팔로우 실시간 수신은 현재 작동하지 않는다. 앞선 클라이언트 APP634 canary opt-in Hosting 코드는 그대로이나 서버 bridge OFF이며, 구독·Firebase 등록의 실제 사용자 수신 합격 주장 금지. COST 실측 PASS도 아님.
+- **GitHub 최종 앱/배포 소스 체크포인트:** APP641 Worker 코드/트리거까지 병합한 `preview` HEAD `d320fb8e124c21f76bcb97bbad0374fc4a2d2ceb`, document-only merge 이후 HEAD는 달라짐. PREVIEW Hosting 앱 변경은 마지막 Actions #43495854680에서 멈춤. 자동 동기화 재활성화는 신규 실패 원인(소유자 enrollment, DO reservation, exact settled receipt/relay)이 안전하게 증명되기 전까지 금지. PR #970 Draft/미병합 보호. 정상 팔로우 재시험을 무제한 반복시키거나 rate limit을 전면 제거하지 않으며 실제 비용·서비스 응답을 별도 확인.
+
+---
+
 ## CURRENT — APP634 단일 계정 팔로우 자동 수신 구독 조건 수정·Hosting PASS / 실사용 HOLD (2026-11-14 KST)
 
 - **이번 실제 실패:** B가 A를 팔로우·취소해도 A PC 브라우저에서 팔로워 수가 자동으로 변하지 않음. A가 팔로워 버튼을 눌러 기존 서버 GET을 강제할 때만 숫자가 최신으로 갱신. 사용자가 직접 확인한 **실사용 FAIL**이며 과거 증상과 동일. 이전 APP633 PREVIEW Hosting SUCCESS를 실제 자동 동기화 PASS로 해석 금지.

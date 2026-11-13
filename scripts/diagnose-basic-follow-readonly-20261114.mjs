@@ -125,8 +125,9 @@ async function queryFollowTelemetryDry(){
    const status=Number(x?.$workers?.event?.response?.status||
      x?.$workers?.statusCode||x.statusCode||x?.$metadata?.statusCode||0);
    const outcome=String(x?.$workers?.outcome||'').slice(0,35);
-   const err=String(x?.$metadata?.error||x?.$workers?.event?.error||'')
-    .replace(/https?:\\/\\/\\S+/g,'[url]').replace(/[A-Za-z0-9_-]{20,}/g,'[redacted]').slice(0,100);
+   const rawErr=String(x?.$metadata?.error||x?.$workers?.event?.error||'');
+   const err=rawErr.includes('://')?'[redacted]':
+     rawErr.replace(/[A-Za-z0-9_-]{20,}/g,'[redacted]').slice(0,100);
    compact.push({status,outcome,error:err});
   }
   console.log('BASIC_FOLLOW_HISTORY_OBSERVABILITY='+JSON.stringify({

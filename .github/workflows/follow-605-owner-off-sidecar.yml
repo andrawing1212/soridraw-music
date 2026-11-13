@@ -42,7 +42,8 @@ jobs:
         run: |
           set -euo pipefail
           npm --prefix cloudflare/explore-worker install --ignore-scripts --no-audit --no-fund --package-lock=false
-          npm --prefix cloudflare/explore-worker install --no-save --ignore-scripts --no-audit --no-fund --package-lock=false miniflare
+          npm --prefix cloudflare/explore-worker install --no-save --ignore-scripts --no-audit --no-fund --package-lock=false miniflare@latest workerd@1.20261110.1
+          node -e "const p=require('./cloudflare/explore-worker/node_modules/workerd/package.json'); console.log('APP605_WORKERD_VERSION='+p.version)"
       - name: Check real 2026-08-28 runtime locally, no network
         shell: bash
         run: |

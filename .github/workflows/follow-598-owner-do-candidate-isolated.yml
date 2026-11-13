@@ -1,0 +1,80 @@
+name: SORIDRAW APP598 Owner DO OFF Candidate Isolated
+
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/app598-owner-do-off-candidate.mjs'
+      - '.github/workflows/follow-598-owner-do-candidate-isolated.yml'
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/follow-598-owner-do-candidate-isolated.yml'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app598-owner-do-isolated
+  cancel-in-progress: false
+jobs:
+  source:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Source-only tests of byte preservation, OFF class and migration contract
+        run: |
+          set -euo pipefail
+          node --check scripts/app598-owner-do-off-candidate.mjs
+          node scripts/app598-owner-do-off-candidate.mjs --self-test
+
+  isolate:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Reuse APP597 fingerprint to build isolated candidate (Cloudflare GET only)
+        run: |
+          set -euo pipefail
+          node --check scripts/app598-owner-do-off-candidate.mjs
+          node scripts/app598-owner-do-off-candidate.mjs --candidate
+          node --check "$RUNNER_TEMP/app598-owner-do-candidate/candidate-worker.mjs"
+      - name: Dry-run-only Wrangler compile with no Cloudflare credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          npm install --no-audit --no-fund --ignore-scripts --package-lock=false
+          mkdir -p "$RUNNER_TEMP/app598-owner-do-candidate/dryrun"
+          env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_ACCOUNT_ID \
+            ./node_modules/.bin/wrangler deploy \
+            --config "$RUNNER_TEMP/app598-owner-do-candidate/wrangler.jsonc" \
+            --dry-run --outdir "$RUNNER_TEMP/app598-owner-do-candidate/dryrun" \
+            > "$RUNNER_TEMP/app598-wrangler-dryrun.log" 2>&1 || {
+              echo 'APP598_WRANGLER_LOCAL_DRYRUN_FAILED_NO_CLOUD_WRITE' >&2
+              tail -n 35 "$RUNNER_TEMP/app598-wrangler-dryrun.log" >&2
+              exit 2
+            }
+          echo 'APP598_WRANGLER_LOCAL_DRYRUN=PASS'
+          echo 'APP598_EXISTING_WORKER_DEPLOY=ZERO'
+          echo 'APP598_CANDIDATE_NOT_SAFE_TO_DEPLOY_WITHOUT_BINDING_ROLLBACK_PROOF'
+      - name: Retain sanitized hash and contract evidence only for one day
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app598-owner-do-source-only-evidence
+          path: ${{ runner.temp }}/app598-owner-do-candidate/sanitized-evidence.json
+          retention-days: 1

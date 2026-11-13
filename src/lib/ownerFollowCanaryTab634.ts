@@ -1,0 +1,23 @@
+// APP634: Preserve only an explicitly entered, PREVIEW-only owner QA opt-in
+// while SPA navigation replaces URL search parameters. This is tab-local;
+// ordinary visitors, other environments and other account UIDs remain inert.
+const PREVIEW_HOST_634='preview.soridraw.com';
+const TAB_KEY_634='soridraw:owner-follow:explicit-tab-optin:634';
+type CanRead634=Pick<Storage,'getItem'>;
+type CanWrite634=Pick<Storage,'setItem'>;
+export const captureOwnerFollowCanaryOptIn634=(
+ hostname:string,search:string,storage:CanWrite634|null,
+):boolean=>{
+ if(hostname!==PREVIEW_HOST_634||
+   new URLSearchParams(search).get('ownerFollowCanary')!=='1')return false;
+ try{storage?.setItem(TAB_KEY_634,'1')}catch{/* The URL-only opt-in still works. */}
+ return true;
+};
+export const hasOwnerFollowCanaryOptIn634=(
+ hostname:string,search:string,storage:CanRead634|null,
+):boolean=>{
+ if(hostname!==PREVIEW_HOST_634)return false;
+ if(new URLSearchParams(search).get('ownerFollowCanary')==='1')return true;
+ try{return storage?.getItem(TAB_KEY_634)==='1'}
+ catch{return false}
+};

@@ -32,11 +32,21 @@ async function api(method,path,token,body){
 const uri=name=>'projects/'+PROJECT+'/locations/'+REGION+'/functions/'+name;
 const clone=x=>JSON.parse(JSON.stringify(x));
 async function main(){
- check(process.argv.length===3&&process.argv[2]==='--apply','USAGE');
+ const cicd=process.argv[2]==='--apply-ci';
+ check(process.argv.length===3&&['--apply','--apply-ci'].includes(process.argv[2]),'USAGE');
+ if(cicd){
+  check(process.env.GITHUB_ACTIONS==='true'&&
+   process.env.GITHUB_REF==='refs/heads/feat/app600-owner-standalone-isolated'&&
+   /^[a-f0-9]{40}$/.test(String(process.env.APP632_APPROVED_PARENT||'')),
+   'CI_APPROVED_CONTEXT');
+ }
  check(createHash('sha256').update(UID).digest('hex')===PIN,'UID_PIN');
  check(call('gcloud',['projects','describe',PROJECT,'--format=value(projectId)'])===PROJECT,'WRONG_GCP_PROJECT');
  const principal=call('gcloud',['auth','list','--filter=status:ACTIVE','--format=value(account)']);
- check(principal&&!principal.includes('.gserviceaccount.com'),'HUMAN_ADMIN_REQUIRED');
+ if(cicd)
+  check(principal.includes('.gserviceaccount.com'),'CI_EXACT_GCP_SERVICE_ACCOUNT_REQUIRED');
+ else
+  check(principal&&!principal.includes('.gserviceaccount.com'),'HUMAN_ADMIN_REQUIRED');
  const token=call('gcloud',['auth','print-access-token']);
  check(token.length>100,'GCP_AUTH_TOKEN_INVALID');
  const baselines=[];

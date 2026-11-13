@@ -168,6 +168,34 @@ async function inspectDeployedFollowStack(){
   console.log('BASIC_FOLLOW_DEPLOYED_STACK_'+at+'='+section.slice(0,3900));
  }
 }
+async function inspectFollowMutationSqlAndSchema(){
+ const result=await cfGet('workers/workers/'+worker+'/versions/'+safe+'?include=modules');
+ const entry=result.modules?.find(m=>m.name==='preview-entry.mjs');
+ assert(entry?.content_base64,'ACTIVE_SQL_NOT_AVAILABLE');
+ const {Buffer}=await import('node:buffer');
+ const lines=Buffer.from(entry.content_base64,'base64').toString('utf8')
+  .split(String.fromCharCode(10));
+ console.log('BASIC_FOLLOW_ACTIVE_SQL_350='+lines.slice(14678,14743)
+  .map((v,i)=>(14679+i)+':'+v.slice(0,280)).join(' | ').slice(0,14000));
+ const queries=[
+  "SELECT name,type,sql FROM sqlite_master WHERE name IN ('explore_follow_overrides_348','explore_follow_cutover_control_348','follows') ORDER BY name LIMIT 4",
+  "SELECT name,type,sql FROM sqlite_master WHERE type='trigger' AND tbl_name='explore_follow_overrides_348' ORDER BY name LIMIT 30",
+  "SELECT name,type,sql FROM sqlite_master WHERE type='index' AND tbl_name='explore_follow_overrides_348' ORDER BY name LIMIT 30",
+  "SELECT name,type FROM pragma_table_info('explore_follow_overrides_348') ORDER BY cid LIMIT 30"
+ ];
+ for(let i=0;i<queries.length;i++){
+  const sql=queries[i];
+  assert(sql.startsWith('SELECT '),'SQL_ALLOWLIST');
+  const r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+account+
+   '/d1/database/'+db+'/query',{method:'POST',
+   headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+   body:JSON.stringify({sql,params:[]}),signal:AbortSignal.timeout(22000)});
+  const j=await r.json(),x=j.result?.[0];
+  assert(r.ok&&j.success===true&&x?.success===true&&x?.meta?.rows_written===0,
+   'SCHEMA_READONLY_'+i);
+  console.log('BASIC_FOLLOW_SCHEMA_'+i+'='+JSON.stringify(x.results).slice(0,13000));
+ }
+}
 async function run(){
  assert(process.argv[2]==='--live'&&process.env.GITHUB_ACTIONS==='true'&&
   process.env.CLOUDFLARE_ACCOUNT_ID===account&&token.length>20,'ACTION_CONTEXT');
@@ -187,6 +215,7 @@ async function run(){
  const cutover=await phase();
  await inspectFrozenCanonical();
  await inspectDeployedFollowStack();
+ await inspectFollowMutationSqlAndSchema();
  await queryFollowTelemetryDry();
  console.log('BASIC_FOLLOW_NO_USER_MUTATIONS_NO_BACKEND_DEPLOYS=PASS');
  if(!p||!d)throw Error('BASIC_FOLLOW_BROWSER_PREFLIGHT_FAIL');

@@ -156,7 +156,7 @@ async function candidate(){
  const oldMigration=String(metadata.result?.resources?.script_runtime?.migration_tag||'');
  const activeRuntime=metadata.result?.resources?.script_runtime||{};
  const activeDate=String(activeRuntime.compatibility_date||'');
- requireTrue(/^\\d{4}-\\d{2}-\\d{2}$/.test(activeDate),'ACTIVE_RUNTIME_DATE_UNAVAILABLE');
+ requireTrue(/^\d{4}-\d{2}-\d{2}$/.test(activeDate),'ACTIVE_RUNTIME_DATE_UNAVAILABLE');
  const runtimeFlags=Array.isArray(activeRuntime.compatibility_flags)?activeRuntime.compatibility_flags:[];
  requireTrue(oldMigration!== 'v2','OWNER_MIGRATION_ALREADY_APPLIED');
  const settings=await getApi(root+'/settings',token);

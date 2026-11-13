@@ -1,0 +1,29 @@
+name: SORIDRAW APP631 Admin Firebase Canary Env Only Source
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - 'scripts/app631-activate-three-functions-env.mjs'
+      - '.github/workflows/follow-631-admin-env-source.yml'
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Source-only exact function scope and API mask
+        run: |
+          set -euo pipefail
+          node --check scripts/app631-activate-three-functions-env.mjs
+          node scripts/app631-activate-three-functions-env.mjs --self-test
+          grep -Fq 'updateMask=serviceConfig.environmentVariables' scripts/app631-activate-three-functions-env.mjs
+          grep -Fq 'etag:b.value.etag' scripts/app631-activate-three-functions-env.mjs
+          grep -Fq 'APP631_THREE_FUNCTIONS_READY_ONE_OWNER=PASS' scripts/app631-activate-three-functions-env.mjs
+          echo APP631_BACKEND_NOT_MUTATED_IN_CI=PASS

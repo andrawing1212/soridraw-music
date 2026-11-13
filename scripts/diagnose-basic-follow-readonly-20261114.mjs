@@ -91,7 +91,7 @@ async function queryFollowTelemetryDry(){
    datasets:['cloudflare-workers'],
    filters:[{key:'$metadata.service',operation:'eq',type:'string',
     value:'soridraw-explore-preview'}],
-   needle:{value:'/v1/profiles/',isRegex:false,matchCase:false}
+   needle:{value:'/follow',isRegex:false,matchCase:false}
   }
  };
  try{
@@ -111,13 +111,22 @@ async function queryFollowTelemetryDry(){
   let found=0;
   const compact=[];
   for(const x of events){
-   const uri=String(x?.$workers?.url||x.url||x?.$metadata?.url||'');
-   if(!uri.includes('/follow'))continue;
+   const uri=String(x?.$workers?.event?.request?.url||x?.$workers?.url||
+     x?.url||x?.$metadata?.url||'');
+   // The whole query is already explicitly limited to '/follow' events.
+   // Never log the URI or identity even when the event schema differs.
+   if(found===0)console.log('BASIC_FOLLOW_EVENT_FIELD_KEYS='+JSON.stringify({
+    root:Object.keys(x||{}).slice(0,30),
+    worker:Object.keys(x?.$workers||{}).slice(0,30),
+    workerEvent:Object.keys(x?.$workers?.event||{}).slice(0,30),
+    metadata:Object.keys(x?.$metadata||{}).slice(0,30)
+   }));
    found++;
-   const status=Number(x?.$workers?.statusCode||x.statusCode||
-     x?.$metadata?.statusCode||0);
+   const status=Number(x?.$workers?.event?.response?.status||
+     x?.$workers?.statusCode||x.statusCode||x?.$metadata?.statusCode||0);
    const outcome=String(x?.$workers?.outcome||'').slice(0,35);
-   const err=String(x?.$metadata?.error||'').replace(/[A-Za-z0-9_-]{28,}/g,'[redacted]').slice(0,100);
+   const err=String(x?.$metadata?.error||x?.$workers?.event?.error||'')
+    .replace(/https?:\\/\\/\\S+/g,'[url]').replace(/[A-Za-z0-9_-]{20,}/g,'[redacted]').slice(0,100);
    compact.push({status,outcome,error:err});
   }
   console.log('BASIC_FOLLOW_HISTORY_OBSERVABILITY='+JSON.stringify({

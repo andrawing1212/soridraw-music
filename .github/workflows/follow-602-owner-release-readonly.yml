@@ -6,16 +6,10 @@ on:
       - 'scripts/verify-602-owner-release-readonly.mjs'
       - '.github/workflows/follow-602-owner-release-readonly.yml'
       - 'cloudflare/owner-follow-worker/APP602_RELEASE_PLAN.md'
-  pull_request:
-    branches: [preview]
-    paths:
-      - 'scripts/verify-602-owner-release-readonly.mjs'
-      - '.github/workflows/follow-602-owner-release-readonly.yml'
-      - 'cloudflare/owner-follow-worker/APP602_RELEASE_PLAN.md'
 permissions:
   contents: read
 concurrency:
-  group: soridraw-app602-no-deploy-readonly
+  group: soridraw-app602-branch-only-readonly
   cancel-in-progress: false
 jobs:
   local:

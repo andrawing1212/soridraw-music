@@ -87,7 +87,7 @@ assert.equal(writes, baseline);
 console.log('APP600_COMPILED_OFF_NO_DO_WRITE=PASS');
 
 assert.equal((await call(make(), {key: 'wrong'})).status, 403);
-assert.equal((await call(make('op_wrong_owner_600_123', {ownerUid: 'C'})).status, 403);
+assert.equal((await call(make('op_wrong_owner_600_123', {ownerUid: 'C'}))).status, 403);
 assert.equal(writes, 0);
 assert.deepEqual(doNames, []);
 assert.equal((await call(make(), {method: 'GET'})).status, 404);

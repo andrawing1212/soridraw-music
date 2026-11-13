@@ -20,8 +20,11 @@ jobs:
         run: |
           set -euo pipefail
           bash -n scripts/app621-admin-stage-owner-secrets.sh
-          grep -Fq 'versions secret put SORIDRAW_OWNER_FOLLOW_HMAC_539' scripts/app621-admin-stage-owner-secrets.sh
-          grep -Fq 'versions secret put SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544' scripts/app621-admin-stage-owner-secrets.sh
-          grep -Fq 'versions secret put SORIDRAW_OWNER_DO_BRIDGE_SECRET_600' scripts/app621-admin-stage-owner-secrets.sh
-          if grep -Eq '^[[:space:]]*(npx|wrangler).* secret put (?!.*versions)' scripts/app621-admin-stage-owner-secrets.sh; then exit 3; fi
-          echo APP621_BASH_AND_NONDEPLOY_SECRET_SOURCE=PASS
+          grep -Fq 'APP624_CLOUDFLARE_CLI_LOGIN_SAVED=PASS' scripts/app621-admin-stage-owner-secrets.sh
+          grep -Fq 'APP624_EXACT_ACCOUNT_MEMBERSHIP=PASS' scripts/app621-admin-stage-owner-secrets.sh
+          grep -Fq 'APP624_SECRETS_STAGE=HOLD_PENDING_ATOMIC_VERSION_BINDING_PROOF' scripts/app621-admin-stage-owner-secrets.sh
+          if grep -Eq '^[[:space:]]*npx[[:space:]].*\b(login|deploy|secret put|versions secret (put|bulk))\b' scripts/app621-admin-stage-owner-secrets.sh; then
+            echo APP624_UNSAFE_AUTO_AUTH_OR_WRITE_FOUND
+            exit 3
+          fi
+          echo APP624_NO_OAUTH_LOOP_NO_SECRET_WRITE_SOURCE=PASS

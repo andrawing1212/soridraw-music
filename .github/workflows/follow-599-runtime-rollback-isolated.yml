@@ -1,0 +1,64 @@
+name: SORIDRAW APP599 Local Runtime and Rollback NO-GO Proof
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'cloudflare/explore-worker/scripts/app599-local-runtime-comparison.mjs'
+      - '.github/workflows/follow-599-runtime-rollback-isolated.yml'
+  push:
+    branches: [preview]
+    paths:
+      - 'cloudflare/explore-worker/scripts/app599-local-runtime-comparison.mjs'
+      - '.github/workflows/follow-599-runtime-rollback-isolated.yml'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app599-runtime-rollback-no-deploy
+  cancel-in-progress: false
+jobs:
+  source:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check scoped runtime test source only
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/scripts/app599-local-runtime-comparison.mjs
+          grep -Fq "APP599_DO_V2_ROLLBACK_ACROSS_LIFECYCLE=BLOCKED" cloudflare/explore-worker/scripts/app599-local-runtime-comparison.mjs
+  isolate:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Materialize exact active source for new local runtime tests (GET only)
+        run: |
+          set -euo pipefail
+          node scripts/app598-owner-do-off-candidate.mjs --candidate
+      - name: Install simulator dependencies locally, never deploy
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+          npm install --no-save --ignore-scripts --no-audit --no-fund --package-lock=false miniflare
+      - name: Compare safe Worker execution paths in local workerd with no outbound HTTP
+        run: |
+          set -euo pipefail
+          env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_ACCOUNT_ID \
+            node cloudflare/explore-worker/scripts/app599-local-runtime-comparison.mjs
+          echo 'APP599_TEST_PRODUCTION_AND_SHARED_DATA_WRITES=ZERO'
+          echo 'APP599_WORKER_DEPLOY_OR_DO_MIGRATION=ZERO'

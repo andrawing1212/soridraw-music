@@ -154,6 +154,10 @@ async function candidate(){
  const metadata=await getApi(root+'/versions/'+VERSION,token);
  requireTrue(metadata.result?.id===VERSION,'METADATA_VERSION_CHANGED');
  const oldMigration=String(metadata.result?.resources?.script_runtime?.migration_tag||'');
+ const activeRuntime=metadata.result?.resources?.script_runtime||{};
+ const activeDate=String(activeRuntime.compatibility_date||'');
+ requireTrue(/^\d{4}-\d{2}-\d{2}$/.test(activeDate),'ACTIVE_RUNTIME_DATE_UNAVAILABLE');
+ const runtimeFlags=Array.isArray(activeRuntime.compatibility_flags)?activeRuntime.compatibility_flags:[];
  requireTrue(oldMigration!== 'v2','OWNER_MIGRATION_ALREADY_APPLIED');
  const settings=await getApi(root+'/settings',token);
  const bindings=validateCurrentBindings(settings,config);
@@ -185,6 +189,8 @@ async function candidate(){
    originalPrefixByteIdentical:true,
    newOwnerDORequestStatus:503,
    oldMigrationVersion:oldMigration||'UNREPORTED',
+   activeCompatibilityDate:activeDate,
+   activeCompatibilityFlags:runtimeFlags,
    plannedMigrations:['v1:ExploreLikeBatchScheduler103','v2:OwnerFollowerRecovery557'],
    sourceOnlyExistingBindingNamesAndTypes:bindings,
    bindingDeltaOnly:[{name:DO_BINDING,class_name:DO_CLASS}],

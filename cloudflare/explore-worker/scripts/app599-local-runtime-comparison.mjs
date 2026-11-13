@@ -12,6 +12,10 @@ const dir=join(process.env.RUNNER_TEMP||'/invalid-runner-temp','app598-owner-do-
 const conf=JSON.parse(readFileSync(new URL('../canonical/wrangler.preview.jsonc',import.meta.url),'utf8'));
 const evidence=JSON.parse(readFileSync(join(dir,'sanitized-evidence.json'),'utf8'));
 const candidate=readFileSync(join(dir,'candidate-worker.mjs'));
+const deployedCompatibilityDate=String(evidence.activeCompatibilityDate||'');
+need(/^\d{4}-\d{2}-\d{2}$/.test(deployedCompatibilityDate),'ACTIVE_COMPAT_DATE_MISSING');
+const deployedCompatibilityFlags=Array.isArray(evidence.activeCompatibilityFlags)?
+ evidence.activeCompatibilityFlags:[];
 need(evidence.originalBytes>5000,'MISSING_VERIFIED_ORIGINAL');
 need(sha(candidate)===evidence.candidateSHA256,'CANDIDATE_BYTES_CHANGED');
 const original=candidate.subarray(0,evidence.originalBytes);
@@ -40,6 +44,7 @@ need(conf.migrations?.length===2&&conf.migrations[1].tag==='v2'&&
  conf.migrations[1].new_sqlite_classes?.includes('OwnerFollowerRecovery557'),
  'OWNER_DO_MIGRATION_V2_MISSING');
 need(evidence.oldMigrationVersion!=='v2','OWNER_DO_ALREADY_MIGRATED');
+console.log('APP599_DEPLOYED_COMPATIBILITY_DATE='+deployedCompatibilityDate);
 console.log('APP599_FULL_LIVE_BINDINGS='+live.length);
 console.log('APP599_DASHBOARD_ONLY_BINDING_NAMES='+missing.length);
 console.log('APP599_KEEP_VARS=true; EXPLICIT_PARITY=NOT_PROVEN');
@@ -56,7 +61,8 @@ const instances=[];
 function start(path,isCandidate){
  const mock=createFetchMock();mock.disableNetConnect();
  const opts={
-  modules:true,scriptPath:path,compatibilityDate:'2026-08-28',fetchMock:mock,
+  modules:true,scriptPath:path,compatibilityDate:deployedCompatibilityDate,
+  compatibilityFlags:deployedCompatibilityFlags,fetchMock:mock,
   bindings:fakeBindings,d1Databases:['DB','RATE_DB'],r2Buckets:['PROFILE_MEDIA','EXPLORE_CACHE'],
   durableObjects:{
    EXPLORE_LIKE_BATCH_SCHEDULER:'ExploreLikeBatchScheduler103',

@@ -1,0 +1,59 @@
+name: SORIDRAW APP597 PREVIEW Worker Active Source Readonly
+
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/verify-597-preview-worker-live-readonly.mjs'
+      - '.github/workflows/follow-597-worker-active-readonly.yml'
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/follow-597-worker-active-readonly.yml'
+
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app597-worker-readonly
+  cancel-in-progress: false
+
+jobs:
+  source:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check safe live-release inspector locally (no cloud call)
+        run: |
+          node --check scripts/verify-597-preview-worker-live-readonly.mjs
+          node scripts/verify-597-preview-worker-live-readonly.mjs --self-test
+
+  live:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    env:
+      CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: \${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Inspect active PREVIEW Worker and rollback metadata (GET only)
+        run: |
+          node --check scripts/verify-597-preview-worker-live-readonly.mjs
+          node scripts/verify-597-preview-worker-live-readonly.mjs --live
+      - name: Retain only non-secret metadata for one day
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app597-worker-release-metadata
+          path: \${{ runner.temp }}/app597-readonly.json
+          retention-days: 1

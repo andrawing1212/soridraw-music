@@ -6,6 +6,7 @@ import {getApp} from 'firebase/app';
 import {getFunctions,httpsCallable} from 'firebase/functions';
 import {onValue,ref as databaseRef,type Unsubscribe} from 'firebase/database';
 import {auth,realtimeDb} from '../firebase';
+import { hasOwnerFollowCanaryOptIn634 } from '../lib/ownerFollowCanaryTab634';
 
 export const EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED=true;
 export const APP608_APPROVED_CANARY_UID='rcZ2GZrBndOZzT8C635eiNBjYIJ2';
@@ -17,12 +18,21 @@ export const shouldAttemptOwnerFollowCanary575=(
  hostname:string,search:string,enabled=APP575_OWNER_CANARY_BOOTSTRAP_ENABLED,
 )=>enabled&&hostname==='preview.soridraw.com'&&
  new URLSearchParams(search).get('ownerFollowCanary')==='1';
+// The explicit root URL may navigate / -> /explore -> ?profile=uid, which
+// erases ownerFollowCanary from location.search. APP634 restores ONLY the
+// same-tab opt-in originally captured on preview.soridraw.com.
+const hasExplicitOwnerFollowTabOptIn634=():boolean=>{
+ if(typeof window==='undefined')return false;
+ try{return hasOwnerFollowCanaryOptIn634(
+  window.location.hostname.toLowerCase(),window.location.search,window.sessionStorage,
+ )}catch{return false}
+};
 export const isApp608OwnerCanaryVisible=(uid:string):boolean=>
  uid===APP608_APPROVED_CANARY_UID&&
- shouldAttemptOwnerFollowCanary575(
+ (shouldAttemptOwnerFollowCanary575(
    typeof window==='undefined'?'':window.location.hostname.toLowerCase(),
    typeof window==='undefined'?'':window.location.search,
- );
+ )||hasExplicitOwnerFollowTabOptIn634());
 const enrollmentAttempts575=new Map<string,Promise<boolean>>();
 const tryOwnerFollowCanaryEnrollment575=(
  uid:string,principal:NonNullable<typeof auth.currentUser>,

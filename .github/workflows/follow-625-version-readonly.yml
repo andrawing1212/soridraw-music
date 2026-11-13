@@ -1,0 +1,25 @@
+name: SORIDRAW APP625 Pinned Workers and Latest Versions Readonly
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - 'scripts/app625-readonly-version-source.mjs'
+      - '.github/workflows/follow-625-version-readonly.yml'
+permissions:
+  contents: read
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Inspect exact inactive worker versions without changing traffic
+        run: node scripts/app625-readonly-version-source.mjs

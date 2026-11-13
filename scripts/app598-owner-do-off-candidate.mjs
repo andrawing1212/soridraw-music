@@ -95,11 +95,13 @@ function inspectModuleBody(payload){
  const original=stamps[0].b;
  const code=original.toString('utf8');
  requireTrue(Buffer.from(code,'utf8').equals(original),'ACTIVE_NOT_VALID_UTF8');
- requireTrue(code.includes('export default') &&
-   code.includes('ExploreLikeBatchScheduler103') &&
-   !code.includes('class OwnerFollowerRecovery557') &&
+ // An active Worker is a compiled/minified ESM module: exact text spelling of
+ // export/default/class statements is NOT part of its contract. Compare the
+ // APP597 cryptographic fingerprint, then let Node and Wrangler parse/build
+ // the exact appended candidate rather than assuming pretty-print syntax.
+ requireTrue(!code.includes('class OwnerFollowerRecovery557') &&
    !code.includes('export {OwnerFollowerRecovery557}'),
-   'CANONICAL_MODULE_EXPORT_SHAPE_CHANGED');
+   'OWNER_DO_ALREADY_EXPORTED');
  return {original,originalModuleSha256:sha(original),name:stamps[0].name,fingerprint};
 }
 async function getApi(path,token){

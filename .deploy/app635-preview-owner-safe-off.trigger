@@ -1,0 +1,9 @@
+mode=exact-preview-owner-follow-safe-off
+approved_preview_parent=afeb59d14427cfb559df9bd9ff890d2169cfa8aa
+active_version=5d0f74b1-84bf-4f96-a9e4-51bea25736fa
+safe_off_version=d5d14cf8-c65a-4aa2-b58f-ed08bcdc92fd
+environment=preview
+director_approval=YES_restore_follow_and_simplify_limits_20261114
+shared_data_mutation=false
+test_production_worker_deploy=false
+disable_new_owner_delivery_only=true

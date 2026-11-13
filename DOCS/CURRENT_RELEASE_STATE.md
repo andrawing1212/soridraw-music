@@ -1,3 +1,13 @@
+## CURRENT — APP605 활성 Worker OFF 사이드카 후보 / 로컬 실행 비교 HOLD (2026-11-13 KST)
+
+- **GitHub 후보:** [Draft PR #970](https://github.com/andrawing1212/soridraw-music/pull/970)에 APP605 활성 Explore Worker 실제 2,440,556바이트 코드를 100% 접두 보존하고 APP601 원본 내부 서비스 연결 + 7개 의존 모듈만 독립적으로 추가하는 **임시 후보 생성 코드**를 저장. `APP605_ACTIVE_BRIDGE_COMPILED_OPEN=false`, `APP601_OWNER_SERVICE_WIRING_COMPILED_OPEN=false`; 기존 fetch/cron·좋아요 DO export·23 바인딩·기존 사용자 경로 변경 없음. 후보는 **트래픽에 등록되지 않고 Cloudflare 새 버전에도 업로드되지 않음**. 정확한 내부 연결을 ON할 수 있는 실제 Worker 릴리스는 아직 준비되지 않았음.
+- **검사 증거 구분:** [APP605 소스·정본 구조 #43428633478](https://github.com/andrawing1212/soridraw-music/actions/runs/43428633478) PASS — Cloudflare GET-only, 실제 코드 지문 및 접두 보존, 내부 모듈 7개 import closure, 컴파일 OFF, 정본의 상대 import 0개 확인. **workerd 동작 동일성 PASS가 아니다.**
+- **APP605 실런타임 BLOCKER:** [첫 시도 #43427792922](https://github.com/andrawing1212/soridraw-music/actions/runs/43427792922)에서 설치된 workerd `2026-08-06`가 실제 `2026-08-28` 호환 날짜 미지원. 최상위 도구 최신화 [#43428026899](https://github.com/andrawing1212/soridraw-music/actions/runs/43428026899)에도 중첩 runtime 구버전이 남았음. 중첩 workerd 전체를 `1.20261110.1`로 고정한 [#43428216174](https://github.com/andrawing1212/soridraw-music/actions/runs/43428216174)에서 호환 날짜 제한은 해소됐으나 기존 원본과 새 후보 **둘 다** 시작 전 파일 시스템 모듈 루트 `.. break out` 오류와 기존 `ExploreLikeBatchScheduler103` export 인식 실패 경고가 발생. 원인 미확정, 실제 요청 처리·DO 동일성 미검증. 날짜 하향·허위 PASS 금지.
+- **서버 상태 불변:** 기존 Explore 활성 `350ce33d-ec83-49d0-a4ae-c25d2d90f59e` 100%, APP604 비활성 동일 코드 복사본 `f8ab4c5b-e037-4109-a635-604f3e3769b0`, APP603 OFF Worker `e274388f-8075-473d-b3a0-6e78eb67f353` 보존. APP605 업로드·트래픽 배포·서비스 바인딩/Secret/DO migration·공유 데이터·Hosting·TEST·PRODUCTION 변경 **0**.
+- **다음 독립 과제:** 현재 활성 코드의 로컬 workerd 모듈 루트와 기존 DO export 인식 문제를 소스 GET-only 격리 환경에서 해결하고, 정본과 OFF 후보 양쪽 실제 런타임 비교 PASS를 얻은 뒤에만 비배포 버전 업로드 여부 판단. 과거 APP601~604 PASS 및 이번 소스 구조 PASS 중복 재검사 금지. 실제 PC·모바일 팔로워 자동 동기화는 계속 OFF/미완료.
+
+---
+
 ## CURRENT — APP604 정확한 활성 코드 기반 비배포 버전 생성 PASS (2026-11-13 KST)
 
 - **기존 Explore Worker LIVE 트래픽 불변:** 디렉터 승인 APP604에서 Cloudflare 활성 `soridraw-explore-preview` `350ce33d-ec83-49d0-a4ae-c25d2d90f59e`의 실제 모듈 2,440,556바이트·SHA-256 지문 일치, DO v1 및 23개 바인딩을 [Actions #43425980714](https://github.com/andrawing1212/soridraw-music/actions/runs/43425980714) GET-only PASS로 확인했다.

@@ -74,9 +74,9 @@ for(const [path,flag] of [
  ['ownerFollowAuthProof547.ts','APP547_AUTH_PROOF_COMPILED_OPEN']
 ])off('functions/src/'+path,flag);
 const clientCanary=read('src/services/exploreOwnerFollowerSync542.ts');
-assert.ok(clientCanary.includes('!shouldAttemptOwnerFollowCanary575('),
+assert.ok(clientCanary.includes('!isApp608OwnerCanaryVisible(uid)'),
  'APP591_PREVIEW_EXPLICIT_CANARY_GATE_MISSING');
-assert.ok(clientCanary.indexOf('!shouldAttemptOwnerFollowCanary575(')<
+assert.ok(clientCanary.indexOf('!isApp608OwnerCanaryVisible(uid)')<
  clientCanary.indexOf('const principal=auth.currentUser'),
  'APP591_CANARY_GATE_MUST_PRECEDE_AUTH_READ');
 assert.ok(clientCanary.includes("typeof window==='undefined'?'':window.location.hostname.toLowerCase()"),

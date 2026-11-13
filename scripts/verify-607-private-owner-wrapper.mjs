@@ -33,7 +33,7 @@ function sourceSafety(){
  need(src.includes('export {ExploreLikeBatchScheduler103};'),'LIKE_DO_REEXPORT_MISSING');
  need(src.includes('original.fetch.call(original'),'CANONICAL_FALLBACK_MISSING');
  need(src.includes('runOwnerFollowPrecommit557'),'DURABLE_RESERVATION_FIRST_MISSING');
- need(src.includes('APP607_SOURCE_WRAPPER_PRESENT=true;'),'BRIDGE_NOT_COMPILED');
+ need(src.includes('const APP607_SOURCE_WRAPPER_PRESENT=true;'),'BRIDGE_NOT_COMPILED');
  need(src.includes('SORIDRAW_OWNER_FOLLOW_RECEIVER_VERIFIED_607'),'RECEIVER_GATE_MISSING');
  need(src.includes('SORIDRAW_OWNER_FOLLOW_CANARY_UID_574'),'OWNER_ISOLATION_MISSING');
  need(src.includes('SORIDRAW_OWNER_FOLLOW_BRIDGE_READY_607'),'EXPLICIT_PREVIEW_BRIDGE_GATE_MISSING');

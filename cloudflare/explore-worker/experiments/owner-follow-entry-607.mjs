@@ -11,7 +11,7 @@ import {reserveOwnerFollowViaService601,handleOwnerFollowReplayService601}
   from './app605/owner-follow-service-601.mjs';
 
 export {ExploreLikeBatchScheduler103};
-export const APP607_SOURCE_WRAPPER_PRESENT=true;
+const APP607_SOURCE_WRAPPER_PRESENT=true;
 const UID=/^[A-Za-z0-9_-]{1,128}$/;
 const CANARY_SHA256='8b9cd603dc722a89765da05bfee9100b2645ecff290bf1f35ff4f0a1bf80fc2f';
 const HEX=/^[0-9a-f]{64}$/;

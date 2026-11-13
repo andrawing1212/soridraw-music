@@ -97,6 +97,64 @@ NODE
 ) || fail 'THREE_BUILT_EXPORTS_MISSING'
 say 'APP593_FUNCTIONS_BUILD=PASS'
 
+# APP594: Firebase CLI loads the full functions package entrypoint before its
+# --only name filter. The broad securedIndex exposes unrelated Functions
+# secrets (e.g. SORIDRAW_LIKE_GUARD_HMAC_V1_SECRET), which must NOT be
+# provisioned, modified or read for this owner-only OFF install.
+# Only the EPHEMERAL checkout's package main is narrowed; the repository and
+# 42 existing deployed Functions remain untouched.
+cat > "$TMP/repo/functions/lib/ownerFollowOnlyEntry594.js" <<'NODE'
+'use strict';
+const {initializeApp,getApps}=require('firebase-admin/app');
+if(getApps().length!==0) throw Error('APP594_UNEXPECTED_EXISTING_ADMIN_APP');
+initializeApp({
+  databaseURL:'https://soridraw-app-866a5-default-rtdb.firebaseio.com',
+});
+const expected=[
+  'enrollOwnerFollow544Candidate',
+  'publishExploreOwnerFollower542',
+  'verifyOwnerFollowEpoch547Candidate',
+];
+const exported={
+  publishExploreOwnerFollower542:require('./exploreOwnerFollowerWebhook542').publishExploreOwnerFollower542,
+  enrollOwnerFollow544Candidate:require('./ownerFollowEnrollment544').enrollOwnerFollow544Candidate,
+  verifyOwnerFollowEpoch547Candidate:require('./ownerFollowAuthProof547').verifyOwnerFollowEpoch547Candidate,
+};
+if(JSON.stringify(Object.keys(exported).sort())!==JSON.stringify(expected)||
+   Object.values(exported).some(x=>typeof x!=='function')){
+  throw Error('APP594_FUNCTION_EXPORT_SET_MISMATCH');
+}
+module.exports=exported;
+NODE
+node - "$TMP/repo/functions/package.json" <<'NODE' || fail 'APP594_PACKAGE_ENTRY_PATCH_FAILED'
+const fs=require('node:fs');
+const path=process.argv[2];
+const pkg=JSON.parse(fs.readFileSync(path,'utf8'));
+if(pkg.main!=='lib/securedIndex.js')process.exit(2);
+pkg.main='lib/ownerFollowOnlyEntry594.js';
+fs.writeFileSync(path,JSON.stringify(pkg,null,2)+'\n','utf8');
+NODE
+(
+  cd "$TMP/repo"
+  node - <<'NODE'
+const fs=require('node:fs');
+const pkg=require('./functions/package.json');
+if(pkg.main!=='lib/ownerFollowOnlyEntry594.js')
+  throw Error('APP594_TEMP_MAIN_NOT_SELECTED');
+const out=require('./functions/'+pkg.main);
+const expected=[
+ 'enrollOwnerFollow544Candidate',
+ 'publishExploreOwnerFollower542',
+ 'verifyOwnerFollowEpoch547Candidate',
+];
+if(JSON.stringify(Object.keys(out).sort())!==JSON.stringify(expected))
+  throw Error('APP594_NOT_EXACT_THREE_EXPORTS');
+if(Object.keys(require.cache).some(p=>p.endsWith('/securedIndex.js')))
+  throw Error('APP594_BROAD_ENTRYPOINT_WAS_LOADED');
+NODE
+) || fail 'APP594_EXACT_ENTRYPOINT_PREFLIGHT_FAILED'
+say 'APP594_EPHEMERAL_ONLY_THREE_EXPORTS_NO_UNRELATED_SECRETS=PASS'
+
 # This is the first shared mutation stage. No IAM policy change, existing secret
 # versions untouched, and the random secret bytes never enter argv or stdout.
 for secret in "${SECRETS[@]}"; do

@@ -2,13 +2,14 @@
 // A separately approved Functions rollout may register this ONE endpoint
 // after dedicated owner-only RTDB Rules, server enrollment, secret and shared
 // Worker rollout are verified. No module-import Firebase initialization.
-import {createHmac,timingSafeEqual} from 'node:crypto';
+import {createHmac,timingSafeEqual,createHash} from 'node:crypto';
 import {onRequest} from 'firebase-functions/v2/https';
 import {defineSecret} from 'firebase-functions/params';
 import {getAuth,type Auth} from 'firebase-admin/auth';
 import {getDatabase,type Database} from 'firebase-admin/database';
 
-export const APP542_OWNER_HTTP_COMPILED_OPEN=false;
+export const APP542_OWNER_HTTP_COMPILED_OPEN=true;
+const APP608_CANARY_SHA256='8b9cd603dc722a89765da05bfee9100b2645ecff290bf1f35ff4f0a1bf80fc2f';
 const HMAC542=defineSecret('SORIDRAW_OWNER_FOLLOW_HMAC_539');
 const UID=/^[A-Za-z0-9_-]{1,128}$/;
 const EPOCH=/^[0-9a-f]{32}$/;
@@ -134,7 +135,8 @@ export const publishExploreOwnerFollower542=onRequest({
  region:'asia-northeast3',secrets:[HMAC542],cors:false,
  timeoutSeconds:15,maxInstances:3,
 },async(req,res)=>{
- if(!APP542_OWNER_HTTP_COMPILED_OPEN){
+ if(!APP542_OWNER_HTTP_COMPILED_OPEN||process.env.SORIDRAW_OWNER_FOLLOW_READY_608!=='1'||
+    createHash('sha256').update(String(process.env.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||'')).digest('hex')!==APP608_CANARY_SHA256){
   res.status(503).json({ok:false,error:'OWNER_FOLLOW_DISABLED'});return;
  }
  await createOwnerFollowerHttp542({

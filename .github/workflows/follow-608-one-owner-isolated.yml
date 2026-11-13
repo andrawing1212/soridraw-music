@@ -1,0 +1,55 @@
+name: SORIDRAW APP608 One-Owner Firebase and PREVIEW Client Isolated
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - 'functions/src/exploreOwnerFollowerWebhook542.ts'
+      - 'functions/src/ownerFollowEnrollment544.ts'
+      - 'functions/src/ownerFollowAuthProof547.ts'
+      - 'src/services/exploreOwnerFollowerSync542.ts'
+      - 'src/pages/ExplorePage.tsx'
+      - 'scripts/verify-608-one-owner-receiver.mjs'
+      - '.github/workflows/follow-608-one-owner-isolated.yml'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app608-one-owner-source-qa
+  cancel-in-progress: true
+jobs:
+  isolated:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install exact locked application and Functions dependencies
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm ci --prefix functions --no-audit --no-fund
+      - name: Run real synthetic HMAC Auth and RTDB commit receiver tests
+        run: |
+          set -euo pipefail
+          npx tsx scripts/verify-608-one-owner-receiver.mjs
+          node scripts/verify-527-owner-follower-idle-cost.mjs
+          echo APP608_CANARY_ONLY_AND_APP528_120S_CACHE=PASS
+      - name: Compile app and targeted shared Functions source without deploying
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit
+          npm run build
+          npm run build --prefix functions
+          node - <<'NODE'
+          const api=require('./functions/lib/securedIndex.js');
+          for(const name of ['publishExploreOwnerFollower542',
+            'enrollOwnerFollow544Candidate','verifyOwnerFollowEpoch547Candidate']){
+            if(typeof api[name]!=='function')throw Error('APP608_EXPORT_MISSING_'+name);
+          }
+          console.log('APP608_THREE_FUNCTION_EXPORTS_BUILD=PASS');
+          NODE
+          echo APP608_ACTUAL_FIREBASE_CLOUDFLARE_HOSTING_DATA_DEPLOY=ZERO

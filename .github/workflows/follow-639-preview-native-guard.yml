@@ -1,0 +1,68 @@
+name: SORIDRAW APP639 PREVIEW Minimal Follow Rate Guard
+
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/app639-preview-follow-native-only.mjs'
+      - '.github/workflows/follow-639-preview-native-guard.yml'
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/app639-preview-native-follow-guard.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-app639-preview-follow-native
+  cancel-in-progress: false
+
+jobs:
+  source:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Verify native-only limiter patch script
+        run: |
+          node --check scripts/app639-preview-follow-native-only.mjs
+          node scripts/app639-preview-follow-native-only.mjs --self-test
+
+  release:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 3
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Enforce director-approved one-Worker PREVIEW scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/preview'
+          test "$(git rev-parse HEAD^1)" = 'b91f084d992ca8312f9c1bd0c273e2873fd7b51c'
+          node --check scripts/app639-preview-follow-native-only.mjs
+          node scripts/app639-preview-follow-native-only.mjs --self-test
+          file='.deploy/app639-preview-native-follow-guard.trigger'
+          test -f "$file"
+          grep -Fxq 'mode=one-follow-native-limiter-and-no-r2-cooldown' "$file"
+          grep -Fxq 'approved_preview_parent=b91f084d992ca8312f9c1bd0c273e2873fd7b51c' "$file"
+          grep -Fxq 'active_safe_off_version=6437d86a-09c5-4ff0-8be5-ecfabd4a1f77' "$file"
+          expected="$(printf '%s\n' "$file" '.github/workflows/follow-639-preview-native-guard.yml' 'scripts/app639-preview-follow-native-only.mjs' | LC_ALL=C sort)"
+          actual="$(git diff --name-only HEAD^1 HEAD | LC_ALL=C sort)"
+          test "$actual" = "$expected"
+          echo 'APP639_APPROVED_PREVIEW_SCOPE_AND_PARENT=PASS'
+          echo 'APP639_PARENT=b91f084d992ca8312f9c1bd0c273e2873fd7b51c' >> "$GITHUB_ENV"
+      - name: Stage exact one-module follow limiter patch and deploy PREVIEW
+        run: node scripts/app639-preview-follow-native-only.mjs --apply-once

@@ -1,4 +1,4 @@
-name: SORIDRAW APP639 PREVIEW Minimal Follow Rate Guard
+name: SORIDRAW APP641 PREVIEW Native Follow Guard Source-Match Retry
 
 on:
   pull_request:
@@ -9,13 +9,13 @@ on:
   push:
     branches: [preview]
     paths:
-      - '.deploy/app639-preview-native-follow-guard.trigger'
+      - '.deploy/app641-preview-native-follow-guard.trigger'
 
 permissions:
   contents: read
 
 concurrency:
-  group: soridraw-app639-preview-follow-native
+  group: soridraw-app641-preview-follow-native
   cancel-in-progress: false
 
 jobs:
@@ -51,18 +51,18 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = 'refs/heads/preview'
-          test "$(git rev-parse HEAD^1)" = 'b91f084d992ca8312f9c1bd0c273e2873fd7b51c'
+          test "$(git rev-parse HEAD^1)" = 'caaedcaa73671bfde42ea13af0893e1dc4c8fcfe'
           node --check scripts/app639-preview-follow-native-only.mjs
           node scripts/app639-preview-follow-native-only.mjs --self-test
-          file='.deploy/app639-preview-native-follow-guard.trigger'
+          file='.deploy/app641-preview-native-follow-guard.trigger'
           test -f "$file"
           grep -Fxq 'mode=one-follow-native-limiter-and-no-r2-cooldown' "$file"
-          grep -Fxq 'approved_preview_parent=b91f084d992ca8312f9c1bd0c273e2873fd7b51c' "$file"
+          grep -Fxq 'approved_preview_parent=caaedcaa73671bfde42ea13af0893e1dc4c8fcfe' "$file"
           grep -Fxq 'active_safe_off_version=6437d86a-09c5-4ff0-8be5-ecfabd4a1f77' "$file"
           expected="$(printf '%s\n' "$file" '.github/workflows/follow-639-preview-native-guard.yml' 'scripts/app639-preview-follow-native-only.mjs' | LC_ALL=C sort)"
           actual="$(git diff --name-only HEAD^1 HEAD | LC_ALL=C sort)"
           test "$actual" = "$expected"
           echo 'APP639_APPROVED_PREVIEW_SCOPE_AND_PARENT=PASS'
-          echo 'APP639_PARENT=b91f084d992ca8312f9c1bd0c273e2873fd7b51c' >> "$GITHUB_ENV"
+          echo 'APP639_PARENT=caaedcaa73671bfde42ea13af0893e1dc4c8fcfe' >> "$GITHUB_ENV"
       - name: Stage exact one-module follow limiter patch and deploy PREVIEW
         run: node scripts/app639-preview-follow-native-only.mjs --apply-once

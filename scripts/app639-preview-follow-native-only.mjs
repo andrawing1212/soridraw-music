@@ -8,10 +8,12 @@ import {createHash} from 'node:crypto';
 const ACCOUNT='e1a30fc9ef497fda1d34f4ab3dc1da45';
 const EX='soridraw-explore-preview',OW='soridraw-owner-follow-preview-candidate';
 const TEST='soridraw-explore-test',PROD='soridraw-explore-api';
-const EXPECTED_PARENT='b91f084d992ca8312f9c1bd0c273e2873fd7b51c';
+const EXPECTED_PARENT='caaedcaa73671bfde42ea13af0893e1dc4c8fcfe';
 const OFF='6437d86a-09c5-4ff0-8be5-ecfabd4a1f77';
 const OWNER='e679a602-44fb-4b4d-9e4d-7878c00b68c3';
-const NEEDLE="await consumeSocialAbuse380(env, uid, 'follow', [{ target: targetUid, desired: following, operationId }]);";
+const APP640_ACTIVE_TARGET_MODULE='preview-entry.mjs';
+const APP640_ACTIVE_TARGET_SHA256='f24bce38cd065c690cf292732e823814b61cf052bb0cd8f859e9ba45d1eec973';
+const NEEDLE='await consumeSocialAbuse380(env, uid, "follow", [{ target: targetUid, desired: following, operationId }]);';
 const PATCH="/* APP639: follow retains native actor limiter; no redundant R2 cooldown receipt. */";
 const token=String(process.env.CLOUDFLARE_API_TOKEN||'');
 const sha=b=>createHash('sha256').update(b).digest('hex');
@@ -95,19 +97,22 @@ async function main(){
   active(EX),active(OW),active(TEST),active(PROD)]);
  need(current===OFF&&owner===OWNER,'PREVIEW_BRIDGE_NOT_OFF');
  const [before,original]=await Promise.all([info(OFF),modules(OFF)]);
+ need(original.map.get(APP640_ACTIVE_TARGET_MODULE)===APP640_ACTIVE_TARGET_SHA256,
+  'ACTIVE_APP640_SOURCE_HASH_DRIFT');
  let changed=0;
  const ms=original.ms.map(m=>{
   const source=Buffer.from(m.content_base64,'base64').toString('utf8');
-  if(!source.includes(NEEDLE))return {
+  if(m.name!==APP640_ACTIVE_TARGET_MODULE&&!source.includes(NEEDLE))return {
    name:m.name,content_type:m.content_type||'application/javascript+module',
    content_base64:m.content_base64};
-  need(source.split(NEEDLE).length===2,'DUPLICATE_PATCH_NEEDLE');
+  need(m.name===APP640_ACTIVE_TARGET_MODULE&&source.split(NEEDLE).length===2,
+   'DUPLICATE_OR_WRONG_MODULE_PATCH_NEEDLE');
   const loc=source.indexOf(NEEDLE);
   const functionStart=source.lastIndexOf('async function enforceFollowEdgeRateLimit355(',loc);
   need(functionStart>=0&&loc-functionStart<1800,'PATCH_NOT_IN_NATIVE_FOLLOW_LIMITER');
   const segment=source.slice(functionStart,loc);
-  need(segment.includes("limiter.limit({ key: 'follow:' + uid })")&&
-       segment.includes('socialAbuseLimited380(60_000)'),'NATIVE_LIMITER_NOT_PRESERVED');
+  need(segment.includes('limiter.limit({ key: "follow:" + uid })')&&
+       segment.includes('socialAbuseLimited380(6e4)'),'NATIVE_LIMITER_NOT_PRESERVED');
   const patched=source.replace(NEEDLE,PATCH);
   need(patched.length>source.length-160&&patched.includes(PATCH),'SINGLE_PATCH');
   changed++;
@@ -162,7 +167,10 @@ async function main(){
 }
 if(process.argv[2]==='--self-test'){
  need(NEEDLE.includes('consumeSocialAbuse380')&&
-  PATCH.includes('native actor limiter')&&OFF!==OWNER,'SOURCE_CONFIG');
+  PATCH.includes('native actor limiter')&&OFF!==OWNER&&
+  NEEDLE.includes('"follow"')&&
+  'async function enforceFollowEdgeRateLimit355(env, uid) {\n  allowed = await limiter.limit({ key: "follow:" + uid });\n  if (!allowed?.success) socialAbuseLimited380(6e4);\n  '+NEEDLE+'\n}'.includes(NEEDLE),
+  'SOURCE_CONFIG');
  console.log('APP639_SOURCE_ONLY_ONE_CALL_REMOVAL=PASS');
 }else if(process.argv[2]==='--apply-once'){
  try{await main()}catch(e){console.error(String(e.message||e).slice(0,190));process.exitCode=2}

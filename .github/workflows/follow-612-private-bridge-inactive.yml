@@ -8,7 +8,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: soridraw-app607-single-private-nondeployed
+  group: soridraw-app612-single-private-nondeployed
   cancel-in-progress: false
 jobs:
   stage:
@@ -39,6 +39,10 @@ jobs:
           printf 'approved_parent=%s\n' "$(git rev-parse HEAD^)" \
             | cmp -s - .deploy/app612-private-bridge-inactive.trigger
           printf 'APP612_STAGE_SOURCE_SHA=%s\n' 'b076990f36ea6816ece2dce30d9e314527231ec0'
+          source_diff="$(git diff --name-only b076990f36ea6816ece2dce30d9e314527231ec0 HEAD^)"
+          test "$(printf '%s\n' "$source_diff" | wc -l)" -eq 2
+          grep -Fxq '.github/workflows/follow-612-private-bridge-inactive.yml' <<< "$source_diff"
+          grep -Fxq 'scripts/upload-612-private-owner-inactive.mjs' <<< "$source_diff"
           test "$(git ls-remote origin refs/heads/preview | cut -f1)" = '028e51a2d52b50e1f021dd6d689268518077c2e1'
           echo "parent=$(git rev-parse HEAD^)" >> "$GITHUB_OUTPUT"
           echo 'stage=true' >> "$GITHUB_OUTPUT"

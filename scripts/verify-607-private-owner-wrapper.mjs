@@ -60,8 +60,10 @@ function prepare(){
  const text=staged.toString('utf8');
  need(text.includes('async function validateExploreAuth307('),
   'ACTIVE_AUTH307_NOT_FOUND');
- need(text.includes('export class ExploreLikeBatchScheduler103 extends DurableObject'),
-  'ACTIVE_LIKE_DO_CLASS_NOT_EXPORTED');
+ need(text.includes('ExploreLikeBatchScheduler103'),
+  'ACTIVE_LIKE_DO_CLASS_NOT_PRESENT');
+ // The exact export shape is verified by the local workerd namespace test,
+ // not by matching one source formatting pattern.
  need(text.includes('export default {'),'ACTIVE_DEFAULT_NOT_FOUND');
  need(!text.includes('export {validateExploreAuth307};'),'ALREADY_AUTH_EXPORTED');
  const append=Buffer.from('\n// APP607: expose the exact deployed Auth307 helper to the private wrapper.\nexport {validateExploreAuth307};\n','utf8');

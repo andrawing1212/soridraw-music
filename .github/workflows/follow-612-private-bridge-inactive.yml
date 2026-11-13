@@ -1,0 +1,70 @@
+name: SORIDRAW APP612 Private Bridge Source One-shot Inactive
+on:
+  push:
+    branches: [feat/app600-owner-standalone-isolated]
+    paths:
+      - '.github/workflows/follow-612-private-bridge-inactive.yml'
+      - '.deploy/app612-private-bridge-inactive.trigger'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app607-single-private-nondeployed
+  cancel-in-progress: false
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: One-time matching approved code and already-passed runtime gate
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only HEAD^ HEAD)"
+          if [ "$changed" != '.deploy/app612-private-bridge-inactive.trigger' ]; then
+            echo 'stage=false' >> "$GITHUB_OUTPUT"
+            echo APP612_NO_TRIGGER_NO_UPLOAD=PASS
+            exit 0
+          fi
+          printf 'approved_parent=%s\n' "$(git rev-parse HEAD^)" \
+            | cmp -s - .deploy/app612-private-bridge-inactive.trigger
+          printf 'APP612_STAGE_SOURCE_SHA=%s\n' 'b076990f36ea6816ece2dce30d9e314527231ec0'
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = '028e51a2d52b50e1f021dd6d689268518077c2e1'
+          echo "parent=$(git rev-parse HEAD^)" >> "$GITHUB_OUTPUT"
+          echo 'stage=true' >> "$GITHUB_OUTPUT"
+          echo APP612_REUSE_RUNTIME_PASS_43458141448=PASS
+      - name: Prepare exact active Worker source + private sidecar with no mutations
+        if: steps.gate.outputs.stage == 'true'
+        run: |
+          set -euo pipefail
+          node --check scripts/upload-612-private-owner-inactive.mjs
+          node scripts/upload-612-private-owner-inactive.mjs --self-test
+          node scripts/verify-605-active-off-sidecar.mjs --prepare
+          node scripts/verify-607-private-owner-wrapper.mjs --prepare
+      - name: Create ONE inactive Cloudflare version and verify preservation
+        if: steps.gate.outputs.stage == 'true'
+        env:
+          APP612_APPROVED_PARENT: ${{ steps.gate.outputs.parent }}
+          APP612_PASS_SHA: b076990f36ea6816ece2dce30d9e314527231ec0
+        run: |
+          set -euo pipefail
+          node scripts/upload-612-private-owner-inactive.mjs --upload-once
+          echo APP612_CLOUDFLARE_DEPLOY_AND_ROUTING_CHANGE=ZERO
+          echo APP612_SHARED_DATA_D1_R2_RULES_FIREBASE_CHANGES=ZERO
+      - name: Keep nonsecret candidate release proof
+        if: steps.gate.outputs.stage == 'true' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app612-unused-private-bridge-version
+          path: ${{ runner.temp }}/app612-version-metadata.json
+          retention-days: 1

@@ -7,6 +7,10 @@ import original, {
 } from './preview-entry.mjs';
 import {runOwnerFollowPrecommit557}
   from './app607/owner-follow-precommit-557.mjs';
+import {handleOwnerEpochBinding544}
+  from './app607/owner-follow-enrollment-544.mjs';
+import {verifyLiveOwnerEpoch547}
+  from './app607/owner-follow-current-auth-547.mjs';
 import {reserveOwnerFollowViaService601,handleOwnerFollowReplayService601}
   from './app605/owner-follow-service-601.mjs';
 
@@ -70,6 +74,20 @@ export class OwnerFollowReplayEntrypoint607 extends WorkerEntrypoint {
 export default {
  ...original,
  async fetch(request,env,ctx){
+  // APP611: one-owner enrollment is not reachable through the frozen
+  // canonical source. Forward only the exact server-HMAC POST when ALL
+  // PREVIEW canary prerequisites are already satisfied. The existing
+  // APP544 handler verifies the HMAC and immutable Auth epoch before D1.
+  // Normal requests (including GET and noncanary) fall through unchanged.
+  const url=new URL(request.url);
+  if(request.method==='POST'&&
+     url.pathname==='/internal/owner-follow/epoch-544'){
+   const owner=String(env?.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||'');
+   if(await activeFor607(env,owner))return handleOwnerEpochBinding544({
+    request,env,enabled:true,
+    verify:(args)=>verifyLiveOwnerEpoch547({...args,enabled:true}),
+   });
+  }
   const uid=eligibleFollow607(request,env);
   if(!uid||!(await activeFor607(env,uid)))
    return original.fetch.call(original,request,env,ctx);

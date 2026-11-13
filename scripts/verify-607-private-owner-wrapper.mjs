@@ -33,6 +33,12 @@ function sourceSafety(){
  need(src.includes('export {ExploreLikeBatchScheduler103};'),'LIKE_DO_REEXPORT_MISSING');
  need(src.includes('original.fetch.call(original'),'CANONICAL_FALLBACK_MISSING');
  need(src.includes('runOwnerFollowPrecommit557'),'DURABLE_RESERVATION_FIRST_MISSING');
+ need(src.includes("url.pathname==='/internal/owner-follow/epoch-544'")&&
+  src.includes('handleOwnerEpochBinding544({')&&
+  src.includes('verifyLiveOwnerEpoch547({...args,enabled:true})'),
+  'CANARY_OWNER_EPOCH_ENROLLMENT_HMAC_OR_LIVE_AUTH_NOT_WIRED');
+ need(src.includes('if(await activeFor607(env,owner))'),
+  'OWNER_EPOCH_ROUTE_NOT_CANARY_GATED');
  need(src.includes('const APP607_SOURCE_WRAPPER_PRESENT=true;'),'BRIDGE_NOT_COMPILED');
  need(src.includes('SORIDRAW_OWNER_FOLLOW_RECEIVER_VERIFIED_607'),'RECEIVER_GATE_MISSING');
  need(src.includes('SORIDRAW_OWNER_FOLLOW_CANARY_UID_574'),'OWNER_ISOLATION_MISSING');
@@ -85,13 +91,21 @@ function prepare(){
  const precommit=load('runtime/owner-follow-precommit-557.mjs');
  writeFileSync(join(OUT,'app607','owner-follow-precommit-557.mjs'),
   precommit,{mode:0o600});
+ const ownerEnrollment=load('runtime/owner-follow-enrollment-544.mjs');
+ const ownerProof=load('runtime/owner-follow-current-auth-547.mjs');
+ writeFileSync(join(OUT,'app607','owner-follow-enrollment-544.mjs'),
+  ownerEnrollment,{mode:0o600});
+ writeFileSync(join(OUT,'app607','owner-follow-current-auth-547.mjs'),
+  ownerProof,{mode:0o600});
  const all=[
   ['owner-follow-entry-607.mjs',main],
   ['preview-entry.mjs',authExported],
   ...PARTS.map(path=>['app605/'+path,load('runtime/'+path)]),
   ['app607/owner-follow-precommit-557.mjs',precommit],
+  ['app607/owner-follow-enrollment-544.mjs',ownerEnrollment],
+  ['app607/owner-follow-current-auth-547.mjs',ownerProof],
  ];
- need(all.length===10,'MODULE_COUNT_DRIFT');
+ need(all.length===12,'MODULE_COUNT_DRIFT');
  const emitted=all.map(([name,buf])=>({
   name,content_base64:buf.toString('base64'),content_type:'application/javascript+module',
   sha256:sha(buf),bytes:buf.length,

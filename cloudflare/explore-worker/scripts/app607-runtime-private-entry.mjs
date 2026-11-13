@@ -18,7 +18,7 @@ const need=(x,why)=>{if(!x)throw Error('APP607_HOLD_'+why)};
 need(active.length===2440556&&
  injected.subarray(0,active.length).equals(active)&&
  sha(active)===proof.originalSha256,'CANONICAL_PREFIX_CHANGED');
-need(proof.moduleCount===10&&proof.existingLikeDoV1&&
+need(proof.moduleCount===12&&proof.existingLikeDoV1&&
  proof.additionalDoClasses===0,'MODULE_DO_CONTRACT_CHANGED');
 const started=[];
 async function create(script,{named=false}={}){
@@ -61,6 +61,7 @@ try{
   ['GET','/v1/me/notifications/inbox'],
   ['OPTIONS','/v1/me/notifications/inbox'],
   ['POST','/owner-follow/replay557-internal'],
+  ['POST','/internal/owner-follow/epoch-544'],
  ];
  for(const [method,path] of cases){
   const first=await request(a,method,path);

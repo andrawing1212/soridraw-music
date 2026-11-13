@@ -107,14 +107,15 @@ const versionRuntime=(metadata)=>{
  check(resources&&typeof resources==='object','VERSION_RESOURCES_MISSING');
  const runtime=resources.script_runtime||{};
  check(runtime.compatibility_date===EXPECTED_DATE,'ACTIVE_COMPATIBILITY_DATE_CHANGED');
- check(Array.isArray(runtime.compatibility_flags),'COMPATIBILITY_FLAGS_NOT_EXPLICIT');
+ check(runtime.compatibility_flags===undefined||runtime.compatibility_flags===null||
+  Array.isArray(runtime.compatibility_flags),'COMPATIBILITY_FLAGS_MALFORMED');
  const migrationTag=String(runtime.migration_tag||'');
  check(migrationTag!=='v2','OWNER_DO_V2_ALREADY_APPLIED');
  check(migrationTag==='v1','EXISTING_DO_TAG_UNPROVEN');
  const bindings=resources.bindings;
  check(Array.isArray(bindings),'PINNED_VERSION_BINDINGS_MISSING');
  return {bindings,compatibilityDate:runtime.compatibility_date,
-  compatibilityFlags:runtime.compatibility_flags,migrationTag};
+  compatibilityFlags:runtime.compatibility_flags??[],migrationTag};
 };
 function selfTest(){
  const conf=JSON.parse(readFileSync(new URL(

@@ -1,5 +1,5 @@
 mode=one-follow-native-limiter-and-no-r2-cooldown
-approved_preview_parent=b91f084d992ca8312f9c1bd0c273e2873fd7b51c
+approved_preview_parent=caaedcaa73671bfde42ea13af0893e1dc4c8fcfe
 active_safe_off_version=6437d86a-09c5-4ff0-8be5-ecfabd4a1f77
 preview_only=true
 auth_and_canonical_idempotency=preserved
@@ -7,4 +7,4 @@ native_actor_rate_limit=60_per_minute
 remove_redundant_follow_R2_pair_window_day_guard=true
 other_like_rules_unchanged=true
 data_and_test_production_changes=false
-director_approval=YES_20261114_restore_follow_and_simplify
+director_approval=YES_20261114_restore_follow_and_simplify;app640_live_source_verified

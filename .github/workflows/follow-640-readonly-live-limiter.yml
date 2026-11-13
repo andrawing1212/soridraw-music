@@ -21,7 +21,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node <<'NODE'
+          node --input-type=module <<'NODE'
           import {createHash} from 'node:crypto';
           const ACCOUNT='e1a30fc9ef497fda1d34f4ab3dc1da45';
           const NAME='soridraw-explore-preview';

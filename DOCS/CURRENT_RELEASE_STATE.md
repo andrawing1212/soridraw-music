@@ -1,3 +1,12 @@
+## CURRENT — APP604 정확한 활성 코드 기반 비배포 버전 생성 PASS (2026-11-13 KST)
+
+- **기존 Explore Worker LIVE 트래픽 불변:** 디렉터 승인 APP604에서 Cloudflare 활성 `soridraw-explore-preview` `350ce33d-ec83-49d0-a4ae-c25d2d90f59e`의 실제 모듈 2,440,556바이트·SHA-256 지문 일치, DO v1 및 23개 바인딩을 [Actions #43425980714](https://github.com/andrawing1212/soridraw-music/actions/runs/43425980714) GET-only PASS로 확인했다.
+- **실제 비배포 후보 생성:** [Actions #43426578037](https://github.com/andrawing1212/soridraw-music/actions/runs/43426578037) PASS. Cloudflare Beta Workers Versions API로 `deploy=false` 단일 업로드, 신규 버전 `f8ab4c5b-e037-4109-a635-604f3e3769b0`. 기존 활성 모듈 **바이트 동일**, 23개 LIVE 바인딩 각각 활성 버전 ID로 고정 상속, 원본 D1/R2·Like DO와 이름·유형 일치. 마이그레이션·exports 변경·신규 owner DO v2 **없음**, 기존 Worker 활성 버전은 **100% 유지**. 새 비배포 버전은 APP601 연결 코드가 없는 순수 복사본이며 **트래픽 승격 승인본 아님**.
+- **남은 HOLD:** 유효한 APP601 사설 Service Binding 빌드·실제 상호 연결, 서버 Secret, 코드 변경 후 동일 런타임 검증, 실제 배포/복구 및 카나리 A←B PC·모바일 실사용은 미완료. 비밀키 평문·실시간 권한은 GET API에서 검증되지 않았다. 별도 APP603 독립 OFF Worker `e274388f-8075-473d-b3a0-6e78eb67f353`는 변경 없이 유지. Shared D1/R2/Functions/RTDB/사용자 원본·TEST/PRODUCTION·Hosting 변경 없음.
+- **재실행 방지:** APP604 활성 소스 검사 #43425980714 및 비배포 후보 업로드 #43426578037 PASS 재사용. 후보 버전·별도 OFF Worker를 새로 만들거나 동일 버전을 다시 업로드하지 않는다. GitHub [Draft PR #970](https://github.com/andrawing1212/soridraw-music/pull/970)에서만 이번 코드·문서 이력을 보존하고 `preview` 병합/Hosting/Worker 배포는 하지 않았다.
+
+---
+
 ## CURRENT — APP603 독립 팔로워 Worker 실제 OFF 생성, Explore 연결 HOLD (2026-11-13 KST)
 
 - **실제 Cloudflare Worker 신규 생성:** 디렉터 승인 하에 독립 `soridraw-owner-follow-preview-candidate`를 단 한 번 OFF 배포했다. [Actions #43423465209](https://github.com/andrawing1212/soridraw-music/actions/runs/43423465209) SUCCESS, 새 활성 버전 `e274388f-8075-473d-b3a0-6e78eb67f353`(100%). `OwnerFollowerStandalone600` SQLite DO 클래스 `owner600_v1` 등록, 컴파일 OFF, 공개 workers.dev/라우트/cron 없음, 바인딩 `OWNER_FOLLOW_DO_600`과 `SORIDRAW_ENVIRONMENT=preview` 두 개만 존재. D1/R2/Firebase/서비스 바인딩/비밀키 없음. **실제 사용자 전달이나 비용 PASS가 아니다.**

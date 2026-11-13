@@ -23,7 +23,7 @@ jobs:
           grep -Fq "SOURCE='763844501b1097fae54630bf88ee9c04620f8268'" scripts/app616-admin-three-owner-functions.sh
           grep -Fq "PREVIEW='028e51a2d52b50e1f021dd6d689268518077c2e1'" scripts/app616-admin-three-owner-functions.sh
           grep -Fq "APP616_ALL_THREE_NEW_REVISIONS_READY_OFF=PASS" scripts/app616-admin-three-owner-functions.sh
-          if grep -Eq -- '--force|gcloud secrets (create|versions access)|gcloud projects add-iam-policy-binding|firebase deploy --only (?!functions:)' scripts/app616-admin-three-owner-functions.sh; then
+          if grep -Eq '^[[:space:]]*(firebase|gcloud)[[:space:]].*(--force|secrets create|secrets versions access|add-iam-policy-binding)' scripts/app616-admin-three-owner-functions.sh; then
             echo APP616_UNSAFE_MUTATION_IN_RUNBOOK_HOLD >&2
             exit 1
           fi

@@ -3,7 +3,7 @@
 // routes are checked; this does not prove all user flows or full rollback.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {join} from 'node:path';
+import {join,dirname} from 'node:path';
 import {createHash} from 'node:crypto';
 import {Miniflare,createFetchMock} from 'miniflare';
 const sha=b=>createHash('sha256').update(b).digest('hex');
@@ -28,7 +28,10 @@ async function launch(script){
  const mock=createFetchMock();
  mock.disableNetConnect();
  const m=new Miniflare({
-  modules:true,scriptPath:script,
+  // Pin both paths inside the same temporary worker root. Without this,
+  // Miniflare may generate illegal ../ module specifiers for scripts under RUNNER_TEMP.
+  rootPath:dirname(script),modulesRoot:dirname(script),
+  modules:true,scriptPath:'preview-entry.js',
   compatibilityDate:'2026-08-28',
   bindings:{
    SORIDRAW_ENVIRONMENT:'preview',ENV_NAME:'preview',

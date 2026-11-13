@@ -42,6 +42,16 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/verify-605-active-off-sidecar.mjs --audit-structure
-          echo APP605_REAL_RUNTIME_PARITY=HOLD_PREVIOUS_FAILURE
-          echo APP605_CLOUDFLARE_UPLOAD_OR_DEPLOY=ZERO
-          echo APP605_EXISTING_DO_D1_R2_FIREBASE_CHANGES=ZERO
+      - name: Install exact-date local Workers runtime (no remote app deployment)
+        run: |
+          set -euo pipefail
+          npm --prefix cloudflare/explore-worker pkg set overrides.workerd=1.20261110.1
+          npm --prefix cloudflare/explore-worker install --ignore-scripts --no-audit --no-fund --package-lock=false
+          npm --prefix cloudflare/explore-worker install --no-save --ignore-scripts --no-audit --no-fund --package-lock=false miniflare@latest
+          npm --prefix cloudflare/explore-worker ls workerd --all
+      - name: APP606 original-vs-OFF candidate actual runtime comparison
+        run: |
+          set -euo pipefail
+          env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_ACCOUNT_ID \
+            node cloudflare/explore-worker/scripts/app605-local-runtime.mjs
+          echo APP606_REMOTE_UPLOAD_DEPLOY_AND_USER_DATA_WRITE=ZERO

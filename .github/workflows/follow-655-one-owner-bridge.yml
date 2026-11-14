@@ -1,0 +1,60 @@
+name: SORIDRAW APP655 approved one-owner PREVIEW follow bridge
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/app655-preview-owner-bridge.mjs'
+      - '.github/workflows/follow-655-one-owner-bridge.yml'
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/app655-preview-one-owner-bridge.trigger'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app655-preview-one-owner-bridge
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ github.event.pull_request.head.sha }}", persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: |
+          node --check scripts/app655-preview-owner-bridge.mjs
+          node scripts/app655-preview-owner-bridge.mjs --self-test
+  release:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ github.sha }}",fetch-depth: 3,persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Director approval and immutable release-only trigger gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/preview
+          test "$(git diff --name-only HEAD^ HEAD)" = '.deploy/app655-preview-one-owner-bridge.trigger'
+          f='.deploy/app655-preview-one-owner-bridge.trigger'
+          grep -Fxq 'director_approval=YES_PREVIEW_OWNER_FOLLOW_SYNC' "$f"
+          grep -Fxq "source_parent=$(git rev-parse HEAD^)" "$f"
+          grep -Fxq 'old_active=ec426c84-381d-4aa9-ac62-316c745dea55' "$f"
+          grep -Fxq 'other_version_0=6b13cde4-4a53-42d2-873f-361f7cf5a931' "$f"
+          grep -Fxq 'functions_compiled_ON_readonly_run=43589366187' "$f"
+          grep -Fxq 'change=one_PREVIEW_owner_bridge_flag_only' "$f"
+          grep -Fxq 'no_user_data_migration=true' "$f"
+          echo "APP655_APPROVED_PARENT=$(git rev-parse HEAD^)" >> "$GITHUB_ENV"
+          node --check scripts/app655-preview-owner-bridge.mjs
+          node scripts/app655-preview-owner-bridge.mjs --self-test
+      - name: Pin active 12 modules and 35 bindings, activate only approved PREVIEW owner
+        run: node scripts/app655-preview-owner-bridge.mjs --apply-once

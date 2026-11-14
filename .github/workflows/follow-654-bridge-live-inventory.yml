@@ -1,0 +1,124 @@
+name: SORIDRAW APP654 read-only actual Follow bridge inventory
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/follow-654-bridge-live-inventory.yml']
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app654-bridge-inventory
+  cancel-in-progress: false
+jobs:
+  inspect:
+    if: github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ github.sha }}", persist-credentials: false}
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Inventory active Cloudflare metadata and Firebase function source (GET only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/preview
+          python3 - <<'PY'
+          import json,os,re,subprocess,tempfile,urllib.request,zipfile
+          from pathlib import Path
+          A='e1a30fc9ef497fda1d34f4ab3dc1da45'
+          PROJECT='soridraw-app-866a5'
+          EX='soridraw-explore-preview'
+          OW='soridraw-owner-follow-preview-candidate'
+          EXPECTED='ec426c84-381d-4aa9-ac62-316c745dea55'
+          ZERO='6b13cde4-4a53-42d2-873f-361f7cf5a931'
+          token=os.environ.get('CLOUDFLARE_API_TOKEN','')
+          assert len(token)>20 and os.environ.get('CLOUDFLARE_ACCOUNT_ID')==A
+          def get(p):
+            u='https://api.cloudflare.com/client/v4/accounts/'+A+'/'+p
+            req=urllib.request.Request(u,headers={'Authorization':'Bearer '+token,'Accept':'application/json'})
+            with urllib.request.urlopen(req,timeout=25) as f: x=json.load(f)
+            if x.get('success') is not True:raise RuntimeError('CF_RESPONSE_NOT_OK')
+            return x.get('result') or {}
+          cf='HOLD'
+          try:
+            dp=get('workers/scripts/'+EX+'/deployments?per_page=1')
+            v=(dp.get('deployments') or [{}])[0].get('versions') or []
+            a=next((i.get('version_id') for i in v if i.get('percentage')==100),None)
+            z=next((i.get('version_id') for i in v if i.get('percentage')==0),None)
+            print('APP654_ACTIVE_PREVIEW_VERSION='+str(a))
+            print('APP654_ZERO_VERSION='+str(z))
+            if not a:raise RuntimeError('NO_ACTIVE')
+            info=get('workers/scripts/'+EX+'/versions/'+a)
+            b=(info.get('resources') or {}).get('bindings') or []
+            m={x.get('name'):x for x in b}
+            flag=lambda k:m.get(k,{}).get('text','ABSENT')
+            print('APP654_PREVIEW_BINDINGS_COUNT='+str(len(b)))
+            print('APP654_BRIDGE_READY_607='+str(flag('SORIDRAW_OWNER_FOLLOW_BRIDGE_READY_607')))
+            print('APP654_STANDALONE_600='+str(flag('SORIDRAW_OWNER_DO_STANDALONE_600')))
+            print('APP654_OWNER_SERVICE_BOUND='+str('OWNER_FOLLOW_RESERVATION_SERVICE_600' in m))
+            print('APP654_OWNER_RECEIVER_READY='+str(flag('SORIDRAW_OWNER_FOLLOW_RECEIVER_VERIFIED_607')))
+            print('APP654_OWNER_CANARY_SET='+str('SORIDRAW_OWNER_FOLLOW_CANARY_UID_574' in m))
+            owner=get('workers/scripts/'+OW+'/deployments?per_page=1')
+            ov=(owner.get('deployments') or [{}])[0].get('versions') or []
+            print('APP654_STANDALONE_ACTIVE='+str(next((x.get('version_id') for x in ov if x.get('percentage')==100),'NONE')))
+            cf='PASS' if a==EXPECTED and z==ZERO and len(b)==35 else 'DRIFT'
+          except Exception as err:
+            print('APP654_CF_GET_ONLY=HOLD_'+type(err).__name__)
+          print('APP654_CF_TOPOLOGY='+cf)
+          names=[
+            ('publishExploreOwnerFollower542','exploreOwnerFollowerWebhook542','APP542_OWNER_HTTP_COMPILED_OPEN'),
+            ('enrollOwnerFollow544Candidate','ownerFollowEnrollment544','APP544_ENROLLMENT_COMPILED_OPEN'),
+            ('verifyOwnerFollowEpoch547Candidate','ownerFollowAuthProof547','APP547_AUTH_PROOF_COMPILED_OPEN'),
+          ]
+          def gcloud(*args):
+            return subprocess.run(['gcloud',*args],capture_output=True,text=True,timeout=60)
+          all_flags=[]
+          with tempfile.TemporaryDirectory(prefix='soridraw654-') as directory:
+            for name,base,symbol in names:
+              result=gcloud('functions','describe',name,'--gen2','--region=asia-northeast3',
+                            '--project='+PROJECT,'--format=json')
+              if result.returncode:
+                print('APP654_FN_'+name+'=METADATA_ACCESS_HOLD')
+                all_flags.append('UNKNOWN')
+                continue
+              f=json.loads(result.stdout)
+              env=(f.get('serviceConfig') or {}).get('environmentVariables') or {}
+              print('APP654_FN_'+name+'_ACTIVE='+str(f.get('state')=='ACTIVE'))
+              print('APP654_FN_'+name+'_UPDATED='+str(f.get('updateTime','UNKNOWN')))
+              print('APP654_FN_'+name+'_READY='+str(env.get('SORIDRAW_OWNER_FOLLOW_READY_608')=='1'))
+              print('APP654_FN_'+name+'_CANARY_SET='+str(bool(env.get('SORIDRAW_OWNER_FOLLOW_CANARY_UID_574'))))
+              print('APP654_FN_'+name+'_GENERAL='+str(env.get('SORIDRAW_OWNER_FOLLOW_GENERAL_PREVIEW_653')=='1'))
+              source=((f.get('buildConfig') or {}).get('source') or {}).get('storageSource') or {}
+              bucket,object_name=source.get('bucket',''),source.get('object','')
+              flag='UNKNOWN'
+              if bucket and object_name:
+                dest=str(Path(directory)/('source-'+name+'.zip'))
+                got=subprocess.run(['gcloud','storage','cp','gs://'+bucket+'/'+object_name,dest,'--quiet'],
+                                    stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=90)
+                if got.returncode:
+                  flag='SOURCE_ARCHIVE_READ_HOLD'
+                else:
+                  try:
+                    with zipfile.ZipFile(dest) as archive:
+                      candidate=next((p for p in archive.namelist() if any(
+                        p.endswith('/'+s+'/'+base+ext) or p==s+'/'+base+ext
+                        for s in ('src','lib') for ext in ('.ts','.js'))),None)
+                      if candidate:
+                        code=archive.read(candidate).decode('utf8','replace')
+                        m=re.search(r'\b'+re.escape(symbol)+r'\s*=\s*(true|false)\b',code)
+                        flag=m.group(1).upper() if m else 'FLAG_NOT_FOUND'
+                      else:flag='SOURCE_FILE_NOT_FOUND'
+                  except Exception:flag='SOURCE_ARCHIVE_FORMAT_HOLD'
+              else:flag='SOURCE_ARCHIVE_NOT_LISTED'
+              all_flags.append(flag)
+              print('APP654_FN_'+name+'_DEPLOYED_COMPILED='+flag)
+          print('APP654_ALL_THREE_FUNCTIONS_COMPILED_ON='+str(all(x=='TRUE' for x in all_flags)))
+          print('APP654_READ_ONLY_NO_IAM_FUNCTION_WORKER_DB_OR_USER_MUTATION=PASS')
+          PY

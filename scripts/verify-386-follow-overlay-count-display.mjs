@@ -25,19 +25,16 @@ const toggleEnd = page.indexOf('\n\n  const closeMoreSheet', toggleStart);
 assert.ok(toggleStart >= 0 && toggleEnd > toggleStart);
 const toggle = page.slice(toggleStart, toggleEnd);
 
-// APP647: settled relation is trusted, compatibility response counts are not.
-assert.match(toggle, /const delta = Number\(following\) - Number\(previousFollowing\)/);
-assert.match(toggle, /readExploreProfileConnectionExactCount379\(targetUid, 'followers'\)/);
-assert.match(toggle, /readExploreProfileConnectionExactCount379\(viewerUid, 'following'\)/);
-assert.match(toggle, /readExploreFollowingExactCount379\(viewerUid\)/);
-assert.match(toggle, /const followerCount = Math\.max\(0, safeCount\(previousTargetCount\) \+ delta\)/);
-assert.match(toggle, /const followingCount = safeCount\(previousTargetFollowingCount\)/);
-assert.match(toggle, /targetFollowerCount: settled\.followerCount/);
-assert.doesNotMatch(toggle, /confirmed\.(?:followerCount|followingCount|actorFollowingCount)/,
-  'do not render stale legacy compatibility counters');
-assert.match(toggle,/if \(persistConfirmed\) \{[\s\S]*?patchExplorePublicProfileFirstViewProfile\(targetUid/);
+// APP662: overlay R2 authoritatively certifies target and actor counts on a
+// settled operation. Frozen legacy compatibility counts are still untrusted.
+assert.match(toggle,/resolveFollowCounts662\(/);
 assert.match(toggle,/paint\(requestedFollow, false\)/);
-assert.match(toggle,/const confirmed = await setExploreFollow/);
+assert.match(toggle,/paint\(confirmed\.isFollowing, true, confirmed\)/);
+assert.match(toggle,/targetFollowerCount: settled\.followerCount/);
+assert.match(toggle,/readExploreProfileConnectionExactCount379\(targetUid, 'followers'\)/);
+assert.match(toggle,/readExploreFollowingExactCount379\(viewerUid\)/);
+assert.match(social,/row\?\.followProtocol===354 && row\?\.canonicalCounts662===true/);
+assert.match(social,/actorCountVerified662: row\?\.followProtocol===354/);
 
 const ownProfileStart = page.indexOf('    const applyProfileFirstView = ');
 const ownProfileEnd = page.indexOf('\n\n    const retainedPublicationSignal357', ownProfileStart);
@@ -61,8 +58,8 @@ assert.match(page, /followerCount: profile\.followerCount,[\s\S]*?followingCount
 console.log('APP379_OVERLAY_LEGACY_COUNTERS_NOT_UI_AUTHORITY=PASS');
 console.log('APP379_OWN_FOLLOWING_COUNT_LOCAL_EXACT=PASS');
 console.log('APP379_OWN_FOLLOWER_COUNT_LOCAL_EXACT_WHEN_CACHED=PASS');
-console.log('APP379_TARGET_FOLLOWER_COUNT_DELTA=PASS');
-console.log('APP379_TARGET_FOLLOWING_COUNT_PRESERVED=PASS');
+console.log('APP662_CANONICAL_OR_OVERLAY_GUARDED_FOLLOW_COUNTS=PASS');
+console.log('APP662_TARGET_FOLLOWING_COUNT_FROM_SETTLED_OVERLAY=PASS');
 console.log('APP379_CROSS_DEVICE_COUNT_RECONCILIATION=PASS');
 console.log('APP379_NO_EXTRA_SERVER_READ_FOR_COUNT_FIX=PASS');
 // A failed browser Follow 500 was traced to the Worker mistaking an

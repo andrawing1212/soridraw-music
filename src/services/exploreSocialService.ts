@@ -126,6 +126,7 @@ export type ExploreFollowState = {
   followingCount: number;
   actorFollowingCount?: number;
   countVerified661?: boolean;
+  actorCountVerified662?: boolean;
 };
 
 export type ExploreProfileConnectionDirection = 'followers' | 'following';
@@ -685,7 +686,7 @@ export const getExploreFollowState = async (user: User, uid: string, forceServer
     isFollowing: Boolean(row?.isFollowing ?? row?.following ?? row?.followed),
     followerCount: toCount(rawFollowers),
     followingCount: toCount(rawFollowing),
-    countVerified661: forceServer &&
+    countVerified661: forceServer && row?.followProtocol === 354 &&
       Number.isSafeInteger(Number(rawFollowers)) && Number(rawFollowers) >= 0 &&
       Number.isSafeInteger(Number(rawFollowing)) && Number(rawFollowing) >= 0 &&
       rawFollowers !== null && rawFollowers !== undefined &&
@@ -725,11 +726,24 @@ export const setExploreFollow = async (
     (path, init) => requestAuthed(user, path, init),
   );
   const row = payload?.data || {};
-  const result = {
+  const targetFollower662 = row?.followerCount ?? row?.follower_count;
+  const targetFollowing662 = row?.followingCount ?? row?.following_count;
+  const actorFollowing662 = row?.actorFollowingCount ?? row?.actor_following_count;
+  const validCount662 = (v:unknown):boolean =>
+    v !== null && v !== undefined &&
+    Number.isSafeInteger(Number(v)) && Number(v)>=0 && Number(v)<=1_000_000_000;
+  const result: ExploreFollowState = {
     isFollowing: Boolean(row?.isFollowing ?? row?.following ?? row?.followed ?? follow),
-    followerCount: toCount(row?.followerCount ?? row?.follower_count),
-    followingCount: toCount(row?.followingCount ?? row?.following_count),
-    actorFollowingCount: toCount(row?.actorFollowingCount ?? row?.actor_following_count),
+    followerCount: toCount(targetFollower662),
+    followingCount: toCount(targetFollowing662),
+    actorFollowingCount: toCount(actorFollowing662),
+    // Distinguish actual canonical zero from missing fields normalized to zero.
+    // Legacy/frozen profile_stats counters are NOT canonical. APP662 Worker
+    // marks only the already-settled overlay R2 owner+actor snapshot as exact.
+    countVerified661: row?.followProtocol===354 && row?.canonicalCounts662===true &&
+      validCount662(targetFollower662) && validCount662(targetFollowing662),
+    actorCountVerified662: row?.followProtocol===354 && row?.canonicalCounts662===true &&
+      validCount662(actorFollowing662),
   };
   patchExploreFollowLocalState377(user.uid, normalizedUid, result.isFollowing, targetProfile);
   return result;

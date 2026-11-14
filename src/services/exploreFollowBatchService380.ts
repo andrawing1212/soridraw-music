@@ -13,6 +13,10 @@ export type ExploreFollowCommitResult380 = {
   followerCount: number;
   followingCount: number;
   actorFollowingCount?: number;
+  // APP662: pass through canonical certainty flags from the existing writer.
+  // The 30s queue itself does not perform any extra reads or writes.
+  countVerified661?: boolean;
+  actorCountVerified662?: boolean;
 };
 
 export type ExploreFollowBatchBase380 = {

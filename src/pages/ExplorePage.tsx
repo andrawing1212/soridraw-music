@@ -106,6 +106,8 @@ import {
   publishExploreFollowSync377,
   subscribeExploreFollowSync377,
 } from '../services/exploreFollowSyncService';
+import {resolveFollowCounts662,shouldApplyActorFollowSignal662}
+ from '../services/exploreFollowCountAuthority662';
 import { createOwnerEpochGate538 } from '../services/exploreOwnerFollowerEpochCore538';
 import {
   EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED,
@@ -2007,6 +2009,9 @@ export default function ExplorePage() {
   // reload. A real changed-follow signal still invalidates its list immediately.
   const OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 120_000;
   const followSignalVersion377Ref = useRef(0);
+  const followSignalUid662Ref=useRef('');
+  const ownCountRequest662Ref=useRef<{uid:string;at:number}|null>(null);
+  const latestActorSignal662Ref=useRef<{uid:string;at:number;count:number}|null>(null);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
 
   useEffect(() => {
@@ -3416,6 +3421,8 @@ export default function ExplorePage() {
     // asynchronously revalidated first-view response from a stale Edge shell.
     let verifiedOwnCounts: Pick<ExplorePublicProfile, 'followerCount' | 'followingCount'> | null = null;
     const ownCountsRequestedAt = Date.now();
+    if(user&&profileUid===user.uid)
+      ownCountRequest662Ref.current={uid:user.uid,at:ownCountsRequestedAt};
     const ownCountsTask = user && profileUid === user.uid
       ? getExploreOwnProfileFollowCounts(user)
           .then((counts) => {
@@ -3454,6 +3461,10 @@ export default function ExplorePage() {
           };
           const ownerSignal = ownerFollowerConfirmed529Ref.current;
           if (ownerSignal?.uid === nextProfile.uid) confirmed.followerCount = ownerSignal.count;
+          const actorSignal662=latestActorSignal662Ref.current;
+          if(actorSignal662?.uid===nextProfile.uid &&
+             shouldApplyActorFollowSignal662(actorSignal662.at,ownCountsRequestedAt))
+            confirmed.followingCount=actorSignal662.count;
           displayProfile379 = { ...nextProfile, ...confirmed };
           if (nextProfile.followerCount !== confirmed.followerCount ||
               nextProfile.followingCount !== confirmed.followingCount) {
@@ -3640,22 +3651,21 @@ export default function ExplorePage() {
         onSettled: (settlement380) => {
           const confirmed380 = Boolean(settlement380.result.isFollowing);
           const delta380 = Number(confirmed380) - Number(settlement380.baseFollowing);
-          const exactActor380 =
-            readExploreProfileConnectionExactCount379(viewerUid380, 'following')
-            ?? readExploreFollowingExactCount379(viewerUid380);
+          const exactActor380 = settlement380.result.actorCountVerified662===true
+            ? settlement380.result.actorFollowingCount??null
+            : readExploreProfileConnectionExactCount379(viewerUid380, 'following')
+              ?? readExploreFollowingExactCount379(viewerUid380);
           const actorCount380 = exactActor380 !== null
             ? exactActor380
             : settlement380.baseActorFollowingCount === null
               ? null
               : Math.max(0, Math.floor(settlement380.baseActorFollowingCount) + delta380);
-          const targetFollower380 = Math.max(
-            0,
-            Math.floor(settlement380.baseTargetFollowerCount) + delta380,
-          );
-          const targetFollowing380 = Math.max(
-            0,
-            Math.floor(settlement380.baseTargetFollowingCount),
-          );
+          const targetFollower380 = settlement380.result.countVerified661===true
+            ? settlement380.result.followerCount
+            : Math.max(0,Math.floor(settlement380.baseTargetFollowerCount)+delta380);
+          const targetFollowing380 = settlement380.result.countVerified661===true
+            ? settlement380.result.followingCount
+            : Math.max(0,Math.floor(settlement380.baseTargetFollowingCount));
 
           patchExplorePublicProfileFirstViewProfile(targetUid380, {
             followerCount: targetFollower380,
@@ -3755,9 +3765,23 @@ export default function ExplorePage() {
   useEffect(() => {
     const viewerUid377 = String(user?.uid || '').trim();
     if (!viewerUid377) return undefined;
+    if(followSignalUid662Ref.current!==viewerUid377){
+      followSignalUid662Ref.current=viewerUid377;
+      followSignalVersion377Ref.current=0;
+      latestActorSignal662Ref.current=null;
+      ownCountRequest662Ref.current=null;
+    }
     return subscribeExploreFollowSync377(viewerUid377, (signal377) => {
       if (signal377.version <= followSignalVersion377Ref.current) return;
       followSignalVersion377Ref.current = signal377.version;
+      // Retained actor RTDB snapshots must never replace a newer self
+      // authenticated count after page navigation, reload or modal reopen.
+      const ownRequest662=ownCountRequest662Ref.current;
+      if(ownRequest662?.uid===viewerUid377 &&
+         !shouldApplyActorFollowSignal662(signal377.at,ownRequest662.at))return;
+      latestActorSignal662Ref.current={
+        uid:viewerUid377,at:signal377.at,count:signal377.actorFollowingCount,
+      };
 
       const previousMembership379 = readExploreFollowMembership379(
         viewerUid377,
@@ -3769,20 +3793,10 @@ export default function ExplorePage() {
         signal377.targetUid,
         signal377.following,
       );
-      const exactActorFollowing379 =
-        readExploreProfileConnectionExactCount379(viewerUid377, 'following')
-        ?? readExploreFollowingExactCount379(viewerUid377);
-      const resolvedSignalActorFollowing379 = exactActorFollowing379
-        ?? signal377.actorFollowingCount;
-      const signalDelta379 = previousMembership379 === null
-        ? 0
-        : Number(signal377.following) - Number(previousMembership379);
-      const resolvedSignalTargetFollower379 = previousMembership379 !== null && previousTargetProfile379
-        ? Math.max(
-          0,
-          Math.floor(Number(previousTargetProfile379.followerCount || 0)) + signalDelta379,
-        )
-        : signal377.targetFollowerCount;
+      // A post-commit signal is newer than an unchanged local list. In 1:N
+      // cases the old membership/target ±1 calculation is not canonical.
+      const resolvedSignalActorFollowing379 = signal377.actorFollowingCount;
+      const resolvedSignalTargetFollower379 = signal377.targetFollowerCount;
 
       patchExplorePublicProfileFirstViewProfile(viewerUid377, {
         followingCount: resolvedSignalActorFollowing379,
@@ -4648,12 +4662,14 @@ export default function ExplorePage() {
       ?? readCachedExplorePublicProfile(viewerUid)?.followingCount
       ?? null;
 
-    const paint = (following: boolean, persistConfirmed: boolean) => {
-      const delta = Number(following) - Number(previousFollowing);
-      const followerCount = Math.max(0, safeCount(previousTargetCount) + delta);
-      const followingCount = safeCount(previousTargetFollowingCount);
-      const actorFollowingCount = previousActorCount === null
-        ? null : Math.max(0, safeCount(previousActorCount) + delta);
+    const paint = (following: boolean, persistConfirmed: boolean, canonical?: ExploreFollowState|null) => {
+      const {followerCount,followingCount,actorFollowingCount}=resolveFollowCounts662({
+        previousFollowing,following,
+        baseFollowerCount:previousTargetCount,
+        baseFollowingCount:previousTargetFollowingCount,
+        baseActorFollowingCount:previousActorCount,
+        canonical:persistConfirmed?canonical:null,
+      });
       if (persistConfirmed) {
         patchExploreFollowLocalState377(viewerUid, targetUid, following, profile);
         patchExplorePublicProfileFirstViewProfile(targetUid, {
@@ -4694,7 +4710,7 @@ export default function ExplorePage() {
     try {
       const confirmed = await setExploreFollow(user, targetUid, requestedFollow, profile);
       if (auth.currentUser?.uid !== viewerUid) return;
-      const settled = paint(confirmed.isFollowing, true);
+      const settled = paint(confirmed.isFollowing, true, confirmed);
       if (confirmed.isFollowing !== requestedFollow) {
         setSocialNotice('팔로우 상태가 변경되었습니다. 다시 확인해 주세요.');
       }
@@ -4712,10 +4728,11 @@ export default function ExplorePage() {
       // canonical recheck distinguishes committed writes from real rejection.
       const latest = await getExploreFollowState(user, targetUid, true).catch(() => null);
       const settledFollowing = latest ? latest.isFollowing : previousFollowing;
-      const settled = paint(settledFollowing, Boolean(latest));
+      const settled = paint(settledFollowing, Boolean(latest), latest);
       if (latest?.isFollowing === requestedFollow) {
-        // The write did commit, even if follow-up projection failed.
-        if (settled.actorFollowingCount !== null) {
+        // The write did commit, but one target-only recheck cannot prove the
+        // actor's 1:N Following total. Never publish an invented scalar.
+        if (latest.actorCountVerified662===true&&settled.actorFollowingCount!==null) {
           void publishExploreFollowSync377(viewerUid, {
             targetUid, following: settledFollowing,
             actorFollowingCount: settled.actorFollowingCount,

@@ -21,3 +21,10 @@ export const hasOwnerFollowCanaryOptIn634=(
  try{return storage?.getItem(TAB_KEY_634)==='1'}
  catch{return false}
 };
+
+// APP658: passive RTDB listening is allowed for the one approved PREVIEW
+// owner after PWA/browser relaunch; this never permits Auth enrollment writes.
+export const mayListenToApprovedOwnerOnPreview658=(
+ hostname:string,uid:string,approvedUid:string,
+):boolean=>hostname.toLowerCase()==='preview.soridraw.com'&&
+ approvedUid.length>0&&uid===approvedUid;

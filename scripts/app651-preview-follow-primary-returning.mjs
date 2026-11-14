@@ -111,9 +111,11 @@ async function main() {
     }
     need(m.name==='preview-entry.mjs','UNEXPECTED_FOLLOW_MODULE_'+m.name);
     const patched=repairFollowPrimaryRowCount650(raw);
+    // Active deployed source uses result2/changes2 variable aliases. The
+    // APP650 helper validates the exact function and replaces only its one
+    // .run()+meta.changes path, regardless of those harmless aliases.
     need(patched!==raw&&patched.includes('RETURNING 1 AS relation_changed')&&
-      patched.includes('Array.isArray(result?.results)')&&
-      !patched.includes('const changes = Number(result?.meta?.changes || 0)'),
+      /const changes[0-9]* = Array[.]isArray[(]result[0-9]*[?][.]results[)]/.test(patched),
       'EXACT_PRIMARY_ROWS_PATCH');
     changed++;
     ms.push({name:m.name,content_type:m.content_type||'application/javascript+module',

@@ -3667,11 +3667,15 @@ export default function ExplorePage() {
             ? settlement380.result.followingCount
             : Math.max(0,Math.floor(settlement380.baseTargetFollowingCount));
 
-          patchExplorePublicProfileFirstViewProfile(targetUid380, {
-            followerCount: targetFollower380,
-            followingCount: targetFollowing380,
-          });
-          if (actorCount380 !== null) {
+          // Cached +/- deltas may paint a provisional UI, but must never
+          // become a persistent/public "canonical" profile count.
+          if (settlement380.result.countVerified661===true) {
+            patchExplorePublicProfileFirstViewProfile(targetUid380, {
+              followerCount: targetFollower380,
+              followingCount: targetFollowing380,
+            });
+          }
+          if (settlement380.result.actorCountVerified662===true && actorCount380 !== null) {
             patchExplorePublicProfileFirstViewProfile(viewerUid380, {
               followingCount: actorCount380,
             });
@@ -3709,15 +3713,22 @@ export default function ExplorePage() {
             });
           }
 
-          void publishExploreFollowSync377(viewerUid380, {
-            targetUid: targetUid380,
-            following: confirmed380,
-            actorFollowingCount: actorCount380
-              ?? Math.max(0, Math.floor(Number(settlement380.result.actorFollowingCount || 0))),
-            targetFollowerCount: targetFollower380,
-          }).catch((reason) => {
-            console.warn('[app380] resumed follow final-state live sync deferred:', reason);
-          });
+          // APP664: never broadcast a provisional local delta as a server
+          // settled fact. Only a changed edge with both canonical counts may
+          // notify the actor's other devices. Existing owner relay is separate.
+          if (confirmed380 !== settlement380.baseFollowing &&
+              settlement380.result.countVerified661===true &&
+              settlement380.result.actorCountVerified662===true &&
+              actorCount380 !== null) {
+            void publishExploreFollowSync377(viewerUid380, {
+              targetUid: targetUid380,
+              following: confirmed380,
+              actorFollowingCount: actorCount380,
+              targetFollowerCount: targetFollower380,
+            }).catch((reason) => {
+              console.warn('[app380] resumed follow final-state live sync deferred:', reason);
+            });
+          }
         },
         onDeferred: () => {
           if (auth.currentUser?.uid === viewerUid380 && activeProfileUidRef.current === targetUid380) {
@@ -4672,10 +4683,12 @@ export default function ExplorePage() {
       });
       if (persistConfirmed) {
         patchExploreFollowLocalState377(viewerUid, targetUid, following, profile);
-        patchExplorePublicProfileFirstViewProfile(targetUid, {
-          followerCount, followingCount,
-        });
-        if (actorFollowingCount !== null) {
+        if (canonical?.countVerified661===true) {
+          patchExplorePublicProfileFirstViewProfile(targetUid, {
+            followerCount, followingCount,
+          });
+        }
+        if (canonical?.actorCountVerified662===true && actorFollowingCount !== null) {
           patchExplorePublicProfileFirstViewProfile(viewerUid, {
             followingCount: actorFollowingCount,
           });
@@ -4714,7 +4727,10 @@ export default function ExplorePage() {
       if (confirmed.isFollowing !== requestedFollow) {
         setSocialNotice('팔로우 상태가 변경되었습니다. 다시 확인해 주세요.');
       }
-      if (confirmed.isFollowing !== previousFollowing && settled.actorFollowingCount !== null) {
+      if (confirmed.isFollowing !== previousFollowing &&
+          confirmed.countVerified661===true &&
+          confirmed.actorCountVerified662===true &&
+          settled.actorFollowingCount !== null) {
         void publishExploreFollowSync377(viewerUid, {
           targetUid,
           following: confirmed.isFollowing,
@@ -4732,7 +4748,8 @@ export default function ExplorePage() {
       if (latest?.isFollowing === requestedFollow) {
         // The write did commit, but one target-only recheck cannot prove the
         // actor's 1:N Following total. Never publish an invented scalar.
-        if (latest.actorCountVerified662===true&&settled.actorFollowingCount!==null) {
+        if (latest.countVerified661===true&&latest.actorCountVerified662===true&&
+            settled.actorFollowingCount!==null) {
           void publishExploreFollowSync377(viewerUid, {
             targetUid, following: settledFollowing,
             actorFollowingCount: settled.actorFollowingCount,

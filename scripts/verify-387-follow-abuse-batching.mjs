@@ -29,7 +29,7 @@ assert.match(toggle, /await setExploreFollow\(user, targetUid, requestedFollow, 
 assert.match(toggle, /readPendingExploreFollowIntents380\(viewerUid\)/);
 assert.match(toggle, /followMutationInFlightRef\.current/);
 assert.doesNotMatch(toggle, /queueExploreFollowFinalState380\(/);
-assert.doesNotMatch(toggle, /patchExploreFollowLocalState377\(/);
+assert.match(toggle,/if \(persistConfirmed\) \{[\s\S]*?patchExploreFollowLocalState377\(viewerUid, targetUid, following, profile\)/);
 const publishIndex = toggle.indexOf('publishExploreFollowSync377(viewerUid');
 const settledIndex = toggle.indexOf('await setExploreFollow(');
 assert.ok(publishIndex > settledIndex, 'same-account signal must follow accepted canonical response');

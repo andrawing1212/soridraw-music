@@ -218,6 +218,11 @@ jobs:
             assert safe
             (out/(script+'.json')).write_text(json.dumps({'version':version,'modules':safe}))
             print('ACTIVE_SOURCE_READ_ONLY='+script+';version='+version+';modules='+str(len(safe)))
+          # APP660: the staged module hashes match, but the deployment checker
+          # reported RUNTIME_CHANGED. Print metadata ONLY; no bindings/secrets.
+          old_runtime=(get('workers/scripts/soridraw-explore-preview/versions/02576623-2172-4922-85b8-3f08a5216653').get('resources') or {}).get('script_runtime') or {}
+          new_runtime=(get('workers/scripts/soridraw-explore-preview/versions/a2e6390d-c879-4e31-83e3-dee8046cb6ed').get('resources') or {}).get('script_runtime') or {}
+          print('APP660_RUNTIME_READONLY_COMPARE='+json.dumps({'active':old_runtime,'staged':new_runtime,'exact':old_runtime==new_runtime},sort_keys=True))
           # APP660: investigate the exact inactive stage; no deployment mutation.
           for version in ['02576623-2172-4922-85b8-3f08a5216653','a2e6390d-c879-4e31-83e3-dee8046cb6ed']:
             for include in ['modules','modules,sourcemaps']:

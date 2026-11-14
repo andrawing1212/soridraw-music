@@ -6,6 +6,8 @@ on:
     paths:
       - 'src/services/exploreOwnerFollowerSync542.ts'
       - 'src/services/exploreSocialService.ts'
+      - 'src/services/exploreFollowCountAuthority662.ts'
+      - 'scripts/verify-662-multifollow-count.mjs'
       - 'src/pages/ExplorePage.tsx'
       - 'scripts/verify-377-follow-count-list-sync.mjs'
       - 'scripts/verify-386-follow-overlay-count-display.mjs'
@@ -139,6 +141,7 @@ jobs:
           run_check 527 node scripts/verify-527-owner-follower-idle-cost.mjs
           run_check 634 node scripts/verify-634-owner-follow-tab-optin.mjs
           run_check 659 node scripts/verify-659-preview-owner-routing.mjs
+          run_check 662 node --import tsx scripts/verify-662-multifollow-count.mjs
           run_check 653 node --import tsx scripts/verify-653-owner-general-scope.mjs
           run_check 529_sql python3 scripts/verify-529-owner-outbox-sql.py
           run_check 529_sync node scripts/verify-529-owner-sync.mjs

@@ -1,6 +1,6 @@
-release=APP651_PREVIEW_FOLLOW_ROWCOUNT_2026-11-14
+release=APP651_PREVIEW_FOLLOW_ROWCOUNT_RETRY_2026-11-14
 director_approval=YES_PREVIEW_WORKER_ONE_FOLLOW_PRIMARY_ROWCOUNT
-source_parent=5792d0d80d98890b8144fdeac630e8b9a503ba42
+source_parent=a6ba3282910dd615e53a9de9a7e55b3ec7fa9578
 safe_active_100=962ee432-fadb-456e-8836-50675aa76b84
 canary_active_0=6b13cde4-4a53-42d2-873f-361f7cf5a931
 scope=only_preview_entry_ordered_follow_mutate_relation_RETURNING

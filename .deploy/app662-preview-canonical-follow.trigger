@@ -1,0 +1,7 @@
+approval=director_20261114_multifollow_correctness_preview
+source_parent=4edfd86401d20caafb37f5a1c4788f5d3c4773e6
+old_worker=9e0f9a57-5da3-49c5-98ef-ffac999d3c39
+owner_worker_unchanged=142e7005-cf9c-4cc7-88fc-a786a8d35058
+scope=one_preview_worker_one_ack_module_only
+no_shared_user_data_rules_or_test_prod_change=true
+regression=app662_exact_overlay_actor_r2_43629452314_PASS

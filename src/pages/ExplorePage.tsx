@@ -4125,10 +4125,14 @@ export default function ExplorePage() {
           readExploreProfileConnectionLastServerAt528(targetUid, direction),
         )
       : 0;
+    // With cross-account push intentionally OFF, a newly opened own-follower
+    // list must check the canonical page once. Re-clicks inside the same open
+    // modal still use the existing 120-second cost guard.
     const refreshOwn523 = ownFollowers523 &&
-      shouldRefreshOwnerFollowersOnOpen528(
-        lastCheck523, Date.now(), OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523,
-      );
+      (profileConnectionsOpen376 !== 'followers' ||
+        shouldRefreshOwnerFollowersOnOpen528(
+          lastCheck523, Date.now(), OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523,
+        ));
     if (cached) {
       setProfileConnectionsItems376(cached.items);
       setProfileConnectionsNextCursor376(cached.nextCursor);

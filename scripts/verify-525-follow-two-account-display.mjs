@@ -51,6 +51,7 @@ const explicit=slice(page,
  '  const openProfileConnections376 = async (direction: ExploreProfileConnectionDirection) => {',
  '  // APP527: A\'s profile must not spend D1/R2 on window focus, blank-space');
 assert.match(explicit,/const ownFollowers523 = direction === 'followers' && targetUid === user\?\.uid/);
+assert.match(explicit,/profileConnectionsOpen376 !== 'followers'/);
 assert.match(explicit,/if \(cached\) \{[\s\S]*?if \(!refreshOwn523\) \{[\s\S]*?return;/);
 assert.match(explicit,/getExploreProfileConnections\(targetUid, direction, null, refreshOwn523\)/);
 assert.match(explicit,/if \(!page.nextCursor\) \{/);

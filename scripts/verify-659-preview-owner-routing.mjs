@@ -26,6 +26,6 @@ for(const bad of ['/v1/profiles/B/follow/','/v1/profiles/B/likes',
 const entry=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
 const client=readFileSync('src/services/exploreOwnerFollowerSync542.ts','utf8');
 assert.match(entry,/ownerFollowTargetInScope659\(env,url\.pathname\)/);
-assert.match(client,/APP659_GENERAL_PREVIEW_OWNERS_ENABLED=false/);
+assert.match(client,/APP659_GENERAL_PREVIEW_OWNERS_ENABLED=true/);
 assert.match(client,/new WeakMap/);
 console.log('APP659_GENERAL_OWNER_PREVIEW_SCOPE_NO_POLL_NO_WIDE_ROUTE=PASS');

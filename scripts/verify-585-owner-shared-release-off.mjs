@@ -92,9 +92,9 @@ assert.ok(tabHelper.includes("new URLSearchParams(search).get('ownerFollowCanary
  'APP591_EXPLICIT_URL_REQUIRED');
 assert.ok(clientCanary.includes('hasExplicitOwnerFollowTabOptIn634()'),
  'APP591_CANARY_ENROLLMENT_EXPLICIT_ONLY');
-assert.ok(clientCanary.includes('APP659_GENERAL_PREVIEW_OWNERS_ENABLED=false'),
- 'APP659_GENERAL_OWNER_MUST_BE_OFF_BEFORE_SERVER_ROLLOUT');
-console.log('APP659_PREVIEW_HOST_EXPLICIT_ENROLLMENT_AND_GENERAL_OFF=PASS');
+assert.ok(clientCanary.includes('APP659_GENERAL_PREVIEW_OWNERS_ENABLED=true'),
+ 'APP660_GENERAL_PREVIEW_OWNER_CLIENT_RELEASE');
+console.log('APP660_PREVIEW_GENERAL_CLIENT_SCOPE=PASS');
 const index=read('functions/src/index.ts');
 assert.ok(index.includes('databaseURL: "https://soridraw-app-866a5-default-rtdb.firebaseio.com"'));
 for(const fn of ['publishExploreOwnerFollower542',

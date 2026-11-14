@@ -36,7 +36,7 @@ assert.equal(canListen(host,'',''),false);
 for(const h of ['soridraw.com','test.soridraw.com','evil-preview.soridraw.com'])
  assert.equal(canListen(h,'approvedOwner','approvedOwner'),false);
 assert.match(client,/mayListenToApprovedOwnerOnPreview658\(/);
-assert.match(client,/APP659_GENERAL_PREVIEW_OWNERS_ENABLED=false/);
+assert.match(client,/APP659_GENERAL_PREVIEW_OWNERS_ENABLED=true/);
 assert.equal(canGeneral(host,'otherOwner',true),true);
 assert.equal(canGeneral(host,'otherOwner',false),false);
 assert.equal(canGeneral('soridraw.com','otherOwner',true),false);

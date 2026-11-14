@@ -39,7 +39,7 @@ assert.match(client,/resolvedSignalActorFollowing379 = signal377\.actorFollowing
 assert.match(client,/resolvedSignalTargetFollower379 = signal377\.targetFollowerCount/);
 assert.match(client,/shouldApplyActorFollowSignal662\(signal377\.at,ownRequest662\.at\)/);
 assert.match(client,/latestActorSignal662Ref/);
-assert.match(social,/actorCountVerified662: validCount662\(actorFollowing662\)/);
+assert.match(social,/actorCountVerified662: row\?\.followProtocol===354 && row\?\.canonicalCounts662===true/);
 console.log('APP662_CANONICAL_1_TO_N_FOLLOW_COUNTS_BEAT_STALE_DELTA=PASS');
 console.log('APP662_SIGNED_TARGET_AND_ACTOR_ACK_ZERO_AND_DEFERRED_BOUNDARY=PASS');
 console.log('APP662_RETAINED_SAME_ACCOUNT_SIGNAL_ORDERING=PASS');

@@ -26,13 +26,13 @@ assert.ok(toggleStart >= 0 && toggleEnd > toggleStart);
 const toggle = page.slice(toggleStart, toggleEnd);
 
 // APP647: settled relation is trusted, compatibility response counts are not.
-assert.match(toggle, /const relationDelta = Number\(confirmed\.isFollowing\) - Number\(previousFollowing\)/);
+assert.match(toggle, /const delta = Number\(following\) - Number\(previousFollowing\)/);
 assert.match(toggle, /readExploreProfileConnectionExactCount379\(targetUid, 'followers'\)/);
 assert.match(toggle, /readExploreProfileConnectionExactCount379\(viewerUid, 'following'\)/);
 assert.match(toggle, /readExploreFollowingExactCount379\(viewerUid\)/);
-assert.match(toggle, /resolvedTargetFollower = Math\.max\(0, safeCount\(previousTargetCount\) \+ relationDelta\)/);
-assert.match(toggle, /resolvedTargetFollowing = safeCount\(previousTargetFollowingCount\)/);
-assert.match(toggle, /targetFollowerCount: resolvedTargetFollower/);
+assert.match(toggle, /const followerCount = Math\.max\(0, safeCount\(previousTargetCount\) \+ delta\)/);
+assert.match(toggle, /const followingCount = safeCount\(previousTargetFollowingCount\)/);
+assert.match(toggle, /targetFollowerCount: settled\.followerCount/);
 assert.doesNotMatch(toggle, /confirmed\.(?:followerCount|followingCount|actorFollowingCount)/,
   'do not render stale legacy compatibility counters');
 assert.match(toggle,/if \(persistConfirmed\) \{[\s\S]*?patchExplorePublicProfileFirstViewProfile\(targetUid/);

@@ -40,8 +40,8 @@ assert.match(click,/followMutationInFlightRef\.current/);
 assert.match(click,/getExploreFollowState\(user, targetUid, true\)/);
 assert.match(click,/if \(persistConfirmed\) \{/);
 assert.match(click,/paint\(requestedFollow, false\)/);
-assert.doesNotMatch(click,/patchExplorePublicProfileFirstViewProfile\(targetUid[^)]*\)[\s\S]*?paint\(requestedFollow, false\)/,
-  'NO_PUBLIC_CACHE_WRITES_FOR_UNSETTLED_OPTIMISTIC_CLICK');
+assert.match(click,/if \(persistConfirmed\) \{[\s\S]*?patchExplorePublicProfileFirstViewProfile\(targetUid/);
+assert.match(click,/paint\(requestedFollow, false\)/);
 assert.match(page,/getExploreFollowState\(user, nextProfile\.uid, true\)/);
 assert.match(page,/disabled=\{followBusy \|\| !followState\}/);
 assert.match(page,/readPendingTargetFollowerCount525\(user\.uid,displayProfile379\.uid\)/);

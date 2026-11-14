@@ -16,13 +16,13 @@ const body=`    const cards661 = await Promise.all(
       if(ids661.length){
         // Only after an R2 miss: one indexed read, never per-card fanout.
         const placeholders661=ids661.map(()=>"?").join(",");
-        const fallback661=await env.DB.prepare(`
+        const fallback661=await env.DB.prepare(\`
           SELECT p.uid,p.nickname,p.handle,p.avatar_url,p.bio,
             COALESCE(ps.follower_count,0) AS follower_count,
             COALESCE(ps.following_count,0) AS following_count
           FROM public_profiles p LEFT JOIN profile_stats ps ON ps.uid=p.uid
-          WHERE p.is_public=1 AND p.uid IN (${placeholders661}) LIMIT ?
-        `).bind(...ids661,ids661.length).all();
+          WHERE p.is_public=1 AND p.uid IN (\${placeholders661}) LIMIT ?
+        \`).bind(...ids661,ids661.length).all();
         const byUid661=new Map((fallback661.results||[]).map(row=>[String(row.uid||""),row]));
         for(let i=0;i<visible2.length;i++){
           if(cards661[i])continue;

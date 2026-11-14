@@ -74,6 +74,26 @@ assert.doesNotMatch(page.slice(0,ownerBegin548)+page.slice(ownerEnd548),
 assert.doesNotMatch(page,/window\.addEventListener\('focus',onOwnFollowersFocus525\)/);
 assert.match(social,/forceServer \? 'no-store' : 'default'/);
 assert.match(social,/if \(!normalizedCursor && !forceServer\)/);
+
+const ownSource = social.slice(social.indexOf('export const getExploreOwnProfileFollowCounts = async ('),
+  social.indexOf('export const setExploreFollow = async ('));
+assert.match(ownSource,/requestAuthed\(/);
+assert.match(ownSource,/follow-state/);
+assert.match(ownSource,/cache: 'no-store'/);
+assert.doesNotMatch(ownSource,/rememberExploreFollowState|setInterval|getExploreProfileConnections/);
+const ownMountStart=page.indexOf('    let verifiedOwnCounts:');
+assert.ok(ownMountStart>=0, 'OWN_PROFILE_SUMMARY_MISSING');
+const ownMountEnd=page.indexOf('    return () => { cancelled = true; }',ownMountStart);
+assert.ok(ownMountEnd>ownMountStart, 'OWN_PROFILE_MOUNT_BOUNDARY');
+const ownerMount=page.slice(ownMountStart,ownMountEnd);
+assert.match(ownerMount,/getExploreOwnProfileFollowCounts\(user\)/);
+assert.match(ownerMount,/if \(ownCountsTask\) await ownCountsTask/);
+assert.match(ownerMount,/if \(verifiedOwnCounts\)/);
+assert.match(ownerMount,/followingCount: newerFollowing \?\? verifiedOwnCounts.followingCount/);
+assert.match(ownerMount,/ownerFollowerConfirmed529Ref\.current/);
+assert.doesNotMatch(ownerMount,/setInterval\(|window\.addEventListener\('focus'/);
+console.log('APP652_OWNER_FIRST_ENTRY_TARGETED_COUNT_WITHOUT_LIST_POLL=PASS');
+
 console.log('APP647_ACTOR_B_CANONICAL_FOLLOW_COUNT_LEGACY_PENDING_PROTECTED=PASS');
 console.log('APP527_OWNER_A_EXPLICIT_ONLY_NO_FOCUS_LIST_READ=PASS');
 console.log('APP525_NO_BACKGROUND_POLL_NO_PRECOMMIT_PUBLIC_WRITE=PASS');

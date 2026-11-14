@@ -669,6 +669,23 @@ export const getExploreFollowState = async (user: User, uid: string, forceServer
   return result;
 };
 
+// Exact one-profile self summary. No local membership cache write, no list scan
+// and no recurring polling. A profile-entry read is necessary while the
+// cross-account owner event pipeline remains disabled for normal accounts.
+export const getExploreOwnProfileFollowCounts = async (
+  user: User,
+): Promise<Pick<ExplorePublicProfile, 'followerCount' | 'followingCount'>> => {
+  const payload = await requestAuthed(
+    user, `/v1/profiles/${encodeURIComponent(user.uid)}/follow-state`,
+    { cache: 'no-store' },
+  );
+  const row = payload?.data || {};
+  return {
+    followerCount: toCount(row?.followerCount ?? row?.follower_count),
+    followingCount: toCount(row?.followingCount ?? row?.following_count),
+  };
+};
+
 export const setExploreFollow = async (
   user: User,
   uid: string,

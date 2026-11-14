@@ -84,6 +84,7 @@ import {
 } from '../services/explorePublicationLivePolicy433';
 import {
   getExploreFollowState,
+  getExploreOwnProfileFollowCounts,
   getExploreFollowingUids312,
   getExploreProfileConnections,
   invalidateExploreProfileConnections377,
@@ -3402,6 +3403,22 @@ export default function ExplorePage() {
     setProfileError('');
     setSocialNotice('');
 
+    // The owner summary is verified only once on each real own-profile entry.
+    // It wins over older persisted list and first-view counters, including an
+    // asynchronously revalidated first-view response from a stale Edge shell.
+    let verifiedOwnCounts: Pick<ExplorePublicProfile, 'followerCount' | 'followingCount'> | null = null;
+    const ownCountsRequestedAt = Date.now();
+    const ownCountsTask = user && profileUid === user.uid
+      ? getExploreOwnProfileFollowCounts(user)
+          .then((counts) => {
+            if (!cancelled && auth.currentUser?.uid === user.uid) verifiedOwnCounts = counts;
+          })
+          .catch((error) => {
+            console.warn('Explore own follower summary unavailable:', error);
+            if (!cancelled) setSocialNotice('팔로워·팔로잉 숫자를 최신으로 확인하지 못했어요.');
+          })
+      : null;
+
     const applyProfileFirstView = (nextProfile: ExplorePublicProfile, rows: Array<Record<string, unknown>>, authoritative = false) => {
       if (cancelled) return;
       const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
@@ -3414,17 +3431,44 @@ export default function ExplorePage() {
       // social counters from complete local relation caches when available.
       let displayProfile379 = nextProfile;
       if (user?.uid === nextProfile.uid) {
-        const exactFollowing379 =
-          readExploreProfileConnectionExactCount379(nextProfile.uid, 'following')
-          ?? readExploreFollowingExactCount379(nextProfile.uid);
-        const exactFollowers379 =
-          readExploreProfileConnectionExactCount379(nextProfile.uid, 'followers');
-        const socialPatch379: Partial<ExplorePublicProfile> = {};
-        if (exactFollowing379 !== null) socialPatch379.followingCount = exactFollowing379;
-        if (exactFollowers379 !== null) socialPatch379.followerCount = exactFollowers379;
-        if (Object.keys(socialPatch379).length > 0) {
-          displayProfile379 = { ...nextProfile, ...socialPatch379 };
-          patchExplorePublicProfileFirstViewProfile(nextProfile.uid, socialPatch379);
+        if (verifiedOwnCounts) {
+          // A bounded one-target authenticated count read is the first-load
+          // authority. Exact list pages fetched AFTER the read started win.
+          const newerFollowers = readExploreProfileConnectionLastServerAt528(nextProfile.uid, 'followers')
+            > ownCountsRequestedAt
+            ? readExploreProfileConnectionExactCount379(nextProfile.uid, 'followers') : null;
+          const newerFollowing = readExploreProfileConnectionLastServerAt528(nextProfile.uid, 'following')
+            > ownCountsRequestedAt
+            ? readExploreProfileConnectionExactCount379(nextProfile.uid, 'following') : null;
+          const confirmed = {
+            followerCount: newerFollowers ?? verifiedOwnCounts.followerCount,
+            followingCount: newerFollowing ?? verifiedOwnCounts.followingCount,
+          };
+          const ownerSignal = ownerFollowerConfirmed529Ref.current;
+          if (ownerSignal?.uid === nextProfile.uid) confirmed.followerCount = ownerSignal.count;
+          displayProfile379 = { ...nextProfile, ...confirmed };
+          if (nextProfile.followerCount !== confirmed.followerCount ||
+              nextProfile.followingCount !== confirmed.followingCount) {
+            patchExplorePublicProfileFirstViewProfile(nextProfile.uid, confirmed);
+          }
+        } else {
+          // If the targeted server request failed, keep existing exact local
+          // list fallback rather than inventing a zero count.
+          const exactFollowing379 =
+            readExploreProfileConnectionExactCount379(nextProfile.uid, 'following')
+            ?? readExploreFollowingExactCount379(nextProfile.uid);
+          const exactFollowers379 =
+            readExploreProfileConnectionExactCount379(nextProfile.uid, 'followers');
+          const socialPatch379: Partial<ExplorePublicProfile> = {};
+          if (exactFollowing379 !== null) socialPatch379.followingCount = exactFollowing379;
+          if (exactFollowers379 !== null) socialPatch379.followerCount = exactFollowers379;
+          if (Object.keys(socialPatch379).length > 0) {
+            displayProfile379 = { ...nextProfile, ...socialPatch379 };
+            if (socialPatch379.followingCount !== nextProfile.followingCount ||
+                socialPatch379.followerCount !== nextProfile.followerCount) {
+              patchExplorePublicProfileFirstViewProfile(nextProfile.uid, socialPatch379);
+            }
+          }
         }
       }
 
@@ -3452,7 +3496,13 @@ export default function ExplorePage() {
     getExplorePublicProfileFirstView(profileUid, {
       expectedPublicationSignalVersion: expectedPublicationSignalVersion357,
       onRevalidated: ({ profile: refreshedProfile, tracks: refreshedRows }) => {
-        applyProfileFirstView(refreshedProfile, refreshedRows, true);
+        // The owner's initial authenticated counter snapshot must finish
+        // before any stale materialized/Edge revalidation can repaint counts.
+        if (ownCountsTask) {
+          void ownCountsTask.then(() => applyProfileFirstView(refreshedProfile, refreshedRows, true));
+        } else {
+          applyProfileFirstView(refreshedProfile, refreshedRows, true);
+        }
       },
       onInvalidated: (message) => {
         if (cancelled) return;
@@ -3463,6 +3513,7 @@ export default function ExplorePage() {
       },
     })
       .then(async ({ profile: nextProfile, tracks: rows }) => {
+        if (ownCountsTask) await ownCountsTask;
         if (cancelled) return;
         applyProfileFirstView(nextProfile, rows);
 

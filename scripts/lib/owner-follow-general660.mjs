@@ -1,5 +1,20 @@
 // Minimal edits to the pinned, actually deployed PREVIEW modules.
 import {createHash} from 'node:crypto';
+import {isDeepStrictEqual} from 'node:util';
+
+// Cloudflare omits migration_tag on an inactive version until it is deployed.
+// This is metadata, NOT an instruction to create/migrate a Durable Object.
+// Preserve the exact active compatibility, usage and any other runtime fields;
+// reject an actual different migration tag or a change to runtime settings.
+export function sameStagedWorkerRuntime660(active,staged){
+ if(!active||!staged||typeof active!=='object'||typeof staged!=='object')return false;
+ if(staged.migration_tag!==undefined&&
+    staged.migration_tag!==active.migration_tag)return false;
+ const before={...active},after={...staged};
+ delete before.migration_tag;
+ delete after.migration_tag;
+ return isDeepStrictEqual(before,after);
+}
 export const hash660=s=>createHash('sha256').update(s).digest('hex');
 const once=(s,old,next)=>{
  if(s.split(old).length!==2)throw Error('APP660_SOURCE_ANCHOR_MISMATCH');

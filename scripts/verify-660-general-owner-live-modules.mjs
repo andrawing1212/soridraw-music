@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHmac} from 'node:crypto';
-import {patchExplore660,patchOwner660} from './lib/owner-follow-general660.mjs';
+import {patchExplore660,patchOwner660,sameStagedWorkerRuntime660} from './lib/owner-follow-general660.mjs';
 import {handleOwnerEpochBinding544} from '../cloudflare/explore-worker/runtime/owner-follow-enrollment-544.mjs';
 const fixture=n=>readFileSync('scripts/fixtures/owner-follow660/'+n,'utf8');
 const load=s=>import('data:text/javascript;base64,'+Buffer.from(s).toString('base64'));
@@ -89,5 +89,13 @@ const releaseRunner=readFileSync('scripts/app660-preview-owner-workers.mjs','utf
 assert.match(releaseRunner,/source\.modules\?\.length===t\.moduleCount/);
 assert.match(releaseRunner,/new Set\(modules\.map\(m=>m\.name\)\)\.size===t\.moduleCount/);
 assert.doesNotMatch(releaseRunner,/source\.modules\?\.length===t\.modules\b/);
+const liveRuntime={compatibility_date:'2026-08-28',usage_model:'standard',migration_tag:'v1'};
+assert.equal(sameStagedWorkerRuntime660(liveRuntime,{compatibility_date:'2026-08-28',usage_model:'standard'}),true);
+assert.equal(sameStagedWorkerRuntime660(liveRuntime,{...liveRuntime}),true);
+assert.equal(sameStagedWorkerRuntime660(liveRuntime,{compatibility_date:'2026-08-28',usage_model:'standard',migration_tag:'v2'}),false);
+assert.equal(sameStagedWorkerRuntime660(liveRuntime,{compatibility_date:'2026-08-28',usage_model:'bundled'}),false);
+assert.equal(sameStagedWorkerRuntime660(liveRuntime,{compatibility_date:'2026-08-27',usage_model:'standard'}),false);
+assert.equal(sameStagedWorkerRuntime660({compatibility_date:'2026-08-28',usage_model:'standard'},{compatibility_date:'2026-08-28',usage_model:'standard'}),true);
+console.log('APP660_UNDEPLOYED_MIGRATION_TAG_METADATA_ONLY_OTHER_RUNTIME_EXACT=PASS');
 console.log('APP660_STAGED_MODULE_COUNT_SEPARATE_FROM_SOURCE_ARRAY=PASS');
 console.log('APP660_A_B_OWNER_ISOLATION_RESTART_IDEMPOTENCY_AUTH_PREVIEW_BOUNDARY=PASS');

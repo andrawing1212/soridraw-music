@@ -1,3 +1,13 @@
+## CURRENT — APP655 PREVIEW 승인된 단일 소유자 팔로우 자동 전달 브리지 활성화 PASS / 실사용 HOLD (2026-11-14 KST)
+
+- **실제 배포 소스 검증:** GitHub [Actions #43589366187](https://github.com/andrawing1212/soridraw-music/actions/runs/43589366187)에서 Firebase GEN2 기존 Function 3개(`publishExploreOwnerFollower542`, `enrollOwnerFollow544Candidate`, `verifyOwnerFollowEpoch547Candidate`)의 **실제 배포 소스 아카이브**를 관리자 GET으로 검사함. 3개 모두 COMPILED_ON=TRUE, READY_608=ON, 승인된 CANARY UID 설정 존재, GENERAL_PREVIEW_653=OFF. 이전 소스코드의 OFF 상태만 보고 배포 코드도 OFF일 것이라고 추정하지 말 것. 함수 재배포와 IAM 확대는 불필요.
+- **APP654 실제 Cloudflare:** [PR #1013](https://github.com/andrawing1212/soridraw-music/pull/1013) 읽기 전용 검증 결과, APP651 안전 Worker `ec426c84-381d-4aa9-ac62-316c745dea55` 100%와 시험 버전 `6b13cde4-4a53-42d2-873f-361f7cf5a931` 0%. 기존 35개 바인딩, 별도 소유자 Worker `e679a602-44fb-4b4d-9e4d-7878c00b68c3` 활성, 소유자 전달 플래그만 OFF 확인.
+- **APP655 디렉터 승인 단일 계정 PREVIEW 활성화:** [PR #1014](https://github.com/andrawing1212/soridraw-music/pull/1014) 소스 검증 → 정확한 배포 트리거 [PR #1015](https://github.com/andrawing1212/soridraw-music/pull/1015) → [Actions #43589998653](https://github.com/andrawing1212/soridraw-music/actions/runs/43589998653) **SUCCESS**. 활성 Worker **`02576623-2172-4922-85b8-3f08a5216653` 100%**, 기존 0% 후보 그대로. 정확한 12개 모듈 SHA 동일(특히 APP651 Follow PUT HTTP 500 수정 유지), 35개 중 소유자 브리지 기존 바인딩 **한 개만** OFF→ON, 나머지 34개 동일. 대상은 기존 SHA-256으로 제한된 승인 Auth UID **한 계정만**. 변경 전 안전 롤백 버전 `ec426c84-381d-4aa9-ac62-316c745dea55` 보존. 별도 소유자 DO/서비스 바인딩 및 TEST·PRODUCTION Worker 활성 버전 불변 PASS.
+- **보호 범위:** PREVIEW Worker 코드/바인딩 1개 범위 외 Firebase Functions·Auth·IAM·RTDB Rules·D1 원본·R2·Music Note·Library·Recent Songs·Like 및 TEST/PRODUCTION **배포·데이터 변경 없음**. 지금부터 승인 소유자의 실제 인증 팔로우 변경에 한해 기존 DO→Function→소유자 RTDB 자동 전달이 시도될 수 있음. 승인 소유자 미등록 시 APP557은 기존 canonical 팔로우 저장으로 복귀. 일반 계정 전체 자동 동기화는 **여전히 OFF**.
+- **실사용 HOLD:** 서버 배포 메타 검증 PASS와 실제 두 기기 A↔B PASS는 다른 단계. A는 기존 승인 소유자 계정 `rcZ2GZrBndOZzT8C635eiNBjYIJ2`, PREVIEW `?ownerFollowCanary=1`로 진입해 자기 프로필에서 소유자 Auth 등록·RTDB 구독을 시도해야 함. B가 A를 팔로우·취소 후 A PC/모바일에서 새로고침·목록 클릭 없이 숫자 갱신되는지 한 번 확인. 사용자 승인 없이 합성 실사용 팔로우를 임의 생성하지 않음. 실패하면 동일 반복 클릭 대신 등록 callable/epoch/RTDB/DO delivery로 원인 격리. `PR #1012` 일반 계정 확대 코드는 아직 미병합·COMPILED OFF; 소유자 DO 단일 UID 하드핀 제거·일반 계정 비용/권한 설계 및 실사용 증거 없이 활성화 금지.
+
+---
+
 ## CURRENT — APP651 PREVIEW 팔로우 HTTP 500 기본 수정 Worker 활성화 PASS / 사용자 실검증 HOLD (2026-11-14 KST)
 
 - **디렉터 YES 승인 범위:** PREVIEW Worker의 순서형 팔로우 관계 변경 건수 판정 한 곳만 수정. 동영상 2026-11-14 06:15:51/06:18:18 UTC의 팔로우 PUT 500은 실제 안전 Worker `962ee432-fadb-456e-8836-50675aa76b84`에서 발생했고, 직전 DELETE는 200. Worker 오류 스택은 `mutateFollowOverlayRelation350`의 `meta.changes > 1` 판정까지 확인됨. 알림 트리거 부수 변경이 합산되는 조건을 격리 SQLite에서 재현.

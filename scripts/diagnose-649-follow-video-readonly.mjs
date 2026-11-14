@@ -22,7 +22,7 @@ const payload=await response.json().catch(()=>null);
 if(!response.ok||payload?.success!==true)throw Error('WORKER_LOG_READ_HTTP_'+response.status);
 const events=payload.result?.events?.events||[];
 const allowed=/D1_ERROR|SQLITE_ERROR|SQLITE_BUSY|UNIQUE constraint|NOT NULL constraint|CHECK constraint|FOREIGN KEY constraint|no such table|no such column|quota exceeded|rate.limit|FOLLOW_RECOVERY_BUSY|FOLLOW_ORDER_REQUIRED|FOLLOW_REVISION_CONFLICT|invalid_delta|missing_shared_profile|[45][0-9][0-9]/i;
-const safe=(s)=>String(s||'').replace(/[A-Za-z0-9_-]{21,}/g,'[redacted]').replace(/https?:\\/\\/[^ ]+/g,'[url]').slice(0,150);
+const safe=(s)=>String(s||'').replace(/[A-Za-z0-9_-]{21,}/g,'[redacted]').replaceAll('https://','[url]').slice(0,150);
 const rows=[];
 for(const e of events){
  const req=e?.$workers?.event?.request||{};

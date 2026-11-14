@@ -38,9 +38,10 @@ assert.doesNotMatch(click,/queueExploreFollowFinalState380\(/);
 assert.match(click,/readPendingExploreFollowIntents380\(viewerUid\)/);
 assert.match(click,/followMutationInFlightRef\.current/);
 assert.match(click,/getExploreFollowState\(user, targetUid, true\)/);
-assert.ok(click.indexOf('await setExploreFollow') <
-  click.indexOf('patchExplorePublicProfileFirstViewProfile(targetUid'),
-  'NO_UNCONFIRMED_PUBLIC_COUNT');
+assert.match(click,/if \(persistConfirmed\) \{/);
+assert.match(click,/paint\(requestedFollow, false\)/);
+assert.doesNotMatch(click,/patchExplorePublicProfileFirstViewProfile\(targetUid[^)]*\)[\s\S]*?paint\(requestedFollow, false\)/,
+  'NO_PUBLIC_CACHE_WRITES_FOR_UNSETTLED_OPTIMISTIC_CLICK');
 assert.match(page,/getExploreFollowState\(user, nextProfile\.uid, true\)/);
 assert.match(page,/disabled=\{followBusy \|\| !followState\}/);
 assert.match(page,/readPendingTargetFollowerCount525\(user\.uid,displayProfile379\.uid\)/);

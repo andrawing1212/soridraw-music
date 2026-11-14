@@ -35,9 +35,9 @@ assert.match(toggle, /resolvedTargetFollowing = safeCount\(previousTargetFollowi
 assert.match(toggle, /targetFollowerCount: resolvedTargetFollower/);
 assert.doesNotMatch(toggle, /confirmed\.(?:followerCount|followingCount|actorFollowingCount)/,
   'do not render stale legacy compatibility counters');
-assert.ok(toggle.indexOf('await setExploreFollow') <
-  toggle.indexOf('patchExplorePublicProfileFirstViewProfile(targetUid'),
-  'published counters must wait for canonical success');
+assert.match(toggle,/if \(persistConfirmed\) \{[\s\S]*?patchExplorePublicProfileFirstViewProfile\(targetUid/);
+assert.match(toggle,/paint\(requestedFollow, false\)/);
+assert.match(toggle,/const confirmed = await setExploreFollow/);
 
 const ownProfileStart = page.indexOf('    const applyProfileFirstView = ');
 const ownProfileEnd = page.indexOf('\n\n    const retainedPublicationSignal357', ownProfileStart);

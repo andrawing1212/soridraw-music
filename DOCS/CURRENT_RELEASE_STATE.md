@@ -1,3 +1,13 @@
+## CURRENT — APP651 PREVIEW 팔로우 HTTP 500 기본 수정 Worker 활성화 PASS / 사용자 실검증 HOLD (2026-11-14 KST)
+
+- **디렉터 YES 승인 범위:** PREVIEW Worker의 순서형 팔로우 관계 변경 건수 판정 한 곳만 수정. 동영상 2026-11-14 06:15:51/06:18:18 UTC의 팔로우 PUT 500은 실제 안전 Worker `962ee432-fadb-456e-8836-50675aa76b84`에서 발생했고, 직전 DELETE는 200. Worker 오류 스택은 `mutateFollowOverlayRelation350`의 `meta.changes > 1` 판정까지 확인됨. 알림 트리거 부수 변경이 합산되는 조건을 격리 SQLite에서 재현.
+- **서버 수정:** 직접 팔로우 관계 SQL에 `RETURNING 1 AS relation_changed`를 사용해 `result.results.length`로 실제 변경 행만 판정. 인증·기존 D1 정본·순서형 idempotency·알림 트리거·좋아요 및 다른 Worker 경로 유지. 코드 [PR #1005](https://github.com/andrawing1212/soridraw-music/pull/1005), 활성 Worker 변수명 `result2` 호환 검증 수선 [PR #1007](https://github.com/andrawing1212/soridraw-music/pull/1007).
+- **실제 PREVIEW Worker 배포:** 승인된 트리거 [PR #1008](https://github.com/andrawing1212/soridraw-music/pull/1008) → [Actions #43568458681](https://github.com/andrawing1212/soridraw-music/actions/runs/43568458681) SUCCESS. 새 버전 **`ec426c84-381d-4aa9-ac62-316c745dea55` 100%**, 기존 시험 Worker 버전 `6b13cde4-4a53-42d2-873f-361f7cf5a931` 0%. 이전 안전 버전 `962ee432-fadb-456e-8836-50675aa76b84`는 복구용으로 보존. 활성 12개 모듈 중 정확히 1개 소스만 변경, 35개 기존 바인딩 동일, TEST·PRODUCTION·별도 Owner Worker 활성 버전 동일함을 배포 후 확인.
+- **APP650 PREVIEW Hosting:** 팔로우 버튼의 `저장 중…` 제거, 클릭 즉시 상태/숫자 반영, HTTP 500 수신 시 정본 1회 확인 후 확정/복원. [Actions #43567403760](https://github.com/andrawing1212/soridraw-music/actions/runs/43567403760) SUCCESS, Hosting 배포 소스 SHA `74eb64d6a6d40e058cdbd29b9a308ba5680e158d`. 이후 테스트 전용 업데이트 외 기능 코드 변화 없음.
+- **보호/남은 HOLD:** 공유 D1 원본·테이블·알림 트리거/Rules, R2, Firebase, 사용자 데이터 이전·삭제 및 TEST/PRODUCTION 배포 없음. 그러나 **배포 후 실제 서명된 A→B 팔로우·취소·재팔로우는 아직 미검증**이며, 상대 기기 자동 실시간 팔로워 숫자 갱신은 이번 범위에서 구현하지 않았음. Worker 배포 PASS를 실사용 PASS로 기록하지 말 것. 과거 독립 QA/공유 D1 검사를 근거 없이 재실행하지 말 것.
+
+---
+
 ## CURRENT — APP646 공유 D1 팔로우 알림 트리거 2개 적용 PASS / 실제 팔로우 저장 사용자 검증 HOLD (2026-11-14 KST)
 
 - **실제 장애 원인 확정:** APP645 사용자 영상(2026-11-13 21:33 UTC) 당시 PREVIEW 안전 Worker `962ee432-fadb-456e-8836-50675aa76b84`의 팔로우 PUT HTTP 500 두 건. Cloudflare D1 쿼리별 로그 [Actions #43533613826](https://github.com/andrawing1212/soridraw-music/actions/runs/43533613826)에서 `UNIQUE constraint failed`가 `soridraw_notification_inbox_001`의 `receiver_uid,bucket_ms,category,actor_uid,subject_id` 복합키에 발생한 것을 확인. 팔로우 관계 UPSERT의 conflict 처리 중 기존 알림 중복 삽입이 canonical 관계 저장을 중단. 새 버전 선택 Worker의 문제라는 초기 추정은 **반증**됐으므로 복구되었다는 근거로 사용하지 않는다.

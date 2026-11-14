@@ -1994,7 +1994,7 @@ export default function ExplorePage() {
   const [profileConnectionsIncomplete661,setProfileConnectionsIncomplete661] = useState(false);
   // Exact authenticated one-target GET counters outlive a stale R2 recheck.
   const verifiedVisitedProfileUid661Ref = useRef('');
-  const profileConnectionsCache376Ref = useRef<Map<string, { items: ExploreProfileConnection[]; nextCursor: string | null }>>(new Map());
+  const profileConnectionsCache376Ref = useRef<Map<string, { items: ExploreProfileConnection[]; nextCursor: string | null; countComplete?: boolean; hasUnresolvedProfiles?: boolean }>>(new Map());
   const profileConnectionsRequest376Ref = useRef(0);
   const ownFollowersLastCheck523Ref = useRef<Map<string, number>>(new Map());
   // APP657: a viewer's cached copy of SOMEONE ELSE's connections has no

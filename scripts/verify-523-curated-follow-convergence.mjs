@@ -98,7 +98,7 @@ assert.match(social,/advanceProfileConnectionGeneration548\(cacheKey\);\s*remove
 console.log('APP548_STALE_FOLLOWER_RESPONSE_PERSISTENT_CACHE_FENCE=PASS');
 assert.match(page,/direction === 'followers' && targetUid === user\?\.uid/);
 assert.match(page,/OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 120_000/);
-assert.match(page,/getExploreProfileConnections\(targetUid, direction, null, refreshOwn523\)/);
+assert.match(page,/getExploreProfileConnections\(targetUid, direction, null, forceConnections657\)/);
 // app527: app525's 15-second focus/visibility list fetch was measured as
 // repeated D1 reads even when there was no actual follow mutation.
 // Preserve the verified explicit popup refresh path; no idle/focus fetch.
@@ -122,7 +122,7 @@ assert.ok(explicitBegin>0 && explicitEnd>explicitBegin);
 assert.match(explicit,/const refreshOwn523 = ownFollowers523 &&/);
 assert.match(explicit,/readExploreProfileConnectionLastServerAt528\(targetUid, direction\)/);
 assert.match(explicit,/shouldRefreshOwnerFollowersOnOpen528\(/);
-assert.match(explicit,/getExploreProfileConnections\(targetUid, direction, null, refreshOwn523\)/);
+assert.match(explicit,/getExploreProfileConnections\(targetUid, direction, null, forceConnections657\)/);
 
 const stampSource=body(social,
  'export const readExploreProfileConnectionLastServerAt528 =',

@@ -1994,6 +1994,10 @@ export default function ExplorePage() {
   const profileConnectionsCache376Ref = useRef<Map<string, { items: ExploreProfileConnection[]; nextCursor: string | null }>>(new Map());
   const profileConnectionsRequest376Ref = useRef(0);
   const ownFollowersLastCheck523Ref = useRef<Map<string, number>>(new Map());
+  // APP657: a viewer's cached copy of SOMEONE ELSE's connections has no
+  // cross-account invalidation signal. Only an explicit list click may spend
+  // one canonical page GET; bound subsequent clicks by two minutes per tab.
+  const publicConnectionsLastCheck657Ref = useRef<Map<string, number>>(new Map());
   // APP529: source-only until trusted server/outbox deployment is approved.
   const ownerFollowerConfirmed529Ref = useRef<{uid:string;count:number;version:number}|null>(null);
   // APP528: one bounded explicit canonical check per two minutes, even after
@@ -3472,6 +3476,27 @@ export default function ExplorePage() {
         }
       }
 
+      // APP657: a verified, fully loaded relation page is better evidence of
+      // another user's exact count than an asynchronously retained R2
+      // first-view value. This changes no server reads on profile entry.
+      // Explicit list opens below remain the only third-party recheck trigger.
+      if (user?.uid !== nextProfile.uid) {
+        const exactFollowing657 = readExploreProfileConnectionExactCount379(
+          nextProfile.uid, 'following',
+        );
+        const exactFollowers657 = readExploreProfileConnectionExactCount379(
+          nextProfile.uid, 'followers',
+        );
+        if (exactFollowing657 !== null &&
+            readExploreProfileConnectionLastServerAt528(nextProfile.uid,'following') > 0) {
+          displayProfile379 = {...displayProfile379, followingCount:exactFollowing657};
+        }
+        if (exactFollowers657 !== null &&
+            readExploreProfileConnectionLastServerAt528(nextProfile.uid,'followers') > 0) {
+          displayProfile379 = {...displayProfile379, followerCount:exactFollowers657};
+        }
+      }
+
       // An async cached profile response cannot erase B's unsent follow intent.
       const pendingFollowerCount525 = user?.uid
         ? readPendingTargetFollowerCount525(user.uid,displayProfile379.uid) : null;
@@ -3840,6 +3865,20 @@ export default function ExplorePage() {
               patchExplorePublicProfileFirstViewProfile(refreshedProfile.uid, socialPatch379);
             }
           }
+          // The same exact list authority applies on delayed first-view
+          // revalidation; otherwise a stale R2 refresh repaints 2 back to 1.
+          if(user?.uid!==refreshedProfile.uid){
+            const checkedFollowing657 = readExploreProfileConnectionExactCount379(
+              refreshedProfile.uid,'following');
+            const checkedFollowers657 = readExploreProfileConnectionExactCount379(
+              refreshedProfile.uid,'followers');
+            if(checkedFollowing657!==null &&
+               readExploreProfileConnectionLastServerAt528(refreshedProfile.uid,'following')>0)
+              displayRefreshedProfile379={...displayRefreshedProfile379,followingCount:checkedFollowing657};
+            if(checkedFollowers657!==null &&
+               readExploreProfileConnectionLastServerAt528(refreshedProfile.uid,'followers')>0)
+              displayRefreshedProfile379={...displayRefreshedProfile379,followerCount:checkedFollowers657};
+          }
           const pending525=user?.uid
             ? readPendingTargetFollowerCount525(user.uid,displayRefreshedProfile379.uid)
             : null;
@@ -4184,15 +4223,27 @@ export default function ExplorePage() {
         shouldRefreshOwnerFollowersOnOpen528(
           lastCheck523, Date.now(), OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523,
         ));
+    // APP657: public relation lists of OTHER users can change without a
+    // same-account RTDB signal. Refresh on an explicit open, never on mere
+    // profile entry, reload, focus, idle or background visibility.
+    const publicLast657 = publicConnectionsLastCheck657Ref.current.get(key) || 0;
+    const refreshPublic657 = targetUid !== user?.uid &&
+      profileConnectionsOpen376 !== direction &&
+      shouldRefreshOwnerFollowersOnOpen528(
+        publicLast657, Date.now(), OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523,
+      );
+    const forceConnections657 = refreshOwn523 || refreshPublic657;
     if (cached) {
       setProfileConnectionsItems376(cached.items);
       setProfileConnectionsNextCursor376(cached.nextCursor);
-      if (!refreshOwn523) {
+      if (!forceConnections657) {
         setProfileConnectionsLoading376(false);
         return;
       }
     }
     if (refreshOwn523) ownFollowersLastCheck523Ref.current.set(key, Date.now());
+    // Record only after a successful server response; navigating away during
+    // the pending GET must not leave the stale cache artificially fresh.
 
     const requestId = ++profileConnectionsRequest376Ref.current;
     if (!cached) {
@@ -4201,12 +4252,13 @@ export default function ExplorePage() {
     }
     setProfileConnectionsLoading376(true);
     try {
-      const page = await getExploreProfileConnections(targetUid, direction, null, refreshOwn523);
+      const page = await getExploreProfileConnections(targetUid, direction, null, forceConnections657);
       if (
         requestId !== profileConnectionsRequest376Ref.current
         || activeProfileUidRef.current !== targetUid
       ) return;
       profileConnectionsCache376Ref.current.set(key, page);
+      if (refreshPublic657) publicConnectionsLastCheck657Ref.current.set(key, Date.now());
       setProfileConnectionsItems376(page.items);
       setProfileConnectionsNextCursor376(page.nextCursor);
       // app377: a complete bounded relation page is exact authority for small
@@ -4223,6 +4275,7 @@ export default function ExplorePage() {
       }
     } catch (reason) {
       if (refreshOwn523) ownFollowersLastCheck523Ref.current.delete(key);
+      if (refreshPublic657) publicConnectionsLastCheck657Ref.current.delete(key);
       if (requestId !== profileConnectionsRequest376Ref.current) return;
       console.warn('[app376] profile connections load failed:', reason);
       setProfileConnectionsError376(

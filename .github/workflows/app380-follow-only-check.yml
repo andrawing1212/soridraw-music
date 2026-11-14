@@ -9,6 +9,8 @@ on:
       - 'src/services/explorePublicLikeSyncService.ts'
       - 'src/components/CacheDiagnosticsOverlay.tsx'
       - 'src/services/exploreFollowBatchService380.ts'
+      - 'src/services/exploreOwnerFollowerSync542.ts'
+      - 'src/lib/ownerFollowCanaryTab634.ts'
       - 'src/services/exploreFollowOrdering354.ts'
       - 'src/pages/ExplorePage.tsx'
       - 'src/components/explore/ExploreShell.tsx'
@@ -21,6 +23,7 @@ on:
       - 'cloudflare/explore-worker/patches/097-follow-abuse-guard.mjs'
       - 'cloudflare/explore-worker/candidates/social-abuse-380.js'
       - 'scripts/verify-354-follow-orchestration.mjs'
+      - 'scripts/verify-634-owner-follow-tab-optin.mjs'
       - 'scripts/verify-394-follow-only-worker-freeze.mjs'
       - 'scripts/verify-395-follow-only-release-scope.mjs'
       - 'scripts/verify-396-public-like-reload-and-diagnostics.mjs'
@@ -112,6 +115,7 @@ jobs:
           run_check 377 node scripts/verify-377-follow-count-list-sync.mjs
           run_check 525 node scripts/verify-525-follow-two-account-display.mjs
           run_check 527 node scripts/verify-527-owner-follower-idle-cost.mjs
+          run_check 634 node scripts/verify-634-owner-follow-tab-optin.mjs
           run_check 529_sql python3 scripts/verify-529-owner-outbox-sql.py
           run_check 529_sync node scripts/verify-529-owner-sync.mjs
           run_check 548_rules node scripts/verify-548-owner-rules-source.mjs

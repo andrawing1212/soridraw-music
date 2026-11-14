@@ -686,7 +686,7 @@ export const getExploreFollowState = async (user: User, uid: string, forceServer
     isFollowing: Boolean(row?.isFollowing ?? row?.following ?? row?.followed),
     followerCount: toCount(rawFollowers),
     followingCount: toCount(rawFollowing),
-    countVerified661: forceServer &&
+    countVerified661: forceServer && row?.followProtocol === 354 &&
       Number.isSafeInteger(Number(rawFollowers)) && Number(rawFollowers) >= 0 &&
       Number.isSafeInteger(Number(rawFollowing)) && Number(rawFollowing) >= 0 &&
       rawFollowers !== null && rawFollowers !== undefined &&
@@ -738,8 +738,12 @@ export const setExploreFollow = async (
     followingCount: toCount(targetFollowing662),
     actorFollowingCount: toCount(actorFollowing662),
     // Distinguish actual canonical zero from missing fields normalized to zero.
-    countVerified661: validCount662(targetFollower662) && validCount662(targetFollowing662),
-    actorCountVerified662: validCount662(actorFollowing662),
+    // Legacy/frozen profile_stats counters are NOT canonical. APP662 Worker
+    // marks only the already-settled overlay R2 owner+actor snapshot as exact.
+    countVerified661: row?.followProtocol===354 && row?.canonicalCounts662===true &&
+      validCount662(targetFollower662) && validCount662(targetFollowing662),
+    actorCountVerified662: row?.followProtocol===354 && row?.canonicalCounts662===true &&
+      validCount662(actorFollowing662),
   };
   patchExploreFollowLocalState377(user.uid, normalizedUid, result.isFollowing, targetProfile);
   return result;

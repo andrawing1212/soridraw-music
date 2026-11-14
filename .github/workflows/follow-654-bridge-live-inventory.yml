@@ -218,6 +218,13 @@ jobs:
             assert safe
             (out/(script+'.json')).write_text(json.dumps({'version':version,'modules':safe}))
             print('ACTIVE_SOURCE_READ_ONLY='+script+';version='+version+';modules='+str(len(safe)))
+          # APP660: investigate the exact inactive stage; no deployment mutation.
+          for version in ['02576623-2172-4922-85b8-3f08a5216653','a2e6390d-c879-4e31-83e3-dee8046cb6ed']:
+            for include in ['modules','modules,sourcemaps']:
+              source=get('workers/workers/soridraw-explore-preview/versions/'+version+'?include='+include)
+              modules=source.get('modules') or []
+              summary=[{'name':m.get('name'),'type':m.get('content_type'),'sha256':hashlib.sha256(base64.b64decode(m.get('content_base64',''))).hexdigest()} for m in modules]
+              print('APP660_SOURCE_INVENTORY='+json.dumps({'version':version,'include':include,'main':source.get('main_module'),'keys':sorted(source),'modules':summary}))
           PYCODE
       - uses: actions/upload-artifact@v4
         with:

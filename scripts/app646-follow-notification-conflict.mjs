@@ -118,6 +118,15 @@ async function postflight(expected){
   must(normalize(actual[name])===normalize(expected[name]),'POST_SCHEMA_MISMATCH_'+name);
  console.log('APP646_POST_TWO_TRIGGER_DEFINITIONS=PASS');
 }
+async function preflightOnly(){
+ must(process.env.CLOUDFLARE_ACCOUNT_ID===ACCOUNT&&token.length>20,
+  'PREFLIGHT_READONLY_CONTEXT');
+ await checkEnvironment();
+ const before=await liveTriggers();
+ for(const name of names)patched(name,before[name]);
+ console.log('APP646_LIVE_TWO_ORIGINAL_TRIGGERS_MATCH_EXACTLY=PASS');
+ console.log('APP646_D1_READONLY_SCHEMA_AND_ACTIVATION_NO_WRITES=PASS');
+}
 async function apply(){
  must(process.env.GITHUB_ACTIONS==='true'&&
   process.env.GITHUB_REF==='refs/heads/preview'&&
@@ -186,6 +195,8 @@ else if(process.argv[2]==='--self-test'){
  assert.throws(()=>patched(INSERT,proposed[INSERT]));
  assert.throws(()=>patched(UPDATE,old[INSERT]));
  console.log('APP646_SOURCE_ONLY_EXACT_TWO_TRIGGERS_AND_GUARD=PASS');
+}else if(process.argv[2]==='--preflight-live'){
+ preflightOnly().catch(e=>{console.error(String(e?.message||e).slice(0,180));process.exitCode=2});
 }else if(process.argv[2]==='--apply-once'){
  apply().catch(e=>{console.error(String(e?.message||e).slice(0,200));process.exitCode=2});
 }else if(process.argv[2]==='--rollback'){

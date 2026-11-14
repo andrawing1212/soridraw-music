@@ -12,7 +12,8 @@ assert.match(service, /expiresAt: null/);
 assert.match(service, /recordCloudflareLocalCacheHit\([\s\S]*?Worker 0 · D1 R0/);
 assert.match(service, /invalidateExploreProfileConnections377\(viewer, 'following'\)/);
 assert.match(service, /invalidateExploreProfileConnections377\(target, 'followers'\)/);
-assert.match(service, /actorFollowingCount: toCount\(row\?\.actorFollowingCount/);
+assert.match(service, /actorFollowingCount: toCount\(actorFollowing662\)/);
+assert.match(service, /row\?\.canonicalCounts662===true/);
 
 const connections = service.slice(
   service.indexOf('export const getExploreProfileConnections'),

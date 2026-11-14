@@ -6,7 +6,7 @@ import {getApp} from 'firebase/app';
 import {getFunctions,httpsCallable} from 'firebase/functions';
 import {onValue,ref as databaseRef,type Unsubscribe} from 'firebase/database';
 import {auth,realtimeDb} from '../firebase';
-import { hasOwnerFollowCanaryOptIn634 } from '../lib/ownerFollowCanaryTab634';
+import { hasOwnerFollowCanaryOptIn634, mayListenToApprovedOwnerOnPreview658 } from '../lib/ownerFollowCanaryTab634';
 
 export const EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED=true;
 export const APP608_APPROVED_CANARY_UID='rcZ2GZrBndOZzT8C635eiNBjYIJ2';
@@ -27,17 +27,20 @@ const hasExplicitOwnerFollowTabOptIn634=():boolean=>{
   window.location.hostname.toLowerCase(),window.location.search,window.sessionStorage,
  )}catch{return false}
 };
+// APP658: already-enrolled exact owner listens on PREVIEW even after PWA
+// relaunch loses ?ownerFollowCanary=1. Other users/hosts remain entirely OFF.
 export const isApp608OwnerCanaryVisible=(uid:string):boolean=>
- uid===APP608_APPROVED_CANARY_UID&&
- (shouldAttemptOwnerFollowCanary575(
-   typeof window==='undefined'?'':window.location.hostname.toLowerCase(),
-   typeof window==='undefined'?'':window.location.search,
- )||hasExplicitOwnerFollowTabOptIn634());
+ uid===APP608_APPROVED_CANARY_UID&&typeof window!=='undefined'&&
+ mayListenToApprovedOwnerOnPreview658(
+   window.location.hostname,uid,APP608_APPROVED_CANARY_UID,
+ );
 const enrollmentAttempts575=new Map<string,Promise<boolean>>();
 const tryOwnerFollowCanaryEnrollment575=(
  uid:string,principal:NonNullable<typeof auth.currentUser>,
 ):Promise<boolean>=>{
- if(!isApp608OwnerCanaryVisible(uid)||auth.currentUser!==principal)return Promise.resolve(false);
+ // Enrollment mutates Auth/Firestore: retain explicit-tab QA opt-in only.
+ if(!isApp608OwnerCanaryVisible(uid)||!hasExplicitOwnerFollowTabOptIn634()||
+    auth.currentUser!==principal)return Promise.resolve(false);
  const key=uid;
  const prior=enrollmentAttempts575.get(key);
  if(prior)return prior;
@@ -61,6 +64,19 @@ const tryOwnerFollowCanaryEnrollment575=(
 };
 const EPOCH=/^[0-9a-f]{32}$/;
 const UID=/^[A-Za-z0-9_-]{1,128}$/;
+// APP658: a second device may hold a cached pre-enrollment ID token. Probe
+// the fresh claim once per Auth principal, with no database write or polling.
+const ownerEpochProbe658=new WeakMap<object,Promise<string|null>>();
+const probeOwnerEpoch658=(principal:NonNullable<typeof auth.currentUser>):Promise<string|null>=>{
+ const prior=ownerEpochProbe658.get(principal);
+ if(prior)return prior;
+ const task=getIdTokenResult(principal,true).then(token=>{
+   const e=token.claims.soridrawFollowEpoch532;
+   return typeof e==='string'&&EPOCH.test(e)?e:null;
+ }).catch(()=>null);
+ ownerEpochProbe658.set(principal,task);
+ return task;
+};
 const prefix=(uid:string,epoch:string)=>
   'soridraw:explore:owner-follow-version:532:'+uid+':'+epoch;
 export const readOwnerFollowerSeenVersion542=(uid:string,epoch:string):number=>{
@@ -81,8 +97,8 @@ export const rememberOwnerFollowerSeenVersion542=(uid:string,epoch:string,versio
 export const subscribeExploreOwnerFollower542=async(
  uid:string,onSnapshot:(value:unknown,verifiedClaimEpoch:string)=>void,
 ):Promise<Unsubscribe>=>{
- // APP591: outside explicit PREVIEW QA opt-in, do not even inspect Auth.
- // This protects ordinary owners from extra token requests when compiled ON.
+ // APP658: only the approved PREVIEW owner can inspect Auth on its own profile.
+ // Other owners, TEST and PRODUCTION trigger zero Auth/RTDB reads.
  if(!EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED||!UID.test(uid)||
     !isApp608OwnerCanaryVisible(uid))return ()=>{};
  const principal=auth.currentUser;
@@ -90,6 +106,9 @@ export const subscribeExploreOwnerFollower542=async(
  let token;
  try{token=await getIdTokenResult(principal);}catch{return ()=>{}}
  let epoch=token.claims.soridrawFollowEpoch532;
+ if(typeof epoch!=='string'||!EPOCH.test(epoch)){
+   epoch=await probeOwnerEpoch658(principal)??undefined;
+ }
  // Only explicit PREVIEW QA opt-in may bootstrap a missing owner claim.
  // Every other owner with no claim exits with zero server writes.
  if((typeof epoch!=='string'||!EPOCH.test(epoch))&&

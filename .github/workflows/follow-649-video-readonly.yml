@@ -1,0 +1,24 @@
+name: SORIDRAW Follow Nov14 video readonly
+on:
+  pull_request:
+    branches: [preview]
+    paths: ['scripts/diagnose-649-follow-video-readonly.mjs','.github/workflows/follow-649-video-readonly.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.head_ref == 'audit/app649-follow-video-readonly'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: node --check scripts/diagnose-649-follow-video-readonly.mjs
+      - name: Read only logged follow failures and D1 query error aggregates from user video
+        run: node scripts/diagnose-649-follow-video-readonly.mjs

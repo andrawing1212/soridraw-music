@@ -36,7 +36,7 @@ jobs:
           PROJECT='soridraw-app-866a5'
           EX='soridraw-explore-preview'
           OW='soridraw-owner-follow-preview-candidate'
-          EXPECTED='ec426c84-381d-4aa9-ac62-316c745dea55'
+          EXPECTED='02576623-2172-4922-85b8-3f08a5216653'
           ZERO='6b13cde4-4a53-42d2-873f-361f7cf5a931'
           token=os.environ.get('CLOUDFLARE_API_TOKEN','')
           assert len(token)>20 and os.environ.get('CLOUDFLARE_ACCOUNT_ID')==A
@@ -79,7 +79,28 @@ jobs:
           ]
           def gcloud(*args):
             return subprocess.run(['gcloud',*args],capture_output=True,text=True,timeout=60)
+          # Capability checks only: testIamPermissions does not modify IAM.
+          access=gcloud('auth','print-access-token')
+          if access.returncode:raise RuntimeError('GCP_ACCESS_TOKEN_UNAVAILABLE')
+          bearer=access.stdout.strip()
+          issues=[]
+          def google_json(url,body=None):
+            req=urllib.request.Request(url,data=None if body is None else json.dumps(body).encode(),
+              headers={'Authorization':'Bearer '+bearer,'Content-Type':'application/json'})
+            with urllib.request.urlopen(req,timeout=30) as response:return json.load(response)
+          def permissions(label,url,wanted):
+            try:
+              granted=set(google_json(url,{'permissions':wanted}).get('permissions',[]))
+              missing=sorted(set(wanted)-granted)
+              print('APP654_IAM_'+label+'_MISSING='+(','.join(missing) or 'NONE'))
+              if missing:issues.append('IAM_'+label)
+            except Exception as error:
+              print('APP654_IAM_'+label+'_CHECK_HOLD='+type(error).__name__)
+              issues.append('IAM_CHECK_'+label)
+          permissions('PROJECT','https://cloudresourcemanager.googleapis.com/v1/projects/'+PROJECT+':testIamPermissions',
+            ['cloudfunctions.functions.sourceCodeSet','cloudfunctions.operations.get'])
           all_flags=[]
+          runtime_accounts=set()
           with tempfile.TemporaryDirectory(prefix='soridraw654-') as directory:
             for name,base,symbol in names:
               result=gcloud('functions','describe',name,'--gen2','--region=asia-northeast3',
@@ -89,6 +110,10 @@ jobs:
                 all_flags.append('UNKNOWN')
                 continue
               f=json.loads(result.stdout)
+              permissions(name,'https://cloudfunctions.googleapis.com/v2/'+f['name']+':testIamPermissions',
+                ['cloudfunctions.functions.get','cloudfunctions.functions.update','cloudfunctions.functions.sourceCodeGet'])
+              account=(f.get('serviceConfig') or {}).get('serviceAccountEmail')
+              if account:runtime_accounts.add(account)
               env=(f.get('serviceConfig') or {}).get('environmentVariables') or {}
               print('APP654_FN_'+name+'_ACTIVE='+str(f.get('state')=='ACTIVE'))
               print('APP654_FN_'+name+'_UPDATED='+str(f.get('updateTime','UNKNOWN')))
@@ -112,6 +137,7 @@ jobs:
                         for s in ('src','lib') for ext in ('.ts','.js'))),None)
                       if candidate:
                         code=archive.read(candidate).decode('utf8','replace')
+                        print('APP654_FN_'+name+'_GENERAL_SCOPE_CODE='+str('ownerFollowScope653' in code))
                         m=re.search(r'\b'+re.escape(symbol)+r'\s*=\s*(true|false)\b',code)
                         flag=m.group(1).upper() if m else 'FLAG_NOT_FOUND'
                       else:flag='SOURCE_FILE_NOT_FOUND'
@@ -120,5 +146,23 @@ jobs:
               all_flags.append(flag)
               print('APP654_FN_'+name+'_DEPLOYED_COMPILED='+flag)
           print('APP654_ALL_THREE_FUNCTIONS_COMPILED_ON='+str(all(x=='TRUE' for x in all_flags)))
+          for account in sorted(runtime_accounts):
+            print('APP654_RUNTIME_ACCOUNT='+account)
+            permissions('RUNTIME_ACT_AS','https://iam.googleapis.com/v1/projects/-/serviceAccounts/'+account+':testIamPermissions',
+              ['iam.serviceAccounts.actAs'])
+          for script in ['soridraw-explore-test','soridraw-explore-api']:
+            versions=(get('workers/scripts/'+script+'/deployments?per_page=1').get('deployments') or [{}])[0].get('versions') or []
+            print('APP654_PROTECTED_'+script+'='+json.dumps(versions,sort_keys=True))
+          try:
+            rules=google_json('https://soridraw-app-866a5-default-rtdb.firebaseio.com/.settings/rules.json')
+            owner_rule=(rules.get('rules') or {}).get('ownerFollowerSync532')
+            print('APP654_RTDB_OWNER_RULE='+json.dumps(owner_rule,sort_keys=True))
+            if not owner_rule:issues.append('RTDB_OWNER_RULE_MISSING')
+          except Exception as error:
+            print('APP654_RTDB_RULE_READ_HOLD='+type(error).__name__)
+            issues.append('RTDB_RULE_READ')
           print('APP654_READ_ONLY_NO_IAM_FUNCTION_WORKER_DB_OR_USER_MUTATION=PASS')
+          if cf!='PASS':issues.append('CF_TOPOLOGY')
+          if not all(x=='TRUE' for x in all_flags):issues.append('FUNCTION_SOURCE')
+          if issues:raise SystemExit('APP654_RELEASE_CAPABILITY_HOLD='+','.join(issues))
           PY

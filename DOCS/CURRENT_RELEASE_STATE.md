@@ -1,3 +1,14 @@
+## CURRENT — APP658 PREVIEW 일반 주소 승인 소유자 RTDB 수신 조건 수정·Hosting 배포 PASS / A↔B 실사용·B 숫자 HOLD (2026-11-14 KST)
+
+- **새 영상 증거:** 디렉터가 2026-11-14 13:38 UTC에 촬영한 약 181초 영상의 두 창은 일반 `preview.soridraw.com`(우측 주소 표시)·PREVIEW 설치 앱이었고, **`?ownerFollowCanary=1`로 진입한 시험이 아니었음**을 디렉터가 명시. A 자신의 SORIDRAW 프로필과 B의 방문 프로필은 팔로워 2·1 등 숫자가 일치하지 않고 자동 전파 없음. 소울포스 뮤직 목록 카드와 B 수치 불일치도 사용자 보고. 영상은 D1 최종 회원 수·Firebase Auth epoch·서버 webhook 성공을 직접 증명하지 않음.
+- **확인된 A 클라이언트 원인 및 수정:** 기존 `isApp608OwnerCanaryVisible`은 정확한 승인 UID여도 동일 탭에 테스트 URL opt-in이 없으면 RTDB listener 자체를 시작하지 않았음. [PR #1021](https://github.com/andrawing1212/soridraw-music/pull/1021) 병합 소스 SHA `909249efcbe7e0ef02f24d966164ff017a682f04`: **PREVIEW 호스트의 승인 UID 자기 프로필·보이는 탭**이라면 이미 등록된 소유자 epoch로 일반 URL/설치 앱에서도 수동 조회·새 폴링 없이 RTDB subscribe. 구형 Auth token의 epoch 누락은 해당 principal당 최대 한 번 refresh. **미등록 owner의 Auth·Firestore enrollment는 이전과 동일한 명시적 탭 opt-in에서만 수행**; 일반 페이지 방문 write 0; 다른 UID/TEST/PROD 불활성.
+- **검사:** [PR #1022](https://github.com/andrawing1212/soridraw-music/pull/1022)의 기존 Follow-only CI에 이번 대상 파일·634 URL 규칙 검사만 연결. [Actions #43603379130](https://github.com/andrawing1212/soridraw-music/actions/runs/43603379130) SUCCESS (TypeScript, Vite Build, 팔로우 기존 회귀 + 634). PR #1022 병합 SHA `5593a6b1e90835019d6b766d3ff031f6afe0e545`. 과거 이미 PASS한 QA/D1/서버 설정 시험은 재실행하지 않음.
+- **PREVIEW Hosting 배포:** [PR #1023](https://github.com/andrawing1212/soridraw-music/pull/1023)의 기존 전용 트리거만 변경, 배포 source SHA **`378081d02b1c33dbc4f8cfcae6dfbacad9de8e36`**. [Actions #43603594856](https://github.com/andrawing1212/soridraw-music/actions/runs/43603594856) SUCCESS: `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`, `TEST_PRODUCTION_UNCHANGED=PASS`. Cloudflare Worker/Functions/Rules/D1/R2/사용자 원본 변경 없음. 이전 APP657 Hosting은 복구 기준.
+- **실사용 HOLD:** 승인 A UID `rcZ2GZrBndOZzT8C635eiNBjYIJ2`의 **최초 epoch 등록 성공 여부 미확인**. 최초 등록이 없다면 본인 PREVIEW에서 명시적 `https://preview.soridraw.com/?ownerFollowCanary=1` 접속 1회 필요; 이후 일반 주소와 설치 앱에서 자기 프로필을 열고 B의 실제 정본 팔로우·취소가 PC/모바일 수치로 자동 수신되는지 검증해야 함. 서버 APP655 배포 PASS=PC/모바일 PASS 아님.
+- **B 목록·숫자 별도 HOLD:** APP657은 명시적으로 연 타 계정 목록의 120초 제한 서버 재확인과 구형 R2 역전 방지만 수정했음. 이번 영상에서도 소울포스 뮤직/수치 불일치가 보고됨. 현재 B는 일반 owner RTDB 활성 대상이 아님. 실제 public GET read-only 근거는 이전 GitHub runner 403, 본 분석의 공개 API 접근도 차단; Worker가 R2 조회 실패 행을 누락하는 코드 가능성은 미확정. **공유 Worker·D1 변경, 강제 숫자 보정, 일반 계정 전면 활성화 금지**. 해당 계정·방향의 exact canonical list/count를 안전하게 확인하기 전 원인 확정·수정 PASS 주장하지 않음.
+
+---
+
 ## CURRENT — APP657 PREVIEW 타 계정 프로필 팔로잉 숫자 2→1·목록 캐시 회귀 방지 배포 PASS / '소울포스 뮤직' 실목록 HOLD (2026-11-14 KST)
 
 - **실제 영상:** 2026-11-14 12:48 UTC 영상에서 승인 시험용 A가 방문한 B 프로필의 팔로워·팔로잉 값과 B 자신의 표시가 일치하지 않음. A 쪽 B 프로필에서 팔로잉 1, B 자신은 2. 숫자가 2로 바뀌었다가 페이지 이동 후 1로 되돌아가며 A의 팔로잉 팝업에서는 '소울포스 뮤직' 카드가 누락됨. 2가 정본인지 및 누락 카드가 Worker 응답에서도 빠지는지는 아직 실증하지 못함.

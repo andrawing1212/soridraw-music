@@ -1,3 +1,13 @@
+## CURRENT — APP661 팔로우·목록 숫자 불일치 원인 수정 / PREVIEW Worker·Hosting 배포 PASS, 실기기 HOLD (2026-11-14 UTC)
+
+- **실제 영상 FAIL:** A/B 서로 다른 화면의 최초 진입 팔로워·팔로잉 수가 다르고, Andy.J 팔로잉 숫자가 2→1 등으로 변하면서 실제 카드와 차이. 서버 확정 후 실시간 알림 작동은 별개.
+- **정확한 코드 원인:** [읽기 전용 활성 Worker 소스 #43620258247](https://github.com/andrawing1212/soridraw-music/actions/runs/43620258247)에서 활성 `handleProfileConnections`는 D1 effective relation page를 받은 뒤 공개 프로필 R2 조회 실패·부재를 `catch(()=>null)` + `filter(Boolean)`으로 조용히 제거함을 확인. 기존 클라이언트 `ExplorePage.tsx`는 이렇게 줄어든 `items.length`를 `nextCursor=null`만으로 정확한 관계 수로 간주해 숫자까지 덮어씀. 타인 프로필의 인증된 follow-state GET 숫자가 처음 화면에 반영되지 않고, 늦은 R2 visibility refresh가 이미 확인된 숫자를 덮는 경로도 확인됨. **개별 누락 행의 구체 원인은 사용자 데이터 읽기 없이 미확정**.
+- **수정·검사:** [PR #1045](https://github.com/andrawing1212/soridraw-music/pull/1045) 활성 Worker SHA 고정, 목록을 사용자가 명시적으로 열었고 R2 공개 프로필 누락이 있을 때만 최대 30 UID 대상 단일 인덱스 D1 SELECT로 복구. 공개가 아닌 프로필은 공개하지 않고 `countComplete=false`, `hasUnresolvedProfiles=true`; 전체 조회·쓰기·폴링 0. [PR #1044](https://github.com/andrawing1212/soridraw-music/pull/1044)에서 인증된 기존 대상 GET 숫자 사용, 인증된 own/target 숫자의 느린 R2 역전 방지, 인증된 완전한 목록에만 카드 수 보정, 기존 잘못된 목록 캐시 최초 명시적 열기 때만 스키마 갱신. [검사 #43622067048](https://github.com/andrawing1212/soridraw-music/actions/runs/43622067048), [#43621277512](https://github.com/andrawing1212/soridraw-music/actions/runs/43621277512), [#43621277511](https://github.com/andrawing1212/soridraw-music/actions/runs/43621277511) PASS.
+- **PREVIEW 배포:** [Worker #43622262181](https://github.com/andrawing1212/soridraw-music/actions/runs/43622262181) SUCCESS, Explore 활성 `9e0f9a57-5da3-49c5-98ef-ffac999d3c39`, 이전 `a2e6390d-c879-4e31-83e3-dee8046cb6ed` 복구 가능; Owner Worker `142e7005-cf9c-4cc7-88fc-a786a8d35058` 그대로. Hosting [#43622697140](https://github.com/andrawing1212/soridraw-music/actions/runs/43622697140) SUCCESS `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`, Rules SKIPPED; 실제 Hosting SHA `ad0d59faa9e0d0879c2c355bb301ff8979febe0f`. Functions/RTDB·보안·공유 원본 데이터/TEST/PRODUCTION 불변.
+- **반드시 사용자 실검증 요청:** 일반 `https://preview.soridraw.com` A/B PC·모바일 각자의 프로필 최초 숫자, 방문 타인 프로필 숫자, 팔로워·팔로잉 카드의 실제 사람이 빠짐없이 표시되는지, 30초 settled follow/unfollow 양방향 및 목록·숫자 일치. 실기기 PASS 전 전체 사용자 기능 완료 보고 금지. 실패 방향만 근거 기반 수정하고 기존 성공 서버 부품 재배포 금지.
+
+---
+
 ## CURRENT — APP660 모든 로그인 사용자 팔로우 실시간 알림 PREVIEW 서버·Hosting 배포 PASS / A↔B 실기기 HOLD (2026-11-14 UTC)
 
 - **승인 목표:** 모든 로그인 사용자에게 서버에서 확정된 팔로우·취소 변경만 소유자별 DO→Functions→RTDB의 작은 변경 신호로 전달. 불필요한 D1 폴링·전체 조회·방문 반복 쓰기 금지. A 단일 카나리 시험은 최종 제품 범위가 아님.

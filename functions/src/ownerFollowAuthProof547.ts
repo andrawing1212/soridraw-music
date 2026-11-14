@@ -7,6 +7,7 @@ import {onRequest} from 'firebase-functions/v2/https';
 import {defineSecret} from 'firebase-functions/params';
 import {getAuth,type Auth} from 'firebase-admin/auth';
 import {getFirestore,type Firestore} from 'firebase-admin/firestore';
+import {ownerFollowScope653} from './ownerFollowScope653';
 import {readOwnerFollowLifecycleState534} from './ownerFollowLifecycle534';
 export const APP547_AUTH_PROOF_COMPILED_OPEN=false;
 const SECRET=defineSecret('SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544');
@@ -119,7 +120,8 @@ export const verifyOwnerFollowEpoch547Candidate=onRequest({
  region:'asia-northeast3',cors:false,secrets:[SECRET],
  timeoutSeconds:15,maxInstances:3,
 },async(req,res)=>{
- if(!APP547_AUTH_PROOF_COMPILED_OPEN){
+ const scope=ownerFollowScope653(process.env,APP547_AUTH_PROOF_COMPILED_OPEN);
+ if(!scope.enabled){
   res.status(503).json({ok:false});return;
  }
  const result=await handleOwnerAuthProof547(
@@ -127,7 +129,7 @@ export const verifyOwnerFollowEpoch547Candidate=onRequest({
    method:req.method,headers:req.headers as Record<string,string>,
    body:req.method==='POST'?req.rawBody?.toString('utf8'):undefined,
   }),{auth:getAuth(),firestore:getFirestore(),secret:SECRET.value(),
-    allowedUid:String(process.env.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||'')});
+    allowedUid:scope.canaryUid});
  res.status(result.status);
  result.headers.forEach((v,k)=>res.set(k,v));
  res.send(await result.text());

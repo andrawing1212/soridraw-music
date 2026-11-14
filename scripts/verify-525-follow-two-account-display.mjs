@@ -61,7 +61,7 @@ assert.match(explicit,/if \(!forceConnections657\)/);
 assert.match(page,/readExploreProfileConnectionExactCount379\([\s\S]*?nextProfile\.uid, 'following'/);
 assert.match(page,/readExploreProfileConnectionExactCount379\([\s\S]*?refreshedProfile\.uid,'following'/);
 console.log('APP657_PUBLIC_LIST_ON_EXPLICIT_CLICK_AND_COUNT_NO_REGRESSION=PASS');
-assert.match(explicit,/if \(!page.nextCursor\) \{/);
+assert.match(explicit,/if \(!page\.nextCursor && page\.countComplete === true\) \{/);
 assert.doesNotMatch(page,/onOwnFollowersFocus525|ownFollowersHeaderLastCheck525Ref|ownFollowersHeaderInflight525Ref/);
 const ownerBegin548=page.indexOf('  // APP542:');
 const ownerEnd548=page.indexOf('  // APP527:',ownerBegin548);
@@ -103,3 +103,12 @@ console.log('APP652_OWNER_FIRST_ENTRY_TARGETED_COUNT_WITHOUT_LIST_POLL=PASS');
 console.log('APP647_ACTOR_B_CANONICAL_FOLLOW_COUNT_LEGACY_PENDING_PROTECTED=PASS');
 console.log('APP527_OWNER_A_EXPLICIT_ONLY_NO_FOCUS_LIST_READ=PASS');
 console.log('APP525_NO_BACKGROUND_POLL_NO_PRECOMMIT_PUBLIC_WRITE=PASS');
+
+
+// APP661: a missing profile card is not an exact relation count.
+assert.match(social,/EXPLORE_PROFILE_CONNECTION_CACHE_SCHEMA_VERSION_377 = 2/);
+assert.match(social,/hasUnresolvedProfiles: payload\?\.data\?\.hasUnresolvedProfiles === true/);
+assert.match(page,/verifiedVisitedProfileUid661Ref\.current=nextProfile\.uid/);
+assert.match(page,/followerCount:previous\.followerCount/);
+assert.match(page,/setProfileConnectionsIncomplete661\(page\.hasUnresolvedProfiles===true\)/);
+console.log('APP661_CERTIFIED_CARD_COUNT_AND_VERIFIED_PROFILE_REFRESH=PASS');

@@ -1,0 +1,63 @@
+name: SORIDRAW APP646 Follow Save Unique Notification Guard
+
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/app646-follow-notification-conflict.mjs'
+      - 'scripts/verify-646-follow-notification-conflict.py'
+      - '.github/workflows/follow-646-notification-unique.yml'
+  push:
+    branches: [preview]
+    paths: ['.deploy/app646-shared-follow-trigger-fix.trigger']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-app646-shared-follow-notification-unique
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: |
+          node --check scripts/app646-follow-notification-conflict.mjs
+          node scripts/app646-follow-notification-conflict.mjs --self-test
+          python3 scripts/verify-646-follow-notification-conflict.py
+
+  deploy:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      APP646_EXPLICIT_SHARED_D1_APPROVAL: YES_EXACT_TWO_TRIGGERS
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 2, persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Require director's exact two shared D1 triggers YES and trigger-only commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/preview
+          test "$(git diff --name-only HEAD^ HEAD)" = '.deploy/app646-shared-follow-trigger-fix.trigger'
+          trigger=.deploy/app646-shared-follow-trigger-fix.trigger
+          test -f "$trigger"
+          grep -Fxq "director_approval=YES_SHARED_D1_EXACT_TWO_NOTIFICATION_TRIGGERS" "$trigger"
+          grep -Fxq "expected_parent=$(git rev-parse HEAD^)" "$trigger"
+          grep -Fxq "no_user_data_rows_no_worker_or_hosting_deploy=true" "$trigger"
+          node --check scripts/app646-follow-notification-conflict.mjs
+          node scripts/app646-follow-notification-conflict.mjs --self-test
+          python3 scripts/verify-646-follow-notification-conflict.py
+      - name: Apply one atomic two-trigger D1 schema-only notification conflict repair
+        run: node scripts/app646-follow-notification-conflict.mjs --apply-once

@@ -4370,6 +4370,7 @@ export default function ExplorePage() {
     let gate:ReturnType<typeof createOwnerEpochGate538>|null=null;
     // A hidden tab never keeps the owner RTDB listener or starts a D1 poll.
     let initialSnapshotHandled=false;
+    let currentOwnerSignalAt=0;
     const detachOwnerFollower542=()=>{
       if(!visibleSubscription)return;
       visibleSubscription=false;
@@ -4390,6 +4391,7 @@ export default function ExplorePage() {
          activeProfileUidRef.current!==ownerUid)return;
       const validOwnerSignal=normalizeOwnerEpochSignal538(signal,ownerUid,epoch);
       if(!validOwnerSignal)return;
+      currentOwnerSignalAt=validOwnerSignal.at;
       if(!gate){
         gate=createOwnerEpochGate538({
           ownerUid,authEpoch:epoch,
@@ -4401,7 +4403,7 @@ export default function ExplorePage() {
             // cannot replace the newer verified owner follower count.
             const verifiedRead=ownVerifiedCount662Ref.current;
             if(verifiedRead?.uid===ownerUid &&
-               validOwnerSignal.at<=verifiedRead.requestedAt)return;
+               currentOwnerSignalAt<=verifiedRead.requestedAt)return;
             // The same retained signal is allowed to repaint without a new
             // followers-list read; new canonical revisions invalidate only A.
             const confirmedNewEvent=isNewEvent&&initialSnapshotHandled;
@@ -4411,7 +4413,7 @@ export default function ExplorePage() {
             // cache; preserve the zero-GET cold-snapshot rule.
             const changedList=isNewEvent||
               (!previousMarker&&profile?.followerCount!==count);
-            ownerFollowerConfirmed529Ref.current={uid:ownerUid,count,version,at:validOwnerSignal.at};
+            ownerFollowerConfirmed529Ref.current={uid:ownerUid,count,version,at:currentOwnerSignalAt};
             if(changedList){
               invalidateExploreProfileConnections377(ownerUid,'followers');
               profileConnectionsCache376Ref.current.delete(ownerUid+':followers');

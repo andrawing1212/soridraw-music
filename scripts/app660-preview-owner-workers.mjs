@@ -1,4 +1,5 @@
 // Clone current deployed modules; no wrangler migrations or canonical rebuild.
+// Keep expected module COUNT distinct from the PATCHED module ARRAY.
 import {readFileSync,writeFileSync} from 'node:fs';
 import {isDeepStrictEqual} from 'node:util';
 import {hash660,patchExplore660,patchOwner660,patchEnrollment660} from './lib/owner-follow-general660.mjs';
@@ -6,11 +7,11 @@ const A='e1a30fc9ef497fda1d34f4ab3dc1da45';
 const EX='soridraw-explore-preview',OW='soridraw-owner-follow-preview-candidate';
 const ZERO='6b13cde4-4a53-42d2-873f-361f7cf5a931';
 const targets=[
- {name:EX,old:'02576623-2172-4922-85b8-3f08a5216653',count:35,modules:12,main:'owner-follow-entry-607.mjs',
+ {name:EX,old:'02576623-2172-4922-85b8-3f08a5216653',count:35,moduleCount:12,main:'owner-follow-entry-607.mjs',
   // Previously staged by approved APP660 run #43614246553, traffic 0%.
   // A subsequent read-only inventory #43614801284 verified all 12 modules.
   resume:'a2e6390d-c879-4e31-83e3-dee8046cb6ed'},
- {name:OW,old:'e679a602-44fb-4b4d-9e4d-7878c00b68c3',count:7,modules:1,main:'worker.js'},
+ {name:OW,old:'e679a602-44fb-4b4d-9e4d-7878c00b68c3',count:7,moduleCount:1,main:'worker.js'},
 ];
 const flags={SORIDRAW_OWNER_FOLLOW_GENERAL_PREVIEW_653:'1',SORIDRAW_OWNER_FOLLOW_SOURCE_BOUNDARY_653:'preview-only'};
 const check=(v,m)=>{if(!v)throw Error('APP660_WORKER_HOLD_'+m)};
@@ -28,9 +29,9 @@ async function snapshot(t,id){
  const [meta,source]=await Promise.all([
   api('GET',`workers/scripts/${t.name}/versions/${id}`),
   api('GET',`workers/workers/${t.name}/versions/${id}?include=modules`)]);
- check(source.modules?.length===t.modules,'MODULE_COUNT_'+t.name);
+ check(source.modules?.length===t.moduleCount,'MODULE_COUNT_'+t.name);
  const modules=source.modules.map(m=>({name:m.name,content_type:m.content_type||'application/javascript+module',content_base64:m.content_base64}));
- check(new Set(modules.map(m=>m.name)).size===t.modules,'DUPLICATE_MODULE');
+ check(new Set(modules.map(m=>m.name)).size===t.moduleCount,'DUPLICATE_MODULE');
  check(modules.some(m=>m.name===t.main),'MAIN_MODULE');
  const bindings=meta.resources.bindings;
  check(new Set(bindings.map(b=>b.name)).size===bindings.length,'DUPLICATE_BINDING');
@@ -55,23 +56,6 @@ async function verify(t,id,old,modules){
  for(const [name,value] of Object.entries(flags))check(map.get(name)?.type==='plain_text'&&map.get(name)?.text===value,'FLAGS');
  for(const m of modules){const after=next.modules.find(x=>x.name===m.name);check(after&&hash660(Buffer.from(after.content_base64,'base64'))===hash660(Buffer.from(m.content_base64,'base64')),'MODULE_HASH_'+m.name)}
  check(isDeepStrictEqual(next.meta.resources.script_runtime,old.meta.resources.script_runtime),'RUNTIME_CHANGED');
-}
-// Cloudflare version modules can be temporarily absent just after an upload.
-// The 2026-11-14 APP660 stage returned MODULE_COUNT for ~75 seconds, while
-// a later GET confirmed the complete 12-module version. Only that transient
-// response may retry; hashes, bindings, runtime and protected deployments
-// must still match exactly or fail immediately.
-async function verifyStagedSource(t,id,old,modules){
- for(let attempt=0;attempt<72;attempt++){
-  try{await verify(t,id,old,modules);return}
-  catch(error){
-   const reason=String(error?.message||error);
-   if(!reason.startsWith('APP660_WORKER_HOLD_MODULE_COUNT_')||attempt===71)
-    throw error;
-   if(attempt===0)console.log('APP660_STAGED_SOURCE_PENDING='+t.name+';version='+id);
-   await sleep(5000);
-  }
- }
 }
 async function run(){
  check(['--apply-once','--preflight'].includes(process.argv[2]),'MODE');
@@ -122,7 +106,7 @@ async function run(){
   const staged=await api('POST',`workers/workers/${t.name}/versions?deploy=false`,payload);
   t.new=staged.id;check(/^[a-f0-9-]{36}$/.test(t.new),'STAGED_ID');
   console.log('APP660_INACTIVE_STAGED='+t.name+';version='+t.new);
-  await verifyStagedSource(t,t.new,t.before,t.modules);
+  await verify(t,t.new,t.before,t.modules);
  }
  for(const t of targets)check(stable(await deployed(t.name))===stable(expected(t,t.old)),'PRE_ACTIVATION_DRIFT');
  for(let i=0;i<protectedNames.length;i++)check(stable(await deployed(protectedNames[i]))===stable(protectedBefore[i]),'PROTECTED_DRIFT');

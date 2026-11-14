@@ -25,7 +25,7 @@ assert.match(page, /direction === 'followers' && targetUid === user\?\.uid/);
 assert.match(page, /OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 120_000/);
 assert.match(page, /readExploreProfileConnectionLastServerAt528\(targetUid, direction\)/);
 assert.match(page, /shouldRefreshOwnerFollowersOnOpen528\(/);
-assert.match(page, /getExploreProfileConnections\(targetUid, direction, null, refreshOwn523\)/);
+assert.match(page, /getExploreProfileConnections\(targetUid, direction, null, forceConnections657\)/);
 assert.match(connections, /if \(!normalizedCursor && isCurrentProfileConnectionGeneration548\(cacheKey548, requestGeneration548\)\) \{\s*writeProfileConnectionCache377/);
 assert.equal((connections.match(/requestPublic\(/g) || []).length, 1, 'cold relation list must use one bounded request');
 

@@ -21,7 +21,7 @@ assert.match(explicit,/readExploreProfileConnectionLastServerAt528\(targetUid, d
 assert.match(explicit,/shouldRefreshOwnerFollowersOnOpen528\(/);
 assert.match(page,/OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 120_000/);
 assert.match(explicit,/shouldRefreshOwnerFollowersOnOpen528\([\s\S]*?lastCheck523, Date\.now\(\), OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523/);
-assert.match(explicit,/getExploreProfileConnections\(targetUid, direction, null, refreshOwn523\)/);
+assert.match(explicit,/getExploreProfileConnections\(targetUid, direction, null, forceConnections657\)/);
 // Only 3 potential call sites survive: user-requested list, user-requested
 // pagination, confirmed same-account follow event; none idle or focus.
 const calls=[...page.matchAll(/getExploreProfileConnections\(/g)];

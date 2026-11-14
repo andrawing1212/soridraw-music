@@ -1,0 +1,7 @@
+approval=director_20261114_fix_follow_number_and_missing_public_cards
+source_parent=1c734573cc28677f3b7ed1ac80c7337fe3067cda
+old_worker=a2e6390d-c879-4e31-83e3-dee8046cb6ed
+owner_worker_unchanged=142e7005-cf9c-4cc7-88fc-a786a8d35058
+scope=one_preview_worker_one_module_only
+no_shared_data_or_test_prod_change=true
+real_A_B_PC_mobile_required=true

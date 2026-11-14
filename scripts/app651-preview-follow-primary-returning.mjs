@@ -115,7 +115,7 @@ async function main() {
     // APP650 helper validates the exact function and replaces only its one
     // .run()+meta.changes path, regardless of those harmless aliases.
     need(patched!==raw&&patched.includes('RETURNING 1 AS relation_changed')&&
-      /const changes\\d* = Array\\.isArray\\(result\\d*\\?\\.results\\)/.test(patched),
+      /const changes[0-9]* = Array[.]isArray[(]result[0-9]*[?][.]results[)]/.test(patched),
       'EXACT_PRIMARY_ROWS_PATCH');
     changed++;
     ms.push({name:m.name,content_type:m.content_type||'application/javascript+module',

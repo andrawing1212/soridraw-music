@@ -4505,6 +4505,15 @@ export default function ExplorePage() {
 
     const requestedFollow = !followState.isFollowing;
     const previousFollowing = followState.isFollowing;
+    // Legacy compatibility response counters are not D1 canonical. Freeze
+    // the best known exact/local baseline BEFORE the mutation invalidates it.
+    const previousTargetCount = readExploreProfileConnectionExactCount379(targetUid, 'followers')
+      ?? profile.followerCount;
+    const previousTargetFollowingCount = profile.followingCount;
+    const previousActorCount = readExploreProfileConnectionExactCount379(viewerUid, 'following')
+      ?? readExploreFollowingExactCount379(viewerUid)
+      ?? readCachedExplorePublicProfile(viewerUid)?.followingCount
+      ?? null;
     followMutationInFlightRef.current = true;
     setFollowBusyUid(targetUid);
     setSocialNotice('');
@@ -4514,13 +4523,24 @@ export default function ExplorePage() {
       const confirmed = await setExploreFollow(user, targetUid, requestedFollow, profile);
       if (auth.currentUser?.uid !== viewerUid) return;
 
+      // Only confirmed membership decides the +1/-1. The old compatibility
+      // API's returned numeric stats can lag the D1 relation overlay.
+      const relationDelta = Number(confirmed.isFollowing) - Number(previousFollowing);
+      const resolvedTargetFollower = Math.max(0, safeCount(previousTargetCount) + relationDelta);
+      const resolvedTargetFollowing = safeCount(previousTargetFollowingCount);
+      const exactActorFollowing = readExploreProfileConnectionExactCount379(viewerUid, 'following')
+        ?? readExploreFollowingExactCount379(viewerUid);
+      const resolvedActorFollowing = exactActorFollowing !== null
+        ? exactActorFollowing
+        : previousActorCount === null
+          ? null : Math.max(0, safeCount(previousActorCount) + relationDelta);
       patchExplorePublicProfileFirstViewProfile(targetUid, {
-        followerCount: confirmed.followerCount,
-        followingCount: confirmed.followingCount,
+        followerCount: resolvedTargetFollower,
+        followingCount: resolvedTargetFollowing,
       });
-      if (confirmed.actorFollowingCount !== undefined) {
+      if (resolvedActorFollowing !== null) {
         patchExplorePublicProfileFirstViewProfile(viewerUid, {
-          followingCount: confirmed.actorFollowingCount,
+          followingCount: resolvedActorFollowing,
         });
       }
       // Explicitly opened lists alone may fetch updated pages; no background
@@ -4536,19 +4556,24 @@ export default function ExplorePage() {
         });
       }
       if (activeProfileUidRef.current === targetUid) {
-        setFollowState(confirmed);
+        setFollowState({
+          isFollowing: confirmed.isFollowing,
+          followerCount: resolvedTargetFollower,
+          followingCount: resolvedTargetFollowing,
+          ...(resolvedActorFollowing === null ? {} : { actorFollowingCount: resolvedActorFollowing }),
+        });
         setProfile((current) => current?.uid === targetUid
-          ? { ...current, followerCount: confirmed.followerCount, followingCount: confirmed.followingCount }
+          ? { ...current, followerCount: resolvedTargetFollower, followingCount: resolvedTargetFollowing }
           : current);
       }
       // Preserve the existing actor-only same-account signal. It is not
       // the retired cross-account owner notification pipeline.
-      if (confirmed.isFollowing !== previousFollowing) {
+      if (confirmed.isFollowing !== previousFollowing && resolvedActorFollowing !== null) {
         void publishExploreFollowSync377(viewerUid, {
           targetUid,
           following: confirmed.isFollowing,
-          actorFollowingCount: confirmed.actorFollowingCount ?? 0,
-          targetFollowerCount: confirmed.followerCount,
+          actorFollowingCount: resolvedActorFollowing,
+          targetFollowerCount: resolvedTargetFollower,
         }).catch((error) => console.warn('Explore same-account follow signal unavailable:', error));
       }
     } catch (error) {

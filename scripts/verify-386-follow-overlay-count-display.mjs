@@ -25,28 +25,19 @@ const toggleEnd = page.indexOf('\n\n  const closeMoreSheet', toggleStart);
 assert.ok(toggleStart >= 0 && toggleEnd > toggleStart);
 const toggle = page.slice(toggleStart, toggleEnd);
 
-assert.match(toggle, /relationDelta380/);
+// APP647: settled relation is trusted, compatibility response counts are not.
+assert.match(toggle, /const relationDelta = Number\(confirmed\.isFollowing\) - Number\(previousFollowing\)/);
+assert.match(toggle, /readExploreProfileConnectionExactCount379\(targetUid, 'followers'\)/);
 assert.match(toggle, /readExploreProfileConnectionExactCount379\(viewerUid, 'following'\)/);
 assert.match(toggle, /readExploreFollowingExactCount379\(viewerUid\)/);
-assert.match(toggle, /resolvedTargetFollower380/);
-assert.match(toggle, /resolvedTargetFollowing380/);
-assert.match(toggle, /Math.floor\(settlement380.baseTargetFollowingCount\)/);
-assert.match(toggle, /targetFollowerCount: resolvedTargetFollower380/);
-assert.doesNotMatch(
-  toggle,
-  /patchExplorePublicProfileFirstViewProfile\(targetUid,[\s\S]{0,260}followerCount:\s*result\.followerCount/,
-  'target follower count must not be overwritten by legacy compatibility stats',
-);
-assert.doesNotMatch(
-  toggle,
-  /patchExplorePublicProfileFirstViewProfile\(targetUid,[\s\S]{0,320}followingCount:\s*result\.followingCount/,
-  'target following count must remain unchanged by somebody else following/unfollowing them',
-);
-assert.doesNotMatch(
-  toggle,
-  /patchExplorePublicProfileFirstViewProfile\(viewerUid,[\s\S]{0,260}result\.actorFollowingCount/,
-  'own following count must not be overwritten by legacy compatibility stats',
-);
+assert.match(toggle, /resolvedTargetFollower = Math\.max\(0, safeCount\(previousTargetCount\) \+ relationDelta\)/);
+assert.match(toggle, /resolvedTargetFollowing = safeCount\(previousTargetFollowingCount\)/);
+assert.match(toggle, /targetFollowerCount: resolvedTargetFollower/);
+assert.doesNotMatch(toggle, /confirmed\.(?:followerCount|followingCount|actorFollowingCount)/,
+  'do not render stale legacy compatibility counters');
+assert.ok(toggle.indexOf('await setExploreFollow') <
+  toggle.indexOf('patchExplorePublicProfileFirstViewProfile(targetUid'),
+  'published counters must wait for canonical success');
 
 const ownProfileStart = page.indexOf('    const applyProfileFirstView = ');
 const ownProfileEnd = page.indexOf('\n\n    const retainedPublicationSignal357', ownProfileStart);

@@ -42,7 +42,7 @@ assert.match(client,/APP608_APPROVED_CANARY_UID=/);
 assert.match(client,/isApp608OwnerCanaryVisible/);
 assert.match(page,/!isApp608OwnerCanaryVisible\(ownerUid\)/);
 assert.match(client,/ownerFollowCanary/);
-assert.match(client,/enrollmentAttempts575=new Map/);
+assert.match(client,/enrollmentAttempts575=new WeakMap/);
 assert.match(client,/getIdTokenResult\(principal,true\)/);
 assert.match(client,/await tryOwnerFollowCanaryEnrollment575\(uid,principal\)/);
 assert.ok(client.includes("getFunctions(getApp(),'asia-northeast3')"));

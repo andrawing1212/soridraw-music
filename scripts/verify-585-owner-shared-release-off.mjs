@@ -83,11 +83,18 @@ assert.ok(clientCanary.includes('!isApp608OwnerCanaryVisible(uid)'),
 assert.ok(clientCanary.indexOf('!isApp608OwnerCanaryVisible(uid)')<
  clientCanary.indexOf('const principal=auth.currentUser'),
  'APP591_CANARY_GATE_MUST_PRECEDE_AUTH_READ');
-assert.ok(clientCanary.includes("typeof window==='undefined'?'':window.location.hostname.toLowerCase()"),
+// APP658/659: exact PREVIEW host and explicit canary enrollment are in
+// the tested tab helper; passive listening on ordinary PREVIEW is intentional.
+const tabHelper=read('src/lib/ownerFollowCanaryTab634.ts');
+assert.ok(tabHelper.includes("const PREVIEW_HOST_634='preview.soridraw.com'"),
  'APP591_PREVIEW_HOST_REQUIRED');
-assert.ok(clientCanary.includes("typeof window==='undefined'?'':window.location.search"),
+assert.ok(tabHelper.includes("new URLSearchParams(search).get('ownerFollowCanary')==='1'"),
  'APP591_EXPLICIT_URL_REQUIRED');
-console.log('APP591_PREVIEW_EXPLICIT_CANARY_BEFORE_AUTH=PASS');
+assert.ok(clientCanary.includes('hasExplicitOwnerFollowTabOptIn634()'),
+ 'APP591_CANARY_ENROLLMENT_EXPLICIT_ONLY');
+assert.ok(clientCanary.includes('APP659_GENERAL_PREVIEW_OWNERS_ENABLED=false'),
+ 'APP659_GENERAL_OWNER_MUST_BE_OFF_BEFORE_SERVER_ROLLOUT');
+console.log('APP659_PREVIEW_HOST_EXPLICIT_ENROLLMENT_AND_GENERAL_OFF=PASS');
 const index=read('functions/src/index.ts');
 assert.ok(index.includes('databaseURL: "https://soridraw-app-866a5-default-rtdb.firebaseio.com"'));
 for(const fn of ['publishExploreOwnerFollower542',

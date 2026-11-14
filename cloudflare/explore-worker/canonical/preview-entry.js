@@ -45,6 +45,8 @@ import {APP557_OWNER_PRECOMMIT_COMPILED_OPEN,runOwnerFollowPrecommit557}
  from '../runtime/owner-follow-precommit-557.mjs';
 import {reserveOwnerFollowViaDo557}
  from '../runtime/owner-follow-do-557.mjs';
+import {ownerFollowTargetInScope659}
+ from '../runtime/owner-follow-target-scope-659.mjs';
 // APP572: export the previously isolated per-owner DO class for the PREVIEW
 // candidate bundle. Both the DO engine and follow precommit remain OFF by
 // default and require their explicit env gate for any write.
@@ -3690,9 +3692,9 @@ export default {
     // APP574: fail closed to one explicitly enrolled PREVIEW canary owner.
     // Every other owner's follow still uses the frozen canonical writer;
     // zero new D1/R2/DO cost on non-canary requests, even after activation.
-    const ownerFollowCanary574=String(env?.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||'');
-    const ownerFollowCanaryRoute574=/^[A-Za-z0-9_-]{1,128}$/.test(ownerFollowCanary574)&&
-      url.pathname===('/v1/profiles/'+ownerFollowCanary574+'/follow');
+    // General owner send scope requires exact PREVIEW release fences.
+    // Both fences absent preserves the existing approved A-only bridge.
+    const ownerFollowCanaryRoute574=ownerFollowTargetInScope659(env,url.pathname);
     // APP557 authenticated precommit is source-wired, compile OFF / unbound.
     // The original canonical Worker remains unchanged for all active traffic.
     let response;

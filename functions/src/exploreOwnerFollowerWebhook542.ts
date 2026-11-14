@@ -7,6 +7,7 @@ import {onRequest} from 'firebase-functions/v2/https';
 import {defineSecret} from 'firebase-functions/params';
 import {getAuth,type Auth} from 'firebase-admin/auth';
 import {getDatabase,type Database} from 'firebase-admin/database';
+import {ownerFollowScope653} from './ownerFollowScope653';
 
 export const APP542_OWNER_HTTP_COMPILED_OPEN=false;
 const HMAC542=defineSecret('SORIDRAW_OWNER_FOLLOW_HMAC_539');
@@ -134,11 +135,12 @@ export const publishExploreOwnerFollower542=onRequest({
  region:'asia-northeast3',secrets:[HMAC542],cors:false,
  timeoutSeconds:15,maxInstances:3,
 },async(req,res)=>{
- if(!APP542_OWNER_HTTP_COMPILED_OPEN){
+ const scope=ownerFollowScope653(process.env,APP542_OWNER_HTTP_COMPILED_OPEN);
+ if(!scope.enabled){
   res.status(503).json({ok:false,error:'OWNER_FOLLOW_DISABLED'});return;
  }
  await createOwnerFollowerHttp542({
   auth:getAuth(),database:getDatabase(),secret:HMAC542.value(),
-  canaryUid:String(process.env.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||''),
+  canaryUid:scope.canaryUid,
  })(req,res);
 });

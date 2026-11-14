@@ -13,7 +13,8 @@ const js=ts.transpileModule(helper,{compilerOptions:{
 const exports={};
 vm.runInNewContext(js,{exports,URLSearchParams});
 const {captureOwnerFollowCanaryOptIn634:capture,hasOwnerFollowCanaryOptIn634:has,
- mayListenToApprovedOwnerOnPreview658:canListen}=exports;
+ mayListenToApprovedOwnerOnPreview658:canListen,
+ mayListenToPreviewOwnerGeneral659:canGeneral}=exports;
 const items=new Map();
 const tab={setItem:(k,v)=>items.set(k,v),getItem:k=>items.get(k)??null};
 const host='preview.soridraw.com';
@@ -35,11 +36,16 @@ assert.equal(canListen(host,'',''),false);
 for(const h of ['soridraw.com','test.soridraw.com','evil-preview.soridraw.com'])
  assert.equal(canListen(h,'approvedOwner','approvedOwner'),false);
 assert.match(client,/mayListenToApprovedOwnerOnPreview658\(/);
+assert.match(client,/APP659_GENERAL_PREVIEW_OWNERS_ENABLED=false/);
+assert.equal(canGeneral(host,'otherOwner',true),true);
+assert.equal(canGeneral(host,'otherOwner',false),false);
+assert.equal(canGeneral('soridraw.com','otherOwner',true),false);
+assert.equal(canGeneral('test.soridraw.com','otherOwner',true),false);
 assert.match(client,/ownerEpochProbe658=new WeakMap/);
 const enrollStart=client.indexOf('const tryOwnerFollowCanaryEnrollment575=');
 const enrollEnd=client.indexOf('const EPOCH=',enrollStart);
 assert.ok(enrollStart>0&&enrollEnd>enrollStart);
-assert.match(client.slice(enrollStart,enrollEnd),/!hasExplicitOwnerFollowTabOptIn634\(\)/);
+assert.match(client.slice(enrollStart,enrollEnd),/hasExplicitOwnerFollowTabOptIn634\(\)/);
 assert.ok(main.indexOf('captureOwnerFollowCanaryOptIn634(')>=0);
 assert.ok(main.indexOf('captureOwnerFollowCanaryOptIn634(')<main.indexOf("createRoot("));
 assert.match(client,/uid===APP608_APPROVED_CANARY_UID/);

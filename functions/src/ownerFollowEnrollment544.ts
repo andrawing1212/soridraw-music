@@ -6,6 +6,7 @@ import {onCall,HttpsError} from 'firebase-functions/v2/https';
 import {defineSecret} from 'firebase-functions/params';
 import {getAuth,type Auth} from 'firebase-admin/auth';
 import {getFirestore,type Firestore} from 'firebase-admin/firestore';
+import {ownerFollowScope653,isPreviewOwnerEnrollmentOrigin653} from './ownerFollowScope653';
 import {
  enrollOwnerFollowEpoch534,readOwnerFollowLifecycleState534,
 } from './ownerFollowLifecycle534';
@@ -87,11 +88,17 @@ export async function revokeDeletedOwnerBinding544({
 export const enrollOwnerFollow544Candidate=onCall({
  region:'asia-northeast3',enforceAppCheck:true,secrets:[KEY],
 },async request=>{
- if(!APP544_ENROLLMENT_COMPILED_OPEN)
+ const scope=ownerFollowScope653(process.env,APP544_ENROLLMENT_COMPILED_OPEN);
+ if(!scope.enabled)
   throw new HttpsError('unavailable','OWNER_FOLLOW_OFF');
  if(!request.auth?.uid)throw new HttpsError('unauthenticated','LOGIN_REQUIRED');
- // No implicit enrollment for ordinary logins or another tenant's user.
- if(request.auth.uid!==String(process.env.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||''))
+ // A general PREVIEW account may enroll only itself, with mandatory AppCheck
+ // (enforceAppCheck:true above) and exact browser host. No page-entry writes:
+ // the client attempts enrollment once only when its token has no epoch.
+ if(scope.general &&
+    !isPreviewOwnerEnrollmentOrigin653(request.rawRequest?.get('origin')))
+  throw new HttpsError('permission-denied','PREVIEW_ORIGIN_REQUIRED');
+ if(scope.canaryUid!==undefined&&request.auth.uid!==scope.canaryUid)
   throw new HttpsError('permission-denied','OWNER_FOLLOW_CANARY_ONLY');
  return enrollAndBindOwner544({
   firestore:getFirestore(),auth:getAuth(),uid:request.auth.uid,secret:KEY.value(),

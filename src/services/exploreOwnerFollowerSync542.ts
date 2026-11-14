@@ -6,10 +6,18 @@ import {getApp} from 'firebase/app';
 import {getFunctions,httpsCallable} from 'firebase/functions';
 import {onValue,ref as databaseRef,type Unsubscribe} from 'firebase/database';
 import {auth,realtimeDb} from '../firebase';
-import { hasOwnerFollowCanaryOptIn634, mayListenToApprovedOwnerOnPreview658 } from '../lib/ownerFollowCanaryTab634';
+import { hasOwnerFollowCanaryOptIn634, mayListenToApprovedOwnerOnPreview658,
+ mayListenToPreviewOwnerGeneral659 } from '../lib/ownerFollowCanaryTab634';
 
 export const EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED=true;
 export const APP608_APPROVED_CANARY_UID='rcZ2GZrBndOZzT8C635eiNBjYIJ2';
+// General PREVIEW hosting stays OFF until the exact Worker/Functions release is
+// active. Otherwise uninvolved owners would call canary-only Functions.
+export const APP659_GENERAL_PREVIEW_OWNERS_ENABLED=false;
+const isGeneralPreviewOwner659=(uid:string):boolean=>
+ typeof window!=='undefined'&&mayListenToPreviewOwnerGeneral659(
+  window.location.hostname,uid,APP659_GENERAL_PREVIEW_OWNERS_ENABLED,
+ );
 // APP575: PREVIEW explicit QA URL only, never a general login/page-entry
 // registration, scan, poll or Firestore mutation. Kept OFF until server
 // canary UID, Rules, Functions and DO are safely installed and checked.
@@ -30,19 +38,21 @@ const hasExplicitOwnerFollowTabOptIn634=():boolean=>{
 // APP658: already-enrolled exact owner listens on PREVIEW even after PWA
 // relaunch loses ?ownerFollowCanary=1. Other users/hosts remain entirely OFF.
 export const isApp608OwnerCanaryVisible=(uid:string):boolean=>
- uid===APP608_APPROVED_CANARY_UID&&typeof window!=='undefined'&&
- mayListenToApprovedOwnerOnPreview658(
+ (uid===APP608_APPROVED_CANARY_UID&&typeof window!=='undefined'&&
+  mayListenToApprovedOwnerOnPreview658(
    window.location.hostname,uid,APP608_APPROVED_CANARY_UID,
- );
-const enrollmentAttempts575=new Map<string,Promise<boolean>>();
+  ))||isGeneralPreviewOwner659(uid);
+const enrollmentAttempts575=new WeakMap<object,Promise<boolean>>();
 const tryOwnerFollowCanaryEnrollment575=(
  uid:string,principal:NonNullable<typeof auth.currentUser>,
 ):Promise<boolean>=>{
  // Enrollment mutates Auth/Firestore: retain explicit-tab QA opt-in only.
- if(!isApp608OwnerCanaryVisible(uid)||!hasExplicitOwnerFollowTabOptIn634()||
+ if(!isApp608OwnerCanaryVisible(uid)||
+    !(isGeneralPreviewOwner659(uid)||hasExplicitOwnerFollowTabOptIn634())||
     auth.currentUser!==principal)return Promise.resolve(false);
- const key=uid;
- const prior=enrollmentAttempts575.get(key);
+ // Initial lifecycle enrollment at most once per authenticated principal;
+ // no repeated profile-entry D1/RTDB list query or focus poll.
+ const prior=enrollmentAttempts575.get(principal);
  if(prior)return prior;
  // One explicit attempt per account per SPA lifetime. Failed enrollment is
  // not retried on focus/profile navigation; QA must explicitly reload.
@@ -59,7 +69,7 @@ const tryOwnerFollowCanaryEnrollment575=(
     /^[0-9a-f]{32}$/.test(refreshed.claims.soridrawFollowEpoch532);
   }catch{return false}
  })();
- enrollmentAttempts575.set(key,task);
+ enrollmentAttempts575.set(principal,task);
  return task;
 };
 const EPOCH=/^[0-9a-f]{32}$/;

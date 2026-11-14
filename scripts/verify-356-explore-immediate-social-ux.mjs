@@ -38,97 +38,87 @@ function setter(ctx,key) {
   return (value) => { ctx[key] = typeof value === 'function' ? value(ctx[key]) : value; };
 }
 
-// Follow app380: this account paints immediately, public target counters wait
-// for one final accepted settlement, and a hard failure restores the local edge.
+// APP647: one canonical request. The button stays disabled and the public
+// count stays unchanged until the server acknowledges; failure never paints
+// an unconfirmed success. No Cloudflare/Firebase calls are made by this test.
 {
-  let membership = false;
+  const d = deferred();
+  let calls = 0;
   const ctx = {
     console, Error, Set, Number, Boolean, Math,
-    profileUid:'target',
-    profile:{ uid:'target', nickname:'Target', avatarUrl:'', handle:'target', followerCount:4, followingCount:2 },
-    user:{ uid:'viewer' },
-    followState:{ isFollowing:false, followerCount:4, followingCount:2 },
-    followingLoadedUid312:'viewer',
-    followingUids312:new Set(),
-    activeProfileUidRef:{ current:'target' },
-    auth:{ currentUser:{ uid:'viewer' } },
-    followBusyUid:'',
-    socialNotice:'',
-    queued:null,
-    setFollowBusyUid:null, setFollowState:null, setFollowingUids312:null, setProfile:null, setSocialNotice:null,
-    readCachedExplorePublicProfile:()=>({ uid:'viewer', followingCount:2 }),
-    readExploreProfileConnectionExactCount379:()=>null,
-    readExploreFollowingExactCount379:()=>membership ? 3 : 2,
-    patchExploreFollowLocalState377:(_viewer,_target,following)=>{ membership=Boolean(following); },
-    patchExplorePublicProfileFirstViewProfile:()=>{},
-    queueExploreFollowFinalState380:(request)=>{ ctx.queued=request; },
-    setExploreFollow:async()=>({ isFollowing:true, followerCount:5, followingCount:2, actorFollowingCount:3 }),
-    publishExploreFollowSync377:async()=>{},
+    profileUid: 'target',
+    profile: { uid: 'target', nickname: 'Target', avatarUrl: '', handle: 'target', followerCount: 4, followingCount: 2 },
+    user: { uid: 'viewer' },
+    followState: { isFollowing: false, followerCount: 4, followingCount: 2 },
+    followBusyUid: '', socialNotice: '',
+    followMutationInFlightRef: { current: false },
+    followingLoadedUid312: 'viewer', followingUids312: new Set(),
+    activeProfileUidRef: { current: 'target' },
+    profileConnectionsCache376Ref: { current: new Map() },
+    auth: { currentUser: { uid: 'viewer' } },
+    readPendingExploreFollowIntents380: () => [],
+    setExploreFollow: () => { calls++; return d.promise; },
+    getExploreFollowState: async () => null,
+    patchExplorePublicProfileFirstViewProfile: () => {},
+    publishExploreFollowSync377: async () => {},
   };
   for (const key of ['followBusyUid','followState','followingUids312','profile','socialNotice']) {
     ctx['set'+key[0].toUpperCase()+key.slice(1)] = setter(ctx,key);
   }
   const handler = loadHandler('toggleFollow',ctx);
+  const running = handler();
   await handler();
-  assert.equal(ctx.followState.isFollowing,true);
-  assert.equal(ctx.profile.followerCount,4,'public target count must stay canonical during 30s local window');
-  assert.equal(ctx.followingUids312.has('target'),true);
-  assert.ok(ctx.queued,'final-state batch request missing');
-  assert.equal(ctx.queued.desiredFollowing,true);
-  ctx.queued.onSettled({
-    viewerUid:'viewer', targetUid:'target', desiredFollowing:true,
-    baseFollowing:false, baseTargetFollowerCount:4, baseTargetFollowingCount:2,
-    baseActorFollowingCount:2,
-    targetProfile:{ uid:'target', nickname:'Target', avatarUrl:'', handle:'target' },
-    result:{ isFollowing:true, followerCount:0, followingCount:0, actorFollowingCount:0 },
-  });
-  assert.equal(ctx.profile.followerCount,5,'public target count must change only after final settlement');
+  assert.equal(calls, 1, 'DOUBLE_CLICK_ONE_WRITE');
+  assert.equal(ctx.followBusyUid, 'target');
+  assert.equal(ctx.followState.isFollowing, false, 'NO_UNCONFIRMED_MEMBERSHIP');
+  assert.equal(ctx.profile.followerCount, 4, 'NO_UNCONFIRMED_COUNT');
+  d.resolve({ isFollowing: true, followerCount: 5, followingCount: 2, actorFollowingCount: 3 });
+  await running;
+  assert.equal(ctx.followState.isFollowing, true);
+  assert.equal(ctx.profile.followerCount, 5);
+  assert.equal(ctx.followingUids312.has('target'), true);
+  assert.equal(ctx.followBusyUid, '');
 }
 {
-  let membership = true;
+  const d = deferred();
+  let checks = 0;
   const ctx = {
     console, Error, Set, Number, Boolean, Math,
-    profileUid:'target',
-    profile:{ uid:'target', nickname:'Target', avatarUrl:'', handle:'target', followerCount:5, followingCount:2 },
-    user:{ uid:'viewer' },
-    followState:{ isFollowing:true, followerCount:5, followingCount:2 },
-    followingLoadedUid312:'viewer',
-    followingUids312:new Set(['target']),
-    activeProfileUidRef:{ current:'target' },
-    auth:{ currentUser:{ uid:'viewer' } },
-    followBusyUid:'',
-    socialNotice:'',
-    queued:null,
-    setFollowBusyUid:null, setFollowState:null, setFollowingUids312:null, setProfile:null, setSocialNotice:null,
-    readCachedExplorePublicProfile:()=>({ uid:'viewer', followingCount:3 }),
-    readExploreProfileConnectionExactCount379:()=>null,
-    readExploreFollowingExactCount379:()=>membership ? 3 : 2,
-    patchExploreFollowLocalState377:(_viewer,_target,following)=>{ membership=Boolean(following); },
-    patchExplorePublicProfileFirstViewProfile:()=>{},
-    queueExploreFollowFinalState380:(request)=>{ ctx.queued=request; },
-    setExploreFollow:async()=>({ isFollowing:false, followerCount:4, followingCount:2, actorFollowingCount:2 }),
-    publishExploreFollowSync377:async()=>{},
+    profileUid: 'target',
+    profile: { uid: 'target', nickname: 'Target', avatarUrl: '', handle: 'target', followerCount: 5, followingCount: 2 },
+    user: { uid: 'viewer' },
+    followState: { isFollowing: true, followerCount: 5, followingCount: 2 },
+    followBusyUid: '', socialNotice: '',
+    followMutationInFlightRef: { current: false },
+    followingLoadedUid312: 'viewer', followingUids312: new Set(['target']),
+    activeProfileUidRef: { current: 'target' },
+    profileConnectionsCache376Ref: { current: new Map() },
+    auth: { currentUser: { uid: 'viewer' } },
+    readPendingExploreFollowIntents380: () => [],
+    setExploreFollow: () => d.promise,
+    getExploreFollowState: async () => { checks++; return { isFollowing: true }; },
+    patchExplorePublicProfileFirstViewProfile: () => {},
+    publishExploreFollowSync377: async () => {},
   };
   for (const key of ['followBusyUid','followState','followingUids312','profile','socialNotice']) {
     ctx['set'+key[0].toUpperCase()+key.slice(1)] = setter(ctx,key);
   }
   const handler = loadHandler('toggleFollow',ctx);
+  const running = handler();
+  assert.equal(ctx.followState.isFollowing, true);
+  d.reject(new Error('follow rejected'));
+  await running;
+  assert.equal(checks, 1, 'FAILED_WRITE_ONE_BOUNDED_RECHECK');
+  assert.equal(ctx.followState.isFollowing, true);
+  assert.equal(ctx.profile.followerCount, 5);
+  assert.equal(ctx.followingUids312.has('target'), true);
+  assert.match(String(ctx.socialNotice), /follow rejected/);
+  assert.equal(ctx.followBusyUid, '');
+  ctx.readPendingExploreFollowIntents380 = () => [{ targetUid: 'target' }];
   await handler();
-  assert.equal(ctx.followState.isFollowing,false);
-  assert.equal(ctx.profile.followerCount,5,'public target count must not drop before final settlement');
-  assert.equal(ctx.followingUids312.has('target'),false);
-  ctx.queued.onError({
-    viewerUid:'viewer', targetUid:'target', desiredFollowing:false,
-    baseFollowing:true, baseTargetFollowerCount:5, baseTargetFollowingCount:2,
-    baseActorFollowingCount:3,
-    error:new Error('follow rejected'),
-  });
-  assert.equal(ctx.followState.isFollowing,true);
-  assert.equal(ctx.profile.followerCount,5);
-  assert.equal(ctx.followingUids312.has('target'),true);
-  assert.match(String(ctx.socialNotice||''),/follow rejected|실패/);
+  assert.match(ctx.socialNotice, /이전 팔로우 변경/);
 }
-console.log('APP356_EXPLORE_FOLLOW_IMMEDIATE_ROLLBACK=PASS');
+console.log('APP647_EXPLORE_FOLLOW_CANONICAL_ONLY_DUPLICATE_FAILURE=PASS');
 
 const collections = ['tracks','popularTracks','curatedTracks307','managedCuratedTracks307','profileTracks','profileLikedTracks'];
 function publicationContext(d, privateConfirm=false) {

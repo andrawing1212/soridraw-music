@@ -1974,6 +1974,8 @@ export default function ExplorePage() {
   const [profileError, setProfileError] = useState('');
   const [followState, setFollowState] = useState<ExploreFollowState | null>(null);
   const [followBusyUid, setFollowBusyUid] = useState('');
+  // A single canonical request at a time, including two taps in the same frame.
+  const followMutationInFlightRef = useRef(false);
   const activeProfileUidRef = useRef('');
   activeProfileUidRef.current = profile?.uid || profileUid || '';
   const followBusy = Boolean(profile?.uid && followBusyUid === profile.uid);
@@ -3466,7 +3468,7 @@ export default function ExplorePage() {
 
         if (user && user.uid !== nextProfile.uid) {
           try {
-            const nextFollowState = await getExploreFollowState(user, nextProfile.uid);
+            const nextFollowState = await getExploreFollowState(user, nextProfile.uid, true);
             if (!cancelled) {
               const pending525=readPendingExploreFollowIntents380(user.uid)
                 .find(row=>row.targetUid===nextProfile.uid);
@@ -3480,7 +3482,10 @@ export default function ExplorePage() {
             }
           } catch (reason) {
             console.warn('Explore follow state load failed:', reason);
-            if (!cancelled) setFollowState(null);
+            if (!cancelled) {
+              setFollowState(null);
+              setSocialNotice('팔로우 상태를 확인하지 못했습니다. 새로고침 후 다시 시도해 주세요.');
+            }
           }
         } else {
           setFollowState(null);
@@ -4120,10 +4125,14 @@ export default function ExplorePage() {
           readExploreProfileConnectionLastServerAt528(targetUid, direction),
         )
       : 0;
+    // With cross-account push intentionally OFF, a newly opened own-follower
+    // list must check the canonical page once. Re-clicks inside the same open
+    // modal still use the existing 120-second cost guard.
     const refreshOwn523 = ownFollowers523 &&
-      shouldRefreshOwnerFollowersOnOpen528(
-        lastCheck523, Date.now(), OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523,
-      );
+      (profileConnectionsOpen376 !== 'followers' ||
+        shouldRefreshOwnerFollowersOnOpen528(
+          lastCheck523, Date.now(), OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523,
+        ));
     if (cached) {
       setProfileConnectionsItems376(cached.items);
       setProfileConnectionsNextCursor376(cached.nextCursor);
@@ -4481,253 +4490,83 @@ export default function ExplorePage() {
     }
     const targetUid = profile.uid;
     const viewerUid = user.uid;
-    if (viewerUid === targetUid) return;
-
-    const previousMembership380 = Boolean(followState?.isFollowing);
-    const nextShouldFollow380 = !previousMembership380;
-    const relationDelta380 = Number(nextShouldFollow380) - Number(previousMembership380);
-    const previousProfile380 = profile;
-    const previousViewerProfile380 = readCachedExplorePublicProfile(viewerUid);
-    const exactActorBefore380 =
-      readExploreProfileConnectionExactCount379(viewerUid, 'following')
-      ?? readExploreFollowingExactCount379(viewerUid);
-    const cachedActorBefore380 = Number(previousViewerProfile380?.followingCount);
-    const actorBefore380 = exactActorBefore380 !== null
-      ? exactActorBefore380
-      : Number.isFinite(cachedActorBefore380)
-        ? Math.max(0, Math.floor(cachedActorBefore380))
-        : null;
-    const canonicalTargetFollowerCount380 = Math.max(
-      0,
-      Math.floor(Number(previousProfile380.followerCount || 0)),
-    );
-    const canonicalTargetFollowing380 = Math.max(
-      0,
-      Math.floor(Number(previousProfile380.followingCount || 0)),
-    );
-    const optimisticTargetFollowerCount525=computeFollowTargetDisplay525(
-      canonicalTargetFollowerCount380,previousMembership380,nextShouldFollow380,
-    );
-
-    // app380: local-first. Paint and patch only this device immediately. The
-    // visible Follow/Unfollow uses immediate canonical settlement; only the
-    // non-immediate legacy fallback waits for its trailing 8-second window.
-    patchExploreFollowLocalState377(
-      viewerUid,
-      targetUid,
-      nextShouldFollow380,
-      previousProfile380,
-      { deferTargetFollowers: true },
-    );
-    const exactActorAfter380 =
-      readExploreProfileConnectionExactCount379(viewerUid, 'following')
-      ?? readExploreFollowingExactCount379(viewerUid);
-    const optimisticActorFollowing380 = exactActorAfter380 !== null
-      ? exactActorAfter380
-      : actorBefore380 === null
-        ? null
-        : Math.max(0, actorBefore380 + relationDelta380);
-
-    setFollowState({
-      isFollowing: nextShouldFollow380,
-      followerCount: optimisticTargetFollowerCount525,
-      followingCount: canonicalTargetFollowing380,
-      ...(optimisticActorFollowing380 === null
-        ? {}
-        : { actorFollowingCount: optimisticActorFollowing380 }),
-    });
-    if (followingLoadedUid312 === viewerUid) {
-      setFollowingUids312((previous) => {
-        const next = new Set(previous);
-        if (nextShouldFollow380) next.add(targetUid);
-        else next.delete(targetUid);
-        return next;
-      });
+    if (viewerUid === targetUid || followMutationInFlightRef.current) return;
+    // A missing membership is not "not following": never send a blind PUT.
+    if (!followState) {
+      setSocialNotice('팔로우 상태를 확인한 후 다시 시도해 주세요.');
+      return;
     }
-    if (optimisticActorFollowing380 !== null) {
-      patchExplorePublicProfileFirstViewProfile(viewerUid, {
-        followingCount: optimisticActorFollowing380,
-      });
+    // Old-version pending mutations are restored by the existing one-time
+    // compatibility effect. Never race a new click against that pending write.
+    if (readPendingExploreFollowIntents380(viewerUid).some((item) => item.targetUid === targetUid)) {
+      setSocialNotice('이전 팔로우 변경을 확인 중입니다. 저장이 끝나면 다시 시도해 주세요.');
+      return;
     }
-    // Show the provisional target count on B's screen immediately. Do NOT
-    // persist or broadcast that count as canonical before the server commit.
-    setProfile((previous) => {
-      if(previous?.uid===targetUid)
-        return {...previous,followerCount:optimisticTargetFollowerCount525};
-      if(previous?.uid===viewerUid && optimisticActorFollowing380!==null)
-        return {...previous,followingCount:optimisticActorFollowing380};
-      return previous;
-    });
 
-    queueExploreFollowFinalState380({
-      viewerUid,
-      targetUid,
-      immediate: true,
-      baseFollowing: previousMembership380,
-      baseTargetFollowerCount: previousProfile380.followerCount,
-      baseTargetFollowingCount: previousProfile380.followingCount,
-      baseActorFollowingCount: actorBefore380,
-      desiredFollowing: nextShouldFollow380,
-      targetProfile: {
-        uid: targetUid,
-        nickname: previousProfile380.nickname,
-        avatarUrl: previousProfile380.avatarUrl,
-        handle: previousProfile380.handle,
-      },
-      commit: (following380) => setExploreFollow(
-        user,
-        targetUid,
-        following380,
-        previousProfile380,
-      ),
-      onBusy: (busy380) => {
-        if (auth.currentUser?.uid !== viewerUid) return;
-        setFollowBusyUid((current) => {
-          if (busy380) return activeProfileUidRef.current === targetUid ? targetUid : current;
-          return current === targetUid ? '' : current;
+    const requestedFollow = !followState.isFollowing;
+    const previousFollowing = followState.isFollowing;
+    followMutationInFlightRef.current = true;
+    setFollowBusyUid(targetUid);
+    setSocialNotice('');
+    try {
+      // One authenticated canonical PUT/DELETE. No new client batch, timer,
+      // provisional public count, owner DO, or extra cross-account delivery.
+      const confirmed = await setExploreFollow(user, targetUid, requestedFollow, profile);
+      if (auth.currentUser?.uid !== viewerUid) return;
+
+      patchExplorePublicProfileFirstViewProfile(targetUid, {
+        followerCount: confirmed.followerCount,
+        followingCount: confirmed.followingCount,
+      });
+      if (confirmed.actorFollowingCount !== undefined) {
+        patchExplorePublicProfileFirstViewProfile(viewerUid, {
+          followingCount: confirmed.actorFollowingCount,
         });
-      },
-      onSettled: (settlement380) => {
-        const confirmedMembership380 = Boolean(settlement380.result.isFollowing);
-        const canonicalDelta380 =
-          Number(confirmedMembership380) - Number(settlement380.baseFollowing);
-        const exactActorFollowing380 =
-          readExploreProfileConnectionExactCount379(viewerUid, 'following')
-          ?? readExploreFollowingExactCount379(viewerUid);
-        const resolvedActorFollowing380 = exactActorFollowing380 !== null
-          ? exactActorFollowing380
-          : settlement380.baseActorFollowingCount === null
-            ? null
-            : Math.max(
-              0,
-              Math.floor(settlement380.baseActorFollowingCount) + canonicalDelta380,
-            );
-        const resolvedTargetFollower380 = Math.max(
-          0,
-          Math.floor(settlement380.baseTargetFollowerCount) + canonicalDelta380,
-        );
-        const resolvedTargetFollowing380 = Math.max(
-          0,
-          Math.floor(settlement380.baseTargetFollowingCount),
-        );
-
-        patchExplorePublicProfileFirstViewProfile(targetUid, {
-          followerCount: resolvedTargetFollower380,
-          followingCount: resolvedTargetFollowing380,
+      }
+      // Explicitly opened lists alone may fetch updated pages; no background
+      // owner poll or entire-profile refresh is introduced.
+      profileConnectionsCache376Ref.current.delete(`${targetUid}:followers`);
+      profileConnectionsCache376Ref.current.delete(`${viewerUid}:following`);
+      if (followingLoadedUid312 === viewerUid) {
+        setFollowingUids312((current) => {
+          const updated = new Set(current);
+          if (confirmed.isFollowing) updated.add(targetUid);
+          else updated.delete(targetUid);
+          return updated;
         });
-        if (resolvedActorFollowing380 !== null) {
-          patchExplorePublicProfileFirstViewProfile(viewerUid, {
-            followingCount: resolvedActorFollowing380,
-          });
-        }
-
-        if (auth.currentUser?.uid === viewerUid) {
-          if (activeProfileUidRef.current === targetUid) {
-            setFollowState({
-              ...settlement380.result,
-              isFollowing: confirmedMembership380,
-              followerCount: resolvedTargetFollower380,
-              followingCount: resolvedTargetFollowing380,
-              ...(resolvedActorFollowing380 === null
-                ? {}
-                : { actorFollowingCount: resolvedActorFollowing380 }),
-            });
-          }
-          setFollowingUids312((previous) => {
-            const next = new Set(previous);
-            if (confirmedMembership380) next.add(targetUid);
-            else next.delete(targetUid);
-            return next;
-          });
-          setProfile((previous) => {
-            if (!previous) return previous;
-            if (previous.uid === targetUid) {
-              return {
-                ...previous,
-                followerCount: resolvedTargetFollower380,
-                followingCount: resolvedTargetFollowing380,
-              };
-            }
-            if (previous.uid === viewerUid && resolvedActorFollowing380 !== null) {
-              return { ...previous, followingCount: resolvedActorFollowing380 };
-            }
-            return previous;
-          });
-        }
-
-        // Other devices/users see only the final accepted state, never the
-        // intermediate local taps before the canonical server settlement.
-        const signalActorFollowing380 = resolvedActorFollowing380
-          ?? Math.max(0, Math.floor(Number(settlement380.result.actorFollowingCount || 0)));
+      }
+      if (activeProfileUidRef.current === targetUid) {
+        setFollowState(confirmed);
+        setProfile((current) => current?.uid === targetUid
+          ? { ...current, followerCount: confirmed.followerCount, followingCount: confirmed.followingCount }
+          : current);
+      }
+      // Preserve the existing actor-only same-account signal. It is not
+      // the retired cross-account owner notification pipeline.
+      if (confirmed.isFollowing !== previousFollowing) {
         void publishExploreFollowSync377(viewerUid, {
           targetUid,
-          following: confirmedMembership380,
-          actorFollowingCount: signalActorFollowing380,
-          targetFollowerCount: resolvedTargetFollower380,
-        }).catch((reason) => {
-          console.warn('[app380] follow final-state live sync deferred:', reason);
-        });
-      },
-      onDeferred: () => {
-        if (auth.currentUser?.uid === viewerUid && activeProfileUidRef.current === targetUid) {
-          setSocialNotice('팔로우 변경이 서버 보호 제한으로 대기 중입니다. 아직 저장되지 않았습니다.');
-        }
-      },
-      onError: (failure380) => {
-        // Hard failure: return only this local optimistic edge to the state that
-        // existed before the batch window. RATE_LIMITED is retried by the batch
-        // service and never reaches this rollback path.
-        patchExploreFollowLocalState377(
-          viewerUid,
-          targetUid,
-          failure380.baseFollowing,
-          previousProfile380,
-        );
-        patchExplorePublicProfileFirstViewProfile(targetUid, {
-          followerCount: failure380.baseTargetFollowerCount,
-          followingCount: failure380.baseTargetFollowingCount,
-        });
-        if (failure380.baseActorFollowingCount !== null) {
-          patchExplorePublicProfileFirstViewProfile(viewerUid, {
-            followingCount: failure380.baseActorFollowingCount,
-          });
-        }
-        if (auth.currentUser?.uid !== viewerUid) return;
-        if (activeProfileUidRef.current === targetUid) {
-          setFollowState({
-            isFollowing: failure380.baseFollowing,
-            followerCount: failure380.baseTargetFollowerCount,
-            followingCount: failure380.baseTargetFollowingCount,
-            ...(failure380.baseActorFollowingCount === null
-              ? {}
-              : { actorFollowingCount: failure380.baseActorFollowingCount }),
-          });
-        }
-        setFollowingUids312((previous) => {
-          const next = new Set(previous);
-          if (failure380.baseFollowing) next.add(targetUid);
-          else next.delete(targetUid);
-          return next;
-        });
-        setProfile((previous) => {
-          if (!previous) return previous;
-          if (previous.uid === targetUid) {
-            return {
-              ...previous,
-              followerCount: failure380.baseTargetFollowerCount,
-              followingCount: failure380.baseTargetFollowingCount,
-            };
-          }
-          if (previous.uid === viewerUid && failure380.baseActorFollowingCount !== null) {
-            return { ...previous, followingCount: failure380.baseActorFollowingCount };
-          }
-          return previous;
-        });
-        const reason = failure380.error;
-        console.error('Explore follow final-state commit failed:', reason);
-        setSocialNotice(reason instanceof Error ? reason.message : '팔로우 처리에 실패했어요.');
-      },
-    });
+          following: confirmed.isFollowing,
+          actorFollowingCount: confirmed.actorFollowingCount ?? 0,
+          targetFollowerCount: confirmed.followerCount,
+        }).catch((error) => console.warn('Explore same-account follow signal unavailable:', error));
+      }
+    } catch (error) {
+      if (auth.currentUser?.uid !== viewerUid) return;
+      // A transport failure may follow a committed write. Recheck once rather
+      // than asserting that the old local membership is canonical.
+      const latest = await getExploreFollowState(user, targetUid, true).catch(() => null);
+      if (latest && activeProfileUidRef.current === targetUid) {
+        setFollowState((current) => current ? { ...current, isFollowing: latest.isFollowing } : latest);
+      }
+      console.warn('Explore follow save failed:', error);
+      setSocialNotice(error instanceof Error ? error.message : '팔로우 변경을 저장하지 못했습니다.');
+    } finally {
+      followMutationInFlightRef.current = false;
+      if (auth.currentUser?.uid === viewerUid) {
+        setFollowBusyUid((current) => current === targetUid ? '' : current);
+      }
+    }
   };
 
   const closeMoreSheet = () => {
@@ -5770,11 +5609,11 @@ export default function ExplorePage() {
                       <button
                         type="button"
                         onClick={toggleFollow}
-                        disabled={followBusy}
+                        disabled={followBusy || !followState}
                         className={`soridraw-explore-follow-button${followState?.isFollowing ? ' is-following' : ''}`}
                       >
                         {followState?.isFollowing ? <UserCheck aria-hidden="true" /> : <UserPlus aria-hidden="true" />}
-                        {followState?.isFollowing ? '팔로잉' : '팔로우'}
+                        {followBusy ? '저장 중…' : !followState ? '상태 확인 중…' : followState.isFollowing ? '팔로잉' : '팔로우'}
                       </button>
                     )}
                   </div>

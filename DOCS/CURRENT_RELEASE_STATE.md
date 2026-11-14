@@ -1,3 +1,13 @@
+## CURRENT — APP660 모든 로그인 사용자 팔로우 실시간 알림 PREVIEW 서버·Hosting 배포 PASS / A↔B 실기기 HOLD (2026-11-14 UTC)
+
+- **승인 목표:** 모든 로그인 사용자에게 서버에서 확정된 팔로우·취소 변경만 소유자별 DO→Functions→RTDB의 작은 변경 신호로 전달. 불필요한 D1 폴링·전체 조회·방문 반복 쓰기 금지. A 단일 카나리 시험은 최종 제품 범위가 아님.
+- **서버 성공:** [Actions #43616355219](https://github.com/andrawing1212/soridraw-music/actions/runs/43616355219) SUCCESS. 기존 Functions 3개 `verifyOwnerFollowEpoch547Candidate`, `publishExploreOwnerFollower542`, `enrollOwnerFollow544Candidate`의 활성 소스가 정확히 일치해 **재배포 없이 재사용 PASS**. Worker 2개 각각 exact module SHA·기존 바인딩·runtime·PREVIEW 범위 검증 후 활성화 PASS: Explore `a2e6390d-c879-4e31-83e3-dee8046cb6ed`, 소유자 DO `142e7005-cf9c-4cc7-88fc-a786a8d35058`. 보호된 TEST/PROD Worker 변경 없음 PASS. 이전 `02576623-2172-4922-85b8-3f08a5216653`, `e679a602-44fb-4b4d-9e4d-7878c00b68c3`는 복구 기준.
+- **중단 원인과 최소 수정:** [PR #1034](https://github.com/andrawing1212/soridraw-music/pull/1034)에서 이미 올라간 비활성 Explore 버전 재사용. [PR #1036](https://github.com/andrawing1212/soridraw-music/pull/1036)은 모듈 개수 변수에 배열을 덮어써 항상 실패한 배포 검사를 해결. [Actions #43616076442](https://github.com/andrawing1212/soridraw-music/actions/runs/43616076442) GET-only 차이 확인 후 [PR #1039](https://github.com/andrawing1212/soridraw-music/pull/1039)는 비활성 버전에서 Cloudflare가 생략하는 `migration_tag`만 메타데이터 비교에서 허용하고 날짜·사용 모델·다른 런타임 항목은 엄격히 확인. 새로운 마이그레이션·원본 데이터 변경 없음.
+- **Hosting 성공:** [PR #1041](https://github.com/andrawing1212/soridraw-music/pull/1041) → [Actions #43616631091](https://github.com/andrawing1212/soridraw-music/actions/runs/43616631091) SUCCESS: `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`, `TEST_PRODUCTION_UNCHANGED=PASS`. 실제 배포 소스 SHA `87ce0a771d72ec37880ddf3447ddb2f728920aed`. 비승인 공유 Rules·D1/R2·Auth/IAM·사용자 데이터/TEST/PRODUCTION 변경 없음.
+- **실사용 HOLD — 사용자에게 테스트 요청 완료:** 일반 `https://preview.soridraw.com`에서 A→B 팔로우·취소가 B의 PC/모바일 자기 프로필 숫자를 모달/새로고침 없이 갱신하는지, B→A 역방향 동일한지, 목록·숫자가 정확하고 기존 `소울포스 뮤직` 표시 문제 재발이 없는지 확인 필요. 서버/Hosting PASS를 실제 PC·모바일 PASS로 보고 금지. 실패하면 그 방향만 근거 기반으로 수정하고 테스트 재요청. 이미 성공한 Functions·Worker 배포 재실행 금지(새 실패/변경 근거가 있는 경우만).
+
+---
+
 ## CURRENT — APP660 PREVIEW 전체 로그인 소유자 실시간 팔로우 준비 / 서버 배포·실사용 대기 (2026-11-14 UTC)
 
 - 현재 디렉터 승인은 모든 로그인 사용자의 PREVIEW 소유자 알림까지 확장. 이전 한 계정 제한은 최종 목표가 아님. TEST/PRODUCTION 배포·IAM 확대·원본 일괄 변경 금지.

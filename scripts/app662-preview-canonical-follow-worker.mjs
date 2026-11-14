@@ -68,7 +68,7 @@ async function run(){
  const old=await snapshot(ACTIVE);
  const main=old.modules.find(m=>m.name==='preview-entry.mjs');
  check(main,'MAIN_BUNDLE');
- const patched=patchActiveProfileConnections661(bytes(main).toString('utf8'));
+ const patched=patchSettledCanonicalFollowAck662(bytes(main).toString('utf8'));
  // Syntax-check the exact real module without invoking Cloudflare bindings.
  const directory=mkdtempSync(join(tmpdir(),'app662-'));
  try {
@@ -108,7 +108,7 @@ async function run(){
  try{
   await api('POST','workers/scripts/'+EX+'/deployments',
    {strategy:'percentage',versions:afterPreview(next),
-    annotations:{'workers/message':'APP662 PREVIEW bounded follow list fallback'}});
+    annotations:{'workers/message':'APP662 PREVIEW settled canonical actor-following ACK'}});
   activated=true;
   check(norm(await deployed(EX))===norm(afterPreview(next)),'ACTIVATED_VERSION');
   await verifyStage(next,old,modules);
@@ -127,7 +127,7 @@ async function run(){
  }
  writeFileSync('app662-worker-result.json',JSON.stringify({status:'PASS',source_parent:process.env.APP662_APPROVED_PARENT,
   previous:ACTIVE,active:next,owner:OW_ACTIVE,changedModules:['preview-entry.mjs']}));
- console.log('APP662_PREVIEW_WORKER_PUBLIC_R2_FALLBACK_ACTIVE='+next);
+ console.log('APP662_PREVIEW_WORKER_CANONICAL_ACK_ACTIVE='+next);
  console.log('APP662_TEST_PRODUCTION_OWNER_DATA_UNCHANGED=PASS');
 }
 run().catch(error=>{console.error(String(error?.message||error).slice(0,1000));process.exitCode=2});

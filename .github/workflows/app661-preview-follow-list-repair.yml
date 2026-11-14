@@ -1,0 +1,71 @@
+name: SORIDRAW APP661 PREVIEW public follow list repair
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/lib/profile-connections-661.mjs'
+      - 'scripts/verify-661-profile-list-r2-fallback.mjs'
+      - 'scripts/app661-preview-public-list-worker.mjs'
+      - '.github/workflows/app661-preview-follow-list-repair.yml'
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/app661-preview-follow-list-repair.trigger'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app661-preview-follow-list-repair
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ github.event.pull_request.head.sha }}",persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: |
+          set -euo pipefail
+          node --check scripts/lib/profile-connections-661.mjs
+          node --check scripts/app661-preview-public-list-worker.mjs
+          node scripts/verify-661-profile-list-r2-fallback.mjs
+  release:
+    if: github.event_name == 'push' && github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ github.sha }}",fetch-depth: 3,persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Exact director-authorized PREVIEW-only release trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/preview
+          test "$(git diff --name-only HEAD^ HEAD)" = '.deploy/app661-preview-follow-list-repair.trigger'
+          f=.deploy/app661-preview-follow-list-repair.trigger
+          grep -Fxq 'approval=director_20261114_fix_follow_number_and_missing_public_cards' "$f"
+          grep -Fxq "source_parent=$(git rev-parse HEAD^)" "$f"
+          grep -Fxq 'old_worker=a2e6390d-c879-4e31-83e3-dee8046cb6ed' "$f"
+          grep -Fxq 'owner_worker_unchanged=142e7005-cf9c-4cc7-88fc-a786a8d35058' "$f"
+          grep -Fxq 'scope=one_preview_worker_one_module_only' "$f"
+          grep -Fxq 'no_shared_data_or_test_prod_change=true' "$f"
+          echo "APP661_APPROVED_PARENT=$(git rev-parse HEAD^)" >> "$GITHUB_ENV"
+          node scripts/verify-661-profile-list-r2-fallback.mjs
+      - name: Preflight active Worker and protect all other environments
+        run: node scripts/app661-preview-public-list-worker.mjs --preflight
+      - name: Deploy one exact changed PREVIEW Worker module
+        run: node scripts/app661-preview-public-list-worker.mjs --apply-once
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app661-preview-worker-result
+          path: app661-worker-result.json
+          if-no-files-found: ignore
+          retention-days: 7

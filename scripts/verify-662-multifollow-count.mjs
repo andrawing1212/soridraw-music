@@ -43,3 +43,17 @@ assert.match(social,/actorCountVerified662: row\?\.followProtocol===354 && row\?
 console.log('APP662_CANONICAL_1_TO_N_FOLLOW_COUNTS_BEAT_STALE_DELTA=PASS');
 console.log('APP662_SIGNED_TARGET_AND_ACTOR_ACK_ZERO_AND_DEFERRED_BOUNDARY=PASS');
 console.log('APP662_RETAINED_SAME_ACCOUNT_SIGNAL_ORDERING=PASS');
+
+// APP664: the older resumed batch path must not announce stale device-cache
+// guesses to other devices, and pending opposite clicks must rebase on the
+// exact 1:N counts returned by their preceding canonical settlement.
+const batch=readFileSync('src/services/exploreFollowBatchService380.ts','utf8');
+assert.match(client,/confirmed380 !== settlement380\.baseFollowing &&[\s\S]*?countVerified661===true &&[\s\S]*?actorCountVerified662===true/);
+assert.match(client,/confirmed\.countVerified661===true &&[\s\S]*?confirmed\.actorCountVerified662===true/);
+assert.match(client,/if \(canonical\?\.countVerified661===true\)/);
+assert.match(client,/if \(canonical\?\.actorCountVerified662===true && actorFollowingCount !== null\)/);
+assert.match(batch,/current\.baseTargetFollowerCount =[\s\S]*?result\.countVerified661===true/);
+assert.match(batch,/current\.baseTargetFollowingCount=result\.followingCount/);
+assert.match(batch,/current\.baseActorFollowingCount=Number\(result\.actorFollowingCount\)/);
+console.log('APP664_UNVERIFIED_DEFERRED_AND_IMMEDIATE_CROSS_DEVICE_COUNTS_BLOCKED=PASS');
+console.log('APP664_QUEUED_OPPOSITE_CLICK_REBASES_ON_REAL_1_TO_N_COUNTS=PASS');

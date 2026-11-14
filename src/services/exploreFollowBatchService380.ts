@@ -283,16 +283,25 @@ export const flushExploreFollowPair380 = async (key: string): Promise<void> => {
       const canonical = Boolean(result.isFollowing);
       const delta = Number(canonical) - Number(entry.baseFollowing);
       current.baseFollowing = canonical;
-      current.baseTargetFollowerCount = Math.max(
-        0,
-        safeCount380(entry.baseTargetFollowerCount) + delta,
-      );
-      if (entry.baseActorFollowingCount !== null) {
-        current.baseActorFollowingCount = Math.max(
-          0,
-          safeCount380(entry.baseActorFollowingCount) + delta,
+      // APP664: the next opposite click must start from the *settled*
+      // 1:N R2 totals. Old local +/- deltas are provisional only.
+      current.baseTargetFollowerCount =
+        result.countVerified661===true && Number.isSafeInteger(result.followerCount) &&
+        result.followerCount>=0 && result.followerCount<=1_000_000_000
+          ? result.followerCount
+          : Math.max(0, safeCount380(entry.baseTargetFollowerCount)+delta);
+      if (result.countVerified661===true && Number.isSafeInteger(result.followingCount) &&
+          result.followingCount>=0 && result.followingCount<=1_000_000_000)
+        current.baseTargetFollowingCount=result.followingCount;
+      if (result.actorCountVerified662===true &&
+          Number.isSafeInteger(result.actorFollowingCount) &&
+          Number(result.actorFollowingCount)>=0 &&
+          Number(result.actorFollowingCount)<=1_000_000_000)
+        current.baseActorFollowingCount=Number(result.actorFollowingCount);
+      else if (entry.baseActorFollowingCount!==null)
+        current.baseActorFollowingCount=Math.max(
+          0,safeCount380(entry.baseActorFollowingCount)+delta
         );
-      }
       current.inflight = false;
       current.notBefore = 0;
       persistEntry380(current);

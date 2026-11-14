@@ -30,7 +30,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REF" = refs/heads/preview
           python3 - <<'PY'
-          import json,os,re,subprocess,tempfile,urllib.request,zipfile
+          import json,os,re,subprocess,tempfile,urllib.request,urllib.error,zipfile
           from pathlib import Path
           A='e1a30fc9ef497fda1d34f4ab3dc1da45'
           PROJECT='soridraw-app-866a5'
@@ -94,6 +94,12 @@ jobs:
               missing=sorted(set(wanted)-granted)
               print('APP654_IAM_'+label+'_MISSING='+(','.join(missing) or 'NONE'))
               if missing:issues.append('IAM_'+label)
+            except urllib.error.HTTPError as error:
+              try: detail=json.load(error).get('error',{})
+              except Exception: detail={}
+              print('APP654_IAM_'+label+'_HTTP='+str(error.code))
+              print('APP654_IAM_'+label+'_ERROR='+str(detail.get('message','UNKNOWN'))[:1200])
+              issues.append('IAM_CHECK_'+label)
             except Exception as error:
               print('APP654_IAM_'+label+'_CHECK_HOLD='+type(error).__name__)
               issues.append('IAM_CHECK_'+label)
@@ -146,9 +152,11 @@ jobs:
               all_flags.append(flag)
               print('APP654_FN_'+name+'_DEPLOYED_COMPILED='+flag)
           print('APP654_ALL_THREE_FUNCTIONS_COMPILED_ON='+str(all(x=='TRUE' for x in all_flags)))
+          permissions('PROJECT_ACT_AS','https://cloudresourcemanager.googleapis.com/v1/projects/'+PROJECT+':testIamPermissions',
+            ['iam.serviceAccounts.actAs'])
           for account in sorted(runtime_accounts):
             print('APP654_RUNTIME_ACCOUNT='+account)
-            permissions('RUNTIME_ACT_AS','https://iam.googleapis.com/v1/projects/-/serviceAccounts/'+account+':testIamPermissions',
+            permissions('RUNTIME_ACT_AS','https://iam.googleapis.com/v1/projects/'+PROJECT+'/serviceAccounts/'+account+':testIamPermissions',
               ['iam.serviceAccounts.actAs'])
           for script in ['soridraw-explore-test','soridraw-explore-api']:
             versions=(get('workers/scripts/'+script+'/deployments?per_page=1').get('deployments') or [{}])[0].get('versions') or []

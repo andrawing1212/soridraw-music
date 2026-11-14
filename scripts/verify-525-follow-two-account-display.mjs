@@ -75,8 +75,8 @@ assert.doesNotMatch(page,/window\.addEventListener\('focus',onOwnFollowersFocus5
 assert.match(social,/forceServer \? 'no-store' : 'default'/);
 assert.match(social,/if \(!normalizedCursor && !forceServer\)/);
 
-const ownSource = service.slice(service.indexOf('export const getExploreOwnProfileFollowCounts = async ('),
-  service.indexOf('export const setExploreFollow = async ('));
+const ownSource = social.slice(social.indexOf('export const getExploreOwnProfileFollowCounts = async ('),
+  social.indexOf('export const setExploreFollow = async ('));
 assert.match(ownSource,/requestAuthed\(/);
 assert.match(ownSource,/follow-state/);
 assert.match(ownSource,/cache: 'no-store'/);

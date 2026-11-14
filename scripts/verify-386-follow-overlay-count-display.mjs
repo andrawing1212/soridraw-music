@@ -26,18 +26,18 @@ assert.ok(toggleStart >= 0 && toggleEnd > toggleStart);
 const toggle = page.slice(toggleStart, toggleEnd);
 
 // APP647: settled relation is trusted, compatibility response counts are not.
-assert.match(toggle, /const relationDelta = Number\(confirmed\.isFollowing\) - Number\(previousFollowing\)/);
+assert.match(toggle, /const delta = Number\(following\) - Number\(previousFollowing\)/);
 assert.match(toggle, /readExploreProfileConnectionExactCount379\(targetUid, 'followers'\)/);
 assert.match(toggle, /readExploreProfileConnectionExactCount379\(viewerUid, 'following'\)/);
 assert.match(toggle, /readExploreFollowingExactCount379\(viewerUid\)/);
-assert.match(toggle, /resolvedTargetFollower = Math\.max\(0, safeCount\(previousTargetCount\) \+ relationDelta\)/);
-assert.match(toggle, /resolvedTargetFollowing = safeCount\(previousTargetFollowingCount\)/);
-assert.match(toggle, /targetFollowerCount: resolvedTargetFollower/);
+assert.match(toggle, /const followerCount = Math\.max\(0, safeCount\(previousTargetCount\) \+ delta\)/);
+assert.match(toggle, /const followingCount = safeCount\(previousTargetFollowingCount\)/);
+assert.match(toggle, /targetFollowerCount: settled\.followerCount/);
 assert.doesNotMatch(toggle, /confirmed\.(?:followerCount|followingCount|actorFollowingCount)/,
   'do not render stale legacy compatibility counters');
-assert.ok(toggle.indexOf('await setExploreFollow') <
-  toggle.indexOf('patchExplorePublicProfileFirstViewProfile(targetUid'),
-  'published counters must wait for canonical success');
+assert.match(toggle,/if \(persistConfirmed\) \{[\s\S]*?patchExplorePublicProfileFirstViewProfile\(targetUid/);
+assert.match(toggle,/paint\(requestedFollow, false\)/);
+assert.match(toggle,/const confirmed = await setExploreFollow/);
 
 const ownProfileStart = page.indexOf('    const applyProfileFirstView = ');
 const ownProfileEnd = page.indexOf('\n\n    const retainedPublicationSignal357', ownProfileStart);
@@ -65,3 +65,10 @@ console.log('APP379_TARGET_FOLLOWER_COUNT_DELTA=PASS');
 console.log('APP379_TARGET_FOLLOWING_COUNT_PRESERVED=PASS');
 console.log('APP379_CROSS_DEVICE_COUNT_RECONCILIATION=PASS');
 console.log('APP379_NO_EXTRA_SERVER_READ_FOR_COUNT_FIX=PASS');
+// A failed browser Follow 500 was traced to the Worker mistaking an
+// AFTER INSERT notification trigger for a second changed relation row.
+// This is source-only; no Cloudflare scripts, D1 tables or users are touched.
+import {execFileSync} from 'node:child_process';
+execFileSync('node',['scripts/app650-follow-primary-rowcount.mjs','--self-test'],{stdio:'inherit'});
+execFileSync('python3',['scripts/verify-650-follow-primary-rowcount.py'],{stdio:'inherit'});
+

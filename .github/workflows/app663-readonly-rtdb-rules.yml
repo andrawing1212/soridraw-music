@@ -1,0 +1,68 @@
+name: SORIDRAW APP663 read-only active RTDB rules comparison
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/lib/follow-profile-canonical-663.mjs'
+      - 'scripts/verify-663-follow-profile-contract.mjs'
+      - '.github/workflows/app663-readonly-rtdb-rules.yml'
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/app663-readonly-rtdb-rules.yml']
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: "${{ github.event.pull_request.head.sha || github.sha }}"
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: node scripts/verify-663-follow-profile-contract.mjs
+  inventory:
+    if: github.event_name == 'push' && github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Only GET currently deployed RTDB rules; never read user records
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,subprocess,urllib.request,hashlib,pathlib
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          assert token
+          base='https://soridraw-app-866a5-default-rtdb.firebaseio.com'
+          req=urllib.request.Request(base+'/.settings/rules.json',
+            headers={'Authorization':'Bearer '+token,'Accept':'application/json'})
+          with urllib.request.urlopen(req,timeout=40) as response:
+            assert response.status==200
+            active=json.load(response)
+          file=json.loads(pathlib.Path('database.rules.json').read_text())
+          assert isinstance(active,dict) and isinstance(active.get('rules'),dict)
+          rules=active['rules']
+          root=rules.get('publicSync',{})
+          privateOwner=rules.get('ownerFollowerSync532',{})
+          publicKeys=sorted(root.keys()) if isinstance(root,dict) else []
+          print('APP663_ACTIVE_RTDB_RULES_READ_ONLY=PASS')
+          print('APP663_ACTIVE_RTDB_RULES_SHA256='+hashlib.sha256(
+            json.dumps(active,sort_keys=True,separators=(',',':')).encode()).hexdigest())
+          print('APP663_LOCAL_FILE_EQUAL_ACTIVE='+str(active==file))
+          print('APP663_OWNER_PRIVATE_RULE_PRESENT='+str(isinstance(privateOwner,dict) and bool(privateOwner)))
+          print('APP663_OWNER_RULE_PATHS='+','.join(sorted(privateOwner.keys())[:8]))
+          print('APP663_PUBLIC_SYNC_CHILD_KEYS='+','.join(publicKeys[:25]))
+          print('APP663_PUBLIC_FOLLOW_PATH_PRESENT='+str('exploreFollowProfiles663' in publicKeys))
+          print('APP663_LIVE_ROOT_RESTRICTED='+str(rules.get('.read') is False and rules.get('.write') is False))
+          print('APP663_GET_ONLY_NO_USER_DATA_NO_RULE_REPLACEMENT=PASS')
+          PY

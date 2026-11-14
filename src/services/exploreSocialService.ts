@@ -125,6 +125,7 @@ export type ExploreFollowState = {
   followerCount: number;
   followingCount: number;
   actorFollowingCount?: number;
+  countVerified661?: boolean;
 };
 
 export type ExploreProfileConnectionDirection = 'followers' | 'following';
@@ -136,13 +137,18 @@ export type ExploreProfileConnection = ExplorePublicProfile & {
 export type ExploreProfileConnectionPage = {
   items: ExploreProfileConnection[];
   nextCursor: string | null;
+  // A paged list is exact only if the Worker certified every effective edge.
+  countComplete?: boolean;
+  hasUnresolvedProfiles?: boolean;
 };
 
 // SORIDRAW_EXPLORE_CONNECTION_PERSISTENT_CACHE_377_20261007
 // Relation pages are change-driven. A browser refresh is not a relation change,
 // so keep the first bounded page device-local until a real follow mutation/signal
 // invalidates only the two affected directions.
-const EXPLORE_PROFILE_CONNECTION_CACHE_SCHEMA_VERSION_377 = 1;
+// APP661: old pages could silently omit an R2-missing profile. Expire on
+// explicit list access, never on ordinary profile/page entry.
+const EXPLORE_PROFILE_CONNECTION_CACHE_SCHEMA_VERSION_377 = 2;
 const EXPLORE_PROFILE_CONNECTION_CACHE_SOURCE_TYPE_377 = 'explore_profile_connections';
 const EXPLORE_PROFILE_CONNECTION_DIAGNOSTIC_PATH_377 = '/v1/profiles/:id/connections';
 const EXPLORE_FOLLOW_CONNECTION_CARD_CACHE_SCHEMA_VERSION_378 = 1;
@@ -189,6 +195,8 @@ const readProfileConnectionCache377 = (
   return {
     items: data.items.map((item) => ({ ...item })),
     nextCursor: String(data.nextCursor || '').trim() || null,
+    countComplete: data.countComplete === true,
+    hasUnresolvedProfiles: data.hasUnresolvedProfiles === true,
   };
 };
 
@@ -231,7 +239,7 @@ export const readExploreProfileConnectionExactCount379 = (
   direction: ExploreProfileConnectionDirection,
 ): number | null => {
   const cached = readProfileConnectionCache377(profileUid, direction);
-  if (!cached || cached.nextCursor) return null;
+  if (!cached || cached.nextCursor || cached.countComplete !== true) return null;
   return cached.items.length;
 };
 
@@ -259,6 +267,8 @@ const writeProfileConnectionCache377 = (
     data: {
       items: page.items.map((item) => ({ ...item })),
       nextCursor: page.nextCursor,
+      countComplete: page.countComplete === true,
+      hasUnresolvedProfiles: page.hasUnresolvedProfiles === true,
     },
   });
 };
@@ -381,6 +391,9 @@ const patchExploreFollowingConnectionCache378 = (
   writeProfileConnectionCache377(viewer, 'following', {
     items,
     nextCursor: page.nextCursor,
+    // Local optimistic patches never certify canonical completeness.
+    countComplete: false,
+    hasUnresolvedProfiles: false,
   });
   return true;
 };
@@ -606,12 +619,18 @@ export const getExploreProfileConnections = async (
     forceServer ? 'no-store' : 'default',
   );
   const rows = Array.isArray(payload?.data?.items) ? payload.data.items : [];
+  const items: ExploreProfileConnection[] = rows.map((row: any) => ({
+    ...normalizeProfile(row, String(row?.uid || '').trim()),
+    followedAt: Math.max(0, Number(row?.followedAt ?? row?.followed_at ?? 0) || 0),
+  })).filter((row: ExploreProfileConnection) => Boolean(row.uid));
+  const nextCursor = String(payload?.data?.nextCursor || '').trim() || null;
   const page: ExploreProfileConnectionPage = {
-    items: rows.map((row: any) => ({
-      ...normalizeProfile(row, String(row?.uid || '').trim()),
-      followedAt: Math.max(0, Number(row?.followedAt ?? row?.followed_at ?? 0) || 0),
-    })).filter((row: ExploreProfileConnection) => Boolean(row.uid)),
-    nextCursor: String(payload?.data?.nextCursor || '').trim() || null,
+    items,
+    nextCursor,
+    countComplete: payload?.data?.countComplete === true &&
+      !nextCursor && items.length === rows.length,
+    hasUnresolvedProfiles: payload?.data?.hasUnresolvedProfiles === true ||
+      items.length !== rows.length,
   };
   if (!normalizedCursor && isCurrentProfileConnectionGeneration548(cacheKey548, requestGeneration548)) {
     writeProfileConnectionCache377(normalizedRef, normalizedDirection, page);
@@ -660,10 +679,17 @@ export const getExploreFollowState = async (user: User, uid: string, forceServer
 
   const payload = await requestAuthed(user, `/v1/profiles/${encodeURIComponent(normalizedUid)}/follow-state`, forceServer ? { cache: 'no-store' } : {});
   const row = payload?.data || {};
-  const result = {
+  const rawFollowers = row?.followerCount ?? row?.follower_count;
+  const rawFollowing = row?.followingCount ?? row?.following_count;
+  const result: ExploreFollowState = {
     isFollowing: Boolean(row?.isFollowing ?? row?.following ?? row?.followed),
-    followerCount: toCount(row?.followerCount ?? row?.follower_count),
-    followingCount: toCount(row?.followingCount ?? row?.following_count),
+    followerCount: toCount(rawFollowers),
+    followingCount: toCount(rawFollowing),
+    countVerified661: forceServer &&
+      Number.isSafeInteger(Number(rawFollowers)) && Number(rawFollowers) >= 0 &&
+      Number.isSafeInteger(Number(rawFollowing)) && Number(rawFollowing) >= 0 &&
+      rawFollowers !== null && rawFollowers !== undefined &&
+      rawFollowing !== null && rawFollowing !== undefined,
   };
   rememberExploreFollowState(user.uid, normalizedUid, result.isFollowing);
   return result;

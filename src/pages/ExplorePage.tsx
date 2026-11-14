@@ -1991,7 +1991,10 @@ export default function ExplorePage() {
   const [profileConnectionsLoading376, setProfileConnectionsLoading376] = useState(false);
   const [profileConnectionsLoadingMore376, setProfileConnectionsLoadingMore376] = useState(false);
   const [profileConnectionsError376, setProfileConnectionsError376] = useState('');
-  const profileConnectionsCache376Ref = useRef<Map<string, { items: ExploreProfileConnection[]; nextCursor: string | null }>>(new Map());
+  const [profileConnectionsIncomplete661,setProfileConnectionsIncomplete661] = useState(false);
+  // Exact authenticated one-target GET counters outlive a stale R2 recheck.
+  const verifiedVisitedProfileUid661Ref = useRef('');
+  const profileConnectionsCache376Ref = useRef<Map<string, { items: ExploreProfileConnection[]; nextCursor: string | null; countComplete?: boolean; hasUnresolvedProfiles?: boolean }>>(new Map());
   const profileConnectionsRequest376Ref = useRef(0);
   const ownFollowersLastCheck523Ref = useRef<Map<string, number>>(new Map());
   // APP657: a viewer's cached copy of SOMEONE ELSE's connections has no
@@ -3397,6 +3400,7 @@ export default function ExplorePage() {
     }
 
     let cancelled = false;
+    verifiedVisitedProfileUid661Ref.current = '';
     setProfileCollection('public');
     // 088: entering this user's own profile from Explore must not discard the
     // optimistic liked cards created moments earlier in the same page session.
@@ -3555,6 +3559,19 @@ export default function ExplorePage() {
                   pending525.baseTargetFollowerCount,
                   pending525.baseFollowing,pending525.desiredFollowing),
               } : nextFollowState);
+              // The existing authenticated GET already verifies the target
+              // count. Reuse it instead of a stale first-view R2 cache, with
+              // zero extra reads. Pending optimistic choices keep priority.
+              if(!pending525&&nextFollowState.countVerified661===true){
+                const exact661={
+                  followerCount:nextFollowState.followerCount,
+                  followingCount:nextFollowState.followingCount,
+                };
+                verifiedVisitedProfileUid661Ref.current=nextProfile.uid;
+                patchExplorePublicProfileFirstViewProfile(nextProfile.uid,exact661);
+                setProfile(previous=>previous?.uid===nextProfile.uid
+                  ?{...previous,...exact661}:previous);
+              }
             }
           } catch (reason) {
             console.warn('Explore follow state load failed:', reason);
@@ -3822,6 +3839,7 @@ export default function ExplorePage() {
             );
             setProfileConnectionsItems376(page377.items);
             setProfileConnectionsNextCursor376(page377.nextCursor);
+            setProfileConnectionsIncomplete661(page377.hasUnresolvedProfiles===true);
           })
           .catch((reason) => {
             if (request377 !== profileConnectionsRequest376Ref.current) return;
@@ -3884,7 +3902,19 @@ export default function ExplorePage() {
             : null;
           if(pending525!==null)
             displayRefreshedProfile379={...displayRefreshedProfile379,followerCount:pending525};
-          setProfile(displayRefreshedProfile379);
+          // APP661: a delayed public/R2 refresh cannot overwrite the already
+          // verified own account counters or one-target authenticated counts.
+          // Follow change events still update the current profile directly.
+          setProfile(previous=>{
+            if(!previous||previous.uid!==displayRefreshedProfile379.uid)
+              return displayRefreshedProfile379;
+            const confirmed661=previous.uid===user?.uid||
+              previous.uid===verifiedVisitedProfileUid661Ref.current;
+            if(!confirmed661)return displayRefreshedProfile379;
+            return {...displayRefreshedProfile379,
+              followerCount:previous.followerCount,
+              followingCount:previous.followingCount};
+          });
           setProfileTracks(overlayActorLikeCounts120(normalizedTracks));
         },
         onInvalidated: (message) => {
@@ -4192,6 +4222,7 @@ export default function ExplorePage() {
     profileConnectionsRequest376Ref.current += 1;
     setProfileConnectionsOpen376(null);
     setProfileConnectionsError376('');
+    setProfileConnectionsIncomplete661(false);
     setProfileConnectionsLoading376(false);
     setProfileConnectionsLoadingMore376(false);
   };
@@ -4202,6 +4233,7 @@ export default function ExplorePage() {
 
     setProfileConnectionsOpen376(direction);
     setProfileConnectionsError376('');
+    setProfileConnectionsIncomplete661(false);
     const key = profileConnectionCacheKey376(targetUid, direction);
     const cached = profileConnectionsCache376Ref.current.get(key);
     // B's unfollow reaches B's own RTDB channel, not A's. Only A's
@@ -4236,6 +4268,7 @@ export default function ExplorePage() {
     if (cached) {
       setProfileConnectionsItems376(cached.items);
       setProfileConnectionsNextCursor376(cached.nextCursor);
+      setProfileConnectionsIncomplete661(cached.hasUnresolvedProfiles===true);
       if (!forceConnections657) {
         setProfileConnectionsLoading376(false);
         return;
@@ -4261,9 +4294,10 @@ export default function ExplorePage() {
       if (refreshPublic657) publicConnectionsLastCheck657Ref.current.set(key, Date.now());
       setProfileConnectionsItems376(page.items);
       setProfileConnectionsNextCursor376(page.nextCursor);
-      // app377: a complete bounded relation page is exact authority for small
-      // profiles. Repair a stale cached count locally without another server read.
-      if (!page.nextCursor) {
+      setProfileConnectionsIncomplete661(page.hasUnresolvedProfiles===true);
+      // The Worker certifies every effective relation had a public card.
+      // An R2-missing row must not quietly reduce the displayed total.
+      if (!page.nextCursor && page.countComplete === true) {
         const exactCount377 = page.items.length;
         const exactPatch377 = direction === 'followers'
           ? { followerCount: exactCount377 }
@@ -4359,6 +4393,7 @@ export default function ExplorePage() {
                     profileConnectionsCache376Ref.current.set(ownerUid+':followers',page);
                     setProfileConnectionsItems376(page.items);
                     setProfileConnectionsNextCursor376(page.nextCursor);
+                    setProfileConnectionsIncomplete661(page.hasUnresolvedProfiles===true);
                     // Page length is never the canonical follower COUNT,
                     // especially when the followers list has further pages.
                   })
@@ -4450,6 +4485,7 @@ export default function ExplorePage() {
       profileConnectionsCache376Ref.current.set(key, next);
       setProfileConnectionsItems376(merged);
       setProfileConnectionsNextCursor376(page.nextCursor);
+      setProfileConnectionsIncomplete661(page.hasUnresolvedProfiles===true);
     } catch (reason) {
       console.warn('[app376] profile connections next page failed:', reason);
       setProfileConnectionsError376(
@@ -5633,6 +5669,11 @@ export default function ExplorePage() {
           </header>
 
           <div className="soridraw-explore-connections-body-376">
+            {profileConnectionsIncomplete661 && !profileConnectionsLoading376 && (
+              <div className="soridraw-explore-connections-state-376" role="status">
+                일부 공개 프로필 정보를 확인하지 못했습니다. 팔로우 숫자를 임의로 줄이지 않았습니다.
+              </div>
+            )}
             {profileConnectionsLoading376 ? (
               <div className="soridraw-explore-connections-state-376" role="status">
                 <Loader2 className="soridraw-explore-spinner" aria-hidden="true" />
@@ -5641,7 +5682,9 @@ export default function ExplorePage() {
             ) : profileConnectionsError376 && profileConnectionsItems376.length === 0 ? (
               <div className="soridraw-explore-connections-state-376">{profileConnectionsError376}</div>
             ) : profileConnectionsItems376.length === 0 ? (
-              <div className="soridraw-explore-connections-state-376">{emptyLabel}</div>
+              <div className="soridraw-explore-connections-state-376">
+                {profileConnectionsIncomplete661 ? '표시 가능한 사용자 정보가 없습니다.' : emptyLabel}
+              </div>
             ) : (
               <>
                 <div className="soridraw-explore-connections-list-376">

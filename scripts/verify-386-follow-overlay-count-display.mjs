@@ -15,7 +15,7 @@ assert.match(workerPatch, /actorFollowingCount: clampExploreSocialCount\(stats\?
 assert.match(workerPatch, /followerCount: clampExploreSocialCount\(stats\?\.following\?\.follower_count\)/);
 
 assert.match(social, /export const readExploreProfileConnectionExactCount379/);
-assert.match(social, /if \(!cached \|\| cached\.nextCursor\) return null;/);
+assert.match(social, /if \(!cached \|\| cached\.nextCursor \|\| cached\.countComplete !== true\) return null;/);
 assert.match(social, /export const readExploreFollowingExactCount379/);
 assert.match(social, /if \(!data\.complete\) return null;/);
 assert.match(social, /export const readExploreFollowMembership379/);

@@ -5,6 +5,11 @@ on:
     branches: [preview]
     paths:
       - 'src/services/exploreOwnerFollowerSync542.ts'
+      - 'src/services/exploreSocialService.ts'
+      - 'src/pages/ExplorePage.tsx'
+      - 'scripts/verify-377-follow-count-list-sync.mjs'
+      - 'scripts/verify-386-follow-overlay-count-display.mjs'
+      - 'scripts/verify-525-follow-two-account-display.mjs'
       - 'src/lib/ownerFollowCanaryTab634.ts'
       - 'functions/src/ownerFollow*.ts'
       - 'functions/src/exploreOwnerFollowerWebhook542.ts'

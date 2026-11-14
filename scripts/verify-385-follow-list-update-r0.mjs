@@ -20,8 +20,8 @@ assert.match(
 );
 assert.match(
   social,
-  /writeProfileConnectionCache377\(viewer, 'following', \{\s*items,\s*nextCursor: page\.nextCursor,\s*\}\);/,
-  'changed relation must rewrite only the existing local first-page cache',
+  /writeProfileConnectionCache377\(viewer, 'following', \{\s*items,\s*nextCursor: page\.nextCursor,[\s\S]*?countComplete: false,\s*hasUnresolvedProfiles: false,\s*\}\);/,
+  'changed relation updates the local first page but must not claim canonical completeness',
 );
 assert.match(social, /expiresAt: null/);
 assert.doesNotMatch(

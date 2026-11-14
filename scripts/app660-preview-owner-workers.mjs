@@ -2,7 +2,7 @@
 // Keep expected module COUNT distinct from the PATCHED module ARRAY.
 import {readFileSync,writeFileSync} from 'node:fs';
 import {isDeepStrictEqual} from 'node:util';
-import {hash660,patchExplore660,patchOwner660,patchEnrollment660} from './lib/owner-follow-general660.mjs';
+import {hash660,patchExplore660,patchOwner660,patchEnrollment660,sameStagedWorkerRuntime660} from './lib/owner-follow-general660.mjs';
 const A='e1a30fc9ef497fda1d34f4ab3dc1da45';
 const EX='soridraw-explore-preview',OW='soridraw-owner-follow-preview-candidate';
 const ZERO='6b13cde4-4a53-42d2-873f-361f7cf5a931';
@@ -55,7 +55,7 @@ async function verify(t,id,old,modules){
  for(const b of old.bindings)check(isDeepStrictEqual(map.get(b.name),b),'EXISTING_BINDING_CHANGED_'+b.name);
  for(const [name,value] of Object.entries(flags))check(map.get(name)?.type==='plain_text'&&map.get(name)?.text===value,'FLAGS');
  for(const m of modules){const after=next.modules.find(x=>x.name===m.name);check(after&&hash660(Buffer.from(after.content_base64,'base64'))===hash660(Buffer.from(m.content_base64,'base64')),'MODULE_HASH_'+m.name)}
- check(isDeepStrictEqual(next.meta.resources.script_runtime,old.meta.resources.script_runtime),'RUNTIME_CHANGED');
+ check(sameStagedWorkerRuntime660(old.meta.resources.script_runtime,next.meta.resources.script_runtime),'RUNTIME_CHANGED');
 }
 async function run(){
  check(['--apply-once','--preflight'].includes(process.argv[2]),'MODE');

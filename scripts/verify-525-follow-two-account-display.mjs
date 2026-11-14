@@ -33,14 +33,16 @@ assert.equal(api.pending('B','A'),null,'AFTER_SETTLEMENT_NO_PENDING_OVERLAY');
 
 const click=slice(page,'  const toggleFollow = async () => {',
  '  const closeMoreSheet = () => {');
-assert.match(click,/optimisticTargetFollowerCount525=computeFollowTargetDisplay525\(/);
-assert.match(click,/followerCount: optimisticTargetFollowerCount525/);
-assert.match(click,/previous\?\.uid===targetUid[\s\S]*?followerCount:optimisticTargetFollowerCount525/);
-assert.match(click,/queueExploreFollowFinalState380\(/);
-assert.match(click,/deferTargetFollowers: true/);
-assert.doesNotMatch(click.slice(0,click.indexOf('queueExploreFollowFinalState380')),
- /patchExplorePublicProfileFirstViewProfile\(targetUid/,
- 'NO_UNSETTLED_PUBLIC_CACHE_WRITES');
+assert.match(click,/await setExploreFollow\(user, targetUid, requestedFollow, profile\)/);
+assert.doesNotMatch(click,/queueExploreFollowFinalState380\(/);
+assert.match(click,/readPendingExploreFollowIntents380\(viewerUid\)/);
+assert.match(click,/followMutationInFlightRef\.current/);
+assert.match(click,/getExploreFollowState\(user, targetUid, true\)/);
+assert.ok(click.indexOf('await setExploreFollow') <
+  click.indexOf('patchExplorePublicProfileFirstViewProfile(targetUid'),
+  'NO_UNCONFIRMED_PUBLIC_COUNT');
+assert.match(page,/getExploreFollowState\(user, nextProfile\.uid, true\)/);
+assert.match(page,/disabled=\{followBusy \|\| !followState\}/);
 assert.match(page,/readPendingTargetFollowerCount525\(user\.uid,displayProfile379\.uid\)/);
 assert.match(page,/readPendingTargetFollowerCount525\(user\.uid,displayRefreshedProfile379\.uid\)/);
 
@@ -70,6 +72,6 @@ assert.doesNotMatch(page.slice(0,ownerBegin548)+page.slice(ownerEnd548),
 assert.doesNotMatch(page,/window\.addEventListener\('focus',onOwnFollowersFocus525\)/);
 assert.match(social,/forceServer \? 'no-store' : 'default'/);
 assert.match(social,/if \(!normalizedCursor && !forceServer\)/);
-console.log('APP525_ACTOR_B_INSTANT_FOLLOWER_COUNT_PENDING_RELOAD=PASS');
+console.log('APP647_ACTOR_B_CANONICAL_FOLLOW_COUNT_LEGACY_PENDING_PROTECTED=PASS');
 console.log('APP527_OWNER_A_EXPLICIT_ONLY_NO_FOCUS_LIST_READ=PASS');
 console.log('APP525_NO_BACKGROUND_POLL_NO_PRECOMMIT_PUBLIC_WRITE=PASS');

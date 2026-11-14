@@ -626,34 +626,39 @@ export const getExplorePublicProfileTracks = async (profileRef: string): Promise
   return Array.isArray(payload?.data?.items) ? payload.data.items : [];
 };
 
-export const getExploreFollowState = async (user: User, uid: string): Promise<ExploreFollowState> => {
+export const getExploreFollowState = async (user: User, uid: string, forceServer = false): Promise<ExploreFollowState> => {
   const normalizedUid = String(uid || '').trim();
   if (!normalizedUid) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
 
-  const cachedBundle = readExploreFollowCache(user.uid);
-  const cached = readCachedExploreFollowState(user.uid, normalizedUid, cachedBundle);
-  if (cached !== null) {
-    recordCloudflareLocalCacheHit(EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH, 'LOCAL HIT · 전체 팔로우 묶음');
-    return { isFollowing: cached, followerCount: 0, followingCount: 0 };
-  }
-
-  // An existing partial list needs only this missing target, not another list
-  // hydration that could reintroduce an older snapshot's complete flag.
-  const partialCache = !cachedBundle.complete && Object.keys(cachedBundle.states).length > 0;
-  if (!partialCache) {
-    try {
-      const bundle = await loadExploreFollowingBundle(user);
-      if (Object.prototype.hasOwnProperty.call(bundle.states, normalizedUid) || bundle.complete) {
-        const isFollowing = Boolean(bundle.states[normalizedUid]);
-        recordCloudflareLocalCacheHit(EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH, 'LOCAL RESOLVE · 팔로우 묶음 1회 로드');
-        return { isFollowing, followerCount: 0, followingCount: 0 };
-      }
-    } catch (bundleError) {
-      console.warn('[Explore follow] following bundle unavailable; using per-target recovery.', bundleError);
+  // The visible follow button needs the canonical state on a new profile visit.
+  // Other existing callers keep their local-first read behavior.
+  if (!forceServer) {
+    const cachedBundle = readExploreFollowCache(user.uid);
+    const cached = readCachedExploreFollowState(user.uid, normalizedUid, cachedBundle);
+    if (cached !== null) {
+      recordCloudflareLocalCacheHit(EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH, 'LOCAL HIT · 전체 팔로우 묶음');
+      return { isFollowing: cached, followerCount: 0, followingCount: 0 };
     }
+
+    // An existing partial list needs only this missing target, not another list
+    // hydration that could reintroduce an older snapshot's complete flag.
+    const partialCache = !cachedBundle.complete && Object.keys(cachedBundle.states).length > 0;
+    if (!partialCache) {
+      try {
+        const bundle = await loadExploreFollowingBundle(user);
+        if (Object.prototype.hasOwnProperty.call(bundle.states, normalizedUid) || bundle.complete) {
+          const isFollowing = Boolean(bundle.states[normalizedUid]);
+          recordCloudflareLocalCacheHit(EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH, 'LOCAL RESOLVE · 팔로우 묶음 1회 로드');
+          return { isFollowing, followerCount: 0, followingCount: 0 };
+        }
+      } catch (bundleError) {
+        console.warn('[Explore follow] following bundle unavailable; using per-target recovery.', bundleError);
+      }
+    }
+
   }
 
-  const payload = await requestAuthed(user, `/v1/profiles/${encodeURIComponent(normalizedUid)}/follow-state`);
+  const payload = await requestAuthed(user, `/v1/profiles/${encodeURIComponent(normalizedUid)}/follow-state`, forceServer ? { cache: 'no-store' } : {});
   const row = payload?.data || {};
   const result = {
     isFollowing: Boolean(row?.isFollowing ?? row?.following ?? row?.followed),

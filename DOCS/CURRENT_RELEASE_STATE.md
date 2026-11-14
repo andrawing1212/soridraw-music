@@ -1,3 +1,14 @@
+## CURRENT — APP646 공유 D1 팔로우 알림 트리거 2개 적용 PASS / 실제 팔로우 저장 사용자 검증 HOLD (2026-11-14 KST)
+
+- **실제 장애 원인 확정:** APP645 사용자 영상(2026-11-13 21:33 UTC) 당시 PREVIEW 안전 Worker `962ee432-fadb-456e-8836-50675aa76b84`의 팔로우 PUT HTTP 500 두 건. Cloudflare D1 쿼리별 로그 [Actions #43533613826](https://github.com/andrawing1212/soridraw-music/actions/runs/43533613826)에서 `UNIQUE constraint failed`가 `soridraw_notification_inbox_001`의 `receiver_uid,bucket_ms,category,actor_uid,subject_id` 복합키에 발생한 것을 확인. 팔로우 관계 UPSERT의 conflict 처리 중 기존 알림 중복 삽입이 canonical 관계 저장을 중단. 새 버전 선택 Worker의 문제라는 초기 추정은 **반증**됐으므로 복구되었다는 근거로 사용하지 않는다.
+- **APP646 코드 [PR #993](https://github.com/andrawing1212/soridraw-music/pull/993) 병합:** 실제 D1의 원래 `soridraw_notification_follow_overlay_insert_002`, `soridraw_notification_follow_overlay_update_002` 두 트리거의 알림 INSERT 구문에 기존 inbox 복합 PK를 이용한 `AND NOT EXISTS`만 추가하는 승인·복구 통제 스크립트. 격리 SQLite에서 기존 UPSERT 재팔로우 UNIQUE 실패 재현 → 수정 후 팔로우·취소·재팔로우 및 다른 계정 보존 PASS, 공유 D1 원본 트리거 정확 일치 READ-ONLY PASS [Actions #43534604518](https://github.com/andrawing1212/soridraw-music/actions/runs/43534604518).
+- **디렉터 승인 후 실제 공유 D1 변경 [PR #994](https://github.com/andrawing1212/soridraw-music/pull/994), [Actions #43553066120](https://github.com/andrawing1212/soridraw-music/actions/runs/43553066120) SUCCESS:** 2026-11-14 디렉터 명시 YES는 **이 두 개 D1 트리거 DDL 변경만** 승인. 배포 전 안전 Worker 100% / 시험 Worker 0%, 알림 활성화 설정 검사 PASS. 기존 두 트리거를 하나의 D1 `batch`에서 DROP→CREATE로 원자 변경. `APP646_POST_TWO_TRIGGER_DEFINITIONS=PASS`, `APP646_SHARED_FOLLOW_NOTIFICATION_UNIQUE_GUARD=APPLIED`. 사용자 원본 행 쓰기·삭제·백필·마이그레이션 없음. Worker, Hosting, Firebase Auth/Rules/Functions, TEST·PRODUCTION Worker 코드는 변경 없음. 공용 D1 스키마에 해당 변경이 반영된 것은 사실이며 TEST/PRODUCTION도 동일 DB를 사용하므로 영향 범위 보고 시 숨기지 않는다.
+- **배포 기준 SHA:** `b729b86d01ff66ec391ee3449450f37b3a36c01c` — 실제 공유 D1 변경이 이 commit의 일회성 trigger release에서 실행됨. 그 이전 APP645 PREVIEW Hosting source SHA는 `c82ce6f0357634f531b523de0e47cf41846a0b6c`로 변경하지 않음. 이 문서-only 커밋은 앱/Worker/D1을 재배포하지 않음.
+- **완료와 남은 HOLD를 구분:** D1 알림 중복 충돌 **원인 수정 및 실서버 DDL 반영 PASS**. 실제 서명된 서로 다른 두 계정 A↔B의 팔로우/취소 정본, 팔로워 수·목록, PC↔모바일 실사용 **미확인**. 기존 자동 동기화 0% 시험 후보를 활성화하거나 다른 공유 자원을 수정하는 추가 승인은 없음. 별도 테스트 계정의 실팔로우 데이터를 임의로 발생시키지 않음. 신규 동일 500 증거가 나타날 때만 영향 경로 재검증하고 이미 PASS한 진단/스키마 검사는 반복 금지.
+- **기타:** 읽기 전용 원인 조사 [PR #992](https://github.com/andrawing1212/soridraw-music/pull/992)는 보존하고 미병합·종료. DO 후보 PR #970은 Draft/미병합 유지. 기존 정상 좋아요·Music Note·Library·Recent Songs 데이터 동기화 보호.
+
+---
+
 ## CURRENT — APP645 사용자 실영상 팔로우 저장 실패 → 시험 요청 분기 긴급 철회·PREVIEW Hosting 복구 PASS / 실제 저장 재확인 HOLD (2026-11-14 KST)
 
 - **실사용 실패 확정:** 디렉터가 제공한 약 34초 동영상 `20261113-2132-45.9939437.mp4`에서 두 브라우저가 SORIDRAW 프로필을 띄운 상태로, 오른쪽 계정 팔로우 버튼이 최종 `팔로우`에 머물고 왼쪽 소유자 팔로워 숫자가 변하지 않음. **팔로우 정본 저장 실제 PASS 부재 / owner PC·모바일 자동 동기화 FAIL/HOLD.** 비디오 화면만으로 네트워크 실패 HTTP 코드·Cloudflare 시험 버전 실제 선택 여부는 확인되지 않으므로 고장 원인을 확정하지 않음.

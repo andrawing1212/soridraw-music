@@ -1,7 +1,7 @@
 """Update only the three existing owner Functions. Keep IAM/secrets/runtime intact.
 Uses the Functions API's narrow updateMask, not full-codebase Firebase discovery.
 """
-import copy, json, os, re, subprocess, sys, tempfile, time, urllib.request, urllib.error, zipfile
+import hashlib, json, os, re, subprocess, sys, tempfile, time, urllib.request, urllib.error, zipfile
 from pathlib import Path
 PROJECT='soridraw-app-866a5'
 ROOT='https://cloudfunctions.googleapis.com/v2/'
@@ -53,14 +53,33 @@ def run():
                 except Exception:message='UNREADABLE_ERROR'
                 # GCP permission errors contain resource and permission names, not credentials.
                 raise RuntimeError(f'FUNCTION_API_{method}_{error.code}: {message[:1800]}') from None
+        def manifest(path):
+            with zipfile.ZipFile(path) as z:
+                return {n:hashlib.sha256(z.read(n)).hexdigest() for n in z.namelist() if not n.endswith('/')}
+        expected_files=manifest(archive)
+        def source_matches(f):
+            source=f['buildConfig']['source']['storageSource']
+            # Functions copies the uploaded ZIP into its managed sources bucket.
+            # Compare deployed file bytes instead of requiring the upload location.
+            dest=Path(temp)/'deployed.zip'
+            result=subprocess.run(['gcloud','storage','cp','gs://'+source['bucket']+'/'+source['object'],str(dest),'--quiet'],capture_output=True,text=True,timeout=90)
+            if result.returncode:raise RuntimeError('SOURCE_ARCHIVE_READ: '+result.stderr[:1200])
+            actual=manifest(dest)
+            same=actual==expected_files
+            print('APP660_DEPLOYED_SOURCE_BYTES='+f['name'].split('/')[-1]+';match='+str(same),flush=True)
+            return same
         before={n:api('GET',PARENT+'/functions/'+n) for n in NAMES}
+        already=set()
         for n,f in before.items():
             assert f['state']=='ACTIVE' and f['buildConfig']['runtime']=='nodejs22', 'FUNCTION_STATE_RUNTIME_'+n
             assert f['buildConfig']['entryPoint']==n
             env=f['serviceConfig'].get('environmentVariables',{})
             assert env.get('SORIDRAW_OWNER_FOLLOW_READY_608')=='1'
             assert env.get('SORIDRAW_OWNER_FOLLOW_CANARY_UID_574')=='rcZ2GZrBndOZzT8C635eiNBjYIJ2'
-            assert env.get('SORIDRAW_OWNER_FOLLOW_GENERAL_PREVIEW_653')!='1','ALREADY_GENERAL_OR_DRIFT'
+            if env.get('SORIDRAW_OWNER_FOLLOW_GENERAL_PREVIEW_653')=='1':
+                assert all(env.get(k)==v for k,v in FLAGS.items()),'GENERAL_SCOPE_DRIFT'
+                assert source_matches(f),'EXISTING_GENERAL_SOURCE_DRIFT'
+                already.add(n)
             assert f['serviceConfig']['serviceAccountEmail']=='91309780603-compute@developer.gserviceaccount.com'
             assert f['serviceConfig'].get('secretEnvironmentVariables'), 'EXISTING_SECRET_BINDINGS_MISSING'
         uploaded=api('POST',PARENT+'/functions:generateUploadUrl',{})
@@ -70,6 +89,12 @@ def run():
         done=[]
         for name in NAMES:
             old=before[name]
+            if name in already:
+                current=api('GET',old['name'])
+                assert current['updateTime']==old['updateTime'],'CONCURRENT_FUNCTION_DEPLOY_'+name
+                done.append(name)
+                print('APP660_FUNCTION_ALREADY_ACTIVE_EXACT_SOURCE='+name+';updated='+old['updateTime'],flush=True)
+                continue
             current=api('GET',old['name'])
             assert current['updateTime']==old['updateTime'],'CONCURRENT_FUNCTION_DEPLOY_'+name
             env={**old['serviceConfig'].get('environmentVariables',{}),**FLAGS}
@@ -89,8 +114,7 @@ def run():
                 assert after['buildConfig'].get(key)==old['buildConfig'].get(key),'BUILD_CONFIG_DRIFT_'+key
             for key in ['serviceAccountEmail','secretEnvironmentVariables','secretVolumes','ingressSettings','availableMemory','availableCpu','timeoutSeconds','minInstanceCount','maxInstanceCount','maxInstanceRequestConcurrency','vpcConnector','vpcConnectorEgressSettings','allTrafficOnLatestRevision']:
                 assert after['serviceConfig'].get(key)==old['serviceConfig'].get(key),'SERVICE_CONFIG_DRIFT_'+key
-            actual=after['buildConfig']['source']['storageSource']
-            assert all(str(actual.get(k))==str(v) for k,v in uploaded['storageSource'].items()),'SOURCE_POSTFLIGHT'
+            assert source_matches(after),'SOURCE_POSTFLIGHT'
             done.append(name)
             print('APP660_FUNCTION_ACTIVE='+name+';updated='+after['updateTime']+';revision='+str(after['serviceConfig'].get('revision','')),flush=True)
         print('APP660_FUNCTIONS_ACTIVE_GENERAL_PREVIEW_SCOPED=PASS')

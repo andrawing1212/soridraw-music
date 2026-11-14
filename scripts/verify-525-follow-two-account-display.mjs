@@ -81,8 +81,11 @@ assert.match(ownSource,/requestAuthed\(/);
 assert.match(ownSource,/follow-state/);
 assert.match(ownSource,/cache: 'no-store'/);
 assert.doesNotMatch(ownSource,/rememberExploreFollowState|setInterval|getExploreProfileConnections/);
-const ownerMount=page.slice(page.indexOf('    let verifiedOwnCounts:'),
-  page.indexOf('    return () => { cancelled = true; }'));
+const ownMountStart=page.indexOf('    let verifiedOwnCounts:');
+assert.ok(ownMountStart>=0, 'OWN_PROFILE_SUMMARY_MISSING');
+const ownMountEnd=page.indexOf('    return () => { cancelled = true; }',ownMountStart);
+assert.ok(ownMountEnd>ownMountStart, 'OWN_PROFILE_MOUNT_BOUNDARY');
+const ownerMount=page.slice(ownMountStart,ownMountEnd);
 assert.match(ownerMount,/getExploreOwnProfileFollowCounts\(user\)/);
 assert.match(ownerMount,/if \(ownCountsTask\) await ownCountsTask/);
 assert.match(ownerMount,/if \(verifiedOwnCounts\)/);

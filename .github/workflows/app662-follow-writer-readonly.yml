@@ -1,0 +1,51 @@
+name: SORIDRAW APP662 exact active follow writer GET only
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/app662-follow-writer-readonly.yml']
+permissions: {contents: read}
+jobs:
+  inspect:
+    if: github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Read public PREVIEW Worker implementation source only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import urllib.request,json,os,base64,hashlib
+          account='e1a30fc9ef497fda1d34f4ab3dc1da45'
+          name='soridraw-explore-preview'
+          required='9e0f9a57-5da3-49c5-98ef-ffac999d3c39'
+          def get(path):
+            req=urllib.request.Request('https://api.cloudflare.com/client/v4/accounts/'+account+'/'+path,
+              headers={'Authorization':'Bearer '+os.environ['CLOUDFLARE_API_TOKEN']})
+            with urllib.request.urlopen(req,timeout=30) as res:j=json.load(res)
+            assert j.get('success') is True,'API_READ_FAIL'
+            return j['result']
+          active=get('workers/scripts/'+name+'/deployments?per_page=1')['deployments'][0]['versions']
+          assert any(v['version_id']==required and v['percentage']==100 for v in active),'ACTIVE_VERSION_DRIFT'
+          result=get('workers/workers/'+name+'/versions/'+required+'?include=modules')
+          assert len(result['modules'])==12,'MODULE_COUNT_DRIFT'
+          main=next(m for m in result['modules'] if m['name']=='preview-entry.mjs')
+          code=base64.b64decode(main['content_base64']).decode('utf8')
+          print('APP662_ACTIVE_SOURCE_SHA='+hashlib.sha256(code.encode()).hexdigest())
+          for f in ['handleFollowOverlay354','orchestrateFollowOverlay354',
+                    'readExactEffectiveFollowCounts351','readFollowStateSnapshot354',
+                    'handleFollowState','handleFollowR2Core']:
+            markers=['async function '+f+'(','function '+f+'(']
+            start=next((code.index(x) for x in markers if x in code),-1)
+            if start<0:
+              print('APP662_'+f+'_NOT_FOUND');continue
+            boundary=code.find('\n__name('+f,start+1)
+            if boundary<0:boundary=min(len(code),start+10000)
+            segment=code[start:min(start+10000,boundary)]
+            print('APP662_'+f+'_BEGIN')
+            print(segment)
+            print('APP662_'+f+'_END')
+          print('APP662_READONLY_ACTIVE_SOURCE=PASS')
+          PY

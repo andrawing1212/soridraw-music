@@ -83,4 +83,11 @@ let response=await handleOwnerEpochBinding544({request:enrollReq(),env,enabled:t
 assert.equal((await response.json()).code,'AUTH_GENERATION_NOT_CURRENT');assert.equal(verified,1);
 response=await handleOwnerEpochBinding544({request:enrollReq(),env:{...env,SORIDRAW_OWNER_FOLLOW_GENERAL_PREVIEW_653:''},enabled:true,now:()=>at,verify});
 assert.equal((await response.json()).code,'OWNER_CANARY_HOLD');assert.equal(verified,1);
+// Regression: the release runner must not overwrite a module-count scalar
+// with its patched array (the old t.modules comparison always failed).
+const releaseRunner=readFileSync('scripts/app660-preview-owner-workers.mjs','utf8');
+assert.match(releaseRunner,/source\.modules\?\.length===t\.moduleCount/);
+assert.match(releaseRunner,/new Set\(modules\.map\(m=>m\.name\)\)\.size===t\.moduleCount/);
+assert.doesNotMatch(releaseRunner,/source\.modules\?\.length===t\.modules\b/);
+console.log('APP660_STAGED_MODULE_COUNT_SEPARATE_FROM_SOURCE_ARRAY=PASS');
 console.log('APP660_A_B_OWNER_ISOLATION_RESTART_IDEMPOTENCY_AUTH_PREVIEW_BOUNDARY=PASS');

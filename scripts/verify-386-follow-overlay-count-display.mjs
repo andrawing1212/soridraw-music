@@ -65,3 +65,10 @@ console.log('APP379_TARGET_FOLLOWER_COUNT_DELTA=PASS');
 console.log('APP379_TARGET_FOLLOWING_COUNT_PRESERVED=PASS');
 console.log('APP379_CROSS_DEVICE_COUNT_RECONCILIATION=PASS');
 console.log('APP379_NO_EXTRA_SERVER_READ_FOR_COUNT_FIX=PASS');
+// A failed browser Follow 500 was traced to the Worker mistaking an
+// AFTER INSERT notification trigger for a second changed relation row.
+// This is source-only; no Cloudflare scripts, D1 tables or users are touched.
+import {execFileSync} from 'node:child_process';
+execFileSync('node',['scripts/app650-follow-primary-rowcount.mjs','--self-test'],{stdio:'inherit'});
+execFileSync('python3',['scripts/verify-650-follow-primary-rowcount.py'],{stdio:'inherit'});
+

@@ -79,12 +79,18 @@ for start_mode in ('insert','update'):
     else:
         set_edge(old,'ACTOR',1,1)
         set_edge(old,'ACTOR',0,2)
-    try:
+    if start_mode == 'insert':
+        # Original INSERT OR IGNORE suppresses duplicates on an INSERT.
+        # The defect appears when the outer ON CONFLICT UPDATE fires.
         set_edge(old,'ACTOR',1,3)
-        raise AssertionError('Original SQL unexpectedly did not fail')
-    except sqlite3.IntegrityError as e:
-        assert 'UNIQUE constraint failed' in str(e)
-print('APP646_ORIGINAL_DUPLICATE_NOTIFICATION_REPRODUCED_INSERT_AND_UPDATE=PASS')
+        assert rows(old)==(1,3)
+    else:
+        try:
+            set_edge(old,'ACTOR',1,3)
+            raise AssertionError('Original UPSERT UPDATE unexpectedly did not fail')
+        except sqlite3.IntegrityError as e:
+            assert 'UNIQUE constraint failed' in str(e)
+print('APP646_ORIGINAL_UPSERT_UPDATE_DUPLICATE_NOTIFICATION_REPRODUCED=PASS')
 
 # Patched trigger: both changed relation and existing notification survive.
 for start_mode in ('insert','update'):

@@ -108,7 +108,7 @@ import {
 } from '../services/exploreFollowSyncService';
 import {resolveFollowCounts662,shouldApplyActorFollowSignal662}
  from '../services/exploreFollowCountAuthority662';
-import { createOwnerEpochGate538 } from '../services/exploreOwnerFollowerEpochCore538';
+import { createOwnerEpochGate538, normalizeOwnerEpochSignal538 } from '../services/exploreOwnerFollowerEpochCore538';
 import {
   EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED,
   readOwnerFollowerSeenVersion542,
@@ -2004,7 +2004,8 @@ export default function ExplorePage() {
   // one canonical page GET; bound subsequent clicks by two minutes per tab.
   const publicConnectionsLastCheck657Ref = useRef<Map<string, number>>(new Map());
   // APP529: source-only until trusted server/outbox deployment is approved.
-  const ownerFollowerConfirmed529Ref = useRef<{uid:string;count:number;version:number}|null>(null);
+  const ownerFollowerConfirmed529Ref = useRef<{uid:string;count:number;version:number;at:number}|null>(null);
+  const ownVerifiedCount662Ref = useRef<{uid:string;requestedAt:number}|null>(null);
   // APP528: one bounded explicit canonical check per two minutes, even after
   // reload. A real changed-follow signal still invalidates its list immediately.
   const OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523 = 120_000;
@@ -3421,12 +3422,17 @@ export default function ExplorePage() {
     // asynchronously revalidated first-view response from a stale Edge shell.
     let verifiedOwnCounts: Pick<ExplorePublicProfile, 'followerCount' | 'followingCount'> | null = null;
     const ownCountsRequestedAt = Date.now();
-    if(user&&profileUid===user.uid)
+    if(user&&profileUid===user.uid){
       ownCountRequest662Ref.current={uid:user.uid,at:ownCountsRequestedAt};
+      ownVerifiedCount662Ref.current=null;
+    }
     const ownCountsTask = user && profileUid === user.uid
       ? getExploreOwnProfileFollowCounts(user)
           .then((counts) => {
-            if (!cancelled && auth.currentUser?.uid === user.uid) verifiedOwnCounts = counts;
+            if (!cancelled && auth.currentUser?.uid === user.uid) {
+              verifiedOwnCounts = counts;
+              ownVerifiedCount662Ref.current={uid:user.uid,requestedAt:ownCountsRequestedAt};
+            }
           })
           .catch((error) => {
             console.warn('Explore own follower summary unavailable:', error);
@@ -3460,7 +3466,8 @@ export default function ExplorePage() {
             followingCount: newerFollowing ?? verifiedOwnCounts.followingCount,
           };
           const ownerSignal = ownerFollowerConfirmed529Ref.current;
-          if (ownerSignal?.uid === nextProfile.uid) confirmed.followerCount = ownerSignal.count;
+          if (ownerSignal?.uid === nextProfile.uid &&
+              ownerSignal.at > ownCountsRequestedAt) confirmed.followerCount = ownerSignal.count;
           const actorSignal662=latestActorSignal662Ref.current;
           if(actorSignal662?.uid===nextProfile.uid &&
              shouldApplyActorFollowSignal662(actorSignal662.at,ownCountsRequestedAt))
@@ -4381,6 +4388,8 @@ export default function ExplorePage() {
       if(stopped||!visibleSubscription||generation!==subscriptionGeneration||
          document.visibilityState!=='visible'||auth.currentUser?.uid!==ownerUid||
          activeProfileUidRef.current!==ownerUid)return;
+      const validOwnerSignal=normalizeOwnerEpochSignal538(signal,ownerUid,epoch);
+      if(!validOwnerSignal)return;
       if(!gate){
         gate=createOwnerEpochGate538({
           ownerUid,authEpoch:epoch,
@@ -4388,6 +4397,11 @@ export default function ExplorePage() {
             if(auth.currentUser?.uid!==ownerUid||
                activeProfileUidRef.current!==ownerUid)return;
             const previousMarker=ownerFollowerConfirmed529Ref.current;
+            // Retained snapshots older than an authenticated profile-entry read
+            // cannot replace the newer verified owner follower count.
+            const verifiedRead=ownVerifiedCount662Ref.current;
+            if(verifiedRead?.uid===ownerUid &&
+               validOwnerSignal.at<=verifiedRead.requestedAt)return;
             // The same retained signal is allowed to repaint without a new
             // followers-list read; new canonical revisions invalidate only A.
             const confirmedNewEvent=isNewEvent&&initialSnapshotHandled;
@@ -4397,7 +4411,7 @@ export default function ExplorePage() {
             // cache; preserve the zero-GET cold-snapshot rule.
             const changedList=isNewEvent||
               (!previousMarker&&profile?.followerCount!==count);
-            ownerFollowerConfirmed529Ref.current={uid:ownerUid,count,version};
+            ownerFollowerConfirmed529Ref.current={uid:ownerUid,count,version,at:validOwnerSignal.at};
             if(changedList){
               invalidateExploreProfileConnections377(ownerUid,'followers');
               profileConnectionsCache376Ref.current.delete(ownerUid+':followers');
@@ -4470,7 +4484,9 @@ export default function ExplorePage() {
   useEffect(()=>{
     if(!EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED)return;
     const row=ownerFollowerConfirmed529Ref.current;
+    const verifiedRead=ownVerifiedCount662Ref.current;
     if(row&&row.uid===user?.uid&&profile?.uid===row.uid&&
+       (!verifiedRead||verifiedRead.uid!==row.uid||row.at>verifiedRead.requestedAt)&&
        profile.followerCount!==row.count){
       patchExplorePublicProfileFirstViewProfile(row.uid,{followerCount:row.count});
       setProfile(prev=>prev?.uid===row.uid?{...prev,followerCount:row.count}:prev);

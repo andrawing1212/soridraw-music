@@ -129,11 +129,13 @@ async function stageCheck(version,before,saved){
  check(metadata?.resources?.script_runtime?.compatibility_date==='2026-08-28',
   'STAGED_RUNTIME_DATE');
 }
-async function restore(oldVersion){
+async function restore(newVersion){
  const current=await deployment(EX);
  const active=current?.find(v=>Number(v.percentage)===100)?.version_id;
- if(active===oldVersion)return;
- if(active!==undefined&&active!==OLD) {
+ if(active===OLD)return;
+ // Roll back ONLY our exact newly activated version. An unexpected third-party
+ // activation is a manual HOLD, not an invitation to overwrite their deploy.
+ if(active===newVersion) {
   try{
    await api('POST','workers/scripts/'+EX+'/deployments',{
     strategy:'percentage',

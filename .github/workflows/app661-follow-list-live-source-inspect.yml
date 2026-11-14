@@ -1,0 +1,51 @@
+name: SORIDRAW APP661 active follow list source GET only
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/app661-follow-list-live-source-inspect.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Read active PREVIEW follow list implementation, no data access
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64,json,os,urllib.request,hashlib
+          account='e1a30fc9ef497fda1d34f4ab3dc1da45'
+          name='soridraw-explore-preview'
+          required='a2e6390d-c879-4e31-83e3-dee8046cb6ed'
+          def get(path):
+            req=urllib.request.Request('https://api.cloudflare.com/client/v4/accounts/'+account+'/'+path,
+              headers={'Authorization':'Bearer '+os.environ['CLOUDFLARE_API_TOKEN']})
+            with urllib.request.urlopen(req,timeout=30) as res: j=json.load(res)
+            assert j.get('success') is True,'CF_GET'
+            return j['result']
+          dp=get('workers/scripts/'+name+'/deployments?per_page=1')['deployments'][0]['versions']
+          assert any(x['version_id']==required and x['percentage']==100 for x in dp),'ACTIVE_WORKER_DRIFT'
+          src=get('workers/workers/'+name+'/versions/'+required+'?include=modules')
+          assert len(src['modules'])==12,'MODULE_COUNT'
+          main=next(m for m in src['modules'] if m['name']=='preview-entry.mjs')
+          code=base64.b64decode(main['content_base64']).decode('utf8')
+          print('APP661_LIVE_MODULE_SHA='+hashlib.sha256(code.encode()).hexdigest())
+          for fname in ['handleProfileConnections','readSharedProfileConnection348','readEffectiveFollowConnectionPage348','handleFollowState']:
+            matches=[token for token in ['async function '+fname+'(', 'function '+fname+'('] if token in code]
+            if not matches:
+              print('APP661_'+fname+'_MISSING')
+              continue
+            start=code.index(matches[0])
+            stop=code.find('\nasync function ',start+len(matches[0]))
+            if stop<0:stop=min(len(code),start+6600)
+            segment=code[start:min(stop,start+6600)]
+            print('APP661_'+fname+'_BEGIN')
+            print(segment)
+            print('APP661_'+fname+'_END')
+          print('APP661_ACTIVE_SOURCE_READ_ONLY_NO_D1_R2_OR_USER_QUERY=PASS')
+          PY

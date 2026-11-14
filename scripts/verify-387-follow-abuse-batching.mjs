@@ -9,7 +9,7 @@ const like = readFileSync('src/services/exploreLikeService.ts', 'utf8');
 const likePatch = readFileSync('cloudflare/explore-worker/patches/054-explore-like-edge-rate-limit.mjs', 'utf8');
 const wrangler = JSON.parse(readFileSync('cloudflare/explore-worker/canonical/wrangler.preview.jsonc', 'utf8'));
 // app380 local-first final-state batching.
-assert.match(batch, /EXPLORE_FOLLOW_IDLE_FLUSH_MS_380 = 8_000/);
+assert.match(batch, /EXPLORE_FOLLOW_IDLE_FLUSH_MS_380 = 30_000/);
 assert.match(batch, /entry\.desiredFollowing === entry\.baseFollowing/);
 assert.match(batch, /No Worker request, R2 write, D1 read or D1 write is needed/);
 assert.match(batch, /soridraw:explore:follow-outbox:380:/);
@@ -23,25 +23,19 @@ const toggleStart = page.indexOf('  const toggleFollow = async () =>');
 const toggleEnd = page.indexOf('\n\n  const closeMoreSheet', toggleStart);
 assert.ok(toggleStart >= 0 && toggleEnd > toggleStart);
 const toggle = page.slice(toggleStart, toggleEnd);
-assert.match(toggle, /patchExploreFollowLocalState377\([\s\S]*?deferTargetFollowers: true/);
-assert.match(toggle, /queueExploreFollowFinalState380/);
-assert.ok(
-  toggle.indexOf('patchExploreFollowLocalState377(') < toggle.indexOf('queueExploreFollowFinalState380('),
-  'local state must paint before final-state queue',
-);
-const beforeQueue = toggle.slice(0, toggle.indexOf('queueExploreFollowFinalState380('));
-assert.doesNotMatch(
-  beforeQueue,
-  /patchExplorePublicProfileFirstViewProfile\(targetUid/,
-  'public target counter must remain canonical during the local-only aggregation window',
-);
-assert.match(toggle, /Other devices\/users see only the final accepted state/);
+// APP647 visible clicks no longer use the legacy pending queue. The old
+// persisted queue survives only for safe one-time recovery of prior intents.
+assert.match(toggle, /await setExploreFollow\(user, targetUid, requestedFollow, profile\)/);
+assert.match(toggle, /readPendingExploreFollowIntents380\(viewerUid\)/);
+assert.match(toggle, /followMutationInFlightRef\.current/);
+assert.doesNotMatch(toggle, /queueExploreFollowFinalState380\(/);
+assert.doesNotMatch(toggle, /patchExploreFollowLocalState377\(/);
 const publishIndex = toggle.indexOf('publishExploreFollowSync377(viewerUid');
-const settledIndex = toggle.indexOf('onSettled:');
-assert.ok(publishIndex > settledIndex, 'cross-device signal must publish only after final settlement');
+const settledIndex = toggle.indexOf('await setExploreFollow(');
+assert.ok(publishIndex > settledIndex, 'same-account signal must follow accepted canonical response');
 
 assert.match(page, /readPendingExploreFollowIntents380\(viewerUid380\)/);
-assert.match(page, /EXPLORE_FOLLOW_IDLE_FLUSH_MS_380 - Math\.max/);
+assert.match(page, /queueExploreFollowFinalState380\(/);
 assert.match(social, /deferTargetFollowers\?: boolean/);
 assert.match(social, /if \(options\.deferTargetFollowers !== true\)/);
 assert.match(social, /retryAfterMs/);
@@ -58,10 +52,8 @@ assert.match(followPatch, /payload\?\.followOperationId/);
 // The app382 historical fixture freezes the former 30-second public-like
 // idle timer. Active app397 uses Stage413 5-second idle flush; it is covered
 // independently by 408. Do NOT rewrite the application to satisfy an old test.
-const currentFollowRuntime = process.env.SORIDRAW_CURRENT_FOLLOW_RUNTIME === '1';
-assert.match(like, currentFollowRuntime
-  ? /EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000/
-  : /EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000/);
+// The current app uses 5s settled like idle; 30s was a historical fixture.
+assert.match(like, /EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 5_000/);
 assert.match(like, /desiredLiked === pending\.baseLiked/);
 assert.match(like, /operationId/);
 assert.match(likePatch, /enforceExploreLikeBatchEdgeRateLimit054/);
@@ -103,15 +95,11 @@ if (generatedPath) {
   );
 }
 
-console.log('APP576_FOLLOW_8S_LEGACY_BATCH_IMMEDIATE_VISIBLE=PASS');
+console.log('APP647_FOLLOW_CANONICAL_VISIBLE_AND_30S_LEGACY_RECOVERY=PASS');
 console.log('APP380_FOLLOW_RETURN_TO_BASE_SERVER_W0=PASS');
 console.log('APP380_FOLLOW_PENDING_RELOAD_RECOVERY=PASS');
 console.log('APP380_PUBLIC_TARGET_FINAL_STATE_ONLY=PASS');
-console.log('APP380_FOLLOW_SERVER_PROGRESSIVE_PAIR_COOLDOWN=PASS');
-console.log('APP380_FOLLOW_ACCOUNT_WINDOW_DAY_CAP=PASS');
-console.log('APP380_FOLLOW_ABUSE_GUARD_D1_RATE_DB_ZERO=PASS');
-console.log(currentFollowRuntime
-  ? 'LIKE_STAGE413_CURRENT_5S_IDLE_FLUSH_SEPARATE_FROM_FOLLOW=PASS'
-  : 'LIKE_HISTORICAL_30S_IDLE_FLUSH=PASS');
+console.log('APP380_FOLLOW_CANDIDATE_ABUSE_GUARDS_PRESERVED=PASS');
+console.log('LIKE_STAGE413_CURRENT_5S_IDLE_FLUSH=PASS');
 console.log('LIKE_EXISTING_EDGE_RATE_LIMIT_D1_RATE_DB_ZERO=PASS');
 console.log('LIKE_PROGRESSIVE_SAME_TRACK_COOLDOWN=CANDIDATE_098_RUNTIME_388');

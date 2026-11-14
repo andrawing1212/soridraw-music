@@ -4242,7 +4242,8 @@ export default function ExplorePage() {
       }
     }
     if (refreshOwn523) ownFollowersLastCheck523Ref.current.set(key, Date.now());
-    if (refreshPublic657) publicConnectionsLastCheck657Ref.current.set(key, Date.now());
+    // Record only after a successful server response; navigating away during
+    // the pending GET must not leave the stale cache artificially fresh.
 
     const requestId = ++profileConnectionsRequest376Ref.current;
     if (!cached) {
@@ -4257,6 +4258,7 @@ export default function ExplorePage() {
         || activeProfileUidRef.current !== targetUid
       ) return;
       profileConnectionsCache376Ref.current.set(key, page);
+      if (refreshPublic657) publicConnectionsLastCheck657Ref.current.set(key, Date.now());
       setProfileConnectionsItems376(page.items);
       setProfileConnectionsNextCursor376(page.nextCursor);
       // app377: a complete bounded relation page is exact authority for small

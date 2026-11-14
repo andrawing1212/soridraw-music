@@ -33,9 +33,14 @@ for(const e of events){
  const time=typeof e.timestamp==='number'?new Date(e.timestamp).toISOString():'';
  const sourceMatch=raw.match(/(?:D1_ERROR|SQLITE_ERROR|SQLITE_BUSY|UNIQUE constraint failed|NOT NULL constraint failed|CHECK constraint failed|FOREIGN KEY constraint failed|no such table|no such column|FOLLOW_RECOVERY_BUSY|rate limited|quota exceeded)[^\\n]{0,100}/i);
  const errorType=sourceMatch?safe(sourceMatch[0]):'';
+ const firstLines=String(raw||'').split('\\n').slice(0,9)
+   .map(s=>safe(s).replaceAll('http://','[url]'));
+ const frames=Array.from(String(raw||'').matchAll(/at\\s+(?:async\\s+)?([A-Za-z_$][A-Za-z0-9_.$-]{1,90})/g))
+   .map(m=>m[1]).slice(0,12);
  rows.push({time,method,status,
   version:String(e?.$workers?.scriptVersion?.id||'').slice(0,48),
   errorType,
+  ...(status===0?{stackFrames:frames,stack:firstLines}:{}),
   outcome:String(e?.$workers?.outcome||'').slice(0,24)});
 }
 console.log('FOLLOW_NOV14_VIDEO_LOG_SUMMARY='+JSON.stringify({

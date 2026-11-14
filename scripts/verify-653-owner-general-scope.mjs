@@ -26,7 +26,7 @@ for(const origin of ['https://soridraw.com','https://test.soridraw.com','https:/
 for(const p of ['exploreOwnerFollowerWebhook542','ownerFollowEnrollment544','ownerFollowAuthProof547']){
  const s=require('node:fs').readFileSync('functions/src/'+p+'.ts','utf8');
  assert.match(s,/ownerFollowScope653\(process\.env/);
- assert.match(s,/canaryUid:scope\.canaryUid|scope\.canaryUid!==undefined/);
+ assert.match(s,/canaryUid:scope\.canaryUid|scope\.canaryUid!==undefined|allowedUid:scope\.canaryUid/);
 }
 assert.match(require('node:fs').readFileSync('functions/src/ownerFollowEnrollment544.ts','utf8'),
  /enforceAppCheck:true/);

@@ -245,6 +245,46 @@ async function explainExactFollowUpsertReadonly(){
  assert(!result||result.meta?.rows_written===0||result.success!==true,
   'EXPLAIN_WRITES_NOT_ALLOWED');
 }
+// Query D1 query-level analytics. It samples SQL text and errors but NEVER
+// includes bind values (per Cloudflare D1 analytics contract). No user rows.
+async function inspectD1QueryErrors(){
+ const query=`query($accountTag:string!,$databaseId:string!){
+ viewer{accounts(filter:{accountTag:$accountTag}){
+  d1QueriesAdaptiveGroups(limit:1000,
+   filter:{date_geq:"2026-11-13",date_leq:"2026-11-14",databaseId:$databaseId})
+  {count dimensions{date datetime error query} sum{rowsWritten}}
+ }}
+ }`;
+ try{
+  const r=await fetch('https://api.cloudflare.com/client/v4/graphql',{
+   method:'POST',headers:{Authorization:'Bearer '+token,
+   'Content-Type':'application/json'},
+   body:JSON.stringify({query,variables:{accountTag:account,databaseId:db}}),
+   signal:AbortSignal.timeout(25000)});
+  const j=await r.json();
+  if(!r.ok||j.errors?.length){
+   console.log('BASIC_FOLLOW_D1_QUERY_ANALYTICS_HOLD='+JSON.stringify({
+    status:r.status,errors:(j.errors||[]).map(x=>x.message).slice(0,3)}));
+   return;
+  }
+  const rows=j.data?.viewer?.accounts?.[0]?.d1QueriesAdaptiveGroups||[];
+  console.log('BASIC_FOLLOW_D1_QUERY_GROUP_TOTAL='+rows.length);
+  const relevant=rows.filter(x=>
+   /explore_follow_overrides_348|soridraw_notification_follow_overlay|follows/i.test(
+   String(x.dimensions?.query||'')) &&
+   (String(x.dimensions?.error||'').length>0||
+     /INSERT INTO explore_follow_overrides_348/i.test(String(x.dimensions?.query||''))));
+  for(const x of relevant.slice(0,15)){
+   const error=String(x.dimensions?.error||'').replace(/[A-Za-z0-9_-]{28,}/g,'[id]')
+     .slice(0,380);
+   const sql=String(x.dimensions?.query||'');
+   const normalized=sql.replace(/\\s+/g,' ').slice(0,190);
+   console.log('BASIC_FOLLOW_D1_QUERY_ERROR='+JSON.stringify({
+    date:x.dimensions?.date,at:x.dimensions?.datetime,error,
+    calls:x.count,written:x.sum?.rowsWritten,sqlPrefix:normalized}));
+  }
+ }catch(e){console.log('BASIC_FOLLOW_D1_QUERY_ANALYTICS_HOLD_UNAVAILABLE')}
+}
 async function run(){
  assert(process.argv[2]==='--live'&&process.env.GITHUB_ACTIONS==='true'&&
   process.env.CLOUDFLARE_ACCOUNT_ID===account&&token.length>20,'ACTION_CONTEXT');
@@ -268,6 +308,7 @@ async function run(){
  await explainExactFollowUpsertReadonly();
  await queryFollowTelemetryDry();
  await queryFollowTelemetryDry(true);
+ await inspectD1QueryErrors();
  console.log('BASIC_FOLLOW_NO_USER_MUTATIONS_NO_BACKEND_DEPLOYS=PASS');
  if(!p||!d)throw Error('BASIC_FOLLOW_BROWSER_PREFLIGHT_FAIL');
  if(cutover==='readonly')throw Error('BASIC_FOLLOW_CUTOVER_READONLY');

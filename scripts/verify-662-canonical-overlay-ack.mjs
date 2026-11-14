@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {patchSettledCanonicalFollowAck662 as patch,sha662} from './lib/follow-canonical-counts-662.mjs';
+const releaseScript=readFileSync('scripts/app662-preview-canonical-follow-worker.mjs','utf8');
+assert.match(releaseScript,/patchSettledCanonicalFollowAck662\(bytes\(main\)\.toString\('utf8'\)\)/);
+assert.doesNotMatch(releaseScript,/patchActiveProfileConnections661/);
 const fixture=`async function handleFollowOverlay354(request, env, cors, actor, target, following, cutover) {
   const result2 = await orchestrateFollowOverlay354(env, actor, target, following);
   const state = await readFollowProfile354(env, target, cutover);

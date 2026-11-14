@@ -11,9 +11,9 @@ import { hasOwnerFollowCanaryOptIn634, mayListenToApprovedOwnerOnPreview658,
 
 export const EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED=true;
 export const APP608_APPROVED_CANARY_UID='rcZ2GZrBndOZzT8C635eiNBjYIJ2';
-// General PREVIEW hosting stays OFF until the exact Worker/Functions release is
-// active. Otherwise uninvolved owners would call canary-only Functions.
-export const APP659_GENERAL_PREVIEW_OWNERS_ENABLED=false;
+// APP660: release Hosting only after the coordinated PREVIEW server rollout.
+// Other hosts remain blocked before any Auth, enrollment or RTDB operation.
+export const APP659_GENERAL_PREVIEW_OWNERS_ENABLED=true;
 const isGeneralPreviewOwner659=(uid:string):boolean=>
  typeof window!=='undefined'&&mayListenToPreviewOwnerGeneral659(
   window.location.hostname,uid,APP659_GENERAL_PREVIEW_OWNERS_ENABLED,
@@ -46,7 +46,7 @@ const enrollmentAttempts575=new WeakMap<object,Promise<boolean>>();
 const tryOwnerFollowCanaryEnrollment575=(
  uid:string,principal:NonNullable<typeof auth.currentUser>,
 ):Promise<boolean>=>{
- // Enrollment mutates Auth/Firestore: retain explicit-tab QA opt-in only.
+ // PREVIEW: enroll a missing epoch once per principal; an existing claim skips it.
  if(!isApp608OwnerCanaryVisible(uid)||
     !(isGeneralPreviewOwner659(uid)||hasExplicitOwnerFollowTabOptIn634())||
     auth.currentUser!==principal)return Promise.resolve(false);
@@ -58,7 +58,7 @@ const tryOwnerFollowCanaryEnrollment575=(
  // not retried on focus/profile navigation; QA must explicitly reload.
  const task=(async()=>{
   try{
-   // Region instance is created ONLY on the explicit canary test attempt.
+   // Created only for a PREVIEW principal with no existing owner epoch.
    const callable=httpsCallable(getFunctions(getApp(),'asia-northeast3'),
      'enrollOwnerFollow544Candidate');
    await callable({});
@@ -119,8 +119,8 @@ export const subscribeExploreOwnerFollower542=async(
  if(typeof epoch!=='string'||!EPOCH.test(epoch)){
    epoch=await probeOwnerEpoch658(principal)??undefined;
  }
- // Only explicit PREVIEW QA opt-in may bootstrap a missing owner claim.
- // Every other owner with no claim exits with zero server writes.
+ // General PREVIEW bootstraps a missing claim once; existing owners do not
+ // enroll again on profile visits, refresh, or another device.
  if((typeof epoch!=='string'||!EPOCH.test(epoch))&&
     await tryOwnerFollowCanaryEnrollment575(uid,principal)){
   try{token=await getIdTokenResult(principal);}catch{return ()=>{}}

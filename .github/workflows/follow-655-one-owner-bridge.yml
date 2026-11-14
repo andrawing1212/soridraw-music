@@ -1,9 +1,12 @@
-name: SORIDRAW APP655 approved one-owner PREVIEW follow bridge
+name: SORIDRAW PREVIEW owner follow bridge release
 on:
   pull_request:
     branches: [preview]
     paths:
-      - 'scripts/app655-preview-owner-bridge.mjs'
+      - 'scripts/app660-preview-owner-*'
+      - 'scripts/lib/owner-follow-general660.mjs'
+      - 'scripts/verify-660-general-owner-live-modules.mjs'
+      - 'scripts/fixtures/owner-follow660/**'
       - '.github/workflows/follow-655-one-owner-bridge.yml'
   push:
     branches: [preview]
@@ -18,19 +21,22 @@ jobs:
   verify:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
-    timeout-minutes: 3
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with: {ref: "${{ github.event.pull_request.head.sha }}", persist-credentials: false}
       - uses: actions/setup-node@v4
         with: {node-version: '22'}
       - run: |
-          node --check scripts/app655-preview-owner-bridge.mjs
-          node scripts/app655-preview-owner-bridge.mjs --self-test
+          node --check scripts/app660-preview-owner-workers.mjs
+          node scripts/verify-660-general-owner-live-modules.mjs
+          npm --prefix functions ci --no-audit --no-fund
+          npm --prefix functions run build
+          python3 scripts/app660-preview-owner-functions.py --package-check
   release:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.repository == 'andrawing1212/soridraw-music'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 70
     env:
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -39,22 +45,41 @@ jobs:
         with: {ref: "${{ github.sha }}",fetch-depth: 3,persist-credentials: false}
       - uses: actions/setup-node@v4
         with: {node-version: '22'}
-      - name: Director approval and immutable release-only trigger gate
+      - name: Immutable PREVIEW-only release trigger
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = refs/heads/preview
           test "$(git diff --name-only HEAD^ HEAD)" = '.deploy/app655-preview-one-owner-bridge.trigger'
           f='.deploy/app655-preview-one-owner-bridge.trigger'
-          grep -Fxq 'director_approval=YES_PREVIEW_OWNER_FOLLOW_SYNC' "$f"
+          grep -Fxq 'director_approval=YES_PREVIEW_ALL_LOGIN_OWNER_FOLLOW_SYNC' "$f"
           grep -Fxq "source_parent=$(git rev-parse HEAD^)" "$f"
-          grep -Fxq 'old_active=ec426c84-381d-4aa9-ac62-316c745dea55' "$f"
-          grep -Fxq 'other_version_0=6b13cde4-4a53-42d2-873f-361f7cf5a931' "$f"
-          grep -Fxq 'functions_compiled_ON_readonly_run=43589366187' "$f"
-          grep -Fxq 'change=one_PREVIEW_owner_bridge_flag_only' "$f"
+          grep -Fxq 'old_explore=02576623-2172-4922-85b8-3f08a5216653' "$f"
+          grep -Fxq 'old_owner=e679a602-44fb-4b4d-9e4d-7878c00b68c3' "$f"
+          grep -Fxq 'change=three_existing_functions_and_two_preview_workers_only' "$f"
           grep -Fxq 'no_user_data_migration=true' "$f"
-          echo "APP655_APPROVED_PARENT=$(git rev-parse HEAD^)" >> "$GITHUB_ENV"
-          node --check scripts/app655-preview-owner-bridge.mjs
-          node scripts/app655-preview-owner-bridge.mjs --self-test
-      - name: Pin active 12 modules and 35 bindings, activate only approved PREVIEW owner
-        run: node scripts/app655-preview-owner-bridge.mjs --apply-once
+          echo "APP660_APPROVED_PARENT=$(git rev-parse HEAD^)" >> "$GITHUB_ENV"
+          node scripts/verify-660-general-owner-live-modules.mjs
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Build only existing owner function source package
+        run: |
+          npm --prefix functions ci --no-audit --no-fund
+          npm --prefix functions run build
+          python3 scripts/app660-preview-owner-functions.py --package-check
+      - name: Verify exact active Worker modules before any server mutation
+        run: node scripts/app660-preview-owner-workers.mjs --preflight
+      - name: Update three owner Functions preserving IAM and secret bindings
+        run: python3 scripts/app660-preview-owner-functions.py --apply-once
+      - name: Stage exact active PREVIEW modules then activate owner and Explore
+        run: node scripts/app660-preview-owner-workers.mjs --apply-once
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app660-owner-release-results
+          path: app660-*-result.json
+          if-no-files-found: ignore
+          retention-days: 14

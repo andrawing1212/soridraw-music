@@ -1,3 +1,14 @@
+## CURRENT — APP660 PREVIEW 전체 로그인 소유자 실시간 팔로우 준비 / 서버 배포·실사용 대기 (2026-11-14 UTC)
+
+- 현재 디렉터 승인은 모든 로그인 사용자의 PREVIEW 소유자 알림까지 확장. 이전 한 계정 제한은 최종 목표가 아님. TEST/PRODUCTION 배포·IAM 확대·원본 일괄 변경 금지.
+- 실제 활성 상태 확인: Explore `02576623-2172-4922-85b8-3f08a5216653`, owner DO `e679a602-44fb-4b4d-9e4d-7878c00b68c3`. Functions 3개는 ACTIVE/compiled ON이나 실제 소스는 canary 전용. RTDB 소유자 읽기 규칙은 이미 적용되어 재배포 불필요. Actions #43610509270에서 Functions update/sourceCodeSet/operations.get 및 runtime actAs 허용 확인. IAM API 미활성 응답은 별도 조회 오류이며 권한 확대 사유가 아님. #43610776141 실제 Worker 모듈 읽기 PASS.
+- 변경: 기존 배포 모듈의 소유자 제한만 PREVIEW 이중 플래그로 확장. 앱은 본인 epoch가 없을 때 최초 등록 후 본인 RTDB 경로만 구독. 폴링·전체 조회·재방문 반복 쓰기 추가 없음. 기존 canonical 12개 모듈 중 wrapper/enrollment만 수정하고 좋아요·팔로우 저장 모듈은 원본 바이트 보존. 기존 DO namespace와 예약·정본 확정 확인·재시도 엔진 유지.
+- 로컬 필수 검사 PASS: TypeScript, Vite, Functions 빌드, 653/659/634/585, 545/547 인증·세대 보호, 555/556/557 정본 확정·예약 회귀, 660 A/B 소유자 분리·중복·재시작·인증·환경 차단. APP585는 source-only 검사이며 서버/실사용 PASS가 아님.
+- 기존 655 Actions 경로를 재사용하여 exact source preflight → 기존 Functions 3개만 source/env PATCH → PREVIEW Worker 2개 무트래픽 staging 검증 → 활성화. IAM/secret binding/Rules 변경 없음. 서버 성공 후 별도 기존 Hosting trigger 실행. 현재 이 문서 시점 신규 배포 없음.
+- **미완료:** 실제 배포 성공과 활성 revision 확인, 이후 디렉터 A↔B 양방향 follow/unfollow 및 PC·모바일 숫자·목록·새로고침 없는 자동 반영 PASS. 실사용 결과 전 완료 보고 금지.
+
+---
+
 ## CURRENT — APP658 PREVIEW 일반 주소 승인 소유자 RTDB 수신 조건 수정·Hosting 배포 PASS / A↔B 실사용·B 숫자 HOLD (2026-11-14 KST)
 
 - **새 영상 증거:** 디렉터가 2026-11-14 13:38 UTC에 촬영한 약 181초 영상의 두 창은 일반 `preview.soridraw.com`(우측 주소 표시)·PREVIEW 설치 앱이었고, **`?ownerFollowCanary=1`로 진입한 시험이 아니었음**을 디렉터가 명시. A 자신의 SORIDRAW 프로필과 B의 방문 프로필은 팔로워 2·1 등 숫자가 일치하지 않고 자동 전파 없음. 소울포스 뮤직 목록 카드와 B 수치 불일치도 사용자 보고. 영상은 D1 최종 회원 수·Firebase Auth epoch·서버 webhook 성공을 직접 증명하지 않음.

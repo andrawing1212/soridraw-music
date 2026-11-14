@@ -1,5 +1,6 @@
 name: SORIDRAW APP654 read-only actual Follow bridge inventory
 on:
+  workflow_dispatch:
   push:
     branches: [preview]
     paths: ['.github/workflows/follow-654-bridge-live-inventory.yml']
@@ -10,7 +11,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   inspect:
-    if: github.repository == 'andrawing1212/soridraw-music'
+    if: github.repository == 'andrawing1212/soridraw-music' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     env:
@@ -94,6 +95,7 @@ jobs:
               missing=sorted(set(wanted)-granted)
               print('APP654_IAM_'+label+'_MISSING='+(','.join(missing) or 'NONE'))
               if missing:issues.append('IAM_'+label)
+              return not missing
             except urllib.error.HTTPError as error:
               try: detail=json.load(error).get('error',{})
               except Exception: detail={}
@@ -152,9 +154,9 @@ jobs:
               all_flags.append(flag)
               print('APP654_FN_'+name+'_DEPLOYED_COMPILED='+flag)
           print('APP654_ALL_THREE_FUNCTIONS_COMPILED_ON='+str(all(x=='TRUE' for x in all_flags)))
-          permissions('PROJECT_ACT_AS','https://cloudresourcemanager.googleapis.com/v1/projects/'+PROJECT+':testIamPermissions',
+          project_act_as=permissions('PROJECT_ACT_AS','https://cloudresourcemanager.googleapis.com/v1/projects/'+PROJECT+':testIamPermissions',
             ['iam.serviceAccounts.actAs'])
-          for account in sorted(runtime_accounts):
+          for account in ([] if project_act_as else sorted(runtime_accounts)):
             print('APP654_RUNTIME_ACCOUNT='+account)
             permissions('RUNTIME_ACT_AS','https://iam.googleapis.com/v1/projects/'+PROJECT+'/serviceAccounts/'+account+':testIamPermissions',
               ['iam.serviceAccounts.actAs'])
@@ -174,3 +176,52 @@ jobs:
           if not all(x=='TRUE' for x in all_flags):issues.append('FUNCTION_SOURCE')
           if issues:raise SystemExit('APP654_RELEASE_CAPABILITY_HOLD='+','.join(issues))
           PY
+
+  active-source:
+    if: github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Read only the exact active owner bridge source modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/preview
+          python3 - <<'PYCODE'
+          import base64,json,os,urllib.request,hashlib
+          from pathlib import Path
+          account='e1a30fc9ef497fda1d34f4ab3dc1da45'
+          token=os.environ['CLOUDFLARE_API_TOKEN']
+          targets={'soridraw-explore-preview':'02576623-2172-4922-85b8-3f08a5216653',
+                   'soridraw-owner-follow-preview-candidate':'e679a602-44fb-4b4d-9e4d-7878c00b68c3'}
+          out=Path(os.environ['RUNNER_TEMP'])/'owner-active-source'
+          out.mkdir()
+          def get(path):
+            req=urllib.request.Request('https://api.cloudflare.com/client/v4/accounts/'+account+'/'+path,
+              headers={'Authorization':'Bearer '+token})
+            with urllib.request.urlopen(req,timeout=30) as response: result=json.load(response)
+            assert result.get('success') is True
+            return result['result']
+          for script,version in targets.items():
+            deployed=get('workers/scripts/'+script+'/deployments?per_page=1')['deployments'][0]['versions']
+            assert any(x['version_id']==version and x['percentage']==100 for x in deployed)
+            modules=get('workers/workers/'+script+'/versions/'+version+'?include=modules')['modules']
+            # Source modules only. NEVER export bindings, env, secrets or auth files.
+            safe=[]
+            for module in modules:
+              if script=='soridraw-explore-preview' and module['name']!='owner-follow-entry-607.mjs':continue
+              data=base64.b64decode(module['content_base64'])
+              safe.append({'name':module['name'],'sha256':hashlib.sha256(data).hexdigest(),
+                           'content':data.decode('utf8')})
+            assert safe
+            (out/(script+'.json')).write_text(json.dumps({'version':version,'modules':safe}))
+            print('ACTIVE_SOURCE_READ_ONLY='+script+';version='+version+';modules='+str(len(safe)))
+          PYCODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: owner-active-source
+          path: ${{ runner.temp }}/owner-active-source/*.json
+          retention-days: 1
+          if-no-files-found: error

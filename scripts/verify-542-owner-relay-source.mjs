@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHmac} from 'node:crypto';
 import {createRequire} from 'node:module';
-import {execFileSync} from 'node:child_process';
 // functions/ is a CommonJS package (unlike the Vite ESM app). tsx registers
 // a .ts require hook; load this source through that exact module shape.
 const require=createRequire(import.meta.url);
@@ -43,7 +42,7 @@ assert.match(client,/APP608_APPROVED_CANARY_UID=/);
 assert.match(client,/isApp608OwnerCanaryVisible/);
 assert.match(page,/!isApp608OwnerCanaryVisible\(ownerUid\)/);
 assert.match(client,/ownerFollowCanary/);
-assert.match(client,/enrollmentAttempts575=new Map/);
+assert.match(client,/enrollmentAttempts575=new WeakMap/);
 assert.match(client,/getIdTokenResult\(principal,true\)/);
 assert.match(client,/await tryOwnerFollowCanaryEnrollment575\(uid,principal\)/);
 assert.ok(client.includes("getFunctions(getApp(),'asia-northeast3')"));
@@ -116,6 +115,3 @@ assert.equal(marker.version,1);
 console.log('APP542_OWNER_HTTP_HMAC_EPOCH_REPLAY_OFF_AND_NO_LIVE_WIRING=PASS');
 console.log('APP574_FUNCTION_CANARY_UID_REQUIRED_BEFORE_AUTH_OR_RTDB=PASS');
 console.log('APP575_PREVIEW_EXPLICIT_OWNER_ENROLLMENT_ONCE_DEFAULT_OFF=PASS');
-execFileSync(process.execPath,['scripts/verify-653-owner-general-scope.mjs'],{
- stdio:'inherit',env:process.env,
-});

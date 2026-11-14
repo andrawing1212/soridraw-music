@@ -53,8 +53,14 @@ const explicit=slice(page,
  '  // APP527: A\'s profile must not spend D1/R2 on window focus, blank-space');
 assert.match(explicit,/const ownFollowers523 = direction === 'followers' && targetUid === user\?\.uid/);
 assert.match(explicit,/profileConnectionsOpen376 !== 'followers'/);
-assert.match(explicit,/if \(cached\) \{[\s\S]*?if \(!refreshOwn523\) \{[\s\S]*?return;/);
-assert.match(explicit,/getExploreProfileConnections\(targetUid, direction, null, refreshOwn523\)/);
+assert.match(explicit,/if \(cached\) \{[\s\S]*?if \(!forceConnections657\) \{[\s\S]*?return;/);
+assert.match(explicit,/getExploreProfileConnections\(targetUid, direction, null, forceConnections657\)/);
+assert.match(explicit,/const refreshPublic657 = targetUid !== user\?\.uid &&/);
+assert.match(explicit,/publicConnectionsLastCheck657Ref\.current\.set\(key, Date\.now\(\)\)/);
+assert.match(explicit,/if \(!forceConnections657\)/);
+assert.match(page,/readExploreProfileConnectionExactCount379\([\s\S]*?nextProfile\.uid, 'following'/);
+assert.match(page,/readExploreProfileConnectionExactCount379\([\s\S]*?refreshedProfile\.uid,'following'/);
+console.log('APP657_PUBLIC_LIST_ON_EXPLICIT_CLICK_AND_COUNT_NO_REGRESSION=PASS');
 assert.match(explicit,/if \(!page.nextCursor\) \{/);
 assert.doesNotMatch(page,/onOwnFollowersFocus525|ownFollowersHeaderLastCheck525Ref|ownFollowersHeaderInflight525Ref/);
 const ownerBegin548=page.indexOf('  // APP542:');

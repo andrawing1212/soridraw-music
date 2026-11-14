@@ -12,7 +12,9 @@ const js=ts.transpileModule(helper,{compilerOptions:{
 }}).outputText;
 const exports={};
 vm.runInNewContext(js,{exports,URLSearchParams});
-const {captureOwnerFollowCanaryOptIn634:capture,hasOwnerFollowCanaryOptIn634:has}=exports;
+const {captureOwnerFollowCanaryOptIn634:capture,hasOwnerFollowCanaryOptIn634:has,
+ mayListenToApprovedOwnerOnPreview658:canListen,
+ mayListenToPreviewOwnerGeneral659:canGeneral}=exports;
 const items=new Map();
 const tab={setItem:(k,v)=>items.set(k,v),getItem:k=>items.get(k)??null};
 const host='preview.soridraw.com';
@@ -27,6 +29,23 @@ assert.equal(has(host,'?profile=ownerA',{getItem:()=>null}),false);
 assert.equal(has(host,'?ownerFollowCanary=1',null),true);
 assert.equal(capture(host,'?profile=ownerA',{setItem:()=>{throw Error('storage blocked')}}),false);
 assert.equal(capture(host,'?ownerFollowCanary=1',{setItem:()=>{throw Error('storage blocked')}}),true);
+// APP658: exact approved PREVIEW owner can listen without URL, but no other UID/host.
+assert.equal(canListen(host,'approvedOwner','approvedOwner'),true);
+assert.equal(canListen(host,'otherOwner','approvedOwner'),false);
+assert.equal(canListen(host,'',''),false);
+for(const h of ['soridraw.com','test.soridraw.com','evil-preview.soridraw.com'])
+ assert.equal(canListen(h,'approvedOwner','approvedOwner'),false);
+assert.match(client,/mayListenToApprovedOwnerOnPreview658\(/);
+assert.match(client,/APP659_GENERAL_PREVIEW_OWNERS_ENABLED=false/);
+assert.equal(canGeneral(host,'otherOwner',true),true);
+assert.equal(canGeneral(host,'otherOwner',false),false);
+assert.equal(canGeneral('soridraw.com','otherOwner',true),false);
+assert.equal(canGeneral('test.soridraw.com','otherOwner',true),false);
+assert.match(client,/ownerEpochProbe658=new WeakMap/);
+const enrollStart=client.indexOf('const tryOwnerFollowCanaryEnrollment575=');
+const enrollEnd=client.indexOf('const EPOCH=',enrollStart);
+assert.ok(enrollStart>0&&enrollEnd>enrollStart);
+assert.match(client.slice(enrollStart,enrollEnd),/hasExplicitOwnerFollowTabOptIn634\(\)/);
 assert.ok(main.indexOf('captureOwnerFollowCanaryOptIn634(')>=0);
 assert.ok(main.indexOf('captureOwnerFollowCanaryOptIn634(')<main.indexOf("createRoot("));
 assert.match(client,/uid===APP608_APPROVED_CANARY_UID/);

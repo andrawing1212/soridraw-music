@@ -1,0 +1,38 @@
+name: SORIDRAW APP656 public Following discrepancy READONLY
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/follow-656-public-list-readonly.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: One GET of visible public profile and one GET of following list
+        run: |
+          python3 - <<'PY'
+          import json,urllib.request
+          from urllib.parse import quote
+          base='https://soridraw-explore-preview.andrawing1212.workers.dev'
+          handle='andyj'
+          def get(path):
+            request=urllib.request.Request(base+path,headers={'Accept':'application/json',
+              'Cache-Control':'no-cache'},method='GET')
+            with urllib.request.urlopen(request,timeout=20) as res:
+              return json.load(res)
+          try:
+            profile=get('/v1/profiles/'+quote(handle))['data']['profile']
+            page=get('/v1/profiles/'+quote(handle)+'/following?limit=30')['data']
+            items=page.get('items') or []
+            names=[str(x.get('nickname') or '') for x in items]
+            print('APP656_PUBLIC_PROFILE_FOLLOWING_COUNT='+str(profile.get('followingCount')))
+            print('APP656_PUBLIC_FOLLOWING_PAGE_ITEMS='+str(len(items)))
+            print('APP656_PUBLIC_FOLLOWING_HAS_NEXT='+str(bool(page.get('nextCursor'))))
+            print('APP656_SOULFORCE_VISIBLE='+str(any('소울포스' in n.replace(' ','') for n in names)))
+            print('APP656_ONLY_TWO_PUBLIC_GETS_NO_USER_IDS_OR_TOKENS_PRINTED=PASS')
+          except Exception as e:
+            print('APP656_PUBLIC_GET_HOLD='+type(e).__name__)
+            raise
+          PY

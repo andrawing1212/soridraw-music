@@ -159,6 +159,7 @@ const store=new Map();let targetReads=0;
 const client=clientContext('src/services/exploreSocialService.ts',{
   EXPLORE_API_BASE:'https://fixture.invalid',getFirebaseAppCheckToken:async()=> 'fixture',
   recordCloudflareResponse:()=>{},recordCloudflareLocalCacheHit:()=>{},
+  readPendingExploreFollowIntents380:()=>[],
   readSoridrawPersistentCache:o=>store.get(o.uid),writeSoridrawPersistentCache:o=>store.set(o.uid,{data:o.data}),
   getExplorePersonalSocialSnapshot:async()=>({followingUids:['known'],followingComplete:false}),
   fetch:async()=>{targetReads++;return new Response(JSON.stringify({data:{following:true}}))},
@@ -174,6 +175,7 @@ let reply=true,fail=false;
 const legacyClient=clientContext('src/services/exploreSocialService.ts',{
   EXPLORE_API_BASE:'https://fixture.invalid',getFirebaseAppCheckToken:async()=> 'fixture',
   recordCloudflareResponse:()=>{},recordCloudflareLocalCacheHit:()=>{},
+  readPendingExploreFollowIntents380:()=>[],
   readSoridrawPersistentCache:o=>{assert.equal(o.schemaVersion,2);return legacyStore.get(o.uid)},
   writeSoridrawPersistentCache:o=>{assert.equal(o.schemaVersion,2);legacyWrites++;legacyStore.set(o.uid,{data:o.data})},
   getExplorePersonalSocialSnapshot:async()=>{throw Error('Partial-cache target must not hydrate a snapshot')},

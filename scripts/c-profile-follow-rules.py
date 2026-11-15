@@ -30,31 +30,48 @@ def main():
  url=URL+'?access_token='+creds.token
  live,etag=get(url,True)
  print('C_PROFILE_ACTIVE_SHARED_RULES_SHA='+sha(live),flush=True)
- check(sha(live)==EXPECTED,'RULES_BASELINE_DRIFT')
+ original=json.loads(json.dumps(live))
+ existing=original.get('rules',{}).get('publicSync',{}).pop('exploreFollowProfiles667',None)
+ already=existing is not None
+ check(sha(original if already else live)==EXPECTED,'RULES_BASELINE_DRIFT')
  Path('/tmp/c-profile-live-rules.json').write_text(json.dumps(live))
+ # Retain the exact original rules before any operation. The workflow uploads
+ # this file even on failure. No credentials or database records are included.
+ Path('c-profile-rules-backup.json').write_text(json.dumps(live,sort_keys=True,indent=2)+chr(10))
  code="""
 import {readFileSync,writeFileSync} from 'node:fs';
 import {makeAdditivePublicFollowRules667} from './scripts/lib/public-follow-rules-667.mjs';
 const current=JSON.parse(readFileSync('/tmp/c-profile-live-rules.json'));
 const next=makeAdditivePublicFollowRules667(current);
-if(next.mode!=='ADD_EXACT_ONE_CHILD')throw Error('RULES_ADD_SCOPE');
+if(!['ADD_EXACT_ONE_CHILD','ALREADY_EXACT'].includes(next.mode))throw Error('RULES_ADD_SCOPE');
 writeFileSync('/tmp/c-profile-next-rules.json',JSON.stringify(next.candidate));
 console.log('C_PROFILE_SHARED_RULES_EXACT_ONE_CHILD=PASS');
 """
  subprocess.run(['node','--input-type=module','-e',code],check=True)
  after=json.loads(Path('/tmp/c-profile-next-rules.json').read_text())
  check(after['rules']['publicSync'].get('exploreFollowProfiles667'),'NEW_CHILD_ABSENT')
- check(sha({**after,'rules':{**after['rules'],'publicSync':{
-  k:v for k,v in after['rules']['publicSync'].items()
-  if k!='exploreFollowProfiles667'}}})==sha(live),'UNRELATED_RULES_CHANGED')
+ restored=json.loads(json.dumps(after))
+ restored['rules']['publicSync'].pop('exploreFollowProfiles667',None)
+ check(sha(restored)==EXPECTED,'UNRELATED_RULES_CHANGED')
+ if already:
+  check(sha(live)==sha(after),'EXISTING_CHILD_CONFLICT')
+  print('C_PROFILE_SHARED_RULES_ALREADY_EXACT=PASS',flush=True)
+  return
  if sys.argv[1]=='--preflight':return
- # Do not PUT unless REST supplied an entity version for compare-and-swap.
- check(bool(etag),'MISSING_SERVER_ETAG')
+ # Firebase RTDB Rules management GET does not reliably issue an ETag.
+ # Without server CAS this is explicitly an operational maintenance release,
+ # never an automatic push-deploy. Exact isolated GitHub workflow opt-in and
+ # a declared freeze of other Rules publishers are mandatory.
+ check(os.environ.get('C_PROFILE_RULES_MAINTENANCE_CONFIRMED')=='FREEZE_CONFIRMED',
+  'MAINTENANCE_FREEZE_REQUIRED')
  compare,_=get(url)
  check(sha(compare)==EXPECTED,'CONCURRENT_RULE_UPDATE')
+ final_check,_=get(url)
+ check(sha(final_check)==EXPECTED,'CONCURRENT_RULE_UPDATE_FINAL')
  body=json.dumps(after,separators=(',',':')).encode()
- req=urllib.request.Request(url,data=body,method='PUT',headers={
-  'Content-Type':'application/json','If-Match':etag})
+ headers={'Content-Type':'application/json'}
+ if etag:headers['If-Match']=etag
+ req=urllib.request.Request(url,data=body,method='PUT',headers=headers)
  try:
   with urllib.request.urlopen(req,timeout=40) as resp:
    check(resp.status in (200,204),'RULES_PUT_STATUS')

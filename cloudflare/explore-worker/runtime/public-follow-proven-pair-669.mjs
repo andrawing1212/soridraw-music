@@ -52,15 +52,18 @@ export async function createVerifiedPublicFollowClaim669({
  const byUid=new Map(rows.map(row=>[row.uid,row]));
  if(byUid.get(target)?.isPublic!==1)return fail('target-not-public');
  const actorPublic=byUid.get(actor)?.isPublic===1;
+ // Private actors do not need an exposed shared-profile R2 bundle.
+ // Only the public target must have a settled, exact counter snapshot.
+ const profileUids=actorPublic?[actor,target]:[target];
  let bundles;
  try{
-  const files=await Promise.all([actor,target].map(uid=>env.PROFILE_MEDIA.get(profileKey(uid))));
+  const files=await Promise.all(profileUids.map(uid=>env.PROFILE_MEDIA.get(profileKey(uid))));
   if(files.some(file=>!file))return fail('r2-missing');
   bundles=await Promise.all(files.map(f=>f.text().then(JSON.parse)));
  }catch{return fail('r2-unavailable')}
- const a=extract(bundles[0],actor);
- const b=extract(bundles[1],target);
- if(!a||!b)return fail('r2-not-exact');
+ const a=actorPublic?extract(bundles[0],actor):null;
+ const b=extract(bundles[bundles.length-1],target);
+ if((actorPublic&&!a)||!b)return fail('r2-not-exact');
  if(b.revision<=Number(r.priorR2Revision||0))
   return fail('target-revision-not-advanced');
  const at=Number(now());
@@ -69,5 +72,5 @@ export async function createVerifiedPublicFollowClaim669({
   schemaVersion:1,actorUid:actor,targetUid:target,
   cutoverToken:r.cutoverToken,operationId:r.operationId,signedAtMs:at,
   actor:actorPublic?a:null,target:b,
- },readScope:{d1Rows:rows.length,r2Objects:2}};
+ },readScope:{d1Rows:rows.length,r2Objects:profileUids.length}};
 }

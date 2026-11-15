@@ -1975,6 +1975,7 @@ export default function ExplorePage() {
   const [profileLikedLoading, setProfileLikedLoading] = useState(false);
   const [profileLikedError, setProfileLikedError] = useState('');
   const [profileLoading, setProfileLoading] = useState(false);
+  const [profileCountsVerifying, setProfileCountsVerifying] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [followState, setFollowState] = useState<ExploreFollowState | null>(null);
   // The existing persisted follow final-state queue serializes rapid taps
@@ -3396,6 +3397,7 @@ export default function ExplorePage() {
   useEffect(() => {
     if (!profileUid) {
       setProfile(null);
+      setProfileCountsVerifying(false);
       setProfileTracks([]);
       setProfileCollection('public');
       setProfileLikedTracks([]);
@@ -3418,6 +3420,7 @@ export default function ExplorePage() {
     setProfileLikedLoading(false);
     setProfileLikedError('');
     setProfileLoading(true);
+    setProfileCountsVerifying(Boolean(user));
     setFollowState(null);
     setProfileError('');
     setSocialNotice('');
@@ -3590,6 +3593,7 @@ export default function ExplorePage() {
           await ownCountsTask;
           if (cancelled) return;
           applyProfileFirstView(nextProfile, rows);
+          setProfileCountsVerifying(false);
         }
         if (cancelled) return;
         if (user && user.uid !== nextProfile.uid) {
@@ -3644,6 +3648,7 @@ export default function ExplorePage() {
               setSocialNotice('팔로우 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.');
             }
           }
+          if (!cancelled) setProfileCountsVerifying(false);
           // Apply any earlier completed R2 refresh only AFTER the authenticated
           // follow-state snapshot; the verified-count guard above preserves it.
           targetFirstViewResolved666=true;
@@ -3658,6 +3663,7 @@ export default function ExplorePage() {
       })
       .catch((reason: unknown) => {
         if (cancelled) return;
+        setProfileCountsVerifying(false);
         console.error('Explore public profile load failed:', reason);
         setProfile(null);
         setProfileTracks([]);
@@ -5951,17 +5957,17 @@ export default function ExplorePage() {
                       type="button"
                       className="soridraw-explore-profile-stat-button-376"
                       onClick={() => void openProfileConnections376('followers')}
-                      aria-label={`팔로워 ${formatCount(profile.followerCount)}명 보기`}
+                      aria-label={profileCountsVerifying ? '팔로워 수 확인 중' : `팔로워 ${formatCount(profile.followerCount)}명 보기`}
                     >
-                      팔로워 <strong>{formatCount(profile.followerCount)}</strong>
+                      팔로워 <strong>{profileCountsVerifying ? '…' : formatCount(profile.followerCount)}</strong>
                     </button>
                     <button
                       type="button"
                       className="soridraw-explore-profile-stat-button-376"
                       onClick={() => void openProfileConnections376('following')}
-                      aria-label={`팔로잉 ${formatCount(profile.followingCount)}명 보기`}
+                      aria-label={profileCountsVerifying ? '팔로잉 수 확인 중' : `팔로잉 ${formatCount(profile.followingCount)}명 보기`}
                     >
-                      팔로잉 <strong>{formatCount(profile.followingCount)}</strong>
+                      팔로잉 <strong>{profileCountsVerifying ? '…' : formatCount(profile.followingCount)}</strong>
                     </button>
                     <span>공개곡 <strong>{formatCount(resolveExplorePublicTrackCount(profile.trackCount, profileTracks))}</strong></span>
                   </div>

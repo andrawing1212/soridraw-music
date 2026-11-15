@@ -3415,6 +3415,9 @@ export default function ExplorePage() {
 
     let cancelled = false;
     verifiedVisitedProfileUid661Ref.current = '';
+    // The profile's public RTDB listener can be installed as soon as its
+    // public shell is visible. An exact per-target GET must not be required
+    // merely to *start listening* for later server-confirmed notifications.
     verifiedVisitedCounts668Ref.current=null;
     setVerifiedVisitedSignalUid669('');
     setProfileCollection('public');
@@ -3423,7 +3426,15 @@ export default function ExplorePage() {
     setProfileLikedTracks((previous) => profileUid === user?.uid ? previous : []);
     setProfileLikedLoading(false);
     setProfileLikedError('');
-    setProfileLoading(true);
+    // APP683: re-entering the owner's profile after a Follow is not a new
+    // mutation. Paint its already persisted profile shell immediately while
+    // the existing one-shot authenticated counter read checks exact totals.
+    // No additional network request or canonical follow write is made.
+    const cachedOwnShell683=user?.uid===profileUid
+      ? readCachedExplorePublicProfile(profileUid):null;
+    setProfile(cachedOwnShell683);
+    setProfileTracks([]);
+    setProfileLoading(!cachedOwnShell683);
     setProfileCountsVerifying(Boolean(user));
     setFollowState(null);
     setProfileError('');
@@ -3436,6 +3447,11 @@ export default function ExplorePage() {
     let targetFirstViewResolved666 = false;
     let queuedTargetRevalidation666: {profile:ExplorePublicProfile;tracks:Array<Record<string,unknown>>}|null = null;
     const ownCountsRequestedAt = Date.now();
+    // APP683: capture the initial profile-entry/GET boundary even when the
+    // optional follow-state GET does not return an exact counter envelope.
+    // Only newer, server-signed public RTDB revisions may repaint this visit.
+    if(user&&profileUid!==user.uid)
+      verifiedVisitedCounts668Ref.current={uid:profileUid,readStartedAt:ownCountsRequestedAt};
     if(user&&profileUid===user.uid){
       ownCountRequest662Ref.current={uid:user.uid,at:ownCountsRequestedAt};
       ownVerifiedCount662Ref.current=null;
@@ -3593,6 +3609,12 @@ export default function ExplorePage() {
       },
     })
       .then(async ({ profile: nextProfile, tracks: rows }) => {
+        // Resolve a public handle to its canonical UID before attaching the
+        // visitor stream. The route query may be a handle, not a Firebase UID.
+        if(user&&user.uid!==nextProfile.uid&&
+           verifiedVisitedCounts668Ref.current?.uid!==nextProfile.uid)
+          verifiedVisitedCounts668Ref.current={uid:nextProfile.uid,
+            readStartedAt:ownCountsRequestedAt};
         // Show the already loaded public profile immediately. Follow-state and
         // owner-count verification must not keep the entire page on a spinner.
         applyProfileFirstView(nextProfile, rows);
@@ -3623,9 +3645,10 @@ export default function ExplorePage() {
               // not the potentially different stale R2 first-view caches.
               // A newer settled follow has already updated this profile.
               // The in-flight old GET must not repaint that canonical count.
-              if(!(verifiedVisitedProfileUid661Ref.current===nextProfile.uid &&
-                   (verifiedVisitedCounts668Ref.current?.readStartedAt||0)>ownCountsRequestedAt))
-                applyProfileFirstView(nextProfile, rows);
+              const newerPublicSignal683 =
+                verifiedVisitedProfileUid661Ref.current===nextProfile.uid &&
+                (verifiedVisitedCounts668Ref.current?.readStartedAt||0)>ownCountsRequestedAt;
+              if(!newerPublicSignal683)applyProfileFirstView(nextProfile, rows);
               const pending525=readPendingExploreFollowIntents380(user.uid)
                 .find(row=>row.targetUid===nextProfile.uid);
               setFollowState(previous=>pending525 ? {
@@ -3634,7 +3657,9 @@ export default function ExplorePage() {
                 followerCount:computeFollowTargetDisplay525(
                   pending525.baseTargetFollowerCount,
                   pending525.baseFollowing,pending525.desiredFollowing),
-              } : verifiedVisitedProfileUid661Ref.current===nextProfile.uid &&
+              } : newerPublicSignal683&&previous
+                ?{...previous,isFollowing:nextFollowState.isFollowing}
+                : verifiedVisitedProfileUid661Ref.current===nextProfile.uid &&
                   nextFollowState.countVerified661!==true && previous
                 ?{...previous,isFollowing:
                   readExploreFollowMembership379(user.uid,nextProfile.uid)??previous.isFollowing}
@@ -3642,7 +3667,7 @@ export default function ExplorePage() {
               // The existing authenticated GET already verifies the target
               // count. Reuse it instead of a stale first-view R2 cache, with
               // zero extra reads. Pending optimistic choices keep priority.
-              if(!pending525&&nextFollowState.countVerified661===true){
+              if(!pending525&&nextFollowState.countVerified661===true&&!newerPublicSignal683){
                 const exact661={
                   followerCount:nextFollowState.followerCount,
                   followingCount:nextFollowState.followingCount,
@@ -4682,8 +4707,11 @@ export default function ExplorePage() {
     if(!PUBLIC_FOLLOW_VISITOR_668_ENABLED)return;
     const viewedUid=String(profile?.uid||'').trim();
     const principal=auth.currentUser;
+    // APP683: a successful exact count GET is a *snapshot authority*,
+    // never a prerequisite for a live, server-confirmed public counter stream.
+    // Otherwise a failed/partial GET silently disables all A-viewing-C updates.
     if(!principal||!viewedUid||viewedUid===principal.uid||
-       user?.uid!==principal.uid||verifiedVisitedSignalUid669!==viewedUid)return;
+       user?.uid!==principal.uid)return;
     let stopped=false;
     let detach=()=>{};
     const attach=()=>{
@@ -4702,6 +4730,9 @@ export default function ExplorePage() {
         const count={followerCount:signal.followerCount,
           followingCount:signal.followingCount};
         verifiedVisitedProfileUid661Ref.current=viewedUid;
+        // Fence all earlier profile / follow-state fetches from repainting
+        // this newer verified server event after their promises resolve.
+        verifiedVisitedCounts668Ref.current={uid:viewedUid,readStartedAt:signal.at};
         patchExplorePublicProfileFirstViewProfile(viewedUid,count);
         setProfile(previous=>previous?.uid===viewedUid
           ?{...previous,...count}:previous);
@@ -4719,7 +4750,7 @@ export default function ExplorePage() {
     document.addEventListener('visibilitychange',onVisibility);
     attach();
     return ()=>{stopped=true;document.removeEventListener('visibilitychange',onVisibility);detach();};
-  },[profile?.uid,user?.uid,verifiedVisitedSignalUid669]);
+  },[profile?.uid,profileUid,user?.uid]);
 
   // APP527: A's profile must not spend D1/R2 on window focus, blank-space
   // clicks or visibility changes. The app525 15-second fallback previously

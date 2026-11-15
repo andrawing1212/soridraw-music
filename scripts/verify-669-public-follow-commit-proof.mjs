@@ -42,7 +42,7 @@ const before=()=>[sqlCalls,r2Calls];
 assert.equal((await run({verify:async()=>({committed:false,status:'intent-not-settled'})})).ready,false);
 assert.deepEqual(before(),[1,2]);
 rows[1].isPublic=0;
-assert.equal((await run()).status,'not-public');
+assert.equal((await run()).status,'target-not-public');
 assert.equal(r2Calls,2);rows[1].isPublic=1;
 rows[0].epoch='bad';
 assert.equal((await run()).ready,true); // No enrollment requirement

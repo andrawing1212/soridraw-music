@@ -58,7 +58,11 @@ export const shouldKeepExploreFollowChoice685=(
  // Only hold a post-click local decision against a request started before
  // that decision. A new canonical request started after it may verify anew.
  return Boolean(choice&&choice.following!==staleFollowing&&
-   choice.at>=serverStartedAt);
+   (choice.at>=serverStartedAt||
+    // An immediately revisited profile may receive a materialized GET that
+    // still predates the last canonical ACK. Bound that display protection.
+    (choice.settled&&now-choice.at<=30_000)||
+    !choice.settled));
 };
 export const shouldIgnoreExploreFollowSignal685=(
  viewerUid:string,targetUid:string,signalAt:number,now=Date.now(),

@@ -69,14 +69,20 @@ console.log('C_PROFILE_SHARED_RULES_EXACT_ONE_CHILD=PASS');
  final_check,_=get(url)
  check(sha(final_check)==EXPECTED,'CONCURRENT_RULE_UPDATE_FINAL')
  body=json.dumps(after,separators=(',',':')).encode()
- headers={'Content-Type':'application/json'}
- if etag:headers['If-Match']=etag
- req=urllib.request.Request(url,data=body,method='PUT',headers=headers)
+ # Rules management PUT is a full-document replacement, NOT an RTDB
+ # data-location conditional write. Never pass data REST If-Match here: the
+ # rules endpoint rejected the prior request with HTTP 400. Rely on exact
+ # baseline + two live reads + a declared maintenance freeze, not false CAS.
+ req=urllib.request.Request(url,data=body,method='PUT',headers={
+  'Content-Type':'application/json'})
  try:
   with urllib.request.urlopen(req,timeout=40) as resp:
    check(resp.status in (200,204),'RULES_PUT_STATUS')
  except urllib.error.HTTPError as err:
-  raise RuntimeError('C_PROFILE_RULES_CAS_REJECTED_'+str(err.code)) from None
+  # Surface bounded validation detail, not OAuth URL/token or live Rules.
+  detail=err.read(4096).decode('utf-8','replace')
+  safe=''.join(c if 32<=ord(c)<127 else ' ' for c in detail)[:360]
+  raise RuntimeError('C_PROFILE_RULES_PUT_REJECTED_'+str(err.code)+':'+safe) from None
  persisted,_=get(url)
  check(sha(persisted)==sha(after),'RULES_POSTFLIGHT_MISMATCH')
  print('C_PROFILE_SHARED_RULES_ONE_CHILD_ONLY_ACTIVE=PASS',flush=True)

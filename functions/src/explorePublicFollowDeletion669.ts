@@ -12,7 +12,7 @@ export async function revokeDeletedPublicFollow669(
  if(!UID.test(uid)||!GEN.test(epoch))return {status:'invalid-or-not-enrolled'};
  const ref=db.ref('publicSync/exploreFollowProfiles667/'+uid);
  const outcome=await ref.transaction((current:unknown)=>{
-  if(current===null)return null;
+  if(current===null)return undefined; // empty probe is never a write
   if(!current||typeof current!=='object'||Array.isArray(current))
    return undefined;
   const row=current as Record<string,unknown>;

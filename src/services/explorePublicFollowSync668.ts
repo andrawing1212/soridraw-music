@@ -3,10 +3,11 @@
 // Do not use the owner's private ownerFollowerSync532 signal for visitors.
 import {onValue,ref as databaseRef,type Unsubscribe} from 'firebase/database';
 import {auth,realtimeDb} from '../firebase';
+import {normalizePublicProfileFollow668,acceptPublicProfileFollow668,
+ type PublicProfileFollowSignal668} from './explorePublicFollowCore668';
 
 export const PUBLIC_FOLLOW_VISITOR_668_ENABLED=false;
 export const PUBLIC_FOLLOW_PROFILE_ROOT_668='publicSync/exploreFollowProfiles667';
-import {normalizePublicProfileFollow668,acceptPublicProfileFollow668} from './explorePublicFollowCore668';
 export type {PublicProfileFollowSignal668} from './explorePublicFollowCore668';
 const UID=/^[A-Za-z0-9_-]{1,128}$/;
 export const subscribePublicProfileFollow668=(

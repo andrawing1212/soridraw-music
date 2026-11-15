@@ -3,6 +3,7 @@
 // triggers perform a single exact owner path transaction (never a fan-out).
 import * as functions from 'firebase-functions/v1';
 import {getDatabase} from 'firebase-admin/database';
+import {publicFollowAuthGeneration669} from './explorePublicFollowAuthGeneration669';
 const UID=/^[A-Za-z0-9_-]{1,128}$/,GEN=/^[a-f0-9]{32}$/;
 export const APP669_PUBLIC_FOLLOW_DELETION_HOOK_COMPILED_OPEN=false;
 export async function revokeDeletedPublicFollow669(
@@ -26,7 +27,8 @@ export const revokePublicFollowOnAuthDelete669=functions
  .runWith({failurePolicy:true})
  .auth.user().onDelete(async user=>{
   if(!APP669_PUBLIC_FOLLOW_DELETION_HOOK_COMPILED_OPEN)return;
-  const epoch=user.customClaims?.soridrawFollowEpoch532;
-  if(typeof epoch!=='string'||!GEN.test(epoch))return;
-  await revokeDeletedPublicFollow669(getDatabase(),user.uid,epoch);
+  const generation=publicFollowAuthGeneration669(
+   user.uid,user.metadata?.creationTime||'');
+  if(!generation)return;
+  await revokeDeletedPublicFollow669(getDatabase(),user.uid,generation);
  });

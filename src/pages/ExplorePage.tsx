@@ -93,6 +93,7 @@ import {
   readExploreFollowingExactCount379,
   readExploreProfileConnectionExactCount379,
   readExploreProfileConnectionLastServerAt528,
+  readExploreProfileConnectionsLocal681,
   shouldRefreshOwnerFollowersOnOpen528,
   getExplorePublicProfile,
   getExplorePublicProfileTracks,
@@ -3880,16 +3881,22 @@ export default function ExplorePage() {
       profileConnectionsCache376Ref.current.delete(row.targetUid+':followers');
       if(profileConnectionsOpen376Ref.current==='following'&&
          activeProfileUidRef.current===viewerUid681){
-        const request=++profileConnectionsRequest376Ref.current;
-        // The confirmed single-card cache patch should satisfy this locally.
-        void getExploreProfileConnections(viewerUid681,'following')
-          .then(page=>{
-            if(request!==profileConnectionsRequest376Ref.current)return;
-            profileConnectionsCache376Ref.current.set(viewerUid681+':following',page);
-            setProfileConnectionsItems376(page.items);
-            setProfileConnectionsNextCursor376(page.nextCursor);
-            setProfileConnectionsIncomplete661(page.hasUnresolvedProfiles===true);
-          }).catch(reason=>console.warn('[681] Following popup refresh unavailable',reason));
+        // Only project the already-patched persisted page. Never issue a new
+        // implicit network GET from the settlement event.
+        const page=readExploreProfileConnectionsLocal681(viewerUid681,'following');
+        if(page){
+          profileConnectionsRequest376Ref.current+=1;
+          profileConnectionsCache376Ref.current.set(viewerUid681+':following',page);
+          setProfileConnectionsItems376(page.items);
+          setProfileConnectionsNextCursor376(page.nextCursor);
+          setProfileConnectionsIncomplete661(page.hasUnresolvedProfiles===true);
+        }else{
+          // A missing local page requires the existing explicit list-open path;
+          // do not leave a known-stale popup visible as if it were confirmed.
+          profileConnectionsCache376Ref.current.delete(viewerUid681+':following');
+          setProfileConnectionsOpen376(null);
+          setSocialNotice('팔로잉 목록이 변경됐습니다. 다시 열어 최신 상태를 확인해 주세요.');
+        }
       }
     };
     window.addEventListener(EXPLORE_FOLLOW_SETTLED_EVENT_681,onSettled681);

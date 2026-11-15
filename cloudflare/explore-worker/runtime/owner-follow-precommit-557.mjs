@@ -33,7 +33,7 @@ const forwardLegacyFollow579=(request,callCanonical,operationId,expectedRevision
 };
 export async function runOwnerFollowPrecommit557({
  request,env,ctx,authenticate,callCanonical,reserve,
- enabled=APP557_OWNER_PRECOMMIT_COMPILED_OPEN,
+ enabled=APP557_OWNER_PRECOMMIT_COMPILED_OPEN,publicWithoutEpoch=false,
 }={}){
  if(typeof callCanonical!=='function')throw Error('557_CANONICAL_REQUIRED');
  if(!enabled||env?.SORIDRAW_ENVIRONMENT!=='preview'||
@@ -85,9 +85,24 @@ export async function runOwnerFollowPrecommit557({
  }catch{return fail('owner-enrollment-unavailable')}
  // Unenrolled owners MUST keep the exact existing canonical follow Writer.
  // A globally enabled PREVIEW push must not reject their normal follows.
- if(!row||row.epoch==='')return callCanonical();
+ // An un-enrolled PUBLIC target still needs a durable public-counter relay.
+ // No private owner notification is attempted with this reserved sentinel.
+ // Private or missing profiles retain the canonical-only legacy behavior.
+ let publicOnly680=false;
+ if(publicWithoutEpoch===true&&env?.SORIDRAW_ENVIRONMENT==='preview'&&
+    env?.SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680==='1'&&row?.epoch===''){
+  // Only the newly approved public-only path pays the one indexed lookup.
+  // Old owner/canary and private follow requests keep their original SQL.
+  let publicStatus;
+  try{publicStatus=await env.DB.prepare(
+   'SELECT is_public FROM public_profiles WHERE uid=? LIMIT 1'
+  ).bind(parts[3]).first();}
+  catch{return callCanonical()}
+  publicOnly680=Number(publicStatus?.is_public)===1;
+ }
+ if(!row||(row.epoch===''&&!publicOnly680))return callCanonical();
  // Missing/corrupt non-empty epoch is not an opt-out: fail closed.
- if(!/^[0-9a-f]{32}$/.test(String(row.epoch||'')))
+ if(!publicOnly680&&!/^[0-9a-f]{32}$/.test(String(row.epoch||'')))
   return fail('owner-epoch-invalid');
  const beforeFollowing=row.override_following===null||
    row.override_following===undefined?Boolean(row.baseline):
@@ -177,7 +192,7 @@ export async function runOwnerFollowPrecommit557({
   if(!operationId)return fail('legacy-operation-id-unavailable');
  }
  const ticket={ownerUid:parts[3],actorUid:auth.uid,
-   authEpoch:String(row.epoch),operationId,
+   authEpoch:publicOnly680?'0'.repeat(32):String(row.epoch),operationId,
    expectedRevision,cutoverToken:manifest.cutoverToken,desired,beforeFollowing,
    priorR2Revision:profile.revision};
  let result;

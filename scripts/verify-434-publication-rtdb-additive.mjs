@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { buildStage416ServerRulesCandidate } from './build-416-private-server-rules.mjs';
+import {PUBLIC_FOLLOW_PROFILE_RULE_667} from './lib/public-follow-rules-667.mjs';
 
 // PREVIEW app434: ONLY the exact two public publication signal roots may
 // be added. The currently live shared RTDB may have BOTH Stage416
@@ -8,6 +9,8 @@ import { buildStage416ServerRulesCandidate } from './build-416-private-server-ru
 // app435 separately permits ONLY the two typed private Explore like result
 // metadata fields when both are absent on the live shared Rules. Never
 // combine an app434 public-root change with the app435 private field change.
+// The separately approved public follower signal 667 is accepted only when
+// its exact deployed read-only subtree matches; this job never installs it.
 const stable = (value) => {
   if (Array.isArray(value)) return value.map(stable);
   if (value && typeof value === 'object')
@@ -107,9 +110,22 @@ const studioVariants = source.rules.userSync.$uid.studioHeartHandoffs
       [stage, approved],
       [stage + '_BEFORE_STUDIO_HEART_HANDOFF', beforeStudioHeartHandoff(approved)],
     ]) : withExistingStudioHandoff;
-const variants=studioVariants.flatMap(([stage,approved])=>[
+const ownerVariants=studioVariants.flatMap(([stage,approved])=>[
   [stage,approved],
   [stage+'_WITH_OWNER_PRIVATE_532',withApprovedOwner532(approved)],
+]);
+// An existing, separately released public-counter child is read-only
+// compatibility here, never a mutation by the legacy publication workflow.
+const withExactPublicFollow667=rules=>{
+  const next=structuredClone(rules);
+  assert.equal(Object.hasOwn(next.rules.publicSync,'exploreFollowProfiles667'),false);
+  next.rules.publicSync.exploreFollowProfiles667=
+    structuredClone(PUBLIC_FOLLOW_PROFILE_RULE_667);
+  return next;
+};
+const variants=ownerVariants.flatMap(([stage,approved])=>[
+ [stage,approved],
+ [stage+'_WITH_EXACT_PUBLIC_FOLLOW_667',withExactPublicFollow667(approved)],
 ]);
 
 function classify(live) {
@@ -136,6 +152,13 @@ function classify(live) {
 }
 
 if (process.argv.includes('--self-test')) {
+  const exactPublic=withExactPublicFollow667(source);
+  assert.equal(classify(exactPublic).mode,'ALREADY_EXACT');
+  for(const field of ['.read','.write']){
+    const bad=structuredClone(exactPublic);
+    bad.rules.publicSync.exploreFollowProfiles667['$uid'][field]=field==='.read'?'auth != null':true;
+    assert.throws(()=>classify(bad),/UNEXPECTED_DRIFT/);
+  }
   for (const [stage, approved] of variants) {
     if (stage.endsWith('_WITH_OWNER_PRIVATE_532')) {
       const publicRead=structuredClone(approved);

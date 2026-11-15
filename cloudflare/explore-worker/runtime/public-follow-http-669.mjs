@@ -41,7 +41,7 @@ export async function deliverVerifiedPublicFollow669({
  }catch{return {status:'transport-retry'}}
  const reply=await response?.json?.().catch(()=>null);
  if(response?.ok===true&&reply?.ok===true)
-  return {status:'delivered'};
+  return {status:'delivered',deliveredRevision:proof.claim.target.revision};
  if(response?.status===409)return {status:'generation-hold'};
  return {status:'receiver-retry'};
 }

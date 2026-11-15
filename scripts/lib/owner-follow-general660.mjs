@@ -37,6 +37,9 @@ export function patchExplore660(source){
   " if(generalOwner660(env)&&request.headers.get('Origin')==='https://preview.soridraw.com'){\n  const match=/^\\/v1\\/profiles\\/([A-Za-z0-9_-]{1,128})\\/follow$/.exec(p);\n  return match?match[1]:null;\n }\n const uid=String(env?.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||'');\n return UID.test(uid)&&p==='/v1/profiles/'+uid+'/follow'?uid:null;");
  s=once(s,'request,env:this.env,enabled:true,allowedCanaryUid:uid,',
   'request,env:this.env,enabled:true,allowedCanaryUid:generalOwner660(this.env)?null:uid,');
+ // Keep unenrolled public-only signaling OFF unless the PREVIEW-only
+ // general scope and the dedicated runtime flag are both active.
+ s=once(s,"   enabled:true,\n  });\n },\n};","   enabled:true,\n   publicWithoutEpoch:generalOwner660(env)&&env?.SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680==='1',\n  });\n },\n};");
  return s;
 }
 export function patchOwner660(source){
@@ -48,6 +51,9 @@ export function patchOwner660(source){
   '  if (syntheticOwnerUid !== void 0) return uid === syntheticOwnerUid;\n  if (generalOwner660(env)) return true;');
  s=once(s,'if (!active(env, enabled) || !await approvedOwner600(String(env?.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574 || ""), env, syntheticOwnerUid))',
   'if (!active(env, enabled) || (!generalOwner660(env) && !await approvedOwner600(String(env?.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574 || ""), env, syntheticOwnerUid)))');
+ // A distinct durable key protects already-enrolled private tickets
+ // from public-only zero-epoch reservations for the same UID.
+ s=once(s,"namespace.idFromName(parsed.ticket.ownerUid)","namespace.idFromName(parsed.ticket.ownerUid+(generalOwner660(env)&&env?.SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680==='1'&&parsed.ticket.authEpoch==='0'.repeat(32)?':public-follow-680':''))");
  return s;
 }
 export function patchEnrollment660(source){

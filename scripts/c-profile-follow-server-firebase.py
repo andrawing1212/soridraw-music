@@ -101,17 +101,24 @@ def main():
   # public reads, the issuer or the HTTP receiver.
   existing_delete=request(token,'GET',
    'https://cloudfunctions.googleapis.com/v1/'+PARENT+'/functions/'+DELETE)
-  check(existing_delete is None,'AUTH_DELETE_HOOK_ALREADY_EXISTS')
-  os.symlink(Path('functions/node_modules').resolve(),delete/'node_modules')
-  cmd=['npx','--yes','firebase-tools@14.18.0','deploy','--only',
-   'functions:'+DELETE,'--project',PROJECT,'--non-interactive',
-   '--force','--config',str(base/'firebase.json')]
-  run=subprocess.run(cmd,cwd=base,text=True,stdout=subprocess.PIPE,
-   stderr=subprocess.STDOUT,timeout=1000)
-  print('C_PROFILE_AUTH_DELETE_DEPLOY_EXIT='+str(run.returncode),flush=True)
-  if run.returncode:
-   print('C_PROFILE_AUTH_DELETE_ERROR='+run.stdout[-1400:].replace('\n',' '),flush=True)
-  check(run.returncode==0,'DELETE_HOOK_FAILED_KEEP_RECEIVER_OFF')
+  if existing_delete is not None:
+   check(existing_delete.get('status')=='ACTIVE' and
+    existing_delete.get('entryPoint')==DELETE and
+    existing_delete.get('runtime')=='nodejs22' and
+    existing_delete.get('eventTrigger',{}).get('eventType')=='providers/firebase.auth/eventTypes/user.delete',
+    'EXISTING_AUTH_DELETE_HOOK_DRIFT')
+   print('C_PROFILE_EXISTING_AUTH_DELETE_HOOK_REUSED=PASS',flush=True)
+  else:
+   os.symlink(Path('functions/node_modules').resolve(),delete/'node_modules')
+   cmd=['npx','--yes','firebase-tools@14.18.0','deploy','--only',
+    'functions:'+DELETE,'--project',PROJECT,'--non-interactive',
+    '--force','--config',str(base/'firebase.json')]
+   run=subprocess.run(cmd,cwd=base,text=True,stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,timeout=1000)
+   print('C_PROFILE_AUTH_DELETE_DEPLOY_EXIT='+str(run.returncode),flush=True)
+   if run.returncode:
+    print('C_PROFILE_AUTH_DELETE_ERROR='+run.stdout[-1400:].replace('\n',' '),flush=True)
+   check(run.returncode==0,'DELETE_HOOK_FAILED_KEEP_RECEIVER_OFF')
   deployed_delete=request(token,'GET',
    'https://cloudfunctions.googleapis.com/v1/'+PARENT+'/functions/'+DELETE)
   check(deployed_delete and deployed_delete.get('status')=='ACTIVE',

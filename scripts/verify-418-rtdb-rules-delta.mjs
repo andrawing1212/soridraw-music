@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { buildStage416ServerRulesCandidate } from './build-416-private-server-rules.mjs';
+import {PUBLIC_FOLLOW_PROFILE_RULE_667} from './lib/public-follow-rules-667.mjs';
 
 // Read-only shared RTDB gate. The local release candidate may add:
 // 1) the previously approved canonicalSettled417 bool,
@@ -200,8 +201,23 @@ const ownerVariants = exactHandoffVariants.flatMap(([status,candidate]) => [
   [status,candidate],
   [status+'-with-owner-private-532',withApprovedOwner532(candidate)],
 ]);
+// The director separately approved and deployed this exact server-only
+// public follow child. It is absent from the older source Rules baseline.
+// Permit only this immutable leaf; never normalize arbitrary live drift.
+const withExactPublicFollow667 = source => {
+  const out=structuredClone(source);
+  assert.equal(Object.hasOwn(out.rules.publicSync,'exploreFollowProfiles667'),false,
+    'PUBLIC_FOLLOW_667_LOCAL_BASE_COLLISION');
+  out.rules.publicSync.exploreFollowProfiles667=
+    structuredClone(PUBLIC_FOLLOW_PROFILE_RULE_667);
+  return out;
+};
+const publicFollowVariants=ownerVariants.flatMap(([status,candidate])=>[
+ [status,candidate],
+ [status+'-with-exact-public-follow-667',withExactPublicFollow667(candidate)],
+]);
 const variants = [...new Map(
-  ownerVariants.map(([status,candidate]) => [stable(candidate), [status,candidate]]),
+  publicFollowVariants.map(([status,candidate]) => [stable(candidate), [status,candidate]]),
 ).values()];
 const compare = remote => {
   const key = stable(remote);
@@ -209,6 +225,17 @@ const compare = remote => {
 };
 
 if (process.argv.includes('--self-test')) {
+  const exactPublic667=withExactPublicFollow667(local);
+  assert.ok(compare(exactPublic667)?.includes('with-exact-public-follow-667'));
+  for(const property of ['.read','.write']){
+    const altered=structuredClone(exactPublic667);
+    altered.rules.publicSync.exploreFollowProfiles667['$uid'][property]=
+      property==='.read'?'auth != null':true;
+    assert.equal(compare(altered),null,'667_PUBLIC_FOLLOW_WIDENED_'+property);
+  }
+  const extra=structuredClone(exactPublic667);
+  extra.rules.publicSync.exploreFollowProfiles667['$uid']['$other']['.validate']=true;
+  assert.equal(compare(extra),null,'667_PUBLIC_FOLLOW_OTHER_FIELD_WIDENED');
   for (const [status,candidate] of variants) {
     assert.equal(compare(candidate), status);
     const malicious = structuredClone(candidate);

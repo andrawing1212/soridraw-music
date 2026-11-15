@@ -1,6 +1,11 @@
 // APP669 source-only, PREVIEW-fenced receiver for the existing trusted
 // owner-follow bridge. No endpoint is exported from index.ts or deployed.
 // Accept only domain-separated HMAC from a settled canonical Worker claim.
+import {onRequest} from 'firebase-functions/v2/https';
+import {defineSecret} from 'firebase-functions/params';
+import {getAuth} from 'firebase-admin/auth';
+import {getFirestore} from 'firebase-admin/firestore';
+import {getDatabase} from 'firebase-admin/database';
 import {createHmac,timingSafeEqual} from 'node:crypto';
 import type {Auth} from 'firebase-admin/auth';
 import type {Firestore} from 'firebase-admin/firestore';
@@ -89,3 +94,21 @@ export const createPublicFollowHttp669=({
   res.status(503).json({ok:false,code:'PUBLIC_FOLLOW_RETRY_REQUIRED'});
  }
 };
+
+ 
+// Exported but disabled until the exact PREVIEW Worker, live RTDB Rule,
+// account-deletion revocation and full producer proof are all active.
+// This URL never accepts browser-origin follow events or client tokens.
+const HMAC669=defineSecret('SORIDRAW_OWNER_FOLLOW_HMAC_539');
+export const publishExplorePublicFollow669=onRequest({
+ region:'asia-northeast3',secrets:[HMAC669],cors:false,
+ timeoutSeconds:15,maxInstances:3,
+},async(req,res)=>{
+ const enabled=APP669_PUBLIC_FOLLOW_ENDPOINT_COMPILED_OPEN&&
+  process.env.SORIDRAW_PUBLIC_FOLLOW_READY_669==='1'&&
+  process.env.SORIDRAW_PUBLIC_FOLLOW_SCOPE_669==='preview-only';
+ await createPublicFollowHttp669({
+  auth:getAuth(),firestore:getFirestore(),database:getDatabase(),
+  secret:HMAC669.value(),enabled,
+ })(req,res);
+});

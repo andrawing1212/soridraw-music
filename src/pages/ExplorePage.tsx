@@ -3539,7 +3539,11 @@ export default function ExplorePage() {
         displayProfile379={...displayProfile379,followerCount:pendingFollowerCount525};
       // APP666: a late R2/cache revalidation cannot repaint a target's two
       // counts after the authenticated per-target follow-state GET verified them.
-      setProfile(previous => authoritative && user?.uid !== displayProfile379.uid &&
+      const newerConfirmedLocal681 =
+        verifiedVisitedProfileUid661Ref.current===displayProfile379.uid &&
+        (verifiedVisitedCounts668Ref.current?.readStartedAt||0)>ownCountsRequestedAt;
+      setProfile(previous => (authoritative||newerConfirmedLocal681) &&
+        user?.uid !== displayProfile379.uid &&
         verifiedVisitedProfileUid661Ref.current === displayProfile379.uid &&
         previous?.uid === displayProfile379.uid
         ? {...displayProfile379, followerCount:previous.followerCount,
@@ -3616,16 +3620,24 @@ export default function ExplorePage() {
             if (!cancelled) {
               // First visible third-party counts use the authenticated GET,
               // not the potentially different stale R2 first-view caches.
-              applyProfileFirstView(nextProfile, rows);
+              // A newer settled follow has already updated this profile.
+              // The in-flight old GET must not repaint that canonical count.
+              if(!(verifiedVisitedProfileUid661Ref.current===nextProfile.uid &&
+                   (verifiedVisitedCounts668Ref.current?.readStartedAt||0)>ownCountsRequestedAt))
+                applyProfileFirstView(nextProfile, rows);
               const pending525=readPendingExploreFollowIntents380(user.uid)
                 .find(row=>row.targetUid===nextProfile.uid);
-              setFollowState(pending525 ? {
+              setFollowState(previous=>pending525 ? {
                 ...nextFollowState,
                 isFollowing:pending525.desiredFollowing,
                 followerCount:computeFollowTargetDisplay525(
                   pending525.baseTargetFollowerCount,
                   pending525.baseFollowing,pending525.desiredFollowing),
-              } : nextFollowState);
+              } : verifiedVisitedProfileUid661Ref.current===nextProfile.uid &&
+                  nextFollowState.countVerified661!==true && previous
+                ?{...previous,isFollowing:
+                  readExploreFollowMembership379(user.uid,nextProfile.uid)??previous.isFollowing}
+                :nextFollowState);
               // The existing authenticated GET already verifies the target
               // count. Reuse it instead of a stale first-view R2 cache, with
               // zero extra reads. Pending optimistic choices keep priority.
@@ -3874,6 +3886,11 @@ export default function ExplorePage() {
           ?{...previous,isFollowing:row.following,
             ...(row.targetFollowerCount===null?{}:{followerCount:row.targetFollowerCount})}
           :previous);
+      if(row.targetFollowerCount!==null &&
+         activeProfileUidRef.current===row.targetUid){
+        verifiedVisitedProfileUid661Ref.current=row.targetUid;
+        verifiedVisitedCounts668Ref.current={uid:row.targetUid,readStartedAt:Date.now()};
+      }
       if(row.targetFollowerCount!==null)
         setProfile(previous=>previous?.uid===row.targetUid
           ?{...previous,followerCount:row.targetFollowerCount!}:previous);

@@ -29,11 +29,16 @@ python3 - <<'PY'
 import json
 p=json.load(open('/tmp/c-profile-invoker-before.json'))
 grants=p.get('bindings',[])
-assert not any('allUsers' in b.get('members',[]) and b.get('role')=='roles/run.invoker' for b in grants),'ALREADY_PUBLIC_BUT_403'
+print('yes' if any('allUsers' in b.get('members',[]) and b.get('role')=='roles/run.invoker' for b in grants) else 'no',file=open('/tmp/c-profile-invoker-existing','w'))
 assert not any('allUsers' in b.get('members',[]) and b.get('role')=='roles/owner' for b in grants),'PUBLIC_OWNER_GRANT'
 print('C_PROFILE_INVOKER_BEFORE_NONPUBLIC=PASS')
 PY
-gcloud run services add-iam-policy-binding "$service" --region "$region" --member allUsers --role roles/run.invoker --quiet >/dev/null
+existing="$(cat /tmp/c-profile-invoker-existing)"
+if [[ "$existing" = no ]]; then
+  gcloud run services add-iam-policy-binding "$service" --region "$region" --member allUsers --role roles/run.invoker --quiet >/dev/null
+else
+  echo C_PROFILE_EXISTING_INVOKER_REUSED=PASS
+fi
 gcloud run services get-iam-policy "$service" --region "$region" --format=json > /tmp/c-profile-invoker-after.json
 python3 - <<'PY'
 import json
@@ -41,7 +46,10 @@ before=json.load(open('/tmp/c-profile-invoker-before.json'))
 after=json.load(open('/tmp/c-profile-invoker-after.json'))
 def strip(p):
  return sorted([(b['role'],tuple(sorted(m for m in b.get('members',[]) if not (b['role']=='roles/run.invoker' and m=='allUsers')))) for b in p.get('bindings',[]) if b.get('members') and (b['role']!='roles/run.invoker' or any(m!='allUsers' for m in b.get('members',[])))])
-assert strip(before)==strip(after),'UNRELATED_IAM_CHANGED'
+if not any(b.get('role')=='roles/run.invoker' and 'allUsers' in b.get('members',[]) for b in before.get('bindings',[])):
+ assert strip(before)==strip(after),'UNRELATED_IAM_CHANGED'
+else:
+ assert sorted(before.get('bindings',[]),key=str)==sorted(after.get('bindings',[]),key=str),'ALREADY_PRESENT_IAM_DRIFT'
 assert any(b.get('role')=='roles/run.invoker' and 'allUsers' in b.get('members',[]) for b in after.get('bindings',[])),'MISSING_SINGLE_INVOKER_GRANT'
 print('C_PROFILE_ONLY_PUBLIC_RECEIVER_INVOKER_ADDED=PASS')
 PY
@@ -50,7 +58,9 @@ code="$(curl -sS --max-time 25 -o /tmp/c-profile-off-endpoint.json -w '%{http_co
 if [[ "$code" != 503 ]] || ! grep -Fq PREVIEW_PUBLIC_FOLLOW_DISABLED /tmp/c-profile-off-endpoint.json; then
  echo "C_PROFILE_RECEIVER_POST_IAM_UNEXPECTED_HTTP=$code"
  # Roll back only the newly added invoker grant; never touch other bindings.
- gcloud run services remove-iam-policy-binding "$service" --region "$region" --member allUsers --role roles/run.invoker --quiet >/dev/null || true
+ if [[ "$existing" = no ]]; then
+   gcloud run services remove-iam-policy-binding "$service" --region "$region" --member allUsers --role roles/run.invoker --quiet >/dev/null || true
+ fi
  exit 2
 fi
 echo C_PROFILE_PUBLIC_HMAC_RECEIVER_OFF_BUT_REACHABLE=PASS

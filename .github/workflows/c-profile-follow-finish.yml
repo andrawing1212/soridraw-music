@@ -3,7 +3,7 @@ on:
   push:
     branches: [preview]
     paths:
-      - 'scripts/app660-preview-owner-workers.mjs'
+      - 'scripts/app680-preview-follow-workers.mjs'
       - 'scripts/lib/public-follow-bridge-680.mjs'
       - '.github/workflows/c-profile-follow-finish.yml'
   pull_request:
@@ -64,7 +64,7 @@ jobs:
           npx tsx scripts/verify-669-public-follow-endpoint.ts
           npx tsx scripts/verify-669-follow-deletion.ts
           npx tsx scripts/verify-668-visitor-follow-signal.ts
-          node --check scripts/app660-preview-owner-workers.mjs
+          node --check scripts/app680-preview-follow-workers.mjs
           node --check scripts/lib/public-follow-bridge-680.mjs
           node scripts/verify-653-owner-general-scope.mjs
           python3 scripts/app660-preview-owner-functions.py --package-check
@@ -173,7 +173,7 @@ jobs:
         with:
           node-version: '22'
       - name: Confirm exact active PREVIEW Worker modules before manual release (GET only)
-        run: node scripts/app660-preview-owner-workers.mjs --preflight
+        run: node scripts/app680-preview-follow-workers.mjs --preflight
   release_all_preview:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/preview' && inputs.confirm_rules_maintenance == 'GENERAL_PREVIEW_CONFIRMED' && github.repository == 'andrawing1212/soridraw-music'
     runs-on: ubuntu-24.04
@@ -209,13 +209,13 @@ jobs:
           node scripts/verify-680-public-follow-precommit.mjs
           node scripts/verify-671-public-follow-dual-ack.mjs
           node scripts/verify-653-owner-general-scope.mjs
-          node --check scripts/app660-preview-owner-workers.mjs
+          node --check scripts/app680-preview-follow-workers.mjs
           python3 scripts/app660-preview-owner-functions.py --package-check
-          node scripts/app660-preview-owner-workers.mjs --preflight
+          node scripts/app680-preview-follow-workers.mjs --preflight
       - name: Activate only existing three PREVIEW-scoped Auth-backed owner Functions
         run: python3 scripts/app660-preview-owner-functions.py --apply-once
       - name: Activate existing PREVIEW owner DO then Explore Worker with public-only durable lane
-        run: node scripts/app660-preview-owner-workers.mjs --apply-once
+        run: node scripts/app680-preview-follow-workers.mjs --apply-once
       - name: Trigger existing safeguarded PREVIEW Hosting release
         run: |
           set -euo pipefail

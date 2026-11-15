@@ -19,8 +19,8 @@ const build=async({publicTarget=1,epoch='',flag='1',baseline=0}={})=>{
  let reservations=[],writes=0,canonicalBody=[];
  const env={SORIDRAW_ENVIRONMENT:'preview',SORIDRAW_OWNER_FOLLOW_W2_PUSH_555:'1',
  SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680:flag,PROFILE_MEDIA:media,
- DB:{prepare:()=>({bind:()=>({first:async()=>({epoch,public_target:publicTarget,
- baseline,override_following:null})})})}};
+ DB:{prepare:(sql)=>({bind:()=>({first:async()=>sql.includes('SELECT is_public FROM public_profiles')
+  ?{is_public:publicTarget}:{epoch,baseline,override_following:null}})})}};
  const response=await runOwnerFollowPrecommit557({
   request:body(),env,ctx:{},enabled:true,publicWithoutEpoch:true,
   authenticate:async()=>({ok:true,uid:A}),

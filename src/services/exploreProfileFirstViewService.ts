@@ -114,6 +114,26 @@ export const readCachedExplorePublicProfile = (uid: string): ExplorePublicProfil
   return cached?.profile.uid === uid ? cached.profile : null;
 };
 
+// APP684: the exact existing validated profile+tracks cache is sufficient to
+// paint a visited profile instantly on return, before separate social count
+// verification. This read never fetches and never mutates the server.
+export const readCachedExplorePublicProfileFirstView684 = (
+  profileRef: string,
+): ExploreProfileFirstViewData | null => {
+  const ref = normalizeProfileRef(profileRef);
+  if (!ref) return null;
+  const cached = readCache(ref);
+  if (!cached?.profile?.uid || !Array.isArray(cached.tracks)) return null;
+  const aliases = [
+    cached.profile.uid,
+    cached.profile.handle,
+    cached.profile.handle ? `@${cached.profile.handle}` : '',
+  ];
+  // Do not show an unrelated profile left in a reused cache slot.
+  if (!aliases.some(alias => alias.toLowerCase() === ref.toLowerCase())) return null;
+  return cached;
+};
+
 const writeCache = (profileRef: string, data: ExploreProfileFirstViewData) => {
   const normalizedData = normalizeCachedData(data);
   const refs = new Set<string>([

@@ -30,6 +30,8 @@ export const announceExploreFollowSettled681=(value:ExploreFollowSettled681)=>{
 
 let started681=false;
 export function startExploreFollowPendingResume681(){
+ // This repair is PREVIEW-only until the director approves a production release.
+ if(typeof window==='undefined'||window.location.hostname!=='preview.soridraw.com')return;
  if(started681)return;
  started681=true;
  onAuthStateChanged(auth,(user)=>{

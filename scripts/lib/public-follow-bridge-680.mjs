@@ -24,21 +24,8 @@ export const patchPrecommit680=source=>{
   'enabled=APP557_OWNER_PRECOMMIT_COMPILED_OPEN,\\n}={}){',
   'enabled=APP557_OWNER_PRECOMMIT_COMPILED_OPEN,publicWithoutEpoch=false,\\n}={}){','signature');
  out=one(out,
-  '   owner_follow_auth_epoch_532 AS epoch,\\n   EXISTS(',
-  '   owner_follow_auth_epoch_532 AS epoch,\\n   EXISTS(SELECT 1 FROM public_profiles p WHERE p.uid=? AND p.is_public=1) AS public_target,\\n   EXISTS(','sql');
- out=one(out,
-  '.bind(auth.uid,parts[3],auth.uid,parts[3],parts[3]).first();',
-  '.bind(parts[3],auth.uid,parts[3],auth.uid,parts[3],parts[3]).first();','sql-bind');
- out=one(out,
   " if(!row||row.epoch==='')return callCanonical();",
-  " // An un-enrolled PUBLIC target still needs a durable public-counter relay.\\n"+
-  " // No private owner notification is attempted with this reserved sentinel.\\n"+
-  " // Private or missing profiles retain the canonical-only legacy behavior.\\n"+
-  " const publicOnly680=publicWithoutEpoch===true\\u0026\\u0026\\n"+
-  "  env?.SORIDRAW_ENVIRONMENT==='preview'\\u0026\\u0026\\n"+
-  "  env?.SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680==='1'\\u0026\\u0026\\n"+
-  "  row?.epoch===''\\u0026\\u0026Number(row?.public_target)===1;\\n"+
-  " if(!row||(row.epoch===''\\u0026\\u0026!publicOnly680))return callCanonical();".replaceAll('\\u0026','&'),'unenrolled');
+  " // An un-enrolled PUBLIC target still needs a durable public-counter relay.\n // No private owner notification is attempted with this reserved sentinel.\n // Private or missing profiles retain the canonical-only legacy behavior.\n let publicOnly680=false;\n if(publicWithoutEpoch===true&&env?.SORIDRAW_ENVIRONMENT==='preview'&&\n    env?.SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680==='1'&&row?.epoch===''){\n  // Only the newly approved public-only path pays the one indexed lookup.\n  // Old owner/canary and private follow requests keep their original SQL.\n  let publicStatus;\n  try{publicStatus=await env.DB.prepare(\n   'SELECT is_public FROM public_profiles WHERE uid=? LIMIT 1'\n  ).bind(parts[3]).first();}\n  catch{return callCanonical()}\n  publicOnly680=Number(publicStatus?.is_public)===1;\n }\n if(!row||(row.epoch===''&&!publicOnly680))return callCanonical();",'unenrolled');
  out=one(out,
   " if(!/^[0-9a-f]{32}$/.test(String(row.epoch||'')))",
   " if(!publicOnly680&&!/^[0-9a-f]{32}$/.test(String(row.epoch||'')))",'epoch-guard');

@@ -2,7 +2,7 @@ import { stageNextSongKeywords } from '../lib/nextSongPendingBridge';
 import { EXPLORE_VIEWER_GENRES_EVENT, readExploreViewerGenres } from '../services/exploreCreatorProfileCache';
 import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 import { rankExploreCreators } from '../services/exploreCreatorRecommendations';
-import { readCachedExplorePublicProfile } from '../services/exploreProfileFirstViewService';
+import { readCachedExplorePublicProfile, readCachedExplorePublicProfileFirstView684 } from '../services/exploreProfileFirstViewService';
 // SORIDRAW_EXPLORE_8E5_SOCIAL_PUBLIC_PROFILE
 // SORIDRAW_EXPLORE_8E5_PROFILE_EDIT_UI_975
 // SORIDRAW_PROFILE_REVISION_DIAGNOSTICS_1000
@@ -3426,17 +3426,38 @@ export default function ExplorePage() {
     setProfileLikedTracks((previous) => profileUid === user?.uid ? previous : []);
     setProfileLikedLoading(false);
     setProfileLikedError('');
-    // APP683: re-entering the owner's profile after a Follow is not a new
-    // mutation. Paint its already persisted profile shell immediately while
-    // the existing one-shot authenticated counter read checks exact totals.
-    // No additional network request or canonical follow write is made.
-    const cachedOwnShell683=user?.uid===profileUid
-      ? readCachedExplorePublicProfile(profileUid):null;
-    setProfile(cachedOwnShell683);
-    setProfileTracks([]);
-    setProfileLoading(!cachedOwnShell683);
+    // APP684: the earlier fix painted only the owner's cached shell. For an
+    // already visited C/A public profile it cleared the entire screen and
+    // restored the full-screen loader until first-view/R2 finished. Paint
+    // the SAME validated cached first-view (profile + tracks) for every
+    // revisited profile without a new server read. Verify social counts
+    // independently and never treat this shell as a canonical follow ACK.
+    const cachedFirstView684=readCachedExplorePublicProfileFirstView684(profileUid);
+    const cachedProfile684=cachedFirstView684?.profile||null;
+    setProfile(cachedProfile684);
+    if(cachedFirstView684){
+      const cachedTracks684=cachedFirstView684.tracks.map(normalizeTrack)
+        .filter(track=>track.id).sort(comparePublicProfileTracks);
+      setProfileTracks(overlayActorLikeCounts120(cachedTracks684));
+    }else setProfileTracks([]);
+    setProfileLoading(!cachedFirstView684);
     setProfileCountsVerifying(Boolean(user));
-    setFollowState(null);
+    // A persisted local choice takes priority; otherwise only a previously
+    // known membership may paint an early button while one target GET verifies.
+    const cachedPending684=user&&cachedProfile684&&user.uid!==cachedProfile684.uid
+      ?readPendingExploreFollowIntents380(user.uid)
+        .find(row=>row.targetUid===cachedProfile684.uid):null;
+    const cachedMembership684=user&&cachedProfile684&&user.uid!==cachedProfile684.uid
+      ?readExploreFollowMembership379(user.uid,cachedProfile684.uid):null;
+    setFollowState(cachedProfile684&&user&&user.uid!==cachedProfile684.uid&&
+      (cachedPending684||cachedMembership684!==null)?{
+        isFollowing:cachedPending684?.desiredFollowing??cachedMembership684??false,
+        followerCount:cachedPending684?computeFollowTargetDisplay525(
+          cachedPending684.baseTargetFollowerCount,
+          cachedPending684.baseFollowing,cachedPending684.desiredFollowing)
+          :cachedProfile684.followerCount,
+        followingCount:cachedProfile684.followingCount,
+      }:null);
     setProfileError('');
     setSocialNotice('');
 

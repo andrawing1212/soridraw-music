@@ -34,7 +34,7 @@ def main():
  Path('/tmp/c-profile-live-rules.json').write_text(json.dumps(live))
  # Retain the exact original rules before any operation. The workflow uploads
  # this file even on failure. No credentials or database records are included.
- Path('c-profile-rules-backup.json').write_text(json.dumps(live,sort_keys=True,indent=2)+'\\n')
+ Path('c-profile-rules-backup.json').write_text(json.dumps(live,sort_keys=True,indent=2)+chr(10))
  code="""
 import {readFileSync,writeFileSync} from 'node:fs';
 import {makeAdditivePublicFollowRules667} from './scripts/lib/public-follow-rules-667.mjs';

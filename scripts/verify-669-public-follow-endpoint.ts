@@ -63,7 +63,17 @@ assert.equal((await invoke()).status,409);assert.equal(writes,2);
 users.Target={accountStatus:'banned'};
 assert.equal((await invoke()).status,409);assert.equal(writes,2);
 users.Target={};
+const targetOnly={...claim,operationId:'operation_1234567891',actor:null,
+ target:{...claim.target,revision:8,followerCount:9}};
+const privateResponse=await invoke({body:targetOnly});
+assert.equal(privateResponse.status,200);
+assert.equal(privateResponse.result.actor,'skipped-private');
+assert.equal(privateResponse.result.rtdbTransactions,1);
+assert.equal(writes,3);
+assert.equal((await invoke({body:targetOnly})).status,200);
+assert.equal(writes,3);
 assert.equal((await invoke({clock:now+100000})).status,403);
+console.log('APP670_PRIVATE_ACTOR_RECEIVER_AUTH_STILL_VERIFIED=PASS');
 assert.equal(writes,2);
 console.log('APP669_HMAC_DOMAIN_AND_AUTH_GENERATION=PASS');
 console.log('APP669_DELETION_AND_DISABLED_ACCOUNT_BLOCK=PASS');

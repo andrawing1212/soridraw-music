@@ -209,6 +209,12 @@ const readProfileConnectionCache377 = (
 // APP528: reuse the server validation stamp already persisted with the bounded
 // follower list. Reloads/tabs do not reset the explicit refresh cooldown.
 // No new storage entry, revision poll, or network request is created here.
+// APP681: read a settled Following popup from the existing persisted page.
+// This cannot create a network request on a follow notification.
+export const readExploreProfileConnectionsLocal681 = (
+ profileUid:string,direction:ExploreProfileConnectionDirection,
+):ExploreProfileConnectionPage|null => readProfileConnectionCache377(profileUid,direction);
+
 export const readExploreProfileConnectionLastServerAt528 = (
   profileUid: string,
   direction: ExploreProfileConnectionDirection,

@@ -1,0 +1,37 @@
+name: SORIDRAW APP672 PREVIEW public follow inactive Worker candidate
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/app672-public-follow-inactive.yml']
+permissions: {contents: read}
+concurrency:
+  group: soridraw-app672-inactive-public-follow-preview
+  cancel-in-progress: false
+jobs:
+  stage:
+    if: github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      APP672_APPROVED_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Verify exact active module and no live-traffic mutation
+        run: |
+          set -euo pipefail
+          node scripts/verify-671-active-service-patch.mjs
+          node scripts/verify-671-public-follow-dual-ack.mjs
+          test "$GITHUB_REF" = refs/heads/preview
+      - name: Create inactive PREVIEW Worker version only
+        run: node scripts/app672-stage-inactive-public-follow.mjs --stage-inactive
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: app672-inactive-preview-worker
+          path: app672-inactive-result.json
+          retention-days: 14

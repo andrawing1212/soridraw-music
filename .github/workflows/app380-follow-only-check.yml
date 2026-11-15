@@ -17,6 +17,8 @@ on:
       - 'functions/src/exploreOwnerFollowerWebhook542.ts'
       - 'functions/src/explorePublicFollowSignal667.ts'
       - 'scripts/verify-667-public-follow-publisher.ts'
+      - 'scripts/lib/public-follow-rules-667.mjs'
+      - 'scripts/verify-667-public-follow-rules.mjs'
       - 'cloudflare/explore-worker/canonical/preview-entry.js'
       - 'cloudflare/explore-worker/runtime/owner-follow-target-scope-659.mjs'
       - 'scripts/verify-659-preview-owner-routing.mjs'
@@ -36,6 +38,8 @@ on:
       - 'functions/src/exploreOwnerFollowerWebhook542.ts'
       - 'functions/src/explorePublicFollowSignal667.ts'
       - 'scripts/verify-667-public-follow-publisher.ts'
+      - 'scripts/lib/public-follow-rules-667.mjs'
+      - 'scripts/verify-667-public-follow-rules.mjs'
       - 'cloudflare/explore-worker/canonical/preview-entry.js'
       - 'cloudflare/explore-worker/runtime/owner-follow-target-scope-659.mjs'
       - 'scripts/verify-659-preview-owner-routing.mjs'
@@ -147,6 +151,7 @@ jobs:
           run_check 659 node scripts/verify-659-preview-owner-routing.mjs
           run_check 662 node --import tsx scripts/verify-662-multifollow-count.mjs
           run_check 667 node --import tsx scripts/verify-667-public-follow-publisher.ts
+          run_check 667_rules node scripts/verify-667-public-follow-rules.mjs
           run_check 653 node --import tsx scripts/verify-653-owner-general-scope.mjs
           run_check 529_sql python3 scripts/verify-529-owner-outbox-sql.py
           run_check 529_sync node scripts/verify-529-owner-sync.mjs

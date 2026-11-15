@@ -11,6 +11,7 @@ on:
     branches: [preview]
     paths:
       - '.github/workflows/c-profile-follow-finish.yml'
+      - 'scripts/c-profile-follow-server-firebase.py'
 permissions:
   contents: read
   actions: write

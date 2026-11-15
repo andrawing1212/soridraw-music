@@ -40,6 +40,9 @@ export const patchPrecommit680=source=>{
   "  row?.epoch===''\\u0026\\u0026Number(row?.public_target)===1;\\n"+
   " if(!row||(row.epoch===''\\u0026\\u0026!publicOnly680))return callCanonical();".replaceAll('\\u0026','&'),'unenrolled');
  out=one(out,
+  " if(!/^[0-9a-f]{32}$/.test(String(row.epoch||'')))",
+  " if(!publicOnly680&&!/^[0-9a-f]{32}$/.test(String(row.epoch||'')))",'epoch-guard');
+ out=one(out,
   '   authEpoch:String(row.epoch),operationId,',
   "   authEpoch:publicOnly680?'0'.repeat(32):String(row.epoch),operationId,",'ticket');
  exact(out,read(precommit),'precommit');

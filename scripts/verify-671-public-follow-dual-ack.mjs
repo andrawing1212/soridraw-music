@@ -32,6 +32,9 @@ result=await bridge({request:request(),env,ownerHandler,enabled:true,
 assert.equal(result.status,200);
 assert.deepEqual(await result.json(),{ok:true,status:'delivered',deliveredRevision:10});
 assert.equal(publicCalls,failures.length+1);
+result=await bridge({request:request(),env,ownerHandler,enabled:true,
+ publicRelay:async()=>({status:'target-not-public'})});
+assert.equal(result.status,200);
 const before=publicCalls;
 for(const authFailure of [403,409,503]){
  const ownerFailure=async()=>new Response('',{status:authFailure});

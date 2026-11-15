@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import {APP671_SERVICE_SHA,patchOwnerServiceDualAck671} from
+ './lib/public-follow-active-patch-671.mjs';
+const src=readFileSync('scripts/fixtures/owner-follow660/owner-follow-service-601.mjs','utf8');
+const sha=s=>createHash('sha256').update(s).digest('hex');
+assert.equal(sha(src),APP671_SERVICE_SHA);
+const patched=patchOwnerServiceDualAck671(src);
+assert.equal((patched.match(/handleOwnerFollowReplayService601Base\(/g)||[]).length,2);
+assert.equal((patched.match(/export async function handleOwnerFollowReplayService601\(/g)||[]).length,1);
+assert.match(patched,/handleOwnerAndPublicFollowReplay671/);
+assert.match(patched,/capabilityValid\(request,env\)/);
+assert.match(patched,/validTicket\(parsed.value\)/);
+assert.match(patched,/allowedCanaryUid!==null/);
+assert.match(patched,/replayOwnerFollowReservation556/);
+assert.match(patched,/ownerHandler:\(\)=>handleOwnerFollowReplayService601Base\(args\)/);
+assert.equal(patched.includes('DO_NEW_CLASS'),false);
+assert.throws(()=>patchOwnerServiceDualAck671(src+'\n// drift'),/HASH_DRIFT/);
+console.log('APP671_ACTIVE_PRIVATE_SERVICE_EXACT_HASH_AND_AUTH_GUARDS_PRESERVED=PASS');
+console.log('APP671_EXISTING_PRIVATE_ENTRYPOINT_EXPORT_UNCHANGED=PASS');
+console.log('APP671_NO_CANONICAL_WRITER_OR_DO_MUTATION=PASS');

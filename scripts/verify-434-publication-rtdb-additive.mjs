@@ -9,6 +9,8 @@ import {PUBLIC_FOLLOW_PROFILE_RULE_667} from './lib/public-follow-rules-667.mjs'
 // app435 separately permits ONLY the two typed private Explore like result
 // metadata fields when both are absent on the live shared Rules. Never
 // combine an app434 public-root change with the app435 private field change.
+// The separately approved public follower signal 667 is accepted only when
+// its exact deployed read-only subtree matches; this job never installs it.
 const stable = (value) => {
   if (Array.isArray(value)) return value.map(stable);
   if (value && typeof value === 'object')

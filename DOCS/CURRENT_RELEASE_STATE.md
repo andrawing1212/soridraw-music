@@ -1,3 +1,14 @@
+## CURRENT — APP667 공개 프로필 팔로우 정본 신호 발행기·보안 규칙 증분 계획 SOURCE-ONLY (2026-11-15 KST)
+
+- **현재 승인 목표:** A가 B를 팔로우/취소하면 A의 팔로잉·B의 팔로워 수와 C가 방문 중인 B의 공개 프로필 숫자까지 서버 확정 후 모달/새로고침 없이 갱신; 첫 진입·페이지 이동·PC↔모바일 동일 숫자. **전체 기능은 여전히 미완료.**
+- **기존 APP666 PREVIEW Hosting 배포 확인:** [Actions #43689245264](https://github.com/andrawing1212/soridraw-music/actions/runs/43689245264) SUCCESS, 배포 `648bf8f9f9fae06c2547b6cf4d63eb85274ff36b`, `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`, `TEST_PRODUCTION_UNCHANGED=PASS`. 실기기 PASS 아님.
+- **APP667 변경:** [PR #1067](https://github.com/andrawing1212/soridraw-music/pull/1067)에서 기존 APP663 데이터 계약을 활용한 `functions/src/explorePublicFollowSignal667.ts` SOURCE-ONLY 발행기 추가. 서명된 actor+target **확정·exact·pending 0·public true** 짝만 수용. 같은 commitId·프로필별 독립 R2 revision/계정 generation, 중복·역순·같은 revision 충돌 거부, 첫 프로필 RTDB 적용 후 둘째 실패 시 같은 원본 재전송으로 복구 가능. 공개 숫자/순서 정보만 보관, 개별 목록/관계·인증 epoch 비노출. RTDB 트랜잭션 최대 2개이며 RTDB 읽기·쓰기 비용은 0이라고 주장하지 않음. 새 D1/R2 조회·쓰기 없음.
+- **Rules 준비:** `scripts/lib/public-follow-rules-667.mjs`는 **현재 활성 Rules GET 결과를 입력받아 새 공개 숫자 경로 하나만 추가하는 순수 계획 함수**로 작성. 기존 owner-private·userSync·좋아요/공개·기타 ACL 불변 요구 및 상충 규칙이면 중단. `database.rules.json`을 실제 Rules 전체에 덮어쓰지 않음. 앱·Worker·Functions export·공유 RTDB Rules·사용자 데이터 **변경/배포 없음**.
+- **검증:** [Follow-only #43691477090](https://github.com/andrawing1212/soridraw-music/actions/runs/43691477090) SUCCESS, 공개 신호 원본/재전송/개별 프로필 정본·증분 ACL 단위검사 포함. 제품 품질 결과는 별도 확인. 기존 APP660/662/665/666 서버/Hosting PASS 재검사 금지.
+- **출시 차단점:** 실제 Cloudflare Worker의 *확정된 두 프로필 R2+operation ID+generation*을 HMAC 신호로 만드는 issuer·기존 DO 내구성 전달 연결, Firebase 수신 endpoint, 활성 Rules 증분 적용, 클라이언트 방문 프로필 구독과 공개→비공개/계정 삭제 시 알림 철회·Auth 세대 보호가 아직 없음. APP667을 PREVIEW 실시간 동기화 PASS로 표시 금지. 활성 공용 백엔드와 TEST/PRODUCTION 데이터 공유 위험 때문에 미검증 상태로 공유 배포 금지. 신규 사용자 반복 테스트 요청하지 않음.
+
+---
+
 ## CURRENT — APP666 방문자 첫 진입 팔로우 숫자 정본 우선 / PREVIEW Hosting 배포 진행 (2026-11-15 KST)
 
 - **디렉터 승인 목표 유지:** 첫 진입 PC·모바일 팔로워·팔로잉 수 동일, 모달 없이 서버 확정 변경 자동 반영, 새로고침·프로필 이동 후 최신 정본 유지, 방문 중인 타인의 공개 프로필 실시간 변경까지 완성. **전체 사용자 실기기 PASS 아님.**

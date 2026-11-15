@@ -212,6 +212,23 @@ jobs:
           node --check scripts/app680-preview-follow-workers.mjs
           python3 scripts/app660-preview-owner-functions.py --package-check
           node scripts/app680-preview-follow-workers.mjs --preflight
+      - name: Require previously activated public receiver, deletion hook and exact shared RTDB read rule
+        run: |
+          set -euo pipefail
+          ready="$(gcloud functions describe publishExplorePublicFollow669 --gen2 --region asia-northeast3 --project soridraw-app-866a5 --format='value(serviceConfig.environmentVariables.SORIDRAW_PUBLIC_FOLLOW_READY_669)')"
+          scope="$(gcloud functions describe publishExplorePublicFollow669 --gen2 --region asia-northeast3 --project soridraw-app-866a5 --format='value(serviceConfig.environmentVariables.SORIDRAW_PUBLIC_FOLLOW_SCOPE_669)')"
+          test "$ready" = 1 && test "$scope" = preview-only || {
+            echo APP680_PUBLIC_RECEIVER_NOT_ENABLED_HOLD; exit 2;
+          }
+          gcloud functions describe revokePublicFollowOnAuthDelete669 --gen2 --region asia-northeast3 --project soridraw-app-866a5 --format='value(name)' | grep -Fq revokePublicFollowOnAuthDelete669 || {
+            echo APP680_AUTH_DELETE_HOOK_MISSING_HOLD; exit 2;
+          }
+          pip -q install google-auth
+          python3 scripts/c-profile-follow-rules.py --preflight
+          test "$(cat /tmp/c-profile-rules-mode)" = ALREADY_EXACT || {
+            echo APP680_PUBLIC_RTDATABASE_RULES_NOT_ACTIVE_HOLD; exit 2;
+          }
+          echo APP680_PUBLIC_RECEIVER_DELETE_HOOK_AND_RULES_READY=PASS
       - name: Activate only existing three PREVIEW-scoped Auth-backed owner Functions
         run: python3 scripts/app660-preview-owner-functions.py --apply-once
       - name: Activate existing PREVIEW owner DO then Explore Worker with public-only durable lane

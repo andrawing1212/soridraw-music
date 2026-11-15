@@ -1,0 +1,63 @@
+name: SORIDRAW APP674 inert public follow Function prepare
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - '.github/workflows/app674-inert-public-follow-function.yml'
+      - 'scripts/app674-create-inert-public-follow-function.py'
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/app674-inert-public-follow-function.yml'
+permissions: {contents: read}
+concurrency:
+  group: soridraw-app674-inert-public-follow-function
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ github.event.pull_request.head.sha }}",persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Verify isolated compiled-OFF single Function package
+        run: |
+          set -euo pipefail
+          npm --prefix functions ci --no-audit --no-fund
+          npx --prefix functions tsc -p functions/tsconfig.json
+          python3 scripts/app674-create-inert-public-follow-function.py --package-check
+  create-off:
+    if: github.event_name == 'push' && github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      APP674_APPROVED_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ github.sha }}",persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Build isolated OFF function package, not full shared Functions
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/preview
+          npm --prefix functions ci --no-audit --no-fund
+          npx --prefix functions tsc -p functions/tsconfig.json
+          python3 scripts/app674-create-inert-public-follow-function.py --package-check
+      - name: CREATE only new PREVIEW public follow receiver, compiled and runtime OFF
+        run: python3 scripts/app674-create-inert-public-follow-function.py --create-off
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app674-new-preview-function-off
+          path: app674-function-result.json
+          if-no-files-found: ignore
+          retention-days: 14

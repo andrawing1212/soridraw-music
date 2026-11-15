@@ -7,11 +7,12 @@ import {getAuth} from 'firebase-admin/auth';
 import {getFirestore} from 'firebase-admin/firestore';
 import {getDatabase} from 'firebase-admin/database';
 import {createHmac,timingSafeEqual} from 'node:crypto';
+import {publicFollowAuthGeneration669} from './explorePublicFollowAuthGeneration669';
 import type {Auth} from 'firebase-admin/auth';
 import type {Firestore} from 'firebase-admin/firestore';
 import type {Database} from 'firebase-admin/database';
 import {publishPublicFollowPair667} from './explorePublicFollowSignal667';
-const EPOCH=/^[a-f0-9]{32}$/;
+const UNVERIFIED_GENERATION='0'.repeat(32);
 const UID=/^[A-Za-z0-9_-]{1,128}$/;
 type MinimalAuth669=Pick<Auth,'getUser'>;
 type MinimalFirestore669=Pick<Firestore,'collection'>;
@@ -23,26 +24,25 @@ const domain='soridraw:preview:public-follow-669';
 export const derivePublicFollowKey669=(baseSecret:string)=>
  createHmac('sha256',baseSecret).update(domain,'utf8').digest('hex');
 const verifyCurrentAccount669=async(
- uid:string,generation:string,auth:MinimalAuth669,firestore:MinimalFirestore669,
-)=>{
- if(!UID.test(uid)||!EPOCH.test(generation))return false;
+ uid:string,auth:MinimalAuth669,firestore:MinimalFirestore669,
+):Promise<string|null>=>{
+ if(!UID.test(uid))return null;
  const record=await auth.getUser(uid);
- if(record.uid!==uid||record.disabled===true||
-    record.customClaims?.soridrawFollowEpoch532!==generation||
-    !Number.isSafeInteger(Date.parse(record.metadata?.creationTime||'')))
-  return false;
+ if(record.uid!==uid||record.disabled===true)return null;
+ const generation=publicFollowAuthGeneration669(uid,record.metadata?.creationTime||'');
+ if(!generation)return null;
  const snapshot=await firestore.collection('users').doc(uid).get();
- if(!snapshot.exists)return false;
+ if(!snapshot.exists)return null;
  const data=snapshot.data()||{};
  if(data.authDeleted===true||data.authDeletionPendingAt||
-    data.accountStatus==='banned')return false;
+    data.accountStatus==='banned')return null;
  const lifecycle=data.ownerFollowLifecycle534;
  if(lifecycle!==undefined && (
     !lifecycle || typeof lifecycle!=='object'||
-    lifecycle.phase!=='active'||lifecycle.epoch!==generation ||
+    lifecycle.phase==='deleting'||lifecycle.phase==='deleted'||
     Date.parse(record.metadata?.creationTime||'')!==lifecycle.createdAtMs
- ))return false;
- return true;
+ ))return null;
+ return generation;
 };
 export const createPublicFollowHttp669=({
  auth,firestore,database,secret,enabled=false,now=Date.now,
@@ -77,17 +77,23 @@ export const createPublicFollowHttp669=({
     !UID.test(String(parsed.actorUid||''))||
     !UID.test(String(parsed.targetUid||''))||
     parsed.actor?.profileUid!==parsed.actorUid||
-    parsed.target?.profileUid!==parsed.targetUid){
+    parsed.target?.profileUid!==parsed.targetUid||
+    parsed.actor?.generation!==UNVERIFIED_GENERATION||
+    parsed.target?.generation!==UNVERIFIED_GENERATION){
   res.status(400).json({ok:false});return;
  }
  try{
-  const actor=await verifyCurrentAccount669(
-   parsed.actorUid,parsed.actor.generation,auth,firestore);
-  const target=await verifyCurrentAccount669(
-   parsed.targetUid,parsed.target.generation,auth,firestore);
+  const actor=await verifyCurrentAccount669(parsed.actorUid,auth,firestore);
+  const target=await verifyCurrentAccount669(parsed.targetUid,auth,firestore);
   if(!actor||!target){res.status(409).json({ok:false,code:'AUTH_OR_PRIVACY_GENERATION_HOLD'});return}
+  // The server, NOT the caller, binds both public rows to actual Auth births.
+  const verifiedRaw=JSON.stringify({...parsed,
+   actor:{...parsed.actor,generation:actor},
+   target:{...parsed.target,generation:target},
+  });
+  const verifiedSignature=createHmac('sha256',key).update(verifiedRaw).digest('hex');
   const result=await publishPublicFollowPair667(
-   database,raw.toString('utf8'),signature,key,clock);
+   database,verifiedRaw,verifiedSignature,key,clock);
   res.status(200).json({ok:true,...result});
  }catch{
   // Never ACK a partial RTDB pair write. Durable owner replay must retry.

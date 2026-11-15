@@ -3657,7 +3657,9 @@ export default function ExplorePage() {
                 followerCount:computeFollowTargetDisplay525(
                   pending525.baseTargetFollowerCount,
                   pending525.baseFollowing,pending525.desiredFollowing),
-              } : verifiedVisitedProfileUid661Ref.current===nextProfile.uid &&
+              } : newerPublicSignal683&&previous
+                ?{...previous,isFollowing:nextFollowState.isFollowing}
+                : verifiedVisitedProfileUid661Ref.current===nextProfile.uid &&
                   nextFollowState.countVerified661!==true && previous
                 ?{...previous,isFollowing:
                   readExploreFollowMembership379(user.uid,nextProfile.uid)??previous.isFollowing}

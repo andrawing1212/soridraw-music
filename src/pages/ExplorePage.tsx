@@ -4422,8 +4422,9 @@ export default function ExplorePage() {
       (ownVerifiedCount662Ref.current?.uid===targetUid||
         latestActorSignal662Ref.current?.uid===targetUid)
       ?profile?.followingCount??null:null;
-    const staleOwnFollowing682=ownFollowing682&&
-      shouldHoldOwnFollowingPage682(cached,exactOwnFollowing682);
+    const staleOwnFollowing682=ownFollowing682&&Boolean(cached)&&
+      (exactOwnFollowing682===null||
+        shouldHoldOwnFollowingPage682(cached,exactOwnFollowing682));
     // B's unfollow reaches B's own RTDB channel, not A's. Only A's
     // explicit own-followers popup can recheck this exact public list.
     const ownFollowers523 = direction === 'followers' && targetUid === user?.uid;
@@ -6090,6 +6091,7 @@ export default function ExplorePage() {
                       type="button"
                       className="soridraw-explore-profile-stat-button-376"
                       onClick={() => void openProfileConnections376('following')}
+                      disabled={Boolean(user?.uid===profile.uid&&profileCountsVerifying)}
                       aria-label={profileCountsVerifying ? '팔로잉 수 확인 중' : `팔로잉 ${formatCount(profile.followingCount)}명 보기`}
                     >
                       팔로잉 <strong>{profileCountsVerifying ? '…' : formatCount(profile.followingCount)}</strong>

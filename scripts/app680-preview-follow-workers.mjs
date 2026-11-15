@@ -87,6 +87,13 @@ async function run(){
  for(const t of targets){
   check(stable(await deployed(t.name))===stable(expected(t,t.old)),'ACTIVE_DRIFT_'+t.name);
   t.before=await snapshot(t,t.old);
+  // A GET-only diagnostic for exact active module pins; no module contents,
+  // secret bindings, or user data are printed.
+  for(const m of t.before.modules)
+   if(t.name===OW||m.name===t.main||
+      /owner-follow-(?:precommit-557|service-601|enrollment-544)\.mjs$/.test(m.name)||
+      /public-follow-(?:http-669|dual-ack-671)\.mjs$/.test(m.name))
+    console.log('APP680_ACTIVE_MODULE_SHA256='+t.name+':'+m.name+':'+hash660(text(m)));
   check(t.before.bindings.length===t.count,'BINDING_COUNT');
   const b=new Map(t.before.bindings.map(x=>[x.name,x]));
   check(b.get('SORIDRAW_ENVIRONMENT')?.text==='preview','ENVIRONMENT');

@@ -106,6 +106,8 @@ import {
   publishExploreFollowSync377,
   subscribeExploreFollowSync377,
 } from '../services/exploreFollowSyncService';
+import {EXPLORE_FOLLOW_SETTLED_EVENT_681,announceExploreFollowSettled681,
+  type ExploreFollowSettled681} from '../services/exploreFollowPendingResume681';
 import {resolveFollowCounts662,shouldApplyActorFollowSignal662}
  from '../services/exploreFollowCountAuthority662';
 import { createOwnerEpochGate538, normalizeOwnerEpochSignal538 } from '../services/exploreOwnerFollowerEpochCore538';
@@ -3780,6 +3782,12 @@ export default function ExplorePage() {
             });
           }
 
+          announceExploreFollowSettled681({
+            viewerUid:viewerUid380,targetUid:targetUid380,following:confirmed380,
+            actorFollowingCount:settlement380.result.actorCountVerified662===true?actorCount380:null,
+            targetFollowerCount:settlement380.result.countVerified661===true?targetFollower380:null,
+            targetFollowingCount:settlement380.result.countVerified661===true?targetFollowing380:null,
+          });
           // APP664: never broadcast a provisional local delta as a server
           // settled fact. Only a changed edge with both canonical counts may
           // notify the actor's other devices. Existing owner relay is separate.
@@ -3837,6 +3845,56 @@ export default function ExplorePage() {
       });
     }
   }, [user?.uid]);
+
+  // APP681: a settled local mutation may finish after navigating away from
+  // the target profile. Update the open owner page and Following popup without
+  // requiring a visit back to the followed target or any background polling.
+  useEffect(() => {
+    const viewerUid681=String(user?.uid||'').trim();
+    if(!viewerUid681)return undefined;
+    const onSettled681=(event:Event)=>{
+      const row=(event as CustomEvent<ExploreFollowSettled681>).detail;
+      if(!row||row.viewerUid!==viewerUid681||auth.currentUser?.uid!==viewerUid681)return;
+      if(row.actorFollowingCount!==null){
+        latestActorSignal662Ref.current={
+          uid:viewerUid681,at:Date.now(),count:row.actorFollowingCount,
+        };
+        setProfile(previous=>previous?.uid===viewerUid681
+          ?{...previous,followingCount:row.actorFollowingCount!}:previous);
+      }
+      setFollowingUids312(previous=>{
+        const next=new Set(previous);
+        if(row.following)next.add(row.targetUid);
+        else next.delete(row.targetUid);
+        return next;
+      });
+      setFollowState(previous=>
+        activeProfileUidRef.current===row.targetUid&&previous
+          ?{...previous,isFollowing:row.following,
+            ...(row.targetFollowerCount===null?{}:{followerCount:row.targetFollowerCount})}
+          :previous);
+      if(row.targetFollowerCount!==null)
+        setProfile(previous=>previous?.uid===row.targetUid
+          ?{...previous,followerCount:row.targetFollowerCount!}:previous);
+      profileConnectionsCache376Ref.current.delete(viewerUid681+':following');
+      profileConnectionsCache376Ref.current.delete(row.targetUid+':followers');
+      if(profileConnectionsOpen376Ref.current==='following'&&
+         activeProfileUidRef.current===viewerUid681){
+        const request=++profileConnectionsRequest376Ref.current;
+        // The confirmed single-card cache patch should satisfy this locally.
+        void getExploreProfileConnections(viewerUid681,'following')
+          .then(page=>{
+            if(request!==profileConnectionsRequest376Ref.current)return;
+            profileConnectionsCache376Ref.current.set(viewerUid681+':following',page);
+            setProfileConnectionsItems376(page.items);
+            setProfileConnectionsNextCursor376(page.nextCursor);
+            setProfileConnectionsIncomplete661(page.hasUnresolvedProfiles===true);
+          }).catch(reason=>console.warn('[681] Following popup refresh unavailable',reason));
+      }
+    };
+    window.addEventListener(EXPLORE_FOLLOW_SETTLED_EVENT_681,onSettled681);
+    return ()=>window.removeEventListener(EXPLORE_FOLLOW_SETTLED_EVENT_681,onSettled681);
+  },[user?.uid]);
 
   // app377: same-account PC/mobile follow convergence is driven by one bounded
   // RTDB signal. Receiving it patches only local caches/UI; D1/Firestore I/O is 0.
@@ -4860,6 +4918,15 @@ export default function ExplorePage() {
         if (confirmed.isFollowing !== settlement.desiredFollowing &&
             activeProfileUidRef.current === targetUid)
           setSocialNotice('팔로우 상태가 변경되었습니다. 다시 확인해 주세요.');
+        announceExploreFollowSettled681({
+          viewerUid,targetUid,following:confirmed.isFollowing,
+          actorFollowingCount:confirmed.actorCountVerified662===true
+            ?confirmed.actorFollowingCount??null:null,
+          targetFollowerCount:confirmed.countVerified661===true
+            ?confirmed.followerCount:null,
+          targetFollowingCount:confirmed.countVerified661===true
+            ?confirmed.followingCount:null,
+        });
         if (confirmed.isFollowing !== settlement.baseFollowing &&
             confirmed.countVerified661 === true &&
             confirmed.actorCountVerified662 === true &&

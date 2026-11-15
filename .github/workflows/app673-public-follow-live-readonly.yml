@@ -24,6 +24,7 @@ jobs:
       - name: Fetch current RTDB security Rules and IAM capability without changes
         run: |
           set -euo pipefail
+          pip -q install google-auth
           python3 - <<'PY'
           import json,hashlib,urllib.request,urllib.error
           import google.auth

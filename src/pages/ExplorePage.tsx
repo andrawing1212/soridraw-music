@@ -4488,15 +4488,18 @@ export default function ExplorePage() {
       // Even a fresh HTTP response may be older than the canonical actor
       // count (R2 materialization lag). Never overwrite a verified count
       // with the length of an inconsistent list.
-      // The same verified number captured when opening this popup is the
-      // comparison authority. A first-view cache is not newer than it.
-      const activeExact682=exactOwnFollowing682;
-      if(ownFollowing682&&shouldHoldOwnFollowingPage682(page,activeExact682)){
+      // A complete freshly fetched server list is newer evidence than the
+      // owner summary GET started before the popup opened. Its identities and
+      // exact length must settle together (1 vs 2 can mean the COUNT was stale).
+      // An incomplete server list cannot prove a different total: don't show
+      // it as an exact 2-person list under a verified count of 1.
+      if(ownFollowing682&&page.countComplete!==true&&!page.nextCursor&&
+         shouldHoldOwnFollowingPage682(page,exactOwnFollowing682)){
         invalidateExploreProfileConnections377(targetUid,'following');
         profileConnectionsCache376Ref.current.delete(key);
         setProfileConnectionsItems376([]);
         setProfileConnectionsNextCursor376(null);
-        setProfileConnectionsError376('팔로잉 목록이 최신 숫자와 동기화 중입니다. 잠시 후 목록을 다시 열어 주세요.');
+        setProfileConnectionsError376('팔로잉 목록을 확인 중입니다. 잠시 후 다시 열어 주세요.');
         return;
       }
       profileConnectionsCache376Ref.current.set(key, page);

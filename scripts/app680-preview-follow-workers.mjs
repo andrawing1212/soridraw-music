@@ -123,6 +123,14 @@ async function run(){
    check(b.get('OWNER_FOLLOW_DO_600')?.class_name==='OwnerFollowerStandalone600','OWNER_DO');
    check(b.get('OWNER_FOLLOW_CANONICAL_REPLAY_600')?.entrypoint==='OwnerFollowReplayEntrypoint607','PRIVATE_REPLAY');
   }
+  if(t.name===EX){
+   // GET-only diagnostic of a single non-secret guard line on an exact SHA-pinned active module.
+   const entry=text(t.before.modules.find(m=>m.name===t.main));
+   check(hash660(entry)==='af59dc29612656ef55f9938081e654918b005a01d334f0957e7b7973a34c800e','ENTRY_DIAGNOSTIC_SHA');
+   const lines=entry.split('\n').filter(line=>line.includes('ownerUid||')||line.includes('OWNER_FOLLOW_CANARY_UID_574')&&line.includes('ownerUid'));
+   check(lines.length>0&&lines.length<=3,'ENTRY_GUARD_LINE_COUNT');
+   for(const line of lines)console.log('APP680_PINNED_OWNER_GATE_LINE='+line.trim().slice(0,180));
+  }
   t.modules=patched(t,t.before.modules);
 
  }

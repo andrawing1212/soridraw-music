@@ -11,15 +11,14 @@ const now=1800000000000;
 const claim={
  schemaVersion:1,actorUid:'Actor',targetUid:'Target',
  cutoverToken:'token',operationId:'operation_1234567890',signedAtMs:now,
- actor:{profileUid:'Actor',generation:'a'.repeat(32),revision:5,followerCount:2,followingCount:6,public:true,exact:true,pending:0},
- target:{profileUid:'Target',generation:'b'.repeat(32),revision:7,followerCount:8,followingCount:4,public:true,exact:true,pending:0},
+ actor:{profileUid:'Actor',generation:'0'.repeat(32),revision:5,followerCount:2,followingCount:6,public:true,exact:true,pending:0},
+ target:{profileUid:'Target',generation:'0'.repeat(32),revision:7,followerCount:8,followingCount:4,public:true,exact:true,pending:0},
 };
 let authReads=0,firestoreReads=0,writes=0;
-const epochs={Actor:'a'.repeat(32),Target:'b'.repeat(32)};
+const births={Actor:now-100000,Target:now-100000};
 const users={Actor:{},Target:{}};
 const auth={async getUser(uid:string){authReads++;return {uid,disabled:false,
- customClaims:{soridrawFollowEpoch532:epochs[uid as keyof typeof epochs]},
- metadata:{creationTime:new Date(now-100000).toISOString()}}}};
+ metadata:{creationTime:new Date(births[uid as keyof typeof births]).toISOString()}}}};
 const firestore={collection(name:string){assert.equal(name,'users');return{doc(uid:string){return{async get(){firestoreReads++;return{
  exists:true,data:()=>users[uid as keyof typeof users]
  };}}}}}};
@@ -53,10 +52,10 @@ assert.equal(r.status,200);assert.equal(r.result.ok,true);
 assert.equal(authReads,2);assert.equal(firestoreReads,2);assert.equal(writes,2);
 assert.equal((await invoke()).status,200);
 assert.equal(writes,2);
-epochs.Actor='c'.repeat(32);
+births.Actor=now-200000; // Same UID, different Auth incarnation.
 r=await invoke();
-assert.equal(r.status,409);assert.equal(writes,2);
-epochs.Actor='a'.repeat(32);
+assert.equal(r.status,503);assert.equal(writes,2);
+births.Actor=now-100000;
 users.Target={authDeletionPendingAt:now-100};
 assert.equal((await invoke()).status,409);assert.equal(writes,2);
 users.Target={authDeleted:true};

@@ -77,22 +77,29 @@ export async function runOwnerFollowPrecommit557({
   // verified by Firebase auth, never trusted from the request body.
   row=await env.DB.prepare(`SELECT
    owner_follow_auth_epoch_532 AS epoch,
-   EXISTS(SELECT 1 FROM public_profiles p WHERE p.uid=? AND p.is_public=1) AS public_target,
    EXISTS(SELECT 1 FROM follows WHERE follower_uid=? AND following_uid=?) AS baseline,
    (SELECT following FROM explore_follow_overrides_348
       WHERE follower_uid=? AND following_uid=? LIMIT 1) AS override_following
    FROM profile_stats WHERE uid=? LIMIT 1`)
-   .bind(parts[3],auth.uid,parts[3],auth.uid,parts[3],parts[3]).first();
+   .bind(auth.uid,parts[3],auth.uid,parts[3],parts[3]).first();
  }catch{return fail('owner-enrollment-unavailable')}
  // Unenrolled owners MUST keep the exact existing canonical follow Writer.
  // A globally enabled PREVIEW push must not reject their normal follows.
  // An un-enrolled PUBLIC target still needs a durable public-counter relay.
  // No private owner notification is attempted with this reserved sentinel.
  // Private or missing profiles retain the canonical-only legacy behavior.
- const publicOnly680=publicWithoutEpoch===true&&
-  env?.SORIDRAW_ENVIRONMENT==='preview'&&
-  env?.SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680==='1'&&
-  row?.epoch===''&&Number(row?.public_target)===1;
+ let publicOnly680=false;
+ if(publicWithoutEpoch===true&&env?.SORIDRAW_ENVIRONMENT==='preview'&&
+    env?.SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680==='1'&&row?.epoch===''){
+  // Only the newly approved public-only path pays the one indexed lookup.
+  // Old owner/canary and private follow requests keep their original SQL.
+  let publicStatus;
+  try{publicStatus=await env.DB.prepare(
+   'SELECT is_public FROM public_profiles WHERE uid=? LIMIT 1'
+  ).bind(parts[3]).first();}
+  catch{return callCanonical()}
+  publicOnly680=Number(publicStatus?.is_public)===1;
+ }
  if(!row||(row.epoch===''&&!publicOnly680))return callCanonical();
  // Missing/corrupt non-empty epoch is not an opt-out: fail closed.
  if(!publicOnly680&&!/^[0-9a-f]{32}$/.test(String(row.epoch||'')))

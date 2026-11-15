@@ -4,6 +4,7 @@ import { getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareLocalCacheHit, recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { readSoridrawPersistentCache, removeSoridrawPersistentCache, writeSoridrawPersistentCache } from '../lib/soridrawPersistentCache';
 import { requestOrderedExploreFollow354 } from './exploreFollowOrdering354';
+import { readPendingExploreFollowIntents380 } from './exploreFollowBatchService380';
 import {
   getExplorePersonalSocialSnapshot,
   patchExplorePersonalSocialFollow,
@@ -16,6 +17,10 @@ const EXPLORE_FOLLOW_BUNDLE_DIAGNOSTIC_PATH = '/v1/me/following-bundle';
 const EXPLORE_FOLLOW_CACHE_KEY = 'explore-follow-state';
 const EXPLORE_FOLLOW_CACHE_SOURCE_TYPE = 'explore_follow_state';
 const EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH = '/v1/profiles/:id/follow-state';
+// Monotonic in-memory fence: a GET started before an actual local follow
+// mutation cannot overwrite the newer confirmed or pending local state.
+const followLocalGeneration681 = new Map<string,number>();
+const followGeneration681=(uid:string)=>followLocalGeneration681.get(uid)||0;
 
 const readPayload = async (response: Response) => {
   try {
@@ -409,6 +414,7 @@ export const patchExploreFollowLocalState377 = (
   const viewer = String(viewerUid || '').trim();
   const target = String(targetUid || '').trim();
   if (!viewer || !target) return;
+  followLocalGeneration681.set(viewer,followGeneration681(viewer)+1);
   rememberExploreFollowState(viewer, target, following);
   patchExplorePersonalSocialFollow(viewer, target, following);
 
@@ -513,6 +519,7 @@ const loadExploreFollowingBundle = async (user: User): Promise<ExploreFollowCach
   const existing = exploreFollowBundleInflight.get(user.uid);
   if (existing) return existing;
 
+  const startedGeneration681=followGeneration681(user.uid);
   const task = (async () => {
     let rawUids: unknown[] = [];
     let complete = false;
@@ -532,6 +539,10 @@ const loadExploreFollowingBundle = async (user: User): Promise<ExploreFollowCach
       if (uid) acc[uid] = true;
       return acc;
     }, {} as Record<string, boolean>);
+    // A real follow mutation may settle while this slower R2 snapshot loads.
+    // Preserve the mutation's later local state instead of restoring old lists.
+    if(followGeneration681(user.uid)!==startedGeneration681)
+      return readExploreFollowCache(user.uid);
     const next: ExploreFollowCacheData = { complete, states };
     writeExploreFollowCache(user.uid, next);
     return next;
@@ -678,6 +689,7 @@ export const getExploreFollowState = async (user: User, uid: string, forceServer
 
   }
 
+  const startedGeneration681=followGeneration681(user.uid);
   const payload = await requestAuthed(user, `/v1/profiles/${encodeURIComponent(normalizedUid)}/follow-state`, forceServer ? { cache: 'no-store' } : {});
   const row = payload?.data || {};
   const rawFollowers = row?.followerCount ?? row?.follower_count;
@@ -692,6 +704,16 @@ export const getExploreFollowState = async (user: User, uid: string, forceServer
       rawFollowers !== null && rawFollowers !== undefined &&
       rawFollowing !== null && rawFollowing !== undefined,
   };
+  const pending681=readPendingExploreFollowIntents380(user.uid)
+    .some(row=>row.targetUid===normalizedUid);
+  if(pending681)return result;
+  if(followGeneration681(user.uid)!==startedGeneration681){
+    // Do not return an older membership/count as verified if a local commit
+    // superseded the GET while it was in flight.
+    const newest=readExploreFollowMembership379(user.uid,normalizedUid);
+    return newest===null?{...result,countVerified661:false}
+      :{...result,isFollowing:newest,countVerified661:false};
+  }
   rememberExploreFollowState(user.uid, normalizedUid, result.isFollowing);
   return result;
 };

@@ -3894,6 +3894,8 @@ export default function ExplorePage() {
           // A missing local page requires the existing explicit list-open path;
           // do not leave a known-stale popup visible as if it were confirmed.
           profileConnectionsCache376Ref.current.delete(viewerUid681+':following');
+          // Fence a stale list request already in flight during the settlement.
+          profileConnectionsRequest376Ref.current+=1;
           setProfileConnectionsOpen376(null);
           setSocialNotice('팔로잉 목록이 변경됐습니다. 다시 열어 최신 상태를 확인해 주세요.');
         }

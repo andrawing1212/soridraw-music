@@ -13,6 +13,7 @@ on:
       - 'cloudflare/explore-worker/runtime/public-follow-dual-ack-671.mjs'
       - 'scripts/c-profile-follow-*'
       - 'scripts/app660-preview-owner-*'
+      - 'scripts/app680-preview-follow-workers.mjs'
       - 'scripts/lib/owner-follow-general660.mjs'
       - 'scripts/lib/public-follow-bridge-680.mjs'
       - 'scripts/lib/public-follow-active-patch-671.mjs'

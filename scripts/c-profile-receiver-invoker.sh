@@ -17,7 +17,9 @@ f=json.load(open('/tmp/c-profile-function.json'))
 assert f.get('name')=='projects/soridraw-app-866a5/locations/asia-northeast3/functions/publishExplorePublicFollow669'
 assert f.get('buildConfig',{}).get('entryPoint')=='publishExplorePublicFollow669'
 config=f.get('serviceConfig',{})
-assert config.get('environmentVariables',{}).get('SORIDRAW_PUBLIC_FOLLOW_READY_669')=='0'
+ready=config.get('environmentVariables',{}).get('SORIDRAW_PUBLIC_FOLLOW_READY_669')
+assert ready in ('0','1'),'UNEXPECTED_RECEIVER_READINESS'
+print('C_PROFILE_RECEIVER_READY_STATE='+ready)
 assert config.get('environmentVariables',{}).get('SORIDRAW_PUBLIC_FOLLOW_SCOPE_669')=='preview-only'
 assert config.get('serviceAccountEmail')=='91309780603-compute@developer.gserviceaccount.com'
 assert config.get('service','').endswith('/services/publishexplorepublicfollow669')
@@ -55,12 +57,21 @@ print('C_PROFILE_ONLY_PUBLIC_RECEIVER_INVOKER_ADDED=PASS')
 PY
 url=https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publishExplorePublicFollow669
 code="$(curl -sS --max-time 25 -o /tmp/c-profile-off-endpoint.json -w '%{http_code}' "$url")"
-if [[ "$code" != 503 ]] || ! grep -Fq PREVIEW_PUBLIC_FOLLOW_DISABLED /tmp/c-profile-off-endpoint.json; then
- echo "C_PROFILE_RECEIVER_POST_IAM_UNEXPECTED_HTTP=$code"
+ready="$(python3 -c "import json; print(json.load(open('/tmp/c-profile-function.json'))['serviceConfig']['environmentVariables']['SORIDRAW_PUBLIC_FOLLOW_READY_669'])")"
+if [[ "$ready" = 0 ]]; then
+  expected=503
+  expected_body=PREVIEW_PUBLIC_FOLLOW_DISABLED
+else
+  # An enabled HMAC receiver must refuse unsigned browser GETs.
+  expected=405
+  expected_body='"ok":false'
+fi
+if [[ "$code" != "$expected" ]] || ! grep -Fq "$expected_body" /tmp/c-profile-off-endpoint.json; then
+ echo "C_PROFILE_RECEIVER_POST_IAM_UNEXPECTED_HTTP=$code; EXPECTED=$expected"
  # Roll back only the newly added invoker grant; never touch other bindings.
  if [[ "$existing" = no ]]; then
    gcloud run services remove-iam-policy-binding "$service" --region "$region" --member allUsers --role roles/run.invoker --quiet >/dev/null || true
  fi
  exit 2
 fi
-echo C_PROFILE_PUBLIC_HMAC_RECEIVER_OFF_BUT_REACHABLE=PASS
+echo C_PROFILE_PUBLIC_HMAC_RECEIVER_READINESS_CHECK=PASS

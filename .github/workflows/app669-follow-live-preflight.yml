@@ -1,0 +1,74 @@
+name: SORIDRAW APP669 verified public follow bridge live preflight
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/app669-follow-live-preflight.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  inspect:
+    if: github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+      - name: Read exact active PREVIEW modules and shared Firebase Rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          pip -q install google-auth requests
+          python3 - <<'PY'
+          import os,json,hashlib,base64,requests
+          from google.auth import default
+          from google.auth.transport.requests import Request
+          A='e1a30fc9ef497fda1d34f4ab3dc1da45'
+          def cf(path):
+              resp=requests.get('https://api.cloudflare.com/client/v4/accounts/'+A+'/'+path,
+                 headers={'Authorization':'Bearer '+os.environ['CLOUDFLARE_API_TOKEN']},timeout=25)
+              resp.raise_for_status()
+              doc=resp.json()
+              assert doc.get('success') is True,'CLOUDFLARE_GET_FAILED'
+              return doc['result']
+          print('APP669_PREFLIGHT_REF='+os.environ['GITHUB_SHA'])
+          for name in ['soridraw-explore-preview','soridraw-owner-follow-preview-candidate']:
+              active=cf('workers/scripts/'+name+'/deployments?per_page=1')['deployments'][0]['versions']
+              full=[v for v in active if v['percentage']==100]
+              assert len(full)==1,'ACTIVE_PREVIEW_NOT_EXACT'
+              version=full[0]['version_id']
+              metadata=cf('workers/scripts/'+name+'/versions/'+version)
+              bindings={v['name']:v for v in metadata['resources']['bindings']}
+              assert bindings.get('SORIDRAW_ENVIRONMENT',{}).get('text')=='preview','NON_PREVIEW_ENV'
+              modules=cf('workers/workers/'+name+'/versions/'+version+'?include=modules')['modules']
+              assert modules and all('content_base64' in m for m in modules),'MODULE_BYTES_UNAVAILABLE'
+              print('APP669_'+name+'_ACTIVE='+version)
+              print('APP669_'+name+'_MODULES='+str(len(modules)))
+              for m in modules:
+                  source=base64.b64decode(m['content_base64'])
+                  print('APP669_MODULE_SHA256_'+m['name'].replace('/','_')+'='+hashlib.sha256(source).hexdigest())
+              print('APP669_'+name+'_BINDINGS='+str(len(bindings)))
+              assert 'SORIDRAW_OWNER_FOLLOW_HMAC_539' in bindings,'OWNER_SECRET_BINDING_MISSING'
+          credentials,project=default(scopes=[
+            'https://www.googleapis.com/auth/firebase.database',
+            'https://www.googleapis.com/auth/userinfo.email'])
+          credentials.refresh(Request())
+          assert credentials.token,'FIREBASE_READ_TOKEN_MISSING'
+          rules_url='https://soridraw-app-866a5-default-rtdb.firebaseio.com/.settings/rules.json'
+          response=requests.get(rules_url,params={'access_token':credentials.token},timeout=25)
+          response.raise_for_status()
+          rules=response.json()
+          root=rules.get('rules',{})
+          public=root.get('publicSync',{})
+          assert isinstance(root.get('ownerFollowerSync532'),dict),'OWNER_PRIVACY_MISSING'
+          assert isinstance(public.get('explorePublicationProfiles'),dict),'PUBLIC_BUS_BOUNDARY_MISSING'
+          print('APP669_EXISTING_PUBLIC_FOLLOW_PATH='+str('exploreFollowProfiles667' in public))
+          print('APP669_LIVE_RULES_SHA256='+hashlib.sha256(json.dumps(
+            rules,sort_keys=True,separators=(',',':')).encode()).hexdigest())
+          print('APP669_LIVE_TOPOLOGY_AND_SHARED_RULES_GET_ONLY=PASS')
+          PY

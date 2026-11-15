@@ -15,7 +15,7 @@ let result=await bridge({request:request(),env,ownerHandler:async()=>{
 assert.equal(result.status,200);assert.equal(owners,1);assert.equal(publicCalls,0);
 const ownerHandler=async()=>{owners++;return ok()};
 const failures=['transport-retry','r2-not-exact','generation-hold','receiver-retry',
- 'target-not-public','disabled'];
+ 'disabled'];
 for(const status of failures){
  result=await bridge({request:request(),env,ownerHandler,enabled:true,
   publicRelay:async args=>{

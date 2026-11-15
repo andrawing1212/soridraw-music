@@ -30,9 +30,9 @@ jobs:
           import google.auth
           from google.auth.transport.requests import Request
           credentials,_=google.auth.default(scopes=[
- 'https://www.googleapis.com/auth/firebase.database',
- 'https://www.googleapis.com/auth/userinfo.email',
- 'https://www.googleapis.com/auth/cloud-platform'])
+            'https://www.googleapis.com/auth/firebase.database',
+            'https://www.googleapis.com/auth/userinfo.email',
+            'https://www.googleapis.com/auth/cloud-platform'])
           credentials.refresh(Request())
           url='https://soridraw-app-866a5-default-rtdb.firebaseio.com/.settings/rules.json'
           with urllib.request.urlopen(

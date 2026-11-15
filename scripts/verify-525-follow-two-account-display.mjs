@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import ts from 'typescript';
+import './verify-681-follow-reload-popup.mjs';
 
 // APP525: real app helper and isolated A/B cross-account display contracts.
 // Never touches live Firestore, D1, RTDB, R2, credentials or user data.

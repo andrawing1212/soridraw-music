@@ -1,5 +1,11 @@
 name: SORIDRAW C profile follower real-time completion
 on:
+  push:
+    branches: [preview]
+    paths:
+      - 'scripts/app660-preview-owner-workers.mjs'
+      - 'scripts/lib/public-follow-bridge-680.mjs'
+      - '.github/workflows/c-profile-follow-finish.yml'
   pull_request:
     branches: [preview]
     paths:
@@ -150,6 +156,24 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  read_only_general_worker_preflight:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/preview' && github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      APP660_APPROVED_PARENT: ${{ github.sha }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Confirm exact active PREVIEW Worker modules before manual release (GET only)
+        run: node scripts/app660-preview-owner-workers.mjs --preflight
   release_all_preview:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/preview' && inputs.confirm_rules_maintenance == 'GENERAL_PREVIEW_CONFIRMED' && github.repository == 'andrawing1212/soridraw-music'
     runs-on: ubuntu-24.04

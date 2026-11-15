@@ -109,6 +109,7 @@ import {
 import {resolveFollowCounts662,shouldApplyActorFollowSignal662}
  from '../services/exploreFollowCountAuthority662';
 import { createOwnerEpochGate538, normalizeOwnerEpochSignal538 } from '../services/exploreOwnerFollowerEpochCore538';
+import {PUBLIC_FOLLOW_VISITOR_668_ENABLED,subscribePublicProfileFollow668} from '../services/explorePublicFollowSync668';
 import {
   EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED,
   readOwnerFollowerSeenVersion542,
@@ -1996,6 +1997,8 @@ export default function ExplorePage() {
   const [profileConnectionsIncomplete661,setProfileConnectionsIncomplete661] = useState(false);
   // Exact authenticated one-target GET counters outlive a stale R2 recheck.
   const verifiedVisitedProfileUid661Ref = useRef('');
+  // Only a successfully verified first-view target GET establishes authority.
+  const verifiedVisitedCounts668Ref=useRef<{uid:string;readStartedAt:number}|null>(null);
   const profileConnectionsCache376Ref = useRef<Map<string, { items: ExploreProfileConnection[]; nextCursor: string | null; countComplete?: boolean; hasUnresolvedProfiles?: boolean }>>(new Map());
   const profileConnectionsRequest376Ref = useRef(0);
   const ownFollowersLastCheck523Ref = useRef<Map<string, number>>(new Map());
@@ -3407,6 +3410,7 @@ export default function ExplorePage() {
 
     let cancelled = false;
     verifiedVisitedProfileUid661Ref.current = '';
+    verifiedVisitedCounts668Ref.current=null;
     setProfileCollection('public');
     // 088: entering this user's own profile from Explore must not discard the
     // optimistic liked cards created moments earlier in the same page session.
@@ -3607,6 +3611,7 @@ export default function ExplorePage() {
                   followingCount:nextFollowState.followingCount,
                 };
                 verifiedVisitedProfileUid661Ref.current=nextProfile.uid;
+                verifiedVisitedCounts668Ref.current={uid:nextProfile.uid,readStartedAt:ownCountsRequestedAt};
                 patchExplorePublicProfileFirstViewProfile(nextProfile.uid,exact661);
                 setProfile(previous=>previous?.uid===nextProfile.uid
                   ?{...previous,...exact661}:previous);
@@ -4524,6 +4529,52 @@ export default function ExplorePage() {
       setProfile(prev=>prev?.uid===row.uid?{...prev,followerCount:row.count}:prev);
     }
   },[profile?.uid,profile?.followerCount,user?.uid]);
+
+  // APP668: one visible *visited* public profile, never a global follower bus.
+  // Disabled until the exact public pair issuer, account-deletion revocation
+  // and additive LIVE RTDB Rules are verified and deployed together.
+  useEffect(()=>{
+    if(!PUBLIC_FOLLOW_VISITOR_668_ENABLED)return;
+    const viewedUid=String(profile?.uid||'').trim();
+    const principal=auth.currentUser;
+    if(!principal||!viewedUid||viewedUid===principal.uid||
+       user?.uid!==principal.uid)return;
+    let stopped=false;
+    let detach=()=>{};
+    const attach=()=>{
+      if(stopped||document.visibilityState!=='visible')return;
+      const read=verifiedVisitedCounts668Ref.current;
+      if(!read||read.uid!==viewedUid)return;
+      // The retained snapshot may predate the existing authenticated GET.
+      // It must never replace the more recent, confirmed first-view count.
+      detach=subscribePublicProfileFollow668(viewedUid,signal=>{
+        if(stopped||auth.currentUser!==principal||
+           activeProfileUidRef.current!==viewedUid||
+           document.visibilityState!=='visible'||
+           signal.at<=read.readStartedAt)return;
+        if(readPendingExploreFollowIntents380(principal.uid)
+           .some(intent=>intent.targetUid===viewedUid))return;
+        const count={followerCount:signal.followerCount,
+          followingCount:signal.followingCount};
+        verifiedVisitedProfileUid661Ref.current=viewedUid;
+        patchExplorePublicProfileFirstViewProfile(viewedUid,count);
+        setProfile(previous=>previous?.uid===viewedUid
+          ?{...previous,...count}:previous);
+        setFollowState(previous=>previous?{...previous,...count}:previous);
+        invalidateExploreProfileConnections377(viewedUid,'followers');
+        invalidateExploreProfileConnections377(viewedUid,'following');
+        profileConnectionsCache376Ref.current.delete(viewedUid+':followers');
+        profileConnectionsCache376Ref.current.delete(viewedUid+':following');
+      });
+    };
+    const onVisibility=()=>{
+      detach();detach=()=>{};
+      if(document.visibilityState==='visible')attach();
+    };
+    document.addEventListener('visibilitychange',onVisibility);
+    attach();
+    return ()=>{stopped=true;document.removeEventListener('visibilitychange',onVisibility);detach();};
+  },[profile?.uid,user?.uid]);
 
   // APP527: A's profile must not spend D1/R2 on window focus, blank-space
   // clicks or visibility changes. The app525 15-second fallback previously

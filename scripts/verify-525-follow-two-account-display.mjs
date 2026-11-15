@@ -33,17 +33,17 @@ assert.equal(api.pending('B','A'),null,'AFTER_SETTLEMENT_NO_PENDING_OVERLAY');
 
 const click=slice(page,'  const toggleFollow = async () => {',
  '  const closeMoreSheet = () => {');
-assert.match(click,/await setExploreFollow\(user, targetUid, requestedFollow, profile\)/);
-assert.doesNotMatch(click,/queueExploreFollowFinalState380\(/);
-assert.match(click,/readPendingExploreFollowIntents380\(viewerUid\)/);
-assert.match(click,/followMutationInFlightRef\.current/);
+assert.match(click,/queueExploreFollowFinalState380\(/);
+assert.match(click,/immediate: true, initialDelayMs: 0/);
+assert.match(click,/commit: \(following\) => setExploreFollow\(user, targetUid, following, profile\)/);
+assert.doesNotMatch(click,/followMutationInFlightRef\.current/);
 assert.match(click,/getExploreFollowState\(user, targetUid, true\)/);
 assert.match(click,/if \(persistConfirmed\) \{/);
 assert.match(click,/paint\(requestedFollow, false\)/);
 assert.match(click,/if \(persistConfirmed\) \{[\s\S]*?patchExplorePublicProfileFirstViewProfile\(targetUid/);
 assert.match(click,/paint\(requestedFollow, false\)/);
 assert.match(page,/getExploreFollowState\(user, nextProfile\.uid, true\)/);
-assert.match(page,/disabled=\{followBusy \|\| !followState\}/);
+assert.match(page,/disabled=\{!followState\}/);
 assert.match(page,/readPendingTargetFollowerCount525\(user\.uid,displayProfile379\.uid\)/);
 assert.match(page,/readPendingTargetFollowerCount525\(user\.uid,displayRefreshedProfile379\.uid\)/);
 
@@ -93,7 +93,8 @@ const ownMountEnd=page.indexOf('    return () => { cancelled = true; }',ownMount
 assert.ok(ownMountEnd>ownMountStart, 'OWN_PROFILE_MOUNT_BOUNDARY');
 const ownerMount=page.slice(ownMountStart,ownMountEnd);
 assert.match(ownerMount,/getExploreOwnProfileFollowCounts\(user\)/);
-assert.match(ownerMount,/if \(ownCountsTask\) await ownCountsTask/);
+assert.match(ownerMount,/if \(ownCountsTask\) \{\s*await ownCountsTask/);
+assert.match(ownerMount,/applyProfileFirstView\(nextProfile, rows\);\s*setProfileLoading\(false\)/);
 assert.match(ownerMount,/if \(verifiedOwnCounts\)/);
 assert.match(ownerMount,/followingCount: newerFollowing \?\? verifiedOwnCounts.followingCount/);
 assert.match(ownerMount,/ownerFollowerConfirmed529Ref\.current/);

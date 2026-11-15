@@ -3421,6 +3421,8 @@ export default function ExplorePage() {
     // It wins over older persisted list and first-view counters, including an
     // asynchronously revalidated first-view response from a stale Edge shell.
     let verifiedOwnCounts: Pick<ExplorePublicProfile, 'followerCount' | 'followingCount'> | null = null;
+    let targetFirstViewResolved666 = false;
+    let queuedTargetRevalidation666: {profile:ExplorePublicProfile;tracks:Array<Record<string,unknown>>}|null = null;
     const ownCountsRequestedAt = Date.now();
     if(user&&profileUid===user.uid){
       ownCountRequest662Ref.current={uid:user.uid,at:ownCountsRequestedAt};
@@ -3524,7 +3526,14 @@ export default function ExplorePage() {
         ? readPendingTargetFollowerCount525(user.uid,displayProfile379.uid) : null;
       if(pendingFollowerCount525!==null)
         displayProfile379={...displayProfile379,followerCount:pendingFollowerCount525};
-      setProfile(displayProfile379);
+      // APP666: a late R2/cache revalidation cannot repaint a target's two
+      // counts after the authenticated per-target follow-state GET verified them.
+      setProfile(previous => authoritative && user?.uid !== displayProfile379.uid &&
+        verifiedVisitedProfileUid661Ref.current === displayProfile379.uid &&
+        previous?.uid === displayProfile379.uid
+        ? {...displayProfile379, followerCount:previous.followerCount,
+           followingCount:previous.followingCount}
+        : displayProfile379);
       setProfileTracks(displayTracks);
       if (user?.uid === displayProfile379.uid) {
         void syncSoridrawProfileAvatarAuthority(user, displayProfile379.avatarUrl)
@@ -3543,6 +3552,14 @@ export default function ExplorePage() {
     getExplorePublicProfileFirstView(profileUid, {
       expectedPublicationSignalVersion: expectedPublicationSignalVersion357,
       onRevalidated: ({ profile: refreshedProfile, tracks: refreshedRows }) => {
+        // APP666: for a visited third-party profile wait for the already
+        // scheduled authenticated follow-state GET before first painting counts.
+        // Queue only this returned R2 response; do not add any network reads.
+        if (user?.uid && user.uid !== refreshedProfile.uid &&
+            !targetFirstViewResolved666) {
+          queuedTargetRevalidation666={profile:refreshedProfile,tracks:refreshedRows};
+          return;
+        }
         // The owner's initial authenticated counter snapshot must finish
         // before any stale materialized/Edge revalidation can repaint counts.
         if (ownCountsTask) {
@@ -3562,12 +3579,16 @@ export default function ExplorePage() {
       .then(async ({ profile: nextProfile, tracks: rows }) => {
         if (ownCountsTask) await ownCountsTask;
         if (cancelled) return;
-        applyProfileFirstView(nextProfile, rows);
+        if (!user || user.uid === nextProfile.uid)
+          applyProfileFirstView(nextProfile, rows);
 
         if (user && user.uid !== nextProfile.uid) {
           try {
             const nextFollowState = await getExploreFollowState(user, nextProfile.uid, true);
             if (!cancelled) {
+              // First visible third-party counts use the authenticated GET,
+              // not the potentially different stale R2 first-view caches.
+              applyProfileFirstView(nextProfile, rows);
               const pending525=readPendingExploreFollowIntents380(user.uid)
                 .find(row=>row.targetUid===nextProfile.uid);
               setFollowState(pending525 ? {
@@ -3594,9 +3615,18 @@ export default function ExplorePage() {
           } catch (reason) {
             console.warn('Explore follow state load failed:', reason);
             if (!cancelled) {
+              applyProfileFirstView(nextProfile, rows);
               setFollowState(null);
               setSocialNotice('팔로우 상태를 확인하지 못했습니다. 새로고침 후 다시 시도해 주세요.');
             }
+          }
+          // Apply any earlier completed R2 refresh only AFTER the authenticated
+          // follow-state snapshot; the verified-count guard above preserves it.
+          targetFirstViewResolved666=true;
+          if(queuedTargetRevalidation666){
+            const queued=queuedTargetRevalidation666;
+            queuedTargetRevalidation666=null;
+            applyProfileFirstView(queued.profile,queued.tracks,true);
           }
         } else {
           setFollowState(null);

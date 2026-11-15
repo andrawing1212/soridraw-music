@@ -82,19 +82,19 @@ const general=`function generalOwner660(env){
 }
 `;
 export function patchEntry680(source){
- if(hash660(source)!=='af59dc29612656ef55f9938081e654918b005a01d334f0957e7b7973a34c800e'
+ if(hash660(source)!=='af59dc29612656ef55f9938081e654918b005a01d334f0957e7b7973a34c800e')
   throw Error('APP680_ACTIVE_ENTRY_SOURCE_DRIFT');
- let s=once(source,'async function approvedCanary607(uid){',general+'async function approvedCanary607(uid){');
- s=once(s,"    String(env?.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||'')!==ownerUid||",
+ let s=one(source,'async function approvedCanary607(uid){',general+'async function approvedCanary607(uid){');
+ s=one(s,"    String(env?.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||'')!==ownerUid||",
   "    !UID.test(String(ownerUid||''))||\n    (!generalOwner660(env)&&String(env?.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||'')!==ownerUid)||");
- s=once(s,' return approvedCanary607(ownerUid);',' return generalOwner660(env)||approvedCanary607(ownerUid);');
- s=once(s," const uid=String(env?.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||'');\n return UID.test(uid)&&p==='/v1/profiles/'+uid+'/follow'?uid:null;",
+ s=one(s,' return approvedCanary607(ownerUid);',' return generalOwner660(env)||approvedCanary607(ownerUid);');
+ s=one(s," const uid=String(env?.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||'');\n return UID.test(uid)&&p==='/v1/profiles/'+uid+'/follow'?uid:null;",
   " if(generalOwner660(env)&&request.headers.get('Origin')==='https://preview.soridraw.com'){\n  const match=/^\\/v1\\/profiles\\/([A-Za-z0-9_-]{1,128})\\/follow$/.exec(p);\n  return match?match[1]:null;\n }\n const uid=String(env?.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||'');\n return UID.test(uid)&&p==='/v1/profiles/'+uid+'/follow'?uid:null;");
- s=once(s,'request,env:this.env,enabled:true,allowedCanaryUid:uid,',
+ s=one(s,'request,env:this.env,enabled:true,allowedCanaryUid:uid,',
   'request,env:this.env,enabled:true,allowedCanaryUid:generalOwner660(this.env)?null:uid,');
  // Keep unenrolled public-only signaling OFF unless the PREVIEW-only
  // general scope and the dedicated runtime flag are both active.
- s=once(s,"   enabled:true,\n  });\n },\n};","   enabled:true,\n   publicWithoutEpoch:generalOwner660(env)&&env?.SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680==='1',\n  });\n },\n};");
+ s=one(s,"   enabled:true,\n  });\n },\n};","   enabled:true,\n   publicWithoutEpoch:generalOwner660(env)&&env?.SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680==='1',\n  });\n },\n};");
  return s;
 }
 

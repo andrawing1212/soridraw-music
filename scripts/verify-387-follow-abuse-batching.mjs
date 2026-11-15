@@ -23,15 +23,16 @@ const toggleStart = page.indexOf('  const toggleFollow = async () =>');
 const toggleEnd = page.indexOf('\n\n  const closeMoreSheet', toggleStart);
 assert.ok(toggleStart >= 0 && toggleEnd > toggleStart);
 const toggle = page.slice(toggleStart, toggleEnd);
-// APP647 visible clicks no longer use the legacy pending queue. The old
-// persisted queue survives only for safe one-time recovery of prior intents.
-assert.match(toggle, /await setExploreFollow\(user, targetUid, requestedFollow, profile\)/);
-assert.match(toggle, /readPendingExploreFollowIntents380\(viewerUid\)/);
-assert.match(toggle, /followMutationInFlightRef\.current/);
-assert.doesNotMatch(toggle, /queueExploreFollowFinalState380\(/);
+// APP follow: visible clicks use the existing persisted queue in immediate mode.
+// The 30-second trailing timer remains for legacy/background non-immediate intents.
+assert.match(toggle, /queueExploreFollowFinalState380\(/);
+assert.match(toggle, /immediate: true, initialDelayMs: 0/);
+assert.match(toggle, /commit: \(following\) => setExploreFollow\(user, targetUid, following, profile\)/);
+assert.doesNotMatch(toggle, /followMutationInFlightRef\.current/);
 assert.match(toggle,/if \(persistConfirmed\) \{[\s\S]*?patchExploreFollowLocalState377\(viewerUid, targetUid, following, profile\)/);
 const publishIndex = toggle.indexOf('publishExploreFollowSync377(viewerUid');
-const settledIndex = toggle.indexOf('await setExploreFollow(');
+const settledIndex = toggle.indexOf('onSettled: (settlement) =>');
+assert.ok(settledIndex > toggle.indexOf('commit: (following) => setExploreFollow('));
 assert.ok(publishIndex > settledIndex, 'same-account signal must follow accepted canonical response');
 
 assert.match(page, /readPendingExploreFollowIntents380\(viewerUid380\)/);

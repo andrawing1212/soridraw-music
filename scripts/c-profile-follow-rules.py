@@ -32,6 +32,9 @@ def main():
  print('C_PROFILE_ACTIVE_SHARED_RULES_SHA='+sha(live),flush=True)
  check(sha(live)==EXPECTED,'RULES_BASELINE_DRIFT')
  Path('/tmp/c-profile-live-rules.json').write_text(json.dumps(live))
+ # Retain the exact original rules before any operation. The workflow uploads
+ # this file even on failure. No credentials or database records are included.
+ Path('c-profile-rules-backup.json').write_text(json.dumps(live,sort_keys=True,indent=2)+'\\n')
  code="""
 import {readFileSync,writeFileSync} from 'node:fs';
 import {makeAdditivePublicFollowRules667} from './scripts/lib/public-follow-rules-667.mjs';
@@ -48,13 +51,20 @@ console.log('C_PROFILE_SHARED_RULES_EXACT_ONE_CHILD=PASS');
   k:v for k,v in after['rules']['publicSync'].items()
   if k!='exploreFollowProfiles667'}}})==sha(live),'UNRELATED_RULES_CHANGED')
  if sys.argv[1]=='--preflight':return
- # Do not PUT unless REST supplied an entity version for compare-and-swap.
- check(bool(etag),'MISSING_SERVER_ETAG')
+ # Firebase RTDB Rules management GET does not reliably issue an ETag.
+ # Without server CAS this is explicitly an operational maintenance release,
+ # never an automatic push-deploy. Exact isolated GitHub workflow opt-in and
+ # a declared freeze of other Rules publishers are mandatory.
+ check(os.environ.get('C_PROFILE_RULES_MAINTENANCE_CONFIRMED')=='FREEZE_CONFIRMED',
+  'MAINTENANCE_FREEZE_REQUIRED')
  compare,_=get(url)
  check(sha(compare)==EXPECTED,'CONCURRENT_RULE_UPDATE')
+ final_check,_=get(url)
+ check(sha(final_check)==EXPECTED,'CONCURRENT_RULE_UPDATE_FINAL')
  body=json.dumps(after,separators=(',',':')).encode()
- req=urllib.request.Request(url,data=body,method='PUT',headers={
-  'Content-Type':'application/json','If-Match':etag})
+ headers={'Content-Type':'application/json'}
+ if etag:headers['If-Match']=etag
+ req=urllib.request.Request(url,data=body,method='PUT',headers=headers)
  try:
   with urllib.request.urlopen(req,timeout=40) as resp:
    check(resp.status in (200,204),'RULES_PUT_STATUS')

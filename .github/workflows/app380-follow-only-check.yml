@@ -143,6 +143,10 @@ jobs:
           node scripts/verify-394-follow-only-worker-freeze.mjs
           node scripts/verify-395-follow-only-release-scope.mjs
           node scripts/verify-396-public-like-reload-and-diagnostics.mjs
+      - name: Prepare Firebase Functions for APP669 signed receiver test
+        run: |
+          npm ci --prefix functions --no-audit --no-fund
+          npx --prefix functions tsc -p functions/tsconfig.json --noEmit
       - name: Current follow regressions (each check reports independently)
         shell: bash
         run: |

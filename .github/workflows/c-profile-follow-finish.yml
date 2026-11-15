@@ -1,0 +1,117 @@
+name: SORIDRAW C profile follower real-time completion
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'src/services/explorePublicFollowSync668.ts'
+      - 'cloudflare/explore-worker/runtime/public-follow-dual-ack-671.mjs'
+      - 'scripts/c-profile-follow-*'
+      - '.github/workflows/c-profile-follow-finish.yml'
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/c-profile-follow-finish.yml'
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: soridraw-c-profile-follow-one-completion
+  cancel-in-progress: false
+jobs:
+  check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate only C profile signal and rollback-safe code
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm --prefix functions ci --no-audit --no-fund
+          npx --prefix functions tsc -p functions/tsconfig.json
+          npx tsc --noEmit
+          python3 -m py_compile scripts/c-profile-follow-server-firebase.py scripts/c-profile-follow-rules.py
+          python3 scripts/c-profile-follow-server-firebase.py --package-check
+          node --check scripts/c-profile-follow-server-worker.mjs
+          node scripts/verify-671-public-follow-dual-ack.mjs
+          node scripts/verify-669-public-follow-commit-proof.mjs
+          npx tsx scripts/verify-669-public-follow-endpoint.ts
+          npx tsx scripts/verify-669-follow-deletion.ts
+          npx tsx scripts/verify-668-public-follow-listener.ts
+  release:
+    if: github.event_name == 'push' && github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      APP_C_PROFILE_APPROVED_SHA: ${{ github.sha }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Lock approved single-C-profile release
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/preview
+          test "$APP_C_PROFILE_APPROVED_SHA" = "$GITHUB_SHA"
+          node scripts/verify-671-active-service-patch.mjs
+          node scripts/verify-671-public-follow-dual-ack.mjs
+          node --check scripts/c-profile-follow-server-worker.mjs
+          python3 -m py_compile scripts/c-profile-follow-server-firebase.py scripts/c-profile-follow-rules.py
+      - name: Compile exact existing receiver and deletion hook
+        run: |
+          set -euo pipefail
+          npm --prefix functions ci --no-audit --no-fund
+          npx --prefix functions tsc -p functions/tsconfig.json
+          python3 scripts/c-profile-follow-server-firebase.py --package-check
+      - name: Verify existing OFF endpoint is accessible only via HMAC receiver
+        run: |
+          set -euo pipefail
+          url=https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publishExplorePublicFollow669
+          code="$(curl -sS --max-time 25 -o /tmp/c-profile-off-endpoint.json -w '%{http_code}' "$url")"
+          test "$code" = 503 || { echo "C_PROFILE_ENDPOINT_NOT_REACHABLE_HTTP=$code"; exit 2; }
+          grep -Fq PREVIEW_PUBLIC_FOLLOW_DISABLED /tmp/c-profile-off-endpoint.json || {
+            echo C_PROFILE_ENDPOINT_IAM_OR_SOURCE_DRIFT; exit 2;
+          }
+          echo C_PROFILE_OFF_RECEIVER_IS_EXTERNALLY_REACHABLE=PASS
+      - name: Read-only exact shared RTDB Rules preflight
+        run: |
+          pip -q install google-auth
+          python3 scripts/c-profile-follow-rules.py --preflight
+      - name: Deploy account deletion protection then enable existing isolated receiver
+        run: python3 scripts/c-profile-follow-server-firebase.py --apply
+      - name: Add ONLY C public counter read Rules child, preserve every sibling
+        run: python3 scripts/c-profile-follow-rules.py --apply
+      - name: Switch ONLY PREVIEW Explore to already proven public follow bridge
+        run: node scripts/c-profile-follow-server-worker.mjs --apply
+      - name: Trigger existing guarded PREVIEW Hosting release for the visitor subscriber
+        run: |
+          set -euo pipefail
+          test -f c-profile-worker-result.json
+          gh workflow run firebase-hosting-custom-preview.yml --repo "$GITHUB_REPOSITORY" --ref preview -f target_sha="$GITHUB_SHA"
+          echo C_PROFILE_PREVIEW_HOSTING_WORKFLOW_DISPATCHED=PASS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: c-profile-follow-activation-result
+          path: c-profile-worker-result.json
+          if-no-files-found: ignore
+          retention-days: 14

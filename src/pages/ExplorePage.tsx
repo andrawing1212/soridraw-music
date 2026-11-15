@@ -1999,6 +1999,7 @@ export default function ExplorePage() {
   const verifiedVisitedProfileUid661Ref = useRef('');
   // Only a successfully verified first-view target GET establishes authority.
   const verifiedVisitedCounts668Ref=useRef<{uid:string;readStartedAt:number}|null>(null);
+  const [verifiedVisitedSignalUid669,setVerifiedVisitedSignalUid669]=useState('');
   const profileConnectionsCache376Ref = useRef<Map<string, { items: ExploreProfileConnection[]; nextCursor: string | null; countComplete?: boolean; hasUnresolvedProfiles?: boolean }>>(new Map());
   const profileConnectionsRequest376Ref = useRef(0);
   const ownFollowersLastCheck523Ref = useRef<Map<string, number>>(new Map());
@@ -3411,6 +3412,7 @@ export default function ExplorePage() {
     let cancelled = false;
     verifiedVisitedProfileUid661Ref.current = '';
     verifiedVisitedCounts668Ref.current=null;
+    setVerifiedVisitedSignalUid669('');
     setProfileCollection('public');
     // 088: entering this user's own profile from Explore must not discard the
     // optimistic liked cards created moments earlier in the same page session.
@@ -3612,6 +3614,7 @@ export default function ExplorePage() {
                 };
                 verifiedVisitedProfileUid661Ref.current=nextProfile.uid;
                 verifiedVisitedCounts668Ref.current={uid:nextProfile.uid,readStartedAt:ownCountsRequestedAt};
+                setVerifiedVisitedSignalUid669(nextProfile.uid);
                 patchExplorePublicProfileFirstViewProfile(nextProfile.uid,exact661);
                 setProfile(previous=>previous?.uid===nextProfile.uid
                   ?{...previous,...exact661}:previous);
@@ -4538,7 +4541,7 @@ export default function ExplorePage() {
     const viewedUid=String(profile?.uid||'').trim();
     const principal=auth.currentUser;
     if(!principal||!viewedUid||viewedUid===principal.uid||
-       user?.uid!==principal.uid)return;
+       user?.uid!==principal.uid||verifiedVisitedSignalUid669!==viewedUid)return;
     let stopped=false;
     let detach=()=>{};
     const attach=()=>{
@@ -4574,7 +4577,7 @@ export default function ExplorePage() {
     document.addEventListener('visibilitychange',onVisibility);
     attach();
     return ()=>{stopped=true;document.removeEventListener('visibilitychange',onVisibility);detach();};
-  },[profile?.uid,user?.uid]);
+  },[profile?.uid,user?.uid,verifiedVisitedSignalUid669]);
 
   // APP527: A's profile must not spend D1/R2 on window focus, blank-space
   // clicks or visibility changes. The app525 15-second fallback previously

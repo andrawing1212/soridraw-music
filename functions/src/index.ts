@@ -4481,3 +4481,10 @@ export {
 export {publishExploreOwnerFollower542} from "./exploreOwnerFollowerWebhook542";
 export {enrollOwnerFollow544Candidate} from "./ownerFollowEnrollment544";
 export {verifyOwnerFollowEpoch547Candidate} from "./ownerFollowAuthProof547";
+
+// APP669 dedicated PREVIEW public aggregate follow receiver, compiled OFF.
+// Deploy individually only after canonical issuer/Rules/delete fences are proven.
+export {publishExplorePublicFollow669} from './explorePublicFollowEndpoint669';
+
+// APP669 PREVIEW public follow aggregate cleanup, compiled OFF and unshipped.
+export {revokePublicFollowOnAuthDelete669} from './explorePublicFollowDeletion669';

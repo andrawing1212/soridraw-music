@@ -1,3 +1,13 @@
+## CURRENT — APP669 제3자 팔로우 숫자 서버 정본 증명·발행 연결 소스, 활성 배포 HOLD (2026-11-15 KST)
+
+- **승인된 목표 유지:** A가 B를 팔로우/취소하면 B 소유자뿐 아니라 C 방문자의 팔로워 숫자, A의 팔로잉 및 공개 방문자 숫자가 실제 확정 후 자동 갱신되고 첫 진입·PC↔모바일·페이지 이동에도 동일해야 함. APP668까지 방문자 코드가 OFF인 상태로 병합됨. **실기기/전 기능 PASS 아님.**
+- **원인 진단:** APP667은 HMAC 형태·카운터·순서 계약만 가지고 있어 실제 D1 확정 관계와 최신 R2/현재 Auth 계정 세대가 검증됐다는 증거는 아님. APP668은 React ref가 인증 GET 성공으로 변경되어도 `profile?.uid`가 같으면 listener effect가 재실행되지 않을 수 있어 첫 구독이 누락되는 경합이 있었음.
+- **코드 작업:** [PR #1069](https://github.com/andrawing1212/soridraw-music/pull/1069)에서 이미 존재하는 APP557 확정 intent 증명을 먼저 재사용, 딱 2명 public_profiles D1 행 + 2개 R2 프로필의 exact/pending 없는 숫자·개별 revision을 증명하고 PREVIEW 전용 도메인 HMAC로 Firebase Functions 수신기에 전달하는 소스 작성. Functions는 Firebase Auth 실제 UID 생성 시점에서 세대를 직접 계산해 기존 owner-epoch 등록 여부와 무관하게 동작하고, users Firestore 계정 삭제 진행/완료·정지 상태면 신호 발행 금지. APP667 서버 트랜잭션 멱등·재전송 유지. Auth 삭제 이벤트에서는 삭제된 세대의 RTDB 공개 신호만 제거하도록 세대 CAS 준비. APP668 방문자 수신기 장착 경합은 인증 GET 완료 상태로 해결. 추가 전역 폴링·전체 조회·D1 쓰기·원본 변경 없음.
+- **현재 미활성:** Function 엔드포인트·Auth 삭제 훅·클라이언트 구독은 컴파일 OFF 또는 런타임 OFF, 현재 활성 Cloudflare Worker/DO 수신 경로에는 APP669을 연결하지 않음. RTDB 보안 규칙과 Hosting/TEST/PRODUCTION 변경 없음. PR 병합 자체가 실제 사용자 기능 활성화가 아님.
+- **검증/배포 차단:** 실제 활성 PREVIEW Worker/DO 모듈·바인딩과 RTDB Rules를 읽기 전용 확인하는 신규 Workflow를 추가해 보호된 preview HEAD에서 실행하도록 설계. Functions 타입·서명·고객 계정 삭제·R2/D1 증명·재전송 검사 완료 및 정확한 활성 버전 기준 배포와 Rules 증분·계정 삭제 수신 훅 검증 뒤에만 ENABLE 가능. 기존 사용자에게 같은 A/B/C 테스트 반복 요청 금지. 테스트/검증 결과는 Actions 기록 기준으로 별도 확인.
+ 
+---
+
 ## CURRENT — APP668 제3자 프로필 공개 팔로우 숫자 수신 경로 구현, 서버 활성화 HOLD (2026-11-15 KST)
 
 - **현재 목표·미완료:** A 팔로우/취소 후 B 소유자와 C 방문자 화면 양쪽 숫자가 서버 확정 시 자동 수렴, PC↔모바일 첫 진입·페이지 이동 일관. **완료/실기기 PASS 아님.**

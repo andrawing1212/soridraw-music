@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import {createHmac} from 'node:crypto';
-import {publishPublicFollowPair667} from '../functions/src/explorePublicFollowSignal667';
+const issuer667=await import('../functions/src/explorePublicFollowSignal667');
+// Firebase Functions is a nested CommonJS package; tsx interop wraps its
+// named exports in `default` when invoked from the root ESM test package.
+const publishPublicFollowPair667=((issuer667 as any).publishPublicFollowPair667 ??
+ (issuer667 as any).default?.publishPublicFollowPair667) as typeof issuer667.publishPublicFollowPair667;
+assert.equal(typeof publishPublicFollowPair667,'function');
 const SECRET='app667_must_be_server_held_32bytes_secret_01234567890';
 const now=1_800_000_000_000;
 const input={

@@ -21,6 +21,10 @@ on:
       - 'functions/src/explorePublicFollowAuthGeneration669.ts'
       - 'functions/src/index.ts'
       - 'scripts/verify-669-follow-deletion.ts'
+      - 'cloudflare/explore-worker/runtime/public-follow-dual-ack-671.mjs'
+      - 'scripts/lib/public-follow-active-patch-671.mjs'
+      - 'scripts/verify-671-public-follow-dual-ack.mjs'
+      - 'scripts/verify-671-active-service-patch.mjs'
       - 'scripts/verify-377-follow-count-list-sync.mjs'
       - 'scripts/verify-386-follow-overlay-count-display.mjs'
       - 'scripts/verify-525-follow-two-account-display.mjs'
@@ -69,6 +73,10 @@ on:
       - 'functions/src/explorePublicFollowAuthGeneration669.ts'
       - 'functions/src/index.ts'
       - 'scripts/verify-669-follow-deletion.ts'
+      - 'cloudflare/explore-worker/runtime/public-follow-dual-ack-671.mjs'
+      - 'scripts/lib/public-follow-active-patch-671.mjs'
+      - 'scripts/verify-671-public-follow-dual-ack.mjs'
+      - 'scripts/verify-671-active-service-patch.mjs'
       - 'src/components/explore/ExploreShell.tsx'
       - 'src/components/studio/StudioSplitEngineWorkspace.tsx'
       - 'public/app-version.json'
@@ -184,6 +192,8 @@ jobs:
           run_check 669_proof node scripts/verify-669-public-follow-commit-proof.mjs
           run_check 669_receiver node --import tsx scripts/verify-669-public-follow-endpoint.ts
           run_check 669_deletion node --import tsx scripts/verify-669-follow-deletion.ts
+          run_check 671_dual node scripts/verify-671-public-follow-dual-ack.mjs
+          run_check 671_patch node scripts/verify-671-active-service-patch.mjs
           run_check 653 node --import tsx scripts/verify-653-owner-general-scope.mjs
           run_check 529_sql python3 scripts/verify-529-owner-outbox-sql.py
           run_check 529_sync node scripts/verify-529-owner-sync.mjs

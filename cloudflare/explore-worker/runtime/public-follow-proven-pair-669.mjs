@@ -45,10 +45,13 @@ export async function createVerifiedPublicFollowClaim669({
    'WHERE p.uid IN (?,?) LIMIT 2').bind(actor,target).all();
   rows=result?.results;
  }catch{return fail('public-enrollment-unavailable')}
- if(!Array.isArray(rows)||rows.length!==2)return fail('not-two-public-profiles');
+ // Following a public profile must not require the actor to publish a profile.
+ // A private actor still needs a valid settled R2 relation snapshot, but must
+ // NEVER emit a public counter row for their own profile.
+ if(!Array.isArray(rows))return fail('public-status-unavailable');
  const byUid=new Map(rows.map(row=>[row.uid,row]));
- if([actor,target].some(uid=>byUid.get(uid)?.isPublic!==1))
-  return fail('not-public');
+ if(byUid.get(target)?.isPublic!==1)return fail('target-not-public');
+ const actorPublic=byUid.get(actor)?.isPublic===1;
  let bundles;
  try{
   const files=await Promise.all([actor,target].map(uid=>env.PROFILE_MEDIA.get(profileKey(uid))));
@@ -65,6 +68,6 @@ export async function createVerifiedPublicFollowClaim669({
  return {status:'ready',ready:true,claim:{
   schemaVersion:1,actorUid:actor,targetUid:target,
   cutoverToken:r.cutoverToken,operationId:r.operationId,signedAtMs:at,
-  actor:a,target:b,
- },readScope:{d1Rows:2,r2Objects:2}};
+  actor:actorPublic?a:null,target:b,
+ },readScope:{d1Rows:rows.length,r2Objects:2}};
 }

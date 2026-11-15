@@ -24,6 +24,11 @@ export async function handleOwnerFollowReplayService601(args={}){
  return handleOwnerAndPublicFollowReplay671({
   request:args.request,env:args.env,
   ownerHandler:()=>handleOwnerFollowReplayService601Base(args),
+  authorizePublicOnly:(request,reservation)=>
+   args.allowedCanaryUid===null&&args.enabled===true&&
+   args.env?.SORIDRAW_ENVIRONMENT==='preview'&&
+   args.env?.SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680==='1'&&
+   capabilityValid(request,args.env)&&validTicket(reservation),
  });
 }
 `;

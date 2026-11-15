@@ -1,3 +1,13 @@
+## CURRENT — APP668 제3자 프로필 공개 팔로우 숫자 수신 경로 구현, 서버 활성화 HOLD (2026-11-15 KST)
+
+- **현재 목표·미완료:** A 팔로우/취소 후 B 소유자와 C 방문자 화면 양쪽 숫자가 서버 확정 시 자동 수렴, PC↔모바일 첫 진입·페이지 이동 일관. **완료/실기기 PASS 아님.**
+- **코드:** [PR #1068](https://github.com/andrawing1212/soridraw-music/pull/1068)에서 공개 프로필별 RTDB 숫자 수신, 순서·세대·필드 검증, 방문 중일 때만 구독, 뒤늦은 retained snapshot의 인증된 first-view GET 덮어쓰기 금지, pending follow 낙관치 보호, 확인된 변경만 공개 프로필·캐시·팔로워·팔로잉 수 갱신. 전체 Feed/목록 재조회나 신규 주기 폴링·D1/R2 조회·쓰기 없음.
+- **안전한 분리:** `PUBLIC_FOLLOW_VISITOR_668_ENABLED=false` 유지. 현재 활성 RTDB Rules에 해당 공개 경로가 없고 APP667 발행기 역시 active Functions/Worker에 미연결이므로, 방문자 수신 listener는 실제 앱에서 **실행되지 않음**. owner-private RTDB는 방문자에게 공개하지 않음. 공유 규칙/Functions/Worker·원본 데이터·TEST·PRODUCTION 불변.
+- **검사:** [팔로우 전용 #43699970377](https://github.com/andrawing1212/soridraw-music/actions/runs/43699970377), [팔로우 쿨다운·권한 #43699970358](https://github.com/andrawing1212/soridraw-music/actions/runs/43699970358), [제품 품질 #43699970359](https://github.com/andrawing1212/soridraw-music/actions/runs/43699970359) SUCCESS. APP667 issuer/Rules-plan 테스트 PASS 재사용, 공유 서버 활성화 검증과는 별개.
+- **출시 차단:** 기존 PREVIEW Worker/DO가 증명 가능한 committed pair + 두 R2 확정 revision + Auth incarnation 및 공개 상태를 서명 발행하도록 정확한 활성 버전 기준으로 연결해야 함. Firebase 수신 endpoint·클라이언트 공개 읽기 Rules를 공유 환경과 호환되게 배포해야 하고, 계정 삭제/비공개 전환 때 과거 공개 신호를 노출하지 않도록 확실한 삭제 또는 접근 차단도 필요. 현재 `database.rules.json` 전체는 active와 불일치하므로 전체 교체 금지. 이번 PR은 source-only, Hosting 배포 트리거 없음. 실제 A/B/C 기기 테스트는 기능 활성화 후 변경 경로만 진행.
+
+---
+
 ## CURRENT — APP667 공개 프로필 팔로우 정본 신호 발행기·보안 규칙 증분 계획 SOURCE-ONLY (2026-11-15 KST)
 
 - **현재 승인 목표:** A가 B를 팔로우/취소하면 A의 팔로잉·B의 팔로워 수와 C가 방문 중인 B의 공개 프로필 숫자까지 서버 확정 후 모달/새로고침 없이 갱신; 첫 진입·페이지 이동·PC↔모바일 동일 숫자. **전체 기능은 여전히 미완료.**

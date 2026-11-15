@@ -68,7 +68,7 @@ function patched(t,files){
 }
 async function verify(t,id,old,modules){
  const next=await snapshot(t,id);
- check(next.bindings.length===t.count+t.addFlags.length,'STAGED_BINDING_COUNT');
+ check(next.bindings.length===old.bindings.length+t.addFlags.length,'STAGED_BINDING_COUNT');
  const map=new Map(next.bindings.map(b=>[b.name,b]));
  for(const b of old.bindings)check(isDeepStrictEqual(map.get(b.name),b),'EXISTING_BINDING_CHANGED_'+b.name);
  for(const [name,value] of Object.entries(flags))check(map.get(name)?.type==='plain_text'&&map.get(name)?.text===value,'FLAGS');
@@ -94,7 +94,6 @@ async function run(){
       /owner-follow-(?:precommit-557|service-601|enrollment-544)\.mjs$/.test(m.name)||
       /public-follow-(?:http-669|dual-ack-671)\.mjs$/.test(m.name))
     console.log('APP680_ACTIVE_MODULE_SHA256='+t.name+':'+m.name+':'+hash660(text(m)));
-  check(t.before.bindings.length===t.count,'BINDING_COUNT');
   const b=new Map(t.before.bindings.map(x=>[x.name,x]));
   check(b.get('SORIDRAW_ENVIRONMENT')?.text==='preview','ENVIRONMENT');
   // Reuse existing general flags only when they match the exact approved
@@ -108,8 +107,9 @@ async function run(){
     }
     return true;
   });
-  console.log('APP680_EXISTING_FLAGS_REUSED='+t.name+';count='+
-    (Object.keys(flags).length-t.addFlags.length));
+  const reused=Object.keys(flags).length-t.addFlags.length;
+  check(t.before.bindings.length===t.count+reused,'BINDING_COUNT');
+  console.log('APP680_EXISTING_FLAGS_REUSED='+t.name+';count='+reused);
   if(t.name===EX){
    check(b.get('SORIDRAW_OWNER_FOLLOW_BRIDGE_READY_607')?.text==='1'&&b.get('SORIDRAW_OWNER_FOLLOW_RECEIVER_VERIFIED_607')?.text==='1','BRIDGE_READY');
    check(b.get('OWNER_FOLLOW_RESERVATION_SERVICE_600')?.service===OW,'OWNER_SERVICE');

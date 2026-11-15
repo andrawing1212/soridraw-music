@@ -16,7 +16,10 @@ const targets=[
 ];
 const flags={SORIDRAW_OWNER_FOLLOW_GENERAL_PREVIEW_653:'1',
  SORIDRAW_OWNER_FOLLOW_SOURCE_BOUNDARY_653:'preview-only',
- SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680:'1'};
+ SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680:'1',
+ SORIDRAW_PUBLIC_FOLLOW_READY_669:'1',
+ SORIDRAW_PUBLIC_FOLLOW_SCOPE_669:'preview-only',
+ SORIDRAW_PUBLIC_FOLLOW_ENDPOINT_669:'https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publishExplorePublicFollow669'};
 const check=(v,m)=>{if(!v)throw Error('APP680_WORKER_HOLD_'+m)};
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function api(method,path,body){

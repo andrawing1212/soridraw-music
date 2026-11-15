@@ -78,7 +78,21 @@ await assert.rejects(()=>run({...next,actor:{...next.actor,generation:'c'.repeat
 const {raw}=signed(next);
 await assert.rejects(()=>publishPublicFollowPair667(db,raw,'0'.repeat(64),SECRET,now),/INVALID_SIGNATURE/);
 await assert.rejects(()=>publishPublicFollowPair667(db,raw,signed(next).sig,SECRET,now+400000),/UNVERIFIED|INVALID/);
+const beforePrivateActor=(data.get('publicSync/exploreFollowProfiles667/Actor') as any).followingCount;
+const privateOperation={...next,operationId:'operation_1234567899',actor:null,
+ target:{...next.target,revision:26,followerCount:9}};
+const privateResult=await run(privateOperation);
+assert.equal(privateResult.actor,'skipped-private');
+assert.equal(privateResult.target,'applied');
+assert.equal(privateResult.rtdbTransactions,1);
+assert.equal((data.get('publicSync/exploreFollowProfiles667/Actor') as any).followingCount,beforePrivateActor);
+assert.equal((data.get('publicSync/exploreFollowProfiles667/Target') as any).followerCount,9);
+assert.equal((await run(privateOperation)).target,'duplicate');
+const missingActorTouches=touched.length;
+await assert.rejects(()=>run({...privateOperation,actor:undefined}));
+assert.equal(touched.length,missingActorTouches);
 assert.equal(touched.every(p=>p.startsWith('publicSync/exploreFollowProfiles667/')),true);
+console.log('APP670_PRIVATE_ACTOR_PUBLIC_TARGET_SINGLE_TRANSACTION=PASS');
 console.log('APP667_PUBLIC_ONLY_AUTHENTICATED_PAIR=PASS');
 console.log('APP667_IDEMPOTENT_PARTIAL_FAILURE_REPLAY=PASS');
 console.log('APP667_STALE_CONFLICT_GENERATION_AND_UNVERIFIED_HOLD=PASS');

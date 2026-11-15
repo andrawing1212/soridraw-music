@@ -28,7 +28,7 @@ const build=async({publicTarget=1,epoch='',flag='1',baseline=0}={})=>{
   callCanonical:async req=>{writes++;canonicalBody.push(await req.clone().text());
    return Response.json({ok:true})},
  });
- assert.equal(response.status,200);
+ assert.equal(response.status,200,JSON.stringify(await response.clone().json()));
  assert.equal(writes,1);
  return {reservations,canonicalBody};
 };

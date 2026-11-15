@@ -108,7 +108,10 @@ async function run(){
     return true;
   });
   const reused=Object.keys(flags).length-t.addFlags.length;
-  check(t.before.bindings.length===t.count+reused,'BINDING_COUNT');
+  // Explore's current 40 includes already active flags; the standalone DO's
+  // original seven are its pre-general baseline. Never double-count Explore.
+  const expectedActiveBindings=t.name===EX?t.count:t.count+reused;
+  check(t.before.bindings.length===expectedActiveBindings,'BINDING_COUNT');
   console.log('APP680_EXISTING_FLAGS_REUSED='+t.name+';count='+reused);
   if(t.name===EX){
    check(b.get('SORIDRAW_OWNER_FOLLOW_BRIDGE_READY_607')?.text==='1'&&b.get('SORIDRAW_OWNER_FOLLOW_RECEIVER_VERIFIED_607')?.text==='1','BRIDGE_READY');

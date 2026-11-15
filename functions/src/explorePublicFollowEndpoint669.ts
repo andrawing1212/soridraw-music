@@ -73,12 +73,12 @@ export const createPublicFollowHttp669=({
  let parsed:any;
  try{parsed=JSON.parse(raw.toString('utf8'))}
  catch{res.status(400).json({ok:false});return}
- if(parsed?.signedAtMs!==at||!parsed.actor||!parsed.target||
+ if(parsed?.signedAtMs!==at||!parsed.target||
     !UID.test(String(parsed.actorUid||''))||
     !UID.test(String(parsed.targetUid||''))||
-    parsed.actor?.profileUid!==parsed.actorUid||
+    (parsed.actor!==null&&parsed.actor?.profileUid!==parsed.actorUid)||
     parsed.target?.profileUid!==parsed.targetUid||
-    parsed.actor?.generation!==UNVERIFIED_GENERATION||
+    (parsed.actor!==null&&parsed.actor?.generation!==UNVERIFIED_GENERATION)||
     parsed.target?.generation!==UNVERIFIED_GENERATION){
   res.status(400).json({ok:false});return;
  }
@@ -88,7 +88,7 @@ export const createPublicFollowHttp669=({
   if(!actor||!target){res.status(409).json({ok:false,code:'AUTH_OR_PRIVACY_GENERATION_HOLD'});return}
   // The server, NOT the caller, binds both public rows to actual Auth births.
   const verifiedRaw=JSON.stringify({...parsed,
-   actor:{...parsed.actor,generation:actor},
+   actor:parsed.actor?{...parsed.actor,generation:actor}:null,
    target:{...parsed.target,generation:target},
   });
   const verifiedSignature=createHmac('sha256',key).update(verifiedRaw).digest('hex');

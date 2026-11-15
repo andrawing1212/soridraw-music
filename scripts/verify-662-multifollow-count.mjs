@@ -49,7 +49,7 @@ console.log('APP662_RETAINED_SAME_ACCOUNT_SIGNAL_ORDERING=PASS');
 // exact 1:N counts returned by their preceding canonical settlement.
 const batch=readFileSync('src/services/exploreFollowBatchService380.ts','utf8');
 assert.match(client,/confirmed380 !== settlement380\.baseFollowing &&[\s\S]*?countVerified661===true &&[\s\S]*?actorCountVerified662===true/);
-assert.match(client,/confirmed\.countVerified661===true &&[\s\S]*?confirmed\.actorCountVerified662===true/);
+assert.match(client,/confirmed\.countVerified661\s*===\s*true &&[\s\S]*?confirmed\.actorCountVerified662\s*===\s*true/);
 assert.match(client,/if \(canonical\?\.countVerified661===true\)/);
 assert.match(client,/if \(canonical\?\.actorCountVerified662===true && actorFollowingCount !== null\)/);
 assert.match(batch,/current\.baseTargetFollowerCount =[\s\S]*?result\.countVerified661===true/);

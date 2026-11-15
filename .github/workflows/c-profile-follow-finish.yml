@@ -44,7 +44,7 @@ jobs:
           node scripts/verify-669-public-follow-commit-proof.mjs
           npx tsx scripts/verify-669-public-follow-endpoint.ts
           npx tsx scripts/verify-669-follow-deletion.ts
-          npx tsx scripts/verify-668-public-follow-listener.ts
+          npx tsx scripts/verify-668-visitor-follow-signal.ts
   release:
     if: github.event_name == 'push' && github.repository == 'andrawing1212/soridraw-music'
     runs-on: ubuntu-24.04

@@ -1,0 +1,67 @@
+name: SORIDRAW APP673 live public follow Rules and Functions capability READONLY
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/app673-public-follow-live-readonly.yml']
+permissions: {contents: read}
+concurrency:
+  group: soridraw-app673-follow-rules-readonly
+  cancel-in-progress: false
+jobs:
+  check:
+    if: github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+      - name: Fetch current RTDB security Rules and IAM capability without changes
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,hashlib,urllib.request,urllib.error
+          import google.auth
+          from google.auth.transport.requests import Request
+          credentials,_=google.auth.default(scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          credentials.refresh(Request())
+          url='https://soridraw-app-866a5-default-rtdb.firebaseio.com/.settings/rules.json'
+          with urllib.request.urlopen(
+            urllib.request.Request(url+'?access_token='+credentials.token),timeout=25) as result:
+            rules=json.load(result)
+          with open('/tmp/app673-current-rules.json','w') as f:json.dump(rules,f)
+          print('APP673_ACTIVE_RULES_SHA256='+hashlib.sha256(json.dumps(
+            rules,sort_keys=True,separators=(',',':')).encode()).hexdigest())
+          permissions=['cloudfunctions.functions.get','cloudfunctions.functions.create',
+           'cloudfunctions.functions.sourceCodeSet','cloudfunctions.operations.get']
+          req=urllib.request.Request(
+            'https://cloudresourcemanager.googleapis.com/v1/projects/soridraw-app-866a5:testIamPermissions',
+            data=json.dumps({'permissions':permissions}).encode(),method='POST',
+            headers={'Authorization':'Bearer '+credentials.token,'Content-Type':'application/json'})
+          try:
+            with urllib.request.urlopen(req,timeout=25) as response:
+              granted=set(json.load(response).get('permissions',[]))
+            print('APP673_CLOUD_FUNCTION_PERMISSION_MISSING='+','.join(
+              p for p in permissions if p not in granted) if granted!=set(permissions)
+              else 'NONE')
+          except urllib.error.HTTPError as error:
+            print('APP673_FUNCTION_IAM_CHECK_HOLD_HTTP='+str(error.code))
+          PY
+      - name: Prove exactly one Rules child can be added with no inherited open grant
+        run: |
+          node --input-type=module - <<'JS'
+          import {readFileSync} from 'node:fs';
+          import {makeAdditivePublicFollowRules667} from './scripts/lib/public-follow-rules-667.mjs';
+          const live=JSON.parse(readFileSync('/tmp/app673-current-rules.json','utf8'));
+          const r=makeAdditivePublicFollowRules667(live);
+          if(!['ADD_EXACT_ONE_CHILD','ALREADY_EXACT'].includes(r.mode))throw Error('RULE_MODE');
+          console.log('APP673_ADD_ONLY_PUBLIC_FOLLOW_RULE='+r.mode);
+          console.log('APP673_EXISTING_SHARED_ACLS_UNCHANGED=PASS');
+          console.log('APP673_LIVE_PUBLIC_FOLLOW_RULES_PREFLIGHT=PASS');
+          console.log('APP673_PUBLIC_FOLLOW_ACTIVATION=HOLD_UNTIL_VERIFIED_SOURCE_AND_DELETE_HOOK');
+          JS

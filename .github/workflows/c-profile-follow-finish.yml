@@ -52,6 +52,7 @@ jobs:
           node scripts/verify-667-public-follow-rules-syntax.mjs
           node scripts/verify-671-public-follow-dual-ack.mjs
           node scripts/verify-680-public-unenrolled-follow.mjs
+          node scripts/verify-680-public-follow-precommit.mjs
           node scripts/verify-660-general-owner-live-modules.mjs
           node scripts/verify-669-public-follow-commit-proof.mjs
           npx tsx scripts/verify-669-public-follow-endpoint.ts
@@ -181,6 +182,7 @@ jobs:
           npx --prefix functions tsc -p functions/tsconfig.json
           node scripts/verify-660-general-owner-live-modules.mjs
           node scripts/verify-680-public-unenrolled-follow.mjs
+          node scripts/verify-680-public-follow-precommit.mjs
           node scripts/verify-671-public-follow-dual-ack.mjs
           node scripts/verify-653-owner-general-scope.mjs
           node --check scripts/app660-preview-owner-workers.mjs

@@ -43,6 +43,7 @@ jobs:
           bash -n scripts/c-profile-receiver-invoker.sh
           python3 scripts/c-profile-follow-server-firebase.py --package-check
           node --check scripts/c-profile-follow-server-worker.mjs
+          node scripts/verify-667-public-follow-rules-syntax.mjs
           node scripts/verify-671-public-follow-dual-ack.mjs
           node scripts/verify-669-public-follow-commit-proof.mjs
           npx tsx scripts/verify-669-public-follow-endpoint.ts
@@ -77,6 +78,7 @@ jobs:
           test "$GITHUB_REF" = refs/heads/preview
           test "$APP_C_PROFILE_APPROVED_SHA" = "$GITHUB_SHA"
           node scripts/verify-671-active-service-patch.mjs
+          node scripts/verify-667-public-follow-rules-syntax.mjs
           node scripts/verify-671-public-follow-dual-ack.mjs
           node --check scripts/c-profile-follow-server-worker.mjs
           python3 -m py_compile scripts/c-profile-follow-server-firebase.py scripts/c-profile-follow-rules.py

@@ -53,8 +53,8 @@ def write_http_zip(path):
   z.writestr('lib/explorePublicFollowEndpoint669.js',endpoint)
   z.writestr('lib/publicFollowEntry674.js',
    "require('firebase-admin/app').initializeApp({projectId:'"+PROJECT+
-   "',databaseURL:'https://"+PROJECT+"-default-rtdb.firebaseio.com'});\\n"+
-   "exports."+FUNCTION+"=require('./explorePublicFollowEndpoint669')."+FUNCTION+";\\n")
+   "',databaseURL:'https://"+PROJECT+"-default-rtdb.firebaseio.com'});\n"+
+   "exports."+FUNCTION+"=require('./explorePublicFollowEndpoint669')."+FUNCTION+";\n")
   check(len(z.namelist())==6,'HTTP_ZIP_SCOPE')
  print('C_PROFILE_HTTP_COMPILED_ON_SINGLE_EXPORT=PASS')
 def package_delete(base):
@@ -65,8 +65,8 @@ def package_delete(base):
  }
  check('getDatabase' in files['explorePublicFollowDeletion669'],'AUTH_DELETE_WRITER')
  entry=("require('firebase-admin/app').initializeApp({projectId:'"+PROJECT+
- "',databaseURL:'https://"+PROJECT+"-default-rtdb.firebaseio.com'});\\n"+
- "exports."+DELETE+"=require('./explorePublicFollowDeletion669')."+DELETE+";\\n")
+ "',databaseURL:'https://"+PROJECT+"-default-rtdb.firebaseio.com'});\n"+
+ "exports."+DELETE+"=require('./explorePublicFollowDeletion669')."+DELETE+";\n")
  return make_entry(base,'deleteEntry',files,DELETE,entry)
 def main():
  check(len(__import__('sys').argv)==2 and __import__('sys').argv[1] in
@@ -110,7 +110,7 @@ def main():
    stderr=subprocess.STDOUT,timeout=1000)
   print('C_PROFILE_AUTH_DELETE_DEPLOY_EXIT='+str(run.returncode),flush=True)
   if run.returncode:
-   print('C_PROFILE_AUTH_DELETE_ERROR='+run.stdout[-1400:].replace('\\n',' '),flush=True)
+   print('C_PROFILE_AUTH_DELETE_ERROR='+run.stdout[-1400:].replace('\n',' '),flush=True)
   check(run.returncode==0,'DELETE_HOOK_FAILED_KEEP_RECEIVER_OFF')
   deployed_delete=request(token,'GET',
    'https://cloudfunctions.googleapis.com/v1/'+PARENT+'/functions/'+DELETE)

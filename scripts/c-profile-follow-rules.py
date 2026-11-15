@@ -30,7 +30,10 @@ def main():
  url=URL+'?access_token='+creds.token
  live,etag=get(url,True)
  print('C_PROFILE_ACTIVE_SHARED_RULES_SHA='+sha(live),flush=True)
- check(sha(live)==EXPECTED,'RULES_BASELINE_DRIFT')
+ original=json.loads(json.dumps(live))
+ existing=original.get('rules',{}).get('publicSync',{}).pop('exploreFollowProfiles667',None)
+ already=existing is not None
+ check(sha(original if already else live)==EXPECTED,'RULES_BASELINE_DRIFT')
  Path('/tmp/c-profile-live-rules.json').write_text(json.dumps(live))
  # Retain the exact original rules before any operation. The workflow uploads
  # this file even on failure. No credentials or database records are included.
@@ -40,16 +43,20 @@ import {readFileSync,writeFileSync} from 'node:fs';
 import {makeAdditivePublicFollowRules667} from './scripts/lib/public-follow-rules-667.mjs';
 const current=JSON.parse(readFileSync('/tmp/c-profile-live-rules.json'));
 const next=makeAdditivePublicFollowRules667(current);
-if(next.mode!=='ADD_EXACT_ONE_CHILD')throw Error('RULES_ADD_SCOPE');
+if(!['ADD_EXACT_ONE_CHILD','ALREADY_EXACT'].includes(next.mode))throw Error('RULES_ADD_SCOPE');
 writeFileSync('/tmp/c-profile-next-rules.json',JSON.stringify(next.candidate));
 console.log('C_PROFILE_SHARED_RULES_EXACT_ONE_CHILD=PASS');
 """
  subprocess.run(['node','--input-type=module','-e',code],check=True)
  after=json.loads(Path('/tmp/c-profile-next-rules.json').read_text())
  check(after['rules']['publicSync'].get('exploreFollowProfiles667'),'NEW_CHILD_ABSENT')
- check(sha({**after,'rules':{**after['rules'],'publicSync':{
-  k:v for k,v in after['rules']['publicSync'].items()
-  if k!='exploreFollowProfiles667'}}})==sha(live),'UNRELATED_RULES_CHANGED')
+ restored=json.loads(json.dumps(after))
+ restored['rules']['publicSync'].pop('exploreFollowProfiles667',None)
+ check(sha(restored)==EXPECTED,'UNRELATED_RULES_CHANGED')
+ if already:
+  check(sha(live)==sha(after),'EXISTING_CHILD_CONFLICT')
+  print('C_PROFILE_SHARED_RULES_ALREADY_EXACT=PASS',flush=True)
+  return
  if sys.argv[1]=='--preflight':return
  # Firebase RTDB Rules management GET does not reliably issue an ETag.
  # Without server CAS this is explicitly an operational maintenance release,

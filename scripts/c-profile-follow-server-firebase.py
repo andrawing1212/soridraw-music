@@ -105,7 +105,7 @@ def main():
   os.symlink(Path('functions/node_modules').resolve(),delete/'node_modules')
   cmd=['npx','--yes','firebase-tools@14.18.0','deploy','--only',
    'functions:'+DELETE,'--project',PROJECT,'--non-interactive',
-   '--config',str(base/'firebase.json')]
+   '--force','--config',str(base/'firebase.json')]
   run=subprocess.run(cmd,cwd=base,text=True,stdout=subprocess.PIPE,
    stderr=subprocess.STDOUT,timeout=1000)
   print('C_PROFILE_AUTH_DELETE_DEPLOY_EXIT='+str(run.returncode),flush=True)

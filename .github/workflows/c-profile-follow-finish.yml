@@ -6,6 +6,12 @@ on:
       - 'src/services/explorePublicFollowSync668.ts'
       - 'cloudflare/explore-worker/runtime/public-follow-dual-ack-671.mjs'
       - 'scripts/c-profile-follow-*'
+      - 'scripts/app660-preview-owner-*'
+      - 'scripts/lib/owner-follow-general660.mjs'
+      - 'scripts/lib/public-follow-bridge-680.mjs'
+      - 'scripts/lib/public-follow-active-patch-671.mjs'
+      - 'cloudflare/explore-worker/runtime/owner-follow-precommit-557.mjs'
+      - 'cloudflare/explore-worker/runtime/public-follow-http-669.mjs'
       - '.github/workflows/c-profile-follow-finish.yml'
   workflow_dispatch:
     inputs:
@@ -51,6 +57,10 @@ jobs:
           npx tsx scripts/verify-669-public-follow-endpoint.ts
           npx tsx scripts/verify-669-follow-deletion.ts
           npx tsx scripts/verify-668-visitor-follow-signal.ts
+          node --check scripts/app660-preview-owner-workers.mjs
+          node --check scripts/lib/public-follow-bridge-680.mjs
+          node scripts/verify-653-owner-general-scope.mjs
+          python3 scripts/app660-preview-owner-functions.py --package-check
   release:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/preview' && inputs.confirm_rules_maintenance == 'FREEZE_CONFIRMED' && github.repository == 'andrawing1212/soridraw-music'
     runs-on: ubuntu-24.04
@@ -136,5 +146,63 @@ jobs:
           path: |
             c-profile-worker-result.json
             c-profile-rules-backup.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  release_all_preview:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/preview' && inputs.confirm_rules_maintenance == 'GENERAL_PREVIEW_CONFIRMED' && github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      APP660_APPROVED_PARENT: ${{ github.sha }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Check exact current PREVIEW Worker versions BEFORE any shared Functions changes
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/preview
+          test "$APP660_APPROVED_PARENT" = "$GITHUB_SHA"
+          npm ci --no-audit --no-fund
+          npm --prefix functions ci --no-audit --no-fund
+          npx --prefix functions tsc -p functions/tsconfig.json
+          node scripts/verify-660-general-owner-live-modules.mjs
+          node scripts/verify-680-public-unenrolled-follow.mjs
+          node scripts/verify-671-public-follow-dual-ack.mjs
+          node scripts/verify-653-owner-general-scope.mjs
+          node --check scripts/app660-preview-owner-workers.mjs
+          python3 scripts/app660-preview-owner-functions.py --package-check
+          node scripts/app660-preview-owner-workers.mjs --preflight
+      - name: Activate only existing three PREVIEW-scoped Auth-backed owner Functions
+        run: python3 scripts/app660-preview-owner-functions.py --apply-once
+      - name: Activate existing PREVIEW owner DO then Explore Worker with public-only durable lane
+        run: node scripts/app660-preview-owner-workers.mjs --apply-once
+      - name: Trigger existing safeguarded PREVIEW Hosting release
+        run: |
+          set -euo pipefail
+          test -f app680-workers-result.json
+          test -f app660-functions-result.json
+          gh workflow run firebase-hosting-custom-preview.yml --repo "$GITHUB_REPOSITORY" --ref preview -f target_sha="$GITHUB_SHA"
+          echo APP680_PREVIEW_HOSTING_DISPATCHED=PASS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app680-follow-all-preview-release
+          path: |
+            app660-functions-result.json
+            app680-workers-result.json
           if-no-files-found: ignore
           retention-days: 14

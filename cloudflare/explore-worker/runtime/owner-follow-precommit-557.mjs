@@ -95,7 +95,7 @@ export async function runOwnerFollowPrecommit557({
   row?.epoch===''&&Number(row?.public_target)===1;
  if(!row||(row.epoch===''&&!publicOnly680))return callCanonical();
  // Missing/corrupt non-empty epoch is not an opt-out: fail closed.
- if(!/^[0-9a-f]{32}$/.test(String(row.epoch||'')))
+ if(!publicOnly680&&!/^[0-9a-f]{32}$/.test(String(row.epoch||'')))
   return fail('owner-epoch-invalid');
  const beforeFollowing=row.override_following===null||
    row.override_following===undefined?Boolean(row.baseline):

@@ -122,5 +122,6 @@ export const publishPublicFollowPair667=async(
  // canonical operation; the first path is an idempotent duplicate.
  const actor=await applyOne667(db,row(claim.actor));
  const target=await applyOne667(db,row(claim.target));
- return {commitId,actor,target,reads:0};
+ // Each Firebase transaction may consume an RTDB read; do not report R0.
+ return {commitId,actor,target,d1Reads:0,rtdbTransactions:2};
 };

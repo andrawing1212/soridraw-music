@@ -4487,11 +4487,9 @@ export default function ExplorePage() {
       // Even a fresh HTTP response may be older than the canonical actor
       // count (R2 materialization lag). Never overwrite a verified count
       // with the length of an inconsistent list.
-      const activeExact682=ownFollowing682&&(
-        ownVerifiedCount662Ref.current?.uid===targetUid||
-        latestActorSignal662Ref.current?.uid===targetUid)
-        ?readCachedExplorePublicProfile(targetUid)?.followingCount??
-          exactOwnFollowing682:null;
+      // The same verified number captured when opening this popup is the
+      // comparison authority. A first-view cache is not newer than it.
+      const activeExact682=exactOwnFollowing682;
       if(ownFollowing682&&shouldHoldOwnFollowingPage682(page,activeExact682)){
         invalidateExploreProfileConnections377(targetUid,'following');
         profileConnectionsCache376Ref.current.delete(key);

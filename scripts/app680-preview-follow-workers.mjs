@@ -68,7 +68,7 @@ function patched(t,files){
 }
 async function verify(t,id,old,modules){
  const next=await snapshot(t,id);
- check(next.bindings.length===t.count+Object.keys(flags).length,'STAGED_BINDING_COUNT');
+ check(next.bindings.length===t.count+t.addFlags.length,'STAGED_BINDING_COUNT');
  const map=new Map(next.bindings.map(b=>[b.name,b]));
  for(const b of old.bindings)check(isDeepStrictEqual(map.get(b.name),b),'EXISTING_BINDING_CHANGED_'+b.name);
  for(const [name,value] of Object.entries(flags))check(map.get(name)?.type==='plain_text'&&map.get(name)?.text===value,'FLAGS');
@@ -90,7 +90,19 @@ async function run(){
   check(t.before.bindings.length===t.count,'BINDING_COUNT');
   const b=new Map(t.before.bindings.map(x=>[x.name,x]));
   check(b.get('SORIDRAW_ENVIRONMENT')?.text==='preview','ENVIRONMENT');
-  check(Object.keys(flags).every(k=>!b.has(k)),'FLAGS_ALREADY_PRESENT');
+  // Reuse existing general flags only when they match the exact approved
+  // PREVIEW values; never overwrite or downgrade a live binding.
+  t.addFlags=Object.entries(flags).filter(([key,value])=>{
+    const existing=b.get(key);
+    if(existing){
+      check(existing.type==='plain_text'&&existing.text===value,
+        'EXISTING_FLAG_DRIFT_'+key);
+      return false;
+    }
+    return true;
+  });
+  console.log('APP680_EXISTING_FLAGS_REUSED='+t.name+';count='+
+    (Object.keys(flags).length-t.addFlags.length));
   if(t.name===EX){
    check(b.get('SORIDRAW_OWNER_FOLLOW_BRIDGE_READY_607')?.text==='1'&&b.get('SORIDRAW_OWNER_FOLLOW_RECEIVER_VERIFIED_607')?.text==='1','BRIDGE_READY');
    check(b.get('OWNER_FOLLOW_RESERVATION_SERVICE_600')?.service===OW,'OWNER_SERVICE');
@@ -111,7 +123,7 @@ async function run(){
  for(const t of targets){
   const payload={main_module:t.main,compatibility_date:'2026-08-28',compatibility_flags:t.before.meta.resources.script_runtime.compatibility_flags||[],
    annotations:{'workers/tag':'app680-preview-general-public-follow','workers/message':'APP680 owner and public follow for all PREVIEW principals; canonical unchanged'},
-   bindings:[...t.before.bindings.map(b=>({name:b.name,type:'inherit',version_id:t.old})),...Object.entries(flags).map(([name,text])=>({name,type:'plain_text',text}))],modules:t.modules};
+   bindings:[...t.before.bindings.map(b=>({name:b.name,type:'inherit',version_id:t.old})),...t.addFlags.map(([name,text])=>({name,type:'plain_text',text}))],modules:t.modules};
   const staged=await api('POST',`workers/workers/${t.name}/versions?deploy=false`,payload);
   t.new=staged.id;check(/^[a-f0-9-]{36}$/.test(t.new),'STAGED_ID');
   console.log('APP660_INACTIVE_STAGED='+t.name+';version='+t.new);

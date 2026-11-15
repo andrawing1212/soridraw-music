@@ -106,4 +106,26 @@ export function patchEntry680(source){
  return s;
 }
 
-export const patchDo680=source=>patchOwner660(source);
+export function patchDo680(source){
+ // Current PREVIEW owner DO already contains APP660's general-owner wiring.
+ // Accept only its exact inspected module, and preserve each existing gate.
+ if(hash660(source)!=='29e25d66a4643b2d2bea1cbba8a1c5d3f06166e8f1f8428a79048eed545afb36')
+  throw Error('APP680_ACTIVE_DO_SOURCE_DRIFT');
+ let out=oneOrAlready(source,
+  'async function approvedOwner600(uid, env, syntheticOwnerUid) {',
+  general+'async function approvedOwner600(uid, env, syntheticOwnerUid) {',
+  'do-general-function');
+ out=oneOrAlready(out,
+  '  if (syntheticOwnerUid !== void 0) return uid === syntheticOwnerUid;',
+  '  if (syntheticOwnerUid !== void 0) return uid === syntheticOwnerUid;\n  if (generalOwner660(env)) return true;',
+  'do-general-owner');
+ out=oneOrAlready(out,
+  'if (!active(env, enabled) || !await approvedOwner600(String(env?.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574 || ""), env, syntheticOwnerUid))',
+  'if (!active(env, enabled) || (!generalOwner660(env) && !await approvedOwner600(String(env?.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574 || ""), env, syntheticOwnerUid)))',
+  'do-general-active');
+ out=oneOrAlready(out,
+  "namespace.idFromName(parsed.ticket.ownerUid)",
+  "namespace.idFromName(parsed.ticket.ownerUid+(generalOwner660(env)&&env?.SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680==='1'&&parsed.ticket.authEpoch==='0'.repeat(32)?':public-follow-680':''))",
+  'do-public-lane-isolation');
+ return out;
+}

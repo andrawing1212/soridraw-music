@@ -93,6 +93,7 @@ import {
   readExploreFollowingExactCount379,
   readExploreProfileConnectionExactCount379,
   readExploreProfileConnectionLastServerAt528,
+  readExploreProfileConnectionsLocal681,
   shouldRefreshOwnerFollowersOnOpen528,
   getExplorePublicProfile,
   getExplorePublicProfileTracks,
@@ -106,6 +107,8 @@ import {
   publishExploreFollowSync377,
   subscribeExploreFollowSync377,
 } from '../services/exploreFollowSyncService';
+import {EXPLORE_FOLLOW_SETTLED_EVENT_681,announceExploreFollowSettled681,
+  type ExploreFollowSettled681} from '../services/exploreFollowPendingResume681';
 import {resolveFollowCounts662,shouldApplyActorFollowSignal662}
  from '../services/exploreFollowCountAuthority662';
 import { createOwnerEpochGate538, normalizeOwnerEpochSignal538 } from '../services/exploreOwnerFollowerEpochCore538';
@@ -3536,7 +3539,11 @@ export default function ExplorePage() {
         displayProfile379={...displayProfile379,followerCount:pendingFollowerCount525};
       // APP666: a late R2/cache revalidation cannot repaint a target's two
       // counts after the authenticated per-target follow-state GET verified them.
-      setProfile(previous => authoritative && user?.uid !== displayProfile379.uid &&
+      const newerConfirmedLocal681 =
+        verifiedVisitedProfileUid661Ref.current===displayProfile379.uid &&
+        (verifiedVisitedCounts668Ref.current?.readStartedAt||0)>ownCountsRequestedAt;
+      setProfile(previous => (authoritative||newerConfirmedLocal681) &&
+        user?.uid !== displayProfile379.uid &&
         verifiedVisitedProfileUid661Ref.current === displayProfile379.uid &&
         previous?.uid === displayProfile379.uid
         ? {...displayProfile379, followerCount:previous.followerCount,
@@ -3613,16 +3620,24 @@ export default function ExplorePage() {
             if (!cancelled) {
               // First visible third-party counts use the authenticated GET,
               // not the potentially different stale R2 first-view caches.
-              applyProfileFirstView(nextProfile, rows);
+              // A newer settled follow has already updated this profile.
+              // The in-flight old GET must not repaint that canonical count.
+              if(!(verifiedVisitedProfileUid661Ref.current===nextProfile.uid &&
+                   (verifiedVisitedCounts668Ref.current?.readStartedAt||0)>ownCountsRequestedAt))
+                applyProfileFirstView(nextProfile, rows);
               const pending525=readPendingExploreFollowIntents380(user.uid)
                 .find(row=>row.targetUid===nextProfile.uid);
-              setFollowState(pending525 ? {
+              setFollowState(previous=>pending525 ? {
                 ...nextFollowState,
                 isFollowing:pending525.desiredFollowing,
                 followerCount:computeFollowTargetDisplay525(
                   pending525.baseTargetFollowerCount,
                   pending525.baseFollowing,pending525.desiredFollowing),
-              } : nextFollowState);
+              } : verifiedVisitedProfileUid661Ref.current===nextProfile.uid &&
+                  nextFollowState.countVerified661!==true && previous
+                ?{...previous,isFollowing:
+                  readExploreFollowMembership379(user.uid,nextProfile.uid)??previous.isFollowing}
+                :nextFollowState);
               // The existing authenticated GET already verifies the target
               // count. Reuse it instead of a stale first-view R2 cache, with
               // zero extra reads. Pending optimistic choices keep priority.
@@ -3780,6 +3795,12 @@ export default function ExplorePage() {
             });
           }
 
+          announceExploreFollowSettled681({
+            viewerUid:viewerUid380,targetUid:targetUid380,following:confirmed380,
+            actorFollowingCount:settlement380.result.actorCountVerified662===true?actorCount380:null,
+            targetFollowerCount:settlement380.result.countVerified661===true?targetFollower380:null,
+            targetFollowingCount:settlement380.result.countVerified661===true?targetFollowing380:null,
+          });
           // APP664: never broadcast a provisional local delta as a server
           // settled fact. Only a changed edge with both canonical counts may
           // notify the actor's other devices. Existing owner relay is separate.
@@ -3837,6 +3858,69 @@ export default function ExplorePage() {
       });
     }
   }, [user?.uid]);
+
+  // APP681: a settled local mutation may finish after navigating away from
+  // the target profile. Update the open owner page and Following popup without
+  // requiring a visit back to the followed target or any background polling.
+  useEffect(() => {
+    const viewerUid681=String(user?.uid||'').trim();
+    if(!viewerUid681)return undefined;
+    const onSettled681=(event:Event)=>{
+      const row=(event as CustomEvent<ExploreFollowSettled681>).detail;
+      if(!row||row.viewerUid!==viewerUid681||auth.currentUser?.uid!==viewerUid681)return;
+      if(row.actorFollowingCount!==null){
+        latestActorSignal662Ref.current={
+          uid:viewerUid681,at:Date.now(),count:row.actorFollowingCount,
+        };
+        setProfile(previous=>previous?.uid===viewerUid681
+          ?{...previous,followingCount:row.actorFollowingCount!}:previous);
+      }
+      setFollowingUids312(previous=>{
+        const next=new Set(previous);
+        if(row.following)next.add(row.targetUid);
+        else next.delete(row.targetUid);
+        return next;
+      });
+      setFollowState(previous=>
+        activeProfileUidRef.current===row.targetUid&&previous
+          ?{...previous,isFollowing:row.following,
+            ...(row.targetFollowerCount===null?{}:{followerCount:row.targetFollowerCount})}
+          :previous);
+      if(row.targetFollowerCount!==null &&
+         activeProfileUidRef.current===row.targetUid){
+        verifiedVisitedProfileUid661Ref.current=row.targetUid;
+        verifiedVisitedCounts668Ref.current={uid:row.targetUid,readStartedAt:Date.now()};
+      }
+      if(row.targetFollowerCount!==null)
+        setProfile(previous=>previous?.uid===row.targetUid
+          ?{...previous,followerCount:row.targetFollowerCount!}:previous);
+      profileConnectionsCache376Ref.current.delete(viewerUid681+':following');
+      profileConnectionsCache376Ref.current.delete(row.targetUid+':followers');
+      if(profileConnectionsOpen376Ref.current==='following'&&
+         activeProfileUidRef.current===viewerUid681){
+        // Only project the already-patched persisted page. Never issue a new
+        // implicit network GET from the settlement event.
+        const page=readExploreProfileConnectionsLocal681(viewerUid681,'following');
+        if(page){
+          profileConnectionsRequest376Ref.current+=1;
+          profileConnectionsCache376Ref.current.set(viewerUid681+':following',page);
+          setProfileConnectionsItems376(page.items);
+          setProfileConnectionsNextCursor376(page.nextCursor);
+          setProfileConnectionsIncomplete661(page.hasUnresolvedProfiles===true);
+        }else{
+          // A missing local page requires the existing explicit list-open path;
+          // do not leave a known-stale popup visible as if it were confirmed.
+          profileConnectionsCache376Ref.current.delete(viewerUid681+':following');
+          // Fence a stale list request already in flight during the settlement.
+          profileConnectionsRequest376Ref.current+=1;
+          setProfileConnectionsOpen376(null);
+          setSocialNotice('팔로잉 목록이 변경됐습니다. 다시 열어 최신 상태를 확인해 주세요.');
+        }
+      }
+    };
+    window.addEventListener(EXPLORE_FOLLOW_SETTLED_EVENT_681,onSettled681);
+    return ()=>window.removeEventListener(EXPLORE_FOLLOW_SETTLED_EVENT_681,onSettled681);
+  },[user?.uid]);
 
   // app377: same-account PC/mobile follow convergence is driven by one bounded
   // RTDB signal. Receiving it patches only local caches/UI; D1/Firestore I/O is 0.
@@ -4860,6 +4944,15 @@ export default function ExplorePage() {
         if (confirmed.isFollowing !== settlement.desiredFollowing &&
             activeProfileUidRef.current === targetUid)
           setSocialNotice('팔로우 상태가 변경되었습니다. 다시 확인해 주세요.');
+        announceExploreFollowSettled681({
+          viewerUid,targetUid,following:confirmed.isFollowing,
+          actorFollowingCount:confirmed.actorCountVerified662===true
+            ?confirmed.actorFollowingCount??null:null,
+          targetFollowerCount:confirmed.countVerified661===true
+            ?confirmed.followerCount:null,
+          targetFollowingCount:confirmed.countVerified661===true
+            ?confirmed.followingCount:null,
+        });
         if (confirmed.isFollowing !== settlement.baseFollowing &&
             confirmed.countVerified661 === true &&
             confirmed.actorCountVerified662 === true &&

@@ -25,6 +25,9 @@ export type ExplorePersonalSocialSnapshot = {
 };
 
 const inflightByUid = new Map<string, Promise<ExplorePersonalSocialSnapshot>>();
+// Only an already-running social-snapshot GET can be stale after a follow tap.
+// Keep its per-target changes locally until that GET finishes; no extra reads.
+const inflightFollowChanges681 = new Map<string,Map<string,boolean>>();
 
 const normalizeIds = (value: unknown) => [
   ...new Set(
@@ -126,6 +129,16 @@ export const getExplorePersonalSocialSnapshot = async (
     }
     if (payload?.ok === true) rememberExploreViewerGenres(user.uid, payload?.data?.viewerProfile);
     const data = normalizeSnapshot(payload?.data || {});
+    const changes681=inflightFollowChanges681.get(user.uid);
+    inflightFollowChanges681.delete(user.uid);
+    if(changes681?.size){
+      const followed=new Set(data.followingUids);
+      for(const [targetUid,following] of changes681){
+        if(following)followed.add(targetUid);
+        else followed.delete(targetUid);
+      }
+      data.followingUids=[...followed];
+    }
     writeSnapshot(user.uid, { ...data, updatedAt: data.updatedAt || Date.now() });
     return data;
   })().finally(() => {
@@ -155,6 +168,13 @@ export const patchExplorePersonalSocialFollow = (uid: string, targetUid: string,
   const normalizedUid = String(uid || '').trim();
   const normalizedTarget = String(targetUid || '').trim();
   if (!normalizedUid || !normalizedTarget) return;
+  // If a cold snapshot is in flight, its response may predate this click.
+  // Apply exactly the newer per-target choice after that response arrives.
+  if(inflightByUid.has(normalizedUid)){
+    const changes=inflightFollowChanges681.get(normalizedUid)||new Map<string,boolean>();
+    changes.set(normalizedTarget,following);
+    inflightFollowChanges681.set(normalizedUid,changes);
+  }
   const current = readSnapshot(normalizedUid);
   if (!current) return;
   const next = new Set(current.followingUids);
@@ -170,5 +190,6 @@ export const clearExplorePersonalSocialSnapshot = (uid: string) => {
   const normalizedUid = String(uid || '').trim();
   if (!normalizedUid) return;
   inflightByUid.delete(normalizedUid);
+  inflightFollowChanges681.delete(normalizedUid);
   removeSoridrawPersistentCache(SOCIAL_SNAPSHOT_CACHE_KEY, normalizedUid);
 };

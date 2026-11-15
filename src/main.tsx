@@ -15,10 +15,13 @@ import { installChunkLoadRecovery } from './services/chunkLoadRecovery';
 import { installExploreRevisionRequestCache } from './services/exploreRevisionRequestCache';
 import { installExploreDormantResumeClock424 } from './services/exploreDormantResume424';
 import { captureOwnerFollowCanaryOptIn634 } from './lib/ownerFollowCanaryTab634';
+import { startExploreFollowPendingResume681 } from './services/exploreFollowPendingResume681';
 
 installChunkLoadRecovery();
 installExploreRevisionRequestCache();
 installExploreDormantResumeClock424();
+// Recovery happens on any route, and is idle unless a real follow intent exists.
+startExploreFollowPendingResume681();
 
 // Preserve an explicit QA URL before App navigation drops its query parameters.
 // No Auth, Firebase reads/writes, or cross-tab persistence.

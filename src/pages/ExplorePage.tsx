@@ -3426,7 +3426,15 @@ export default function ExplorePage() {
     setProfileLikedTracks((previous) => profileUid === user?.uid ? previous : []);
     setProfileLikedLoading(false);
     setProfileLikedError('');
-    setProfileLoading(true);
+    // APP683: re-entering the owner's profile after a Follow is not a new
+    // mutation. Paint its already persisted profile shell immediately while
+    // the existing one-shot authenticated counter read checks exact totals.
+    // No additional network request or canonical follow write is made.
+    const cachedOwnShell683=user?.uid===profileUid
+      ? readCachedExplorePublicProfile(profileUid):null;
+    setProfile(cachedOwnShell683);
+    setProfileTracks([]);
+    setProfileLoading(!cachedOwnShell683);
     setProfileCountsVerifying(Boolean(user));
     setFollowState(null);
     setProfileError('');

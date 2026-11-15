@@ -19,7 +19,7 @@ type RawProfile667={
 type Claim667={
  schemaVersion:1;actorUid:string;targetUid:string;
  cutoverToken:string;operationId:string;signedAtMs:number;
- actor:RawProfile667;target:RawProfile667;
+ actor:RawProfile667|null;target:RawProfile667;
 };
 export type PublicFollowSignal667={
  profileUid:string;generation:string;revision:number;
@@ -58,7 +58,7 @@ const parseClaim667=(raw:string,signature:string,secret:string,nowMs:number):Cla
     typeof c.operationId!=='string'||!OP667.test(c.operationId)||
     typeof c.signedAtMs!=='number'||!Number.isSafeInteger(c.signedAtMs)||
     c.signedAtMs<=0||Math.abs(nowMs-c.signedAtMs)>300_000||
-    !validateProfile667(c.actor,c.actorUid)||
+    (c.actor!==null&&!validateProfile667(c.actor,c.actorUid))||
     !validateProfile667(c.target,c.targetUid))
    throw Error('667_UNVERIFIED_PUBLIC_PAIR');
  return c as Claim667;
@@ -120,8 +120,10 @@ export const publishPublicFollowPair667=async(
  });
  // If the second transaction fails, the issuer must retry the same signed
  // canonical operation; the first path is an idempotent duplicate.
- const actor=await applyOne667(db,row(claim.actor));
+ // A private or unlisted actor has no public aggregate signal path. Their
+ // verified intent still increments/decrements the PUBLIC target correctly.
+ const actor=claim.actor?await applyOne667(db,row(claim.actor)):'skipped-private';
  const target=await applyOne667(db,row(claim.target));
  // Each Firebase transaction may consume an RTDB read; do not report R0.
- return {commitId,actor,target,d1Reads:0,rtdbTransactions:2};
+ return {commitId,actor,target,d1Reads:0,rtdbTransactions:claim.actor?2:1};
 };

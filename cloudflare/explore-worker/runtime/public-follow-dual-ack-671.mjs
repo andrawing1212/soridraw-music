@@ -36,6 +36,9 @@ export const handleOwnerAndPublicFollowReplay671=async({
  try{
   result=await publicRelay({reservation,env,enabled:true,now,send});
  }catch{return reply(503,'public-transport-retry')}
+ // If the target has no public profile, only its private owner channel
+ // participates. Retrying this public-only absence would pin the DO ticket.
+ if(result?.status==='target-not-public')return existing;
  if(result?.status!=='delivered')
   return reply(503,'public-retry-required');
  // Owner result is returned byte-for-byte; the DO marks delivery complete

@@ -15,7 +15,7 @@ let result=await bridge({request:request(),env,ownerHandler:async()=>{
 assert.equal(result.status,200);assert.equal(owners,1);assert.equal(publicCalls,0);
 const ownerHandler=async()=>{owners++;return ok()};
 const failures=['transport-retry','r2-not-exact','generation-hold','receiver-retry',
- 'target-not-public','disabled'];
+ 'disabled'];
 for(const status of failures){
  result=await bridge({request:request(),env,ownerHandler,enabled:true,
   publicRelay:async args=>{
@@ -32,6 +32,9 @@ result=await bridge({request:request(),env,ownerHandler,enabled:true,
 assert.equal(result.status,200);
 assert.deepEqual(await result.json(),{ok:true,status:'delivered',deliveredRevision:10});
 assert.equal(publicCalls,failures.length+1);
+result=await bridge({request:request(),env,ownerHandler,enabled:true,
+ publicRelay:async()=>({status:'target-not-public'})});
+assert.equal(result.status,200);
 const before=publicCalls;
 for(const authFailure of [403,409,503]){
  const ownerFailure=async()=>new Response('',{status:authFailure});

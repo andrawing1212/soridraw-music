@@ -94,11 +94,21 @@ jobs:
           set -euo pipefail
           url=https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publishExplorePublicFollow669
           code="$(curl -sS --max-time 25 -o /tmp/c-profile-off-endpoint.json -w '%{http_code}' "$url")"
-          test "$code" = 503 || { echo "C_PROFILE_ENDPOINT_NOT_REACHABLE_HTTP=$code"; exit 2; }
-          grep -Fq PREVIEW_PUBLIC_FOLLOW_DISABLED /tmp/c-profile-off-endpoint.json || {
-            echo C_PROFILE_ENDPOINT_IAM_OR_SOURCE_DRIFT; exit 2;
-          }
-          echo C_PROFILE_OFF_RECEIVER_IS_EXTERNALLY_REACHABLE=PASS
+          # Existing receiver may already be enabled by a prior successful
+          # partial release; only the exact unsigned GET refusal is accepted.
+          ready="$(python3 -c "import json; print(json.load(open('/tmp/c-profile-function.json'))['serviceConfig']['environmentVariables']['SORIDRAW_PUBLIC_FOLLOW_READY_669'])")"
+          if [ "$ready" = 0 ]; then
+            test "$code" = 503 && grep -Fq PREVIEW_PUBLIC_FOLLOW_DISABLED /tmp/c-profile-off-endpoint.json || {
+              echo C_PROFILE_OFF_RECEIVER_DRIFT; exit 2;
+            }
+          elif [ "$ready" = 1 ]; then
+            test "$code" = 405 && grep -Fq '"ok":false' /tmp/c-profile-off-endpoint.json || {
+              echo C_PROFILE_ENABLED_RECEIVER_UNSIGNED_GET_NOT_DENIED; exit 2;
+            }
+          else
+            echo C_PROFILE_UNEXPECTED_RECEIVER_STATE; exit 2
+          fi
+          echo C_PROFILE_RECEIVER_UNSIGNED_GET_DENIED=PASS
       - name: Read-only exact shared RTDB Rules preflight
         run: |
           pip -q install google-auth

@@ -20,12 +20,26 @@ export const PUBLIC_FOLLOW_PROFILE_RULE_667={
  }
 };
 const json=v=>JSON.stringify(v);
+const deniesGrant=v=>v===undefined||v===null||v===false;
+// RTDB rules cascade: a wider ancestor grant defeats a narrower child.
+const inheritedGrantUnsafe=(rules)=>{
+ for(const parent of [rules,rules?.publicSync]){
+  if(!parent||typeof parent!=='object')return true;
+  if(!deniesGrant(parent['.read'])||!deniesGrant(parent['.write']))return true;
+  for(const [key,child] of Object.entries(parent)){
+   if(key.charCodeAt(0)===36&&child&&typeof child==='object'&&
+      (!deniesGrant(child['.read'])||!deniesGrant(child['.write'])))return true;
+  }
+ }
+ return false;
+};
 const isPlain=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 export const makeAdditivePublicFollowRules667=(live)=>{
  if(!isPlain(live)||!isPlain(live.rules)||!isPlain(live.rules.publicSync)||
     live.rules['.read']!==false||live.rules['.write']!==false||
     !isPlain(live.rules.ownerFollowerSync532)||
-    !isPlain(live.rules.publicSync.explorePublicationProfiles))
+    !isPlain(live.rules.publicSync.explorePublicationProfiles)||
+    inheritedGrantUnsafe(live.rules))
   throw Error('667_LIVE_RULES_BOUNDARY_UNVERIFIED');
  const current=live.rules.publicSync.exploreFollowProfiles667;
  if(current!==undefined&&json(current)!==json(PUBLIC_FOLLOW_PROFILE_RULE_667))

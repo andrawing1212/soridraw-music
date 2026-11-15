@@ -31,6 +31,23 @@ for(const bad of [
  ]){
  assert.throws(()=>makeAdditivePublicFollowRules667(bad),/BOUNDARY_UNVERIFIED/);
 }
+for(const wider of [
+ {scope:'publicSync',property:'.read',value:'auth != null'},
+ {scope:'publicSync',property:'.write',value:'auth != null'},
+ {scope:'rules',property:'.read',value:'auth != null'},
+]){
+ const unsafe=structuredClone(live);
+ const parent=wider.scope==='rules'?unsafe.rules:unsafe.rules.publicSync;
+ parent[wider.property]=wider.value;
+ assert.throws(()=>makeAdditivePublicFollowRules667(unsafe),/BOUNDARY_UNVERIFIED/);
+}
+const wildcard=structuredClone(live);
+wildcard.rules.publicSync[String.fromCharCode(36)+'any']={'.read':'auth != null'};
+assert.throws(()=>makeAdditivePublicFollowRules667(wildcard),/BOUNDARY_UNVERIFIED/);
+const rootWildcard=structuredClone(live);
+rootWildcard.rules[String.fromCharCode(36)+'any']={'.write':true};
+assert.throws(()=>makeAdditivePublicFollowRules667(rootWildcard),/BOUNDARY_UNVERIFIED/);
+console.log('APP673_INHERITED_PUBLIC_SYNC_AND_WILDCARD_GRANTS_FAIL_CLOSED=PASS');
 console.log('APP667_SHARED_LIVE_RULES_ADDITIVE_ONLY=PASS');
 console.log('APP667_OWNER_PRIVATE_AND_OTHER_ACLS_PRESERVED=PASS');
 console.log('APP667_AUTH_PUBLIC_ONLY_READ_AND_NO_CLIENT_WRITE=PASS');

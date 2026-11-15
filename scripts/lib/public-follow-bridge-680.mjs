@@ -21,8 +21,8 @@ const enrollment=runtime+'owner-follow-enrollment-544.mjs';
 const fixture='scripts/fixtures/owner-follow660/owner-follow-service-601.mjs';
 export const patchPrecommit680=source=>{
  let out=one(source,
-  'enabled=APP557_OWNER_PRECOMMIT_COMPILED_OPEN,\\n}={}){',
-  'enabled=APP557_OWNER_PRECOMMIT_COMPILED_OPEN,publicWithoutEpoch=false,\\n}={}){','signature');
+  'enabled=APP557_OWNER_PRECOMMIT_COMPILED_OPEN,\n}={}){',
+  'enabled=APP557_OWNER_PRECOMMIT_COMPILED_OPEN,publicWithoutEpoch=false,\n}={}){','signature');
  out=one(out,
   " if(!row||row.epoch==='')return callCanonical();",
   " // An un-enrolled PUBLIC target still needs a durable public-counter relay.\n // No private owner notification is attempted with this reserved sentinel.\n // Private or missing profiles retain the canonical-only legacy behavior.\n let publicOnly680=false;\n if(publicWithoutEpoch===true&&env?.SORIDRAW_ENVIRONMENT==='preview'&&\n    env?.SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680==='1'&&row?.epoch===''){\n  // Only the newly approved public-only path pays the one indexed lookup.\n  // Old owner/canary and private follow requests keep their original SQL.\n  let publicStatus;\n  try{publicStatus=await env.DB.prepare(\n   'SELECT is_public FROM public_profiles WHERE uid=? LIMIT 1'\n  ).bind(parts[3]).first();}\n  catch{return callCanonical()}\n  publicOnly680=Number(publicStatus?.is_public)===1;\n }\n if(!row||(row.epoch===''&&!publicOnly680))return callCanonical();",'unenrolled');
@@ -52,7 +52,7 @@ export const patchDualAck680=source=>{
  if(first<0||last<0||last<=first)throw Error('APP680_DUAL_SOURCE_ANCHORS');
  let prior=authored.slice(0,first)+authored.slice(last);
  prior=one(prior,
-  ' authorizePublicOnly=()=>false,\\n','',
+  ' authorizePublicOnly=()=>false,\n','',
   'dual-callback');
  exact(source,prior,'dual-ack');
  return authored;

@@ -1,0 +1,26 @@
+# Registration-only workflow for GitHub Actions' default-branch dispatch UI.
+# Real C-profile release steps live exclusively on the preview branch.
+# This file never deploys, reads credentials, or changes shared resources.
+name: SORIDRAW C profile follower real-time completion
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_rules_maintenance:
+        description: 'Type FREEZE_CONFIRMED only after pausing other shared RTDB Rules deployments'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  registration-only:
+    if: github.ref != 'refs/heads/preview'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Block all non-preview manual releases
+        run: |
+          echo 'This main-branch file only registers the Run workflow UI.'
+          echo 'Select preview as the workflow dispatch branch.'
+          exit 1

@@ -74,7 +74,7 @@ assert.equal((await invoke({body:targetOnly})).status,200);
 assert.equal(writes,3);
 assert.equal((await invoke({clock:now+100000})).status,403);
 console.log('APP670_PRIVATE_ACTOR_RECEIVER_AUTH_STILL_VERIFIED=PASS');
-assert.equal(writes,2);
+assert.equal(writes,3);
 console.log('APP669_HMAC_DOMAIN_AND_AUTH_GENERATION=PASS');
 console.log('APP669_DELETION_AND_DISABLED_ACCOUNT_BLOCK=PASS');
 console.log('APP669_IDEMPOTENT_DUAL_PROFILE_RTDB_WRITE=PASS');

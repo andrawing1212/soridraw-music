@@ -38,6 +38,7 @@ jobs:
           npx --prefix functions tsc -p functions/tsconfig.json
           npx tsc --noEmit
           python3 -m py_compile scripts/c-profile-follow-server-firebase.py scripts/c-profile-follow-rules.py
+          bash -n scripts/c-profile-receiver-invoker.sh
           python3 scripts/c-profile-follow-server-firebase.py --package-check
           node --check scripts/c-profile-follow-server-worker.mjs
           node scripts/verify-671-public-follow-dual-ack.mjs
@@ -76,12 +77,15 @@ jobs:
           node scripts/verify-671-public-follow-dual-ack.mjs
           node --check scripts/c-profile-follow-server-worker.mjs
           python3 -m py_compile scripts/c-profile-follow-server-firebase.py scripts/c-profile-follow-rules.py
+          bash -n scripts/c-profile-receiver-invoker.sh
       - name: Compile exact existing receiver and deletion hook
         run: |
           set -euo pipefail
           npm --prefix functions ci --no-audit --no-fund
           npx --prefix functions tsc -p functions/tsconfig.json
           python3 scripts/c-profile-follow-server-firebase.py --package-check
+      - name: Grant only new HMAC-protected C-profile receiver its required public invoker
+        run: bash scripts/c-profile-receiver-invoker.sh
       - name: Verify existing OFF endpoint is accessible only via HMAC receiver
         run: |
           set -euo pipefail

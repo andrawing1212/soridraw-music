@@ -2,7 +2,10 @@
 // The checked-in Rules JSON is NOT identical to the LIVE shared Rules.
 // Call this only on an authorized GET of the live rules, never by replacing
 // that live document with repository database.rules.json.
-const validation667="newData.hasChildren(['profileUid','generation','revision','followerCount','followingCount','public','commitId','at']) && newData.numChildren() === 8";
+// Firebase Realtime Database Rules does not support DataSnapshot.numChildren().
+// hasChildren requires all 8 named fields; the $other false validation below
+// rejects any additional child, preserving the exact-shape contract.
+const validation667="newData.hasChildren(['profileUid','generation','revision','followerCount','followingCount','public','commitId','at'])";
 export const PUBLIC_FOLLOW_PROFILE_RULE_667={
  '$uid':{
   '.read':"auth != null && data.child('public').val() === true",

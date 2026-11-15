@@ -1,3 +1,13 @@
+## CURRENT — APP666 방문자 첫 진입 팔로우 숫자 정본 우선 / PREVIEW Hosting 배포 진행 (2026-11-15 KST)
+
+- **디렉터 승인 목표 유지:** 첫 진입 PC·모바일 팔로워·팔로잉 수 동일, 모달 없이 서버 확정 변경 자동 반영, 새로고침·프로필 이동 후 최신 정본 유지, 방문 중인 타인의 공개 프로필 실시간 변경까지 완성. **전체 사용자 실기기 PASS 아님.**
+- **코드 수정:** [PR #1065](https://github.com/andrawing1212/soridraw-music/pull/1065) 병합 (`e4a2f0eaf8f6af7b55f25277fde95a962088d9fc`). 방문자 최초 프로필 캐시(R2) 화면을 별도 인증된 기존 `follow-state` GET보다 먼저 표시하지 않고, 응답 중 먼저 도착한 재검증 결과도 인증된 숫자 확인 후 적용. 이후 늦은 first-view 재검증이 이미 확인된 팔로워·팔로잉 숫자를 덮어쓰지 못하도록 보호. GET 추가 0, RTDB/D1 읽기·쓰기/폴링 추가 0. 인증 GET 실패 시 기존 캐시·오류 안내 유지. 소유자 전용 APP665·actor APP662 및 정상 기능 불변.
+- **검사 재사용:** [팔로우 전용 #43689005472](https://github.com/andrawing1212/soridraw-music/actions/runs/43689005472), [쿨다운·보안 규칙 에뮬레이터 #43689005438](https://github.com/andrawing1212/soridraw-music/actions/runs/43689005438), [제품 품질 #43689005458](https://github.com/andrawing1212/soridraw-music/actions/runs/43689005458) SUCCESS. 이 변경은 Hosting 코드만 수정. 기존 APP662/660 Worker/Functions/RTDB 배포 PASS를 재실행하지 않음.
+- **배포:** 본 PR의 APP666 Hosting-only 트리거가 병합되고 기존 Release Actions가 성공해야 PREVIEW 배포 PASS. `deploy_shared_rtdb_rules=false`, `functions_deploy=false`, `worker_deploy=false`, TEST/PRODUCTION 불변.
+- **미완료:** 다른 방문자가 보고 있는 제3자 프로필의 **이후** 팔로우·취소를 자동 갱신하는 공개 프로필별 서버 확정 푸시 경로는 미구현. APP663 공개 합산 숫자 신호 계약은 코드·검사 기준일 뿐 실제 publisher/RTDB Rules 및 클라이언트 활성화 아님. 공유 활성 RTDB 규칙 ≠ 저장소 파일이므로 기존 규칙 전체 교체 금지. 실제 PC·모바일 A/B/C 확인 미실시. 새 실사용 PASS 주장 금지.
+
+---
+
 ## CURRENT — APP662 1:N 팔로잉 정본 응답·페이지 이동 보호 PREVIEW 배포 PASS / 제3자 공개 프로필 실시간 HOLD (2026-11-14 UTC)
 
 - **디렉터 새 영상 (약 190초)과 추가 지적:** A·B 실사용 성공은 **팔로워 자동 갱신에 한정**. 팔로잉은 목록 팝업을 열거나 새로고침해야 숫자가 바뀌고, 페이지 이동·재진입 때 되돌아갈 수 있음. 2:00 이후 제3자 `소울포스뮤직` 공개 프로필을 두 클라이언트가 보는 동안 팔로워 수 1/2→1/1→1/0 등 분기. **1:N 및 방문자 실사용은 FAIL**.

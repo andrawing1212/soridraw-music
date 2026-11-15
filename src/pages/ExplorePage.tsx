@@ -1977,12 +1977,10 @@ export default function ExplorePage() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [followState, setFollowState] = useState<ExploreFollowState | null>(null);
-  const [followBusyUid, setFollowBusyUid] = useState('');
-  // A single canonical request at a time, including two taps in the same frame.
-  const followMutationInFlightRef = useRef(false);
+  // The existing persisted follow final-state queue serializes rapid taps
+  // without locking the visible button while the server settles.
   const activeProfileUidRef = useRef('');
   activeProfileUidRef.current = profile?.uid || profileUid || '';
-  const followBusy = Boolean(profile?.uid && followBusyUid === profile.uid);
   // SORIDRAW_EXPLORE_PROFILE_CONNECTIONS_376_20261007
   // Connection cards are fetched only after an explicit followers/following click.
   // Reopening the same list in this mounted Explore session reuses the bounded page.
@@ -3420,6 +3418,7 @@ export default function ExplorePage() {
     setProfileLikedLoading(false);
     setProfileLikedError('');
     setProfileLoading(true);
+    setFollowState(null);
     setProfileError('');
     setSocialNotice('');
 
@@ -3583,12 +3582,28 @@ export default function ExplorePage() {
       },
     })
       .then(async ({ profile: nextProfile, tracks: rows }) => {
-        if (ownCountsTask) await ownCountsTask;
-        if (cancelled) return;
-        if (!user || user.uid === nextProfile.uid)
+        // Show the already loaded public profile immediately. Follow-state and
+        // owner-count verification must not keep the entire page on a spinner.
+        applyProfileFirstView(nextProfile, rows);
+        setProfileLoading(false);
+        if (ownCountsTask) {
+          await ownCountsTask;
+          if (cancelled) return;
           applyProfileFirstView(nextProfile, rows);
-
+        }
+        if (cancelled) return;
         if (user && user.uid !== nextProfile.uid) {
+          // A pending click survives navigation/reload. Keep its last choice
+          // visible while the single canonical follow-state check completes.
+          const queuedFollow = readPendingExploreFollowIntents380(user.uid)
+            .find(row => row.targetUid === nextProfile.uid);
+          if (queuedFollow) setFollowState({
+            isFollowing: queuedFollow.desiredFollowing,
+            followerCount: computeFollowTargetDisplay525(
+              queuedFollow.baseTargetFollowerCount,
+              queuedFollow.baseFollowing, queuedFollow.desiredFollowing),
+            followingCount: nextProfile.followingCount,
+          });
           try {
             const nextFollowState = await getExploreFollowState(user, nextProfile.uid, true);
             if (!cancelled) {
@@ -3623,9 +3638,10 @@ export default function ExplorePage() {
           } catch (reason) {
             console.warn('Explore follow state load failed:', reason);
             if (!cancelled) {
-              applyProfileFirstView(nextProfile, rows);
-              setFollowState(null);
-              setSocialNotice('팔로우 상태를 확인하지 못했습니다. 새로고침 후 다시 시도해 주세요.');
+              // Do not erase a pending local choice on transient GET failure.
+              if (!readPendingExploreFollowIntents380(user.uid)
+                .some(row => row.targetUid === nextProfile.uid)) setFollowState(null);
+              setSocialNotice('팔로우 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.');
             }
           }
           // Apply any earlier completed R2 refresh only AFTER the authenticated
@@ -4757,13 +4773,9 @@ export default function ExplorePage() {
     }
     const targetUid = profile.uid;
     const viewerUid = user.uid;
-    if (viewerUid === targetUid || followMutationInFlightRef.current) return;
-    if (!followState) return;
-    // Never race the new direct call with an unfinished old-version outbox.
-    if (readPendingExploreFollowIntents380(viewerUid).some((item) => item.targetUid === targetUid)) {
-      setSocialNotice('이전 팔로우 변경을 확인 중입니다. 잠시 후 다시 시도해 주세요.');
-      return;
-    }
+    if (viewerUid === targetUid || !followState) return;
+    // The persisted final-state queue handles an in-flight opposite choice.
+    // Its last desired state wins and survives a route change or hard reload.
 
     const previousFollowing = followState.isFollowing;
     const requestedFollow = !previousFollowing;
@@ -4816,60 +4828,66 @@ export default function ExplorePage() {
       return { followerCount, actorFollowingCount };
     };
 
-    followMutationInFlightRef.current = true;
-    setFollowBusyUid(targetUid);
     setSocialNotice('');
-    // Familiar follow UX: immediate label/count; pending state is not
-    // published into the shared/persistent canonical caches.
+    // Paint the last local choice at once; only a confirmed server ACK may
+    // update canonical caches or publish the cross-device notification.
     paint(requestedFollow, false);
-    try {
-      const confirmed = await setExploreFollow(user, targetUid, requestedFollow, profile);
-      if (auth.currentUser?.uid !== viewerUid) return;
-      const settled = paint(confirmed.isFollowing, true, confirmed);
-      if (confirmed.isFollowing !== requestedFollow) {
-        setSocialNotice('팔로우 상태가 변경되었습니다. 다시 확인해 주세요.');
-      }
-      if (confirmed.isFollowing !== previousFollowing &&
-          confirmed.countVerified661===true &&
-          confirmed.actorCountVerified662===true &&
-          settled.actorFollowingCount !== null) {
-        void publishExploreFollowSync377(viewerUid, {
-          targetUid,
-          following: confirmed.isFollowing,
-          actorFollowingCount: settled.actorFollowingCount,
-          targetFollowerCount: settled.followerCount,
-        }).catch((reason) => console.warn('Explore follow actor signal unavailable:', reason));
-      }
-    } catch (error) {
-      if (auth.currentUser?.uid !== viewerUid) return;
-      // HTTP 500 may arrive AFTER the D1 relation was committed. A single
-      // canonical recheck distinguishes committed writes from real rejection.
-      const latest = await getExploreFollowState(user, targetUid, true).catch(() => null);
-      const settledFollowing = latest ? latest.isFollowing : previousFollowing;
-      const settled = paint(settledFollowing, Boolean(latest), latest);
-      if (latest?.isFollowing === requestedFollow) {
-        // The write did commit, but one target-only recheck cannot prove the
-        // actor's 1:N Following total. Never publish an invented scalar.
-        if (latest.countVerified661===true&&latest.actorCountVerified662===true&&
-            settled.actorFollowingCount!==null) {
+    queueExploreFollowFinalState380({
+      viewerUid, targetUid,
+      desiredFollowing: requestedFollow,
+      immediate: true, initialDelayMs: 0,
+      baseFollowing: previousFollowing,
+      baseTargetFollowerCount: previousTargetCount,
+      baseTargetFollowingCount: previousTargetFollowingCount,
+      baseActorFollowingCount: previousActorCount,
+      targetProfile: {
+        uid: targetUid,
+        nickname: profile.nickname,
+        avatarUrl: profile.avatarUrl,
+        handle: profile.handle,
+      },
+      commit: (following) => setExploreFollow(user, targetUid, following, profile),
+      onSettled: (settlement) => {
+        if (auth.currentUser?.uid !== viewerUid) return;
+        const confirmed = settlement.result;
+        const settled = paint(confirmed.isFollowing, true, confirmed);
+        if (confirmed.isFollowing !== settlement.desiredFollowing &&
+            activeProfileUidRef.current === targetUid)
+          setSocialNotice('팔로우 상태가 변경되었습니다. 다시 확인해 주세요.');
+        if (confirmed.isFollowing !== settlement.baseFollowing &&
+            confirmed.countVerified661 === true &&
+            confirmed.actorCountVerified662 === true &&
+            settled.actorFollowingCount !== null) {
           void publishExploreFollowSync377(viewerUid, {
-            targetUid, following: settledFollowing,
+            targetUid, following: confirmed.isFollowing,
             actorFollowingCount: settled.actorFollowingCount,
             targetFollowerCount: settled.followerCount,
-          }).catch(() => {});
+          }).catch((reason) => console.warn('Explore follow actor signal unavailable:', reason));
         }
-      } else {
-        setSocialNotice(latest
-          ? (error instanceof Error ? error.message : '팔로우 변경을 저장하지 못했습니다.')
-          : '팔로우 저장 결과를 확인하지 못했습니다. 잠시 후 다시 확인해 주세요.');
-      }
-      console.warn('Explore follow request failed:', error);
-    } finally {
-      followMutationInFlightRef.current = false;
-      if (auth.currentUser?.uid === viewerUid) {
-        setFollowBusyUid((current) => current === targetUid ? '' : current);
-      }
-    }
+      },
+      onError: (failure) => {
+        // A failed response can happen after the canonical writer committed.
+        // Recheck only this target once, never scan the entire Explore feed.
+        void getExploreFollowState(user, targetUid, true)
+          .catch(() => null).then((latest) => {
+            if (auth.currentUser?.uid !== viewerUid) return;
+            // This callback may outlive the profile being viewed.
+            const restored = latest?.isFollowing ?? failure.baseFollowing;
+            if (latest) patchExploreFollowLocalState377(
+              viewerUid, targetUid, restored, profile);
+            if (activeProfileUidRef.current !== targetUid) return;
+            paint(restored, Boolean(latest), latest);
+            if (!latest || latest.isFollowing !== failure.desiredFollowing)
+              setSocialNotice(latest
+                ? '팔로우 변경을 저장하지 못했습니다. 다시 시도해 주세요.'
+                : '팔로우 저장 결과를 확인하지 못했습니다. 잠시 후 다시 확인해 주세요.');
+          });
+      },
+      onDeferred: () => {
+        if (activeProfileUidRef.current === targetUid)
+          setSocialNotice('팔로우 변경이 서버 보호 제한으로 대기 중입니다. 아직 저장되지 않았습니다.');
+      },
+    });
   };
 
   const closeMoreSheet = () => {
@@ -5919,7 +5937,7 @@ export default function ExplorePage() {
                       <button
                         type="button"
                         onClick={toggleFollow}
-                        disabled={followBusy || !followState}
+                        disabled={!followState}
                         className={`soridraw-explore-follow-button${followState?.isFollowing ? ' is-following' : ''}`}
                       >
                         {followState?.isFollowing ? <UserCheck aria-hidden="true" /> : <UserPlus aria-hidden="true" />}

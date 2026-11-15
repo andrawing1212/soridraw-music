@@ -25,7 +25,7 @@ const build=async({publicTarget=1,epoch='',flag='1',baseline=0}={})=>{
   request:body(),env,ctx:{},enabled:true,publicWithoutEpoch:true,
   authenticate:async()=>({ok:true,uid:A}),
   reserve:async ticket=>{reservations.push(ticket);return {ok:true}},
-  callCanonical:async req=>{writes++;canonicalBody.push(await req.clone().text());
+  callCanonical:async req=>{writes++;canonicalBody.push(req?await req.clone().text():null);
    return Response.json({ok:true})},
  });
  assert.equal(response.status,200,JSON.stringify(await response.clone().json()));

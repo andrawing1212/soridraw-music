@@ -4,6 +4,7 @@ import { getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareLocalCacheHit, recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { readSoridrawPersistentCache, removeSoridrawPersistentCache, writeSoridrawPersistentCache } from '../lib/soridrawPersistentCache';
 import { requestOrderedExploreFollow354 } from './exploreFollowOrdering354';
+import { shouldHoldOwnFollowingPage682 } from './exploreFollowingPopupConsistency682';
 import { readPendingExploreFollowIntents380 } from './exploreFollowBatchService380';
 import {
   getExplorePersonalSocialSnapshot,
@@ -774,6 +775,16 @@ export const setExploreFollow = async (
       validCount662(actorFollowing662),
   };
   patchExploreFollowLocalState377(user.uid, normalizedUid, result.isFollowing, targetProfile);
+  // A canonical actor count wins over a locally patched but unverified list.
+  // Invalidate only this owner's Following page when its cards cannot prove
+  // that count; a later explicit popup open will fetch the canonical identities.
+  if(result.actorCountVerified662===true &&
+     shouldHoldOwnFollowingPage682(
+       readProfileConnectionCache377(user.uid,'following'),
+       result.actorFollowingCount??null,
+     )){
+    invalidateExploreProfileConnections377(user.uid,'following');
+  }
   return result;
 };
 

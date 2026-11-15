@@ -107,6 +107,7 @@ import {
   publishExploreFollowSync377,
   subscribeExploreFollowSync377,
 } from '../services/exploreFollowSyncService';
+import {shouldHoldOwnFollowingPage682} from '../services/exploreFollowingPopupConsistency682';
 import {EXPLORE_FOLLOW_SETTLED_EVENT_681,announceExploreFollowSettled681,
   type ExploreFollowSettled681} from '../services/exploreFollowPendingResume681';
 import {resolveFollowCounts662,shouldApplyActorFollowSignal662}
@@ -4411,7 +4412,19 @@ export default function ExplorePage() {
     setProfileConnectionsError376('');
     setProfileConnectionsIncomplete661(false);
     const key = profileConnectionCacheKey376(targetUid, direction);
-    const cached = profileConnectionsCache376Ref.current.get(key);
+    const cached = profileConnectionsCache376Ref.current.get(key)
+      || readExploreProfileConnectionsLocal681(targetUid,direction);
+    // APP682: a server-confirmed own Following total and an older persisted
+    // connection list are different authorities. Never display two cards under
+    // a verified count of one; refresh only when the owner explicitly opens it.
+    const ownFollowing682=direction==='following'&&targetUid===user?.uid;
+    const exactOwnFollowing682=ownFollowing682&&!profileCountsVerifying&&
+      (ownVerifiedCount662Ref.current?.uid===targetUid||
+        latestActorSignal662Ref.current?.uid===targetUid)
+      ?profile?.followingCount??null:null;
+    const staleOwnFollowing682=ownFollowing682&&Boolean(cached)&&
+      (exactOwnFollowing682===null||
+        shouldHoldOwnFollowingPage682(cached,exactOwnFollowing682));
     // B's unfollow reaches B's own RTDB channel, not A's. Only A's
     // explicit own-followers popup can recheck this exact public list.
     const ownFollowers523 = direction === 'followers' && targetUid === user?.uid;
@@ -4440,8 +4453,14 @@ export default function ExplorePage() {
       shouldRefreshOwnerFollowersOnOpen528(
         publicLast657, Date.now(), OWN_FOLLOWERS_EXPLICIT_RECHECK_MS_523,
       );
-    const forceConnections657 = refreshOwn523 || refreshPublic657;
-    if (cached) {
+    const forceConnections657 = refreshOwn523 || refreshPublic657 || staleOwnFollowing682;
+    if (staleOwnFollowing682) {
+      // Stale persisted cards must not flash beneath the exact count.
+      profileConnectionsCache376Ref.current.delete(key);
+      setProfileConnectionsItems376([]);
+      setProfileConnectionsNextCursor376(null);
+    }
+    if (cached&&!staleOwnFollowing682) {
       setProfileConnectionsItems376(cached.items);
       setProfileConnectionsNextCursor376(cached.nextCursor);
       setProfileConnectionsIncomplete661(cached.hasUnresolvedProfiles===true);
@@ -4455,7 +4474,7 @@ export default function ExplorePage() {
     // the pending GET must not leave the stale cache artificially fresh.
 
     const requestId = ++profileConnectionsRequest376Ref.current;
-    if (!cached) {
+    if (!cached||staleOwnFollowing682) {
       setProfileConnectionsItems376([]);
       setProfileConnectionsNextCursor376(null);
     }
@@ -4466,6 +4485,23 @@ export default function ExplorePage() {
         requestId !== profileConnectionsRequest376Ref.current
         || activeProfileUidRef.current !== targetUid
       ) return;
+      // Even a fresh HTTP response may be older than the canonical actor
+      // count (R2 materialization lag). Never overwrite a verified count
+      // with the length of an inconsistent list.
+      // A complete freshly fetched server list is newer evidence than the
+      // owner summary GET started before the popup opened. Its identities and
+      // exact length must settle together (1 vs 2 can mean the COUNT was stale).
+      // An incomplete server list cannot prove a different total: don't show
+      // it as an exact 2-person list under a verified count of 1.
+      if(ownFollowing682&&page.countComplete!==true&&!page.nextCursor&&
+         shouldHoldOwnFollowingPage682(page,exactOwnFollowing682)){
+        invalidateExploreProfileConnections377(targetUid,'following');
+        profileConnectionsCache376Ref.current.delete(key);
+        setProfileConnectionsItems376([]);
+        setProfileConnectionsNextCursor376(null);
+        setProfileConnectionsError376('팔로잉 목록을 확인 중입니다. 잠시 후 다시 열어 주세요.');
+        return;
+      }
       profileConnectionsCache376Ref.current.set(key, page);
       if (refreshPublic657) publicConnectionsLastCheck657Ref.current.set(key, Date.now());
       setProfileConnectionsItems376(page.items);
@@ -6058,6 +6094,7 @@ export default function ExplorePage() {
                       type="button"
                       className="soridraw-explore-profile-stat-button-376"
                       onClick={() => void openProfileConnections376('following')}
+                      disabled={Boolean(user?.uid===profile.uid&&profileCountsVerifying)}
                       aria-label={profileCountsVerifying ? '팔로잉 수 확인 중' : `팔로잉 ${formatCount(profile.followingCount)}명 보기`}
                     >
                       팔로잉 <strong>{profileCountsVerifying ? '…' : formatCount(profile.followingCount)}</strong>

@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import ts from 'typescript';
 import './verify-681-follow-reload-popup.mjs';
+import './verify-682-own-following-popup-consistency.mjs';
 
 // APP525: real app helper and isolated A/B cross-account display contracts.
 // Never touches live Firestore, D1, RTDB, R2, credentials or user data.
@@ -54,7 +55,7 @@ const explicit=slice(page,
  '  // APP527: A\'s profile must not spend D1/R2 on window focus, blank-space');
 assert.match(explicit,/const ownFollowers523 = direction === 'followers' && targetUid === user\?\.uid/);
 assert.match(explicit,/profileConnectionsOpen376 !== 'followers'/);
-assert.match(explicit,/if \(cached\) \{[\s\S]*?if \(!forceConnections657\) \{[\s\S]*?return;/);
+assert.match(explicit,/if \(cached&&!staleOwnFollowing682\) \{[\s\S]*?if \(!forceConnections657\) \{[\s\S]*?return;/);
 assert.match(explicit,/getExploreProfileConnections\(targetUid, direction, null, forceConnections657\)/);
 assert.match(explicit,/const refreshPublic657 = targetUid !== user\?\.uid &&/);
 assert.match(explicit,/publicConnectionsLastCheck657Ref\.current\.set\(key, Date\.now\(\)\)/);

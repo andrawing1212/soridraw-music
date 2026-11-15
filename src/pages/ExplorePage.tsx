@@ -3601,6 +3601,12 @@ export default function ExplorePage() {
       },
     })
       .then(async ({ profile: nextProfile, tracks: rows }) => {
+        // Resolve a public handle to its canonical UID before attaching the
+        // visitor stream. The route query may be a handle, not a Firebase UID.
+        if(user&&user.uid!==nextProfile.uid&&
+           verifiedVisitedCounts668Ref.current?.uid!==nextProfile.uid)
+          verifiedVisitedCounts668Ref.current={uid:nextProfile.uid,
+            readStartedAt:ownCountsRequestedAt};
         // Show the already loaded public profile immediately. Follow-state and
         // owner-count verification must not keep the entire page on a spinner.
         applyProfileFirstView(nextProfile, rows);
@@ -4695,7 +4701,7 @@ export default function ExplorePage() {
     // never a prerequisite for a live, server-confirmed public counter stream.
     // Otherwise a failed/partial GET silently disables all A-viewing-C updates.
     if(!principal||!viewedUid||viewedUid===principal.uid||
-       user?.uid!==principal.uid||profileUid!==viewedUid)return;
+       user?.uid!==principal.uid)return;
     let stopped=false;
     let detach=()=>{};
     const attach=()=>{

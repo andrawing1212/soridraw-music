@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: soridraw-preview-app-release
+  group: soridraw-shared-rtdb-rules-release
   cancel-in-progress: false
 
 jobs:

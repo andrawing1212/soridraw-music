@@ -17,7 +17,7 @@ permissions:
   contents: read
   actions: write
 concurrency:
-  group: soridraw-c-profile-follow-one-completion
+  group: ${{ github.event_name == 'pull_request' && format('soridraw-c-profile-pr-{0}', github.event.pull_request.number) || 'soridraw-shared-rtdb-rules-release' }}
   cancel-in-progress: false
 jobs:
   check:

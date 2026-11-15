@@ -8,7 +8,7 @@
 const validation667="newData.hasChildren(['profileUid','generation','revision','followerCount','followingCount','public','commitId','at'])";
 export const PUBLIC_FOLLOW_PROFILE_RULE_667={
  '$uid':{
-  '.read':"auth != null && data.child('public').val() === true",
+  '.read':"auth != null && (!data.exists() || data.child('public').val() === true)",
   '.write':false,
   '.validate':validation667,
   'profileUid':{'.validate':"newData.isString() && newData.val() === $uid && newData.val().matches(/^[A-Za-z0-9_-]{1,128}$/)"},
@@ -22,6 +22,11 @@ export const PUBLIC_FOLLOW_PROFILE_RULE_667={
   '$other':{'.validate':false}
  }
 };
+// Exact old deployed child is the only accepted migration source.
+// Missing nodes must be readable to authenticated subscribers; otherwise
+// Firebase cancels onValue with permission_denied before the first publish.
+export const PREVIOUS_PUBLIC_FOLLOW_PROFILE_RULE_667=JSON.parse(JSON.stringify(PUBLIC_FOLLOW_PROFILE_RULE_667));
+PREVIOUS_PUBLIC_FOLLOW_PROFILE_RULE_667['$uid']['.read']="auth != null && data.child('public').val() === true";
 const json=v=>JSON.stringify(v);
 const deniesGrant=v=>v===undefined||v===null||v===false;
 // RTDB rules cascade: a wider ancestor grant defeats a narrower child.
@@ -45,7 +50,8 @@ export const makeAdditivePublicFollowRules667=(live)=>{
     inheritedGrantUnsafe(live.rules))
   throw Error('667_LIVE_RULES_BOUNDARY_UNVERIFIED');
  const current=live.rules.publicSync.exploreFollowProfiles667;
- if(current!==undefined&&json(current)!==json(PUBLIC_FOLLOW_PROFILE_RULE_667))
+ if(current!==undefined&&json(current)!==json(PUBLIC_FOLLOW_PROFILE_RULE_667)&&
+    json(current)!==json(PREVIOUS_PUBLIC_FOLLOW_PROFILE_RULE_667))
   throw Error('667_EXISTING_RULE_CONFLICT');
  const candidate=JSON.parse(JSON.stringify(live));
  candidate.rules.publicSync.exploreFollowProfiles667=
@@ -56,5 +62,6 @@ export const makeAdditivePublicFollowRules667=(live)=>{
  if(current===undefined)delete restored.rules.publicSync.exploreFollowProfiles667;
  else restored.rules.publicSync.exploreFollowProfiles667=current;
  if(json(restored)!==json(live))throw Error('667_UNRELATED_ACL_DRIFT');
- return {candidate,mode:current===undefined?'ADD_EXACT_ONE_CHILD':'ALREADY_EXACT'};
+ return {candidate,mode:current===undefined?'ADD_EXACT_ONE_CHILD':
+   json(current)===json(PUBLIC_FOLLOW_PROFILE_RULE_667)?'ALREADY_EXACT':'UPDATE_EXACT_CHILD_READ'};
 };

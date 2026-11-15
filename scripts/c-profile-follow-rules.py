@@ -43,8 +43,9 @@ import {readFileSync,writeFileSync} from 'node:fs';
 import {makeAdditivePublicFollowRules667} from './scripts/lib/public-follow-rules-667.mjs';
 const current=JSON.parse(readFileSync('/tmp/c-profile-live-rules.json'));
 const next=makeAdditivePublicFollowRules667(current);
-if(!['ADD_EXACT_ONE_CHILD','ALREADY_EXACT'].includes(next.mode))throw Error('RULES_ADD_SCOPE');
+if(!['ADD_EXACT_ONE_CHILD','ALREADY_EXACT','UPDATE_EXACT_CHILD_READ'].includes(next.mode))throw Error('RULES_ADD_SCOPE');
 writeFileSync('/tmp/c-profile-next-rules.json',JSON.stringify(next.candidate));
+writeFileSync('/tmp/c-profile-rules-mode',next.mode);
 console.log('C_PROFILE_SHARED_RULES_EXACT_ONE_CHILD=PASS');
 """
  subprocess.run(['node','--input-type=module','-e',code],check=True)
@@ -53,7 +54,10 @@ console.log('C_PROFILE_SHARED_RULES_EXACT_ONE_CHILD=PASS');
  restored=json.loads(json.dumps(after))
  restored['rules']['publicSync'].pop('exploreFollowProfiles667',None)
  check(sha(restored)==EXPECTED,'UNRELATED_RULES_CHANGED')
- if already:
+ mode=Path('/tmp/c-profile-rules-mode').read_text()
+ check(mode in ('ADD_EXACT_ONE_CHILD','ALREADY_EXACT','UPDATE_EXACT_CHILD_READ'),
+  'UNEXPECTED_RULES_MODE')
+ if mode=='ALREADY_EXACT':
   check(sha(live)==sha(after),'EXISTING_CHILD_CONFLICT')
   print('C_PROFILE_SHARED_RULES_ALREADY_EXACT=PASS',flush=True)
   return
@@ -65,9 +69,9 @@ console.log('C_PROFILE_SHARED_RULES_EXACT_ONE_CHILD=PASS');
  check(os.environ.get('C_PROFILE_RULES_MAINTENANCE_CONFIRMED')=='FREEZE_CONFIRMED',
   'MAINTENANCE_FREEZE_REQUIRED')
  compare,_=get(url)
- check(sha(compare)==EXPECTED,'CONCURRENT_RULE_UPDATE')
+ check(sha(compare)==sha(live),'CONCURRENT_RULE_UPDATE')
  final_check,_=get(url)
- check(sha(final_check)==EXPECTED,'CONCURRENT_RULE_UPDATE_FINAL')
+ check(sha(final_check)==sha(live),'CONCURRENT_RULE_UPDATE_FINAL')
  body=json.dumps(after,separators=(',',':')).encode()
  # Rules management PUT is a full-document replacement, NOT an RTDB
  # data-location conditional write. Never pass data REST If-Match here: the
@@ -85,7 +89,7 @@ console.log('C_PROFILE_SHARED_RULES_EXACT_ONE_CHILD=PASS');
   raise RuntimeError('C_PROFILE_RULES_PUT_REJECTED_'+str(err.code)+':'+safe) from None
  persisted,_=get(url)
  check(sha(persisted)==sha(after),'RULES_POSTFLIGHT_MISMATCH')
- print('C_PROFILE_SHARED_RULES_ONE_CHILD_ONLY_ACTIVE=PASS',flush=True)
+ print('C_PROFILE_SHARED_RULES_ONE_CHILD_ONLY_ACTIVE=PASS;MODE='+mode,flush=True)
 if __name__=='__main__':
  try:main()
  except Exception as error:

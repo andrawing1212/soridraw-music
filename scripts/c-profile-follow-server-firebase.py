@@ -90,8 +90,10 @@ def main():
   check(current.get('buildConfig',{}).get('entryPoint')==FUNCTION and
    current['buildConfig'].get('runtime')=='nodejs22','RECEIVER_CODE_DRIFT')
   config=current['serviceConfig']
-  check(config.get('environmentVariables',{}).get('SORIDRAW_PUBLIC_FOLLOW_READY_669')=='0',
-   'PREVIEW_RECEIVER_ALREADY_ENABLED')
+  ready=config.get('environmentVariables',{}).get('SORIDRAW_PUBLIC_FOLLOW_READY_669')
+  check(ready in ('0','1'),'RECEIVER_READY_STATE_DRIFT')
+  check(config.get('environmentVariables',{}).get('SORIDRAW_PUBLIC_FOLLOW_SCOPE_669')=='preview-only',
+   'RECEIVER_PREVIEW_SCOPE_DRIFT')
   check(len(config.get('secretEnvironmentVariables',[]))==1 and
    config['secretEnvironmentVariables'][0].get('key')==PUBLIC_SECRET,
    'RECEIVER_SECRET_DRIFT')
@@ -124,6 +126,20 @@ def main():
   check(deployed_delete and deployed_delete.get('status')=='ACTIVE',
    'DELETE_HOOK_NOT_ACTIVE')
   print('C_PROFILE_AUTH_DELETE_REVOCATION_ACTIVE=PASS',flush=True)
+  if ready=='1':
+   # Another release already activated this exact receiver. Do not repatch
+   # or overwrite its source/secret/IAM. Workflow verifies unsigned GET denial.
+   latest=request(token,'GET',ROOT+PARENT+'/functions/'+FUNCTION)
+   check(latest and latest.get('updateTime')==current.get('updateTime') and
+    latest.get('state')=='ACTIVE' and
+    latest.get('serviceConfig',{}).get('environmentVariables')==
+      config.get('environmentVariables') and
+    latest.get('serviceConfig',{}).get('secretEnvironmentVariables')==
+      config.get('secretEnvironmentVariables') and
+    latest.get('serviceConfig',{}).get('serviceAccountEmail')==
+      config.get('serviceAccountEmail'),'ACTIVE_RECEIVER_CONCURRENT_DRIFT')
+   print('C_PROFILE_ALREADY_ACTIVE_RECEIVER_REUSED=PASS',flush=True)
+   return
   # Update ONLY existing isolated receiver's source + READY env, retaining
   # all IAM, service identity, secret binding, limits and trigger metadata.
   uploaded=request(token,'POST',ROOT+PARENT+'/functions:generateUploadUrl',{})

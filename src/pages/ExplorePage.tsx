@@ -113,7 +113,7 @@ import {readExploreFollowLocalChoice685,rememberExploreFollowLocalChoice685,
   from '../services/exploreFollowChoice685';
 import {EXPLORE_FOLLOW_SETTLED_EVENT_681,announceExploreFollowSettled681,
   type ExploreFollowSettled681} from '../services/exploreFollowPendingResume681';
-import {resolveFollowCounts662,shouldApplyActorFollowSignal662}
+import {resolveFollowCounts662,shouldApplyActorFollowSignal662,displayOwnPendingFollowing689}
  from '../services/exploreFollowCountAuthority662';
 import { createOwnerEpochGate538, normalizeOwnerEpochSignal538 } from '../services/exploreOwnerFollowerEpochCore538';
 import {PUBLIC_FOLLOW_VISITOR_668_ENABLED,subscribePublicProfileFollow668} from '../services/explorePublicFollowSync668';
@@ -3559,6 +3559,18 @@ export default function ExplorePage() {
         }
       }
 
+      // APP689: a recent canonical ACK on this same account must not be
+      // replaced by an older R2 first-view count after repeated reloads.
+      // This 30s local receipt is owner-of-action only; it never publishes
+      // provisional values or changes another visitor's public profile.
+      if(user?.uid&&user.uid!==displayProfile379.uid){
+        const latestChoice689=readExploreFollowLocalChoice685(user.uid,displayProfile379.uid);
+        if(latestChoice689?.settled&&Date.now()-latestChoice689.at<=30_000&&
+           typeof latestChoice689.targetFollowerCount==='number')
+          displayProfile379={...displayProfile379,
+            followerCount:latestChoice689.targetFollowerCount};
+      }
+
       // APP657: a verified, fully loaded relation page is better evidence of
       // another user's exact count than an asynchronously retained R2
       // first-view value. This changes no server reads on profile entry.
@@ -3578,6 +3590,17 @@ export default function ExplorePage() {
             readExploreProfileConnectionLastServerAt528(nextProfile.uid,'followers') > 0) {
           displayProfile379 = {...displayProfile379, followerCount:exactFollowers657};
         }
+      }
+
+      // APP689: same-account route changes must not wait for the five-second
+      // canonical write to show the owner's own optimistic Following number.
+      // This is a local display override only; shared profile caches retain
+      // server-confirmed counts and third-party visitors never see this value.
+      if(user?.uid===displayProfile379.uid){
+        const ownPending689=readPendingExploreFollowIntents380(user.uid);
+        if(ownPending689.length)
+          displayProfile379={...displayProfile379,followingCount:
+            displayOwnPendingFollowing689(displayProfile379.followingCount,ownPending689)};
       }
 
       // An async cached profile response cannot erase B's unsent follow intent.
@@ -3691,8 +3714,13 @@ export default function ExplorePage() {
               const keepChoice685=!pending525&&shouldKeepExploreFollowChoice685(
                 user.uid,nextProfile.uid,nextFollowState.isFollowing,
                 followReadStartedAt685);
-              const savedChoice685=keepChoice685
-                ?readExploreFollowLocalChoice685(user.uid,nextProfile.uid):null;
+              const latestReceipt689=readExploreFollowLocalChoice685(user.uid,nextProfile.uid);
+              const confirmedFollower689=latestReceipt689?.settled&&
+                Date.now()-latestReceipt689.at<=30_000&&
+                typeof latestReceipt689.targetFollowerCount==='number'&&
+                !newerPublicSignal683
+                  ?latestReceipt689.targetFollowerCount:null;
+              const savedChoice685=keepChoice685?latestReceipt689:null;
               setFollowSavingUid685(pending525?.targetUid||'');
               setFollowState(previous=>pending525 ? {
                 ...nextFollowState,
@@ -3702,9 +3730,11 @@ export default function ExplorePage() {
                   pending525.baseFollowing,pending525.desiredFollowing),
               } : keepChoice685&&savedChoice685
                 ?{...nextFollowState,isFollowing:savedChoice685.following,
-                    followerCount:previous?.followerCount??nextFollowState.followerCount,
+                    followerCount:confirmedFollower689??previous?.followerCount??nextFollowState.followerCount,
                     followingCount:previous?.followingCount??nextFollowState.followingCount,
                     countVerified661:false}
+                : confirmedFollower689!==null
+                ?{...nextFollowState,followerCount:confirmedFollower689}
                 : newerPublicSignal683&&previous
                 ?{...previous,isFollowing:nextFollowState.isFollowing}
                 : verifiedVisitedProfileUid661Ref.current===nextProfile.uid &&
@@ -3715,7 +3745,8 @@ export default function ExplorePage() {
               // The existing authenticated GET already verifies the target
               // count. Reuse it instead of a stale first-view R2 cache, with
               // zero extra reads. Pending optimistic choices keep priority.
-              if(!pending525&&!keepChoice685&&nextFollowState.countVerified661===true&&!newerPublicSignal683){
+              if(!pending525&&!keepChoice685&&confirmedFollower689===null&&
+                 nextFollowState.countVerified661===true&&!newerPublicSignal683){
                 const exact661={
                   followerCount:nextFollowState.followerCount,
                   followingCount:nextFollowState.followingCount,
@@ -5088,7 +5119,8 @@ export default function ExplorePage() {
         if (auth.currentUser?.uid !== viewerUid) return;
         const confirmed = settlement.result;
         rememberExploreFollowLocalChoice685(viewerUid,targetUid,
-          confirmed.isFollowing,true);
+          confirmed.isFollowing,true,Date.now(),
+          confirmed.countVerified661===true?confirmed.followerCount:null);
         setFollowSavingUid685('');
         const settled = paint(confirmed.isFollowing, true, confirmed);
         if (confirmed.isFollowing !== settlement.desiredFollowing &&

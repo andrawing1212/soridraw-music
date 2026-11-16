@@ -106,6 +106,25 @@ await remount.advance(1_000); assert.equal(calls.at(-1), true);
 assert.equal(remount.readPendingExploreFollowIntents380('viewer').length, 0);
 
 
+// APP689: three quick route/reload recoveries retain the FIRST 5-second
+// deadline and produce one final canonical commit, not 3 server writes.
+const rapid=client(),rapidCalls=[];
+const rapidRequest={...request('rapid-refresh'),
+  commit:async value=>{rapidCalls.push(value);return {isFollowing:value,followerCount:5,followingCount:8};}};
+rapid.queueExploreFollowFinalState380(rapidRequest);
+const firstRapid=rapid.readPendingExploreFollowIntents380('viewer')[0];
+for(let i=0;i<3;i++){
+  await rapid.advance(1_000);
+  rapid.queueExploreFollowFinalState380({...rapidRequest,
+    restoredUpdatedAt:firstRapid.updatedAt,initialDelayMs:0});
+  assert.equal(rapid.readPendingExploreFollowIntents380('viewer')[0].updatedAt,
+    firstRapid.updatedAt,'RELOAD_MUST_NOT_RESTART_FIRST_CLICK');
+}
+await rapid.advance(1_999);assert.equal(rapidCalls.length,0);
+await rapid.advance(1);assert.deepEqual(rapidCalls,[true],
+ 'THREE_FAST_RELOADS_ONE_FINAL_COMMIT');
+assert.equal(rapid.readPendingExploreFollowIntents380('viewer').length,0);
+
  // Immediate mode: one user click requests a canonical commit at next tick.
  const instant = client(), instantCalls = [];
  const instantReq = (id, desired = true) => ({

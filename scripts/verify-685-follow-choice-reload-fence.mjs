@@ -52,6 +52,16 @@ assert.match(toggle,/if\(persistConfirmed&&canonical\?\.countVerified661===true\
 assert.match(toggle,/rememberExploreFollowLocalChoice685\(viewerUid,targetUid,\s*confirmed.isFollowing,true\)/);
 assert.match(page,/disabled=\{!followState\}/);
 assert.match(page,/aria-busy=\{followSavingUid685===profile.uid\}/);
+const followButton686=page.slice(
+  page.indexOf('onClick={toggleFollow}'),
+  page.indexOf('onClick={toggleFollow}')+650,
+);
+assert.match(followButton686,/followState\?\.isFollowing \? '팔로잉' : '팔로우'/);
+assert.doesNotMatch(followButton686,/저장 중|팔로우 해제 ·/);
+assert.match(page,/팔로워 <strong>\{formatCount\(profile\.followerCount\)\}<\/strong>/);
+assert.match(page,/팔로잉 <strong>\{formatCount\(profile\.followingCount\)\}<\/strong>/);
+assert.doesNotMatch(page,/팔로워 <strong>\{profileCountsVerifying|팔로워 <strong>\{profileCountsVerifying\|\|/);
+console.log('APP686_ORIGINAL_FOLLOW_LABELS_AND_NUMERIC_COUNTS_RESTORED=PASS');
 assert.match(page,/shouldIgnoreExploreFollowSignal685\(/);
 assert.match(page,/const keepChoice685=!pending525&&shouldKeepExploreFollowChoice685\(/);
 assert.match(event,/rememberExploreFollowLocalChoice685\(\s*value.viewerUid,value.targetUid,value.following,true\)/);

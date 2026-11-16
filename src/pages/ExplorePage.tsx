@@ -3439,7 +3439,6 @@ export default function ExplorePage() {
     // independently and never treat this shell as a canonical follow ACK.
     const cachedFirstView684=readCachedExplorePublicProfileFirstView684(profileUid);
     const cachedProfile684=cachedFirstView684?.profile||null;
-    setProfile(cachedProfile684);
     if(cachedFirstView684){
       const cachedTracks684=cachedFirstView684.tracks.map(normalizeTrack)
         .filter(track=>track.id).sort(comparePublicProfileTracks);
@@ -3458,6 +3457,16 @@ export default function ExplorePage() {
       ?readExploreFollowLocalChoice685(user.uid,cachedProfile684.uid):null;
     const visibleChoice685=recentChoice685&&Date.now()-recentChoice685.at<=30_000
       ?recentChoice685:null;
+    // A cached shell must not flash the old 2 while this actor's durable
+    // pending unfollow already says 1. Paint the count and button together.
+    const firstFollower690=cachedPending684?computeFollowTargetDisplay525(
+      cachedPending684.baseTargetFollowerCount,
+      cachedPending684.baseFollowing,cachedPending684.desiredFollowing)
+      :visibleChoice685?.settled&&
+        typeof visibleChoice685.targetFollowerCount==='number'
+        ?visibleChoice685.targetFollowerCount:null;
+    setProfile(cachedProfile684&&firstFollower690!==null
+      ?{...cachedProfile684,followerCount:firstFollower690}:cachedProfile684);
     setFollowSavingUid685(cachedPending684?.targetUid||'');
     setFollowState(cachedProfile684&&user&&user.uid!==cachedProfile684.uid&&
       (cachedPending684||visibleChoice685||cachedMembership684!==null)?{

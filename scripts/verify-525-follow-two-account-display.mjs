@@ -42,6 +42,13 @@ assert.match(click,/queueExploreFollowFinalState380\(/);
 assert.match(click,/immediate: false, initialDelayMs: 5_000/);
 assert.match(click,/const previousPending = readPendingExploreFollowIntents380\(viewerUid\)/);
 assert.match(click,/const baseFollowing = previousPending\?\.baseFollowing \?\? previousFollowing/);
+assert.match(click,/const recentExact690=exactReceipt690\?\.settled===true/);
+assert.match(click,/const previousTargetCount = previousPending\?\.baseTargetFollowerCount \?\?\s*recentExact690 \?\? profile\.followerCount/);
+assert.doesNotMatch(click,/readExploreProfileConnectionExactCount379\(targetUid, 'followers'\)/,
+ 'an older locally cached exact relation list cannot override the confirmed recent count');
+assert.match(page,/visibleChoice685\?\.targetFollowerCount/);
+assert.match(page,/overlayOwnFollowingPending690\(/);
+
 assert.match(click,/commit: \(following\) => setExploreFollow\(user, targetUid, following, profile\)/);
 assert.doesNotMatch(click,/followMutationInFlightRef\.current/);
 assert.match(click,/getExploreFollowState\(user, targetUid, true\)/);
@@ -120,3 +127,27 @@ assert.match(page,/verifiedVisitedProfileUid661Ref\.current=nextProfile\.uid/);
 assert.match(page,/followerCount:previous\.followerCount/);
 assert.match(page,/setProfileConnectionsIncomplete661\(page\.hasUnresolvedProfiles===true\)/);
 console.log('APP661_CERTIFIED_CARD_COUNT_AND_VERIFIED_PROFILE_REFRESH=PASS');
+const overlaySource=readFileSync('src/services/exploreOwnFollowingPending690.ts','utf8');
+const overlayModule=ts.transpileModule(overlaySource,{compilerOptions:{
+ target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,
+}}).outputText;
+const overlayExports={};
+runInNewContext(overlayModule,{exports:overlayExports,console});
+const overlay690=overlayExports.overlayOwnFollowingPending690;
+const known690=new Map([
+ ['A',{uid:'A',nickname:'A',followedAt:1}],
+ ['B',{uid:'B',nickname:'B',followedAt:1}],
+ ['C',{uid:'C',nickname:'C',followedAt:1}],
+]);
+const rows690=[known690.get('A'),known690.get('B')];
+assert.deepEqual(overlay690(rows690,[{targetUid:'B',desiredFollowing:false,updatedAt:10}],
+ uid=>known690.get(uid)||null).map(x=>x.uid),['A'],
+ 'unfollow must remove B from own Following popup before server settlement');
+assert.deepEqual(overlay690(rows690,[{targetUid:'C',desiredFollowing:true,updatedAt:10}],
+ uid=>known690.get(uid)||null).map(x=>x.uid),['A','B','C'],
+ 'follow must appear instantly in own Following popup when profile is known');
+assert.deepEqual(rows690.map(x=>x.uid),['A','B'],
+ 'the optimistic projection cannot mutate a canonical/persisted list');
+assert.equal(overlay690(rows690,[{targetUid:'B',desiredFollowing:false,updatedAt:10}],
+ uid=>known690.get(uid)||null).length,1);
+console.log('APP690_OWN_FOLLOWING_LIST_LOCAL_PROJECTION_AND_CONFIRMED_COUNT_BASELINE=PASS');

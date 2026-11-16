@@ -378,9 +378,10 @@ export const queueExploreFollowFinalState380 = (request: ExploreFollowBatchReque
     existing.immediate = request.immediate === true;
     existing.targetProfile = { ...request.targetProfile };
     existing.version += 1;
-    // Keep the first click's five-second deadline through repeated toggles.
-    // Only the last desired state is sent at the end of that window.
-    // updatedAt stays anchored to the first pending click.
+    // Rapid taps BEFORE dispatch share the first click's five-second window.
+    // A new choice DURING an already-sent request starts a new window from
+    // that click, so the follow-up commit is never sent earlier than five seconds.
+    if (existing.inflight) existing.updatedAt = Date.now();
     existing.retryUsed = false;
     existing.suspended = false;
     persistEntry380(existing);

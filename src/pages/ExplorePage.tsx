@@ -3792,7 +3792,7 @@ export default function ExplorePage() {
 
       queueExploreFollowFinalState380({
         ...record380,
-        immediate: true,
+        immediate: false,
         initialDelayMs: 0,
         restoredNotBefore: record380.notBefore,
         restoredUpdatedAt: record380.updatedAt,

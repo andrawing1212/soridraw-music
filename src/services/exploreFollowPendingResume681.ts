@@ -55,7 +55,7 @@ export function startExploreFollowPendingResume681(){
    const hadCooldown=Number(row.notBefore||0)>Date.now();
    queueExploreFollowFinalState380({
     ...row,
-    immediate:true,initialDelayMs:0,
+    immediate:false,initialDelayMs:0,
     restoredNotBefore:row.notBefore,
     restoredUpdatedAt:row.updatedAt,
     restoredRetryUsed:row.retryUsed,

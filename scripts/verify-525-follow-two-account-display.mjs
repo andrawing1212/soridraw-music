@@ -39,7 +39,9 @@ assert.equal(api.pending('B','A'),null,'AFTER_SETTLEMENT_NO_PENDING_OVERLAY');
 const click=slice(page,'  const toggleFollow = async () => {',
  '  const closeMoreSheet = () => {');
 assert.match(click,/queueExploreFollowFinalState380\(/);
-assert.match(click,/immediate: true, initialDelayMs: 0/);
+assert.match(click,/immediate: false, initialDelayMs: 5_000/);
+assert.match(click,/const previousPending = readPendingExploreFollowIntents380\(viewerUid\)/);
+assert.match(click,/const baseFollowing = previousPending\?\.baseFollowing \?\? previousFollowing/);
 assert.match(click,/commit: \(following\) => setExploreFollow\(user, targetUid, following, profile\)/);
 assert.doesNotMatch(click,/followMutationInFlightRef\.current/);
 assert.match(click,/getExploreFollowState\(user, targetUid, true\)/);

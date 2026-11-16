@@ -48,7 +48,7 @@ assert.match(toggle,/rememberExploreFollowLocalChoice685\(viewerUid,targetUid,re
 assert.match(toggle,/readPendingExploreFollowIntents380\(viewerUid\)/);
 assert.match(toggle,/setFollowSavingUid685\(targetUid\)/);
 assert.match(toggle,/paint\(requestedFollow, false\)/);
-assert.match(toggle,/if\(persistConfirmed&&canonical\?\.countVerified661===true\)/);
+assert.match(toggle,/if \(persistConfirmed\) \{[\s\S]*?if \(canonical\?\.countVerified661===true\)/);
 assert.match(toggle,/rememberExploreFollowLocalChoice685\(viewerUid,targetUid,\s*confirmed.isFollowing,true\)/);
 assert.match(page,/disabled=\{!followState\}/);
 assert.match(page,/aria-busy=\{followSavingUid685===profile.uid\}/);

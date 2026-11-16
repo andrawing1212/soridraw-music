@@ -3792,7 +3792,7 @@ export default function ExplorePage() {
 
       queueExploreFollowFinalState380({
         ...record380,
-        immediate: true,
+        immediate: false,
         initialDelayMs: 0,
         restoredNotBefore: record380.notBefore,
         restoredUpdatedAt: record380.updatedAt,
@@ -4995,24 +4995,27 @@ export default function ExplorePage() {
     const targetUid = profile.uid;
     const viewerUid = user.uid;
     if (viewerUid === targetUid || !followState) return;
-    // A second click cannot calculate numbers from an unconfirmed first click.
-    if(followSavingUid685===targetUid||
-       readPendingExploreFollowIntents380(viewerUid)
-         .some(row=>row.targetUid===targetUid))return;
-
+    // Every click is accepted during the five-second collection window.
+    // The pending record retains the canonical starting state and count,
+    // so repeated toggles cannot stack provisional +/- counts.
+    const previousPending = readPendingExploreFollowIntents380(viewerUid)
+      .find(row=>row.targetUid===targetUid);
     const previousFollowing = followState.isFollowing;
     const requestedFollow = !previousFollowing;
-    const previousTargetCount = readExploreProfileConnectionExactCount379(targetUid, 'followers')
-      ?? profile.followerCount;
+    const baseFollowing = previousPending?.baseFollowing ?? previousFollowing;
+    const previousTargetCount = previousPending?.baseTargetFollowerCount ??
+      (readExploreProfileConnectionExactCount379(targetUid, 'followers')
+      ?? profile.followerCount);
     const previousTargetFollowingCount = profile.followingCount;
-    const previousActorCount = readExploreProfileConnectionExactCount379(viewerUid, 'following')
+    const previousActorCount = previousPending?.baseActorFollowingCount ??
+      readExploreProfileConnectionExactCount379(viewerUid, 'following')
       ?? readExploreFollowingExactCount379(viewerUid)
       ?? readCachedExplorePublicProfile(viewerUid)?.followingCount
       ?? null;
 
     const paint = (following: boolean, persistConfirmed: boolean, canonical?: ExploreFollowState|null) => {
       const {followerCount,followingCount,actorFollowingCount}=resolveFollowCounts662({
-        previousFollowing,following,
+        previousFollowing:baseFollowing,following,
         baseFollowerCount:previousTargetCount,
         baseFollowingCount:previousTargetFollowingCount,
         baseActorFollowingCount:previousActorCount,
@@ -5042,15 +5045,16 @@ export default function ExplorePage() {
         });
       }
       if (activeProfileUidRef.current === targetUid) {
-        // User intent changes button only. A canonical response owns counts.
+        // Local counts move immediately; only the canonical ACK persists
+        // shared/public caches. Reversal within five seconds restores baseline.
         setFollowState({ isFollowing: following,
-          followerCount:persistConfirmed?followerCount:previousTargetCount,
-          followingCount:persistConfirmed?followingCount:previousTargetFollowingCount,
-          ...(actorFollowingCount === null || !persistConfirmed
-            ? {} : { actorFollowingCount }) });
-        if(persistConfirmed&&canonical?.countVerified661===true)
-          setProfile((previous) => previous?.uid === targetUid
-            ? { ...previous, followerCount, followingCount }:previous);
+          followerCount,
+          followingCount,
+          ...(actorFollowingCount === null ? {} : { actorFollowingCount }) });
+        setProfile((previous) => previous?.uid === targetUid
+          ? { ...previous, followerCount,
+              ...(persistConfirmed&&canonical?.countVerified661===true
+                ? {followingCount}: {}) }:previous);
       }
       return { followerCount, actorFollowingCount };
     };
@@ -5065,8 +5069,8 @@ export default function ExplorePage() {
     queueExploreFollowFinalState380({
       viewerUid, targetUid,
       desiredFollowing: requestedFollow,
-      immediate: true, initialDelayMs: 0,
-      baseFollowing: previousFollowing,
+      immediate: false, initialDelayMs: 5_000,
+      baseFollowing,
       baseTargetFollowerCount: previousTargetCount,
       baseTargetFollowingCount: previousTargetFollowingCount,
       baseActorFollowingCount: previousActorCount,
@@ -5077,6 +5081,9 @@ export default function ExplorePage() {
         handle: profile.handle,
       },
       commit: (following) => setExploreFollow(user, targetUid, following, profile),
+      onBusy: (busy) => {
+        if(!busy) setFollowSavingUid685('');
+      },
       onSettled: (settlement) => {
         if (auth.currentUser?.uid !== viewerUid) return;
         const confirmed = settlement.result;

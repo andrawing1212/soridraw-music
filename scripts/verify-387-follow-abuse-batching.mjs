@@ -9,7 +9,7 @@ const like = readFileSync('src/services/exploreLikeService.ts', 'utf8');
 const likePatch = readFileSync('cloudflare/explore-worker/patches/054-explore-like-edge-rate-limit.mjs', 'utf8');
 const wrangler = JSON.parse(readFileSync('cloudflare/explore-worker/canonical/wrangler.preview.jsonc', 'utf8'));
 // app380 local-first final-state batching.
-assert.match(batch, /EXPLORE_FOLLOW_IDLE_FLUSH_MS_380 = 30_000/);
+assert.match(batch, /EXPLORE_FOLLOW_IDLE_FLUSH_MS_380 = 5_000/);
 assert.match(batch, /entry\.desiredFollowing === entry\.baseFollowing/);
 assert.match(batch, /No Worker request, R2 write, D1 read or D1 write is needed/);
 assert.match(batch, /soridraw:explore:follow-outbox:380:/);
@@ -26,7 +26,7 @@ const toggle = page.slice(toggleStart, toggleEnd);
 // APP follow: visible clicks use the existing persisted queue in immediate mode.
 // The 30-second trailing timer remains for legacy/background non-immediate intents.
 assert.match(toggle, /queueExploreFollowFinalState380\(/);
-assert.match(toggle, /immediate: true, initialDelayMs: 0/);
+assert.match(toggle, /immediate: false, initialDelayMs: 5_000/);
 assert.match(toggle, /commit: \(following\) => setExploreFollow\(user, targetUid, following, profile\)/);
 assert.doesNotMatch(toggle, /followMutationInFlightRef\.current/);
 assert.match(toggle,/if \(persistConfirmed\) \{[\s\S]*?patchExploreFollowLocalState377\(viewerUid, targetUid, following, profile\)/);

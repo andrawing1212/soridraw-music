@@ -113,7 +113,7 @@ import {readExploreFollowLocalChoice685,rememberExploreFollowLocalChoice685,
   from '../services/exploreFollowChoice685';
 import {EXPLORE_FOLLOW_SETTLED_EVENT_681,announceExploreFollowSettled681,
   type ExploreFollowSettled681} from '../services/exploreFollowPendingResume681';
-import {resolveFollowCounts662,shouldApplyActorFollowSignal662}
+import {resolveFollowCounts662,shouldApplyActorFollowSignal662,displayOwnPendingFollowing689}
  from '../services/exploreFollowCountAuthority662';
 import { createOwnerEpochGate538, normalizeOwnerEpochSignal538 } from '../services/exploreOwnerFollowerEpochCore538';
 import {PUBLIC_FOLLOW_VISITOR_668_ENABLED,subscribePublicProfileFollow668} from '../services/explorePublicFollowSync668';
@@ -3578,6 +3578,17 @@ export default function ExplorePage() {
             readExploreProfileConnectionLastServerAt528(nextProfile.uid,'followers') > 0) {
           displayProfile379 = {...displayProfile379, followerCount:exactFollowers657};
         }
+      }
+
+      // APP689: same-account route changes must not wait for the five-second
+      // canonical write to show the owner's own optimistic Following number.
+      // This is a local display override only; shared profile caches retain
+      // server-confirmed counts and third-party visitors never see this value.
+      if(user?.uid===displayProfile379.uid){
+        const ownPending689=readPendingExploreFollowIntents380(user.uid);
+        if(ownPending689.length)
+          displayProfile379={...displayProfile379,followingCount:
+            displayOwnPendingFollowing689(displayProfile379.followingCount,ownPending689)};
       }
 
       // An async cached profile response cannot erase B's unsent follow intent.

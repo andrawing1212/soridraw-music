@@ -3566,7 +3566,8 @@ export default function ExplorePage() {
       if(user?.uid&&user.uid!==displayProfile379.uid){
         const latestChoice689=readExploreFollowLocalChoice685(user.uid,displayProfile379.uid);
         if(latestChoice689?.settled&&Date.now()-latestChoice689.at<=30_000&&
-           typeof latestChoice689.targetFollowerCount==='number')
+           typeof latestChoice689.targetFollowerCount==='number'&&
+           (verifiedVisitedCounts668Ref.current?.readStartedAt||0)<=latestChoice689.at)
           displayProfile379={...displayProfile379,
             followerCount:latestChoice689.targetFollowerCount};
       }
@@ -3717,7 +3718,8 @@ export default function ExplorePage() {
               const latestReceipt689=readExploreFollowLocalChoice685(user.uid,nextProfile.uid);
               const confirmedFollower689=latestReceipt689?.settled&&
                 Date.now()-latestReceipt689.at<=30_000&&
-                typeof latestReceipt689.targetFollowerCount==='number'
+                typeof latestReceipt689.targetFollowerCount==='number'&&
+                !newerPublicSignal683
                   ?latestReceipt689.targetFollowerCount:null;
               const savedChoice685=keepChoice685?latestReceipt689:null;
               setFollowSavingUid685(pending525?.targetUid||'');

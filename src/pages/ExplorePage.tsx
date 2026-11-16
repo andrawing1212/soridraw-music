@@ -4775,15 +4775,20 @@ export default function ExplorePage() {
     let detach=()=>{};
     const attach=()=>{
       if(stopped||document.visibilityState!=='visible')return;
-      const read=verifiedVisitedCounts668Ref.current;
-      if(!read||read.uid!==viewedUid)return;
-      // The retained snapshot may predate the existing authenticated GET.
+      // Subscribe as soon as the public profile is visible. Waiting for
+      // an optional first-view GET can leave this tab disconnected forever
+      // when that request fails or finishes after the first effect run.
+      // The callback still fences against the most recent verified read.
       // It must never replace the more recent, confirmed first-view count.
       detach=subscribePublicProfileFollow668(viewedUid,signal=>{
         if(stopped||auth.currentUser!==principal||
            activeProfileUidRef.current!==viewedUid||
-           document.visibilityState!=='visible'||
-           signal.at<=read.readStartedAt)return;
+           document.visibilityState!=='visible')return;
+        // A newer authenticated profile read may finish after subscription.
+        // Compare against the CURRENT authority, not the value captured on attach.
+        const latestRead=verifiedVisitedCounts668Ref.current;
+        if(latestRead?.uid===viewedUid&&
+           signal.at<=latestRead.readStartedAt)return;
         if(readPendingExploreFollowIntents380(principal.uid)
            .some(intent=>intent.targetUid===viewedUid))return;
         const count={followerCount:signal.followerCount,
@@ -4809,7 +4814,7 @@ export default function ExplorePage() {
     document.addEventListener('visibilitychange',onVisibility);
     attach();
     return ()=>{stopped=true;document.removeEventListener('visibilitychange',onVisibility);detach();};
-  },[profile?.uid,profileUid,user?.uid]);
+  },[profile?.uid,profileUid,user?.uid,verifiedVisitedSignalUid669]);
 
   // APP527: A's profile must not spend D1/R2 on window focus, blank-space
   // clicks or visibility changes. The app525 15-second fallback previously

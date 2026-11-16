@@ -115,6 +115,7 @@ import {EXPLORE_FOLLOW_SETTLED_EVENT_681,announceExploreFollowSettled681,
   type ExploreFollowSettled681} from '../services/exploreFollowPendingResume681';
 import {resolveFollowCounts662,shouldApplyActorFollowSignal662,displayOwnPendingFollowing689}
  from '../services/exploreFollowCountAuthority662';
+import {overlayOwnFollowingPending690} from '../services/exploreOwnFollowingPending690';
 import { createOwnerEpochGate538, normalizeOwnerEpochSignal538 } from '../services/exploreOwnerFollowerEpochCore538';
 import {PUBLIC_FOLLOW_VISITOR_668_ENABLED,subscribePublicProfileFollow668} from '../services/explorePublicFollowSync668';
 import {
@@ -3438,7 +3439,6 @@ export default function ExplorePage() {
     // independently and never treat this shell as a canonical follow ACK.
     const cachedFirstView684=readCachedExplorePublicProfileFirstView684(profileUid);
     const cachedProfile684=cachedFirstView684?.profile||null;
-    setProfile(cachedProfile684);
     if(cachedFirstView684){
       const cachedTracks684=cachedFirstView684.tracks.map(normalizeTrack)
         .filter(track=>track.id).sort(comparePublicProfileTracks);
@@ -3457,6 +3457,16 @@ export default function ExplorePage() {
       ?readExploreFollowLocalChoice685(user.uid,cachedProfile684.uid):null;
     const visibleChoice685=recentChoice685&&Date.now()-recentChoice685.at<=30_000
       ?recentChoice685:null;
+    // A cached shell must not flash the old 2 while this actor's durable
+    // pending unfollow already says 1. Paint the count and button together.
+    const firstFollower690=cachedPending684?computeFollowTargetDisplay525(
+      cachedPending684.baseTargetFollowerCount,
+      cachedPending684.baseFollowing,cachedPending684.desiredFollowing)
+      :visibleChoice685?.settled&&
+        typeof visibleChoice685.targetFollowerCount==='number'
+        ?visibleChoice685.targetFollowerCount:null;
+    setProfile(cachedProfile684&&firstFollower690!==null
+      ?{...cachedProfile684,followerCount:firstFollower690}:cachedProfile684);
     setFollowSavingUid685(cachedPending684?.targetUid||'');
     setFollowState(cachedProfile684&&user&&user.uid!==cachedProfile684.uid&&
       (cachedPending684||visibleChoice685||cachedMembership684!==null)?{
@@ -3465,7 +3475,10 @@ export default function ExplorePage() {
         followerCount:cachedPending684?computeFollowTargetDisplay525(
           cachedPending684.baseTargetFollowerCount,
           cachedPending684.baseFollowing,cachedPending684.desiredFollowing)
-          :cachedProfile684.followerCount,
+          :visibleChoice685?.settled&&
+            typeof visibleChoice685.targetFollowerCount==='number'
+            ?visibleChoice685.targetFollowerCount
+            :cachedProfile684.followerCount,
         followingCount:cachedProfile684.followingCount,
       }:null);
     setProfileError('');
@@ -3559,18 +3572,6 @@ export default function ExplorePage() {
         }
       }
 
-      // APP689: a recent canonical ACK on this same account must not be
-      // replaced by an older R2 first-view count after repeated reloads.
-      // This 30s local receipt is owner-of-action only; it never publishes
-      // provisional values or changes another visitor's public profile.
-      if(user?.uid&&user.uid!==displayProfile379.uid){
-        const latestChoice689=readExploreFollowLocalChoice685(user.uid,displayProfile379.uid);
-        if(latestChoice689?.settled&&Date.now()-latestChoice689.at<=30_000&&
-           typeof latestChoice689.targetFollowerCount==='number')
-          displayProfile379={...displayProfile379,
-            followerCount:latestChoice689.targetFollowerCount};
-      }
-
       // APP657: a verified, fully loaded relation page is better evidence of
       // another user's exact count than an asynchronously retained R2
       // first-view value. This changes no server reads on profile entry.
@@ -3590,6 +3591,18 @@ export default function ExplorePage() {
             readExploreProfileConnectionLastServerAt528(nextProfile.uid,'followers') > 0) {
           displayProfile379 = {...displayProfile379, followerCount:exactFollowers657};
         }
+      }
+
+      // APP689: a recent canonical ACK on this same account must not be
+      // replaced by an older R2 first-view count after repeated reloads.
+      // This 30s local receipt is owner-of-action only; it never publishes
+      // provisional values or changes another visitor's public profile.
+      if(user?.uid&&user.uid!==displayProfile379.uid){
+        const latestChoice689=readExploreFollowLocalChoice685(user.uid,displayProfile379.uid);
+        if(latestChoice689?.settled&&Date.now()-latestChoice689.at<=30_000&&
+           typeof latestChoice689.targetFollowerCount==='number')
+          displayProfile379={...displayProfile379,
+            followerCount:latestChoice689.targetFollowerCount};
       }
 
       // APP689: same-account route changes must not wait for the five-second
@@ -3613,7 +3626,17 @@ export default function ExplorePage() {
       const newerConfirmedLocal681 =
         verifiedVisitedProfileUid661Ref.current===displayProfile379.uid &&
         (verifiedVisitedCounts668Ref.current?.readStartedAt||0)>ownCountsRequestedAt;
+      const activeChoice690=user?.uid&&user.uid!==displayProfile379.uid
+        ?readExploreFollowLocalChoice685(user.uid,displayProfile379.uid):null;
+      const ownPendingTarget690=user?.uid
+        ?readPendingExploreFollowIntents380(user.uid)
+           .some(row=>row.targetUid===displayProfile379.uid):false;
+      const protectActorCount690=ownPendingTarget690||
+        (activeChoice690?.settled===true&&
+         typeof activeChoice690.targetFollowerCount==='number'&&
+         Date.now()-activeChoice690.at<=30_000);
       setProfile(previous => (authoritative||newerConfirmedLocal681) &&
+        !protectActorCount690 &&
         user?.uid !== displayProfile379.uid &&
         verifiedVisitedProfileUid661Ref.current === displayProfile379.uid &&
         previous?.uid === displayProfile379.uid
@@ -5034,14 +5057,21 @@ export default function ExplorePage() {
     const previousFollowing = followState.isFollowing;
     const requestedFollow = !previousFollowing;
     const baseFollowing = previousPending?.baseFollowing ?? previousFollowing;
+    // The actor's recent exact server ACK outranks an older saved Followers
+    // list. That list may still say 2 after the verified count became 1.
+    // Starting the next click from the stale 2 would incorrectly paint 3.
+    const exactReceipt690=readExploreFollowLocalChoice685(viewerUid,targetUid);
+    const recentExact690=exactReceipt690?.settled===true&&
+      Date.now()-exactReceipt690.at<=30_000&&
+      typeof exactReceipt690.targetFollowerCount==='number'
+        ?exactReceipt690.targetFollowerCount:null;
     const previousTargetCount = previousPending?.baseTargetFollowerCount ??
-      (readExploreProfileConnectionExactCount379(targetUid, 'followers')
-      ?? profile.followerCount);
+      recentExact690 ?? profile.followerCount;
     const previousTargetFollowingCount = profile.followingCount;
     const previousActorCount = previousPending?.baseActorFollowingCount ??
-      readExploreProfileConnectionExactCount379(viewerUid, 'following')
+      readCachedExplorePublicProfile(viewerUid)?.followingCount
+      ?? readExploreProfileConnectionExactCount379(viewerUid, 'following')
       ?? readExploreFollowingExactCount379(viewerUid)
-      ?? readCachedExplorePublicProfile(viewerUid)?.followingCount
       ?? null;
 
     const paint = (following: boolean, persistConfirmed: boolean, canonical?: ExploreFollowState|null) => {
@@ -6058,6 +6088,14 @@ export default function ExplorePage() {
     const direction = profileConnectionsOpen376;
     if (!direction || !profile) return null;
     const emptyLabel = direction === 'followers' ? '아직 팔로워가 없어요.' : '아직 팔로잉한 사람이 없어요.';
+    const ownPending690=direction==='following'&&profile.uid===user?.uid
+      ?readPendingExploreFollowIntents380(user.uid):[];
+    const visibleItems690=ownPending690.length
+      ?overlayOwnFollowingPending690(profileConnectionsItems376,ownPending690,(uid)=>{
+        const known=readCachedExplorePublicProfile(uid);
+        return known?.uid===uid?{...known,followedAt:Date.now()}:null;
+      })
+      :profileConnectionsItems376;
 
     return (
       <div
@@ -6111,21 +6149,21 @@ export default function ExplorePage() {
                 일부 공개 프로필 정보를 확인하지 못했습니다. 팔로우 숫자를 임의로 줄이지 않았습니다.
               </div>
             )}
-            {profileConnectionsLoading376 ? (
+            {profileConnectionsLoading376 && visibleItems690.length===0 ? (
               <div className="soridraw-explore-connections-state-376" role="status">
                 <Loader2 className="soridraw-explore-spinner" aria-hidden="true" />
                 목록을 불러오는 중
               </div>
-            ) : profileConnectionsError376 && profileConnectionsItems376.length === 0 ? (
+            ) : profileConnectionsError376 && visibleItems690.length === 0 ? (
               <div className="soridraw-explore-connections-state-376">{profileConnectionsError376}</div>
-            ) : profileConnectionsItems376.length === 0 ? (
+            ) : visibleItems690.length === 0 ? (
               <div className="soridraw-explore-connections-state-376">
                 {profileConnectionsIncomplete661 ? '표시 가능한 사용자 정보가 없습니다.' : emptyLabel}
               </div>
             ) : (
               <>
                 <div className="soridraw-explore-connections-list-376">
-                  {profileConnectionsItems376.map((person) => (
+                  {visibleItems690.map((person) => (
                     <button
                       key={person.uid}
                       type="button"

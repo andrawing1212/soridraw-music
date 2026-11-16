@@ -46,7 +46,7 @@ assert.match(click,/const recentExact690=exactReceipt690\?\.settled===true/);
 assert.match(click,/const previousTargetCount = previousPending\?\.baseTargetFollowerCount \?\?\s*recentExact690 \?\? profile\.followerCount/);
 assert.doesNotMatch(click,/readExploreProfileConnectionExactCount379\(targetUid, 'followers'\)/,
  'an older locally cached exact relation list cannot override the confirmed recent count');
-assert.match(page,/visibleChoice685\?\.targetFollowerCount/);
+assert.match(page,/typeof visibleChoice685\.targetFollowerCount==='number'/);
 assert.ok(page.indexOf('// APP689: a recent canonical ACK on this same account')>
  page.indexOf('// APP657: a verified, fully loaded relation page'),
  'a stale local list cannot override the newer confirmed follower receipt');

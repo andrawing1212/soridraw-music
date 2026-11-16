@@ -4036,6 +4036,10 @@ export default function ExplorePage() {
         signal377.targetUid,
         signal377.following,
       );
+      // A newer signed/validated RTDB relation beats this device's earlier
+      // local receipt and must also survive its next profile revisit.
+      rememberExploreFollowLocalChoice685(viewerUid377,
+        signal377.targetUid,signal377.following,true);
       // A post-commit signal is newer than an unchanged local list. In 1:N
       // cases the old membership/target ±1 calculation is not canonical.
       const resolvedSignalActorFollowing379 = signal377.actorFollowingCount;

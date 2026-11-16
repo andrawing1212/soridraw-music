@@ -6096,6 +6096,17 @@ export default function ExplorePage() {
         return known?.uid===uid?{...known,followedAt:Date.now()}:null;
       })
       :profileConnectionsItems376;
+    // APP691: the own Following header and the visible exact first page
+    // must not show different numbers. Use its item count only when that
+    // cached page is explicitly certified complete; the provisional pending
+    // overlay is applied to both the cards and the number in this modal.
+    // Never pretend a paginated/incomplete list is the full follower total.
+    const ownFollowingPage691=direction==='following'&&profile.uid===user?.uid
+      ?profileConnectionsCache376Ref.current.get(profile.uid+':following')
+        ||readExploreProfileConnectionsLocal681(profile.uid,'following'):null;
+    const ownFollowingCount691=ownFollowingPage691?.countComplete===true&&
+      !profileConnectionsNextCursor376&&!profileConnectionsIncomplete661
+        ?visibleItems690.length:profile.followingCount;
 
     return (
       <div
@@ -6130,7 +6141,7 @@ export default function ExplorePage() {
                 className={direction === 'following' ? 'is-active' : undefined}
                 onClick={() => void openProfileConnections376('following')}
               >
-                팔로잉 <strong>{formatCount(profile.followingCount)}</strong>
+                팔로잉 <strong>{formatCount(ownFollowingCount691)}</strong>
               </button>
             </div>
             <button

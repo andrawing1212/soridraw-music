@@ -159,3 +159,12 @@ assert.deepEqual(rows690.map(x=>x.uid),['A','B'],
 assert.equal(overlay690(rows690,[{targetUid:'B',desiredFollowing:false,updatedAt:10}],
  uid=>known690.get(uid)||null).length,1);
 console.log('APP690_OWN_FOLLOWING_LIST_LOCAL_PROJECTION_AND_CONFIRMED_COUNT_BASELINE=PASS');
+
+const popup691=page.slice(page.indexOf('  const renderProfileConnectionsModal376 = () => {'),
+  page.indexOf('  const renderProfileConnectionsModal376 = () => {')+8500);
+assert.match(popup691,/ownFollowingPage691\?\.countComplete===true/);
+assert.match(popup691,/!profileConnectionsNextCursor376&&!profileConnectionsIncomplete661/);
+assert.match(popup691,/ownFollowingCount691=ownFollowingPage691/);
+assert.match(popup691,/formatCount\(ownFollowingCount691\)/);
+assert.match(popup691,/visibleItems690\.length:profile\.followingCount/);
+console.log('APP691_OWN_FOLLOWING_POPUP_HEADER_MATCHES_CERTIFIED_VISIBLE_LIST=PASS');

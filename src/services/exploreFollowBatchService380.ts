@@ -6,7 +6,7 @@
 // This module intentionally owns only timing/settlement orchestration. Product
 // caches and RTDB convergence remain in ExplorePage/exploreSocialService.
 
-export const EXPLORE_FOLLOW_IDLE_FLUSH_MS_380 = 30_000;
+export const EXPLORE_FOLLOW_IDLE_FLUSH_MS_380 = 5_000;
 
 export type ExploreFollowCommitResult380 = {
   isFollowing: boolean;
@@ -378,7 +378,9 @@ export const queueExploreFollowFinalState380 = (request: ExploreFollowBatchReque
     existing.immediate = request.immediate === true;
     existing.targetProfile = { ...request.targetProfile };
     existing.version += 1;
-    existing.updatedAt = Date.now();
+    // Keep the first click's five-second deadline through repeated toggles.
+    // Only the last desired state is sent at the end of that window.
+    // updatedAt stays anchored to the first pending click.
     existing.retryUsed = false;
     existing.suspended = false;
     persistEntry380(existing);

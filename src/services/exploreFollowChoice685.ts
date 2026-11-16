@@ -4,7 +4,7 @@
 // snapshot after navigation or reload. No network I/O or background polling.
 const PREFIX685='soridraw_follow_choice_685:';
 const RETAIN_MS685=10*60_000;
-type LocalChoice685={targetUid:string;following:boolean;at:number;settled:boolean};
+type LocalChoice685={targetUid:string;following:boolean;at:number;settled:boolean;targetFollowerCount?:number};
 const safeUid685=(value:string)=>String(value||'').trim();
 const storage685=(viewerUid:string)=>PREFIX685+viewerUid;
 
@@ -26,7 +26,7 @@ export const readExploreFollowLocalChoice685=(
 
 export const rememberExploreFollowLocalChoice685=(
   viewerUid:string,targetUid:string,following:boolean,settled=false,
-  now=Date.now(),
+  now=Date.now(),targetFollowerCount?:number|null,
 ):void=>{
   const viewer=safeUid685(viewerUid),target=safeUid685(targetUid);
   if(!viewer||!target||viewer===target||typeof localStorage==='undefined')return;
@@ -41,7 +41,19 @@ export const rememberExploreFollowLocalChoice685=(
           rows[uid]=row;
       }
     }
-    rows[target]={targetUid:target,following:following===true,at:now,settled};
+    // A short-lived VERIFIED target count accompanies a settled membership.
+    // Unconfirmed clicks never gain a public count receipt. Later same-value
+    // announcement helpers may retain the earlier exact count locally.
+    const count=typeof targetFollowerCount==='number'&&
+      Number.isSafeInteger(targetFollowerCount)&&targetFollowerCount>=0&&
+      targetFollowerCount<=1_000_000_000?targetFollowerCount:
+      settled&&stored?.[target]?.settled===true&&
+      stored[target].following===following&&
+      now-stored[target].at<=30_000&&
+      Number.isSafeInteger(stored[target].targetFollowerCount)
+        ?stored[target].targetFollowerCount:undefined;
+    rows[target]={targetUid:target,following:following===true,at:now,settled,
+      ...(settled&&count!==undefined?{targetFollowerCount:count}:{})};
     // Bounded local-only retention; never touch the user’s other caches.
     const recent=Object.entries(rows).sort((a,b)=>b[1].at-a[1].at).slice(0,48);
     localStorage.setItem(storage685(viewer),JSON.stringify(Object.fromEntries(recent)));

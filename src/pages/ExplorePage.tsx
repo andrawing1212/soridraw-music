@@ -3465,7 +3465,10 @@ export default function ExplorePage() {
         followerCount:cachedPending684?computeFollowTargetDisplay525(
           cachedPending684.baseTargetFollowerCount,
           cachedPending684.baseFollowing,cachedPending684.desiredFollowing)
-          :cachedProfile684.followerCount,
+          :visibleChoice685?.settled&&
+            typeof visibleChoice685.targetFollowerCount==='number'
+            ?visibleChoice685.targetFollowerCount
+            :cachedProfile684.followerCount,
         followingCount:cachedProfile684.followingCount,
       }:null);
     setProfileError('');
@@ -5034,14 +5037,21 @@ export default function ExplorePage() {
     const previousFollowing = followState.isFollowing;
     const requestedFollow = !previousFollowing;
     const baseFollowing = previousPending?.baseFollowing ?? previousFollowing;
+    // The actor's recent exact server ACK outranks an older saved Followers
+    // list. That list may still say 2 after the verified count became 1.
+    // Starting the next click from the stale 2 would incorrectly paint 3.
+    const exactReceipt690=readExploreFollowLocalChoice685(viewerUid,targetUid);
+    const recentExact690=exactReceipt690?.settled===true&&
+      Date.now()-exactReceipt690.at<=30_000&&
+      typeof exactReceipt690.targetFollowerCount==='number'
+        ?exactReceipt690.targetFollowerCount:null;
     const previousTargetCount = previousPending?.baseTargetFollowerCount ??
-      (readExploreProfileConnectionExactCount379(targetUid, 'followers')
-      ?? profile.followerCount);
+      recentExact690 ?? profile.followerCount;
     const previousTargetFollowingCount = profile.followingCount;
     const previousActorCount = previousPending?.baseActorFollowingCount ??
-      readExploreProfileConnectionExactCount379(viewerUid, 'following')
+      readCachedExplorePublicProfile(viewerUid)?.followingCount
+      ?? readExploreProfileConnectionExactCount379(viewerUid, 'following')
       ?? readExploreFollowingExactCount379(viewerUid)
-      ?? readCachedExplorePublicProfile(viewerUid)?.followingCount
       ?? null;
 
     const paint = (following: boolean, persistConfirmed: boolean, canonical?: ExploreFollowState|null) => {

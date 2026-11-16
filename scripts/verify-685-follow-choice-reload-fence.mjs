@@ -35,6 +35,15 @@ assert.equal(keep('B','C',false,now+120,now+31_000),false,
  'local receipt has bounded precedence; later server truth wins');
 remember('B','C',false,true,now+200);
 assert.equal(read('B','C',now+300).following,false,'last unfollow choice wins');
+remember('B','C',false,true,now+301,7);
+assert.equal(read('B','C',now+302).targetFollowerCount,7,
+ 'canonical follower count survives one reload');
+remember('B','C',false,true,now+303);
+assert.equal(read('B','C',now+304).targetFollowerCount,7,
+ 'same-account settled notification cannot erase the exact count');
+remember('B','C',true,false,now+305);
+assert.equal(read('B','C',now+306).targetFollowerCount,undefined,
+ 'a new uncommitted choice cannot impersonate a canonical public receipt');
 assert.equal(ignore('B','C',now+190,now+300),true);
 assert.equal(read('B','C',now+11*60_000),null,'expired local receipt discarded');
 const page=readFileSync('src/pages/ExplorePage.tsx','utf8');
@@ -49,7 +58,9 @@ assert.match(toggle,/readPendingExploreFollowIntents380\(viewerUid\)/);
 assert.match(toggle,/setFollowSavingUid685\(targetUid\)/);
 assert.match(toggle,/paint\(requestedFollow, false\)/);
 assert.match(toggle,/if \(persistConfirmed\) \{[\s\S]*?if \(canonical\?\.countVerified661===true\)/);
-assert.match(toggle,/rememberExploreFollowLocalChoice685\(viewerUid,targetUid,\s*confirmed.isFollowing,true\)/);
+assert.match(toggle,/rememberExploreFollowLocalChoice685\(viewerUid,targetUid,\s*confirmed.isFollowing,true,Date.now\(\),/);
+assert.match(page,/confirmedFollower689===null&&/);
+assert.match(page,/followerCount:confirmedFollower689\?\?/);
 assert.match(page,/disabled=\{!followState\}/);
 assert.match(page,/aria-busy=\{followSavingUid685===profile.uid\}/);
 const followButton686=page.slice(

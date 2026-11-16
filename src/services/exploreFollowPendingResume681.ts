@@ -13,7 +13,7 @@ import {
 } from './exploreSocialService';
 import {patchExplorePublicProfileFirstViewProfile} from './exploreProfileFirstViewService';
 import {publishExploreFollowSync377} from './exploreFollowSyncService';
-import {rememberExploreFollowLocalChoice685} from './exploreFollowChoice685';
+import {rememberExploreFollowLocalChoice685,clearExploreFollowLocalChoice695} from './exploreFollowChoice685';
 
 export const EXPLORE_FOLLOW_SETTLED_EVENT_681='soridraw:explore-follow-settled-681';
 
@@ -89,24 +89,35 @@ export function startExploreFollowPendingResume681(){
       }).catch(error=>console.warn('[681] confirmed follow signal deferred',error));
      }
     },
-    onError:(failure)=>{
-     // A failed HTTP response might follow a committed D1 write. One bounded
-     // target recheck is allowed only for this failed user mutation.
+    onError:(_failure)=>{
+     // APP695: the globally registered resume handler also runs when Explore
+     // is unmounted (back-navigation / repeated hard reload). A lost HTTP ACK
+     // may follow a committed D1 mutation. Never announce the PRE-CLICK base
+     // as settled if the one bounded canonical GET fails. APP694 protected the
+     // mounted page handler; this global handler must obey the same rule.
      void getExploreFollowState(user,targetUid,true).catch(()=>null).then(latest=>{
       if(auth.currentUser?.uid!==viewerUid)return;
-      const following=latest?.isFollowing??failure.baseFollowing;
+      // A newer click is now pending: this older repair cannot supersede it.
+      if(readPendingExploreFollowIntents380(viewerUid)
+       .some(next=>next.targetUid===targetUid))return;
+      clearExploreFollowLocalChoice695(viewerUid,targetUid);
+      if(!latest)return; // Unknown != server-confirmed false.
+      const following=latest.isFollowing;
       patchExploreFollowLocalState377(viewerUid,targetUid,following,row.targetProfile);
-      const actor=latest?.actorCountVerified662===true
+      const actor=latest.actorCountVerified662===true
         && Number.isSafeInteger(latest.actorFollowingCount)
         ? Number(latest.actorFollowingCount):null;
-      const target=latest?.countVerified661===true?latest.followerCount:null;
+      const target=latest.countVerified661===true?latest.followerCount:null;
+      const targetFollowing=latest.countVerified661===true?latest.followingCount:null;
       if(actor!==null)
        patchExplorePublicProfileFirstViewProfile(viewerUid,{followingCount:actor});
-      if(target!==null)
-       patchExplorePublicProfileFirstViewProfile(targetUid,{followerCount:target});
+      if(target!==null&&targetFollowing!==null)
+       patchExplorePublicProfileFirstViewProfile(targetUid,{
+        followerCount:target,followingCount:targetFollowing,
+       });
       announceExploreFollowSettled681({
        viewerUid,targetUid,following,actorFollowingCount:actor,
-       targetFollowerCount:target,targetFollowingCount:null,
+       targetFollowerCount:target,targetFollowingCount:targetFollowing,
       });
      });
     },

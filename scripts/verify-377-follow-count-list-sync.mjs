@@ -44,7 +44,7 @@ assert.match(page, /publishExploreFollowSync377\(viewerUid/);
 assert.match(page, /subscribeExploreFollowSync377\(viewerUid377/);
 assert.match(page, /patchExplorePublicProfileFirstViewProfile\(viewerUid, \{[\s\S]*?followingCount/);
 assert.match(page, /patchExplorePublicProfileFirstViewProfile\(signal377\.targetUid, \{[\s\S]*?followerCount/);
-assert.match(page, /if \(!page\.nextCursor && page\.countComplete === true\) \{[\s\S]*?exactCount377 = page\.items\.length/);
+assert.match(page, /if \(!page\.nextCursor && page\.countComplete === true &&\s*!\(targetUid===user\?\.uid&&direction==='following'\)\) \{[\s\S]*?exactCount377 = page\.items\.length/);
 assert.match(service, /countComplete: payload\?\.data\?\.countComplete === true/);
 
 const marker = 'SORIDRAW_FOLLOW_ACTOR_COUNT_RESPONSE_096_20261007';

@@ -34,7 +34,7 @@ assert.match(popup,/refreshOwn523 \|\| refreshPublic657 \|\| staleOwnFollowing68
 assert.match(popup,/getExploreProfileConnections\(targetUid, direction, null, forceConnections657\)/);
 assert.match(popup,/page.countComplete!==true&&!page.nextCursor/);
 assert.match(popup,/shouldHoldOwnFollowingPage682\(page,exactOwnFollowing682\)/);
-assert.match(popup,/if \(!page.nextCursor && page.countComplete === true\)/,
+assert.match(popup,/if \(!page.nextCursor && page.countComplete === true &&\s*!\(targetUid===user\?\.uid&&direction==='following'\)\)/,
   'a complete new server list must update the header count with its identities');
 assert.match(popup,/invalidateExploreProfileConnections377\(targetUid,'following'\)/);
 assert.match(social,/result\.actorCountVerified662===true &&\s*shouldHoldOwnFollowingPage682\(/);

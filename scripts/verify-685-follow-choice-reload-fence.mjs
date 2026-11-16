@@ -50,7 +50,7 @@ assert.match(toggle,/setFollowSavingUid685\(targetUid\)/);
 assert.match(toggle,/paint\(requestedFollow, false\)/);
 assert.match(toggle,/if\(persistConfirmed&&canonical\?\.countVerified661===true\)/);
 assert.match(toggle,/rememberExploreFollowLocalChoice685\(viewerUid,targetUid,\s*confirmed.isFollowing,true\)/);
-assert.match(page,/disabled=\{!followState\|\|followSavingUid685===profile.uid\}/);
+assert.match(page,/disabled=\{!followState\}/);
 assert.match(page,/aria-busy=\{followSavingUid685===profile.uid\}/);
 assert.match(page,/shouldIgnoreExploreFollowSignal685\(/);
 assert.match(page,/const keepChoice685=!pending525&&shouldKeepExploreFollowChoice685\(/);

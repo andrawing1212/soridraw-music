@@ -13,7 +13,7 @@ import {
 } from './exploreSocialService';
 import {patchExplorePublicProfileFirstViewProfile} from './exploreProfileFirstViewService';
 import {publishExploreFollowSync377} from './exploreFollowSyncService';
-import {rememberExploreFollowLocalChoice685,clearExploreFollowLocalChoice685} from './exploreFollowChoice685';
+import {rememberExploreFollowLocalChoice685,clearExploreFollowLocalChoice695} from './exploreFollowChoice685';
 
 export const EXPLORE_FOLLOW_SETTLED_EVENT_681='soridraw:explore-follow-settled-681';
 
@@ -100,7 +100,7 @@ export function startExploreFollowPendingResume681(){
       // A newer click is now pending: this older repair cannot supersede it.
       if(readPendingExploreFollowIntents380(viewerUid)
        .some(next=>next.targetUid===targetUid))return;
-      clearExploreFollowLocalChoice685(viewerUid,targetUid);
+      clearExploreFollowLocalChoice695(viewerUid,targetUid);
       if(!latest)return; // Unknown != server-confirmed false.
       const following=latest.isFollowing;
       patchExploreFollowLocalState377(viewerUid,targetUid,following,row.targetProfile);

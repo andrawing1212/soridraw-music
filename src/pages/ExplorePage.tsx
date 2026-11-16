@@ -3572,18 +3572,6 @@ export default function ExplorePage() {
         }
       }
 
-      // APP689: a recent canonical ACK on this same account must not be
-      // replaced by an older R2 first-view count after repeated reloads.
-      // This 30s local receipt is owner-of-action only; it never publishes
-      // provisional values or changes another visitor's public profile.
-      if(user?.uid&&user.uid!==displayProfile379.uid){
-        const latestChoice689=readExploreFollowLocalChoice685(user.uid,displayProfile379.uid);
-        if(latestChoice689?.settled&&Date.now()-latestChoice689.at<=30_000&&
-           typeof latestChoice689.targetFollowerCount==='number')
-          displayProfile379={...displayProfile379,
-            followerCount:latestChoice689.targetFollowerCount};
-      }
-
       // APP657: a verified, fully loaded relation page is better evidence of
       // another user's exact count than an asynchronously retained R2
       // first-view value. This changes no server reads on profile entry.
@@ -3603,6 +3591,18 @@ export default function ExplorePage() {
             readExploreProfileConnectionLastServerAt528(nextProfile.uid,'followers') > 0) {
           displayProfile379 = {...displayProfile379, followerCount:exactFollowers657};
         }
+      }
+
+      // APP689: a recent canonical ACK on this same account must not be
+      // replaced by an older R2 first-view count after repeated reloads.
+      // This 30s local receipt is owner-of-action only; it never publishes
+      // provisional values or changes another visitor's public profile.
+      if(user?.uid&&user.uid!==displayProfile379.uid){
+        const latestChoice689=readExploreFollowLocalChoice685(user.uid,displayProfile379.uid);
+        if(latestChoice689?.settled&&Date.now()-latestChoice689.at<=30_000&&
+           typeof latestChoice689.targetFollowerCount==='number')
+          displayProfile379={...displayProfile379,
+            followerCount:latestChoice689.targetFollowerCount};
       }
 
       // APP689: same-account route changes must not wait for the five-second
@@ -3626,7 +3626,17 @@ export default function ExplorePage() {
       const newerConfirmedLocal681 =
         verifiedVisitedProfileUid661Ref.current===displayProfile379.uid &&
         (verifiedVisitedCounts668Ref.current?.readStartedAt||0)>ownCountsRequestedAt;
+      const activeChoice690=user?.uid&&user.uid!==displayProfile379.uid
+        ?readExploreFollowLocalChoice685(user.uid,displayProfile379.uid):null;
+      const ownPendingTarget690=user?.uid
+        ?readPendingExploreFollowIntents380(user.uid)
+           .some(row=>row.targetUid===displayProfile379.uid):false;
+      const protectActorCount690=ownPendingTarget690||
+        (activeChoice690?.settled===true&&
+         typeof activeChoice690.targetFollowerCount==='number'&&
+         Date.now()-activeChoice690.at<=30_000);
       setProfile(previous => (authoritative||newerConfirmedLocal681) &&
+        !protectActorCount690 &&
         user?.uid !== displayProfile379.uid &&
         verifiedVisitedProfileUid661Ref.current === displayProfile379.uid &&
         previous?.uid === displayProfile379.uid

@@ -115,6 +115,7 @@ import {EXPLORE_FOLLOW_SETTLED_EVENT_681,announceExploreFollowSettled681,
   type ExploreFollowSettled681} from '../services/exploreFollowPendingResume681';
 import {resolveFollowCounts662,shouldApplyActorFollowSignal662,displayOwnPendingFollowing689}
  from '../services/exploreFollowCountAuthority662';
+import {overlayOwnFollowingPending690} from '../services/exploreOwnFollowingPending690';
 import { createOwnerEpochGate538, normalizeOwnerEpochSignal538 } from '../services/exploreOwnerFollowerEpochCore538';
 import {PUBLIC_FOLLOW_VISITOR_668_ENABLED,subscribePublicProfileFollow668} from '../services/explorePublicFollowSync668';
 import {
@@ -6135,7 +6136,16 @@ export default function ExplorePage() {
             ) : (
               <>
                 <div className="soridraw-explore-connections-list-376">
-                  {profileConnectionsItems376.map((person) => (
+                  {(profileConnectionsOpen376==='following'&&profile?.uid===user?.uid
+                    ?overlayOwnFollowingPending690(
+                       profileConnectionsItems376,
+                       readPendingExploreFollowIntents380(user.uid),
+                       (uid)=>{
+                         const known=readCachedExplorePublicProfile(uid);
+                         return known?.uid===uid
+                           ?{...known,followedAt:Date.now()}:null;
+                       })
+                    :profileConnectionsItems376).map((person) => (
                     <button
                       key={person.uid}
                       type="button"

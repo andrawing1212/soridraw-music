@@ -5081,6 +5081,9 @@ export default function ExplorePage() {
         handle: profile.handle,
       },
       commit: (following) => setExploreFollow(user, targetUid, following, profile),
+      onBusy: (busy) => {
+        if(!busy) setFollowSavingUid685('');
+      },
       onSettled: (settlement) => {
         if (auth.currentUser?.uid !== viewerUid) return;
         const confirmed = settlement.result;

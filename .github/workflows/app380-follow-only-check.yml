@@ -4,6 +4,9 @@ on:
   pull_request:
     branches: [preview]
     paths:
+      - '.github/workflows/app380-follow-only-check.yml'
+      - 'src/services/exploreFollowPendingResume681.ts'
+      - 'scripts/verify-681-follow-reload-popup.mjs'
       - 'src/services/exploreOwnerFollowerSync542.ts'
       - 'src/services/exploreSocialService.ts'
       - 'src/services/exploreFollowCountAuthority662.ts'
@@ -185,6 +188,7 @@ jobs:
           run_check 527 node scripts/verify-527-owner-follower-idle-cost.mjs
           run_check 634 node scripts/verify-634-owner-follow-tab-optin.mjs
           run_check 659 node scripts/verify-659-preview-owner-routing.mjs
+          run_check 681 node scripts/verify-681-follow-reload-popup.mjs
           run_check 662 node --import tsx scripts/verify-662-multifollow-count.mjs
           run_check 667 node --import tsx scripts/verify-667-public-follow-publisher.ts
           run_check 667_rules node scripts/verify-667-public-follow-rules.mjs

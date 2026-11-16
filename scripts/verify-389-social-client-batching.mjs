@@ -50,7 +50,7 @@ await c.advance(3_999); assert.equal(calls.length, 0);
 await c.advance(1); assert.deepEqual(calls, [true]);
 assert.equal(settled[0].baseTargetFollowerCount, 4, 'stale server count is not the local authority');
 
-// In-flight last click gets a new baseline and keeps its own last-click deadline.
+// A click while a canonical request is in-flight gets its own fresh 5s deadline.
 let resolve;
 c.queueExploreFollowFinalState380({ ...request('flight'), commit: () => new Promise(r => { resolve = r; }) });
 await c.advance(5_000);
@@ -193,7 +193,7 @@ const protocolRequest = async (path, init) => {
 await assert.rejects(() => protocolContext.exports.requestOrderedExploreFollow354('v', 't', true, protocolRequest));
 await protocolContext.exports.requestOrderedExploreFollow354('v', 't', false, protocolRequest);
 assert.deepEqual(methods, ['PUT', 'DELETE']);
-console.log('APP585_FOLLOW_30S_LEGACY_TIMERS_NET_ZERO_INFLIGHT_RELOAD_RETRY_BUDGET=PASS');
+console.log('APP688_FOLLOW_5S_FIRST_CLICK_NET_ZERO_INFLIGHT_RELOAD_RETRY_BUDGET=PASS');
 console.log('APP380_389_EXHAUSTED_429_ROLLBACK_AND_LEGACY_SUSPENDED_REPAIR=PASS');
 if (!followOnly389) console.log('APP380_LIKE_NET_ZERO_AND_DETERMINISTIC_429_NO_FALSE_REBASE=PASS');
 console.log('APP380_NAVIGATION_FLUSH_ZERO=PASS');

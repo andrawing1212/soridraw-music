@@ -48,7 +48,7 @@ assert.match(click,/paint\(requestedFollow, false\)/);
 assert.match(click,/if \(persistConfirmed\) \{[\s\S]*?patchExplorePublicProfileFirstViewProfile\(targetUid/);
 assert.match(click,/paint\(requestedFollow, false\)/);
 assert.match(page,/getExploreFollowState\(user, nextProfile\.uid, true\)/);
-assert.match(page,/disabled=\{!followState\|\|followSavingUid685===profile.uid\}/);
+assert.match(page,/disabled=\{!followState\}/);
 assert.match(page,/readPendingTargetFollowerCount525\(user\.uid,displayProfile379\.uid\)/);
 assert.match(page,/readPendingTargetFollowerCount525\(user\.uid,displayRefreshedProfile379\.uid\)/);
 

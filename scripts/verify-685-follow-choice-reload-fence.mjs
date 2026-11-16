@@ -13,6 +13,7 @@ const entries=new Map();
 const localStorage={
  getItem:key=>entries.has(key)?entries.get(key):null,
  setItem:(key,val)=>{entries.set(key,val);},
+ removeItem:key=>{entries.delete(key);},
 };
 const exports={};
 runInNewContext(compiled,{exports,localStorage,Date,JSON,Object,Number,String,Map,Set});

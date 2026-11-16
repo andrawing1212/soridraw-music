@@ -31,7 +31,10 @@ assert.match(toggle,/resolveFollowCounts662\(/);
 assert.match(toggle,/paint\(requestedFollow, false\)/);
 assert.match(toggle,/paint\(confirmed\.isFollowing, true, confirmed\)/);
 assert.match(toggle,/targetFollowerCount: settled\.followerCount/);
-assert.match(toggle,/readExploreProfileConnectionExactCount379\(targetUid, 'followers'\)/);
+assert.match(toggle,/const recentExact690=exactReceipt690\?\.settled===true/);
+assert.match(toggle,/previousPending\?\.baseTargetFollowerCount \?\?\s*recentExact690 \?\? profile\.followerCount/);
+assert.doesNotMatch(toggle,/readExploreProfileConnectionExactCount379\(targetUid, 'followers'\)/,
+ 'cached exact list may predate the latest canonical ACK');
 assert.match(toggle,/readExploreFollowingExactCount379\(viewerUid\)/);
 assert.match(social,/row\?\.followProtocol===354 && row\?\.canonicalCounts662===true/);
 assert.match(social,/actorCountVerified662: row\?\.followProtocol===354/);

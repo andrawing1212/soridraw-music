@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {resolveFollowCounts662 as settle,shouldApplyActorFollowSignal662 as gate}
+import {resolveFollowCounts662 as settle,shouldApplyActorFollowSignal662 as gate,displayOwnPendingFollowing689 as ownPending}
  from '../src/services/exploreFollowCountAuthority662.ts';
 const input={previousFollowing:false,following:true,baseFollowerCount:1,
  baseFollowingCount:4,baseActorFollowingCount:1};
@@ -57,3 +57,19 @@ assert.match(batch,/current\.baseTargetFollowingCount=result\.followingCount/);
 assert.match(batch,/current\.baseActorFollowingCount=Number\(result\.actorFollowingCount\)/);
 console.log('APP664_UNVERIFIED_DEFERRED_AND_IMMEDIATE_CROSS_DEVICE_COUNTS_BLOCKED=PASS');
 console.log('APP664_QUEUED_OPPOSITE_CLICK_REBASES_ON_REAL_1_TO_N_COUNTS=PASS');
+
+const pending=(target,base,desired,at=1)=>({target,baseFollowing:base,desiredFollowing:desired,
+  baseActorFollowingCount:3,updatedAt:at});
+assert.equal(ownPending(3,[]),3,'no pending leaves canonical count alone');
+assert.equal(ownPending(3,[pending('C',false,true)]),4,
+  'own profile shows queued follow before five-second server commit');
+assert.equal(ownPending(3,[pending('C',true,false)]),2,
+  'own profile shows queued unfollow before five-second server commit');
+assert.equal(ownPending(3,[pending('C',true,true)]),3,'net-zero W0 original');
+assert.equal(ownPending(3,[pending('C',false,true),pending('D',false,true,2)]),5,
+  'multiple pending targets are counted once each');
+assert.equal(ownPending(3,[pending('C',false,true),pending('D',true,false,2)]),3,
+  'opposing changes cancel in owner-only display');
+assert.match(client,/if\(user\?\.uid===displayProfile379\.uid\)[\s\S]*?displayOwnPendingFollowing689\(/);
+assert.doesNotMatch(client,/patchExplorePublicProfileFirstViewProfile\(user\.uid,\s*\{followingCount:displayOwnPendingFollowing689/);
+console.log('APP689_OWN_PROFILE_LOCAL_PENDING_FOLLOW_COUNT_NO_PRECOMMIT_PUBLIC_WRITE=PASS');

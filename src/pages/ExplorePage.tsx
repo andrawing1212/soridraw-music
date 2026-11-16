@@ -3714,8 +3714,12 @@ export default function ExplorePage() {
               const keepChoice685=!pending525&&shouldKeepExploreFollowChoice685(
                 user.uid,nextProfile.uid,nextFollowState.isFollowing,
                 followReadStartedAt685);
-              const savedChoice685=keepChoice685
-                ?readExploreFollowLocalChoice685(user.uid,nextProfile.uid):null;
+              const latestReceipt689=readExploreFollowLocalChoice685(user.uid,nextProfile.uid);
+              const confirmedFollower689=latestReceipt689?.settled&&
+                Date.now()-latestReceipt689.at<=30_000&&
+                typeof latestReceipt689.targetFollowerCount==='number'
+                  ?latestReceipt689.targetFollowerCount:null;
+              const savedChoice685=keepChoice685?latestReceipt689:null;
               setFollowSavingUid685(pending525?.targetUid||'');
               setFollowState(previous=>pending525 ? {
                 ...nextFollowState,
@@ -3725,9 +3729,11 @@ export default function ExplorePage() {
                   pending525.baseFollowing,pending525.desiredFollowing),
               } : keepChoice685&&savedChoice685
                 ?{...nextFollowState,isFollowing:savedChoice685.following,
-                    followerCount:previous?.followerCount??nextFollowState.followerCount,
+                    followerCount:confirmedFollower689??previous?.followerCount??nextFollowState.followerCount,
                     followingCount:previous?.followingCount??nextFollowState.followingCount,
                     countVerified661:false}
+                : confirmedFollower689!==null
+                ?{...nextFollowState,followerCount:confirmedFollower689}
                 : newerPublicSignal683&&previous
                 ?{...previous,isFollowing:nextFollowState.isFollowing}
                 : verifiedVisitedProfileUid661Ref.current===nextProfile.uid &&
@@ -3738,7 +3744,8 @@ export default function ExplorePage() {
               // The existing authenticated GET already verifies the target
               // count. Reuse it instead of a stale first-view R2 cache, with
               // zero extra reads. Pending optimistic choices keep priority.
-              if(!pending525&&!keepChoice685&&nextFollowState.countVerified661===true&&!newerPublicSignal683){
+              if(!pending525&&!keepChoice685&&confirmedFollower689===null&&
+                 nextFollowState.countVerified661===true&&!newerPublicSignal683){
                 const exact661={
                   followerCount:nextFollowState.followerCount,
                   followingCount:nextFollowState.followingCount,

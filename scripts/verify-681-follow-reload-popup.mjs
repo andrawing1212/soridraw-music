@@ -37,6 +37,9 @@ const build=(hostname)=>{
   './exploreFollowSyncService':{
    publishExploreFollowSync377:async(...args)=>{signals.push(args);return null;},
   },
+  './exploreFollowChoice685':{
+   rememberExploreFollowLocalChoice685:()=>{},
+  },
  };
  const exports={};
  runInNewContext(compiled,{exports,require:name=>{

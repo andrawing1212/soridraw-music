@@ -108,6 +108,9 @@ import {
   subscribeExploreFollowSync377,
 } from '../services/exploreFollowSyncService';
 import {shouldHoldOwnFollowingPage682} from '../services/exploreFollowingPopupConsistency682';
+import {readExploreFollowLocalChoice685,rememberExploreFollowLocalChoice685,
+  shouldKeepExploreFollowChoice685,shouldIgnoreExploreFollowSignal685}
+  from '../services/exploreFollowChoice685';
 import {EXPLORE_FOLLOW_SETTLED_EVENT_681,announceExploreFollowSettled681,
   type ExploreFollowSettled681} from '../services/exploreFollowPendingResume681';
 import {resolveFollowCounts662,shouldApplyActorFollowSignal662}
@@ -1982,6 +1985,7 @@ export default function ExplorePage() {
   const [profileCountsVerifying, setProfileCountsVerifying] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [followState, setFollowState] = useState<ExploreFollowState | null>(null);
+  const [followSavingUid685,setFollowSavingUid685] = useState('');
   // The existing persisted follow final-state queue serializes rapid taps
   // without locking the visible button while the server settles.
   const activeProfileUidRef = useRef('');
@@ -3449,9 +3453,15 @@ export default function ExplorePage() {
         .find(row=>row.targetUid===cachedProfile684.uid):null;
     const cachedMembership684=user&&cachedProfile684&&user.uid!==cachedProfile684.uid
       ?readExploreFollowMembership379(user.uid,cachedProfile684.uid):null;
+    const recentChoice685=user&&cachedProfile684&&user.uid!==cachedProfile684.uid
+      ?readExploreFollowLocalChoice685(user.uid,cachedProfile684.uid):null;
+    const visibleChoice685=recentChoice685&&Date.now()-recentChoice685.at<=30_000
+      ?recentChoice685:null;
+    setFollowSavingUid685(cachedPending684?.targetUid||'');
     setFollowState(cachedProfile684&&user&&user.uid!==cachedProfile684.uid&&
-      (cachedPending684||cachedMembership684!==null)?{
-        isFollowing:cachedPending684?.desiredFollowing??cachedMembership684??false,
+      (cachedPending684||visibleChoice685||cachedMembership684!==null)?{
+        isFollowing:cachedPending684?.desiredFollowing??
+          visibleChoice685?.following??cachedMembership684??false,
         followerCount:cachedPending684?computeFollowTargetDisplay525(
           cachedPending684.baseTargetFollowerCount,
           cachedPending684.baseFollowing,cachedPending684.desiredFollowing)
@@ -3652,14 +3662,18 @@ export default function ExplorePage() {
           // visible while the single canonical follow-state check completes.
           const queuedFollow = readPendingExploreFollowIntents380(user.uid)
             .find(row => row.targetUid === nextProfile.uid);
-          if (queuedFollow) setFollowState({
+          if (queuedFollow) {
+            setFollowSavingUid685(nextProfile.uid);
+            setFollowState({
             isFollowing: queuedFollow.desiredFollowing,
             followerCount: computeFollowTargetDisplay525(
               queuedFollow.baseTargetFollowerCount,
               queuedFollow.baseFollowing, queuedFollow.desiredFollowing),
             followingCount: nextProfile.followingCount,
-          });
+            });
+          }
           try {
+            const followReadStartedAt685=Date.now();
             const nextFollowState = await getExploreFollowState(user, nextProfile.uid, true);
             if (!cancelled) {
               // First visible third-party counts use the authenticated GET,
@@ -3672,13 +3686,26 @@ export default function ExplorePage() {
               if(!newerPublicSignal683)applyProfileFirstView(nextProfile, rows);
               const pending525=readPendingExploreFollowIntents380(user.uid)
                 .find(row=>row.targetUid===nextProfile.uid);
+              // A GET started before this click/ACK can return the previous
+              // relation after the pending outbox has already been cleared.
+              const keepChoice685=!pending525&&shouldKeepExploreFollowChoice685(
+                user.uid,nextProfile.uid,nextFollowState.isFollowing,
+                followReadStartedAt685);
+              const savedChoice685=keepChoice685
+                ?readExploreFollowLocalChoice685(user.uid,nextProfile.uid):null;
+              setFollowSavingUid685(pending525?.targetUid||'');
               setFollowState(previous=>pending525 ? {
                 ...nextFollowState,
                 isFollowing:pending525.desiredFollowing,
                 followerCount:computeFollowTargetDisplay525(
                   pending525.baseTargetFollowerCount,
                   pending525.baseFollowing,pending525.desiredFollowing),
-              } : newerPublicSignal683&&previous
+              } : keepChoice685&&savedChoice685
+                ?{...nextFollowState,isFollowing:savedChoice685.following,
+                    followerCount:previous?.followerCount??nextFollowState.followerCount,
+                    followingCount:previous?.followingCount??nextFollowState.followingCount,
+                    countVerified661:false}
+                : newerPublicSignal683&&previous
                 ?{...previous,isFollowing:nextFollowState.isFollowing}
                 : verifiedVisitedProfileUid661Ref.current===nextProfile.uid &&
                   nextFollowState.countVerified661!==true && previous
@@ -3688,7 +3715,7 @@ export default function ExplorePage() {
               // The existing authenticated GET already verifies the target
               // count. Reuse it instead of a stale first-view R2 cache, with
               // zero extra reads. Pending optimistic choices keep priority.
-              if(!pending525&&nextFollowState.countVerified661===true&&!newerPublicSignal683){
+              if(!pending525&&!keepChoice685&&nextFollowState.countVerified661===true&&!newerPublicSignal683){
                 const exact661={
                   followerCount:nextFollowState.followerCount,
                   followingCount:nextFollowState.followingCount,
@@ -3915,6 +3942,8 @@ export default function ExplorePage() {
     const onSettled681=(event:Event)=>{
       const row=(event as CustomEvent<ExploreFollowSettled681>).detail;
       if(!row||row.viewerUid!==viewerUid681||auth.currentUser?.uid!==viewerUid681)return;
+      if(row.targetUid===activeProfileUidRef.current)
+        setFollowSavingUid685('');
       if(row.actorFollowingCount!==null){
         latestActorSignal662Ref.current={
           uid:viewerUid681,at:Date.now(),count:row.actorFollowingCount,
@@ -3983,6 +4012,11 @@ export default function ExplorePage() {
     return subscribeExploreFollowSync377(viewerUid377, (signal377) => {
       if (signal377.version <= followSignalVersion377Ref.current) return;
       followSignalVersion377Ref.current = signal377.version;
+      // Older retained remote events cannot undo an explicit local click/ACK.
+      if(readPendingExploreFollowIntents380(viewerUid377)
+          .some(row=>row.targetUid===signal377.targetUid)||
+         shouldIgnoreExploreFollowSignal685(
+           viewerUid377,signal377.targetUid,signal377.at))return;
       // Retained actor RTDB snapshots must never replace a newer self
       // authenticated count after page navigation, reload or modal reopen.
       const ownRequest662=ownCountRequest662Ref.current;
@@ -4002,6 +4036,10 @@ export default function ExplorePage() {
         signal377.targetUid,
         signal377.following,
       );
+      // A newer signed/validated RTDB relation beats this device's earlier
+      // local receipt and must also survive its next profile revisit.
+      rememberExploreFollowLocalChoice685(viewerUid377,
+        signal377.targetUid,signal377.following,true);
       // A post-commit signal is newer than an unchanged local list. In 1:N
       // cases the old membership/target ±1 calculation is not canonical.
       const resolvedSignalActorFollowing379 = signal377.actorFollowingCount;
@@ -4952,8 +4990,10 @@ export default function ExplorePage() {
     const targetUid = profile.uid;
     const viewerUid = user.uid;
     if (viewerUid === targetUid || !followState) return;
-    // The persisted final-state queue handles an in-flight opposite choice.
-    // Its last desired state wins and survives a route change or hard reload.
+    // A second click cannot calculate numbers from an unconfirmed first click.
+    if(followSavingUid685===targetUid||
+       readPendingExploreFollowIntents380(viewerUid)
+         .some(row=>row.targetUid===targetUid))return;
 
     const previousFollowing = followState.isFollowing;
     const requestedFollow = !previousFollowing;
@@ -4997,16 +5037,23 @@ export default function ExplorePage() {
         });
       }
       if (activeProfileUidRef.current === targetUid) {
-        setFollowState({ isFollowing: following, followerCount, followingCount,
-          ...(actorFollowingCount === null ? {} : { actorFollowingCount }) });
-        setProfile((previous) => previous?.uid === targetUid
-          ? { ...previous, followerCount, followingCount }
-          : previous);
+        // User intent changes button only. A canonical response owns counts.
+        setFollowState({ isFollowing: following,
+          followerCount:persistConfirmed?followerCount:previousTargetCount,
+          followingCount:persistConfirmed?followingCount:previousTargetFollowingCount,
+          ...(actorFollowingCount === null || !persistConfirmed
+            ? {} : { actorFollowingCount }) });
+        if(persistConfirmed&&canonical?.countVerified661===true)
+          setProfile((previous) => previous?.uid === targetUid
+            ? { ...previous, followerCount, followingCount }:previous);
       }
       return { followerCount, actorFollowingCount };
     };
 
     setSocialNotice('');
+    // Save the newest button choice before queuing a server mutation.
+    rememberExploreFollowLocalChoice685(viewerUid,targetUid,requestedFollow,false);
+    setFollowSavingUid685(targetUid);
     // Paint the last local choice at once; only a confirmed server ACK may
     // update canonical caches or publish the cross-device notification.
     paint(requestedFollow, false);
@@ -5028,6 +5075,9 @@ export default function ExplorePage() {
       onSettled: (settlement) => {
         if (auth.currentUser?.uid !== viewerUid) return;
         const confirmed = settlement.result;
+        rememberExploreFollowLocalChoice685(viewerUid,targetUid,
+          confirmed.isFollowing,true);
+        setFollowSavingUid685('');
         const settled = paint(confirmed.isFollowing, true, confirmed);
         if (confirmed.isFollowing !== settlement.desiredFollowing &&
             activeProfileUidRef.current === targetUid)
@@ -5060,6 +5110,8 @@ export default function ExplorePage() {
             if (auth.currentUser?.uid !== viewerUid) return;
             // This callback may outlive the profile being viewed.
             const restored = latest?.isFollowing ?? failure.baseFollowing;
+            rememberExploreFollowLocalChoice685(viewerUid,targetUid,restored,true);
+            setFollowSavingUid685('');
             if (latest) patchExploreFollowLocalState377(
               viewerUid, targetUid, restored, profile);
             if (activeProfileUidRef.current !== targetUid) return;
@@ -6124,11 +6176,14 @@ export default function ExplorePage() {
                       <button
                         type="button"
                         onClick={toggleFollow}
-                        disabled={!followState}
+                        disabled={!followState||followSavingUid685===profile.uid}
+                        aria-busy={followSavingUid685===profile.uid}
                         className={`soridraw-explore-follow-button${followState?.isFollowing ? ' is-following' : ''}`}
                       >
                         {followState?.isFollowing ? <UserCheck aria-hidden="true" /> : <UserPlus aria-hidden="true" />}
-                        {followState?.isFollowing ? '팔로잉' : '팔로우'}
+                        {followSavingUid685===profile.uid
+                          ?(followState?.isFollowing?'팔로잉 · 저장 중':'팔로우 해제 · 저장 중')
+                          :(followState?.isFollowing ? '팔로잉' : '팔로우')}
                       </button>
                     )}
                   </div>
@@ -6140,7 +6195,8 @@ export default function ExplorePage() {
                       onClick={() => void openProfileConnections376('followers')}
                       aria-label={profileCountsVerifying ? '팔로워 수 확인 중' : `팔로워 ${formatCount(profile.followerCount)}명 보기`}
                     >
-                      팔로워 <strong>{profileCountsVerifying ? '…' : formatCount(profile.followerCount)}</strong>
+                      팔로워 <strong>{profileCountsVerifying||
+                        followSavingUid685===profile.uid?'…':formatCount(profile.followerCount)}</strong>
                     </button>
                     <button
                       type="button"

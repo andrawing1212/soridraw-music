@@ -24,7 +24,7 @@ const mount=slice('  useEffect(() => {\n    if (!profileUid)', '  // app380: a r
 assert.match(mount,/verifiedVisitedCounts668Ref\.current=\{uid:profileUid,readStartedAt:ownCountsRequestedAt\}/);
 assert.match(mount,/verifiedVisitedCounts668Ref\.current=\{uid:nextProfile\.uid,/);
 assert.match(mount,/const newerPublicSignal683 =/);
-assert.match(mount,/if\(!pending525&&nextFollowState\.countVerified661===true&&!newerPublicSignal683\)/);
+assert.match(mount,/if\(!pending525&&!keepChoice685&&nextFollowState\.countVerified661===true&&!newerPublicSignal683\)/);
 assert.match(mount,/const cachedFirstView684=readCachedExplorePublicProfileFirstView684\(profileUid\)/);
 assert.match(mount,/setProfile\(cachedProfile684\)/);
 assert.match(mount,/setProfileLoading\(!cachedFirstView684\)/);

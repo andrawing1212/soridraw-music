@@ -13,6 +13,7 @@ import {
 } from './exploreSocialService';
 import {patchExplorePublicProfileFirstViewProfile} from './exploreProfileFirstViewService';
 import {publishExploreFollowSync377} from './exploreFollowSyncService';
+import {rememberExploreFollowLocalChoice685} from './exploreFollowChoice685';
 
 export const EXPLORE_FOLLOW_SETTLED_EVENT_681='soridraw:explore-follow-settled-681';
 
@@ -25,6 +26,12 @@ export type ExploreFollowSettled681={
 
 export const announceExploreFollowSettled681=(value:ExploreFollowSettled681)=>{
  if(typeof window==='undefined')return;
+ // Resume may settle while Explore is unmounted. Persist the confirmed
+ // one-target outcome before broadcasting, so hard reload and an older
+ // RTDB retained marker cannot repaint the previous button.
+ if(auth.currentUser?.uid===value.viewerUid)
+  rememberExploreFollowLocalChoice685(
+   value.viewerUid,value.targetUid,value.following,true);
  window.dispatchEvent(new CustomEvent(EXPLORE_FOLLOW_SETTLED_EVENT_681,{detail:value}));
 };
 

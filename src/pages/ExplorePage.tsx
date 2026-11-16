@@ -3559,6 +3559,18 @@ export default function ExplorePage() {
         }
       }
 
+      // APP689: a recent canonical ACK on this same account must not be
+      // replaced by an older R2 first-view count after repeated reloads.
+      // This 30s local receipt is owner-of-action only; it never publishes
+      // provisional values or changes another visitor's public profile.
+      if(user?.uid&&user.uid!==displayProfile379.uid){
+        const latestChoice689=readExploreFollowLocalChoice685(user.uid,displayProfile379.uid);
+        if(latestChoice689?.settled&&Date.now()-latestChoice689.at<=30_000&&
+           typeof latestChoice689.targetFollowerCount==='number')
+          displayProfile379={...displayProfile379,
+            followerCount:latestChoice689.targetFollowerCount};
+      }
+
       // APP657: a verified, fully loaded relation page is better evidence of
       // another user's exact count than an asynchronously retained R2
       // first-view value. This changes no server reads on profile entry.
@@ -5099,7 +5111,8 @@ export default function ExplorePage() {
         if (auth.currentUser?.uid !== viewerUid) return;
         const confirmed = settlement.result;
         rememberExploreFollowLocalChoice685(viewerUid,targetUid,
-          confirmed.isFollowing,true);
+          confirmed.isFollowing,true,Date.now(),
+          confirmed.countVerified661===true?confirmed.followerCount:null);
         setFollowSavingUid685('');
         const settled = paint(confirmed.isFollowing, true, confirmed);
         if (confirmed.isFollowing !== settlement.desiredFollowing &&

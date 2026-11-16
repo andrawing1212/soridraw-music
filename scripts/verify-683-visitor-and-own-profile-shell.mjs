@@ -16,11 +16,14 @@ assert.match(subscriber,/subscribePublicProfileFollow668\(viewedUid,signal=>/);
 assert.match(subscriber,/user\?\.uid!==principal\.uid\)return/);
 assert.doesNotMatch(subscriber,/verifiedVisitedSignalUid669!==viewedUid/,
  'exact follow-state GET must not gate public listener registration');
+assert.doesNotMatch(subscriber,/if\(!read\|\|read\.uid!==viewedUid\)return/,
+ 'a failed or late first-view GET must not block subscription');
 // APP687: the first attempt may precede the authenticated GET, so its
 // completion must re-run attachment. A later read also advances the fence.
 assert.match(subscriber,/verifiedVisitedSignalUid669\]\);/,
  'the verified-first-view state must re-trigger visitor subscription');
 assert.match(subscriber,/const latestRead=verifiedVisitedCounts668Ref\.current/);
+assert.match(subscriber,/latestRead\?\.uid===viewedUid/);
 assert.match(subscriber,/signal\.at<=latestRead\.readStartedAt/);
 assert.doesNotMatch(subscriber,/signal\.at<=read\.readStartedAt/,
  'do not compare against a stale ref captured during earlier attachment');

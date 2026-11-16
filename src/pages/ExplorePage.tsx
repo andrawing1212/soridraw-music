@@ -109,7 +109,8 @@ import {
 } from '../services/exploreFollowSyncService';
 import {shouldHoldOwnFollowingPage682} from '../services/exploreFollowingPopupConsistency682';
 import {readExploreFollowLocalChoice685,rememberExploreFollowLocalChoice685,
-  shouldKeepExploreFollowChoice685,shouldIgnoreExploreFollowSignal685}
+  shouldKeepExploreFollowChoice685,shouldIgnoreExploreFollowSignal685,
+  clearExploreFollowLocalChoice695}
   from '../services/exploreFollowChoice685';
 import {EXPLORE_FOLLOW_SETTLED_EVENT_681,announceExploreFollowSettled681,
   type ExploreFollowSettled681} from '../services/exploreFollowPendingResume681';
@@ -5209,17 +5210,30 @@ export default function ExplorePage() {
           .catch(() => null).then((latest) => {
             if (auth.currentUser?.uid !== viewerUid) return;
             // This callback may outlive the profile being viewed.
-            const restored = latest?.isFollowing ?? failure.baseFollowing;
-            rememberExploreFollowLocalChoice685(viewerUid,targetUid,restored,true);
+            // APP696: a failed one-target GET must not mint a 10-minute
+            // settled receipt for the pre-click base, or repaint unknown data
+            // as verified. Only a confirmed server reply may settle this pair.
+            clearExploreFollowLocalChoice695(viewerUid,targetUid);
             setFollowSavingUid685('');
-            if (latest) patchExploreFollowLocalState377(
-              viewerUid, targetUid, restored, profile);
+            const code = String((failure.error as {code?:unknown})?.code || '').trim();
+            const status = Number((failure.error as {status?:unknown})?.status || 0);
+            const detail = /^[A-Z][A-Z0-9_]{2,63}$/.test(code) ? code :
+              Number.isSafeInteger(status) && status >= 400 && status < 600 ? String(status) : '';
+            if (!latest) {
+              if (activeProfileUidRef.current === targetUid)
+                setSocialNotice('팔로우 저장 결과를 확인하지 못했습니다.' +
+                  (detail ? ` (오류: ${detail})` : '') + ' 잠시 후 다시 확인해 주세요.');
+              return;
+            }
+            const restored = latest.isFollowing;
+            rememberExploreFollowLocalChoice685(viewerUid,targetUid,restored,true,
+              Date.now(),latest.countVerified661===true?latest.followerCount:null);
+            patchExploreFollowLocalState377(viewerUid,targetUid,restored,profile);
             if (activeProfileUidRef.current !== targetUid) return;
-            paint(restored, Boolean(latest), latest);
-            if (!latest || latest.isFollowing !== failure.desiredFollowing)
-              setSocialNotice(latest
-                ? '팔로우 변경을 저장하지 못했습니다. 다시 시도해 주세요.'
-                : '팔로우 저장 결과를 확인하지 못했습니다. 잠시 후 다시 확인해 주세요.');
+            paint(restored,true,latest);
+            if (latest.isFollowing !== failure.desiredFollowing)
+              setSocialNotice('팔로우 변경을 저장하지 못했습니다.' +
+                (detail ? ` (오류: ${detail})` : '') + ' 다시 시도해 주세요.');
           });
       },
       onDeferred: () => {

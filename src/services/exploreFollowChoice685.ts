@@ -98,3 +98,20 @@ export const clearExploreFollowLocalChoice685=(viewerUid:string,targetUid:string
   else localStorage.removeItem(storage685(viewer));
  }catch{}
 };
+
+// APP695: dedicated single-target invalid-choice cleanup, preserved when the
+// APP693 PREVIEW restoration removes APP694's earlier helper on merge.
+export const clearExploreFollowLocalChoice695=(viewerUid:string,targetUid:string):void=>{
+ const viewer=safeUid685(viewerUid),target=safeUid685(targetUid);
+ if(!viewer||!target||typeof localStorage==='undefined')return;
+ try{
+  const stored=JSON.parse(localStorage.getItem(storage685(viewer))||'{}') as
+   Record<string,LocalChoice685>;
+  if(!stored||typeof stored!=='object'||Array.isArray(stored)||
+     !Object.prototype.hasOwnProperty.call(stored,target))return;
+  delete stored[target];
+  if(Object.keys(stored).length)
+   localStorage.setItem(storage685(viewer),JSON.stringify(stored));
+  else localStorage.removeItem(storage685(viewer));
+ }catch{}
+};

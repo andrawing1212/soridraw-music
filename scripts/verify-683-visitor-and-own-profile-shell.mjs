@@ -22,18 +22,25 @@ assert.doesNotMatch(subscriber,/if\(!read\|\|read\.uid!==viewedUid\)return/,
 // completion must re-run attachment. A later read also advances the fence.
 assert.match(subscriber,/verifiedVisitedSignalUid669\]\);/,
  'the verified-first-view state must re-trigger visitor subscription');
-assert.match(subscriber,/const latestRead=verifiedVisitedCounts668Ref\.current/);
-assert.match(subscriber,/latestRead\?\.uid===viewedUid/);
-assert.match(subscriber,/signal\.at<=latestRead\.readStartedAt/);
+assert.match(subscriber,/const currentPublic=newestPublicFollow668Ref\.current/);
+assert.match(subscriber,/currentPublic\.generation===signal\.generation/);
+assert.match(subscriber,/signal\.revision<=currentPublic\.revision/);
+assert.doesNotMatch(subscriber,/signal\.at<=latestRead\.readStartedAt/,
+ 'valid server revisions must not be compared with local browser GET clock');
 assert.doesNotMatch(subscriber,/signal\.at<=read\.readStartedAt/,
  'do not compare against a stale ref captured during earlier attachment');
-assert.match(subscriber,/verifiedVisitedCounts668Ref\.current=\{uid:viewedUid,readStartedAt:signal\.at\}/);
+assert.match(subscriber,/verifiedVisitedCounts668Ref\.current=\{uid:viewedUid,readStartedAt:Date\.now\(\)\}/);
+assert.match(subscriber,/newestPublicFollow668Ref\.current=\{uid:viewedUid,/);
 assert.match(subscriber,/activeProfileUidRef\.current!==viewedUid/);
 assert.match(subscriber,/readPendingExploreFollowIntents380\(principal\.uid\)/);
 const mount=slice('  useEffect(() => {\n    if (!profileUid)', '  // app380: a real pending follow choice');
 assert.match(mount,/verifiedVisitedCounts668Ref\.current=\{uid:profileUid,readStartedAt:ownCountsRequestedAt\}/);
 assert.match(mount,/verifiedVisitedCounts668Ref\.current=\{uid:nextProfile\.uid,/);
 assert.match(mount,/const newerPublicSignal683 =/);
+assert.match(mount,/const publicRevision692=newestPublicFollow668Ref\.current/);
+assert.match(mount,/publicRevision692\?\.uid===displayProfile379\.uid/);
+assert.match(mount,/followerCount:publicRevision692\.followerCount/);
+assert.match(mount,/newestPublicFollow668Ref\.current=null/);
 assert.match(mount,/if\(!pending525&&!keepChoice685&&confirmedFollower689===null&&[\s\S]*?nextFollowState\.countVerified661===true&&!newerPublicSignal683\)/);
 assert.match(mount,/const cachedFirstView684=readCachedExplorePublicProfileFirstView684\(profileUid\)/);
 assert.match(mount,/setProfile\(cachedProfile684&&firstFollower690!==null/);

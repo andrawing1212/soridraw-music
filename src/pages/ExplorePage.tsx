@@ -2007,6 +2007,7 @@ export default function ExplorePage() {
   const verifiedVisitedProfileUid661Ref = useRef('');
   // Only a successfully verified first-view target GET establishes authority.
   const verifiedVisitedCounts668Ref=useRef<{uid:string;readStartedAt:number}|null>(null);
+  const newestPublicFollow668Ref=useRef<{uid:string;generation:string;revision:number;followerCount:number;followingCount:number}|null>(null);
   const [verifiedVisitedSignalUid669,setVerifiedVisitedSignalUid669]=useState('');
   const profileConnectionsCache376Ref = useRef<Map<string, { items: ExploreProfileConnection[]; nextCursor: string | null; countComplete?: boolean; hasUnresolvedProfiles?: boolean }>>(new Map());
   const profileConnectionsRequest376Ref = useRef(0);
@@ -3424,6 +3425,7 @@ export default function ExplorePage() {
     // public shell is visible. An exact per-target GET must not be required
     // merely to *start listening* for later server-confirmed notifications.
     verifiedVisitedCounts668Ref.current=null;
+    newestPublicFollow668Ref.current=null;
     setVerifiedVisitedSignalUid669('');
     setProfileCollection('public');
     // 088: entering this user's own profile from Explore must not discard the
@@ -3616,6 +3618,17 @@ export default function ExplorePage() {
             displayOwnPendingFollowing689(displayProfile379.followingCount,ownPending689)};
       }
 
+      // APP692: public RTDB counts have a canonical per-profile revision.
+      // A materialized profile/list GET has no comparable revision and may
+      // still be stale even if it started after the event was published.
+      // Keep the newest confirmed public revision while this profile is open.
+      const publicRevision692=newestPublicFollow668Ref.current;
+      if(user?.uid!==displayProfile379.uid&&
+         publicRevision692?.uid===displayProfile379.uid)
+        displayProfile379={...displayProfile379,
+          followerCount:publicRevision692.followerCount,
+          followingCount:publicRevision692.followingCount};
+
       // An async cached profile response cannot erase B's unsent follow intent.
       const pendingFollowerCount525 = user?.uid
         ? readPendingTargetFollowerCount525(user.uid,displayProfile379.uid) : null;
@@ -3624,8 +3637,9 @@ export default function ExplorePage() {
       // APP666: a late R2/cache revalidation cannot repaint a target's two
       // counts after the authenticated per-target follow-state GET verified them.
       const newerConfirmedLocal681 =
-        verifiedVisitedProfileUid661Ref.current===displayProfile379.uid &&
-        (verifiedVisitedCounts668Ref.current?.readStartedAt||0)>ownCountsRequestedAt;
+        newestPublicFollow668Ref.current?.uid===displayProfile379.uid ||
+        (verifiedVisitedProfileUid661Ref.current===displayProfile379.uid &&
+         (verifiedVisitedCounts668Ref.current?.readStartedAt||0)>ownCountsRequestedAt);
       const activeChoice690=user?.uid&&user.uid!==displayProfile379.uid
         ?readExploreFollowLocalChoice685(user.uid,displayProfile379.uid):null;
       const ownPendingTarget690=user?.uid
@@ -3727,8 +3741,9 @@ export default function ExplorePage() {
               // A newer settled follow has already updated this profile.
               // The in-flight old GET must not repaint that canonical count.
               const newerPublicSignal683 =
-                verifiedVisitedProfileUid661Ref.current===nextProfile.uid &&
-                (verifiedVisitedCounts668Ref.current?.readStartedAt||0)>ownCountsRequestedAt;
+                newestPublicFollow668Ref.current?.uid===nextProfile.uid ||
+                (verifiedVisitedProfileUid661Ref.current===nextProfile.uid &&
+                 (verifiedVisitedCounts668Ref.current?.readStartedAt||0)>ownCountsRequestedAt);
               if(!newerPublicSignal683)applyProfileFirstView(nextProfile, rows);
               const pending525=readPendingExploreFollowIntents380(user.uid)
                 .find(row=>row.targetUid===nextProfile.uid);
@@ -4838,19 +4853,24 @@ export default function ExplorePage() {
         if(stopped||auth.currentUser!==principal||
            activeProfileUidRef.current!==viewedUid||
            document.visibilityState!=='visible')return;
-        // A newer authenticated profile read may finish after subscription.
-        // Compare against the CURRENT authority, not the value captured on attach.
-        const latestRead=verifiedVisitedCounts668Ref.current;
-        if(latestRead?.uid===viewedUid&&
-           signal.at<=latestRead.readStartedAt)return;
+        // APP692: receipt order comes from the server's per-profile revision,
+        // NOT from comparing a server publish time with this browser's GET
+        // start time. That cross-clock comparison drops valid retained events
+        // when the first-view/R2 response is stale after a quick reload.
+        const currentPublic=newestPublicFollow668Ref.current;
+        if(currentPublic?.uid===viewedUid&&
+           currentPublic.generation===signal.generation&&
+           signal.revision<=currentPublic.revision)return;
         if(readPendingExploreFollowIntents380(principal.uid)
            .some(intent=>intent.targetUid===viewedUid))return;
         const count={followerCount:signal.followerCount,
           followingCount:signal.followingCount};
+        newestPublicFollow668Ref.current={uid:viewedUid,
+          generation:signal.generation,revision:signal.revision,...count};
         verifiedVisitedProfileUid661Ref.current=viewedUid;
         // Fence all earlier profile / follow-state fetches from repainting
         // this newer verified server event after their promises resolve.
-        verifiedVisitedCounts668Ref.current={uid:viewedUid,readStartedAt:signal.at};
+        verifiedVisitedCounts668Ref.current={uid:viewedUid,readStartedAt:Date.now()};
         patchExplorePublicProfileFirstViewProfile(viewedUid,count);
         setProfile(previous=>previous?.uid===viewedUid
           ?{...previous,...count}:previous);

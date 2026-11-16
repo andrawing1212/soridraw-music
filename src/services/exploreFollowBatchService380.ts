@@ -385,7 +385,7 @@ export const queueExploreFollowFinalState380 = (request: ExploreFollowBatchReque
     existing.retryUsed = false;
     existing.suspended = false;
     persistEntry380(existing);
-    if (!existing.inflight) schedule380(existing,
+    if (!existing.inflight) schedule380(existing, existing.immediate ? 0 :
       Math.max(0, existing.updatedAt + EXPLORE_FOLLOW_IDLE_FLUSH_MS_380 - Date.now()));
     return;
   }

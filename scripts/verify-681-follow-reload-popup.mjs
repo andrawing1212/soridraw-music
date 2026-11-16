@@ -39,7 +39,7 @@ const build=(hostname)=>{
   },
   './exploreFollowChoice685':{
    rememberExploreFollowLocalChoice685:()=>{},
-   clearExploreFollowLocalChoice685:(...args)=>cleared.push(args),
+   clearExploreFollowLocalChoice695:(...args)=>cleared.push(args),
   },
  };
  const exports={};

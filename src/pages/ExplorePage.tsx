@@ -6176,14 +6176,12 @@ export default function ExplorePage() {
                       <button
                         type="button"
                         onClick={toggleFollow}
-                        disabled={!followState||followSavingUid685===profile.uid}
+                        disabled={!followState}
                         aria-busy={followSavingUid685===profile.uid}
                         className={`soridraw-explore-follow-button${followState?.isFollowing ? ' is-following' : ''}`}
                       >
                         {followState?.isFollowing ? <UserCheck aria-hidden="true" /> : <UserPlus aria-hidden="true" />}
-                        {followSavingUid685===profile.uid
-                          ?(followState?.isFollowing?'팔로잉 · 저장 중':'팔로우 해제 · 저장 중')
-                          :(followState?.isFollowing ? '팔로잉' : '팔로우')}
+                        {followState?.isFollowing ? '팔로잉' : '팔로우'}
                       </button>
                     )}
                   </div>
@@ -6193,19 +6191,18 @@ export default function ExplorePage() {
                       type="button"
                       className="soridraw-explore-profile-stat-button-376"
                       onClick={() => void openProfileConnections376('followers')}
-                      aria-label={profileCountsVerifying ? '팔로워 수 확인 중' : `팔로워 ${formatCount(profile.followerCount)}명 보기`}
+                      aria-label={`팔로워 ${formatCount(profile.followerCount)}명 보기`}
                     >
-                      팔로워 <strong>{profileCountsVerifying||
-                        followSavingUid685===profile.uid?'…':formatCount(profile.followerCount)}</strong>
+                      팔로워 <strong>{formatCount(profile.followerCount)}</strong>
                     </button>
                     <button
                       type="button"
                       className="soridraw-explore-profile-stat-button-376"
                       onClick={() => void openProfileConnections376('following')}
                       disabled={Boolean(user?.uid===profile.uid&&profileCountsVerifying)}
-                      aria-label={profileCountsVerifying ? '팔로잉 수 확인 중' : `팔로잉 ${formatCount(profile.followingCount)}명 보기`}
+                      aria-label={`팔로잉 ${formatCount(profile.followingCount)}명 보기`}
                     >
-                      팔로잉 <strong>{profileCountsVerifying ? '…' : formatCount(profile.followingCount)}</strong>
+                      팔로잉 <strong>{formatCount(profile.followingCount)}</strong>
                     </button>
                     <span>공개곡 <strong>{formatCount(resolveExplorePublicTrackCount(profile.trackCount, profileTracks))}</strong></span>
                   </div>

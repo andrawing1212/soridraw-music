@@ -10,8 +10,8 @@ const compiled=ts.transpileModule(source,{compilerOptions:{
  target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,
 }}).outputText;
 const build=(hostname)=>{
- const callbacks=[],patches=[],events=[],signals=[];
- let queued=[],pending=[],requests=0;
+ const callbacks=[],patches=[],events=[],signals=[],cleared=[];
+ let queued=[],pending=[],requests=0,recheckValue={isFollowing:true};
  const user={uid:'viewer'};
  const auth={currentUser:user};
  const win={location:{hostname},dispatchEvent:event=>events.push(event)};
@@ -29,7 +29,7 @@ const build=(hostname)=>{
    patchExploreFollowLocalState377:(...args)=>patches.push(args),
    setExploreFollow:async()=>({isFollowing:true,followerCount:2,followingCount:0,
     actorFollowingCount:1,countVerified661:true,actorCountVerified662:true}),
-   getExploreFollowState:async()=>{requests++;return {isFollowing:true};},
+   getExploreFollowState:async()=>{requests++;return recheckValue;},
   },
   './exploreProfileFirstViewService':{
    patchExplorePublicProfileFirstViewProfile:(...args)=>patches.push(args),
@@ -39,6 +39,7 @@ const build=(hostname)=>{
   },
   './exploreFollowChoice685':{
    rememberExploreFollowLocalChoice685:()=>{},
+   clearExploreFollowLocalChoice685:(...args)=>cleared.push(args),
   },
  };
  const exports={};
@@ -46,8 +47,9 @@ const build=(hostname)=>{
   assert.ok(Object.hasOwn(dependencies,name),'unexpected dependency '+name);
   return dependencies[name];
  },window:win,CustomEvent:FakeCustomEvent,console,Date,Map,Set,Number,Promise});
- return {exports,callbacks,patches,events,signals,user,auth,
-  setPending:rows=>{pending=rows;},getQueued:()=>queued,requests:()=>requests};
+ return {exports,callbacks,patches,events,signals,cleared,user,auth,
+  setPending:rows=>{pending=rows;},setRecheck:value=>{recheckValue=value;},
+  getQueued:()=>queued,requests:()=>requests};
 };
 const onPreview=build('preview.soridraw.com');
 onPreview.exports.startExploreFollowPendingResume681();
@@ -84,6 +86,49 @@ assert.equal(onPreview.events[0].detail.targetFollowerCount,2);
 assert.equal(onPreview.signals.length,1,'signal only after canonical exact ACK');
 assert.equal(onPreview.requests(),0,'settled callback needs no recheck');
 
+// APP695: only a confirmed server recheck may recover a failed mutation.
+// During rapid reload the global route-independent handler used to broadcast
+// pre-click base even when this GET failed, creating a 10-minute false receipt.
+const failed=build('preview.soridraw.com');
+failed.exports.startExploreFollowPendingResume681();
+failed.setPending([record]);failed.callbacks[0](failed.user);
+const lost=failed.getQueued()[0];
+failed.setPending([]); // 380 removed the failed intent before onError
+failed.setRecheck(null);
+const patchesBefore=failed.patches.length;
+lost.onError({...record,error:new Error('ACK_LOST')});
+await Promise.resolve();await Promise.resolve();await Promise.resolve();
+assert.equal(failed.requests(),1,'one bounded canonical GET only on actual failure');
+assert.equal(failed.cleared.length,1,'clear stale unconfirmed choice for just this pair');
+assert.equal(failed.events.length,0,'UNKNOWN_SERVER_STATE_MUST_NOT_EMIT_SETTLED_EVENT');
+assert.equal(failed.patches.length,patchesBefore,
+ 'UNKNOWN_SERVER_STATE_MUST_NOT_RESTORE_STALE_PRE_CLICK_BASE');
+
+const confirmed=build('preview.soridraw.com');
+confirmed.exports.startExploreFollowPendingResume681();
+confirmed.setPending([record]);confirmed.callbacks[0](confirmed.user);
+const recovered=confirmed.getQueued()[0];
+confirmed.setPending([]);
+confirmed.setRecheck({isFollowing:false,followerCount:1,followingCount:0,
+ actorFollowingCount:0,countVerified661:true,actorCountVerified662:true});
+recovered.onError({...record,error:new Error('ACK_LOST')});
+await Promise.resolve();await Promise.resolve();await Promise.resolve();
+assert.equal(confirmed.events.length,1);
+assert.equal(confirmed.events[0].detail.following,false,
+ 'a VERIFIED server correction may be announced');
+assert.equal(confirmed.events[0].detail.targetFollowerCount,1);
+assert.equal(confirmed.cleared.length,1);
+
+const superseded=build('preview.soridraw.com');
+superseded.exports.startExploreFollowPendingResume681();
+superseded.setPending([record]);superseded.callbacks[0](superseded.user);
+const oldFailure=superseded.getQueued()[0];
+superseded.setPending([{...record,updatedAt:record.updatedAt+10,desiredFollowing:false}]);
+oldFailure.onError({...record,error:new Error('ACK_LOST')});
+await Promise.resolve();await Promise.resolve();await Promise.resolve();
+assert.equal(superseded.events.length,0,'old failure must not override newer intent');
+assert.equal(superseded.cleared.length,0,'new pending click must keep its choice');
+
 const other=build('soridraw.com');
 other.exports.startExploreFollowPendingResume681();
 assert.equal(other.callbacks.length,0,'PRODUCTION must not start new recovery');
@@ -109,3 +154,5 @@ console.log('APP681_NON_EXPLORE_RELOAD_ONLY_PENDING_RESUMED=PASS');
 console.log('APP681_EXACT_SERVER_ACK_UPDATES_POPUP_AND_ACTOR_WITHOUT_EXTRA_GET=PASS');
 console.log('APP681_STALE_SNAPSHOT_AND_FOLLOW_GET_FENCED=PASS');
 console.log('APP681_PRODUCTION_AUTO_RECOVERY_OFF=PASS');
+
+console.log('APP695_GLOBAL_RELOAD_UNKNOWN_ACK_NO_FAKE_SETTLED_OR_BASE_ROLLBACK=PASS');

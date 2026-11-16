@@ -3637,8 +3637,9 @@ export default function ExplorePage() {
       // APP666: a late R2/cache revalidation cannot repaint a target's two
       // counts after the authenticated per-target follow-state GET verified them.
       const newerConfirmedLocal681 =
-        verifiedVisitedProfileUid661Ref.current===displayProfile379.uid &&
-        (verifiedVisitedCounts668Ref.current?.readStartedAt||0)>ownCountsRequestedAt;
+        newestPublicFollow668Ref.current?.uid===displayProfile379.uid ||
+        (verifiedVisitedProfileUid661Ref.current===displayProfile379.uid &&
+         (verifiedVisitedCounts668Ref.current?.readStartedAt||0)>ownCountsRequestedAt);
       const activeChoice690=user?.uid&&user.uid!==displayProfile379.uid
         ?readExploreFollowLocalChoice685(user.uid,displayProfile379.uid):null;
       const ownPendingTarget690=user?.uid
@@ -3740,8 +3741,9 @@ export default function ExplorePage() {
               // A newer settled follow has already updated this profile.
               // The in-flight old GET must not repaint that canonical count.
               const newerPublicSignal683 =
-                verifiedVisitedProfileUid661Ref.current===nextProfile.uid &&
-                (verifiedVisitedCounts668Ref.current?.readStartedAt||0)>ownCountsRequestedAt;
+                newestPublicFollow668Ref.current?.uid===nextProfile.uid ||
+                (verifiedVisitedProfileUid661Ref.current===nextProfile.uid &&
+                 (verifiedVisitedCounts668Ref.current?.readStartedAt||0)>ownCountsRequestedAt);
               if(!newerPublicSignal683)applyProfileFirstView(nextProfile, rows);
               const pending525=readPendingExploreFollowIntents380(user.uid)
                 .find(row=>row.targetUid===nextProfile.uid);

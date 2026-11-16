@@ -150,6 +150,16 @@ assert.match(listener,/readExploreProfileConnectionsLocal681\(viewerUid681,'foll
 assert.doesNotMatch(listener,/getExploreProfileConnections\(/,
  'settlement event cannot add implicit follower-list server reads');
 assert.match(page,/announceExploreFollowSettled681\(/);
+// APP696: the mounted profile handler must not turn an unavailable canonical
+// recheck into a settled receipt or restore the old pre-click base.
+const mountedError=page.slice(page.indexOf('      onError: (failure) => {'),
+  page.indexOf('      onDeferred: () => {',page.indexOf('      onError: (failure) => {')));
+assert.ok(mountedError.includes('clearExploreFollowLocalChoice695(viewerUid,targetUid)'));
+assert.match(mountedError,/if \(!latest\) \{/);
+assert.match(mountedError,/if \(!latest\) \{[\s\S]*?return;[\s\S]*?\}\s*const restored = latest\.isFollowing/);
+assert.doesNotMatch(mountedError,/latest\?\.isFollowing \?\? failure\.baseFollowing/);
+assert.match(mountedError,/오류: /);
+console.log('APP696_MOUNTED_UNKNOWN_ACK_NO_FAKE_SETTLED=PASS');
 console.log('APP681_NON_EXPLORE_RELOAD_ONLY_PENDING_RESUMED=PASS');
 console.log('APP681_EXACT_SERVER_ACK_UPDATES_POPUP_AND_ACTOR_WITHOUT_EXTRA_GET=PASS');
 console.log('APP681_STALE_SNAPSHOT_AND_FOLLOW_GET_FENCED=PASS');

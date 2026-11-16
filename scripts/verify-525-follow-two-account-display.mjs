@@ -47,6 +47,14 @@ assert.match(click,/const previousTargetCount = previousPending\?\.baseTargetFol
 assert.doesNotMatch(click,/readExploreProfileConnectionExactCount379\(targetUid, 'followers'\)/,
  'an older locally cached exact relation list cannot override the confirmed recent count');
 assert.match(page,/visibleChoice685\?\.targetFollowerCount/);
+assert.ok(page.indexOf('// APP689: a recent canonical ACK on this same account')>
+ page.indexOf('// APP657: a verified, fully loaded relation page'),
+ 'a stale local list cannot override the newer confirmed follower receipt');
+assert.match(page,/const protectActorCount690=ownPendingTarget690/);
+assert.match(page,/!protectActorCount690 &&/);
+assert.match(page,/const visibleItems690=ownPending690\.length/);
+assert.match(page,/profileConnectionsLoading376 && visibleItems690\.length===0/);
+
 assert.match(page,/overlayOwnFollowingPending690\(/);
 
 assert.match(click,/commit: \(following\) => setExploreFollow\(user, targetUid, following, profile\)/);

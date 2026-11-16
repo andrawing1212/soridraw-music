@@ -82,3 +82,19 @@ export const shouldIgnoreExploreFollowSignal685=(
  const choice=readExploreFollowLocalChoice685(viewerUid,targetUid,now);
  return Boolean(choice&&signalAt<=choice.at);
 };
+
+// APP694: a rejected/unknown mutation cannot retain an unsent click as
+// proof of a server-confirmed relation. This removes ONLY that one actor pair.
+export const clearExploreFollowLocalChoice685=(viewerUid:string,targetUid:string):void=>{
+ const viewer=safeUid685(viewerUid),target=safeUid685(targetUid);
+ if(!viewer||!target||typeof localStorage==='undefined')return;
+ try{
+  const stored=JSON.parse(localStorage.getItem(storage685(viewer))||'{}') as
+    Record<string,LocalChoice685>;
+  if(!stored||typeof stored!=='object'||Array.isArray(stored)||
+     !Object.prototype.hasOwnProperty.call(stored,target))return;
+  delete stored[target];
+  if(Object.keys(stored).length)localStorage.setItem(storage685(viewer),JSON.stringify(stored));
+  else localStorage.removeItem(storage685(viewer));
+ }catch{}
+};

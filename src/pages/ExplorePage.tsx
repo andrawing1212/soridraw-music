@@ -109,7 +109,8 @@ import {
 } from '../services/exploreFollowSyncService';
 import {shouldHoldOwnFollowingPage682} from '../services/exploreFollowingPopupConsistency682';
 import {readExploreFollowLocalChoice685,rememberExploreFollowLocalChoice685,
-  shouldKeepExploreFollowChoice685,shouldIgnoreExploreFollowSignal685}
+  shouldKeepExploreFollowChoice685,shouldIgnoreExploreFollowSignal685,
+  clearExploreFollowLocalChoice685}
   from '../services/exploreFollowChoice685';
 import {EXPLORE_FOLLOW_SETTLED_EVENT_681,announceExploreFollowSettled681,
   type ExploreFollowSettled681} from '../services/exploreFollowPendingResume681';
@@ -3967,36 +3968,50 @@ export default function ExplorePage() {
           }
         },
         onError: (failure380) => {
-          patchExploreFollowLocalState377(
-            viewerUid380,
-            targetUid380,
-            failure380.baseFollowing,
-            record380.targetProfile,
-          );
-          patchExplorePublicProfileFirstViewProfile(targetUid380, {
-            followerCount: failure380.baseTargetFollowerCount,
-            followingCount: failure380.baseTargetFollowingCount,
-          });
-          if (failure380.baseActorFollowingCount !== null) {
-            patchExplorePublicProfileFirstViewProfile(viewerUid380, {
-              followingCount: failure380.baseActorFollowingCount,
+          // APP694: a request may have committed before its ACK was lost
+          // during rapid reload. The pre-click base is NOT a server receipt.
+          // Reconcile only this pair once and never persist guessed counts.
+          void getExploreFollowState(activeUser380,targetUid380,true)
+            .catch(()=>null).then(latest380=>{
+              if(auth.currentUser?.uid!==viewerUid380)return;
+              if(readPendingExploreFollowIntents380(viewerUid380)
+                .some(row=>row.targetUid===targetUid380))return;
+              clearExploreFollowLocalChoice685(viewerUid380,targetUid380);
+              if(latest380){
+                patchExploreFollowLocalState377(viewerUid380,targetUid380,
+                  latest380.isFollowing,record380.targetProfile);
+                rememberExploreFollowLocalChoice685(viewerUid380,targetUid380,
+                  latest380.isFollowing,true,Date.now(),
+                  latest380.countVerified661===true?latest380.followerCount:null);
+                if(latest380.countVerified661===true)
+                  patchExplorePublicProfileFirstViewProfile(targetUid380,{
+                    followerCount:latest380.followerCount,
+                    followingCount:latest380.followingCount,
+                  });
+                if(latest380.actorCountVerified662===true&&
+                   Number.isSafeInteger(latest380.actorFollowingCount))
+                  patchExplorePublicProfileFirstViewProfile(viewerUid380,{
+                    followingCount:Number(latest380.actorFollowingCount),
+                  });
+                announceExploreFollowSettled681({
+                  viewerUid:viewerUid380,targetUid:targetUid380,
+                  following:latest380.isFollowing,
+                  actorFollowingCount:latest380.actorCountVerified662===true
+                    ?latest380.actorFollowingCount??null:null,
+                  targetFollowerCount:latest380.countVerified661===true
+                    ?latest380.followerCount:null,
+                  targetFollowingCount:latest380.countVerified661===true
+                    ?latest380.followingCount:null,
+                });
+              }
+              if(activeProfileUidRef.current===targetUid380){
+                if(latest380)setFollowState(latest380);
+                setFollowSavingUid685('');
+                setSocialNotice(latest380
+                  ?'팔로우 저장 결과를 다시 확인했습니다.'
+                  :'팔로우 저장 결과를 확인하지 못했습니다. 다시 확인해 주세요.');
+              }
             });
-          }
-          if (auth.currentUser?.uid === viewerUid380 && activeProfileUidRef.current === targetUid380) {
-            setFollowState({
-              isFollowing: failure380.baseFollowing,
-              followerCount: failure380.baseTargetFollowerCount,
-              followingCount: failure380.baseTargetFollowingCount,
-              ...(failure380.baseActorFollowingCount === null
-                ? {}
-                : { actorFollowingCount: failure380.baseActorFollowingCount }),
-            });
-            setSocialNotice(
-              failure380.error instanceof Error
-                ? failure380.error.message
-                : '팔로우 처리에 실패했어요.',
-            );
-          }
         },
       });
     }
@@ -5209,13 +5224,20 @@ export default function ExplorePage() {
           .catch(() => null).then((latest) => {
             if (auth.currentUser?.uid !== viewerUid) return;
             // This callback may outlive the profile being viewed.
+            // Do not call an unverified fallback 'settled'. The HTTP response
+            // might have been lost AFTER the D1 relation was committed.
+            if(readPendingExploreFollowIntents380(viewerUid)
+              .some(row=>row.targetUid===targetUid))return;
+            clearExploreFollowLocalChoice685(viewerUid,targetUid);
             const restored = latest?.isFollowing ?? failure.baseFollowing;
-            rememberExploreFollowLocalChoice685(viewerUid,targetUid,restored,true);
+            if(latest){
+              rememberExploreFollowLocalChoice685(viewerUid,targetUid,restored,true,
+                Date.now(),latest.countVerified661===true?latest.followerCount:null);
+              patchExploreFollowLocalState377(viewerUid,targetUid,restored,profile);
+            }
             setFollowSavingUid685('');
-            if (latest) patchExploreFollowLocalState377(
-              viewerUid, targetUid, restored, profile);
             if (activeProfileUidRef.current !== targetUid) return;
-            paint(restored, Boolean(latest), latest);
+            if(latest)paint(restored,true,latest);
             if (!latest || latest.isFollowing !== failure.desiredFollowing)
               setSocialNotice(latest
                 ? '팔로우 변경을 저장하지 못했습니다. 다시 시도해 주세요.'

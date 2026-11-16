@@ -13,13 +13,15 @@ const entries=new Map();
 const localStorage={
  getItem:key=>entries.has(key)?entries.get(key):null,
  setItem:(key,val)=>{entries.set(key,val);},
+ removeItem:key=>{entries.delete(key);},
 };
 const exports={};
 runInNewContext(compiled,{exports,localStorage,Date,JSON,Object,Number,String,Map,Set});
 const {readExploreFollowLocalChoice685:read,
  rememberExploreFollowLocalChoice685:remember,
  shouldKeepExploreFollowChoice685:keep,
- shouldIgnoreExploreFollowSignal685:ignore}=exports;
+ shouldIgnoreExploreFollowSignal685:ignore,
+ clearExploreFollowLocalChoice685:clear}=exports;
 const now=1_800_000_000_000;
 remember('B','C',true,false,now);
 assert.equal(read('B','C',now).following,true,'clicked choice survives a reload');
@@ -46,6 +48,18 @@ assert.equal(read('B','C',now+306).targetFollowerCount,undefined,
  'a new uncommitted choice cannot impersonate a canonical public receipt');
 assert.equal(ignore('B','C',now+190,now+300),true);
 assert.equal(read('B','C',now+11*60_000),null,'expired local receipt discarded');
+remember('B','C',false,false,now+400);
+clear('B','C');
+assert.equal(read('B','C',now+401),null,
+ 'failed/unknown ACK must not keep a stale click that hijacks the next tap');
+remember('B','C',true,true,now+402,4);
+clear('B','C');
+assert.equal(read('B','C',now+403),null,'clear affects only one target pair');
+remember('B','D',true,true,now+404,2);
+clear('B','C');
+assert.equal(read('B','D',now+405).following,true,
+ 'failure cleanup must not erase any other pending or settled relation');
+
 const page=readFileSync('src/pages/ExplorePage.tsx','utf8');
 const queue=readFileSync('src/services/exploreFollowBatchService380.ts','utf8');
 const event=readFileSync('src/services/exploreFollowPendingResume681.ts','utf8');
@@ -59,6 +73,14 @@ assert.match(toggle,/setFollowSavingUid685\(targetUid\)/);
 assert.match(toggle,/paint\(requestedFollow, false\)/);
 assert.match(toggle,/if \(persistConfirmed\) \{[\s\S]*?if \(canonical\?\.countVerified661===true\)/);
 assert.match(toggle,/rememberExploreFollowLocalChoice685\(viewerUid,targetUid,\s*confirmed.isFollowing,true,Date.now\(\),/);
+assert.match(toggle,/clearExploreFollowLocalChoice685\(viewerUid,targetUid\)/);
+assert.match(toggle,/if\(latest\)paint\(restored,true,latest\)/);
+assert.doesNotMatch(toggle,/rememberExploreFollowLocalChoice685\(viewerUid,targetUid,restored,true\)/,
+ 'never mark an unverified fallback as settled after a missing ACK');
+assert.match(page,/void getExploreFollowState\(activeUser380,targetUid380,true\)/);
+assert.doesNotMatch(page,/followerCount: failure380\.baseTargetFollowerCount/,
+ 'reload recovery must never write the pre-click count back over a committed server value');
+
 assert.match(page,/confirmedFollower689===null&&/);
 assert.match(page,/followerCount:confirmedFollower689\?\?/);
 assert.match(page,/disabled=\{!followState\}/);

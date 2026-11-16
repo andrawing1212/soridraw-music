@@ -6078,6 +6078,14 @@ export default function ExplorePage() {
     const direction = profileConnectionsOpen376;
     if (!direction || !profile) return null;
     const emptyLabel = direction === 'followers' ? '아직 팔로워가 없어요.' : '아직 팔로잉한 사람이 없어요.';
+    const ownPending690=direction==='following'&&profile.uid===user?.uid
+      ?readPendingExploreFollowIntents380(user.uid):[];
+    const visibleItems690=ownPending690.length
+      ?overlayOwnFollowingPending690(profileConnectionsItems376,ownPending690,(uid)=>{
+        const known=readCachedExplorePublicProfile(uid);
+        return known?.uid===uid?{...known,followedAt:Date.now()}:null;
+      })
+      :profileConnectionsItems376;
 
     return (
       <div
@@ -6131,30 +6139,21 @@ export default function ExplorePage() {
                 일부 공개 프로필 정보를 확인하지 못했습니다. 팔로우 숫자를 임의로 줄이지 않았습니다.
               </div>
             )}
-            {profileConnectionsLoading376 ? (
+            {profileConnectionsLoading376 && visibleItems690.length===0 ? (
               <div className="soridraw-explore-connections-state-376" role="status">
                 <Loader2 className="soridraw-explore-spinner" aria-hidden="true" />
                 목록을 불러오는 중
               </div>
-            ) : profileConnectionsError376 && profileConnectionsItems376.length === 0 ? (
+            ) : profileConnectionsError376 && visibleItems690.length === 0 ? (
               <div className="soridraw-explore-connections-state-376">{profileConnectionsError376}</div>
-            ) : profileConnectionsItems376.length === 0 ? (
+            ) : visibleItems690.length === 0 ? (
               <div className="soridraw-explore-connections-state-376">
                 {profileConnectionsIncomplete661 ? '표시 가능한 사용자 정보가 없습니다.' : emptyLabel}
               </div>
             ) : (
               <>
                 <div className="soridraw-explore-connections-list-376">
-                  {(profileConnectionsOpen376==='following'&&profile?.uid===user?.uid
-                    ?overlayOwnFollowingPending690(
-                       profileConnectionsItems376,
-                       readPendingExploreFollowIntents380(user.uid),
-                       (uid)=>{
-                         const known=readCachedExplorePublicProfile(uid);
-                         return known?.uid===uid
-                           ?{...known,followedAt:Date.now()}:null;
-                       })
-                    :profileConnectionsItems376).map((person) => (
+                  {visibleItems690.map((person) => (
                     <button
                       key={person.uid}
                       type="button"

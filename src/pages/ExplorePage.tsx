@@ -4662,7 +4662,13 @@ export default function ExplorePage() {
       setProfileConnectionsIncomplete661(page.hasUnresolvedProfiles===true);
       // The Worker certifies every effective relation had a public card.
       // An R2-missing row must not quietly reduce the displayed total.
-      if (!page.nextCursor && page.countComplete === true) {
+      // APP693: the owner's authenticated Following summary is the scalar
+      // authority. A complete relation list can still be an older snapshot
+      // during a 5-second follow change or a fast page re-entry. It may
+      // populate the popup, but MUST NOT repaint the own profile's scalar
+      // from 1 to stale 2 (which the owner summary later resets to 1).
+      if (!page.nextCursor && page.countComplete === true &&
+          !(targetUid===user?.uid&&direction==='following')) {
         const exactCount377 = page.items.length;
         const exactPatch377 = direction === 'followers'
           ? { followerCount: exactCount377 }

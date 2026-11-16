@@ -3566,8 +3566,7 @@ export default function ExplorePage() {
       if(user?.uid&&user.uid!==displayProfile379.uid){
         const latestChoice689=readExploreFollowLocalChoice685(user.uid,displayProfile379.uid);
         if(latestChoice689?.settled&&Date.now()-latestChoice689.at<=30_000&&
-           typeof latestChoice689.targetFollowerCount==='number'&&
-           (verifiedVisitedCounts668Ref.current?.readStartedAt||0)<=latestChoice689.at)
+           typeof latestChoice689.targetFollowerCount==='number')
           displayProfile379={...displayProfile379,
             followerCount:latestChoice689.targetFollowerCount};
       }

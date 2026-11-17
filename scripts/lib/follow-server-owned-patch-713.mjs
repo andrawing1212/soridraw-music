@@ -74,6 +74,7 @@ export function patchExploreEntry713(source,{strict=true}={}){
   '  ExploreLikeBatchScheduler103,validateExploreAuth307,',
   '  readFollowCutoverState348,readFollowIntent354,',
   '  readEffectiveFollowMembership348,handleFollowOverlay354,',
+  '  enforcePreAuthBurstLimit,',
   "} from './preview-entry.mjs';",
   'import {handleAuthenticatedFollowClick713}',
   " from './app713/owner-follow-click-ingress-713.mjs';",
@@ -106,6 +107,7 @@ export function patchExploreEntry713(source,{strict=true}={}){
   ' async fetch(request,env,ctx){',
   '  const click=await handleAuthenticatedFollowClick713({',
   '   request,env,ctx,enabled:true,authenticate:validateExploreAuth307,',
+  '   preAuthLimiter:enforcePreAuthBurstLimit,'
   '  });',
   '  if(click!==null)return click;',
   '',
@@ -116,7 +118,8 @@ export function patchExploreEntry713(source,{strict=true}={}){
 export function patchExploreCanonicalExports713(source,{strict=true}={}){
  if(strict)pin(source,PIN713.canonical,'CANONICAL');
  const names=['readFollowCutoverState348','readFollowIntent354',
-  'readEffectiveFollowMembership348','handleFollowOverlay354'];
+  'readEffectiveFollowMembership348','handleFollowOverlay354',
+  'enforcePreAuthBurstLimit'];
  for(const n of names){
   if(!source.includes('function '+n+'('))throw Error('APP713_HOLD_CANONICAL_SYMBOL_'+n);
  }

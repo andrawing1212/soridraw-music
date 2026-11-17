@@ -1,0 +1,44 @@
+name: SORIDRAW APP706 Readonly Active Follow Error Shape
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/app706-503-serializer-readonly.yml']
+permissions: {contents: read}
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Inspect active error serializer without source dump
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          const a='e1a30fc9ef497fda1d34f4ab3dc1da45',name='soridraw-explore-preview';
+          const token=process.env.CLOUDFLARE_API_TOKEN||'';
+          if(token.length<20||process.env.GITHUB_REF!=='refs/heads/preview')throw Error('APP706_HOLD_CONTEXT');
+          const api=async p=>{
+             const r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+a+'/'+p,
+               {headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(20000)});
+             const d=await r.json();if(!r.ok||!d.success)throw Error('APP706_HOLD_READ');
+             return d.result;
+          };
+          const versions=(await api('workers/scripts/'+name+'/deployments?per_page=1'))?.deployments?.[0]?.versions;
+          if(versions?.length!==1||Number(versions[0].percentage)!==100)throw Error('APP706_HOLD_SPLIT');
+          const active=versions[0].version_id;
+          const modules=await api('workers/workers/'+name+'/versions/'+active+'?include=modules');
+          const main=modules?.modules?.find(m=>m.name==='preview-entry.mjs');
+          if(!main?.content_base64)throw Error('APP706_HOLD_MODULE');
+          const s=Buffer.from(main.content_base64,'base64').toString('utf8');
+          console.log('APP706_ACTIVE_VERSION='+active);
+          for(const marker of ['class ApiFault','function json(','function throwApi(','instanceof ApiFault','function handleFollowOverlay354(']){
+            const i=s.indexOf(marker);
+            console.log('APP706_MARKER='+marker+' FOUND='+(i>=0));
+            if(i<0)continue;
+            const tail=s.slice(i,i+Math.min(marker.includes('ApiFault')?2000:1200,2500))
+              .replace(/[A-Za-z0-9_-]{48,}/g,'<redacted>');
+            console.log('APP706_SNIPPET='+JSON.stringify(tail).slice(0,2400));
+          }
+          console.log('APP706_ONLY_GET_NO_MUTATION=PASS');
+          NODE

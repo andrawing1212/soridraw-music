@@ -6,6 +6,11 @@ on:
       - '.github/workflows/app713-isolated-contract-check.yml'
       - 'cloudflare/explore-worker/runtime/owner-follow-*-713.mjs'
       - 'scripts/verify-713-*.mjs'
+      - 'scripts/lib/follow-server-owned-patch-713.mjs'
+      - 'scripts/app713-preview-stage-inactive.mjs'
+      - 'src/services/exploreFollowServerOwned713.ts'
+      - 'functions/src/ownerFollowActorVerify713.ts'
+      - 'functions/scripts/test-713-current-actor.cjs'
 permissions:
   contents: read
 jobs:

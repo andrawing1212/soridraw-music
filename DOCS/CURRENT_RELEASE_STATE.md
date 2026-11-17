@@ -1,3 +1,14 @@
+## CURRENT — APP714 팔로우 마지막 클릭 +5초, PREVIEW Hosting PASS (2026-11-18 KST)
+
+- **사용자 명시 승인:** 팔로우·취소의 5초 정본 저장 기준을 기존 '첫 클릭 +5초'에서 정상 Explore 좋아요 app399의 **'마지막 실제 클릭 +5초'**로 통일. 버튼은 즉시 반응, 추가 클릭마다 지연 타이머 갱신, 원상 복귀는 최종 canonical 쓰기 W0. 11회 연속 토글 최종 1회 요청, 12회 원상 복귀 요청 0회 재현.
+- **코드:** [PR #1198](https://github.com/andrawing1212/soridraw-music/pull/1198) 병합 `178f41d6e8e86f552a06c051392e07dc7d0255f4`; `src/services/exploreFollowBatchService380.ts`의 신규 클릭 시 `updatedAt`만 갱신. 복원·리마운트는 기존 `restoredUpdatedAt` 보호로 시계 재시작 금지. 기존 APP712 pagehide keepalive·local outbox·서버 확정·RTDB 소유자/공개 알림·cooldown 유지.
+- **검사:** [Follow-only #44169212774](https://github.com/andrawing1212/soridraw-music/actions/runs/44169212774) SUCCESS (389 연속 클릭/원상 복귀, 387, 681, 빌드 등); [race #44169213001](https://github.com/andrawing1212/soridraw-music/actions/runs/44169213001) SUCCESS; [cooldown #44169212834](https://github.com/andrawing1212/soridraw-music/actions/runs/44169212834) SUCCESS; [product #44169212923](https://github.com/andrawing1212/soridraw-music/actions/runs/44169212923) SUCCESS.
+- **PREVIEW 배포:** Hosting-only [PR #1199](https://github.com/andrawing1212/soridraw-music/pull/1199) 병합 `47a02319bff07e03fc29829f900ecc0c7a0819f1`; [Actions #44170038652](https://github.com/andrawing1212/soridraw-music/actions/runs/44170038652) SUCCESS. `LOCKED_PREVIEW_SHA` 일치·`FIREBASE_PREVIEW_DEPLOY=PASS`·`PREVIEW_EXACT_BUILD=PASS`·`TEST_PRODUCTION_UNCHANGED=PASS`; 공유 RTDB Rules SKIPPED, Functions·Workers·D1/R2·사용자 원본 수정 없음.
+- **좋아요 Stage416 5분 방식:** 코드는 후보로 남아 있으나 `STAGE416_PRIVATE_FIVE_MINUTE_ACTIVE=false` 및 `STAGE416_SHARED_RTDB_BATCH_ACTIVE=false`. 과거 app400–407 PC↔모바일 하트 불일치와 불완전한 서버 정착 검증으로 app408 롤백, app410 복원된 5초 canonical 경로 보호. 5분 재활성화는 별도 범위 승인 전 금지.
+- **검증 한계:** 이번 변경은 오직 5초 시작점. 사용자의 실제 PC·모바일 클릭·닫기·동기화는 **실검증 요망**. 1초 안에 브라우저 종료 시 서버 접수 보장은 여전히 없음. **APP713 비활성 유지**, 본계정 카나리 재지정 금지. 이 기록은 APP713 긴급 복구 기록을 덮어쓰지 않음.
+
+---
+
 ## CURRENT — 긴급 복구 완료: 본계정 APP713 철회, PREVIEW APP712 복귀 (2026-11-18 KST)
 
 - **원인·조치:** 본계정 UID `rcZ2GZrBndOZzT8C635eiNBjYIJ2`를 신규 APP713 시험 계정으로 사용한 뒤 기존 팔로우 기능이 회귀했다는 사용자 영상 제보. 실사용 합격 전 활성화한 것은 개발 판단 오류. **APP713 전면 보류; 임의 재활성화 금지.**

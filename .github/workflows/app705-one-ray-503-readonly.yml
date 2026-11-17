@@ -1,0 +1,61 @@
+name: SORIDRAW APP705 One-Ray 503 Read-Only Diagnostics
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/app705-one-ray-503-readonly.yml'
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Query only known 503 Cloudflare Ray, no user data
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const ray='a5bf4b7ca8e01fa4';
+          const account='e1a30fc9ef497fda1d34f4ab3dc1da45';
+          const token=process.env.CLOUDFLARE_API_TOKEN;
+          if(!token||token.length<20||process.env.GITHUB_REF!=='refs/heads/preview')throw Error('APP705_HOLD_CONTEXT');
+          const body={
+            queryId:'app705-ray-20261117-readonly',
+            timeframe:{
+              from:Date.parse('2026-11-17T14:05:00Z'),
+              to:Date.parse('2026-11-17T14:07:30Z')},
+            limit:30,dry:true,
+            parameters:{view:'events',datasets:['cloudflare-workers'],
+              filters:[{key:'$metadata.rayId',operation:'eq',type:'string',value:ray}]
+            }
+          };
+          const res=await fetch('https://api.cloudflare.com/client/v4/accounts/'+account+'/workers/observability/telemetry/query',{
+             method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+             body:JSON.stringify(body),signal:AbortSignal.timeout(20000)});
+          const obj=await res.json().catch(()=>({}));
+          console.log('APP705_OBSERVABILITY_HTTP='+res.status);
+          if(!res.ok||obj.success===false){
+            console.log('APP705_OBSERVABILITY_ACCESS_OR_QUERY_UNAVAILABLE');
+            console.log('APP705_ERROR_CATEGORIES='+JSON.stringify((obj.errors||[]).map(x=>x.code||String(x.message||'').slice(0,75))).slice(0,400));
+            process.exit(0);
+          }
+          const events=obj.result?.events?.events||obj.result?.events||[];
+          console.log('APP705_RESULT_KEYS='+Object.keys(obj.result||{}).sort().join(','));
+          console.log('APP705_RAY_EVENT_COUNT='+(Array.isArray(events)?events.length:0));
+          if(Array.isArray(events))for(const row of events.slice(0,20)){
+            const meta=row.$metadata||row.metadata||{};
+            const workers=row.$workers||{};
+            console.log('APP705_EVENT='+JSON.stringify({
+               timestamp:row.timestamp||null,
+               service:String(meta.service||workers.scriptName||'').slice(0,65),
+               status:Number(meta.statusCode||0),
+               level:String(meta.level||'').slice(0,25),
+               error:String(meta.error||'').replace(/[A-Za-z0-9_-]{32,}/g,'[redacted]').slice(0,180),
+               outcome:String(workers.outcome||'').slice(0,30)
+            }));
+          }
+          console.log('APP705_READ_ONLY_NO_MUTATION=PASS');
+          NODE

@@ -1,0 +1,81 @@
+name: SORIDRAW APP710 PREVIEW Follow 503 Stage Diagnostic
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'scripts/lib/follow-reservation-diagnostic-710.mjs'
+      - 'scripts/app710-preview-follow-reservation-diagnostic-release.mjs'
+      - 'scripts/verify-710-follow-reservation-diagnostic.mjs'
+      - '.github/workflows/app710-preview-follow-reservation-diagnostic.yml'
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/app710-preview-follow-reservation-diagnostic.trigger'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app710-preview-follow-503-guard
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Verify exact follow guard compatibility and rollback script syntax
+        run: |
+          set -euo pipefail
+          node --check scripts/lib/follow-reservation-diagnostic-710.mjs
+          node --check scripts/app710-preview-follow-reservation-diagnostic-release.mjs
+          node scripts/verify-710-follow-reservation-diagnostic.mjs
+          node scripts/verify-031-follow-cooldown.mjs
+  release:
+    if: github.event_name == 'push' && github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 3
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Exact authorized PREVIEW-only follow guard release
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/preview
+          test "$(git diff --name-only HEAD^1 HEAD)" = '.deploy/app710-preview-follow-reservation-diagnostic.trigger'
+          f=.deploy/app710-preview-follow-reservation-diagnostic.trigger
+          grep -Fxq 'approval=director_20261118_follow_503_diagnosis_safe_preview' "$f"
+          grep -Fxq "source_parent=$(git rev-parse HEAD^1)" "$f"
+          grep -Fxq 'expected_active=1f5bfc69-f84b-4a52-983b-7590254b83b3' "$f"
+          grep -Fxq 'scope=one_active_preview_service_failure_log_only' "$f"
+          grep -Fxq 'shared_d1_r2_data_no_change=true' "$f"
+          grep -Fxq 'test_production_owner_no_change=true' "$f"
+          node --check scripts/lib/follow-reservation-diagnostic-710.mjs
+          node --check scripts/app710-preview-follow-reservation-diagnostic-release.mjs
+          node scripts/verify-710-follow-reservation-diagnostic.mjs
+          node scripts/verify-031-follow-cooldown.mjs
+          echo "APP710_APPROVED_PARENT=$(git rev-parse HEAD^1)" >> "$GITHUB_ENV"
+      - name: Read-only active version, runtime, bindings and one-module patch preflight
+        run: node scripts/app710-preview-follow-reservation-diagnostic-release.mjs --preflight
+      - name: Stage one PREVIEW Worker module and activate with rollback on failure
+        run: node scripts/app710-preview-follow-reservation-diagnostic-release.mjs --apply-once
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app710-preview-follow-reservation-diagnostic-result
+          path: app710-worker-result.json
+          if-no-files-found: ignore
+          retention-days: 7

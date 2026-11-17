@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/app380-follow-only-check.yml'
       - 'src/services/exploreFollowPendingResume681.ts'
+      - 'src/services/exploreFollowBatchService380.ts'
+      - 'scripts/verify-389-social-client-batching.mjs'
       - 'scripts/verify-681-follow-reload-popup.mjs'
       - 'src/services/exploreOwnerFollowerSync542.ts'
       - 'src/services/exploreSocialService.ts'

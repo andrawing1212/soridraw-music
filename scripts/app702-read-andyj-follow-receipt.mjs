@@ -109,5 +109,32 @@ try{
   uniquePairs:new Set(pairs.map(p=>p.target)).size===pairs.length,
  };
  console.log('APP702_EXACT_380_CHECKS='+Object.entries(report).map(([k,v])=>k+':'+(v?'PASS':'FAIL')).join(','));
+ // APP703: an exact pair's durable follow-intent may remain unresolved
+ // even when rate receipts and canonical edge are healthy. No raw data/logging.
+ const controls=await query('SELECT cutover_token,phase FROM explore_follow_cutover_control_348 WHERE id=1 LIMIT 1');
+ if(controls.length!==1||controls[0].phase!=='overlay'||typeof controls[0].cutover_token!=='string'||!controls[0].cutover_token)fail('CUTOVER_TOKEN_NOT_AVAILABLE');
+ const intent=join(folder,'exact-follow-intent.json');
+ const intentKey='internal/explore/follow-intents-v354/'+encodeURIComponent(controls[0].cutover_token)+'/'+encodeURIComponent(actor[0].uid)+'/'+encodeURIComponent(target[0].uid)+'.json';
+ let intentResult='NOT_FOUND_OR_READ_ERROR';
+ try{
+   execFileSync(process.execPath,[executable,'r2','object','get','soridraw-profile-media/'+intentKey,'--remote','--file',intent],
+   {encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:60000,env:{...process.env,WRANGLER_SEND_METRICS:'false'}});
+   intentResult='DOWNLOADED';
+ }catch{}
+ console.log('APP703_EXACT_PAIR_R2_DOWNLOAD='+intentResult);
+ if(intentResult==='DOWNLOADED'&&existsSync(intent)){
+   let detail;try{detail=JSON.parse(readFileSync(intent,'utf8'));}catch{detail=null}
+   console.log('APP703_EXACT_PAIR_JSON_VALID='+Boolean(detail&&typeof detail==='object'&&!Array.isArray(detail)));
+   if(detail&&typeof detail==='object'){
+     console.log('APP703_EXACT_PAIR_SETTLED='+String(detail.settled===true?'TRUE':detail.settled===false?'FALSE':'UNKNOWN'));
+     console.log('APP703_EXACT_PAIR_FOLLOWING='+String(detail.following===true?'TRUE':detail.following===false?'FALSE':'UNKNOWN'));
+     console.log('APP703_EXACT_PAIR_REVISION_VALID='+(Number.isSafeInteger(detail.revision)&&detail.revision>0));
+     console.log('APP703_EXACT_PAIR_EXPECTED_REVISION_VALID='+(Number.isSafeInteger(detail.expectedRevision)&&detail.expectedRevision>=0));
+     console.log('APP703_EXACT_PAIR_ACTOR_MATCH='+(detail.actor===actor[0].uid));
+     console.log('APP703_EXACT_PAIR_TARGET_MATCH='+(detail.target===target[0].uid));
+     console.log('APP703_EXACT_PAIR_HAS_OPERATION_ID='+(typeof detail.id==='string'&&detail.id.length>=16));
+     console.log('APP703_EXACT_PAIR_FIELDS='+Object.keys(detail).sort().join(','));
+   }
+ }
  console.log('APP702_READONLY_NO_BACKUP_WRITE_NO_MUTATION=PASS');
 }finally{rmSync(folder,{recursive:true,force:true});}

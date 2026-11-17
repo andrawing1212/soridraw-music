@@ -141,3 +141,10 @@ jobs:
           }
           console.log('PAIR_DIAG_READ_ONLY_NO_USER_DATA_CHANGE=PASS');
           NODE
+
+      - name: Read only Andy.j exact per-user follow request receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix cloudflare/explore-worker --no-audit --no-fund --package-lock=false --silent
+          node scripts/app702-read-andyj-follow-receipt.mjs

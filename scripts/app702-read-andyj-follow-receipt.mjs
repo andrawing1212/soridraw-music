@@ -140,7 +140,7 @@ try{
  // profiles. Inspect only status booleans/counts, never media or user fields.
  for(const [role,uid] of [['ACTOR',actor[0].uid],['TARGET',target[0].uid]]){
    const path=join(folder,'private-profile-'+role+'.json');
-   const r2key='profiles/'+encodeURIComponent(uid);
+   const r2key='internal/explore/shared-profile-v113/'+encodeURIComponent(uid)+'.json';
    let ok=false;
    try{execFileSync(process.execPath,[executable,'r2','object','get','soridraw-profile-media/'+r2key,'--remote','--file',path],
        {encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:60000,env:{...process.env,WRANGLER_SEND_METRICS:'false'}});

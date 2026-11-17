@@ -31,6 +31,20 @@ const readPayload = async (response: Response) => {
   }
 };
 
+// APP712: keep credentials only in memory and only briefly. A pagehide
+// cannot wait for fresh Firebase/Auth/AppCheck promises before sending.
+// Never persist bearer tokens or use the cache for ordinary API requests.
+let followExitAuth712: {
+  user: User;
+  at: number;
+  headers: { Authorization: string; 'X-Firebase-AppCheck': string };
+} | null = null;
+const getFollowExitAuth712 = (user: User) =>
+  followExitAuth712?.user === user &&
+  Date.now() - followExitAuth712.at >= 0 &&
+  Date.now() - followExitAuth712.at < 5 * 60_000
+    ? followExitAuth712.headers : null;
+
 const buildAuthHeaders = async (user: User) => {
   const [idToken, appCheckToken] = await Promise.all([
     user.getIdToken(),
@@ -41,10 +55,19 @@ const buildAuthHeaders = async (user: User) => {
     throw new Error('Explore 보안 인증을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.');
   }
 
-  return {
+  const headers = {
     Authorization: `Bearer ${idToken}`,
     'X-Firebase-AppCheck': appCheckToken,
   };
+  followExitAuth712 = { user, at: Date.now(), headers };
+  return headers;
+};
+
+// Called only after a real follow click. Cached Firebase tokens normally
+// need no network work; lack of a ready token cannot claim an exit success.
+export const primeExploreFollowExitAuth712 = (user: User): void => {
+  if (getFollowExitAuth712(user)) return;
+  void buildAuthHeaders(user).catch(() => {});
 };
 
 const requestPublic = async (path: string, cache: RequestCache = 'default') => {
@@ -63,7 +86,10 @@ const requestPublic = async (path: string, cache: RequestCache = 'default') => {
 };
 
 const requestAuthed = async (user: User, path: string, init: RequestInit = {}) => {
-  const authHeaders = await buildAuthHeaders(user);
+  const authHeaders = init.keepalive === true
+    ? getFollowExitAuth712(user)
+    : await buildAuthHeaders(user);
+  if (!authHeaders) throw new Error('종료 중 보안 인증이 준비되지 않았습니다. 다음 접속에서 안전하게 다시 시도합니다.');
   const response = await fetch(`${EXPLORE_API_BASE}${path}`, {
     ...init,
     headers: {
@@ -747,12 +773,14 @@ export const setExploreFollow = async (
   uid: string,
   follow: boolean,
   targetProfile?: ExploreProfileConnectionSeed378 | null,
+  options: { exitKeepalive?: boolean } = {},
 ): Promise<ExploreFollowState> => {
   const normalizedUid = String(uid || '').trim();
   if (!normalizedUid) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
   const payload = await requestOrderedExploreFollow354(
     user.uid, normalizedUid, follow,
-    (path, init) => requestAuthed(user, path, init),
+    (path, init) => requestAuthed(user, path,
+      options.exitKeepalive === true ? { ...init, keepalive: true } : init),
   );
   const row = payload?.data || {};
   const targetFollower662 = row?.followerCount ?? row?.follower_count;

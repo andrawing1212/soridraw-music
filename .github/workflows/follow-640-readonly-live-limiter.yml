@@ -160,7 +160,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with: {node-version: '22'}
-      - name: Read only Andy.j per-user APP380 and APP355 rate receipts
+      - name: Read only APP380, APP355 and exact Andy.j→SoulForceMusic durable follow intent
         shell: bash
         run: |
           set -euo pipefail

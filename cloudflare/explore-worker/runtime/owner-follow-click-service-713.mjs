@@ -29,7 +29,8 @@ const valid=info=>info&&UID.test(String(info.actorUid||''))&&
  UID.test(String(info.ownerUid||''))&&info.actorUid!==info.ownerUid&&
  typeof info.desired==='boolean'&&
  DEVICE.test(String(info.deviceId||''))&&
- Number.isSafeInteger(info.sequence)&&info.sequence>0;
+ Number.isSafeInteger(info.sequence)&&info.sequence>0&&
+ Number.isSafeInteger(info.issuedAtSec)&&info.issuedAtSec>0;
 async function parse(request){
  const declared=request.headers.get('Content-Length');
  if(declared!==null&&(!/^\d+$/.test(declared)||Number(declared)>1024))
@@ -87,7 +88,8 @@ export function createOwnerClickDoService713({
    if(!valid(info))return reply(400,{ok:false,status:'invalid'});
    const result=await engine.submit({
     principalUid:info.actorUid,ownerUid:info.ownerUid,
-    desired:info.desired,deviceId:info.deviceId,sequence:info.sequence});
+    desired:info.desired,deviceId:info.deviceId,sequence:info.sequence,
+    issuedAtSec:info.issuedAtSec});
    return reply(result.ok?200:503,result);
   },
   async alarm(){
@@ -103,7 +105,8 @@ export async function sendTrustedFollowCommit713(operation,env,{
  if(!operation||!UID.test(String(operation.actorUid||''))||
     !UID.test(String(operation.ownerUid||''))||
     !OP.test(String(operation.operationId||''))||
-    typeof operation.desired!=='boolean')
+    typeof operation.desired!=='boolean'||
+    !Number.isSafeInteger(operation.issuedAtSec)||operation.issuedAtSec<=0)
   return {ok:false,status:'invalid-operation'};
  const secret=env?.SORIDRAW_OWNER_DO_BRIDGE_SECRET_600;
  const service=env?.OWNER_FOLLOW_CANONICAL_REPLAY_600;

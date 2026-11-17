@@ -20,16 +20,17 @@ export function createFollowClickIntent713({
    env?.SORIDRAW_FOLLOW_SERVER_CLICK_713==='1'&&
    env?.SORIDRAW_OWNER_FOLLOW_GENERAL_PREVIEW_653==='1'&&
    env?.SORIDRAW_OWNER_FOLLOW_SOURCE_BOUNDARY_653==='preview-only';
- const valid=(actorUid,ownerUid,desired,deviceId,sequence)=>
+ const valid=(actorUid,ownerUid,desired,deviceId,sequence,issuedAtSec)=>
    UID.test(String(actorUid||''))&&UID.test(String(ownerUid||''))&&
    actorUid!==ownerUid&&typeof desired==='boolean'&&
    DEVICE.test(String(deviceId||''))&&Number.isSafeInteger(sequence)&&
-   sequence>0&&sequence<=Number.MAX_SAFE_INTEGER;
+   sequence>0&&sequence<=Number.MAX_SAFE_INTEGER&&
+   Number.isSafeInteger(issuedAtSec)&&issuedAtSec>0;
  // A separate DO instance keyed on actor+owner keeps the APP711 owner's
  // notification pending/alarm untouched. One alarm covers this pair's windows.
- const submit=async({principalUid,ownerUid,desired,deviceId,sequence}={})=>{
+ const submit=async({principalUid,ownerUid,desired,deviceId,sequence,issuedAtSec}={})=>{
   if(!allowed()||!storage?.transaction)return fail('disabled');
-  if(!valid(principalUid,ownerUid,desired,deviceId,sequence))
+  if(!valid(principalUid,ownerUid,desired,deviceId,sequence,issuedAtSec))
    return fail('invalid-intent');
   const at=now();
   try{return await storage.transaction(async tx=>{
@@ -60,7 +61,7 @@ export function createFollowClickIntent713({
     if(!/^[A-Za-z0-9_-]{16,128}$/.test(operationId))
      return fail('invalid-operation-id');
     tail={operationId,dueAt:at+APP713_FIRST_CLICK_WINDOW_MS,
-      desired,attempts:0,status:'waiting',nextAttemptAt:0};
+      desired,issuedAtSec,attempts:0,status:'waiting',nextAttemptAt:0};
     windows.push(tail);
    }else{
     // First click's five-second floor NEVER slides on rapid follow/unfollow.
@@ -122,7 +123,7 @@ export function createFollowClickIntent713({
   try{result=await commit({
    actorUid:(await storage.get(KEY)).actorUid,
    ownerUid:(await storage.get(KEY)).ownerUid,
-   desired:item.desired,operationId:item.operationId,
+   desired:item.desired,operationId:item.operationId,issuedAtSec:item.issuedAtSec,
   });}catch{result=null;}
   const confirmed=result?.ok===true&&result?.canonicalFollowing===item.desired&&
     Number.isSafeInteger(result?.revision)&&result.revision>=0;

@@ -51,12 +51,25 @@ export async function handleAuthenticatedFollowClick713({
   return respond(401,{ok:false,status:'auth-required'});
  if(!/^[A-Za-z0-9_-]{1,128}$/.test(auth.uid)||auth.uid===match[1])
   return respond(400,{ok:false,status:'invalid-principal'});
+ if(auth.uid!==env?.SORIDRAW_FOLLOW_CANARY_UID_713||
+    auth.uid!=='rcZ2GZrBndOZzT8C635eiNBjYIJ2')
+  return respond(409,{ok:false,status:'canary-only'});
+ // Only AFTER the existing signed Firebase Auth+AppCheck check, decode
+ // this token's issue time; never accept it in client-supplied JSON.
+ let issuedAtSec=0;
+ try{
+  const parts=String(auth.idToken||'').split('.');
+  const claims=JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+  if(claims.sub===auth.uid&&claims.aud==='soridraw-app-866a5'&&
+     Number.isSafeInteger(claims.iat)&&claims.iat>0)issuedAtSec=claims.iat;
+ }catch{}
+ if(!issuedAtSec)return respond(401,{ok:false,status:'verified-token-issue-missing'});
  const secret=env?.SORIDRAW_OWNER_DO_BRIDGE_SECRET_600;
  const service=env?.OWNER_FOLLOW_RESERVATION_SERVICE_600;
  if(typeof secret!=='string'||secret.length<32||typeof service?.fetch!=='function')
   return respond(503,{ok:false,status:'private-bridge-unavailable'});
  const intent={actorUid:auth.uid,ownerUid:match[1],desired:data.following,
-   deviceId:data.deviceId,sequence:data.sequence};
+   deviceId:data.deviceId,sequence:data.sequence,issuedAtSec};
  let response,ack;
  try{
   response=await service.fetch(new Request('https://owner-follow.internal/internal/owner-follow/click713',{

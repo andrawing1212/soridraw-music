@@ -19,7 +19,7 @@ function verifyCapability(request,env){
 }
 export async function routeTrustedFollowCanonical713({
  request,env,ctx,readCutover,readIntent,readMembership,runPrecommit,
- callCanonical,reserve,
+ callCanonical,reserve,verifyActor,
  enabled=APP713_PRIVATE_CANONICAL_ENTRY_COMPILED_OPEN,
 }={}){
  if(new URL(request.url).pathname!==PATH)return null;
@@ -42,11 +42,13 @@ export async function routeTrustedFollowCanonical713({
     !UID.test(String(body.ownerUid||''))||
     body.actorUid===body.ownerUid||
     !OP.test(String(body.operationId||''))||
-    typeof body.desired!=='boolean')
+    typeof body.desired!=='boolean'||
+    !Number.isSafeInteger(body.issuedAtSec)||body.issuedAtSec<=0)
   return reply(400,{ok:false,status:'invalid-operation'});
  const result=await commitTrustedFollow713({
   actorUid:body.actorUid,ownerUid:body.ownerUid,
-  desired:body.desired,operationId:body.operationId,env,ctx,
+  desired:body.desired,operationId:body.operationId,
+  issuedAtSec:body.issuedAtSec,env,ctx,verifyActor,
   authorized:true,enabled:true,
   readCutover,readIntent,readMembership,runPrecommit,callCanonical,reserve,
  });

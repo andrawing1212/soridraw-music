@@ -19,7 +19,8 @@ export const APP713_EXTRA_MODULES={
  owner:['app713/owner-follow-click-service-713.mjs','app713/owner-follow-client-intent-713.mjs'],
  explore:['app713/owner-follow-click-ingress-713.mjs',
  'app713/owner-follow-click-canonical-entry-713.mjs',
- 'app713/owner-follow-trusted-canonical-713.mjs'],
+ 'app713/owner-follow-trusted-canonical-713.mjs',
+ 'app713/owner-follow-actor-verify-713.mjs'],
 };
 export function patchOwnerWorker713(source,{strict=true}={}){
  if(strict)pin(source,PIN713.owner,'OWNER');
@@ -79,7 +80,9 @@ export function patchExploreEntry713(source,{strict=true}={}){
   'import {handleAuthenticatedFollowClick713}',
   " from './app713/owner-follow-click-ingress-713.mjs';",
   'import {routeTrustedFollowCanonical713}',
-  " from './app713/owner-follow-click-canonical-entry-713.mjs';");
+  " from './app713/owner-follow-click-canonical-entry-713.mjs';",
+  'import {verifyCurrentActor713}',
+  " from './app713/owner-follow-actor-verify-713.mjs';");
  result=replaceOnce(result,oldImport,newImport,'EXPLORE_IMPORT');
  const oldPrivate=lines(
   "  if(!(await activeFor607(this.env,uid)))return reply(503,{ok:false,status:'disabled'});",
@@ -87,7 +90,8 @@ export function patchExploreEntry713(source,{strict=true}={}){
  const newPrivate=lines(
   "  if(!(await activeFor607(this.env,uid)))return reply(503,{ok:false,status:'disabled'});",
   '  const click=await routeTrustedFollowCanonical713({',
-  '   request,env:this.env,ctx:this.ctx,enabled:true,',
+  '   request,env:this.env,ctx:this.ctx,enabled:true,
+   verifyActor:verifyCurrentActor713,',
   '   readCutover:readFollowCutoverState348,',
   '   readIntent:readFollowIntent354,',
   '   readMembership:readEffectiveFollowMembership348,',

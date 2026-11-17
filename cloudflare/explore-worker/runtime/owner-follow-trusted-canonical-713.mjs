@@ -8,7 +8,7 @@ const UID=/^[A-Za-z0-9_-]{1,128}$/;
 const OP=/^[A-Za-z0-9_-]{16,128}$/;
 const error=status=>({ok:false,status});
 export async function commitTrustedFollow713({
- actorUid,ownerUid,desired,operationId,env,ctx,authorized,
+ actorUid,ownerUid,desired,operationId,issuedAtSec,env,ctx,authorized,verifyActor,
  readCutover,readIntent,readMembership,runPrecommit,callCanonical,reserve,
  enabled=APP713_TRUSTED_CANONICAL_COMPILED_OPEN,
 }={}){
@@ -20,11 +20,17 @@ export async function commitTrustedFollow713({
  if(authorized!==true)return error('private-capability-required');
  if(!UID.test(String(actorUid||''))||!UID.test(String(ownerUid||''))||
     actorUid===ownerUid||!OP.test(String(operationId||''))||
-    typeof desired!=='boolean')
+    typeof desired!=='boolean'||
+    !Number.isSafeInteger(issuedAtSec)||issuedAtSec<=0)
   return error('invalid-operation');
  if([readCutover,readIntent,readMembership,runPrecommit,
-     callCanonical,reserve].some(fn=>typeof fn!=='function'))
+     callCanonical,reserve,verifyActor].some(fn=>typeof fn!=='function'))
   return error('trusted-dependency-unavailable');
+ // Firebase Auth, revocation and Firestore lifecycle are checked again
+ // immediately before EVERY canonical attempt, including server retries.
+ let proof=false;
+ try{proof=await verifyActor({actorUid,operationId,issuedAtSec,env})===true}catch{}
+ if(!proof)return error('actor-current-auth-unverified');
  let cutover,prior,member;
  try{
   cutover=await readCutover(env);

@@ -133,7 +133,8 @@ async function run(){
     'workers/message':'APP713 candidate inactive only; existing active unchanged'},
    bindings:[...t.bindings.map(binding=>({name:binding.name,
     type:'inherit',version_id:t.live})),
-    {name:'SORIDRAW_FOLLOW_SERVER_CLICK_713',type:'plain_text',text:'0'}],
+    {name:'SORIDRAW_FOLLOW_SERVER_CLICK_713',type:'plain_text',text:'0'},
+    {name:'SORIDRAW_FOLLOW_CANARY_UID_713',type:'plain_text',text:'rcZ2GZrBndOZzT8C635eiNBjYIJ2'}],
    modules:t.modules,
   };
   const staged=await api('POST','workers/workers/'+t.name+'/versions?deploy=false',payload);
@@ -149,8 +150,9 @@ async function run(){
     'STAGED_MODULE_HASH_'+expected.name);
   }
   const inherited=normalizeBindings(after.meta.resources.bindings||[]);
-  need(inherited.size===t.bindings.length+1&&
-   inherited.get('SORIDRAW_FOLLOW_SERVER_CLICK_713')?.text==='0',
+  need(inherited.size===t.bindings.length+2&&
+   inherited.get('SORIDRAW_FOLLOW_SERVER_CLICK_713')?.text==='0'&&
+   inherited.get('SORIDRAW_FOLLOW_CANARY_UID_713')?.text==='rcZ2GZrBndOZzT8C635eiNBjYIJ2',
    'STAGED_FLAG_NOT_OFF_'+t.name);
   for(const original of t.bindings)
    need(isDeepStrictEqual(inherited.get(original.name),original),

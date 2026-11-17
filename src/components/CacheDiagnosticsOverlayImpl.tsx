@@ -225,6 +225,8 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
   const [serverLoading, setServerLoading] = useState(false);
   const [serverError, setServerError] = useState('');
   const [storageAudit504, setStorageAudit504] = useState<BrowserStorageAudit504 | null>(null);
+  // Keep one-off source/recovery tools unmounted until an administrator opens them.
+  const [manualOriginalToolsOpen, setManualOriginalToolsOpen] = useState(false);
   const [storageAuditBusy504, setStorageAuditBusy504] = useState(false);  const panelRef = useRef<HTMLDivElement | null>(null);
   const serverLoadingRef = useRef(false);
   const dragRef = useRef<{
@@ -700,10 +702,30 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
             </div>
           </div>
 
-          <RecentSongsExactCountDiagnostic />
-          <NextSongOriginalReadOnlyDiagnostic />
-          <ColorHistoryReadOnlyDiagnostic />
-          <StudioHeartSingleDocDiagnostic />
+          <section className="mt-2 rounded-xl bg-white/[0.035] px-2.5 py-2 text-[11px] text-white/75">
+            <button
+              type="button"
+              aria-expanded={manualOriginalToolsOpen}
+              aria-controls="cache-live-original-recovery-tools"
+              onClick={() => setManualOriginalToolsOpen((open) => !open)}
+              className="flex w-full items-center justify-between gap-2 border-0 bg-transparent p-0 text-left font-black text-white/85"
+            >
+              <span>원본·복구 진단 <span className="font-medium text-white/45">· 수동 도구 4개</span></span>
+              <span className="shrink-0 text-white/60">{manualOriginalToolsOpen ? '접기' : '펼치기'}</span>
+            </button>
+            {manualOriginalToolsOpen ? (
+              <div id="cache-live-original-recovery-tools" className="mt-2">
+                <p className="text-[10px] leading-4 text-white/50">
+                  일상 비용 계측과 별개인 문제 해결 도구입니다. 각 서버 조회는 해당 버튼을 눌러야 실행됩니다.
+                  지정색 복원은 별도 버튼으로 이 기기의 로컬 색상만 변경합니다.
+                </p>
+                <RecentSongsExactCountDiagnostic />
+                <NextSongOriginalReadOnlyDiagnostic />
+                <ColorHistoryReadOnlyDiagnostic />
+                <StudioHeartSingleDocDiagnostic />
+              </div>
+            ) : null}
+          </section>
 
           <section className="mt-2 rounded-xl bg-white/[0.035] px-2.5 py-2 text-[10px] text-white/65">
             <div className="flex flex-wrap items-center justify-between gap-2">

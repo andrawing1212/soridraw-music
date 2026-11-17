@@ -67,6 +67,7 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
           project_id: soridraw-app-866a5
+      # One-shot OFF-only preparation. Canary write route stays disabled.
       - name: Create exactly one isolated canary actor verifier (runtime OFF)
         if: github.event.head_commit.message == 'APP713_PREPARE_OFF_ONCE'
         env:

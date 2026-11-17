@@ -41,7 +41,7 @@ def create_archive(path):
   },'PACKAGE_UNEXPECTED_FILES')
   require(b'initializeApp' in archive.read('lib/actorProofEntry713.js'),
     'ADMIN_INIT_MISSING')
- print('APP713_PREVIEW_FUNCTION_SOURCE_OFF_AND_SIX_FILES=PASS',flush=True)
+ print('APP713_CANARY_ACTOR_PROOF_ISOLATED_PACKAGE_FOUR_FILES=PASS',flush=True)
 def api(token,method,path,body=None):
  data=None if body is None else json.dumps(body).encode()
  req=urllib.request.Request(ROOT+path,data=data,method=method,headers={
@@ -126,7 +126,7 @@ def main():
    'status':'PASS','function':NAME,'sourceSha':os.environ['APP713_APPROVED_SHA'],
    'httpCompiledOff':False,'runtimeReadyOff':True,'sharedDataWrites':0,
   }))
-  print('APP713_NEW_PREVIEW_PUBLIC_FUNCTION_CREATED_OFF=PASS',flush=True)
+  print('APP713_NEW_PREVIEW_ACTOR_PROOF_RUNTIME_OFF=PASS',flush=True)
   print('APP713_OLD_OWNER_FUNCTION_UNCHANGED=PASS',flush=True)
   print('APP713_NO_SHARED_RTDB_RULES_OR_USER_DATA_CHANGES=PASS',flush=True)
 if __name__=='__main__':

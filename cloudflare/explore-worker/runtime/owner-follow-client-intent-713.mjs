@@ -39,9 +39,12 @@ export function createFollowClickIntent713({
     return fail('identity-conflict');
    const state=old||{actorUid:principalUid,ownerUid,windows:[],deviceFloors:{}};
    const floor=Number(state.deviceFloors[deviceId]||0);
-   if(sequence<=floor)
-    return sequence===floor?{ok:true,status:'already-accepted',
-      generation:state.windows.at(-1)?.operationId||null}:fail('stale-sequence');
+   if(sequence<=floor){
+    const receipt=state.windows.at(-1)||state.lastReceipt;
+    return sequence===floor&&receipt?
+      {ok:true,status:'already-accepted',generation:receipt.operationId,dueAt:receipt.dueAt}:
+      fail('stale-sequence');
+   }
    if(!Object.hasOwn(state.deviceFloors,deviceId)&&
      Object.keys(state.deviceFloors).length>=MAX_DEVICES)
     return fail('device-limit');
@@ -126,7 +129,9 @@ export function createFollowClickIntent713({
     // Preserve bounded per-device sequence floors after settlement, so an
     // old reordered click cannot re-open a new window after the first ACK.
     const retainUntil=now()+RECEIPT_RETENTION_MS;
-    await tx.put(KEY,{...latest,windows:[],retainUntil});
+    await tx.put(KEY,{...latest,windows:[],retainUntil,
+     lastReceipt:{operationId:item.operationId,dueAt:item.dueAt,
+      desired:item.desired,revision:result.revision}});
     await tx.setAlarm(retainUntil);
     return {ok:true,status:result?.changed===true?'committed':'noop',
      revision:result.revision};

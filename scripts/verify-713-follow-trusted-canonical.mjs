@@ -21,7 +21,7 @@ const args={
   assert.equal((await a.authenticate()).uid,'actor');
   const payload=await a.request.clone().json();
   assert.ok(/^click713_[A-Za-z0-9_-]+$/.test(payload.followOperationId));
-  assert.equal(payload.followExpectedRevision,intent?.id===args.operationId?
+  assert.equal(payload.followExpectedRevision,intent?.id===payload.followOperationId?
     intent.expectedRevision:intent?.revision||0);
   return a.callCanonical(a.request);
  },

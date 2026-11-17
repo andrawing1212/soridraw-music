@@ -67,5 +67,27 @@ try{
  console.log('APP702_TARGET_PAIR_LEVEL='+(specific.length===1?specific[0].level:'OTHER'));
  console.log('APP702_TARGET_PAIR_OVERDUE='+(specific.length===1?Number(specific[0].nextAllowedAt)<=now:'UNKNOWN'));
  console.log('APP702_STRUCTURAL_ISSUES='+(problems.length?problems.join(','):'NONE'));
+ // The older independent APP355 per-actor limiter can also reject DELETE with
+ // 503, even when APP380's separate receipt is entirely valid. GET only.
+ const second=join(folder,'private-edge-rate.json');
+ const rateKey='internal/explore/follow-rate-v355/'+encodeURIComponent(actor[0].uid)+'.json';
+ try {
+   execFileSync(process.execPath,[executable,'r2','object','get','soridraw-profile-media/'+rateKey,'--remote','--file',second],
+   {encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:60000,env:{...process.env,WRANGLER_SEND_METRICS:'false'}});
+ } catch {
+   console.log('APP702_SECONDARY_RATE_RECORD=NOT_READABLE_OR_ABSENT');
+ }
+ if(existsSync(second)){
+   let rate;try{rate=JSON.parse(readFileSync(second,'utf8'));}catch{rate=null}
+   console.log('APP702_SECONDARY_RATE_RECORD=EXISTS');
+   console.log('APP702_SECONDARY_RATE_JSON_VALID='+Boolean(rate&&typeof rate==='object'&&!Array.isArray(rate)));
+   console.log('APP702_SECONDARY_RATE_WINDOW_INTEGER='+Number.isSafeInteger(rate?.windowStart));
+   console.log('APP702_SECONDARY_RATE_WINDOW_IN_FUTURE='+(Number.isSafeInteger(rate?.windowStart)?rate.windowStart>now:'UNKNOWN'));
+   console.log('APP702_SECONDARY_RATE_WINDOW_AGE_SECONDS='+(Number.isSafeInteger(rate?.windowStart)?Math.floor((now-rate.windowStart)/1000):'UNKNOWN'));
+   console.log('APP702_SECONDARY_RATE_COUNT_INTEGER='+Number.isSafeInteger(rate?.count));
+   console.log('APP702_SECONDARY_RATE_COUNT_RANGE='+(
+     Number.isSafeInteger(rate?.count)&&rate.count>=0&&rate.count<=1000?'OK':'INVALID_OR_UNKNOWN'));
+   console.log('APP702_SECONDARY_RATE_KEYS='+Object.keys(rate||{}).sort().join(','));
+ }
  console.log('APP702_READONLY_NO_BACKUP_WRITE_NO_MUTATION=PASS');
 }finally{rmSync(folder,{recursive:true,force:true});}

@@ -136,5 +136,26 @@ try{
      console.log('APP703_EXACT_PAIR_FIELDS='+Object.keys(detail).sort().join(','));
    }
  }
+ // APP703: the settled pair also needs exact R2 projections for both
+ // profiles. Inspect only status booleans/counts, never media or user fields.
+ for(const [role,uid] of [['ACTOR',actor[0].uid],['TARGET',target[0].uid]]){
+   const path=join(folder,'private-profile-'+role+'.json');
+   const r2key='profiles/'+encodeURIComponent(uid);
+   let ok=false;
+   try{execFileSync(process.execPath,[executable,'r2','object','get','soridraw-profile-media/'+r2key,'--remote','--file',path],
+       {encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:60000,env:{...process.env,WRANGLER_SEND_METRICS:'false'}});
+     ok=existsSync(path);
+   }catch{}
+   console.log('APP703_'+role+'_PROFILE_R2_READ='+ok);
+   if(ok){
+     let data;try{data=JSON.parse(readFileSync(path,'utf8'));}catch{}
+     const sync=data?.followSync354;
+     console.log('APP703_'+role+'_SYNC_PRESENT='+Boolean(sync));
+     console.log('APP703_'+role+'_SYNC_EXACT='+(sync?.exact===true));
+     console.log('APP703_'+role+'_SYNC_PENDING_COUNT='+(sync?.pending&&typeof sync.pending==='object'&&!Array.isArray(sync.pending)?Object.keys(sync.pending).length:'UNKNOWN'));
+     const count=data?.body?.data?.profile;
+     console.log('APP703_'+role+'_FOLLOW_COUNTS_VALID='+(Number.isSafeInteger(count?.followerCount)&&Number.isSafeInteger(count?.followingCount)));
+   }
+ }
  console.log('APP702_READONLY_NO_BACKUP_WRITE_NO_MUTATION=PASS');
 }finally{rmSync(folder,{recursive:true,force:true});}

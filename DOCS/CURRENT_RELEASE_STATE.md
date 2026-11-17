@@ -1,13 +1,12 @@
-## CURRENT — APP710 팔로우 503 내부 원인 진단 진행 (2026-11-18 KST)
+## CURRENT — APP711 팔로우 503 직접 원인 수정·검증 (2026-11-18 KST)
 
-- 기준: preview 3a20c702c861b2a5d9b3e5db70d4038b599a3f32. PR #1179~#1182 및 읽기 전용 Actions 44117574735 재사용.
-- 실제 PREVIEW PC에서 소울포스뮤직 팔로우 취소 DELETE 503 재현. 2026-11-17 15:43:10Z, Ray a5bfd970be5f830e. CORS 때문에 브라우저 오류 본문 접근 불가. 기존 팔로잉 상태로 복귀.
-- 활성 Explore 1f5bfc69-f84b-4a52-983b-7590254b83b3 / owner 15981200-c988-44b7-8b20-73b777d4fe63. 서비스 모듈 SHA ded26d6bf39a092fcafed658b73b96330dfb7f12b937637e28a52a5ab6b97e9e. 공개 dual ACK 활성 확인.
-- 원인 미확정: precommit → reserve 서비스가 내부 비200 사유를 reservation-unavailable로 합침. 대기열 포화/충돌/저장소 장애를 추정으로 수정하지 않음.
-- APP710은 정확한 활성 서비스 모듈에 고정된 실패 코드만 로그로 추가. 사용자 식별자/티켓/인증/응답 본문 로그 금지. 예약 ACK·멱등·알림·원본 쓰기 조건 변경 없음. 추가 DB/서비스 호출 없음.
-- 검사: TypeScript 및 앱 build 성공(기존 번들 경고). 진단 단위 검사 성공. 배포 전 정확한 버전/모든 바인딩·런타임 보존 및 롤백 검사 필수.
-- 아직 진단 코드 배포 전, 기능 수정 전, PC/모바일 완료 기준 미충족. main/TEST/PRODUCTION/Hosting/Functions/데이터 변경 없음.
-- 다음: 안전 PREVIEW 진단 배포 → 실제 한 번의 실패 로그에서 내부 조건 확보 → 직접 원인만 수정 → 반복 새로고침 및 PC/모바일 검증.
+- 기준 preview 76821aa8e5a71cae34fea73d597bb93bcc93a386. APP710 진단 배포 PR #1183/#1184 완료, 읽기 전용 PR #1185/Actions 44120598139에서 실제 요청의 내부 실패가 operation-conflict임을 확인. Ray a5bfee994d881a23, 2026-11-17T15:57:36Z.
+- 원인: 기존 예약과 같은 작업 ID/관계 revision/방향인데 별도로 변하는 공개 프로필 priorR2Revision까지 완전 일치를 요구함. 페이지 이동·reload 후 같은 작업 재시도에서 최신 프로필 버전이 달라지면 canonical 저장 전에 503. 실제 활성 owner 소스 SHA를 고정한 실행 테스트로 재현. CORS 오류는 이 실패 응답에 CORS 헤더가 없는 부수 현상.
+- 최소 수정: 같은 불변 작업 + 프로필 버전 비역행이면 최초 예약과 최초 floor를 그대로 재사용. 서로 다른 작업/순서/세대/방향은 거절. 명시적인 인증 재요청으로 동일한 dead 예약만 새 generation으로 재예약해 알림 누락을 방지. 예약/알람 저장 성공 전 ACK 금지, 관련 없는 예약 보존, 큐 24/재시도 8 제한 유지. 데이터 초기화/강제 편집/새 polling 없음.
+- 비용: 정상 중복 6회 storage write/alarm write 0 실행 확인. 추가 D1/R2/Functions 호출 없음. 중복 ACK 전 로컬 DO alarm 존재 확인 1회. dead 재요청만 기존 예약 재저장/알람 1회, 백그라운드 polling 없음.
+- 검증: 활성 번들 및 원본 두 경로에서 재현/수정/중복/불변값 충돌/queue bound/8회 실패 후 재요청/알람 실패 시 ACK 거부/전달 검사 PASS. 기존 APP556/557/568 회귀 PASS. APP710에서 TS/build PASS, APP711 필수 CI 예정.
+- 활성: Explore a28c1391-1d98-41fb-b9c4-8f51aa19e0a0(APP710 진단), owner 15981200-c988-44b7-8b20-73b777d4fe63. APP711 아직 배포 전. 버전·바인딩·런타임 완전 보존과 rollback 확인 후 owner 단일 모듈만 적용.
+- 미완료: APP711 PREVIEW 배포, 실제 follow→페이지 이동→여러 번 reload→unfollow, PC/실제 모바일 숫자 일치. 기능 완료 아님. Hosting/Functions/Rules/main/TEST/PRODUCTION 변경 없음.
 
 ## CURRENT — APP669 제3자 팔로우 숫자 서버 정본 증명·발행 연결 소스, 활성 배포 HOLD (2026-11-15 KST)
 

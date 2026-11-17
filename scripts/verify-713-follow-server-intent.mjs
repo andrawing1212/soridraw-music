@@ -8,27 +8,32 @@ assert.equal(APP713_SERVER_CLICK_QUEUE_COMPILED_OPEN,false);
 assert.equal(APP713_FIRST_CLICK_WINDOW_MS,5000);
 let clock=100000,operationCounter=0,writeCount=0,alarmCount=0,commits=[];
 const saved=new Map();
-let scheduled=null;
+let scheduled=null,activeTx=null;
 const clone=v=>v===undefined?undefined:JSON.parse(JSON.stringify(v));
 const storage={
  async get(key){return clone(saved.get(key))},
- async setAlarm(when){scheduled=when;alarmCount++},
- async getAlarm(){return scheduled},
+ async setAlarm(when){
+  // Real Cloudflare SQLite storage supports alarm APIs on ctx.storage,
+  // NOT on the transaction's KV-only 'txn' argument.
+  if(activeTx)activeTx.alarm=when;else scheduled=when;
+  alarmCount++;
+ },
+ async getAlarm(){return activeTx?activeTx.alarm:scheduled},
  async transaction(fn){
-  // Isolated deterministic transaction, staged writes committed only on success.
   const stage=new Map([...saved].map(([k,v])=>[k,clone(v)]));
-  let localAlarm=scheduled;
+  if(activeTx)throw Error('unexpected nested transaction');
+  activeTx={alarm:scheduled};
   const tx={
    get:async key=>clone(stage.get(key)),
    put:async(key,value)=>{writeCount++;stage.set(key,clone(value))},
    delete:async key=>{stage.delete(key)},
-   getAlarm:async()=>localAlarm,
-   setAlarm:async at=>{localAlarm=at;alarmCount++},
   };
-  const result=await fn(tx);
-  saved.clear();for(const [k,v] of stage)saved.set(k,v);
-  scheduled=localAlarm;
-  return result;
+  try{
+   const result=await fn(tx);
+   saved.clear();for(const [k,v] of stage)saved.set(k,v);
+   scheduled=activeTx.alarm;
+   return result;
+  }finally{activeTx=null}
  },
 };
 const env={SORIDRAW_ENVIRONMENT:'preview',SORIDRAW_FOLLOW_SERVER_CLICK_713:'1',

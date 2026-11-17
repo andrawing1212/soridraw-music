@@ -132,6 +132,10 @@ import {
   queueExploreFollowFinalState380,
   readPendingExploreFollowIntents380,
 } from '../services/exploreFollowBatchService380';
+import {
+  isExploreServerOwnedFollow713,stageExploreServerOwnedFollow713,
+  sendExploreServerOwnedFollow713,confirmExploreServerOwnedFollow713,
+} from '../services/exploreFollowServerOwned713';
 import { syncSoridrawProfileAvatarAuthority } from '../services/profileAvatarAuthority';
 import ExploreProfileEditModal from '../components/explore/ExploreProfileEditModal';
 import ExplorePublicationSettingsModal from '../components/explore/ExplorePublicationSettingsModal';
@@ -3869,19 +3873,15 @@ export default function ExplorePage() {
         restoredUpdatedAt: record380.updatedAt,
         restoredRetryUsed: record380.retryUsed,
         restoredSuspended: record380.suspended || hadCooldown380,
-        commit: (following380) => setExploreFollow(
-          activeUser380,
-          targetUid380,
-          following380,
-          record380.targetProfile,
-        ),
-        exitCommit: (following380) => setExploreFollow(
-          activeUser380,
-          targetUid380,
-          following380,
-          record380.targetProfile,
-          { exitKeepalive: true },
-        ),
+        serverOwned713: record380.serverOwned713 === true,
+        commit: (following380) => record380.serverOwned713 === true
+          ? confirmExploreServerOwnedFollow713(activeUser380,targetUid380,following380)
+          : setExploreFollow(
+              activeUser380,targetUid380,following380,record380.targetProfile),
+        exitCommit: record380.serverOwned713 === true ? undefined :
+          (following380) => setExploreFollow(
+            activeUser380,targetUid380,following380,
+            record380.targetProfile,{exitKeepalive:true}),
         onSettled: (settlement380) => {
           const confirmed380 = Boolean(settlement380.result.isFollowing);
           const delta380 = Number(confirmed380) - Number(settlement380.baseFollowing);
@@ -5155,6 +5155,17 @@ export default function ExplorePage() {
       return { followerCount, actorFollowingCount };
     };
 
+    // APP713: stage a stable device/sequence identity before optimistic
+    // painting. If local durable outbox is unavailable, fail closed instead
+    // of submitting an untracked old-client canonical write.
+    let serverRecord713: ReturnType<typeof stageExploreServerOwnedFollow713>|null=null;
+    if(isExploreServerOwnedFollow713()){
+      try{serverRecord713=stageExploreServerOwnedFollow713(user,targetUid,requestedFollow)}
+      catch{
+        setSocialNotice('팔로우 저장 준비를 확인할 수 없습니다. 브라우저 저장소를 확인해 주세요.');
+        return;
+      }
+    }
     setSocialNotice('');
     // Warm existing Firebase credentials while this document is alive.
     // pagehide has no time to await them; never block the instant button paint.
@@ -5169,6 +5180,7 @@ export default function ExplorePage() {
       viewerUid, targetUid,
       desiredFollowing: requestedFollow,
       immediate: false, initialDelayMs: 5_000,
+      serverOwned713: serverRecord713 !== null,
       baseFollowing,
       baseTargetFollowerCount: previousTargetCount,
       baseTargetFollowingCount: previousTargetFollowingCount,
@@ -5179,10 +5191,12 @@ export default function ExplorePage() {
         avatarUrl: profile.avatarUrl,
         handle: profile.handle,
       },
-      commit: (following) => setExploreFollow(user, targetUid, following, profile),
-      exitCommit: (following) => setExploreFollow(
-        user, targetUid, following, profile, { exitKeepalive: true },
-      ),
+      commit: (following) => serverRecord713 !== null
+        ? confirmExploreServerOwnedFollow713(user,targetUid,following)
+        : setExploreFollow(user,targetUid,following,profile),
+      exitCommit: serverRecord713 !== null ? undefined:
+        (following) => setExploreFollow(
+          user,targetUid,following,profile,{exitKeepalive:true}),
       onBusy: (busy) => {
         if(!busy) setFollowSavingUid685('');
       },
@@ -5321,9 +5335,13 @@ export default function ExplorePage() {
       },
       onDeferred: () => {
         if (activeProfileUidRef.current === targetUid)
-          setSocialNotice('팔로우 변경이 서버 보호 제한으로 대기 중입니다. 아직 저장되지 않았습니다.');
+          setSocialNotice(serverRecord713!==null
+            ? '팔로우 요청은 서버에서 확인 중입니다. 아직 확정되지 않았습니다.'
+            : '팔로우 변경이 서버 보호 제한으로 대기 중입니다. 아직 저장되지 않았습니다.');
       },
     });
+    if(serverRecord713!==null)
+      void sendExploreServerOwnedFollow713(user,serverRecord713);
   };
 
   const closeMoreSheet = () => {

@@ -69,6 +69,8 @@ try{
    const nextEntry=patchExploreEntry713(entry);
    const nextCanonical=patchExploreCanonicalExports713(canonical);
    assert.ok(nextEntry.includes('runOwnerFollowPrecommit557'));
+   assert.ok(nextEntry.includes('preAuthLimiter:enforcePreAuthBurstLimit'));
+   assert.ok(nextCanonical.includes('enforcePreAuthBurstLimit'));
    assert.ok(nextCanonical.endsWith('handleFollowOverlay354 };\n'));
    checkSyntax('explore-entry',nextEntry);
    checkSyntax('explore-canonical',nextCanonical);

@@ -166,7 +166,13 @@ assert.match(mountedError,/failure\.desiredFollowing === true/);
 assert.match(mountedError,/getExploreProfileConnections\(\s*targetUid, 'followers', null, true\)/);
 assert.match(mountedError,/page697\.items\.some\(row => row\.uid === viewerUid\)/);
 assert.match(mountedError,/if \(confirmedByFollowerPage697\)/);
-assert.match(mountedError,/readExploreFollowLocalChoice685\(viewerUid,targetUid\)\?\.following !== true/);
+// APP698: known exact public follower must remain recoverable even when
+// local receipt or direct follow-state recheck is unavailable.
+assert.match(mountedError,/latest\?\.isFollowing !== true/);
+assert.match(mountedError,/clickChoice698\?\.following !== false/);
+assert.match(mountedError,/currentChoice698\?\.following === false/);
+assert.match(mountedError,/currentChoice698\.at > clickChoice698\.at/);
+console.log('APP698_MISSING_RECEIPT_OR_GET_CAN_USE_POSITIVE_ONLY_PROOF=PASS');
 assert.match(mountedError,/setFollowState\(previous => previous[\s\S]*isFollowing:true/);
 console.log('APP697_POSITIVE_ONLY_ONE_TARGET_FOLLOWER_RECOVERY=PASS');
 console.log('APP696_MOUNTED_UNKNOWN_ACK_NO_FAKE_SETTLED=PASS');

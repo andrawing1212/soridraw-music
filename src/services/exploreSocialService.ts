@@ -85,8 +85,10 @@ const requestPublic = async (path: string, cache: RequestCache = 'default') => {
   return payload;
 };
 
-const requestAuthed = async (user: User, path: string, init: RequestInit = {}) => {
-  const authHeaders = init.keepalive === true
+const requestAuthed = async (
+  user: User, path: string, init: RequestInit = {}, preparedOnly712 = false,
+) => {
+  const authHeaders = preparedOnly712
     ? getFollowExitAuth712(user)
     : await buildAuthHeaders(user);
   if (!authHeaders) throw new Error('종료 중 보안 인증이 준비되지 않았습니다. 다음 접속에서 안전하게 다시 시도합니다.');
@@ -779,8 +781,16 @@ export const setExploreFollow = async (
   if (!normalizedUid) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
   const payload = await requestOrderedExploreFollow354(
     user.uid, normalizedUid, follow,
-    (path, init) => requestAuthed(user, path,
-      options.exitKeepalive === true ? { ...init, keepalive: true } : init),
+    (path, init) => {
+      // Already-dispatched normal mutations must also survive a subsequent
+      // pagehide. Normal auth remains fresh; only an exit uses memory-only
+      // preauthorization to avoid awaiting credentials during teardown.
+      const isWrite = init?.method === 'PUT' || init?.method === 'DELETE';
+      return requestAuthed(user, path,
+        options.exitKeepalive === true || isWrite
+          ? { ...init, keepalive: true } : init,
+        options.exitKeepalive === true);
+    },
   );
   const row = payload?.data || {};
   const targetFollower662 = row?.followerCount ?? row?.follower_count;

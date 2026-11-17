@@ -55,7 +55,7 @@ jobs:
             console.log('APP705_SOURCE_FIELD_KEYS='+(row.source&&typeof row.source==='object'?Object.keys(row.source).sort().join(','):'NONE'));
             console.log('APP705_WORKERS_FIELD_KEYS='+Object.keys(workers).sort().join(','));
             console.log('APP705_HTTP_STATUS='+String(workers?.event?.response?.status||row?.statusCode||meta?.statusCode||'UNKNOWN'));
-            const safeText=v=>String(v||'').replace(/https?:\\/\\/[^ ]+/g,'[URL]').replace(/[A-Za-z0-9_-]{32,}/g,'[redacted]').slice(0,140);
+            const safeText=v=>String(v||'').replaceAll('https://','[URL]:').replace(/[A-Za-z0-9_-]{32,}/g,'[redacted]').slice(0,140);
             console.log('APP705_SOURCE_SAFE_MESSAGE='+safeText(row.source?.message||row.source?.error||row.message));
             console.log('APP705_METADATA_SAFE_MESSAGE='+safeText(meta.message||meta.errorTemplate||meta.messageTemplate));
             console.log('APP705_EVENT='+JSON.stringify({

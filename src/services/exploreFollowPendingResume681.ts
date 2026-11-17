@@ -2,6 +2,7 @@
 // on ANY SORIDRAW route. No startup request for a settled account.
 import {onAuthStateChanged} from 'firebase/auth';
 import {auth} from '../firebase';
+import {confirmExploreServerOwnedFollow713} from './exploreFollowServerOwned713';
 import {
   queueExploreFollowFinalState380,
   readPendingExploreFollowIntents380,
@@ -66,9 +67,13 @@ export function startExploreFollowPendingResume681(){
     restoredUpdatedAt:row.updatedAt,
     restoredRetryUsed:row.retryUsed,
     restoredSuspended:row.suspended||hadCooldown,
-    commit:(following)=>setExploreFollow(user,targetUid,following,row.targetProfile),
-    exitCommit:(following)=>setExploreFollow(
-     user,targetUid,following,row.targetProfile,{exitKeepalive:true}),
+    serverOwned713:row.serverOwned713===true,
+    commit:(following)=>row.serverOwned713===true
+     ?confirmExploreServerOwnedFollow713(user,targetUid,following)
+     :setExploreFollow(user,targetUid,following,row.targetProfile),
+    exitCommit:row.serverOwned713===true?undefined:
+     (following)=>setExploreFollow(
+      user,targetUid,following,row.targetProfile,{exitKeepalive:true}),
     onSettled:(settlement)=>{
      if(auth.currentUser?.uid!==viewerUid)return;
      const result=settlement.result;

@@ -163,6 +163,11 @@ assert.match(mountedError,/ACTOR_MISSING_PUBLIC_LIST/);
 assert.match(mountedError,/PUBLIC_LIST_UNAVAILABLE/);
 assert.match(mountedError,/WRITE_UNKNOWN/);
 assert.match(mountedError,/상태:/);
+assert.ok(mountedError.includes("failure.desiredFollowing ? 'FOLLOW' : 'UNFOLLOW'"));
+assert.match(mountedError,/REVISION_ACK_INVALID/);
+assert.match(mountedError,/ORDER_STATE_INVALID/);
+assert.match(mountedError,/LOCAL_RETRY_GUARD/);
+console.log('APP700_FOLLOW_UNFOLLOW_ERROR_CLASSIFICATION=PASS');
 console.log('APP699_MOUNTED_ONE_PAIR_AUTH_DIAGNOSTICS_NO_NEW_GET=PASS');
 // APP697: a real existing follower confirmed in a bounded public relation
 // page can repair only the button after failure, not invent public counts.

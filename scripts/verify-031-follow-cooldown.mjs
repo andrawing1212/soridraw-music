@@ -55,7 +55,9 @@ try{
  assert.equal(errors.length,1,'EXHAUSTED_COOLDOWN_MUST_NOTIFY');
  assert.equal(errors[0].baseFollowing,true,'REVERT_TO_LAST_KNOWN_BASE');
  assert.equal(errors[0].desiredFollowing,false);
- assert.match(errors[0].error.message,/저장하지 못했습니다/);
+ assert.equal(errors[0].error.code,'RATE_LIMITED','SECOND_429_CODE_MUST_REACH_UI');
+ assert.equal(errors[0].error.retryAfterMs,60_000,'SECOND_429_RETRY_HEADER_MUST_SURVIVE');
+ assert.equal(errors[0].error.message,'Server cooldown');
  assert.equal(m.readPendingExploreFollowIntents380('actor').length,0,
   'MUST_NOT_PERSIST_FALSE_UNFOLLOW_INDEFINITELY');
  assert.deepEqual(settlements,[]);

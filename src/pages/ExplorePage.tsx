@@ -5272,9 +5272,22 @@ export default function ExplorePage() {
             setFollowSavingUid685('');
             const code = String((failure.error as {code?:unknown})?.code || '').trim();
             const status = Number((failure.error as {status?:unknown})?.status || 0);
+            // APP700: missing transport code is not proof of a server ban.
+            // Classify only known local messages; never expose arbitrary
+            // exception contents, tokens or user identifiers in the UI.
+            const cause700 = String((failure.error as {message?:unknown})?.message || '');
+            const localCause700 = cause700.includes('팔로우 응답 순서를 확인하지 못했습니다')
+              ? 'REVISION_ACK_INVALID'
+              : cause700.includes('팔로우 저장 정보를 확인하지 못했습니다')
+              ? 'ORDER_STATE_INVALID'
+              : cause700.includes('팔로우 변경을 서버에 저장하지 못했습니다')
+              ? 'LOCAL_RETRY_GUARD'
+              : /(?:Failed to fetch|NetworkError|Load failed)/i.test(cause700)
+              ? 'NETWORK_FAILURE'
+              : 'WRITE_UNKNOWN';
             const detail = /^[A-Z][A-Z0-9_]{2,63}$/.test(code) ? code :
-              Number.isSafeInteger(status) && status >= 400 && status < 600 ? String(status) : 'WRITE_UNKNOWN';
-            const diagnosis699 = ` [저장:${detail} · 상태:${latest ? latest.isFollowing ? 'TRUE' : 'FALSE' : 'UNAVAILABLE'} · 목록:${pairEvidence699}]`;
+              Number.isSafeInteger(status) && status >= 400 && status < 600 ? String(status) : localCause700;
+            const diagnosis699 = ` [요청:${failure.desiredFollowing ? 'FOLLOW' : 'UNFOLLOW'} · 저장:${detail} · 상태:${latest ? latest.isFollowing ? 'TRUE' : 'FALSE' : 'UNAVAILABLE'} · 목록:${pairEvidence699}]`;
             if (!latest) {
               if (activeProfileUidRef.current === targetUid)
                 setSocialNotice('팔로우 저장 결과를 확인하지 못했습니다.' +

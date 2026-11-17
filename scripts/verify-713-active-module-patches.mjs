@@ -71,7 +71,7 @@ try{
    assert.ok(nextEntry.includes('runOwnerFollowPrecommit557'));
    assert.ok(nextEntry.includes('preAuthLimiter:enforcePreAuthBurstLimit'));
    assert.ok(nextCanonical.includes('enforcePreAuthBurstLimit'));
-   assert.ok(nextCanonical.endsWith('handleFollowOverlay354 };\n'));
+   assert.ok(nextCanonical.endsWith('handleFollowOverlay354, enforcePreAuthBurstLimit };\n'));
    checkSyntax('explore-entry',nextEntry);
    checkSyntax('explore-canonical',nextCanonical);
    console.log('APP713_EXPLORE_ACTIVE='+id+' PIN_AND_SYNTAX=PASS');

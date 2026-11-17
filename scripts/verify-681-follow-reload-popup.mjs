@@ -159,6 +159,16 @@ assert.match(mountedError,/if \(!latest\) \{/);
 assert.match(mountedError,/if \(!latest\) \{[\s\S]*?return;[\s\S]*?\}\s*const restored = latest\.isFollowing/);
 assert.doesNotMatch(mountedError,/latest\?\.isFollowing \?\? failure\.baseFollowing/);
 assert.match(mountedError,/오류: /);
+// APP697: a real existing follower confirmed in a bounded public relation
+// page can repair only the button after failure, not invent public counts.
+// Missing/partial pages never prove non-follow and cannot force an unfollow.
+assert.match(mountedError,/failure\.desiredFollowing === true/);
+assert.match(mountedError,/getExploreProfileConnections\(\s*targetUid, 'followers', null, true\)/);
+assert.match(mountedError,/page697\.items\.some\(row => row\.uid === viewerUid\)/);
+assert.match(mountedError,/if \(confirmedByFollowerPage697\)/);
+assert.match(mountedError,/readExploreFollowLocalChoice685\(viewerUid,targetUid\)\?\.following !== true/);
+assert.match(mountedError,/setFollowState\(previous => previous[\s\S]*isFollowing:true/);
+console.log('APP697_POSITIVE_ONLY_ONE_TARGET_FOLLOWER_RECOVERY=PASS');
 console.log('APP696_MOUNTED_UNKNOWN_ACK_NO_FAKE_SETTLED=PASS');
 console.log('APP681_NON_EXPLORE_RELOAD_ONLY_PENDING_RESUMED=PASS');
 console.log('APP681_EXACT_SERVER_ACK_UPDATES_POPUP_AND_ACTOR_WITHOUT_EXTRA_GET=PASS');

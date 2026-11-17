@@ -116,6 +116,7 @@ release();await active;
 assert.equal(saved.size,1,'later choice survives prior commit');
 clock+=5000;
 // Different complete window uses another operation ID, not the first.
+release=null;
 const nextAlarm=delayed.alarm();
 for(let i=0;i<40&&!release;i++)await Promise.resolve();
 release();await nextAlarm;

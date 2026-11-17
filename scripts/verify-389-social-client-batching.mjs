@@ -58,24 +58,24 @@ await c.advance(1_000); assert.deepEqual(calls, [true],
 assert.equal(settled[0].baseTargetFollowerCount, 4, 'stale server count is not the local authority');
 
 // Repeated clicks every second for 11 seconds remain ONE unsent final intent.
-const rapid = client(), rapidCalls = [];
+const burst = client(), burstCalls = [];
 for (let i = 0; i < 11; i++) {
-  rapid.queueExploreFollowFinalState380({
+  burst.queueExploreFollowFinalState380({
     ...request('rapid', i % 2 === 0),
     commit: async following => {
-      rapidCalls.push(following);
+      burstCalls.push(following);
       return { isFollowing: following, followerCount: 5, followingCount: 8 };
     },
   });
   if (i !== 10) {
-    await rapid.advance(1_000);
-    assert.deepEqual(rapidCalls, [], 'continuous toggles must not issue periodic writes');
+    await burst.advance(1_000);
+    assert.deepEqual(burstCalls, [], 'continuous toggles must not issue periodic writes');
   }
 }
-await rapid.advance(4_999);
-assert.deepEqual(rapidCalls, [], 'must wait five seconds AFTER the eleventh click');
-await rapid.advance(1);
-assert.deepEqual(rapidCalls, [true], 'only final state is submitted exactly once');
+await burst.advance(4_999);
+assert.deepEqual(burstCalls, [], 'must wait five seconds AFTER the eleventh click');
+await burst.advance(1);
+assert.deepEqual(burstCalls, [true], 'only final state is submitted exactly once');
 
 // Even-number repeated clicks return to the original state and cost W0.
 const noOpRapid = client(), noOpCalls = [];

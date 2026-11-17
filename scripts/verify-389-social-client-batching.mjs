@@ -216,3 +216,5 @@ console.log('APP688_FOLLOW_5S_FIRST_CLICK_NET_ZERO_INFLIGHT_RELOAD_RETRY_BUDGET=
 console.log('APP380_389_EXHAUSTED_429_ROLLBACK_AND_LEGACY_SUSPENDED_REPAIR=PASS');
 if (!followOnly389) console.log('APP380_LIKE_NET_ZERO_AND_DETERMINISTIC_429_NO_FALSE_REBASE=PASS');
 console.log('APP380_NAVIGATION_FLUSH_ZERO=PASS');
+// Run the executable APP712 document-exit tests whenever follow batching is verified.
+await import('./verify-712-follow-pagehide.mjs');

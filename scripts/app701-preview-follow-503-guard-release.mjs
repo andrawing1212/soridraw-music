@@ -34,10 +34,24 @@ async function snapshot(id){
  const [metadata,source]=await Promise.all([
   api('GET','workers/scripts/'+EX+'/versions/'+id),
   api('GET','workers/workers/'+EX+'/versions/'+id+'?include=modules')]);
- check(source.modules?.length===12,'MODULES_12');
- check(new Set(source.modules.map(m=>m.name)).size===12,'NO_DUPLICATE_MODULE');
- check(metadata?.resources?.bindings?.length===37,'BINDINGS_37');
- check(metadata.resources.script_runtime.compatibility_date==='2026-08-28','COMPAT_DATE');
+ // APP701: the CURRENT 100%-active Worker is exact-version and exact-main-
+ // hash locked. Old historical module/binding counts are not release identity.
+ // Preserve the complete actual inventory, and compare every item after staging.
+ const n=source?.modules?.length||0;
+ check(n>=2&&n<=80,'LIVE_MODULE_INVENTORY');
+ check(new Set(source.modules.map(m=>m?.name)).size===n &&
+  source.modules.every(m=>typeof m?.name==='string'&&
+   typeof m?.content_base64==='string'&&m.content_base64.length>0),
+  'LIVE_MODULE_IDENTITY');
+ const bindings=metadata?.resources?.bindings;
+ check(Array.isArray(bindings)&&bindings.length>=5&&bindings.length<=100 &&
+  new Set(bindings.map(b=>b?.name)).size===bindings.length &&
+  bindings.every(b=>typeof b?.name==='string'&&typeof b?.type==='string'),
+  'LIVE_BINDING_INVENTORY');
+ check(/^\\d{4}-\\d{2}-\\d{2}$/.test(metadata?.resources?.script_runtime?.compatibility_date||''),
+  'LIVE_RUNTIME_DATE');
+ check(source.modules.some(m=>m.name==='owner-follow-entry-607.mjs'),
+  'PINNED_MAIN_MODULE_MISSING');
  return {metadata,modules:source.modules.map(m=>({
   name:m.name,content_type:m.content_type||'application/javascript+module',content_base64:m.content_base64
  }))};

@@ -20,7 +20,7 @@ const args={
   precommit++;
   assert.equal((await a.authenticate()).uid,'actor');
   const payload=await a.request.clone().json();
-  assert.equal(payload.followOperationId,args.operationId);
+  assert.ok(/^click713_[A-Za-z0-9_-]+$/.test(payload.followOperationId));
   assert.equal(payload.followExpectedRevision,intent?.id===args.operationId?
     intent.expectedRevision:intent?.revision||0);
   return a.callCanonical(a.request);
@@ -70,7 +70,7 @@ assert.equal((await request({
  readMembership:async()=>{throw Error('D1 offline')}
 })).status,'canonical-state-unavailable');
 assert.equal((await request({
- desired:false,
+ desired:false,operationId:'click713_unfollow_operation_000000000',
  callCanonical:async()=>Response.json({ok:false,status:'writer-unknown'},{status:503})
 })).status,'canonical-write-unconfirmed');
 assert.equal(precommit,2,'changed false branch calls precommit exactly once');

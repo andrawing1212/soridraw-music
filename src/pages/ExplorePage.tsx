@@ -5215,6 +5215,7 @@ export default function ExplorePage() {
             // a partial/missing page, and never issue this read on page entry.
             if (latest && latest.isFollowing === false &&
                 failure.desiredFollowing === true &&
+                readExploreFollowLocalChoice685(viewerUid,targetUid)?.following === true &&
                 !readPendingExploreFollowIntents380(viewerUid)
                   .some(row => row.targetUid === targetUid)) {
               let confirmedByFollowerPage697 = false;
@@ -5225,8 +5226,9 @@ export default function ExplorePage() {
                   page697.items.some(row => row.uid === viewerUid);
               } catch {}
               if (auth.currentUser?.uid !== viewerUid) return;
-              if (readPendingExploreFollowIntents380(viewerUid)
-                .some(row => row.targetUid === targetUid)) return;
+              if (readExploreFollowLocalChoice685(viewerUid,targetUid)?.following !== true ||
+                  readPendingExploreFollowIntents380(viewerUid)
+                    .some(row => row.targetUid === targetUid)) return;
               if (confirmedByFollowerPage697) {
                 clearExploreFollowLocalChoice695(viewerUid,targetUid);
                 rememberExploreFollowLocalChoice685(viewerUid,targetUid,true,true);

@@ -116,6 +116,16 @@ jobs:
           console.log('APP698_CUTOVER_PHASE='+String(phase[0]?.phase||'MISSING'));
           console.log('APP698_CUTOVER_SCHEMA='+String(phase[0]?.schema_version||'MISSING'));
           console.log('APP698_CUTOVER_PRESENT='+(phase.length===1));
+          const publicUrl='https://soridraw-explore-preview.andrawing1212.workers.dev/v1/profiles/'+encodeURIComponent(target[0].uid)+'/followers?limit=30';
+          const res=await fetch(publicUrl,{method:'GET',headers:{Accept:'application/json'},signal:AbortSignal.timeout(25000)});
+          console.log('APP698_PUBLIC_FOLLOWERS_HTTP='+res.status);
+          if(res.ok){
+            const payload=await res.json();
+            const items=Array.isArray(payload?.data?.items)?payload.data.items:[];
+            console.log('APP698_PUBLIC_FOLLOWERS_COUNT='+items.length);
+            console.log('APP698_PUBLIC_FOLLOWERS_HAS_ACTOR='+items.some(row=>row.uid===actor[0].uid));
+            console.log('APP698_PUBLIC_FOLLOWERS_MORE='+Boolean(payload?.data?.nextCursor));
+          }
           console.log('PAIR_DIAG_ONLY_NAMED_PAIR_READ=PASS');
           }
           console.log('PAIR_DIAG_READ_ONLY_NO_USER_DATA_CHANGE=PASS');

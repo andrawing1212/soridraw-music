@@ -47,5 +47,21 @@ jobs:
               console.log('APP707_MAIN_CONTEXT='+JSON.stringify(t).slice(0,1800));
             }
           }
+          for(const filename of ['app607/owner-follow-precommit-557.mjs','app605/owner-follow-service-601.mjs','app605/owner-follow-http-539.mjs']){
+            const mod=modules.find(m=>m.name===filename);
+            if(!mod?.content_base64)throw Error('APP707_MISSING_REQUIRED_MODULE');
+            const source=Buffer.from(mod.content_base64,'base64').toString('utf8');
+            console.log('APP707_PRECOMMIT_MODULE='+filename+' LENGTH='+source.length);
+            const needles=filename.includes('precommit')?['runOwnerFollowPrecommit557','return reply(','503','reserve(']:
+              filename.includes('service-601')?['reserveOwnerFollowViaService601','handleOwnerFollowReplayService601','503']:
+              ['503','Response.json','return reply('];
+            for(const needle of needles){
+              const at=source.indexOf(needle);
+              if(at<0){console.log('APP707_PRECOMMIT_MARKER='+needle+' MISSING');continue;}
+              const size=needle==='runOwnerFollowPrecommit557'?Math.min(12500,source.length-at):
+                needle==='reserveOwnerFollowViaService601'?Math.min(7000,source.length-at):2000;
+              console.log('APP707_PRECOMMIT_CONTEXT='+filename+' '+needle+' '+JSON.stringify(source.slice(Math.max(0,at-150),at+size).replace(/[A-Za-z0-9_-]{48,}/g,'<redacted>')).slice(0,14000));
+            }
+          }
           console.log('APP707_GET_ONLY_NO_USER_DATA=PASS');
           NODE

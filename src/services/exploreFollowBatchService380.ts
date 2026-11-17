@@ -425,10 +425,10 @@ export const queueExploreFollowFinalState380 = (request: ExploreFollowBatchReque
     existing.immediate = request.immediate === true;
     existing.targetProfile = { ...request.targetProfile };
     existing.version += 1;
-    // Rapid taps BEFORE dispatch share the first click's five-second window.
-    // A new choice DURING an already-sent request starts a new window from
-    // that click, so the follow-up commit is never sent earlier than five seconds.
-    if (existing.inflight) existing.updatedAt = Date.now();
+    // APP714: like APP399, an actual NEW click restarts the trailing five-second
+    // window. A resume/remount (restoredUpdatedAt) returns above without moving
+    // this deadline. In-flight changes also wait five seconds from their click.
+    existing.updatedAt = Date.now();
     existing.retryUsed = false;
     existing.suspended = false;
     existing.serverConfirmAttempts713 = 0;

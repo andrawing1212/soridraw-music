@@ -38,17 +38,57 @@ await c.advance(4_000);
 assert.equal(calls.length, 0);
 await c.flushPendingExploreFollowsForPageExit380('viewer');
 await c.flushExploreFollowPair380(JSON.stringify(['viewer', 'target']));
-assert.equal(calls.length, 0, 'navigation/manual flush must respect first click +5s');
+assert.equal(calls.length, 0, 'navigation/manual flush must respect last click +5s');
 c.queueExploreFollowFinalState380(request('target', false));
 await c.advance(999); assert.equal(calls.length, 0);
 await c.advance(1); assert.equal(calls.length, 0);
-assert.equal(c.readPendingExploreFollowIntents380('viewer').length, 0);
+assert.equal(c.readPendingExploreFollowIntents380('viewer').length, 1,
+  'second click must restart the countdown rather than settle at first +5s');
+await c.advance(4_000); assert.equal(calls.length, 0);
+assert.equal(c.readPendingExploreFollowIntents380('viewer').length, 0,
+  'return-to-base after last +5s must be net-zero W0');
 c.queueExploreFollowFinalState380(request());
 await c.advance(1_000);
 c.queueExploreFollowFinalState380(request());
 await c.advance(3_999); assert.equal(calls.length, 0);
-await c.advance(1); assert.deepEqual(calls, [true]);
+await c.advance(1); assert.deepEqual(calls, [],
+  'first click deadline must not dispatch after an intervening click');
+await c.advance(1_000); assert.deepEqual(calls, [true],
+  'last click +5s settles once');
 assert.equal(settled[0].baseTargetFollowerCount, 4, 'stale server count is not the local authority');
+
+// Repeated clicks every second for 11 seconds remain ONE unsent final intent.
+const rapid = client(), rapidCalls = [];
+for (let i = 0; i < 11; i++) {
+  rapid.queueExploreFollowFinalState380({
+    ...request('rapid', i % 2 === 0),
+    commit: async following => {
+      rapidCalls.push(following);
+      return { isFollowing: following, followerCount: 5, followingCount: 8 };
+    },
+  });
+  if (i !== 10) {
+    await rapid.advance(1_000);
+    assert.deepEqual(rapidCalls, [], 'continuous toggles must not issue periodic writes');
+  }
+}
+await rapid.advance(4_999);
+assert.deepEqual(rapidCalls, [], 'must wait five seconds AFTER the eleventh click');
+await rapid.advance(1);
+assert.deepEqual(rapidCalls, [true], 'only final state is submitted exactly once');
+
+// Even-number repeated clicks return to the original state and cost W0.
+const noOpRapid = client(), noOpCalls = [];
+for (let i = 0; i < 12; i++) {
+  noOpRapid.queueExploreFollowFinalState380({
+    ...request('rapid-noop', i % 2 === 0),
+    commit: async following => { noOpCalls.push(following); throw Error('W0 violation'); },
+  });
+  if (i !== 11) await noOpRapid.advance(1_000);
+}
+await noOpRapid.advance(5_000);
+assert.deepEqual(noOpCalls, [], 'last click final net-zero has zero backend writes');
+assert.equal(noOpRapid.readPendingExploreFollowIntents380('viewer').length, 0);
 
 // A click while a canonical request is in-flight gets its own fresh 5s deadline.
 let resolve;
@@ -106,7 +146,7 @@ await remount.advance(1_000); assert.equal(calls.at(-1), true);
 assert.equal(remount.readPendingExploreFollowIntents380('viewer').length, 0);
 
 
-// APP689: three quick route/reload recoveries retain the FIRST 5-second
+// APP689: three quick route/reload recoveries retain the last REAL CLICK
 // deadline and produce one final canonical commit, not 3 server writes.
 const rapid=client(),rapidCalls=[];
 const rapidRequest={...request('rapid-refresh'),
@@ -118,7 +158,7 @@ for(let i=0;i<3;i++){
   rapid.queueExploreFollowFinalState380({...rapidRequest,
     restoredUpdatedAt:firstRapid.updatedAt,initialDelayMs:0});
   assert.equal(rapid.readPendingExploreFollowIntents380('viewer')[0].updatedAt,
-    firstRapid.updatedAt,'RELOAD_MUST_NOT_RESTART_FIRST_CLICK');
+    firstRapid.updatedAt,'RELOAD_MUST_NOT_RESTART_LAST_USER_CLICK');
 }
 await rapid.advance(1_999);assert.equal(rapidCalls.length,0);
 await rapid.advance(1);assert.deepEqual(rapidCalls,[true],

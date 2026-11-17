@@ -142,6 +142,11 @@ jobs:
           console.log('PAIR_DIAG_READ_ONLY_NO_USER_DATA_CHANGE=PASS');
           NODE
 
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
       - name: Read only Andy.j exact per-user follow request receipt
         shell: bash
         run: |

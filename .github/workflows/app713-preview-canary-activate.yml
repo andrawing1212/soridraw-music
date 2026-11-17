@@ -60,7 +60,7 @@ jobs:
           retention-days: 14
 
   runtime_inspect:
-    if: github.repository == 'andrawing1212/soridraw-music' && github.event.head_commit.message == 'APP713_INSPECT_RUNTIME_ONCE'
+    if: github.repository == 'andrawing1212/soridraw-music' && (github.event.head_commit.message == 'APP713_INSPECT_RUNTIME_ONCE' || github.event.head_commit.message == 'APP713_INSPECT_MODULES_ONCE')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -88,6 +88,15 @@ jobs:
             console.log('APP713_RUNTIME_SOURCE='+name);
             console.log('LIVE_RUNTIME='+JSON.stringify(a));
             console.log('STAGED_RUNTIME='+JSON.stringify(b));
+            for(const id of [live,stage]){
+              const path='workers/workers/'+name+'/versions/'+id+'?include=modules';
+              const resp=await fetch('https://api.cloudflare.com/client/v4/accounts/'+account+'/'+path,{
+                headers:{Authorization:'Bearer '+process.env.CLOUDFLARE_API_TOKEN}});
+              const doc=await resp.json().catch(()=>({}));
+              console.log('MODULE_GET='+name+' version='+id+' status='+resp.status+
+                ' err='+String(doc?.errors?.[0]?.code||'none')+
+                ' count='+String(doc?.result?.modules?.length||0));
+            }
           }
           console.log('APP713_RUNTIME_READONLY_DIFF_CAPTURE=PASS');
           NODE

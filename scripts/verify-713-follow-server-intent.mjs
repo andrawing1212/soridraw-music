@@ -44,7 +44,7 @@ const commit=async op=>{
  return {ok:true,canonicalFollowing:op.desired,revision:commits.length,changed};
 };
 const engine=createFollowClickIntent713({storage,env,commit,
- now:()=>clock,makeOperationId:()=>String(++operationCounter).padStart(20,'a')});
+ now:()=>clock,makeOperationId:()=>String(++operationCounter).padStart(20,'a'),enabled:true});
 const args=(desired,sequence,deviceId='device0001',ownerUid='owner')=>
  ({principalUid:'actor',ownerUid,desired,deviceId,sequence});
 assert.equal((await createFollowClickIntent713({storage,env,commit}).submit(args(true,1))).status,'disabled');
@@ -82,7 +82,7 @@ assert.equal(saved.size,0);
 // server-issued operation identity, even if the first transport ACK is lost.
 let calls=0,ids=[],shouldFail=true;
 const errorEngine=createFollowClickIntent713({storage,env,now:()=>clock,
- makeOperationId:()=>String(++operationCounter).padStart(20,'b'),
+ makeOperationId:()=>String(++operationCounter).padStart(20,'b'),enabled:true,
  commit:async x=>{calls++;ids.push(x.operationId);
   if(shouldFail)throw Error('unknown response after maybe commit');
   return {ok:true,canonicalFollowing:x.desired,changed:true,revision:42};
@@ -100,7 +100,7 @@ assert.equal(saved.size,0);
 // Serializes another device's next window while first is committing.
 let release;
 const delayed=createFollowClickIntent713({storage,env,now:()=>clock,
- makeOperationId:()=>String(++operationCounter).padStart(20,'c'),
+ makeOperationId:()=>String(++operationCounter).padStart(20,'c'),enabled:true,
  commit:async x=>new Promise(resolve=>{release=()=>resolve({
   ok:true,canonicalFollowing:x.desired,changed:true,revision:100});}),
 });

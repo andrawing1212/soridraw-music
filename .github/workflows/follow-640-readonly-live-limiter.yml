@@ -94,6 +94,10 @@ jobs:
           } else {
             const baseline=await query('SELECT COUNT(*) AS n FROM follows WHERE follower_uid=? AND following_uid=?',[actor[0].uid,target[0].uid]);
             console.log('PAIR_DIAG_FROZEN_BASELINE_PRESENT='+(Number(baseline[0]?.n||0)>0));
+            const overlay=await query('SELECT following,baseline_following FROM explore_follow_overrides_348 WHERE follower_uid=? AND following_uid=? LIMIT 1',[actor[0].uid,target[0].uid]);
+            console.log('PAIR_DIAG_OVERLAY_ROWS='+overlay.length);
+            console.log('PAIR_DIAG_OVERLAY_FOLLOWING='+(overlay.length===1?String(overlay[0].following):'ABSENT'));
+            console.log('PAIR_DIAG_OVERLAY_BASELINE='+(overlay.length===1?String(overlay[0].baseline_following):'ABSENT'));
             const cols=await query('PRAGMA table_info(explore_follow_overrides_348)');
             console.log('PAIR_DIAG_OVERLAY_COLUMNS='+cols.map(c=>String(c.name||'')).join(','));
             console.log('PAIR_DIAG_ONLY_NAMED_PAIR_READ=PASS');

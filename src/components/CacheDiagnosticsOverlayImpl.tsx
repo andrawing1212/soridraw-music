@@ -206,6 +206,39 @@ const getCallableErrorMessage = (error: any) => {
 
 const SORIDRAW_925_CACHE_LIVE_LARGE_SOURCE_TRACE = true;
 
+
+type DiagnosticGroupTone = 'mint' | 'violet' | 'blue' | 'amber' | 'neutral';
+const diagnosticGroupColors: Record<DiagnosticGroupTone, string> = {
+  mint: 'text-[#9fddb9]',
+  violet: 'text-[#c6b5ff]',
+  blue: 'text-[#9fc7ff]',
+  amber: 'text-[#ffbf66]',
+  neutral: 'text-white/90',
+};
+
+function DiagnosticGroup({ title, hint, tone = 'neutral', children }: {
+  title: string;
+  hint?: string;
+  tone?: DiagnosticGroupTone;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="group mt-1.5 rounded-xl bg-[#202023] px-2.5 py-2">
+      <summary className="flex min-w-0 cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0 flex-1">
+          <span className={`text-[12px] font-black tracking-[0.02em] ${diagnosticGroupColors[tone]}`}>{title}</span>
+          {hint ? <span className="ml-1 text-[10px] font-semibold text-white/40">{hint}</span> : null}
+        </span>
+        <span className="shrink-0 text-[10px] font-bold text-white/55">
+          <span className="group-open:hidden">펼치기</span>
+          <span className="hidden group-open:inline">접기</span>
+        </span>
+      </summary>
+      <div className="mt-2 space-y-1">{children}</div>
+    </details>
+  );
+}
+
 export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean }) {
   const [, setAccessRevision] = useState(0);
   const currentUid = String(auth.currentUser?.uid || '');
@@ -550,11 +583,12 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
 
       {!collapsed ? (
         <>
-          <div className="space-y-0.5">
+          <>
             <div className="mb-1.5 flex items-center justify-between gap-2 rounded-lg bg-white/[0.035] px-2 py-1.5 text-[10px] font-bold">
               <span className="text-white/70">이번 실행 진단</span>
               <span className="text-white/38">업데이트 적용 시 자동 초기화</span>
             </div>
+            <DiagnosticGroup title="무료 사용 기준" hint="D1 · Firestore" tone="mint">
             <div className="mb-1.5 rounded-xl bg-[#9fddb9]/[0.07] px-2.5 py-2">
               <div className="mb-1 text-[10px] font-black tracking-[0.05em] text-[#9fddb9]/80">무료한도 기준 · 30일 값은 단순 환산</div>
               <div className="text-[11px] font-bold leading-4 text-white/72">
@@ -566,6 +600,8 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
               <div className="mt-0.5 text-[9px] font-bold text-white/35">실제 무료한도는 매일 초기화되며 30일 한도가 따로 있는 것은 아님</div>
             </div>
 
+            </DiagnosticGroup>
+            <DiagnosticGroup title="앱 · Cloudflare 사용량" hint={`SDK R ${formatNumber(actual.reads)} · Worker ${formatNumber(cloudflare.workerRequests)}`} tone="violet">
             <div className="whitespace-nowrap text-[12px] font-bold text-white/76">{formatActualUsage(actual)}</div>
             <div className="whitespace-nowrap text-[12px] font-bold text-[#c6b5ff]">
               Cloudflare 앱 · LOCAL {formatNumber(cloudflare.localCacheHits)} · Worker {formatNumber(cloudflare.workerRequests)}
@@ -588,7 +624,19 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
       <span>Firestore R {formatNumber(pageSync.firestoreReads)} · W {formatNumber(pageSync.firestoreWrites)}</span>
     </div>
   </div>
+            {hasR2Usage ? (
+              <div className="whitespace-nowrap text-[10px] font-bold text-[#c6b5ff]/72">
+                R2 · Class A {formatNumber(cloudflare.r2ClassA)} · Class B {formatNumber(cloudflare.r2ClassB)}
+              </div>
+            ) : null}
+            {cloudflare.unmeteredResponses > 0 ? (
+              <div className="whitespace-nowrap text-[10px] font-bold text-[#c6b5ff]/55">
+                계측 전 응답 {formatNumber(cloudflare.unmeteredResponses)} · 초기화 권장
+              </div>
+            ) : null}
+            </DiagnosticGroup>
             {cloudflarePathEntries.length > 0 ? (
+              <DiagnosticGroup title="Cloudflare 요청 상세" hint={`${cloudflarePathEntries.length}개 경로`} tone="violet">
               <div className="mt-1 space-y-1 rounded-lg bg-[#c6b5ff]/[0.055] px-2 py-1.5">
                 <div className="mb-0.5 text-[10px] font-black tracking-[0.04em] text-[#c6b5ff]/70">CLOUDFLARE 요청 상세 · 이번 실행</div>
                 {cloudflarePathEntries.map(([path, state]) => {
@@ -625,17 +673,10 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
                   );
                 })}
               </div>
+              </DiagnosticGroup>
             ) : null}
-            {hasR2Usage ? (
-              <div className="whitespace-nowrap text-[10px] font-bold text-[#c6b5ff]/72">
-                R2 · Class A {formatNumber(cloudflare.r2ClassA)} · Class B {formatNumber(cloudflare.r2ClassB)}
-              </div>
-            ) : null}
-            {cloudflare.unmeteredResponses > 0 ? (
-              <div className="whitespace-nowrap text-[10px] font-bold text-[#c6b5ff]/55">
-                계측 전 응답 {formatNumber(cloudflare.unmeteredResponses)} · 초기화 권장
-              </div>
-            ) : null}
+            {(topReadSources.length > 0 || topWriteSources.length > 0) ? (
+              <DiagnosticGroup title="브라우저 SDK 발생처" hint="읽기 · 쓰기" tone="neutral">
             {topWriteSources.length > 0 ? (
               <div className="mt-1 rounded-lg bg-white/[0.025] px-2 py-1.5">
                 <div className="mb-0.5 text-[10px] font-black tracking-[0.05em] text-white/42">SDK WRITE 발생처</div>
@@ -662,6 +703,9 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
                 </div>
               </div>
             ) : null}
+              </DiagnosticGroup>
+            ) : null}
+            <DiagnosticGroup title="실제 서버 지표" hint={serverLoading ? "조회 중" : serverUsage ? `오늘 읽기 ${formatNumber(todayOps?.reads)}` : "서버 ↻ 버튼으로 조회"} tone="blue">
             <div className="mt-1.5 border-t border-white/[0.06] pt-1.5 text-[10px] font-black tracking-[0.04em] text-[#9fc7ff]/62">
               실제 서버 지표 · 오늘 / 최근 {CLOUD_WINDOW_MINUTES}분
             </div>
@@ -688,8 +732,9 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
             {serverError && serverUsage ? (
               <div className="text-[10px] font-bold leading-4 text-[#ff9d9d]/85">{serverError}</div>
             ) : null}
-          </div>
-
+            </DiagnosticGroup>
+          </>
+            <DiagnosticGroup title="카탈로그 조회 상태" hint="뮤직노트" tone="amber">
           <div className="mt-2 rounded-xl bg-[#ffbf66]/[0.07] px-2.5 py-2">
             <div className="mb-1 text-[10px] font-black tracking-[0.05em] text-[#ffbf66]/75">CATALOG BROWSER PATH</div>
             <div className="flex min-w-0 items-center justify-between gap-2 text-[11px] font-bold text-white/72">
@@ -702,13 +747,14 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
             </div>
           </div>
 
-          <section className="mt-2 rounded-xl bg-white/[0.035] px-2.5 py-2 text-[11px] text-white/75">
+            </DiagnosticGroup>
+          <section className="mt-2 rounded-xl bg-white/[0.045] px-2.5 py-2 text-[11px] text-white/75">
             <button
               type="button"
               aria-expanded={manualOriginalToolsOpen}
               aria-controls="cache-live-original-recovery-tools"
               onClick={() => setManualOriginalToolsOpen((open) => !open)}
-              className="flex w-full items-center justify-between gap-2 border-0 bg-transparent p-0 text-left font-black text-white/85"
+              className="flex w-full items-center justify-between gap-2 border-0 bg-transparent p-0 text-left text-[12px] font-black text-white/95"
             >
               <span>원본·복구 진단 <span className="font-medium text-white/45">· 수동 도구 4개</span></span>
               <span className="shrink-0 text-white/60">{manualOriginalToolsOpen ? '접기' : '펼치기'}</span>
@@ -727,6 +773,7 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
             ) : null}
           </section>
 
+          <DiagnosticGroup title="기기 저장공간" hint="수동 측정 · 읽기 전용" tone="neutral">
           <section className="mt-2 rounded-xl bg-white/[0.035] px-2.5 py-2 text-[10px] text-white/65">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-black">기기 저장공간 · 읽기 전용</span>
@@ -765,6 +812,8 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
             )}
           </section>
 
+          </DiagnosticGroup>
+          <DiagnosticGroup title="페이지별 사용량" hint="섹션 · 최근곡 · 뮤직노트 · 라이브러리" tone="neutral">
           <div className="mt-2 space-y-1">
             {rows.map(({ domain, label }) => {
               const state = states[domain];
@@ -779,6 +828,7 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
             })}
           </div>
 
+          </DiagnosticGroup>
         </>
       ) : null}
     </div>

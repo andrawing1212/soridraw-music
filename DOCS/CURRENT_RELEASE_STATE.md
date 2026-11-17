@@ -1,12 +1,35 @@
-## CURRENT — APP711 팔로우 503 직접 원인 수정·검증 (2026-11-18 KST)
+## CURRENT — APP711 팔로우 503 수정·PREVIEW 실사용 검증 완료 (2026-11-18 KST)
 
 - 기준 preview 76821aa8e5a71cae34fea73d597bb93bcc93a386. APP710 진단 배포 PR #1183/#1184 완료, 읽기 전용 PR #1185/Actions 44120598139에서 실제 요청의 내부 실패가 operation-conflict임을 확인. Ray a5bfee994d881a23, 2026-11-17T15:57:36Z.
 - 원인: 기존 예약과 같은 작업 ID/관계 revision/방향인데 별도로 변하는 공개 프로필 priorR2Revision까지 완전 일치를 요구함. 페이지 이동·reload 후 같은 작업 재시도에서 최신 프로필 버전이 달라지면 canonical 저장 전에 503. 실제 활성 owner 소스 SHA를 고정한 실행 테스트로 재현. CORS 오류는 이 실패 응답에 CORS 헤더가 없는 부수 현상.
 - 최소 수정: 같은 불변 작업 + 프로필 버전 비역행이면 최초 예약과 최초 floor를 그대로 재사용. 서로 다른 작업/순서/세대/방향은 거절. 명시적인 인증 재요청으로 동일한 dead 예약만 새 generation으로 재예약해 알림 누락을 방지. 예약/알람 저장 성공 전 ACK 금지, 관련 없는 예약 보존, 큐 24/재시도 8 제한 유지. 데이터 초기화/강제 편집/새 polling 없음.
 - 비용: 정상 중복 6회 storage write/alarm write 0 실행 확인. 추가 D1/R2/Functions 호출 없음. 중복 ACK 전 로컬 DO alarm 존재 확인 1회. dead 재요청만 기존 예약 재저장/알람 1회, 백그라운드 polling 없음.
-- 검증: 활성 번들 및 원본 두 경로에서 재현/수정/중복/불변값 충돌/queue bound/8회 실패 후 재요청/알람 실패 시 ACK 거부/전달 검사 PASS. 기존 APP556/557/568 회귀 PASS. APP710에서 TS/build PASS, APP711 필수 CI 예정.
-- 활성: Explore a28c1391-1d98-41fb-b9c4-8f51aa19e0a0(APP710 진단), owner 15981200-c988-44b7-8b20-73b777d4fe63. APP711 아직 배포 전. 버전·바인딩·런타임 완전 보존과 rollback 확인 후 owner 단일 모듈만 적용.
-- 미완료: APP711 PREVIEW 배포, 실제 follow→페이지 이동→여러 번 reload→unfollow, PC/실제 모바일 숫자 일치. 기능 완료 아님. Hosting/Functions/Rules/main/TEST/PRODUCTION 변경 없음.
+- 검증: 활성 번들 및 원본 두 경로에서 재현/수정/중복/불변값 충돌/queue bound/8회 실패 후 재요청/알람 실패 시 ACK 거부/전달 검사 PASS. 기존 APP556/557/568 회귀 PASS. APP711 CI 44124884859(TypeScript/build 포함 공통 품질), 44124884759(팔로우 제한), 44124884595(정확한 활성 소스·예약 회귀) 모두 PASS. 배포 트리거 공통 검사 44125538099도 PASS.
+- 활성: Explore a28c1391-1d98-41fb-b9c4-8f51aa19e0a0(APP710 진단) 유지. owner는 15981200-c988-44b7-8b20-73b777d4fe63 → **1e987bc3-36d3-4bb0-861f-4df17f536592** 100% 배포 완료. Actions 44125559531 성공, 2026-11-17T16:25:52Z. 단일 worker.js만 변경, 모든 바인딩·런타임·DO namespace 보존 및 TEST/PRODUCTION/Explore 불변 검사 PASS. 이전 owner 버전이 롤백 기준.
+- 실사용 완료: 실제 로그인 PC PREVIEW에서 기존 실패 취소가 HTTP 200으로 성공(팔로워 2→1). 이어 팔로우 HTTP 200 → Explore 이동 → 새로고침 3회 → 소울포스뮤직 재진입(팔로워 2/팔로잉 1/팔로잉 버튼 유지) → 취소 HTTP 200 → 마지막 새로고침 뒤 팔로워 1/팔로잉 1/팔로우 버튼 유지. 실제 모바일도 동일 계정에서 버튼·팔로워 1·팔로잉 1 모두 일치한다고 사용자가 확인.
+- GitHub: 수정 PR #1186(merge 42784907c3109d183e1edfaab6b56f14e9f13f07), 배포 PR #1187(merge **0ef42faa013ee329f0288cda29118b97cd263baa**). 검증 주소 https://preview.soridraw.com . Hosting/Functions/Rules/main/TEST/PRODUCTION 변경 없음. Firebase 기존 연결·Rules 읽기 전용 CI 확인 PASS. 사용자 원본 강제 수정/초기화 없음; 실사용 검증에서 승인된 정상 follow/unfollow만 수행.
+- 범위 한계: 실제 과금 계정의 장기 트래픽 비용 측정이나 전체 기능 재감사는 수행하지 않음. 이번 수정의 격리 비용 회귀와 기존 알림 검증을 재사용. 예약 오류 응답의 CORS 헤더 자체는 변경하지 않았고, 재현된 정상 요청에서는 503/CORS 오류가 사라짐. 향후 다른 내부 실패가 생기면 APP710 고정 코드 로그로 구분 가능.
+- 다음: 본 수정의 PREVIEW 완료. TEST/PRODUCTION 승격은 별도 사용자 명령 전까지 하지 않음.
+
+### 이번 작업 변경 파일 / 누적 변경 파일
+
+이번 팔로우 503 요청의 누적 기준은 preview 8a95052dc022de2ed82b406a9ad6f2cdc9039f54이며, 두 목록은 동일한 아래 15개 파일이다. 중단·재개는 새 세션으로 초기화하지 않았다.
+
+- `.deploy/app710-preview-follow-reservation-diagnostic.trigger`
+- `.deploy/app711-preview-follow-reservation-retry.trigger`
+- `.github/workflows/app705-one-ray-503-readonly.yml`
+- `.github/workflows/app709-public-reservation-source-readonly.yml`
+- `.github/workflows/app710-preview-follow-reservation-diagnostic.yml`
+- `.github/workflows/app711-preview-follow-reservation-retry.yml`
+- `DOCS/CURRENT_RELEASE_STATE.md`
+- `cloudflare/explore-worker/runtime/owner-follow-recovery-556.mjs`
+- `scripts/app710-preview-follow-reservation-diagnostic-release.mjs`
+- `scripts/app711-preview-follow-reservation-retry-release.mjs`
+- `scripts/fixtures/owner-follow660/owner-follow-service-active710.mjs`
+- `scripts/lib/follow-reservation-diagnostic-710.mjs`
+- `scripts/lib/follow-reservation-retry-711.mjs`
+- `scripts/verify-710-follow-reservation-diagnostic.mjs`
+- `scripts/verify-711-follow-reservation-retry.mjs`
 
 ## CURRENT — APP669 제3자 팔로우 숫자 서버 정본 증명·발행 연결 소스, 활성 배포 HOLD (2026-11-15 KST)
 

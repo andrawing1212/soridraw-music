@@ -57,7 +57,10 @@ assert.match(page,/profileConnectionsLoading376 && visibleItems690\.length===0/)
 
 assert.match(page,/overlayOwnFollowingPending690\(/);
 
-assert.match(click,/commit: \(following\) => setExploreFollow\(user, targetUid, following, profile\)/);
+assert.match(click,/commit: \(following\) => serverRecord713 !== null/);
+assert.match(click,/confirmExploreServerOwnedFollow713\(user,targetUid,following\)/);
+assert.match(click,/: setExploreFollow\(user,targetUid,following,profile\)/);
+assert.match(click,/exitCommit: serverRecord713 !== null \? undefined/);
 assert.doesNotMatch(click,/followMutationInFlightRef\.current/);
 assert.match(click,/getExploreFollowState\(user, targetUid, true\)/);
 assert.match(click,/if \(persistConfirmed\) \{/);

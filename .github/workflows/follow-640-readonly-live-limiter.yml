@@ -146,5 +146,5 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npm install --prefix cloudflare/explore-worker --no-audit --no-fund --package-lock=false --silent
+          npm install --prefix cloudflare/explore-worker --no-audit --no-fund --package-lock=false
           node scripts/app702-read-andyj-follow-receipt.mjs

@@ -160,7 +160,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with: {node-version: '22'}
-      - name: Read only actor and target R2 follow profile projection status
+      - name: Read only exact active shared-profile v113 actor and target records
         shell: bash
         run: |
           set -euo pipefail

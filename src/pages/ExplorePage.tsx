@@ -5216,6 +5216,9 @@ export default function ExplorePage() {
             // APP698: the canonical retry itself may be unavailable and
             // localStorage may have lost the short-lived choice on reload.
             // Neither condition may suppress one positive-only public proof.
+            // APP699: safe one-pair evidence from the same existing GETs;
+            // never log UIDs or tokens, and never add another network request.
+            let pairEvidence699 = 'NO_PUBLIC_CHECK';
             const clickChoice698 = readExploreFollowLocalChoice685(viewerUid,targetUid);
             if (latest?.isFollowing !== true &&
                 failure.desiredFollowing === true &&
@@ -5228,7 +5231,13 @@ export default function ExplorePage() {
                   targetUid, 'followers', null, true);
                 confirmedByFollowerPage697 =
                   page697.items.some(row => row.uid === viewerUid);
-              } catch {}
+                pairEvidence699 = confirmedByFollowerPage697 ? 'ACTOR_IN_PUBLIC_LIST' :
+                  !page697.nextCursor && page697.items.length < 30
+                    ? 'ACTOR_MISSING_PUBLIC_LIST'
+                    : 'PUBLIC_LIST_INCOMPLETE';
+              } catch {
+                pairEvidence699 = 'PUBLIC_LIST_UNAVAILABLE';
+              }
               if (auth.currentUser?.uid !== viewerUid) return;
               const currentChoice698 = readExploreFollowLocalChoice685(viewerUid,targetUid);
               // A newer opposite click or more recent same-pair choice wins;
@@ -5264,11 +5273,12 @@ export default function ExplorePage() {
             const code = String((failure.error as {code?:unknown})?.code || '').trim();
             const status = Number((failure.error as {status?:unknown})?.status || 0);
             const detail = /^[A-Z][A-Z0-9_]{2,63}$/.test(code) ? code :
-              Number.isSafeInteger(status) && status >= 400 && status < 600 ? String(status) : '';
+              Number.isSafeInteger(status) && status >= 400 && status < 600 ? String(status) : 'WRITE_UNKNOWN';
+            const diagnosis699 = ` [저장:${detail} · 상태:${latest ? latest.isFollowing ? 'TRUE' : 'FALSE' : 'UNAVAILABLE'} · 목록:${pairEvidence699}]`;
             if (!latest) {
               if (activeProfileUidRef.current === targetUid)
                 setSocialNotice('팔로우 저장 결과를 확인하지 못했습니다.' +
-                  (detail ? ` (오류: ${detail})` : '') + ' 잠시 후 다시 확인해 주세요.');
+                  diagnosis699 + ' 잠시 후 다시 확인해 주세요.');
               return;
             }
             const restored = latest.isFollowing;
@@ -5279,7 +5289,7 @@ export default function ExplorePage() {
             paint(restored,true,latest);
             if (latest.isFollowing !== failure.desiredFollowing)
               setSocialNotice('팔로우 변경을 저장하지 못했습니다.' +
-                (detail ? ` (오류: ${detail})` : '') + ' 다시 시도해 주세요.');
+                diagnosis699 + ' 다시 시도해 주세요.');
           });
       },
       onDeferred: () => {

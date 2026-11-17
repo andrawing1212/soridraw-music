@@ -1,0 +1,103 @@
+name: APP713 PREVIEW single-actor backend canary activation
+on:
+  push:
+    branches: [fix/app713-server-owned-follow]
+    paths:
+      - '.github/workflows/app713-preview-canary-activate.yml'
+permissions: {contents: read}
+concurrency:
+  group: soridraw-app713-preview-single-actor-release
+  cancel-in-progress: false
+jobs:
+  canary:
+    if: github.repository == 'andrawing1212/soridraw-music' && github.event.head_commit.message == 'APP713_CANARY_ACTIVATE_ONE_SHOT'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    env:
+      APP713_APPROVED_SHA: ${{ github.sha }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+      - uses: google-github-actions/setup-gcloud@v2
+      # APP713_NEW_VERSION_READ_RETRY_GUARD: bounded Cloudflare 100146 immediate GET only.
+      # APP713_RUNTIME_MIGRATION_METADATA_GUARD: inactive versions omit the applied tag.
+      - name: Exact backend release syntax and preview source check
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/app713-canary-function-flag.py
+          node --check scripts/app713-preview-canary-release.mjs
+          node scripts/verify-713-active-module-patches.mjs
+          APP713_SOURCE_SHA=${{ github.sha }} node scripts/app713-preview-stage-inactive.mjs --preflight
+      - name: Enable only new Firebase actor proof and activate two canary-fenced PREVIEW Workers
+        shell: bash
+        run: |
+          set -euo pipefail
+          cleanup() {
+            echo 'APP713_ACTIVATION_FAILED_PERFORM_PINNED_ROLLBACK'
+            node scripts/app713-preview-canary-release.mjs --rollback-if-owned || true
+            python3 scripts/app713-canary-function-flag.py --disable || true
+          }
+          trap cleanup ERR
+          python3 scripts/app713-canary-function-flag.py --enable
+          node scripts/app713-preview-canary-release.mjs --activate
+          trap - ERR
+          echo 'APP713_SINGLE_ACTOR_PREVIEW_BACKENDS_CANARY_LIVE=PASS'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app713-preview-canary-backend-result
+          path: |
+            app713-function-activated.json
+            app713-canary-prepared.json
+            app713-canary-live-result.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  runtime_inspect:
+    if: github.repository == 'andrawing1212/soridraw-music' && (github.event.head_commit.message == 'APP713_INSPECT_RUNTIME_ONCE' || github.event.head_commit.message == 'APP713_INSPECT_MODULES_ONCE')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: GET-only compare Cloudflare active and staged runtime fields
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        shell: bash
+        run: |
+          node --input-type=module - <<'NODE'
+          const account='e1a30fc9ef497fda1d34f4ab3dc1da45';
+          const pairs=[
+            ['soridraw-owner-follow-preview-candidate','1e987bc3-36d3-4bb0-861f-4df17f536592','c4b42dcc-606d-4ac4-a897-da8c6d95c604'],
+            ['soridraw-explore-preview','a28c1391-1d98-41fb-b9c4-8f51aa19e0a0','44cd9dcc-38f9-42af-9596-89a2672f9e0f']
+          ];
+          const get=async(name,id)=>{
+            const r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+account+
+              '/workers/scripts/'+name+'/versions/'+id,{headers:{
+              Authorization:'Bearer '+process.env.CLOUDFLARE_API_TOKEN}});
+            const j=await r.json();
+            if(!r.ok||!j?.success)throw Error('APP713_CLOUDFLARE_READONLY_GET_FAILED');
+            return j.result?.resources?.script_runtime||{};
+          };
+          for(const [name,live,stage] of pairs){
+            const a=await get(name,live),b=await get(name,stage);
+            console.log('APP713_RUNTIME_SOURCE='+name);
+            console.log('LIVE_RUNTIME='+JSON.stringify(a));
+            console.log('STAGED_RUNTIME='+JSON.stringify(b));
+            for(const id of [live,stage]){
+              const path='workers/workers/'+name+'/versions/'+id+'?include=modules';
+              const resp=await fetch('https://api.cloudflare.com/client/v4/accounts/'+account+'/'+path,{
+                headers:{Authorization:'Bearer '+process.env.CLOUDFLARE_API_TOKEN}});
+              const doc=await resp.json().catch(()=>({}));
+              console.log('MODULE_GET='+name+' version='+id+' status='+resp.status+
+                ' err='+String(doc?.errors?.[0]?.code||'none')+
+                ' count='+String(doc?.result?.modules?.length||0));
+            }
+          }
+          console.log('APP713_RUNTIME_READONLY_DIFF_CAPTURE=PASS');
+          NODE

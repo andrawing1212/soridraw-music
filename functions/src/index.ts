@@ -1,4 +1,6 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
+// APP713 additive canary-only Auth status proof (no data writes).
+export { verifyExploreFollowActor713 } from "./ownerFollowActorVerify713";
 import { defineSecret } from "firebase-functions/params";
 // APP572: obsolete UID-only 529 owner relay remains NOT exported.
 // The epoch-aware 542 receiver / 544 enrollment / 547 Auth proof are exported

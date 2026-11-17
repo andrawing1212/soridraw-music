@@ -219,3 +219,10 @@ console.log('APP380_NAVIGATION_FLUSH_ZERO=PASS');
 // Run the executable APP712 document-exit tests whenever follow batching is verified.
 await import('./verify-712-follow-pagehide.mjs');
 await import('./verify-712-follow-keepalive-request.mjs');
+
+// APP713 isolated server-held click intent: source OFF until all private
+// bindings, canonical replay and real-device release gates are integrated.
+await import('./verify-713-follow-server-intent.mjs');
+await import('./verify-713-follow-click-ingress.mjs');
+await import('./verify-713-follow-trusted-canonical.mjs');
+await import('./verify-713-follow-private-pipeline.mjs');

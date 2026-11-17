@@ -27,12 +27,15 @@ const toggle = page.slice(toggleStart, toggleEnd);
 // The 30-second trailing timer remains for legacy/background non-immediate intents.
 assert.match(toggle, /queueExploreFollowFinalState380\(/);
 assert.match(toggle, /immediate: false, initialDelayMs: 5_000/);
-assert.match(toggle, /commit: \(following\) => setExploreFollow\(user, targetUid, following, profile\)/);
+assert.match(toggle, /commit: \(following\) => serverRecord713 !== null/);
+assert.match(toggle, /confirmExploreServerOwnedFollow713\(user,targetUid,following\)/);
+assert.match(toggle, /: setExploreFollow\(user,targetUid,following,profile\)/);
+assert.match(toggle, /exitCommit: serverRecord713 !== null \? undefined/);
 assert.doesNotMatch(toggle, /followMutationInFlightRef\.current/);
 assert.match(toggle,/if \(persistConfirmed\) \{[\s\S]*?patchExploreFollowLocalState377\(viewerUid, targetUid, following, profile\)/);
 const publishIndex = toggle.indexOf('publishExploreFollowSync377(viewerUid');
 const settledIndex = toggle.indexOf('onSettled: (settlement) =>');
-assert.ok(settledIndex > toggle.indexOf('commit: (following) => setExploreFollow('));
+assert.ok(settledIndex > toggle.indexOf('commit: (following) => serverRecord713 !== null'));
 assert.ok(publishIndex > settledIndex, 'same-account signal must follow accepted canonical response');
 
 assert.match(page, /readPendingExploreFollowIntents380\(viewerUid380\)/);

@@ -11,6 +11,7 @@ on:
       - 'src/services/exploreFollowServerOwned713.ts'
       - 'functions/src/ownerFollowActorVerify713.ts'
       - 'functions/scripts/test-713-current-actor.cjs'
+      - 'scripts/app713-create-actor-proof-off.py'
 permissions:
   contents: read
 jobs:
@@ -42,6 +43,7 @@ jobs:
           npm ci --prefix functions --ignore-scripts --no-audit --no-fund
           npm run build --prefix functions
           node functions/scripts/test-713-current-actor.cjs
+          python3 scripts/app713-create-actor-proof-off.py --package-check
       - name: GET-only exact active private Worker release preflight
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

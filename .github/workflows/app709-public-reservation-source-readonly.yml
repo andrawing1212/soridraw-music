@@ -1,0 +1,47 @@
+name: SORIDRAW APP709 Read Only Public Follow Reservation Path
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/app709-public-reservation-source-readonly.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: GET-only current public-only owner reservation implementation
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          const token=process.env.CLOUDFLARE_API_TOKEN||'';
+          const a='e1a30fc9ef497fda1d34f4ab3dc1da45';
+          if(token.length<20||process.env.GITHUB_REF!=='refs/heads/preview')throw Error('HOLD_CONTEXT');
+          const get=async p=>{const r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+a+'/'+p,
+            {headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(25000)});
+            const j=await r.json();if(!r.ok||!j.success)throw Error('HOLD_READ_'+r.status);return j.result};
+          for(const name of ['soridraw-explore-preview','soridraw-owner-follow-preview-candidate']){
+            const versions=(await get('workers/scripts/'+name+'/deployments?per_page=1'))?.deployments?.[0]?.versions;
+            if(versions?.length!==1||Number(versions[0].percentage)!==100)throw Error('HOLD_ACTIVE_'+name);
+            const active=versions[0].version_id;
+            const data=await get('workers/workers/'+name+'/versions/'+active+'?include=modules');
+            console.log('APP709_WORKER='+name+' VERSION='+active+' MODULES='+(data.modules||[]).map(m=>m.name).join(','));
+            for(const module of data.modules||[]){
+              if(!/public-follow|owner-follow-service|owner-follow-http|reservation/i.test(module.name))continue;
+              const src=Buffer.from(module.content_base64||'','base64').toString('utf8');
+              const searches=['validTicket','reserveOwnerFollowViaService601','handleOwnerAndPublic','publicOnly','reservation-unavailable','reserve','authEpoch'];
+              const hits=searches.filter(t=>src.includes(t));
+              if(!hits.length)continue;
+              console.log('APP709_MODULE='+module.name+' LEN='+src.length+' HITS='+hits.join(','));
+              for(const key of ['validTicket','reserveOwnerFollowViaService601','handleOwnerAndPublic','publicOnly']){
+                const i=src.indexOf(key);
+                if(i<0)continue;
+                const excerpt=src.slice(Math.max(0,i-120),i+Math.min(7200,src.length-i)).replace(/[A-Za-z0-9_-]{48,}/g,'<redacted>');
+                console.log('APP709_SOURCE='+module.name+' '+key+' '+JSON.stringify(excerpt).slice(0,7700));
+              }
+            }
+          }
+          console.log('APP709_GET_ONLY_NO_MUTATION=PASS');
+          NODE

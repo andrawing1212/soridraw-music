@@ -224,3 +224,5 @@ await import('./verify-712-follow-keepalive-request.mjs');
 // bindings, canonical replay and real-device release gates are integrated.
 await import('./verify-713-follow-server-intent.mjs');
 await import('./verify-713-follow-click-ingress.mjs');
+await import('./verify-713-follow-trusted-canonical.mjs');
+await import('./verify-713-follow-private-pipeline.mjs');

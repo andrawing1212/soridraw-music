@@ -11,7 +11,7 @@ import {sameStagedWorkerRuntime660} from './lib/owner-follow-general660.mjs';
 const A='e1a30fc9ef497fda1d34f4ab3dc1da45';
 const EX='soridraw-explore-preview',OW='soridraw-owner-follow-preview-candidate';
 const ACTIVE='6c34a746-51de-49ca-9e1f-2a0fb817c1fe';
-const OW_ACTIVE='142e7005-cf9c-4cc7-88fc-a786a8d35058';
+// Owner Worker is a separate service. Read its current 100%-active version at runtime.
 // No historical 0% canary is permitted on the current 100% active release.
 const check=(yes,why)=>{if(!yes)throw Error('APP701_PREVIEW_HOLD_'+why)};
 async function api(method,path,body){
@@ -29,7 +29,7 @@ const norm=v=>JSON.stringify((v||[]).map(({version_id,percentage})=>({version_id
  .sort((a,b)=>a.version_id.localeCompare(b.version_id)));
 const beforePreview=[{version_id:ACTIVE,percentage:100}];
 const afterPreview=id=>[{version_id:id,percentage:100}];
-const ownerBefore=[{version_id:OW_ACTIVE,percentage:100}];
+// Snapshot exact active owner deployment, preserving its current version unchanged.
 async function snapshot(id){
  const [metadata,source]=await Promise.all([
   api('GET','workers/scripts/'+EX+'/versions/'+id),
@@ -63,6 +63,10 @@ async function run(){
   'RELEASE_CONTEXT');
  const protectedNames=['soridraw-explore-test','soridraw-explore-api'];
  const beforeProtected=await Promise.all(protectedNames.map(deployed));
+ const ownerBefore=await deployed(OW);
+ check(Array.isArray(ownerBefore)&&ownerBefore.length===1&&
+  ownerBefore[0]?.version_id&&Number(ownerBefore[0].percentage)===100,
+  'OWNER_ACTIVE_SPLIT_OR_MISSING');
  check(norm(await deployed(EX))===norm(beforePreview),'EXPLORE_ACTIVE_VERSION');
  check(norm(await deployed(OW))===norm(ownerBefore),'OWNER_ACTIVE_VERSION');
  const old=await snapshot(ACTIVE);
@@ -128,7 +132,7 @@ async function run(){
   throw error;
  }
  writeFileSync('app701-worker-result.json',JSON.stringify({status:'PASS',source_parent:process.env.APP701_APPROVED_PARENT,
-  previous:ACTIVE,active:next,owner:OW_ACTIVE,changedModules:['preview-entry.mjs']}));
+  previous:ACTIVE,active:next,owner:ownerBefore[0].version_id,changedModules:['preview-entry.mjs']}));
  console.log('APP701_PREVIEW_WORKER_CANONICAL_ACK_ACTIVE='+next);
  console.log('APP701_TEST_PRODUCTION_OWNER_DATA_UNCHANGED=PASS');
 }

@@ -583,7 +583,7 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
 
       {!collapsed ? (
         <>
-          <div className="space-y-0.5">
+          <>
             <div className="mb-1.5 flex items-center justify-between gap-2 rounded-lg bg-white/[0.035] px-2 py-1.5 text-[10px] font-bold">
               <span className="text-white/70">이번 실행 진단</span>
               <span className="text-white/38">업데이트 적용 시 자동 초기화</span>
@@ -662,8 +662,8 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
                   );
                 })}
               </div>
+              </DiagnosticGroup>
             ) : null}
-            </DiagnosticGroup>
             {hasR2Usage ? (
               <div className="whitespace-nowrap text-[10px] font-bold text-[#c6b5ff]/72">
                 R2 · Class A {formatNumber(cloudflare.r2ClassA)} · Class B {formatNumber(cloudflare.r2ClassB)}
@@ -732,9 +732,8 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
             {serverError && serverUsage ? (
               <div className="text-[10px] font-bold leading-4 text-[#ff9d9d]/85">{serverError}</div>
             ) : null}
-          </div>
-
             </DiagnosticGroup>
+          </>
             <DiagnosticGroup title="카탈로그 조회 상태" hint="뮤직노트" tone="amber">
           <div className="mt-2 rounded-xl bg-[#ffbf66]/[0.07] px-2.5 py-2">
             <div className="mb-1 text-[10px] font-black tracking-[0.05em] text-[#ffbf66]/75">CATALOG BROWSER PATH</div>

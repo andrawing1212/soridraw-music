@@ -16,6 +16,10 @@ jobs:
         shell: bash
         run: |
           node --input-type=module <<'NODE'
+          const {mkdirSync,writeFileSync}=await import('node:fs');
+          const {createHash}=await import('node:crypto');
+          const out=process.env.RUNNER_TEMP+'/follow-active-source';
+          mkdirSync(out,{recursive:true});
           const token=process.env.CLOUDFLARE_API_TOKEN||'';
           const a='e1a30fc9ef497fda1d34f4ab3dc1da45';
           if(token.length<20||process.env.GITHUB_REF!=='refs/heads/preview')throw Error('HOLD_CONTEXT');
@@ -27,9 +31,15 @@ jobs:
             if(versions?.length!==1||Number(versions[0].percentage)!==100)throw Error('HOLD_ACTIVE_'+name);
             const active=versions[0].version_id;
             const data=await get('workers/workers/'+name+'/versions/'+active+'?include=modules');
+            // Export code only, never binding values, credentials or user/DO data.
+            const modules=(data.modules||[]).map(m=>({name:m.name,
+              content:Buffer.from(m.content_base64||'','base64').toString('utf8')}));
+            for(const m of modules)console.log('APP709_SOURCE_SHA='+name+':'+m.name+':'+
+              createHash('sha256').update(m.content).digest('hex'));
+            writeFileSync(out+'/'+name+'.json',JSON.stringify({version:active,modules}));
             console.log('APP709_WORKER='+name+' VERSION='+active+' MODULES='+(data.modules||[]).map(m=>m.name).join(','));
             for(const module of data.modules||[]){
-              if(!/public-follow|owner-follow-service|owner-follow-http|reservation/i.test(module.name))continue;
+              if(!/public-follow|owner-follow-service|owner-follow-http|reservation|^worker\.js$/i.test(module.name))continue;
               const src=Buffer.from(module.content_base64||'','base64').toString('utf8');
               if(module.name==='app605/public-follow-dual-ack-671.mjs'){
                 const found=src.match(/APP671_PUBLIC_DUAL_ACK_COMPILED_OPEN\s*=\s*(true|false)/);
@@ -39,7 +49,7 @@ jobs:
               const hits=searches.filter(t=>src.includes(t));
               if(!hits.length)continue;
               console.log('APP709_MODULE='+module.name+' LEN='+src.length+' HITS='+hits.join(','));
-              for(const key of ['validTicket','reserveOwnerFollowViaService601','handleOwnerAndPublic','publicOnly']){
+              for(const key of ['validTicket','reserveOwnerFollowViaService601','handleOwnerAndPublic','publicOnly','function createOwnerFollowRecovery556','function createOwnerDoService600','function handleOwnerWorker600']){
                 const i=src.indexOf(key);
                 if(i<0)continue;
                 const excerpt=src.slice(Math.max(0,i-120),i+Math.min(7200,src.length-i)).replace(/[A-Za-z0-9_-]{48,}/g,'<redacted>');
@@ -49,3 +59,9 @@ jobs:
           }
           console.log('APP709_GET_ONLY_NO_MUTATION=PASS');
           NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: follow-active-source
+          path: ${{ runner.temp }}/follow-active-source/*.json
+          retention-days: 1
+          if-no-files-found: error

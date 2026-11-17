@@ -31,6 +31,8 @@ export type ExploreFollowPendingRecord380 = ExploreFollowBatchBase380 & {
   targetUid: string;
   desiredFollowing: boolean;
   immediate?: boolean;
+  serverOwned713?: boolean;
+  serverConfirmAttempts713?: number;
   targetProfile: {
     uid: string;
     nickname: string;
@@ -78,6 +80,9 @@ type ExploreFollowBatchRequest380 = ExploreFollowBatchBase380 & {
   // APP712: only a real document exit uses this pre-authorized keepalive sender.
   // Normal five-second batching and net-zero W0 remain unchanged.
   exitCommit?: (following: boolean) => Promise<ExploreFollowCommitResult380>;
+  // APP713 source OFF: backend owns the mutation after a click receipt.
+  serverOwned713?: boolean;
+  serverConfirmAttempts713?: number;
   onBusy?: (busy: boolean) => void;
   onSettled: (settlement: ExploreFollowBatchSettlement380) => void;
   onError: (failure: ExploreFollowBatchError380) => void;
@@ -98,6 +103,7 @@ type ExploreFollowBatchEntry380 = ExploreFollowBatchRequest380 & {
   notBefore: number;
   retryUsed: boolean;
   suspended: boolean;
+  serverConfirmAttempts713: number;
 };
 
 const pending380 = new Map<string, ExploreFollowBatchEntry380>();
@@ -147,6 +153,8 @@ const toRecord380 = (entry: ExploreFollowBatchEntry380): ExploreFollowPendingRec
   baseActorFollowingCount: entry.baseActorFollowingCount,
   desiredFollowing: entry.desiredFollowing,
   immediate: entry.immediate === true,
+  serverOwned713: entry.serverOwned713 === true,
+  serverConfirmAttempts713: entry.serverConfirmAttempts713,
   targetProfile: { ...entry.targetProfile },
   updatedAt: entry.updatedAt,
   notBefore: entry.notBefore,
@@ -332,6 +340,23 @@ export const flushExploreFollowPair380 = async (
     if (exitKeepalive) return;
     const current = pending380.get(key) || entry;
     const code = String((error as { code?: unknown })?.code || '').trim();
+    if (code === 'SERVER_OWNED_PENDING_713' && current.serverOwned713) {
+      // An unknown GET result is NOT a failed canonical commit. Retain the
+      // local outbox; never issue the competing legacy PUT/DELETE.
+      current.inflight = false;
+      current.serverConfirmAttempts713 = Math.min(
+        3, current.serverConfirmAttempts713 + 1);
+      persistEntry380(current);
+      current.onBusy?.(false);
+      if (current.serverConfirmAttempts713 < 3) {
+        schedule380(current, Math.min(10_000, Math.max(1000,
+          Number((error as { retryAfterMs?: unknown })?.retryAfterMs) || 2500)));
+      } else {
+        clearTimer380(current);
+        current.onDeferred?.(0);
+      }
+      return;
+    }
     if (code === 'RATE_LIMITED') {
       // The server rejected this write BEFORE the canonical mutation.
       // A second rejection must not leave an optimistic unfollow painted as
@@ -390,6 +415,7 @@ export const queueExploreFollowFinalState380 = (request: ExploreFollowBatchReque
   if (existing) {
     existing.commit = request.commit;
     existing.exitCommit = request.exitCommit;
+    existing.serverOwned713 = request.serverOwned713 === true;
     existing.onBusy = request.onBusy;
     existing.onSettled = request.onSettled;
     existing.onError = request.onError;
@@ -405,6 +431,7 @@ export const queueExploreFollowFinalState380 = (request: ExploreFollowBatchReque
     if (existing.inflight) existing.updatedAt = Date.now();
     existing.retryUsed = false;
     existing.suspended = false;
+    existing.serverConfirmAttempts713 = 0;
     persistEntry380(existing);
     if (!existing.inflight) schedule380(existing, existing.immediate ? 0 :
       Math.max(0, existing.updatedAt + EXPLORE_FOLLOW_IDLE_FLUSH_MS_380 - Date.now()));
@@ -432,6 +459,9 @@ export const queueExploreFollowFinalState380 = (request: ExploreFollowBatchReque
     notBefore: Math.max(0, Math.floor(Number(request.restoredNotBefore || 0))),
     retryUsed: request.restoredRetryUsed === true,
     suspended: request.restoredSuspended === true,
+    serverOwned713: request.serverOwned713 === true,
+    serverConfirmAttempts713: Math.max(0, Math.min(3,
+      Math.floor(Number(request.serverConfirmAttempts713 || 0)))),
   };
   pending380.set(key, entry);
   // Existing persisted suspended intents from the old app never had a timer.
@@ -464,6 +494,7 @@ export const dispatchPendingExploreFollowsOnPageHide712 = (viewerUid: string): n
   let attempted = 0;
   for (const [key, entry] of pending380) {
     if (entry.viewerUid !== uid || entry.inflight || entry.suspended ||
+        entry.serverOwned713 === true ||
         entry.notBefore > Date.now() || !entry.exitCommit ||
         entry.desiredFollowing === entry.baseFollowing) continue;
     // Persisted at click time. Never clear it merely because keepalive was

@@ -1,0 +1,34 @@
+name: APP713 approved one new Function invoker only
+on:
+  push:
+    branches: [fix/app713-server-owned-follow]
+    paths:
+      - '.github/workflows/app713-one-function-invoker.yml'
+permissions: {contents: read}
+concurrency:
+  group: soridraw-app713-one-function-invoker
+  cancel-in-progress: false
+jobs:
+  invoker_only:
+    if: github.repository == 'andrawing1212/soridraw-music' && github.event.head_commit.message == 'APP713_IAM_APPROVED_ONE_FUNCTION'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      APP713_APPROVED_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ github.sha }}",persist-credentials: false}
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Read and grant invoker only for new actor proof Function; roll back on failure
+        run: python3 scripts/app713-one-function-invoker.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app713-exact-function-invoker-result
+          path: app713-invoker-result.json
+          if-no-files-found: ignore
+          retention-days: 14

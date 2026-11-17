@@ -49,6 +49,15 @@ jobs:
           if(Array.isArray(events))for(const row of events.slice(0,20)){
             const meta=row.$metadata||row.metadata||{};
             const workers=row.$workers||{};
+            console.log('APP705_EVENT_FIELD_KEYS='+Object.keys(row).sort().join(','));
+            console.log('APP705_METADATA_FIELD_KEYS='+Object.keys(meta).sort().join(','));
+            console.log('APP705_SOURCE_TYPE='+typeof row.source);
+            console.log('APP705_SOURCE_FIELD_KEYS='+(row.source&&typeof row.source==='object'?Object.keys(row.source).sort().join(','):'NONE'));
+            console.log('APP705_WORKERS_FIELD_KEYS='+Object.keys(workers).sort().join(','));
+            console.log('APP705_HTTP_STATUS='+String(workers?.event?.response?.status||row?.statusCode||meta?.statusCode||'UNKNOWN'));
+            const safeText=v=>String(v||'').replace(/https?:\\/\\/[^ ]+/g,'[URL]').replace(/[A-Za-z0-9_-]{32,}/g,'[redacted]').slice(0,140);
+            console.log('APP705_SOURCE_SAFE_MESSAGE='+safeText(row.source?.message||row.source?.error||row.message));
+            console.log('APP705_METADATA_SAFE_MESSAGE='+safeText(meta.message||meta.errorTemplate||meta.messageTemplate));
             console.log('APP705_EVENT='+JSON.stringify({
                timestamp:row.timestamp||null,
                service:String(meta.service||workers.scriptName||'').slice(0,65),

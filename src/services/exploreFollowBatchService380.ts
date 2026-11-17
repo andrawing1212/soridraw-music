@@ -335,7 +335,10 @@ export const flushExploreFollowPair380 = async (key: string): Promise<void> => {
         return;
       }
       if (current.retryUsed) {
-        failExploreFollowPending380(current, followRateLimitFailure380());
+        // APP700: a second server 429 is a known RATE_LIMITED response.
+        // Preserve its original code/status/retryAfter instead of converting
+        // it into an opaque WRITE_UNKNOWN local Error. No extra retry or write.
+        failExploreFollowPending380(current, error);
         return;
       }
       const retryDelay = retryAfterMs380(error);

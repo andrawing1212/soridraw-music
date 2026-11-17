@@ -63,7 +63,7 @@ const prep=(target,source)=>{
    if(m.name==='owner-follow-entry-607.mjs')next=patchExploreEntry713(next);
    else if(m.name==='preview-entry.mjs')next=patchExploreCanonicalExports713(next);
   }
-  return {...m,content_type:m.content_type||'application/javascript+module',
+  return {name:m.name,content_type:m.content_type||'application/javascript+module',
    content_base64:Buffer.from(next).toString('base64')};
  });
  need(names.has(target.main),'MISSING_MAIN_'+target.name);

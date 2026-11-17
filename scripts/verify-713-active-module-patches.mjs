@@ -81,7 +81,7 @@ try{
   for(const m of modules){
    const source='cloudflare/explore-worker/runtime/'+m.split('/').at(-1);
    const data=readFileSync(source,'utf8');
-   assert.ok(data.includes('COMPILED_OPEN=false'),'must be source OFF: '+m);
+   assert.match(data,/COMPILED_OPEN\s*=\s*false/,'must be source OFF: '+m);
    checkSyntax('module-'+kind+'-'+m.split('/').at(-1),data);
   }
  }

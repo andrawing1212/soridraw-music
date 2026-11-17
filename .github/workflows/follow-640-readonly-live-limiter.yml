@@ -65,3 +65,38 @@ jobs:
           console.log('APP640_GET_ONLY_SOURCE_INSPECTION=PASS');
           console.log('APP640_NO_DATA_OR_WORKER_MUTATION=PASS');
           NODE
+
+      - name: Read exact Andy.j to SoulForceMusic relation (SELECT only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const token=String(process.env.CLOUDFLARE_API_TOKEN||'');
+          const account='e1a30fc9ef497fda1d34f4ab3dc1da45';
+          const database='217ef5b1-5d80-4f7c-afc7-9e07eb05c06b';
+          if(process.env.GITHUB_REF!=='refs/heads/preview'||token.length<20)throw Error('READONLY_CONTEXT');
+          const query=async(sql,params=[])=>{
+            const r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+account+'/d1/database/'+database+'/query',{
+              method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+              body:JSON.stringify({sql,params}),signal:AbortSignal.timeout(25000)});
+            const j=await r.json();
+            if(!r.ok||j.success!==true||!Array.isArray(j.result))throw Error('READONLY_D1_'+r.status);
+            return j.result[0]?.results||[];
+          };
+          // Named public profile lookup only, never log UIDs or raw rows.
+          const profiles=await query("SELECT uid,nickname,handle FROM public_profiles WHERE nickname IN ('Andy.j','Andy.J','andy.j','소울포스뮤직') OR handle IN ('andy.j','andyj','soulforcemusic','soulforcemusi') LIMIT 12");
+          const actor=profiles.filter(p=>String(p.nickname||'').toLowerCase()==='andy.j'||['andy.j','andyj'].includes(String(p.handle||'').toLowerCase()));
+          const target=profiles.filter(p=>p.nickname==='소울포스뮤직'||['soulforcemusic','soulforcemusi'].includes(String(p.handle||'').toLowerCase()));
+          console.log('PAIR_DIAG_PUBLIC_ACTOR_MATCHES='+actor.length);
+          console.log('PAIR_DIAG_PUBLIC_TARGET_MATCHES='+target.length);
+          if(actor.length!==1||target.length!==1) {
+            console.log('PAIR_DIAG_UNAMBIGUOUS_IDENTIFICATION=HOLD');
+          } else {
+            const baseline=await query('SELECT COUNT(*) AS n FROM follows WHERE follower_uid=? AND following_uid=?',[actor[0].uid,target[0].uid]);
+            console.log('PAIR_DIAG_FROZEN_BASELINE_PRESENT='+(Number(baseline[0]?.n||0)>0));
+            const cols=await query('PRAGMA table_info(explore_follow_overrides_348)');
+            console.log('PAIR_DIAG_OVERLAY_COLUMNS='+cols.map(c=>String(c.name||'')).join(','));
+            console.log('PAIR_DIAG_ONLY_NAMED_PAIR_READ=PASS');
+          }
+          console.log('PAIR_DIAG_READ_ONLY_NO_USER_DATA_CHANGE=PASS');
+          NODE

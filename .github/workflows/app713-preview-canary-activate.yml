@@ -57,3 +57,36 @@ jobs:
             app713-canary-live-result.json
           if-no-files-found: ignore
           retention-days: 14
+
+  runtime_inspect:
+    if: github.repository == 'andrawing1212/soridraw-music' && github.event.head_commit.message == 'APP713_INSPECT_RUNTIME_ONCE'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: GET-only compare Cloudflare active and staged runtime fields
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        shell: bash
+        run: |
+          node --input-type=module - <<'NODE'
+          const account='e1a30fc9ef497fda1d34f4ab3dc1da45';
+          const pairs=[
+            ['soridraw-owner-follow-preview-candidate','1e987bc3-36d3-4bb0-861f-4df17f536592','c4b42dcc-606d-4ac4-a897-da8c6d95c604'],
+            ['soridraw-explore-preview','a28c1391-1d98-41fb-b9c4-8f51aa19e0a0','44cd9dcc-38f9-42af-9596-89a2672f9e0f']
+          ];
+          const get=async(name,id)=>{
+            const r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+account+
+              '/workers/scripts/'+name+'/versions/'+id,{headers:{
+              Authorization:'Bearer '+process.env.CLOUDFLARE_API_TOKEN}});
+            const j=await r.json();
+            if(!r.ok||!j?.success)throw Error('APP713_CLOUDFLARE_READONLY_GET_FAILED');
+            return j.result?.resources?.script_runtime||{};
+          };
+          for(const [name,live,stage] of pairs){
+            const a=await get(name,live),b=await get(name,stage);
+            console.log('APP713_RUNTIME_SOURCE='+name);
+            console.log('LIVE_RUNTIME='+JSON.stringify(a));
+            console.log('STAGED_RUNTIME='+JSON.stringify(b));
+          }
+          console.log('APP713_RUNTIME_READONLY_DIFF_CAPTURE=PASS');
+          NODE

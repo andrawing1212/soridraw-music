@@ -5,6 +5,7 @@ import {auth} from '../firebase';
 import {
   queueExploreFollowFinalState380,
   readPendingExploreFollowIntents380,
+  dispatchPendingExploreFollowsOnPageHide712,
 } from './exploreFollowBatchService380';
 import {
   getExploreFollowState,
@@ -41,6 +42,11 @@ export function startExploreFollowPendingResume681(){
  if(typeof window==='undefined'||window.location.hostname!=='preview.soridraw.com')return;
  if(started681)return;
  started681=true;
+ // Real document teardown (reload/window close), not React route navigation.
+ // The click-time local outbox remains until an actual canonical ACK.
+ window.addEventListener('pagehide',()=>{
+  dispatchPendingExploreFollowsOnPageHide712(auth.currentUser?.uid||'');
+ });
  onAuthStateChanged(auth,(user)=>{
   if(!user)return;
   const viewerUid=user.uid;
@@ -61,6 +67,8 @@ export function startExploreFollowPendingResume681(){
     restoredRetryUsed:row.retryUsed,
     restoredSuspended:row.suspended||hadCooldown,
     commit:(following)=>setExploreFollow(user,targetUid,following,row.targetProfile),
+    exitCommit:(following)=>setExploreFollow(
+     user,targetUid,following,row.targetProfile,{exitKeepalive:true}),
     onSettled:(settlement)=>{
      if(auth.currentUser?.uid!==viewerUid)return;
      const result=settlement.result;

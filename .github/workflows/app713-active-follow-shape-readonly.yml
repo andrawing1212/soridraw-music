@@ -2,7 +2,10 @@ name: APP713 GET-only active follow server-queue boundary
 on:
   push:
     branches: ['fix/app713-server-owned-follow']
-    paths: ['.github/workflows/app713-active-follow-shape-readonly.yml']
+    paths:
+      - '.github/workflows/app713-active-follow-shape-readonly.yml'
+      - 'cloudflare/explore-worker/runtime/owner-follow-client-intent-713.mjs'
+      - 'scripts/verify-713-follow-server-intent.mjs'
 permissions:
   contents: read
 jobs:
@@ -12,6 +15,9 @@ jobs:
     env:
       CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
+      - uses: actions/checkout@v4
+      - name: Isolated server-owned first-click DO state regression
+        run: node scripts/verify-713-follow-server-intent.mjs
       - name: Current active follow private replay and durable owner DO shape
         shell: bash
         run: |

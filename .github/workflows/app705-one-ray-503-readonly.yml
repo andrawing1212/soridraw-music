@@ -18,15 +18,15 @@ jobs:
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
-          const ray='a5bf4b7ca8e01fa4';
+          const ray='a5bfee994d881a23';
           const account='e1a30fc9ef497fda1d34f4ab3dc1da45';
           const token=process.env.CLOUDFLARE_API_TOKEN;
           if(!token||token.length<20||process.env.GITHUB_REF!=='refs/heads/preview')throw Error('APP705_HOLD_CONTEXT');
           const body={
-            queryId:'app705-ray-20261117-readonly',
+            queryId:'app710-ray-20261118-readonly',
             timeframe:{
-              from:Date.parse('2026-11-17T14:05:00Z'),
-              to:Date.parse('2026-11-17T14:07:30Z')},
+              from:Date.parse('2026-11-17T15:57:00Z'),
+              to:Date.parse('2026-11-17T15:58:00Z')},
             limit:30,dry:true,view:'events',
             parameters:{view:'events',datasets:['cloudflare-workers'],
               filters:[{key:'$metadata.rayId',operation:'eq',type:'string',value:ray}]

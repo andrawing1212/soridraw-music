@@ -1,3 +1,13 @@
+## CURRENT — APP712 팔로우 새로고침·창 닫기 전송 PREVIEW Hosting 완료 / 실기기 HOLD (2026-11-18 KST)
+
+- **승인 범위/원인:** 팔로우 클릭은 앱에 먼저 표시되고 5초 뒤 서버에 저장되지만, 기존 `flushPendingExploreFollowsForPageExit380`는 실제 문서 종료에 아무 동작을 하지 않았음. 사용자가 브라우저를 닫으면 미확정 선택은 그 기기의 localStorage에만 남아 같은 계정이 재접속해 APP681 복구가 실행될 때까지 상대방 서버 확정이 지연됐음.
+- **수정:** [소스 PR #1189](https://github.com/andrawing1212/soridraw-music/pull/1189) 병합 `217613414982773cd7fea30340837f18a99cd951`. 실제 `pagehide`에서만 계정이 일치하고 최종적으로 변경된 미확정 팔로우를 준비된 Firebase Auth/AppCheck 헤더로 `fetch keepalive` 송신 시도. 5초 후 이미 진행 중인 PUT/DELETE에도 keepalive 적용. 미확인 응답은 성공으로 판단하지 않고 기존 localStorage outbox를 유지해 다음 접속 시 복구. 일반 SPA 이동 5초 유지, 원상복귀 W0, 서버 쿨다운/중복/APP711 DO 예약 보호, 기존 RTDB 서버 확정 신호 유지. 관리자 저장시간 기능 이번 작업 제외.
+- **검사 PASS:** [팔로우 전용 Actions #44134914214](https://github.com/andrawing1212/soridraw-music/actions/runs/44134914214) TypeScript/빌드/APP712 종료·중복·W0·인증 경계 검사 성공. [최신 의도 경합 #44134915057](https://github.com/andrawing1212/soridraw-music/actions/runs/44134915057) PASS, [쿨다운 #44134913855](https://github.com/andrawing1212/soridraw-music/actions/runs/44134913855) PASS. 기존 APP711 서버 검증 재사용.
+- **PREVIEW 배포:** [PR #1190](https://github.com/andrawing1212/soridraw-music/pull/1190) 병합, [Actions #44135662944](https://github.com/andrawing1212/soridraw-music/actions/runs/44135662944) SUCCESS. 실제 Hosting SHA `e881383ccb957978399892e34946e1b33a11db14`, `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, 공유 RTDB Rules SKIPPED, TEST/PRODUCTION unchanged PASS. Cloudflare Worker, Functions, 공유 D1/R2/사용자 원본 수정 없음.
+- **실검증 요망:** PREVIEW 실로그인 A가 B를 팔로우하고 1초 내 창 닫기, 별도 B PC/모바일의 자동 갱신; A 팔로우 후 새로고침 2~3회; 5초 직후 창 닫기; 5초 안에 팔로우↔취소 후 W0; 버튼·숫자·목록 일치. **현재 실제 PC/모바일 종료 수신 PASS는 미확인.** 브라우저/모바일 강제 종료에서는 cross-origin CORS preflight나 인증 준비로 keepalive가 실패할 수 있으며, 이 경우 앱은 미확정 기록을 안전하게 남기지만 사용자가 재접속하지 않는 상태의 100% 전달을 보장하지는 못함. 새 실패 증거가 나오면 그 경로만 최소 수정. 별도 관리자 저장시간 설정 작업은 승인 전 보류.
+
+---
+
 ## CURRENT — APP711 팔로우 503 수정·PREVIEW 실사용 검증 완료 (2026-11-18 KST)
 
 - 기준 preview 76821aa8e5a71cae34fea73d597bb93bcc93a386. APP710 진단 배포 PR #1183/#1184 완료, 읽기 전용 PR #1185/Actions 44120598139에서 실제 요청의 내부 실패가 operation-conflict임을 확인. Ray a5bfee994d881a23, 2026-11-17T15:57:36Z.

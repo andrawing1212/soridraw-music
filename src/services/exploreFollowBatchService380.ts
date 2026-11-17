@@ -75,6 +75,9 @@ type ExploreFollowBatchRequest380 = ExploreFollowBatchBase380 & {
     handle: string;
   };
   commit: (following: boolean) => Promise<ExploreFollowCommitResult380>;
+  // APP712: only a real document exit uses this pre-authorized keepalive sender.
+  // Normal five-second batching and net-zero W0 remain unchanged.
+  exitCommit?: (following: boolean) => Promise<ExploreFollowCommitResult380>;
   onBusy?: (busy: boolean) => void;
   onSettled: (settlement: ExploreFollowBatchSettlement380) => void;
   onError: (failure: ExploreFollowBatchError380) => void;
@@ -229,12 +232,20 @@ const schedule380 = (entry: ExploreFollowBatchEntry380, delayMs = entry.immediat
   }, finalDelay);
 };
 
-export const flushExploreFollowPair380 = async (key: string): Promise<void> => {
+export const flushExploreFollowPair380 = async (
+  key: string, options: { exitKeepalive?: boolean } = {},
+): Promise<void> => {
   const entry = pending380.get(key);
   if (!entry || entry.inflight || entry.suspended) return;
+  const exitKeepalive = options.exitKeepalive === true;
+  // Do not bypass a server cooldown or send without a prepared, authenticated
+  // keepalive sender. The local outbox remains durable for later recovery.
+  if (exitKeepalive && (entry.notBefore > Date.now() || !entry.exitCommit)) return;
   const dueAt = Math.max(entry.updatedAt + (entry.immediate ? 0 : EXPLORE_FOLLOW_IDLE_FLUSH_MS_380),
     entry.desiredFollowing === entry.baseFollowing ? 0 : entry.notBefore);
-  if (Date.now() < dueAt) { schedule380(entry, dueAt - Date.now()); return; }
+  if (!exitKeepalive && Date.now() < dueAt) {
+    schedule380(entry, dueAt - Date.now()); return;
+  }
 
   // The user's final local state returned to the state that existed before the
   // window opened. No Worker request, R2 write, D1 read or D1 write is needed.
@@ -252,7 +263,9 @@ export const flushExploreFollowPair380 = async (key: string): Promise<void> => {
   const sentDesired = entry.desiredFollowing;
 
   try {
-    const result = await entry.commit(sentDesired);
+    const result = await (exitKeepalive
+      ? entry.exitCommit!(sentDesired)
+      : entry.commit(sentDesired));
     const current = pending380.get(key);
     const settlement: ExploreFollowBatchSettlement380 = {
       viewerUid: entry.viewerUid,
@@ -313,6 +326,10 @@ export const flushExploreFollowPair380 = async (key: string): Promise<void> => {
     pending380.delete(key);
     removeStored380(entry.viewerUid, entry.targetUid);
   } catch (error) {
+    // A browser exit cannot prove that the server did NOT commit. Do not
+    // rollback or discard the saved intent on a missing/failed keepalive ACK.
+    // The APP681 reload recovery reconciles this exact pending pair later.
+    if (exitKeepalive) return;
     const current = pending380.get(key) || entry;
     const code = String((error as { code?: unknown })?.code || '').trim();
     if (code === 'RATE_LIMITED') {
@@ -372,6 +389,7 @@ export const queueExploreFollowFinalState380 = (request: ExploreFollowBatchReque
   const existing = pending380.get(key);
   if (existing) {
     existing.commit = request.commit;
+    existing.exitCommit = request.exitCommit;
     existing.onBusy = request.onBusy;
     existing.onSettled = request.onSettled;
     existing.onError = request.onError;
@@ -437,5 +455,21 @@ export const getPendingExploreFollowMutationCount380 = (viewerUid = '') => {
 };
 
 export const flushPendingExploreFollowsForPageExit380 = async (_viewerUid = '') => {
-  // Navigation never flushes. The module timer and durable outbox own settlement.
+  // SPA navigation never flushes. Only an actual pagehide triggers APP712.
+};
+
+export const dispatchPendingExploreFollowsOnPageHide712 = (viewerUid: string): number => {
+  const uid = String(viewerUid || '').trim();
+  if (!uid) return 0;
+  let attempted = 0;
+  for (const [key, entry] of pending380) {
+    if (entry.viewerUid !== uid || entry.inflight || entry.suspended ||
+        entry.notBefore > Date.now() || !entry.exitCommit ||
+        entry.desiredFollowing === entry.baseFollowing) continue;
+    // Persisted at click time. Never clear it merely because keepalive was
+    // dispatched: page teardown can prevent delivery or its response.
+    attempted++;
+    void flushExploreFollowPair380(key, { exitKeepalive: true });
+  }
+  return attempted;
 };

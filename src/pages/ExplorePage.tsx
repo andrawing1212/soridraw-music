@@ -98,6 +98,7 @@ import {
   getExplorePublicProfile,
   getExplorePublicProfileTracks,
   setExploreFollow,
+  primeExploreFollowExitAuth712,
   type ExploreFollowState,
   type ExploreProfileConnection,
   type ExploreProfileConnectionDirection,
@@ -3874,6 +3875,13 @@ export default function ExplorePage() {
           following380,
           record380.targetProfile,
         ),
+        exitCommit: (following380) => setExploreFollow(
+          activeUser380,
+          targetUid380,
+          following380,
+          record380.targetProfile,
+          { exitKeepalive: true },
+        ),
         onSettled: (settlement380) => {
           const confirmed380 = Boolean(settlement380.result.isFollowing);
           const delta380 = Number(confirmed380) - Number(settlement380.baseFollowing);
@@ -5148,6 +5156,9 @@ export default function ExplorePage() {
     };
 
     setSocialNotice('');
+    // Warm existing Firebase credentials while this document is alive.
+    // pagehide has no time to await them; never block the instant button paint.
+    primeExploreFollowExitAuth712(user);
     // Save the newest button choice before queuing a server mutation.
     rememberExploreFollowLocalChoice685(viewerUid,targetUid,requestedFollow,false);
     setFollowSavingUid685(targetUid);
@@ -5169,6 +5180,9 @@ export default function ExplorePage() {
         handle: profile.handle,
       },
       commit: (following) => setExploreFollow(user, targetUid, following, profile),
+      exitCommit: (following) => setExploreFollow(
+        user, targetUid, following, profile, { exitKeepalive: true },
+      ),
       onBusy: (busy) => {
         if(!busy) setFollowSavingUid685('');
       },

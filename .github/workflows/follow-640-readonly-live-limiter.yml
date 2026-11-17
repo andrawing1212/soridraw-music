@@ -62,6 +62,18 @@ jobs:
            }
            console.log('APP640_MODULE_SHA256='+createHash('sha256').update(t).digest('hex'));
           }
+          const entry=w.modules.find(m=>m.name==='preview-entry.mjs');
+          if(!entry)halt('ACTIVE_ENTRY_MISSING');
+          const src=Buffer.from(entry.content_base64||'','base64').toString('utf8');
+          for(const name of ['handleFollowOverlay354','readFollowStateSnapshot354','readEffectiveFollowMembership348','orchestrateFollowOverlay354','handleFollowState']){
+            const re=new RegExp('(?:async\\s+)?function\\s+'+name+'\\s*\\(');
+            const at=src.search(re);
+            if(at<0){console.log('APP698_'+name+'_MISSING');continue;}
+            const tail=src.slice(at,at+7200);
+            const cut=tail.search(/\n__name\(/);
+            const code=(cut>0?tail.slice(0,cut):tail).replace(/[A-Za-z0-9_-]{48,}/g,'<redacted>');
+            console.log('APP698_'+name+'_SOURCE='+JSON.stringify(code).slice(0,8000));
+          }
           console.log('APP640_GET_ONLY_SOURCE_INSPECTION=PASS');
           console.log('APP640_NO_DATA_OR_WORKER_MUTATION=PASS');
           NODE

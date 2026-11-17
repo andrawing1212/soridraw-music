@@ -75,7 +75,7 @@ export function createOwnerClickDoService713({
  const engine=createFollowClickIntent713({
   storage:state?.storage,env,enabled,
   ...(now?{now}:{}),...(makeOperationId?{makeOperationId}:{}),
-  commit:sendCommit||((op)=>sendTrustedFollowCommit713(op,env)),
+  commit:sendCommit||((op)=>sendTrustedFollowCommit713(op,env,{enabled})),
  });
  return {
   async fetch(request){

@@ -1,0 +1,47 @@
+name: APP713 GET-only active follow server-queue boundary
+on:
+  push:
+    branches: ['fix/app713-server-owned-follow']
+    paths: ['.github/workflows/app713-active-follow-shape-readonly.yml']
+permissions:
+  contents: read
+jobs:
+  shape:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Current active follow private replay and durable owner DO shape
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import {createHash} from 'node:crypto';
+          const A='e1a30fc9ef497fda1d34f4ab3dc1da45';
+          if(process.env.GITHUB_REF!=='refs/heads/fix/app713-server-owned-follow'||!process.env.CF_TOKEN)throw Error('HOLD_CONTEXT');
+          const get=async p=>{const r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+A+'/'+p,{headers:{Authorization:'Bearer '+process.env.CF_TOKEN},signal:AbortSignal.timeout(25000)});const j=await r.json();if(!r.ok||j.success!==true)throw Error('HOLD_GET_'+r.status);return j.result};
+          const hash=s=>createHash('sha256').update(s).digest('hex');
+          for(const name of ['soridraw-explore-preview','soridraw-owner-follow-preview-candidate']){
+            const versions=(await get('workers/scripts/'+name+'/deployments?per_page=1'))?.deployments?.[0]?.versions;
+            if(!Array.isArray(versions)||versions.length!==1||Number(versions[0].percentage)!==100)throw Error('HOLD_SPLIT_ACTIVE');
+            const id=versions[0].version_id;
+            const [meta,data]=await Promise.all([get('workers/scripts/'+name+'/versions/'+id),get('workers/workers/'+name+'/versions/'+id+'?include=modules')]);
+            console.log('APP713_WORKER='+name+' ACTIVE='+id+' MODULES='+data.modules?.length);
+            console.log('APP713_BINDING_NAMES='+name+' '+(meta?.resources?.bindings||[]).map(b=>b.name+':'+b.type).join(','));
+            for(const m of data.modules||[]){
+              if(name==='soridraw-explore-preview'&&!/owner-follow-entry-607|preview-entry.mjs|owner-follow-service-601|owner-follow-precommit-557/i.test(m.name))continue;
+              const s=Buffer.from(m.content_base64||'','base64').toString('utf8');
+              console.log('APP713_MODULE='+name+':'+m.name+' LEN='+s.length+' SHA='+hash(s));
+              const keys=name==='soridraw-explore-preview'
+                ?['class OwnerFollowReplayEntrypoint607','OwnerFollowReplayEntrypoint607','runOwnerFollowPrecommit557','fetch(request','callCanonical:','preview_entry_default']
+                :['class OwnerFollowerStandalone600','async fetch(request','async alarm()','async function handle','async function reserve','function createOwner','ownerHandler','OWNER_FOLLOW_CANONICAL_REPLAY_600'];
+              for(const key of keys){
+                const i=s.indexOf(key);if(i<0)continue;
+                const snippet=s.slice(Math.max(0,i-150),Math.min(s.length,i+2200))
+                  .replace(/[A-Za-z0-9_-]{80,}/g,'<redacted>');
+                console.log('APP713_SHAPE='+name+':'+m.name+' KEY='+key+' '+JSON.stringify(snippet).slice(0,2500));
+              }
+            }
+          }
+          console.log('APP713_GET_ONLY_NO_WRITES=PASS');
+          NODE

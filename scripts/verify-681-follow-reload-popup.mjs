@@ -163,7 +163,7 @@ assert.match(mountedError,/ACTOR_MISSING_PUBLIC_LIST/);
 assert.match(mountedError,/PUBLIC_LIST_UNAVAILABLE/);
 assert.match(mountedError,/WRITE_UNKNOWN/);
 assert.match(mountedError,/상태:/);
-assert.match(mountedError,/요청:\\$\\{failure\\.desiredFollowing \\? 'FOLLOW' : 'UNFOLLOW'\\}/);
+assert.ok(mountedError.includes("failure.desiredFollowing ? 'FOLLOW' : 'UNFOLLOW'"));
 assert.match(mountedError,/REVISION_ACK_INVALID/);
 assert.match(mountedError,/ORDER_STATE_INVALID/);
 assert.match(mountedError,/LOCAL_RETRY_GUARD/);

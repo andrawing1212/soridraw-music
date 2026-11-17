@@ -115,7 +115,18 @@ async function stageOne(t){
  const newVersion=await cf('POST','workers/workers/'+t.name+'/versions?deploy=false',payload);
  const next=String(newVersion?.id||'');
  need(/^[0-9a-f-]{36}$/.test(next),'NEW_VERSION_INVALID_'+t.name);
- const after=await snapshot(t.name,next);
+ // Cloudflare can return 100146 for a version immediately after POST.
+ // Retry ONLY this documented eventual-consistency case, bounded to ~17s.
+ let after=null;
+ for(let attempt=0;attempt<7;attempt++){
+  try{after=await snapshot(t.name,next);break}
+  catch(error){
+   const message=String(error?.message||error);
+   if(!message.includes('CF_GET_404_100146')||attempt===6)throw error;
+   await new Promise(resolve=>setTimeout(resolve,350*(2**attempt)));
+  }
+ }
+ need(after!==null,'NEW_VERSION_NOT_READABLE_'+t.name);
  const a=key(after.bindings),m=key(after.modules);
  need(after.modules.length===off.modules.length&&
    a.size===off.bindings.length&&

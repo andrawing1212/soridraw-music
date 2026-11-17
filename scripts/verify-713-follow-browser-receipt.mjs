@@ -37,7 +37,7 @@ const compile=()=>{const exports={};runInNewContext(code,{
   if(name==='./exploreSocialService')return {getExploreFollowState:async()=>{
    reads++;return {isFollowing:serverFollowing,followerCount:3,
     followingCount:1,actorFollowingCount:1,
-    countVerified661:true,actorCountVerified662:true}};
+    countVerified661:true,actorCountVerified662:true};}
   };
   throw Error('unexpected dependency '+name);
  },

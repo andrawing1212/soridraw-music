@@ -1,0 +1,6 @@
+approval=director_20261118_follow_503_diagnosis_safe_preview
+source_parent=a18eee397b1d0317c0767b90676e28895d88ec62
+expected_active=1f5bfc69-f84b-4a52-983b-7590254b83b3
+scope=one_active_preview_service_failure_log_only
+shared_d1_r2_data_no_change=true
+test_production_owner_no_change=true

@@ -624,6 +624,17 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
       <span>Firestore R {formatNumber(pageSync.firestoreReads)} · W {formatNumber(pageSync.firestoreWrites)}</span>
     </div>
   </div>
+            {hasR2Usage ? (
+              <div className="whitespace-nowrap text-[10px] font-bold text-[#c6b5ff]/72">
+                R2 · Class A {formatNumber(cloudflare.r2ClassA)} · Class B {formatNumber(cloudflare.r2ClassB)}
+              </div>
+            ) : null}
+            {cloudflare.unmeteredResponses > 0 ? (
+              <div className="whitespace-nowrap text-[10px] font-bold text-[#c6b5ff]/55">
+                계측 전 응답 {formatNumber(cloudflare.unmeteredResponses)} · 초기화 권장
+              </div>
+            ) : null}
+            </DiagnosticGroup>
             {cloudflarePathEntries.length > 0 ? (
               <DiagnosticGroup title="Cloudflare 요청 상세" hint={`${cloudflarePathEntries.length}개 경로`} tone="violet">
               <div className="mt-1 space-y-1 rounded-lg bg-[#c6b5ff]/[0.055] px-2 py-1.5">
@@ -664,17 +675,6 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
               </div>
               </DiagnosticGroup>
             ) : null}
-            {hasR2Usage ? (
-              <div className="whitespace-nowrap text-[10px] font-bold text-[#c6b5ff]/72">
-                R2 · Class A {formatNumber(cloudflare.r2ClassA)} · Class B {formatNumber(cloudflare.r2ClassB)}
-              </div>
-            ) : null}
-            {cloudflare.unmeteredResponses > 0 ? (
-              <div className="whitespace-nowrap text-[10px] font-bold text-[#c6b5ff]/55">
-                계측 전 응답 {formatNumber(cloudflare.unmeteredResponses)} · 초기화 권장
-              </div>
-            ) : null}
-            </DiagnosticGroup>
             {(topReadSources.length > 0 || topWriteSources.length > 0) ? (
               <DiagnosticGroup title="브라우저 SDK 발생처" hint="읽기 · 쓰기" tone="neutral">
             {topWriteSources.length > 0 ? (

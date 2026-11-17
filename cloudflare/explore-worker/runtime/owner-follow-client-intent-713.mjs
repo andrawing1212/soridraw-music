@@ -40,9 +40,10 @@ export function createFollowClickIntent713({
    const state=old||{actorUid:principalUid,ownerUid,windows:[],deviceFloors:{}};
    const floor=Number(state.deviceFloors[deviceId]||0);
    if(sequence<=floor){
-    const receipt=state.windows.at(-1)||state.lastReceipt;
-    return sequence===floor&&receipt?
-      {ok:true,status:'already-accepted',generation:receipt.operationId,dueAt:receipt.dueAt}:
+    const receipt=state.deviceReceipts?.[deviceId];
+    return sequence===floor&&receipt?.sequence===sequence?
+      {ok:true,status:'already-accepted',
+       generation:receipt.operationId,dueAt:receipt.dueAt}:
       fail('stale-sequence');
    }
    if(!Object.hasOwn(state.deviceFloors,deviceId)&&
@@ -64,7 +65,9 @@ export function createFollowClickIntent713({
     windows[windows.length-1]=tail;
    }
    const next={...state,windows,
-    deviceFloors:{...state.deviceFloors,[deviceId]:sequence}};
+    deviceFloors:{...state.deviceFloors,[deviceId]:sequence},
+    deviceReceipts:{...(state.deviceReceipts||{}),
+     [deviceId]:{sequence,operationId:tail.operationId,dueAt:tail.dueAt}}};
    await tx.put(KEY,next);
    // Cloudflare DurableObjectTransaction has only KV methods (get/put/delete/list).
    // With the already-SQLite-backed DO class, direct storage alarm APIs
@@ -96,6 +99,9 @@ export function createFollowClickIntent713({
    }
    item=initial.windows[0];
    if(item.status==='dead')return fail('manual-hold');
+   // A previously authenticated click is NOT an unlimited delegation.
+   // Never change a relationship hours after a prolonged service outage.
+   if(at>item.dueAt+10*60_000)return fail('expired-click-manual-hold');
    const due=item.status==='waiting'?item.dueAt:item.nextAttemptAt;
    if(due>at){await storage.setAlarm(due);return {ok:true,status:'not-due'}}
    // Fence later arrivals: once this window starts, subsequent clicks

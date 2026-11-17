@@ -20,6 +20,16 @@ jobs:
           node scripts/verify-713-follow-click-ingress.mjs
           node scripts/verify-713-follow-trusted-canonical.mjs
           node scripts/verify-713-follow-private-pipeline.mjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Follow client TypeScript and Vite build
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run lint
+          npm run build
+          node scripts/verify-389-social-client-batching.mjs
       - name: GET-only exact active private Worker release preflight
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

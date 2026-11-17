@@ -89,5 +89,25 @@ try{
      Number.isSafeInteger(rate?.count)&&rate.count>=0&&rate.count<=1000?'OK':'INVALID_OR_UNKNOWN'));
    console.log('APP702_SECONDARY_RATE_KEYS='+Object.keys(rate||{}).sort().join(','));
  }
+ // Full structural predicates used by the active APP380 handler.
+ const idOk=v=>typeof v==='string'&&/^[a-zA-Z0-9_-]{16,128}$/.test(v);
+ const targetOk=v=>typeof v==='string'&&v.length>0&&v.length<=512;
+ const eventOk=v=>Number.isSafeInteger(v)&&v>=0&&v<=now;
+ const opOk=o=>o&&targetOk(o.target)&&typeof o.desired==='boolean'&&
+   idOk(o.operationId)&&eventOk(o.at);
+ const pairOk=p=>opOk(p)&&Number.isSafeInteger(p.level)&&p.level>=0&&p.level<=3&&
+   Number.isSafeInteger(p.nextAllowedAt)&&p.nextAllowedAt>=0&&
+   (p.nextAllowedAt===p.at+old[p.level]||p.nextAllowedAt===p.at+current[p.level]);
+ const report={
+  schema:record.schemaVersion===380,
+  eventLength:events.length<=120,
+  eventShape:events.every(eventOk),
+  operationLength:ops.length<=120,
+  operationShape:ops.every(opOk),
+  pairLength:pairs.length<=120,
+  pairShape:pairs.every(pairOk),
+  uniquePairs:new Set(pairs.map(p=>p.target)).size===pairs.length,
+ };
+ console.log('APP702_EXACT_380_CHECKS='+Object.entries(report).map(([k,v])=>k+':'+(v?'PASS':'FAIL')).join(','));
  console.log('APP702_READONLY_NO_BACKUP_WRITE_NO_MUTATION=PASS');
 }finally{rmSync(folder,{recursive:true,force:true});}

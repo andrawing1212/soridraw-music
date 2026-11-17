@@ -65,7 +65,7 @@ jobs:
           const entry=w.modules.find(m=>m.name==='preview-entry.mjs');
           if(!entry)halt('ACTIVE_ENTRY_MISSING');
           const src=Buffer.from(entry.content_base64||'','base64').toString('utf8');
-          for(const name of ['handleFollowOverlay354','readFollowStateSnapshot354','readEffectiveFollowMembership348','orchestrateFollowOverlay354','handleFollowState']){
+          for(const name of ['handleFollowOverlay354','readFollowStateSnapshot354','readEffectiveFollowMembership348','orchestrateFollowOverlay354','handleFollowState','enforceFollowEdgeRateLimit355']){
             const re=new RegExp('(?:async\\s+)?function\\s+'+name+'\\s*\\(');
             const at=src.search(re);
             if(at<0){console.log('APP698_'+name+'_MISSING');continue;}

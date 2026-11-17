@@ -45,10 +45,11 @@ const err=(status:string,retryAfterMs=2500)=>Object.assign(
  new Error('팔로우 서버 확정 확인을 기다리고 있습니다.'),{
  code:'SERVER_OWNED_PENDING_713',status,retryAfterMs,
 });
-export const isExploreServerOwnedFollow713=()=>{
+export const isExploreServerOwnedFollow713=(user?:User)=>{
  if(!APP713_SERVER_FOLLOW_CLIENT_COMPILED_OPEN||
     typeof window==='undefined')return false;
- return window.location.hostname==='preview.soridraw.com';
+ return window.location.hostname==='preview.soridraw.com'&&
+   user?.uid==='rcZ2GZrBndOZzT8C635eiNBjYIJ2';
 };
 export const stageExploreServerOwnedFollow713=(
  user:User,targetUid:string,following:boolean,
@@ -85,7 +86,7 @@ const getPreparedAuth713=async(user:User)=>{
  catch(e){if(preparedAuth713.get(user)===next)preparedAuth713.delete(user);throw e}
 };
 export const primeExploreServerOwnedFollowAuth713=(user:User)=>{
- if(!isExploreServerOwnedFollow713())return;
+ if(!isExploreServerOwnedFollow713(user))return;
  void getPreparedAuth713(user).catch(()=>{});
 };
 const dispatch=async(user:User,record:Receipt713)=>{

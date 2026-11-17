@@ -51,7 +51,7 @@ const commit=async op=>{
 const engine=createFollowClickIntent713({storage,env,commit,
  now:()=>clock,makeOperationId:()=>String(++operationCounter).padStart(20,'a'),enabled:true});
 const args=(desired,sequence,deviceId='device0001',ownerUid='owner')=>
- ({principalUid:'actor',ownerUid,desired,deviceId,sequence});
+ ({principalUid:'actor',ownerUid,desired,deviceId,sequence,issuedAtSec:100});
 assert.equal((await createFollowClickIntent713({storage,env,commit}).submit(args(true,1))).status,'disabled');
 assert.equal((await engine.submit({...args(true,1),principalUid:'owner'})).status,'invalid-intent');
 assert.equal(saved.size,0,'no unauthorized storage work');

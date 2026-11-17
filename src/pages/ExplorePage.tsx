@@ -5167,7 +5167,7 @@ export default function ExplorePage() {
     // painting. If local durable outbox is unavailable, fail closed instead
     // of submitting an untracked old-client canonical write.
     let serverRecord713: ReturnType<typeof stageExploreServerOwnedFollow713>|null=null;
-    if(isExploreServerOwnedFollow713()){
+    if(isExploreServerOwnedFollow713(user)){
       try{serverRecord713=stageExploreServerOwnedFollow713(user,targetUid,requestedFollow)}
       catch{
         setSocialNotice('팔로우 저장 준비를 확인할 수 없습니다. 브라우저 저장소를 확인해 주세요.');

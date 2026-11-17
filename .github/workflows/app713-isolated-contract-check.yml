@@ -31,6 +31,12 @@ jobs:
           npm run build
           node scripts/verify-389-social-client-batching.mjs --follow-only
           node scripts/verify-713-follow-browser-receipt.mjs
+          node scripts/verify-713-follow-actor-oracle.mjs
+      - name: Build canary-only Firebase actor proof without deployment
+        run: |
+          npm ci --prefix functions --ignore-scripts --no-audit --no-fund
+          npm run build --prefix functions
+          node functions/scripts/test-713-current-actor.cjs
       - name: GET-only exact active private Worker release preflight
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

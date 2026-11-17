@@ -11,7 +11,8 @@ let intent=null,following=false,precommit=0,actualWrites=0,reads=0;
 const args={
  enabled:true,authorized:true,env,
  actorUid:'actor',ownerUid:'owner',desired:true,
- operationId:'click713_operation_000000000000000',
+ operationId:'click713_operation_000000000000000',issuedAtSec:1000,
+ verifyActor:async()=>true,
  readCutover:async()=>{reads++;return cutover},
  readIntent:async()=>({value:intent}),
  readMembership:async()=>({mode:'overlay348',following}),
@@ -45,6 +46,8 @@ assert.equal((await request({authorized:false})).status,'private-capability-requ
 assert.equal((await request({env:{...env,SORIDRAW_ENVIRONMENT:'prod'}})).status,'disabled');
 assert.equal((await request({ownerUid:'actor'})).status,'invalid-operation');
 assert.equal(actualWrites,0);
+assert.equal((await request({verifyActor:async()=>false})).status,'actor-current-auth-unverified');
+assert.equal(reads,0,'revoked user must not read canonical data');
 const committed=await request();
 assert.equal(committed.ok,true);
 assert.equal(committed.canonicalFollowing,true);

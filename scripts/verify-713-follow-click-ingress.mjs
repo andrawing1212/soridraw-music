@@ -8,6 +8,7 @@ const env={SORIDRAW_ENVIRONMENT:'preview',SORIDRAW_FOLLOW_SERVER_CLICK_713:'1',
  SORIDRAW_OWNER_FOLLOW_GENERAL_PREVIEW_653:'1',
  SORIDRAW_OWNER_FOLLOW_SOURCE_BOUNDARY_653:'preview-only',
  SORIDRAW_OWNER_DO_BRIDGE_SECRET_600:'safe_mock_bridge_capability_xxxxxxxxx',
+ SORIDRAW_FOLLOW_CANARY_UID_713:'rcZ2GZrBndOZzT8C635eiNBjYIJ2',
 };
 const responses=[];
 env.OWNER_FOLLOW_RESERVATION_SERVICE_600={fetch:async req=>{
@@ -21,7 +22,8 @@ const request=(following=true,extras={})=>new Request(url,{method:'POST',
  body:JSON.stringify({following,deviceId:'device0001',sequence:1,
    actorUid:'forged_account',...extras})});
 const scopedRun=options=>run({preAuthLimiter:()=>{},...options});
-const auth=async()=>({ok:true,uid:'real_actor'});
+const auth=async()=>({ok:true,uid:'rcZ2GZrBndOZzT8C635eiNBjYIJ2',idToken:'a.'+
+ Buffer.from(JSON.stringify({sub:'rcZ2GZrBndOZzT8C635eiNBjYIJ2',aud:'soridraw-app-866a5',iat:1000})).toString('base64url')+'.b'});
 assert.equal((await scopedRun({request:request(),env,authenticate:auth})).status,503);
 const okay=await scopedRun({request:request(),env,authenticate:auth,enabled:true});
 assert.equal(okay.status,202);
@@ -29,8 +31,8 @@ const data=await okay.json();assert.equal(data.status,'durably-accepted');
 assert.equal(responses.length,1);
 assert.equal(responses[0].path,'/internal/owner-follow/click713');
 assert.deepEqual(responses[0].forwarded,{
- actorUid:'real_actor',ownerUid:'owner',desired:true,
- deviceId:'device0001',sequence:1});
+ actorUid:'rcZ2GZrBndOZzT8C635eiNBjYIJ2',ownerUid:'owner',desired:true,
+ deviceId:'device0001',sequence:1,issuedAtSec:1000});
 assert.equal(responses[0].headers.get('X-Soridraw-Owner-Bridge-600'),
  env.SORIDRAW_OWNER_DO_BRIDGE_SECRET_600);
 assert.equal(okay.headers.get('Access-Control-Allow-Origin'),'https://preview.soridraw.com');

@@ -11,7 +11,7 @@ const code=ts.transpileModule(source.replace(literal,
  'export const APP713_SERVER_FOLLOW_CLIENT_COMPILED_OPEN=true'),{
  compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS},
 }).outputText;
-const backing=new Map(),calls=[],users={viewer:{uid:'viewer',getIdToken:async()=> 'test-id-token'}};
+const backing=new Map(),calls=[],users={viewer:{uid:'rcZ2GZrBndOZzT8C635eiNBjYIJ2',getIdToken:async()=> 'test-id-token'}};
 const localStorage={getItem:k=>backing.get(k)||null,setItem:(k,v)=>backing.set(k,v),
  removeItem:k=>backing.delete(k)};
 const response=(body,status=202)=>({ok:status===202,status,json:async()=>body});
@@ -47,7 +47,7 @@ const compile=()=>{const exports={};runInNewContext(code,{
  setTimeout:fn=>{fn();return 1},fetch:fakeFetch,
  });return exports};
 const a=compile();
-assert.equal(a.isExploreServerOwnedFollow713(),true);
+assert.equal(a.isExploreServerOwnedFollow713(users.viewer),true);
 a.primeExploreServerOwnedFollowAuth713(users.viewer);
 for(let n=0;n<4;n++)await Promise.resolve();
 const pending=a.stageExploreServerOwnedFollow713(users.viewer,'target',true);

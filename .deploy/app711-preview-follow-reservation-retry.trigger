@@ -1,0 +1,6 @@
+approval=director_20261118_follow_503_fix_safe_preview
+source_parent=42784907c3109d183e1edfaab6b56f14e9f13f07
+expected_active=15981200-c988-44b7-8b20-73b777d4fe63
+scope=one_active_preview_owner_reservation_retry_only
+shared_d1_r2_data_no_change=true
+test_production_explore_no_change=true

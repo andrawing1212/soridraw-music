@@ -25,7 +25,7 @@ jobs:
           import {createHash} from 'node:crypto';
           const ACCOUNT='e1a30fc9ef497fda1d34f4ab3dc1da45';
           const NAME='soridraw-explore-preview';
-          const EXPECTED='6437d86a-09c5-4ff0-8be5-ecfabd4a1f77';
+          // Read the currently deployed 100% active PREVIEW version, not a frozen 2026-11-15 ID.
           const token=String(process.env.CLOUDFLARE_API_TOKEN||'');
           const halt=x=>{throw Error('APP640_HOLD_'+x)};
           if(process.env.GITHUB_REF!=='refs/heads/preview'||
@@ -40,12 +40,14 @@ jobs:
           }
           const d=await get('workers/scripts/'+NAME+'/deployments?per_page=1');
           const v=d?.deployments?.[0]?.versions;
-          if(v?.length!==1||v[0]?.version_id!==EXPECTED||Number(v[0].percentage)!==100)
-           halt('PREVIEW_ACTIVE_VERSION_DRIFT');
-          const w=await get('workers/workers/'+NAME+'/versions/'+EXPECTED+'?include=modules');
-          if(w?.modules?.length!==12)halt('MODULE_SET');
+          if(v?.length!==1||!v[0]?.version_id||Number(v[0].percentage)!==100)
+           halt('PREVIEW_ACTIVE_VERSION_SPLIT_OR_MISSING');
+          const active=v[0].version_id;
+          console.log('APP640_PREVIEW_ACTIVE_VERSION='+active);
+          const w=await get('workers/workers/'+NAME+'/versions/'+active+'?include=modules');
+          if(!Array.isArray(w?.modules)||w.modules.length<1)halt('MODULE_SET');
           const terms=['enforceFollowEdgeRateLimit355','consumeSocialAbuse380','socialAbuseLimited380',
-           'FOLLOW_ABUSE_GUARD_380','RATE_LIMITED','follow:'];
+           'FOLLOW_ABUSE_GUARD_380','RATE_LIMITED','FOLLOW_ORDER_REQUIRED','FOLLOW_REVISION_CONFLICT','follow:'];
           for(const m of w.modules){
            const t=Buffer.from(m.content_base64||'','base64').toString('utf8');
            const matches=terms.map(x=>[x,t.split(x).length-1]).filter(x=>x[1]>0);

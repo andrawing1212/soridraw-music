@@ -48,7 +48,7 @@ async function snapshot(id){
   new Set(bindings.map(b=>b?.name)).size===bindings.length &&
   bindings.every(b=>typeof b?.name==='string'&&typeof b?.type==='string'),
   'LIVE_BINDING_INVENTORY');
- check(/^\\d{4}-\\d{2}-\\d{2}$/.test(metadata?.resources?.script_runtime?.compatibility_date||''),
+ check(/^\d{4}-\d{2}-\d{2}$/.test(metadata?.resources?.script_runtime?.compatibility_date||''),
   'LIVE_RUNTIME_DATE');
  check(source.modules.some(m=>m.name==='owner-follow-entry-607.mjs'),
   'PINNED_MAIN_MODULE_MISSING');

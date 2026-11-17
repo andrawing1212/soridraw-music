@@ -8,7 +8,8 @@ jobs:
   read:
     runs-on: ubuntu-24.04
     timeout-minutes: 3
-    env: {CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - name: GET-only inspect main entry 503 and follow interception
         shell: bash

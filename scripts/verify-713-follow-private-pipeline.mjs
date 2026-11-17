@@ -38,7 +38,7 @@ const common={
  SORIDRAW_OWNER_FOLLOW_SOURCE_BOUNDARY_653:'preview-only',
  SORIDRAW_OWNER_DO_BRIDGE_SECRET_600:secret,
 };
-let canonicalFollowing=false,revision=0,writes=0,reservations=0;
+let canonicalFollowing=false,revision=0,operationSeq=0,writes=0,reservations=0;
 let intent=null;
 const ownerEnv={...common};
 const exploreEnv={...common};
@@ -72,7 +72,7 @@ ownerEnv.OWNER_FOLLOW_CANONICAL_REPLAY_600={fetch:request=>
   enabled:true,...deps})};
 const doService=createOwnerClickDoService713({
  state:{storage},env:ownerEnv,enabled:true,now:()=>time,
- makeOperationId:()=>('server_operation_'+(++revision).toString().padStart(20,'0')),
+ makeOperationId:()=>('server_operation_'+(++operationSeq).toString().padStart(20,'0')),
 });
 const ids=[];
 ownerEnv.OWNER_FOLLOW_DO_600={

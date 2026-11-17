@@ -21,7 +21,7 @@ async function api(p){
   headers:{Authorization:'Bearer '+process.env.CLOUDFLARE_API_TOKEN},
   signal:AbortSignal.timeout(30000)});
  const j=await r.json();
- if(!r.ok||j.success!==true)throw Error('APP713_HOLD_READONLY_API_'+r.status);
+ if(!r.ok||j.success!==true)throw Error('APP713_HOLD_READONLY_API_'+p.split('?')[0]+'_'+r.status+'_'+String(j.errors?.[0]?.code||''));
  return j.result;
 }
 const hash=s=>createHash('sha256').update(s).digest('hex');

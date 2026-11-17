@@ -1,3 +1,15 @@
+## CURRENT — APP713 PREVIEW 단일 카나리 서버·Hosting 배포 PASS / PC·모바일 실검증 요망 (2026-11-18 KST)
+
+- **최종 목표는 여전히 모든 로그인 사용자의 팔로우·취소 서버 확정 후 PC·모바일 자동 동기화.** 이번 APP713은 이 목표의 **승인된 단일 시험 계정** 단계만 완료. 해당 UID `rcZ2GZrBndOZzT8C635eiNBjYIJ2`만 새 클릭 서버 예약 경로를 사용하고 나머지 로그인 계정은 APP712 기존 경로 유지. 전면 배포·실사용 PASS 아님.
+- **APP712 실패 재현:** 실제 영상에서 클릭 후 1초 내 창 닫기 시 상대방 자동 반영 실패, 재접속 후 반영. APP713은 클릭 시 서버가 지속성 예약을 받아 5초 뒤 마지막 상태를 정본에 쓰고, 브라우저가 닫혀도 서버 예약을 계속 처리하도록 수정. 서버 확정 전 타인에게 팔로워 숫자·신호를 발행하지 않음. 5초 내 원상복귀는 D1/R2 W0, APP711 예약 보호 유지.
+- **Firebase 계정 재확인:** 신규 `verifyExploreFollowActor713` 한 개만 공유 Firebase `soridraw-app-866a5`에 생성. 승인된 변경은 이 함수의 Cloud Run `roles/run.invoker` 외부 호출 한 개뿐 ([Actions #44157796722](https://github.com/andrawing1212/soridraw-music/actions/runs/44157796722)); 기존 Functions/IAM/RTDB Rules·원본 데이터 무변경. 이 함수는 PREVIEW만, HMAC 서명·정확한 시험 UID·현재 Firebase Auth/Firestore 계정 생성세대/삭제/정지/토큰 취소 검증, 비정상 요청 거절, min instances 0 / max 2. 공개 호출은 거절 요청도 비용이 발생할 수 있으므로 비용 0으로 보고 금지.
+- **PREVIEW Cloudflare 실제 활성 서버:** 단일 시험 계정 플래그로 owner `379a904e-abe4-4f37-abfb-3b50cf058190`, Explore `1ac63568-d7bf-427d-b655-5f510ac0ea76` 100%. 기존 DO migration tag `owner600_v1` / `v1` 보존, 기존 바인딩 유지, OPTIONS 204·무인증 POST 401 거절 PASS. [서버 활성 Actions #44160778959](https://github.com/andrawing1212/soridraw-music/actions/runs/44160778959). 이전 owner `1e987bc3-36d3-4bb0-861f-4df17f536592`, Explore `a28c1391-1d98-41fb-b9c4-8f51aa19e0a0`을 정확한 롤백 기준으로 보존.
+- **앱·검사:** [PR #1193](https://github.com/andrawing1212/soridraw-music/pull/1193) squash 병합 `f3b1634de7f626b100810d95c9e7e1aefb270f46`; UI는 PREVIEW + 해당 시험 UID만 새 경로 선택. [APP713 집중 CI #44161735555](https://github.com/andrawing1212/soridraw-music/actions/runs/44161735555), 기존 팔로우 최신 경합 #44161750326·쿨다운 #44161750358·팔로우 전용 #44161750420 PASS. 사용자 원본 변경·전체조회·새 폴링 없음.
+- **PREVIEW Hosting:** [배포 전용 PR #1194](https://github.com/andrawing1212/soridraw-music/pull/1194) 병합 `fe9e353376f1cbea47bbc12caa5e563df8f0296d`, [Actions #44162498949](https://github.com/andrawing1212/soridraw-music/actions/runs/44162498949) `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`, `TEST_PRODUCTION_UNCHANGED=PASS`. 실제 배포 주소 `https://preview.soridraw.com`. 공유 Functions/Worker는 이 Hosting 워크플로에서 재배포하지 않음.
+- **실검증 요망 / 다음 판단:** 로그인된 시험 계정 A에서 PREVIEW 공개 프로필 B 팔로우 1회 클릭→**1초 안에 A 창 닫기**→A가 다시 접속하지 않은 채 B의 별도 PC/모바일에서 **5초 이후 팔로워 숫자·버튼·목록 자동 수렴** 확인. 이어 취소 및 5초 내 팔로우↔취소 원상복귀 W0를 필요한 범위에서만 확인. 이 사용자의 실사용 보고 전 APP713 전체 사용자 활성화 및 기능 PASS 선언 금지. 실패하면 해당 요청/서버 로그만 조사하고, 새 Hosting→APP712 이전 Hosting과 owner/Explore 이전 고정 버전으로 복구, 신규 함수 OFF 필요 여부 판단. TEST/PRODUCTION·사용자 원본 변경 금지.
+
+---
+
 ## CURRENT — APP712 창 닫기 실사용 FAIL / 재접속 전 서버 확정 불능 (2026-11-18 KST)
 
 - 사용자가 제공한 PREVIEW 110초 영상 `20261117-1726-00.3047372.mp4` 직접 분석. 오른쪽 사용자 브라우저에서 공개 프로필 팔로우 버튼 선택 후 창을 닫았을 때 왼쪽 상대방 팔로워 수 자동 반영에 실패. 약 38초 상대방 팔로워 1, 약 61초 재접속 후 상대방 팔로워 2. 영상 자체에는 네트워크 원본이 없으므로 `pagehide` 미발생 / 인증 사전준비 지연 / CORS OPTIONS 중단 / 본 요청 취소 중 어느 원인인지는 확정 불가. **창 종료 기능 실사용 FAIL**; 2번 연속 새로고침 검사는 사용자 PASS 보고로 재실행 금지.

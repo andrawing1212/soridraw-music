@@ -1,0 +1,43 @@
+name: SORIDRAW APP707 PREVIEW Main Entry 503 Read-Only
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/app707-preview-main-entry-readonly.yml']
+permissions: {contents: read}
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    env: {CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}}
+    steps:
+      - name: GET-only inspect main entry 503 and follow interception
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          const token=process.env.CLOUDFLARE_API_TOKEN||'';
+          const a='e1a30fc9ef497fda1d34f4ab3dc1da45',name='soridraw-explore-preview';
+          if(token.length<20||process.env.GITHUB_REF!=='refs/heads/preview')throw Error('APP707_HOLD_CONTEXT');
+          const get=async p=>{const r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+a+'/'+p,
+            {headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(20000)});
+            const j=await r.json();if(!r.ok||!j.success)throw Error('APP707_HOLD_READ_'+r.status);return j.result};
+          const versions=(await get('workers/scripts/'+name+'/deployments?per_page=1'))?.deployments?.[0]?.versions;
+          if(versions?.length!==1||Number(versions[0].percentage)!==100)throw Error('APP707_HOLD_VERSION');
+          const worker=await get('workers/workers/'+name+'/versions/'+versions[0].version_id+'?include=modules');
+          const modules=worker?.modules||[];
+          console.log('APP707_ACTIVE='+versions[0].version_id);
+          console.log('APP707_MODULE_NAMES='+modules.map(m=>m.name).join(','));
+          for(const file of ['owner-follow-entry-607.mjs','preview-entry.mjs']){
+            const mod=modules.find(m=>m.name===file);
+            if(!mod?.content_base64)throw Error('APP707_HOLD_'+file);
+            const s=Buffer.from(mod.content_base64,'base64').toString('utf8');
+            console.log('APP707_MODULE='+file+' SIZE='+s.length);
+            for(const search of ['fetch(request','async fetch(','/follow','503','owner-follow','FOLLOW_OVERLAY_READONLY','rateLimit','function onRequest']){
+              const i=s.indexOf(search);
+              console.log('APP707_TERM='+file+':'+search+' INDEX='+i);
+              if(i<0||file==='preview-entry.mjs')continue;
+              const t=s.slice(Math.max(0,i-450),i+1300).replace(/[A-Za-z0-9_-]{48,}/g,'<redacted>');
+              console.log('APP707_MAIN_CONTEXT='+JSON.stringify(t).slice(0,1800));
+            }
+          }
+          console.log('APP707_GET_ONLY_NO_USER_DATA=PASS');
+          NODE

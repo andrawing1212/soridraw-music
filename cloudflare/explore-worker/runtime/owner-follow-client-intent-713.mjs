@@ -9,6 +9,7 @@ const KEY='follow-click-intent-713';
 const UID=/^[A-Za-z0-9_-]{1,128}$/;
 const DEVICE=/^[A-Za-z0-9_-]{8,80}$/;
 const MAX_WINDOWS=2, MAX_DEVICES=8, MAX_ATTEMPTS=8;
+const RECEIPT_RETENTION_MS=24*60*60_000;
 const fail=status=>({ok:false,status});
 const backoff=attempt=>Math.min(60_000,1000*2**Math.max(0,attempt-1));
 export function createFollowClickIntent713({
@@ -32,7 +33,8 @@ export function createFollowClickIntent713({
    return fail('invalid-intent');
   const at=now();
   try{return await storage.transaction(async tx=>{
-   const old=await tx.get(KEY);
+   const existing=await tx.get(KEY);
+   const old=existing?.retainUntil&&existing.retainUntil<=at?null:existing;
    if(old&&(old.actorUid!==principalUid||old.ownerUid!==ownerUid))
     return fail('identity-conflict');
    const state=old||{actorUid:principalUid,ownerUid,windows:[],deviceFloors:{}};
@@ -77,7 +79,15 @@ export function createFollowClickIntent713({
   let item;
   try{
    const initial=await storage.get(KEY);
-   if(!initial?.windows?.length)return {ok:true,status:'empty'};
+   if(!initial?.windows?.length){
+    if(initial?.retainUntil&&initial.retainUntil<=at){
+     await storage.delete(KEY);
+     return {ok:true,status:'expired-receipt'};
+    }
+    if(initial?.retainUntil>at){await storage.setAlarm(initial.retainUntil);
+     return {ok:true,status:'receipt-retained'};}
+    return {ok:true,status:'empty'};
+   }
    item=initial.windows[0];
    if(item.status==='dead')return fail('manual-hold');
    const due=item.status==='waiting'?item.dueAt:item.nextAttemptAt;
@@ -113,7 +123,11 @@ export function createFollowClickIntent713({
      attempts,nextAttemptAt:dead?0:now()+backoff(attempts)},...windows];
    }
    if(!windows.length){
-    await tx.delete(KEY);
+    // Preserve bounded per-device sequence floors after settlement, so an
+    // old reordered click cannot re-open a new window after the first ACK.
+    const retainUntil=now()+RECEIPT_RETENTION_MS;
+    await tx.put(KEY,{...latest,windows:[],retainUntil});
+    await tx.setAlarm(retainUntil);
     return {ok:true,status:result?.changed===true?'committed':'noop',
      revision:result.revision};
    }

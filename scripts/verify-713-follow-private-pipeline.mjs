@@ -129,7 +129,8 @@ assert.equal(reservations,2);
 // Client cannot forge the actor, and direct DO is not a public API.
 assert.equal((await handleAuthenticatedFollowClick713({
  request:click(true,5,'device0001','https://untrusted.invalid'),
- env:exploreEnv,authenticate:async()=>({ok:true,uid:'real_actor'}),enabled:true,
+ env:exploreEnv,authenticate:async()=>({ok:true,uid:'real_actor'}),
+ preAuthLimiter:()=>{},enabled:true,
 })).status,403);
 assert.equal((await doService.fetch(new Request(
  'https://owner-follow.internal/internal/owner-follow/click713',

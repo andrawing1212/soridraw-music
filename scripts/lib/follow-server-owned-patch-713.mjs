@@ -90,8 +90,8 @@ export function patchExploreEntry713(source,{strict=true}={}){
  const newPrivate=lines(
   "  if(!(await activeFor607(this.env,uid)))return reply(503,{ok:false,status:'disabled'});",
   '  const click=await routeTrustedFollowCanonical713({',
-  '   request,env:this.env,ctx:this.ctx,enabled:true,
-   verifyActor:verifyCurrentActor713,',
+  '   request,env:this.env,ctx:this.ctx,enabled:true,',
+  '   verifyActor:verifyCurrentActor713,',
   '   readCutover:readFollowCutoverState348,',
   '   readIntent:readFollowIntent354,',
   '   readMembership:readEffectiveFollowMembership348,',

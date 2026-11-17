@@ -27,7 +27,17 @@ assert.match(explicit,/getExploreProfileConnections\(targetUid, direction, null,
 const calls=[...page.matchAll(/getExploreProfileConnections\(/g)];
 // Four bounded sites: explicit popup, explicit pagination, actor's real
 // same-account accepted event, and NEW authenticated owner event with OPEN popup.
-assert.equal(calls.length,4,'unexpected implicit list-fetch path');
+// APP697 adds exactly one bounded read only AFTER a real failed follow click.
+// It is not an idle, navigation, focus, or normal profile-entry fetch.
+assert.equal(calls.length,5,'unexpected implicit list-fetch path');
+const failRecoverStart=page.indexOf('      onError: (failure) => {');
+const failRecoverEnd=page.indexOf('      onDeferred: () => {',failRecoverStart);
+assert.ok(failRecoverStart>0&&failRecoverEnd>failRecoverStart);
+const failRecovery=page.slice(failRecoverStart,failRecoverEnd);
+assert.match(failRecovery,/failure\.desiredFollowing === true/);
+assert.match(failRecovery,/getExploreProfileConnections\(\s*targetUid, 'followers', null, true\)/);
+assert.match(failRecovery,/page697\.items\.some\(row => row\.uid === viewerUid\)/);
+assert.match(failRecovery,/if \(confirmedByFollowerPage697\)/);
 const ownerStart548=explicit.indexOf('  // APP542:');
 const ownerEnd548=explicit.indexOf('  // APP527:',ownerStart548);
 assert.ok(ownerStart548>=0&&ownerEnd548>ownerStart548);

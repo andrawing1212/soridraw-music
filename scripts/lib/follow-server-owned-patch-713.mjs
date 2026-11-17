@@ -107,7 +107,7 @@ export function patchExploreEntry713(source,{strict=true}={}){
   ' async fetch(request,env,ctx){',
   '  const click=await handleAuthenticatedFollowClick713({',
   '   request,env,ctx,enabled:true,authenticate:validateExploreAuth307,',
-  '   preAuthLimiter:enforcePreAuthBurstLimit,'
+  '   preAuthLimiter:enforcePreAuthBurstLimit,',
   '  });',
   '  if(click!==null)return click;',
   '',

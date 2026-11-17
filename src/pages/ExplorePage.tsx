@@ -5213,9 +5213,13 @@ export default function ExplorePage() {
             // failed FOLLOW write, a bounded canonical follower page can
             // POSITIVELY prove a pre-existing edge. Never infer absence from
             // a partial/missing page, and never issue this read on page entry.
-            if (latest && latest.isFollowing === false &&
+            // APP698: the canonical retry itself may be unavailable and
+            // localStorage may have lost the short-lived choice on reload.
+            // Neither condition may suppress one positive-only public proof.
+            const clickChoice698 = readExploreFollowLocalChoice685(viewerUid,targetUid);
+            if (latest?.isFollowing !== true &&
                 failure.desiredFollowing === true &&
-                readExploreFollowLocalChoice685(viewerUid,targetUid)?.following === true &&
+                clickChoice698?.following !== false &&
                 !readPendingExploreFollowIntents380(viewerUid)
                   .some(row => row.targetUid === targetUid)) {
               let confirmedByFollowerPage697 = false;
@@ -5226,7 +5230,12 @@ export default function ExplorePage() {
                   page697.items.some(row => row.uid === viewerUid);
               } catch {}
               if (auth.currentUser?.uid !== viewerUid) return;
-              if (readExploreFollowLocalChoice685(viewerUid,targetUid)?.following !== true ||
+              const currentChoice698 = readExploreFollowLocalChoice685(viewerUid,targetUid);
+              // A newer opposite click or more recent same-pair choice wins;
+              // never overwrite that interaction with this older recovery.
+              if (currentChoice698?.following === false ||
+                  (clickChoice698 && currentChoice698 &&
+                    currentChoice698.at > clickChoice698.at) ||
                   readPendingExploreFollowIntents380(viewerUid)
                     .some(row => row.targetUid === targetUid)) return;
               if (confirmedByFollowerPage697) {

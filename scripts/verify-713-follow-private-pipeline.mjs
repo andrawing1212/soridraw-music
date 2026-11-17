@@ -89,7 +89,7 @@ const click=(following,sequence,deviceId='device0001',origin='https://preview.so
 const accept=(following,sequence,deviceId)=>
  handleAuthenticatedFollowClick713({request:click(following,sequence,deviceId),
   env:exploreEnv,authenticate:async()=>({ok:true,uid:'real_actor'}),
-  enabled:true});
+  preAuthLimiter:()=>{},enabled:true});
 const first=await accept(true,1);
 assert.equal(first.status,202,'server must durably ACK before app closes');
 assert.match(ids[0],/^app713:pair:real_actor:owner$/);

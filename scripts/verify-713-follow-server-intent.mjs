@@ -59,7 +59,7 @@ assert.equal(commits.length,0);
 clock+=5000;
 assert.equal((await engine.alarm()).status,'committed');
 assert.deepEqual(commits.map(x=>x.desired),[true]);
-assert.equal(saved.size,0);
+assert.equal(saved.size,1,'the 24h sequence receipt survives the canonical ACK');
 assert.equal(baseline.get('actor:owner'),true);
 
 // Same exact pair window: last click follows original 5s floor.
@@ -76,7 +76,7 @@ assert.equal((await engine.alarm()).status,'noop');
 assert.equal(commits.length,2);
 assert.equal(commits[1].desired,true);
 assert.equal(commits[1].operationId,two.generation);
-assert.equal(saved.size,0);
+assert.equal(saved.size,1,'the 24h sequence receipt survives the canonical ACK');
 
 // A truly opposite settled state commits exactly once with the stable
 // server-issued operation identity, even if the first transport ACK is lost.
@@ -95,7 +95,7 @@ shouldFail=false;clock+=1000;
 assert.equal((await errorEngine.alarm()).status,'committed');
 assert.equal(calls,2);
 assert.equal(ids[0],ids[1],'replay uses same operation ID');
-assert.equal(saved.size,0);
+assert.equal(saved.size,1,'the 24h sequence receipt survives the canonical ACK');
 
 // Serializes another device's next window while first is committing.
 let release;
@@ -120,7 +120,7 @@ release=null;
 const nextAlarm=delayed.alarm();
 for(let i=0;i<40&&!release;i++)await Promise.resolve();
 release();await nextAlarm;
-assert.equal(saved.size,0);
+assert.equal(saved.size,1,'the 24h sequence receipt survives the canonical ACK');
 assert.notEqual(next.generation,one.generation);
 
 const offline=createFollowClickIntent713({storage,env:{...env,SORIDRAW_ENVIRONMENT:'production'},

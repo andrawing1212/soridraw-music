@@ -14,7 +14,7 @@ type Receipt713={
  following:boolean;issuedAt:number;generation?:string;dueAt?:number;
 };
 const key=(viewer:string,target:string)=>'soridraw:follow713:'+viewer+':'+target;
-const deviceKey=viewer=>'soridraw:follow713-device:'+viewer;
+const deviceKey=(viewer:string)=>'soridraw:follow713-device:'+viewer;
 const counterKey=(viewer:string,target:string)=>
  'soridraw:follow713-sequence:'+viewer+':'+target;
 const read=(viewer:string,target:string):Receipt713|null=>{
@@ -33,7 +33,7 @@ const store=(entry:Receipt713)=>{
  try{localStorage.setItem(key(entry.viewerUid,entry.targetUid),
   JSON.stringify(entry))}catch{}
 };
-const deviceId=viewer=>{
+const deviceId=(viewer:string)=>{
  if(typeof localStorage==='undefined')throw Error('APP713_LOCAL_STORAGE_REQUIRED');
  const old=localStorage.getItem(deviceKey(viewer))||'';
  if(DEVICE.test(old))return old;
@@ -67,13 +67,32 @@ export const stageExploreServerOwnedFollow713=(
   issuedAt:Date.now()};
  store(entry);return entry;
 };
+type PreparedAuth713={token:string;appCheck:string;preparedAt:number};
+const preparedAuth713=new WeakMap<User,Promise<PreparedAuth713>>();
+const getPreparedAuth713=async(user:User)=>{
+ const prior=preparedAuth713.get(user);
+ if(prior){
+  const ready=await prior;
+  if(Date.now()-ready.preparedAt<2*60_000)return ready;
+ }
+ const next=Promise.all([user.getIdToken(),getFirebaseAppCheckToken()])
+  .then(([token,appCheck])=>{
+   if(!token||!appCheck)throw err('app-check-unavailable');
+   return {token,appCheck,preparedAt:Date.now()};
+  });
+ preparedAuth713.set(user,next);
+ try{return await next}
+ catch(e){if(preparedAuth713.get(user)===next)preparedAuth713.delete(user);throw e}
+};
+export const primeExploreServerOwnedFollowAuth713=(user:User)=>{
+ if(!isExploreServerOwnedFollow713())return;
+ void getPreparedAuth713(user).catch(()=>{});
+};
 const dispatch=async(user:User,record:Receipt713)=>{
- const [idToken,appCheck]=await Promise.all([user.getIdToken(),
-  getFirebaseAppCheckToken()]);
- if(!appCheck)throw err('app-check-unavailable');
+ const {token:idToken,appCheck}=await getPreparedAuth713(user);
  const response=await fetch(EXPLORE_API_BASE+'/v1/profiles/'+
   encodeURIComponent(record.targetUid)+'/follow-click-713',{
-  method:'POST',headers:{'Content-Type':'application/json',
+  method:'POST',keepalive:true,headers:{'Content-Type':'application/json',
    Authorization:'Bearer '+idToken,'X-Firebase-AppCheck':appCheck},
   body:JSON.stringify({following:record.following,
    deviceId:record.deviceId,sequence:record.sequence}),

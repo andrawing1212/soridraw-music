@@ -50,6 +50,9 @@ export function createFollowClickIntent713({
      Object.keys(state.deviceFloors).length>=MAX_DEVICES)
     return fail('device-limit');
    const windows=[...state.windows];
+   // A terminal held operation must never falsely accept a later click that
+   // the alarm cannot reach. Repair requires explicit operator review.
+   if(windows.some(window=>window.status==='dead'))return fail('manual-hold');
    let tail=windows.at(-1);
    if(!tail||tail.status!=='waiting'||at>=tail.dueAt){
     if(windows.length>=MAX_WINDOWS)return fail('pair-window-full');

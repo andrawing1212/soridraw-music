@@ -85,6 +85,19 @@ jobs:
               .replace(/[A-Za-z0-9_-]{48,}/g,'<redacted>');
             console.log('APP700_'+name+'_SOURCE='+JSON.stringify(code).slice(0,10000));
           }
+          const meta=await get('workers/scripts/'+NAME+'/versions/'+active);
+          const rate=(meta?.resources?.bindings||[]).filter(b=>b?.name==='LIKE_RATE_LIMITER');
+          console.log('APP703_LIVE_NATIVE_LIMITER_BINDING_COUNT='+rate.length);
+          console.log('APP703_LIVE_NATIVE_LIMITER_TYPE='+(rate[0]?.type||'NONE'));
+          for(const name of ['throwApi','socialAbuseUnavailable380','enforceFollowEdgeRateLimit355','handleFollowOverlay354']){
+            const needle='function '+name+'(';
+            const idx=src.indexOf(needle);
+            if(idx<0){console.log('APP703_'+name+'_NOT_FOUND');continue;}
+            let excerpt=src.slice(idx,idx+Math.min(name==='handleFollowOverlay354'?3000:1900,src.length-idx));
+            excerpt=excerpt.replace(/[A-Za-z0-9_-]{48,}/g,'<redacted>');
+            console.log('APP703_'+name+'_SOURCE='+JSON.stringify(excerpt).slice(0,3600));
+          }
+          console.log('APP703_ACTIVE_MAIN_SHA256='+createHash('sha256').update(src).digest('hex'));
           console.log('APP640_GET_ONLY_SOURCE_INSPECTION=PASS');
           console.log('APP640_NO_DATA_OR_WORKER_MUTATION=PASS');
           NODE

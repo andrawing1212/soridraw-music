@@ -11,7 +11,7 @@ const compiled=ts.transpileModule(source,{compilerOptions:{
 }}).outputText;
 const build=(hostname)=>{
  const callbacks=[],patches=[],events=[],signals=[],cleared=[],exitCalls=[],pagehideListeners=[];
- let queued=[],pending=[],requests=0,recheckValue={isFollowing:true};
+ let queued=[],pending=[],requests=0,serverCalls=0,recheckValue={isFollowing:true};
  const user={uid:'viewer'};
  const auth={currentUser:user};
  const win={location:{hostname},dispatchEvent:event=>events.push(event),
@@ -26,6 +26,9 @@ const build=(hostname)=>{
    readPendingExploreFollowIntents380:()=>pending,
    queueExploreFollowFinalState380:row=>{queued.push(row);},
    dispatchPendingExploreFollowsOnPageHide712:uid=>{exitCalls.push(uid);},
+  },
+  './exploreFollowServerOwned713':{
+   confirmExploreServerOwnedFollow713:async()=>{serverCalls++;return recheckValue;},
   },
   './exploreSocialService':{
    patchExploreFollowLocalState377:(...args)=>patches.push(args),
@@ -51,7 +54,7 @@ const build=(hostname)=>{
  },window:win,CustomEvent:FakeCustomEvent,console,Date,Map,Set,Number,Promise});
  return {exports,callbacks,patches,events,signals,cleared,exitCalls,pagehideListeners,user,auth,
   setPending:rows=>{pending=rows;},setRecheck:value=>{recheckValue=value;},
-  getQueued:()=>queued,requests:()=>requests};
+  getQueued:()=>queued,requests:()=>requests,serverCalls:()=>serverCalls};
 };
 const onPreview=build('preview.soridraw.com');
 onPreview.exports.startExploreFollowPendingResume681();
@@ -90,6 +93,16 @@ assert.equal(onPreview.events[0].detail.actorFollowingCount,1);
 assert.equal(onPreview.events[0].detail.targetFollowerCount,2);
 assert.equal(onPreview.signals.length,1,'signal only after canonical exact ACK');
 assert.equal(onPreview.requests(),0,'settled callback needs no recheck');
+// APP713: restored server-owned receipts must never start a legacy PUT/DELETE.
+const owned=build('preview.soridraw.com');
+owned.exports.startExploreFollowPendingResume681();
+owned.setPending([{...record,serverOwned713:true}]);
+owned.callbacks[0](owned.user);
+const serverRow=owned.getQueued()[0];
+assert.equal(serverRow.serverOwned713,true);
+assert.equal(serverRow.exitCommit,undefined,'server owns the click after tab close');
+assert.equal((await serverRow.commit(true)).isFollowing,true);
+assert.equal(owned.serverCalls(),1,'confirm only the exact server-held click');
 
 // APP695: only a confirmed server recheck may recover a failed mutation.
 // During rapid reload the global route-independent handler used to broadcast

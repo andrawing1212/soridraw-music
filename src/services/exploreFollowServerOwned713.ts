@@ -15,6 +15,8 @@ type Receipt713={
 };
 const key=(viewer:string,target:string)=>'soridraw:follow713:'+viewer+':'+target;
 const deviceKey=viewer=>'soridraw:follow713-device:'+viewer;
+const counterKey=(viewer:string,target:string)=>
+ 'soridraw:follow713-sequence:'+viewer+':'+target;
 const read=(viewer:string,target:string):Receipt713|null=>{
  if(typeof localStorage==='undefined')return null;
  try{
@@ -56,8 +58,11 @@ export const stageExploreServerOwnedFollow713=(
   throw Error('APP713_INVALID_PAIR');
  const existing=read(viewerUid,targetUid);
  const device=deviceId(viewerUid);
- const sequence=(existing?.deviceId===device?existing.sequence:0)+1;
+ const previous=Number(localStorage.getItem(counterKey(viewerUid,targetUid))||0);
+ const sequence=Math.max(Number.isSafeInteger(previous)&&previous>=0?previous:0,
+   existing?.deviceId===device?existing.sequence:0)+1;
  if(!Number.isSafeInteger(sequence))throw Error('APP713_SEQUENCE_EXHAUSTED');
+ localStorage.setItem(counterKey(viewerUid,targetUid),String(sequence));
  const entry={viewerUid,targetUid,deviceId:device,sequence,following,
   issuedAt:Date.now()};
  store(entry);return entry;

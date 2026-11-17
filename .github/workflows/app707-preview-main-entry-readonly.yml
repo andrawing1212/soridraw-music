@@ -32,6 +32,13 @@ jobs:
             if(!mod?.content_base64)throw Error('APP707_HOLD_'+file);
             const s=Buffer.from(mod.content_base64,'base64').toString('utf8');
             console.log('APP707_MODULE='+file+' SIZE='+s.length);
+            if(file==='owner-follow-entry-607.mjs'){
+              const i=s.indexOf('async fetch(request,env,ctx)');
+              if(i<0)throw Error('APP707_HOLD_FETCH');
+              const tail=s.slice(i).replace(/[A-Za-z0-9_-]{48,}/g,'<redacted>');
+              console.log('APP707_DEFAULT_FETCH='+JSON.stringify(tail).slice(0,8500));
+            }
+
             for(const search of ['fetch(request','async fetch(','/follow','503','owner-follow','FOLLOW_OVERLAY_READONLY','rateLimit','function onRequest']){
               const i=s.indexOf(search);
               console.log('APP707_TERM='+file+':'+search+' INDEX='+i);

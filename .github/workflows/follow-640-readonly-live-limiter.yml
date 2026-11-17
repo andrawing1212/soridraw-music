@@ -74,6 +74,18 @@ jobs:
             const code=(cut>0?tail.slice(0,cut):tail).replace(/[A-Za-z0-9_-]{48,}/g,'<redacted>');
             console.log('APP698_'+name+'_SOURCE='+JSON.stringify(code).slice(0,8000));
           }
+          // APP700: inspect read-only real deployed abuse policy and rate-limit
+          // helpers; never log user rows, secrets or full bundled source.
+          for(const name of ['socialAbusePolicy380','socialAbuseLimited380','consumeSocialAbuse380']){
+            const re=new RegExp('(?:async\\\\s+)?function\\\\s+'+name+'\\\\s*\\\\(');
+            const at=src.search(re);
+            if(at<0){console.log('APP700_'+name+'_NOT_FOUND');continue;}
+            const tail=src.slice(at,at+8500);
+            const cut=tail.search(/\\n__name\\(/);
+            const code=(cut>0?tail.slice(0,cut):tail)
+              .replace(/[A-Za-z0-9_-]{48,}/g,'<redacted>');
+            console.log('APP700_'+name+'_SOURCE='+JSON.stringify(code).slice(0,10000));
+          }
           console.log('APP640_GET_ONLY_SOURCE_INSPECTION=PASS');
           console.log('APP640_NO_DATA_OR_WORKER_MUTATION=PASS');
           NODE

@@ -22,7 +22,7 @@ const same=(a,b)=>a.ownerUid===b.ownerUid&&a.actorUid===b.actorUid&&
  a.operationId===b.operationId&&a.cutoverToken===b.cutoverToken&&
  a.authEpoch===b.authEpoch&&a.desired===b.desired&&
  a.beforeFollowing===b.beforeFollowing&&
- a.expectedRevision===b.expectedRevision&&a.priorR2Revision===b.priorR2Revision;
+ a.expectedRevision===b.expectedRevision&&b.priorR2Revision>=a.priorR2Revision;
 export function createOwnerFollowRecovery556({
  state,env,now=Date.now,deliver=replayOwnerFollowReservation556,
  enabled=OWNER_FOLLOW_RECOVERY_556_COMPILED_OPEN,
@@ -38,13 +38,25 @@ export function createOwnerFollowRecovery556({
      current.authEpoch!==record.authEpoch))return fail('generation-held');
   const entries=Array.isArray(current?.entries)?current.entries:[];
   const old=entries.find(x=>identity(x)===identity(record));
-  if(old)return same(old,record)
-    ?{ok:true,status:'already-reserved',generation:old.generation}
-    :fail('operation-conflict');
-  if(entries.length>=MAX_QUEUE)return fail('owner-queue-full');
+  // The profile revision can advance independently of this exact pair's
+  // mutation identity. Keep the ORIGINAL floor; never replace a reservation
+  // with a newly observed profile revision or accept a regressed snapshot.
+  if(old&&!same(old,record))return fail('operation-conflict');
+  if(old&&!old.dead){
+   // A previous put may have succeeded while scheduling failed. A duplicate
+   // must still have a durable wake-up before the caller can commit.
+   const scheduled=typeof storage.getAlarm==='function'?await storage.getAlarm():null;
+   if(!Number.isSafeInteger(scheduled)||scheduled<=now())await storage.setAlarm(now()+INITIAL_MS);
+   return {ok:true,status:'already-reserved',generation:old.generation};
+  }
+  if(!old&&entries.length>=MAX_QUEUE)return fail('owner-queue-full');
   const generation=Math.max(0,Number(current?.generation)||0)+1;
+  // An explicit authenticated retry may revive only its own exact ticket.
+  // Fence any older alarm with a new generation and await durable scheduling
+  // before canonical storage. Never clear or revive unrelated held tickets.
+  const entry={...(old||record),generation,attempts:0,dead:false,nextAttemptAt:0};
   const next={ownerUid:record.ownerUid,authEpoch:record.authEpoch,generation,
-   entries:[...entries,{...record,generation,attempts:0,dead:false,nextAttemptAt:0}]};
+   entries:old?entries.map(x=>identity(x)===identity(old)?entry:x):[...entries,entry]};
   // SQLite-backed DO storage batches these consecutive writes. Both awaited
   // promises MUST succeed before the canonical mutation may begin.
   // Keep an already-earlier alarm instead of resetting its one-second timer

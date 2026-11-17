@@ -66,11 +66,14 @@ export function createFollowClickIntent713({
    const next={...state,windows,
     deviceFloors:{...state.deviceFloors,[deviceId]:sequence}};
    await tx.put(KEY,next);
-   const alarm=await tx.getAlarm();
+   // Cloudflare DurableObjectTransaction has only KV methods (get/put/delete/list).
+   // With the already-SQLite-backed DO class, direct storage alarm APIs
+   // called inside transaction() join the same transaction.
+   const alarm=await storage.getAlarm();
    const due=windows[0].status==='waiting'?
      windows[0].dueAt:Math.max(at+1000,windows[0].nextAttemptAt||at+1000);
    if(!Number.isSafeInteger(alarm)||alarm<=at||alarm>due)
-    await tx.setAlarm(due);
+    await storage.setAlarm(due);
    return {ok:true,status:'accepted',generation:tail.operationId,
      dueAt:tail.dueAt};
   });}catch{return fail('durable-reservation-unavailable')}
@@ -132,7 +135,7 @@ export function createFollowClickIntent713({
     await tx.put(KEY,{...latest,windows:[],retainUntil,
      lastReceipt:{operationId:item.operationId,dueAt:item.dueAt,
       desired:item.desired,revision:result.revision}});
-    await tx.setAlarm(retainUntil);
+    await storage.setAlarm(retainUntil);
     return {ok:true,status:result?.changed===true?'committed':'noop',
      revision:result.revision};
    }
@@ -140,7 +143,7 @@ export function createFollowClickIntent713({
    if(windows[0].status!=='dead'){
     const due=windows[0].status==='waiting'?
       windows[0].dueAt:windows[0].nextAttemptAt;
-    await tx.setAlarm(Math.max(now()+1,due));
+    await storage.setAlarm(Math.max(now()+1,due));
    }
    return confirmed?{ok:true,status:'next-window-scheduled'}
      :fail(windows[0].status==='dead'?'manual-hold':'retry-scheduled');

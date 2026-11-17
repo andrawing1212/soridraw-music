@@ -112,7 +112,11 @@ jobs:
             console.log('PAIR_DIAG_OVERLAY_BASELINE='+(overlay.length===1?String(overlay[0].baseline_following):'ABSENT'));
             const cols=await query('PRAGMA table_info(explore_follow_overrides_348)');
             console.log('PAIR_DIAG_OVERLAY_COLUMNS='+cols.map(c=>String(c.name||'')).join(','));
-            console.log('PAIR_DIAG_ONLY_NAMED_PAIR_READ=PASS');
+            const phase=await query('SELECT id,phase,schema_version,updated_at FROM explore_follow_cutover_control_348 WHERE id=1 LIMIT 1');
+          console.log('APP698_CUTOVER_PHASE='+String(phase[0]?.phase||'MISSING'));
+          console.log('APP698_CUTOVER_SCHEMA='+String(phase[0]?.schema_version||'MISSING'));
+          console.log('APP698_CUTOVER_PRESENT='+(phase.length===1));
+          console.log('PAIR_DIAG_ONLY_NAMED_PAIR_READ=PASS');
           }
           console.log('PAIR_DIAG_READ_ONLY_NO_USER_DATA_CHANGE=PASS');
           NODE

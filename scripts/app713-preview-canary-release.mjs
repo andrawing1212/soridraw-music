@@ -87,8 +87,15 @@ async function stageOne(t){
  need(source.length===off.modules.length,'ORIGINAL_MODULE_COUNT_'+t.name);
  for(const m of source)need(hash(m.source)===hash(bytes(offMap.get(m.name)||{content_base64:''})),
   'OFF_SOURCE_DRIFT_'+m.name);
- need(isDeepStrictEqual(live.meta.resources.script_runtime,
-   off.meta.resources.script_runtime),'RUNTIME_DRIFT_'+t.name);
+ // Cloudflare reports migration_tag only for an *already deployed* version.
+ // An inactive staged version has no migration_tag by design. All other
+ // runtime fields (including compatibility date and usage model) must match.
+ const originalRuntime=live.meta.resources.script_runtime||{};
+ const inactiveRuntime=off.meta.resources.script_runtime||{};
+ const {migration_tag:appliedTag,...baselineRuntime}=originalRuntime;
+ need(appliedTag===(t.baseCount===1?'owner600_v1':'v1')&&
+  isDeepStrictEqual(baselineRuntime,inactiveRuntime),
+  'REAL_RUNTIME_DRIFT_'+t.name);
  // The old and new bundles share exact modules, secrets, bindings and DO
  // namespaces. The ONLY configuration difference is this click route flag.
  const runtime=off.meta.resources.script_runtime;
@@ -176,6 +183,15 @@ async function main(){
   for(let i=0;i<protectedNames.length;i++)
    need(stable(await deployment(protectedNames[i]))===stable(originalProtected[i]),
     'TEST_PROD_DEPLOYMENT_CHANGED');
+  // The original Durable Object migration tag must still be applied
+  // after deployment. No new migration declaration is submitted.
+  for(const t of list){
+   const current=await snapshot(t.name,t.next);
+   const tag=current.meta?.resources?.script_runtime?.migration_tag;
+   need(tag===(t.baseCount===1?'owner600_v1':'v1'),
+    'DO_MIGRATION_TAG_NOT_PRESERVED_'+t.name);
+  }
+
   const url='https://soridraw-explore-preview.andrawing1212.workers.dev'+
    '/v1/profiles/synthetic_owner_B/follow-click-713';
   const options=await fetch(url,{method:'OPTIONS',headers:{

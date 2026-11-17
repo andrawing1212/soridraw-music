@@ -5207,8 +5207,43 @@ export default function ExplorePage() {
         // A failed response can happen after the canonical writer committed.
         // Recheck only this target once, never scan the entire Explore feed.
         void getExploreFollowState(user, targetUid, true)
-          .catch(() => null).then((latest) => {
+          .catch(() => null).then(async (latest) => {
             if (auth.currentUser?.uid !== viewerUid) return;
+            // APP697: if the exact follow-state endpoint is stale after a
+            // failed FOLLOW write, a bounded canonical follower page can
+            // POSITIVELY prove a pre-existing edge. Never infer absence from
+            // a partial/missing page, and never issue this read on page entry.
+            if (latest && latest.isFollowing === false &&
+                failure.desiredFollowing === true &&
+                !readPendingExploreFollowIntents380(viewerUid)
+                  .some(row => row.targetUid === targetUid)) {
+              let confirmedByFollowerPage697 = false;
+              try {
+                const page697 = await getExploreProfileConnections(
+                  targetUid, 'followers', null, true);
+                confirmedByFollowerPage697 =
+                  page697.items.some(row => row.uid === viewerUid);
+              } catch {}
+              if (auth.currentUser?.uid !== viewerUid) return;
+              if (readPendingExploreFollowIntents380(viewerUid)
+                .some(row => row.targetUid === targetUid)) return;
+              if (confirmedByFollowerPage697) {
+                clearExploreFollowLocalChoice695(viewerUid,targetUid);
+                rememberExploreFollowLocalChoice685(viewerUid,targetUid,true,true);
+                patchExploreFollowLocalState377(viewerUid,targetUid,true,profile);
+                setFollowSavingUid685('');
+                if (followingLoadedUid312 === viewerUid)
+                  setFollowingUids312(previous => new Set(previous).add(targetUid));
+                if (activeProfileUidRef.current === targetUid) {
+                  // Only membership is proven here; keep public/count data
+                  // unchanged until the existing exact count path verifies it.
+                  setFollowState(previous => previous
+                    ? {...previous,isFollowing:true} : previous);
+                  setSocialNotice('');
+                }
+                return;
+              }
+            }
             // This callback may outlive the profile being viewed.
             // APP696: a failed one-target GET must not mint a 10-minute
             // settled receipt for the pre-click base, or repaint unknown data

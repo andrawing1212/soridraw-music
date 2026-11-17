@@ -10,11 +10,12 @@ const compiled=ts.transpileModule(source,{compilerOptions:{
  target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,
 }}).outputText;
 const build=(hostname)=>{
- const callbacks=[],patches=[],events=[],signals=[],cleared=[];
+ const callbacks=[],patches=[],events=[],signals=[],cleared=[],exitCalls=[],pagehideListeners=[];
  let queued=[],pending=[],requests=0,recheckValue={isFollowing:true};
  const user={uid:'viewer'};
  const auth={currentUser:user};
- const win={location:{hostname},dispatchEvent:event=>events.push(event)};
+ const win={location:{hostname},dispatchEvent:event=>events.push(event),
+  addEventListener:(name,callback)=>{if(name==='pagehide')pagehideListeners.push(callback);}};
  class FakeCustomEvent{
   constructor(type,options){this.type=type;this.detail=options.detail;}
  }
@@ -24,6 +25,7 @@ const build=(hostname)=>{
   './exploreFollowBatchService380':{
    readPendingExploreFollowIntents380:()=>pending,
    queueExploreFollowFinalState380:row=>{queued.push(row);},
+   dispatchPendingExploreFollowsOnPageHide712:uid=>{exitCalls.push(uid);},
   },
   './exploreSocialService':{
    patchExploreFollowLocalState377:(...args)=>patches.push(args),
@@ -47,7 +49,7 @@ const build=(hostname)=>{
   assert.ok(Object.hasOwn(dependencies,name),'unexpected dependency '+name);
   return dependencies[name];
  },window:win,CustomEvent:FakeCustomEvent,console,Date,Map,Set,Number,Promise});
- return {exports,callbacks,patches,events,signals,cleared,user,auth,
+ return {exports,callbacks,patches,events,signals,cleared,exitCalls,pagehideListeners,user,auth,
   setPending:rows=>{pending=rows;},setRecheck:value=>{recheckValue=value;},
   getQueued:()=>queued,requests:()=>requests};
 };
@@ -55,6 +57,9 @@ const onPreview=build('preview.soridraw.com');
 onPreview.exports.startExploreFollowPendingResume681();
 onPreview.exports.startExploreFollowPendingResume681();
 assert.equal(onPreview.callbacks.length,1,'register auth callback only once');
+assert.equal(onPreview.pagehideListeners.length,1,'register one real-document exit listener');
+onPreview.pagehideListeners[0]();
+assert.deepEqual(onPreview.exitCalls,['viewer'],'pagehide routes only current account to exit sender');
 onPreview.callbacks[0](onPreview.user);
 assert.equal(onPreview.getQueued().length,0,'no settled-user startup work');
 assert.equal(onPreview.requests(),0,'no startup server reads');

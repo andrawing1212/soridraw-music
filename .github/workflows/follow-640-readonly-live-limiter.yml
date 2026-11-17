@@ -86,6 +86,13 @@ jobs:
             console.log('APP700_'+name+'_SOURCE='+JSON.stringify(code).slice(0,10000));
           }
           const meta=await get('workers/scripts/'+NAME+'/versions/'+active);
+          const serviceBindings=(meta?.resources?.bindings||[]).filter(b=>b?.name==='OWNER_FOLLOW_RESERVATION_SERVICE_600');
+          console.log('APP708_RESERVATION_SERVICE_BINDING_PRESENT='+(serviceBindings.length===1));
+          console.log('APP708_RESERVATION_SERVICE_BINDING_TYPE='+(serviceBindings[0]?.type||'NONE'));
+          const guard=meta?.resources?.bindings||[];
+          for(const name of ['SORIDRAW_OWNER_FOLLOW_W2_PUSH_555','SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680']){
+            console.log('APP708_'+name+'_ENABLED='+(guard.some(b=>b.name===name&&b.text==='1')));
+          }
           const rate=(meta?.resources?.bindings||[]).filter(b=>b?.name==='LIKE_RATE_LIMITER');
           console.log('APP703_LIVE_NATIVE_LIMITER_BINDING_COUNT='+rate.length);
           console.log('APP703_LIVE_NATIVE_LIMITER_TYPE='+(rate[0]?.type||'NONE'));
@@ -128,6 +135,10 @@ jobs:
           if(actor.length!==1||target.length!==1) {
             console.log('PAIR_DIAG_UNAMBIGUOUS_IDENTIFICATION=HOLD');
           } else {
+            const epoch=await query('SELECT owner_follow_auth_epoch_532 AS e FROM profile_stats WHERE uid=? LIMIT 1',[target[0].uid]);
+            console.log('APP708_TARGET_PROFILE_STATS_PRESENT='+(epoch.length===1));
+            const value=epoch[0]?.e;
+            console.log('APP708_TARGET_OWNER_EPOCH_STATUS='+(value===''?'UNENROLLED':/^[0-9a-f]{32}$/.test(String(value||''))?'VALID_ENROLLED':'INVALID_OR_MISSING'));
             const baseline=await query('SELECT COUNT(*) AS n FROM follows WHERE follower_uid=? AND following_uid=?',[actor[0].uid,target[0].uid]);
             console.log('PAIR_DIAG_FROZEN_BASELINE_PRESENT='+(Number(baseline[0]?.n||0)>0));
             const overlay=await query('SELECT following,baseline_following FROM explore_follow_overrides_348 WHERE follower_uid=? AND following_uid=? LIMIT 1',[actor[0].uid,target[0].uid]);

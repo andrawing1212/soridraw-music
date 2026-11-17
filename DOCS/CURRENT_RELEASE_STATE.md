@@ -1,3 +1,11 @@
+## CURRENT — APP712 창 닫기 실사용 FAIL / 재접속 전 서버 확정 불능 (2026-11-18 KST)
+
+- 사용자가 제공한 PREVIEW 110초 영상 `20261117-1726-00.3047372.mp4` 직접 분석. 오른쪽 사용자 브라우저에서 공개 프로필 팔로우 버튼 선택 후 창을 닫았을 때 왼쪽 상대방 팔로워 수 자동 반영에 실패. 약 38초 상대방 팔로워 1, 약 61초 재접속 후 상대방 팔로워 2. 영상 자체에는 네트워크 원본이 없으므로 `pagehide` 미발생 / 인증 사전준비 지연 / CORS OPTIONS 중단 / 본 요청 취소 중 어느 원인인지는 확정 불가. **창 종료 기능 실사용 FAIL**; 2번 연속 새로고침 검사는 사용자 PASS 보고로 재실행 금지.
+- 소스상의 구조적 위험: APP712는 실제 브라우저 `pagehide`에 처음 `fetch(...,keepalive:true)`를 시도하며, 자격 증명 준비는 `primeExploreFollowExitAuth712()` 비동기; PREVIEW 앱 `preview.soridraw.com`에서 별도 workers.dev API에 Authorization·X-Firebase-AppCheck, PUT/DELETE 사용(CORS preflight 가능). 유효한 인증이 준비되지 않거나 종료 이전에 서버 접수되지 않으면 변경은 클라이언트 `localStorage`에만 남아 APP681 로그인 재접속 복구 후 확정됨. 기존 5초 정상 경로·APP711 503 재시도·데이터는 보호.
+- APP712 [PR #1189](https://github.com/andrawing1212/soridraw-music/pull/1189) 코드/ [Actions #44135662944](https://github.com/andrawing1212/soridraw-music/actions/runs/44135662944) Hosting 자체는 PASS지만 **사용자 기능 FAIL은 별개**. 원인 재현 없이 이벤트 리스너를 무작정 늘리거나 전송을 확정 ACK로 위장하지 말 것. 사용자가 다시 접속하지 않아도 전달하려면 클릭 시 이미 서버가 수신한 지속성 있는 예약·최종상태 큐를 소유하도록 서버 설계를 검토해야 하며, 기존 W0 5초 최종선택·APP711 보호 및 추가 서버 비용·공유 Backend 변경 승인 경계를 따로 판단할 것. 현재 추가 코드 수정·공유 백엔드 배포 없음. 관리자 저장시간 조절은 보류.
+
+---
+
 ## CURRENT — APP712 팔로우 새로고침·창 닫기 전송 PREVIEW Hosting 완료 / 실기기 HOLD (2026-11-18 KST)
 
 - **승인 범위/원인:** 팔로우 클릭은 앱에 먼저 표시되고 5초 뒤 서버에 저장되지만, 기존 `flushPendingExploreFollowsForPageExit380`는 실제 문서 종료에 아무 동작을 하지 않았음. 사용자가 브라우저를 닫으면 미확정 선택은 그 기기의 localStorage에만 남아 같은 계정이 재접속해 APP681 복구가 실행될 때까지 상대방 서버 확정이 지연됐음.

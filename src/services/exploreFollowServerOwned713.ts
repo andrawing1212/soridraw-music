@@ -5,7 +5,7 @@ import type {User} from 'firebase/auth';
 import {getFirebaseAppCheckToken} from '../firebase';
 import {EXPLORE_API_BASE} from '../config/exploreEnvironment';
 import {getExploreFollowState} from './exploreSocialService';
-export const APP713_SERVER_FOLLOW_CLIENT_COMPILED_OPEN=false;
+export const APP713_SERVER_FOLLOW_CLIENT_COMPILED_OPEN=true;
 const SAFE=/^[A-Za-z0-9_-]{1,128}$/;
 const DEVICE=/^[A-Za-z0-9_-]{8,80}$/;
 const TTL_MS=24*60*60_000;

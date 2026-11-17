@@ -5,10 +5,9 @@ import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import ts from 'typescript';
 const source=readFileSync('src/services/exploreFollowServerOwned713.ts','utf8');
-const literal='export const APP713_SERVER_FOLLOW_CLIENT_COMPILED_OPEN=false';
+const literal='export const APP713_SERVER_FOLLOW_CLIENT_COMPILED_OPEN=true';
 assert.equal(source.split(literal).length,2);
-const code=ts.transpileModule(source.replace(literal,
- 'export const APP713_SERVER_FOLLOW_CLIENT_COMPILED_OPEN=true'),{
+const code=ts.transpileModule(source,{
  compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS},
 }).outputText;
 const backing=new Map(),calls=[],users={viewer:{uid:'rcZ2GZrBndOZzT8C635eiNBjYIJ2',getIdToken:async()=> 'test-id-token'}};
@@ -48,6 +47,7 @@ const compile=()=>{const exports={};runInNewContext(code,{
  });return exports};
 const a=compile();
 assert.equal(a.isExploreServerOwnedFollow713(users.viewer),true);
+assert.equal(a.isExploreServerOwnedFollow713({uid:'other'}),false,'noncanary client stays on legacy path');
 a.primeExploreServerOwnedFollowAuth713(users.viewer);
 for(let n=0;n<4;n++)await Promise.resolve();
 const pending=a.stageExploreServerOwnedFollow713(users.viewer,'target',true);

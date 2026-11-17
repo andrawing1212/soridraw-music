@@ -28,7 +28,7 @@ const expected=id=>stable([{version_id:id,percentage:100}]);
 const bodyVersion=v=>[{version_id:v,percentage:100}];
 const key=m=>new Map(m.map(x=>[x.name,x]));
 const mode=process.argv[2];
-need(['--activate','--rollback-if-owned'].includes(mode),'MODE');
+need(['--activate','--rollback-if-owned','--verify-live'].includes(mode),'MODE');
 need(process.env.GITHUB_ACTIONS==='true'&&
  process.env.GITHUB_REF==='refs/heads/fix/app713-server-owned-follow'&&
  typeof token==='string'&&token.length>24&&
@@ -166,6 +166,25 @@ async function rollbackFromArtifact(){
 }
 async function main(){
  if(mode==='--rollback-if-owned'){await rollbackFromArtifact();return}
+ if(mode==='--verify-live'){
+  const active=[{name:T[0].name,id:'379a904e-abe4-4f37-abfb-3b50cf058190'},
+   {name:T[1].name,id:'1ac63568-d7bf-427d-b655-5f510ac0ea76'}];
+  for(const row of active){
+   need(stable(await deployment(row.name))===expected(row.id),
+    'EXPECTED_SINGLE_CANARY_LIVE_VERSION_'+row.name);
+   const v=await snapshot(row.name,row.id);
+   const m=key(v.bindings),t=T.find(x=>x.name===row.name);
+   need(m.get('SORIDRAW_ENVIRONMENT')?.text==='preview'&&
+    m.get('SORIDRAW_FOLLOW_SERVER_CLICK_713')?.text==='1'&&
+    m.get('SORIDRAW_FOLLOW_CANARY_UID_713')?.text===CANARY&&
+    v.modules.length===t.baseCount+t.extras.length&&
+    v.meta?.resources?.script_runtime?.migration_tag===
+      (t.baseCount===1?'owner600_v1':'v1'),
+    'CANARY_BINDING_MODULE_OR_DO_MIGRATION_DRIFT_'+row.name);
+  }
+  console.log('APP713_EXACT_CANARY_ACTIVE_WORKERS_AND_DO_TAGS_GET_ONLY=PASS');
+  return;
+ }
  const originalProtected=await Promise.all(protectedNames.map(deployment));
  const list=[];
  try{

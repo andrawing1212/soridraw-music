@@ -1,3 +1,14 @@
+## CURRENT — 긴급 복구 완료: 본계정 APP713 철회, PREVIEW APP712 복귀 (2026-11-18 KST)
+
+- **원인·조치:** 본계정 UID `rcZ2GZrBndOZzT8C635eiNBjYIJ2`를 신규 APP713 시험 계정으로 사용한 뒤 기존 팔로우 기능이 회귀했다는 사용자 영상 제보. 실사용 합격 전 활성화한 것은 개발 판단 오류. **APP713 전면 보류; 임의 재활성화 금지.**
+- **PREVIEW 웹:** [긴급 복원 PR #1196](https://github.com/andrawing1212/soridraw-music/pull/1196) 병합 `cd0309ff882b4b75dc7849f4dd94ad9c9d283cf6`; APP713 클라이언트 스위치를 OFF하여 모든 계정이 기존 APP712 처리 경로를 사용. [PREVIEW Hosting #44164843678](https://github.com/andrawing1212/soridraw-music/actions/runs/44164843678) **SUCCESS**. 공유 RTDB Rules·Functions·사용자 원본 변경 없음.
+- **PREVIEW Cloudflare 복원 PASS:** [APP713 긴급 서버 복원 #44165158349](https://github.com/andrawing1212/soridraw-music/actions/runs/44165158349)에서 Explore 버전 `a28c1391-1d98-41fb-b9c4-8f51aa19e0a0`, owner 버전 `1e987bc3-36d3-4bb0-861f-4df17f536592` 각각 100% 활성화 PASS. TEST·PRODUCTION과 기존 DB/R2/RTDB 변경 없음.
+- **Firebase 복원 PASS:** 신설 함수 `verifyExploreFollowActor713` 전용 활성 플래그 `SORIDRAW_FOLLOW_ACTOR_PROOF_713=0`(OFF), 이번에 추가한 신규 Cloud Run Service의 `allUsers roles/run.invoker` 권한 제거 PASS. 기존 다른 Functions·서비스 계정 IAM·공유 데이터 변경 없음.
+- **검증 상태 구분:** **웹 Hosting 복원 PASS / Cloudflare 복원 PASS / 신규 Firebase 기능 OFF와 권한 철회 PASS**. 사용자 기기에서 실제 기존 APP712 복원 효과는 별도 미확인. 과거 APP712의 클릭 직후 창 닫기 자동 동기화 누락은 미해결 가능성이 있으므로, 이번 복구를 전체 팔로우 기능 수정 완료라고 주장하지 말 것.
+- **다음 진행:** 새로운 작업 승인 없이 APP713 서버를 다시 켜거나 본계정을 카나리로 사용하지 말 것. 긴급 복구 후 원인 분석은 이미 제출된 `20261117-1956-38.2007783.mp4` 등 사용자 증거와 최신 실제 코드에서 **읽기 전용**부터 시작. 사용자에게 다른 계정 생성이나 공유 원본 데이터 수정 요구 금지.
+
+---
+
 ## CURRENT — APP713 PREVIEW 단일 카나리 서버·Hosting 배포 PASS / PC·모바일 실검증 요망 (2026-11-18 KST)
 
 - **최종 목표는 여전히 모든 로그인 사용자의 팔로우·취소 서버 확정 후 PC·모바일 자동 동기화.** 이번 APP713은 이 목표의 **승인된 단일 시험 계정** 단계만 완료. 해당 UID `rcZ2GZrBndOZzT8C635eiNBjYIJ2`만 새 클릭 서버 예약 경로를 사용하고 나머지 로그인 계정은 APP712 기존 경로 유지. 전면 배포·실사용 PASS 아님.

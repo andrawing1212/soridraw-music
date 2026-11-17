@@ -1,0 +1,22 @@
+name: APP713 isolated server-held follow contract
+on:
+  push:
+    branches: [fix/app713-server-owned-follow]
+    paths:
+      - '.github/workflows/app713-isolated-contract-check.yml'
+      - 'cloudflare/explore-worker/runtime/owner-follow-*-713.mjs'
+      - 'scripts/verify-713-*.mjs'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test private server-owned follow chain with no real user writes
+        run: |
+          node scripts/verify-713-follow-server-intent.mjs
+          node scripts/verify-713-follow-click-ingress.mjs
+          node scripts/verify-713-follow-trusted-canonical.mjs
+          node scripts/verify-713-follow-private-pipeline.mjs

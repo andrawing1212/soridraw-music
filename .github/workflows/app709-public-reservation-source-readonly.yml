@@ -31,6 +31,10 @@ jobs:
             for(const module of data.modules||[]){
               if(!/public-follow|owner-follow-service|owner-follow-http|reservation/i.test(module.name))continue;
               const src=Buffer.from(module.content_base64||'','base64').toString('utf8');
+              if(module.name==='app605/public-follow-dual-ack-671.mjs'){
+                const found=src.match(/APP671_PUBLIC_DUAL_ACK_COMPILED_OPEN\\s*=\\s*(true|false)/);
+                console.log('APP709_PUBLIC_DUAL_ACK_COMPILED_OPEN='+(found?found[1]:'UNKNOWN'));
+              }
               const searches=['validTicket','reserveOwnerFollowViaService601','handleOwnerAndPublic','publicOnly','reservation-unavailable','reserve','authEpoch'];
               const hits=searches.filter(t=>src.includes(t));
               if(!hits.length)continue;

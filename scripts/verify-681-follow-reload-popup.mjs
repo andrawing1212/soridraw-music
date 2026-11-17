@@ -158,7 +158,12 @@ assert.ok(mountedError.includes('clearExploreFollowLocalChoice695(viewerUid,targ
 assert.match(mountedError,/if \(!latest\) \{/);
 assert.match(mountedError,/if \(!latest\) \{[\s\S]*?return;[\s\S]*?\}\s*const restored = latest\.isFollowing/);
 assert.doesNotMatch(mountedError,/latest\?\.isFollowing \?\? failure\.baseFollowing/);
-assert.match(mountedError,/오류: /);
+assert.match(mountedError,/const diagnosis699/);
+assert.match(mountedError,/ACTOR_MISSING_PUBLIC_LIST/);
+assert.match(mountedError,/PUBLIC_LIST_UNAVAILABLE/);
+assert.match(mountedError,/WRITE_UNKNOWN/);
+assert.match(mountedError,/상태:/);
+console.log('APP699_MOUNTED_ONE_PAIR_AUTH_DIAGNOSTICS_NO_NEW_GET=PASS');
 // APP697: a real existing follower confirmed in a bounded public relation
 // page can repair only the button after failure, not invent public counts.
 // Missing/partial pages never prove non-follow and cannot force an unfollow.

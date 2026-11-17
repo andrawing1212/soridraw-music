@@ -27,7 +27,7 @@ jobs:
             timeframe:{
               from:Date.parse('2026-11-17T14:05:00Z'),
               to:Date.parse('2026-11-17T14:07:30Z')},
-            limit:30,dry:true,
+            limit:30,dry:true,view:'events',
             parameters:{view:'events',datasets:['cloudflare-workers'],
               filters:[{key:'$metadata.rayId',operation:'eq',type:'string',value:ray}]
             }
@@ -44,6 +44,7 @@ jobs:
           }
           const events=obj.result?.events?.events||obj.result?.events||[];
           console.log('APP705_RESULT_KEYS='+Object.keys(obj.result||{}).sort().join(','));
+          console.log('APP705_RUN_VIEW='+String(obj.result?.run?.query?.parameters?.view||obj.result?.run?.query?.view||'UNKNOWN'));
           console.log('APP705_RAY_EVENT_COUNT='+(Array.isArray(events)?events.length:0));
           if(Array.isArray(events))for(const row of events.slice(0,20)){
             const meta=row.$metadata||row.metadata||{};

@@ -14,7 +14,7 @@ const cors={'Access-Control-Allow-Origin':ORIGIN,
  'Cache-Control':'private,no-store'};
 const respond=(status,body)=>Response.json(body,{status,headers:cors});
 export async function handleAuthenticatedFollowClick713({
- request,env,ctx,authenticate,
+ request,env,ctx,authenticate,preAuthLimiter,
  enabled=APP713_FOLLOW_CLICK_INGRESS_COMPILED_OPEN,
 }={}){
  const url=new URL(request.url);
@@ -30,6 +30,10 @@ export async function handleAuthenticatedFollowClick713({
  if(request.method==='OPTIONS')
   return new Response(null,{status:204,headers:cors});
  if(request.method!=='POST')return respond(405,{ok:false,status:'method-denied'});
+ // Reuse the existing canonical pre-auth burst limit before Firebase token
+ // verification; no new D1/R2/cache writes for invalid click floods.
+ if(typeof preAuthLimiter!=='function')return respond(503,{ok:false,status:'rate-guard-unavailable'});
+ try{preAuthLimiter(request)}catch{return respond(429,{ok:false,status:'rate-limited'})}
  const raw=await request.clone().text().catch(()=>null);
  if(typeof raw!=='string'||new TextEncoder().encode(raw).byteLength>512)
   return respond(413,{ok:false,status:'oversized'});

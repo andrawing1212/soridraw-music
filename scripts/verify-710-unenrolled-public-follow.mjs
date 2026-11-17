@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {patchGate710} from './lib/public-follow-gate-710.mjs';
+const anchor="import {reserveOwnerFollowViaService601,handleOwnerFollowReplayService601}\n  from './app605/owner-follow-service-601.mjs';";
+const entry="export default {async fetch(request,env,ctx){return runOwnerFollowPrecommit557({callCanonical:(canonicalRequest=request)=>original.fetch.call(original,canonicalRequest,env,ctx),publicWithoutEpoch:generalOwner660(env)&&env?.SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680==='1',});}}";
+const main='x'.repeat(5500)+'\n'+anchor+'\n'+entry;
+const disabled='y'.repeat(2500)+'\nexport const APP671_PUBLIC_DUAL_ACK_COMPILED_OPEN = false;';
+const patched=patchGate710(main,disabled);
+assert.equal(patched.includes("import {APP671_PUBLIC_DUAL_ACK_COMPILED_OPEN} from './app605/public-follow-dual-ack-671.mjs';"),true);
+assert.equal(patched.includes("publicWithoutEpoch:generalOwner660(env)&&APP671_PUBLIC_DUAL_ACK_COMPILED_OPEN&&env?.SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680==='1',"),true);
+assert.equal(patched.includes('callCanonical:(canonicalRequest=request)=>original.fetch.call'),true);
+assert.throws(()=>patchGate710(main,disabled.replace('false','true')),/APP710_HOLD_PUBLIC_RECEIVER_ALREADY_ENABLED/);
+assert.throws(()=>patchGate710(patched,disabled),/APP710_HOLD_ENTRY_ANCHORS_NOT_UNIQUE/);
+assert.throws(()=>patchGate710(main,'bad'),/APP710_HOLD_SOURCE_SHAPE/);
+console.log('APP710_COMPILED_OFF_PUBLIC_FALLBACK_CANONICAL_ACTIVE_OWNER_UNCHANGED=PASS');

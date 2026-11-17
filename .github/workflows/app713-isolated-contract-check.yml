@@ -34,3 +34,14 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: node scripts/verify-713-active-module-patches.mjs
+      - name: GET-only inactive Worker staging preflight
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          APP713_SOURCE_SHA: ${{ github.sha }}
+        run: node scripts/app713-preview-stage-inactive.mjs --preflight
+      - name: Stage APP713 OFF once without deploying traffic
+        if: github.event.head_commit.message == 'release(app713): APP713_STAGE_INACTIVE_ONCE'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          APP713_SOURCE_SHA: ${{ github.sha }}
+        run: node scripts/app713-preview-stage-inactive.mjs --stage-inactive

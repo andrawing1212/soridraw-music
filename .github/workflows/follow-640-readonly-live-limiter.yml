@@ -147,7 +147,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with: {node-version: '22'}
-      - name: Read only Andy.j exact per-user follow request receipt
+      - name: Read only Andy.j per-user APP380 and APP355 rate receipts
         shell: bash
         run: |
           set -euo pipefail

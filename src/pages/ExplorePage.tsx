@@ -135,6 +135,7 @@ import {
 import {
   isExploreServerOwnedFollow713,stageExploreServerOwnedFollow713,
   sendExploreServerOwnedFollow713,confirmExploreServerOwnedFollow713,
+  primeExploreServerOwnedFollowAuth713,
 } from '../services/exploreFollowServerOwned713';
 import { syncSoridrawProfileAvatarAuthority } from '../services/profileAvatarAuthority';
 import ExploreProfileEditModal from '../components/explore/ExploreProfileEditModal';
@@ -1997,6 +1998,13 @@ export default function ExplorePage() {
   // without locking the visible button while the server settles.
   const activeProfileUidRef = useRef('');
   activeProfileUidRef.current = profile?.uid || profileUid || '';
+  // APP713: prepare Firebase auth while the user is viewing a followable
+  // profile. This is not a D1/R2/RTDB fetch or a scheduled mutation.
+  // Keep client server queue completely OFF outside approved PREVIEW.
+  useEffect(() => {
+    if(user && profile?.uid && user.uid !== profile.uid)
+      primeExploreServerOwnedFollowAuth713(user);
+  }, [user,profile?.uid]);
   // SORIDRAW_EXPLORE_PROFILE_CONNECTIONS_376_20261007
   // Connection cards are fetched only after an explicit followers/following click.
   // Reopening the same list in this mounted Explore session reuses the bounded page.

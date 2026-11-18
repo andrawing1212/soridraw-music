@@ -496,13 +496,16 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
     .slice(0, 4);
   const cloudflareMetered = cloudflare.meteredResponses > 0;
   const cloudflarePathEntries = Object.entries(cloudflare.paths || {})
-    .filter(([, state]) => state.localCacheHits > 0 || state.workerRequests > 0 || state.d1RowsRead > 0 || state.d1RowsWritten > 0)
-    .sort((a, b) => {
-      const aScore = a[1].localCacheHits + a[1].d1RowsRead + a[1].d1RowsWritten + a[1].workerRequests;
-      const bScore = b[1].localCacheHits + b[1].d1RowsRead + b[1].d1RowsWritten + b[1].workerRequests;
-      return bScore - aScore;
-    })
-    .slice(0, 5);
+    .filter(([, state]) =>
+      state.localCacheHits > 0 || state.workerRequests > 0 ||
+      state.d1RowsRead > 0 || state.d1RowsWritten > 0 ||
+      state.r2ClassA > 0 || state.r2ClassB > 0)
+    .sort((a, b) =>
+      (b[1].r2ClassB + b[1].r2ClassA) - (a[1].r2ClassB + a[1].r2ClassA) ||
+      (b[1].d1RowsRead + b[1].d1RowsWritten) - (a[1].d1RowsRead + a[1].d1RowsWritten) ||
+      b[1].workerRequests - a[1].workerRequests)
+    // Source already limits stored path groups to 24; avoid hiding metered routes.
+    .slice(0, 24);
   const hasR2Usage = cloudflare.r2ClassA > 0 || cloudflare.r2ClassB > 0;
 
   if (docked && isMobile) {
@@ -639,6 +642,7 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
               <DiagnosticGroup title="Cloudflare 요청 상세" hint={`${cloudflarePathEntries.length}개 경로`} tone="violet">
               <div className="mt-1 space-y-1 rounded-lg bg-[#c6b5ff]/[0.055] px-2 py-1.5">
                 <div className="mb-0.5 text-[10px] font-black tracking-[0.04em] text-[#c6b5ff]/70">CLOUDFLARE 요청 상세 · 이번 실행</div>
+                 <div className="text-[9px] text-white/40">R2 수치는 이미 받은 서버 응답에 기록된 값입니다. 새 조회 없이 표시하며 실제 청구량과 다를 수 있습니다.</div>
                 {cloudflarePathEntries.map(([path, state]) => {
                   const requestCount = Math.max(1, state.workerRequests);
                   const avgRead = Math.ceil(state.d1RowsRead / requestCount);
@@ -655,6 +659,9 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
                         <span className="shrink-0 whitespace-nowrap tabular-nums">D1 쿼리 R {formatNumber(state.d1ReadQueries)} · W {formatNumber(state.d1WriteQueries)}</span>
                         <span className="shrink-0 whitespace-nowrap tabular-nums">이번 실행 행 R {formatNumber(state.d1RowsRead)} · W {formatNumber(state.d1RowsWritten)}</span>
                       </div>
+                       <div className="text-[10px] font-bold tabular-nums text-[#c6b5ff]/75">
+                         R2 읽기(Class B) {formatNumber(state.r2ClassB)} · 저장(Class A) {formatNumber(state.r2ClassA)}
+                       </div>
                       <div className="flex min-w-0 items-center justify-between gap-2 text-[10px] font-black">
                         <span className="shrink-0 whitespace-nowrap tabular-nums text-white/52">요청당 평균 R {formatNumber(avgRead)} · W {formatNumber(avgWrite)}</span>
                         <span className={`shrink-0 whitespace-nowrap tabular-nums ${getFreeCapacityTone(freeDaily)}`}>

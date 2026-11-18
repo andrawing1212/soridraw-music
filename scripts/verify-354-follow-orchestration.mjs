@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { verifyFollowMutationReadCandidate718 } from './verify-718-follow-mutation-reads.mjs';
 import { verifyFollowStateReadCandidate717 } from './verify-717-follow-state-r2-read.mjs';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
@@ -413,6 +414,7 @@ assert.equal(revision,3);
 const conflict = async () => { throw Object.assign(Error('conflict'),{ code:'FOLLOW_REVISION_CONFLICT' }); };
 await assert.rejects(client.client354('overlay-viewer','target',false,conflict), { code:'FOLLOW_REVISION_CONFLICT' });
 await verifyFollowStateReadCandidate717({ fixture, cutover, source });
+await verifyFollowMutationReadCandidate718({ fixture, cutover, source, id });
 console.log('FOLLOW354_ACTUAL_FUNCTION_CRASH_REPLAY_AND_EXACT_RECOVERY=PASS');
 console.log('FOLLOW354_SUSPENDED_WRITER_DUPLICATE_REVERSE_AND_SHARED_TARGET=PASS');
 console.log('FOLLOW354_ACTUAL_HTTP_FLOW_LEGACY_SYNC_BYPASS=PASS');

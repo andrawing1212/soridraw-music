@@ -1,3 +1,13 @@
+## CURRENT — APP720 PREVIEW 팔로우 상태 재방문 RTDB 확인 기반 로컬 재사용 배포 PASS / 실제 비용·동기화 검증 요망 (2026-11-19 KST)
+
+- **승인:** 2026-11-18 22:43:38 UTC 디렉터가 기존 RTDB 확정 신호·로컬 캐시를 활용해 팔로우 상태 재방문 D1/R2 비용 최소화, 동기화·오프라인 복구 보호, 필수 검사 후 **PREVIEW Hosting만** 적용 승인. 공유 Worker/D1/R2/RTDB Rules/Functions/사용자 원본·TEST·PRODUCTION 변경 금지.
+- **코드/병합:** [APP720 PR #1220](https://github.com/andrawing1212/soridraw-music/pull/1220) 병합 `5b90f5c351a0fb7daa6c97da531dd713aa1e5125`. 기존 단일 `userSync/{viewer}/exploreFollow` 구독에서 onValue 준비/오류 상태만 관찰, **새 RTDB 리스너·조회·쓰기·폴링·타이머 0**. `ExplorePage`/visit reuse의 기존 10초 캐시는 유지하며, **정확한 canonical GET `countVerified661===true` + 보이는 온라인 탭 + 동일 계정 정상 RTDB 구독**이 확인된 경우에만 최대 **120초** 재사용. pending/recent choice, 실제 클릭, 새 RTDB 확정 변경/공개 프로필 새 revision, 탭 숨김, offline→online, 구독 오류, 계정 전환 시 기존 canonical 재확인으로 복구. last-only RTDB 알림은 이력 전체가 아니므로 무기한 캐시 금지.
+- **검사:** [Follow-only #44415650289](https://github.com/andrawing1212/soridraw-music/actions/runs/44415650289) SUCCESS, [Cooldown #44415650292](https://github.com/andrawing1212/soridraw-music/actions/runs/44415650292) SUCCESS, [Product #44415650250](https://github.com/andrawing1212/soridraw-music/actions/runs/44415650250) SUCCESS. APP720 전용 TypeScript 실행 기반 VM: 정상 RTDB + verified 상태 10→120초, 미검증/오류 10초 fallback, 오래된 GET/새 클릭 invalidation, 단일 RTDB 구독/변경 수신/오류, 계정·대상 분리, 동시 GET 병합 PASS. 최초 소스에서 이전 회귀 테스트의 정확한 기존 unsubscribe 문구를 복원하고 동일 PR에서 재검사 후 병합.
+- **PREVIEW Hosting 배포 PASS:** [트리거 PR #1221](https://github.com/andrawing1212/soridraw-music/pull/1221) 병합 `7608e4146d19f19cf5d763830b55dd22e45e85b1`, [Actions #44416194658](https://github.com/andrawing1212/soridraw-music/actions/runs/44416194658) SUCCESS. `LOCKED_PREVIEW_SHA=7608e414...`, `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`. APP719 PREVIEW Worker `cfd40718-6ab5-4133-bdb2-fa69332d6810`에 대한 배포는 수행하지 않았음.
+- **실검증 요망:** 실제 PREVIEW 로그인 계정에서 CACHE LIVE **진단 수치만 초기화** 후 변경 없는 **타인 공개 프로필**에 (1) 10초 이전, (2) 10초 초과~120초 이내, (3) 120초 이후 재방문 시 '팔로우 상태 확인' GET과 D1 행 R/W·R2 A/B 수치 비교. 리스너가 아직 준비되지 않거나 서버에서 정확한 count envelope를 반환하지 않으면 기존 10초로 fallback하는 것은 정상. 이어 PC↔모바일 타 기기의 팔로우·취소 확정 신호, offline→online, 계정 전환·새 탭 재진입 시 정본 복구 확인. **서버 물리 비용·실기기 기능은 아직 PASS 아님.** 이후 새로운 독립 변경은 별도 승인.
+ 
+---
+
 ## CURRENT — APP719 PREVIEW 팔로우 공통 D1 오버레이 조회 최적화 배포 PASS / 실제 계정 rows_read 실검증 요망 (2026-11-19 KST)
 
 - **승인:** 2026-11-18 18:23:43 UTC 디렉터가 팔로우 상태 확인·팔로우 변경 공통 D1 조회문 최소 수정, 필수 검사, PREVIEW Worker 적용·실측·필요 시 롤백 승인. 사용자 원본·TEST·PRODUCTION 변경 금지.

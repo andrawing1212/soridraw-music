@@ -3777,20 +3777,35 @@ export default function ExplorePage() {
               const age=choice?Date.now()-choice.at:Infinity;
               return age>=0&&age<=30_000;
             };
-            // Pending clicks and recent settled receipts always use the
-            // existing canonical check/choice fence, never this visit cache.
-            const cachedFollow715=!queuedFollow&&!recentChoice715()
+            // Pending clicks and recent settled receipts keep an independent
+            // canonical GET. Only unchanged visits share the SAME in-flight
+            // authenticated request; different viewers/targets never join.
+            const reusableFollow716=!queuedFollow&&!recentChoice715();
+            const cachedFollow715=reusableFollow716
               ?visit715.read(user.uid,nextProfile.uid):null;
-            const nextFollowState=cachedFollow715 ??
-              await getExploreFollowState(user, nextProfile.uid, true);
+            const fetchedFollow716=cachedFollow715?null:reusableFollow716
+              ?await visit715.runOrJoin(user.uid,nextProfile.uid,
+                ()=>getExploreFollowState(user, nextProfile.uid, true),
+                followReadStartedAt685)
+              :{state:await getExploreFollowState(user, nextProfile.uid, true),
+                startedAt:followReadStartedAt685,generation:visitGeneration715,
+                shared:false};
+            const nextFollowState=cachedFollow715??fetchedFollow716!.state;
+            // A joined response was started by the earlier visit: use its
+            // ORIGINAL request time for all stale-response and receipt fences.
+            const effectiveReadStartedAt716=fetchedFollow716?.startedAt??followReadStartedAt685;
             if(cachedFollow715)
               recordCloudflareLocalCacheHit('/v1/profiles/:id/follow-state',
                 'LOCAL REVISIT · 10초 이내');
-            else if(!cancelled&&!recentChoice715()&&
+            else if(fetchedFollow716?.shared)
+              recordCloudflareLocalCacheHit('/v1/profiles/:id/follow-state',
+                'LOCAL JOIN · 진행 중인 조회 공유');
+            if(!cachedFollow715&&!cancelled&&!recentChoice715()&&
               !readPendingExploreFollowIntents380(user.uid)
                 .some(row=>row.targetUid===nextProfile.uid))
               visit715.remember(user.uid,nextProfile.uid,nextFollowState,
-                followReadStartedAt685,visitGeneration715);
+                effectiveReadStartedAt716,
+                fetchedFollow716?.generation??visitGeneration715);
             if (!cancelled) {
               // First visible third-party counts use the authenticated GET,
               // not the potentially different stale R2 first-view caches.
@@ -3807,7 +3822,7 @@ export default function ExplorePage() {
               // relation after the pending outbox has already been cleared.
               const keepChoice685=!pending525&&shouldKeepExploreFollowChoice685(
                 user.uid,nextProfile.uid,nextFollowState.isFollowing,
-                followReadStartedAt685);
+                effectiveReadStartedAt716);
               const latestReceipt689=readExploreFollowLocalChoice685(user.uid,nextProfile.uid);
               const confirmedFollower689=latestReceipt689?.settled&&
                 Date.now()-latestReceipt689.at<=30_000&&

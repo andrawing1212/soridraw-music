@@ -1,0 +1,87 @@
+name: APP719 PREVIEW Follow D1 Indexed Read Release
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - '.github/workflows/app719-preview-follow-d1-rows-release.yml'
+      - 'scripts/app719-preview-follow-d1-rows-release.mjs'
+      - 'cloudflare/explore-worker/candidates/719-follow-membership-single-overlay-read.mjs'
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/app719-preview-follow-d1-rows.trigger'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app719-preview-follow-release
+  cancel-in-progress: false
+jobs:
+  source:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Exact source-only single-function self-test
+        run: |
+          set -euo pipefail
+          node --check scripts/app719-preview-follow-d1-rows-release.mjs
+          node scripts/app719-preview-follow-d1-rows-release.mjs --self-test
+          echo 'APP719_NO_SERVER_DEPLOY=PASS'
+  readonly:
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 1217 && github.event.pull_request.head.repo.full_name == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      GITHUB_EVENT_PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: GET-only active version, bindings, target SHA and patched digest
+        run: |
+          set -euo pipefail
+          node scripts/app719-preview-follow-d1-rows-release.mjs --live-readonly
+  release:
+    if: github.event_name == 'push' && github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Confirm exact user-approved single trigger and source SHA
+        run: |
+          set -euo pipefail
+          parent="$(git rev-parse HEAD^1)"
+          grep -Fxq "source_commit=$parent" .deploy/app719-preview-follow-d1-rows.trigger
+          echo "APP719_SOURCE_COMMIT=$parent" >> "$GITHUB_ENV"
+          test "$(git diff --name-only HEAD^1 HEAD)" = '.deploy/app719-preview-follow-d1-rows.trigger'
+      - name: GET-only active/other environment/version and integrity preflight
+        run: |
+          set -euo pipefail
+          node scripts/app719-preview-follow-d1-rows-release.mjs --preflight
+      - name: Stage inactive one-function module, activate PREVIEW or rollback
+        run: |
+          set -euo pipefail
+          node scripts/app719-preview-follow-d1-rows-release.mjs --apply-once

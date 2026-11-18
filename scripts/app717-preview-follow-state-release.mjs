@@ -51,8 +51,6 @@ function patch(source,mode='bundle'){
   'ACTIVE_FUNCTION_LOGIC_CHANGED');
  const edited=source.slice(0,fn.getStart(ast))+followStateCandidate717+source.slice(fn.end);
  need(edited!==source,'NO_CHANGE');
- need(edited.replace(followStateCandidate717,followStateOld717)!==source || true,
-  'INERT'); // exact unchanged surrounding bytes is verified below via AST positions
  const patchedAst=ts.createSourceFile('patched.js',edited,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
  need(patchedAst.parseDiagnostics.length===0,'PATCHED_MODULE_SYNTAX');
  const hits=patchedAst.statements.filter(n=>ts.isFunctionDeclaration(n)&&

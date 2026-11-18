@@ -1,3 +1,14 @@
+## CURRENT — APP718 PREVIEW 팔로우 변경 R2 비용 절감 서버 배포 PASS / 실제 기기 검증 요망 (2026-11-19 KST)
+
+- **승인:** 2026-11-18 17:53:15 UTC 디렉터가 APP718 [PR #1214](https://github.com/andrawing1212/soridraw-music/pull/1214) 병합·PREVIEW Explore Worker 함수 두 개 적용·실측·오류 시 롤백 승인. 공유 사용자 데이터·TEST·PRODUCTION·Firebase 변경은 금지.
+- **코드/릴리스:** PR #1214 병합 `5fe7a2c052986d17251f80715da154cf9b5924b3`. 단일 목적 배포 트리거 [PR #1215](https://github.com/andrawing1212/soridraw-music/pull/1215) 병합 `4f20e734f21d22c1af9a4b133dc1f6ac0b569e91`.
+- **서버 배포 PASS:** [Actions #44365313822](https://github.com/andrawing1212/soridraw-music/actions/runs/44365313822) SUCCESS. PREVIEW Explore 활성 버전 `f35c6924-05f0-4435-ad35-3c37699865ae` → `07230f46-4b91-4162-bba8-195465f5f689` 100%. 정확한 구버전 롤백 보존, 자동 롤백 불필요. 15개 모듈 중 `preview-entry.mjs`의 `orchestrateFollowOverlay354`와 `handleFollowOverlay354`만 변경. 원본 모듈 SHA `4a81b779...`, 새 모듈 SHA `0d6853d7...` 고정 PASS. 다른 14모듈·바인딩·런타임 동일.
+- **보호:** TEST Explore·PRODUCTION Explore·PREVIEW Owner 버전 불변 PASS. D1/R2/RTDB/Functions/Rules/사용자 데이터 이전·수정·삭제 0. APP713 OFF, APP714 +5초, APP715/716 캐시, 좋아요 및 PREVIEW Hosting 변경 없음.
+- **검사와 비용:** [팔로우 #44364514197](https://github.com/andrawing1212/soridraw-music/actions/runs/44364514197) PASS, [릴리스 도구 #44364514179](https://github.com/andrawing1212/soridraw-music/actions/runs/44364514179) PASS. 정본 함수 기반 격리 시험의 정상 변경 R2 GET **9→7(-2)**, R2 PUT **6→6**, D1 관계 변경 **1→1**. 과거 사용자 영상에서 팔로우 변경 R2 Class B 13 → **11회는 예상**, 실제 인증 요청의 측정값 아님. D1 R/W·행 R/W·R2 Class B/A와 PC↔모바일 자동 수렴은 아직 실검증 PASS 아님.
+- **실검증 요망:** PREVIEW 본계정에서 관리자 CACHE LIVE 초기화→공개 프로필 한 건 팔로우→마지막 클릭+5초 뒤 D1 R/W·D1 행 R/W·R2 B/A 증가분과 상대 계정 PC↔모바일 팔로워 숫자/목록 확인. 이어 취소 1회 동일하게 확인. 불필요한 새로고침·페이지 재진입을 섞지 말 것. 문제가 확인되면 정확한 활성 버전 확인 후 `f35c6924...` 안전 롤백. 이 영상이 오기 전에는 전체 사용자 실사용 PASS 선언 금지.
+
+---
+
 ## CURRENT — APP717 PREVIEW 팔로우 상태 확인 R2 읽기 비용 후보 배포 PASS / PC·모바일 실검증 요망 (2026-11-19 KST)
 
 - **명시적 승인:** 2026-11-18 16:35 UTC 디렉터가 실제 이용자 0명인 PREVIEW에서 팔로우 상태 확인 함수 한 개만 안전하게 적용·검증·문제 시 복구하도록 승인. 공유 원본을 지우거나 TEST/PRODUCTION으로 승격한 승인 아님.

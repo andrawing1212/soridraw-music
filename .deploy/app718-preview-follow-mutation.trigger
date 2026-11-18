@@ -1,0 +1,12 @@
+release=app718_follow_mutation_clean_r2_reads
+mode=apply_two_functions_one_preview_worker_module
+source_pr=1214
+approval=director_yes_20261118_175315_preview_worker_two_mutation_functions_no_shared_data_change
+target_worker=soridraw-explore-preview
+previous_version=f35c6924-05f0-4435-ad35-3c37699865ae
+target_module=preview-entry.mjs
+source_commit=5fe7a2c052986d17251f80715da154cf9b5924b3
+shared_schema_change=false
+shared_data_migration=false
+hosting_change=false
+test_production_change=false

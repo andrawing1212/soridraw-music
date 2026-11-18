@@ -4,10 +4,10 @@
 import type { ExploreFollowState } from './exploreSocialService';
 
 const VISIT_REUSE_MS_715 = 10_000;
-// APP720: a validated exact GET can be reused for at most 2 minutes while
-// the existing same-account RTDB stream is observed as healthy. A single
-// retained last-change signal is NOT a durable history; never cache forever.
-const SIGNAL_QUALIFIED_REUSE_MS_720 = 120_000;
+// APP721: a verified GET remains reusable for at most 5 minutes while the
+// existing same-account RTDB stream is observed as healthy. A single retained
+// last-change signal is NOT a durable history; never cache forever.
+const SIGNAL_QUALIFIED_REUSE_MS_720 = 300_000;
 const MAX_VISITS_715 = 24;
 type Visit715 = { at: number; state: ExploreFollowState; qualified720: boolean };
 type Inflight716 = { generation: number; startedAt: number; task: Promise<ExploreFollowState> };

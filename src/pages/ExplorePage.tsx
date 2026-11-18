@@ -4247,8 +4247,10 @@ export default function ExplorePage() {
       });
 
       // Only an actually changed relation may spend this bounded list refresh.
+      // APP721: read the current open modal through the existing ref so opening
+      // or closing a modal cannot tear down/reopen the same RTDB subscription.
       // Ordinary reopen/reload stays persistent-cache local.
-      const openDirection377 = profileConnectionsOpen376;
+      const openDirection377 = profileConnectionsOpen376Ref.current;
       const openUid377 = activeProfileUidRef.current;
       const affectedOpen377 =
         (openDirection377 === 'following' && openUid377 === viewerUid377) ||
@@ -4288,7 +4290,7 @@ export default function ExplorePage() {
          (typeof navigator==='undefined'||navigator.onLine!==false))
         followStreamReady720Ref.current=viewerUid377;
     });
-  }, [user?.uid, profileConnectionsOpen376]);
+  }, [user?.uid]);
 
   // app335: warm public-profile entry/reload is Worker 0. Preserve eventual
   // cross-device freshness by doing the existing 60s shared-R2 check only after

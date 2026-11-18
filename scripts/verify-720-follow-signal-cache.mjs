@@ -19,8 +19,13 @@ const actor='actor',target='public-target',base=1_000_000;
 const a=create();
 assert.equal(a.remember(actor,target,verified,base,a.version(),base+1,true),true);
 assert.equal(a.read(actor,target,base+119999,true).isFollowing,false,
- 'one authenticated GET + active RTDB => at most 120s local reuse');
-assert.equal(a.read(actor,target,base+120000,true),null,'120s bounded recovery');
+ 'existing 120s behavior preserved after APP721');
+assert.equal(a.read(actor,target,base+120000,true).isFollowing,false,
+ '120s is no longer a cache miss');
+assert.equal(a.read(actor,target,base+299999,true).isFollowing,false,
+ 'one verified GET + healthy RTDB => reuse before the 5-minute boundary');
+assert.equal(a.read(actor,target,base+300000,true),null,
+ 'hard five-minute boundary still makes a new canonical GET necessary');
 assert.equal(a.remember(actor,target,verified,base,a.version(),base+1,true),true);
 assert.equal(a.read(actor,target,base+10000,false),null,
  'stream unavailable => 10s fallback, no unchecked long lease');
@@ -100,9 +105,21 @@ assert.match(page,/window\.addEventListener\('offline',onBoundary720\)/);
 assert.match(page,/window\.addEventListener\('online',onBoundary720\)/);
 assert.match(page,/followVisitCache715Ref\.current\?\.invalidate\(\)/);
 assert.match(page,/getExploreFollowState\(user, nextProfile\.uid, true\)/);
+const subscriptionStart721=page.indexOf('return subscribeExploreFollowSync377(viewerUid377');
+const subscriptionEnd721=page.indexOf('// app335: warm public-profile entry',subscriptionStart721);
+assert.ok(subscriptionStart721>=0&&subscriptionEnd721>subscriptionStart721,
+ 'follow RTDB subscription must remain in its established hook');
+const subscription721=page.slice(subscriptionStart721,subscriptionEnd721);
+assert.match(subscription721,/const openDirection377 = profileConnectionsOpen376Ref\.current/,
+ 'live modal direction must come from existing ref, not stale closure');
+assert.match(subscription721,/\}, \[user\?\.uid\]\);/,
+ 'opening/closing follower list must not resubscribe RTDB');
+assert.doesNotMatch(subscription721,/\[user\?\.uid, profileConnectionsOpen376\]/,
+ 'modal open/close must not trigger another RTDB initial snapshot');
 assert.equal((readFileSync('src/services/exploreFollowSyncService.ts','utf8')
  .match(/onValue\(/g)||[]).length,1,'APP720 adds zero RTDB subscriptions');
-console.log('APP720_VERIFIED_GET_AND_LIVE_SIGNAL_REUSE_UNTIL_120S=PASS');
+console.log('APP721_VERIFIED_GET_AND_LIVE_SIGNAL_REUSE_UNTIL_300S=PASS');
+console.log('APP721_POPUP_TOGGLE_NO_EXTRA_RTDB_SUBSCRIBE=PASS');
 console.log('APP720_FALLBACK_10S_LEGACY_PENDING_ACCOUNT_CONNECTION_FENCES=PASS');
 console.log('APP720_RTDB_CONFIRMED_UPDATE_DISCONNECT_AND_SINGLE_LISTENER=PASS');
 console.log('APP720_BACKEND_D1_R2_FIREBASE_RULES_WRITES=0');

@@ -2031,6 +2031,9 @@ export default function ExplorePage() {
   const followVisitCache715Ref=useRef<ReturnType<typeof createExploreFollowVisitReuse715>|null>(null);
   if(!followVisitCache715Ref.current)
     followVisitCache715Ref.current=createExploreFollowVisitReuse715();
+  // APP720: session-only lease. True only after the existing actor RTDB
+  // onValue subscription has delivered a snapshot in the visible online tab.
+  const followStreamReady720Ref=useRef('');
   const [verifiedVisitedSignalUid669,setVerifiedVisitedSignalUid669]=useState('');
   const profileConnectionsCache376Ref = useRef<Map<string, { items: ExploreProfileConnection[]; nextCursor: string | null; countComplete?: boolean; hasUnresolvedProfiles?: boolean }>>(new Map());
   const profileConnectionsRequest376Ref = useRef(0);
@@ -3427,17 +3430,27 @@ export default function ExplorePage() {
     };
   }, [requestUrl, profileUid, user?.uid]);
 
-  // APP715: tab backgrounding or an account switch invalidates reuse without
-  // issuing a single follow-state/Firestore/D1 request.
+  // APP715/720: no long-lived lease across account, tab or connectivity
+  // boundaries. Existing 10s fallback remains; no focus, timer or server poll.
   useEffect(() => {
+    followStreamReady720Ref.current='';
     followVisitCache715Ref.current?.invalidate();
     lastPublicVisitRevision715Ref.current.clear();
+    const onBoundary720=()=>{
+      followStreamReady720Ref.current='';
+      followVisitCache715Ref.current?.invalidate();
+    };
     const onHidden715=()=>{
-      if(document.visibilityState==='hidden')
-        followVisitCache715Ref.current?.invalidate();
+      if(document.visibilityState==='hidden')onBoundary720();
     };
     document.addEventListener('visibilitychange',onHidden715);
-    return ()=>document.removeEventListener('visibilitychange',onHidden715);
+    window.addEventListener('offline',onBoundary720);
+    window.addEventListener('online',onBoundary720);
+    return ()=>{
+      document.removeEventListener('visibilitychange',onHidden715);
+      window.removeEventListener('offline',onBoundary720);
+      window.removeEventListener('online',onBoundary720);
+    };
   },[user?.uid]);
 
   useEffect(() => {
@@ -3781,8 +3794,12 @@ export default function ExplorePage() {
             // canonical GET. Only unchanged visits share the SAME in-flight
             // authenticated request; different viewers/targets never join.
             const reusableFollow716=!queuedFollow&&!recentChoice715();
+            const signalQualified720=()=>followStreamReady720Ref.current===user.uid&&
+              auth.currentUser?.uid===user.uid&&
+              document.visibilityState==='visible'&&
+              (typeof navigator==='undefined'||navigator.onLine!==false);
             const cachedFollow715=reusableFollow716
-              ?visit715.read(user.uid,nextProfile.uid):null;
+              ?visit715.read(user.uid,nextProfile.uid,Date.now(),signalQualified720()):null;
             const fetchedFollow716=cachedFollow715?null:reusableFollow716
               ?await visit715.runOrJoin(user.uid,nextProfile.uid,
                 ()=>getExploreFollowState(user, nextProfile.uid, true),
@@ -3796,7 +3813,7 @@ export default function ExplorePage() {
             const effectiveReadStartedAt716=fetchedFollow716?.startedAt??followReadStartedAt685;
             if(cachedFollow715)
               recordCloudflareLocalCacheHit('/v1/profiles/:id/follow-state',
-                'LOCAL REVISIT · 10초 이내');
+                'LOCAL REVISIT · 기존 RTDB 신호/검증 캐시');
             else if(fetchedFollow716?.shared)
               recordCloudflareLocalCacheHit('/v1/profiles/:id/follow-state',
                 'LOCAL JOIN · 진행 중인 조회 공유');
@@ -3805,7 +3822,8 @@ export default function ExplorePage() {
                 .some(row=>row.targetUid===nextProfile.uid))
               visit715.remember(user.uid,nextProfile.uid,nextFollowState,
                 effectiveReadStartedAt716,
-                fetchedFollow716?.generation??visitGeneration715);
+                fetchedFollow716?.generation??visitGeneration715,
+                Date.now(),signalQualified720());
             if (!cancelled) {
               // First visible third-party counts use the authenticated GET,
               // not the potentially different stale R2 first-view caches.
@@ -4154,6 +4172,7 @@ export default function ExplorePage() {
       latestActorSignal662Ref.current=null;
       ownCountRequest662Ref.current=null;
     }
+    followStreamReady720Ref.current='';
     return subscribeExploreFollowSync377(viewerUid377, (signal377) => {
       if (signal377.version <= followSignalVersion377Ref.current) return;
       followSignalVersion377Ref.current = signal377.version;
@@ -4258,6 +4277,16 @@ export default function ExplorePage() {
             }
           });
       }
+    },(available720)=>{
+      if(auth.currentUser?.uid!==viewerUid377)return;
+      if(!available720){
+        followStreamReady720Ref.current='';
+        followVisitCache715Ref.current?.invalidate();
+        return;
+      }
+      if(document.visibilityState==='visible'&&
+         (typeof navigator==='undefined'||navigator.onLine!==false))
+        followStreamReady720Ref.current=viewerUid377;
     });
   }, [user?.uid, profileConnectionsOpen376]);
 

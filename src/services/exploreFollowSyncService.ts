@@ -87,6 +87,8 @@ export const publishExploreFollowSync377 = async (
 export const subscribeExploreFollowSync377 = (
   viewerUid: string,
   listener: (signal: ExploreFollowSyncSignal377) => void,
+  // APP720: observe the existing RTDB subscription; never open another stream.
+  onStream720?: (available: boolean) => void,
 ): Unsubscribe => {
   const uid = String(viewerUid || '').trim();
   if (!uid) return () => {};
@@ -96,14 +98,24 @@ export const subscribeExploreFollowSync377 = (
     databaseRef(realtimeDb, `userSync/${uid}/exploreFollow`),
     (snapshot) => {
       const signal = normalizeFollowSignal377(snapshot.val());
-      if (!signal || signal.version <= lastVersion) return;
+      if (!signal || signal.version <= lastVersion) {
+        onStream720?.(true);
+        return;
+      }
       lastVersion = signal.version;
-      if (signal.originDeviceId === ownDeviceId) return;
+      if (signal.originDeviceId === ownDeviceId) {
+        onStream720?.(true);
+        return;
+      }
       // During PREVIEW→TEST→PRODUCTION rollout older clients can still mutate
       // shared follow data without this signal. Never replay an old marker as
       // perpetual authority; it is only a short live convergence channel.
-      if (Date.now() - signal.at > EXPLORE_FOLLOW_SIGNAL_RETENTION_MS_377) return;
+      if (Date.now() - signal.at > EXPLORE_FOLLOW_SIGNAL_RETENTION_MS_377) {
+        onStream720?.(true);
+        return;
+      }
       listener(signal);
+      onStream720?.(true);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent(EXPLORE_FOLLOW_SYNC_EVENT_377, {
           detail: { uid, ...signal },
@@ -111,6 +123,7 @@ export const subscribeExploreFollowSync377 = (
       }
     },
     (error) => {
+      onStream720?.(false);
       console.warn('[377] Explore follow RTDB sync unavailable; local state remains usable.', error);
     },
   );

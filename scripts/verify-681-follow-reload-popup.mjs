@@ -210,3 +210,60 @@ console.log('APP681_STALE_SNAPSHOT_AND_FOLLOW_GET_FENCED=PASS');
 console.log('APP681_PRODUCTION_AUTO_RECOVERY_OFF=PASS');
 
 console.log('APP695_GLOBAL_RELOAD_UNKNOWN_ACK_NO_FAKE_SETTLED_OR_BASE_ROLLBACK=PASS');
+
+
+// APP715 — repeated third-party visits must be free until bounded expiry,
+ // and no stale in-flight GET may survive an accepted mutation/signal.
+const visitSource715=readFileSync('src/services/exploreFollowVisitReuse715.ts','utf8');
+const visitExports715={};
+runInNewContext(ts.transpileModule(visitSource715,{compilerOptions:{
+ target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,
+}}).outputText,{exports:visitExports715,Date,Number,String,Object,JSON,Map});
+const makeVisit715=visitExports715.createExploreFollowVisitReuse715;
+assert.equal(typeof makeVisit715,'function');
+const visit715=makeVisit715();
+const confirmed715={isFollowing:false,followerCount:5,followingCount:2};
+const now715=1_900_000_000_000;
+const generation715=visit715.version();
+assert.equal(visit715.remember('viewer','target',confirmed715,now715,generation715,now715+100),true);
+assert.equal(visit715.read('viewer','target',now715+1_000).followerCount,5);
+assert.equal(visit715.read('viewer','target',now715+3_000).isFollowing,false,
+ '10 route reentries must not each spend a follow-state GET');
+assert.equal(visit715.read('another','target',now715+1000),null,
+ 'no cross-account reuse');
+assert.equal(visit715.read('viewer','another',now715+1000),null,
+ 'no cross-target reuse');
+assert.equal(visit715.read('viewer','viewer',now715+1000),null,
+ 'own profile never uses third-party visit data');
+const mutable715=visit715.read('viewer','target',now715+2_000);
+mutable715.followerCount=99;
+assert.equal(visit715.read('viewer','target',now715+2_001).followerCount,5,
+ 'caller cannot mutate cached canonical response');
+assert.equal(visit715.read('viewer','target',now715+10_000),null,
+ 'expired visit requires canonical GET again');
+assert.equal(visit715.remember('viewer','target',confirmed715,now715,generation715,now715+10_000),false,
+ 'slow/stale in-flight GET cannot enter visit cache');
+const oldGeneration715=visit715.version();
+visit715.invalidate(); // mutation, RTDB signal, or tab background
+assert.equal(visit715.remember('viewer','target',confirmed715,now715+20_000,oldGeneration715,now715+20_050),false,
+ 'a server response started before a signal must never repopulate the cache');
+assert.equal(visit715.read('viewer','target',now715+20_050),null);
+assert.equal(visit715.remember('viewer','target',{...confirmed715,followerCount:6},
+ now715+20_100,visit715.version(),now715+20_150),true);
+assert.equal(visit715.read('viewer','target',now715+20_200).followerCount,6);
+for(let i=0;i<30;i++)visit715.remember('viewer','target'+i,confirmed715,
+ now715+30_000,visit715.version(),now715+30_010);
+assert.equal(visit715.read('viewer','target0',now715+30_100),null,
+ 'memory entries must be capped; never write persistent storage');
+const page715=readFileSync('src/pages/ExplorePage.tsx','utf8');
+assert.match(page715,/const cachedFollow715=!queuedFollow&&!recentChoice715\(\)/);
+assert.match(page715,/await getExploreFollowState\(user, nextProfile.uid, true\)/,
+ 'cold visit still uses canonical authenticated GET');
+assert.match(page715,/!readPendingExploreFollowIntents380\(user.uid\)/,
+ 'never cache while an unconfirmed local click is pending');
+assert.match(page715,/visit715.remember\(user.uid,nextProfile.uid,nextFollowState/);
+assert.match(page715,/onHidden715/);
+assert.match(page715,/followVisitCache715Ref.current\?\.invalidate\(\)/);
+assert.match(page715,/recordCloudflareLocalCacheHit\('\/v1\/profiles\/:id\/follow-state'/);
+console.log('APP715_THIRD_PARTY_10S_VISIT_R2_R0_MEMORY_ONLY=PASS');
+console.log('APP715_EXPIRE_PENDING_REMOTE_SIGNAL_INFLIGHT_AND_ACCOUNT_FENCES=PASS');

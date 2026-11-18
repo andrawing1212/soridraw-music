@@ -78,7 +78,19 @@ for(const m of modules){
  need(fns.length<=1,'FUNCTION_DUPLICATE_'+m.name);
  if(fns.length===1){
   const fn=fns[0];
-  const equivalent=print.printNode(ts.EmitHint.Unspecified,fn,parsed)===expectedPrinted;
+  const activePrinted=print.printNode(ts.EmitHint.Unspecified,fn,parsed);
+  const equivalent=activePrinted===expectedPrinted;
+  if(!equivalent){
+   let i=0;
+   while(i<activePrinted.length&&i<expectedPrinted.length&&
+    activePrinted[i]===expectedPrinted[i])i++;
+   console.log('APP717_AST_DIFFERENCE='+JSON.stringify({
+    module:m.name,firstMismatchOffset:i,
+    liveLength:activePrinted.length,sourceLength:expectedPrinted.length,
+    live:activePrinted.slice(Math.max(0,i-65),i+420),
+    candidateBase:expectedPrinted.slice(Math.max(0,i-65),i+420)
+   }));
+  }
   // No code bytes or sensitive bindings are printed.
   console.log('APP717_ACTIVE_FUNCTION_AST='+JSON.stringify({
    module:m.name,ASTEquivalent:equivalent,bytes:fn.end-fn.pos,

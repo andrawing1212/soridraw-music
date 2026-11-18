@@ -49,9 +49,13 @@ assert.match(ownProfile, /socialPatch379\.followingCount = exactFollowing379/);
 assert.match(ownProfile, /socialPatch379\.followerCount = exactFollowers379/);
 
 const syncStart = page.indexOf('return subscribeExploreFollowSync377(viewerUid377');
-const syncEnd = page.indexOf('\n  }, [user?.uid, profileConnectionsOpen376]);', syncStart);
+const syncEnd = page.indexOf('\n  }, [user?.uid]);', syncStart);
 assert.ok(syncStart >= 0 && syncEnd > syncStart);
 const sync = page.slice(syncStart, syncEnd);
+// APP721: the same account-wide RTDB subscription must stay mounted when
+// a follower/following popup opens; only the changed list still refreshes.
+assert.match(sync, /const openDirection377 = profileConnectionsOpen376Ref\.current/);
+assert.doesNotMatch(sync, /const openDirection377 = profileConnectionsOpen376;/);
 assert.match(sync, /readExploreFollowMembership379/);
 assert.match(sync, /resolvedSignalActorFollowing379/);
 assert.match(sync, /resolvedSignalTargetFollower379/);

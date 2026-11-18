@@ -4173,7 +4173,7 @@ export default function ExplorePage() {
       ownCountRequest662Ref.current=null;
     }
     followStreamReady720Ref.current='';
-    const unsubscribe377=subscribeExploreFollowSync377(viewerUid377, (signal377) => {
+    return subscribeExploreFollowSync377(viewerUid377, (signal377) => {
       if (signal377.version <= followSignalVersion377Ref.current) return;
       followSignalVersion377Ref.current = signal377.version;
       // Older retained remote events cannot undo an explicit local click/ACK.
@@ -4288,10 +4288,6 @@ export default function ExplorePage() {
          (typeof navigator==='undefined'||navigator.onLine!==false))
         followStreamReady720Ref.current=viewerUid377;
     });
-    return ()=>{
-      followStreamReady720Ref.current='';
-      unsubscribe377();
-    };
   }, [user?.uid, profileConnectionsOpen376]);
 
   // app335: warm public-profile entry/reload is Worker 0. Preserve eventual

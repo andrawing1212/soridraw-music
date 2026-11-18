@@ -4,8 +4,12 @@
 import type { ExploreFollowState } from './exploreSocialService';
 
 const VISIT_REUSE_MS_715 = 10_000;
+// APP720: a validated exact GET can be reused for at most 2 minutes while
+// the existing same-account RTDB stream is observed as healthy. A single
+// retained last-change signal is NOT a durable history; never cache forever.
+const SIGNAL_QUALIFIED_REUSE_MS_720 = 120_000;
 const MAX_VISITS_715 = 24;
-type Visit715 = { at: number; state: ExploreFollowState };
+type Visit715 = { at: number; state: ExploreFollowState; qualified720: boolean };
 type Inflight716 = { generation: number; startedAt: number; task: Promise<ExploreFollowState> };
 type SharedRead716 = { state: ExploreFollowState; startedAt: number; generation: number; shared: boolean };
 
@@ -25,12 +29,17 @@ export const createExploreFollowVisitReuse715 = () => {
     // Existing callers retain their own promise and freshness guards.
     inflight716.clear();
   };
-  const read = (viewerUid: string, targetUid: string, now = Date.now()): ExploreFollowState | null => {
+  const read = (
+    viewerUid: string, targetUid: string, now = Date.now(),
+    signalLive720 = false,
+  ): ExploreFollowState | null => {
     const id = key(viewerUid, targetUid);
     const row = visits.get(id);
     if (!row) return null;
     const age = now - row.at;
-    if (age < 0 || age >= VISIT_REUSE_MS_715) {
+    const limit = signalLive720 && row.qualified720
+      ? SIGNAL_QUALIFIED_REUSE_MS_720 : VISIT_REUSE_MS_715;
+    if (age < 0 || age >= limit) {
       visits.delete(id);
       return null;
     }
@@ -39,6 +48,7 @@ export const createExploreFollowVisitReuse715 = () => {
   const remember = (
     viewerUid: string, targetUid: string, state: ExploreFollowState,
     startedAt: number, startedGeneration: number, now = Date.now(),
+    signalLive720 = false,
   ): boolean => {
     const id = key(viewerUid, targetUid);
     const age = now - startedAt;
@@ -49,7 +59,11 @@ export const createExploreFollowVisitReuse715 = () => {
         !Number.isSafeInteger(state.followingCount) || state.followingCount < 0) return false;
     // Freshness begins when the GET started, never when it finally completed.
     visits.delete(id);
-    visits.set(id, { at: startedAt, state: { ...state } });
+    visits.set(id, {
+      at: startedAt, state: { ...state },
+      // Missing/legacy count authority never earns the extended lease.
+      qualified720: signalLive720 && state.countVerified661 === true,
+    });
     if (visits.size > MAX_VISITS_715) {
       visits.delete(visits.keys().next().value!);
     }

@@ -1,3 +1,14 @@
+## CURRENT — APP719 PREVIEW 팔로우 공통 D1 오버레이 조회 최적화 배포 PASS / 실제 계정 rows_read 실검증 요망 (2026-11-19 KST)
+
+- **승인:** 2026-11-18 18:23:43 UTC 디렉터가 팔로우 상태 확인·팔로우 변경 공통 D1 조회문 최소 수정, 필수 검사, PREVIEW Worker 적용·실측·필요 시 롤백 승인. 사용자 원본·TEST·PRODUCTION 변경 금지.
+- **소스·릴리스:** [APP719 PR #1217](https://github.com/andrawing1212/soridraw-music/pull/1217) 병합 `e89db8df6362d34391986f3ca422a331600294b3`; [배포 트리거 PR #1218](https://github.com/andrawing1212/soridraw-music/pull/1218) 병합 `7d892b0a2380861c25baeb06e0defb0edb9220b6`. GitHub 정본 Worker의 전체 파일/sha는 변경하지 않음.
+- **PREVIEW Worker 배포 PASS:** [Actions #44371313856](https://github.com/andrawing1212/soridraw-music/actions/runs/44371313856) SUCCESS. 활성 Explore `07230f46-4b91-4162-bba8-195465f5f689` → `cfd40718-6ab5-4133-bdb2-fa69332d6810` 100%; 이전 버전은 정확한 롤백 기준. 15모듈 중 `preview-entry.mjs` 안 `readEffectiveFollowMembership348` 단일 함수만 교체. 기존 모듈 SHA `0d6853d7...`, 새 SHA `1692f74f...` 고정 검증 PASS; 다른 14모듈·기존 바인딩·런타임·protected 3 Worker 불변. 무인증 GET 차단 PASS, 자동 롤백 불필요.
+- **기능·비용 검사:** [Follow-only #44370329447](https://github.com/andrawing1212/soridraw-music/actions/runs/44370329447), [수정 최종 Follow #44370791503](https://github.com/andrawing1212/soridraw-music/actions/runs/44370791503), [배포 가드 #44370791635](https://github.com/andrawing1212/soridraw-music/actions/runs/44370791635) PASS. 실제 SQLite 실행 계획에서 동일 PK overlay 인덱스 **SEARCH 3→1**, baseline indexed read와 결과/순서 tombstone/복구/팔로우·취소/noop 일치, D1/R2 쓰기 변화 0. 이는 **실제 Cloudflare D1 rows_read 감소 실측이 아님**.
+- **보호:** TEST Explore·PRODUCTION Explore·PREVIEW Owner Worker 변경 0. 공유 D1/R2/RTDB/Functions/Rules/사용자 원본 스키마 변경·쓰기·마이그레이션·삭제 0. APP713 OFF, APP714 +5초, APP715/716 재방문 캐시, APP717 상태 GET 최적화, APP718 mutation R2 절감 유지. PREVIEW Hosting 변경 0.
+- **실검증 요망:** PREVIEW 로그인 계정으로 진단 **수치만 초기화**→(A) 공개 프로필 방문·나오기·재방문에서 `팔로우 상태 확인` 한 건당 D1 쿼리 R/W·**행** R/W·R2 Class B/A 비교→(B) 팔로우 1회, 마지막 클릭+5초 뒤 `팔로우 변경` 같은 수치→(C) 취소 1회 동일. PC↔모바일 실제 자동 수렴·팔로워 수·목록 정확성 아직 PASS 아님. 10초 캐시 만료 후의 새 상태 GET 자체는 APP719 범위 밖으로 발생할 수 있음. 실제 사용자 동작·비용 실패가 확인되면 현재 활성 버전 확인 후 `07230f46...` 복구.
+ 
+---
+
 ## CURRENT — APP718 PREVIEW 팔로우 변경 R2 비용 절감 서버 배포 PASS / 실제 기기 검증 요망 (2026-11-19 KST)
 
 - **승인:** 2026-11-18 17:53:15 UTC 디렉터가 APP718 [PR #1214](https://github.com/andrawing1212/soridraw-music/pull/1214) 병합·PREVIEW Explore Worker 함수 두 개 적용·실측·오류 시 롤백 승인. 공유 사용자 데이터·TEST·PRODUCTION·Firebase 변경은 금지.

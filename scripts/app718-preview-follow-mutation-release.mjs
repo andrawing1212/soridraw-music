@@ -22,7 +22,7 @@ const OWNER_ORIGINAL='1e987bc3-36d3-4bb0-861f-4df17f536592';
 const TARGET_MODULE='preview-entry.mjs';
 const MAIN_MODULE='owner-follow-entry-607.mjs';
 const BEFORE='4a81b779d8a6e1f72fabec534314bb5ee50f0c8ee5909bc4e9ed563cb6343a13';
-const AFTER='__PIN_FROM_READONLY__';
+const AFTER='0d6853d70549be1d178251f862653e047481361d655070f436302660d4b9ed8d';
 const triggerPath='.deploy/app718-preview-follow-mutation.trigger';
 const APPROVAL='director_yes_20261118_175315_preview_worker_two_mutation_functions_no_shared_data_change';
 const need=(condition,code)=>{if(!condition)throw Error('APP718_RELEASE_HOLD_'+code)};

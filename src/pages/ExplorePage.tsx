@@ -2023,6 +2023,9 @@ export default function ExplorePage() {
   // Only a successfully verified first-view target GET establishes authority.
   const verifiedVisitedCounts668Ref=useRef<{uid:string;readStartedAt:number}|null>(null);
   const newestPublicFollow668Ref=useRef<{uid:string;generation:string;revision:number;followerCount:number;followingCount:number}|null>(null);
+  // A retained RTDB snapshot replays on every profile re-subscription.
+  // Only genuinely newer server revisions invalidate the local visit cache.
+  const lastPublicVisitRevision715Ref=useRef<Map<string,{generation:string;revision:number}>>(new Map());
   // APP715: 10-second authenticated visit snapshot, never persisted or used
   // for mutations, errors or initial user/account recovery.
   const followVisitCache715Ref=useRef<ReturnType<typeof createExploreFollowVisitReuse715>|null>(null);
@@ -3428,6 +3431,7 @@ export default function ExplorePage() {
   // issuing a single follow-state/Firestore/D1 request.
   useEffect(() => {
     followVisitCache715Ref.current?.invalidate();
+    lastPublicVisitRevision715Ref.current.clear();
     const onHidden715=()=>{
       if(document.visibilityState==='hidden')
         followVisitCache715Ref.current?.invalidate();
@@ -4927,7 +4931,18 @@ export default function ExplorePage() {
            signal.revision<=currentPublic.revision)return;
         if(readPendingExploreFollowIntents380(principal.uid)
            .some(intent=>intent.targetUid===viewedUid))return;
-        followVisitCache715Ref.current?.invalidate();
+        const previousPublic715=lastPublicVisitRevision715Ref.current.get(viewedUid);
+        if(!previousPublic715 ||
+           previousPublic715.generation!==signal.generation ||
+           signal.revision>previousPublic715.revision){
+          lastPublicVisitRevision715Ref.current.set(viewedUid,
+            {generation:signal.generation,revision:signal.revision});
+          if(lastPublicVisitRevision715Ref.current.size>24)
+            lastPublicVisitRevision715Ref.current.delete(
+              lastPublicVisitRevision715Ref.current.keys().next().value!);
+          // A repeated retained snapshot is not a new canonical change.
+          followVisitCache715Ref.current?.invalidate();
+        }
         const count={followerCount:signal.followerCount,
           followingCount:signal.followingCount};
         newestPublicFollow668Ref.current={uid:viewedUid,

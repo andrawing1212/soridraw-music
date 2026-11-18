@@ -21,7 +21,7 @@ import { favoritesStore } from '../hooks/useFavoritesStore';
 import { formatExploreDisplayTitle } from '../lib/exploreTitleDisplay';
 import { admitExploreLikeClick, recordExploreLikeAcceptedClick } from '../lib/exploreLikeClickGuard';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
-import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
+import { recordCloudflareLocalCacheHit, recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache } from '../lib/userProfileCache';
 import {
   readExploreFeedSessionCache,
@@ -109,6 +109,7 @@ import {
   subscribeExploreFollowSync377,
 } from '../services/exploreFollowSyncService';
 import {shouldHoldOwnFollowingPage682} from '../services/exploreFollowingPopupConsistency682';
+import {createExploreFollowVisitReuse715} from '../services/exploreFollowVisitReuse715';
 import {readExploreFollowLocalChoice685,rememberExploreFollowLocalChoice685,
   shouldKeepExploreFollowChoice685,shouldIgnoreExploreFollowSignal685,
   clearExploreFollowLocalChoice695}
@@ -2022,6 +2023,14 @@ export default function ExplorePage() {
   // Only a successfully verified first-view target GET establishes authority.
   const verifiedVisitedCounts668Ref=useRef<{uid:string;readStartedAt:number}|null>(null);
   const newestPublicFollow668Ref=useRef<{uid:string;generation:string;revision:number;followerCount:number;followingCount:number}|null>(null);
+  // A retained RTDB snapshot replays on every profile re-subscription.
+  // Only genuinely newer server revisions invalidate the local visit cache.
+  const lastPublicVisitRevision715Ref=useRef<Map<string,{generation:string;revision:number}>>(new Map());
+  // APP715: 10-second authenticated visit snapshot, never persisted or used
+  // for mutations, errors or initial user/account recovery.
+  const followVisitCache715Ref=useRef<ReturnType<typeof createExploreFollowVisitReuse715>|null>(null);
+  if(!followVisitCache715Ref.current)
+    followVisitCache715Ref.current=createExploreFollowVisitReuse715();
   const [verifiedVisitedSignalUid669,setVerifiedVisitedSignalUid669]=useState('');
   const profileConnectionsCache376Ref = useRef<Map<string, { items: ExploreProfileConnection[]; nextCursor: string | null; countComplete?: boolean; hasUnresolvedProfiles?: boolean }>>(new Map());
   const profileConnectionsRequest376Ref = useRef(0);
@@ -3418,6 +3427,19 @@ export default function ExplorePage() {
     };
   }, [requestUrl, profileUid, user?.uid]);
 
+  // APP715: tab backgrounding or an account switch invalidates reuse without
+  // issuing a single follow-state/Firestore/D1 request.
+  useEffect(() => {
+    followVisitCache715Ref.current?.invalidate();
+    lastPublicVisitRevision715Ref.current.clear();
+    const onHidden715=()=>{
+      if(document.visibilityState==='hidden')
+        followVisitCache715Ref.current?.invalidate();
+    };
+    document.addEventListener('visibilitychange',onHidden715);
+    return ()=>document.removeEventListener('visibilitychange',onHidden715);
+  },[user?.uid]);
+
   useEffect(() => {
     if (!profileUid) {
       setProfile(null);
@@ -3748,7 +3770,27 @@ export default function ExplorePage() {
           }
           try {
             const followReadStartedAt685=Date.now();
-            const nextFollowState = await getExploreFollowState(user, nextProfile.uid, true);
+            const visit715=followVisitCache715Ref.current!;
+            const visitGeneration715=visit715.version();
+            const recentChoice715=()=>{
+              const choice=readExploreFollowLocalChoice685(user.uid,nextProfile.uid);
+              const age=choice?Date.now()-choice.at:Infinity;
+              return age>=0&&age<=30_000;
+            };
+            // Pending clicks and recent settled receipts always use the
+            // existing canonical check/choice fence, never this visit cache.
+            const cachedFollow715=!queuedFollow&&!recentChoice715()
+              ?visit715.read(user.uid,nextProfile.uid):null;
+            const nextFollowState=cachedFollow715 ??
+              await getExploreFollowState(user, nextProfile.uid, true);
+            if(cachedFollow715)
+              recordCloudflareLocalCacheHit('/v1/profiles/:id/follow-state',
+                'LOCAL REVISIT · 10초 이내');
+            else if(!cancelled&&!recentChoice715()&&
+              !readPendingExploreFollowIntents380(user.uid)
+                .some(row=>row.targetUid===nextProfile.uid))
+              visit715.remember(user.uid,nextProfile.uid,nextFollowState,
+                followReadStartedAt685,visitGeneration715);
             if (!cancelled) {
               // First visible third-party counts use the authenticated GET,
               // not the potentially different stale R2 first-view caches.
@@ -3857,6 +3899,7 @@ export default function ExplorePage() {
     if (!activeUser380 || !viewerUid380) return;
 
     const pending380 = readPendingExploreFollowIntents380(viewerUid380);
+    if(pending380.length)followVisitCache715Ref.current?.invalidate();
     for (const record380 of pending380) {
       const targetUid380 = String(record380.targetUid || '').trim();
       if (!targetUid380 || targetUid380 === viewerUid380) continue;
@@ -4028,6 +4071,7 @@ export default function ExplorePage() {
     const onSettled681=(event:Event)=>{
       const row=(event as CustomEvent<ExploreFollowSettled681>).detail;
       if(!row||row.viewerUid!==viewerUid681||auth.currentUser?.uid!==viewerUid681)return;
+      followVisitCache715Ref.current?.invalidate();
       if(row.targetUid===activeProfileUidRef.current)
         setFollowSavingUid685('');
       if(row.actorFollowingCount!==null){
@@ -4112,6 +4156,7 @@ export default function ExplorePage() {
         uid:viewerUid377,at:signal377.at,count:signal377.actorFollowingCount,
       };
 
+      followVisitCache715Ref.current?.invalidate();
       const previousMembership379 = readExploreFollowMembership379(
         viewerUid377,
         signal377.targetUid,
@@ -4886,6 +4931,18 @@ export default function ExplorePage() {
            signal.revision<=currentPublic.revision)return;
         if(readPendingExploreFollowIntents380(principal.uid)
            .some(intent=>intent.targetUid===viewedUid))return;
+        const previousPublic715=lastPublicVisitRevision715Ref.current.get(viewedUid);
+        if(!previousPublic715 ||
+           previousPublic715.generation!==signal.generation ||
+           signal.revision>previousPublic715.revision){
+          lastPublicVisitRevision715Ref.current.set(viewedUid,
+            {generation:signal.generation,revision:signal.revision});
+          if(lastPublicVisitRevision715Ref.current.size>24)
+            lastPublicVisitRevision715Ref.current.delete(
+              lastPublicVisitRevision715Ref.current.keys().next().value!);
+          // A repeated retained snapshot is not a new canonical change.
+          followVisitCache715Ref.current?.invalidate();
+        }
         const count={followerCount:signal.followerCount,
           followingCount:signal.followingCount};
         newestPublicFollow668Ref.current={uid:viewedUid,
@@ -5179,6 +5236,7 @@ export default function ExplorePage() {
     // pagehide has no time to await them; never block the instant button paint.
     primeExploreFollowExitAuth712(user);
     // Save the newest button choice before queuing a server mutation.
+    followVisitCache715Ref.current?.invalidate();
     rememberExploreFollowLocalChoice685(viewerUid,targetUid,requestedFollow,false);
     setFollowSavingUid685(targetUid);
     // Paint the last local choice at once; only a confirmed server ACK may

@@ -1,6 +1,7 @@
 // APP717: GET-only active PREVIEW Worker contract inspection, zero user-data access.
 import {createHash} from 'node:crypto';
-import {applyFollowStateReadCandidate717,followStateOld717} from
+import ts from 'typescript';
+import {followStateCandidate717,followStateOld717} from
  '../cloudflare/explore-worker/candidates/717-follow-state-target-postread.mjs';
 const ACCOUNT='e1a30fc9ef497fda1d34f4ab3dc1da45';
 const NAMES=['soridraw-explore-preview','soridraw-explore-test',
@@ -60,16 +61,34 @@ need(/^202[0-9]-\d\d-\d\d$/.test(meta?.resources?.script_runtime?.compatibility_
 need(modules.every(m=>typeof m.name==='string'&&typeof m.content_base64==='string'&&
  m.content_base64.length>0)&&new Set(modules.map(m=>m.name)).size===modules.length,
  'SOURCE_INVENTORY');
+const print=ts.createPrinter({removeComments:true,newLine:ts.NewLineKind.LineFeed});
+const expectedAst=ts.createSourceFile('old.js',followStateOld717,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
+const expectedNode=expectedAst.statements.find(n=>ts.isFunctionDeclaration(n)&&
+ n.name?.text==='readFollowStateSnapshot354');
+need(expectedNode&&expectedAst.parseDiagnostics.length===0,'EXPECTED_AST_INVALID');
+const expectedPrinted=print.printNode(ts.EmitHint.Unspecified,expectedNode,expectedAst);
 const found=[];
 for(const m of modules){
  const original=Buffer.from(m.content_base64,'base64').toString('utf8');
- const matches=original.split(followStateOld717).length-1;
- need(matches<=1,'FUNCTION_DUPLICATE_'+m.name);
- if(matches===1){
-  const patched=applyFollowStateReadCandidate717(original);
-  need(patched!==original,'PATCH_EMPTY');
-  found.push({module:m.name,beforeHash:sha(original),afterHash:sha(patched),
-   bytes:Buffer.byteLength(original)});
+ if(!original.includes('readFollowStateSnapshot354'))continue;
+ const parsed=ts.createSourceFile(m.name,original,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
+ need(parsed.parseDiagnostics.length===0,'LIVE_MODULE_PARSE_'+m.name);
+ const fns=parsed.statements.filter(n=>ts.isFunctionDeclaration(n)&&
+  n.name?.text==='readFollowStateSnapshot354');
+ need(fns.length<=1,'FUNCTION_DUPLICATE_'+m.name);
+ if(fns.length===1){
+  const fn=fns[0];
+  const equivalent=print.printNode(ts.EmitHint.Unspecified,fn,parsed)===expectedPrinted;
+  // No code bytes or sensitive bindings are printed.
+  console.log('APP717_ACTIVE_FUNCTION_AST='+JSON.stringify({
+   module:m.name,ASTEquivalent:equivalent,bytes:fn.end-fn.pos,
+  }));
+  if(equivalent){
+   const patched=original.slice(0,fn.getStart(parsed))+
+    followStateCandidate717+original.slice(fn.end);
+   found.push({module:m.name,beforeHash:sha(original),afterHash:sha(patched),
+    bytes:Buffer.byteLength(original)});
+  }
  }
 }
 need(await deployment(NAMES[0])===active,'CONCURRENT_RELEASE');

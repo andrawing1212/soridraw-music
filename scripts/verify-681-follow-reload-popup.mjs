@@ -270,3 +270,67 @@ assert.match(page715,/previousPublic715\.generation!==signal\.generation/);
 assert.match(page715,/recordCloudflareLocalCacheHit\('\/v1\/profiles\/:id\/follow-state'/);
 console.log('APP715_THIRD_PARTY_10S_VISIT_R2_R0_MEMORY_ONLY=PASS');
 console.log('APP715_EXPIRE_PENDING_REMOTE_SIGNAL_INFLIGHT_AND_ACCOUNT_FENCES=PASS');
+
+
+// APP716 — in-flight follow-state GET coalescing is scoped per viewer/target.
+// No server/auth network; verify real promise sharing, failures and invalidation.
+const visit716=makeVisit715();
+let loadCount716=0;
+let resolveFirst716;
+const waiting716=new Promise(resolve=>{resolveFirst716=resolve;});
+const inFirst716=visit716.runOrJoin('viewer','target',()=>{
+  loadCount716++;return waiting716;
+},now715+60_000);
+const inSecond716=visit716.runOrJoin('viewer','target',()=>{
+  loadCount716++;throw Error('duplicate same-pair server GET');
+},now715+60_050);
+assert.equal(loadCount716,1,'overlapping same-pair GET must issue one request');
+resolveFirst716({isFollowing:true,followerCount:6,followingCount:2});
+const [resultFirst716,resultSecond716]=await Promise.all([inFirst716,inSecond716]);
+assert.equal(resultFirst716.shared,false);
+assert.equal(resultSecond716.shared,true);
+assert.equal(resultSecond716.startedAt,now715+60_000,
+ 'join must keep ORIGINAL request time for stale-response fencing');
+assert.equal(resultSecond716.state.followerCount,6);
+resultSecond716.state.followerCount=999;
+assert.equal(resultFirst716.state.followerCount,6,'joined readers receive separate state objects');
+const countNew716=async()=>{loadCount716++;return confirmed715;};
+await visit716.runOrJoin('another','target',countNew716,now715+60_100);
+await visit716.runOrJoin('viewer','another',countNew716,now715+60_120);
+await visit716.runOrJoin('viewer','target',countNew716,now715+60_140);
+assert.equal(loadCount716,4,'different accounts and targets never share, settled GET refetches');
+
+let oldResolve716;
+const oldRequest716=new Promise(resolve=>{oldResolve716=resolve;});
+const original716=visit716.runOrJoin('viewer','target',()=>oldRequest716,now715+70_000);
+const staleGen716=visit716.version();
+visit716.invalidate();
+const afterSignal716=await visit716.runOrJoin('viewer','target',
+ async()=>({...confirmed715,followerCount:8}),now715+70_100);
+oldResolve716({...confirmed715,followerCount:3});
+const staleResult716=await original716;
+assert.equal(afterSignal716.state.followerCount,8);
+assert.equal(staleResult716.state.followerCount,3);
+assert.equal(visit716.remember('viewer','target',staleResult716.state,
+ staleResult716.startedAt,staleGen716,now715+70_150),false,
+ 'a pre-signal response cannot populate the fresh visit cache');
+assert.equal(visit716.remember('viewer','target',afterSignal716.state,
+ afterSignal716.startedAt,afterSignal716.generation,now715+70_150),true);
+assert.equal(visit716.read('viewer','target',now715+70_200).followerCount,8);
+
+const fail716=visit716.runOrJoin('viewer','failure',
+ async()=>{throw Error('temporary follow-state 503');},now715+80_000);
+const joinFail716=visit716.runOrJoin('viewer','failure',
+ async()=>{throw Error('must share failed GET');},now715+80_050);
+await assert.rejects(fail716,/temporary follow-state 503/);
+await assert.rejects(joinFail716,/temporary follow-state 503/);
+const retry716=await visit716.runOrJoin('viewer','failure',
+ async()=>confirmed715,now715+80_200);
+assert.equal(retry716.shared,false,'failure clears single-flight entry for later recovery');
+
+assert.match(page715,/visit715\.runOrJoin\(user.uid,nextProfile.uid/);
+assert.match(page715,/const reusableFollow716=!queuedFollow&&!recentChoice715\(\)/);
+assert.match(page715,/effectiveReadStartedAt716=fetchedFollow716\?\.startedAt/);
+assert.match(page715,/followVisitCache715Ref.current\?\.invalidate\(\)/);
+console.log('APP716_SAME_PAIR_INFLIGHT_SINGLE_GET_AND_FAILURE_RETRY=PASS');
+console.log('APP716_ACCOUNT_TARGET_SIGNAL_AND_STALE_RESPONSE_FENCES=PASS');

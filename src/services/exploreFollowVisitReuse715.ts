@@ -6,9 +6,12 @@ import type { ExploreFollowState } from './exploreSocialService';
 const VISIT_REUSE_MS_715 = 10_000;
 const MAX_VISITS_715 = 24;
 type Visit715 = { at: number; state: ExploreFollowState };
+type Inflight716 = { generation: number; startedAt: number; task: Promise<ExploreFollowState> };
+type SharedRead716 = { state: ExploreFollowState; startedAt: number; generation: number; shared: boolean };
 
 export const createExploreFollowVisitReuse715 = () => {
   const visits = new Map<string, Visit715>();
+  const inflight716 = new Map<string, Inflight716>();
   let generation = 0;
   const key = (viewerUid: string, targetUid: string) => {
     const viewer = String(viewerUid || '').trim();
@@ -18,6 +21,9 @@ export const createExploreFollowVisitReuse715 = () => {
   const invalidate = () => {
     generation += 1;
     visits.clear();
+    // Never join a GET started before a click, confirmed event or account switch.
+    // Existing callers retain their own promise and freshness guards.
+    inflight716.clear();
   };
   const read = (viewerUid: string, targetUid: string, now = Date.now()): ExploreFollowState | null => {
     const id = key(viewerUid, targetUid);
@@ -49,5 +55,36 @@ export const createExploreFollowVisitReuse715 = () => {
     }
     return true;
   };
-  return { version: () => generation, read, remember, invalidate };
+  // APP716: join only concurrently pending authenticated GETs for the SAME
+  // signed-in viewer and target, within the same invalidation generation.
+  // No persistent storage, polling, abort or new backend request is introduced.
+  const runOrJoin = (
+    viewerUid: string, targetUid: string,
+    load: () => Promise<ExploreFollowState>, startedAt = Date.now(),
+  ): Promise<SharedRead716> => {
+    const id = key(viewerUid, targetUid);
+    const prior = id ? inflight716.get(id) : undefined;
+    if (prior?.generation === generation) {
+      return prior.task.then(state => ({
+        state: { ...state }, startedAt: prior.startedAt,
+        generation: prior.generation, shared: true,
+      }));
+    }
+    const startedGeneration = generation;
+    // Start immediately, rather than scheduling a request after invalidation.
+    let raw: Promise<ExploreFollowState>;
+    try { raw = Promise.resolve(load()); }
+    catch (error) { raw = Promise.reject(error); }
+    const task = raw.finally(() => {
+      // An invalidated old request must never delete a newer in-flight entry.
+      if (id && inflight716.get(id)?.task === task) inflight716.delete(id);
+    });
+    if (id && inflight716.size < MAX_VISITS_715)
+      inflight716.set(id, { generation: startedGeneration, startedAt, task });
+    return task.then(state => ({
+      state: { ...state }, startedAt,
+      generation: startedGeneration, shared: false,
+    }));
+  };
+  return { version: () => generation, read, remember, invalidate, runOrJoin };
 };

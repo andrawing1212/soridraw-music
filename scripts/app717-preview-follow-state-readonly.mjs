@@ -80,6 +80,24 @@ console.log('APP717_ACTIVE_OWNER='+versions[NAMES[3]]);
 console.log('APP717_ACTIVE_MODULE_COUNT='+modules.length);
 console.log('APP717_ACTIVE_MODULE_NAMES='+modules.map(m=>m.name).sort().join(','));
 console.log('APP717_EXACT_PATCHABLE='+JSON.stringify(found));
+// Read-only diagnostics: report identifiers, never print actual module bytes or secrets.
+if(found.length!==1){
+ for(const m of modules){
+  const v=Buffer.from(m.content_base64,'base64').toString('utf8');
+  const count=id=>v.split(id).length-1;
+  const keys=['readFollowStateSnapshot354','handleFollowState','readFollowIntent354',
+   'readFollowProfile354','readEffectiveFollowMembership348','follow-state'];
+  const foundIds=Object.fromEntries(keys.map(x=>[x,count(x)]));
+  if(Object.values(foundIds).some(Boolean)){
+   const idx=v.indexOf('readFollowStateSnapshot354');
+   console.log('APP717_MODULE_DIAGNOSTIC='+JSON.stringify({
+    module:m.name,size:v.length,identifiers:foundIds,
+    // Source signature only, trimmed to 300 chars; no contents or credentials.
+    functionShape:idx<0?'not-present':v.slice(Math.max(0,idx-30),idx+270).replace(/\s+/g,' ').slice(0,300),
+   }));
+  }
+ }
+}
 need(found.length===1,'FUNCTION_NOT_EXACT_ACTIVE_SOURCE');
 console.log('APP717_LIVE_READONLY_EXACT_FUNCTION=PASS');
 console.log('APP717_DATA_READ_WRITE=0;CLOUDFLARE_MUTATIONS=0');

@@ -79,7 +79,19 @@ for(const m of modules){
  if(fns.length===1){
   const fn=fns[0];
   const activePrinted=print.printNode(ts.EmitHint.Unspecified,fn,parsed);
-  const equivalent=activePrinted===expectedPrinted;
+  // Bundling removes redundant expression parentheses and formats objects.
+  // Compare parser nodes rather than text; preserve all operators and literals.
+  const semantic=node=>{
+   if(ts.isParenthesizedExpression(node))return semantic(node.expression);
+   const parts=[];
+   ts.forEachChild(node,child=>{parts.push(semantic(child));});
+   const text=ts.isIdentifier(node)||ts.isStringLiteral(node)||
+    ts.isNumericLiteral(node)||ts.isRegularExpressionLiteral(node)
+    ?node.text:null;
+   return [node.kind,text,parts];
+  };
+  const equivalent=JSON.stringify(semantic(fn))===
+    JSON.stringify(semantic(expectedNode));
   if(!equivalent){
    let i=0;
    while(i<activePrinted.length&&i<expectedPrinted.length&&

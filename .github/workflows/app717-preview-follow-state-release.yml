@@ -1,0 +1,66 @@
+name: APP717 PREVIEW Follow One-Module Release
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - '.github/workflows/app717-preview-follow-state-release.yml'
+      - 'scripts/app717-preview-follow-state-release.mjs'
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/app717-preview-follow-state.trigger'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app717-preview-follow-release
+  cancel-in-progress: false
+jobs:
+  source:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check one-function Worker candidate and release script syntax (offline)
+        run: |
+          set -euo pipefail
+          node --check scripts/app717-preview-follow-state-release.mjs
+          node scripts/app717-preview-follow-state-release.mjs --self-test
+          echo 'APP717_RELEASE_SOURCE_ONLY_NO_DEPLOY=PASS'
+  release:
+    if: github.event_name == 'push' && github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Resolve exact source parent and user-approved trigger
+        run: |
+          set -euo pipefail
+          parent="$(git rev-parse HEAD^1)"
+          grep -Fxq "source_commit=$parent" .deploy/app717-preview-follow-state.trigger
+          echo "APP717_SOURCE_COMMIT=$parent" >> "$GITHUB_ENV"
+          test "$(git diff --name-only HEAD^1 HEAD)" = '.deploy/app717-preview-follow-state.trigger'
+      - name: Exact active and protected versions GET-only preflight
+        run: |
+          set -euo pipefail
+          node scripts/app717-preview-follow-state-release.mjs --preflight
+      - name: Stage inactive version, verify exact inventory, activate PREVIEW only with rollback
+        run: |
+          set -euo pipefail
+          node scripts/app717-preview-follow-state-release.mjs --apply-once

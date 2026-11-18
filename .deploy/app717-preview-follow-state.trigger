@@ -1,0 +1,12 @@
+release=app717_follow_state_r2_target_read
+mode=apply_one_preview_worker_module
+source_pr=1211
+approval=director_yes_20261118_1635_preview_worker_one_function_shared_data_preserved
+target_worker=soridraw-explore-preview
+previous_version=a28c1391-1d98-41fb-b9c4-8f51aa19e0a0
+target_module=preview-entry.mjs
+source_commit=b8d24b7e0f82bfc855033e696844f38adb3e6484
+shared_schema_change=false
+shared_data_migration=false
+hosting_change=false
+test_production_change=false

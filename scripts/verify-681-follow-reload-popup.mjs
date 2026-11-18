@@ -256,7 +256,8 @@ for(let i=0;i<30;i++)visit715.remember('viewer','target'+i,confirmed715,
 assert.equal(visit715.read('viewer','target0',now715+30_100),null,
  'memory entries must be capped; never write persistent storage');
 const page715=readFileSync('src/pages/ExplorePage.tsx','utf8');
-assert.match(page715,/const cachedFollow715=!queuedFollow&&!recentChoice715\(\)/);
+assert.match(page715,/const reusableFollow716=!queuedFollow&&!recentChoice715\(\)/);
+assert.match(page715,/const cachedFollow715=reusableFollow716/);
 assert.match(page715,/await getExploreFollowState\(user, nextProfile.uid, true\)/,
  'cold visit still uses canonical authenticated GET');
 assert.match(page715,/!readPendingExploreFollowIntents380\(user.uid\)/,

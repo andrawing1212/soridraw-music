@@ -1,3 +1,14 @@
+## CURRENT — APP721 팔로우 5분 상태 캐시·팝업 RTDB 재구독 중복 제거 PREVIEW Hosting PASS / 실기기 비용 QA 대기 (2026-11-19 KST)
+
+- **디렉터 승인:** 2026-11-18 23:28:13 UTC. APP720 기준 RTDB 확인된 팔로우 상태 캐시 120→300초 확대와 불필요한 중복비용 점검. PREVIEW 일반 앱 코드만 수정, 공유 사용자 원본·Worker/D1/R2/RTDB Rules/Functions·TEST/PRODUCTION 변경 금지.
+- **수정:** [PR #1224](https://github.com/andrawing1212/soridraw-music/pull/1224) 병합 `702ca752574bd0d38726d5d01034714df2e8be9e`. `src/services/exploreFollowVisitReuse715.ts`에서 **검증된 canonical GET + 정상 동일계정 RTDB 구독**인 경우의 캐시만 **120,000ms→300,000ms**. APP715 기본 10초, 계정·대상 분리, 앱 다시 로드/탭 숨김/연결 오류/offline→online/팔로우 클릭·확정 신호에서 캐시 무효화, pending/최근 선택 독립 정본 확인, 5분 만료 시 1회 GET 유지. 캐시 만료는 마지막 GET 시작시각 기준이며 재방문으로 연장되지 않음.
+- **중복비용 발견·해결:** `ExplorePage`의 기존 `subscribeExploreFollowSync377` effect가 `[user?.uid, profileConnectionsOpen376]`에 묶여 팔로워·팔로잉 팝업 열기·닫기마다 동일 RTDB 구독을 해제·재구독했음. 이미 존재하는 `profileConnectionsOpen376Ref.current`로 최신 팝업 방향을 읽도록 수정, effect 의존성은 `[user?.uid]`만 남겨 재구독 원인 제거. 실제 변경 시 열린 목록만 갱신하는 보호 유지. 새 RTDB listener/Worker/D1/R2 요청/쓰기 0. 공개 프로필 서버 GET은 기존 APP716 동일 타깃 동시 요청 합치기 유지; 실패 복구 GET·본인 프로필 집계는 정확성을 위해 보존.
+- **검사:** [Follow-only #44421731938](https://github.com/andrawing1212/soridraw-music/actions/runs/44421731938), [Cooldown #44421731921](https://github.com/andrawing1212/soridraw-music/actions/runs/44421731921), [Product #44421732045](https://github.com/andrawing1212/soridraw-music/actions/runs/44421732045) SUCCESS. APP721 120초 계속 캐시·299999ms HIT·300000ms MISS, RTDB 연결 끊김 기본 10초·계정/대상/동시 GET 분리, 팝업 무재구독·기존 정본 카운트 조정 검증 PASS.
+- **PREVIEW Hosting 배포 PASS:** 단일 배포 트리거 [PR #1225](https://github.com/andrawing1212/soridraw-music/pull/1225) 병합 `8caf91c80c958fcab1a4875ced033ccb3210a69f`; [Actions #44422318111](https://github.com/andrawing1212/soridraw-music/actions/runs/44422318111) SUCCESS. `LOCKED_PREVIEW_SHA=8caf91c8...`, `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`. 공유 Worker/D1/R2/Functions/Rules 및 Hosting 이외 사용자 원본 수정 0. APP719 PREVIEW Worker 버전 `cfd40718-6ab5-4133-bdb2-fa69332d6810` 코드는 미변경.
+- **실검증 요망:** 로그인한 PREVIEW PC에서 CACHE LIVE 진단값만 초기화→타인 공개 프로필 동일 대상을 반복 방문(2분 초과~5분 이내), 팔로워 팝업 열기·닫기를 반복해 상태 확인 Worker/D1/R2 추가 요청과 RTDB 재구독 재발 여부 확인. 5분 뒤 재방문하면 정본 재조회 1회는 정상. 다른 PC/모바일에서 팔로우·취소 최종 확정 뒤 5분 이내 상태·목록 반영, 오프라인/새로고침 정본 복구 확인. 본인 프로필 집계 및 공개 첫보기 등 **별도 경로를 동일 팔로우 상태 GET 비용으로 혼동 금지**. 코드·Hosting 검증 PASS이지 사용자 실기기/Cloudflare 물리 과금 PASS 아님. 사용자 증거 전 신규 변경·PRODUCTION 승격 금지.
+
+---
+
 ## CURRENT — APP720 PREVIEW 팔로우 상태 재방문 RTDB 확인 기반 로컬 재사용 배포 PASS / 실제 비용·동기화 검증 요망 (2026-11-19 KST)
 
 - **승인:** 2026-11-18 22:43:38 UTC 디렉터가 기존 RTDB 확정 신호·로컬 캐시를 활용해 팔로우 상태 재방문 D1/R2 비용 최소화, 동기화·오프라인 복구 보호, 필수 검사 후 **PREVIEW Hosting만** 적용 승인. 공유 Worker/D1/R2/RTDB Rules/Functions/사용자 원본·TEST·PRODUCTION 변경 금지.

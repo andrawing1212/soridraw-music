@@ -1,3 +1,14 @@
+## CURRENT — APP717 PREVIEW 팔로우 상태 확인 R2 읽기 비용 후보 배포 PASS / PC·모바일 실검증 요망 (2026-11-19 KST)
+
+- **명시적 승인:** 2026-11-18 16:35 UTC 디렉터가 실제 이용자 0명인 PREVIEW에서 팔로우 상태 확인 함수 한 개만 안전하게 적용·검증·문제 시 복구하도록 승인. 공유 원본을 지우거나 TEST/PRODUCTION으로 승격한 승인 아님.
+- **기준 코드:** APP717 [PR #1211](https://github.com/andrawing1212/soridraw-music/pull/1211) 병합 `b8d24b7e0f82bfc855033e696844f38adb3e6484`; 자동 런타임 적용 경로는 단일 목적 트리거 [PR #1212](https://github.com/andrawing1212/soridraw-music/pull/1212) 병합 `416a658b7bd91d962e117662b24025e130a42d34`. GitHub canonical Worker의 전체 소스·고정 checksum과 앱 Hosting은 변경하지 않고, **활성된 15모듈 중 `preview-entry.mjs` 안 `readFollowStateSnapshot354` 함수만 교체**.
+- **서버 배포 PASS:** [Actions #44353338942](https://github.com/andrawing1212/soridraw-music/actions/runs/44353338942) SUCCESS. PREVIEW Explore Worker 활성 버전 `a28c1391-1d98-41fb-b9c4-8f51aa19e0a0` → `f35c6924-05f0-4435-ad35-3c37699865ae` (100%). 이전 버전은 정확한 롤백 기준으로 유지; 자동 롤백 불필요. preflight 원본 모듈 SHA `57ef11a2...`, 교체 후 SHA `4a81b779...`, 기존 바인딩·런타임 및 다른 14개 모듈 일치 PASS.
+- **보호 범위:** TEST Explore `ddd2255a-75cc-4db9-8905-b47338558cb0`, PRODUCTION Explore `af81502a-298d-4ec6-bc2a-0c529d6dc29e`, PREVIEW Owner `1e987bc3-36d3-4bb0-861f-4df17f536592` 모두 변경 없음 PASS. 공유 D1/R2/RTDB/Functions/Rules·사용자 원본 수정, migration/backfill/delete 0. 앱 APP713 OFF, APP714 마지막 클릭+5초, APP715/716 재방문 캐시·중복 GET, 좋아요 유지.
+- **검사:** [팔로우 전용 #44352270263](https://github.com/andrawing1212/soridraw-music/actions/runs/44352270263) PASS, [제품 품질 #44352270342](https://github.com/andrawing1212/soridraw-music/actions/runs/44352270342) PASS, [실제 활성 함수 정합성 #44352270225](https://github.com/andrawing1212/soridraw-music/actions/runs/44352270225) PASS, [원함수 단위 복구·동시 변경 #44335565175](https://github.com/andrawing1212/soridraw-music/actions/runs/44335565175) PASS. 별도 QA Owner Worker Build 기존 FAIL은 변경 대상과 무관.
+- **실검증 요망:** 배포 뒤 실제 로그인 계정에서 기존 CACHE LIVE 방식대로 초기화→다른 사람 공개프로필 재방문(상태 확인)→한 번 팔로우/취소 후 5초+ 기다림. 상태 확인 1회당 R2 B **6→5 예상(실측 미확인)**, 팔로우 변경 R2 B 13/A 6은 이번 수정 범위 밖. PC↔모바일 자동 동기화 및 상대방 팔로워 숫자/목록 정확성은 사용자 확인 전 PASS 금지. 오류가 확인되면 현재 `f35c6924...` 소유권을 확인하고 `a28c1391...`로 안전 복구. 기존 PASS 검사 반복 금지.
+
+---
+
 ## CURRENT — APP714 팔로우 마지막 클릭 +5초, PREVIEW Hosting PASS (2026-11-18 KST)
 
 - **사용자 명시 승인:** 팔로우·취소의 5초 정본 저장 기준을 기존 '첫 클릭 +5초'에서 정상 Explore 좋아요 app399의 **'마지막 실제 클릭 +5초'**로 통일. 버튼은 즉시 반응, 추가 클릭마다 지연 타이머 갱신, 원상 복귀는 최종 canonical 쓰기 W0. 11회 연속 토글 최종 1회 요청, 12회 원상 복귀 요청 0회 재현.

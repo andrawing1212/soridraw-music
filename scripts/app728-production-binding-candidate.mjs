@@ -83,6 +83,31 @@ export function buildApp728ProductionBindingCandidate(input) {
       hold(stage + '_UNRELEASED_DO_MIGRATION');
     }
   }
+  // The source PREVIEW Wrangler is not the live production configuration.
+  // A new DO class/migration cannot be silently inherited or auto-deployed.
+  const canonical = input?.sourceCanonical;
+  const migrations = canonical?.migrations;
+  const declared = canonical?.durable_objects?.bindings;
+  if (!Array.isArray(migrations) || !Array.isArray(declared)) {
+    hold('SOURCE_CANONICAL_CONTRACT_UNVERIFIED');
+  } else {
+    if (migrations.some(m => m.tag !== 'v1' ||
+      (m.new_sqlite_classes || []).some(c => c !== 'ExploreLikeBatchScheduler103')) ||
+      declared.some(b => b.class_name === 'OwnerFollowerRecovery557')) {
+      hold('SOURCE_HAS_UNRELEASED_DO_MIGRATION');
+    }
+    const canonicalDB = (canonical.d1_databases || []).find(b => b.binding === 'DB');
+    const canonicalMedia = (canonical.r2_buckets || []).find(b => b.binding === 'PROFILE_MEDIA');
+    for (const worker of [p, d]) {
+      const liveDB = get(worker).find(b => b.name === 'DB');
+      const liveMedia = get(worker).find(b => b.name === 'PROFILE_MEDIA');
+      if (!canonicalDB?.database_id || liveDB?.id !== canonicalDB.database_id ||
+        canonicalMedia?.bucket_name !== 'soridraw-profile-media' ||
+        liveMedia?.bucket !== canonicalMedia.bucket_name) {
+        hold('SOURCE_CANONICAL_DATA_TARGET_MISMATCH');
+      }
+    }
+  }
   for (const [name, type] of Object.entries(REQUIRED)) {
     if (dm.get(name)?.type !== type) hold('PRODUCTION_REQUIRED_BINDING_MISSING_' + name);
   }

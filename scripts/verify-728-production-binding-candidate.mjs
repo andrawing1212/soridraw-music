@@ -48,11 +48,17 @@ const prodOnly = [
 const cast = ([name,type]) => ({
   name, type,
   ...(name === 'DB' ? { id:'canonical-shared-d1' } : {}),
-  ...(name === 'PROFILE_MEDIA' ? { bucket:'canonical-shared-r2' } : {}),
+  ...(name === 'PROFILE_MEDIA' ? { bucket:'soridraw-profile-media' } : {}),
   ...(type === 'secret_text' ? { secret:'HIDDEN_SECRET_SHOULD_NOT_BE_COPIED' } : {}),
 });
 const snapshot = () => ({
   sourceSha:fixedSha, lockedPreviewSha:fixedSha,
+  sourceCanonical: {
+    d1_databases:[{binding:'DB',database_id:'canonical-shared-d1'}],
+    r2_buckets:[{binding:'PROFILE_MEDIA',bucket_name:'soridraw-profile-media'}],
+    migrations:[{tag:'v1',new_sqlite_classes:['ExploreLikeBatchScheduler103']}],
+    durable_objects:{bindings:[{name:'EXPLORE_LIKE_BATCH_SCHEDULER',class_name:'ExploreLikeBatchScheduler103'}]},
+  },
   preview:{ name:'soridraw-explore-preview', activeVersion:previewActive,
     pinnedBindingsVerified:true, schedulesVerified:true, trafficPercent:100,
     schedules:[{cron:'37 * * * *'}],bindings:[...shared,...extra].map(cast) },
@@ -104,6 +110,13 @@ const duplicate=snapshot();duplicate.production.bindings.push({...duplicate.prod
 assert(buildApp728ProductionBindingCandidate(duplicate).blockers.includes('PRODUCTION_BINDING_LIST_INVALID'));
 const migration=snapshot();migration.preview.hasUnexpectedMigration=true;
 assert(buildApp728ProductionBindingCandidate(migration).blockers.includes('PREVIEW_UNRELEASED_DO_MIGRATION'));
+const sourceV2=snapshot();sourceV2.sourceCanonical.migrations.push({tag:'v2',new_sqlite_classes:['OwnerFollowerRecovery557']});
+sourceV2.sourceCanonical.durable_objects.bindings.push({name:'OWNER_FOLLOW_RECOVERY_557',class_name:'OwnerFollowerRecovery557'});
+assert(buildApp728ProductionBindingCandidate(sourceV2).blockers.includes('SOURCE_HAS_UNRELEASED_DO_MIGRATION'));
+const wrongCanonical=snapshot();wrongCanonical.sourceCanonical.d1_databases[0].database_id='wrong';
+assert(buildApp728ProductionBindingCandidate(wrongCanonical).blockers.includes('SOURCE_CANONICAL_DATA_TARGET_MISMATCH'));
+const missingSource=snapshot();delete missingSource.sourceCanonical;
+assert(buildApp728ProductionBindingCandidate(missingSource).blockers.includes('SOURCE_CANONICAL_CONTRACT_UNVERIFIED'));
 const badSha=snapshot();badSha.lockedPreviewSha='b'.repeat(40);
 assert(buildApp728ProductionBindingCandidate(badSha).blockers.includes('SOURCE_NOT_LOCKED'));
-console.log('APP728_PRODUCTION_BINDING_CANDIDATE=PASS (41/12 actual-name fixture, 10 protective scenarios)');
+console.log('APP728_PRODUCTION_BINDING_CANDIDATE=PASS (41/12 actual-name fixture, 13 protective scenarios)');

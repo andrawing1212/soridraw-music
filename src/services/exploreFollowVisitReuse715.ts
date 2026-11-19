@@ -23,6 +23,60 @@ type VerifiedReturn726 = {
 };
 const observedPublic726 = new Map<string, { generation: string; revision: number }>();
 const verifiedReturns726 = new Map<string, VerifiedReturn726>();
+// APP727: per-component actor signal version resets on every route mount.
+// A retained, already-applied same-account signal is not a NEW mutation.
+// Keep only the highest processed version per account for this browser tab.
+const appliedActorRevision727 = new Map<string, number>();
+export const acceptActorFollowRevision727 = (viewerUid:string,version:number):boolean => {
+  const uid=String(viewerUid||'').trim();
+  if(!uid||!Number.isSafeInteger(version)||version<=0)return false;
+  const previous=appliedActorRevision727.get(uid)||0;
+  if(version<=previous)return false;
+  appliedActorRevision727.set(uid,version);
+  return true;
+};
+export type FollowReadReason727 =
+  'GET_PENDING'|'GET_NEW_CHOICE'|'GET_COLD'|'GET_ACTOR_NOT_READY'|
+  'GET_PUBLIC_NOT_READY'|'GET_EXPIRED'|'GET_PUBLIC_CHANGED'|
+  'GET_COUNTS_CHANGED'|'GET_CHOICE_CHANGED'|'GET_OTHER'|
+  'SAVE_ACTOR_NOT_READY'|'SAVE_PUBLIC_NOT_READY'|'SAVE_PUBLIC_LATE'|
+  'SAVE_COUNT_UNVERIFIED'|'SAVE_COUNTS_CHANGED'|'SAVE_REVISION_CHANGED'|
+  'SAVE_OTHER'|'SAVE_LOCAL_REJECT'|'SAVE_OK';
+export const explainFollowReadMiss727 = (
+  viewer:string,target:string,now:number,publicSignal:{
+    generation:string;revision:number;followerCount:number;followingCount:number;
+  }|null,actorReady:boolean,choice:Choice724,pending:boolean,
+):FollowReadReason727=>{
+  if(pending)return 'GET_PENDING';
+  if(choice?.settled===false)return 'GET_NEW_CHOICE';
+  const id=pair726(viewer,target),row=verifiedReturns726.get(id);
+  if(!row)return 'GET_COLD';
+  if(!actorReady)return 'GET_ACTOR_NOT_READY';
+  if(!publicSignal)return 'GET_PUBLIC_NOT_READY';
+  if(now<row.at||now-row.at>=RETURN_REUSE_MS_726)return 'GET_EXPIRED';
+  const observed=observedPublic726.get(id);
+  if(row.generation!==publicSignal.generation||
+     row.revision!==String(publicSignal.revision)||
+     observed?.generation!==publicSignal.generation||
+     observed.revision!==publicSignal.revision)return 'GET_PUBLIC_CHANGED';
+  if(row.state.followerCount!==publicSignal.followerCount||
+     row.state.followingCount!==publicSignal.followingCount)return 'GET_COUNTS_CHANGED';
+  if(choice&&(!choice.settled||row.at<choice.at||
+     row.state.isFollowing!==choice.following))return 'GET_CHOICE_CHANGED';
+  return 'GET_OTHER';
+};
+export const explainFollowSaveMiss727 = (
+  state:ExploreFollowState,startedAt:number,publicSignal:Public726|null,
+  actorReady:boolean,
+):FollowReadReason727=>{
+  if(!actorReady)return 'SAVE_ACTOR_NOT_READY';
+  if(!publicSignal)return 'SAVE_PUBLIC_NOT_READY';
+  if(state.countVerified661!==true)return 'SAVE_COUNT_UNVERIFIED';
+  if(publicSignal.observedAt>startedAt)return 'SAVE_PUBLIC_LATE';
+  if(state.followerCount!==publicSignal.followerCount||
+     state.followingCount!==publicSignal.followingCount)return 'SAVE_COUNTS_CHANGED';
+  return 'SAVE_REVISION_CHANGED';
+};
 const pair726 = (viewer: string, target: string) => {
   const a=String(viewer||'').trim(),b=String(target||'').trim();
   return a&&b&&a!==b?JSON.stringify([a,b]):'';
@@ -127,6 +181,7 @@ export const observeExploreFollowViewer725 = (viewerUid: string | undefined): vo
   if (observedViewer725 === uid) return;
   observedViewer725 = uid;
   observedPublic726.clear();
+  appliedActorRevision727.clear();
   invalidateShared725(); // actual logout/account switch, NOT same-user remount
 };
 

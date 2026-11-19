@@ -19,6 +19,9 @@ export type CloudflarePathDiagnosticState = {
   lastDurationMs: number;
   lastOutcome: string;
   lastEdgeCache: string;
+  // Read-only APP727 route diagnosis. No UID, token, profile or user content.
+  followTrace727?: string[];
+  followReasonCounts727?: Record<string,number>;
 };
 
 export type CloudflareDiagnosticState = {
@@ -71,6 +74,8 @@ const emptyPathState = (): CloudflarePathDiagnosticState => ({
   lastDurationMs: 0,
   lastOutcome: '',
   lastEdgeCache: '',
+  followTrace727: [],
+  followReasonCounts727: {},
 });
 
 const emptyState = (updatedAt = 0): CloudflareDiagnosticState => ({
@@ -144,6 +149,18 @@ const readStoredPaths = (value: unknown): Record<string, CloudflarePathDiagnosti
         lastDurationMs: normalizeCount(state?.lastDurationMs),
         lastOutcome: String(state?.lastOutcome || '').slice(0, 96),
         lastEdgeCache: String(state?.lastEdgeCache || '').slice(0, 24),
+        followTrace727: Array.isArray(state?.followTrace727)
+          ? state.followTrace727.slice(-8)
+            .filter((v:unknown)=>typeof v==='string'&&/^[A-Z_0-9]{3,40}$/.test(v as string))
+          : [],
+        followReasonCounts727: state?.followReasonCounts727 &&
+          typeof state.followReasonCounts727==='object' &&
+          !Array.isArray(state.followReasonCounts727)
+          ? Object.fromEntries(
+              Object.entries(state.followReasonCounts727).slice(0,20)
+                .filter(([code])=>/^[A-Z_0-9]{3,40}$/.test(code))
+                .map(([code,value])=>[code,normalizeCount(value)]))
+          : {},
       };
       return acc;
     }, {});
@@ -197,6 +214,30 @@ export function resetCloudflareDiagnostics(): void {
 }
 
 const readUsageHeader = (response: Response, name: string) => normalizeCount(response.headers.get(name));
+
+// APP727: one bounded, reason-only local diagnostic event per actual follow
+// read or verified-cache result. It does NOT increment Worker/D1/R2/LOCAL
+// counters, call fetch, or include any identifying data.
+export function recordCloudflareFollowReason727(reason: string): void {
+  if(!readCacheDiagnosticsGloballyEnabled())return;
+  const code=String(reason||'').trim();
+  if(!/^(GET|SAVE)_[A-Z_]{2,35}$/.test(code))return;
+  const previous=readCloudflareDiagnostics();
+  const path='팔로우 상태 확인';
+  const current=previous.paths[path]||emptyPathState();
+  const counts=current.followReasonCounts727||{};
+  writeCloudflareDiagnostics({
+    ...previous,
+    paths:{...previous.paths,[path]:{
+      ...current,
+      followTrace727:[...(current.followTrace727||[]),code].slice(-8),
+      followReasonCounts727:{
+        ...counts,[code]:Math.min(9999,(counts[code]||0)+1),
+      },
+    }},
+    updatedAt:Date.now(),
+  });
+}
 
 export function recordCloudflareLocalCacheHit(path: string, outcome = 'LOCAL CACHE HIT'): void {
   if (!readCacheDiagnosticsGloballyEnabled()) return;

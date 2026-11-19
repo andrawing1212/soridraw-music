@@ -2,6 +2,7 @@ const SORIDRAW_CHUNK_LOAD_RECOVERY_047 = true;
 const RECOVERY_STORAGE_KEY = 'soridraw_chunk_load_recovery_v1';
 const RECOVERY_COOLDOWN_MS = 60_000;
 let installed = false;
+let reloadStarted = false;
 
 const errorMessage = (value: unknown): string => {
   if (value instanceof Error) return String(value.message || value.name || '');
@@ -24,23 +25,41 @@ export const isStaleChunkLoadError = (value: unknown): boolean => {
 
 const recoverySignature = (value: unknown): string => errorMessage(value).trim().slice(0, 800);
 
-export const recoverFromStaleChunkError = (value: unknown): boolean => {
+// Render a neutral update state only while a single safe reload is eligible.
+// If the same chunk fails again inside 60 seconds, reveal the real error.
+export const shouldShowStaleChunkRecovery = (value: unknown): boolean => {
   if (typeof window === 'undefined' || !isStaleChunkLoadError(value)) return false;
-  const signature = recoverySignature(value);
-  const now = Date.now();
+  if (reloadStarted) return true;
   try {
     const raw = window.sessionStorage.getItem(RECOVERY_STORAGE_KEY);
     if (raw) {
       const previous = JSON.parse(raw) as { signature?: string; at?: number };
-      if (previous?.signature === signature && now - Number(previous?.at || 0) < RECOVERY_COOLDOWN_MS) {
-        return false;
-      }
+      const age = Date.now() - Number(previous?.at || 0);
+      if (previous?.signature === recoverySignature(value) &&
+          age >= 0 && age < RECOVERY_COOLDOWN_MS) return false;
     }
-    window.sessionStorage.setItem(RECOVERY_STORAGE_KEY, JSON.stringify({ signature, at: now }));
   } catch {
-    // Storage can be blocked. A reload is still safer than leaving a stale chunk fatal screen.
+    // Storage-disabled browsers may still attempt the one safe reload.
   }
-  window.location.reload();
+  return true;
+};
+
+export const recoverFromStaleChunkError = (value: unknown): boolean => {
+  if (reloadStarted) return isStaleChunkLoadError(value);
+  if (!shouldShowStaleChunkRecovery(value)) return false;
+  const signature = recoverySignature(value);
+  try {
+    window.sessionStorage.setItem(RECOVERY_STORAGE_KEY, JSON.stringify({ signature, at: Date.now() }));
+  } catch {
+    // Never clear app caches, auth, or user drafts on failed local storage.
+  }
+  reloadStarted = true;
+  try {
+    window.location.reload();
+  } catch {
+    reloadStarted = false;
+    return false;
+  }
   return true;
 };
 

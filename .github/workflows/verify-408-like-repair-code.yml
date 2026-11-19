@@ -235,6 +235,7 @@ jobs:
           node scripts/verify-482-preview-writer-release-gate.mjs --self-test
           # app487: prevent stale app427 empty-command semantics in any later release
           node scripts/verify-427-legacy-next-song-parity.mjs
+          node scripts/verify-047-stale-chunk-recovery.mjs
       - name: APP563 postcommit R2 alternative feasibility and reject unsafe legacy paths
         run: |
           node --check cloudflare/explore-worker/candidates/563-follow-r2-postcommit-feasibility.mjs

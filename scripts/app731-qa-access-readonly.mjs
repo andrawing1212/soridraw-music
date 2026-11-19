@@ -12,8 +12,8 @@ const get=async(path,token,send)=>{
   const listing=PREFIX+'/workers/scripts';
   const deployments=listing+'/'+WORKER+'/deployments';
   const modulePrefix=PREFIX+'/workers/workers/'+WORKER+'/versions/';
-  const v=path.startsWith(modulePrefix)?path.slice(modulePrefix.length).split('?')[0]:'';
-  const pinnedCodeRead=VERSION.test(v)&&path===modulePrefix+v+'?include=modules';
+  const pinnedVersion=path.startsWith(modulePrefix)?path.slice(modulePrefix.length).split('?')[0]:'';
+  const pinnedCodeRead=VERSION.test(pinnedVersion)&&path===modulePrefix+pinnedVersion+'?include=modules';
   if(path!==listing&&path!==deployments&&!pinnedCodeRead)
     hold('CROSS_ACCOUNT_DENIED');
   const r=await send(path,{method:'GET',headers:{

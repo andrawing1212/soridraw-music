@@ -24,3 +24,12 @@
 - APP730은 독립 QA Worker 비활성 업로드·버전 지정 403 실호출과 기존 100% 복구까지 PASS했지만, **합성 A↔B의 내구성 있는 확정→Functions→RTDB 실제 전송/PC·모바일 검증은 미완료**다. 이전 APP583 PASS를 새 버전 PASS로 재분류하지 않는다.
 - PROD Worker 코드/DO migration 및 Functions·Rules 버전·새 코드 번들 동일성, 실제 Hosting 자산 동등성, 복구 리허설이 확인되지 않아 **현재 정식 배포 HOLD**다.
 - 사용자 데이터 원본·Local First·뮤직노트·라이브러리·최근곡·로그인/좋아요 동기화 및 무변경 방문 W0 보호는 항상 우선한다.
+
+## APP738 — 실제 Hosting 승격·복구 실행 코드
+
+- `scripts/app738-firebase-hosting-runtime.mjs`: Firebase Hosting REST API GET으로 PREVIEW와 정식앱의 정확한 활성 버전·서버측 파일 SHA256 목록·ServingConfig를 수집한다. 버전 파일 목록은 페이지를 모두 읽고 동일 경로 중복/미업로드/미완료 상태를 차단한다.
+- `scripts/app738-production-hosting-transaction.mjs`: APP737 검증 결과와 **Studio·가사·Suno·Music Note·Library·Recent·Explore·좋아요·팔로우·공유·프로필·로그인·미디어·관리자·PC/모바일 동기화** 필수 기능의 PREVIEW/PRODUCTION 동등성, 독립 QA 증거, 디렉터 승인, PREVIEW SHA와 활성 Hosting 버전 고정을 확인한다. 미검증이면 복제 API 호출도 불가.
+- 정식 배포를 승인받은 뒤에만 원본 PREVIEW 버전으로 **신규 정식 Hosting 버전을 비활성 복제**하고, 모든 파일 해시와 Hosting 설정이 원본과 정확히 일치하는지 검사한다. 기존 정식앱의 릴리스 ID가 변경되면 활성화하지 않는다. 그 후에만 새 릴리스로 활성화하고 실제 정식 도메인의 앱 버전·접속을 확인한다.
+- 활성화가 성공해도 실검증이 실패하면 활성 버전이 방금 배포한 버전일 경우에만 **기존 정식 Hosting 버전으로 자동 복구**한다. 다른 관리자 또는 릴리스가 중간에 개입했다면 기존 버전으로 무조건 덮어쓰지 않고 수동 HOLD한다. 이 자동 복구는 **Hosting에만 적용**되며 Worker·Functions·Rules·D1·R2의 복구를 대신하지 않는다.
+- `.github/workflows/app738-direct-hosting-promotion.yml`: `inventory`는 독립된 Firebase GET-only 실서버 검사이며 정식배포 변경 0. `deploy`는 저장소 소유자의 명시적인 `DEPLOY_PRODUCTION`, 현재 PREVIEW SHA와 정확한 검증 증거 해시, 검토·독립 QA를 통과한 `DOCS/APP738_APPROVED_DIRECT_RELEASE_EVIDENCE.json`이 모두 일치할 때만 실행한다. **현재 해당 승인 증거 파일이 없어 정식 배포는 자동 차단된다.** 검증된 환경 준비가 되기 전 미리 PASS로 적거나 임의로 증거 파일을 만들지 않는다.
+- 이 배포기는 PRODUCTION **Hosting만** 승격한다. 정식 Explore/Media Worker와 Firebase Functions/RTDB Rules의 호환·기능 동등성 및 안전한 릴리스는 **APP737 독립 사전검증 단계에서 별도 합격**해야 한다. 현재 Explore Worker 41/12 연결 차이와 APP730 실전송 미검증 때문에 전체 직접 승격은 여전히 HOLD다. 구형 TEST 기반 컨트롤러와 TEST 앱은 변경하지 않는다.

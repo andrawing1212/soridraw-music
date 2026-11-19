@@ -217,7 +217,7 @@ import {
 import { observeExploreLikeAccountSyncSignal } from './services/exploreLikeService';
 import { SORIDRAW_PROFILE_AVATAR_EVENT } from './services/profileAvatarAuthority';
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
-import { recoverFromStaleChunkError } from './services/chunkLoadRecovery';
+import { recoverFromStaleChunkError, shouldShowStaleChunkRecovery } from './services/chunkLoadRecovery';
 import StudioPageFrame from './components/studio/StudioPageFrame';
 import StudioLeftRail, { type StudioWorkspaceView } from './components/studio/StudioLeftRail';
 import NotificationPanel from './components/studio/NotificationPanel';
@@ -1385,6 +1385,16 @@ class ErrorBoundary extends Component<any, any> {
   render() {
     if ((this.state as any).hasError) {
       const error = (this.state as any).error;
+      // APP723: React renders this boundary before componentDidCatch can
+      // reload a stale chunk. Do not flash a fatal error during recovery.
+      // Repeated failures after the cooldown remain visible and actionable.
+      if (shouldShowStaleChunkRecovery(error)) {
+        return (
+          <main role="status" aria-live="polite" className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center p-6 text-center text-[var(--text-secondary)]">
+            새 버전을 불러오고 있습니다.
+          </main>
+        );
+      }
       let errorMessage = "알 수 없는 오류가 발생했습니다.";
       
       if (error?.message) {

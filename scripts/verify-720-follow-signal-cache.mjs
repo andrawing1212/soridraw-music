@@ -325,7 +325,7 @@ assert.match(page,/observePublicFollowRevision726\(principal\.uid,viewedUid/,
  'public RTDB retained version must be compared across remounts');
 assert.match(page,/readVerifiedFollowReturn726\(user\.uid,nextProfile\.uid/,
  'only qualified verified results can be reused on route return');
-assert.match(page,/rememberVerifiedFollowReturn726\(user\.uid,nextProfile\.uid/,
+assert.match(page,/rememberVerifiedFollowReturn726\(\s*user\.uid,nextProfile\.uid/,
  'exact GET creates bounded verified return cache');
 assert.match(page,/const reusableFollow716=!queuedFollow&&!recentChoice715\(\)/,
  'pending and recent local choice still force canonical verification');

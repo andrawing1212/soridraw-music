@@ -48,7 +48,10 @@ jobs:
           node-version: 22
 
       - name: Offline APP728 release contract tests (no cloud access)
-        run: node scripts/verify-728-direct-preflight.mjs
+        run: |
+          node scripts/verify-728-direct-preflight.mjs
+          node scripts/verify-728-release-plan.mjs
+          node scripts/verify-728-pinned-worker.mjs
 
       - name: Build exact preview source once, without deploying
         shell: bash

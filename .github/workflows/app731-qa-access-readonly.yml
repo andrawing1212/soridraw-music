@@ -1,0 +1,64 @@
+name: SORIDRAW APP731 Independent QA Cloudflare Access (GET-only)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/app731-qa-access-readonly.mjs'
+      - 'scripts/verify-731-qa-access-readonly.mjs'
+      - '.github/workflows/app731-qa-access-readonly.yml'
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-app731-qa-readonly
+  cancel-in-progress: false
+
+jobs:
+  offline:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: QA access synthetic guard; no credentials or network
+        run: |
+          node --check scripts/app731-qa-access-readonly.mjs
+          node scripts/verify-731-qa-access-readonly.mjs
+
+  qa_readonly:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 1251 &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/app731-qa-readonly'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify synthetic guards before touching QA API
+        run: node scripts/verify-731-qa-access-readonly.mjs
+      - name: QA-only Cloudflare Worker identity and active version (GET only)
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          node scripts/app731-qa-access-readonly.mjs
+          echo 'APP731_QA_GET_ONLY=PASS; APP730_PHYSICAL_QA=HOLD'

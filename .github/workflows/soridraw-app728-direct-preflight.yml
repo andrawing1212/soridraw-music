@@ -1,0 +1,86 @@
+name: SORIDRAW APP728 direct PRODUCTION preflight (read only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: 'Exact full SHA of current preview HEAD; no TEST promotion or deployment'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-app728-direct-preflight
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    if: github.actor == github.repository_owner
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout immutable controller from default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+
+      - name: Lock exact preview source with no branch changes
+        shell: bash
+        env:
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$TARGET_SHA" | grep -Eq '^[0-9a-f]{40}$'
+          git fetch origin preview production --no-tags
+          test "$TARGET_SHA" = "$(git rev-parse origin/preview)" || { echo 'PREVIEW_HEAD_DRIFT'; exit 2; }
+          git cat-file -e "$TARGET_SHA^{commit}"
+          git worktree add --detach "$RUNNER_TEMP/app728-source" "$TARGET_SHA"
+          echo "APP728_SOURCE_DIR=$RUNNER_TEMP/app728-source" >> "$GITHUB_ENV"
+          echo "APP728_SOURCE_SHA=$TARGET_SHA" >> "$GITHUB_ENV"
+          echo "APP728_LOCKED_PREVIEW_SHA=$TARGET_SHA" >> "$GITHUB_ENV"
+          echo "APP728_CONTROLLER_SHA=$GITHUB_WORKFLOW_SHA" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Offline APP728 release contract tests (no cloud access)
+        run: node scripts/verify-728-direct-preflight.mjs
+
+      - name: Build exact preview source once, without deploying
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$APP728_SOURCE_DIR"
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+
+      - name: Existing Firebase read permission only
+        uses: google-github-actions/auth@v2
+        id: firebase_auth
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          token_format: access_token
+
+      - name: Active PREVIEW/PRODUCTION contracts (GET only, HOLD on uncertainty)
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          FIREBASE_ACCESS_TOKEN: ${{ steps.firebase_auth.outputs.access_token }}
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$APP728_SOURCE_SHA" || { echo 'PREVIEW_HEAD_CHANGED'; exit 2; }
+          node scripts/app728-direct-preflight.mjs
+
+      - name: Final source immutability check
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$APP728_SOURCE_SHA"
+          test "$(git -C "$APP728_SOURCE_DIR" rev-parse HEAD)" = "$APP728_SOURCE_SHA"
+          echo 'APP728_READ_ONLY_COMPLETED=PASS'

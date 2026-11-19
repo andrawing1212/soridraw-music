@@ -1,0 +1,128 @@
+name: SORIDRAW APP738 Direct PREVIEW to PRODUCTION Hosting (NO TEST)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/app738-firebase-hosting-runtime.mjs'
+      - 'scripts/app738-production-hosting-transaction.mjs'
+      - 'scripts/app738-hosting-cli.mjs'
+      - 'scripts/verify-738-hosting-promotion.mjs'
+      - '.github/workflows/app738-direct-hosting-promotion.yml'
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'GET-only inventory or director-approved LIVE Hosting promotion'
+        required: true
+        default: inventory
+        type: choice
+        options: [inventory, deploy]
+      preview_sha:
+        description: 'Exact current PREVIEW 40-character commit (deploy only)'
+        required: false
+        type: string
+      production_approval:
+        description: 'For deploy only, type DEPLOY_PRODUCTION'
+        required: false
+        type: string
+      evidence_sha256:
+        description: 'Reviewed exact SHA256 of APP738 approved release evidence'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-app738-production-hosting
+  cancel-in-progress: false
+
+jobs:
+  synthetic:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Full offline hosting clone, drift, rollback and authorization regressions
+        run: |
+          set -euo pipefail
+          node --check scripts/app738-firebase-hosting-runtime.mjs
+          node --check scripts/app738-production-hosting-transaction.mjs
+          node --check scripts/app738-hosting-cli.mjs
+          node scripts/verify-738-hosting-promotion.mjs
+
+  run:
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      (github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'issue_comment' &&
+         github.event.issue.number == 1261 &&
+         github.event.issue.pull_request != null &&
+         github.event.comment.body == '/app738-hosting-inventory'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Lock exact controller and requested mode before auth
+        env:
+          INPUT_MODE: ${{ inputs.mode }}
+          INPUT_SHA: ${{ inputs.preview_sha }}
+          INPUT_APPROVAL: ${{ inputs.production_approval }}
+          INPUT_EVIDENCE: ${{ inputs.evidence_sha256 }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$(git ls-remote origin refs/heads/main | cut -f1)" || {
+            echo 'APP738_CONTROLLER_SHA_CHANGED';exit 2;
+          }
+          node scripts/verify-738-hosting-promotion.mjs
+          MODE="$INPUT_MODE"
+          if [ "$GITHUB_EVENT_NAME" = issue_comment ]; then MODE=inventory; fi
+          case "$MODE" in
+            inventory) echo 'APP738_MODE=inventory' >> "$GITHUB_ENV";;
+            deploy)
+              test "$INPUT_APPROVAL" = DEPLOY_PRODUCTION || exit 2
+              printf '%s' "$INPUT_SHA" | grep -Eq '^[0-9a-f]{40}$' || exit 2
+              printf '%s' "$INPUT_EVIDENCE" | grep -Eq '^[0-9a-f]{64}$' || exit 2
+              test "$INPUT_SHA" = "$(git ls-remote origin refs/heads/preview | cut -f1)" || exit 2
+              test -f DOCS/APP738_APPROVED_DIRECT_RELEASE_EVIDENCE.json || {
+                echo 'APP738_REVIEWED_RELEASE_EVIDENCE_NOT_PRESENT_HOLD';exit 2;
+              }
+              echo 'APP738_MODE=deploy' >> "$GITHUB_ENV"
+              ;;
+            *) exit 2;;
+          esac
+          echo "APP738_PREVIEW_SHA=$INPUT_SHA" >> "$GITHUB_ENV"
+          echo "APP738_PRODUCTION_APPROVAL=$INPUT_APPROVAL" >> "$GITHUB_ENV"
+          echo "APP738_EVIDENCE_SHA256=$INPUT_EVIDENCE" >> "$GITHUB_ENV"
+      - name: Authenticate existing Firebase Hosting only
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          token_format: access_token
+      - name: Direct Hosting inventory or gated promotion (never TEST)
+        env:
+          FIREBASE_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: |
+          set -euo pipefail
+          node scripts/app738-hosting-cli.mjs "$APP738_MODE"
+          if [ "$APP738_MODE" = inventory ]; then
+            echo 'APP738_GET_ONLY_LIVE_VERSION_FILES=PASS; PRODUCTION=HOLD'
+          fi

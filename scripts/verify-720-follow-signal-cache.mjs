@@ -33,6 +33,28 @@ const b=create();
 b.remember(actor,target,legacy,base,b.version(),base+1,true);
 assert.equal(b.read(actor,target,base+10000,true),null,
  'not exact canonical follow count => never allow 120s');
+// APP724: preserve the 30s receipt's ordering protection, but never spend
+// another canonical GET after a single matching post-ACK verified response.
+const settled724={following:true,settled:true,at:base};
+const pending724={...settled724,settled:false};
+const match724={...verified,isFollowing:true};
+const mismatch724={...verified,isFollowing:false};
+const allowed724=visitsModule.exports.canReuseVerifiedFollowChoice724;
+const remember724=visitsModule.exports.canRememberPostAckFollowChoice724;
+assert.equal(allowed724(settled724,match724,base+1000),true);
+assert.equal(allowed724(pending724,match724,base+1000),false,'unsettled click cannot reuse GET');
+assert.equal(allowed724(settled724,mismatch724,base+1000),false,'old membership cannot override ACK');
+assert.equal(allowed724(settled724,{...match724,countVerified661:false},base+1000),false);
+assert.equal(allowed724(settled724,match724,base+30_001),false,'expired receipt is not a new ACK');
+assert.equal(remember724(settled724,match724,base-1,base+1000),false,'pre-click GET cannot enter cache');
+assert.equal(remember724(settled724,match724,base,base+1000),true);
+const after724=create();
+after724.remember(actor,target,match724,base+1000,after724.version(),base+1001,true);
+const warm724=after724.read(actor,target,base+9000,true);
+assert.equal(allowed724(settled724,warm724,base+9000),true,
+  'two revisits after one post-ACK canonical GET must use local cache');
+after724.invalidate();
+assert.equal(after724.read(actor,target,base+9000,true),null,'new signal/click always invalidates');
 const c=create();
 c.remember(actor,target,verified,base,c.version(),base+1,false);
 assert.equal(c.read(actor,target,base+10000,true),null,
@@ -99,6 +121,10 @@ const page=readFileSync('src/pages/ExplorePage.tsx','utf8');
 assert.match(page,/signalQualified720=\(\)=>followStreamReady720Ref\.current===user\.uid/);
 assert.match(page,/visit715\.read\(user\.uid,nextProfile\.uid,Date\.now\(\),signalQualified720\(\)\)/);
 assert.match(page,/Date\.now\(\),signalQualified720\(\)\);/);
+assert.match(page,/canReuseVerifiedFollowChoice724\(currentRecentChoice724,candidateFollow715,Date\.now\(\)\)/,
+ 'APP724 settled choice must be backed by an exact cached GET');
+assert.match(page,/canRememberPostAckFollowChoice724\(/,
+ 'APP724 post-ACK verified GET must become reusable');
 assert.match(page,/const reusableFollow716=!queuedFollow&&!recentChoice715\(\)/,
  'pending and recent local choice still force canonical verification');
 assert.match(page,/window\.addEventListener\('offline',onBoundary720\)/);
@@ -123,3 +149,5 @@ console.log('APP721_POPUP_TOGGLE_NO_EXTRA_RTDB_SUBSCRIBE=PASS');
 console.log('APP720_FALLBACK_10S_LEGACY_PENDING_ACCOUNT_CONNECTION_FENCES=PASS');
 console.log('APP720_RTDB_CONFIRMED_UPDATE_DISCONNECT_AND_SINGLE_LISTENER=PASS');
 console.log('APP720_BACKEND_D1_R2_FIREBASE_RULES_WRITES=0');
+
+console.log('APP724_POST_ACK_VERIFIED_REVISIT_NO_REPEAT_WORKER_D1_R2=PASS');

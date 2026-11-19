@@ -10,6 +10,22 @@ const VISIT_REUSE_MS_715 = 10_000;
 const SIGNAL_QUALIFIED_REUSE_MS_720 = 300_000;
 const MAX_VISITS_715 = 24;
 type Visit715 = { at: number; state: ExploreFollowState; qualified720: boolean };
+// APP724: a recent local choice must remain a fence against old GET/RTDB,
+// but one *post-ACK, exact* canonical GET suffices for warm revisits. Pending
+// and unverified/mismatched responses never qualify.
+type Choice724 = { following: boolean; settled: boolean; at: number } | null;
+export const canReuseVerifiedFollowChoice724 = (
+  choice: Choice724, state: ExploreFollowState | null, now: number,
+): boolean => Boolean(choice?.settled === true && state?.countVerified661 === true &&
+  Number.isSafeInteger(choice.at) && choice.at > 0 &&
+  now >= choice.at && now - choice.at <= 30_000 &&
+  state.isFollowing === choice.following);
+
+export const canRememberPostAckFollowChoice724 = (
+  choice: Choice724, state: ExploreFollowState, readStartedAt: number, now: number,
+): boolean => canReuseVerifiedFollowChoice724(choice, state, now) &&
+  Number.isFinite(readStartedAt) && readStartedAt >= choice!.at;
+
 type Inflight716 = { generation: number; startedAt: number; task: Promise<ExploreFollowState> };
 type SharedRead716 = { state: ExploreFollowState; startedAt: number; generation: number; shared: boolean };
 

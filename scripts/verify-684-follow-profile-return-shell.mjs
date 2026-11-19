@@ -15,7 +15,8 @@ assert.match(profile,/setProfileTracks\(overlayActorLikeCounts120\(cachedTracks6
 assert.match(profile,/setProfileLoading\(!cachedFirstView684\)/);
 assert.doesNotMatch(profile,/setProfileLoading\(true\)/,'revisited profile must not always blank the screen');
 assert.match(profile,/getExplorePublicProfileFirstView\(profileUid/);
-assert.match(profile,/await getExploreFollowState\(user, nextProfile.uid, true\)/);
+assert.match(profile,/\(\)=>getExploreFollowState\(user, nextProfile.uid, true\)/,
+ 'APP725 exact canonical GET stays inside one in-flight request loader');
 assert.match(profile,/cachedPending684\?\.desiredFollowing/);
 assert.match(profile,/readExploreFollowMembership379\(user.uid,cachedProfile684.uid\)/);
 assert.doesNotMatch(profile,/setExploreFollow\(/,'profile return cannot trigger a new follow write');

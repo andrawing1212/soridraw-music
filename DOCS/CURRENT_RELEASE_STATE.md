@@ -1,3 +1,14 @@
+## CURRENT — APP723 모바일 업데이트 순간 오류 화면 완화 PREVIEW Hosting PASS / 실기기 검증 대기 (2026-11-19 KST)
+
+- **사용자 증상·승인:** 모바일에서 업데이트 후 앱 첫 진입 시 F로 시작하는 오류 문구가 순간적으로 표시되고 사라짐. 실제 문자열은 미포착이며 사용자 수정 승인. APP722 완료 뒤 별도 작업.
+- **확인된 코드 원인:** `src/App.tsx` ErrorBoundary는 청크 로드 오류를 일반 빨간 오류 화면으로 먼저 렌더링하고, `componentDidCatch`에서 기존 047 자동 새로고침을 실행함. 이 순서 때문에 복구되는 오류가 잠깐 화면에 나타날 수 있음. 사용자에게 보인 실제 오류가 이 청크 오류였는지는 아직 확인되지 않음.
+- **변경:** [PR #1230](https://github.com/andrawing1212/soridraw-music/pull/1230) 병합 `5f9c2c49ed4486503ae54ad42150d2e6d8ec5b5d`. 정확히 stale chunk로 판정되고 안전한 새로고침이 가능한 동안에만 일시적인 안내 문구 표시. 동일 오류 60초 재발 시 기존 실제 오류/수동 재시도 화면 유지. 다른 Firebase·권한·서버 오류는 숨기지 않음. 재시도 중복 reload 방지. 기존 개인 캐시·로그인·음악 데이터·Worker/Functions/Rules/RTDB 변경 없음.
+- **검사:** [Product CI #44473822418](https://github.com/andrawing1212/soridraw-music/actions/runs/44473822418) SUCCESS, 기존 `verify-047-stale-chunk-recovery.mjs` 실제 VM 동작 시험: 정상 1회 새로고침, 중복 회피, 60초 안 같은 오류 재발 시 실제 오류 표기, 일반 Firebase 오류 미차단 PASS. 로그인 복구/뮤직노트/최근곡 관련 독립 기존 CI 성공 기록 확인. 별도 QA Cloudflare Worker 빌드 여부는 이번 Hosting 수정 합격 기준과 별개.
+- **PREVIEW 배포 PASS:** Hosting 전용 [PR #1231](https://github.com/andrawing1212/soridraw-music/pull/1231) 병합 `1e6093303268aac815a33ff2d7906b68c472d869`; [Actions #44474307635](https://github.com/andrawing1212/soridraw-music/actions/runs/44474307635) SUCCESS. `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`. 공유 Worker·D1·R2·Functions·Rules·사용자 원본·TEST/PRODUCTION 변경 없음.
+- **실검증 요망:** 사용자 모바일에서 `https://preview.soridraw.com` 최신 버전 적용 후 첫 진입과 일반 화면 이동 시 오류가 더 이상 순식간에 나타나지 않는지 확인. 자동 새로고침 한 번으로 정상 진입하는지, 로그인·보관곡 유지되는지 확인. 같은 F 오류가 계속 나오면 문구 또는 브라우저 콘솔 정보가 필요하며 정확한 오류를 확정하지 않은 채 다른 오류를 숨기지 않는다. 실제 모바일 실검증 전 사용자 문제 완전 해결 PASS 아님.
+
+---
+
 ## CURRENT — APP722 최초 팔로우 변경 중복 요청 제거 PREVIEW Hosting PASS / 실사용 비용·PC↔모바일 QA 대기 (2026-11-19 KST)
 
 - **승인 및 기준:** 디렉터 2026-11-19 새 개발 채팅에서 APP722 최초 팔로우 변경의 거절 요청·중복 상태 GET 최소화 승인. 시작 PREVIEW `50ceb0f705403a7b7b2f7bc82809c0a35058d25e`, APP721 5분 검증 캐시·팝업 RTDB 구독 안정화 및 기존 검사는 재사용.

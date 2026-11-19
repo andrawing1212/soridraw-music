@@ -47,6 +47,11 @@ const badRuntime = base(); badRuntime.workers.productionExplore.compatibilityDat
 const workflow = readFileSync('.github/workflows/soridraw-app728-direct-preflight.yml', 'utf8');
 const script = readFileSync('scripts/app728-direct-preflight.mjs', 'utf8');
 assert(workflow.includes('workflow_dispatch:'));
+assert(workflow.includes('issue_comment:'));
+assert(workflow.includes('github.actor == github.repository_owner'));
+assert(workflow.includes('github.event.issue.number == 1245'));
+assert(workflow.includes("startsWith(github.event.comment.body, '/app728-readonly ')"));
+assert(workflow.includes("s@^/app728-readonly ([0-9a-f]{40})$@"));
 assert(workflow.includes('contents: read'));
 assert(workflow.includes('ref: ${{ github.workflow_sha }}'));
 assert(workflow.includes('APP728_SOURCE_SHA'));

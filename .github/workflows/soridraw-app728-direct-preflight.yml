@@ -7,6 +7,8 @@ on:
         description: 'Exact full SHA of current preview HEAD; no TEST promotion or deployment'
         type: string
         required: true
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
@@ -17,7 +19,11 @@ concurrency:
 
 jobs:
   preflight:
-    if: github.actor == github.repository_owner
+    if: >-
+      github.actor == github.repository_owner &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' && github.event.issue.number == 1245 &&
+      github.event.issue.pull_request != null && startsWith(github.event.comment.body, '/app728-readonly ')))
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -31,8 +37,12 @@ jobs:
         shell: bash
         env:
           TARGET_SHA: ${{ inputs.target_sha }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = issue_comment ]; then
+            TARGET_SHA="$(printf '%s' "$COMMENT_BODY" | sed -nE 's@^/app728-readonly ([0-9a-f]{40})$@\1@p')"
+          fi
           printf '%s' "$TARGET_SHA" | grep -Eq '^[0-9a-f]{40}$'
           git fetch origin preview production --no-tags
           test "$TARGET_SHA" = "$(git rev-parse origin/preview)" || { echo 'PREVIEW_HEAD_DRIFT'; exit 2; }

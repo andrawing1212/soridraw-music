@@ -1,3 +1,14 @@
+## CURRENT — APP722 최초 팔로우 변경 중복 요청 제거 PREVIEW Hosting PASS / 실사용 비용·PC↔모바일 QA 대기 (2026-11-19 KST)
+
+- **승인 및 기준:** 디렉터 2026-11-19 새 개발 채팅에서 APP722 최초 팔로우 변경의 거절 요청·중복 상태 GET 최소화 승인. 시작 PREVIEW `50ceb0f705403a7b7b2f7bc82809c0a35058d25e`, APP721 5분 검증 캐시·팝업 RTDB 구독 안정화 및 기존 검사는 재사용.
+- **원인:** 최초 인증 팔로우 상태 GET에는 이미 `followProtocol=354`와 `followRevision`이 있었지만 `exploreFollowOrdering354.ts`는 이를 사용하지 않았다. 최초 PUT/DELETE가 `FOLLOW_ORDER_REQUIRED`로 거절된 다음 같은 상태를 다시 GET하고 재전송하는 경로.
+- **수정:** [PR #1227](https://github.com/andrawing1212/soridraw-music/pull/1227) 병합 `1a7f0965462cb1991eea92f3e45d41ea11e2ddee`. 기존 정확한 인증 GET의 revision을 pending·이전 in-flight GET 정합성 가드 통과 후 1회 재사용. 확실한 숫자·프로토콜 354만 신뢰, 이미 진행 중인 쓰기·더 최신 revision은 덮지 않음. 최초 60초 이내 일치한 경우 검증된 순서형 저장 1회, 오래된 첫 조회 정보·레거시/미검증 서버는 기존 거절/상태 확인 안전 경로로 복귀. 기존 서버 확정, 재시도 동일 ID, 충돌 시 정지, APP714 5초 마지막 클릭 묶음 저장 및 APP721 5분 재방문 캐시·단일 RTDB 구독 유지. 변경은 3개 파일(서비스 2·검사 1), Worker/Functions/Rules·D1/R2·사용자 원본 변경 없음.
+- **검사:** [Follow-only #44441972601](https://github.com/andrawing1212/soridraw-music/actions/runs/44441972601) SUCCESS, [Product #44441972606](https://github.com/andrawing1212/soridraw-music/actions/runs/44441972606) SUCCESS. 기존 VM 검사기가 복수 export를 처리하지 못한 첫 실패는 동일 PR에서 `replaceAll`로 수정 후 재검사 PASS. 별도 Cloudflare owner QA Worker 빌드 실패는 변경하지 않은 시험용 Worker의 외부 체크로, 이번 클라이언트/Hosting 릴리스의 필수 검사와 구분.
+- **PREVIEW Hosting 배포 PASS:** 배포 전용 [PR #1228](https://github.com/andrawing1212/soridraw-music/pull/1228) 병합 `78bb376db0794ce199099ebf6d1e52569758014a`, [Actions #44442378192](https://github.com/andrawing1212/soridraw-music/actions/runs/44442378192) SUCCESS. `LOCKED_PREVIEW_SHA=78bb376d...`, `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`. 공유 Worker/D1/R2/Functions/Rules·TEST·PRODUCTION 미변경.
+- **실검증 요망:** 로그인한 `preview.soridraw.com` PC에서 CACHE LIVE **진단 수치만** 초기화하고, 타인 공개프로필에 진입해 첫 팔로우 1회 클릭·마지막 클릭+5초 확정 뒤 `팔로우 변경` 요청과 `팔로우 상태 확인` GET 횟수·D1 R/W·R2 A/B 비교. **60초 이내 조회한 프로필**에서 최초 저장 시 거절 요청과 추가 상태 GET 없이 한 번에 완료되는지 확인. 이어 PC↔모바일와 상대방 팔로워 숫자/목록이 서버 확정 뒤 맞는지, 취소 후 복구가 되는지 확인. 이번 결과는 코드 검사 및 Hosting PASS이며 사용자 실기기·물리 과금 절감 PASS가 아님. 검증 후 근거 없는 새 작업·PRODUCTION 승격 금지.
+
+---
+
 ## CURRENT — APP721 팔로우 5분 상태 캐시·팝업 RTDB 재구독 중복 제거 PREVIEW Hosting PASS / 실기기 비용 QA 대기 (2026-11-19 KST)
 
 - **디렉터 승인:** 2026-11-18 23:28:13 UTC. APP720 기준 RTDB 확인된 팔로우 상태 캐시 120→300초 확대와 불필요한 중복비용 점검. PREVIEW 일반 앱 코드만 수정, 공유 사용자 원본·Worker/D1/R2/RTDB Rules/Functions·TEST/PRODUCTION 변경 금지.

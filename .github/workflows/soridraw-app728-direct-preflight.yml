@@ -14,6 +14,8 @@ on:
     paths:
       - 'scripts/app728-binding-diff.mjs'
       - 'scripts/verify-728-binding-diff.mjs'
+      - 'scripts/app728-production-binding-candidate.mjs'
+      - 'scripts/verify-728-production-binding-candidate.mjs'
       - '.github/workflows/soridraw-app728-direct-preflight.yml'
 
 permissions:
@@ -117,6 +119,8 @@ jobs:
         run: |
           node --check scripts/app728-binding-diff.mjs
           node scripts/verify-728-binding-diff.mjs
+          node --check scripts/app728-production-binding-candidate.mjs
+          node scripts/verify-728-production-binding-candidate.mjs
 
   binding_diff:
     if: >-

@@ -385,7 +385,7 @@ assert.equal(readonly.metrics().changed,0);
 
 const client = {};
 vm.createContext(client);
-const clientSource = readFileSync('src/services/exploreFollowOrdering354.ts','utf8').replace('export const','const');
+const clientSource = readFileSync('src/services/exploreFollowOrdering354.ts','utf8').replaceAll('export const','const');
 vm.runInContext(ts.transpileModule(clientSource, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText + '\nglobalThis.client354 = requestOrderedExploreFollow354; globalThis.prime722 = primeExploreFollowRevision722;',client);
 client.crypto = crypto;
 let legacyCalls = [];

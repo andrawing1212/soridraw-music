@@ -1,0 +1,64 @@
+name: SORIDRAW APP735 QA Staged Version Binding Fence (GET only)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/app735-qa-version-bindings.mjs'
+      - 'scripts/verify-735-qa-version-bindings.mjs'
+      - '.github/workflows/app735-qa-staged-binding-check.yml'
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-app735-qa-staged-readonly
+  cancel-in-progress: false
+
+jobs:
+  offline:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Offline exact QA binding and drift failures
+        run: |
+          node --check scripts/app735-qa-version-bindings.mjs
+          node scripts/verify-735-qa-version-bindings.mjs
+
+  qa_get_only:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 1254 &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/app735-qa-bindings'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Guard before QA cloud read
+        run: node scripts/verify-735-qa-version-bindings.mjs
+      - name: Read two pinned QA version binding names/types only
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          node scripts/app735-qa-version-bindings.mjs
+          echo 'APP735_QA_BINDING_PRESERVATION_PASS; LIVE_QA_APP730=HOLD'

@@ -9,6 +9,12 @@ on:
         required: true
   issue_comment:
     types: [created]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/app728-binding-diff.mjs'
+      - 'scripts/verify-728-binding-diff.mjs'
+      - '.github/workflows/soridraw-app728-direct-preflight.yml'
 
 permissions:
   contents: read
@@ -97,3 +103,56 @@ jobs:
           test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$APP728_SOURCE_SHA"
           test "$(git -C "$APP728_SOURCE_DIR" rev-parse HEAD)" = "$APP728_SOURCE_SHA"
           echo 'APP728_READ_ONLY_COMPLETED=PASS'
+
+  offline_binding_diff:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check binding comparison with synthetic data only
+        run: |
+          node --check scripts/app728-binding-diff.mjs
+          node scripts/verify-728-binding-diff.mjs
+
+  binding_diff:
+    if: >-
+      github.actor == github.repository_owner &&
+      github.event_name == 'issue_comment' &&
+      github.event.issue.number == 1245 &&
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/app728-bindings ')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Lock exact current PREVIEW identity
+        shell: bash
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          TARGET_SHA="$(printf '%s' "$COMMENT_BODY" | sed -nE 's@^/app728-bindings ([0-9a-f]{40})$@\1@p')"
+          printf '%s' "$TARGET_SHA" | grep -Eq '^[0-9a-f]{40}$'
+          git fetch origin preview --no-tags
+          test "$TARGET_SHA" = "$(git rev-parse origin/preview)" || { echo 'PREVIEW_HEAD_DRIFT'; exit 2; }
+          echo "APP728_READONLY_PREVIEW_SHA=$TARGET_SHA" >> "$GITHUB_ENV"
+      - name: Synthetic binding-diff guards
+        run: node scripts/verify-728-binding-diff.mjs
+      - name: GET-only active bindings inventory (not release approval)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          node scripts/app728-binding-diff.mjs
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$APP728_READONLY_PREVIEW_SHA"
+          echo 'APP728_BINDING_INVENTORY_CAPTURED=PASS; PRODUCTION_RELEASE=HOLD'

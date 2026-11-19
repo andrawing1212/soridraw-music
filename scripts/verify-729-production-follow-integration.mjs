@@ -37,13 +37,14 @@ assert.throws(()=>integrateApp729ProductionOwnerFollow(base,{enabled:true}),/APP
 assert.throws(()=>integrateApp729ProductionOwnerFollow(base,{enabled:'1'}),/APP729_HOLD_COMPILE_FLAG_INVALID/);
 assert.throws(()=>integrateApp729ProductionOwnerFollow(null),/APP729_HOLD_CANONICAL_WORKER_MISSING/);
 const weak={verifyFirebaseActorAndAppCheck:()=>{},reserveDurableBeforeCommit:()=>{},
- verifyCanonicalSettledCommit:()=>{},queueSettledOwnerSignal:()=>{}};
+ makeCanonicalRequest:()=>{},verifyCanonicalSettledCommit:()=>{},queueSettledOwnerSignal:()=>{}};
 assert.throws(()=>integrateApp729ProductionOwnerFollow(base,{enabled:true,bridge:weak}),/APP729_HOLD_DELIVERY_CONTRACT_NOT_PROVEN/);
 const bridge={
  ownerOnlyRulesProof:true, stableReceiptReplayProof:true,
  changedOnlyAndCanonicalOrderingProof:true,prodFunctionTargetVerified:true,
  async verifyFirebaseActorAndAppCheck(){pending++;return principal?{verified:true,uid:actor}:{verified:false};},
- async reserveDurableBeforeCommit(){pending++;return durable?{durable:true,operationId:'confirmedoperationid1234567'}:{durable:false};},
+ async reserveDurableBeforeCommit(){pending++;return durable?{durable:true,operationId:'confirmedoperationid1234567',expectedRevision:0,cutoverToken:'synthetic-cutover',authEpoch:'0123456789abcdef0123456789abcdef'}:{durable:false};},
+ async makeCanonicalRequest({request,reservation}){return new Request(request,{body:JSON.stringify({followOperationId:reservation.operationId,followExpectedRevision:reservation.expectedRevision}),headers:{'Content-Type':'application/json'}});},
  async verifyCanonicalSettledCommit({canonicalResponse,operationId,ownerUid}){
   pending++;assert.equal(canonicalResponse.status,200);
   return {changed,settled,operationId,ownerUid,revision:8};

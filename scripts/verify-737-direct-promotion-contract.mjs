@@ -13,7 +13,7 @@ const shared=[
  {name:'SORIDRAW_ENVIRONMENT',type:'plain_text',plainHash:'x'},
 ];
 const prodShared=shared.map(x=>x.name==='SORIDRAW_ENVIRONMENT'?{...x,plainHash:'y'}:{...x});
-const worker=(value,b)=>({...base('P',b),activeVersion:v(value)});
+const worker=(value,b)=>({...base('P',b.map(x=>({...x}))),activeVersion:v(value)});
 const checks=[
 'exactFrontendSourceAndRoutes','exploreWorkerCodeAndFeatureFlags',
 'mediaWorkerCodeAndRoutes','functionsReceiverParity',

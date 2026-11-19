@@ -9,6 +9,86 @@ const VISIT_REUSE_MS_715 = 10_000;
 // last-change signal is NOT a durable history; never cache forever.
 const SIGNAL_QUALIFIED_REUSE_MS_720 = 300_000;
 const MAX_VISITS_715 = 24;
+// APP726: a successful exact GET can be reused across route remounts only
+// after BOTH the actor stream is ready and the target public RTDB revision
+// has been observed again. A missing or changed signal forces the old GET path.
+const RETURN_REUSE_MS_726 = 30_000;
+type Public726 = {
+  generation: string; revision: number; followerCount: number;
+  followingCount: number; observedAt: number;
+};
+type VerifiedReturn726 = {
+  state: ExploreFollowState; at: number; revision: string;
+  generation: string;
+};
+const observedPublic726 = new Map<string, { generation: string; revision: number }>();
+const verifiedReturns726 = new Map<string, VerifiedReturn726>();
+const pair726 = (viewer: string, target: string) => {
+  const a=String(viewer||'').trim(),b=String(target||'').trim();
+  return a&&b&&a!==b?JSON.stringify([a,b]):'';
+};
+export const observePublicFollowRevision726 = (
+  viewer: string,target: string,generation: string,revision: number,
+): boolean => {
+  const key=pair726(viewer,target);
+  if(!key||!generation||!Number.isSafeInteger(revision)||revision<0)return true;
+  const prior=observedPublic726.get(key);
+  if(prior?.generation===generation&&prior.revision===revision)return false;
+  // Never roll a remembered revision backward on a retained older response.
+  if(prior?.generation===generation&&prior.revision>revision)return true;
+  observedPublic726.delete(key);
+  observedPublic726.set(key,{generation,revision});
+  if(observedPublic726.size>MAX_VISITS_715)
+    observedPublic726.delete(observedPublic726.keys().next().value!);
+  return true; // new public signal is a REAL cache-invalidation boundary
+};
+export const rememberVerifiedFollowReturn726 = (
+  viewer:string,target:string,state:ExploreFollowState,startedAt:number,
+  now:number,publicSignal:Public726|null,actorLive:boolean,
+):boolean=>{
+  const id=pair726(viewer,target);
+  if(!actorLive||!id||!publicSignal||state.countVerified661!==true||
+     !Number.isSafeInteger(startedAt)||!Number.isSafeInteger(now)||
+     now<startedAt||now-startedAt>=10_000||
+     !Number.isSafeInteger(publicSignal.observedAt)||
+     publicSignal.observedAt>startedAt||
+     !Number.isSafeInteger(publicSignal.revision)||
+     state.followerCount!==publicSignal.followerCount||
+     state.followingCount!==publicSignal.followingCount)return false;
+  const observed=observedPublic726.get(id);
+  if(observed?.generation!==publicSignal.generation||
+     observed.revision!==publicSignal.revision)return false;
+  verifiedReturns726.delete(id);
+  verifiedReturns726.set(id,{
+    state:{...state},at:startedAt,
+    generation:publicSignal.generation,revision:String(publicSignal.revision),
+  });
+  if(verifiedReturns726.size>MAX_VISITS_715)
+    verifiedReturns726.delete(verifiedReturns726.keys().next().value!);
+  return true;
+};
+export const readVerifiedFollowReturn726 = (
+  viewer:string,target:string,now:number,publicSignal:Public726|null,
+  actorLive:boolean,choice:{following:boolean;settled:boolean;at:number}|null,
+):ExploreFollowState|null=>{
+  if(!actorLive||!publicSignal)return null;
+  const id=pair726(viewer,target),row=verifiedReturns726.get(id);
+  if(!id||!row)return null;
+  if(!Number.isSafeInteger(now)||now<row.at||
+     now-row.at>=RETURN_REUSE_MS_726||
+     row.generation!==publicSignal.generation||
+     row.revision!==String(publicSignal.revision)||
+     row.state.followerCount!==publicSignal.followerCount||
+     row.state.followingCount!==publicSignal.followingCount||
+     observedPublic726.get(id)?.generation!==publicSignal.generation||
+     observedPublic726.get(id)?.revision!==publicSignal.revision||
+     (choice!==null&&(!choice.settled||row.at<choice.at||
+       row.state.isFollowing!==choice.following))){
+    verifiedReturns726.delete(id);
+    return null;
+  }
+  return {...row.state};
+};
 type Visit715 = { at: number; state: ExploreFollowState; qualified720: boolean };
 // APP724: a recent local choice must remain a fence against old GET/RTDB,
 // but one *post-ACK, exact* canonical GET suffices for warm revisits. Pending
@@ -40,11 +120,13 @@ let observedViewer725: string | null = null;
 const invalidateShared725 = () => {
   epoch725 += 1;
   inflight716.clear();
+  verifiedReturns726.clear();
 };
 export const observeExploreFollowViewer725 = (viewerUid: string | undefined): void => {
   const uid = String(viewerUid || '').trim();
   if (observedViewer725 === uid) return;
   observedViewer725 = uid;
+  observedPublic726.clear();
   invalidateShared725(); // actual logout/account switch, NOT same-user remount
 };
 

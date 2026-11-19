@@ -259,8 +259,8 @@ const page715=readFileSync('src/pages/ExplorePage.tsx','utf8');
 assert.match(page715,/const reusableFollow716=!queuedFollow&&!recentChoice715\(\)/);
 assert.match(page715,/const candidateFollow715=!queuedFollow/,
   'pending click must never consult a stale visit cache');
-assert.match(page715,/const cachedFollow715=currentRecentChoice724/,
-  'recent settled choice requires verified post-ACK cache match');
+assert.match(page715,/const cachedFollow715=returnedVerified726\?\?\(currentRecentChoice724/,
+  'verified return only supplements the existing post-ACK choice fence');
 assert.match(page715,/canReuseVerifiedFollowChoice724\(currentRecentChoice724,candidateFollow715,Date\.now\(\)\)/,
   'APP724 must not bypass canonical verification for unmatched choice');
 assert.match(page715,/\(\)=>getExploreFollowState\(user, nextProfile.uid, true\)/,
@@ -271,9 +271,12 @@ assert.match(page715,/!readPendingExploreFollowIntents380\(user.uid\)/,
 assert.match(page715,/visit715.remember\(user.uid,nextProfile.uid,nextFollowState/);
 assert.match(page715,/onHidden715/);
 assert.match(page715,/followVisitCache715Ref.current\?\.invalidate\(\)/);
-assert.match(page715,/lastPublicVisitRevision715Ref\.current\.get\(viewedUid\)/);
-assert.match(page715,/signal\.revision>previousPublic715\.revision/);
-assert.match(page715,/previousPublic715\.generation!==signal\.generation/);
+assert.match(page715,/observePublicFollowRevision726\(principal\.uid,viewedUid/,
+ 'retained public revision must not invalidate verified return on remount');
+assert.match(page715,/readVerifiedFollowReturn726\(/,
+ 'verified short return requires confirmed public and actor streams');
+assert.match(page715,/if\(observePublicFollowRevision726\(principal\.uid,viewedUid/,
+  'new public revisions still invalidate the local visit cache');
 assert.match(page715,/recordCloudflareLocalCacheHit\('\/v1\/profiles\/:id\/follow-state'/);
 console.log('APP715_THIRD_PARTY_10S_VISIT_R2_R0_MEMORY_ONLY=PASS');
 console.log('APP715_EXPIRE_PENDING_REMOTE_SIGNAL_INFLIGHT_AND_ACCOUNT_FENCES=PASS');

@@ -105,7 +105,7 @@ const withEnv=()=>{
  return x;
 };
 const provenEnv=assessApp737DirectPromotion(withEnv());
-assert.equal(provenEnv.status,'READY_FOR_DIRECTOR_APPROVAL');
+assert.equal(provenEnv.status,'READY_FOR_DIRECTOR_APPROVAL',provenEnv.unproven.join(','));
 assert.deepEqual(provenEnv.bindingInventory.reviewedExclusions.map(x=>x.name),
  ['ENV_NAME','EXPLORE_CACHE','PREVIEW_QA_METRIC','RATE_DB']);
 const envFailures=[

@@ -1,0 +1,71 @@
+name: SORIDRAW APP732 QA Worker Bundle Dry Run (No Cloud Write)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/app732-qa-bundle-dryrun.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  qa_offline_bundle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Compose only exact current QA source in temporary worktree
+        run: |
+          set -euo pipefail
+          QA_SHA=4363820117100cb03bcbc44a01e127aeb5de3cf4
+          git fetch origin preview --no-tags
+          test "$(git rev-parse origin/preview)" = "$QA_SHA" || { echo 'QA_SOURCE_SHA_DRIFT'; exit 2; }
+          git worktree add --detach "$RUNNER_TEMP/app732-qa-source" "$QA_SHA"
+          cp scripts/app730-source-only-follow-bridge.mjs "$RUNNER_TEMP/app732-qa-source/scripts/"
+          cp cloudflare/explore-worker/experiments/owner-follow-qa730-bridge.mjs \
+            "$RUNNER_TEMP/app732-qa-source/cloudflare/explore-worker/experiments/"
+          cp cloudflare/explore-worker/experiments/owner-follow-qa730-entry.mjs \
+            "$RUNNER_TEMP/app732-qa-source/cloudflare/explore-worker/experiments/"
+          cd "$RUNNER_TEMP/app732-qa-source/cloudflare/explore-worker"
+          node --input-type=module - <<'NODE'
+          import fs from 'node:fs';
+          import assert from 'node:assert/strict';
+          const file='wrangler.owner-qa-583.json';
+          const x=JSON.parse(fs.readFileSync(file,'utf8'));
+          assert.equal(x.account_id,'b60fcd62c679c64db19f0b0e0c2f3429');
+          assert.equal(x.name,'soridraw-owner-qa-583');
+          assert.equal(x.main,'./experiments/owner-follow-isolated-558-entry.mjs');
+          assert.deepEqual(x.durable_objects.bindings,[{
+            name:'OWNER558_DO',class_name:'OwnerFollowIsolated558',
+          }]);
+          assert.deepEqual(x.migrations,[{
+            tag:'v1',new_sqlite_classes:['OwnerFollowIsolated558'],
+          }]);
+          assert.equal(x.vars.SORIDRAW_ENVIRONMENT,'preview');
+          assert.equal(x.vars.SORIDRAW_OWNER_FOLLOW_W2_PUSH_555,'1');
+          assert.equal(x.d1_databases,undefined);
+          assert.equal(x.r2_buckets,undefined);
+          x.main='./experiments/owner-follow-qa730-entry.mjs';
+          fs.writeFileSync('wrangler.app732.candidate.json',JSON.stringify(x,null,2)+'\n');
+          NODE
+          echo "QA_BUNDLE_CONFIG=PINNED_EXISTING_ACCOUNT_ONLY; DO_MIGRATIONS=UNCHANGED"
+      - name: Wrangler actual bundle dry-run (no token, no deploy, no artifact upload)
+        env:
+          CLOUDFLARE_API_TOKEN: ''
+          CLOUDFLARE_QA_API_TOKEN: ''
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/app732-qa-source/cloudflare/explore-worker"
+          npx --yes wrangler@4.102.0 deploy \
+            --dry-run \
+            --config wrangler.app732.candidate.json \
+            --outdir "$RUNNER_TEMP/app732-qa-bundle"
+          test -d "$RUNNER_TEMP/app732-qa-bundle"
+          echo "APP732_QA_REAL_BUNDLE=PASS_DRY_RUN; QA_UPLOAD=NOT_RUN; QA_FIREBASE_RTDB=NOT_RUN"

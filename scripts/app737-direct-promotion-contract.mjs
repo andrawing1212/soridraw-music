@@ -8,6 +8,19 @@ const SHA64=/^[0-9a-f]{64}$/;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VERSION_ID=/^sites\/(soridraw-preview|soridraw)\/versions\/[A-Za-z0-9_-]{4,128}$/;
 const isTrue=x=>x===true;
+// No PREVIEW-only binding may be dropped by classification alone.
+// These two derived resources have named, existing PRODUCTION alternatives.
+const ENVIRONMENT_LOCAL_BINDINGS=Object.freeze({
+ RATE_DB:{type:'d1',fallback:'LIKE_RATE_LIMITER',fallbackType:'ratelimit'},
+ EXPLORE_CACHE:{type:'r2_bucket',fallback:'PROFILE_MEDIA',fallbackType:'r2_bucket'},
+});
+const ENVIRONMENT_IDENTITY_BINDINGS=Object.freeze({
+ BOOTSTRAP_TOKEN:'plain_text',ENV_NAME:'plain_text',
+ PROD_BASE:'plain_text',TARGET_BASE:'plain_text',
+});
+const reviewedBindingEvidence=p=>p?.evidenceVerified===true&&
+ SHA64.test(String(p?.evidenceSha256||''))&&
+ p?.sourceAndActiveRuntimeVerified===true;
 const fingerprint=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 function different(a,b){return a!==b}
 function formatBindings(report){
@@ -58,15 +71,48 @@ export function assessApp737DirectPromotion(input={}){
     bindingDiff=formatBindings(diff);
     for(const x of diff.anomalies)hold(x);
     if(diff.changedTypes.length)hold('BINDING_TYPE_CONFLICT');
+    const productionBindings=new Map(workers.productionExplore.bindings.map(x=>[x.name,x]));
+    const reviewedExclusions=[];
     for(const b of diff.onlyPreview){
-      const [name]=b.split(':');
-      // Omission is allowed only with documented QA-only/diagnostic proof.
+      const [name,type]=b.split(':');
       const disposition=policies[name];
-      if(disposition?.classification!=='QA_ONLY'&&disposition?.classification!=='DIAGNOSTIC_ONLY')
+      const reviewed=reviewedBindingEvidence(disposition);
+      if(disposition?.classification==='QA_ONLY'||disposition?.classification==='DIAGNOSTIC_ONLY'){
+        // Never label a user-facing capability as "QA" to bypass a release gate.
+        if(!reviewed||disposition.noUserFeatureDependencyVerified!==true)
+          hold('NONPRODUCTION_BINDING_EXCLUSION_UNVERIFIED_'+name);
+        else reviewedExclusions.push({name,classification:disposition.classification});
+      }else if(disposition?.classification==='ENVIRONMENT_LOCAL'&&
+          ENVIRONMENT_LOCAL_BINDINGS[name]?.type===type){
+        const expected=ENVIRONMENT_LOCAL_BINDINGS[name];
+        const replacement=productionBindings.get(expected.fallback);
+        if(!reviewed||
+           disposition.productionFallbackBinding!==expected.fallback||
+           replacement?.type!==expected.fallbackType||
+           disposition.productionFeatureParityVerified!==true||
+           disposition.dataAndCostSafetyVerified!==true||
+           gate.exploreWorkerCodeAndFeatureFlags!==true||
+           gate.productionEnvironmentAndLegacyBindingsCompatible!==true||
+           gate.costAndNoPassiveWritesVerified!==true)
+          hold('ENVIRONMENT_LOCAL_BINDING_UNVERIFIED_'+name);
+        else reviewedExclusions.push({name,classification:'ENVIRONMENT_LOCAL',
+          productionFallback:expected.fallback});
+      }else if(disposition?.classification==='ENVIRONMENT_IDENTITY'&&
+          ENVIRONMENT_IDENTITY_BINDINGS[name]===type){
+        if(!reviewed||
+           disposition.noUserFeatureDependencyVerified!==true||
+           disposition.productionConfigurationEquivalentVerified!==true||
+           gate.exploreWorkerCodeAndFeatureFlags!==true||
+           gate.productionEnvironmentAndLegacyBindingsCompatible!==true)
+          hold('ENVIRONMENT_IDENTITY_BINDING_UNVERIFIED_'+name);
+        else reviewedExclusions.push({name,classification:'ENVIRONMENT_IDENTITY'});
+      }else{
+        // Functional bindings (follow, notifications, release) remain blocked
+        // until their actual PROD behavior and receiver are independently proven.
         hold('PREVIEW_BINDING_NOT_ACCOUNTED_FOR_'+name);
-      else if(disposition.evidenceVerified!==true)
-        hold('NONPRODUCTION_BINDING_EXCLUSION_UNVERIFIED_'+name);
+      }
     }
+    bindingDiff.reviewedExclusions=reviewedExclusions;
     for(const row of diff.changedTargets){
       if(row.name!=='SORIDRAW_ENVIRONMENT')hold('BINDING_TARGET_DRIFT_'+row.name);
     }
@@ -129,7 +175,14 @@ export function assessApp737DirectPromotion(input={}){
     source:source.distSha256,
     hosting:h,
     workers:prodBefore,
-    features:features.map(x=>x.id).sort(),
+    previewWorkerVersions:Object.fromEntries(
+      must.filter(x=>x.startsWith('preview')).map(x=>[x,workers[x].activeVersion||null])),
+    bindingDisposition:Object.fromEntries(
+      Object.keys(policies).sort().map(name=>[name,policies[name]])),
+    verification:gate,
+    features:features.map(x=>({
+      id:x.id,previewPass:x.previewPass,productionEquivalentVerified:x.productionEquivalentVerified,
+    })).sort((a,b)=>a.id.localeCompare(b.id)),
     blockers:result.unproven,
   });
   return result;

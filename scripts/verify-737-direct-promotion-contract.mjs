@@ -38,7 +38,9 @@ const make=()=>({
   previewMedia:worker('c',[]),productionMedia:worker('d',[]),
  },
  verification:Object.fromEntries(checks.map(x=>[x,true])),
- bindingDisposition:{PREVIEW_QA_METRIC:{classification:'QA_ONLY',evidenceVerified:true}},
+ bindingDisposition:{PREVIEW_QA_METRIC:{classification:'QA_ONLY',evidenceVerified:true,
+  evidenceSha256:sha,sourceAndActiveRuntimeVerified:true,
+  noUserFeatureDependencyVerified:true}},
  featureMatrix:[
   {id:'studio-prompt',previewPass:true,productionEquivalentVerified:true},
   {id:'music-note',previewPass:true,productionEquivalentVerified:true},
@@ -80,6 +82,52 @@ for(const [mutate,reason] of invalidCases){
  assert.equal(result.executable,false);
  assert(result.unproven.includes(reason),reason);
 }
+// Genuine environment-local differences are allowed only with pinned proof,
+// known PRODUCTION fallback, cost/data safety and full runtime equivalence.
+const withEnv=()=>{
+ const x=make();
+ x.workers.previewExplore.bindings.push(
+  {name:'RATE_DB',type:'d1',id:'preview-only-cost'},
+  {name:'EXPLORE_CACHE',type:'r2_bucket',bucket:'preview-only-derived'},
+  {name:'ENV_NAME',type:'plain_text',plainHash:'preview-name'});
+ x.workers.productionExplore.bindings.push(
+  {name:'LIKE_RATE_LIMITER',type:'ratelimit',namespace_id:'production-limiter'});
+ const review={evidenceVerified:true,evidenceSha256:sha,
+  sourceAndActiveRuntimeVerified:true};
+ x.bindingDisposition.RATE_DB={...review,classification:'ENVIRONMENT_LOCAL',
+  productionFallbackBinding:'LIKE_RATE_LIMITER',productionFeatureParityVerified:true,
+  dataAndCostSafetyVerified:true};
+ x.bindingDisposition.EXPLORE_CACHE={...review,classification:'ENVIRONMENT_LOCAL',
+  productionFallbackBinding:'PROFILE_MEDIA',productionFeatureParityVerified:true,
+  dataAndCostSafetyVerified:true};
+ x.bindingDisposition.ENV_NAME={...review,classification:'ENVIRONMENT_IDENTITY',
+  noUserFeatureDependencyVerified:true,productionConfigurationEquivalentVerified:true};
+ return x;
+};
+const provenEnv=assessApp737DirectPromotion(withEnv());
+assert.equal(provenEnv.status,'READY_FOR_DIRECTOR_APPROVAL');
+assert.deepEqual(provenEnv.bindingInventory.reviewedExclusions.map(x=>x.name),
+ ['ENV_NAME','EXPLORE_CACHE','PREVIEW_QA_METRIC','RATE_DB']);
+const envFailures=[
+ [x=>{x.bindingDisposition.RATE_DB.evidenceVerified=false;},'ENVIRONMENT_LOCAL_BINDING_UNVERIFIED_RATE_DB'],
+ [x=>{x.bindingDisposition.RATE_DB.productionFallbackBinding='DB';},'ENVIRONMENT_LOCAL_BINDING_UNVERIFIED_RATE_DB'],
+ [x=>{x.workers.productionExplore.bindings=x.workers.productionExplore.bindings.filter(b=>b.name!=='LIKE_RATE_LIMITER');},'ENVIRONMENT_LOCAL_BINDING_UNVERIFIED_RATE_DB'],
+ [x=>{x.bindingDisposition.EXPLORE_CACHE.dataAndCostSafetyVerified=false;},'ENVIRONMENT_LOCAL_BINDING_UNVERIFIED_EXPLORE_CACHE'],
+ [x=>{x.bindingDisposition.ENV_NAME.noUserFeatureDependencyVerified=false;},'ENVIRONMENT_IDENTITY_BINDING_UNVERIFIED_ENV_NAME'],
+ [x=>{x.bindingDisposition.PREVIEW_QA_METRIC.noUserFeatureDependencyVerified=false;},'NONPRODUCTION_BINDING_EXCLUSION_UNVERIFIED_PREVIEW_QA_METRIC'],
+ [x=>{x.workers.previewExplore.bindings.push({name:'SORIDRAW_OWNER_FOLLOW_HMAC_539',type:'secret_text'});x.bindingDisposition.SORIDRAW_OWNER_FOLLOW_HMAC_539={classification:'ENVIRONMENT_LOCAL',evidenceVerified:true};},'PREVIEW_BINDING_NOT_ACCOUNTED_FOR_SORIDRAW_OWNER_FOLLOW_HMAC_539'],
+ [x=>{x.verification.costAndNoPassiveWritesVerified=false;},'ENVIRONMENT_LOCAL_BINDING_UNVERIFIED_RATE_DB'],
+];
+for(const [mutate,reason] of envFailures){
+ const x=withEnv();mutate(x);
+ const r=assessApp737DirectPromotion(x);
+ assert.equal(r.status,'HOLD',reason);
+ assert(r.unproven.includes(reason),reason);
+}
+const alteredEvidence=withEnv();
+alteredEvidence.bindingDisposition.RATE_DB.evidenceSha256='b'.repeat(64);
+assert.notEqual(assessApp737DirectPromotion(alteredEvidence).manifestSha256,
+ provenEnv.manifestSha256,'digest must cover the reviewed binding proof');
 const unproven=assessApp737DirectPromotion({
  previewSha:s,currentPreviewHead:s,
  workers:make().workers,hosting:make().hosting,bindingDisposition:{},

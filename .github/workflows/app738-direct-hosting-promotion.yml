@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/app738-firebase-hosting-runtime.mjs'
+      - 'scripts/app737-direct-promotion-contract.mjs'
       - 'scripts/app738-production-hosting-transaction.mjs'
       - 'scripts/app738-hosting-cli.mjs'
       - 'scripts/verify-738-hosting-promotion.mjs'

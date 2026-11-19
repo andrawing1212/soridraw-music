@@ -257,7 +257,12 @@ assert.equal(visit715.read('viewer','target0',now715+30_100),null,
  'memory entries must be capped; never write persistent storage');
 const page715=readFileSync('src/pages/ExplorePage.tsx','utf8');
 assert.match(page715,/const reusableFollow716=!queuedFollow&&!recentChoice715\(\)/);
-assert.match(page715,/const cachedFollow715=reusableFollow716/);
+assert.match(page715,/const candidateFollow715=!queuedFollow/,
+  'pending click must never consult a stale visit cache');
+assert.match(page715,/const cachedFollow715=currentRecentChoice724/,
+  'recent settled choice requires verified post-ACK cache match');
+assert.match(page715,/canReuseVerifiedFollowChoice724\(currentRecentChoice724,candidateFollow715,Date\.now\(\)\)/,
+  'APP724 must not bypass canonical verification for unmatched choice');
 assert.match(page715,/await getExploreFollowState\(user, nextProfile.uid, true\)/,
  'cold visit still uses canonical authenticated GET');
 assert.match(page715,/!readPendingExploreFollowIntents380\(user.uid\)/,

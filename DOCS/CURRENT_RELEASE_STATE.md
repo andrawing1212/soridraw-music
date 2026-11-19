@@ -1,3 +1,14 @@
+## CURRENT — APP724 영상 실측 기반 팔로우 확정 후 재방문 중복 GET 최소화 PREVIEW Hosting PASS / PC·모바일 실사용 비용 QA 대기 (2026-11-19 KST)
+
+- **사용자 승인·영상:** 2026-11-19 사용자가 팔로우 비용 작업 이어가기 지시, 약 118초 CACHE LIVE 실사용 영상 제공. 화면 기록 기준 첫 공개프로필 진입 후 상태 확인 1회(Worker 1, D1 쿼리 R1/W0, R2 B5); 팔로우와 취소 두 번 확정 후 팔로우 변경 Worker 2, D1 쿼리 R3/W2, 응답 집계의 D1 행 R19/W4(행 쓰기 2/변경), R2 B20/A12. 약 96초까지 동일 대상 반복 진입으로 상태 확인 Worker 4, D1 쿼리 R4/W0, R2 B20; 이후 100초대 마지막에는 LOCAL REVISIT, 추가 Worker 0. 이 숫자는 CACHE LIVE 응답 기반 계측이며 Cloudflare 독립 청구서 증거가 아님.
+- **코드 원인:** APP715/721의 `recentChoice715()`가 클릭 후 30초 동안 모든 재방문에서 캐시 재사용을 금지하고, 그 구간에 서버 확정 뒤 정확한 `getExploreFollowState` GET을 이미 성공했어도 `visit715.remember`를 차단했다. 단일 서버 변경 또는 상이한 계정 이벤트를 구분하는 보호 자체는 필수.
+- **최소 수정:** [PR #1233](https://github.com/andrawing1212/soridraw-music/pull/1233) 병합 `697d857ef4b2ea4ba3fbca39f85e6ed7834145d8`. pending 클릭, 최근 미확정 선택, GET이 선택 이전에 시작됨, 선택 결과와 GET 멤버십 불일치, 검증되지 않은 `countVerified661`, 신규 RTDB 신호·오프라인/탭 숨김·계정 변경에서는 기존 서버 확인과 무효화 보호 유지. 단 **확정된 선택 이후에 시작한 정확한 GET 1회가 그 선택과 일치**하면 기존 APP721 10초/5분 (RTDB 정상 시 5분) 재방문 캐시에 기록해 30초 구간 중 동일 프로필 추가 조회를 억제. 팔로우 5초 묶음 저장, 클라이언트 캐시/서버 원본 보호 유지. 수정 4개 파일(코드 2·검사 2).
+- **검사:** [Follow-only #44478468000](https://github.com/andrawing1212/soridraw-music/actions/runs/44478468000), [Cooldown/owner-rules #44478468008](https://github.com/andrawing1212/soridraw-music/actions/runs/44478468008), [Product #44478467970](https://github.com/andrawing1212/soridraw-music/actions/runs/44478467970) SUCCESS. 최초 시험 파일의 과거 정확한 코드문자열 매칭 실패는 기존 상태검사 `verify-681-follow-reload-popup.mjs`를 새 확정·캐시 보호 의미 검증으로 수정하고 재검사 PASS. Cloudflare 별도 QA Worker 빌드는 이 Hosting-only 소스 범위 밖의 실패로 공유 활성 Worker 변경 없음.
+- **PREVIEW Hosting 배포 PASS:** 배포 트리거 [PR #1234](https://github.com/andrawing1212/soridraw-music/pull/1234), 정확한 PREVIEW 코드 `40514bfa520f31f18cc70c1709887ad38b240c45`; [Actions #44478956541](https://github.com/andrawing1212/soridraw-music/actions/runs/44478956541) SUCCESS. `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_EXACT_BUILD=PASS`, `SHARED_RTDB_RULES_DEPLOY=SKIPPED`, `TEST_PRODUCTION_UNCHANGED=PASS`. Worker/Functions/D1/R2/shared data/TEST/PRODUCTION 변경 없음.
+- **실검증 요망:** PC PREVIEW에서 CACHE LIVE 진단만 초기화, 동일 타인 공개프로필 → 팔로우 1회 → 5초 후 서버 확정 → 다른 화면과 프로필을 30초 안에 3회 왕복. 정상 동일 계정 RTDB 연결·정확한 응답 조건에서 최초 GET 1회와 확정 후 확인 GET 1회는 허용되지만, 이후 **변경 없는 반복 재방문은 Worker/D1/R2 추가 GET 0** 목표. 실제 원격 변화·오프라인·신호 invalidation은 보호 재조회 허용. 사용자가 상대방 계정 PC/모바일의 팔로워 숫자와 목록도 확인해야 사용자 합격. 임의 서버 원본 변경·새 작업/PRODUCTION 승격 금지.
+
+---
+
 ## CURRENT — APP723 모바일 업데이트 순간 오류 화면 완화 PREVIEW Hosting PASS / 실기기 검증 대기 (2026-11-19 KST)
 
 - **사용자 증상·승인:** 모바일에서 업데이트 후 앱 첫 진입 시 F로 시작하는 오류 문구가 순간적으로 표시되고 사라짐. 실제 문자열은 미포착이며 사용자 수정 승인. APP722 완료 뒤 별도 작업.

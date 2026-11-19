@@ -252,9 +252,12 @@ const page727=readFileSync('src/pages/ExplorePage.tsx','utf8');
 const actorSignalStart727=page727.indexOf('return subscribeExploreFollowSync377(viewerUid377');
 const actorSignalEnd727=page727.indexOf('followVisitCache715Ref.current?.invalidate();',actorSignalStart727);
 assert.ok(actorSignalStart727>=0&&actorSignalEnd727>actorSignalStart727);
-assert.match(page727.slice(actorSignalStart727,actorSignalEnd727),
- /if\(!acceptActorFollowRevision727\(viewerUid377,signal377\.version\)\)return/,
- 'APP727 dedupe must run BEFORE invalidating any verified cache');
+const actorGuard727=page727.indexOf('if(!acceptActorFollowRevision727(viewerUid377,signal377.version))return;',actorSignalStart727);
+const pendingGuard727=page727.indexOf('if(readPendingExploreFollowIntents380(viewerUid377)',actorSignalStart727);
+const ownGuard727=page727.indexOf('if(ownRequest662?.uid===viewerUid377',actorSignalStart727);
+assert.ok(pendingGuard727<actorGuard727 && ownGuard727<actorGuard727 &&
+  actorGuard727<actorSignalEnd727,
+  'APP727 must dedupe only after pending/old-GET guards, before invalidation');
 assert.match(page727,/recordCloudflareFollowReason727\(missReason727\)/,
  'only actual GETs receive a reason');
 const diagnostics727=readFileSync('src/lib/cloudflareDiagnostics.ts','utf8');

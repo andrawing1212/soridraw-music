@@ -4223,11 +4223,6 @@ export default function ExplorePage() {
     return subscribeExploreFollowSync377(viewerUid377, (signal377) => {
       if (signal377.version <= followSignalVersion377Ref.current) return;
       followSignalVersion377Ref.current = signal377.version;
-      // APP727: the same RTDB retained snapshot arrives on every Explore
-      // route remount. Replaying its already-processed revision must not
-      // evict a valid verified follow snapshot or trigger extra Worker GETs.
-      // A genuinely newer server version still flows through all old guards.
-      if(!acceptActorFollowRevision727(viewerUid377,signal377.version))return;
       // Older retained remote events cannot undo an explicit local click/ACK.
       if(readPendingExploreFollowIntents380(viewerUid377)
           .some(row=>row.targetUid===signal377.targetUid)||
@@ -4238,6 +4233,10 @@ export default function ExplorePage() {
       const ownRequest662=ownCountRequest662Ref.current;
       if(ownRequest662?.uid===viewerUid377 &&
          !shouldApplyActorFollowSignal662(signal377.at,ownRequest662.at))return;
+      // APP727: remember only an actually APPLIED server signal. A newer
+      // signal blocked by a pending local click or newer canonical GET must
+      // remain eligible for recovery on a later route mount.
+      if(!acceptActorFollowRevision727(viewerUid377,signal377.version))return;
       latestActorSignal662Ref.current={
         uid:viewerUid377,at:signal377.at,count:signal377.actorFollowingCount,
       };

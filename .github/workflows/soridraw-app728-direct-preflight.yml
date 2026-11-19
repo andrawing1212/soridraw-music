@@ -18,6 +18,8 @@ on:
       - 'scripts/verify-728-production-binding-candidate.mjs'
       - 'scripts/app728-active-code-provenance.mjs'
       - 'scripts/verify-728-active-code-provenance.mjs'
+      - 'scripts/app728-production-source-candidate.mjs'
+      - 'scripts/verify-728-production-source-candidate.mjs'
       - '.github/workflows/soridraw-app728-direct-preflight.yml'
 
 permissions:
@@ -125,6 +127,8 @@ jobs:
           node scripts/verify-728-production-binding-candidate.mjs
           node --check scripts/app728-active-code-provenance.mjs
           node scripts/verify-728-active-code-provenance.mjs
+          node --check scripts/app728-production-source-candidate.mjs
+          node scripts/verify-728-production-source-candidate.mjs
 
   binding_diff:
     if: >-
@@ -206,3 +210,44 @@ jobs:
           node scripts/app728-active-code-provenance.mjs
           test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$APP728_SOURCE_SHA" || { echo 'PREVIEW_HEAD_CHANGED'; exit 2; }
           echo 'APP728_ACTIVE_CODE_READONLY=PASS; PRODUCTION_RELEASE=HOLD'
+
+  production_source_candidate:
+    if: >-
+      github.actor == github.repository_owner &&
+      github.event_name == 'issue_comment' &&
+      github.event.issue.number == 1245 &&
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/app728-source ')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Lock exact preview source (no cloud writes)
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          TARGET_SHA="$(printf '%s' "$COMMENT_BODY" | sed -nE 's@^/app728-source ([0-9a-f]{40})$@\1@p')"
+          printf '%s' "$TARGET_SHA" | grep -Eq '^[0-9a-f]{40}$'
+          git fetch origin preview --no-tags
+          test "$TARGET_SHA" = "$(git rev-parse origin/preview)" || { echo 'APP728_PREVIEW_HEAD_DRIFT'; exit 2; }
+          git worktree add --detach "$RUNNER_TEMP/app728-source" "$TARGET_SHA"
+          echo "APP728_SOURCE_DIR=$RUNNER_TEMP/app728-source" >> "$GITHUB_ENV"
+          echo "APP728_SOURCE_SHA=$TARGET_SHA" >> "$GITHUB_ENV"
+          echo "APP728_LOCKED_PREVIEW_SHA=$TARGET_SHA" >> "$GITHUB_ENV"
+      - name: Synthetic preservation and source-isolation tests
+        run: node scripts/verify-728-production-source-candidate.mjs
+      - name: Generate exact production baseline and quarantined PREVIEW modules in runner temp only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          node scripts/app728-production-source-candidate.mjs
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$APP728_SOURCE_SHA" || { echo 'APP728_PREVIEW_CHANGED_DURING_READ'; exit 2; }
+          echo 'APP728_PRODUCTION_SOURCE_CANDIDATE=PASS_SOURCE_ONLY; RUNTIME_RELEASE=HOLD'

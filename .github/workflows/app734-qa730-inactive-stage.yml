@@ -1,0 +1,123 @@
+name: SORIDRAW APP734 QA730 Inactive Staging Only
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/app734-qa730-inactive-stage.yml']
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-app734-qa-inactive
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Verify no live deployment command exists
+        run: |
+          set -euo pipefail
+          grep -q 'wrangler@4.102.0 versions upload' .github/workflows/app734-qa730-inactive-stage.yml
+          ! grep -Eq 'wrangler[[:space:]]+versions[[:space:]]+deploy' .github/workflows/app734-qa730-inactive-stage.yml
+          ! grep -Eq 'wrangler[[:space:]]+deploy[[:space:]]+--config' .github/workflows/app734-qa730-inactive-stage.yml
+          echo 'APP734_NO_ACTIVATION_IN_WORKFLOW=PASS'
+
+  stage:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 1254 &&
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/app734-stage ')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify exact main and QA source
+        env:
+          DIRECTOR_COMMAND: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          SHA="$(printf '%s' "$DIRECTOR_COMMAND" | sed -nE 's|^/app734-stage ([0-9a-f]{40})$|\1|p')"
+          test -n "$SHA" && test "$SHA" = "$(git rev-parse HEAD)" || exit 2
+          test "$SHA" = "$(git ls-remote origin refs/heads/main | cut -f1)" || exit 2
+          git fetch origin preview --no-tags
+          test "$(git rev-parse origin/preview)" = "4363820117100cb03bcbc44a01e127aeb5de3cf4" || exit 2
+          git worktree add --detach "$RUNNER_TEMP/app734-qa" 4363820117100cb03bcbc44a01e127aeb5de3cf4
+          cp scripts/app730-source-only-follow-bridge.mjs "$RUNNER_TEMP/app734-qa/scripts/"
+          cp cloudflare/explore-worker/experiments/owner-follow-qa730-bridge.mjs "$RUNNER_TEMP/app734-qa/cloudflare/explore-worker/experiments/"
+          cp cloudflare/explore-worker/experiments/owner-follow-qa730-entry.mjs "$RUNNER_TEMP/app734-qa/cloudflare/explore-worker/experiments/"
+          cd "$RUNNER_TEMP/app734-qa/cloudflare/explore-worker"
+          node --input-type=module - <<'NODE'
+          import {readFileSync,writeFileSync} from 'node:fs';
+          import assert from 'node:assert/strict';
+          const x=JSON.parse(readFileSync('wrangler.owner-qa-583.json','utf8'));
+          assert.equal(x.account_id,'b60fcd62c679c64db19f0b0e0c2f3429');
+          assert.equal(x.name,'soridraw-owner-qa-583');
+          assert.equal(x.main,'./experiments/owner-follow-isolated-558-entry.mjs');
+          assert.deepEqual(x.durable_objects.bindings,[{name:'OWNER558_DO',class_name:'OwnerFollowIsolated558'}]);
+          assert.deepEqual(x.migrations,[{tag:'v1',new_sqlite_classes:['OwnerFollowIsolated558']}]);
+          assert.equal(x.vars.SORIDRAW_ENVIRONMENT,'preview');
+          assert.equal(x.vars.SORIDRAW_OWNER_FOLLOW_W2_PUSH_555,'1');
+          assert.equal(x.d1_databases,undefined);
+          assert.equal(x.r2_buckets,undefined);
+          x.main='./experiments/owner-follow-qa730-entry.mjs';
+          // Fail closed if the existing QA probe/HMAC secret does not survive.
+          x.secrets={required:['OWNER583_QA_CONFIG']};
+          writeFileSync('wrangler.app734.stage.json',JSON.stringify(x,null,2)+'\n');
+          console.log('APP734_EXACT_QA_SOURCE=PASS; EXISTING_DO_V1_PRESERVED');
+          NODE
+      - name: Verify live QA Worker version and binding types (GET only)
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          node --input-type=module - <<'NODE'
+          import {inspectQaWorker731} from './scripts/app731-qa-access-readonly.mjs';
+          const x=await inspectQaWorker731(process.env.CLOUDFLARE_QA_API_TOKEN||'');
+          if(x.activeVersion!=='4ed70845-6a4b-4a80-9c51-ed95d0becc38' ||
+             x.mainCodeSha256!=='3f589a56f851ca530a5e25e360b1fe7b666c4c61753143afd41a2c05d3a3d189' ||
+             x.settingsBindingCount!==4||!x.existingQaBindingsPreserved||
+             !x.sharedRuntimeAbsent||x.app730SourceMarkerPresent)
+            throw Error('APP734_LIVE_QA_OR_BINDING_DRIFT_HOLD');
+          console.log('APP734_LIVE_QA_READONLY_GUARD=PASS');
+          NODE
+      - name: Upload inactive version ONLY with separately scoped QA credential
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo 'APP734_QA_EDIT_TOKEN_MISSING_HOLD'; exit 2; }
+          cd "$RUNNER_TEMP/app734-qa/cloudflare/explore-worker"
+          npx --yes wrangler@4.102.0 versions upload --config wrangler.app734.stage.json
+          echo 'APP734_INACTIVE_VERSION_UPLOADED; QA_TRAFFIC_NOT_ACTIVATED'
+      - name: Confirm old QA version still serves 100 percent
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+        run: |
+          node --input-type=module - <<'NODE'
+          import {inspectQaWorker731} from './scripts/app731-qa-access-readonly.mjs';
+          const x=await inspectQaWorker731(process.env.CLOUDFLARE_QA_API_TOKEN||'');
+          if(x.activeVersion!=='4ed70845-6a4b-4a80-9c51-ed95d0becc38')
+            throw Error('APP734_UNEXPECTED_QA_TRAFFIC_CHANGE');
+          console.log('APP734_ACTIVE_QA_VERSION_UNCHANGED=PASS; APP730_PHYSICAL_QA=NOT_RUN');
+          NODE

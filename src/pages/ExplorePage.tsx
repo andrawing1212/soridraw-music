@@ -109,7 +109,9 @@ import {
   subscribeExploreFollowSync377,
 } from '../services/exploreFollowSyncService';
 import {shouldHoldOwnFollowingPage682} from '../services/exploreFollowingPopupConsistency682';
-import {createExploreFollowVisitReuse715} from '../services/exploreFollowVisitReuse715';
+import {createExploreFollowVisitReuse715,
+  canReuseVerifiedFollowChoice724,canRememberPostAckFollowChoice724}
+  from '../services/exploreFollowVisitReuse715';
 import {readExploreFollowLocalChoice685,rememberExploreFollowLocalChoice685,
   shouldKeepExploreFollowChoice685,shouldIgnoreExploreFollowSignal685,
   clearExploreFollowLocalChoice695}
@@ -3785,21 +3787,28 @@ export default function ExplorePage() {
             const followReadStartedAt685=Date.now();
             const visit715=followVisitCache715Ref.current!;
             const visitGeneration715=visit715.version();
-            const recentChoice715=()=>{
+            const recentChoiceRecord715=()=>{
               const choice=readExploreFollowLocalChoice685(user.uid,nextProfile.uid);
               const age=choice?Date.now()-choice.at:Infinity;
-              return age>=0&&age<=30_000;
+              return age>=0&&age<=30_000?choice:null;
             };
-            // Pending clicks and recent settled receipts keep an independent
-            // canonical GET. Only unchanged visits share the SAME in-flight
-            // authenticated request; different viewers/targets never join.
+            const recentChoice715=()=>recentChoiceRecord715()!==null;
+            // APP724: pending/new choices still require canonical verification.
+            // After one exact post-ACK GET, reusing that snapshot avoids a new
+            // Worker/D1/R2 read on every navigation during the same 30s fence.
+            // Keep the existing original-request join only for unchanged visits.
             const reusableFollow716=!queuedFollow&&!recentChoice715();
             const signalQualified720=()=>followStreamReady720Ref.current===user.uid&&
               auth.currentUser?.uid===user.uid&&
               document.visibilityState==='visible'&&
               (typeof navigator==='undefined'||navigator.onLine!==false);
-            const cachedFollow715=reusableFollow716
+            const candidateFollow715=!queuedFollow
               ?visit715.read(user.uid,nextProfile.uid,Date.now(),signalQualified720()):null;
+            const currentRecentChoice724=recentChoiceRecord715();
+            const cachedFollow715=currentRecentChoice724
+              ?canReuseVerifiedFollowChoice724(currentRecentChoice724,candidateFollow715,Date.now())
+                ?candidateFollow715:null
+              :candidateFollow715;
             const fetchedFollow716=cachedFollow715?null:reusableFollow716
               ?await visit715.runOrJoin(user.uid,nextProfile.uid,
                 ()=>getExploreFollowState(user, nextProfile.uid, true),
@@ -3817,7 +3826,10 @@ export default function ExplorePage() {
             else if(fetchedFollow716?.shared)
               recordCloudflareLocalCacheHit('/v1/profiles/:id/follow-state',
                 'LOCAL JOIN · 진행 중인 조회 공유');
-            if(!cachedFollow715&&!cancelled&&!recentChoice715()&&
+            const postAckVerified724=canRememberPostAckFollowChoice724(
+              recentChoiceRecord715(),nextFollowState,effectiveReadStartedAt716,Date.now());
+            if(!cachedFollow715&&!cancelled&&
+              (!recentChoice715()||postAckVerified724)&&
               !readPendingExploreFollowIntents380(user.uid)
                 .some(row=>row.targetUid===nextProfile.uid))
               visit715.remember(user.uid,nextProfile.uid,nextFollowState,

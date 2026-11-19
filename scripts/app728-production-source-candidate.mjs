@@ -8,6 +8,7 @@ import {join,resolve,relative,dirname,sep} from 'node:path';
 import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import { buildApp729ProductionIntegrationEntry } from './app729-production-follow-entry.mjs';
 
 const ACCOUNT='e1a30fc9ef497fda1d34f4ab3dc1da45';
 const PROD_NAME='soridraw-explore-api';
@@ -99,7 +100,9 @@ export function createApp728PreservedSourceCandidate({baseline,featureSources,so
    sourceSha, productionWorker:PROD_NAME,
    activeVersion:check.pinned, baselineMainModule:baseline.mainModule,
    baselineMainSha256:check.mainCodeSha256, existingBindingsProtected:12,
-   unchangedProductionMain:true, importedFeatureModules:0, addedBindings:0,
+   unchangedProductionMain:true, importedFeatureModules:0,
+   integratedFollowSignalSeam:true, productionFollowSignalCompiledOpen:false,
+   addedBindings:0,
    addedDurableObjectClasses:0, addedMigrations:0, newRoutes:0,
    quarantinedModules:review.map(({name,sha256,bytes})=>({name,sha256,bytes})),
    forbiddenActions:['DEPLOY','UPLOAD','ACTIVATE','TEST_ACCESS','DATA_WRITE','BINDING_ADD','MIGRATION'],
@@ -168,6 +171,28 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
    if(sha256(readFileSync(dest))!==x.sha256)fail('QUARANTINED_CODE_DRIFT');
    checkSyntax(dest);
  }
+ const entry=buildApp729ProductionIntegrationEntry();
+ const entryPath=join(dir,'production-follow-entry.mjs');
+ const adapterSource=readFileSync(resolve('scripts/app729-production-follow-adapter.mjs'),'utf8');
+ if(!adapterSource.includes('APP729_PRODUCTION_OWNER_FOLLOW_COMPILED_OPEN = false'))
+   fail('INTEGRATION_COMPILE_OFF_REQUIRED');
+ mkdirSync(join(dir,'integration'),{recursive:true});
+ const adapterPath=join(dir,'integration','app729-production-follow-adapter.mjs');
+ writeFileSync(adapterPath,adapterSource);
+ writeFileSync(entryPath,entry.code);
+ if(sha256(readFileSync(entryPath))!==entry.sha256)
+   fail('INTEGRATION_ENTRY_DRIFT');
+ checkSyntax(adapterPath);
+ checkSyntax(entryPath);
+ candidate.manifest.integration={
+   entrypoint:'production-follow-entry.mjs',
+   entrypointSha256:entry.sha256,
+   originalMainUntouched:true,
+   existingProductionBindingCount:12,
+   runtimeEnabled:false,
+   deployable:false,
+   integrationReadyForProduction:false,
+ };
  writeFileSync(join(dir,'review-manifest.json'),JSON.stringify(candidate.manifest,null,2)+'\n');
  return {outputDirectory:dir,manifest:candidate.manifest};
 }
@@ -196,6 +221,8 @@ async function main(){
    baselineMainSha256:result.manifest.baselineMainSha256,
    sourceOnlyCandidateFiles:result.manifest.quarantinedModules.length,
    bindingsProtected:result.manifest.existingBindingsProtected,
+   integrationSeamWiredOff:result.manifest.integratedFollowSignalSeam,
+   productionFollowSignalCompiledOpen:false,
    featureWiredToProduction:false,deployAllowed:false,
    sharedDataReads:0,workerMutations:0,testEnvironmentQueried:false,
  },null,2));

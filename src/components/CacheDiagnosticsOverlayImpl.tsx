@@ -133,6 +133,22 @@ const getFreeCapacityTone = (daily: number | null) => {
   return 'text-[#ff9d9d]';
 };
 
+// APP727: short labels for the opt-in, local-only CACHE LIVE reason trace.
+const followReasonLabels727:Record<string,string>={
+  GET_PENDING:'저장 대기',GET_NEW_CHOICE:'미확정 선택',
+  GET_COLD:'검증 결과 없음',GET_ACTOR_NOT_READY:'본인 알림 미확인',
+  GET_PUBLIC_NOT_READY:'상대 알림 미확인',GET_EXPIRED:'30초 만료',
+  GET_PUBLIC_CHANGED:'상대 변경 버전 차이',GET_COUNTS_CHANGED:'팔로워 숫자 차이',
+  GET_CHOICE_CHANGED:'최근 선택 차이',GET_OTHER:'추가 확인 필요',
+  SAVE_ACTOR_NOT_READY:'본인 알림 준비 전',SAVE_PUBLIC_NOT_READY:'상대 알림 준비 전',
+  SAVE_PUBLIC_LATE:'상대 알림이 조회보다 늦게 옴',
+  SAVE_COUNT_UNVERIFIED:'숫자 검증 미완료',SAVE_COUNTS_CHANGED:'숫자 일치하지 않음',
+  SAVE_REVISION_CHANGED:'변경 버전 일치하지 않음',
+  SAVE_LOCAL_REJECT:'조회 결과 재사용 조건 불충족',
+  SAVE_OK:'안전한 결과 저장',
+};
+const showFollowReason727=(code:string)=>followReasonLabels727[code]||code;
+
 const getCloudflarePathLabel = (path: string) => {
   if (path === '/v1/publications') return '최초 공개 등록';
   if (path === '/v1/me/music-note-publications/batch') return '공개상태 묶음';
@@ -676,6 +692,20 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
                           <span className="shrink-0 whitespace-nowrap tabular-nums">검증 {formatNumber(state.revisionChecks)} · 304 {formatNumber(state.notModifiedResponses)} · 200 {formatNumber(state.fullResponses)} · {formatNumber(state.lastDurationMs)}ms</span>
                         </div>
                       ) : null}
+                      {path==='팔로우 상태 확인'&&Boolean(state.followTrace727?.length)?(
+                        <div className="mt-0.5 rounded-md bg-white/[0.025] px-1.5 py-1 text-[10px] font-bold text-white/65">
+                          <div>APP727 서버 조회·재사용 판단 사유 (최근 {state.followTrace727!.length}건)</div>
+                          <div className="mt-0.5 leading-4">
+                            {state.followTrace727!.map((reason,index)=>(
+                              <span key={index} className="mr-2 inline-block">{showFollowReason727(reason)}</span>
+                            ))}
+                          </div>
+                          <div className="mt-0.5 text-white/40">
+                            {Object.entries(state.followReasonCounts727||{}).map(([reason,count])=>
+                              `${showFollowReason727(reason)} ${count}`).join(' · ')}
+                          </div>
+                        </div>
+                      ):null}
                     </div>
                   );
                 })}

@@ -21,7 +21,8 @@ import { favoritesStore } from '../hooks/useFavoritesStore';
 import { formatExploreDisplayTitle } from '../lib/exploreTitleDisplay';
 import { admitExploreLikeClick, recordExploreLikeAcceptedClick } from '../lib/exploreLikeClickGuard';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
-import { recordCloudflareLocalCacheHit, recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
+import { recordCloudflareLocalCacheHit, recordCloudflareResponse,
+  recordCloudflareFollowReason727 } from '../lib/cloudflareDiagnostics';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache } from '../lib/userProfileCache';
 import {
   readExploreFeedSessionCache,
@@ -111,7 +112,8 @@ import {
 import {shouldHoldOwnFollowingPage682} from '../services/exploreFollowingPopupConsistency682';
 import {createExploreFollowVisitReuse715,observeExploreFollowViewer725,
   observePublicFollowRevision726,readVerifiedFollowReturn726,
-  rememberVerifiedFollowReturn726,
+  rememberVerifiedFollowReturn726,acceptActorFollowRevision727,
+  explainFollowReadMiss727,explainFollowSaveMiss727,
   canReuseVerifiedFollowChoice724,canRememberPostAckFollowChoice724}
   from '../services/exploreFollowVisitReuse715';
 import {readExploreFollowLocalChoice685,rememberExploreFollowLocalChoice685,
@@ -3812,6 +3814,11 @@ export default function ExplorePage() {
             // existing actor and public RTDB streams have both confirmed the
             // *same* revision. Pending clicks and newer local receipts still
             // require canonical GET, not an optimistic or stale display hint.
+            // Capture WHY a new GET is necessary without adding a server call.
+            // Exact reason codes are stored only in the opt-in CACHE LIVE panel.
+            const missReason727=explainFollowReadMiss727(
+              user.uid,nextProfile.uid,Date.now(),targetPublic726,
+              signalQualified720(),currentRecentChoice724,Boolean(queuedFollow));
             const returnedVerified726=!queuedFollow
               ?readVerifiedFollowReturn726(user.uid,nextProfile.uid,Date.now(),
                 targetPublic726,signalQualified720(),currentRecentChoice724):null;
@@ -3830,6 +3837,8 @@ export default function ExplorePage() {
                 followReadStartedAt685,
                 reusableFollow716?0:(recentChoiceRecord715()?.at??0),
                 Boolean(queuedFollow));
+            if(!cachedFollow715&&!fetchedFollow716?.shared)
+              recordCloudflareFollowReason727(missReason727);
             const nextFollowState=cachedFollow715??fetchedFollow716!.state;
             // A joined response was started by the earlier visit: use its
             // ORIGINAL request time for all stale-response and receipt fences.
@@ -3850,12 +3859,17 @@ export default function ExplorePage() {
                 effectiveReadStartedAt716,
                 fetchedFollow716?.generation??visitGeneration715,
                 Date.now(),signalQualified720());
-              if(remembered715)
-                rememberVerifiedFollowReturn726(user.uid,nextProfile.uid,nextFollowState,
-                  effectiveReadStartedAt716,Date.now(),
-                  newestPublicFollow668Ref.current?.uid===nextProfile.uid
-                    ?newestPublicFollow668Ref.current:null,
-                  signalQualified720());
+              if(remembered715){
+                const publicProof727=newestPublicFollow668Ref.current?.uid===nextProfile.uid
+                  ?newestPublicFollow668Ref.current:null;
+                const actorReady727=signalQualified720();
+                const saved727=rememberVerifiedFollowReturn726(
+                  user.uid,nextProfile.uid,nextFollowState,
+                  effectiveReadStartedAt716,Date.now(),publicProof727,actorReady727);
+                recordCloudflareFollowReason727(saved727?'SAVE_OK':
+                  explainFollowSaveMiss727(nextFollowState,effectiveReadStartedAt716,
+                    publicProof727,actorReady727));
+              }else recordCloudflareFollowReason727('SAVE_LOCAL_REJECT');
             }
             if (!cancelled) {
               // First visible third-party counts use the authenticated GET,
@@ -4219,6 +4233,10 @@ export default function ExplorePage() {
       const ownRequest662=ownCountRequest662Ref.current;
       if(ownRequest662?.uid===viewerUid377 &&
          !shouldApplyActorFollowSignal662(signal377.at,ownRequest662.at))return;
+      // APP727: remember only an actually APPLIED server signal. A newer
+      // signal blocked by a pending local click or newer canonical GET must
+      // remain eligible for recovery on a later route mount.
+      if(!acceptActorFollowRevision727(viewerUid377,signal377.version))return;
       latestActorSignal662Ref.current={
         uid:viewerUid377,at:signal377.at,count:signal377.actorFollowingCount,
       };

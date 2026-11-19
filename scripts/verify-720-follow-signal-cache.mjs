@@ -223,6 +223,52 @@ console.log('APP726_RETAINED_SIGNAL_SAME_REVISION_NO_FALSE_INVALIDATION=PASS');
 console.log('APP726_VERIFIED_RETURN_30S_STREAMS_CHOICE_REMOTE_AND_ACCOUNT_GUARDS=PASS');
 console.log('APP726_NO_ADDITIONAL_WORKER_D1_R2_RTDB_POLLS_WRITES=PASS');
 
+// APP727: a retained actor RTDB snapshot must be ignored across SAME-account
+// Explore route remounts; a new server revision is still processed.
+const accept727=visitsModule.exports.acceptActorFollowRevision727;
+observe725(actor);
+assert.equal(accept727(actor,800),true);
+assert.equal(accept727(actor,800),false,'retained actor 800 replay is not a new mutation');
+assert.equal(accept727(actor,799),false,'old/reordered actor version never invalidates');
+assert.equal(accept727(actor,801),true,'a real newer actor update must invalidate');
+observe725('another-account');
+observe725(actor);
+assert.equal(accept727(actor,800),true,'account switch clears old revision state');
+const explain727=visitsModule.exports.explainFollowReadMiss727;
+const saveExplain727=visitsModule.exports.explainFollowSaveMiss727;
+assert.equal(explain727(actor,target,base+280_000,null,false,null,false),
+ 'GET_COLD');
+assert.equal(explain727(actor,target,base+280_000,null,false,null,true),
+ 'GET_PENDING');
+assert.equal(explain727(actor,target,base+280_000,null,true,
+ {following:true,settled:false,at:base+279_000},false),'GET_NEW_CHOICE');
+assert.equal(saveExplain727(exact726,base+280_000,null,true),
+ 'SAVE_PUBLIC_NOT_READY');
+assert.equal(saveExplain727(exact726,base+280_000,
+ {...pub726,observedAt:base+280_001},true),'SAVE_PUBLIC_LATE');
+assert.equal(saveExplain727({...exact726,followerCount:20},base+280_000,
+ {...pub726,observedAt:base+279_000},true),'SAVE_COUNTS_CHANGED');
+const page727=readFileSync('src/pages/ExplorePage.tsx','utf8');
+const actorSignalStart727=page727.indexOf('return subscribeExploreFollowSync377(viewerUid377');
+const actorSignalEnd727=page727.indexOf('followVisitCache715Ref.current?.invalidate();',actorSignalStart727);
+assert.ok(actorSignalStart727>=0&&actorSignalEnd727>actorSignalStart727);
+const actorGuard727=page727.indexOf('if(!acceptActorFollowRevision727(viewerUid377,signal377.version))return;',actorSignalStart727);
+const pendingGuard727=page727.indexOf('if(readPendingExploreFollowIntents380(viewerUid377)',actorSignalStart727);
+const ownGuard727=page727.indexOf('if(ownRequest662?.uid===viewerUid377',actorSignalStart727);
+assert.ok(pendingGuard727<actorGuard727 && ownGuard727<actorGuard727 &&
+  actorGuard727<actorSignalEnd727,
+  'APP727 must dedupe only after pending/old-GET guards, before invalidation');
+assert.match(page727,/recordCloudflareFollowReason727\(missReason727\)/,
+ 'only actual GETs receive a reason');
+const diagnostics727=readFileSync('src/lib/cloudflareDiagnostics.ts','utf8');
+assert.match(diagnostics727,/function recordCloudflareFollowReason727/);
+assert.match(diagnostics727,/followTrace727:\[/);
+assert.match(readFileSync('src/components/CacheDiagnosticsOverlayImpl.tsx','utf8'),
+ /APP727 서버 조회·재사용 판단 사유/);
+console.log('APP727_ACTOR_RETAINED_REPLAY_NO_FALSE_INVALIDATION=PASS');
+console.log('APP727_REAL_NEWER_ACTOR_VERSION_AND_ACCOUNT_SWITCH_PROTECTED=PASS');
+console.log('APP727_REASON_ONLY_CACHE_LIVE_NO_ADDITIONAL_SERVER_IO=PASS');
+
 const subscriptions=[];
 const syncModule={exports:{}};
 const fakeDatabase={
@@ -279,7 +325,7 @@ assert.match(page,/observePublicFollowRevision726\(principal\.uid,viewedUid/,
  'public RTDB retained version must be compared across remounts');
 assert.match(page,/readVerifiedFollowReturn726\(user\.uid,nextProfile\.uid/,
  'only qualified verified results can be reused on route return');
-assert.match(page,/rememberVerifiedFollowReturn726\(user\.uid,nextProfile\.uid/,
+assert.match(page,/rememberVerifiedFollowReturn726\(\s*user\.uid,nextProfile\.uid/,
  'exact GET creates bounded verified return cache');
 assert.match(page,/const reusableFollow716=!queuedFollow&&!recentChoice715\(\)/,
  'pending and recent local choice still force canonical verification');

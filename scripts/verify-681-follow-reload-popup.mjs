@@ -271,8 +271,10 @@ assert.match(page715,/!readPendingExploreFollowIntents380\(user.uid\)/,
 assert.match(page715,/visit715.remember\(user.uid,nextProfile.uid,nextFollowState/);
 assert.match(page715,/onHidden715/);
 assert.match(page715,/followVisitCache715Ref.current\?\.invalidate\(\)/);
-assert.match(page715,/lastPublicVisitRevision715Ref\.current\.get\(viewedUid\)/);
-assert.match(page715,/signal\.revision>previousPublic715\.revision/);
+assert.match(page715,/observePublicFollowRevision726\(principal\.uid,viewedUid/,
+ 'retained public revision must not invalidate verified return on remount');
+assert.match(page715,/readVerifiedFollowReturn726\(/,
+ 'verified short return requires confirmed public and actor streams');
 assert.match(page715,/previousPublic715\.generation!==signal\.generation/);
 assert.match(page715,/recordCloudflareLocalCacheHit\('\/v1\/profiles\/:id\/follow-state'/);
 console.log('APP715_THIRD_PARTY_10S_VISIT_R2_R0_MEMORY_ONLY=PASS');

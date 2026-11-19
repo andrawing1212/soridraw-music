@@ -110,6 +110,8 @@ import {
 } from '../services/exploreFollowSyncService';
 import {shouldHoldOwnFollowingPage682} from '../services/exploreFollowingPopupConsistency682';
 import {createExploreFollowVisitReuse715,observeExploreFollowViewer725,
+  observePublicFollowRevision726,readVerifiedFollowReturn726,
+  rememberVerifiedFollowReturn726,
   canReuseVerifiedFollowChoice724,canRememberPostAckFollowChoice724}
   from '../services/exploreFollowVisitReuse715';
 import {readExploreFollowLocalChoice685,rememberExploreFollowLocalChoice685,
@@ -2024,10 +2026,9 @@ export default function ExplorePage() {
   const verifiedVisitedProfileUid661Ref = useRef('');
   // Only a successfully verified first-view target GET establishes authority.
   const verifiedVisitedCounts668Ref=useRef<{uid:string;readStartedAt:number}|null>(null);
-  const newestPublicFollow668Ref=useRef<{uid:string;generation:string;revision:number;followerCount:number;followingCount:number}|null>(null);
-  // A retained RTDB snapshot replays on every profile re-subscription.
-  // Only genuinely newer server revisions invalidate the local visit cache.
-  const lastPublicVisitRevision715Ref=useRef<Map<string,{generation:string;revision:number}>>(new Map());
+  const newestPublicFollow668Ref=useRef<{uid:string;generation:string;revision:number;followerCount:number;followingCount:number;observedAt:number}|null>(null);
+  // APP726 observes the last public revision per viewer/target across Explore
+  // route remounts, without persisting it or adding a RTDB subscription.
   // APP715: 10-second authenticated visit snapshot, never persisted or used
   // for mutations, errors or initial user/account recovery.
   const followVisitCache715Ref=useRef<ReturnType<typeof createExploreFollowVisitReuse715>|null>(null);
@@ -3440,7 +3441,6 @@ export default function ExplorePage() {
     // A same-account Explore remount must not discard another instance's
     // still-pending one-pair GET. An actual account change is fenced above.
     followVisitCache715Ref.current?.invalidate(false);
-    lastPublicVisitRevision715Ref.current.clear();
     const onBoundary720=()=>{
       followStreamReady720Ref.current='';
       followVisitCache715Ref.current?.invalidate();
@@ -3805,13 +3805,22 @@ export default function ExplorePage() {
               auth.currentUser?.uid===user.uid&&
               document.visibilityState==='visible'&&
               (typeof navigator==='undefined'||navigator.onLine!==false);
+            const currentRecentChoice724=recentChoiceRecord715();
+            const targetPublic726=newestPublicFollow668Ref.current?.uid===nextProfile.uid
+              ?newestPublicFollow668Ref.current:null;
+            // Exact GET result is reusable after navigation only when the
+            // existing actor and public RTDB streams have both confirmed the
+            // *same* revision. Pending clicks and newer local receipts still
+            // require canonical GET, not an optimistic or stale display hint.
+            const returnedVerified726=!queuedFollow
+              ?readVerifiedFollowReturn726(user.uid,nextProfile.uid,Date.now(),
+                targetPublic726,signalQualified720(),currentRecentChoice724):null;
             const candidateFollow715=!queuedFollow
               ?visit715.read(user.uid,nextProfile.uid,Date.now(),signalQualified720()):null;
-            const currentRecentChoice724=recentChoiceRecord715();
-            const cachedFollow715=currentRecentChoice724
+            const cachedFollow715=returnedVerified726??(currentRecentChoice724
               ?canReuseVerifiedFollowChoice724(currentRecentChoice724,candidateFollow715,Date.now())
                 ?candidateFollow715:null
-              :candidateFollow715;
+              :candidateFollow715);
             // APP725: join one in-flight exact-pair read even during the
             // post-click 30s fence. An unconfirmed click is never shared,
             // and a GET started before the latest receipt is never joined.
@@ -3836,11 +3845,18 @@ export default function ExplorePage() {
             if(!cachedFollow715&&!cancelled&&fetchedFollow716?.current725!==false&&
               (!recentChoice715()||postAckVerified724)&&
               !readPendingExploreFollowIntents380(user.uid)
-                .some(row=>row.targetUid===nextProfile.uid))
-              visit715.remember(user.uid,nextProfile.uid,nextFollowState,
+                .some(row=>row.targetUid===nextProfile.uid)){
+              const remembered715=visit715.remember(user.uid,nextProfile.uid,nextFollowState,
                 effectiveReadStartedAt716,
                 fetchedFollow716?.generation??visitGeneration715,
                 Date.now(),signalQualified720());
+              if(remembered715)
+                rememberVerifiedFollowReturn726(user.uid,nextProfile.uid,nextFollowState,
+                  effectiveReadStartedAt716,Date.now(),
+                  newestPublicFollow668Ref.current?.uid===nextProfile.uid
+                    ?newestPublicFollow668Ref.current:null,
+                  signalQualified720());
+            }
             if (!cancelled) {
               // First visible third-party counts use the authenticated GET,
               // not the potentially different stale R2 first-view caches.
@@ -4994,22 +5010,17 @@ export default function ExplorePage() {
            signal.revision<=currentPublic.revision)return;
         if(readPendingExploreFollowIntents380(principal.uid)
            .some(intent=>intent.targetUid===viewedUid))return;
-        const previousPublic715=lastPublicVisitRevision715Ref.current.get(viewedUid);
-        if(!previousPublic715 ||
-           previousPublic715.generation!==signal.generation ||
-           signal.revision>previousPublic715.revision){
-          lastPublicVisitRevision715Ref.current.set(viewedUid,
-            {generation:signal.generation,revision:signal.revision});
-          if(lastPublicVisitRevision715Ref.current.size>24)
-            lastPublicVisitRevision715Ref.current.delete(
-              lastPublicVisitRevision715Ref.current.keys().next().value!);
-          // A repeated retained snapshot is not a new canonical change.
+        // APP726: remounting a profile replays its retained snapshot. That
+        // SAME revision is not a new server change and must not erase the
+        // verified return cache. Genuine new revisions still invalidate it.
+        if(observePublicFollowRevision726(principal.uid,viewedUid,
+             signal.generation,signal.revision))
           followVisitCache715Ref.current?.invalidate();
-        }
         const count={followerCount:signal.followerCount,
           followingCount:signal.followingCount};
         newestPublicFollow668Ref.current={uid:viewedUid,
-          generation:signal.generation,revision:signal.revision,...count};
+          generation:signal.generation,revision:signal.revision,
+          observedAt:Date.now(),...count};
         verifiedVisitedProfileUid661Ref.current=viewedUid;
         // Fence all earlier profile / follow-state fetches from repainting
         // this newer verified server event after their promises resolve.

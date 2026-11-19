@@ -164,6 +164,65 @@ console.log('APP725_SAME_PAIR_RAPID_ROUTE_ONE_INFLIGHT_GET=PASS');
 console.log('APP725_CHANGED_CHOICE_PENDING_SIGNAL_ACCOUNT_FAIL_CLOSED=PASS');
 console.log('APP725_NO_NEW_POLL_CACHE_NETWORK_OR_SHARED_DATA_WRITE=PASS');
 
+// APP726: exact authenticated GET and SAME retained public revision may
+// survive Explore route unmount/reentry for at most 30s. No persistent state.
+const note726=visitsModule.exports.observePublicFollowRevision726;
+const save726=visitsModule.exports.rememberVerifiedFollowReturn726;
+const read726=visitsModule.exports.readVerifiedFollowReturn726;
+observe725(actor);
+const pub726={generation:'public-generation',revision:1,followerCount:4,
+  followingCount:9,observedAt:base+200_000};
+const exact726={...verified,isFollowing:true,followerCount:4,followingCount:9};
+assert.equal(note726(actor,target,pub726.generation,pub726.revision),true,
+  'initial public revision is a real invalidation boundary');
+assert.equal(note726(actor,target,pub726.generation,pub726.revision),false,
+  'retained snapshot after profile navigation is not a new mutation');
+assert.equal(save726(actor,target,exact726,base+200_005,base+200_010,pub726,true),true);
+const restored726=read726(actor,target,base+205_000,
+  {...pub726,observedAt:base+204_999},true,
+  {following:true,settled:true,at:base+200_002});
+assert.equal(restored726?.followerCount,4);
+assert.equal(read726(actor,target,base+205_000,pub726,false,null),null,
+  'without verified actor stream reentry must spend canonical GET');
+assert.equal(read726(actor,target,base+205_000,pub726,true,
+  {following:false,settled:true,at:base+200_002}),null,
+  'wrong latest membership must not reuse settled snapshot');
+assert.equal(read726(actor,target,base+205_000,pub726,true,null),null,
+  'mismatched receipt deletes the row instead of returning stale data');
+assert.equal(save726(actor,target,exact726,base+210_005,base+210_010,
+  {...pub726,observedAt:base+210_006},true),false,
+  'GET started BEFORE retained revision was observed cannot be canonicalized');
+assert.equal(save726(actor,target,exact726,base+210_005,base+210_010,
+  {...pub726,observedAt:base+210_000},true),true);
+assert.equal(read726(actor,target,base+240_005,pub726,true,null),null,
+  'hard 30 second boundary requires fresh GET');
+assert.equal(save726(actor,target,exact726,base+250_005,base+250_010,pub726,true),true);
+assert.equal(note726(actor,target,pub726.generation,2),true,
+  'real public revision change invalidates all verified return authority');
+const afterPublicChange726=create();
+afterPublicChange726.invalidate();
+assert.equal(read726(actor,target,base+250_020,{...pub726,revision:2},true,null),null);
+assert.equal(save726(actor,target,{...exact726,countVerified661:false},base+260_005,
+  base+260_010,{...pub726,revision:2,observedAt:base+260_000},true),false,
+  'unverified canonical count must never become cross-route cache');
+assert.equal(save726(actor,target,{...exact726,followerCount:3},base+260_005,
+  base+260_010,{...pub726,revision:2,observedAt:base+260_000},true),false,
+  'public counter mismatch must not become a stale return result');
+assert.equal(note726(actor,target,pub726.generation,2),false);
+assert.equal(save726(actor,target,exact726,base+260_005,base+260_010,
+  {...pub726,revision:2,observedAt:base+260_000},true),true);
+afterPublicChange726.invalidate(); // real click, ACK, signal, hidden/offline
+assert.equal(read726(actor,target,base+260_020,{...pub726,revision:2},true,null),null);
+assert.equal(save726(actor,target,exact726,base+270_005,base+270_010,
+  {...pub726,revision:2,observedAt:base+270_000},true),true);
+observe725('different-account');
+observe725(actor);
+assert.equal(read726(actor,target,base+270_020,{...pub726,revision:2},true,null),null,
+  'viewer change must drop all verified cross-route results');
+console.log('APP726_RETAINED_SIGNAL_SAME_REVISION_NO_FALSE_INVALIDATION=PASS');
+console.log('APP726_VERIFIED_RETURN_30S_STREAMS_CHOICE_REMOTE_AND_ACCOUNT_GUARDS=PASS');
+console.log('APP726_NO_ADDITIONAL_WORKER_D1_R2_RTDB_POLLS_WRITES=PASS');
+
 const subscriptions=[];
 const syncModule={exports:{}};
 const fakeDatabase={
@@ -216,6 +275,12 @@ assert.match(page,/followVisitCache715Ref\.current\?\.invalidate\(false\)/,
  'route remount must retain global in-flight, not persistent visit cache');
 assert.match(page,/fetchedFollow716\?\.current725!==false/,
  'invalidated stale read must never populate visit cache');
+assert.match(page,/observePublicFollowRevision726\(principal\.uid,viewedUid/,
+ 'public RTDB retained version must be compared across remounts');
+assert.match(page,/readVerifiedFollowReturn726\(user\.uid,nextProfile\.uid/,
+ 'only qualified verified results can be reused on route return');
+assert.match(page,/rememberVerifiedFollowReturn726\(user\.uid,nextProfile\.uid/,
+ 'exact GET creates bounded verified return cache');
 assert.match(page,/const reusableFollow716=!queuedFollow&&!recentChoice715\(\)/,
  'pending and recent local choice still force canonical verification');
 assert.match(page,/window\.addEventListener\('offline',onBoundary720\)/);

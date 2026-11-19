@@ -1,5 +1,7 @@
-// APP731: Independent Cloudflare QA-only access preflight.
-// Only GET requests. No code fetch, script updates, D1/R2/DO storage access,
+// APP731: Independent Cloudflare QA-only access preflight and pinned source fingerprint.
+import {analyzePinnedVersionModules} from './app728-active-code-provenance.mjs';
+// GET-only; pinned QA Worker module bytes are hashed in memory, never logged.
+// No script updates, D1/R2/DO storage access,
 // Firebase calls, secrets, or user data. This is NOT APP730 physical QA.
 const ACCOUNT='b60fcd62c679c64db19f0b0e0c2f3429';
 const WORKER='soridraw-owner-qa-583';
@@ -7,7 +9,13 @@ const PREFIX='https://api.cloudflare.com/client/v4/accounts/'+ACCOUNT;
 const VERSION=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function hold(code){throw Error('APP731_QA_READ_ONLY_'+code)}
 const get=async(path,token,send)=>{
-  if(!path.startsWith(PREFIX+'/workers/scripts'))hold('CROSS_ACCOUNT_DENIED');
+  const listing=PREFIX+'/workers/scripts';
+  const deployments=listing+'/'+WORKER+'/deployments';
+  const modulePrefix=PREFIX+'/workers/workers/'+WORKER+'/versions/';
+  const pinnedVersion=path.startsWith(modulePrefix)?path.slice(modulePrefix.length).split('?')[0]:'';
+  const pinnedCodeRead=VERSION.test(pinnedVersion)&&path===modulePrefix+pinnedVersion+'?include=modules';
+  if(path!==listing&&path!==deployments&&!pinnedCodeRead)
+    hold('CROSS_ACCOUNT_DENIED');
   const r=await send(path,{method:'GET',headers:{
     Authorization:'Bearer '+token,
     Accept:'application/json',
@@ -31,12 +39,33 @@ export async function inspectQaWorker731(token,send=fetch){
      !VERSION.test(String(versions[0]?.version_id||''))||
      Number(versions[0]?.percentage)<99.99)
     hold('ACTIVE_VERSION_NOT_PINNED');
+  // Read the byte identity of the EXACT pinned QA Worker. No source or
+  // variable values are ever logged; only hashes and marker booleans.
+  const version=versions[0].version_id;
+  const modules=await get(
+    PREFIX+'/workers/workers/'+WORKER+'/versions/'+version+'?include=modules',
+    token,send,
+  );
+  if(modules?.id&&modules.id!==version)hold('PINNED_CODE_VERSION_CHANGED');
+  const fingerprint=analyzePinnedVersionModules(modules);
+  const source=modules.modules.map(m=>Buffer.from(m.content_base64,'base64').toString('utf8')).join('\n');
+  const latest=await get(PREFIX+'/workers/scripts/'+WORKER+'/deployments',token,send);
+  if(latest?.deployments?.[0]?.versions?.length!==1 ||
+     latest.deployments[0].versions[0]?.version_id!==version ||
+     Number(latest.deployments[0].versions[0]?.percentage)<99.99)
+    hold('VERSION_CHANGED_DURING_READ');
   return {
     scope:'EXACT_ISOLATED_CLOUDFLARE_QA_ACCOUNT',
     status:'PASS',
     accountMatches:true,
     qaWorkerPresent:true,
-    activeVersion:versions[0].version_id,
+    activeVersion:version,
+    mainCodeSha256:fingerprint.mainCodeSha256,
+    allModulesSha256:fingerprint.allModuleCodeSha256,
+    moduleCount:fingerprint.moduleCount,
+    qa583SourceMarkerPresent:source.includes('createQaOwnerRelay583'),
+    app730SourceMarkerPresent:source.includes('createApp730SourceOnlyBridge'),
+    app730RuntimeVerified:false,
     permittedMethods:['GET'],
     cloudMutationCount:0,
     testProductionQueried:false,

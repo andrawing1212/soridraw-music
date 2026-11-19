@@ -1,0 +1,136 @@
+name: SORIDRAW APP736 QA Zero-Traffic Version Override Smoke (QA only)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/app736-qa-zero-traffic-smoke.mjs'
+      - 'scripts/verify-736-qa-zero-traffic-smoke.mjs'
+      - '.github/workflows/app736-qa-zero-traffic-smoke.yml'
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-app736-qa-zero-traffic
+  cancel-in-progress: false
+
+jobs:
+  offline:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify no credentials, follow mutations or real Worker requests
+        run: |
+          node --check scripts/app736-qa-zero-traffic-smoke.mjs
+          node scripts/verify-736-qa-zero-traffic-smoke.mjs
+
+  qa_canary:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 1254 &&
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/app736-qa-canary ')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check frozen main SHA and synthetic contract
+        env:
+          DIRECTOR_COMMAND: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          SHA="$(printf '%s' "$DIRECTOR_COMMAND" | sed -nE 's|^/app736-qa-canary ([0-9a-f]{40})$|\1|p')"
+          test -n "$SHA" && test "$SHA" = "$(git rev-parse HEAD)" || exit 2
+          test "$SHA" = "$(git ls-remote origin refs/heads/main | cut -f1)" || exit 2
+          node scripts/verify-736-qa-zero-traffic-smoke.mjs
+      - name: Exact QA active/staged bindings and traffic preflight (GET only)
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          node scripts/app735-qa-version-bindings.mjs
+          echo 'APP736_EXISTING_QA_100_PERCENT_AND_NEW_INACTIVE=PASS'
+      - name: Add new QA version to deployment at ZERO percent
+        id: route
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || exit 2
+          touch "$RUNNER_TEMP/app736-qa-deploy-attempted"
+          cd cloudflare/explore-worker
+          npx --yes wrangler@4.102.0 versions deploy \
+            '4ed70845-6a4b-4a80-9c51-ed95d0becc38@100%' \
+            '16a07d40-7a75-4f31-a8b1-fdcf0410a544@0%' \
+            --config wrangler.owner-qa-583.json \
+            --yes
+          echo 'APP736_QA_TWO_VERSIONS_OLD100_NEW0=APPLIED'
+      - name: Verify exactly two QA versions with no new default traffic
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          node --input-type=module - <<'NODE'
+          const token=process.env.CLOUDFLARE_QA_API_TOKEN||'';
+          if(!token)throw Error('APP736_QA_READ_TOKEN_MISSING');
+          const url='https://api.cloudflare.com/client/v4/accounts/b60fcd62c679c64db19f0b0e0c2f3429/workers/scripts/soridraw-owner-qa-583/deployments';
+          const r=await fetch(url,{headers:{Authorization:'Bearer '+token}});
+          if(!r.ok)throw Error('APP736_DEPLOYMENT_GET_DENIED');
+          const v=await r.json(), versions=v?.result?.deployments?.[0]?.versions;
+          const map=new Map(versions?.map(x=>[x.version_id,Number(x.percentage)]));
+          if(map.size!==2||
+            map.get('4ed70845-6a4b-4a80-9c51-ed95d0becc38')!==100||
+            map.get('16a07d40-7a75-4f31-a8b1-fdcf0410a544')!==0)
+            throw Error('APP736_QA_DEPLOYMENT_NOT_EXACT_100_TO_0');
+          console.log('APP736_DEPLOYED_QA_VERSIONS_100_0=PASS');
+          NODE
+      - name: Smoke real QA zero-percent version with NO auth and NO writes
+        run: |
+          set -euo pipefail
+          node scripts/app736-qa-zero-traffic-smoke.mjs
+          echo 'APP736_QA_INACTIVE_WORKER_CODE=REAL_403_TEST_PASS; SIGNED_FOLLOW=NOT_RUN'
+      - name: Restore original single-version QA deployment no matter the result
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+        run: |
+          set -euo pipefail
+          if [ ! -f "$RUNNER_TEMP/app736-qa-deploy-attempted" ]; then
+            echo 'APP736_NO_QA_DEPLOYMENT_ATTEMPT; ORIGINAL_UNCHANGED'
+            exit 0
+          fi
+          test -n "$CLOUDFLARE_API_TOKEN" || exit 2
+          cd cloudflare/explore-worker
+          npx --yes wrangler@4.102.0 versions deploy \
+            '4ed70845-6a4b-4a80-9c51-ed95d0becc38@100%' \
+            --config wrangler.owner-qa-583.json --yes
+          echo 'APP736_QA_ORIGINAL_SINGLE_VERSION_RESTORED'
+      - name: Prove old QA version and bindings restored (GET only)
+        if: always()
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          node scripts/app735-qa-version-bindings.mjs
+          echo 'APP736_FINAL_QA_ORIGINAL_100_PERCENT=PASS; LIVE_SIGNED_RTDB=NOT_RUN'

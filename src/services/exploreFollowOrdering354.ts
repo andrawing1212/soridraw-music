@@ -4,6 +4,25 @@ type Pending354 = { following: boolean; id: string; revision: number };
 const revisions354 = new Map<string, number>();
 const pending354 = new Map<string, Pending354>();
 const queues354 = new Map<string, Promise<unknown>>();
+const primedAt722 = new Map<string, number>();
+const FIRST_VIEW_REVISION_MAX_AGE_722 = 60_000;
+
+// Reuse the exact revision from the already-completed authenticated follow-state
+// GET. Never prime from persisted profile/list caches, a pending intent, or an
+// in-flight writer. A stale first-view hint must fall back to the old safe
+// negotiation path instead of causing a late revision conflict.
+export const primeExploreFollowRevision722 = (
+  viewerUid: string, targetUid: string, protocol: unknown, revision: unknown,
+): void => {
+  const viewer = String(viewerUid || '').trim();
+  const target = String(targetUid || '').trim();
+  if (!viewer || !target || viewer === target || protocol !== 354 ||
+      !Number.isSafeInteger(revision) || Number(revision) < 0) return;
+  const key = JSON.stringify([viewer, target]);
+  if (revisions354.has(key) || pending354.has(key) || queues354.has(key)) return;
+  revisions354.set(key, Number(revision));
+  primedAt722.set(key, Date.now());
+};
 
 // Legacy retains its original single request and no extra body/read. Negotiate
 // ordering only when the armed server explicitly rejects an unordered write.
@@ -14,6 +33,12 @@ export const requestOrderedExploreFollow354 = (
 ): Promise<Payload354> => {
   const key = JSON.stringify([viewerUid, targetUid]);
   const path = `/v1/profiles/${encodeURIComponent(targetUid)}/follow`;
+  const primedAt = primedAt722.get(key);
+  if (primedAt !== undefined && !pending354.has(key) &&
+      (Date.now() - primedAt < 0 || Date.now() - primedAt >= FIRST_VIEW_REVISION_MAX_AGE_722)) {
+    primedAt722.delete(key);
+    revisions354.delete(key);
+  }
   const ordered = () => {
     const task = (queues354.get(key) || Promise.resolve()).catch(() => {}).then(async () => {
       const send = async (operation: Pending354) => {
@@ -27,6 +52,7 @@ export const requestOrderedExploreFollow354 = (
             throw new Error('팔로우 응답 순서를 확인하지 못했습니다. 다시 시도해 주세요.');
           }
           revisions354.set(key, Number(revision));
+          primedAt722.delete(key);
           pending354.delete(key);
           return payload;
         } catch (error) {
@@ -34,6 +60,7 @@ export const requestOrderedExploreFollow354 = (
           if (['FOLLOW_REVISION_CONFLICT', 'FOLLOW_OPERATION_CONFLICT'].includes(String((error as { code?: string })?.code))) {
             pending354.delete(key);
             revisions354.delete(key);
+            primedAt722.delete(key);
           }
           throw error;
         }

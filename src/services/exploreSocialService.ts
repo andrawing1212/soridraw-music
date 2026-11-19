@@ -3,7 +3,7 @@ import type { User } from 'firebase/auth';
 import { getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareLocalCacheHit, recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { readSoridrawPersistentCache, removeSoridrawPersistentCache, writeSoridrawPersistentCache } from '../lib/soridrawPersistentCache';
-import { requestOrderedExploreFollow354 } from './exploreFollowOrdering354';
+import { primeExploreFollowRevision722, requestOrderedExploreFollow354 } from './exploreFollowOrdering354';
 import { shouldHoldOwnFollowingPage682 } from './exploreFollowingPopupConsistency682';
 import { readPendingExploreFollowIntents380 } from './exploreFollowBatchService380';
 import {
@@ -750,6 +750,11 @@ export const getExploreFollowState = async (user: User, uid: string, forceServer
       :{...result,isFollowing:newest,countVerified661:false};
   }
   rememberExploreFollowState(user.uid, normalizedUid, result.isFollowing);
+  // APP722: reuse this verified, fresh server response for the first write.
+  // The two earlier guards reject pending clicks and stale in-flight GETs.
+  if (forceServer) primeExploreFollowRevision722(
+    user.uid, normalizedUid, row?.followProtocol, row?.followRevision,
+  );
   return result;
 };
 

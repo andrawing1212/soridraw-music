@@ -11,10 +11,11 @@ function hold(code){throw Error('APP731_QA_READ_ONLY_'+code)}
 const get=async(path,token,send)=>{
   const listing=PREFIX+'/workers/scripts';
   const deployments=listing+'/'+WORKER+'/deployments';
+  const settings=listing+'/'+WORKER+'/settings';
   const modulePrefix=PREFIX+'/workers/workers/'+WORKER+'/versions/';
   const pinnedVersion=path.startsWith(modulePrefix)?path.slice(modulePrefix.length).split('?')[0]:'';
   const pinnedCodeRead=VERSION.test(pinnedVersion)&&path===modulePrefix+pinnedVersion+'?include=modules';
-  if(path!==listing&&path!==deployments&&!pinnedCodeRead)
+  if(path!==listing&&path!==deployments&&path!==settings&&!pinnedCodeRead)
     hold('CROSS_ACCOUNT_DENIED');
   const r=await send(path,{method:'GET',headers:{
     Authorization:'Bearer '+token,
@@ -49,6 +50,27 @@ export async function inspectQaWorker731(token,send=fetch){
   if(modules?.id&&modules.id!==version)hold('PINNED_CODE_VERSION_CHANGED');
   const fingerprint=analyzePinnedVersionModules(modules);
   const source=modules.modules.map(m=>Buffer.from(m.content_base64,'base64').toString('utf8')).join('\n');
+  // Script settings are a separate GET. They may describe an uploaded
+  // inactive version; do not claim binding parity of the ACTIVE version.
+  // Never log `text`, `secret`, or any other binding value.
+  const settings=await get(PREFIX+'/workers/scripts/'+WORKER+'/settings',token,send);
+  const bindings=settings?.bindings;
+  if(!Array.isArray(bindings)||bindings.length<4||bindings.length>80||
+     new Set(bindings.map(x=>x?.name)).size!==bindings.length)
+    hold('QA_BINDING_INVENTORY_UNVERIFIED');
+  const byName=new Map(bindings.map(({name,type})=>[name,type]));
+  const required={
+    OWNER558_DO:'durable_object_namespace',
+    OWNER583_QA_CONFIG:'secret_text',
+    SORIDRAW_ENVIRONMENT:'plain_text',
+    SORIDRAW_OWNER_FOLLOW_W2_PUSH_555:'plain_text',
+  };
+  const existingQaBindingsPreserved=Object.entries(required)
+    .every(([name,type])=>byName.get(name)===type);
+  const sharedBindingNames=['DB','PROFILE_MEDIA','RATE_DB','EXPLORE_CACHE'];
+  const sharedRuntimeAbsent=sharedBindingNames.every(name=>!byName.has(name));
+  if(!existingQaBindingsPreserved||!sharedRuntimeAbsent)
+    hold('QA_BOUNDARY_BINDINGS_DRIFT');
   const latest=await get(PREFIX+'/workers/scripts/'+WORKER+'/deployments',token,send);
   if(latest?.deployments?.[0]?.versions?.length!==1 ||
      latest.deployments[0].versions[0]?.version_id!==version ||
@@ -63,6 +85,11 @@ export async function inspectQaWorker731(token,send=fetch){
     mainCodeSha256:fingerprint.mainCodeSha256,
     allModulesSha256:fingerprint.allModuleCodeSha256,
     moduleCount:fingerprint.moduleCount,
+    settingsBindingCount:bindings.length,
+    existingQaBindingsPreserved,
+    sharedRuntimeAbsent,
+    bindingsPinnedToActiveVersion:false,
+    authorizedToDeploy:false,
     qa583SourceMarkerPresent:source.includes('createQaOwnerRelay583'),
     app730SourceMarkerPresent:source.includes('createApp730SourceOnlyBridge'),
     app730RuntimeVerified:false,

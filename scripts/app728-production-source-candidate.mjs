@@ -35,6 +35,8 @@ export const APP728_QUARANTINED_SOURCE_FILES=Object.freeze([
  'owner-follow-auth-epoch-532.mjs',
  'owner-follow-qa-boundary-577.mjs',
  'owner-follow-commit-proof-557.mjs',
+ 'owner-follow-precommit-557.mjs',
+ 'owner-follow-recovery-556.mjs',
  'public-follow-dual-ack-671.mjs',
  'public-follow-http-669.mjs',
  'public-follow-proven-pair-669.mjs',
@@ -174,15 +176,21 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  const entry=buildApp729ProductionIntegrationEntry();
  const entryPath=join(dir,'production-follow-entry.mjs');
  const adapterSource=readFileSync(resolve('scripts/app729-production-follow-adapter.mjs'),'utf8');
+ const lifecycleSource=readFileSync(resolve('scripts/app730-source-only-follow-bridge.mjs'),'utf8');
  if(!adapterSource.includes('APP729_PRODUCTION_OWNER_FOLLOW_COMPILED_OPEN = false'))
    fail('INTEGRATION_COMPILE_OFF_REQUIRED');
  mkdirSync(join(dir,'integration'),{recursive:true});
  const adapterPath=join(dir,'integration','app729-production-follow-adapter.mjs');
+ const lifecyclePath=join(dir,'integration','app730-source-only-follow-bridge.mjs');
+ if(!lifecycleSource.includes('APP730_PRODUCTION_RELAY_ENABLED = false'))
+   fail('DURABLE_RELAY_COMPILE_OFF_REQUIRED');
  writeFileSync(adapterPath,adapterSource);
+ writeFileSync(lifecyclePath,lifecycleSource);
  writeFileSync(entryPath,entry.code);
  if(sha256(readFileSync(entryPath))!==entry.sha256)
    fail('INTEGRATION_ENTRY_DRIFT');
  checkSyntax(adapterPath);
+ checkSyntax(lifecyclePath);
  checkSyntax(entryPath);
  candidate.manifest.integration={
    entrypoint:'production-follow-entry.mjs',
@@ -192,6 +200,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
    runtimeEnabled:false,
    deployable:false,
    integrationReadyForProduction:false,
+   sourceOnlyPrecommitAndDurableReplayPresent:true,
  };
  writeFileSync(join(dir,'review-manifest.json'),JSON.stringify(candidate.manifest,null,2)+'\n');
  return {outputDirectory:dir,manifest:candidate.manifest};

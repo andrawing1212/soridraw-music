@@ -14,6 +14,7 @@ function requireBridgeProof729(bridge) {
   if (!bridge || ![
     bridge.verifyFirebaseActorAndAppCheck,
     bridge.reserveDurableBeforeCommit,
+    bridge.makeCanonicalRequest,
     bridge.verifyCanonicalSettledCommit,
     bridge.queueSettledOwnerSignal,
   ].every(isFn)) FAIL('BRIDGE_NOT_VERIFIED');
@@ -54,8 +55,29 @@ export function integrateApp729ProductionOwnerFollow(baseWorker,{
       if (!reservation || reservation.durable!==true ||
           !/^[A-Za-z0-9_-]{16,128}$/.test(String(reservation.operationId||'')))
         return new Response(null,{status:503});
+      // The original canonical Writer must see the exact ID reserved by the
+      // server, not a second client-supplied or newly minted mutation ID.
+      if (!Number.isSafeInteger(reservation.expectedRevision) ||
+          reservation.expectedRevision < 0 || !reservation.cutoverToken ||
+          !/^[0-9a-f]{32}$/.test(String(reservation.authEpoch||'')))
+        return new Response(null,{status:503});
+      let canonicalRequest;
+      try {
+        canonicalRequest=await bridge.makeCanonicalRequest({
+          request,env,ctx,reservation,actorUid:principal.uid,ownerUid:match[1],
+        });
+        if (!(canonicalRequest instanceof Request) ||
+            canonicalRequest.method!==request.method ||
+            canonicalRequest.url!==request.url) throw Error('bad-canonical-request');
+        const envelope=await canonicalRequest.clone().json();
+        if (envelope?.followOperationId!==reservation.operationId ||
+            envelope?.followExpectedRevision!==reservation.expectedRevision)
+          throw Error('unmatched-canonical-operation');
+      }catch{
+        return new Response(null,{status:503});
+      }
       // Canonical Worker retains the ONLY actual follow mutation.
-      const response=await baseWorker.fetch(request,env,ctx);
+      const response=await baseWorker.fetch(canonicalRequest,env,ctx);
       if (!response?.ok) return response;
       // The receipt must independently prove a CHANGED and fully SETTLED
       // canonical commit. Response.ok alone is NOT proof of a change.

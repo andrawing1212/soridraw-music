@@ -79,6 +79,91 @@ assert.equal(joined.shared,true);
 assert.equal(first.startedAt,base);
 assert.equal(joined.startedAt,base);
 
+// APP725: same-account route remount shares only a STILL PENDING GET, not
+// completed answers. No actual Cloudflare, D1, R2, Firebase or browser I/O.
+const observe725=visitsModule.exports.observeExploreFollowViewer725;
+observe725(actor);
+const routeA725=create();
+let loadCount725=0;
+let resolve725;
+const wait725=new Promise(resolve=>{resolve725=resolve;});
+const original725=routeA725.runOrJoin(actor,target,
+  ()=>{loadCount725++;return wait725;},base+100_000);
+const routeB725=create();
+routeB725.invalidate(false); // ordinary same-user Explore component remount
+observe725(actor);
+const joined725=routeB725.runOrJoin(actor,target,
+  ()=>{loadCount725++;throw Error('APP725 duplicate GET');},base+100_100);
+assert.equal(loadCount725,1,'same actor/target across route remount spends one Worker GET');
+resolve725({...verified,followerCount:4});
+const [originalValue725,joinedValue725]=await Promise.all([original725,joined725]);
+assert.equal(joinedValue725.shared,true);
+assert.equal(joinedValue725.startedAt,base+100_000,'join retains request time');
+assert.equal(joinedValue725.current725,true,'no new event => response can be used');
+assert.equal(originalValue725.current725,true);
+await routeB725.runOrJoin(actor,target,()=>{loadCount725++;return verified;},base+100_200);
+assert.equal(loadCount725,2,'completed GET never becomes a module-level cache');
+
+// A click or freshly confirmed RTDB event must invalidate the in-flight GET.
+let resolveOld725;
+const oldPromise725=new Promise(resolve=>{resolveOld725=resolve;});
+const beforeClick725=routeA725.runOrJoin(actor,target,
+  ()=>{loadCount725++;return oldPromise725;},base+110_000);
+routeA725.invalidate(); // click / ACK / real signal
+const afterClick725=await routeB725.runOrJoin(actor,target,
+  ()=>{loadCount725++;return {...verified,isFollowing:true};},
+  base+110_010,base+110_005);
+resolveOld725(verified);
+const stale725=await beforeClick725;
+assert.equal(stale725.current725,false,'obsolete GET cannot be cached after invalidation');
+assert.equal(afterClick725.current725,true);
+assert.equal(afterClick725.shared,false,'changed state requires its own read');
+assert.equal(loadCount725,4);
+
+// A newer receipt can disqualify the earlier pending GET even if a route
+// change occurred before its invalidation callback ran.
+let releaseChoice725;
+const choicePending725=new Promise(resolve=>{releaseChoice725=resolve;});
+const beforeChoice725=routeA725.runOrJoin(actor,target,
+  ()=>{loadCount725++;return choicePending725;},base+120_000);
+const afterChoice725=await routeB725.runOrJoin(actor,target,
+  ()=>{loadCount725++;return {...verified,isFollowing:true};},
+  base+120_020,base+120_010);
+releaseChoice725(verified);
+await beforeChoice725;
+assert.equal(afterChoice725.shared,false,'GET started before newest receipt not shareable');
+
+// An outstanding pending final-state intent never joins an unrelated read.
+let releasePending725;
+const pendingWait725=new Promise(resolve=>{releasePending725=resolve;});
+const beforePending725=routeA725.runOrJoin(actor,target,
+  ()=>{loadCount725++;return pendingWait725;},base+130_000);
+const pendingResult725=await routeB725.runOrJoin(actor,target,
+  ()=>{loadCount725++;return {...verified,isFollowing:true};},
+  base+130_010,base+130_005,true);
+releasePending725(verified);
+await beforePending725;
+assert.equal(pendingResult725.shared,false,'queued change must not reuse GET');
+
+// Account changes fence cross-mount requests, including switching back.
+let releaseAccount725;
+const waitingAccount725=new Promise(resolve=>{releaseAccount725=resolve;});
+const priorAccount725=routeA725.runOrJoin(actor,target,
+  ()=>{loadCount725++;return waitingAccount725;},base+140_000);
+observe725('new-viewer');
+observe725(actor);
+const afterSwitch725=await routeB725.runOrJoin(actor,target,
+  ()=>{loadCount725++;return verified;},base+140_010);
+releaseAccount725(verified);
+assert.equal((await priorAccount725).current725,false);
+assert.equal(afterSwitch725.shared,false);
+assert.equal(afterSwitch725.current725,true);
+assert.equal(routeB725.read(actor,target,base+140_020,true),null,
+  'request joining does not retain any completed state beyond APP715 cache');
+console.log('APP725_SAME_PAIR_RAPID_ROUTE_ONE_INFLIGHT_GET=PASS');
+console.log('APP725_CHANGED_CHOICE_PENDING_SIGNAL_ACCOUNT_FAIL_CLOSED=PASS');
+console.log('APP725_NO_NEW_POLL_CACHE_NETWORK_OR_SHARED_DATA_WRITE=PASS');
+
 const subscriptions=[];
 const syncModule={exports:{}};
 const fakeDatabase={
@@ -125,6 +210,12 @@ assert.match(page,/canReuseVerifiedFollowChoice724\(currentRecentChoice724,candi
  'APP724 settled choice must be backed by an exact cached GET');
 assert.match(page,/canRememberPostAckFollowChoice724\(/,
  'APP724 post-ACK verified GET must become reusable');
+assert.match(page,/observeExploreFollowViewer725\(user\?\.uid\)/,
+ 'same-user remount preserves only unfinished exact-pair requests');
+assert.match(page,/followVisitCache715Ref\.current\?\.invalidate\(false\)/,
+ 'route remount must retain global in-flight, not persistent visit cache');
+assert.match(page,/fetchedFollow716\?\.current725!==false/,
+ 'invalidated stale read must never populate visit cache');
 assert.match(page,/const reusableFollow716=!queuedFollow&&!recentChoice715\(\)/,
  'pending and recent local choice still force canonical verification');
 assert.match(page,/window\.addEventListener\('offline',onBoundary720\)/);

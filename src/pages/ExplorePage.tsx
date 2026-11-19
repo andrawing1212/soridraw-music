@@ -109,7 +109,7 @@ import {
   subscribeExploreFollowSync377,
 } from '../services/exploreFollowSyncService';
 import {shouldHoldOwnFollowingPage682} from '../services/exploreFollowingPopupConsistency682';
-import {createExploreFollowVisitReuse715,
+import {createExploreFollowVisitReuse715,observeExploreFollowViewer725,
   canReuseVerifiedFollowChoice724,canRememberPostAckFollowChoice724}
   from '../services/exploreFollowVisitReuse715';
 import {readExploreFollowLocalChoice685,rememberExploreFollowLocalChoice685,
@@ -3435,8 +3435,11 @@ export default function ExplorePage() {
   // APP715/720: no long-lived lease across account, tab or connectivity
   // boundaries. Existing 10s fallback remains; no focus, timer or server poll.
   useEffect(() => {
+    observeExploreFollowViewer725(user?.uid);
     followStreamReady720Ref.current='';
-    followVisitCache715Ref.current?.invalidate();
+    // A same-account Explore remount must not discard another instance's
+    // still-pending one-pair GET. An actual account change is fenced above.
+    followVisitCache715Ref.current?.invalidate(false);
     lastPublicVisitRevision715Ref.current.clear();
     const onBoundary720=()=>{
       followStreamReady720Ref.current='';
@@ -3809,13 +3812,15 @@ export default function ExplorePage() {
               ?canReuseVerifiedFollowChoice724(currentRecentChoice724,candidateFollow715,Date.now())
                 ?candidateFollow715:null
               :candidateFollow715;
-            const fetchedFollow716=cachedFollow715?null:reusableFollow716
-              ?await visit715.runOrJoin(user.uid,nextProfile.uid,
+            // APP725: join one in-flight exact-pair read even during the
+            // post-click 30s fence. An unconfirmed click is never shared,
+            // and a GET started before the latest receipt is never joined.
+            const fetchedFollow716=cachedFollow715?null:
+              await visit715.runOrJoin(user.uid,nextProfile.uid,
                 ()=>getExploreFollowState(user, nextProfile.uid, true),
-                followReadStartedAt685)
-              :{state:await getExploreFollowState(user, nextProfile.uid, true),
-                startedAt:followReadStartedAt685,generation:visitGeneration715,
-                shared:false};
+                followReadStartedAt685,
+                reusableFollow716?0:(recentChoiceRecord715()?.at??0),
+                Boolean(queuedFollow));
             const nextFollowState=cachedFollow715??fetchedFollow716!.state;
             // A joined response was started by the earlier visit: use its
             // ORIGINAL request time for all stale-response and receipt fences.
@@ -3828,7 +3833,7 @@ export default function ExplorePage() {
                 'LOCAL JOIN · 진행 중인 조회 공유');
             const postAckVerified724=canRememberPostAckFollowChoice724(
               recentChoiceRecord715(),nextFollowState,effectiveReadStartedAt716,Date.now());
-            if(!cachedFollow715&&!cancelled&&
+            if(!cachedFollow715&&!cancelled&&fetchedFollow716?.current725!==false&&
               (!recentChoice715()||postAckVerified724)&&
               !readPendingExploreFollowIntents380(user.uid)
                 .some(row=>row.targetUid===nextProfile.uid))

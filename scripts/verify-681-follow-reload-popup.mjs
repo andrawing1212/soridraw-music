@@ -263,7 +263,8 @@ assert.match(page715,/const cachedFollow715=currentRecentChoice724/,
   'recent settled choice requires verified post-ACK cache match');
 assert.match(page715,/canReuseVerifiedFollowChoice724\(currentRecentChoice724,candidateFollow715,Date\.now\(\)\)/,
   'APP724 must not bypass canonical verification for unmatched choice');
-assert.match(page715,/await getExploreFollowState\(user, nextProfile.uid, true\)/,
+assert.match(page715,/\(\)=>getExploreFollowState\(user, nextProfile.uid, true\)/,
+ 'APP725 cold visit still makes exactly one authenticated GET through single-flight',
  'cold visit still uses canonical authenticated GET');
 assert.match(page715,/!readPendingExploreFollowIntents380\(user.uid\)/,
  'never cache while an unconfirmed local click is pending');

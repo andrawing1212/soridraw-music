@@ -62,6 +62,12 @@ jobs:
           test -n "$SHA" && test "$SHA" = "$(git rev-parse HEAD)" || exit 2
           test "$SHA" = "$(git ls-remote origin refs/heads/main | cut -f1)" || exit 2
           node scripts/verify-736-qa-zero-traffic-smoke.mjs
+          # The original independent QA Wrangler config is pinned to PREVIEW,
+          # not present on main; use the already-verified exact QA source.
+          git fetch origin preview --no-tags
+          test "$(git rev-parse origin/preview)" = "4363820117100cb03bcbc44a01e127aeb5de3cf4" || exit 2
+          git worktree add --detach "$RUNNER_TEMP/app736-preview" 4363820117100cb03bcbc44a01e127aeb5de3cf4
+          test -f "$RUNNER_TEMP/app736-preview/cloudflare/explore-worker/wrangler.owner-qa-583.json" || exit 2
       - name: Exact QA active/staged bindings and traffic preflight (GET only)
         env:
           CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
@@ -78,7 +84,7 @@ jobs:
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN" || exit 2
           touch "$RUNNER_TEMP/app736-qa-deploy-attempted"
-          cd cloudflare/explore-worker
+          cd "$RUNNER_TEMP/app736-preview/cloudflare/explore-worker"
           npx --yes wrangler@4.102.0 versions deploy \
             '4ed70845-6a4b-4a80-9c51-ed95d0becc38@100%' \
             '16a07d40-7a75-4f31-a8b1-fdcf0410a544@0%' \
@@ -121,7 +127,7 @@ jobs:
             exit 0
           fi
           test -n "$CLOUDFLARE_API_TOKEN" || exit 2
-          cd cloudflare/explore-worker
+          cd "$RUNNER_TEMP/app736-preview/cloudflare/explore-worker"
           npx --yes wrangler@4.102.0 versions deploy \
             '4ed70845-6a4b-4a80-9c51-ed95d0becc38@100%' \
             --config wrangler.owner-qa-583.json --yes

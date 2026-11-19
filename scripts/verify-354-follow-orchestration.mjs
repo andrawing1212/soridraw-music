@@ -386,7 +386,7 @@ assert.equal(readonly.metrics().changed,0);
 const client = {};
 vm.createContext(client);
 const clientSource = readFileSync('src/services/exploreFollowOrdering354.ts','utf8').replace('export const','const');
-vm.runInContext(ts.transpileModule(clientSource, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText + '\nglobalThis.client354 = requestOrderedExploreFollow354;',client);
+vm.runInContext(ts.transpileModule(clientSource, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText + '\nglobalThis.client354 = requestOrderedExploreFollow354; globalThis.prime722 = primeExploreFollowRevision722;',client);
 client.crypto = crypto;
 let legacyCalls = [];
 const legacyRequest = async (path, init) => { legacyCalls.push([path,init]); return { data: { following: true } }; };
@@ -414,6 +414,42 @@ await Promise.all([client.client354('overlay-viewer','target',false,orderedReque
 assert.equal(revision,3);
 const conflict = async () => { throw Object.assign(Error('conflict'),{ code:'FOLLOW_REVISION_CONFLICT' }); };
 await assert.rejects(client.client354('overlay-viewer','target',false,conflict), { code:'FOLLOW_REVISION_CONFLICT' });
+// APP722: a fresh authenticated follow-state GET already contains the pair
+// revision. The first mutation must not send a rejected legacy request OR
+// issue a second follow-state GET. Legacy/unverified and stale hints still
+// follow the original safe negotiation.
+const seededCalls722 = [];
+client.prime722('first-viewer-722','target',354,7);
+client.prime722('first-viewer-722','target',354,6); // never regress a known hint
+await client.client354('first-viewer-722','target',true,async (path,init)=>{
+  seededCalls722.push([path,init]);
+  assert.equal(path.endsWith('/follow'),true);
+  assert.equal(init.method,'PUT');
+  assert.equal(JSON.parse(init.body).followExpectedRevision,7);
+  return {data:{revision:8}};
+});
+assert.equal(seededCalls722.length,1,'APP722 first follow added a rejected probe or redundant GET');
+client.prime722('first-viewer-722','target',354,1); // cannot undo confirmed revision
+await client.client354('first-viewer-722','target',false,async (path,init)=>{
+  assert.equal(JSON.parse(init.body).followExpectedRevision,8);
+  return {data:{revision:9}};
+});
+const legacy722=[];
+client.prime722('legacy-viewer-722','target',0,4);
+client.prime722('legacy-viewer-722','target',354,'4');
+await client.client354('legacy-viewer-722','target',true,async (path,init)=>{
+  legacy722.push([path,init]);
+  return {data:{isFollowing:true}};
+});
+assert.equal(legacy722.length,1);
+assert.equal(legacy722[0][1].body,undefined,'unverified/legacy write changed behavior');
+const guardedSource722 = readFileSync('src/services/exploreSocialService.ts','utf8');
+assert.match(guardedSource722,/if \(forceServer\) primeExploreFollowRevision722\(/);
+assert.ok(guardedSource722.indexOf('if(pending681)return result;') <
+  guardedSource722.indexOf('primeExploreFollowRevision722('));
+assert.ok(guardedSource722.indexOf('if(followGeneration681(user.uid)!==startedGeneration681)') <
+  guardedSource722.indexOf('primeExploreFollowRevision722('));
+console.log('APP722_FIRST_FOLLOW_NO_REJECTED_PROBE_OR_DUPLICATE_GET=PASS');
 await verifyFollowStateReadCandidate717({ fixture, cutover, source });
 await verifyFollowMutationReadCandidate718({ fixture, cutover, source, id });
 await verifyFollowMembershipCandidate719({ fixture, cutover, source });

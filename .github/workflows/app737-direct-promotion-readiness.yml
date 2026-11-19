@@ -1,0 +1,113 @@
+name: SORIDRAW Direct PREVIEW to PRODUCTION Parity (read-only, no TEST)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/app737-direct-promotion-contract.mjs'
+      - 'scripts/app737-live-readiness.mjs'
+      - 'scripts/verify-737-direct-promotion-contract.mjs'
+      - '.github/workflows/app737-direct-promotion-readiness.yml'
+      - 'DOCS/PREVIEW_PRODUCTION_DIRECT_PROMOTION.md'
+  workflow_dispatch:
+    inputs:
+      preview_sha:
+        description: 'Exact current PREVIEW HEAD SHA for READ-ONLY parity readiness'
+        required: true
+        type: string
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-direct-preview-production-parity
+  cancel-in-progress: false
+
+jobs:
+  synthetic:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Parity invariants, fail-closed without cloud credentials
+        run: |
+          set -euo pipefail
+          node --check scripts/app737-direct-promotion-contract.mjs
+          node --check scripts/app737-live-readiness.mjs
+          node scripts/verify-737-direct-promotion-contract.mjs
+
+  readiness:
+    if: >-
+      github.actor == github.repository_owner &&
+      (github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'issue_comment' &&
+         github.event.issue.number == 1259 &&
+         github.event.issue.pull_request != null &&
+         startsWith(github.event.comment.body, '/app737-readiness ')))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Lock exact PREVIEW HEAD and source tree
+        env:
+          INPUT_SHA: ${{ inputs.preview_sha }}
+          COMMAND: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          SHA="$INPUT_SHA"
+          if [ "$GITHUB_EVENT_NAME" = issue_comment ]; then
+            SHA="$(printf '%s' "$COMMAND" | sed -nE 's|^/app737-readiness ([0-9a-f]{40})$|\1|p')"
+          fi
+          printf '%s' "$SHA" | grep -Eq '^[0-9a-f]{40}$'
+          git fetch origin preview --no-tags
+          CURRENT="$(git rev-parse origin/preview)"
+          test "$SHA" = "$CURRENT" || { echo 'APP737_EXACT_PREVIEW_HEAD_DRIFT_HOLD'; exit 2; }
+          git worktree add --detach "$RUNNER_TEMP/app737-preview" "$SHA"
+          echo "APP737_PREVIEW_SHA=$SHA" >> "$GITHUB_ENV"
+          echo "APP737_CURRENT_PREVIEW_SHA=$CURRENT" >> "$GITHUB_ENV"
+          echo "APP737_SOURCE_ROOT=$RUNNER_TEMP/app737-preview" >> "$GITHUB_ENV"
+      - name: Synthetic proof must pass
+        run: node scripts/verify-737-direct-promotion-contract.mjs
+      - name: Build exact PREVIEW source in isolated runner, no Hosting deploy
+        run: |
+          set -euo pipefail
+          cd "$APP737_SOURCE_ROOT"
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          DIGEST="$(find dist -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
+          test "${#DIGEST}" = 64
+          echo "APP737_DIST_SHA256=$DIGEST" >> "$GITHUB_ENV"
+          echo 'APP737_PREVIEW_EXACT_BUILD=PASS; HOSTING_DEPLOY=NOT_RUN'
+      - name: Authenticate existing Firebase service account for GET-only Hosting metadata
+        uses: google-github-actions/auth@v2
+        id: firebase_auth
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          token_format: access_token
+      - name: GET-only live PREVIEW/PRODUCTION resource and feature parity gap
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          FIREBASE_ACCESS_TOKEN: ${{ steps.firebase_auth.outputs.access_token }}
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$APP737_PREVIEW_SHA" || exit 2
+          node scripts/app737-live-readiness.mjs
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$APP737_PREVIEW_SHA" || exit 2
+          echo 'APP737_PARITY_INVENTORY=PASS_READ_ONLY; DIRECT_PRODUCTION_RELEASE=HOLD'

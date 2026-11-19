@@ -1,0 +1,136 @@
+// APP737: PREVIEW -> PRODUCTION direct promotion contract (TEST is untouched).
+// Pure gate. No deployment, auth, network, data mutations or authorization bypass.
+import {createHash} from 'node:crypto';
+import {compareApp728Bindings} from './app728-binding-diff.mjs';
+
+const SHA40=/^[0-9a-f]{40}$/;
+const SHA64=/^[0-9a-f]{64}$/;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const VERSION_ID=/^sites\/(soridraw-preview|soridraw)\/versions\/[A-Za-z0-9_-]{4,128}$/;
+const isTrue=x=>x===true;
+const fingerprint=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+function different(a,b){return a!==b}
+function formatBindings(report){
+  return {previewOnly:report.onlyPreview,productionOnly:report.onlyProduction,
+    sharedCanonical:report.shared,changedTypes:report.changedTypes,
+    changedTargets:report.changedTargets,anomalies:report.anomalies};
+}
+export function assessApp737DirectPromotion(input={}){
+  const blockers=[];
+  const hold=x=>blockers.push(x);
+  const sha=input.previewSha;
+  const source=input.source||{}, h=input.hosting||{}, w=input.workers||{};
+  const gate=input.verification||{};
+  const policies=input.bindingDisposition||{};
+  const must=['previewExplore','productionExplore','previewMedia','productionMedia'];
+  const workers=Object.fromEntries(must.map(k=>[k,w[k]||{}]));
+  const prodBefore={};
+  if(!SHA40.test(sha||'')||sha!==input.currentPreviewHead||
+     source.previewSha!==sha)hold('EXACT_PREVIEW_SOURCE_NOT_PINNED');
+  if(!SHA64.test(source.distSha256||'')||
+     source.distSha256!==source.previewLiveDistSha256||
+     !isTrue(source.noBuildTimeEnvironmentDrift))
+    hold('EXACT_PREVIEW_HOSTING_ASSET_NOT_PROVEN');
+  if(h.preview?.site!=='soridraw-preview'||h.production?.site!=='soridraw'||
+     !VERSION_ID.test(String(h.preview?.version||''))||
+     !VERSION_ID.test(String(h.production?.version||''))||
+     !String(h.preview.version).startsWith('sites/soridraw-preview/versions/')||
+     !String(h.production.version).startsWith('sites/soridraw/versions/'))
+    hold('LIVE_HOSTING_ROLLBACK_VERSION_NOT_PINNED');
+  if(!isTrue(h.sourceLiveMatchesPinnedBuild)||!isTrue(h.cloneHeadersAndCacheReviewed))
+    hold('HOSTING_CLONE_COMPATIBILITY_NOT_PROVEN');
+  for(const key of must){
+    const value=workers[key];
+    if(!UUID.test(value.activeVersion||'')||Number(value.trafficPercent)<99.99||
+       !isTrue(value.pinnedBindingsVerified)||!isTrue(value.schedulesVerified))
+       hold('ACTIVE_WORKER_VERSION_OR_BINDINGS_UNPROVEN_'+key);
+    if(value.hasUnexpectedMigration)hold('WORKER_MIGRATION_UNSAFE_'+key);
+    if(key.startsWith('production'))prodBefore[key]={
+      version:value.activeVersion||null,
+      bindingNamesAndTypes:fingerprint((value.bindings||[])
+        .map(x=>x.name+':'+x.type).sort()),
+      schedules:fingerprint(value.schedules||[]),
+    };
+  }
+  let bindingDiff=null;
+  if(must.every(key=>Array.isArray(workers[key].bindings))){
+    const diff=compareApp728Bindings(workers.previewExplore,workers.productionExplore);
+    bindingDiff=formatBindings(diff);
+    for(const x of diff.anomalies)hold(x);
+    if(diff.changedTypes.length)hold('BINDING_TYPE_CONFLICT');
+    for(const b of diff.onlyPreview){
+      const [name]=b.split(':');
+      // Omission is allowed only with documented QA-only/diagnostic proof.
+      const disposition=policies[name];
+      if(disposition?.classification!=='QA_ONLY'&&disposition?.classification!=='DIAGNOSTIC_ONLY')
+        hold('PREVIEW_BINDING_NOT_ACCOUNTED_FOR_'+name);
+      else if(disposition.evidenceVerified!==true)
+        hold('NONPRODUCTION_BINDING_EXCLUSION_UNVERIFIED_'+name);
+    }
+    for(const row of diff.changedTargets){
+      if(row.name!=='SORIDRAW_ENVIRONMENT')hold('BINDING_TARGET_DRIFT_'+row.name);
+    }
+    for(const shared of diff.shared)
+      if(!shared.presentInBoth||!shared.sameTarget)hold('SHARED_CANONICAL_BACKEND_DRIFT_'+shared.name);
+  }else hold('WORKER_BINDING_INVENTORY_MISSING');
+  const requiredChecks=[
+    'exactFrontendSourceAndRoutes',
+    'exploreWorkerCodeAndFeatureFlags',
+    'mediaWorkerCodeAndRoutes',
+    'functionsReceiverParity',
+    'firebaseRulesAndAuthAppCheck',
+    'allPreviewUserFeaturesInventoryComplete',
+    'previewPcRealUsePass',
+    'previewMobileRealUsePass',
+    'productionExistingUserUpgradeCompatible',
+    'productionEnvironmentAndLegacyBindingsCompatible',
+    'rollbackSnapshotAndRehearsalPass',
+    'costAndNoPassiveWritesVerified',
+  ];
+  for(const key of requiredChecks)if(gate[key]!==true)
+    hold('PROMOTION_EVIDENCE_REQUIRED_'+key);
+  const features=Array.isArray(input.featureMatrix)?input.featureMatrix:[];
+  if(features.length===0||new Set(features.map(x=>x?.id)).size!==features.length||
+     features.some(x=>!/^[a-z][a-z0-9_-]{1,60}$/.test(String(x?.id||''))))
+    hold('COMPLETE_FEATURE_MATRIX_NOT_PROVIDED');
+  for(const feature of features){
+    if(feature?.previewPass!==true||feature?.productionEquivalentVerified!==true)
+      hold('FEATURE_PARITY_NOT_PROVEN_'+String(feature?.id||'unknown'));
+  }
+  if(input.testEnvironmentTouched===true)hold('TEST_ENVIRONMENT_MODIFICATION_FORBIDDEN');
+  if(input.sharedUserDataMutationRequested===true)hold('SHARED_USER_DATA_MUTATION_FORBIDDEN');
+  if(input.productionBackendChangeApproved!==true&&input.productionBackendChangeRequired===true)
+    hold('SHARED_BACKEND_CHANGE_REQUIRES_SEPARATE_APPROVAL');
+  const result={
+    kind:'APP737_PREVIEW_TO_PRODUCTION_DIRECT_PROMOTION',
+    status:blockers.length?'HOLD':'READY_FOR_DIRECTOR_APPROVAL',
+    productionDeploymentExecuted:false,
+    executable:false,
+    testEnvironmentTouched:false,
+    exactPreviewSource:SHA40.test(sha||'')?sha:null,
+    proposedOrder:[
+      'freeze exact live PREVIEW artifact and all user feature proofs',
+      'verify production canonical resources and preserve legacy bindings',
+      'stage migration-safe Explore and Media Workers with immutable rollback targets',
+      'verify candidate code, bindings, Functions, Rules, Auth/AppCheck and PC/mobile parity',
+      'activate only separately approved backend changes after real QA and rollback rehearsal',
+      'clone exact PREVIEW Hosting live version to PRODUCTION live with source drift gate',
+      'verify PRODUCTION routes, PC/mobile upgrade and stored rollback versions',
+    ],
+    rollback:{
+      hostingVersion:h.production?.version||null,
+      workerVersions:prodBefore,
+    },
+    bindingInventory:bindingDiff,
+    unproven:[...new Set(blockers)].sort(),
+  };
+  result.manifestSha256=fingerprint({
+    previewSha:result.exactPreviewSource,
+    source:source.distSha256,
+    hosting:h,
+    workers:prodBefore,
+    features:features.map(x=>x.id).sort(),
+    blockers:result.unproven,
+  });
+  return result;
+}

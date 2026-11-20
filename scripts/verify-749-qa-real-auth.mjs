@@ -49,7 +49,7 @@ await reject(request('PUT','follow',cfg.actorUid,appClaims(),
 await reject(request('PUT','follow',cfg.actorUid,
   {...appClaims(),aud:['projects/other']}),checkOpts('PUT','follow'));
 await reject(request('PUT','follow',cfg.actorUid,
-  {...appClaims(),sub:'1:1083981050742:web:foreign'}),checkOpts('PUT','follow'));
+  {...appClaims(),sub:'1:999999999:web:foreign'}),checkOpts('PUT','follow'));
 await reject(request('PUT','follow',cfg.actorUid,appClaims(),
   {...authClaims(cfg.actorUid),iss:'https://securetoken.google.com/soridraw-app-866a5'}),
   checkOpts('PUT','follow'));

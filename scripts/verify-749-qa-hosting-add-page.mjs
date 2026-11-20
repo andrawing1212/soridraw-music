@@ -75,6 +75,10 @@ function fake({missingIndex=false,wrongOperation=false,changedRelease=false,smok
    assert.deepEqual(JSON.parse(opts.body),{status:'FINALIZED'});final=true;return make({});
   }
   if(path===site+'/releases'&&opts.method==='POST'){
+   // Firebase Hosting Release.type is output-only for normal DEPLOY;
+   // supplying {"type":"DEPLOY"} is rejected with HTTP 400.
+   assert.equal(opts.body,undefined,'normal release and rollback must omit body');
+   assert.equal(opts.headers['Content-Type'],undefined,'no JSON release body');
    const requested=new URL(url).searchParams.get('versionName');
    assert(final);
    current=requested;

@@ -1,3 +1,15 @@
+## 0APP749. 실제 Firebase Auth·App Check QA 전용 검증 경로 / 임시 활성화·원본복구 PASS (2026-11-21 KST)
+
+- 디렉터 승인 범위: PR #1284 병합 및 기존 격리 QA Worker에만 실제 서명 토큰 검사 경로 임시 활성화. TEST/PRODUCTION/공유 사용자 데이터 변경 금지.
+- PR #1284 main 병합 commit `d74d834f64059bdf874ac9179c033cf4b3f06fb6`; QA HTTP 검사 수정 main `7387f872da4e9934462273c4f7984c2bb791629e`; preview HEAD `4363820117100cb03bcbc44a01e127aeb5de3cf4` 불변.
+- 실제 Firebase App Check 원본 JWT에는 `app_id` 필드가 없고 `sub`가 App ID임을 공식 규격으로 확인해, 이전 synthetic mock false-green을 수정. QA signed Auth/AppCheck RS256 검증 + QA project/UID 고정, 다른 프로젝트/만료/위조 토큰 거부, 기존 APP583/APP730 경로 보존.
+- 변경 전 오프라인 APP749 검증 [Actions #44770940492] SUCCESS, 기존 APP732 호환성 [#44770940547] SUCCESS.
+- 1차 격리 QA 실서버 [#44771242688]: 신규 버전 업로드·활성화 PASS, 즉시 403 응답 검사는 구/신 응답 여부를 분리하지 못해 FAIL. 하지만 APP583 100% 복구 명령과 최종 실제 HTTP 확인 PASS. 이 실패를 보안 PASS로 취급하지 않음.
+- HTTP 검사를 좁혀 구버전 403 응답 전파와 실제 인증 우회를 구분하도록 수정. 403 외 응답 또는 ok:false 부재는 즉시 FAIL. 2차 격리 QA 실서버 [Actions #44771635185] **SUCCESS**: 기존 APP583 original100 + QA bindings preflight PASS → APP749 새 버전의 QA 전용 5개 바인딩/공유 D1·R2 없음 PASS → 정확한 새 QA 버전 임시 100% PASS → 실제 무인증/합성 probe만 요청 3건 모두 HTTP 403·QA749 서명 경계 차단 PASS → 기존 APP583 경로 보존 PASS → historical APP583 `4ed70845-6a4b-4a80-9c51-ed95d0becc38` 100% 원복 PASS → 원본 버전·바인딩·실제 HTTP PASS.
+- **QA Worker 현재 상태는 기존 APP583 100% 복구**. 신규 APP749는 서버에서 더 이상 활성화돼 있지 않음. 자동 복구 완료 및 QA 외 환경 배포 0. 검증 과정의 HTTP 거부 요청으로 QA RTDB/DO 사용자 변경 0.
+- **HOLD**: QA 프로젝트에서 실제 발급된 A·B Firebase Auth ID token + 유효한 App Check token을 이용한 `/qa730/verified/follow` 및 취소/QA RTDB PC↔모바일 실검증은 수행하지 못함. GitHub에는 실제 QA 토큰·Cloud Shell 자격증명이 없고 QA Worker는 임시 활성화가 종료된 상태. 기존 APP748 synthetic 503→DO retry→QA Functions/RTDB v9/1→v10/0 PASS와 혼동 금지. 실제 Firebase Auth 토큰 폐기 여부·App Check 실제 발급, 실기기 PC·모바일 아직 미검증.
+- 다음 안전 단계: QA Cloud Shell에 기존 QA A/B 실제 Firebase Auth/App Check 토큰을 **기밀을 채팅/GitHub에 공개하지 않는 방식으로** 준비할 수 있는지 확인. QA 전용 허용 경로에서만 한 번의 제한된 인증·팔로우/취소·RTDB 검증 후 APP583 자동 복구. 새로운 QA 계정 생성·App Check 설정·IAM 변경이 필요하면 별도 승인 전 실행 금지. TEST/PRODUCTION, 공유 D1/R2/RTDB·사용자 원본 변경 금지.
+
 ## 0RQ. follow W1~W2 shared schema 적용 + PREVIEW rollback-safe Worker 배포 완료 / cutover OFF (2026-10-07 KST)
 
 실제 완료:

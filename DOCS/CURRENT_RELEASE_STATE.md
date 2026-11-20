@@ -6,6 +6,7 @@
 - `qa/app749/qa749.html`: 기존 QA584 index를 덮지 않는 신규 시험 화면. QA Firebase Web SDK로 기존 A·B 로그인(인메모리), QA App Check 서명 토큰 발급, QA A RTDB `onValue` 단일 수신, B의 signed follow/unfollow 1회씩, A/B 서버 확정/RTDB 0→1→0 확인. 인증정보·비밀번호·토큰 저장/출력 금지. PC/모바일 실기기 동작은 별도 확인 필요.
 - `scripts/app749-qa-hosting-add-page.mjs`: 기존 QA584 Hosting live 버전을 Firebase Hosting REST API `versions:clone`으로 그대로 복제하고 `/qa749.html`만 추가하는 QA 전용 Cloud Shell 스크립트. 버전·기존 파일/Config 보존, 동시 릴리스 충돌 차단, 원본 HTTP 보호, 실패 시 기존 버전 재릴리스. `--check`는 읽기 전용, `--deploy`는 QA584 Hosting에만 작성. 테스트 로컬/모의 기능, 실제 Hosting API 실행은 아직 아님.
 - 신규 코드·기존 APP730 호환 실행형 검사: Actions #44803481529, #44803481526 **SUCCESS**. 기존 APP749 원본 Worker 회복 PASS [#44771635185] 재사용. main 저장 성공 ≠ QA Hosting 배포 성공 ≠ 실제 로그인 성공.
+- QA 실기기 검증을 위한 기존 `.github/workflows/app749-qa-real-auth-offline.yml`의 **추가 QA 전용** `/app749-qa-browser <mainSHA>` 실행 창을 main `8f56fe3c479726ee3cdac7c53dcda05ad1ff99b2`에 반영. GitHub owner 명령 + 정확한 main SHA + 기존 QA 원본/바인딩 확인 후 12분간 QA749만 임시 활성화, 종료·실패 시 APP583 자동 원복. QA 사이트가 실제 배포되고 A/B 로그인 준비되기 전에는 창을 열지 않음. Worker 물리 실행 및 PC/모바일 PASS 미검증.
 - **미완료/HOLD:** 사용자 기존 QA Cloud Shell에서 `--check` 확인 후 QA584에 별도 페이지를 append 배포해야 함. 여기서는 Cloud Shell에 원격 명령을 직접 입력할 수 없고 실제 QA Hosting/Cloudflare 배포 미실행. QA749 Worker는 원본 APP583 100% 상태. 기존 A·B QA 암호/실토큰 및 실기기 PC↔모바일 미확인. APP749 잠깐 활성화/자동 원복은 QA B 토큰을 쓸 준비가 된 때 기존 승인 QA 경로만 사용. TEST/PRODUCTION/공유 DB/원본 사용자 데이터 변경 금지.
 
 ## 0APP749. 실제 Firebase Auth·App Check QA 전용 검증 경로 / 임시 활성화·원본복구 PASS (2026-11-21 KST)

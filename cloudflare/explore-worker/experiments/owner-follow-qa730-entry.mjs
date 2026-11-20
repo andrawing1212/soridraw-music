@@ -40,21 +40,52 @@ export function createQaAuthEntry749({verify=qaVerify,legacy=originalWorker}={})
       const verifiedPrefix='/qa730/verified/';
       const isVerified=pathname.startsWith(verifiedPrefix);
       if(isVerified){
+        // Browser access restricted to the existing isolated QA Hosting origin.
+        // No wildcard, no credentials forwarding, no public production origins.
+        const origin=request.headers.get('Origin');
+        const allowedOrigin='https://soridraw-qa-owner-584.web.app';
+        if(origin&&origin!==allowedOrigin)return respond(403);
+        const cors=(response)=>{
+          if(!origin)return response;
+          const headers=new Headers(response.headers);
+          headers.set('Access-Control-Allow-Origin',allowedOrigin);
+          headers.set('Vary','Origin');
+          headers.set('Cache-Control','no-store');
+          return new Response(response.body,{status:response.status,headers});
+        };
+        const deny=status=>cors(respond(status));
         // Explicit opt-in on an INACTIVE QA candidate; APP583 remains unchanged.
-        if(env?.SORIDRAW_QA749_REAL_AUTH!=='1')return respond(403);
+        if(env?.SORIDRAW_QA749_REAL_AUTH!=='1')return deny(403);
         const action=pathname.slice(verifiedPrefix.length);
+        if(!['status','follow'].includes(action))return deny(404);
+        if(request.method==='OPTIONS'){
+          if(!origin)return respond(403);
+          const method=request.headers.get('Access-Control-Request-Method')||'';
+          if(!((action==='status'&&method==='GET')||
+                (action==='follow'&&['PUT','DELETE'].includes(method))))
+            return deny(403);
+          const requested=(request.headers.get('Access-Control-Request-Headers')||'')
+            .toLowerCase().split(',').map(x=>x.trim()).filter(Boolean);
+          const allowed=['authorization','x-firebase-appcheck','accept','cache-control'];
+          if(requested.some(x=>!allowed.includes(x)))return deny(403);
+          const headers=new Headers({'Access-Control-Allow-Methods':
+            action==='status'?'GET, OPTIONS':'PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers':allowed.join(', '),
+            'Access-Control-Max-Age':'30'});
+          return cors(new Response(null,{status:204,headers}));
+        }
         if(!((action==='status'&&request.method==='GET')||
               (action==='follow'&&['PUT','DELETE'].includes(request.method))))
-          return respond(404);
+          return deny(404);
         let principal;
         try{
           principal=await verify(request,{actorUid:cfg.actorUid,
             ownerUid:cfg.ownerUid,method:request.method,path:action});
-        }catch{return respond(403)}
+        }catch{return deny(403)}
         if(principal?.verified!==true||
           (action==='follow'&&principal.uid!==cfg.actorUid)||
           (action==='status'&&![cfg.actorUid,cfg.ownerUid].includes(principal.uid)))
-          return respond(403);
+          return deny(403);
         // The browser sends signed tokens; only this QA gateway converts them
         // into the preexisting internal DO probe. Never forward JWTs to DO,
         // Functions, storage, logs, or other environments.
@@ -68,9 +99,9 @@ export function createQaAuthEntry749({verify=qaVerify,legacy=originalWorker}={})
         const id=env.OWNER558_DO.idFromName('qa730-isolated-owner-only');
         const result=await env.OWNER558_DO.get(id).fetch(delegated);
         const body=await result.json().catch(()=>null);
-        if(!body||typeof body!=='object'||Array.isArray(body))return respond(502);
-        return Response.json({...body,qaFirebaseAuthAppCheckVerified:true},
-          {status:result.status,headers:{'Cache-Control':'no-store'}});
+        if(!body||typeof body!=='object'||Array.isArray(body))return deny(502);
+        return cors(Response.json({...body,qaFirebaseAuthAppCheckVerified:true},
+          {status:result.status,headers:{'Cache-Control':'no-store'}}));
       }
       // The existing APP730 synthetic QA paths stay probe-gated.
       if(request.headers.get('X-Owner583-Token')!==cfg.probeToken)

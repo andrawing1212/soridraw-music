@@ -92,6 +92,41 @@ assert.equal((await app.fetch(request('POST','follow'),env)).status,404);
 assert.equal(calls.length,1);
 assert.equal((await app.fetch(request('PUT','follow'),{...env,DB:{}})).status,403);
 assert.equal(calls.length,1,'no shared binding bypass');
+
+const qaOrigin='https://soridraw-qa-owner-584.web.app';
+const preflight=(origin,method='PUT',headers='authorization,x-firebase-appcheck')=>
+  app.fetch(new Request('https://qa.example/qa730/verified/follow',{
+    method:'OPTIONS',headers:{Origin:origin,
+      'Access-Control-Request-Method':method,
+      'Access-Control-Request-Headers':headers}}),env);
+const pf=await preflight(qaOrigin);
+assert.equal(pf.status,204);
+assert.equal(pf.headers.get('Access-Control-Allow-Origin'),qaOrigin);
+assert.equal(pf.headers.get('Access-Control-Allow-Methods'),'PUT, DELETE, OPTIONS');
+assert.equal((await preflight('https://soridraw.com')).status,403);
+assert.equal((await preflight(qaOrigin,'POST')).status,403);
+assert.equal((await preflight(qaOrigin,'PUT','authorization,x-secret')).status,403);
+assert.equal(calls.length,1,'CORS preflight must never call DO');
+const fromQa=request('PUT','follow');
+const signedHeaders=new Headers(fromQa.headers);
+signedHeaders.set('Origin',qaOrigin);
+const accepted=await app.fetch(new Request(fromQa,{headers:signedHeaders}),env);
+assert.equal(accepted.status,200);
+assert.equal(accepted.headers.get('Access-Control-Allow-Origin'),qaOrigin);
+assert.equal(calls.length,2,'signed QA browser request forwarded to DO');
+const outsiderHeaders=new Headers(fromQa.headers);
+outsiderHeaders.set('Origin','https://preview.soridraw.com');
+const outside=await app.fetch(new Request(fromQa,{headers:outsiderHeaders}),env);
+assert.equal(outside.status,403);
+assert.equal(outside.headers.get('Access-Control-Allow-Origin'),null);
+assert.equal(calls.length,2,'non-QA origin must never reach DO');
+const noBearer=new Request('https://qa.example/qa730/verified/follow',{
+  method:'PUT',headers:{Origin:qaOrigin,'X-Owner583-Token':cfg.probeToken}});
+const deniedBrowser=await app.fetch(noBearer,env);
+assert.equal(deniedBrowser.status,403);
+assert.equal(deniedBrowser.headers.get('Access-Control-Allow-Origin'),qaOrigin);
+assert.equal(calls.length,2,'probe token cannot bypass signed auth');
+console.log('APP749_QA_BROWSER_CORS_PINNED_584_PREFLIGHT=PASS');
 console.log('APP749_QA_REAL_SIGNED_AUTH_APPCHECK_PUBLIC_KEY_OFFLINE=PASS');
 console.log('APP749_QA_AUTH_GATE_NO_PROBE_BYPASS_NO_SHARED_BINDINGS=PASS');
 console.log('APP749_EXISTING_APP583_DELEGATION_AND_SYNTHETIC_PATH_PRESERVED=PASS');

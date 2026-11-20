@@ -3,7 +3,7 @@ import {createOwnerQa730Runtime}
  from '../cloudflare/explore-worker/experiments/owner-follow-qa730-bridge.mjs';
 const cfg={projectId:'soridraw-app',projectNumber:'1083981050742',
  ownerUid:'qaSyntheticA',actorUid:'qaSyntheticB',authEpoch:'b'.repeat(32),
- probeToken:'p'.repeat(64),hmacSecret:'h'.repeat(64)};
+ probeToken:'c'.repeat(64),hmacSecret:'b'.repeat(64)};
 const env={SORIDRAW_ENVIRONMENT:'preview',SORIDRAW_OWNER_FOLLOW_W2_PUSH_555:'1',
  SORIDRAW_QA747_INJECT503:'1',OWNER583_QA_CONFIG:JSON.stringify(cfg)};
 const values=new Map();let sendCalls=0,alarms=0,puts=0,deletes=0;

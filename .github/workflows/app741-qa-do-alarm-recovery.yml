@@ -5,6 +5,8 @@ on:
     paths:
       - 'scripts/app741-qa-recovery.mjs'
       - 'scripts/app741-qa-100-smoke.mjs'
+      - 'scripts/app741-qa-original-restore-verify.mjs'
+      - 'scripts/verify-741-qa-original-restore.mjs'
       - 'scripts/verify-741-qa-recovery.mjs'
       - '.github/workflows/app741-qa-do-alarm-recovery.yml'
   issue_comment:
@@ -31,7 +33,9 @@ jobs:
         run: |
           node --check scripts/app741-qa-recovery.mjs
           node --check scripts/app741-qa-100-smoke.mjs
+          node --check scripts/app741-qa-original-restore-verify.mjs
           node scripts/verify-741-qa-recovery.mjs
+          node scripts/verify-741-qa-original-restore.mjs
   qa_full_alarm_window:
     if: >-
       github.event_name == 'issue_comment' &&
@@ -108,11 +112,10 @@ jobs:
             '4ed70845-6a4b-4a80-9c51-ed95d0becc38@100%' \
             --config wrangler.owner-qa-583.json --yes
           echo 'APP741_ORIGINAL_QA_APP583_WORKER_100_PERCENT_RESTORED'
-      - name: Final GET-only proof of original version/bindings after rollback
+      - name: Final bounded read-only GET and live original default route verification
         if: always()
         env:
           CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
         run: |
           set -euo pipefail
-          node scripts/app735-qa-version-bindings.mjs
-          echo 'APP741_ORIGINAL_QA_VERSION_BINDINGS_FINAL=PASS'
+          node scripts/app741-qa-original-restore-verify.mjs

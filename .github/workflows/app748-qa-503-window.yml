@@ -122,12 +122,27 @@ jobs:
           cd "$RUNNER_TEMP/app748-qa/cloudflare/explore-worker"
           npx --yes wrangler@4.102.0 versions upload \
              --config wrangler.app748.json --tag "$TAG" \
-             --message 'APP748 isolated synthetic QA 503 recovery, auto restore'
+             --message 'APP748 isolated synthetic QA 503 recovery, auto restore' \
+             2>&1 | tee "$RUNNER_TEMP/app748-upload-log"
+          # Wrangler 4.102.0 emits exactly one immutable Worker Version ID.
+          # Do not infer from a stale Cloudflare list/tag cache; pin the direct
+          # uploader's UUID, then GET exact version/bindings before deploying.
+          node --input-type=module - <<'NODE'
+          import {readFileSync,writeFileSync} from 'node:fs';
+          const raw=readFileSync(process.env.RUNNER_TEMP+'/app748-upload-log','utf8');
+          const clean=raw.replace(/\x1b\[[0-9;]*m/g,'');
+          const ids=[...clean.matchAll(/Worker Version ID:\s*([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})/g)];
+          if(ids.length!==1)throw Error('APP748_QA_UPLOAD_ID_NOT_UNIQUE');
+          const id=ids[0][1];
+          writeFileSync(process.env.RUNNER_TEMP+'/app748-version-id',id+'\n',{mode:0o600});
+          console.log('APP748_QA_UPLOAD_ID_PINNED=PASS');
+          NODE
+          echo "APP748_VERSION_ID=$(cat "$RUNNER_TEMP/app748-version-id")" >> "$GITHUB_ENV"
           echo 'APP748_QA_INACTIVE_SOURCE_UPLOADED; ORIGINAL_STILL_ACTIVE'
       - name: Prove QA candidate 5 bindings and original still 100 percent (GET only)
         env:
           CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
-          APP748_VERSION_FILE: ${{ runner.temp }}/app748-version-id
+          APP748_VERSION_ID: ${{ env.APP748_VERSION_ID }}
         run: node scripts/app748-qa-version-guard.mjs stage "$APP748_TAG"
       - name: Activate only exact new QA version for bounded test window
         env:
@@ -145,6 +160,7 @@ jobs:
       - name: Verify only QA code and exact 5 bindings active (GET + unauthenticated 403)
         env:
           CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          APP748_VERSION_ID: ${{ env.APP748_VERSION_ID }}
         run: |
           set -euo pipefail
           node scripts/app748-qa-version-guard.mjs active "$APP748_TAG"

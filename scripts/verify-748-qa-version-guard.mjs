@@ -23,7 +23,7 @@ const send=async(url,opt)=>{
  return new Response(JSON.stringify({success:true,result:body}),{
   status:200,headers:{'Content-Type':'application/json'}});
 };
-const params={token,tag,send,mode:'stage'};
+const params={token,tag,versionId:id,send,mode:'stage'};
 const a=await inspectApp748QaVersion(params);
 assert.equal(a.status,'PASS');
 assert.equal(a.candidateBindingCount,5);
@@ -37,4 +37,8 @@ broken=false;extra=true;
 await assert.rejects(()=>inspectApp748QaVersion(params),/NEW_QA_BINDING_COUNT/);
 extra=false;
 await assert.rejects(()=>inspectApp748QaVersion({...params,tag:'bad'}),/TAG_UNPINNED/);
+await assert.rejects(()=>inspectApp748QaVersion({...params,versionId:old}),
+ /UPLOAD_VERSION_ID_NOT_PINNED/);
+await assert.rejects(()=>inspectApp748QaVersion({...params,versionId:null}),
+ /UPLOAD_VERSION_ID_NOT_PINNED/);
 console.log('APP748_QA_VERSION_FENCE_MOCK=PASS; REAL_QA=NOT_RUN');

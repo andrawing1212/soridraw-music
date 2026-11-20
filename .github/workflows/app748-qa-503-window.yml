@@ -153,6 +153,37 @@ jobs:
           test -n "$CLOUDFLARE_API_TOKEN" || exit 2
           ID="$(cat "$RUNNER_TEMP/app748-version-id")"
           [[ "$ID" =~ ^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$ ]] || exit 2
+          # Wrangler deploy uses the legacy /workers/scripts/.../versions
+          # API, while the QA binding fence uses /workers/workers/.../versions.
+          # Upload can be visible to the latter before the former. Require
+          # the EXACT immutable ID on the deploy API before any traffic write.
+          node --input-type=module - <<'NODE'
+          const id=process.env.APP748_VERSION_ID;
+          if(!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id||''))
+            throw Error('APP748_QA_VERSION_ID_UNPINNED');
+          const uri='https://api.cloudflare.com/client/v4/accounts/'+
+            'b60fcd62c679c64db19f0b0e0c2f3429/workers/scripts/'+
+            'soridraw-owner-qa-583/versions/'+id;
+          let found=false;
+          for(let i=0;i<12;i++){
+            const result=await fetch(uri,{method:'GET',headers:{
+              Authorization:'Bearer '+process.env.CLOUDFLARE_API_TOKEN,
+              Accept:'application/json','Cache-Control':'no-store'
+            },signal:AbortSignal.timeout(15000)});
+            if(result.status===200){
+              const payload=await result.json().catch(()=>null);
+              if(payload?.success===true&&payload?.result?.id===id){
+                found=true;break;
+              }
+              throw Error('APP748_QA_DEPLOY_API_VERSION_MISMATCH');
+            }
+            if(result.status!==404)
+              throw Error('APP748_QA_DEPLOY_API_UNEXPECTED_HTTP_'+result.status);
+            if(i<11)await new Promise(ok=>setTimeout(ok,2500));
+          }
+          if(!found)throw Error('APP748_QA_DEPLOY_API_VERSION_NOT_VISIBLE_HOLD');
+          console.log('APP748_QA_EXACT_SCRIPTS_VERSION_DEPLOYABLE=PASS');
+          NODE
           touch "$RUNNER_TEMP/app748-route-attempted"
           cd "$RUNNER_TEMP/app748-qa/cloudflare/explore-worker"
           npx --yes wrangler@4.102.0 versions deploy "${ID}@100%" \

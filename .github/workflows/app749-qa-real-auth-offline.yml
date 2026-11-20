@@ -28,7 +28,6 @@ jobs:
           set -euo pipefail
           node --check cloudflare/explore-worker/experiments/owner-follow-qa-real-auth-749.mjs
           node --check cloudflare/explore-worker/experiments/owner-follow-qa730-entry.mjs
-          node scripts/verify-749-qa-real-auth.mjs
       - name: Pin historical APP583 QA and build new entry in temporary worktree ONLY
         run: |
           set -euo pipefail
@@ -40,10 +39,13 @@ jobs:
           git worktree add --detach "$RUNNER_TEMP/app749-preview" "$QA_BASE"
           cp scripts/app730-source-only-follow-bridge.mjs \
             "$RUNNER_TEMP/app749-preview/scripts/"
+          cp scripts/verify-749-qa-real-auth.mjs \
+            "$RUNNER_TEMP/app749-preview/scripts/"
           for name in owner-follow-qa730-bridge.mjs owner-follow-qa730-entry.mjs owner-follow-qa-real-auth-749.mjs; do
             cp "cloudflare/explore-worker/experiments/$name" \
               "$RUNNER_TEMP/app749-preview/cloudflare/explore-worker/experiments/"
           done
+          (cd "$RUNNER_TEMP/app749-preview" && node scripts/verify-749-qa-real-auth.mjs)
           cd "$RUNNER_TEMP/app749-preview/cloudflare/explore-worker"
           node --input-type=module - <<'NODE'
           import {readFileSync,writeFileSync} from 'node:fs';

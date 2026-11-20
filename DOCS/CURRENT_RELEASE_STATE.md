@@ -1,3 +1,12 @@
+## 0APP749E. QA 로그인 화면 스타일·자동설정 보정 코드 PASS / QA584 적용 대기 (2026-11-21 KST)
+
+- 사용자 실기기 `/qa749.html`에서는 새 외부 CSS가 브라우저에 적용되지 않아 기본 흰색 화면, Firebase `/__/firebase/init.json` 자동 조회 실패로 로그인 버튼 비활성, "QA Firebase 공개 설정 직접 입력" 표시. 최초 HTML 내 CSS는 실제 어두운 디자인으로 표시된 증거가 있음. 원본 QA Hosting 설정/보안 규칙/비밀번호 문제로 단정하지 않음.
+- PR #1290 squash main `16dc50e5ce049723fc3b2afa34843fd72a36781e` 소스 병합. 기존 QA 화면에서 정상 표시됐던 CSS 내용을 HTML 안에 그대로 복원하고 JavaScript는 same-origin `qa749.js` 외부 실행 유지(CSP 변경 없음). 수동 설정 입력 UI 제거.
+- 코드에서 Firebase 공개 설정은 `/__/firebase/init.json` 후 동일 출처 `/qa749-config.json`으로 가져옴. QA584 Hosting 보정 스크립트는 **Cloud Shell의 이미 로그인된 계정으로 QA Firebase Management API webApps.list/getConfig에 GET 2건만 사용**하여 `SORIDRAW-QA` Web App 고유 앱 ID, 프로젝트 `soridraw-app`, 프로젝트 번호, API Key 및 Auth 도메인을 확인하고 QA-only 웹 공개 설정만 QA584 웹 리소스에 추가. 어떤 비밀번호·Firebase Auth/AppCheck 토큰도 저장하지 않음.
+- `scripts/app749-qa-hosting-fix-ui-init.mjs`: 실제 QA584 원본 인덱스, 현재 QA749 HTML·JS·CSS 해시/설정 확인 → 변경된 HTML·JS + `qa749-config.json` 총 3파일만 신규 버전에 반영 → HTTP 확인 실패 시 기존 릴리스 자동 원복. 기존 사용자 데이터·공유 D1/R2/RTDB·프로덕션/TEST 변경 없음.
+- QA 오프라인 CSS·자동설정·원본 보존·안전 롤백 검사 [Actions #44834072585] **SUCCESS**. **GitHub PASS≠실제 QA Hosting 배포 PASS≠A/B 인증 PASS**. 아직 Cloud Shell로 이 수정본 미배포·PC 모바일 팔로우 수신 미확인.
+- 다음: 이미 열린 QA Cloud Shell에서 commit `16dc50e5ce049723fc3b2afa34843fd72a36781e` 기준 보정 스크립트와 `qa749.html`/`qa749.js`/`qa749.css`를 가져와 `--check` 뒤 QA584만 `--deploy`. 실패하면 코드 재실행 금지, 화면/명령의 오류 코드로 원인 수정. QA 사이트 외 변경 금지. `preview` HEAD `4363820117100cb03bcbc44a01e127aeb5de3cf4` 보호.
+
 ## 0APP749D. QA584 CSP 수정 Hosting 실배포 PASS / 실제 A·B 로그인·PC 모바일 수신 미검증 (2026-11-21 KST)
 
 - 디렉터가 QA 전용 Cloud Shell에서 `scripts/app749-qa-hosting-repair-csp.mjs --check && --deploy` 직접 실행한 결과 사진 확인: `APP749_QA_SITE_EXISTING_RECEIVER=PASS`, `APP749_QA_ORIGINAL_RELEASE_AND_FILES_PINNED=PASS`, `APP749_QA_NO_HOSTING_CHANGES=PASS`, `APP749_QA_CLONE_CONFIG_EXACT_ORIGINAL=PASS`, `APP749_QA_APPEND_RELEASE_CREATED=PASS`, `APP749_QA_NEW_PAGE_AND_OLD_RECEIVER_HTTP=PASS`, `APP749_QA_HOSTING_DEPLOY=PASS`, 종료코드 `0`.

@@ -1,0 +1,175 @@
+name: SORIDRAW APP748 Isolated QA Single 503 Physical Window (Auto Restore)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/app748-qa-503-cloudshell.mjs'
+      - 'scripts/verify-748-qa-503-cloudshell.mjs'
+      - 'scripts/app748-qa-version-guard.mjs'
+      - 'scripts/verify-748-qa-version-guard.mjs'
+      - 'cloudflare/explore-worker/experiments/owner-follow-qa730-bridge.mjs'
+      - 'scripts/verify-747-qa-fault-injection.mjs'
+      - '.github/workflows/app748-qa-503-window.yml'
+  issue_comment:
+    types: [created]
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app736-qa-zero-traffic
+  cancel-in-progress: false
+jobs:
+  offline:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: APP748 exact QA Cloud Shell, version fence, and 503 evidence checks
+        run: |
+          set -euo pipefail
+          node --check scripts/app748-qa-503-cloudshell.mjs
+          node scripts/verify-748-qa-503-cloudshell.mjs
+          node scripts/verify-748-qa-version-guard.mjs
+          git fetch origin preview --no-tags
+          test "$(git rev-parse origin/preview)" = "4363820117100cb03bcbc44a01e127aeb5de3cf4" || exit 2
+          git worktree add --detach "$RUNNER_TEMP/app748-offline" 4363820117100cb03bcbc44a01e127aeb5de3cf4
+          cp scripts/app730-source-only-follow-bridge.mjs "$RUNNER_TEMP/app748-offline/scripts/"
+          cp scripts/verify-747-qa-fault-injection.mjs "$RUNNER_TEMP/app748-offline/scripts/"
+          cp cloudflare/explore-worker/experiments/owner-follow-qa730-bridge.mjs \
+            "$RUNNER_TEMP/app748-offline/cloudflare/explore-worker/experiments/"
+          (cd "$RUNNER_TEMP/app748-offline" && node scripts/verify-747-qa-fault-injection.mjs)
+  qa_window:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 1254 &&
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/app748-qa-503 ')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Pin exact main and independent QA preview source
+        env:
+          DIRECTOR_COMMAND: ${{ github.event.comment.body }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHA="$(printf '%s' "$DIRECTOR_COMMAND" | sed -nE 's|^/app748-qa-503 ([0-9a-f]{40})$|\1|p')"
+          test -n "$SHA" && test "$SHA" = "$(git rev-parse HEAD)" || exit 2
+          test "$SHA" = "$(git ls-remote origin refs/heads/main | cut -f1)" || exit 2
+          git fetch origin preview --no-tags
+          test "$(git rev-parse origin/preview)" = "4363820117100cb03bcbc44a01e127aeb5de3cf4" || exit 2
+          git worktree add --detach "$RUNNER_TEMP/app748-qa" 4363820117100cb03bcbc44a01e127aeb5de3cf4
+          cp scripts/app730-source-only-follow-bridge.mjs "$RUNNER_TEMP/app748-qa/scripts/"
+          cp cloudflare/explore-worker/experiments/owner-follow-qa730-bridge.mjs \
+            "$RUNNER_TEMP/app748-qa/cloudflare/explore-worker/experiments/"
+          cp cloudflare/explore-worker/experiments/owner-follow-qa730-entry.mjs \
+            "$RUNNER_TEMP/app748-qa/cloudflare/explore-worker/experiments/"
+          node scripts/verify-748-qa-version-guard.mjs
+          cd "$RUNNER_TEMP/app748-qa/cloudflare/explore-worker"
+          node --input-type=module - <<'NODE'
+          import {readFileSync,writeFileSync} from 'node:fs';
+          import assert from 'node:assert/strict';
+          const file='wrangler.owner-qa-583.json';
+          const x=JSON.parse(readFileSync(file,'utf8'));
+          assert.equal(x.name,'soridraw-owner-qa-583');
+          assert.equal(x.account_id,'b60fcd62c679c64db19f0b0e0c2f3429');
+          assert.equal(x.main,'./experiments/owner-follow-isolated-558-entry.mjs');
+          assert.deepEqual(x.durable_objects.bindings,
+            [{name:'OWNER558_DO',class_name:'OwnerFollowIsolated558'}]);
+          assert.deepEqual(x.migrations,[{tag:'v1',new_sqlite_classes:['OwnerFollowIsolated558']}]);
+          assert.equal(x.vars.SORIDRAW_ENVIRONMENT,'preview');
+          assert.equal(x.vars.SORIDRAW_OWNER_FOLLOW_W2_PUSH_555,'1');
+          assert.equal(x.d1_databases,undefined);
+          assert.equal(x.r2_buckets,undefined);
+          x.main='./experiments/owner-follow-qa730-entry.mjs';
+          x.vars.SORIDRAW_QA747_INJECT503='1';
+          x.secrets={required:['OWNER583_QA_CONFIG']};
+          writeFileSync('wrangler.app748.json',JSON.stringify(x,null,2)+'\n');
+          console.log('APP748_EXACT_QA_SOURCE_ISOLATED=PASS');
+          NODE
+      - name: QA active original 100 percent and 4 bindings (GET only)
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+        run: node scripts/app735-qa-version-bindings.mjs
+      - name: Upload inactive QA-only 503 candidate (no traffic change)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || exit 2
+          TAG="app748-qa503-${GITHUB_SHA:0:12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "APP748_TAG=$TAG" >> "$GITHUB_ENV"
+          cd "$RUNNER_TEMP/app748-qa/cloudflare/explore-worker"
+          npx --yes wrangler@4.102.0 versions upload \
+             --config wrangler.app748.json --tag "$TAG" \
+             --message 'APP748 isolated synthetic QA 503 recovery, auto restore'
+          echo 'APP748_QA_INACTIVE_SOURCE_UPLOADED; ORIGINAL_STILL_ACTIVE'
+      - name: Prove QA candidate 5 bindings and original still 100 percent (GET only)
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          APP748_VERSION_FILE: ${{ runner.temp }}/app748-version-id
+        run: node scripts/app748-qa-version-guard.mjs stage "$APP748_TAG"
+      - name: Activate only exact new QA version for bounded test window
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || exit 2
+          ID="$(cat "$RUNNER_TEMP/app748-version-id")"
+          [[ "$ID" =~ ^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$ ]] || exit 2
+          touch "$RUNNER_TEMP/app748-route-attempted"
+          cd "$RUNNER_TEMP/app748-qa/cloudflare/explore-worker"
+          npx --yes wrangler@4.102.0 versions deploy "${ID}@100%" \
+             --config wrangler.app748.json --yes
+      - name: Verify only QA code and exact 5 bindings active (GET + unauthenticated 403)
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          node scripts/app748-qa-version-guard.mjs active "$APP748_TAG"
+          node scripts/app741-qa-100-smoke.mjs
+          echo 'APP748_QA_503_PHYSICAL_WINDOW_OPEN'
+      - name: Cloud Shell bounded QA synthetic 503 verification window
+        run: |
+          echo 'APP748_QA_CLOUD_SHELL_TEST_WINDOW=OPEN'
+          sleep 900
+      - name: Always restore the historical APP583 QA Worker single version 100 percent
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+        run: |
+          set -euo pipefail
+          if [ ! -f "$RUNNER_TEMP/app748-route-attempted" ]; then
+            echo 'APP748_QA_ROUTE_NOT_CHANGED'; exit 0
+          fi
+          test -n "$CLOUDFLARE_API_TOKEN" || exit 2
+          cd "$RUNNER_TEMP/app748-qa/cloudflare/explore-worker"
+          npx --yes wrangler@4.102.0 versions deploy \
+           '4ed70845-6a4b-4a80-9c51-ed95d0becc38@100%' \
+           --config wrangler.owner-qa-583.json --yes
+          echo 'APP748_ORIGINAL_QA_APP583_WORKER_100_PERCENT_RESTORED'
+      - name: Final QA original version and unauthenticated HTTP proof
+        if: always()
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+        run: node scripts/app741-qa-original-restore-verify.mjs

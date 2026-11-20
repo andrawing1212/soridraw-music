@@ -16,7 +16,7 @@ const authClaims=(uid)=>({iss:'https://securetoken.google.com/soridraw-app',
 const appId='1:1083981050742:web:deadbeef';
 const appClaims=()=>({iss:'https://firebaseappcheck.googleapis.com/1083981050742',
   aud:['projects/1083981050742','projects/soridraw-app'],sub:appId,
-  app_id:appId,iat:sec-60,exp:sec+900});
+  iat:sec-60,exp:sec+900});
 let keyFetches=0;
 const getKeys=async url=>{
   assert(['https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com',
@@ -49,7 +49,7 @@ await reject(request('PUT','follow',cfg.actorUid,appClaims(),
 await reject(request('PUT','follow',cfg.actorUid,
   {...appClaims(),aud:['projects/other']}),checkOpts('PUT','follow'));
 await reject(request('PUT','follow',cfg.actorUid,
-  {...appClaims(),app_id:'1:1083981050742:web:foreign'}),checkOpts('PUT','follow'));
+  {...appClaims(),sub:'1:1083981050742:web:foreign'}),checkOpts('PUT','follow'));
 await reject(request('PUT','follow',cfg.actorUid,appClaims(),
   {...authClaims(cfg.actorUid),iss:'https://securetoken.google.com/soridraw-app-866a5'}),
   checkOpts('PUT','follow'));

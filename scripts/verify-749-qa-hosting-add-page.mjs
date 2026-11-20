@@ -26,8 +26,11 @@ const old='sites/soridraw-qa-owner-584/versions/9737bd-old';
 const fresh='sites/soridraw-qa-owner-584/versions/new-749';
 const expectedHash=createHash('sha256').update(gzipSync(Buffer.from(html),{level:9,mtime:0})).digest('hex');
 const priorText='<html>SORIDRAW · 독립 QA 팔로워 실시간 수신 onValue</html>';
-function fake({missingIndex=false,wrongOperation=false,changedRelease=false,smokeFail=false}={}){
+const expectedConfig={headers:[{glob:'/**',headers:{'Cache-Control':'max-age=60'}}],
+  cleanUrls:false,rewrites:[{glob:'/qa-existing',path:'/index.html'}]};
+function fake({missingIndex=false,wrongOperation=false,changedRelease=false,smokeFail=false,configPatchIgnored=false,configPatchDenied=false,cloneAlreadyMatching=false}={}){
  const calls=[];let current=old,clone=false,appended=false,done=false,final=false;
+ let candidateConfig=cloneAlreadyMatching?structuredClone(expectedConfig):{};
  const make=(value,code=200)=>new Response(
   JSON.stringify(value),{status:code,headers:{'Content-Type':'application/json'}});
  const send=async(url,opts)=>{
@@ -51,9 +54,9 @@ function fake({missingIndex=false,wrongOperation=false,changedRelease=false,smok
    return make({name:'projects/soridraw-app/operations/qa749',done:true,response:{name:fresh}});
   }
   if(path===site+'/versions/9737bd-old'&&opts.method==='GET')
-   return make({name:old,status:'FINALIZED',config:{}});
+   return make({name:old,status:'FINALIZED',config:expectedConfig});
   if(path===site+'/versions/new-749'&&opts.method==='GET')
-   return make({name:fresh,status:'CREATED',config:{}});
+   return make({name:fresh,status:'CREATED',config:candidateConfig});
   if(path===site+'/versions/9737bd-old/files'&&opts.method==='GET')
    return make({files:missingIndex?[]:[{path:'/index.html',hash:'a'.repeat(64)}]});
   if(path===site+'/versions/new-749/files'&&opts.method==='GET')
@@ -72,7 +75,17 @@ function fake({missingIndex=false,wrongOperation=false,changedRelease=false,smok
    return make({});
   }
   if(path===site+'/versions/new-749'&&opts.method==='PATCH'){
-   assert.deepEqual(JSON.parse(opts.body),{status:'FINALIZED'});final=true;return make({});
+   const mask=new URL(url).searchParams.get('updateMask');
+   if(mask==='config'){
+     assert.deepEqual(JSON.parse(opts.body),{name:fresh,config:expectedConfig});
+     if(configPatchDenied)return make({error:{message:'PERMISSION_DENIED'}},403);
+     if(!configPatchIgnored)candidateConfig=structuredClone(expectedConfig);
+     return make({name:fresh,status:'CREATED',config:candidateConfig});
+   }
+   assert.equal(mask,'status');
+   assert.deepEqual(JSON.parse(opts.body),{status:'FINALIZED'});
+   assert.deepEqual(candidateConfig,expectedConfig,'never publish with altered rules');
+   final=true;return make({});
   }
   if(path===site+'/releases'&&opts.method==='POST'){
    // Firebase Hosting Release.type is output-only for normal DEPLOY;
@@ -98,6 +111,20 @@ const b=fake();
 const result=await runApp749QaHosting({...opts,mode:'--deploy',send:b.send});
 assert.equal(result.status,'PASS');
 assert.equal(b.getCurrent(),fresh);
+const patchCalls=b.calls.filter(x=>x.method==='PATCH'&&x.url.includes('updateMask=config'));
+assert.equal(patchCalls.length,1,'clone that drops serving config must repair clone only');
+const ignore=fake({configPatchIgnored:true});
+await assert.rejects(()=>runApp749QaHosting({...opts,mode:'--deploy',send:ignore.send}),
+ /CLONE_SERVING_CONFIG_NOT_IDENTICAL_HOLD/);
+assert.equal(ignore.getCurrent(),old,'mismatched rules must never be released');
+const denied=fake({configPatchDenied:true});
+await assert.rejects(()=>runApp749QaHosting({...opts,mode:'--deploy',send:denied.send}),
+ /RESTORE_CLONE_CONFIG_HTTP_403/);
+assert.equal(denied.getCurrent(),old,'failed config patch must keep old release');
+const equal=fake({cloneAlreadyMatching:true});
+assert.equal((await runApp749QaHosting({...opts,mode:'--deploy',send:equal.send})).status,'PASS');
+assert.equal(equal.calls.filter(x=>x.method==='PATCH'&&x.url.includes('updateMask=config')).length,0);
+
 assert.equal(b.calls.filter(x=>x.method==='POST').length,4,'clone, populate, upload, release exactly');
 assert(!b.calls.some(x=>x.url.includes('/soridraw-app-866a5/')));
 const wrong=fake({wrongOperation:true});
@@ -126,4 +153,6 @@ console.log('APP749_QA_HOSTING_READ_ONLY_PREFLIGHT=PASS');
 console.log('APP749_QA_CLONE_PRESERVES_OLD_RECEIVER_AND_APPEND_ONLY=PASS');
 console.log('APP749_QA_HOSTING_CONCURRENT_CHANGE_FAIL_CLOSED=PASS');
 console.log('APP749_QA_HOSTING_BOUNDED_ROLLBACK=PASS');
+console.log('APP749_QA_CLONED_SERVING_CONFIG_RESTORED_FROM_EXACT_LIVE=PASS');
+console.log('APP749_QA_CLONED_CONFIG_DRIFT_OR_PATCH_FAILURE_NO_RELEASE=PASS');
 console.log('APP749_QA_REAL_HOSTING_DEPLOY=NOT_RUN');

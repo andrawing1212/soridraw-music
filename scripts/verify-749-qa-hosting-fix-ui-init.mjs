@@ -63,7 +63,7 @@ await assert.rejects(()=>qaPublicConfig({token,send:wrong.send}),
 const gz=s=>gzipSync(Buffer.from(s,'utf8'),{level:9,mtime:0});
 const sha=s=>createHash('sha256').update(gz(s)).digest('hex');
 const oldHtml='<!doctype html><h1>SORIDRAW · 독립 QA 팔로우 실검증</h1><link rel="stylesheet" href="/qa749.css"><script type="module" src="/qa749.js"></script>';
-const oldJs='// QA749 old loader\nconst original="/__/firebase/init.json";$("manual").hidden=false;\n';
+const oldJs=`// QA749 old loader\nconst original="/__/firebase/init.json";$('manual').hidden=false;\n`;
 const oldCss=css;
 const oldRoot='<h1>SORIDRAW 독립 QA onValue</h1>';
 const oldFiles={'/index.html':sha(oldRoot),'/qa749.html':sha(oldHtml),

@@ -26,7 +26,7 @@ const old='sites/soridraw-qa-owner-584/versions/9737bd-old';
 const fresh='sites/soridraw-qa-owner-584/versions/new-749';
 const expectedHash=createHash('sha256').update(gzipSync(Buffer.from(html),{level:9,mtime:0})).digest('hex');
 const priorText='<html>SORIDRAW · 독립 QA 팔로워 실시간 수신 onValue</html>';
-function fake({missingIndex=false,wrongSite=false,changedRelease=false,smokeFail=false}={}){
+function fake({missingIndex=false,wrongOperation=false,changedRelease=false,smokeFail=false}={}){
  const calls=[];let current=old,clone=false,appended=false,done=false,final=false;
  const make=(value,code=200)=>new Response(
   JSON.stringify(value),{status:code,headers:{'Content-Type':'application/json'}});
@@ -44,10 +44,11 @@ function fake({missingIndex=false,wrongSite=false,changedRelease=false,smokeFail
    const j=JSON.parse(opts.body);
    assert.deepEqual(j,{sourceVersion:old,finalize:false});
    clone=true;
-   return make({name:'operations/qa749',done:false});
+   return make({name:wrongOperation?'projects/soridraw-app-866a5/operations/qa749':
+     'projects/soridraw-app/operations/qa749',done:false});
   }
-  if(path==='https://firebasehosting.googleapis.com/v1beta1/operations/qa749'){
-   return make({done:true,response:{name:fresh}});
+  if(path==='https://firebasehosting.googleapis.com/v1beta1/projects/soridraw-app/operations/qa749'){
+   return make({name:'projects/soridraw-app/operations/qa749',done:true,response:{name:fresh}});
   }
   if(path===site+'/versions/9737bd-old'&&opts.method==='GET')
    return make({name:old,status:'FINALIZED',config:{}});
@@ -95,6 +96,15 @@ assert.equal(result.status,'PASS');
 assert.equal(b.getCurrent(),fresh);
 assert.equal(b.calls.filter(x=>x.method==='POST').length,4,'clone, populate, upload, release exactly');
 assert(!b.calls.some(x=>x.url.includes('/soridraw-app-866a5/')));
+const wrong=fake({wrongOperation:true});
+await assert.rejects(()=>runApp749QaHosting({...opts,mode:'--deploy',send:wrong.send}),
+ /CLONE_OPERATION_INVALID/);
+assert.equal(wrong.calls.filter(x=>x.method==='POST').length,1,
+ 'invalid project operation never triggers upload or release');
+assert.equal(wrong.getCurrent(),old,'original release must remain active');
+const operationPolls=b.calls.filter(x=>
+ x.url.endsWith('/projects/soridraw-app/operations/qa749'));
+assert.equal(operationPolls.length,1,'poll only the exact QA Firebase project operation');
 const c=fake({changedRelease:true});
 await assert.rejects(()=>runApp749QaHosting({...opts,mode:'--deploy',send:c.send}),
  /CONCURRENT_QA_HOSTING_RELEASE_HOLD/);

@@ -5,6 +5,7 @@
 import {readFileSync,statSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
+import {isDeepStrictEqual} from 'node:util';
 import {gzipSync} from 'node:zlib';
 import {resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -126,9 +127,23 @@ async function run({mode,html,send=fetch,token,projectId,projectNumber,notify=()
  const version=op.response?.name??op.response?.version?.name;
  check(isVersion(version)&&version!==oldVer,'NEW_VERSION_INVALID');
  const before=await json('GET',API+'/'+version,undefined,'CLONED_VERSION');
- check(before.status==='CREATED'&&
-   JSON.stringify(before.config??{})===JSON.stringify(oldDetails.config??{}),
-   'CLONE_DID_NOT_PRESERVE_CONFIG');
+ check(before.name===version&&before.status==='CREATED','CLONED_VERSION_NOT_EDITABLE');
+ // Firebase Hosting versions:clone copies content; do not assume that its
+ // serving rules were copied too. Restore ONLY the original QA live version's
+ // exact serving config onto this NEW, un-released clone (never the old version).
+ // compare object values independent of response key ordering, then re-GET.
+ const originalConfig=oldDetails.config??{};
+ check(originalConfig&&typeof originalConfig==='object'&&
+   !Array.isArray(originalConfig),'ORIGINAL_SERVING_CONFIG_INVALID');
+ if(!isDeepStrictEqual(before.config??{},originalConfig)){
+   await json('PATCH',API+'/'+version+'?updateMask=config',
+     {name:version,config:originalConfig},'RESTORE_CLONE_CONFIG');
+ }
+ const copied=await json('GET',API+'/'+version,undefined,'CLONED_CONFIG_RECHECK');
+ check(copied.name===version&&copied.status==='CREATED'&&
+   isDeepStrictEqual(copied.config??{},originalConfig),
+   'CLONE_SERVING_CONFIG_NOT_IDENTICAL_HOLD');
+ notify('APP749_QA_CLONE_CONFIG_EXACT_ORIGINAL=PASS');
  const filesOld=filesMap;
  const cloneFiles=await list('/sites/'+SITE+'/versions/'+version.split('/').pop()+'/files?pageSize=1000');
  check(cloneFiles.length===filesOld.size&&cloneFiles.every(f=>filesOld.get(f.path)===f.hash),

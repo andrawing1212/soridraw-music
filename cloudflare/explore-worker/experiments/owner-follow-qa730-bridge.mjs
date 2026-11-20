@@ -87,7 +87,12 @@ export function createOwnerQa730Runtime({storage,env,now=Date.now,send=fetch}={}
       return reply({ok:true,syntheticOnly:true,version:x?.version??null,
         following:x?.desired??false,followerCount:x?.followerCount??0,
         pending:Boolean(x?.pending),hold:Boolean(x?.pending?.hold),
-        attempts:x?.pending?.attempts||0,lastStatus:x?.lastStatus||'uninitialized'});
+        attempts:x?.pending?.attempts||0,lastStatus:x?.lastStatus||'uninitialized',
+        // APP748: persistent QA-only evidence so a fast DO alarm cannot
+        // hide the single injected outbound 503 before external polling.
+        injected503Version:x?.lastInjected503Version??null,
+        recovered503Version:x?.lastRecovered503Version??null,
+        recoveryAttemptCount:x?.recoveryAttemptCount??0});
     }
     if(path==='/qa730/bootstrap'&&request.method==='POST'){
       if(await state())return reply({ok:false,error:'already-bootstrapped'},409);
@@ -184,8 +189,12 @@ export function createOwnerQa730Runtime({storage,env,now=Date.now,send=fetch}={}
     const latest=await state();
     if(latest?.pending?.operationId!==x.pending.operationId)return true;
     if(delivery?.ok){
+      const retry=latest.lastInjected503Version===x.version&&
+        latest.pending.attempts>0;
       await storage.put(KEY,{...latest,pending:null,
-        lastStatus:delivery.applied?'applied':'duplicate',lastAckAt:now()});
+        lastStatus:delivery.applied?'applied':'duplicate',lastAckAt:now(),
+        ...(retry?{lastRecovered503Version:x.version,
+          recoveryAttemptCount:latest.pending.attempts}:{})});
       if(faultAllowed()){
         const fault=await storage.get(FAULT_KEY);
         if(fault?.expectedVersion===x.version&&fault.consumed===true)
@@ -195,7 +204,9 @@ export function createOwnerQa730Runtime({storage,env,now=Date.now,send=fetch}={}
     }
     const attempts=x.pending.attempts+1,hold=attempts>=3||delivery?.status===409;
     await storage.put(KEY,{...latest,pending:{...latest.pending,attempts,hold},
-      lastStatus:hold?'manual-hold':'retry-scheduled'});
+      lastStatus:hold?'manual-hold':'retry-scheduled',
+      ...(delivery?.status===503&&faultAllowed()?
+        {lastInjected503Version:x.version}:{})});
     if(!hold)await storage.setAlarm(now()+Math.min(4000,1000*2**attempts));
     return true;
   };

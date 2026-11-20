@@ -87,7 +87,8 @@ jobs:
       github.actor == github.repository_owner &&
       github.event.issue.number == 1254 &&
       github.event.issue.pull_request != null &&
-      startsWith(github.event.comment.body, '/app749-qa-auth ')
+      (startsWith(github.event.comment.body, '/app749-qa-auth ') ||
+       startsWith(github.event.comment.body, '/app749-qa-browser '))
     concurrency:
       group: soridraw-app736-qa-zero-traffic
       cancel-in-progress: false
@@ -107,7 +108,7 @@ jobs:
           DIRECTOR_COMMAND: ${{ github.event.comment.body }}
         run: |
           set -euo pipefail
-          SHA="$(printf '%s' "$DIRECTOR_COMMAND" | sed -nE 's|^/app749-qa-auth ([0-9a-f]{40})$|\1|p')"
+          SHA="$(printf '%s' "$DIRECTOR_COMMAND" | sed -nE 's|^/app749-qa-(auth|browser) ([0-9a-f]{40})$|\2|p')"
           test -n "$SHA" && test "$SHA" = "$(git rev-parse HEAD)" || exit 2
           test "$SHA" = "$(git ls-remote origin refs/heads/main | cut -f1)" || exit 2
           git fetch origin preview --no-tags
@@ -311,6 +312,12 @@ jobs:
           console.log('APP749_QA_LIVE_APP583_LEGACY_UNCHANGED=PASS');
           console.log('APP749_REAL_QA_AUTH_TOKENS_FOLLOW_UNFOLLOW=NOT_TESTED');
           NODE
+      - name: Allow bounded QA A/B browser and two-device sync physical test
+        if: startsWith(github.event.comment.body, '/app749-qa-browser ')
+        run: |
+          echo 'APP749_QA_BROWSER_REAL_AUTH_WINDOW=OPEN_12_MINUTES'
+          echo 'APP749_QA_BROWSER_TEST_HUMAN_RESULT=NOT_AUTOMATICALLY_ASSERTED'
+          sleep 720
       - name: Always restore historical APP583 exact 100 percent
         if: always()
         env:

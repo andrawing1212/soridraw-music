@@ -55,9 +55,11 @@ async function qaPublicConfig({token,send=fetch,timeout=15000}={}){
  const match=found.apps.filter(a=>a.displayName==='SORIDRAW-QA'&&
    a.state!=='DELETED'&&
    /^1:1083981050742:web:[A-Za-z0-9_-]+$/.test(a.appId||'')&&
-   a.name==='projects/'+PROJECT+'/webApps/'+a.appId);
+   (a.name==='projects/'+PROJECT+'/webApps/'+a.appId||
+     a.name==='projects/'+NUMBER+'/webApps/'+a.appId));
  check(match.length===1,'QA_WEB_APP_NOT_UNIQUE');
- const config=await get(FIREBASE_API+'/'+match[0].name+'/config',
+ const config=await get(FIREBASE_API+'/projects/'+PROJECT+
+   '/webApps/'+encodeURIComponent(match[0].appId)+'/config',
    'QA_WEB_APP_CONFIG');
  check(validateConfig(config)&&config.appId===match[0].appId,
    'QA_WEB_APP_CONFIG_MISMATCH');
@@ -87,7 +89,7 @@ async function run({mode,html,css,js,config,send=fetch,token,projectId,projectNu
    js.includes("'/qa749-config.json'")&&!js.includes("$('manual')"),
    'QA_JS_INVALID');
  check(typeof css==='string'&&css.includes('.status')&&css.includes('background')&&
-   html.includes('<style>\n'+css.trim()+'\n</style>'),
+   html.match(/<style>\s*([\s\S]*?)\s*<\/style>/)?.[1]?.trim()===css.trim(),
    'QA_INLINE_CSS_MATCH_INVALID');
  check(validateConfig(config),'QA_PUBLIC_CONFIG_INVALID');
  const bytes=Object.freeze({

@@ -1,3 +1,11 @@
+## 0APP749G. QA749 scoped CSP 실제 Hosting 재배포 스모크 FAIL / 원본 롤백 명령 PASS (2026-11-21 KST)
+
+- 디렉터 Cloud Shell 사진: `scripts/app749-qa-hosting-scoped-csp.mjs --check && --deploy`에서 `APP749_QA_ORIGINAL_RELEASE_AND_FILES_PINNED=PASS`, `APP749_QA_SCOPED_CSP_CONFIG_PINNED=PASS`, `APP749_QA_APPEND_RELEASE_CREATED=PASS` 후, `APP749_QA_OLD_HOSTING_ROLLBACK_COMMAND=PASS`, `APP749_QA_HOSTING_HOLD_QA_PAGE_OR_EXISTING_RECEIVER_HTTP_FAILURE`, 종료코드 `2`.
+- 공개 요청은 성공했지만 **최종 QA 웹 HTTP 검증은 FAIL**. 본 스크립트는 `/qa749.html` 페이지의 CSP exact-value, `/qa749.js` 최신 본문 포함, 기존 CSS·공개설정·원본 루트·원본 CSP를 하나의 `smoke` boolean으로 검사하므로 **이 출력만으로 어떤 항목이 실패했는지 확정할 수 없음**. 동일 스크립트 무재실행. 원본 버전 롤백 API 응답만 PASS; 실제 현재 live 버전과 CSP/파일은 별도 읽기 전용 확인 필요.
+- Firebase Hosting 헤더 규칙 적용 순서·전역 규칙 중복·CDN 전파와 예상 CSP 문자열 차이 가능성을 우선 조사. 브라우저 서명 로그인과 PC↔모바일 팔로우/취소 실검증은 여전히 시작 전.
+- QA584 전용 과거 릴리스/버전 설정과 현재 HTML·JS CSP를 **GET만** 읽어 비교하는 `scripts/diagnose-749-qa-rollback-config-readonly.mjs`를 GitHub 진단 브랜치 `diagnose/app749-last-release-csp-readonly` commit `4fc85e6a3e56aace3244e49bad00c79ab33b1335`에 준비. QA Cloud Shell의 기존 인증만 재사용하며 계정 정보·키·원문을 출력하지 않음. 진단 결과 확인 전 재배포·공유 서버/보안 설정 변경 금지.
+- 운영·TEST·PRODUCTION·공유 D1/R2/RTDB/Auth 데이터 변경 없음. GitHub `main` QA 코드 PASS와 실제 QA Hosting FAIL을 구분.
+
 ## 0APP749F. 실제 QA584 브라우저 CSP 원인 확정 + QA749만 허용한 수정 소스 검사 PASS / 사이트 재배포·실기기 미완료 (2026-11-21 KST)
 
 - 사용자 제공 실브라우저 스크린샷: QA 화면 스타일은 정상이나 `QA Firebase 자동 연결 실패`, A/B 로그인 버튼 비활성. 사용자 로그인 암호 원인으로 보고하지 않음.

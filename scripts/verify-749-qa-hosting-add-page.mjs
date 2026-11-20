@@ -7,12 +7,12 @@ import {gzipSync} from 'node:zlib';
 import {createHash} from 'node:crypto';
 import {runApp749QaHosting} from './app749-qa-hosting-add-page.mjs';
 const html=readFileSync('qa/app749/qa749.html','utf8');
-const embedded=html.match(/<script type="module">([\\s\\S]*?)<\\/script>/);
+const embedded=html.split('<script type="module">')[1]?.split('</script>')[0];
 assert(embedded,'QA browser module missing');
 const temp=mkdtempSync(join(tmpdir(),'app749-qa-client-'));
 try{
  const filename=join(temp,'qa749.mjs');
- writeFileSync(filename,embedded[1]);
+ writeFileSync(filename,embedded);
  execFileSync(process.execPath,['--check',filename],{stdio:'pipe'});
 }finally{rmSync(temp,{recursive:true,force:true})}
 assert(html.includes("initializeAppCheck"));

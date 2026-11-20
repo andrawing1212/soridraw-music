@@ -59,3 +59,27 @@ await assert.rejects(()=>runApp740({config:cfg,accessToken:token,
  }}),/QA_EPOCH_MISMATCH/);
 assert.equal(badWrites,0);
 console.log('APP740_LOCAL_QA_CONFIG_EPOCH_ROUTING_FOLLOW_UNFOLLOW=PASS; LIVE_QA=NOT_RUN');
+
+// Cloudflare may return the previous old@100% deployment briefly after a
+// successful zero-percent rollout. Retry only that exact safe stale state.
+import {verifyQa740Deployment} from './app740-qa-window-verify.mjs';
+const old='4ed70845-6a4b-4a80-9c51-ed95d0becc38';
+const candidate='16a07d40-7a75-4f31-a8b1-fdcf0410a544';
+const mock=versions=>({ok:true,json:async()=>({result:{deployments:[{versions}]}})});
+let attempts=0, waits=0;
+const synced=await verifyQa740Deployment({token:'qa-read-only-token',
+ send:async()=>{attempts++;return mock(attempts===1?
+  [{version_id:old,percentage:100}]:
+  [{version_id:old,percentage:100},{version_id:candidate,percentage:0}]);},
+ wait:async()=>{waits++;}});
+assert.equal(synced.status,'PASS');assert.equal(attempts,2);assert.equal(waits,1);
+await assert.rejects(()=>verifyQa740Deployment({token:'qa-read-only-token',
+ send:async()=>mock([{version_id:old,percentage:99},{version_id:candidate,percentage:1}]),
+ wait:async()=>{throw Error('UNEXPECTED_RETRY')}}),/UNEXPECTED_DEPLOYMENT_HOLD/);
+await assert.rejects(()=>verifyQa740Deployment({token:'qa-read-only-token',
+ send:async()=>mock([{version_id:'unrelated',percentage:100}]),
+ wait:async()=>{throw Error('UNEXPECTED_RETRY')}}),/UNEXPECTED_DEPLOYMENT_HOLD/);
+await assert.rejects(()=>verifyQa740Deployment({token:'qa-read-only-token',
+ send:async()=>mock([{version_id:old,percentage:100}]),
+ wait:async()=>{},maxAttempts:2}),/NOT_VISIBLE_AFTER_RETRY_HOLD/);
+console.log('APP740_QA_CLOUDFLARE_BOUNDED_STALE_DEPLOYMENT_RETRY=PASS');

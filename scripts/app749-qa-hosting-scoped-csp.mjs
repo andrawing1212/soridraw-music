@@ -97,7 +97,10 @@ function qa749ScopedCsp(original){
  return rs.map(r=>r.name+' '+r.sources.join(' ')).join('; ');
 }
 async function run({mode,html,css,js,config,send=fetch,token,projectId,projectNumber,
-   notify=()=>{},timeout=15000}={}){
+   notify=()=>{},timeout=15000,smokeAttempts=15,smokeDelayMs=2000}={}){
+ check(Number.isSafeInteger(smokeAttempts)&&smokeAttempts>=1&&smokeAttempts<=20&&
+   Number.isSafeInteger(smokeDelayMs)&&smokeDelayMs>=0&&smokeDelayMs<=5000,
+   'SMOKE_BOUNDS_INVALID');
  check(['--check','--deploy'].includes(mode),'USE_CHECK_OR_DEPLOY');
  check(projectId===PROJECT&&projectNumber===NUMBER,'WRONG_QA_PROJECT');
  check(typeof token==='string'&&token.length>30,'OAUTH_MISSING');
@@ -288,25 +291,44 @@ async function run({mode,html,css,js,config,send=fetch,token,projectId,projectNu
    encodeURIComponent(version),undefined,'RELEASE');
  check(deployed.version?.name===version,'DEPLOYED_VERSION_NOT_CONFIRMED');
  notify('APP749_QA_APPEND_RELEASE_CREATED=PASS');
+ // After the public release, diagnose EACH expected invariant separately.
+ // A failed diagnostic must always roll the QA site back to the original.
+ // No Firebase credentials, headers or user data are included in logs.
  let smoke=false;
- for(let attempt=0;attempt<6&&!smoke;attempt++){
+ let observed={observed:false,reason:'NOT_CHECKED'};
+ for(let attempt=0;attempt<smokeAttempts&&!smoke;attempt++){
   try{
    const [page,script,style,publicConfig,index]=await Promise.all([
      originalReq(FILE),originalReq(JSFILE),originalReq(CSSFILE),
      originalReq(CONFIGFILE),originalReq('/')]);
-   const serverConfig=JSON.parse(publicConfig);
-   smoke=page.includes(PURPOSE)&&page.includes('<style>')&&
-     page.includes('src="/qa749.js"')&&
-     !page.includes('<script type="module">')&&
-     script.includes('/qa749-config.json')&&
-     style===oldQaCss&&seenCsp.get(FILE)===qaCsp&&
-      seenCsp.get('/')===rootCsp&&
-     validateConfig(serverConfig)&&serverConfig.appId===config.appId&&
-     createHash('sha256').update(index).digest('hex')===rootSha;
-  }catch{/* allow bounded Hosting edge propagation */}
-  if(!smoke&&attempt<5)await new Promise(r=>setTimeout(r,2000));
+   let serverConfig;
+   try{serverConfig=JSON.parse(publicConfig)}catch{serverConfig=null}
+   observed={
+     observed:true,
+     htmlUnchanged:page===oldQaHtml,
+     scriptExactlyUpdated:script===js,
+     stylesheetUnchanged:style===oldQaCss,
+     publicConfigUnchanged:publicConfig===oldQaConfig,
+     qaPageCspExact:seenCsp.get(FILE)===qaCsp,
+     qaPageCspHasSelf:/(?:^|;)\s*connect-src\s+[^;]*'self'/.test(seenCsp.get(FILE)||''),
+     qaPageCspHasAppCheck:(seenCsp.get(FILE)||'').includes('firebaseappcheck.googleapis.com'),
+     receiverCspUnchanged:seenCsp.get('/')===rootCsp,
+     receiverHtmlUnchanged:createHash('sha256').update(index).digest('hex')===rootSha,
+     configValid:validateConfig(serverConfig),
+     configWebAppExact:serverConfig?.appId===config.appId,
+   };
+   smoke=Object.entries(observed).every(([k,v])=>k==='observed'||v===true);
+  }catch(error){
+   // Only expose controlled error codes; never log URL response body.
+   const message=typeof error?.message==='string'?error.message:'';
+   const safe=/^APP749_QA_HOSTING_HOLD_[A-Z0-9_]+$/.test(message)
+     ?message:'HTTP_FETCH_OR_FORMAT_ERROR';
+   observed={observed:false,reason:safe};
+  }
+  if(!smoke&&attempt<smokeAttempts-1)await new Promise(r=>setTimeout(r,smokeDelayMs));
  }
  if(!smoke){
+  notify('APP749_QA_POST_RELEASE_DIAGNOSTIC='+JSON.stringify(observed));
   const active=await latest();
   if(active.version.name===version){
     const rollback=await json('POST',API+'/sites/'+SITE+'/releases?versionName='+

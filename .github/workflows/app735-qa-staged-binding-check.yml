@@ -34,6 +34,26 @@ jobs:
         run: |
           node --check scripts/app735-qa-version-bindings.mjs
           node scripts/verify-735-qa-version-bindings.mjs
+      - name: Read-only APP583 default route HTTP proof (no credentials)
+        run: |
+          set -euo pipefail
+          node --input-type=module - <<'NODE'
+          const endpoint='https://soridraw-owner-qa-583.soridraw-qa.workers.dev/qa730/status';
+          for(let n=0;n<2;n++){
+            const u=endpoint+'?app583_readonly='+encodeURIComponent(
+              process.env.GITHUB_RUN_ID+'-'+process.env.GITHUB_RUN_ATTEMPT+'-'+n);
+            const r=await fetch(u,{method:'GET',redirect:'manual',
+              headers:{Accept:'application/json','Cache-Control':'no-store'},
+              signal:AbortSignal.timeout(12000)});
+            const body=await r.json().catch(()=>null);
+            const isOriginal=r.status===403&&body?.ok===false&&
+              body?.syntheticOnly!==true;
+            console.log('APP583_DEFAULT_ROUTE_HTTP_PROBE_'+n+'='+
+              (isOriginal?'ORIGINAL':'HOLD')+'; HTTP='+r.status);
+            if(!isOriginal)throw Error('APP583_DEFAULT_ROUTE_NOT_ORIGINAL_HOLD');
+          }
+          console.log('APP583_DEFAULT_ROUTE_TWO_HTTP_PROBES=PASS');
+          NODE
 
   qa_get_only:
     if: >-

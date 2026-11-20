@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {assessApp737DirectPromotion} from './app737-direct-promotion-contract.mjs';
+import {summarizeApp737ProductionGaps} from './app737-live-readiness.mjs';
 const s='f'.repeat(40),sha='a'.repeat(64);
 const v=id=>id.repeat(8)+'-1111-2222-3333-444444444444';
 const base=(name,bindings)=>({
@@ -135,3 +136,65 @@ const unproven=assessApp737DirectPromotion({
 assert.equal(unproven.status,'HOLD');
 assert(unproven.unproven.some(x=>x.startsWith('PROMOTION_EVIDENCE_REQUIRED_')));
 console.log('APP737_DIRECT_PREVIEW_PRODUCTION_RELEASE_CONTRACT=PASS; TEST_UNUSED; PROD_MUTATIONS=0');
+
+const realPreviewOnly31=[
+  'BOOTSTRAP_TOKEN:plain_text','ENV_NAME:plain_text','EXPLORE_CACHE:r2_bucket',
+  'OWNER_FOLLOW_RESERVATION_SERVICE_600:service','PROD_BASE:plain_text',
+  'RATE_DB:d1','SORIDRAW_NOTIFICATION_INBOX_READ_ONLY_019:plain_text',
+  'SORIDRAW_NOTIFICATION_RETENTION_013:plain_text',
+  'SORIDRAW_NOTIFICATION_SCHEMA_READY_013:plain_text',
+  'SORIDRAW_OWNER_DO_BRIDGE_SECRET_600:secret_text',
+  'SORIDRAW_OWNER_DO_STANDALONE_600:plain_text',
+  'SORIDRAW_OWNER_FOLLOW_AUTH_PROOF_547:plain_text',
+  'SORIDRAW_OWNER_FOLLOW_BIND_544:plain_text',
+  'SORIDRAW_OWNER_FOLLOW_BRIDGE_READY_607:plain_text',
+  'SORIDRAW_OWNER_FOLLOW_CANARY_UID_574:plain_text',
+  'SORIDRAW_OWNER_FOLLOW_ENDPOINT_539:plain_text',
+  'SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544:secret_text',
+  'SORIDRAW_OWNER_FOLLOW_GENERAL_PREVIEW_653:plain_text',
+  'SORIDRAW_OWNER_FOLLOW_HMAC_539:secret_text',
+  'SORIDRAW_OWNER_FOLLOW_RECEIVER_VERIFIED_607:plain_text',
+  'SORIDRAW_OWNER_FOLLOW_SOURCE_BOUNDARY_653:plain_text',
+  'SORIDRAW_OWNER_FOLLOW_W2_PUSH_555:plain_text',
+  'SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET:secret_text',
+  'SORIDRAW_PRIVATE_FINAL416_ENDPOINT:plain_text',
+  'SORIDRAW_PUBLICATION_RELEASE431_ENDPOINT:plain_text',
+  'SORIDRAW_PUBLIC_FOLLOW_ENDPOINT_669:plain_text',
+  'SORIDRAW_PUBLIC_FOLLOW_READY_669:plain_text',
+  'SORIDRAW_PUBLIC_FOLLOW_SCOPE_669:plain_text',
+  'SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680:plain_text',
+  'SORIDRAW_PUBLIC_RELEASE416_ENDPOINT:plain_text',
+  'TARGET_BASE:plain_text',
+];
+const prodLegacy={productionExplore:{bindings:[
+ {name:'EXPLORE_MIRROR_PREVIEW',type:'service'},
+ {name:'EXPLORE_MIRROR_TEST',type:'service'},
+]}};
+const triage=summarizeApp737ProductionGaps({previewOnly:realPreviewOnly31},prodLegacy);
+assert.equal(triage.status,'HOLD_NO_PRODUCTION_MUTATION');
+assert.equal(triage.productionDeploymentAllowed,false);
+assert.equal(triage.productionLegacyServicesPreserved,true);
+assert.equal(triage.previewOnlyCount,31);
+assert.equal(triage.classifiedCount,31);
+assert.equal(triage.potentiallyUserFacingCount,25);
+assert.equal(triage.productionLocalAndIdentityCount,6);
+assert.equal(triage.unknownCount,0);
+assert.deepEqual(Object.fromEntries(triage.evidencePriority.map(x=>[x.key,x.count])),{
+ follow:18,notification:3,'release-endpoint':4,'cache-cost':2,'environment-identity':4,
+});
+assert(triage.evidencePriority.every(x=>x.independentProofRequired&&
+ !x.canAutoExclude&&!x.canAutoInheritFromPreview));
+const unknownTriage=summarizeApp737ProductionGaps({previewOnly:[
+ 'SORIDRAW_NEW_USER_FEATURE_FLAG:plain_text',
+ 'SORIDRAW_NEW_USER_FEATURE_FLAG:plain_text',
+ '???:invalid',
+]},prodLegacy);
+assert.equal(unknownTriage.unknownCount,3);
+assert.equal(unknownTriage.productionDeploymentAllowed,false);
+const removedMirror=summarizeApp737ProductionGaps({previewOnly:realPreviewOnly31},
+ {productionExplore:{bindings:prodLegacy.productionExplore.bindings.slice(0,1)}});
+assert.equal(removedMirror.productionLegacyServicesPreserved,false);
+const noInventory=summarizeApp737ProductionGaps();
+assert.equal(noInventory.productionDeploymentAllowed,false);
+assert.equal(noInventory.productionLegacyServicesPreserved,false);
+console.log('APP742_ACTUAL_31_BINDING_WORKSTREAM_TRIAGE=PASS; NO_RELEASE_ELIGIBILITY_IMPLIED');

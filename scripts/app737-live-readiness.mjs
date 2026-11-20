@@ -1,9 +1,11 @@
 // APP737: actual PREVIEW/PRODUCTION runtime inventory; GET only, ALWAYS HOLD
 // until real browser/feature/Functions evidence and immutable artifacts exist.
 import {readFileSync} from 'node:fs';
-import {join} from 'node:path';
+import {join,resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {assessApp737DirectPromotion} from './app737-direct-promotion-contract.mjs';
 import {readWorker} from './app728-direct-preflight.mjs';
+import {classifyMissingBinding} from './app728-production-binding-candidate.mjs';
 const QA_WORKERS={
  previewExplore:'soridraw-explore-preview',
  productionExplore:'soridraw-explore-api',
@@ -28,6 +30,68 @@ async function versionAtPreview(){
  if(!r.ok)throw Error('APP737_PREVIEW_LIVE_VERSION_GET_FAILED');
  return String((await r.json()).version||'');
 }
+// APP742: group existing APP728 binding categories into actionable runtime
+// parity workstreams. No decision to drop or copy a binding is made here.
+// A deployed-name/type match, a source string, or a synthetic PASS alone
+// never establishes that PREVIEW and PRODUCTION user features are equivalent.
+const APP742_GROUPS=Object.freeze([
+  ['follow','Owner follow/public follower sync',
+   'Production canonical follow commit, durable receipt+retry, Firebase Auth/AppCheck, RTDB ordering, PC/mobile and cost proof'],
+  ['notification','Notification inbox',
+   'Owner-only authenticated inbox, exact user-visible activation and production origin/receiver proof'],
+  ['release-endpoint','Likes and publication release',
+   'Private/public likes and publication endpoints, signed Functions, receipt convergence and old-client compatibility proof'],
+  ['cache-cost','Derived cache and rate limit',
+   'Exact production-local replacement target, no passive writes, R2/D1 billing and data safety proof'],
+  ['environment-identity','Environment identity/config',
+   'Exact pinned runtime values and proof of unchanged user-facing feature behavior'],
+  ['unclassified','Unclassified binding',
+   'Explicit source+active runtime investigation; never auto-exclude or auto-copy'],
+]);
+export function summarizeApp737ProductionGaps(inventory={},workers={}){
+  const rows=Array.isArray(inventory.previewOnly)?inventory.previewOnly:[];
+  const groups=new Map(APP742_GROUPS.map(([key,title,evidence])=>
+    [key,{key,title,evidenceRequired:evidence,bindings:[]}]));
+  const invalid=[];
+  const seen=new Set();
+  for(const row of rows){
+    const match=/^([A-Z][A-Z0-9_]{1,127}):(plain_text|secret_text|d1|r2_bucket|service|ratelimit|durable_object_namespace)$/.exec(String(row));
+    if(!match||seen.has(match[1])){
+      invalid.push('INVALID_OR_DUPLICATE_BINDING_NAME_TYPE');
+      continue;
+    }
+    seen.add(match[1]);
+    const group=classifyMissingBinding(match[1]);
+    groups.get(group||'unclassified').bindings.push(row);
+  }
+  const prodRows=workers?.productionExplore?.bindings;
+  const legacy=['EXPLORE_MIRROR_PREVIEW','EXPLORE_MIRROR_TEST'];
+  const prodLegacyPreserved=Array.isArray(prodRows)&&legacy.every(name=>
+    prodRows.some(x=>x.name===name&&x.type==='service'));
+  const workstreams=[...groups.values()].map(x=>({
+    ...x,bindings:x.bindings.sort(),count:x.bindings.length,
+    independentProofRequired:x.bindings.length>0,
+    canAutoExclude:false,canAutoInheritFromPreview:false,
+  }));
+  return {
+    kind:'APP742_SOURCE_AND_ACTIVE_RUNTIME_PARITY_GAP_TRIAGE',
+    status:'HOLD_NO_PRODUCTION_MUTATION',
+    readOnly:true,productionDeploymentAllowed:false,
+    previewOnlyCount:rows.length,
+    classifiedCount:seen.size,
+    potentiallyUserFacingCount:
+      ['follow','notification','release-endpoint'].reduce((n,k)=>n+groups.get(k).bindings.length,0),
+    productionLocalAndIdentityCount:
+      ['cache-cost','environment-identity'].reduce((n,k)=>n+groups.get(k).bindings.length,0),
+    unknownCount:groups.get('unclassified').bindings.length+invalid.length,
+    productionLegacyServicesPreserved:prodLegacyPreserved,
+    classificationIsNotActivationProof:true,
+    noAutomaticReleaseExclusions:true,
+    evidencePriority:workstreams.filter(x=>x.count>0),
+    invalid:invalid.length?[...new Set(invalid)]:[],
+  };
+}
+
 async function main(){
  const sha=need('APP737_PREVIEW_SHA');
  const current=need('APP737_CURRENT_PREVIEW_SHA');
@@ -67,6 +131,9 @@ async function main(){
       schedulesVerified:x.schedulesVerified},
   ])),
   bindingInventory:readiness.bindingInventory,
+  // Workstream counts refer to missing connections, NOT active features.
+  // The original release gate remains the sole HOLD decision.
+  productionGapTriage:summarizeApp737ProductionGaps(readiness.bindingInventory,workers),
   blockers:readiness.unproven,
   action:'HOLD_NO_PRODUCTION_MUTATION',
  };
@@ -74,4 +141,6 @@ async function main(){
  if(readiness.status!=='HOLD'||readiness.executable!==false)
   throw Error('APP737_READ_ONLY_RELEASE_NEVER_EXECUTABLE');
 }
-main().catch(e=>{console.error(String(e?.message||e));process.exitCode=2});
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+ main().catch(e=>{console.error(String(e?.message||e));process.exitCode=2});
+}

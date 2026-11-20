@@ -8,6 +8,10 @@ on:
       - 'scripts/app741-qa-original-restore-verify.mjs'
       - 'scripts/verify-741-qa-original-restore.mjs'
       - 'scripts/verify-741-qa-recovery.mjs'
+      - 'scripts/app747-qa-firebase-proof.mjs'
+      - 'scripts/verify-747-qa-firebase-proof.mjs'
+      - 'scripts/verify-747-qa-fault-injection.mjs'
+      - 'cloudflare/explore-worker/experiments/owner-follow-qa730-bridge.mjs'
       - '.github/workflows/app741-qa-do-alarm-recovery.yml'
   issue_comment:
     types: [created]
@@ -36,6 +40,24 @@ jobs:
           node --check scripts/app741-qa-original-restore-verify.mjs
           node scripts/verify-741-qa-recovery.mjs
           node scripts/verify-741-qa-original-restore.mjs
+          node --check scripts/app747-qa-firebase-proof.mjs
+          node scripts/verify-747-qa-firebase-proof.mjs
+      - name: Verify 503 recovery in pinned isolated QA Worker source (no cloud calls)
+        shell: bash
+        run: |
+          set -euo pipefail
+          QA_SHA=4363820117100cb03bcbc44a01e127aeb5de3cf4
+          git fetch origin preview --no-tags
+          test "$(git rev-parse origin/preview)" = "$QA_SHA" || {
+            echo 'APP747_QA_SOURCE_DRIFT_HOLD'; exit 2;
+          }
+          git worktree add --detach "$RUNNER_TEMP/app747-qa" "$QA_SHA"
+          cp scripts/app730-source-only-follow-bridge.mjs "$RUNNER_TEMP/app747-qa/scripts/"
+          cp scripts/verify-747-qa-fault-injection.mjs "$RUNNER_TEMP/app747-qa/scripts/"
+          cp cloudflare/explore-worker/experiments/owner-follow-qa730-bridge.mjs \
+             "$RUNNER_TEMP/app747-qa/cloudflare/explore-worker/experiments/"
+          cd "$RUNNER_TEMP/app747-qa"
+          node scripts/verify-747-qa-fault-injection.mjs
   qa_full_alarm_window:
     if: >-
       github.event_name == 'issue_comment' &&

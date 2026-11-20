@@ -195,7 +195,30 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/app748-qa-version-guard.mjs active "$APP748_TAG"
-          node scripts/app741-qa-100-smoke.mjs
+          # Only QA default authenticated boundary is required during the
+          # new 100% window. APP741's old-0% version override is not a
+          # reliable Cloudflare routing proof under a single-version deploy.
+          # The ORIGINAL APP583 is independently restored and GET/403-tested
+          # in always() after this bounded window.
+          node --input-type=module - <<'NODE'
+          const url='https://soridraw-owner-qa-583.soridraw-qa.workers.dev/qa730/status';
+          let proven=false;
+          for(let attempt=0;attempt<10;attempt++){
+            const r=await fetch(url,{method:'GET',redirect:'manual',
+              headers:{Accept:'application/json','Cache-Control':'no-store'},
+              signal:AbortSignal.timeout(12000)});
+            const body=await r.json().catch(()=>null);
+            if(r.status===403&&body?.ok===false&&body.syntheticOnly===true){
+              proven=true;break;
+            }
+            if(r.status!==403||body?.ok!==false||
+               body?.syntheticOnly===true)
+              throw Error('APP748_QA_DEFAULT_ROUTE_UNEXPECTED_HOLD');
+            if(attempt<9)await new Promise(done=>setTimeout(done,2500));
+          }
+          if(!proven)throw Error('APP748_QA_DEFAULT_ROUTE_NOT_ACTIVE_HOLD');
+          console.log('APP748_QA_DEFAULT_403_SYNTHETIC_ONLY=PASS');
+          NODE
           echo 'APP748_QA_503_PHYSICAL_WINDOW_OPEN'
       - name: Cloud Shell bounded QA synthetic 503 verification window
         run: |

@@ -202,7 +202,7 @@ jobs:
             if grep -Fq '[code: 100146]' "$LOG" && \
                ! grep -Fq 'Deployed soridraw-owner-qa-583 version' "$LOG"; then
               echo "APP748_QA_KNOWN_TRANSIENT_VERSION_100146_ATTEMPT=${ATTEMPT}"
-              if [ "$ATTEMPT" -lt 5 ]; then sleep 3500ms 2>/dev/null || sleep 4; fi
+              if [ "$ATTEMPT" -lt 5 ]; then sleep 4; fi
               continue
             fi
             echo 'APP748_QA_NONTRANSIENT_DEPLOY_FAIL_HOLD'

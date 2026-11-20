@@ -1,0 +1,142 @@
+name: SORIDRAW APP740 QA730 Authenticated Window (isolated QA only)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/app740-qa-cloudshell.mjs'
+      - 'scripts/verify-740-qa-cloudshell.mjs'
+      - '.github/workflows/app740-qa-signed-window.yml'
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+# Reuse APP736's exclusivity: never race a QA 0% rollout or its rollback.
+concurrency:
+  group: soridraw-app736-qa-zero-traffic
+  cancel-in-progress: false
+
+jobs:
+  offline:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify exact isolated QA cloud-shell behavior, no live calls
+        run: |
+          node --check scripts/app740-qa-cloudshell.mjs
+          node scripts/verify-740-qa-cloudshell.mjs
+
+  qa_window:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 1254 &&
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/app740-qa-window ')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify exact main, pinned QA-only preview config and synthetic contract
+        env:
+          DIRECTOR_COMMAND: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          SHA="$(printf '%s' "$DIRECTOR_COMMAND" | sed -nE 's|^/app740-qa-window ([0-9a-f]{40})$|\1|p')"
+          test -n "$SHA" && test "$SHA" = "$(git rev-parse HEAD)" || exit 2
+          test "$SHA" = "$(git ls-remote origin refs/heads/main | cut -f1)" || exit 2
+          node scripts/verify-740-qa-cloudshell.mjs
+          git fetch origin preview --no-tags
+          test "$(git rev-parse origin/preview)" = "4363820117100cb03bcbc44a01e127aeb5de3cf4" || exit 2
+          git worktree add --detach "$RUNNER_TEMP/app740-preview" 4363820117100cb03bcbc44a01e127aeb5de3cf4
+          test -f "$RUNNER_TEMP/app740-preview/cloudflare/explore-worker/wrangler.owner-qa-583.json" || exit 2
+      - name: Verify original QA 100% and staged 0% version/bindings (GET only)
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          node scripts/app735-qa-version-bindings.mjs
+      - name: Temporarily add candidate at ZERO percent; original stays 100%
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || exit 2
+          touch "$RUNNER_TEMP/app740-qa-route-attempted"
+          cd "$RUNNER_TEMP/app740-preview/cloudflare/explore-worker"
+          npx --yes wrangler@4.102.0 versions deploy \
+            '4ed70845-6a4b-4a80-9c51-ed95d0becc38@100%' \
+            '16a07d40-7a75-4f31-a8b1-fdcf0410a544@0%' \
+            --config wrangler.owner-qa-583.json --yes
+      - name: Verify exact old 100% and new 0% from Cloudflare API (GET only)
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          node --input-type=module - <<'NODE'
+          const token=process.env.CLOUDFLARE_QA_API_TOKEN||'';
+          if(!token)throw Error('APP740_QA_READ_TOKEN_MISSING');
+          const url='https://api.cloudflare.com/client/v4/accounts/b60fcd62c679c64db19f0b0e0c2f3429/workers/scripts/soridraw-owner-qa-583/deployments';
+          const response=await fetch(url,{headers:{Authorization:'Bearer '+token}});
+          if(!response.ok)throw Error('APP740_QA_DEPLOYMENT_GET_FAIL');
+          const data=await response.json();
+          const v=data?.result?.deployments?.[0]?.versions;
+          const map=new Map(v?.map(x=>[x.version_id,Number(x.percentage)]));
+          if(map.size!==2||
+             map.get('4ed70845-6a4b-4a80-9c51-ed95d0becc38')!==100||
+             map.get('16a07d40-7a75-4f31-a8b1-fdcf0410a544')!==0)
+             throw Error('APP740_QA_PERCENTAGE_MISMATCH_HOLD');
+          console.log('APP740_QA_OLD100_NEW0=PASS');
+          NODE
+      - name: Prove candidate route and old default deny unauthenticated requests
+        run: |
+          set -euo pipefail
+          node scripts/app736-qa-zero-traffic-smoke.mjs
+          echo 'APP740_QA_WINDOW_OPEN=PASS; ORIGINAL_TRAFFIC=100_PERCENT; CANDIDATE=ZERO_PERCENT'
+      - name: Allow already authenticated QA Cloud Shell to run synthetic A/B
+        run: |
+          echo 'APP740_QA_SIGNED_TEST_WINDOW=OPEN_18_MINUTES'
+          sleep 1080
+      - name: Restore original QA version exclusively, even after a failure
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+        run: |
+          set -euo pipefail
+          if [ ! -f "$RUNNER_TEMP/app740-qa-route-attempted" ]; then
+            echo 'APP740_QA_DEPLOY_NOT_ATTEMPTED'
+            exit 0
+          fi
+          test -n "$CLOUDFLARE_API_TOKEN" || exit 2
+          cd "$RUNNER_TEMP/app740-preview/cloudflare/explore-worker"
+          npx --yes wrangler@4.102.0 versions deploy \
+            '4ed70845-6a4b-4a80-9c51-ed95d0becc38@100%' \
+            --config wrangler.owner-qa-583.json --yes
+          echo 'APP740_ORIGINAL_QA_SINGLE_VERSION_RESTORED'
+      - name: Final GET-only confirmation of old 100%, QA-only bindings
+        if: always()
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          node scripts/app735-qa-version-bindings.mjs
+          echo 'APP740_QA_ORIGINAL_VERSION_AND_BINDINGS_FINAL=PASS'

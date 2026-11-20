@@ -1,4 +1,6 @@
 // APP749: pinned independent QA Firebase Auth + App Check JWT gate.
+// App Check's raw signed JWT has sub=appId; app_id is added by the
+// Firebase Admin SDK as a convenience and is NOT a raw JWT claim.
 // Only for the existing QA Firebase project. Public verification keys only;
 // never accepts client UID, QA probe secret, or an unsigned claim as identity.
 // No Admin credentials, Firestore/RTDB access or production connections.
@@ -32,7 +34,7 @@ function claimsValid(x,time,auth){
     x.auth_time>0&&x.auth_time<=time+30;
   return x.iss==='https://firebaseappcheck.googleapis.com/'+NUMBER&&
     Array.isArray(x.aud)&&x.aud.includes('projects/'+NUMBER)&&
-    APP_ID.test(x.sub||'')&&x.app_id===x.sub;
+    APP_ID.test(x.sub||'');
 }
 export function createQaFirebaseVerifier749({send=fetch,now=Date.now,subtle=globalThis.crypto?.subtle}={}){
   const cache=new Map();

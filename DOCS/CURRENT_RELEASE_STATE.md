@@ -1,3 +1,10 @@
+## 0APP749D. QA584 CSP 수정 Hosting 실배포 PASS / 실제 A·B 로그인·PC 모바일 수신 미검증 (2026-11-21 KST)
+
+- 디렉터가 QA 전용 Cloud Shell에서 `scripts/app749-qa-hosting-repair-csp.mjs --check && --deploy` 직접 실행한 결과 사진 확인: `APP749_QA_SITE_EXISTING_RECEIVER=PASS`, `APP749_QA_ORIGINAL_RELEASE_AND_FILES_PINNED=PASS`, `APP749_QA_NO_HOSTING_CHANGES=PASS`, `APP749_QA_CLONE_CONFIG_EXACT_ORIGINAL=PASS`, `APP749_QA_APPEND_RELEASE_CREATED=PASS`, `APP749_QA_NEW_PAGE_AND_OLD_RECEIVER_HTTP=PASS`, `APP749_QA_HOSTING_DEPLOY=PASS`, 종료코드 `0`.
+- 이 PASS는 **실제 QA Hosting의 `/qa749.html`, CSP 대응 `qa749.js`/`qa749.css` 공개 및 기존 수신 사이트 보호가 서버 HTTP 기준 성공**했다는 뜻. 브라우저 JS 실행·Firebase SDK 로딩·A/B 실제 로그인·App Check 실토큰·PC↔모바일 자동 수신 PASS는 아직 아님.
+- 다음 순서: PC에서 `https://soridraw-qa-owner-584.web.app/qa749.html` 강력 새로고침 후 `QA Firebase 연결 준비 완료` 문구·A/B 버튼 활성화 확인 → PC A/B 및 모바일 A 로그인 확인 → 기존 QA Worker 12분 임시 검증 창만 실행 → B 팔로우·취소 시 두 기기 A의 RTDB 실시간 수신 → APP583 정확 원본 자동 복구 확인. 상태 실패 시 재배포 반복 금지; 페이지 상태 메시지로 정확한 원인 판정.
+- 기존 QA 사용자 데이터·원본 사용자 정보·TEST·PRODUCTION·PREVIEW/공유 D1/R2/RTDB 변경 없음. `main` 소스 기준 2bccef4e2d24b806d1ec0398e53961ed09ebee08; `preview` 기준 4363820117100cb03bcbc44a01e127aeb5de3cf4.
+
 ## 0APP749C. QA584 브라우저 CSP 차단 원인 확인·수정 코드 PASS / 실페이지 재배포 대기 (2026-11-21 KST)
 
 - 디렉터 QA Cloud Shell 현장 출력에서 `APP749_QA_HOSTING_DEPLOY=PASS`, `APP749_QA_NEW_PAGE_AND_OLD_RECEIVER_HTTP=PASS`, 종료코드 0 확인. **QA584 `/qa749.html` 초기 배포와 기존 수신 페이지 보존은 실제 PASS**. 운영·TEST/PRODUCTION 변경 없음.

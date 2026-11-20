@@ -13,9 +13,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: soridraw-app736-qa-zero-traffic
-  cancel-in-progress: false
 
 jobs:
   offline:
@@ -43,6 +40,11 @@ jobs:
       github.event.issue.number == 1254 &&
       github.event.issue.pull_request != null &&
       startsWith(github.event.comment.body, '/app736-qa-canary ')
+    # Only an approved QA mutation job should occupy the shared QA lock.
+    # Issue comments for unrelated workflows never enter its pending queue.
+    concurrency:
+      group: soridraw-app736-qa-zero-traffic
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:

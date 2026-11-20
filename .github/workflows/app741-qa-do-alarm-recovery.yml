@@ -17,9 +17,6 @@ on:
     types: [created]
 permissions:
   contents: read
-concurrency:
-  group: soridraw-app736-qa-zero-traffic
-  cancel-in-progress: false
 jobs:
   offline:
     if: github.event_name == 'pull_request'
@@ -66,6 +63,11 @@ jobs:
       github.event.issue.number == 1254 &&
       github.event.issue.pull_request != null &&
       startsWith(github.event.comment.body, '/app741-qa-recover ')
+    # Only an approved QA mutation job should occupy the shared QA lock.
+    # Issue comments for unrelated workflows never enter its pending queue.
+    concurrency:
+      group: soridraw-app736-qa-zero-traffic
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

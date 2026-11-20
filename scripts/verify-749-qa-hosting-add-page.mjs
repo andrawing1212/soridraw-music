@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {gzipSync} from 'node:zlib';
 import {createHash} from 'node:crypto';
 import {runApp749QaHosting} from './app749-qa-hosting-add-page.mjs';
-const html=readFileSync('qa/app749/qa749.html','utf8');
+const html=readFileSync('scripts/__fixtures__/qa749-inline-original.html','utf8').split('\n').slice(1).join('\n');
 const embedded=html.split('<script type="module">')[1]?.split('</script>')[0];
 assert(embedded,'QA browser module missing');
 const temp=mkdtempSync(join(tmpdir(),'app749-qa-client-'));

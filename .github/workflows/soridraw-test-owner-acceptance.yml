@@ -1,0 +1,82 @@
+name: SORIDRAW TEST Owner Acceptance — Separate Manual Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifest_tag:
+        description: 'Exact pending TEST_AUTO_CHECKED release tag'
+        required: true
+        type: string
+      evidence_json:
+        description: 'Owner-observed PC/mobile and 3-env parity evidence for the exact pending manifest'
+        required: true
+        type: string
+      owner_confirmation:
+        description: 'Type ACCEPT_TEST_RESULTS (not PRODUCTION approval)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-release-owner-acceptance
+  cancel-in-progress: false
+
+jobs:
+  owner-acceptance:
+    # No issue-comment/automatic trigger. The owner must manually authorize.
+    if: github.actor == github.repository_owner && github.triggering_actor == github.actor
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MANIFEST_TAG: ${{ inputs.manifest_tag }}
+      OWNER_EVIDENCE_JSON: ${{ inputs.evidence_json }}
+      OWNER_ACCEPTANCE_EXPLICIT_CONFIRMATION: ${{ inputs.owner_confirmation }}
+      SORIDRAW_RELEASE_ATTESTATION_KEY: ${{ secrets.SORIDRAW_RELEASE_ATTESTATION_KEY }}
+    steps:
+      - name: Checkout exact audited owner-acceptance controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fail closed without owner/unique unaccepted release/secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTOR" = "$GITHUB_REPOSITORY_OWNER"
+          test "$GITHUB_TRIGGERING_ACTOR" = "$GITHUB_ACTOR"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$OWNER_ACCEPTANCE_EXPLICIT_CONFIRMATION" = ACCEPT_TEST_RESULTS
+          test "${#SORIDRAW_RELEASE_ATTESTATION_KEY}" -ge 32
+          [[ "$MANIFEST_TAG" =~ ^soridraw-test-v[0-9]+-[0-9a-f]{12}$ ]]
+          gh release view "$MANIFEST_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' |
+            grep -Fx 'soridraw-test-acceptance.json' && {
+              echo 'TEST_OWNER_ACCEPTANCE_ALREADY_ISSUED_HOLD'; exit 1;
+            } || true
+      - name: Fetch pending manifest and sign separately authorized evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/test-acceptance-input"
+          gh release download "$MANIFEST_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern soridraw-release-manifest.json --dir "$RUNNER_TEMP/test-acceptance-input"
+          printf '%s' "$OWNER_EVIDENCE_JSON" > "$RUNNER_TEMP/test-acceptance-input/owner-observed-evidence.json"
+          node scripts/sign-497-owner-acceptance-cli.mjs \
+            "$RUNNER_TEMP/test-acceptance-input/soridraw-release-manifest.json" \
+            "$RUNNER_TEMP/test-acceptance-input/owner-observed-evidence.json" \
+            "$RUNNER_TEMP/test-acceptance-input/soridraw-test-acceptance.json"
+          node scripts/verify-497-owner-acceptance-cli.mjs \
+            "$RUNNER_TEMP/test-acceptance-input/soridraw-release-manifest.json" \
+            "$RUNNER_TEMP/test-acceptance-input/soridraw-test-acceptance.json" \
+            "$GITHUB_REPOSITORY_OWNER"
+          gh release upload "$MANIFEST_TAG" \
+            "$RUNNER_TEMP/test-acceptance-input/soridraw-test-acceptance.json#soridraw-test-acceptance.json" \
+            --repo "$GITHUB_REPOSITORY"
+          echo 'TEST_OWNER_APPROVAL_ASSET_ADDED=PASS'
+          echo 'PRODUCTION_DEPLOYMENT=NOT_AUTHORIZED_NOT_EXECUTED'

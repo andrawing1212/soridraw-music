@@ -11,7 +11,7 @@ if (!repository || !token || !stateFile) throw new Error('release status environ
 
 const validStates = new Set([
   'REQUESTED', 'SOURCE_LOCKED', 'STATIC_CHECKS', 'PREFLIGHT', 'TEST_DEPLOY',
-  'TEST_VERIFY', 'TEST_VERIFIED', 'PROD_PREFLIGHT', 'PROD_DEPLOY', 'PROD_VERIFY',
+  'TEST_VERIFY', 'TEST_AUTO_CHECKED', 'TEST_VERIFIED', 'PROD_PREFLIGHT', 'PROD_DEPLOY', 'PROD_VERIFY',
   'RELEASED', 'BLOCKED', 'FAILED', 'ROLLED_BACK',
 ]);
 if (!validStates.has(state)) throw new Error(`unsupported release state: ${state}`);

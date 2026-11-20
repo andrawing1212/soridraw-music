@@ -2,6 +2,19 @@
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Cache-Control" content="no-store">
 <title>SORIDRAW 독립 QA | 실제 팔로우 동기화</title>
+<style>
+:root{font:15px/1.5 system-ui, sans-serif;color:#f3f4f6;background:#161617}
+*{box-sizing:border-box}body{margin:0;padding:24px 12px;max-width:850px;margin-inline:auto}
+h1{font-size:21px;margin:0 0 7px}h2{font-size:16px;margin:0 0 12px}
+p{margin:5px 0 16px;color:#b9bac0}section{background:#262628;padding:17px;border-radius:14px;margin:14px 0}
+label{display:block;margin:9px 0 3px;color:#ddd}input,textarea{width:100%;background:#363639;color:white;padding:11px;border:0;border-radius:8px;font:inherit}
+textarea{height:110px}button{border:0;border-radius:999px;padding:10px 15px;background:#ffbb22;color:#171717;font-weight:650;font:inherit;cursor:pointer}
+button:disabled{opacity:.32;cursor:not-allowed}.muted{color:#aaa;font-size:13px}
+.status{white-space:pre-wrap;font-variant-numeric:tabular-nums;padding:8px 0;color:#eaeaea}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}.tag{color:#ffce75}#events{background:#1d1d20;border-radius:10px;min-height:72px;padding:12px}
+code{font-size:12px}a{color:#c4b0ff}
+
+</style>
 <link rel="stylesheet" href="/qa749.css"></head>
 <body>
 <h1>SORIDRAW · 독립 QA 팔로우 실검증</h1>
@@ -10,10 +23,7 @@
 <section>
 <h2>1. QA Firebase 연결</h2>
 <p id="configStatus" class="status">QA 설정 확인 중…</p>
-<details id="manual" hidden><summary>QA Firebase 공개 설정 직접 입력 (자동 연결 실패 시)</summary>
-<label for="config">기존 QA584 페이지의 「Firebase QA 웹 앱 공개 설정 JSON」만 입력</label>
-<textarea id="config" spellcheck="false" placeholder='{"apiKey":"...","appId":"1:1083981050742:web:...","projectId":"soridraw-app",...}'></textarea>
-<div class="row"><button id="apply">설정 연결</button></div></details>
+<p class="muted" id="configHelp">연결 정보를 사용자에게 입력받지 않습니다. 기존 QA 앱의 공개 설정을 자동으로 확인합니다.</p>
 </section>
 <section>
 <h2>2. A · 알림 수신 계정 (PC·모바일 각각 로그인)</h2>

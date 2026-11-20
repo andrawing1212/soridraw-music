@@ -21,9 +21,18 @@
 ## 현행 미해결 차이 (실제 환경 기준, 새 자동 승인 아님)
 
 - 최근 Cloudflare GET 검사: Explore Worker 바인딩 PREVIEW 41개, PROD 12개. 구형 PROD service binding 2개와 PREVIEW 전용 owner-follow/Functions 플래그·저장소·부트스트랩 연결을 무차별 복사하지 않는다. 어떤 기능이 정식에서도 필요한지, 어느 항목이 QA/진단용인지 코드·실제 동작으로 구분해야 한다.
-- APP730은 독립 QA Worker 비활성 업로드·버전 지정 403 실호출과 기존 100% 복구까지 PASS했지만, **합성 A↔B의 내구성 있는 확정→Functions→RTDB 실제 전송/PC·모바일 검증은 미완료**다. 이전 APP583 PASS를 새 버전 PASS로 재분류하지 않는다.
+- APP730/741 독립 합성 QA: 기존 QA 프로젝트 `soridraw-app`에서 실제 합성 B→A 팔로우 확정 revision 7 / count 1 → Functions → RTDB 및 취소 revision 8 / count 0 **실전송 PASS**(Cloud Shell 결과, [APP741 Actions #44646956397](https://github.com/andrawing1212/soridraw-music/actions/runs/44646956397)). 이 합성 경로는 QA probe token 인증이며 **실제 Firebase Auth/AppCheck 인증·강제 503 장애 주입·일반 PC/모바일 실사용 PASS가 아니다.** APP583 합격을 재표기한 것이 아니라 APP730 자체의 신호 실증이며 PROD 승격은 HOLD.
 - PROD Worker 코드/DO migration 및 Functions·Rules 버전·새 코드 번들 동일성, 실제 Hosting 자산 동등성, 복구 리허설이 확인되지 않아 **현재 정식 배포 HOLD**다.
 - 사용자 데이터 원본·Local First·뮤직노트·라이브러리·최근곡·로그인/좋아요 동기화 및 무변경 방문 W0 보호는 항상 우선한다.
+
+## 반복 배포 최적화 계약 — 최초 검증과 일상 승격 분리 (2026-11-20)
+
+- **최초 1회 검증:** PREVIEW/PRODUCTION 실제 코드·Worker 바인딩/DO·Functions·RTDB Rules·Auth/AppCheck·구버전 사용자 데이터·비용·롤백의 동등성을 실제 증거로 확립한다. 아직 완료되지 않았으며 RELEASE HOLD. 증거 없이 EXCLUDE/QA_ONLY로 기능을 제거하거나 모두 복사하지 않는다.
+- **이후 일반 Hosting 업데이트:** 기존 백엔드 활성 버전 UUID, 정확한 바인딩 대상·정책/Rules/Functions 버전, 사용자 API 계약 및 비용 경로가 마지막 **독립적으로 승인된 기준과 동일한지 읽기 전용으로 비교**한다. 모두 동일하고 신규 서버 기능이 없으면 그 기준에서 이미 PASS한 백엔드 독립 QA/롤백 훈련을 재수행하지 않는다. 대신 바뀐 프런트엔드 기능·PREVIEW 실제 활성 Hosting 파일 전체 SHA·현재 PROD 롤백 버전/설정·PC/모바일 영향 경로만 재검증한다.
+- **재검증 경계:** Worker 코드/버전·바인딩 대상·Functions/RTDB Rules/Auth/AppCheck·요청 API 계약·데이터 저장/동기화/캐시 비용이 바뀌면 변경된 계층의 추가 검증·승인이 필요하다. 단순 UI 변경이라도 새 서버 호출이나 저장 동작이 있으면 'Hosting만 변경'으로 처리하지 않는다.
+- **목표 속도:** 일반 변경은 PREVIEW 합격 후 당일, 30~60분 내 승격을 지향하지만 검사 실패·실사용 이상·고위험 변경 시 강행하지 않는다. 매번 새 QA 프로젝트·전체 회귀·중복 독립 감사·TEST 컨트롤러를 만들지 않는다. 모든 필수 기능의 정상 동작과 저장 원본 보호는 여전히 합격 조건이다.
+- **배포 게이트 유지:** APP737/738의 `READY_FOR_DIRECTOR_APPROVAL` / 정확한 SHA/증거 파일/최종 디렉터 승인·자동 복구 조건을 우회하지 않는다. 현재 해당 승인 증거 파일은 아직 없으며 운영 배포를 수행하지 않는다.
+- **QA Worker 복구 재사용:** APP741은 Wrangler 원본 `4ed70845...` 단일 100% 복구 명령 **SUCCESS**였으나 직후 Cloudflare API read는 일시적 `ACTIVE_TRAFFIC_DRIFT`로 실패. 외부 재배포 없이 [APP735 최종 GET-only #44650441200](https://github.com/andrawing1212/soridraw-music/actions/runs/44650441200) **PASS**. 같은 정상 조회 지연 때문에 매번 18분의 QA를 반복하지 않는다. 기존 원본 응답·고정 바인딩 조회를 제한적으로 재확인하고, 미일치 시 HOLD. 실사용 합격 범위는 별도.
 
 ## APP738 — 실제 Hosting 승격·복구 실행 코드
 

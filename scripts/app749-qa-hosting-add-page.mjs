@@ -159,7 +159,7 @@ async function run({mode,html,send=fetch,token,projectId,projectNumber,notify=()
  check(current.name===old.name&&current.version.name===oldVer,
    'CONCURRENT_QA_HOSTING_RELEASE_HOLD');
  const deployed=await json('POST',API+'/sites/'+SITE+'/releases?versionName='+
-   encodeURIComponent(version),{type:'DEPLOY'},'RELEASE');
+   encodeURIComponent(version),undefined,'RELEASE');
  check(deployed.version?.name===version,'DEPLOYED_VERSION_NOT_CONFIRMED');
  notify('APP749_QA_APPEND_RELEASE_CREATED=PASS');
  let smoke=false;
@@ -176,7 +176,7 @@ async function run({mode,html,send=fetch,token,projectId,projectNumber,notify=()
   const active=await latest();
   if(active.version.name===version){
     const rollback=await json('POST',API+'/sites/'+SITE+'/releases?versionName='+
-      encodeURIComponent(oldVer),{type:'DEPLOY'},'ROLLBACK');
+      encodeURIComponent(oldVer),undefined,'ROLLBACK');
     check(rollback.version?.name===oldVer,'ROLLBACK_NOT_CONFIRMED');
     notify('APP749_QA_OLD_HOSTING_ROLLBACK_COMMAND=PASS');
   }

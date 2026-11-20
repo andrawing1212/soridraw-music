@@ -47,7 +47,7 @@ const serving={headers:[{glob:'/**',headers:{'Content-Security-Policy':policy}}]
  rewrites:[{glob:'/only-old',path:'/index.html'}],cleanUrls:false};
 const servingScoped={...serving,headers:[...serving.headers,
  {glob:'/qa749.html',headers:{'Content-Security-Policy':scoped}}]};
-function fake({oldDrift=false,cspBad=false,concurrent=false}={}){
+function fake({oldDrift=false,cspBad=false,jsBad=false,concurrent=false}={}){
  let current=old,configured=false,populated=false,final=false;
  const calls=[];
  const json=(body,status=200)=>new Response(JSON.stringify(body),{status});
@@ -58,7 +58,7 @@ function fake({oldDrift=false,cspBad=false,concurrent=false}={}){
   if(path===host+'/')return page(oldRoot,policy);
   if(path===host+'/qa749.html')return page(oldDrift?'changed':html,
     current===old||cspBad?policy:scoped);
-  if(path===host+'/qa749.js')return page(current===old?oldJs:js,policy);
+  if(path===host+'/qa749.js')return page(current===old||jsBad?oldJs:js,policy);
   if(path===host+'/qa749.css')return page(css,policy);
   if(path===host+'/qa749-config.json')return page(oldConfig,policy);
   if(path===site+'/releases'&&opts.method==='GET')
@@ -113,6 +113,7 @@ function fake({oldDrift=false,cspBad=false,concurrent=false}={}){
  return{send,calls,getCurrent:()=>current};
 }
 const args={html,css,js,config:c,token:'testOauth'+'a'.repeat(60),
+ smokeAttempts:1,smokeDelayMs:0,
  projectId:'soridraw-app',projectNumber:'1083981050742'};
 const check=fake();
 assert.equal((await runApp749QaScopedCsp({...args,mode:'--check',send:check.send})).status,'READY');
@@ -131,13 +132,33 @@ const conflict=fake({concurrent:true});
 await assert.rejects(()=>runApp749QaScopedCsp({...args,mode:'--deploy',send:conflict.send}),
  /CONCURRENT_QA_HOSTING_RELEASE_HOLD/);
 assert.equal(conflict.getCurrent(),old);
+const problems=[];
 const broken=fake({cspBad:true});
-await assert.rejects(()=>runApp749QaScopedCsp({...args,mode:'--deploy',send:broken.send}),
+await assert.rejects(()=>runApp749QaScopedCsp({...args,mode:'--deploy',send:broken.send,
+ notify:x=>problems.push(x)}),
  /QA_PAGE_OR_EXISTING_RECEIVER_HTTP_FAILURE/);
 assert.equal(broken.getCurrent(),old,'revert on unchanged QA749 CSP after release');
+const report=problems.find(x=>x.startsWith('APP749_QA_POST_RELEASE_DIAGNOSTIC='));
+assert(report,'QA smoke must disclose safe per-check result before rollback');
+const failed=JSON.parse(report.split('=')[1]);
+assert.equal(failed.qaPageCspExact,false);
+assert.equal(failed.receiverCspUnchanged,true);
+assert.equal(failed.stylesheetUnchanged,true);
+assert.equal(failed.publicConfigUnchanged,true);
+assert.equal(failed.configValid,true);
+const jsProblems=[];
+const wrongJs=fake({jsBad:true});
+await assert.rejects(()=>runApp749QaScopedCsp({...args,mode:'--deploy',send:wrongJs.send,
+ notify:x=>jsProblems.push(x)}),
+ /QA_PAGE_OR_EXISTING_RECEIVER_HTTP_FAILURE/);
+assert.equal(wrongJs.getCurrent(),old,'revert when QA JavaScript body is stale');
+const jsReport=JSON.parse(jsProblems.find(x=>x.startsWith('APP749_QA_POST_RELEASE_DIAGNOSTIC=')).split('=')[1]);
+assert.equal(jsReport.scriptExactlyUpdated,false);
+assert.equal(jsReport.qaPageCspExact,true);
 console.log('APP749_QA_LIVE_CSP_ROOT_CAUSE_SELF_GOOGLE_WORKER_BLOCKED=PASS');
 console.log('APP749_QA_ONLY_QA749_HTML_CONNECT_FRAME_SCRIPT_SCOPED=PASS');
 console.log('APP749_QA_ORIGINAL_RECEIVER_CSP_ALL_FILES_UNCHANGED=PASS');
 console.log('APP749_QA_CONFIG_SINGLE_VERIFIED_QA_SOURCE=PASS');
 console.log('APP749_QA_SCOPED_CSP_SMOKE_ROLLBACK=PASS');
+console.log('APP749_QA_POST_RELEASE_FAILURE_REASON_ISOLATED=PASS');
 console.log('APP749_QA_LIVE_AUTH_PC_MOBILE=NOT_RUN');

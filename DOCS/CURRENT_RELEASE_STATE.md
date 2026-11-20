@@ -1,3 +1,10 @@
+## 0APP749H. QA584 진단 결과 확보, 마지막 HTTP 스모크 실패 항목 구분 코드 PASS / 실 QA 미배포 (2026-11-21 KST)
+
+- 디렉터가 이미 실행한 QA584 읽기 전용 진단 사진: 종료코드 `0`, `APP749_QA_READONLY_NO_WRITE=PASS`. 현재 활성버전 `e7bfc3a27e9ebe49`은 기존 전역 CSP 규칙 하나, 직전 실패 후보 `7a8b790e9f3449f`에는 기존 `glob:**` 규칙과 신규 `glob:/qa749.html` 전용 CSP 규칙 2개. 기존 루트와 QA749 공개 응답은 원본 CSP(해시 `66dd3d5dc2e4b4`)이고 QA App Check와 'self' 접속은 여전히 차단. **이는 롤백 후 라이브 응답이므로 실패 후보가 활성화돼 있을 때 어떤 CSP 헤더가 서비스됐는지는 보여주지 않음.**
+- 반복 진단 요청 금지: 사용자에게 `diagnose-qa.mjs`를 재실행하라고 다시 안내하지 않는다. 기존 스크립트의 `APP749_QA_HOSTING_HOLD_QA_PAGE_OR_EXISTING_RECEIVER_HTTP_FAILURE`는 HTML/JS/CSS/QA Config/루트/CSP를 한 boolean으로 합쳐서 **실패 원인별 분리가 불가**했던 것이 직접적 가시화 결함.
+- PR #1293 main squash `ebb6ef862dfd2e7f2728cbfe8034f35614cc0183` 병합; Actions #44839479440 QA 오프라인 **SUCCESS**. `scripts/app749-qa-hosting-scoped-csp.mjs`는 QA 공개 직후 원본 불변·새 JS 정확성·QA CSP 정확성/접속 허용 여부·QA 설정 파일 원본·루트 HTTP를 개별 boolean으로 구분해 출력 `APP749_QA_POST_RELEASE_DIAGNOSTIC`하고, 실패 시 기존 원본으로 rollback 유지. 에지 반영 최장 약 30초(15회 제한), 테스트에서만 즉시 실패 모의. CSP 미반영·JS 구버전 실패 원인을 각각 확인하고 원복 PASS.
+- **현재 FAIL/HOLD 유지:** 이 수정 코드는 GitHub에만 저장, QA584 Hosting에는 재배포하지 않음. APP749 실제 로그인, App Check 실토큰, B 팔로우/취소, A PC↔모바일 자동 수신·서버 원복은 미검증. 추가 QA 라이브 변경은 현장 실패 체크포인트와 승인 범위 확인 후 단일 제한 실행. PREVIEW/TEST/PRODUCTION/공유 DB/원본 데이터 변경 없음. `preview` HEAD `4363820117100cb03bcbc44a01e127aeb5de3cf4` 보호.
+
 ## 0APP749G. QA749 scoped CSP 실제 Hosting 재배포 스모크 FAIL / 원본 롤백 명령 PASS (2026-11-21 KST)
 
 - 디렉터 Cloud Shell 사진: `scripts/app749-qa-hosting-scoped-csp.mjs --check && --deploy`에서 `APP749_QA_ORIGINAL_RELEASE_AND_FILES_PINNED=PASS`, `APP749_QA_SCOPED_CSP_CONFIG_PINNED=PASS`, `APP749_QA_APPEND_RELEASE_CREATED=PASS` 후, `APP749_QA_OLD_HOSTING_ROLLBACK_COMMAND=PASS`, `APP749_QA_HOSTING_HOLD_QA_PAGE_OR_EXISTING_RECEIVER_HTTP_FAILURE`, 종료코드 `2`.

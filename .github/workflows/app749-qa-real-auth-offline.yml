@@ -10,6 +10,9 @@ on:
       - 'scripts/verify-749-qa-real-auth.mjs'
       - 'scripts/app749-qa-real-login-cloudshell.mjs'
       - 'scripts/verify-749-qa-real-login-cloudshell.mjs'
+      - 'qa/app749/qa749.html'
+      - 'scripts/app749-qa-hosting-add-page.mjs'
+      - 'scripts/verify-749-qa-hosting-add-page.mjs'
       - '.github/workflows/app749-qa-real-auth-offline.yml'
 permissions:
   contents: read
@@ -34,6 +37,7 @@ jobs:
           node --check cloudflare/explore-worker/experiments/owner-follow-qa730-entry.mjs
           node --check scripts/app749-qa-real-login-cloudshell.mjs
           node scripts/verify-749-qa-real-login-cloudshell.mjs
+          node scripts/verify-749-qa-hosting-add-page.mjs
       - name: Pin historical APP583 QA and build new entry in temporary worktree ONLY
         run: |
           set -euo pipefail

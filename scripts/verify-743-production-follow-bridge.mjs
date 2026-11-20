@@ -15,17 +15,30 @@ const evidence={scope:'REVIEWED_PRODUCTION_RUNTIME_ONLY',verifiedByIndependentQa
  durableAlarmReplayVerified:true,canonicalSettledRevisionVerified:true,
  productionFunctionTargetVerified:true};
 const calls={auth:0,lookup:0,pair:0,reserve:0,proof:0,canonical:0};
-let existing=false,badExisting=false,duplicateAck=false;
+let existing=false,badExisting=false,duplicateAck=false,lookupFault='';
 let auth=true,project='soridraw-app-866a5',pair=true,
  alarm=true,commit=true,noOp=false;
 const args={evidence,
  verifyFirebasePrincipal:async()=>{calls.auth++;return{
   verifiedAuth:auth,verifiedAppCheck:auth,firebaseProjectId:project,uid:actor}},
- findDurableReceipt:async ({canonicalOperationId,expectedRevision})=>{
+ findDurableReceipt:async ({actorUid,ownerUid,desired,
+   canonicalOperationId,expectedRevision})=>{
   calls.lookup++;
   assert.equal(canonicalOperationId,clientId);
-  if(expectedRevision!==5)return null;
-  return badExisting?{...ticket,ownerUid:'wrongOwner'}:existing?ticket:null;
+  if(lookupFault==='throw')throw Error('SYNTHETIC_DO_UNAVAILABLE');
+  if(lookupFault==='null')return null;
+  if(lookupFault==='undefined')return undefined;
+  if(lookupFault==='unknown')return {status:'unknown'};
+  if(lookupFault==='wrong-scope')return {status:'absent',
+    authoritative:true,actorUid,ownerUid:'wrongOwner',desired,
+    canonicalOperationId,expectedRevision};
+  if(lookupFault==='weak-absence')return {status:'absent',
+    authoritative:false,actorUid,ownerUid,desired,
+    canonicalOperationId,expectedRevision};
+  if(badExisting||existing)return {status:'found',
+    receipt:badExisting?{...ticket,ownerUid:'wrongOwner'}:ticket};
+  return {status:'absent',authoritative:true,actorUid,ownerUid,desired,
+    canonicalOperationId,expectedRevision};
  },
  readCanonicalPair:async()=>{calls.pair++;return{
   canonicalVerified:pair,actorUid:actor,ownerUid:owner,revision:5,following:noOp}},
@@ -111,6 +124,24 @@ const replayCanonicalBefore=calls.canonical;
 assert.equal((await connected.fetch(req(),env,{})).status,503);
 assert.equal(calls.canonical,replayCanonicalBefore,'corrupt receipt cannot mutate D1');
 badExisting=false;
+// APP746: unknown DO lookup must NEVER be mistaken for an absent receipt.
+// No new alarm, canonical preflight or D1 write under transient errors.
+for(const fault of ['null','undefined','unknown','wrong-scope',
+                    'weak-absence','throw']){
+ lookupFault=fault;
+ const beforeFault={...calls};
+ if(fault==='throw'){
+  await assert.rejects(()=>connected.fetch(req(),env,{}),
+    /SYNTHETIC_DO_UNAVAILABLE/);
+ }else{
+  assert.equal((await connected.fetch(req(),env,{})).status,503,
+    'unknown / untrusted absent proof must HOLD');
+ }
+ assert.equal(calls.pair,beforeFault.pair);
+ assert.equal(calls.reserve,beforeFault.reserve);
+ assert.equal(calls.canonical,beforeFault.canonical);
+}
+lookupFault='';
 // No unversioned/empty-body write is ever authorized by this OFF candidate.
 // The original APP354 first-request negotiation remains a separate release HOLD.
 const noBodyBefore=calls.reserve;
@@ -124,4 +155,5 @@ assert.equal(calls.reserve,noBodyBefore);
 
 console.log('APP743_SOURCE_ONLY_PROD_BRIDGE_AUTH_DO_CANONICAL_PROOF=PASS');
 console.log('APP744_CLIENT354_ID_DO_RECEIPT_SPLIT_REPLAY=PASS; LEGACY_FIRST_REQUEST=HOLD');
+console.log('APP746_DURABLE_RECEIPT_AUTHORITATIVE_ABSENCE_AND_UNAVAILABLE_HOLD=PASS');
 console.log('APP743_PHYSICAL_AUTH_APPCHECK_NOOP_RACE_503=NOT_VERIFIED_RELEASE_HOLD');

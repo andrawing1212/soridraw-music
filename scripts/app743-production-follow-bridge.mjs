@@ -69,15 +69,25 @@ export function createApp743ProductionFollowBridge({
       r.cutoverToken.length<=128;
    // Retry after lost ACK MUST reuse the persisted owner-only receipt;
    // it may not generate a second DO reservation when canonical has changed.
-   const previous=await findDurableReceipt({
+   // A null, undefined or transient DO response is NOT evidence of absence.
+   // Fail closed before any D1/R2 canonical read or new DO alarm on ambiguity.
+   // Only the authoritative DO read may positively assert absence for the
+   // authenticated actor/owner/pair, client ID and revision.
+   const lookup=await findDurableReceipt({
       request,env,ctx,actorUid,ownerUid,desired,
       canonicalOperationId,expectedRevision,
    });
-   if(previous!==null&&previous!==undefined){
-      if(!valid(previous))return {durable:false};
-      stored.set(request,previous);
-      return previous;
+   if(lookup?.status==='found'){
+      if(!valid(lookup.receipt))return {durable:false};
+      stored.set(request,lookup.receipt);
+      return lookup.receipt;
    }
+   if(lookup?.status!=='absent'||lookup.authoritative!==true||
+      lookup.actorUid!==actorUid||lookup.ownerUid!==ownerUid||
+      lookup.desired!==desired||
+      lookup.canonicalOperationId!==canonicalOperationId||
+      lookup.expectedRevision!==expectedRevision)
+      return {durable:false};
    const before=await readCanonicalPair({request,env,ctx,actorUid,ownerUid,desired});
    if(before?.canonicalVerified!==true||before.actorUid!==actorUid||
       before.ownerUid!==ownerUid||!REV(before.revision)||

@@ -29,6 +29,7 @@ async function json(url,token,send){
 }
 export async function inspectApp748QaVersion({
  token,tag,versionId,mode='stage',send=fetch,
+ wait=ms=>new Promise(r=>setTimeout(r,ms)),
 }={}){
  if(typeof token!=='string'||token.length<10)stop('READ_TOKEN_MISSING');
  if(!/^app748-qa503-[0-9a-f]{12}-[0-9]{5,16}-[0-9]+$/.test(tag||''))
@@ -48,7 +49,22 @@ export async function inspectApp748QaVersion({
  const current=await deployment();
  if(mode==='stage'&&current!==OLD)stop('ORIGINAL_NOT_100_BEFORE_STAGE');
  const id=versionId;
- const exact=await json(BASE+'/workers/workers/'+WORKER+'/versions/'+id,token,send);
+ // A newly uploaded immutable version can briefly return 404 to the
+ // read-only API even when Wrangler confirms its ID. Retry ONLY this
+ // exact transient for bounded time; every other error and binding drift
+ // remains a hard HOLD before any QA route activation.
+ let exact;
+ for(let n=0;n<10;n++){
+   try{
+     exact=await json(BASE+'/workers/workers/'+WORKER+'/versions/'+id,token,send);
+     break;
+   }catch(e){
+     if(String(e?.message||e)!=='APP748_QA_VERSION_HOLD_CLOUDFLARE_GET_404'||
+        n===9)throw e;
+     await wait(2000);
+   }
+ }
+ if(!exact)stop('NEW_VERSION_NOT_OBSERVED');
  if(exact?.id!==id||!Array.isArray(exact.bindings)||
     exact.bindings.length!==5)stop('NEW_QA_BINDING_COUNT');
  const m=new Map(exact.bindings.map(b=>[b.name,b.type]));

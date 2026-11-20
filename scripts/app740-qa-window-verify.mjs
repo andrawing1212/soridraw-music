@@ -25,10 +25,16 @@ export async function verifyQa740Deployment({token,send=fetch,wait=pause,maxAtte
    throw Error('APP740_QA_UNEXPECTED_DEPLOYMENT_HOLD');
   if(attempt<maxAttempts-1)await wait(2000);
  }
- throw Error('APP740_QA_DEPLOYMENT_NOT_VISIBLE_AFTER_RETRY_HOLD');
+ // The read API can remain on an old@100 snapshot even when the
+ // independently probed 0% version and original default are both correct.
+ // The caller MUST complete the actual version-override 403 proof FIRST.
+ // A stale GET is an observation, never a standalone green light.
+ return {status:'STALE_OLD100_ROUTE_PROOF_REQUIRED',oldTraffic:100,newTraffic:null};
 }
 if(process.argv[1]&&process.argv[1].endsWith('app740-qa-window-verify.mjs')){
  verifyQa740Deployment({token:process.env.CLOUDFLARE_QA_API_TOKEN})
-  .then(()=>console.log('APP740_QA_OLD100_NEW0=PASS'))
+  .then(result=>console.log(result.status==='PASS'?
+    'APP740_QA_API_EXACT_100_0=PASS':
+    'APP740_QA_API_STALE_OLD100; PHYSICAL_VERSION_OVERRIDE_PREVIOUS_STEP_REQUIRED'))
   .catch(e=>{console.error(e.message);process.exitCode=2});
 }

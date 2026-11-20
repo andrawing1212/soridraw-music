@@ -274,14 +274,27 @@ jobs:
             if(n<9)await new Promise(resolve=>setTimeout(resolve,2500));
           }
           if(!active)throw Error('APP749_QA_NEW_DEFAULT_NOT_VISIBLE_HOLD');
-          const bad=[
-            await req('PUT','/qa730/verified/follow'),
-            await req('PUT','/qa730/verified/follow',{'X-Owner583-Token':'not-a-token'}),
-            await req('GET','/qa730/verified/status',{Authorization:'Bearer invalid.jwt.token'})
-          ];
-          if(bad.some(r=>r.status!==403||r.body?.ok!==false||
-             r.body?.syntheticOnly!==true))
-            throw Error('APP749_QA_AUTH_BYPASS_HOLD');
+          // During Cloudflare propagation, the original APP583 (also 403)
+          // can still be seen after the first new-version response.
+          // Never tolerate a 200, a non-403 or a missing ok:false response.
+          let fenced=false;
+          for(let attempt=0;attempt<10;attempt++){
+            const bad=[
+              await req('PUT','/qa730/verified/follow'),
+              await req('PUT','/qa730/verified/follow',{'X-Owner583-Token':'not-a-token'}),
+              await req('GET','/qa730/verified/status',{Authorization:'Bearer invalid.jwt.token'})
+            ];
+            console.log('APP749_QA_AUTH_BOUNDARY_PROBE_'+attempt+'='+
+              bad.map(x=>x.status+'/'+(x.body?.ok===false?'DENIED':'OTHER')+
+                '/'+(x.body?.syntheticOnly===true?'QA749':'LEGACY')).join(','));
+            if(bad.some(r=>r.status!==403||r.body?.ok!==false))
+              throw Error('APP749_QA_AUTH_BYPASS_OR_UNEXPECTED_HTTP_HOLD');
+            if(bad.every(r=>r.body.syntheticOnly===true)){
+              fenced=true;break;
+            }
+            if(attempt<9)await new Promise(resolve=>setTimeout(resolve,2500));
+          }
+          if(!fenced)throw Error('APP749_QA_NEW_AUTH_ROUTE_NOT_CONVERGED_HOLD');
           const legacy=await req('GET','/qa583/status');
           if(legacy.status!==403||legacy.body?.ok!==false||
              legacy.body?.syntheticOnly===true)

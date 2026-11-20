@@ -1,0 +1,118 @@
+name: SORIDRAW APP741 QA730 Temporary DO Alarm Recovery (QA only)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/app741-qa-recovery.mjs'
+      - 'scripts/app741-qa-100-smoke.mjs'
+      - 'scripts/verify-741-qa-recovery.mjs'
+      - '.github/workflows/app741-qa-do-alarm-recovery.yml'
+  issue_comment:
+    types: [created]
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app736-qa-zero-traffic
+  cancel-in-progress: false
+jobs:
+  offline:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check isolated QA alarm recovery and mock version routing
+        run: |
+          node --check scripts/app741-qa-recovery.mjs
+          node --check scripts/app741-qa-100-smoke.mjs
+          node scripts/verify-741-qa-recovery.mjs
+  qa_full_alarm_window:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 1254 &&
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/app741-qa-recover ')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify exact main SHA and pinned preview QA source
+        env:
+          DIRECTOR_COMMAND: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          SHA="$(printf '%s' "$DIRECTOR_COMMAND" | sed -nE 's|^/app741-qa-recover ([0-9a-f]{40})$|\1|p')"
+          test -n "$SHA" && test "$SHA" = "$(git rev-parse HEAD)" || exit 2
+          test "$SHA" = "$(git ls-remote origin refs/heads/main | cut -f1)" || exit 2
+          node scripts/verify-741-qa-recovery.mjs
+          git fetch origin preview --no-tags
+          test "$(git rev-parse origin/preview)" = "4363820117100cb03bcbc44a01e127aeb5de3cf4" || exit 2
+          git worktree add --detach "$RUNNER_TEMP/app741-preview" 4363820117100cb03bcbc44a01e127aeb5de3cf4
+          test -f "$RUNNER_TEMP/app741-preview/cloudflare/explore-worker/wrangler.owner-qa-583.json"
+      - name: Verify original QA Worker exclusive 100% and exact bindings (GET-only)
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          node scripts/app735-qa-version-bindings.mjs
+      - name: Temporarily assign QA Worker and DO code APP730 100% (isolated QA only)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || exit 2
+          touch "$RUNNER_TEMP/app741-qa-deploy-attempted"
+          cd "$RUNNER_TEMP/app741-preview/cloudflare/explore-worker"
+          npx --yes wrangler@4.102.0 versions deploy \
+            '4ed70845-6a4b-4a80-9c51-ed95d0becc38@0%' \
+            '16a07d40-7a75-4f31-a8b1-fdcf0410a544@100%' \
+            --config wrangler.owner-qa-583.json --yes
+      - name: Prove new QA default and original version override by HTTP only
+        run: |
+          set -euo pipefail
+          node scripts/app741-qa-100-smoke.mjs
+          echo 'APP741_ISOLATED_QA_NEW100_OLD0_VERIFIED; DO_ALARM=NOT_YET_PROVEN'
+      - name: QA physical Cloud Shell recovery window; no GitHub-side Firebase credentials
+        run: |
+          echo 'APP741_QA_DO_ALARM_RECOVERY_WINDOW=OPEN'
+          sleep 1080
+      - name: Always restore historical QA APP583 single version at 100%
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+        run: |
+          set -euo pipefail
+          if [ ! -f "$RUNNER_TEMP/app741-qa-deploy-attempted" ]; then
+            echo 'APP741_NO_QA_DEPLOYMENT_ATTEMPT; OLD_QA_UNCHANGED'
+            exit 0
+          fi
+          test -n "$CLOUDFLARE_API_TOKEN" || exit 2
+          cd "$RUNNER_TEMP/app741-preview/cloudflare/explore-worker"
+          npx --yes wrangler@4.102.0 versions deploy \
+            '4ed70845-6a4b-4a80-9c51-ed95d0becc38@100%' \
+            --config wrangler.owner-qa-583.json --yes
+          echo 'APP741_ORIGINAL_QA_APP583_WORKER_100_PERCENT_RESTORED'
+      - name: Final GET-only proof of original version/bindings after rollback
+        if: always()
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          node scripts/app735-qa-version-bindings.mjs
+          echo 'APP741_ORIGINAL_QA_VERSION_BINDINGS_FINAL=PASS'

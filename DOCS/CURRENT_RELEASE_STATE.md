@@ -1,3 +1,13 @@
+## 0APP749B. QA584 실제 A/B Firebase 로그인·App Check·실시간 수신 화면 구현 / 소스 병합, 실배포 미완료 (2026-11-21 KST)
+
+- 승인된 기존 QA-only 팔로우 자동 수신 실검증 후속. 새로운 Firebase QA 웹 App Check Fraud Defense 등록은 디렉터가 Firebase Console에서 확인(등록됨), reCAPTCHA Enterprise 키는 QA584 도메인 한정. 이 등록만으로 실제 로그인/팔로우 PASS 아님.
+- PR #1285 main squash merge `23d33cc99684fc2e47ebb7a5bd8668ac7bce1be2`; `preview` 기준 `4363820117100cb03bcbc44a01e127aeb5de3cf4` 불변. QA 코드 외 제품 UI/TEST/PRODUCTION 변경 없음.
+- `cloudflare/explore-worker/experiments/owner-follow-qa730-entry.mjs`: 기존 APP749 signed Firebase Auth/App Check 검증을 유지하고 QA584 정확한 `https://soridraw-qa-owner-584.web.app` Origin에 한하여 OPTIONS/CORS 허용. 합성 probe/token-only 우회, 다른 Origin, 공유 D1/R2 바인딩 허용 금지.
+- `qa/app749/qa749.html`: 기존 QA584 index를 덮지 않는 신규 시험 화면. QA Firebase Web SDK로 기존 A·B 로그인(인메모리), QA App Check 서명 토큰 발급, QA A RTDB `onValue` 단일 수신, B의 signed follow/unfollow 1회씩, A/B 서버 확정/RTDB 0→1→0 확인. 인증정보·비밀번호·토큰 저장/출력 금지. PC/모바일 실기기 동작은 별도 확인 필요.
+- `scripts/app749-qa-hosting-add-page.mjs`: 기존 QA584 Hosting live 버전을 Firebase Hosting REST API `versions:clone`으로 그대로 복제하고 `/qa749.html`만 추가하는 QA 전용 Cloud Shell 스크립트. 버전·기존 파일/Config 보존, 동시 릴리스 충돌 차단, 원본 HTTP 보호, 실패 시 기존 버전 재릴리스. `--check`는 읽기 전용, `--deploy`는 QA584 Hosting에만 작성. 테스트 로컬/모의 기능, 실제 Hosting API 실행은 아직 아님.
+- 신규 코드·기존 APP730 호환 실행형 검사: Actions #44803481529, #44803481526 **SUCCESS**. 기존 APP749 원본 Worker 회복 PASS [#44771635185] 재사용. main 저장 성공 ≠ QA Hosting 배포 성공 ≠ 실제 로그인 성공.
+- **미완료/HOLD:** 사용자 기존 QA Cloud Shell에서 `--check` 확인 후 QA584에 별도 페이지를 append 배포해야 함. 여기서는 Cloud Shell에 원격 명령을 직접 입력할 수 없고 실제 QA Hosting/Cloudflare 배포 미실행. QA749 Worker는 원본 APP583 100% 상태. 기존 A·B QA 암호/실토큰 및 실기기 PC↔모바일 미확인. APP749 잠깐 활성화/자동 원복은 QA B 토큰을 쓸 준비가 된 때 기존 승인 QA 경로만 사용. TEST/PRODUCTION/공유 DB/원본 사용자 데이터 변경 금지.
+
 ## 0APP749. 실제 Firebase Auth·App Check QA 전용 검증 경로 / 임시 활성화·원본복구 PASS (2026-11-21 KST)
 
 - 디렉터 승인 범위: PR #1284 병합 및 기존 격리 QA Worker에만 실제 서명 토큰 검사 경로 임시 활성화. TEST/PRODUCTION/공유 사용자 데이터 변경 금지.

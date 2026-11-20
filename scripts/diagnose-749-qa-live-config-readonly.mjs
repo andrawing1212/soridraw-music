@@ -28,6 +28,16 @@ for(const path of paths){
  }
  const info={path,status:r.status,mime:(r.headers.get('content-type')||'').split(';')[0],
    bytes:new TextEncoder().encode(body).length};
+ if(path==='/qa749.html'){
+   const header=r.headers.get('content-security-policy')||'';
+   const directives=Object.fromEntries(header.split(';')
+     .map(x=>x.trim()).filter(Boolean)
+     .map(x=>{const tokens=x.split(/\s+/);return[tokens[0],tokens.slice(1).join(' ')];})
+     .filter(([name])=>['default-src','connect-src','script-src','script-src-elem',
+       'style-src','style-src-elem'].includes(name)));
+   console.log('APP749_QA_LIVE_PAGE_CSP '+JSON.stringify({
+     hasCsp:header.length>0,directives}));
+ }
  if(expected[path]!==undefined){
    info.matchesRepo=sha(expected[path])===sha(body);
    info.isHTML=path.endsWith('.html')?body.includes('QA Firebase 연결'):undefined;

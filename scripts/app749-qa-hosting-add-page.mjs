@@ -105,17 +105,22 @@ async function run({mode,html,send=fetch,token,projectId,projectNumber,notify=()
  const operation=await json('POST',API+'/sites/'+SITE+'/versions:clone',
    {sourceVersion:oldVer,finalize:false},'CLONE');
  let op=operation;
+ // Firebase Hosting clone uses projects/{QA_PROJECT}/operations/{OP_ID},
+ // NOT the short "operations/{ID}" path used by the old mock.
+ const operationName=op?.name;
+ check(typeof operationName==='string'&&
+   /^projects\/(?:soridraw-app|1083981050742)\/operations\/[A-Za-z0-9_-]{1,256}$/.test(operationName),
+   'CLONE_OPERATION_INVALID');
  for(let i=0;i<30&&!op.done;i++){
-  check(typeof op.name==='string'&&op.name.startsWith('operations/'),
-    'CLONE_OPERATION_INVALID');
   await new Promise(r=>setTimeout(r,1000));
-  const endpoint=API+'/'+op.name;
-  // Google Hosting long-running operation is read-only; never another clone.
+  const endpoint=API+'/'+operationName;
+  // Poll only the exact QA project operation returned by the clone response.
   let response;try{response=await send(endpoint,{
    method:'GET',redirect:'error',headers,signal:AbortSignal.timeout(timeout)})}
    catch{hold('CLONE_POLL_NETWORK')}
   check(response.status===200,'CLONE_POLL_HTTP_'+response.status);
-  op=await response.json();
+  op=await response.json().catch(()=>null);
+  check(op?.name===operationName,'CLONE_OPERATION_DRIFT');
  }
  check(op.done===true&&!op.error,'CLONE_NOT_DONE');
  const version=op.response?.name??op.response?.version?.name;

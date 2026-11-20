@@ -110,7 +110,7 @@ async function main(){
  const token=execFileSync('gcloud',['auth','print-access-token'],{
   encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim();
  const result=await runApp740({config:content,accessToken:token});
- console.log('APP740_QA730_SIGNED_DO_RTD B='+result.status.replace('R T','RT'));
+ console.log('APP740_QA730_SIGNED_DO_RTDB='+result.status);
  console.log('APP740_QA730_FOLLOW_VERSION='+result.qaApp730FollowVersion);
  console.log('APP740_QA730_UNFOLLOW_VERSION='+result.qaApp730UnfollowVersion);
  console.log('APP740_QA730_FINAL_FOLLOWER_COUNT=0');

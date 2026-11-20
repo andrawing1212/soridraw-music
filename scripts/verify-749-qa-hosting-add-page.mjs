@@ -1,9 +1,25 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdtempSync,rmSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {gzipSync} from 'node:zlib';
 import {createHash} from 'node:crypto';
 import {runApp749QaHosting} from './app749-qa-hosting-add-page.mjs';
 const html=readFileSync('qa/app749/qa749.html','utf8');
+const embedded=html.match(/<script type="module">([\\s\\S]*?)<\\/script>/);
+assert(embedded,'QA browser module missing');
+const temp=mkdtempSync(join(tmpdir(),'app749-qa-client-'));
+try{
+ const filename=join(temp,'qa749.mjs');
+ writeFileSync(filename,embedded[1]);
+ execFileSync(process.execPath,['--check',filename],{stdio:'pipe'});
+}finally{rmSync(temp,{recursive:true,force:true})}
+assert(html.includes("initializeAppCheck"));
+assert(html.includes("signInWithEmailAndPassword"));
+assert(html.includes("onValue"));
+assert(html.includes("soridraw-qa-owner-584.web.app"));
+assert(html.includes("inMemoryPersistence"));
 const site='https://firebasehosting.googleapis.com/v1beta1/sites/soridraw-qa-owner-584';
 const host='https://soridraw-qa-owner-584.web.app';
 const old='sites/soridraw-qa-owner-584/versions/9737bd-old';

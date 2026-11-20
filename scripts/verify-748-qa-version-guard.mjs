@@ -11,7 +11,7 @@ const arr=[
  {name:'SORIDRAW_OWNER_FOLLOW_W2_PUSH_555',type:'plain_text'},
  {name:'SORIDRAW_QA747_INJECT503',type:'plain_text'},
 ];
-let active=old,broken=false,extra=false;
+let active=old,broken=false,extra=false,missing=0,waitCount=0;
 const send=async(url,opt)=>{
  assert.equal(opt.method,'GET');
  assert(url.includes('/workers/'));
@@ -20,13 +20,24 @@ const send=async(url,opt)=>{
  url.includes('/versions?')?
  {items:[{id,annotations:{'workers/tag':tag}}]}:
  {id,bindings:extra?[...arr,{name:'DB',type:'d1'}]:broken?arr.slice(0,4):arr};
+ if(url.endsWith('/versions/'+id)&&missing-->0)
+  return new Response(JSON.stringify({success:false}),{status:404});
  return new Response(JSON.stringify({success:true,result:body}),{
   status:200,headers:{'Content-Type':'application/json'}});
 };
-const params={token,tag,versionId:id,send,mode:'stage'};
+const params={token,tag,versionId:id,send,mode:'stage',
+ wait:async()=>{waitCount++}};
 const a=await inspectApp748QaVersion(params);
 assert.equal(a.status,'PASS');
 assert.equal(a.candidateBindingCount,5);
+missing=3;
+const eventual=await inspectApp748QaVersion(params);
+assert.equal(eventual.status,'PASS');
+assert.equal(waitCount,3,'only exact 404 retried');
+missing=11;
+await assert.rejects(()=>inspectApp748QaVersion(params),/CLOUDFLARE_GET_404/);
+assert.equal(waitCount,12,'bounded ten exact attempts');
+missing=0;
 active=id;
 const b=await inspectApp748QaVersion({...params,mode:'active'});
 assert.equal(b.qaTrafficVersion,id);

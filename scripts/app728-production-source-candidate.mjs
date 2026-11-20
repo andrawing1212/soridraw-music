@@ -177,20 +177,26 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  const entryPath=join(dir,'production-follow-entry.mjs');
  const adapterSource=readFileSync(resolve('scripts/app729-production-follow-adapter.mjs'),'utf8');
  const lifecycleSource=readFileSync(resolve('scripts/app730-source-only-follow-bridge.mjs'),'utf8');
+ const productionBridgeSource=readFileSync(resolve('scripts/app743-production-follow-bridge.mjs'),'utf8');
  if(!adapterSource.includes('APP729_PRODUCTION_OWNER_FOLLOW_COMPILED_OPEN = false'))
    fail('INTEGRATION_COMPILE_OFF_REQUIRED');
+ if(!productionBridgeSource.includes('APP743_PRODUCTION_FOLLOW_COMPILED_OPEN=false'))
+   fail('PRODUCTION_BRIDGE_MUST_REMAIN_OFF');
  mkdirSync(join(dir,'integration'),{recursive:true});
  const adapterPath=join(dir,'integration','app729-production-follow-adapter.mjs');
  const lifecyclePath=join(dir,'integration','app730-source-only-follow-bridge.mjs');
+ const productionBridgePath=join(dir,'integration','app743-production-follow-bridge.mjs');
  if(!lifecycleSource.includes('APP730_PRODUCTION_RELAY_ENABLED = false'))
    fail('DURABLE_RELAY_COMPILE_OFF_REQUIRED');
  writeFileSync(adapterPath,adapterSource);
  writeFileSync(lifecyclePath,lifecycleSource);
+ writeFileSync(productionBridgePath,productionBridgeSource);
  writeFileSync(entryPath,entry.code);
  if(sha256(readFileSync(entryPath))!==entry.sha256)
    fail('INTEGRATION_ENTRY_DRIFT');
  checkSyntax(adapterPath);
  checkSyntax(lifecyclePath);
+ checkSyntax(productionBridgePath);
  checkSyntax(entryPath);
  candidate.manifest.integration={
    entrypoint:'production-follow-entry.mjs',
@@ -201,6 +207,8 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
    deployable:false,
    integrationReadyForProduction:false,
    sourceOnlyPrecommitAndDurableReplayPresent:true,
+   productionBridgeSourceOnlyAndNotActivated:true,
+   productionBridgeImplementationDependenciesInjected:false,
  };
  writeFileSync(join(dir,'review-manifest.json'),JSON.stringify(candidate.manifest,null,2)+'\n');
  return {outputDirectory:dir,manifest:candidate.manifest};

@@ -307,7 +307,7 @@ async function run({mode,html,css,js,config,send=fetch,token,projectId,projectNu
      stylesheetUnchanged:style===oldQaCss,
      publicConfigUnchanged:publicConfig===oldQaConfig,
      qaPageCspExact:seenCsp.get(FILE)===qaCsp,
-     qaPageCspHasSelf:/(?:^|;)\\s*connect-src\\s+[^;]*'self'/.test(seenCsp.get(FILE)||''),
+     qaPageCspHasSelf:/(?:^|;)\s*connect-src\s+[^;]*'self'/.test(seenCsp.get(FILE)||''),
      qaPageCspHasAppCheck:(seenCsp.get(FILE)||'').includes('firebaseappcheck.googleapis.com'),
      receiverCspUnchanged:seenCsp.get('/')===rootCsp,
      receiverHtmlUnchanged:createHash('sha256').update(index).digest('hex')===rootSha,

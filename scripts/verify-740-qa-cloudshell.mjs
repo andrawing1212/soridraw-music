@@ -79,7 +79,9 @@ await assert.rejects(()=>verifyQa740Deployment({token:'qa-read-only-token',
 await assert.rejects(()=>verifyQa740Deployment({token:'qa-read-only-token',
  send:async()=>mock([{version_id:'unrelated',percentage:100}]),
  wait:async()=>{throw Error('UNEXPECTED_RETRY')}}),/UNEXPECTED_DEPLOYMENT_HOLD/);
-await assert.rejects(()=>verifyQa740Deployment({token:'qa-read-only-token',
+const stale=await verifyQa740Deployment({token:'qa-read-only-token',
  send:async()=>mock([{version_id:old,percentage:100}]),
- wait:async()=>{},maxAttempts:2}),/NOT_VISIBLE_AFTER_RETRY_HOLD/);
+ wait:async()=>{},maxAttempts:2});
+assert.equal(stale.status,'STALE_OLD100_ROUTE_PROOF_REQUIRED');
+assert.equal(stale.newTraffic,null);
 console.log('APP740_QA_CLOUDFLARE_BOUNDED_STALE_DEPLOYMENT_RETRY=PASS');

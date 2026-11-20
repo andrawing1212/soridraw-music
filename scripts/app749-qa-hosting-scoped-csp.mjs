@@ -97,7 +97,10 @@ function qa749ScopedCsp(original){
  return rs.map(r=>r.name+' '+r.sources.join(' ')).join('; ');
 }
 async function run({mode,html,css,js,config,send=fetch,token,projectId,projectNumber,
-   notify=()=>{},timeout=15000}={}){
+   notify=()=>{},timeout=15000,smokeAttempts=15,smokeDelayMs=2000}={}){
+ check(Number.isSafeInteger(smokeAttempts)&&smokeAttempts>=1&&smokeAttempts<=20&&
+   Number.isSafeInteger(smokeDelayMs)&&smokeDelayMs>=0&&smokeDelayMs<=5000,
+   'SMOKE_BOUNDS_INVALID');
  check(['--check','--deploy'].includes(mode),'USE_CHECK_OR_DEPLOY');
  check(projectId===PROJECT&&projectNumber===NUMBER,'WRONG_QA_PROJECT');
  check(typeof token==='string'&&token.length>30,'OAUTH_MISSING');
@@ -293,7 +296,7 @@ async function run({mode,html,css,js,config,send=fetch,token,projectId,projectNu
  // No Firebase credentials, headers or user data are included in logs.
  let smoke=false;
  let observed={observed:false,reason:'NOT_CHECKED'};
- for(let attempt=0;attempt<15&&!smoke;attempt++){
+ for(let attempt=0;attempt<smokeAttempts&&!smoke;attempt++){
   try{
    const [page,script,style,publicConfig,index]=await Promise.all([
      originalReq(FILE),originalReq(JSFILE),originalReq(CSSFILE),
@@ -322,7 +325,7 @@ async function run({mode,html,css,js,config,send=fetch,token,projectId,projectNu
      ?message:'HTTP_FETCH_OR_FORMAT_ERROR';
    observed={observed:false,reason:safe};
   }
-  if(!smoke&&attempt<14)await new Promise(r=>setTimeout(r,2000));
+  if(!smoke&&attempt<smokeAttempts-1)await new Promise(r=>setTimeout(r,smokeDelayMs));
  }
  if(!smoke){
   notify('APP749_QA_POST_RELEASE_DIAGNOSTIC='+JSON.stringify(observed));

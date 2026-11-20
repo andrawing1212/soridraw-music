@@ -13,7 +13,7 @@ const send=async(url,options)=>{
  assert.equal(options.redirect,'manual');
  if(isRtdb){
   assert.equal(method,'GET');
-  assert.equal(options.headers.Authorization,'Bearer local-qa-access-token-'.padEnd(45,'z'));
+  assert.equal(options.headers.Authorization,'Bearer '+('local-qa-access-token-'.padEnd(45,'z')));
   return {status:200,json:async()=>({...value})};
  }
  assert.equal(url.startsWith('https://soridraw-owner-qa-583.soridraw-qa.workers.dev/qa730/'),true);

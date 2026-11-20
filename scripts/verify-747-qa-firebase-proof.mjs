@@ -55,7 +55,13 @@ for(const [set,reset,code] of [
  set();await assert.rejects(()=>verifyApp747QaFirebasePrincipals(args),code);
  reset();
 }
-assert(!Object.keys(r).some(k=>/token|uid|secret/i.test(k)&&
- !['noTokensReturned'].includes(k)));
+// Status labels may contain the word "token"; credential material itself
+// must never be returned, logged, or be embedded in a success payload.
+assert(!JSON.stringify(r).includes(actorIdToken));
+assert(!JSON.stringify(r).includes(ownerIdToken));
+assert(!JSON.stringify(r).includes(appCheckToken));
+assert(!JSON.stringify(r).includes(cfg.actorUid));
+assert(!JSON.stringify(r).includes(cfg.ownerUid));
+assert(!JSON.stringify(r).includes(cfg.probeToken));
 console.log('APP747_QA_OFFICIAL_ADMIN_AUTH_APPCHECK_MOCK_CONTRACT=PASS');
 console.log('APP747_QA_REAL_FIREBASE_TOKENS=NOT_RUN; QA_WORKER_GATE=NOT_RUN');

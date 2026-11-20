@@ -1,3 +1,14 @@
+## 0APP749F. 실제 QA584 브라우저 CSP 원인 확정 + QA749만 허용한 수정 소스 검사 PASS / 사이트 재배포·실기기 미완료 (2026-11-21 KST)
+
+- 사용자 제공 실브라우저 스크린샷: QA 화면 스타일은 정상이나 `QA Firebase 자동 연결 실패`, A/B 로그인 버튼 비활성. 사용자 로그인 암호 원인으로 보고하지 않음.
+- 서버에서 **QA584 공개 URL 읽기 전용** 실측: Actions #44835235065 `/qa749.html`, `/qa749.js`, `/qa749.css`, `/qa749-config.json` 모두 200, repo source 일치. QA 전용 config 프로젝트·앱 ID·API Key·도메인·DB field PASS. `/__/firebase/init.json`은 DB URL이 QA 전용과 불일치.
+- 별도 실제 응답 CSP 검증 Actions #44835491970: HTML `default-src 'none'`; `connect-src`에 `'self'`, Firebase App Check 서버, QA Worker가 빠져 있고 `script-src`에는 Google reCAPTCHA가 없음. **파일이 존재하더라도 브라우저 fetch가 CSP로 차단됨**. 기존 자동 초기화가 두 소스를 폭넓게 묶어 모든 실패를 같은 문구로 표시하므로 진단이 지연됨.
+- PR #1292 main squash `cbe3ae6eaf08df3a262211b742cf24c09445a197` 소스 병합. QA client는 QA 전용 `/qa749-config.json`만 사용, 파일 HTTP·형식·프로젝트 불일치·Auth 초기화 실패를 구분 표시. Auth 로그인 준비와 App Check 준비는 분리하지만 **서명 없는 Worker 요청은 절대 허용하지 않음**.
+- `scripts/app749-qa-hosting-scoped-csp.mjs`: 기존 QA584 원본 Hosting live 리비전·모든 파일/설정/RTDB·앱 소유자·원본 수신 페이지를 보존. `/qa749.js` 한 파일과 `/qa749.html` 경로 하나에만 지정된 접속 허용 CSP를 추가; 기존 `default-src 'none'`/CSS 정책을 유지. 새 버전 조립 후 원본 수신 페이지 CSP 불변, QA749 CSP 반영, 기존 HTML/CSS/config/루트 파일 불변을 실제 HTTP로 검사하고 실패 시 기존 릴리스 복구. 공유 RTDB/IAM/Worker/TEST/PRODUCTION/PREVIEW 수정 없음.
+- GitHub Actions #44836342302 **offline QA PASS**: CSP 원인 재현, path-only 허용 목록, 원본 수신 페이지 보호·실패 rollback·기존 APP749 signed auth/APP730 호환. 임시 QA Worker 검증 미수행. 진단용 PR #1291은 **읽기 결과 확보 후 closed (미병합)**.
+- **현재 HOLD:** GitHub 소스 검사 PASS만 기록. **새 CSP·JS의 QA584 실제 Hosting 배포는 아직 실행되지 않음**. QA 실제 A/B 로그인·App Check 토큰, 팔로우/취소와 PC↔모바일 자동 수신, 원본 APP583 Worker 복구는 여전히 미검증. QA 전용 Cloud Shell 안전한 기존 프로세스에서 스크립트 `--check`→`--deploy` 수행 후 반드시 실제 브라우저 상태 확인. 공유 데이터/운영·TEST/PRODUCTION 변경 금지.
+- main `cbe3ae6eaf08df3a262211b742cf24c09445a197`, preview `4363820117100cb03bcbc44a01e127aeb5de3cf4` 유지.
+
 ## 0APP749E. QA 로그인 화면 스타일·자동설정 보정 코드 PASS / QA584 적용 대기 (2026-11-21 KST)
 
 - 사용자 실기기 `/qa749.html`에서는 새 외부 CSS가 브라우저에 적용되지 않아 기본 흰색 화면, Firebase `/__/firebase/init.json` 자동 조회 실패로 로그인 버튼 비활성, "QA Firebase 공개 설정 직접 입력" 표시. 최초 HTML 내 CSS는 실제 어두운 디자인으로 표시된 증거가 있음. 원본 QA Hosting 설정/보안 규칙/비밀번호 문제로 단정하지 않음.

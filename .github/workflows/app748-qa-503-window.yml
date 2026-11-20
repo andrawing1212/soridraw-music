@@ -186,8 +186,29 @@ jobs:
           NODE
           touch "$RUNNER_TEMP/app748-route-attempted"
           cd "$RUNNER_TEMP/app748-qa/cloudflare/explore-worker"
-          npx --yes wrangler@4.102.0 versions deploy "${ID}@100%" \
-             --config wrangler.app748.json --yes
+          # Cloudflare has intermittently returned 100146 when Wrangler
+          # fetches a freshly uploaded exact QA version, even AFTER the
+          # same scripts API GET returned 200. Retry ONLY that known
+          # pre-deployment error; never retry arbitrary API/permission errors.
+          DEPLOYED=0
+          for ATTEMPT in 1 2 3 4 5; do
+            LOG="$RUNNER_TEMP/app748-deploy-attempt-${ATTEMPT}.log"
+            if npx --yes wrangler@4.102.0 versions deploy "${ID}@100%" \
+               --config wrangler.app748.json --yes > "$LOG" 2>&1; then
+              echo 'APP748_QA_WRANGLER_DEPLOY_EXACT_ID=PASS'
+              DEPLOYED=1
+              break
+            fi
+            if grep -Fq '[code: 100146]' "$LOG" && \
+               ! grep -Fq 'Deployed soridraw-owner-qa-583 version' "$LOG"; then
+              echo "APP748_QA_KNOWN_TRANSIENT_VERSION_100146_ATTEMPT=${ATTEMPT}"
+              if [ "$ATTEMPT" -lt 5 ]; then sleep 4; fi
+              continue
+            fi
+            echo 'APP748_QA_NONTRANSIENT_DEPLOY_FAIL_HOLD'
+            exit 2
+          done
+          test "$DEPLOYED" = 1 || { echo 'APP748_QA_EXACT_VERSION_NOT_DEPLOYABLE_HOLD'; exit 2; }
       - name: Verify only QA code and exact 5 bindings active (GET + unauthenticated 403)
         env:
           CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}

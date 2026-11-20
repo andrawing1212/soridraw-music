@@ -13,7 +13,8 @@ const principal=uid=>({uid,sub:uid,aud:'soridraw-app',
  iss:'https://securetoken.google.com/soridraw-app',
  iat:sec-60,auth_time:sec-1000,exp:sec+1000});
 let read=0,appCheck=0,wrongUid=false,expired=false,
- wrongProject=false,wrongApp=false,revoked=false,weakApp=false;
+ wrongProject=false,wrongApp=false,revoked=false,weakApp=false,
+ wrongAppSub=false,wrongIssuer=false,expiredApp=false,flatApp=false;
 const tokenVerifier=async(t,checkRevoked)=>{
  assert.equal(checkRevoked,true);read++;
  if(revoked)throw Error('TOKEN_REVOKED');
@@ -23,10 +24,21 @@ const tokenVerifier=async(t,checkRevoked)=>{
   exp:expired?sec-1:sec+1000};
 };
 const appVerifier=async()=>{
- appCheck++;return {appId:wrongApp?'1:1083981050742:web:foreign':appId,
-  sub:appId,iss:'https://firebaseappcheck.googleapis.com/1083981050742',
-  aud:weakApp?['projects/866a5']:['projects/1083981050742'],
-  iat:sec-20,exp:sec+1000};
+ appCheck++;
+ const signedClaims={
+  app_id:appId,
+  sub:wrongAppSub?'1:1083981050742:web:foreign':appId,
+  iss:wrongIssuer?'https://firebaseappcheck.googleapis.com/other':
+      'https://firebaseappcheck.googleapis.com/1083981050742',
+  aud:weakApp?['projects/1083981050742','projects/foreign']:
+     ['projects/1083981050742','projects/soridraw-app'],
+  iat:sec-20,exp:expiredApp?sec-10:sec+1000,
+ };
+ // Flat shape may have appeared to pass earlier mock tests but is NOT
+ // the actual Firebase Admin SDK's VerifyAppCheckTokenResponse shape.
+ return flatApp?{appId, ...signedClaims}:
+   {appId:wrongApp?'1:1083981050742:web:foreign':appId,
+     token:signedClaims};
 };
 const args={config:cfg,actorIdToken,ownerIdToken,appCheckToken,
  qaAppId:appId,verifyAuth:tokenVerifier,verifyAppCheck:appVerifier,now:()=>now};
@@ -50,6 +62,10 @@ for(const [set,reset,code] of [
  [()=>wrongProject=true,()=>wrongProject=false,/QA_ACTOR_AUTH_UNVERIFIED/],
  [()=>wrongApp=true,()=>wrongApp=false,/QA_APPCHECK_UNVERIFIED/],
  [()=>weakApp=true,()=>weakApp=false,/QA_APPCHECK_UNVERIFIED/],
+ [()=>wrongAppSub=true,()=>wrongAppSub=false,/QA_APPCHECK_UNVERIFIED/],
+ [()=>wrongIssuer=true,()=>wrongIssuer=false,/QA_APPCHECK_UNVERIFIED/],
+ [()=>expiredApp=true,()=>expiredApp=false,/QA_APPCHECK_UNVERIFIED/],
+ [()=>flatApp=true,()=>flatApp=false,/QA_APPCHECK_UNVERIFIED/],
  [()=>revoked=true,()=>revoked=false,/TOKEN_REVOKED/],
 ]){
  set();await assert.rejects(()=>verifyApp747QaFirebasePrincipals(args),code);
@@ -63,5 +79,5 @@ assert(!JSON.stringify(r).includes(appCheckToken));
 assert(!JSON.stringify(r).includes(cfg.actorUid));
 assert(!JSON.stringify(r).includes(cfg.ownerUid));
 assert(!JSON.stringify(r).includes(cfg.probeToken));
-console.log('APP747_QA_OFFICIAL_ADMIN_AUTH_APPCHECK_MOCK_CONTRACT=PASS');
+console.log('APP747_QA_OFFICIAL_ADMIN_AUTH_APPCHECK_RESPONSE_SHAPE=PASS');
 console.log('APP747_QA_REAL_FIREBASE_TOKENS=NOT_RUN; QA_WORKER_GATE=NOT_RUN');

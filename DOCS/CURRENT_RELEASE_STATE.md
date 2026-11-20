@@ -1,3 +1,12 @@
+## 0APP749C. QA584 브라우저 CSP 차단 원인 확인·수정 코드 PASS / 실페이지 재배포 대기 (2026-11-21 KST)
+
+- 디렉터 QA Cloud Shell 현장 출력에서 `APP749_QA_HOSTING_DEPLOY=PASS`, `APP749_QA_NEW_PAGE_AND_OLD_RECEIVER_HTTP=PASS`, 종료코드 0 확인. **QA584 `/qa749.html` 초기 배포와 기존 수신 페이지 보존은 실제 PASS**. 운영·TEST/PRODUCTION 변경 없음.
+- 그러나 실제 PC 화면의 `QA Firebase 연결: QA 설정 확인 중…` 및 로그인 버튼 비활성. 제공받은 61초 브라우저 영상에서 Chrome DevTools Issues의 정확한 오류: `Content Security Policy blocks inline execution of scripts and stylesheets`, `qa749.html:48` inline module blocked. 비밀번호·Firebase App Check 문제가 아닌 **QA HTML inline module 구조 오류**로 확인; 실제 로그인 시도 0, RTDB 동기화 실검증 0.
+- PR #1289 squash main `986bd90c5ef0a75dc7e72a78ea24511f8d2fbf1e`. QA749 inline JS/CSS를 정확한 QA584 동일 출처 `qa749.js`/`qa749.css`로 분리. 외부 Firebase SDK 실패 시 상태 메시지 표시. 기존 CSP를 해제·완화하지 않음.
+- `scripts/app749-qa-hosting-repair-csp.mjs`: **기존 live QA584 버전을 그대로 clone**, live `/index.html` 파일·serving config를 보존하고 기존 고장난 `/qa749.html`만 교체 + 새로운 JS/CSS 두 파일만 추가. live HTML gzip hash 및 clone 파일/serving config/리비전 비교, 예상 외 기존 상태·설정 변경 시 중단, 실패 시 QA584 원본 릴리스 복구. 독립 `--check`는 읽기 전용.
+- APP749 CSP 수정 코드/원본 QA584 Hosting 보존/실패 시 복구 **GitHub offline 검사** [Actions #44832267611] SUCCESS. 기존 APP749/Auth와 APP730 호환 PASS를 불필요하게 재검사하지 않음.
+- **HOLD/다음 실행**: 사용자 QA Cloud Shell에서 새 CSP repair 스크립트/JS/CSS/HTML을 내려받아 `--check` → `--deploy` 수행해야 함. **수정한 3개 파일의 실제 Hosting 배포는 아직 없음.** QA A/B 로그인 성공, App Check 실토큰, RTDB A 수신 PC↔모바일, 검증 창/Worker APP583 원복은 모두 아직 미검증. QA Worker는 변경 전 APP583 원본 상태. 새 환경·사용자 데이터·IAM 변경 불허.
+
 ## 0APP749B. QA584 실제 A/B Firebase 로그인·App Check·실시간 수신 화면 구현 / 소스 병합, 실배포 미완료 (2026-11-21 KST)
 
 - 승인된 기존 QA-only 팔로우 자동 수신 실검증 후속. 새로운 Firebase QA 웹 App Check Fraud Defense 등록은 디렉터가 Firebase Console에서 확인(등록됨), reCAPTCHA Enterprise 키는 QA584 도메인 한정. 이 등록만으로 실제 로그인/팔로우 PASS 아님.

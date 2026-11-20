@@ -1,0 +1,69 @@
+name: SORIDRAW APP749 Isolated QA Real Firebase Auth (offline only)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'cloudflare/explore-worker/experiments/owner-follow-qa-real-auth-749.mjs'
+      - 'cloudflare/explore-worker/experiments/owner-follow-qa730-entry.mjs'
+      - 'scripts/verify-749-qa-real-auth.mjs'
+      - '.github/workflows/app749-qa-real-auth-offline.yml'
+permissions:
+  contents: read
+jobs:
+  offline:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: QA signed Firebase Auth and App Check behavior, no cloud mutations
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/experiments/owner-follow-qa-real-auth-749.mjs
+          node --check cloudflare/explore-worker/experiments/owner-follow-qa730-entry.mjs
+          node scripts/verify-749-qa-real-auth.mjs
+      - name: Pin historical APP583 QA and build new entry in temporary worktree ONLY
+        run: |
+          set -euo pipefail
+          QA_BASE=4363820117100cb03bcbc44a01e127aeb5de3cf4
+          git fetch origin preview --no-tags
+          test "$(git rev-parse origin/preview)" = "$QA_BASE" || {
+            echo APP749_QA_PREVIEW_BASE_DRIFT_HOLD; exit 2;
+          }
+          git worktree add --detach "$RUNNER_TEMP/app749-preview" "$QA_BASE"
+          cp scripts/app730-source-only-follow-bridge.mjs \
+            "$RUNNER_TEMP/app749-preview/scripts/"
+          for name in owner-follow-qa730-bridge.mjs owner-follow-qa730-entry.mjs owner-follow-qa-real-auth-749.mjs; do
+            cp "cloudflare/explore-worker/experiments/$name" \
+              "$RUNNER_TEMP/app749-preview/cloudflare/explore-worker/experiments/"
+          done
+          cd "$RUNNER_TEMP/app749-preview/cloudflare/explore-worker"
+          node --input-type=module - <<'NODE'
+          import {readFileSync,writeFileSync} from 'node:fs';
+          import assert from 'node:assert/strict';
+          const input=JSON.parse(readFileSync('wrangler.owner-qa-583.json','utf8'));
+          assert.equal(input.name,'soridraw-owner-qa-583');
+          assert.equal(input.account_id,'b60fcd62c679c64db19f0b0e0c2f3429');
+          assert.equal(input.main,'./experiments/owner-follow-isolated-558-entry.mjs');
+          assert.deepEqual(input.durable_objects.bindings,
+            [{name:'OWNER558_DO',class_name:'OwnerFollowIsolated558'}]);
+          assert.equal(input.d1_databases,undefined);
+          assert.equal(input.r2_buckets,undefined);
+          assert.equal(input.vars.SORIDRAW_ENVIRONMENT,'preview');
+          assert.equal(input.vars.SORIDRAW_OWNER_FOLLOW_W2_PUSH_555,'1');
+          const candidate={...input,main:'./experiments/owner-follow-qa730-entry.mjs',
+            vars:{...input.vars,SORIDRAW_QA749_REAL_AUTH:'1'}};
+          writeFileSync('wrangler.app749.json',JSON.stringify(candidate,null,2)+'\n');
+          console.log('APP749_QA_CONFIG_EXISTING_DO_NO_SHARED_DB_R2=PASS');
+          NODE
+          npx --yes wrangler@4.102.0 deploy --dry-run \
+            --config wrangler.app749.json \
+            --outdir "$RUNNER_TEMP/app749-qa-bundle"
+          echo 'APP749_QA_WRANGLER_BUNDLE_ONLY=PASS; QA_DEPLOY=0; REAL_TOKENS=NOT_TESTED'

@@ -1,6 +1,6 @@
 // APP748: exact existing isolated QA version fence. Cloudflare GET only.
 // Never return sensitive values or operate on shared/production workers.
-import {readFileSync,writeFileSync} from 'node:fs';
+import {readFileSync} from 'node:fs';
 const ACCOUNT='b60fcd62c679c64db19f0b0e0c2f3429';
 const WORKER='soridraw-owner-qa-583';
 const OLD='4ed70845-6a4b-4a80-9c51-ed95d0becc38';
@@ -28,11 +28,15 @@ async function json(url,token,send){
  return value.result;
 }
 export async function inspectApp748QaVersion({
- token,tag,mode='stage',send=fetch,
+ token,tag,versionId,mode='stage',send=fetch,
 }={}){
  if(typeof token!=='string'||token.length<10)stop('READ_TOKEN_MISSING');
  if(!/^app748-qa503-[0-9a-f]{12}-[0-9]{5,16}-[0-9]+$/.test(tag||''))
    stop('TAG_UNPINNED');
+ // The exact UUID comes directly from this run's Wrangler upload output,
+ // NOT from a stale/cached or changing list of all QA Worker versions.
+ if(!UID.test(String(versionId||''))||versionId===OLD)
+   stop('UPLOAD_VERSION_ID_NOT_PINNED');
  if(!['stage','active'].includes(mode))stop('MODE_INVALID');
  const deployment=async()=>{
   const dep=await json(BASE+'/workers/scripts/'+WORKER+'/deployments',token,send);
@@ -43,14 +47,7 @@ export async function inspectApp748QaVersion({
  };
  const current=await deployment();
  if(mode==='stage'&&current!==OLD)stop('ORIGINAL_NOT_100_BEFORE_STAGE');
- const listing=await json(BASE+'/workers/workers/'+WORKER+
-   '/versions?per_page=100',token,send);
- const items=Array.isArray(listing)?listing:listing?.items;
- if(!Array.isArray(items))stop('LIST_SHAPE_UNKNOWN');
- const found=items.filter(x=>x?.annotations?.['workers/tag']===tag);
- if(found.length!==1||!UID.test(String(found[0].id||''))||
-    found[0].id===OLD)stop('PINNED_VERSION_NOT_UNIQUE');
- const id=found[0].id;
+ const id=versionId;
  const exact=await json(BASE+'/workers/workers/'+WORKER+'/versions/'+id,token,send);
  if(exact?.id!==id||!Array.isArray(exact.bindings)||
     exact.bindings.length!==5)stop('NEW_QA_BINDING_COUNT');
@@ -69,13 +66,9 @@ export async function inspectApp748QaVersion({
 }
 if(process.argv[1]?.endsWith('app748-qa-version-guard.mjs')){
  const mode=process.argv[2],tag=process.argv[3];
- inspectApp748QaVersion({token:process.env.CLOUDFLARE_QA_API_TOKEN,mode,tag})
+ inspectApp748QaVersion({token:process.env.CLOUDFLARE_QA_API_TOKEN,
+   mode,tag,versionId:process.env.APP748_VERSION_ID})
   .then(r=>{
-    if(mode==='stage'){
-      const path=process.env.APP748_VERSION_FILE;
-      if(!path)stop('VERSION_FILE_NOT_SET');
-      writeFileSync(path,r.candidateVersion+'\n',{mode:0o600});
-    }
     console.log('APP748_QA_VERSION_'+mode.toUpperCase()+'=PASS');
     console.log('APP748_QA_CANDIDATE_BINDINGS=5_SHARED_DB_R2=0');
   })

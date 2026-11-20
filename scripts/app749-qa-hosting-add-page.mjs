@@ -158,12 +158,15 @@ async function run({mode,html,send=fetch,token,projectId,projectNumber,notify=()
  check(deployed.version?.name===version,'DEPLOYED_VERSION_NOT_CONFIRMED');
  notify('APP749_QA_APPEND_RELEASE_CREATED=PASS');
  let smoke=false;
- try{
-  const page=await originalReq(FILE);
-  const index=await originalReq('/');
-  smoke=page.includes(PURPOSE)&&
-    createHash('sha256').update(index).digest('hex')===rootSha;
- }catch{/* handled by rollback below */}
+ for(let attempt=0;attempt<6&&!smoke;attempt++){
+  try{
+   const page=await originalReq(FILE);
+   const index=await originalReq('/');
+   smoke=page.includes(PURPOSE)&&
+     createHash('sha256').update(index).digest('hex')===rootSha;
+  }catch{/* allow bounded Hosting edge propagation */}
+  if(!smoke&&attempt<5)await new Promise(r=>setTimeout(r,2000));
+ }
  if(!smoke){
   const active=await latest();
   if(active.version.name===version){

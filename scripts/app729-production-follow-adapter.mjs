@@ -55,8 +55,9 @@ export function integrateApp729ProductionOwnerFollow(baseWorker,{
       if (!reservation || reservation.durable!==true ||
           !/^[A-Za-z0-9_-]{16,128}$/.test(String(reservation.operationId||'')))
         return new Response(null,{status:503});
-      // The original canonical Writer must see the exact ID reserved by the
-      // server, not a second client-supplied or newly minted mutation ID.
+      // Preserve APP354's canonical correlation ID while requiring it to be
+      // bound to the distinct server-owned durable receipt. Legacy APP730
+      // synthetic QA has no separate canonical ID and remains compatible.
       if (!Number.isSafeInteger(reservation.expectedRevision) ||
           reservation.expectedRevision < 0 || !reservation.cutoverToken ||
           !/^[0-9a-f]{32}$/.test(String(reservation.authEpoch||'')))
@@ -70,7 +71,11 @@ export function integrateApp729ProductionOwnerFollow(baseWorker,{
             canonicalRequest.method!==request.method ||
             canonicalRequest.url!==request.url) throw Error('bad-canonical-request');
         const envelope=await canonicalRequest.clone().json();
-        if (envelope?.followOperationId!==reservation.operationId ||
+        const canonicalId=reservation.canonicalOperationId??reservation.operationId;
+        if (!/^[A-Za-z0-9_-]{16,128}$/.test(String(canonicalId||'')) ||
+            (reservation.canonicalOperationId!==undefined &&
+             canonicalId===reservation.operationId) ||
+            envelope?.followOperationId!==canonicalId ||
             envelope?.followExpectedRevision!==reservation.expectedRevision)
           throw Error('unmatched-canonical-operation');
       }catch{

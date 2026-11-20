@@ -98,7 +98,8 @@ async function run({mode,html,css,js,config,send=fetch,token,projectId,projectNu
    [CONFIGFILE]:Buffer.from(JSON.stringify(config)+'\n','utf8'),
  });
  const entries=Object.entries(bytes);
- check(entries.every(([p,b])=>p.startsWith('/qa749.')&&
+ check(entries.length===3&&entries.every(([p,b])=>
+   [FILE,JSFILE,CONFIGFILE].includes(p)&&
    b.length>=100&&b.length<100000),'QA_ASSET_SIZE_INVALID');
  const gzip=new Map(entries.map(([p,b])=>[p,gzipSync(b,{level:9,mtime:0})]));
  const hashes=new Map([...gzip].map(([p,b])=>[p,createHash('sha256').update(b).digest('hex')]));

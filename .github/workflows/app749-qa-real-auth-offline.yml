@@ -15,6 +15,7 @@ on:
       - 'qa/app749/qa749.css'
       - 'scripts/app749-qa-hosting-fix-ui-init.mjs'
       - 'scripts/verify-749-qa-hosting-fix-ui-init.mjs'
+      - 'scripts/diagnose-749-qa-live-config-readonly.mjs'
       - 'scripts/__fixtures__/qa749-inline-original.html'
       - 'scripts/app749-qa-hosting-repair-csp.mjs'
       - 'scripts/verify-749-qa-hosting-repair-csp.mjs'
@@ -45,6 +46,7 @@ jobs:
           node --check scripts/app749-qa-real-login-cloudshell.mjs
           node scripts/verify-749-qa-real-login-cloudshell.mjs
           node scripts/verify-749-qa-hosting-fix-ui-init.mjs
+          node scripts/diagnose-749-qa-live-config-readonly.mjs
       - name: Pin historical APP583 QA and build new entry in temporary worktree ONLY
         run: |
           set -euo pipefail

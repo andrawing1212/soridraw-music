@@ -8,6 +8,10 @@ on:
       - 'scripts/app741-qa-original-restore-verify.mjs'
       - 'scripts/verify-741-qa-original-restore.mjs'
       - 'scripts/verify-741-qa-recovery.mjs'
+      - 'scripts/app747-qa-firebase-proof.mjs'
+      - 'scripts/verify-747-qa-firebase-proof.mjs'
+      - 'scripts/verify-747-qa-fault-injection.mjs'
+      - 'cloudflare/explore-worker/experiments/owner-follow-qa730-bridge.mjs'
       - '.github/workflows/app741-qa-do-alarm-recovery.yml'
   issue_comment:
     types: [created]
@@ -36,6 +40,9 @@ jobs:
           node --check scripts/app741-qa-original-restore-verify.mjs
           node scripts/verify-741-qa-recovery.mjs
           node scripts/verify-741-qa-original-restore.mjs
+          node --check scripts/app747-qa-firebase-proof.mjs
+          node scripts/verify-747-qa-firebase-proof.mjs
+          node scripts/verify-747-qa-fault-injection.mjs
   qa_full_alarm_window:
     if: >-
       github.event_name == 'issue_comment' &&

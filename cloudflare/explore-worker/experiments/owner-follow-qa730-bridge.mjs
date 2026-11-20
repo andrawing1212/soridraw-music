@@ -8,6 +8,10 @@ import {sendOwnerFollowHttp539} from '../runtime/owner-follow-http-539.mjs';
 import {QA_OWNER_FOLLOW_FUNCTION_URL_577} from '../runtime/owner-follow-qa-boundary-577.mjs';
 
 const KEY='qa730-durable-state-v1';
+// APP747: fault injection is restricted to this already isolated QA worker.
+// It models ONE outbound Functions 503; it never changes the receiver,
+// shared Firebase data, or the default APP583 worker.
+const FAULT_KEY='qa747-sender-503-once-v1';
 const reply=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
 const validVersion=x=>Number.isSafeInteger(x)&&x>=0;
 const QA_FUNC='https://asia-northeast3-soridraw-app.cloudfunctions.net/publishExploreOwnerFollower542';
@@ -22,6 +26,7 @@ export function createOwnerQa730Runtime({storage,env,now=Date.now,send=fetch}={}
     storage&&typeof storage.get==='function'&&typeof storage.put==='function'&&
     typeof storage.setAlarm==='function';
   const auth=request=>enabled()&&request.headers.get('X-Owner583-Token')===cfg.probeToken;
+  const faultAllowed=()=>enabled()&&env?.SORIDRAW_QA747_INJECT503==='1';
   const state=()=>storage.get(KEY);
   const createBridge=()=>createApp730SourceOnlyBridge({
     isolatedProof:{scope:'SYNTHETIC_ISOLATED_QA_ONLY'},
@@ -101,6 +106,19 @@ export function createOwnerQa730Runtime({storage,env,now=Date.now,send=fetch}={}
       });
       return reply({ok:true,syntheticOnly:true,version:data.version});
     }
+    // Only the QA-synthetic actor may arm the exact NEXT revision while
+    // no durable receipt is pending. A 503 is simulated locally at sender.
+    if(path==='/qa730/arm-503-747'&&request.method==='POST'){
+      if(!faultAllowed())return reply({ok:false,error:'fault-disabled'},403);
+      const x=await state();
+      if(!x||x.pending||!validVersion(x.version)||
+         await storage.get(FAULT_KEY))
+        return reply({ok:false,error:'qa-baseline-not-clear'},409);
+      const next=x.version+1;
+      await storage.put(FAULT_KEY,{expectedVersion:next,consumed:false});
+      return reply({ok:true,syntheticOnly:true,fault:'sender-503-once',
+        expectedVersion:next});
+    }
     if(path==='/qa730/redrive'&&request.method==='POST'){
       const x=await state();
       if(!x?.pending)return reply({ok:false,error:'no-pending'},409);
@@ -149,17 +167,30 @@ export function createOwnerQa730Runtime({storage,env,now=Date.now,send=fetch}={}
       x.desired===x.pending.desired;
     let delivery=null;
     if(exact)try{
-      delivery=await sendOwnerFollowHttp539({
-        ownerUid:cfg.ownerUid,authEpoch:cfg.authEpoch,version:x.version,
-        followerCount:x.followerCount,updatedAt:x.pending.updatedAt,
-      },{endpoint:QA_OWNER_FOLLOW_FUNCTION_URL_577,
-        secret:cfg.hmacSecret,qaOnly:true,send,now});
+      const fault=faultAllowed()?await storage.get(FAULT_KEY):null;
+      if(fault&&fault.expectedVersion===x.version&&fault.consumed===false){
+        // Model a single 503 from the outbound sender, without contacting
+        // Firebase Functions. Keep the persisted ticket and DO alarm.
+        await storage.put(FAULT_KEY,{...fault,consumed:true});
+        delivery={ok:false,status:503};
+      }else{
+        delivery=await sendOwnerFollowHttp539({
+          ownerUid:cfg.ownerUid,authEpoch:cfg.authEpoch,version:x.version,
+          followerCount:x.followerCount,updatedAt:x.pending.updatedAt,
+        },{endpoint:QA_OWNER_FOLLOW_FUNCTION_URL_577,
+          secret:cfg.hmacSecret,qaOnly:true,send,now});
+      }
     }catch{/* retain exact receipt; bounded retry */}
     const latest=await state();
     if(latest?.pending?.operationId!==x.pending.operationId)return true;
     if(delivery?.ok){
       await storage.put(KEY,{...latest,pending:null,
         lastStatus:delivery.applied?'applied':'duplicate',lastAckAt:now()});
+      if(faultAllowed()){
+        const fault=await storage.get(FAULT_KEY);
+        if(fault?.expectedVersion===x.version&&fault.consumed===true)
+          await storage.delete(FAULT_KEY);
+      }
       return true;
     }
     const attempts=x.pending.attempts+1,hold=attempts>=3||delivery?.status===409;

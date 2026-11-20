@@ -45,11 +45,19 @@ export async function verifyApp747QaFirebasePrincipals({
    Number.isSafeInteger(token.exp)&&token.exp>epoch;
  guard(validAuth(actor,cfg.actorUid),'QA_ACTOR_AUTH_UNVERIFIED');
  guard(validAuth(owner,cfg.ownerUid),'QA_OWNER_AUTH_UNVERIFIED');
- guard(app?.appId===qaAppId&&app?.sub===qaAppId&&
-   app?.iss==='https://firebaseappcheck.googleapis.com/'+NUMBER&&
-   Array.isArray(app?.aud)&&app.aud.includes('projects/'+NUMBER)&&
-   Number.isSafeInteger(app?.iat)&&app.iat>0&&app.iat<=epoch+30&&
-   Number.isSafeInteger(app?.exp)&&app.exp>epoch,
+ // Firebase Admin AppCheck.verifyToken() returns a wrapper:
+ // { appId, token: DecodedAppCheckToken, alreadyConsumed? }.
+ // The JWT claims are INSIDE .token, never on the wrapper itself.
+ // Verify both the signed token's app identity and exact QA audience.
+ const claim=app?.token;
+ guard(app?.appId===qaAppId&&claim?.app_id===qaAppId&&
+   claim?.sub===qaAppId&&
+   claim?.iss==='https://firebaseappcheck.googleapis.com/'+NUMBER&&
+   Array.isArray(claim?.aud)&&
+   claim.aud.includes('projects/'+NUMBER)&&
+   claim.aud.includes('projects/'+PROJECT)&&
+   Number.isSafeInteger(claim?.iat)&&claim.iat>0&&claim.iat<=epoch+30&&
+   Number.isSafeInteger(claim?.exp)&&claim.exp>epoch,
    'QA_APPCHECK_UNVERIFIED');
  // This verifies actual tokens ONLY. The APP730 QA Worker still accepts the
  // synthetic probe token and does not yet enforce these Firebase tokens.

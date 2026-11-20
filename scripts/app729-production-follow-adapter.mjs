@@ -3,6 +3,32 @@
 // Preserve canonical production fetch/scheduled/alarm behavior byte-for-byte while OFF.
 export const APP729_PRODUCTION_OWNER_FOLLOW_COMPILED_OPEN = false;
 const FOLLOW_PATH = /^\/v1\/profiles\/([A-Za-z0-9_-]{1,128})\/follow$/;
+// APP745: exact live SORIDRAW production origin set, not wildcard CORS.
+// Candidate runs only when APP729 is independently verified and enabled.
+const PROD_FOLLOW_ORIGINS = new Set([
+  'https://soridraw.com',
+  'https://www.soridraw.com',
+  'https://soridraw.web.app',
+  'https://soridraw.firebaseapp.com',
+]);
+const followOrderRequired=(request)=>{
+  const headers=new Headers({
+    'Content-Type':'application/json; charset=utf-8',
+    'Cache-Control':'private, no-store',
+    Vary:'Origin',
+  });
+  const origin=request.headers.get('Origin')||'';
+  if(PROD_FOLLOW_ORIGINS.has(origin)){
+    headers.set('Access-Control-Allow-Origin',origin);
+    headers.set('Access-Control-Allow-Methods','GET, PUT, DELETE, OPTIONS');
+    headers.set('Access-Control-Allow-Headers',
+      'Content-Type, Authorization, X-Firebase-AppCheck');
+  }
+  return new Response(JSON.stringify({
+    ok:false,error:{code:'FOLLOW_ORDER_REQUIRED',
+      message:'The canonical follow revision is required before mutation'},
+  }),{status:409,headers});
+};
 const FAIL = (code) => { throw Error('APP729_HOLD_' + code); };
 const isFn = (f) => typeof f === 'function';
 
@@ -48,6 +74,15 @@ export function integrateApp729ProductionOwnerFollow(baseWorker,{
       if (principal?.verified!==true ||
           !/^[A-Za-z0-9_-]{1,128}$/.test(String(principal.uid||'')) ||
           principal.uid===match[1]) return new Response(null,{status:401});
+      // APP745: APP354's first unversioned PUT/DELETE is a negotiation,
+      // not an authorized mutation. Explicit click only; no canonical
+      // Worker/D1/R2 read, DO reservation, Firebase signal or polling.
+      // The existing client then GETs /follow-state once and retries with
+      // stable followOperationId + followExpectedRevision.
+      let raw;
+      try { raw=await request.clone().text(); }
+      catch { return new Response(null,{status:503}); }
+      if(raw.trim()==='') return followOrderRequired(request);
       const reservation=await bridge.reserveDurableBeforeCommit({
         request,env,ctx,actorUid:principal.uid,ownerUid:match[1],
         desired:request.method==='PUT',

@@ -63,10 +63,19 @@ assert.equal(APP730_PRODUCTION_RELAY_ENABLED,false);
 assert.notStrictEqual(integrated,base);
 assert.strictEqual(integrated.scheduled,base.scheduled);
 const url='https://isolated.example/v1/profiles/'+owner+'/follow';
-const change=async(desired,body='')=>integrated.fetch(new Request(url,{
+// Offline APP730 synthetic tests explicitly use the confirmed v354 packet.
+// The first legacy bodyless client request negotiates; it must never write.
+const change=async(desired,body=JSON.stringify({
+ followOperationId:idFor(desired),followExpectedRevision:canonical.revision,
+}))=>integrated.fetch(new Request(url,{
  method:desired?'PUT':'DELETE',
  headers:{'Content-Type':'application/json'}, ...(body?{body}:{}),
 }),{SORIDRAW_ENVIRONMENT:'production'},{});
+const legacyFirst=await change(true,'');
+assert.equal(legacyFirst.status,409);
+assert.equal((await legacyFirst.json()).error?.code,'FOLLOW_ORDER_REQUIRED');
+assert.equal(canonical.writeCount,0);
+assert.equal(durable.size,0);
 const before=canonical.writeCount;
 authVerified=false;assert.equal((await change(true)).status,401);
 authVerified=true;appCheckVerified=false;assert.equal((await change(true)).status,401);

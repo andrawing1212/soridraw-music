@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync,mkdirSync,rmSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,mkdirSync,rmSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -59,7 +59,51 @@ assert.strictEqual(on.scheduled,base.scheduled);
 assert.strictEqual(on.alarm,base.alarm);
 assert.equal(on.marker,base.marker);
 const ctx={};
-const send=(method='PUT',env='production')=>on.fetch(new Request(followUrl,{method}),{SORIDRAW_ENVIRONMENT:env},ctx);
+const send=(method='PUT',env='production',
+ body=JSON.stringify({followOperationId:'confirmedoperationid1234567',
+  followExpectedRevision:0}))=>on.fetch(new Request(followUrl,{method,
+  headers:{'Content-Type':'application/json'},body}),
+  {SORIDRAW_ENVIRONMENT:env},ctx);
+
+// APP745: the *real* APP354 client initially sends a bodyless PUT/DELETE
+// and retries ONLY if requestAuthed exposes error.code FOLLOW_ORDER_REQUIRED.
+const client354=readFileSync('src/services/exploreFollowOrdering354.ts','utf8');
+const clientApi=readFileSync('src/services/exploreSocialService.ts','utf8');
+assert(client354.includes("code !== 'FOLLOW_ORDER_REQUIRED'"));
+assert(client354.includes("followOperationId: operation.id"));
+assert(client354.includes("followExpectedRevision: operation.revision"));
+assert(clientApi.includes('payload?.error?.code'));
+const firstNoMutation={calls,pending,signals};
+const negotiate=async(method,origin)=>{
+ const h=origin?{'Origin':origin}:{};
+ return on.fetch(new Request(followUrl,{method,headers:h}),
+  {SORIDRAW_ENVIRONMENT:'production'},ctx);
+};
+for(const method of ['PUT','DELETE']){
+ const res=await negotiate(method,'https://soridraw.com');
+ assert.equal(res.status,409);
+ const body=await res.json();
+ assert.equal(body.ok,false);
+ assert.equal(body.error.code,'FOLLOW_ORDER_REQUIRED');
+ assert.equal(res.headers.get('Access-Control-Allow-Origin'),
+  'https://soridraw.com');
+ assert.match(res.headers.get('Cache-Control'),/no-store/);
+ assert.equal(res.headers.get('Vary'),'Origin');
+}
+assert.equal(calls,firstNoMutation.calls,'unversioned requests cannot commit D1');
+assert.equal(signals,firstNoMutation.signals,'no owner signal before commit');
+assert.equal(pending,firstNoMutation.pending+2,
+ 'verify principal once; no DO/canonical calls during negotiation');
+const untrusted=await negotiate('PUT','https://bad.example');
+assert.equal(untrusted.status,409);
+assert.equal(untrusted.headers.get('Access-Control-Allow-Origin'),null);
+assert.equal(calls,firstNoMutation.calls);
+assert.equal(signals,firstNoMutation.signals);
+for(const host of ['https://www.soridraw.com','https://soridraw.web.app',
+ 'https://soridraw.firebaseapp.com']){
+ const r=await negotiate('DELETE',host);
+ assert.equal(r.headers.get('Access-Control-Allow-Origin'),host);
+}
 const first=await send();
 assert.equal(first.status,200);assert.equal(calls,2);assert.equal(signals,1);
 changed=false;await send('DELETE');assert.equal(signals,1,'canonical no-op cannot signal');

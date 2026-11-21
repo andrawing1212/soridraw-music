@@ -49,6 +49,9 @@ try{
  assert.equal(built.manifest.integration.productionOwnerDoReceiptSourceOnly,true);
  assert.equal(built.manifest.integration.productionOwnerDoBindingAndMigrationAdded,false);
  assert.equal(built.manifest.integration.productionFunction542SenderUnconnected,true);
+ assert.equal(built.manifest.integration.app755SourceFilesCopiedExactly,true);
+ assert.equal(built.manifest.integration.activeWorkerRuntimeParityNotVerified,true);
+ assert.equal(built.manifest.integration.productionDeployAuthorized,false);
  assert.equal(built.manifest.integration.productionBridgeImplementationDependenciesInjected,false);
  const entry=buildApp729ProductionIntegrationEntry();
  assert.equal(built.manifest.integration.entrypointSha256,entry.sha256);
@@ -75,6 +78,8 @@ try{
  const receiptSource=readFileSync(join(built.outputDirectory,'integration','app755-production-owner-receipt.mjs'),'utf8');
  assert(backendSource.includes('APP755_PRODUCTION_BACKEND_COMPILED_OPEN=false'));
  assert(receiptSource.includes('APP755_PRODUCTION_OWNER_RECEIPT_COMPILED_OPEN=false'));
+ assert.equal(built.manifest.integration.app755BackendSha256,sha(backendSource));
+ assert.equal(built.manifest.integration.app755OwnerReceiptSha256,sha(receiptSource));
  assert.equal(existsSync(join(built.outputDirectory,'wrangler.toml')),false);
  assert.equal(existsSync(join(built.outputDirectory,'migrations')),false);
  assert.equal(existsSync(join(built.outputDirectory,'.deploy')),false);

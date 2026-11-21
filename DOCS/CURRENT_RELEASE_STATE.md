@@ -1,3 +1,12 @@
+## CURRENT — APP767 10만 명 팔로우 이력 W1~W2 저비용 설계 선택 + 격리 합성 QA (2026-11-22 KST)
+
+- **분석 결론:** APP766 실제 D1 103 테이블/관계별 `mutation_id`와 R2 관계별 최신 `follow-intents-v354`는 APP765의 전체 operation ID 기록 아님. D1에 독립 append-only receipt row를 추가하면 현재 원래 W2 경로에서 최소 W3 가능성·인덱스 쓰기/기존 Writer 호환 위험이 있어 선택하지 않음. Cloudflare R2 Standard **조건부 create-once PUT**로 canonical ID별 변하지 않는 접수 객체를 만들면 새 D1 쓰기는 0, 하지만 **D1 commit과 R2 PUT은 원자적이지 않음**. 전체 비교와 10만 owner × 5/50/500 events/년의 별도 R2 비용 모델은 `DOCS/APP767_FOLLOW_HISTORY_MIN_COST_DECISION.md`에 기록.
+- **구현 범위:** `scripts/app767-r2-admission-candidate.mjs`는 `APP767_R2_ADMISSION_COMPILED_OPEN=false`·`APP767_ISOLATED_SYNTHETIC_QA` 전용이며 실제 Worker/R2 bucket 바인딩 없음. trusted owner epoch·new cutover completeness·legacy writer coverage·deletion lifecycle·DO PITR 독립성이 증명되지 않으면 접수 쓰기조차 HOLD. 동일 해시 키 `onlyIf:{etagDoesNotMatch:'*'}` 조건부 생성 한 번만 시도, 이미 존재/503 불확정 시 새 DO/canonical 변경 허용하지 않음. 성공도 **접수만 확정**, D1 committed나 APP765 `completeFromOrigin:true` 증명이 아님.
+- **격리 QA:** 기존 GitHub Actions PREVIEW/PROD read-only 검토 Workflow의 오프라인 synthetic R2 시험에서 6개 동시 ID 경합/DO PITR/503 before/after write/D1 ACK 유실/Auth epoch/이전 Writer 미확인/삭제 정책 불확실/0 추가 D1 쓰기 가정 등을 검사. 이는 실제 Cloudflare QA R2/S3 물리 QA나 D1 `meta.rows_written` 측정이 아님. 기존 APP749/760 독립 QA 실전송 PASS는 재시험하지 않음.
+- **잔여 HOLD:** 새 epoch의 과거 요청과 충돌하지 않는 cutover, 모든 최신·레거시 Writer의 강제 접수, exact settled R2↔D1 reconcile, 외부 owner revision floor, R2 객체 장기 보관·실제 Auth 삭제/재생성 개인정보 정책, 실제 R2 412/중복/비용·D1 W1~W2 물리 실험은 별도 실제 QA 전 완료 미확인. APP765에 가짜 원장을 연결하거나 조건을 완화하지 않음. PREVIEW/TEST/PRODUCTION Worker·DO·Functions·D1/R2/RTDB·Rules·Hosting·사용자 원본 읽기/변경·배포 0. APP737/738 정식 배포 HOLD.
+
+---
+
 ## CURRENT — APP766 기존 D1/R2 팔로우 이력 재사용 가능성 조사 (2026-11-22 KST)
 
 - **소스 사실:** D1 `explore_follow_overrides_348`는 `(follower_uid,following_uid)` 한 행에 최신 `mutation_id`를 저장하며 원천부터 append-only operation ID 이력이 아니다. R2 `internal/explore/follow-intents-v354/<cutoverToken>/<actor>/<owner>.json`도 해당 관계별 한 개의 최신 settled intent/current revision을 조회한다. owner 집계 Outbox 529 및 profile_stats epoch/revision candidate는 과거 개별 canonical ID 원장이 아니다. 정확한 출처·근거·재사용 범위는 `DOCS/APP766_EXISTING_FOLLOW_HISTORY_EVIDENCE.md`.

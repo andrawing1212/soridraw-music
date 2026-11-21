@@ -94,7 +94,8 @@ export function assessApp757CanaryReadiness({worker,functions,rtDb,gitRulesNode,
     knownRequiredNamesVerified:!blockers.some(x=>x.startsWith('PREVIEW_BINDING_MISSING_')),
     ownerDoDirectBound:ownerDoDirect,ownerDoServiceBound:ownerDoService,
     ownerDoServiceTargetStatus:ownerService?.status||'UNVERIFIED',
-    ownerDoServiceTargetActiveVersion:ownerService?.activeVersion||null},
+    ownerDoServiceTargetActiveVersion:ownerService?.activeVersion||null,
+    ownerDoServiceTargetFailedChecks:ownerService?.failedChecks||[]},
   functions:fnSummary,
   rtDb:{status:rtDb?.status||'UNKNOWN',singleInstance:rtDb?.singleInstance===true,
     ownerReadOnly:rtDb?.ownerReadOnly===true,
@@ -157,6 +158,25 @@ export function summarizeOwnerRules(rules){
    rootRead===false&&ruleKeys.every(x=>x!=='.validate'||rules.rules[x]===false);
  return {rulesNodePresent:true,ownerReadOnly,clientWriteBlocked};
 }
+// Check metadata without exposing any binding or secret values. The active
+// version can match its name while the DO class/binding is still unproven.
+export function assessOwnerServiceTarget600(active,serviceName){
+ const checks={
+  exactTargetName:serviceName==='soridraw-owner-follow-preview-candidate'&&
+    active?.name===serviceName,
+  activeVersionPresent:/^[0-9a-f-]{36}$/i.test(String(active?.activeVersion||'')),
+  traffic100:active?.trafficPercent===100,
+  pinnedBindingIdentity:active?.pinnedBindingsVerified===true,
+  schedulesMetadataReadable:active?.schedulesVerified===true,
+  exactDoClassBound:active?.bindings?.some(x=>
+    x.name==='OWNER_FOLLOW_DO_600'&&
+    x.type==='durable_object_namespace'&&
+    x.class_name==='OwnerFollowerStandalone600')===true,
+ };
+ const failedChecks=Object.entries(checks).filter(([,ok])=>!ok).map(([key])=>key);
+ return {status:failedChecks.length?'TARGET_BINDING_UNVERIFIED':'PINNED_TARGET_OWNER_DO',
+   activeVersion:checks.activeVersionPresent?active.activeVersion:null,failedChecks};
+}
 async function probeOwnerService(worker,token){
  const b=worker?.bindings?.find(x=>
    x.name==='OWNER_FOLLOW_RESERVATION_SERVICE_600'&&x.type==='service');
@@ -165,15 +185,7 @@ async function probeOwnerService(worker,token){
    return {status:'UNVERIFIED_SERVICE_NAME'};
  try{
   const active=await readWorker(b.service,token);
-  const ownerDo=active.bindings?.some(x=>
-    x.name==='OWNER_FOLLOW_DO_600'&&
-    x.type==='durable_object_namespace'&&
-    x.class_name==='OwnerFollowerStandalone600');
-  if(active.name===b.service&&active.activeVersion&&
-     active.trafficPercent===100&&active.pinnedBindingsVerified&&
-     active.schedulesVerified&&ownerDo)
-    return {status:'PINNED_TARGET_OWNER_DO',activeVersion:active.activeVersion};
-  return {status:'TARGET_BINDING_UNVERIFIED'};
+  return assessOwnerServiceTarget600(active,b.service);
  }catch{return {status:'UNREADABLE'}}
 }
 async function probeRtDb(access){

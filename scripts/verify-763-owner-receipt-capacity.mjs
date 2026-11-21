@@ -100,7 +100,7 @@ const duplicate=clone(entries);
 duplicate.push([finalPrefix+archived[0].canonicalOperationId,
  clone(archived[0])]);
 assert.throws(()=>captureApp763OwnerSnapshot({ownerUid:owner,entries:duplicate}),
- /APP763_RECEIPT_ID_COLLISION/);
+ /APP763_ARCHIVE_OWNER_STATE_OR_ID_UNVERIFIED/);
 const fakeHot=clone(entries);
 fakeHot[0][1].entries.push({...fakeHot[0][1].entries[0]});
 assert.throws(()=>captureApp763OwnerSnapshot({ownerUid:owner,entries:fakeHot}),

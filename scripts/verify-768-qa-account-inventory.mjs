@@ -25,7 +25,7 @@ const send=async (url,opt)=>{
   return Response.json({success:true,result:{buckets:r2}});
  throw Error('CROSS_ACCOUNT_REQUEST_DENIED');
 };
-const result=await inventoryApp768Qa({readToken:token,send});
+const result=await inventoryApp768Qa({readToken:token,dataToken:token,send});
 assert.equal(result.qaAccountIdVerified,true);
 assert.equal(result.safeExistingQaResourcePairPresent,true);
 assert.deepEqual(result.qaD1,['soridraw-qa-app768']);
@@ -34,7 +34,9 @@ assert.equal(req.length,3);
 assert(req.every(x=>x.method==='GET'));
 assert.equal(result.mutations,0);
 req=[];
-const noQa=await inventoryApp768Qa({readToken:token,send:async(uri,opt)=>{
+await assert.rejects(()=>inventoryApp768Qa({readToken:token,send}),
+ /QA_DATA_TOKEN_REQUIRED/);
+const noQa=await inventoryApp768Qa({readToken:token,dataToken:token,send:async(uri,opt)=>{
  if(uri===BASE+'/workers/scripts/soridraw-owner-qa-583/deployments')
   return send(uri,opt);
  if(uri===BASE+'/d1/database')
@@ -46,14 +48,14 @@ const noQa=await inventoryApp768Qa({readToken:token,send:async(uri,opt)=>{
 assert.equal(noQa.safeExistingQaResourcePairPresent,false);
 assert.equal(noQa.qaD1.length,0);
 assert.equal(noQa.qaR2.length,0);
-await assert.rejects(()=>inventoryApp768Qa({readToken:token,send:async (url,opt)=>{
+await assert.rejects(()=>inventoryApp768Qa({readToken:token,dataToken:token,send:async (url,opt)=>{
  if(url===BASE+'/workers/scripts/soridraw-owner-qa-583/deployments')
   return Response.json({success:true,result:{deployments:[{versions:[
     {version_id:'another',percentage:100},
    ]}]}});
  throw Error('UNEXPECTED_REQUEST');
 }}),/QA_APP583_ORIGINAL_NOT_100_PERCENT/);
-await assert.rejects(()=>inventoryApp768Qa({readToken:token,send:async()=>new Response('',{status:403})}),
+await assert.rejects(()=>inventoryApp768Qa({readToken:token,dataToken:token,send:async()=>new Response('',{status:403})}),
  /QA_TOKEN_READ_SCOPE_403/);
 console.log('APP768_QA_CLOUDFLARE_READONLY_ORIGINAL_583_PINNED=PASS');
 console.log('APP768_QA_D1_R2_METADATA_NO_USER_ROW_OR_OBJECT=PASS');

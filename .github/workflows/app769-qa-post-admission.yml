@@ -1,0 +1,72 @@
+name: APP769 QA R2 accepted then D1 failure or lost ACK (bounded)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/app769-qa-post-admission.mjs'
+      - 'scripts/verify-769-qa-post-admission-offline.mjs'
+      - '.github/workflows/app769-qa-post-admission.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/app769-qa-post-admission.mjs'
+      - '.github/workflows/app769-qa-post-admission.yml'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app768-r2-physical-qa
+  cancel-in-progress: false
+jobs:
+  offline:
+    if: github.event_name == 'pull_request' && github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test exact QA restrictions, simulated SQL failure and lost ACK
+        run: |
+          set -euo pipefail
+          node --check scripts/app769-qa-post-admission.mjs
+          node scripts/verify-769-qa-post-admission-offline.mjs
+  live:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Pin exact code and offline safety before Cloudflare usage
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          node scripts/verify-769-qa-post-admission-offline.mjs
+      - name: Verify original Worker and existing QA D1/R2 without creating any resource
+        env:
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
+        run: node scripts/app769-qa-post-admission.mjs prepare
+      - name: Real QA R2 PUT and D1 invalid SQL failure plus synthetic lost ACK
+        env:
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
+        run: node scripts/app769-qa-post-admission.mjs exercise
+      - name: Always remove two exact QA R2 objects and exact synthetic D1 rows
+        if: always()
+        env:
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
+        run: node scripts/app769-qa-post-admission.mjs cleanup

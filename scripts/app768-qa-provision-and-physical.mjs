@@ -17,10 +17,12 @@ function verifiedToken(t){return typeof t==='string'&&t.length>=20;}
 const api=async({token,path,method='GET',body,headers={}})=>{
  if(!verifiedToken(token)||!path.startsWith(BASE+'/')||QA===PROD)
   HOLD('WRONG_ACCOUNT_OR_TOKEN');
+ const binary=body instanceof Blob||body instanceof Uint8Array;
  const res=await fetch(path,{method,
   headers:{Authorization:'Bearer '+token,'Cache-Control':'no-store',
-    ...(body&&!(body instanceof FormData)?{'Content-Type':'application/json'}:{}),...headers},
-  ...(body?{body:body instanceof FormData?body:JSON.stringify(body)}:{}),
+    ...(binary?{'Content-Type':'application/octet-stream'}:
+      body?{'Content-Type':'application/json'}:{}),...headers},
+  ...(body?{body:binary?body:JSON.stringify(body)}:{}),
   redirect:'error',signal:AbortSignal.timeout(18000)});
  let j=null;try{j=await res.json()}catch{HOLD('RESPONSE_JSON_UNVERIFIED_'+method+'_'+res.status)}
  if(!res.ok||j?.success!==true)
@@ -133,11 +135,12 @@ export async function app768Physical({
  let submitted=false;
  let success=false,uploadError=null;
  try{
-  const form=new FormData();
-  form.set('body',new Blob(['app768-isolated-qa-physical-check'],
-    {type:'application/octet-stream'}),'app768.txt');
+  // Cloudflare management PUT /objects/{key} accepts the raw object body.
+  // Multipart form-data may be interpreted as unimplemented S3 POST-object.
+  const payload=new Blob(['app768-isolated-qa-physical-check'],
+    {type:'application/octet-stream'});
   submitted=true;
-  const result=await api({token:dataToken,path:url,method:'PUT',body:form});
+  const result=await api({token:dataToken,path:url,method:'PUT',body:payload});
   if(result?.key!==objectKey)HOLD('QA_R2_UPLOAD_KEY_UNVERIFIED');
   success=true;
   console.log('APP768_REAL_QA_R2_MANAGEMENT_API_SINGLE_OBJECT_UPLOAD=PASS');

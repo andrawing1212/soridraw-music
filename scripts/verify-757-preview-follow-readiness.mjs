@@ -55,7 +55,7 @@ for(const x of [
  {rtDb:{status:'READ',singleInstance:true,...summarizeOwnerRules(null)},
  marker:'RTDB_OWNER_FOLLOW_PATH_NOT_PROVEN'},
  {gitRulesNode:false,marker:'PREVIEW_GIT_RULES_PATH_NOT_PRESENT'},
- {sourceHeadPinned:false,marker:'PREVIEW_SOURCE_NOT_PINN'},
+ {sourceHeadPinned:false,marker:'PREVIEW_SOURCE_NOT_PINNED'},
  ]) {
  const {marker,...patch}=x;
  const r=assessApp757CanaryReadiness({...sample,...patch});

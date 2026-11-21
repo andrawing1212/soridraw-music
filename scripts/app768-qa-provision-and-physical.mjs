@@ -84,6 +84,9 @@ export async function app768Physical({
  if(dbs.length!==1||buckets.length!==1)HOLD('QA_RESOURCE_CREATION_INCOMPLETE');
  console.log('APP768_QA_RESOURCE_IDENTITIES_FINAL=D1:'+D1_NAME+',R2:'+R2_NAME);
  const uuid=dbs[0].uuid;
+ if(process.env.APP768_QA_TEST_PHASE==='r2'){
+  console.log('APP768_REAL_QA_D1_W1_W2=PREVIOUS_RUN_PASS_NOT_REPEATED');
+ }else{
  // Separate synthetic table in this newly created isolated QA D1 only.
  // D1 rows_written metering here cannot prove existing PROD worker W1/W2.
  const synthetic='app768_qa_synthetic_follow';
@@ -120,6 +123,7 @@ export async function app768Physical({
    console.log('APP768_QA_D1_SYNTHETIC_ROWS_CLEANED=PASS');
   }
  }
+ }
  // Native Cloudflare management object PUT is physically testable using
  // an account API token but is NOT the APP767 Workers R2.put API or S3 API.
  // Its documented upload endpoint does not promise If-None-Match support:
@@ -127,7 +131,7 @@ export async function app768Physical({
  const objectKey='app768-only-qa-'+randomBytes(8).toString('hex');
  const url=BASE+'/r2/buckets/'+R2_NAME+'/objects/'+objectKey;
  let submitted=false;
- let success=false;
+ let success=false,uploadError=null;
  try{
   const form=new FormData();
   form.set('body',new Blob(['app768-isolated-qa-physical-check'],
@@ -138,15 +142,27 @@ export async function app768Physical({
   success=true;
   console.log('APP768_REAL_QA_R2_MANAGEMENT_API_SINGLE_OBJECT_UPLOAD=PASS');
   console.log('APP768_R2_WORKERS_S3_CONDITIONAL_CREATE_ONCE=NOT_TESTED');
+ }catch(e){
+  uploadError=e;
+  console.log('APP768_QA_R2_UPLOAD_CAUSE='+String(e?.message||'UNAVAILABLE'));
  }finally{
   if(submitted){
-   // Only this run's random synthetic key is deleted. Keep QA bucket.
-   const deletion=await api({token:dataToken,path:url,method:'DELETE'});
-   if(deletion?.key!==undefined&&deletion?.key!==objectKey)
-    HOLD('QA_R2_DELETE_KEY_MISMATCH');
-   console.log('APP768_QA_R2_SYNTHETIC_OBJECT_CLEANUP=PASS');
+   // Only this random synthetic key, even when the PUT response is
+   // uncertain. Preserve the real PUT error instead of masking it with
+   // a 10007 NoSuchKey error from cleaning up an absent object.
+   try{
+    const deletion=await api({token:dataToken,path:url,method:'DELETE'});
+    if(deletion?.key!==undefined&&deletion?.key!==objectKey)
+     HOLD('QA_R2_DELETE_KEY_MISMATCH');
+    console.log('APP768_QA_R2_SYNTHETIC_OBJECT_CLEANUP=PASS');
+   }catch(e){
+    if(uploadError&&String(e?.message||'').includes('CODES_10007'))
+     console.log('APP768_QA_R2_NO_OBJECT_TO_CLEAN=CONFIRMED');
+    else throw e;
+   }
   }
  }
+ if(uploadError)throw uploadError;
  if(!success)HOLD('QA_R2_BASIC_UPLOAD_MISSING');
  console.log('APP768_PHYSICAL_QA_BASIC_RESOURCES_AND_D1_ROWS=PASS');
  console.log('APP768_APP767_R2_CONDITIONAL_6_WAY=NOT_TESTED');

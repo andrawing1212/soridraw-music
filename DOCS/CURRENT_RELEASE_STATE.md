@@ -1,3 +1,12 @@
+## CURRENT — APP761 정식 팔로우 owner DO 알람 연결 소스 준비 / APP760 독립 QA 503→복구 최종 PASS (2026-11-22 KST)
+
+- **APP760 실검증 완료 — 재실행 불필요:** 디렉터 QA Cloud Shell 실제 `APP748_QA503_DO_RETRY_FUNCTIONS_RTDB=PASS`, 기존 RTDB 버전 12 → 한 번의 503 주입 뒤 DO 알람 재전송 버전 13/팔로우 1명 → 취소 버전 14/0명. [GitHub Actions #44929523386](https://github.com/andrawing1212/soridraw-music/actions/runs/44929523386) **qa_window SUCCESS**, 원본 APP583 QA Worker 버전 `4ed70845-6a4b-4a80-9c51-ed95d0becc38` 100% 자동 복구와 최종 바인딩·HTTP `APP741_QA_ORIGINAL_VERSION_BINDINGS_AND_HTTP_FINAL=PASS`. PR #1317/#1318 병합. 독립 QA 전용이며 공유 사용자 데이터/실서비스 배포 없음. APP749 실기기 PC↔모바일 0→1→0 PASS도 그대로 재사용.
+- **APP761 후속 구현 범위:** APP755 owner-scoped DO 내구 receipt + APP759 알람/Functions 전달 엔진을 재사용하고 owner-bound trust callback을 통과할 때만 find/reserve/alarm을 실행하는 **정식앱 OFF-only 소스 어댑터**. owner ID와 DO identity가 불일치하면 DO 저장/Functions 호출 전에 중단. APP728 임시 검토 번들에 소스 SHA와 기본 OFF 상태만 추가하고 생산 Worker 원본 export/12 bindings/레거시 service/마이그레이션 불변. QA 서버 재검증 불필요.
+- **중요 HOLD:** PROD owner DO 클래스·서비스 바인딩/Functions scope/정본 settled proof·서명 송신점의 실제 연결은 여전히 없다. APP755 owner receipt 24개 상한 이후 안전한 정리·중복 보존 구조는 미해결. APP761 소스/오프라인 모의 PASS는 운영 알람·정식 사용자 기능 PASS가 아님. 실제 Cloudflare/Firebase 공유 자원 변경/배포, TEST/PRODUCTION/Hosting, 원본 데이터 변경은 별도 위험 검증·승인 전까지 금지. 정식 배포 APP737/738 **HOLD**.
+- **작업 기준:** GitHub `preview` HEAD `4363820117100cb03bcbc44a01e127aeb5de3cf4`, `production` HEAD `fa81b02b695a8e935cdbbf8cab1efe1b2c9387f4`; APP758 실제 PROD Explore 12 / PREVIEW 41 바인딩, PROD owner service 없음 증거 재사용. 다음 작업은 owner DO identity proof·production canonical proof 및 receipt 보관 비용/복구를 별도 승인된 범위에서 해결.
+
+---
+
 ## CURRENT — APP749 독립 QA 실제 A↔B 인증·팔로우/취소·PC↔모바일 자동 수신 PASS / 정식 승격은 별도 HOLD (2026-11-21 KST)
 
 - **최신 사용자 실사용 증거(같은 날 22:16~22:17 KST 화면):** QA 전용 `https://soridraw-qa-owner-584.web.app/qa749.html` PC에서 기존 A/B Firebase 실로그인, 서버 서명 인증과 RTDB 기준 0명 확인 PASS. B→A 팔로우 1회 후 A 수신 1명/버전 11, 취소 1회 후 0명/버전 12. PC 검증 기록에는 `팔로우·취소 검증 PASS · 최종 팔로워 0명`, `A PC↔모바일 + 서버 최종 반영 PASS`가 표시됐고, 모바일 A도 새로고침 없이 0명/버전 10 → 1명/버전 11 → 0명/버전 12 순서를 수신한 화면 제공. 이는 **APP749 독립 QA 실제 로그인·서명/동기화 경로 PASS**이며 이전 APP583 또는 APP730 합성 검사 PASS를 재표기한 것이 아님.

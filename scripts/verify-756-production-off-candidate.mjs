@@ -51,6 +51,8 @@ try{
  assert.equal(built.manifest.integration.productionFunction542SenderUnconnected,true);
  assert.equal(built.manifest.integration.app755SourceFilesCopiedExactly,true);
  assert.equal(built.manifest.integration.app759OwnerAlarmSourceExactlyCopied,true);
+ assert.equal(built.manifest.integration.app761OwnerDoRuntimeSourceExactlyCopied,true);
+ assert.equal(built.manifest.integration.productionOwnerRuntimeCompositionSourceOnly,true);
  assert.equal(built.manifest.integration.productionOwnerAlarmReplaySourceOnly,true);
  assert.equal(built.manifest.integration.activeWorkerRuntimeParityNotVerified,true);
  assert.equal(built.manifest.integration.productionDeployAuthorized,false);
@@ -79,9 +81,12 @@ try{
  const backendSource=readFileSync(join(built.outputDirectory,'integration','app755-production-follow-backend.mjs'),'utf8');
  const receiptSource=readFileSync(join(built.outputDirectory,'integration','app755-production-owner-receipt.mjs'),'utf8');
  const alarmSource=readFileSync(join(built.outputDirectory,'integration','app759-production-owner-alarm.mjs'),'utf8');
+ const ownerDoRuntimeSource=readFileSync(join(built.outputDirectory,'integration','app761-production-owner-do-runtime.mjs'),'utf8');
  assert(backendSource.includes('APP755_PRODUCTION_BACKEND_COMPILED_OPEN=false'));
  assert(receiptSource.includes('APP755_PRODUCTION_OWNER_RECEIPT_COMPILED_OPEN=false'));
  assert(alarmSource.includes('APP759_PRODUCTION_OWNER_ALARM_COMPILED_OPEN=false'));
+ assert(ownerDoRuntimeSource.includes('APP761_PRODUCTION_OWNER_DO_RUNTIME_COMPILED_OPEN=false'));
+ assert.equal(built.manifest.integration.app761OwnerDoRuntimeSha256,sha(ownerDoRuntimeSource));
  assert.equal(built.manifest.integration.app759AlarmSha256,sha(alarmSource));
  assert.equal(built.manifest.integration.app755BackendSha256,sha(backendSource));
  assert.equal(built.manifest.integration.app755OwnerReceiptSha256,sha(receiptSource));

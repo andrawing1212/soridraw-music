@@ -96,6 +96,41 @@ function qa749ScopedCsp(original){
  }
  return rs.map(r=>r.name+' '+r.sources.join(' ')).join('; ');
 }
+// CSP directive and source order / whitespace have no security meaning.
+// Compare complete policy directive + source multisets, not raw HTTP bytes.
+// Reject combined/multiple CSP policies: a restrictive second policy would
+// silently block Firebase despite required tokens appearing in the first one.
+function qaCspSafeEquivalent(expected,received){
+ const parse=value=>{
+  if(typeof value!=='string'||value.length<30||value.length>8000)
+   return{ok:false,reason:'CSP_LENGTH_OR_TYPE'};
+  if(value.includes(','))return{ok:false,reason:'MULTIPLE_OR_COMBINED_CSP'};
+  const policies=new Map();
+  for(const segment of value.split(';').map(x=>x.trim()).filter(Boolean)){
+   const parts=segment.split(/\s+/);
+   const name=parts.shift();
+   if(!/^[a-z][a-z0-9-]*$/.test(name)||policies.has(name))
+    return{ok:false,reason:'DUPLICATE_OR_INVALID_DIRECTIVE'};
+   if(parts.some(x=>x.includes(',')||x.includes(';')))
+    return{ok:false,reason:'INVALID_SOURCE_LIST'};
+   policies.set(name,parts.sort());
+  }
+  return policies.size?{ok:true,policies}:{ok:false,reason:'EMPTY_CSP'};
+ };
+ const a=parse(expected),b=parse(received);
+ if(!a.ok)return{same:false,reason:'EXPECTED_'+a.reason};
+ if(!b.ok)return{same:false,reason:b.reason};
+ if(a.policies.size!==b.policies.size)
+  return{same:false,reason:'DIRECTIVE_COUNT_MISMATCH'};
+ for(const [name,expectedSources]of a.policies){
+  const got=b.policies.get(name);
+  if(!got)return{same:false,reason:'DIRECTIVE_MISSING_'+name};
+  if(expectedSources.length!==got.length||
+     expectedSources.some((x,i)=>x!==got[i]))
+   return{same:false,reason:'SOURCE_MISMATCH_'+name};
+ }
+ return{same:true,reason:'SAME_POLICY_DIFFERENT_SERIALIZATION_OK'};
+}
 async function run({mode,html,css,js,config,send=fetch,token,projectId,projectNumber,
    notify=()=>{},timeout=15000,smokeAttempts=15,smokeDelayMs=2000}={}){
  check(Number.isSafeInteger(smokeAttempts)&&smokeAttempts>=1&&smokeAttempts<=20&&
@@ -303,21 +338,24 @@ async function run({mode,html,css,js,config,send=fetch,token,projectId,projectNu
      originalReq(CONFIGFILE),originalReq('/')]);
    let serverConfig;
    try{serverConfig=JSON.parse(publicConfig)}catch{serverConfig=null}
-   observed={
-     observed:true,
+   const csp=qaCspSafeEquivalent(qaCsp,seenCsp.get(FILE));
+   const required={
      htmlUnchanged:page===oldQaHtml,
      scriptExactlyUpdated:script===js,
      stylesheetUnchanged:style===oldQaCss,
      publicConfigUnchanged:publicConfig===oldQaConfig,
-     qaPageCspExact:seenCsp.get(FILE)===qaCsp,
-     qaPageCspHasSelf:/(?:^|;)\s*connect-src\s+[^;]*'self'/.test(seenCsp.get(FILE)||''),
-     qaPageCspHasAppCheck:(seenCsp.get(FILE)||'').includes('firebaseappcheck.googleapis.com'),
+     qaPageCspSafeEquivalent:csp.same,
      receiverCspUnchanged:seenCsp.get('/')===rootCsp,
      receiverHtmlUnchanged:createHash('sha256').update(index).digest('hex')===rootSha,
      configValid:validateConfig(serverConfig),
      configWebAppExact:serverConfig?.appId===config.appId,
    };
-   smoke=Object.entries(observed).every(([k,v])=>k==='observed'||v===true);
+   observed={
+     observed:true,...required,
+     qaPageCspExact:seenCsp.get(FILE)===qaCsp,
+     qaPageCspComparison:csp.reason,
+   };
+   smoke=Object.values(required).every(v=>v===true);
   }catch(error){
    // Only expose controlled error codes; never log URL response body.
    const message=typeof error?.message==='string'?error.message:'';
@@ -343,7 +381,7 @@ async function run({mode,html,css,js,config,send=fetch,token,projectId,projectNu
  notify('APP749_QA_FIREBASE_AUTH_APPCHECK_AND_PC_MOBILE=NOT_TESTED');
  return{status:'PASS',url:HOST+FILE,oldVersion:oldVer,newVersion:version};
 }
-export {run as runApp749QaScopedCsp,qa749ScopedCsp,qaPublicConfig};
+export {run as runApp749QaScopedCsp,qa749ScopedCsp,qaCspSafeEquivalent,qaPublicConfig};
 async function main(){
  const mode=process.argv[2];
  check(['--check','--deploy'].includes(mode)&&process.argv.length<=4,

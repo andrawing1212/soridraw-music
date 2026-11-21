@@ -69,6 +69,7 @@ globalThis.fetch=async (url,opts={})=>{
   assert.match(key,/^app768-only-qa-[0-9a-f]{16}$/);
   if(method==='PUT'){
    assert(opts.body instanceof Blob);
+   assert.equal(opts.body.type,'application/octet-stream');
    assert.equal(opts.headers['Content-Type'],'application/octet-stream');
    const body=opts.body;
    keys.set(key,await body.text());writes.push(key);

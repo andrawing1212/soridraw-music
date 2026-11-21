@@ -73,6 +73,44 @@ export function summarizeApp737ProductionGaps(inventory={},workers={}){
     independentProofRequired:x.bindings.length>0,
     canAutoExclude:false,canAutoInheritFromPreview:false,
   }));
+  // APP751: a short *evidence plan* instead of one manual test per binding.
+  // Grouping does not waive proof that every source/live binding is handled.
+  // Reuse APP749 only for isolated-QA A/B delivery; never promote that PASS
+  // to production Auth/Functions/RTDB or all-user feature activation.
+  const order=['follow','release-endpoint','notification','cache-cost',
+    'environment-identity','unclassified'];
+  const proofPlan=order.map((key,rank)=>{
+    const item=workstreams.find(x=>x.key===key);
+    return {priority:rank+1,key,count:item.count,
+      review:'REVIEW_ALL_BINDING_NAMES_AND_ACTIVE_CODE',
+      proof:item.evidenceRequired,
+      coverage:key==='follow'?'APP749_ISOLATED_QA_AB_PC_MOBILE_PARTIAL_REUSE':
+        'NO_LIVE_PRODUCTION_FEATURE_PROOF_RECORDED',
+      proofState:'HOLD_UNTIL_PRODUCTION_EVIDENCE',
+      separateBackendApprovalRequired:key==='follow'||key==='release-endpoint'||
+        key==='notification',
+    };
+  }).filter(x=>x.count>0);
+  const functional=['follow','release-endpoint','notification'];
+  const environment=['cache-cost','environment-identity'];
+  const releaseBlockerPlan={
+    status:'HOLD_NO_RELEASE_AUTHORITY',readOnly:true,
+    totalMissingBindings:rows.length,
+    functionalBindingCount:proofPlan.filter(x=>functional.includes(x.key))
+      .reduce((total,x)=>total+x.count,0),
+    environmentReviewCount:proofPlan.filter(x=>environment.includes(x.key))
+      .reduce((total,x)=>total+x.count,0),
+    independentEvidenceBatches:proofPlan.length,
+    nextWorkstream:proofPlan[0]?.key||null,
+    workstreams:proofPlan,
+    legacyBindingsPreserved:prodLegacyPreserved,
+    unknownBindingsOrEntries:groups.get('unclassified').bindings.length+invalid.length,
+    perBindingSourceAndActiveRuntimeProofStillRequired:true,
+    allProductionFunctionAndRollbackProofStillRequired:true,
+    noIndividualLiveJourneyPerFlagImplied:true,
+    noAutomaticExclusionOrActivation:true,
+    productionDeployAuthorized:false,
+  };
   return {
     kind:'APP742_SOURCE_AND_ACTIVE_RUNTIME_PARITY_GAP_TRIAGE',
     status:'HOLD_NO_PRODUCTION_MUTATION',
@@ -88,6 +126,7 @@ export function summarizeApp737ProductionGaps(inventory={},workers={}){
     classificationIsNotActivationProof:true,
     noAutomaticReleaseExclusions:true,
     evidencePriority:workstreams.filter(x=>x.count>0),
+    releaseBlockerPlan,
     invalid:invalid.length?[...new Set(invalid)]:[],
   };
 }

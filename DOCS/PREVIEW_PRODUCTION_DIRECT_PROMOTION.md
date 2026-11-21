@@ -40,6 +40,20 @@
 - **배포 게이트 유지:** APP737/738의 `READY_FOR_DIRECTOR_APPROVAL` / 정확한 SHA/증거 파일/최종 디렉터 승인·자동 복구 조건을 우회하지 않는다. 현재 해당 승인 증거 파일은 아직 없으며 운영 배포를 수행하지 않는다.
 - **QA Worker 복구 재사용:** APP741은 Wrangler 원본 `4ed70845...` 단일 100% 복구 명령 **SUCCESS**였으나 직후 Cloudflare API read는 일시적 `ACTIVE_TRAFFIC_DRIFT`로 실패. 외부 재배포 없이 [APP735 최종 GET-only #44650441200](https://github.com/andrawing1212/soridraw-music/actions/runs/44650441200) **PASS**. 같은 정상 조회 지연 때문에 매번 18분의 QA를 반복하지 않는다. 기존 원본 응답·고정 바인딩 조회를 제한적으로 재확인하고, 미일치 시 HOLD. 실사용 합격 범위는 별도.
 
+## APP752 — 팔로우 18개 실제 차이의 소스 대조 및 최소 수정 우선순위 (2026-11-21, READ-ONLY)
+
+**확인 기준:** GitHub `preview` HEAD `4363820117100cb03bcbc44a01e127aeb5de3cf4`와 `production` 브랜치 HEAD `fa81b02b695a8e935cdbbf8cab1efe1b2c9387f4`의 `cloudflare/explore-worker/canonical/preview-entry.js`를 직접 대조. 해당 파일의 Git blob은 서로 다르고(PROD 소스에는 아래 PREVIEW owner-follow 실행 표식이 없음), PREVIEW의 owner-follow 관련 런타임 `OWNER_FOLLOW_AUTH_EPOCH_532_COMPILED_OPEN`, `APP539_WORKER_HTTP_BRIDGE_COMPILED_OPEN`, `APP557_OWNER_PRECOMMIT_COMPILED_OPEN`이 모두 `false`. main의 `scripts/app729-production-follow-adapter.mjs`와 `scripts/app743-production-follow-bridge.mjs`도 배포하지 않는 소스 후보이며 `APP729_PRODUCTION_OWNER_FOLLOW_COMPILED_OPEN=false`, `APP743_PRODUCTION_FOLLOW_COMPILED_OPEN=false`. **Git 브랜치 소스 비교는 Cloudflare 활성 버전의 코드 해시와 동일하다는 증거가 아니다.** 기존 APP737 GET-only 보고의 실제 PREVIEW/PROD Explore 바인딩 41/12 차이(18개 follow)는 재사용하되 배포 직전에 활성 버전 해시와 대상은 별도 고정한다.
+
+**18개 이름별 필요한 증거를 세 작업으로 통합(설정값/비밀키 복사 금지):**
+
+- **① 정본→내구성 예약/중복 방지 (8개):** `OWNER_FOLLOW_RESERVATION_SERVICE_600`, `SORIDRAW_OWNER_DO_BRIDGE_SECRET_600`, `SORIDRAW_OWNER_DO_STANDALONE_600`, `SORIDRAW_OWNER_FOLLOW_AUTH_PROOF_547`, `SORIDRAW_OWNER_FOLLOW_BIND_544`, `SORIDRAW_OWNER_FOLLOW_BRIDGE_READY_607`, `SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544`, `SORIDRAW_OWNER_FOLLOW_SOURCE_BOUNDARY_653`. 필요한 실증은 PROD Auth+AppCheck 주체 확인, 정본 D1 확정과 stable receipt/DO alarm, 재전송·순서·중복 차단, 실제 활성 Worker 연결과 비용·복구. APP743 후보는 여전히 source-only/OFF.
+- **② 서명된 Functions→소유자 RTDB 전달 (4개):** `SORIDRAW_OWNER_FOLLOW_ENDPOINT_539`, `SORIDRAW_OWNER_FOLLOW_HMAC_539`, `SORIDRAW_OWNER_FOLLOW_RECEIVER_VERIFIED_607`, `SORIDRAW_PUBLIC_FOLLOW_ENDPOINT_669`. QA APP749는 **격리 QA 두 계정**에 한해 A↔B Firebase 실인증과 PC/모바일 수신 0→1→0 PASS. PROD 실제 Functions 수신점·서명 비밀·오래된 버전 거절·사용자별 Rules·복구·호환은 별도 미증명.
+- **③ 사용자 활성화·범위·카나리 보호 (6개):** `SORIDRAW_OWNER_FOLLOW_CANARY_UID_574`, `SORIDRAW_OWNER_FOLLOW_GENERAL_PREVIEW_653`, `SORIDRAW_OWNER_FOLLOW_W2_PUSH_555`, `SORIDRAW_PUBLIC_FOLLOW_READY_669`, `SORIDRAW_PUBLIC_FOLLOW_SCOPE_669`, `SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680`. 일반 사용자 전체 동작을 특정 카나리 계정이나 PREVIEW 도메인에 묶지 않고, 구형 클라이언트와 기존 정상 팔로우/좋아요 경로를 보호하는 방식으로 실제 사용자 활성화 계약 증명 필요. 단순 플래그 ON 또는 PREVIEW 값을 PROD에 복사해 통과 처리 금지.
+
+**우선 조치:** (1) 기존 APP728의 Cloudflare **활성 버전 코드 해시/출처 증거**를 확인하여 브랜치 소스와의 차이 및 18개 필요 연결을 확정, (2) APP729/743의 OFF 생산 후보에 실제 PROD용 Firebase principal/DO durable receipt/Functions RTDB 연결과 승인된 보안·비용 증거를 마련, (3) 배포 이전 독립 QA의 장애 재전송·빠른 반대 클릭·기존 캐시/구버전 호환·복구만 영향 범위 검사. **APP749 통과한 QA A/B 단순 팔로우 0→1→0은 반복하지 않는다.** 이 세 작업은 18회의 반복 실기기 검사도, 18개 자원 자동 생성도 의미하지 않는다.
+
+**현재 결론:** APP749 PASS를 일반 PREVIEW/PRODUCTION 계정 PASS로 확대할 수 없다. 배포를 막는 핵심은 단순 바인딩 수량이 아니라 **정식 활성 코드의 기능 연결 및 정본↔RTDB 전체 처리·복구 증거 부재**다. 새 Worker/Functions/RTDB/Rules/Secrets·데이터 변경은 별도 승인이 필요하며 이 소스 대조에서는 수행하지 않았다. APP737/738 PRODUCTION 릴리스 HOLD, TEST 미사용, 운영 기존 레거시 service 바인딩 2개 보존.
+
 ## APP751 — 31개 연결의 최소 검증 순서 (읽기 전용, 릴리스 HOLD)
 
 APP737의 기존 GET-only 실행 결과에 `releaseBlockerPlan`을 추가했다. 기존 APP742의 31개 목록을 새로 검사하지 않고 재사용하며 **25개 사용자 기능 관련 연결은 기능별 3묶음**, **6개 비용·환경 연결은 설정 동등성 2묶음**으로 한 번에 검토한다. 모든 연결의 원본 코드·실제 활성 대상 확인은 유지한다. 버전이나 설정이 달라진 부분만 후속 검사한다.

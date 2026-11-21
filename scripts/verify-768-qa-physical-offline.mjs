@@ -68,8 +68,9 @@ globalThis.fetch=async (url,opts={})=>{
   const key=u.split('/objects/')[1];
   assert.match(key,/^app768-only-qa-[0-9a-f]{16}$/);
   if(method==='PUT'){
-   assert(opts.body instanceof FormData);
-   const body=opts.body.get('body');assert(body instanceof Blob);
+   assert(opts.body instanceof Blob);
+   assert.equal(opts.headers['Content-Type'],'application/octet-stream');
+   const body=opts.body;
    keys.set(key,await body.text());writes.push(key);
    return ok({key,etag:'synthetic-etag'});
   }

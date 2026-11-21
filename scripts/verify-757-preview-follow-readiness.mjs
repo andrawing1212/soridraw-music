@@ -18,7 +18,8 @@ const worker={name:'soridraw-explore-preview',activeVersion:'cfd40718-6ab5-4133-
  ])};
 const names=['enrollOwnerFollow544Candidate','verifyOwnerFollowEpoch547Candidate',
  'publishExploreOwnerFollower542'];
-const funcs=Object.fromEntries(names.map(n=>[n,{status:'ACTIVE'}]));
+const funcs=Object.fromEntries(names.map(n=>[n,{status:'ACTIVE',
+ canaryScopeConfigured:true,generalPreviewDisabled:true}]));
 const validRule={'rules':{'.read':false,'.write':false,
  ownerFollowerSync532:{$uid:{'.read':"auth != null && auth.uid === $uid && auth.token.soridrawFollowEpoch532 != null && (!data.exists() || auth.token.soridrawFollowEpoch532 === data.child('authEpoch').val())",
  '.write':false}}}};
@@ -45,6 +46,7 @@ assert.equal(ready.productionTouched,false);
 assert.equal(ready.testTouched,false);
 assert.equal(ready.sharedUserDataReads,0);
 assert.equal(ready.previewBackendMutationAllowed,false);
+assert.equal(ready.functions.every(x=>x.canaryScopeConfigured),true);
 assert.equal(ready.externalWrites,0);
 for(const x of [
  {worker:{...worker,pinnedBindingsVerified:false},marker:'PREVIEW_ACTIVE_BINDINGS_NOT_PINNED'},
@@ -54,6 +56,9 @@ for(const x of [
   ?{...b,plainHash:hash('production')}:b)},marker:'PREVIEW_ENVIRONMENT_IDENTITY_UNVERIFIED'},
  {functions:{...funcs,publishExploreOwnerFollower542:{status:'NOT_DEPLOYED'}},
  marker:'FUNCTION_NOT_ACTIVE_OR_UNVERIFIED_publishExploreOwnerFollower542'},
+ {functions:{...funcs,publishExploreOwnerFollower542:{status:'ACTIVE',
+   canaryScopeConfigured:false,generalPreviewDisabled:true}},
+ marker:'FUNCTION_CANARY_GATE_UNVERIFIED_publishExploreOwnerFollower542'},
  {rtDb:{status:'UNREADABLE',singleInstance:false,...summarizeOwnerRules(null)},
  marker:'SHARED_RTDB_ACTIVE_RULES_NOT_READ'},
  {rtDb:{status:'READ',singleInstance:true,...summarizeOwnerRules(null)},

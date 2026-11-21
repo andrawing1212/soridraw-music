@@ -25,6 +25,12 @@
 - PROD Worker 코드/DO migration 및 Functions·Rules 버전·새 코드 번들 동일성, 실제 Hosting 자산 동등성, 복구 리허설이 확인되지 않아 **현재 정식 배포 HOLD**다.
 - 사용자 데이터 원본·Local First·뮤직노트·라이브러리·최근곡·로그인/좋아요 동기화 및 무변경 방문 W0 보호는 항상 우선한다.
 
+## APP749 독립 QA PASS 재사용 — 정식 서버 동등성은 아직 HOLD (2026-11-21)
+
+- 현장 PC A/B Firebase Auth·App Check 검증 및 A PC/모바일 RTDB 팔로우 **0명/버전10 → 1명/버전11 → 0명/버전12** 수신, PC 팔로우·취소 1회씩 PASS. APP749 QA Worker/QA584/QA Firebase `soridraw-app`에 한정한 실기기 증거를 `DOCS/CURRENT_RELEASE_STATE.md` 최상단 체크포인트로 고정한다. 관련 코드·서버 상태가 같으면 이 합격 검사를 다시 수행하지 않는다.
+- 이 성공은 **정식 Worker·Auth/AppCheck/Functions/RTDB·다른 로그인 사용자의 활성화**나 강제 장애 503 복구를 입증하지 않는다. APP737 실제 서버 바인딩 41 대 12(차이 31 + 운영 레거시 2), PRODUCTION 사용자 기능 ON·비용/보호·실제 릴리스·롤백 호환은 여전히 독립 확인 대상이고 APP738 승인 증거 파일도 미생성. 직행 PRODUCTION은 HOLD.
+- 릴리스 시간 단축은 기존 계약의 **최초 백엔드 호환성 1회 확인 → 이후 환경 고정·변경 범위만 검사 → 검증된 PREVIEW Hosting 활성 버전 그대로 복제**를 사용한다. TEST 컨트롤러 호출/기능 OFF/임의 제외/반복 QA/전체 회귀를 속도 확보 수단으로 쓰지 않는다.
+
 ## 반복 배포 최적화 계약 — 최초 검증과 일상 승격 분리 (2026-11-20)
 
 - **최초 1회 검증:** PREVIEW/PRODUCTION 실제 코드·Worker 바인딩/DO·Functions·RTDB Rules·Auth/AppCheck·구버전 사용자 데이터·비용·롤백의 동등성을 실제 증거로 확립한다. 아직 완료되지 않았으며 RELEASE HOLD. 증거 없이 EXCLUDE/QA_ONLY로 기능을 제거하거나 모두 복사하지 않는다.

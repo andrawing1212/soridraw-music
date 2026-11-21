@@ -31,6 +31,9 @@ on:
       - 'scripts/verify-753-production-follow-composition.mjs'
       - 'scripts/app754-production-firebase-principal.mjs'
       - 'scripts/verify-754-production-firebase-principal.mjs'
+      - 'scripts/app755-production-owner-receipt.mjs'
+      - 'scripts/app755-production-follow-backend.mjs'
+      - 'scripts/verify-755-production-follow-backend.mjs'
       - '.github/workflows/soridraw-app728-direct-preflight.yml'
 
 permissions:
@@ -151,6 +154,9 @@ jobs:
           node scripts/verify-753-production-follow-composition.mjs
           node --check scripts/app754-production-firebase-principal.mjs
           node scripts/verify-754-production-firebase-principal.mjs
+          node --check scripts/app755-production-owner-receipt.mjs
+          node --check scripts/app755-production-follow-backend.mjs
+          node scripts/verify-755-production-follow-backend.mjs
 
   binding_diff:
     if: >-
@@ -274,6 +280,9 @@ jobs:
           node scripts/verify-753-production-follow-composition.mjs
           node --check scripts/app754-production-firebase-principal.mjs
           node scripts/verify-754-production-firebase-principal.mjs
+          node --check scripts/app755-production-owner-receipt.mjs
+          node --check scripts/app755-production-follow-backend.mjs
+          node scripts/verify-755-production-follow-backend.mjs
       - name: Generate exact production baseline and quarantined PREVIEW modules in runner temp only
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

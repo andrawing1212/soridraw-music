@@ -35,7 +35,7 @@ assert(req.every(x=>x.method==='GET'));
 assert.equal(result.mutations,0);
 req=[];
 await assert.rejects(()=>inventoryApp768Qa({readToken:token,send}),
- /QA_DATA_TOKEN_REQUIRED/);
+ /RESOURCE_METADATA_ACCESS_INCOMPLETE/);
 const noQa=await inventoryApp768Qa({readToken:token,dataToken:token,send:async(uri,opt)=>{
  if(uri===BASE+'/workers/scripts/soridraw-owner-qa-583/deployments')
   return send(uri,opt);

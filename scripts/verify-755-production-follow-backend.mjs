@@ -93,7 +93,7 @@ const readPair=async a=>{preflights++;assert.equal(a.expectedRevision,7);
    priorR2Revision:13};};
 const proof=async a=>{proofs++;assert.equal(a.reservation.operationId,state.entries[0].operationId);
  return {committed:true,projectionSettled:true,changed:true,ownerUid:owner,
-   operationId:ticket.operationId,canonicalOperationId:canonical,revision:8};};
+   operationId:a.reservation.operationId,canonicalOperationId:canonical,revision:8};};
 let transportStatus=503;
 const send=async (event,opts)=>{
  sends++;assert.equal(opts.endpoint,env.SORIDRAW_OWNER_FOLLOW_ENDPOINT_539);
@@ -135,12 +135,13 @@ assert.equal(sends,0,'HTTP request must NOT send signed Functions before alarm')
 // Atomic new-operation path starts from empty storage, not from a synthetic
 // existing receipt. This exercises find -> canonical -> durable reserve.
 state=null;alarm=null;preflights=0;proofs=0;canonicalCalls=0;
+const idsBeforeNew=generated;
 const next=await worker.fetch(request(),env,{});
 assert.equal(next.status,200);
 assert.equal(preflights,1);
 assert.equal(canonicalCalls,1);
 assert.equal(state.entries.length,1);
-assert.equal(generated,2);
+assert.equal(generated,idsBeforeNew+1,'new operation gets exactly one new server receipt');
 assert.equal(sends,0);
 const fresh=state.entries[0];
 const settled={committed:true,projectionSettled:true,changed:true,

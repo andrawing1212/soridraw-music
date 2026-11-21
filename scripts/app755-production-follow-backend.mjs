@@ -76,9 +76,9 @@ export function createApp755ProductionBackend({
       typeof r.cutoverToken!=='string'||r.cutoverToken.length<1||
       r.cutoverToken.length>128||!integer(r.priorR2Revision))
      hold('CANONICAL_PREFLIGHT_UNVERIFIED');
-   // A true no-op must never reserve a DO alarm, modify D1 or send RTDB.
-   if(r.following===a.desired)hold('CANONICAL_NOOP');
-   preflight.set(a.request,{...r,
+   // APP743's own no-op gate returns durable:false before any reservation.
+   // Return the verified unchanged pair so it can fail closed as HTTP 503.
+   if(r.following!==a.desired)preflight.set(a.request,{...r,
      canonicalOperationId:bound.canonicalOperationId});
    return r;
   },

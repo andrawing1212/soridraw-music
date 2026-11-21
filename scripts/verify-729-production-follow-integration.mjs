@@ -140,6 +140,9 @@ try {
     await (await import('node:fs/promises')).readFile(new URL('./app754-production-firebase-principal.mjs',import.meta.url),'utf8'));
  writeFileSync(join(dir,'integration','app755-production-follow-backend.mjs'),
     await (await import('node:fs/promises')).readFile(new URL('./app755-production-follow-backend.mjs',import.meta.url),'utf8'));
+ // APP765: OFF entry still needs to resolve the backend's static source import.
+ writeFileSync(join(dir,'integration','app765-production-canonical-recovery.mjs'),
+    await (await import('node:fs/promises')).readFile(new URL('./app765-production-canonical-recovery.mjs',import.meta.url),'utf8'));
  const mainModule=await import(pathToFileURL(join(dir,'production-main.mjs')));
  const entryModule=await import(pathToFileURL(join(dir,'production-follow-entry.mjs')));
  assert.strictEqual(entryModule.default,mainModule.default,'generated OFF entry exact object identity');

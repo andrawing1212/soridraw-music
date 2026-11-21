@@ -122,8 +122,9 @@ assert.equal(made.originalMainUntouched,true);
 assert.equal(made.additionalBindings,0);assert.equal(made.additionalMigrations,0);
 assert.match(made.sha256,/^[0-9a-f]{64}$/);
 assert(made.code.includes("import canonical from './production-main.mjs'"));
-assert(made.code.includes('integrateApp729ProductionOwnerFollow(canonical'));
-assert(made.code.includes('if (APP729_PRODUCTION_OWNER_FOLLOW_COMPILED_OPEN) {'));
+assert(made.code.includes('composeApp753ProductionFollow(canonical'));
+assert(made.code.includes('APP729_PRODUCTION_OWNER_FOLLOW_COMPILED_OPEN'));
+assert.equal(made.productionDependenciesProvided,false);
 const dir=mkdtempSync(join(tmpdir(),'app729-off-'));
 try {
  mkdirSync(join(dir,'integration'));
@@ -131,6 +132,10 @@ try {
  writeFileSync(join(dir,'production-follow-entry.mjs'),made.code);
  writeFileSync(join(dir,'integration','app729-production-follow-adapter.mjs'),
    await (await import('node:fs/promises')).readFile(new URL('./app729-production-follow-adapter.mjs',import.meta.url),'utf8'));
+ writeFileSync(join(dir,'integration','app743-production-follow-bridge.mjs'),
+    await (await import('node:fs/promises')).readFile(new URL('./app743-production-follow-bridge.mjs',import.meta.url),'utf8'));
+ writeFileSync(join(dir,'integration','app753-production-follow-composition.mjs'),
+    await (await import('node:fs/promises')).readFile(new URL('./app753-production-follow-composition.mjs',import.meta.url),'utf8'));
  const mainModule=await import(pathToFileURL(join(dir,'production-main.mjs')));
  const entryModule=await import(pathToFileURL(join(dir,'production-follow-entry.mjs')));
  assert.strictEqual(entryModule.default,mainModule.default,'generated OFF entry exact object identity');

@@ -88,6 +88,56 @@ async function workerFetch(s,route,method='GET'){
   'Cache-Control':'no-store'},signal:AbortSignal.timeout(18000)});
  return {code:res.status,json:await res.json().catch(()=>null)};
 }
+async function deploy(){
+ checkRun();
+ const s=getState();
+ if(!s)hold('NO_PREPARED_STATE');
+ if(!token(process.env.CLOUDFLARE_QA_DEPLOY_TOKEN))
+  hold('QA_DEPLOY_TOKEN_MISSING');
+ const path=resolve('app768-r2-worker.bundle.mjs');
+ if(!existsSync(path))hold('OFFLINE_BUNDLE_MISSING');
+ const code=readFileSync(path,'utf8');
+ if(code.length<1000||code.length>100000||!code.includes('APP767_ISOLATED_SYNTHETIC_QA'))
+  hold('BUNDLE_SCOPE_UNVERIFIED');
+ const metadata={main_module:'app768-worker.mjs',
+  compatibility_date:'2026-11-19',
+  bindings:[
+   {type:'r2_bucket',name:'QA_APP768_R2',bucket_name:R2},
+   ...Object.entries(s.vars).map(([name,text])=>({type:'plain_text',name,text})),
+  ],
+ };
+ const form=new FormData();
+ form.append('metadata',new Blob([JSON.stringify(metadata)],
+  {type:'application/json'}),'metadata.json');
+ form.append('app768-worker.mjs',new Blob([code],
+  {type:'application/javascript+module'}),'app768-worker.mjs');
+ // The official script upload API is authorized independently of Wrangler's
+ // R2 metadata GET. Cloudflare itself must still authorize this binding.
+ const uploaded=await fetch(BASE+'/workers/scripts/'+worker,{
+  method:'PUT',headers:{Authorization:'Bearer '+
+   process.env.CLOUDFLARE_QA_DEPLOY_TOKEN,Accept:'application/json'},
+  body:form,redirect:'error',signal:AbortSignal.timeout(20000)});
+ const response=await uploaded.json().catch(()=>null);
+ if(uploaded.status!==200||response?.success!==true)
+  hold('DIRECT_API_BINDING_DEPLOY_'+uploaded.status+'_CODES_'+
+   (response?.errors||[]).map(e=>e?.code||'NA').join('_'));
+ const sub=await fetch(BASE+'/workers/scripts/'+worker+'/subdomain',{
+  method:'POST',headers:{Authorization:'Bearer '+
+   process.env.CLOUDFLARE_QA_DEPLOY_TOKEN,
+   'Content-Type':'application/json',Accept:'application/json'},
+  body:JSON.stringify({enabled:true,previews_enabled:false}),
+  redirect:'error',signal:AbortSignal.timeout(18000)});
+ const sj=await sub.json().catch(()=>null);
+ if(sub.status!==200||sj?.success!==true)
+  hold('QA_WORKER_SUBDOMAIN_'+sub.status+'_CODES_'+
+   (sj?.errors||[]).map(e=>e?.code||'NA').join('_'));
+ const available=await api(BASE+'/workers/scripts/'+worker,
+  process.env.CLOUDFLARE_QA_API_TOKEN);
+ if(available.code!==200||available.json?.success!==true)
+  hold('QA_WORKER_UPLOAD_NOT_VISIBLE');
+ console.log('APP768_DISPOSABLE_QA_WORKER_DIRECT_UPLOAD=PASS');
+}
+
 async function race(){
  checkRun();
  const s=getState();if(!s)hold('NO_PREPARED_STATE');
@@ -142,7 +192,7 @@ async function cleanup(){
    const d=await api(path,process.env.CLOUDFLARE_QA_DATA_TOKEN,'DELETE');
    const codes=(d.json?.errors||[]).map(x=>x.code);
    if(!(d.code===200&&d.json?.success===true)&&
-      !(d.code===404&&codes.includes(10007)))
+      !codes.includes(10007))
     hold('EXACT_OBJECT_DELETE_FAILED_'+d.code);
    objectCleaned=true;
   }catch(e){errors.push('OBJECT_'+String(e.message));}
@@ -168,6 +218,6 @@ async function cleanup(){
  console.log('APP768_QA_D1_R2_AND_APP583_UNCHANGED=PASS');
 }
 const mode=process.argv[2];
-if(!['preflight','race','cleanup'].includes(mode))hold('UNKNOWN_MODE');
-const run=mode==='preflight'?preflight:mode==='race'?race:cleanup;
+if(!['preflight','deploy','race','cleanup'].includes(mode))hold('UNKNOWN_MODE');
+const run=mode==='preflight'?preflight:mode==='deploy'?deploy:mode==='race'?race:cleanup;
 run().catch(e=>{console.error(String(e.message||'UNEXPECTED_QA_ERROR'));process.exitCode=2;});

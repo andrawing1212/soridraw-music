@@ -1,3 +1,12 @@
+## CURRENT — APP764 보존 키 단독 손실 시 과거 예약 중복 발급 방지 (SOURCE ONLY, 2026-11-22 KST)
+
+- **실제 결함 경로:** APP762에서 `archiveUsed=true`인 owner의 개별 `app762-owner-follow-final-*` 키가 손실되면 `find`가 `absent,authoritative:true`를 반환해 동일 canonical operation ID를 새로 발급할 수 있었다. APP764는 owner DO의 기존 `app755-owner-follow-pending-v1` 안에 **보존된 canonical ID의 SHA-256 앞 128비트 압축 확인 인덱스**와 그 SHA-256 검증값을, 원래 완료 기록/새 예약/알람과 **같은 storage.transaction**에서 저장한다. 삭제·TTL·스캔·백그라운드 쓰기·새 namespace/DB/바인딩 추가 없음. 단순 해시 충돌은 재발급이 아닌 안전 HOLD.
+- **보호:** 새 요청 조회 시 기존 hot/개별 archive key 경로를 유지하며, 보존 키만 사라져도 확인 인덱스에 과거 ID가 있으면 `find=unknown`, `reserve=durable:false`로 차단. 확인 목록/검증값 오류·APP762식 `archiveUsed=true`이지만 확인 목록이 없는 과거 상태는 검증 없이 재생성하지 않고 HOLD. 정상 신규 ID는 원래 APP743/755의 정본 D1/R2·revision·Auth preflight 계약을 거쳐 기존대로 진행. 기존 v1 예약 기록은 별도 마이그레이션 없이 읽는다.
+- **남는 엄격한 한계:** 이것은 **개별 archive 키만 손실되고 hot 본문의 확인 인덱스는 유지된 경우**에 대한 보호다. 전체 DO PITR 롤백·hot 키와 archive 키 동시 손실·다른 canonical D1/R2/owner authEpoch의 최신 상태 불일치는 로컬 인덱스만으로 확인 불가능하다. 실제 운영 복구와 정식 배포는 독립 정본·서버 운영 이력 동등성 증명이 나올 때까지 HOLD. APP763 비용 모델에 보존 인덱스 약 35B/건 추가 반영. APP749/760 QA 실제 PC↔모바일·503 복구/원본 Worker 복원 PASS는 재검증하지 않는다.
+- **실서버 영향:** APP755/759/761 정식앱 후보 compile OFF. Cloudflare/Firebase Worker·DO·Functions·RTDB·D1/R2·Rules·Hosting, PREVIEW/TEST/PRODUCTION 및 공유 사용자 원본 읽기·변경/배포 0. 기존 APP737/738 출시 HOLD 유지.
+
+---
+
 ## CURRENT — APP763 소유자 DO 10만 명 운영 비용·장기 보존 복구 검증 (2026-11-22 KST)
 
 - **작업 범위:** APP762 완료/held 기록을 owner별 영구 개별 키로 보관하는 정책에 대해 Cloudflare 공식 SQLite DO 요금/Free·Paid 한도/Legacy KV 차이를 조사하고 10만 owner × 5/50/500회/년, 10년 누적 사용량을 **가정으로만** 산출. 모델과 원본 공식 URL·전제·제외 비용은 `DOCS/APP763_OWNER_FOLLOW_STORAGE_COST_AND_RECOVERY.md`에 고정. 실제 계정별 플랜/사용량/물리 DB 바이트와 다른 Cloudflare/Firebase 기능의 공용 할당량 소모는 미확인.

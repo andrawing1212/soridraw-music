@@ -67,7 +67,11 @@ export function estimateApp763OwnerCost({
  // This is a simplified *logical-key* size plus a scenario multiplier,
  // not physical SQLite databaseSize. Hot queue, B-tree and per-object
  // metadata are approximated separately. Real reads/writes require metrics.
- const logicalBytesPerReceipt=sampleReceiptBytes+sampleArchiveKeyBytes;
+ // APP764 keeps an additional 128-bit archived-operation witness in hot
+ // state. Approximate 32 hex chars + JSON quotes/array separator per ID.
+ const archiveWitnessBytesPerReceipt=35;
+ const logicalBytesPerReceipt=sampleReceiptBytes+sampleArchiveKeyBytes+
+  archiveWitnessBytesPerReceipt;
  const estimatedStoredBytes=owners*metadataBytesPerOwner+
   totalChanges*logicalBytesPerReceipt*storageOverheadMultiplier;
  const totalStorageGB=estimatedStoredBytes/GB;
@@ -97,7 +101,8 @@ export function estimateApp763OwnerCost({
   assumptions:{owners,eventsPerOwnerPerYear,months,storageOverheadMultiplier,
    metadataBytesPerOwner,requestsPerChange,rowsWrittenPerChange,
    rowsReadPerChange,activeMillisPerChange,
-   sampleReceiptBytes,sampleArchiveKeyBytes,logicalBytesPerReceipt,
+   sampleReceiptBytes,sampleArchiveKeyBytes,archiveWitnessBytesPerReceipt,
+   logicalBytesPerReceipt,
    backend:'SQLite-backed candidate; ACTUAL PRODUCTION NOT CONNECTED'},
   totals:{totalChanges,storedGB:Math.round(totalStorageGB*1000)/1000,
    perOwnerGB:Math.round(perOwnerGB*1_000_000)/1_000_000,

@@ -12,7 +12,8 @@ const fiveHundred=estimateApp763OwnerCost({owners:100000,eventsPerOwnerPerYear:5
 assert.equal(five.assumptions.sampleReceiptBytes,
  Buffer.byteLength(JSON.stringify(sample),'utf8'));
 assert.equal(five.assumptions.logicalBytesPerReceipt,
- five.assumptions.sampleReceiptBytes+five.assumptions.sampleArchiveKeyBytes);
+ five.assumptions.sampleReceiptBytes+five.assumptions.sampleArchiveKeyBytes+
+ five.assumptions.archiveWitnessBytesPerReceipt);
 assert.equal(five.totals.totalChanges,500000);
 assert.equal(fifty.totals.totalChanges,5000000);
 assert.equal(fiveHundred.totals.totalChanges,50000000);

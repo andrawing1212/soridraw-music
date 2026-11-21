@@ -67,8 +67,8 @@ assert.equal(generated,issuedAfterCommit,
  'rolled-back issuance is not persisted; duplicate must mint zero additional IDs');
 assert.equal(state.entries.length,1);
 assert.equal((await store.find({...input,desired:false})).status,'unknown');
-assert.throws(()=>store.reserve({...input,ownerUid:'wrongOwner'}),/OWNER_SCOPE_OR_INPUT/);
-assert.throws(()=>store.reserve({...input,authEpoch:'not-an-epoch'}),
+await assert.rejects(()=>store.reserve({...input,ownerUid:'wrongOwner'}),/OWNER_SCOPE_OR_INPUT/);
+await assert.rejects(()=>store.reserve({...input,authEpoch:'not-an-epoch'}),
  /TRUSTED_CANONICAL_PREFLIGHT_MISSING/);
 alarm=null;failAlarm=true;
 assert.equal((await store.find(input)).status,'unknown',

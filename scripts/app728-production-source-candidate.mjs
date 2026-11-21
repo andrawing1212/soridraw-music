@@ -184,6 +184,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  const backendSource=readFileSync(resolve('scripts/app755-production-follow-backend.mjs'),'utf8');
  const ownerAlarmSource=readFileSync(resolve('scripts/app759-production-owner-alarm.mjs'),'utf8');
  const ownerDoRuntimeSource=readFileSync(resolve('scripts/app761-production-owner-do-runtime.mjs'),'utf8');
+ const recoveryGateSource=readFileSync(resolve('scripts/app765-production-canonical-recovery.mjs'),'utf8');
  if(!adapterSource.includes('APP729_PRODUCTION_OWNER_FOLLOW_COMPILED_OPEN = false'))
    fail('INTEGRATION_COMPILE_OFF_REQUIRED');
  if(!productionBridgeSource.includes('APP743_PRODUCTION_FOLLOW_COMPILED_OPEN=false'))
@@ -202,7 +203,10 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
     !ownerAlarmSource.includes('APP759_PRODUCTION_OWNER_ALARM_COMPILED_OPEN=false')||
     !ownerAlarmSource.includes('VERIFIED_OWNER_DO_AND_PROOF_REQUIRED')||
     !ownerDoRuntimeSource.includes('APP761_PRODUCTION_OWNER_DO_RUNTIME_COMPILED_OPEN=false')||
-    !ownerDoRuntimeSource.includes('TRUSTED_OWNER_BINDING_AND_RELAY_REQUIRED'))
+    !ownerDoRuntimeSource.includes('TRUSTED_OWNER_BINDING_AND_RELAY_REQUIRED')||
+    !recoveryGateSource.includes('APP765_PRODUCTION_RECOVERY_GATE_COMPILED_OPEN=false')||
+    !recoveryGateSource.includes('INDEPENDENT_MONOTONIC_OPERATION_LEDGER')||
+    !backendSource.includes('verifyIndependentCanonicalHistory'))
    fail('PRODUCTION_OWNER_DO_AND_RELAY_MUST_REMAIN_OFF');
  mkdirSync(join(dir,'integration'),{recursive:true});
  const adapterPath=join(dir,'integration','app729-production-follow-adapter.mjs');
@@ -214,6 +218,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  const backendPath=join(dir,'integration','app755-production-follow-backend.mjs');
  const alarmPath=join(dir,'integration','app759-production-owner-alarm.mjs');
  const ownerDoRuntimePath=join(dir,'integration','app761-production-owner-do-runtime.mjs');
+ const recoveryGatePath=join(dir,'integration','app765-production-canonical-recovery.mjs');
  if(!lifecycleSource.includes('APP730_PRODUCTION_RELAY_ENABLED = false'))
    fail('DURABLE_RELAY_COMPILE_OFF_REQUIRED');
  writeFileSync(adapterPath,adapterSource);
@@ -225,6 +230,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  writeFileSync(backendPath,backendSource);
  writeFileSync(alarmPath,ownerAlarmSource);
  writeFileSync(ownerDoRuntimePath,ownerDoRuntimeSource);
+ writeFileSync(recoveryGatePath,recoveryGateSource);
  writeFileSync(entryPath,entry.code);
  if(sha256(readFileSync(entryPath))!==entry.sha256)
    fail('INTEGRATION_ENTRY_DRIFT');
@@ -237,6 +243,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  checkSyntax(backendPath);
  checkSyntax(alarmPath);
  checkSyntax(ownerDoRuntimePath);
+ checkSyntax(recoveryGatePath);
  checkSyntax(entryPath);
  candidate.manifest.integration={
    entrypoint:'production-follow-entry.mjs',
@@ -245,6 +252,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
    app755BackendSha256:sha256(readFileSync(backendPath)),
    app759AlarmSha256:sha256(readFileSync(alarmPath)),
    app761OwnerDoRuntimeSha256:sha256(readFileSync(ownerDoRuntimePath)),
+   app765RecoveryGateSha256:sha256(readFileSync(recoveryGatePath)),
    app755SourceFilesCopiedExactly:
      sha256(readFileSync(ownerReceiptPath))===sha256(ownerReceiptSource)&&
      sha256(readFileSync(backendPath))===sha256(backendSource),
@@ -252,6 +260,8 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
      sha256(ownerAlarmSource),
    app761OwnerDoRuntimeSourceExactlyCopied:sha256(readFileSync(ownerDoRuntimePath))===
      sha256(ownerDoRuntimeSource),
+   app765RecoveryGateSourceExactlyCopied:sha256(readFileSync(recoveryGatePath))===
+     sha256(recoveryGateSource),
    originalMainUntouched:true,
    existingProductionBindingCount:12,
    runtimeEnabled:false,
@@ -267,6 +277,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
    productionOwnerDoReceiptSourceOnly:true,
    productionOwnerAlarmReplaySourceOnly:true,
    productionOwnerRuntimeCompositionSourceOnly:true,
+   productionOwnerIndependentRecoveryGateSourceOnly:true,
    productionOwnerDoBindingAndMigrationAdded:false,
    productionFunction542SenderUnconnected:true,
    // A source-only review bundle is NEVER an approved deployable worker.
@@ -275,8 +286,9 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  };
  if(!candidate.manifest.integration.app755SourceFilesCopiedExactly||
     !candidate.manifest.integration.app759OwnerAlarmSourceExactlyCopied||
-    !candidate.manifest.integration.app761OwnerDoRuntimeSourceExactlyCopied)
-   fail('APP755_759_761_REVIEW_SOURCE_NOT_IDENTICAL');
+    !candidate.manifest.integration.app761OwnerDoRuntimeSourceExactlyCopied||
+    !candidate.manifest.integration.app765RecoveryGateSourceExactlyCopied)
+   fail('APP755_759_761_765_REVIEW_SOURCE_NOT_IDENTICAL');
  writeFileSync(join(dir,'review-manifest.json'),JSON.stringify(candidate.manifest,null,2)+'\n');
  return {outputDirectory:dir,manifest:candidate.manifest};
 }

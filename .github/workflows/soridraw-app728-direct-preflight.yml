@@ -41,6 +41,8 @@ on:
       - 'scripts/verify-754-production-firebase-principal.mjs'
       - 'scripts/app755-production-owner-receipt.mjs'
       - 'scripts/app755-production-follow-backend.mjs'
+      - 'scripts/app765-production-canonical-recovery.mjs'
+      - 'scripts/verify-765-production-canonical-recovery.mjs'
       - 'scripts/verify-755-production-follow-backend.mjs'
       - 'scripts/verify-762-owner-receipt-archive.mjs'
       - 'scripts/verify-764-owner-receipt-witness.mjs'
@@ -221,6 +223,8 @@ jobs:
           node --check scripts/app755-production-owner-receipt.mjs
           node --check scripts/app755-production-follow-backend.mjs
           node scripts/verify-755-production-follow-backend.mjs
+          node --check scripts/app765-production-canonical-recovery.mjs
+          node scripts/verify-765-production-canonical-recovery.mjs
           node scripts/verify-762-owner-receipt-archive.mjs
           node scripts/verify-764-owner-receipt-witness.mjs
           node scripts/verify-763-owner-receipt-capacity.mjs
@@ -355,6 +359,8 @@ jobs:
           node --check scripts/app755-production-owner-receipt.mjs
           node --check scripts/app755-production-follow-backend.mjs
           node scripts/verify-755-production-follow-backend.mjs
+          node --check scripts/app765-production-canonical-recovery.mjs
+          node scripts/verify-765-production-canonical-recovery.mjs
           node scripts/verify-762-owner-receipt-archive.mjs
           node scripts/verify-764-owner-receipt-witness.mjs
           node scripts/verify-763-owner-receipt-capacity.mjs

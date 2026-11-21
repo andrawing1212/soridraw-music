@@ -229,6 +229,11 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  candidate.manifest.integration={
    entrypoint:'production-follow-entry.mjs',
    entrypointSha256:entry.sha256,
+   app755OwnerReceiptSha256:sha256(readFileSync(ownerReceiptPath)),
+   app755BackendSha256:sha256(readFileSync(backendPath)),
+   app755SourceFilesCopiedExactly:
+     sha256(readFileSync(ownerReceiptPath))===sha256(ownerReceiptSource)&&
+     sha256(readFileSync(backendPath))===sha256(backendSource),
    originalMainUntouched:true,
    existingProductionBindingCount:12,
    runtimeEnabled:false,
@@ -244,7 +249,12 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
    productionOwnerDoReceiptSourceOnly:true,
    productionOwnerDoBindingAndMigrationAdded:false,
    productionFunction542SenderUnconnected:true,
+   // A source-only review bundle is NEVER an approved deployable worker.
+   activeWorkerRuntimeParityNotVerified:true,
+   productionDeployAuthorized:false,
  };
+ if(!candidate.manifest.integration.app755SourceFilesCopiedExactly)
+   fail('APP755_REVIEW_SOURCE_NOT_IDENTICAL');
  writeFileSync(join(dir,'review-manifest.json'),JSON.stringify(candidate.manifest,null,2)+'\n');
  return {outputDirectory:dir,manifest:candidate.manifest};
 }
@@ -275,6 +285,10 @@ async function main(){
    bindingsProtected:result.manifest.existingBindingsProtected,
    integrationSeamWiredOff:result.manifest.integratedFollowSignalSeam,
    productionFollowSignalCompiledOpen:false,
+   app755SourceFilesCopiedExactly:result.manifest.integration.app755SourceFilesCopiedExactly,
+   app755OwnerReceiptSha256:result.manifest.integration.app755OwnerReceiptSha256,
+   app755BackendSha256:result.manifest.integration.app755BackendSha256,
+   activeWorkerRuntimeParityNotVerified:true,
    featureWiredToProduction:false,deployAllowed:false,
    sharedDataReads:0,workerMutations:0,testEnvironmentQueried:false,
  },null,2));

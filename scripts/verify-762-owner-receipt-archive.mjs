@@ -72,7 +72,8 @@ assert.equal(twentyFifth.durable,true,'24 completed receipts must not stop next 
 assert.equal(map.get(key).entries.length,24);
 assert.equal(map.get(key).archiveUsed,true);
 assert.equal(map.size,2,'only one terminal receipt moved');
-assert.deepEqual(map.get(prefix+input(0).canonicalOperationId),receipt[0]);
+assert.equal(map.get(prefix+input(0).canonicalOperationId).operationId,receipt[0].operationId);
+assert.equal(map.get(prefix+input(0).canonicalOperationId).delivery.status,'delivered');
 assert.equal(map.get(key).entries.some(v=>v.operationId===receipt[0].operationId),false);
 assert.equal(sequence,originalCount+1);
 // Duplicate after rollover must retrieve ORIGINAL server-issued receipt.

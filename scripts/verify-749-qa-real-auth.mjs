@@ -18,9 +18,13 @@ const appClaims=()=>({iss:'https://firebaseappcheck.googleapis.com/1083981050742
   aud:['projects/1083981050742','projects/soridraw-app'],sub:appId,
   iat:sec-60,exp:sec+900});
 let keyFetches=0;
-const getKeys=async url=>{
+const getKeys=async (url,init)=>{
   assert(['https://www.googleapis.com/service_accounts/v1/metadata/jwk/securetoken@system.gserviceaccount.com',
     'https://firebaseappcheck.googleapis.com/v1/jwks'].includes(url));
+  // Cloudflare Workers throws TypeError on redirect:'error'. A 3xx must
+  // never be followed; the only acceptable key response is HTTP 200.
+  assert.equal(init.method,'GET');
+  assert.equal(init.redirect,'manual','Workers fetch must not use unsupported redirect:error');
   keyFetches++;
   return {ok:true,status:200,headers:new Headers({'Cache-Control':'public, max-age=120'}),
     json:async()=>({keys:[jwk]})};
@@ -116,6 +120,11 @@ await assertStage(verify,invalidHeader,'AUTH_TOKEN_FORMAT');
 const noKeys=createQaFirebaseVerifier749({send:async()=>new Response('unavailable',{status:503}),
  now:()=>now});
 await assertStage(noKeys,signed,'AUTH_KEYS_HTTP');
+const redirectKeys=createQaFirebaseVerifier749({send:async(url,init)=>{
+ assert.equal(init.redirect,'manual');
+ return Response.redirect('https://example.org/redirect-not-allowed',302);
+},now:()=>now});
+await assertStage(redirectKeys,signed,'AUTH_KEYS_HTTP');
 const network=createQaFirebaseVerifier749({send:async()=>{throw Error('network')},now:()=>now});
 await assertStage(network,signed,'AUTH_KEYS_NETWORK');
 const invalidJson=createQaFirebaseVerifier749({send:async()=>({

@@ -57,7 +57,9 @@ export function createQaFirebaseVerifier749({send=fetch,now=Date.now,subtle=glob
     const reason=kind=>stage==='AUTH_PUBLIC_KEYS'?'AUTH_KEYS_'+kind:stage;
     let res;
     try{
-      res=await send(endpoint,{method:'GET',redirect:'error',
+      // Workers does not implement redirect:'error'; manual keeps redirects
+      // non-following, and the strict HTTP 200 check below rejects them.
+      res=await send(endpoint,{method:'GET',redirect:'manual',
         headers:{Accept:'application/json'},signal:AbortSignal.timeout(12000)});
     }catch{fail(reason('NETWORK'))}
     if(!res?.ok||res.status!==200)fail(reason('HTTP'));

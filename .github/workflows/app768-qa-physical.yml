@@ -7,7 +7,7 @@ on:
       - 'scripts/verify-768-qa-physical-offline.mjs'
       - '.github/workflows/app768-qa-physical.yml'
   push:
-    branches: [main]
+    branches: [main, qa/app768-physical-two-resources]
     paths:
       - 'scripts/app768-qa-provision-and-physical.mjs'
       - '.github/workflows/app768-qa-physical.yml'
@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   offline:
-    if: github.event_name == 'pull_request' && github.repository == 'andrawing1212/soridraw-music'
+    if: (github.event_name == 'pull_request' || github.ref == 'refs/heads/qa/app768-physical-two-resources') && github.repository == 'andrawing1212/soridraw-music'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

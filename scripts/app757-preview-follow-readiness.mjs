@@ -52,7 +52,12 @@ export function assessApp757CanaryReadiness({worker,functions,rtDb,gitRulesNode,
   const item=functions?.[name];
   if(item?.status!=='ACTIVE')
     add('FUNCTION_NOT_ACTIVE_OR_UNVERIFIED_'+name);
-  return {name,status:item?.status||'UNKNOWN'};
+  // ACTIVE proves deployment, not actual canary invocation.
+  if(item?.canaryScopeConfigured!==true)
+    add('FUNCTION_CANARY_GATE_UNVERIFIED_'+name);
+  return {name,status:item?.status||'UNKNOWN',
+    canaryScopeConfigured:item?.canaryScopeConfigured===true,
+    generalPreviewDisabled:item?.generalPreviewDisabled===true};
  });
  if(rtDb?.status!=='READ'||rtDb?.singleInstance!==true)
   add('SHARED_RTDB_ACTIVE_RULES_NOT_READ');
@@ -109,7 +114,15 @@ async function probeFunction(name,access){
   if(d.missing)return {status:'NOT_DEPLOYED'};
   if(d.name!=='projects/'+PROJECT+'/locations/'+REGION+'/functions/'+name)
     return {status:'UNVERIFIED_NAME'};
-  return {status:d.state==='ACTIVE'?'ACTIVE':(d.state||'UNVERIFIED_STATE')};
+  const vars=d.serviceConfig?.environmentVariables||{};
+  const uid=String(vars.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||'');
+  const canaryScopeConfigured=d.state==='ACTIVE'&&
+    vars.SORIDRAW_OWNER_FOLLOW_READY_608==='1'&&
+    /^[A-Za-z0-9_-]{1,128}$/.test(uid)&&
+    vars.SORIDRAW_OWNER_FOLLOW_GENERAL_PREVIEW_653!=='1';
+  return {status:d.state==='ACTIVE'?'ACTIVE':(d.state||'UNVERIFIED_STATE'),
+    canaryScopeConfigured,generalPreviewDisabled:
+      vars.SORIDRAW_OWNER_FOLLOW_GENERAL_PREVIEW_653!=='1'};
  }catch{return {status:'UNREADABLE'}}
 }
 export function summarizeOwnerRules(rules){

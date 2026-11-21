@@ -89,7 +89,7 @@ const readPair=async a=>{preflights++;assert.equal(a.expectedRevision,7);
  return {canonicalVerified:true,actorUid:actor,ownerUid:owner,revision:7,
    following:noOp,authEpoch:'a'.repeat(32),cutoverToken:'server-cutover',
    priorR2Revision:13};};
-const proof=async a=>{proofs++;assert.equal(a.reservation.operationId,ticket.operationId);
+const proof=async a=>{proofs++;assert.equal(a.reservation.operationId,state.entries[0].operationId);
  return {committed:true,projectionSettled:true,changed:true,ownerUid:owner,
    operationId:ticket.operationId,canonicalOperationId:canonical,revision:8};};
 let transportStatus=503;

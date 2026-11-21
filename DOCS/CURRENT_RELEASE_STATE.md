@@ -1,3 +1,13 @@
+## CURRENT — APP768 독립 QA 실제 R2/D1 물리 검사: QA API 접근 HOLD (2026-11-22 KST)
+
+- **승인 범위:** 기존 격리 Cloudflare QA 계정 `b60fcd62c679c64db19f0b0e0c2f3429`만 활용해 APP767 R2 조건부 create-once와 실제 D1 `meta.rows_written` W1~W2 검증, 합성 기록만 생성/정리. 공유 PRODUCTION/PREVIEW/TEST 사용자 데이터·서버/배포 변경 금지.
+- **완료 근거:** PR #1326 병합(`81fe0a0c88b53a12db13d96ca6807720027ab5c9`), qa-only GET 스크립트와 mock 검사 [#44941643234](https://github.com/andrawing1212/soridraw-music/actions/runs/44941643234) 오프라인 PASS. QA 원본 APP583 Worker 활성 버전 `4ed70845-6a4b-4a80-9c51-ed95d0becc38` 100% GET 확인. 기존 read-only [APP735 #44941838295](https://github.com/andrawing1212/soridraw-music/actions/runs/44941838295)로 QA Worker의 액세스 토큰/4 바인딩 읽기 성공 재확인.
+- **실제 접근 차단:** [APP768 최초 QA inventory #44941700240](https://github.com/andrawing1212/soridraw-music/actions/runs/44941700240)는 `QA_TOKEN_READ_SCOPE_401`. 계정별 경로 분리 후 [#44941958269](https://github.com/andrawing1212/soridraw-music/actions/runs/44941958269) QA Worker GET PASS 다음 D1 list 접근 거부. [#44942018417](https://github.com/andrawing1212/soridraw-music/actions/runs/44942018417)에서는 Worker GET PASS, **기존 QA D1 및 QA R2 각각 메타데이터 목록 접근 실패**. 이 때문에 기존 QA D1/R2 리소스 존재 여부·생성/삭제 권한을 확인하지 못했으므로 **D1 SQL/R2 객체를 포함한 물리 시험 자체를 시작하지 않음**. PRODUCTION 계정 토큰으로 대체하지 않음.
+- **정확한 상태:** APP767의 6-way create-once/503/DO PITR은 이전 메모리 합성 QA PASS이나 APP768 실제 R2 조건부 write/Cloudflare D1 `meta.rows_written`은 **NOT_TESTED / AUTH_HOLD**. `W1~W2 PASS` 또는 실제 R2 중복 방지 PASS 주장 금지. 다른 QA 계정이나 공유 사용자 데이터 접근 0, 새로운 버킷·D1·테이블·객체 생성·삭제 0, Cloudflare Worker 배포·변경 0.
+- **안전한 해제 조건:** 기존 격리 QA 계정으로 한정된 유효 API token의 **D1 Read/Edit 및 Workers R2 Storage Read/Edit** 접근과 QA 전용 리소스 식별이 확인되어야만 기존 승인 범위의 합성 물리 검사를 수행. 새 QA 리소스 생성/과금 및 원본 정리 안전성이 불명확하면 먼저 HOLD. 작업은 GitHub `APP768` read-only workflow 재실행으로 확인 가능하나 불필요한 반복 호출 금지. APP765/767 기본 OFF, APP737/738 PRODUCTION HOLD, APP749/760 기존 실제 QA 결과 재검사하지 않음.
+
+---
+
 ## CURRENT — APP767 10만 명 팔로우 이력 W1~W2 저비용 설계 선택 + 격리 합성 QA (2026-11-22 KST)
 
 - **분석 결론:** APP766 실제 D1 103 테이블/관계별 `mutation_id`와 R2 관계별 최신 `follow-intents-v354`는 APP765의 전체 operation ID 기록 아님. D1에 독립 append-only receipt row를 추가하면 현재 원래 W2 경로에서 최소 W3 가능성·인덱스 쓰기/기존 Writer 호환 위험이 있어 선택하지 않음. Cloudflare R2 Standard **조건부 create-once PUT**로 canonical ID별 변하지 않는 접수 객체를 만들면 새 D1 쓰기는 0, 하지만 **D1 commit과 R2 PUT은 원자적이지 않음**. 전체 비교와 10만 owner × 5/50/500 events/년의 별도 R2 비용 모델은 `DOCS/APP767_FOLLOW_HISTORY_MIN_COST_DECISION.md`에 기록.

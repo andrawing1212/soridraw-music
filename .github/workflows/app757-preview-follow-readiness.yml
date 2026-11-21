@@ -1,0 +1,94 @@
+name: SORIDRAW APP757 PREVIEW owner-follow canary readiness (GET-only)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/app757-preview-follow-readiness.mjs'
+      - 'scripts/verify-757-preview-follow-readiness.mjs'
+      - '.github/workflows/app757-preview-follow-readiness.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/app757-preview-follow-readiness.mjs'
+      - '.github/workflows/app757-preview-follow-readiness.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-app757-preview-follow-readiness
+  cancel-in-progress: false
+
+jobs:
+  offline:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: No-live-resource scoped ownership and HOLD regressions
+        run: |
+          set -euo pipefail
+          node --check scripts/app757-preview-follow-readiness.mjs
+          node scripts/verify-757-preview-follow-readiness.mjs
+
+  live_readonly:
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' ||
+        (github.event_name == 'workflow_dispatch' &&
+         github.actor == github.repository_owner))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Lock current PREVIEW HEAD and source rules (no writes)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch origin main preview --no-tags
+          test "$(git rev-parse refs/remotes/origin/main)" = "$GITHUB_SHA" || {
+            echo 'APP757_CONTROLLER_HEAD_MOVED_HOLD'; exit 2;
+          }
+          PREVIEW_SHA="$(git rev-parse refs/remotes/origin/preview)"
+          test "$PREVIEW_SHA" = '4363820117100cb03bcbc44a01e127aeb5de3cf4' || {
+            echo 'APP757_PREVIEW_HEAD_DRIFT_HOLD'; exit 2;
+          }
+          git worktree add --detach "$RUNNER_TEMP/app757-preview-source" "$PREVIEW_SHA"
+          echo "APP757_PREVIEW_SHA=$PREVIEW_SHA" >> "$GITHUB_ENV"
+          echo "APP757_SOURCE_RULES=$RUNNER_TEMP/app757-preview-source/database.rules.json" >> "$GITHUB_ENV"
+      - name: Narrow offline evidence fence
+        run: node scripts/verify-757-preview-follow-readiness.mjs
+      - uses: google-github-actions/auth@v2
+        id: firebase_auth
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          token_format: access_token
+      - name: GET-only PREVIEW Worker / Firebase Functions / shared RTDB Rules metadata
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          FIREBASE_ACCESS_TOKEN: ${{ steps.firebase_auth.outputs.access_token }}
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$APP757_PREVIEW_SHA" || exit 2
+          node scripts/app757-preview-follow-readiness.mjs
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$APP757_PREVIEW_SHA" || exit 2
+          echo 'APP757_READ_ONLY_METADATA=PASS; DEPLOY=0; SHARED_DATA_READS_WRITES=0; ROLLOUT=HOLD'

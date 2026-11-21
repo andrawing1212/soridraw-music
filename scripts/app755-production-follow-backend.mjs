@@ -31,15 +31,18 @@ export function createApp755ProductionBackend({
    hold('VERIFIED_RUNTIME_COMPONENTS_MISSING');
  // Only an APP743-authenticated request object can retain its immutable
  // verified canonical preflight. Never accept the client's body as a proof.
- const preflight=new WeakMap();
+ const requestIdentity=new WeakMap(),preflight=new WeakMap();
  const prod=a=>{
-  if(a.env?.SORIDRAW_ENVIRONMENT!=='production'||!validInput(a))
+  if(a.env?.SORIDRAW_ENVIRONMENT!=='production'||
+     !UID.test(a.actorUid||'')||!UID.test(a.ownerUid||'')||
+     a.actorUid===a.ownerUid||typeof a.desired!=='boolean')
    hold('PRODUCTION_SCOPE');
  };
  const backend={
   verifyFirebasePrincipal,
   async findDurableReceipt(a){
    prod(a);
+   if(!validInput(a)||!a.request)hold('REQUEST_IDENTITY_MISSING');
    let v;
    try{v=await ownerStore.find(a)}catch{hold('DO_READ_UNAVAILABLE')}
    if(v?.status==='found'){
@@ -50,16 +53,24 @@ export function createApp755ProductionBackend({
       hold('DO_RECEIPT_SCOPE');
    }else if(v?.status==='absent'){
     if(v.authoritative!==true||!same(v,a))hold('DO_ABSENCE_NOT_AUTHENTICATED');
+    requestIdentity.set(a.request,a);
    }else hold('DO_RECEIPT_UNKNOWN');
    return v;
   },
   async readCanonicalPair(a){
    prod(a);
+   const bound=requestIdentity.get(a.request);
+   if(!bound||bound.actorUid!==a.actorUid||
+      bound.ownerUid!==a.ownerUid||bound.desired!==a.desired)
+     hold('DO_ABSENCE_AND_REQUEST_NOT_BOUND');
    let r;
-   try{r=await readCanonicalPair(a)}catch{hold('CANONICAL_PREFLIGHT_UNAVAILABLE')}
+   try{r=await readCanonicalPair({...a,
+       canonicalOperationId:bound.canonicalOperationId,
+       expectedRevision:bound.expectedRevision})}
+   catch{hold('CANONICAL_PREFLIGHT_UNAVAILABLE')}
    if(r?.canonicalVerified!==true||r.actorUid!==a.actorUid||
       r.ownerUid!==a.ownerUid||!integer(r.revision)||
-      r.revision!==a.expectedRevision||
+      r.revision!==bound.expectedRevision||
       typeof r.following!=='boolean'||
       !EPOCH.test(r.authEpoch||'')||
       typeof r.cutoverToken!=='string'||r.cutoverToken.length<1||
@@ -67,14 +78,17 @@ export function createApp755ProductionBackend({
      hold('CANONICAL_PREFLIGHT_UNVERIFIED');
    // A true no-op must never reserve a DO alarm, modify D1 or send RTDB.
    if(r.following===a.desired)hold('CANONICAL_NOOP');
-   preflight.set(a.request,r);
+   preflight.set(a.request,{...r,
+     canonicalOperationId:bound.canonicalOperationId});
    return r;
   },
   async reserveOwnerDurableAlarm(a){
    prod(a);
    const r=preflight.get(a.request);
    if(!r||r.actorUid!==a.actorUid||r.ownerUid!==a.ownerUid||
-      r.revision!==a.expectedRevision||r.following===a.desired)
+      r.revision!==a.expectedRevision||
+      r.canonicalOperationId!==a.canonicalOperationId||
+      r.following===a.desired)
      hold('PREFLIGHT_REQUEST_NOT_BOUND');
    const reservation={actorUid:a.actorUid,ownerUid:a.ownerUid,
      desired:a.desired,canonicalOperationId:a.canonicalOperationId,

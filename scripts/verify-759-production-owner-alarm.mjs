@@ -51,6 +51,7 @@ let outbound=0,mode=503,proofs=0;
 const backend=createApp755ProductionBackend({
  enabled:true,verifyFirebasePrincipal:async()=>({verified:true}),
  ownerStore:store,readCanonicalPair:async()=>({}),verifyExactCommit:async()=>({}),
+ verifyIndependentCanonicalHistory:async()=>{throw Error('ALARM_CANNOT_READ_HISTORY')},
  sendSignedOwnerRelay:async(event)=>{
   outbound++;assert.equal(event.ownerUid,owner);assert.equal(event.authEpoch,epoch);
   assert.equal(event.version,8+event.seq);

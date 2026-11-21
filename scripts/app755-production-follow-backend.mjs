@@ -2,6 +2,8 @@
 // owner-scoped DO store and preexisting canonical R2/D1/APP557 proof and
 // APP539 signed Function transport callbacks. NO endpoint/route/DO migration.
 // Its default is OFF; actual PROD DO and Functions542 remain unconnected.
+import {createApp765CanonicalRecoveryGate}
+ from './app765-production-canonical-recovery.mjs';
 export const APP755_PRODUCTION_BACKEND_COMPILED_OPEN=false;
 const UID=/^[A-Za-z0-9_-]{1,128}$/;
 const OP=/^[A-Za-z0-9_-]{16,128}$/;
@@ -19,7 +21,7 @@ const validInput=a=>a&&UID.test(a.actorUid||'')&&UID.test(a.ownerUid||'')&&
 export function createApp755ProductionBackend({
  enabled=APP755_PRODUCTION_BACKEND_COMPILED_OPEN,
  verifyFirebasePrincipal,ownerStore,readCanonicalPair,verifyExactCommit,
- sendSignedOwnerRelay,
+ verifyIndependentCanonicalHistory,sendSignedOwnerRelay,
 }={}){
  if(enabled!==true)return null;
  if(typeof verifyFirebasePrincipal!=='function'||
@@ -27,11 +29,17 @@ export function createApp755ProductionBackend({
     typeof ownerStore.reserve!=='function'||
     typeof readCanonicalPair!=='function'||
     typeof verifyExactCommit!=='function'||
+    typeof verifyIndependentCanonicalHistory!=='function'||
     typeof sendSignedOwnerRelay!=='function')
    hold('VERIFIED_RUNTIME_COMPONENTS_MISSING');
  // Only an APP743-authenticated request object can retain its immutable
  // verified canonical preflight. Never accept the client's body as a proof.
  const requestIdentity=new WeakMap(),preflight=new WeakMap();
+ // Full owner-DO PITR can erase receipts AND witness IDs simultaneously.
+ // This external gate is required only on a verified NEW reservation path;
+ // an existing durable receipt replay incurs zero extra canonical reads.
+ const recoveryGate=createApp765CanonicalRecoveryGate({enabled:true,
+   verifyIndependentCanonicalHistory});
  const prod=a=>{
   if(a.env?.SORIDRAW_ENVIRONMENT!=='production'||
      !UID.test(a.actorUid||'')||!UID.test(a.ownerUid||'')||
@@ -95,6 +103,18 @@ export function createApp755ProductionBackend({
      expectedRevision:a.expectedRevision,authEpoch:r.authEpoch,
      cutoverToken:r.cutoverToken,priorR2Revision:r.priorR2Revision,
      beforeFollowing:r.following};
+   // Must validate independent canonical operation history and current
+   // owner epoch BEFORE any Durable Object write or Functions delivery.
+   // Mere 'DO not found' and D1/R2 latest pair state cannot prove never-seen.
+   let recovery;
+   try{recovery=await recoveryGate({request:a.request,env:a.env,
+     reservation,preflight:r})}
+   catch{hold('INDEPENDENT_RECOVERY_HISTORY_UNVERIFIED')}
+   if(recovery?.status!=='FRESH_RESERVATION_REVIEWED'||
+      recovery.ownerUid!==a.ownerUid||recovery.actorUid!==a.actorUid||
+      recovery.canonicalOperationId!==a.canonicalOperationId||
+      recovery.expectedRevision!==a.expectedRevision)
+     hold('INDEPENDENT_RECOVERY_HISTORY_UNVERIFIED');
    let receipt;
    try{receipt=await ownerStore.reserve(reservation)}
    catch{hold('DO_RESERVATION_UNKNOWN')}

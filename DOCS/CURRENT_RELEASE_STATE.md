@@ -1,3 +1,12 @@
+## CURRENT — APP765 DO 전체 복구 후 독립 정본·계정 세대·요청 이력 검증 게이트 (OFF-ONLY, 2026-11-22 KST)
+
+- **변경 범위:** APP755 백엔드에서 owner DO에 이미 동일 예약이 있으면 기존 수신 경로 그대로 재사용하고, **DO에서 신규 예약으로 판단돼 실제 reserve()하기 직전에만** `APP765` 독립 정본 재확인 게이트를 추가한다. 기존 APP743의 요청별 WeakMap/Auth App Check·APP354 expectedRevision·D1/R2 preflight를 재사용한다. `app765-production-canonical-recovery.mjs`는 추가 네트워크를 자체 수행하지 않는 순수 검증+서버 callback 인터페이스이며 기본 `COMPILED_OPEN=false`.
+- **게이트 계약:** 별도 서버 callback이 D1 현재 pair (actor/owner/desired 이전 상태/revision), R2 settled owner revision+Auth epoch, Firebase 소유자 epoch, **DO rollback에 종속되지 않는 처음부터 이력을 보장하는 canonical operation ID 원장**, 그리고 owner별 단조 증가 외부 revision floor를 정확한 ID/세대/기대 버전으로 묶어 제공해야 신규 DO 예약 허용. 이미 처리된 ID, 원장 누락·부분 이력, DO보다 최신 외부 revision, 소유자 계정 세대/버전 불일치, 인증 에러·503는 DO 저장/정본 쓰기 전에 HOLD. 기존 확정 receipt 재시도는 원장 추가 조회 0.
+- **중요한 미완료:** 실제 PRODUCTION에 해당 **독립·내구성 operation history ledger/복구 floor/서버 확인 callback이 존재한다는 증거가 없으며 구현·배포하지 않았다**. 임시 D1 최신 pair 조회·클라이언트 assertion·DO 로컬 스냅샷만으로 원장이 있다고 가정 금지. APP765 합성 callback을 사용한 CI PASS는 실제 독립 데이터 무결성, PITR 복구, Functions/PC·모바일 PROD PASS가 아니다. 외부 history 조회 비용은 신규 예약에만 발생하지만 실제 쿼리 수/비용은 미래 callback 구현 전에 검증 필요.
+- **릴리스 보호:** APP755/759/761과 APP765 자체 기본 OFF, APP728/756 검토 후보도 원본 PROD Worker 그대로. 기존 APP749 실제 QA A↔B 및 APP760 503→복구·QA 원본 Worker 복구 PASS 영향 없으므로 반복 검사 없음. PREVIEW·TEST·PRODUCTION Worker/DO/Firebase/Rules/RTDB/D1/R2/Hosting 및 공유 사용자 데이터 읽기·변경/배포 0. APP737/738 정식 배포 HOLD.
+
+---
+
 ## CURRENT — APP764 보존 키 단독 손실 시 과거 예약 중복 발급 방지 (SOURCE ONLY, 2026-11-22 KST)
 
 - **실제 결함 경로:** APP762에서 `archiveUsed=true`인 owner의 개별 `app762-owner-follow-final-*` 키가 손실되면 `find`가 `absent,authoritative:true`를 반환해 동일 canonical operation ID를 새로 발급할 수 있었다. APP764는 owner DO의 기존 `app755-owner-follow-pending-v1` 안에 **보존된 canonical ID의 SHA-256 앞 128비트 압축 확인 인덱스**와 그 SHA-256 검증값을, 원래 완료 기록/새 예약/알람과 **같은 storage.transaction**에서 저장한다. 삭제·TTL·스캔·백그라운드 쓰기·새 namespace/DB/바인딩 추가 없음. 단순 해시 충돌은 재발급이 아닌 안전 HOLD.

@@ -101,8 +101,32 @@ const send=async (event,opts)=>{
  assert.equal(event.version,8);
  return {ok:transportStatus===200,status:transportStatus,applied:transportStatus===200};
 };
+let independentChecks=0;
+const trustedHistory=async({reservation:r})=>{
+ independentChecks++;
+ return {
+  source:'TRUSTED_SERVER_INDEPENDENT_CANONICAL_765',
+  d1:{source:'EXACT_CANONICAL_D1',verified:true,actorUid:r.actorUid,
+   ownerUid:r.ownerUid,revision:r.expectedRevision,
+   following:r.beforeFollowing},
+  r2:{source:'EXACT_SETTLED_OWNER_R2',verified:true,ownerUid:r.ownerUid,
+   revision:r.priorR2Revision,authEpoch:r.authEpoch},
+  auth:{source:'FIREBASE_VERIFIED_OWNER_AUTH_EPOCH',verified:true,
+   firebaseProjectId:'soridraw-app-866a5',ownerUid:r.ownerUid,
+   authEpoch:r.authEpoch},
+  history:{source:'INDEPENDENT_MONOTONIC_OPERATION_LEDGER',verified:true,
+   independentOfOwnerDo:true,completeFromOrigin:true,
+   operationStatus:'never-seen',actorUid:r.actorUid,ownerUid:r.ownerUid,
+   canonicalOperationId:r.canonicalOperationId,authEpoch:r.authEpoch,
+   completeThroughRevision:r.expectedRevision},
+  checkpoint:{source:'EXTERNAL_OWNER_REVISION_FLOOR',verified:true,
+   independentOfOwnerDo:true,ownerUid:r.ownerUid,authEpoch:r.authEpoch,
+   minD1Revision:r.expectedRevision,minR2Revision:r.priorR2Revision},
+ };
+};
 const backend=createApp755ProductionBackend({enabled:true,verifyFirebasePrincipal:principal,
  ownerStore:store,readCanonicalPair:readPair,verifyExactCommit:proof,
+ verifyIndependentCanonicalHistory:trustedHistory,
  sendSignedOwnerRelay:send});
 const base={scheduled(){return 'unchanged'},alarm(){return 'unchanged'},
  async fetch(request){
@@ -128,6 +152,7 @@ const request=()=>new Request('https://soridraw.com/v1/profiles/'+owner+'/follow
 const response=await worker.fetch(request(),env,{});
 assert.equal(response.status,200);
 assert.equal(preflights,0,'existing DO receipt replay never re-reads canonical pair');
+assert.equal(independentChecks,0,'same DO ID replay does not recheck external history');
 assert.equal(canonicalCalls,1);
 assert.equal(proofs,1);
 assert.equal(sends,0,'HTTP request must NOT send signed Functions before alarm');
@@ -139,6 +164,7 @@ const idsBeforeNew=generated;
 const next=await worker.fetch(request(),env,{});
 assert.equal(next.status,200);
 assert.equal(preflights,1);
+assert.equal(independentChecks,1,'new DO reservation requires independent canonical history');
 assert.equal(canonicalCalls,1);
 assert.equal(state.entries.length,1);
 assert.equal(generated,idsBeforeNew+1,'new operation gets exactly one new server receipt');
@@ -168,6 +194,7 @@ duplicateAck=false;
 state=null;alarm=null;noOp=true;const priorWrites=writes;
 assert.equal((await worker.fetch(request(),env,{})).status,503);
 assert.equal(writes,priorWrites,'no-op cannot reserve DO alarm');
+assert.equal(independentChecks,1,'no-op does not fetch operation ledger');
 noOp=false;
 console.log('APP755_DO_STORAGE_TRANSACTION_ALARM_IDEMPOTENCY_AND_FAILURE=PASS');
 console.log('APP755_APP743_REAL_BRIDGE_ORDERED_CANONICAL_RECEIPT=PASS');

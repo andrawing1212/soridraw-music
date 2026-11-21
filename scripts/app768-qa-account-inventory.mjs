@@ -9,7 +9,8 @@ const uuid=/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 const tokenOK=t=>typeof t==='string'&&t.length>=20;
 export async function inventoryApp768Qa({
  readToken=process.env.CLOUDFLARE_QA_API_TOKEN,
- deployToken=process.env.CLOUDFLARE_QA_DEPLOY_TOKEN,send=fetch,
+ deployToken=process.env.CLOUDFLARE_QA_DEPLOY_TOKEN,
+ dataToken=process.env.CLOUDFLARE_QA_DATA_TOKEN,send=fetch,
 }={}){
  if(QA===PROD||!tokenOK(readToken)&&!tokenOK(deployToken))
   hold('QA_ID_OR_TOKEN_NOT_AVAILABLE');
@@ -20,8 +21,10 @@ export async function inventoryApp768Qa({
  };
  async function get(path){
   if(!Object.values(paths).includes(path))hold('CROSS_ACCOUNT_URL');
+  if(path!==paths.worker&&!tokenOK(dataToken))hold('QA_DATA_TOKEN_REQUIRED');
   let code=0;
-  for(const token of [readToken,deployToken].filter(tokenOK)){
+  const tokens=path===paths.worker?[readToken,deployToken]:[dataToken];
+  for(const token of tokens.filter(tokenOK)){
    const response=await send(path,{
     method:'GET',headers:{Authorization:'Bearer '+token,
      Accept:'application/json','Cache-Control':'no-store'},
@@ -46,10 +49,12 @@ export async function inventoryApp768Qa({
  let d1=null,r2=null,missing=false;
  try{d1=await get(paths.d1);console.log('APP768_QA_D1_METADATA_GET=PASS')}
  catch(e){missing=true;console.log('APP768_QA_D1_METADATA_GET=HOLD_'+
-   (String(e?.message||'').match(/SCOPE_(\\d+)/)?.[1]||'UNAVAILABLE'))}
+   (String(e?.message||'').includes('QA_DATA_TOKEN_REQUIRED')?'QA_DATA_TOKEN_REQUIRED':
+    String(e?.message||'').match(/SCOPE_(\d+)/)?.[1]||'UNAVAILABLE'))}
  try{r2=await get(paths.r2);console.log('APP768_QA_R2_METADATA_GET=PASS')}
  catch(e){missing=true;console.log('APP768_QA_R2_METADATA_GET=HOLD_'+
-   (String(e?.message||'').match(/SCOPE_(\\d+)/)?.[1]||'UNAVAILABLE'))}
+   (String(e?.message||'').includes('QA_DATA_TOKEN_REQUIRED')?'QA_DATA_TOKEN_REQUIRED':
+    String(e?.message||'').match(/SCOPE_(\d+)/)?.[1]||'UNAVAILABLE'))}
  if(missing)hold('RESOURCE_METADATA_ACCESS_INCOMPLETE');
  const dbs=Array.isArray(d1)?d1:Array.isArray(d1?.databases)?d1.databases:null;
  const buckets=Array.isArray(r2?.buckets)?r2.buckets:Array.isArray(r2)?r2:null;

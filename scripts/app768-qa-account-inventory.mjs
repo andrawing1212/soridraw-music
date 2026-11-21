@@ -42,8 +42,11 @@ export async function inventoryApp768Qa({
     versions[0].version_id!=='4ed70845-6a4b-4a80-9c51-ed95d0becc38'||
     Number(versions[0].percentage)<99.99)
   hold('QA_APP583_ORIGINAL_NOT_100_PERCENT');
+ console.log('APP768_QA_WORKER_ORIGINAL_GET=PASS');
  const d1=await get(paths.d1);
+ console.log('APP768_QA_D1_METADATA_GET=PASS');
  const r2=await get(paths.r2);
+ console.log('APP768_QA_R2_METADATA_GET=PASS');
  const dbs=Array.isArray(d1)?d1:Array.isArray(d1?.databases)?d1.databases:null;
  const buckets=Array.isArray(r2?.buckets)?r2.buckets:Array.isArray(r2)?r2:null;
  if(!dbs||!buckets)hold('RESOURCE_LIST_SHAPE');

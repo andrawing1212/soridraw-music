@@ -1,3 +1,11 @@
+## 0APP749J. APP749 CSP 안전 비교 수정 QA584 Hosting 실제 배포 PASS / A↔B 실기기 로그인·실시간 수신 미검증 (2026-11-21 KST)
+
+- 디렉터 QA 전용 Cloud Shell에서 고정 commit `89857fe5bd1dc19aba467cc33e0ca8e272ef7585`의 `scripts/app749-qa-hosting-scoped-csp.mjs --check && --deploy` 실행 사진 확인: `APP749_QA_SITE_EXISTING_RECEIVER=PASS`, `APP749_QA_ORIGINAL_RELEASE_AND_FILES_PINNED=PASS`, `APP749_QA_SCOPED_CSP_CONFIG_PINNED=PASS`, `APP749_QA_APPEND_RELEASE_CREATED=PASS`, `APP749_QA_AUTH_CONFIG_AND_SCOPED_CSP_HTTP=PASS`, `APP749_QA_NEW_PAGE_AND_OLD_RECEIVER_HTTP=PASS`, `APP749_QA_HOSTING_DEPLOY=PASS`, **종료코드 0**.
+- 이는 **QA Hosting 실제 파일 제공과 원본 페이지 보호가 서버 HTTP 기준 PASS**라는 증거. GitHub 코드 QA PASS #44840918896 별도 재검사 불필요. 배포 이력과 실제 PC·모바일 기능 합격은 구분.
+- 여전히 `APP749_QA_FIREBASE_AUTH_APPCHECK_AND_PC_MOBILE=NOT_TESTED` 출력. 사용자가 PC/모바일에서 `https://soridraw-qa-owner-584.web.app/qa749.html` 새로고침, 맨 위 `QA Firebase 자동 연결 완료 · A/B 로그인 가능` 여부와 버튼 활성화를 확인해야 함. PASS시 기존 QA 테스트 계정 A를 PC·모바일에, B를 PC에서 로그인하여 RTDB 동일 기준 상태 수신을 확인. **B 팔로우·취소 버튼은 QA Worker 임시 활성화와 A↔B 인증 기준 PASS 전까지 누르지 않음**.
+- QA Worker 원본 APP583 유지, APP749 12분 QA 전용 실검증 창 활성화/복구, A↔B 팔로우/취소와 A PC↔모바일 0→1→0 확인은 **아직 미검증**. TEST·PRODUCTION·PREVIEW/공유 사용자 데이터 변경 없음.
+- GitHub `main` c6b7efe25beebdaef2e5f90293ca15615c4545e3; `preview` 4363820117100cb03bcbc44a01e127aeb5de3cf4.
+
 ## 0APP749I. CSP 서버 직렬화 불일치 검증 수정 코드 PASS / QA 실제 재배포 대기 (2026-11-21 KST)
 
 - QA584 실제 Cloud Shell APP749 서버 공개 후 결과: `qaPageCspExact:false`만 실패하고 `htmlUnchanged`, `scriptExactlyUpdated`, `stylesheetUnchanged`, `publicConfigUnchanged`, `qaPageCspHasSelf`, `qaPageCspHasAppCheck`, `receiverCspUnchanged`, `receiverHtmlUnchanged`, `configValid`, `configWebAppExact`는 모두 true. `APP749_QA_OLD_HOSTING_ROLLBACK_COMMAND=PASS` + 종료코드 2. 실제 QA 로그인 PASS 아님.

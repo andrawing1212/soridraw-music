@@ -43,6 +43,9 @@ on:
       - 'scripts/app755-production-follow-backend.mjs'
       - 'scripts/app765-production-canonical-recovery.mjs'
       - 'scripts/verify-765-production-canonical-recovery.mjs'
+      - 'scripts/app767-r2-admission-candidate.mjs'
+      - 'scripts/verify-767-r2-admission-isolated-qa.mjs'
+      - 'DOCS/APP767_FOLLOW_HISTORY_MIN_COST_DECISION.md'
       - 'scripts/verify-755-production-follow-backend.mjs'
       - 'scripts/verify-762-owner-receipt-archive.mjs'
       - 'scripts/verify-764-owner-receipt-witness.mjs'
@@ -225,6 +228,8 @@ jobs:
           node scripts/verify-755-production-follow-backend.mjs
           node --check scripts/app765-production-canonical-recovery.mjs
           node scripts/verify-765-production-canonical-recovery.mjs
+          node --check scripts/app767-r2-admission-candidate.mjs
+          node scripts/verify-767-r2-admission-isolated-qa.mjs
           node scripts/verify-762-owner-receipt-archive.mjs
           node scripts/verify-764-owner-receipt-witness.mjs
           node scripts/verify-763-owner-receipt-capacity.mjs
@@ -361,6 +366,8 @@ jobs:
           node scripts/verify-755-production-follow-backend.mjs
           node --check scripts/app765-production-canonical-recovery.mjs
           node scripts/verify-765-production-canonical-recovery.mjs
+          node --check scripts/app767-r2-admission-candidate.mjs
+          node scripts/verify-767-r2-admission-isolated-qa.mjs
           node scripts/verify-762-owner-receipt-archive.mjs
           node scripts/verify-764-owner-receipt-witness.mjs
           node scripts/verify-763-owner-receipt-capacity.mjs

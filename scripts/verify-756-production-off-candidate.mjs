@@ -53,6 +53,8 @@ try{
  assert.equal(built.manifest.integration.app759OwnerAlarmSourceExactlyCopied,true);
  assert.equal(built.manifest.integration.app761OwnerDoRuntimeSourceExactlyCopied,true);
  assert.equal(built.manifest.integration.app765RecoveryGateSourceExactlyCopied,true);
+ assert.equal(built.manifest.integration.app767R2AdmissionQaOnlyExactlyCopied,true);
+ assert.equal(built.manifest.integration.app767AdmissionIsolatedQaSourceOnly,true);
  assert.equal(built.manifest.integration.productionOwnerIndependentRecoveryGateSourceOnly,true);
  assert.equal(built.manifest.integration.productionOwnerRuntimeCompositionSourceOnly,true);
  assert.equal(built.manifest.integration.productionOwnerAlarmReplaySourceOnly,true);
@@ -85,11 +87,15 @@ try{
  const alarmSource=readFileSync(join(built.outputDirectory,'integration','app759-production-owner-alarm.mjs'),'utf8');
  const ownerDoRuntimeSource=readFileSync(join(built.outputDirectory,'integration','app761-production-owner-do-runtime.mjs'),'utf8');
  const recoveryGateSource=readFileSync(join(built.outputDirectory,'integration','app765-production-canonical-recovery.mjs'),'utf8');
+ const r2AdmissionSource=readFileSync(join(built.outputDirectory,'integration','app767-r2-admission-candidate.mjs'),'utf8');
  assert(backendSource.includes('APP755_PRODUCTION_BACKEND_COMPILED_OPEN=false'));
  assert(receiptSource.includes('APP755_PRODUCTION_OWNER_RECEIPT_COMPILED_OPEN=false'));
  assert(alarmSource.includes('APP759_PRODUCTION_OWNER_ALARM_COMPILED_OPEN=false'));
  assert(ownerDoRuntimeSource.includes('APP761_PRODUCTION_OWNER_DO_RUNTIME_COMPILED_OPEN=false'));
  assert(recoveryGateSource.includes('APP765_PRODUCTION_RECOVERY_GATE_COMPILED_OPEN=false'));
+ assert(r2AdmissionSource.includes('APP767_R2_ADMISSION_COMPILED_OPEN=false'));
+ assert(r2AdmissionSource.includes("scope!=='APP767_ISOLATED_SYNTHETIC_QA'"));
+ assert.equal(built.manifest.integration.app767R2AdmissionQaOnlySha256,sha(r2AdmissionSource));
  assert.equal(built.manifest.integration.app765RecoveryGateSha256,sha(recoveryGateSource));
  assert.equal(built.manifest.integration.app761OwnerDoRuntimeSha256,sha(ownerDoRuntimeSource));
  assert.equal(built.manifest.integration.app759AlarmSha256,sha(alarmSource));

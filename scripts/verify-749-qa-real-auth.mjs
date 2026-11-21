@@ -94,12 +94,39 @@ assert.equal(calls.length,1,'no DO call on wrong owner/actor');
 const badAuth=await app.fetch(withQaOrigin(request('PUT','follow',cfg.actorUid,
  appClaims(),{...authClaims(cfg.actorUid),exp:sec-1})),env);
 assert.equal(badAuth.status,403);
-assert.equal((await badAuth.json()).qa749AuthStage,'AUTH_VALIDATION');
+assert.equal((await badAuth.json()).qa749AuthStage,'AUTH_CLAIMS');
 const badApp=await app.fetch(withQaOrigin(request('PUT','follow',cfg.actorUid,
  {...appClaims(),sub:'1:999999999:web:foreign'})),env);
 assert.equal(badApp.status,403);
 assert.equal((await badApp.json()).qa749AuthStage,'APPCHECK_VALIDATION');
 assert.equal(calls.length,1,'no DO mutation for malformed credentials');
+// Specific QA-only failure stage remains safe: no token/header/UID/key ID revealed.
+const assertStage=async(verifier,req,expected)=>{
+  await assert.rejects(()=>verifier(req,checkOpts('PUT','follow')),
+    e=>e.message==='APP749_QA_SIGNED_CREDENTIALS_REQUIRED'&&
+       e.qaStage===expected&&
+       !JSON.stringify(e).includes(cfg.actorUid));
+};
+const invalidHeader=new Request(signed,{headers:{
+  Authorization:'Bearer '+sign(authClaims(cfg.actorUid),{
+   alg:'HS256',kid:jwk.kid,typ:'JWT'}),
+  'X-Firebase-AppCheck':sign(appClaims())
+}});
+await assertStage(verify,invalidHeader,'AUTH_TOKEN_FORMAT');
+const noKeys=createQaFirebaseVerifier749({send:async()=>new Response('unavailable',{status:503}),
+ now:()=>now});
+await assertStage(noKeys,signed,'AUTH_PUBLIC_KEYS');
+const missingKid=createQaFirebaseVerifier749({send:async()=>({
+ ok:true,status:200,headers:new Headers(),json:async()=>({keys:[{...jwk,kid:'not-current'}]})
+}),now:()=>now});
+await assertStage(missingKid,signed,'AUTH_KID_MISMATCH');
+const badSignatureParts=sign(authClaims(cfg.actorUid)).split('.');
+badSignatureParts[2]=(badSignatureParts[2][0]==='A'?'B':'A')+
+ badSignatureParts[2].slice(1);
+const sigHeaders=new Headers(signed.headers);
+sigHeaders.set('Authorization','Bearer '+badSignatureParts.join('.'));
+await assertStage(verify,new Request(signed,{headers:sigHeaders}),'AUTH_SIGNATURE');
+assert.equal(calls.length,1,'all reject stages require zero DO mutations');
 const noOrigin=await app.fetch(new Request('https://qa.example/qa730/verified/follow',{
  method:'PUT'}),env);
 assert.equal(noOrigin.status,403);

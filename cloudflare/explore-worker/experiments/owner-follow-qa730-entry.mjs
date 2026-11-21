@@ -87,6 +87,8 @@ export function createQaAuthEntry749({verify=qaVerify,legacy=originalWorker}={})
           const stage=['REQUEST_INVALID','AUTH_VALIDATION','APPCHECK_VALIDATION',
             'PRINCIPAL_MISMATCH'].includes(error?.qaStage)
             ?error.qaStage:'CREDENTIALS_REJECTED';
+          // Suppress diagnostics on requests without the exact QA browser origin.
+          if(origin!==allowedOrigin)return deny(403);
           return cors(Response.json({ok:false,syntheticOnly:true,
             qa749AuthStage:stage},{status:403,
               headers:{'Cache-Control':'no-store'}}));

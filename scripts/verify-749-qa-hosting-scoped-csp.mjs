@@ -19,7 +19,9 @@ assert(!js.includes("for(const url of ['/__/firebase/init.json'"));
 const policy="default-src 'none'; script-src 'self' https://www.gstatic.com https://*.asia-southeast1.firebasedatabase.app; style-src 'unsafe-inline'; connect-src https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://soridraw-qa-sg.asia-southeast1.firebasedatabase.app wss://soridraw-qa-sg.asia-southeast1.firebasedatabase.app https://*.asia-southeast1.firebasedatabase.app wss://*.asia-southeast1.firebasedatabase.app";
 const scoped=qa749ScopedCsp(policy);
 assert(scoped.includes("default-src 'none'"));
-assert(scoped.includes("style-src 'unsafe-inline'"));
+assert(scoped.includes("style-src 'unsafe-inline' 'self'"));
+assert(scoped.includes('https://content-firebaseappcheck.googleapis.com'));
+assert(!scoped.includes('https://*.googleapis.com'));
 assert(scoped.includes("connect-src https://identitytoolkit.googleapis.com"));
 assert(scoped.includes(" 'self' https://firebaseappcheck.googleapis.com"));
 assert(scoped.includes('https://soridraw-owner-qa-583.soridraw-qa.workers.dev'));
@@ -46,22 +48,36 @@ const c={apiKey:'AIza'+'b'.repeat(35),appId:'1:1083981050742:web:aabbcc',
  messagingSenderId:'1083981050742',
  databaseURL:'https://soridraw-qa-sg.asia-southeast1.firebasedatabase.app'};
 const sha=s=>createHash('sha256').update(gzipSync(Buffer.from(s),{level:9,mtime:0})).digest('hex');
-const oldJs="// Existing QA client\nfor(const url of ['/__/firebase/init.json','/qa749-config.json']){}\nconst receiver='soridraw-app749-receiver';\n";
+const oldJs=js;
 const oldConfig=JSON.stringify(c)+'\n';
 const oldRoot='<h1>SORIDRAW QA onValue</h1>';
 const files={'/index.html':sha(oldRoot),'/qa749.html':sha(html),
  '/qa749.js':sha(oldJs),'/qa749.css':sha(css),'/qa749-config.json':sha(oldConfig)};
-const desiredFiles={...files,'/qa749.js':sha(js)};
 const site='https://firebasehosting.googleapis.com/v1beta1/sites/soridraw-qa-owner-584';
 const host='https://soridraw-qa-owner-584.web.app';
 const old='sites/soridraw-qa-owner-584/versions/original';
 const next='sites/soridraw-qa-owner-584/versions/scoped-csp';
-const serving={headers:[{glob:'/**',headers:{'Content-Security-Policy':policy}}],
+// Previous QA policy differs only by the exact two browser-blocked sources.
+const previousScoped=scoped.split(';').map(s=>{
+ if(s.trim().startsWith('style-src '))return s.replace(" 'self'",'');
+ if(s.trim().startsWith('connect-src '))
+  return s.replace(' https://content-firebaseappcheck.googleapis.com','');
+ return s;
+}).join(';');
+assert(!previousScoped.includes('https://content-firebaseappcheck.googleapis.com'));
+assert(previousScoped.includes("style-src 'unsafe-inline'"));
+// The live-hosting repair appends new sources at the end of each directive.
+// Full source-set equivalence is secure, but mock the exact patched order.
+const scopedFromLive=qa749ScopedCsp(previousScoped);
+assert.equal(qaCspSafeEquivalent(scoped,scopedFromLive).same,true);
+const serving={headers:[
+ {glob:'/**',headers:{'Content-Security-Policy':policy}},
+ {glob:'/qa749.html',headers:{'Content-Security-Policy':previousScoped}}],
  rewrites:[{glob:'/only-old',path:'/index.html'}],cleanUrls:false};
-const servingScoped={...serving,headers:[...serving.headers,
- {glob:'/qa749.html',headers:{'Content-Security-Policy':scoped}}]};
-function fake({oldDrift=false,cspBad=false,jsBad=false,concurrent=false,cspReordered=false,cspExtraOrigin=false,cspSecondPolicy=false}={}){
- let current=old,configured=false,populated=false,final=false;
+const servingScoped={...serving,headers:serving.headers.map(h=>h.glob==='/qa749.html'?
+ {...h,headers:{'Content-Security-Policy':scopedFromLive}}:h)};
+function fake({oldDrift=false,cspBad=false,jsBad=false,concurrent=false,cspReordered=false,cspExtraOrigin=false,cspSecondPolicy=false,originalRuleMissing=false,originalRuleDrift=false}={}){
+ let current=old,configured=false,final=false;
  const calls=[];
  const json=(body,status=200)=>new Response(JSON.stringify(body),{status});
  const page=(body,csp)=>new Response(body,{status:200,headers:{
@@ -70,30 +86,32 @@ function fake({oldDrift=false,cspBad=false,jsBad=false,concurrent=false,cspReord
   const path=url.split('?')[0];calls.push({url,method:opts.method,body:opts.body});
   if(path===host+'/')return page(oldRoot,policy);
   if(path===host+'/qa749.html'){
-   let effective=current===old||cspBad?policy:scoped;
+   let effective=current===old||cspBad?previousScoped:scopedFromLive;
    if(current===next){
      if(cspReordered)effective=equivalent;
-     if(cspExtraOrigin)effective=scoped.replace('connect-src ','connect-src https://evil.example ');
-     if(cspSecondPolicy)effective=scoped+', '+policy;
+     if(cspExtraOrigin)effective=scopedFromLive.replace('connect-src ','connect-src https://evil.example ');
+     if(cspSecondPolicy)effective=scopedFromLive+', '+policy;
    }
    return page(oldDrift?'changed':html,effective);
   }
-  if(path===host+'/qa749.js')return page(current===old||jsBad?oldJs:js,policy);
+  if(path===host+'/qa749.js')return page(current===next&&jsBad?'STALE_JS':js,policy);
   if(path===host+'/qa749.css')return page(css,policy);
   if(path===host+'/qa749-config.json')return page(oldConfig,policy);
   if(path===site+'/releases'&&opts.method==='GET')
    return json({releases:[{name:'sites/soridraw-qa-owner-584/releases/old',
     version:{name:concurrent&&configured?'sites/soridraw-qa-owner-584/versions/external':current}}]});
   if(path===site+'/versions/original'&&opts.method==='GET')
-   return json({name:old,status:'FINALIZED',config:serving});
+   return json({name:old,status:'FINALIZED',config:{
+    ...serving,headers:originalRuleMissing?serving.headers.slice(0,1):
+     originalRuleDrift?serving.headers.map(h=>h.glob==='/qa749.html'?
+      {...h,headers:{'Content-Security-Policy':policy}}:h):serving.headers}});
   if(path===site+'/versions/scoped-csp'&&opts.method==='GET')
    return json({name:next,status:'CREATED',
     config:configured?servingScoped:{}});
   if(path===site+'/versions/original/files'&&opts.method==='GET')
    return json({files:Object.entries(files).map(([path,hash])=>({path,hash}))});
   if(path===site+'/versions/scoped-csp/files'&&opts.method==='GET')
-   return json({files:Object.entries(populated?desiredFiles:files)
-    .map(([path,hash])=>({path,hash}))});
+   return json({files:Object.entries(files).map(([path,hash])=>({path,hash}))});
   if(path===site+'/versions:clone'&&opts.method==='POST'){
    assert.deepEqual(JSON.parse(opts.body),{sourceVersion:old,finalize:false});
    return json({name:'projects/soridraw-app/operations/scoped749',done:false});
@@ -110,17 +128,8 @@ function fake({oldDrift=false,cspBad=false,jsBad=false,concurrent=false,cspReord
    }
    assert.equal(mask,'status');
    assert.deepEqual(JSON.parse(opts.body),{status:'FINALIZED'});
-   assert(configured&&populated);
+   assert(configured);
    final=true;return json({});
-  }
-  if(path===site+'/versions/scoped-csp:populateFiles'&&opts.method==='POST'){
-   assert.deepEqual(JSON.parse(opts.body),{files:{'/qa749.js':sha(js)}});
-   populated=true;return json({uploadRequiredHashes:[sha(js)],
-    uploadUrl:'https://upload-firebasehosting.googleapis.com/upload/sites/soridraw-qa-owner-584/versions/scoped-csp/files'});
-  }
-  if(path.endsWith('/files/'+sha(js))&&opts.method==='POST'){
-   assert.equal(createHash('sha256').update(opts.body).digest('hex'),sha(js));
-   return json({});
   }
   if(path===site+'/releases'&&opts.method==='POST'){
    assert(final&&opts.body===undefined,'only finalized no-body Hosting release');
@@ -142,7 +151,8 @@ const yes=fake();
 const result=await runApp749QaScopedCsp({...args,mode:'--deploy',send:yes.send});
 assert.equal(result.status,'PASS');
 assert.equal(yes.getCurrent(),next);
-assert.equal(yes.calls.filter(x=>x.method==='POST'&&x.url.startsWith('https://upload-firebasehosting')).length,1);
+assert.equal(yes.calls.filter(x=>x.method==='POST'&&x.url.startsWith('https://upload-firebasehosting')).length,0);
+assert.equal(yes.calls.filter(x=>x.url.includes(':populateFiles')).length,0);
 assert.equal(yes.calls.filter(x=>x.method==='PATCH'&&x.url.includes('updateMask=config')).length,1);
 const shuffled=fake({cspReordered:true});
 const shuffledNotices=[];
@@ -152,6 +162,12 @@ assert.equal((await runApp749QaScopedCsp({...args,mode:'--deploy',send:shuffled.
 assert.equal(shuffled.getCurrent(),next);
 assert(!shuffledNotices.some(x=>x.startsWith('APP749_QA_POST_RELEASE_DIAGNOSTIC=')));
 
+for(const opts of [{originalRuleMissing:true},{originalRuleDrift:true}]){
+ const unsafe=fake(opts);
+ await assert.rejects(()=>runApp749QaScopedCsp({...args,mode:'--deploy',send:unsafe.send}),
+   /QA749_EXISTING_SCOPED_CSP_DRIFT/);
+ assert(unsafe.calls.every(x=>x.method==='GET'),'Unsafe original CSP must stop before write');
+}
 const drift=fake({oldDrift:true});
 await assert.rejects(()=>runApp749QaScopedCsp({...args,mode:'--deploy',send:drift.send}),
  /ORIGINAL_QA_PAGE_UNEXPECTED/);
@@ -171,7 +187,7 @@ assert(report,'QA smoke must disclose safe per-check result before rollback');
 const failed=JSON.parse(report.split('=')[1]);
 assert.equal(failed.qaPageCspExact,false);
 assert.equal(failed.qaPageCspSafeEquivalent,false);
-assert.equal(failed.qaPageCspComparison,'DIRECTIVE_COUNT_MISMATCH');
+assert.equal(failed.qaPageCspComparison,'SOURCE_MISMATCH_style-src');
 assert.equal(failed.receiverCspUnchanged,true);
 assert.equal(failed.stylesheetUnchanged,true);
 assert.equal(failed.publicConfigUnchanged,true);

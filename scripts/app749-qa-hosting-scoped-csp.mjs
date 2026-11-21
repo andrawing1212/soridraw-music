@@ -1,6 +1,6 @@
-// APP749 QA-only browser fix. Clone exact QA584 release and only replace
-// broken QA749 HTML/JS, adding exact QA Web App public config. Preserve all
-// original receiver files, external CSS, security rules and serving config.
+// APP749 QA-only CSP correction. Clone exact live QA584 release and change
+// ONLY the existing /qa749.html CSP override. Preserve all files, scripts,
+// receiver, other headers, rewrites and QA Web App configuration.
 // No Firebase Auth/App Check/RTDB/Worker/IAM/rules changes. No secret output.
 // Cloud Shell: node app749-qa-hosting-scoped-csp.mjs --check|--deploy
 import {readFileSync,statSync} from 'node:fs';
@@ -83,7 +83,9 @@ function qa749ScopedCsp(original){
   'QA_CSP_REQUIRED_DIRECTIVES_MISSING');
  const adds={
   'script-src':['https://www.google.com/recaptcha/'],
+  'style-src':["'self'"],
   'connect-src':["'self'",'https://firebaseappcheck.googleapis.com',
+   'https://content-firebaseappcheck.googleapis.com',
    'https://recaptchaenterprise.googleapis.com','https://www.google.com/recaptcha/',
    'https://soridraw-owner-qa-583.soridraw-qa.workers.dev'],
   'frame-src':['https://www.google.com/recaptcha/','https://recaptcha.google.com/recaptcha/']
@@ -152,12 +154,6 @@ async function run({mode,html,css,js,config,send=fetch,token,projectId,projectNu
    html.match(/<style>\s*([\s\S]*?)\s*<\/style>/)?.[1]?.trim()===css.trim(),
    'QA_INLINE_CSS_MATCH_INVALID');
  check(validateConfig(config),'QA_PUBLIC_CONFIG_INVALID');
- const bytes=Object.freeze({[JSFILE]:Buffer.from(js,'utf8')});
- const entries=Object.entries(bytes);
- check(entries.length===1&&entries[0][0]===JSFILE&&
-  entries[0][1].length>5000&&entries[0][1].length<100000,'QA_ASSET_SIZE_INVALID');
- const gzip=new Map(entries.map(([p,b])=>[p,gzipSync(b,{level:9,mtime:0})]));
- const hashes=new Map([...gzip].map(([p,b])=>[p,createHash('sha256').update(b).digest('hex')]));
  const headers={Authorization:'Bearer '+token,Accept:'application/json'};
  const json=async(method,path,body,code)=>{
   check(path.startsWith(API+'/sites/'+SITE+'/')||
@@ -224,16 +220,48 @@ async function run({mode,html,css,js,config,send=fetch,token,projectId,projectNu
  const oldQaJs=await originalReq(JSFILE);
  const oldQaCss=await originalReq(CSSFILE);
  const oldQaConfig=await originalReq(CONFIGFILE);
- check(oldQaHtml===html&&oldQaCss===css&&
-  oldQaJs.includes("for(const url of ['/__/firebase/init.json','/qa749-config.json'])"),
+ check(oldQaHtml===html&&oldQaCss===css&&oldQaJs===js,
   'ORIGINAL_QA_PAGE_UNEXPECTED');
  let c;try{c=JSON.parse(oldQaConfig)}catch{hold('QA_OLD_CONFIG_NOT_JSON')}
  check(validateConfig(c)&&c.appId===config.appId&&
   c.apiKey===config.apiKey&&c.databaseURL===config.databaseURL,
   'ORIGINAL_QA_CONFIG_MISMATCH');
- const qaCsp=qa749ScopedCsp(seenCsp.get(FILE));
+ const currentQaCsp=seenCsp.get(FILE);
+ const qaCsp=qa749ScopedCsp(currentQaCsp);
  const rootCsp=seenCsp.get('/');
  check(rootCsp?.includes("default-src 'none'"),'ORIGINAL_RECEIVER_CSP_MISSING');
+ // This repair is only for the existing page-specific QA749 security policy.
+ const originalConfig=oldDetails.config??{};
+ check(Array.isArray(originalConfig.headers)&&originalConfig.headers.length<50,
+  'ORIGINAL_SERVING_CONFIG_INVALID');
+ const priorRules=originalConfig.headers.filter(h=>h.glob===FILE);
+ check(priorRules.length===1&&priorRules[0].headers&&
+   Object.keys(priorRules[0].headers).length===1&&
+   typeof priorRules[0].headers['Content-Security-Policy']==='string'&&
+   qaCspSafeEquivalent(priorRules[0].headers['Content-Security-Policy'],
+     currentQaCsp).same,'QA749_EXISTING_SCOPED_CSP_DRIFT');
+ const priorDirectives=new Map(currentQaCsp.split(';').map(s=>s.trim()).filter(Boolean)
+   .map(s=>{const p=s.split(/\s+/);return[p[0],p.slice(1)]}));
+ check(priorDirectives.get('style-src')?.includes("'unsafe-inline'")&&
+   !priorDirectives.get('style-src').includes("'self'")&&
+   priorDirectives.get('connect-src')?.includes('https://firebaseappcheck.googleapis.com')&&
+   priorDirectives.get('connect-src').includes('https://soridraw-owner-qa-583.soridraw-qa.workers.dev')&&
+   !priorDirectives.get('connect-src').includes('https://content-firebaseappcheck.googleapis.com'),
+   'QA749_PRIOR_CSP_ALREADY_CHANGED_OR_DRIFT');
+ // Only two observed omissions may be fixed; no wildcard, extra origins,
+ // removed directives, policy doubling or change to the original QA root.
+ const afterDirectives=new Map(qaCsp.split(';').map(s=>s.trim()).filter(Boolean)
+   .map(s=>{const p=s.split(/\s+/);return[p[0],p.slice(1)]}));
+ check(afterDirectives.size===priorDirectives.size&&
+   [...afterDirectives].every(([name,sources])=>{
+     const prior=priorDirectives.get(name);
+     if(!prior)return false;
+     const added=sources.filter(s=>!prior.includes(s));
+     return sources.length===prior.length+added.length&&
+       added.every(s=>name==='style-src'?s==="'self'":
+         name==='connect-src'&&s==='https://content-firebaseappcheck.googleapis.com')&&
+       (name==='style-src'||name==='connect-src'?added.length===1:added.length===0);
+   }),'QA749_UNEXPECTED_CSP_BROADENING_HOLD');
  const existing={[FILE]:oldQaHtml,[JSFILE]:oldQaJs,[CSSFILE]:oldQaCss,
   [CONFIGFILE]:oldQaConfig};
  for(const [path,source]of Object.entries(existing)){
@@ -278,12 +306,8 @@ async function run({mode,html,css,js,config,send=fetch,token,projectId,projectNu
  // serving rules were copied too. Restore ONLY the original QA live version's
  // exact serving config onto this NEW, un-released clone (never the old version).
  // compare object values independent of response key ordering, then re-GET.
- const originalConfig=oldDetails.config??{};
- check(Array.isArray(originalConfig.headers)&&originalConfig.headers.length<50,
-  'ORIGINAL_SERVING_CONFIG_INVALID');
- check(!originalConfig.headers.some(h=>h.glob===FILE),'QA749_CSP_OVERRIDE_ALREADY_EXISTS_HOLD');
- const nextConfig={...originalConfig,headers:[...originalConfig.headers,
-  {glob:FILE,headers:{'Content-Security-Policy':qaCsp}}]};
+ const nextConfig={...originalConfig,headers:originalConfig.headers.map(h=>
+  h.glob===FILE?{...h,headers:{'Content-Security-Policy':qaCsp}}:h)};
  await json('PATCH',API+'/'+version+'?updateMask=config',
   {name:version,config:nextConfig},'QA749_CSP_CONFIG_PATCH');
  const copied=await json('GET',API+'/'+version,undefined,'CLONED_CONFIG_RECHECK');
@@ -294,28 +318,6 @@ async function run({mode,html,css,js,config,send=fetch,token,projectId,projectNu
  const cloneFiles=await list('/sites/'+SITE+'/versions/'+version.split('/').pop()+'/files?pageSize=1000');
  check(cloneFiles.length===filesOld.size&&cloneFiles.every(f=>filesOld.get(f.path)===f.hash),
    'CLONE_DID_NOT_PRESERVE_FILES');
- const upload=await json('POST',API+'/'+version+':populateFiles',
-   {files:Object.fromEntries(hashes)},'REPAIR_QA_ASSETS');
- const required=upload.uploadRequiredHashes??[];
- const byHash=new Map([...hashes].map(([p,h])=>[h,p]));
- check(Array.isArray(required)&&new Set(required).size===required.length&&
-   required.length<=1&&required.every(h=>byHash.has(h)),
-   'UPLOAD_SCOPE_DRIFT');
- if(required.length)check(typeof upload.uploadUrl==='string'&&
-   upload.uploadUrl.startsWith('https://upload-firebasehosting.googleapis.com/upload/sites/'+SITE+'/versions/'),
-   'UPLOAD_URL_NOT_QA');
- for(const h of required){
-   let u;try{u=await send(upload.uploadUrl+'/'+h,{
-     method:'POST',redirect:'error',headers:{...headers,
-       'Content-Type':'application/octet-stream'},body:gzip.get(byHash.get(h)),
-     signal:AbortSignal.timeout(timeout)})}catch{hold('UPLOAD_NETWORK')}
-   check(u.status>=200&&u.status<300,'UPLOAD_HTTP_'+u.status);
- }
- const appended=await list('/sites/'+SITE+'/versions/'+version.split('/').pop()+'/files?pageSize=1000');
- check(appended.length===filesOld.size&&
-   appended.every(f=>hashes.has(f.path)?f.hash===hashes.get(f.path):
-     filesOld.get(f.path)===f.hash),
-   'APPENDED_VERSION_FILE_MISMATCH');
  await json('PATCH',API+'/'+version+'?updateMask=status',
    {status:'FINALIZED'},'FINALIZE');
  // Check nobody modified QA Hosting since our original read.

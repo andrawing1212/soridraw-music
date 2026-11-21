@@ -7,13 +7,6 @@ on:
       - 'scripts/app768-qa-race-runner.mjs'
       - 'scripts/verify-768-qa-race-offline.mjs'
       - '.github/workflows/app768-qa-r2-conditional-race.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/app768-qa-race-worker.mjs'
-      - 'scripts/app768-qa-race-runner.mjs'
-      - 'scripts/verify-768-qa-race-offline.mjs'
-      - '.github/workflows/app768-qa-r2-conditional-race.yml'
 permissions:
   contents: read
 concurrency:
@@ -39,7 +32,7 @@ jobs:
           node --check scripts/app768-qa-race-runner.mjs
           node scripts/verify-768-qa-race-offline.mjs
   live:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'andrawing1212/soridraw-music'
+    if: false # APP768 one-time physical QA PASS; require new approval to reactivate
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:

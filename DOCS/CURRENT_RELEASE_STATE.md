@@ -1,3 +1,13 @@
+## CURRENT — APP768 실제 QA R2 조건부 6중 경합 PASS · 자동 재실행 OFF (2026-11-22 KST)
+
+- **승인된 미완료 QA 마무리:** 디렉터 YES로 기존 격리 Cloudflare QA 계정의 R2 버킷을 재사용하여 임시 Worker 1개 생성 → 동일 작업 ID 6개 동시 요청 → 정확한 합성 객체 및 임시 Worker 삭제를 시행. [PR #1332](https://github.com/andrawing1212/soridraw-music/pull/1332)·[#1333](https://github.com/andrawing1212/soridraw-music/pull/1333)·[#1334](https://github.com/andrawing1212/soridraw-music/pull/1334)·[#1335](https://github.com/andrawing1212/soridraw-music/pull/1335)에서 실제 실패의 최소 원인만 해결, 합격한 기초 D1 검사는 반복하지 않음.
+- **실제 Cloudflare QA PASS:** [Actions #44952152823](https://github.com/andrawing1212/soridraw-music/actions/runs/44952152823) **SUCCESS**, 검증 SHA `372a37188d495e8d263ea1b215661ed5775f668d`. 실제 Workers `R2Bucket.put(key,body,{onlyIf:{etagDoesNotMatch:'*'}})` 동일 합성 operation ID 6개 병렬 요청 결과: **HTTP 201 단 1건, 409 중복 차단 5건**, 생성된 객체 HEAD 확인(존재/JSON 메타) PASS. 이것은 R2 조건부 create-once 물리 검증이며, 메모리 mock만의 증거가 아님.
+- **정리·격리 PASS:** 검증 완료 직후 임시 QA Worker 삭제 확인, 해당 실행 합성 R2 객체만 삭제 확인. 기존 QA Worker `soridraw-owner-qa-583` 원본 버전 `4ed70845-6a4b-4a80-9c51-ed95d0becc38` 100% 유지, 기존 QA D1 `soridraw-qa-app768-d1` 및 R2 `soridraw-qa-app768-r2` 보존. PROD/TEST/PREVIEW 공유 Worker·D1/R2·Firebase·Hosting·실사용자 원본 데이터 변경 0. 기존 계정의 요금은 실측하지 않음.
+- **재실행 차단:** 이미 승인된 임시 Worker 시험 1회 완료에 따라 QA-only Workflow의 `push` 실서버 자동 트리거와 `live` job을 OFF 처리; 오프라인 PR 검사와 검증 소스는 보존. 별도 새 승인 없이 동일 시험 재실행·과금하지 않음. 완료 기록만으로 Hosting 배포하지 않음.
+- **완료가 아닌 것:** APP767의 R2 접수와 D1 실제 정본 쓰기 원자성, 재전송/ACK 손실 복구, 기존·구형 Writer 전부의 강제 접수/과거 ID 검증, DO PITR 독립 역사, 실제 팔로우 Writer의 D1 W1~W2 물리 과금, PC↔모바일 사용자 실사용은 **NOT_TESTED**. APP765/767 기본 OFF, APP737/738 정식 릴리스 HOLD. 이전 APP768 기초 D1 W1/W2 합성 물리 QA PASS 및 APP749/760 실검증은 원래 범위대로 재사용.
+
+---
+
 ## CURRENT — APP768 독립 QA D1·R2 기초 물리 검증 PASS / R2 조건부 경합·정식 W2 미검증 (2026-11-22 KST)
 
 - **승인과 QA 자원 생성:** 디렉터 2026-11-22(KST) 명시 YES로 QA 계정 `b60fcd62c679c64db19f0b0e0c2f3429`에 **D1 `soridraw-qa-app768-d1` 1개, R2 `soridraw-qa-app768-r2` 버킷 1개**만 생성·보존 승인. [PR #1329](https://github.com/andrawing1212/soridraw-music/pull/1329) 병합 `8fa092ce`. QA Worker `soridraw-owner-qa-583` 기존 버전 `4ed70845-6a4b-4a80-9c51-ed95d0becc38` 100% 불변을 실 API GET으로 보호. 기존 0개/0개 QA 자원을 확인한 뒤 생성하고, 다음 실행에서 정확히 QA 리소스 1개씩만 존재하는 것 재확인(중복 생성 0). PROD/TEST/PREVIEW 공유 계정/사용자 데이터 영향 0.

@@ -63,15 +63,18 @@ jobs:
           CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
           CLOUDFLARE_QA_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
         run: node scripts/app768-qa-race-runner.mjs preflight
-      - name: Deploy one short-lived QA Worker with only existing QA R2 binding
+      - name: Bundle isolated QA Worker offline and upload via official Cloudflare API
         env:
           CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_QA_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
         run: |
           set -euo pipefail
           test -f "$RUNNER_TEMP/app768-r2-race-state.json"
-          test -n "$CLOUDFLARE_API_TOKEN"
-          npx --yes wrangler@4.102.0 deploy --config wrangler.app768-r2-race.generated.json
+          npx --yes esbuild@0.25.12 scripts/app768-qa-race-worker.mjs \
+            --bundle --format=esm --platform=browser --target=es2022 \
+            --outfile=app768-r2-worker.bundle.mjs
+          node scripts/app768-qa-race-runner.mjs deploy
       - name: Six real concurrent calls; one R2 object winner, five duplicates blocked
         env:
           CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429

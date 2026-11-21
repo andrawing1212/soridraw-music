@@ -81,7 +81,18 @@ export function createQaAuthEntry749({verify=qaVerify,legacy=originalWorker}={})
         try{
           principal=await verify(request,{actorUid:cfg.actorUid,
             ownerUid:cfg.ownerUid,method:request.method,path:action});
-        }catch{return deny(403)}
+        }catch(error){
+          // Only the isolated QA Hosting origin can read a bounded stage label.
+          // Never expose token bytes, identities, claims, key IDs or fetch errors.
+          const stage=['REQUEST_INVALID','AUTH_VALIDATION','APPCHECK_VALIDATION',
+            'PRINCIPAL_MISMATCH'].includes(error?.qaStage)
+            ?error.qaStage:'CREDENTIALS_REJECTED';
+          // Suppress diagnostics on requests without the exact QA browser origin.
+          if(origin!==allowedOrigin)return deny(403);
+          return cors(Response.json({ok:false,syntheticOnly:true,
+            qa749AuthStage:stage},{status:403,
+              headers:{'Cache-Control':'no-store'}}));
+        }
         if(principal?.verified!==true||
           (action==='follow'&&principal.uid!==cfg.actorUid)||
           (action==='status'&&![cfg.actorUid,cfg.ownerUid].includes(principal.uid)))

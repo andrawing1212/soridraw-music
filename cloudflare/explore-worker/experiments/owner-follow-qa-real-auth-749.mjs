@@ -11,7 +11,12 @@ const APP_JWKS='https://firebaseappcheck.googleapis.com/v1/jwks';
 const UID=/^[A-Za-z0-9_-]{1,128}$/;
 const APP_ID=/^1:1083981050742:(?:web|android|ios):[A-Za-z0-9]+$/;
 const TOKEN=/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
-const fail=()=>{throw Error('APP749_QA_SIGNED_CREDENTIALS_REQUIRED')};
+// QA-only sanitized failure stage. Never include token, key ID, UID or claims.
+const fail=(qaStage='CREDENTIALS_REJECTED')=>{
+  const error=Error('APP749_QA_SIGNED_CREDENTIALS_REQUIRED');
+  error.qaStage=qaStage;
+  throw error;
+};
 function parsePart(s){
   if(typeof s!=='string'||s.length>12000||!s.length)fail();
   try{
@@ -86,11 +91,14 @@ export function createQaFirebaseVerifier749({send=fetch,now=Date.now,subtle=glob
       !['status','follow'].includes(path)||
       (path==='status'&&method!=='GET')||
       (path==='follow'&&method==='GET')||request.method!==method||
-      new URL(request.url).pathname!=='/qa730/verified/'+path)fail();
-    const auth=await checkJwt(match[1],AUTH_JWKS,true);
-    await checkJwt(appCheck,APP_JWKS,false);
+      new URL(request.url).pathname!=='/qa730/verified/'+path)fail('REQUEST_INVALID');
+    let auth;
+    try{auth=await checkJwt(match[1],AUTH_JWKS,true)}
+    catch{fail('AUTH_VALIDATION')}
+    try{await checkJwt(appCheck,APP_JWKS,false)}
+    catch{fail('APPCHECK_VALIDATION')}
     if((path==='status'&&auth.sub!==actorUid&&auth.sub!==ownerUid)||
-       (path==='follow'&&auth.sub!==actorUid))fail();
+       (path==='follow'&&auth.sub!==actorUid))fail('PRINCIPAL_MISMATCH');
     return {verified:true,uid:auth.sub,qaProject:PROJECT};
   };
 }

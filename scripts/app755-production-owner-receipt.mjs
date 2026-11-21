@@ -6,6 +6,11 @@ export const APP755_PRODUCTION_OWNER_RECEIPT_COMPILED_OPEN=false;
 const UID=/^[A-Za-z0-9_-]{1,128}$/,OP=/^[A-Za-z0-9_-]{16,128}$/;
 const EPOCH=/^[0-9a-f]{32}$/;
 const KEY='app755-owner-follow-pending-v1',MAX=24,DELAY=1000;
+// APP762: finished receipts move to owner-DO-local immutable per-operation
+// keys. Never delete/timestamp-expire them: the same canonical ID must always
+// map to its original server-issued receipt, including across Worker upgrades.
+const FINAL_PREFIX='app762-owner-follow-final-';
+const finalKey=id=>FINAL_PREFIX+id;
 const safe=n=>Number.isSafeInteger(n)&&n>=0;
 const validDelivery=d=>d===undefined||(
  d&&['pending','delivered','held'].includes(d.status)&&
@@ -25,7 +30,11 @@ const validReceipt=x=>validInput(x)&&OP.test(x.operationId||'')&&
  typeof x.beforeFollowing==='boolean'&&
  x.beforeFollowing!==x.desired&&x.durable===true&&
  x.ownerDoAlarmScheduled===true&&validDelivery(x.delivery);
+const validFinal=(v,id,owner)=>validReceipt(v)&&
+ v.canonicalOperationId===id&&v.ownerUid===owner&&
+ ['delivered','held'].includes(v.delivery?.status);
 const validState=(s,owner)=>s?.version===1&&s.ownerUid===owner&&
+ (s.archiveUsed===undefined||s.archiveUsed===true)&&
  Array.isArray(s.entries)&&s.entries.length<=MAX&&
  s.entries.every(validReceipt)&&
  new Set(s.entries.map(x=>x.canonicalOperationId)).size===s.entries.length&&
@@ -47,6 +56,17 @@ export function createApp755ProductionOwnerReceiptStore({
    if(!validState(state,ownerUid))hold('PERSISTED_STATE_UNVERIFIED');
    return state;
  };
+ // Legacy v1 storage with no archiveUsed flag retains the original single
+ // read path. Once the first terminal receipt is archived, lookups check
+ // exactly one indexed key (no list scans, no background polling).
+ const receiptFor=async(st,state,id)=>{
+   const current=state.entries.find(x=>x.canonicalOperationId===id);
+   if(current||state.archiveUsed!==true)return current||null;
+   const finished=await st.get(finalKey(id));
+   if(finished===undefined||finished===null)return null;
+   if(!validFinal(finished,id,ownerUid))hold('ARCHIVED_RECEIPT_UNVERIFIED');
+   return finished;
+ };
  const alarmReady=async(st,requestedAt)=>{
    const at=now();if(!safe(at)||at===0)hold('CLOCK');
    const target=Math.max(at+1,requestedAt??at+DELAY);
@@ -61,8 +81,7 @@ export function createApp755ProductionOwnerReceiptStore({
      // Any storage failure is unknown, NEVER authoritative absence.
      try{
        const state=await load(storage);
-       const conflict=state.entries.find(x=>
-         x.canonicalOperationId===input.canonicalOperationId);
+       const conflict=await receiptFor(storage,state,input.canonicalOperationId);
        if(!conflict)return {status:'absent',authoritative:true,...input};
        if(!same(conflict,input))return {status:'unknown'};
        // A partial failure between durable put and alarm cannot be a
@@ -83,8 +102,7 @@ export function createApp755ProductionOwnerReceiptStore({
      try{
        return await storage.transaction(async tx=>{
          const state=await load(tx);
-         const previous=state.entries.find(x=>
-           x.canonicalOperationId===input.canonicalOperationId);
+         const previous=await receiptFor(tx,state,input.canonicalOperationId);
          if(previous){
            if(!same(previous,input)||previous.authEpoch!==input.authEpoch||
               previous.cutoverToken!==input.cutoverToken)
@@ -93,18 +111,39 @@ export function createApp755ProductionOwnerReceiptStore({
              await alarmReady(tx,previous.delivery?.retryAt);
            return previous;
          }
-         if(state.entries.length>=MAX)return {durable:false,reason:'owner-queue-full'};
+         let entries=state.entries;
+         let archived=false;
+         if(entries.length>=MAX){
+           // Only finished/held receipts leave the bounded hot queue.
+           // Pending work is never lost, acknowledged, or replaced.
+           const finishedIndex=entries.findIndex(x=>
+             x.delivery?.status==='delivered'||x.delivery?.status==='held');
+           if(finishedIndex<0)return {durable:false,reason:'owner-pending-queue-full'};
+           const finished=entries[finishedIndex];
+           const key=finalKey(finished.canonicalOperationId);
+           const prior=await tx.get(key);
+           if(prior!==undefined&&prior!==null){
+             // An unexpected prior archive must not be overwritten, even if
+             // it looks similar. Require exact validated receipt equality.
+             if(!validFinal(prior,finished.canonicalOperationId,ownerUid)||
+                JSON.stringify(prior)!==JSON.stringify(finished))
+               hold('ARCHIVE_COLLISION_OR_CORRUPTION');
+           }else await tx.put(key,finished);
+           entries=entries.filter((_,i)=>i!==finishedIndex);
+           archived=true;
+         }
          const id=issueId();
          if(!OP.test(id||'')||id===input.canonicalOperationId||
-           state.entries.some(x=>x.operationId===id))
+           entries.some(x=>x.operationId===id))
            hold('SERVER_OPERATION_ID_UNVERIFIED');
          const receipt={...input,operationId:id,durable:true,
            ownerDoAlarmScheduled:true,delivery:{status:'pending',attempts:0,
              retryAt:now()+DELAY}};
          // Transaction commits pending receipt and DO alarm together.
          // Any error fails closed; no canonical D1 write may follow.
-         await tx.put(KEY,{version:1,ownerUid,
-           entries:[...state.entries,receipt]});
+         await tx.put(KEY,{...state,
+           ...(archived?{archiveUsed:true}:{}),
+           entries:[...entries,receipt]});
          await alarmReady(tx);
          return receipt;
        });

@@ -1,3 +1,12 @@
+## CURRENT — APP762 24개 완료 예약 누적 차단 수정: 불변 보존 키 + 24개 처리 대기 목록 유지 (2026-11-22 KST)
+
+- **수정 대상:** 기존 APP755 owner Durable Object 예약 기록은 완료·보류 후에도 `app755-owner-follow-pending-v1` 한 목록(최대 24개)에 남아 누적 24번째 이후 새 요청을 거부했다. 새 APP762는 **목록이 실제로 가득 찼을 때에만** 가장 오래된 완료(`delivered`) 또는 보류(`held`) 예약을 같은 owner DO storage 내 canonical-operation-ID별 개별 영구 보존 키(`app762-owner-follow-final-*`)에 **하나만 원자적으로 이동**한 뒤 신규 예약을 추가한다. 보존 키에는 원래 server-issued operation ID·authEpoch/소유자·최종 상태가 유지되며, 재전송된 옛 canonical ID는 목록과 단일 보존 키를 조회하여 원래 예약을 반환한다. 삭제·TTL·일괄 scan·방문 시 쓰기·상시 polling·D1/R2/RTDB 접근 없음.
+- **기존 구조 보호:** 기존 version-1 목록 구조와 v1 초기 동작은 변경하지 않음. 최초 이동 뒤 선택적 `archiveUsed:true` 플래그로 보존 키 확인을 활성화한다. 동일 키·다른 소유자·기록 손상·보존소 오류는 새로운 서버 예약을 만들지 않고 HOLD. DO transaction 안에서 보존 키·활성 목록·알람을 함께 갱신하여 실패 시 전체 롤백. 기존 APP759 503·세대 충돌·중복 ACK·알람 제한 및 APP761 owner identity 범위는 유지한다. 독립 QA APP760 실제 12→13(503 회복)→14(취소) 및 원본 Worker 복구 PASS 재검증 불필요.
+- **명확한 한계:** 완료/보류 기록만 넘긴다. **처리 중인 예약 24개가 모두 미완료이면 정본·내구 데이터 안전을 위해 추가 요청 HOLD**; 강제 삭제나 가짜 성공 없음. 보존 기록은 중복 방지를 위해 자동 삭제하지 않으므로 owner별 저장량이 이벤트 수만큼 증가한다. 10만 명 대상 장기 비용·보존 정책·수명/압축/증분 비용은 활성화 전에 별도 확인해야 하며, 영구 무료/무제한 공간을 보장하지 않는다.
+- **배포 상태:** 모든 APP755/759/761/762 정식앱 소스는 기본 OFF, 활성 PRODUCTION owner DO/Functions 연결·PC↔모바일 동등성 별도 HOLD. 실제 PREVIEW/TEST/PRODUCTION/공유 사용자 원본/Cloudflare·Firebase 배포·설정 변경 0. 기존 APP737/738 정식 승인·검사 게이트 불변.
+
+---
+
 ## CURRENT — APP761 정식 팔로우 owner DO 알람 연결 소스 준비 / APP760 독립 QA 503→복구 최종 PASS (2026-11-22 KST)
 
 - **APP760 실검증 완료 — 재실행 불필요:** 디렉터 QA Cloud Shell 실제 `APP748_QA503_DO_RETRY_FUNCTIONS_RTDB=PASS`, 기존 RTDB 버전 12 → 한 번의 503 주입 뒤 DO 알람 재전송 버전 13/팔로우 1명 → 취소 버전 14/0명. [GitHub Actions #44929523386](https://github.com/andrawing1212/soridraw-music/actions/runs/44929523386) **qa_window SUCCESS**, 원본 APP583 QA Worker 버전 `4ed70845-6a4b-4a80-9c51-ed95d0becc38` 100% 자동 복구와 최종 바인딩·HTTP `APP741_QA_ORIGINAL_VERSION_BINDINGS_AND_HTTP_FINAL=PASS`. PR #1317/#1318 병합. 독립 QA 전용이며 공유 사용자 데이터/실서비스 배포 없음. APP749 실기기 PC↔모바일 0→1→0 PASS도 그대로 재사용.

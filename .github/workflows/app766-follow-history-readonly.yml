@@ -1,0 +1,60 @@
+name: APP766 canonical follow history metadata (read only)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/app766-live-d1-history-schema-readonly.mjs'
+      - 'scripts/verify-766-live-d1-history-schema-readonly.mjs'
+      - '.github/workflows/app766-follow-history-readonly.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/app766-live-d1-history-schema-readonly.mjs'
+      - '.github/workflows/app766-follow-history-readonly.yml'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app766-canonical-history-readonly
+  cancel-in-progress: false
+jobs:
+  offline:
+    if: github.event_name == 'pull_request' && github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Schema metadata no-write and strict APP765 HOLD tests
+        run: |
+          set -euo pipefail
+          node --check scripts/app766-live-d1-history-schema-readonly.mjs
+          node scripts/verify-766-live-d1-history-schema-readonly.mjs
+  live_schema:
+    if: github.event_name == 'push' &&
+        github.ref == 'refs/heads/main' &&
+        github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Validate trusted main SHA and pinned query syntax
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          node --check scripts/app766-live-d1-history-schema-readonly.mjs
+      - name: Read only existing shared D1 sqlite_schema metadata (one SELECT)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          node scripts/app766-live-d1-history-schema-readonly.mjs
+          echo 'APP766_D1_SQLITE_SCHEMA_SELECT=PASS; USER_ROWS=0; D1_WRITES=0; NO_DEPLOY=TRUE; APP765_HOLD=TRUE'

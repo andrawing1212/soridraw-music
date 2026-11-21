@@ -1,0 +1,166 @@
+name: SORIDRAW APP750 Bidirectional Source Sync (PR ONLY - NO DEPLOY)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/app750-bidirectional-sync-policy.mjs'
+      - 'scripts/app750-bidirectional-sync-cli.mjs'
+      - 'scripts/verify-750-bidirectional-sync.mjs'
+      - '.github/workflows/app750-bidirectional-code-sync.yml'
+  workflow_dispatch:
+    inputs:
+      origin:
+        description: 'Git source branch containing the single finished change'
+        required: true
+        type: choice
+        options: [preview, production]
+      source_sha:
+        description: 'Exact current source branch HEAD, 40 lowercase hex'
+        required: true
+        type: string
+      source_parent_sha:
+        description: 'Exact single parent SHA of source commit'
+        required: true
+        type: string
+      destination_sha:
+        description: 'Exact current opposite branch HEAD before applying'
+        required: true
+        type: string
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-app750-bidirectional-code-sync
+  cancel-in-progress: false
+
+jobs:
+  synthetic:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Inspect immutable source-sync constraints (no cloud credentials)
+        run: |
+          set -euo pipefail
+          node --check scripts/app750-bidirectional-sync-policy.mjs
+          node --check scripts/app750-bidirectional-sync-cli.mjs
+          node scripts/verify-750-bidirectional-sync.mjs
+
+  prepare_review_pr:
+    # This job ONLY creates a GitHub code review PR. It cannot deploy anything.
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      (github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'issue_comment' &&
+         github.event.issue.pull_request != null &&
+         startsWith(github.event.comment.body, '/app750-sync ')))
+    permissions:
+      contents: write
+      pull-requests: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout immutable controller (not user patch)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Lock controller and exact source/target commits
+        id: locked
+        shell: bash
+        env:
+          INPUT_ORIGIN: ${{ inputs.origin }}
+          INPUT_SOURCE: ${{ inputs.source_sha }}
+          INPUT_PARENT: ${{ inputs.source_parent_sha }}
+          INPUT_DESTINATION: ${{ inputs.destination_sha }}
+          COMMENT: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          git fetch origin main preview production --no-tags
+          test "$(git rev-parse HEAD)" = "$(git rev-parse refs/remotes/origin/main)" || {
+            echo 'APP750_CONTROLLER_MAIN_MOVED_HOLD';exit 2;
+          }
+          node scripts/verify-750-bidirectional-sync.mjs
+          ORIGIN="$INPUT_ORIGIN"
+          SOURCE="$INPUT_SOURCE"
+          PARENT="$INPUT_PARENT"
+          DESTINATION="$INPUT_DESTINATION"
+          if [ "$GITHUB_EVENT_NAME" = 'issue_comment' ]; then
+            if [[ "$COMMENT" =~ ^/app750-sync[[:space:]](preview|production)[[:space:]]([0-9a-f]{40})[[:space:]]([0-9a-f]{40})[[:space:]]([0-9a-f]{40})$ ]]; then
+              ORIGIN="${BASH_REMATCH[1]}"
+              SOURCE="${BASH_REMATCH[2]}"
+              PARENT="${BASH_REMATCH[3]}"
+              DESTINATION="${BASH_REMATCH[4]}"
+            else
+              echo 'APP750_INVALID_OWNER_COMMAND_HOLD';exit 2;
+            fi
+          fi
+          case "$ORIGIN" in preview|production) ;; *) exit 2 ;; esac
+          for SHA in "$SOURCE" "$PARENT" "$DESTINATION"; do
+            [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          done
+          echo "origin=$ORIGIN" >> "$GITHUB_OUTPUT"
+          echo "source=$SOURCE" >> "$GITHUB_OUTPUT"
+          echo "parent=$PARENT" >> "$GITHUB_OUTPUT"
+          echo "destination=$DESTINATION" >> "$GITHUB_OUTPUT"
+      - name: Create exact one-commit sync branch (not deployed)
+        id: sync
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          node scripts/app750-bidirectional-sync-cli.mjs \
+            "${{ steps.locked.outputs.origin }}" \
+            "${{ steps.locked.outputs.source }}" \
+            "${{ steps.locked.outputs.parent }}" \
+            "${{ steps.locked.outputs.destination }}"
+      - name: Open review PR only (never merge or release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ORIGIN: ${{ steps.locked.outputs.origin }}
+          SOURCE: ${{ steps.locked.outputs.source }}
+          PARENT: ${{ steps.locked.outputs.parent }}
+          DESTINATION_SHA: ${{ steps.locked.outputs.destination }}
+          BRANCH: ${{ steps.sync.outputs.branch }}
+          DESTINATION: ${{ steps.sync.outputs.destination }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/app750-pr-body.md" <<EOF_BODY
+          APP750 immutable one-commit code sync only.
+
+          Source branch: $ORIGIN
+          Source commit: $SOURCE
+          Source parent: $PARENT
+          Target branch: $DESTINATION
+          Target pinned head: $DESTINATION_SHA
+
+          **Not a deployment or proof of live Hosting.** PREVIEW/PRODUCTION active site version, environment-specific config, Workers/Functions/Rules and shared data are deliberately untouched.
+
+          - Review the copied change and run affected feature/build checks on the target.
+          - Production-origin branch does not establish it matches the active PRODUCTION Hosting artifact. Confirm release provenance separately.
+          - Deploy PREVIEW through existing approved release path. PRODUCTION Hosting only through APP737/738 after all parity/rollback evidence and required release authorization.
+          - Do not merge the entire preview/production branches, use TEST, or bypass APP738.
+          EOF_BODY
+          gh pr create --repo "$GITHUB_REPOSITORY" \
+            --base "$DESTINATION" --head "$BRANCH" \
+            --title "sync(APP750): $ORIGIN ${SOURCE:0:12} -> $DESTINATION (code only)" \
+            --body-file "$RUNNER_TEMP/app750-pr-body.md"
+          echo 'APP750_CODE_SYNC_PR_CREATED=PASS; PREVIEW_DEPLOY=0; PRODUCTION_DEPLOY=0; SHARED_BACKEND_WRITES=0'

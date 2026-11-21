@@ -1,0 +1,61 @@
+name: APP768 physical isolated QA D1 and R2 (bounded creation)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/app768-qa-provision-and-physical.mjs'
+      - 'scripts/verify-768-qa-physical-offline.mjs'
+      - '.github/workflows/app768-qa-physical.yml'
+  push:
+    branches: [main, qa/app768-physical-two-resources]
+    paths:
+      - 'scripts/app768-qa-provision-and-physical.mjs'
+      - '.github/workflows/app768-qa-physical.yml'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app768-isolated-qa-physical
+  cancel-in-progress: false
+jobs:
+  offline:
+    if: (github.event_name == 'pull_request' || github.ref == 'refs/heads/qa/app768-physical-two-resources') && github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Safety and exact-resource-count dry run (no secrets)
+        run: |
+          set -euo pipefail
+          node --check scripts/app768-qa-provision-and-physical.mjs
+          node scripts/verify-768-qa-physical-offline.mjs
+  live_qa_physical:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify exact main commit and script syntax
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          node --check scripts/app768-qa-provision-and-physical.mjs
+      - name: Create max 1 QA D1 and 1 QA R2; physical D1 W1/W2; clean synthetic rows/object
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
+        run: |
+          set -euo pipefail
+          node scripts/app768-qa-provision-and-physical.mjs
+          echo 'APP768_REAL_QA_RESULT=PASS; APP767_WORKERS_R2_CONDITIONAL=NOT_TESTED; PROD_DEPLOY=0'

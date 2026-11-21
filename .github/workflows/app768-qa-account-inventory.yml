@@ -5,6 +5,8 @@ on:
     paths:
       - 'scripts/app768-qa-account-inventory.mjs'
       - 'scripts/verify-768-qa-account-inventory.mjs'
+      - 'scripts/app768-qa-provision-and-physical.mjs'
+      - 'scripts/verify-768-qa-physical-offline.mjs'
       - '.github/workflows/app768-qa-account-inventory.yml'
   push:
     branches: [main]
@@ -34,6 +36,8 @@ jobs:
           set -euo pipefail
           node --check scripts/app768-qa-account-inventory.mjs
           node scripts/verify-768-qa-account-inventory.mjs
+          node --check scripts/app768-qa-provision-and-physical.mjs
+          node scripts/verify-768-qa-physical-offline.mjs
   live_metadata:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'andrawing1212/soridraw-music'
     runs-on: ubuntu-24.04

@@ -179,6 +179,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  const lifecycleSource=readFileSync(resolve('scripts/app730-source-only-follow-bridge.mjs'),'utf8');
  const productionBridgeSource=readFileSync(resolve('scripts/app743-production-follow-bridge.mjs'),'utf8');
  const compositionSource=readFileSync(resolve('scripts/app753-production-follow-composition.mjs'),'utf8');
+ const principalSource=readFileSync(resolve('scripts/app754-production-firebase-principal.mjs'),'utf8');
  if(!adapterSource.includes('APP729_PRODUCTION_OWNER_FOLLOW_COMPILED_OPEN = false'))
    fail('INTEGRATION_COMPILE_OFF_REQUIRED');
  if(!productionBridgeSource.includes('APP743_PRODUCTION_FOLLOW_COMPILED_OPEN=false'))
@@ -186,17 +187,23 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  if(!compositionSource.includes('APP753_PRODUCTION_FOLLOW_COMPILED_OPEN=false')||
     !compositionSource.includes('PRODUCTION_DEPENDENCIES_UNVERIFIED'))
    fail('PRODUCTION_COMPOSITION_MUST_REMAIN_OFF');
+ if(!principalSource.includes('APP754_PRODUCTION_PRINCIPAL_COMPILED_OPEN=false')||
+    !principalSource.includes("const PROJECT='soridraw-app-866a5'")||
+    !principalSource.includes("const NUMBER='91309780603'"))
+   fail('PRODUCTION_SIGNED_PRINCIPAL_MUST_REMAIN_PINNED_OFF');
  mkdirSync(join(dir,'integration'),{recursive:true});
  const adapterPath=join(dir,'integration','app729-production-follow-adapter.mjs');
  const lifecyclePath=join(dir,'integration','app730-source-only-follow-bridge.mjs');
  const productionBridgePath=join(dir,'integration','app743-production-follow-bridge.mjs');
  const compositionPath=join(dir,'integration','app753-production-follow-composition.mjs');
+ const principalPath=join(dir,'integration','app754-production-firebase-principal.mjs');
  if(!lifecycleSource.includes('APP730_PRODUCTION_RELAY_ENABLED = false'))
    fail('DURABLE_RELAY_COMPILE_OFF_REQUIRED');
  writeFileSync(adapterPath,adapterSource);
  writeFileSync(lifecyclePath,lifecycleSource);
  writeFileSync(productionBridgePath,productionBridgeSource);
  writeFileSync(compositionPath,compositionSource);
+ writeFileSync(principalPath,principalSource);
  writeFileSync(entryPath,entry.code);
  if(sha256(readFileSync(entryPath))!==entry.sha256)
    fail('INTEGRATION_ENTRY_DRIFT');
@@ -204,6 +211,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  checkSyntax(lifecyclePath);
  checkSyntax(productionBridgePath);
  checkSyntax(compositionPath);
+ checkSyntax(principalPath);
  checkSyntax(entryPath);
  candidate.manifest.integration={
    entrypoint:'production-follow-entry.mjs',
@@ -218,6 +226,8 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
    productionBridgeImplementationDependenciesInjected:false,
    productionFollowCompositionPresent:true,
    productionFollowCompositionEnabled:false,
+   productionSignedPrincipalSourcePresent:true,
+   productionSignedPrincipalNoCredentialsOrLiveCalls:true,
  };
  writeFileSync(join(dir,'review-manifest.json'),JSON.stringify(candidate.manifest,null,2)+'\n');
  return {outputDirectory:dir,manifest:candidate.manifest};

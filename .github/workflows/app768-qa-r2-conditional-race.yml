@@ -1,0 +1,86 @@
+name: APP768 QA R2 real conditional six-way race and cleanup
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/app768-qa-race-worker.mjs'
+      - 'scripts/app768-qa-race-runner.mjs'
+      - 'scripts/verify-768-qa-race-offline.mjs'
+      - '.github/workflows/app768-qa-r2-conditional-race.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/app768-qa-race-worker.mjs'
+      - 'scripts/app768-qa-race-runner.mjs'
+      - 'scripts/verify-768-qa-race-offline.mjs'
+      - '.github/workflows/app768-qa-r2-conditional-race.yml'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app768-r2-physical-qa
+  cancel-in-progress: false
+jobs:
+  offline:
+    if: github.event_name == 'pull_request' && github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Offline six-way test using exact APP767 admission source
+        run: |
+          set -euo pipefail
+          node --check scripts/app768-qa-race-worker.mjs
+          node --check scripts/app768-qa-race-runner.mjs
+          node scripts/verify-768-qa-race-offline.mjs
+  live:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check exact main revision and code with no cloud access
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          node --check scripts/app768-qa-race-runner.mjs
+          node scripts/verify-768-qa-race-offline.mjs
+      - name: Pin original APP583, reuse one D1 and one R2, prepare unique QA Worker
+        env:
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
+          CLOUDFLARE_QA_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+        run: node scripts/app768-qa-race-runner.mjs preflight
+      - name: Deploy one short-lived QA Worker with only existing QA R2 binding
+        env:
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -f "$RUNNER_TEMP/app768-r2-race-state.json"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          npx --yes wrangler@4.102.0 deploy --config wrangler.app768-r2-race.generated.json
+      - name: Six real concurrent calls; one R2 object winner, five duplicates blocked
+        env:
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+        run: node scripts/app768-qa-race-runner.mjs race
+      - name: Always delete exact synthetic object and disposable Worker
+        if: always()
+        env:
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
+          CLOUDFLARE_QA_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+        run: node scripts/app768-qa-race-runner.mjs cleanup

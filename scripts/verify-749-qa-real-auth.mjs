@@ -80,21 +80,31 @@ assert.equal(calls[0].path,'/qa730/follow');
 assert.equal(calls[0].headers['x-owner583-token'],cfg.probeToken);
 assert.equal(calls[0].headers.authorization,undefined,'no Firebase credential to DO');
 assert.equal(calls[0].headers['x-firebase-appcheck'],undefined);
-const denied=await app.fetch(request('PUT','follow',cfg.ownerUid),env);
+const qaOrigin='https://soridraw-qa-owner-584.web.app';
+const withQaOrigin=req=>{
+ const headers=new Headers(req.headers);headers.set('Origin',qaOrigin);
+ return new Request(req,{headers});
+};
+const denied=await app.fetch(withQaOrigin(request('PUT','follow',cfg.ownerUid)),env);
 assert.equal(denied.status,403);
 assert.deepEqual(await denied.json(),{ok:false,syntheticOnly:true,
   qa749AuthStage:'PRINCIPAL_MISMATCH'});
 assert.equal(calls.length,1,'no DO call on wrong owner/actor');
 // Signed-only QA auth diagnostics are read-only and report no secrets.
-const badAuth=await app.fetch(request('PUT','follow',cfg.actorUid,
- appClaims(),{...authClaims(cfg.actorUid),exp:sec-1}),env);
+const badAuth=await app.fetch(withQaOrigin(request('PUT','follow',cfg.actorUid,
+ appClaims(),{...authClaims(cfg.actorUid),exp:sec-1})),env);
 assert.equal(badAuth.status,403);
 assert.equal((await badAuth.json()).qa749AuthStage,'AUTH_VALIDATION');
-const badApp=await app.fetch(request('PUT','follow',cfg.actorUid,
- {...appClaims(),sub:'1:999999999:web:foreign'}),env);
+const badApp=await app.fetch(withQaOrigin(request('PUT','follow',cfg.actorUid,
+ {...appClaims(),sub:'1:999999999:web:foreign'})),env);
 assert.equal(badApp.status,403);
 assert.equal((await badApp.json()).qa749AuthStage,'APPCHECK_VALIDATION');
 assert.equal(calls.length,1,'no DO mutation for malformed credentials');
+const noOrigin=await app.fetch(new Request('https://qa.example/qa730/verified/follow',{
+ method:'PUT'}),env);
+assert.equal(noOrigin.status,403);
+assert.equal(Object.hasOwn(await noOrigin.json(),'qa749AuthStage'),false,
+ 'stage labels only exposed to pinned QA origin');
 const oldOnly={...env,SORIDRAW_QA749_REAL_AUTH:'0'};
 assert.equal((await app.fetch(request('PUT','follow'),oldOnly)).status,403);
 assert.equal(calls.length,1,'default QA app never enables new auth');
@@ -105,7 +115,6 @@ assert.equal(calls.length,1);
 assert.equal((await app.fetch(request('PUT','follow'),{...env,DB:{}})).status,403);
 assert.equal(calls.length,1,'no shared binding bypass');
 
-const qaOrigin='https://soridraw-qa-owner-584.web.app';
 const preflight=(origin,method='PUT',headers='authorization,x-firebase-appcheck')=>
   app.fetch(new Request('https://qa.example/qa730/verified/follow',{
     method:'OPTIONS',headers:{Origin:origin,

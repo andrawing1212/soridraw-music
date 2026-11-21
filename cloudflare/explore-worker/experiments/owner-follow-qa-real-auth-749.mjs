@@ -17,18 +17,20 @@ const fail=(qaStage='CREDENTIALS_REJECTED')=>{
   error.qaStage=qaStage;
   throw error;
 };
-function parsePart(s){
-  if(typeof s!=='string'||s.length>12000||!s.length)fail();
+function parsePart(s,stage='CREDENTIALS_REJECTED'){
+  if(typeof s!=='string'||s.length>12000||!s.length)fail(stage);
+  let value;
   try{
     const padded=s.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-s.length%4)%4);
-    return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(padded),c=>c.charCodeAt(0))));
-  }catch{fail()}
+    value=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(padded),c=>c.charCodeAt(0))));
+  }catch{fail(stage)}
+  return value;
 }
-function bytes(s){
+function bytes(s,stage='CREDENTIALS_REJECTED'){
   try{
     const padded=s.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-s.length%4)%4);
     return Uint8Array.from(atob(padded),c=>c.charCodeAt(0));
-  }catch{fail()}
+  }catch{fail(stage)}
 }
 function claimsValid(x,time,auth){
   if(!x||typeof x!=='object'||!Number.isSafeInteger(x.iat)||x.iat<=0||
@@ -41,43 +43,55 @@ function claimsValid(x,time,auth){
     Array.isArray(x.aud)&&x.aud.includes('projects/'+NUMBER)&&
     APP_ID.test(x.sub||'');
 }
+const AUTH_FAILURE_STAGES=Object.freeze([
+  'AUTH_TOKEN_FORMAT','AUTH_PUBLIC_KEYS','AUTH_KID_MISMATCH',
+  'AUTH_SIGNATURE','AUTH_CLAIMS',
+]);
 export function createQaFirebaseVerifier749({send=fetch,now=Date.now,subtle=globalThis.crypto?.subtle}={}){
   const cache=new Map();
-  async function keys(endpoint){
+  async function keys(endpoint,stage){
     const previous=cache.get(endpoint);
     if(previous&&now()<previous.expires)return previous.keys;
-    const res=await send(endpoint,{method:'GET',redirect:'error',
-      headers:{Accept:'application/json'},signal:AbortSignal.timeout(12000)});
-    if(!res?.ok||res.status!==200)fail();
-    const json=await res.json();
-    if(!Array.isArray(json?.keys)||json.keys.length<1||json.keys.length>30)fail();
+    let res;
+    try{
+      res=await send(endpoint,{method:'GET',redirect:'error',
+        headers:{Accept:'application/json'},signal:AbortSignal.timeout(12000)});
+    }catch{fail(stage)}
+    if(!res?.ok||res.status!==200)fail(stage);
+    let json;
+    try{json=await res.json()}catch{fail(stage)}
+    if(!Array.isArray(json?.keys)||json.keys.length<1||json.keys.length>30)
+      fail(stage);
     const usable=json.keys.filter(k=>k?.kty==='RSA'&&k?.n&&k?.e&&
       /^[A-Za-z0-9_-]{1,256}$/.test(k?.kid||'')&&
       (!k.alg||k.alg==='RS256')&&(!k.use||k.use==='sig'));
-    if(!usable.length)fail();
+    if(!usable.length)fail(stage);
     const maxAge=/\bmax-age=(\d+)\b/i.exec(res.headers?.get('cache-control')||'');
     const ttl=Math.min(21600,Math.max(0,Number(maxAge?.[1]||300)));
     cache.set(endpoint,{keys:usable,expires:now()+ttl*1000});
     return usable;
   }
   async function checkJwt(token,endpoint,auth){
+    const code=suffix=>(auth?'AUTH_':'APPCHECK_')+suffix;
     if(!subtle||typeof token!=='string'||token.length>12000||
-      token.length<90||!TOKEN.test(token))fail();
+      token.length<90||!TOKEN.test(token))fail(code('TOKEN_FORMAT'));
     const [a,b,sig]=token.split('.');
-    const head=parsePart(a);
+    const head=parsePart(a,code('TOKEN_FORMAT'));
     if(head?.alg!=='RS256'||head?.typ!=='JWT'||
       !/^[A-Za-z0-9_-]{1,256}$/.test(head.kid||'')||
-      head.jku!==undefined||head.x5u!==undefined||head.crit!==undefined)fail();
-    const pub=(await keys(endpoint)).find(k=>k.kid===head.kid);
-    if(!pub)fail();
+      head.jku!==undefined||head.x5u!==undefined||head.crit!==undefined)
+      fail(code('TOKEN_FORMAT'));
+    const pub=(await keys(endpoint,code('PUBLIC_KEYS'))).find(k=>k.kid===head.kid);
+    if(!pub)fail(code('KID_MISMATCH'));
     let valid=false;
     try{
       const key=await subtle.importKey('jwk',pub,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['verify']);
-      valid=await subtle.verify('RSASSA-PKCS1-v1_5',key,bytes(sig),new TextEncoder().encode(a+'.'+b));
-    }catch{fail()}
-    if(!valid)fail();
-    const payload=parsePart(b);
-    if(!claimsValid(payload,Math.floor(now()/1000),auth))fail();
+      valid=await subtle.verify('RSASSA-PKCS1-v1_5',key,
+        bytes(sig,code('SIGNATURE')),new TextEncoder().encode(a+'.'+b));
+    }catch{fail(code('SIGNATURE'))}
+    if(!valid)fail(code('SIGNATURE'));
+    const payload=parsePart(b,code('CLAIMS'));
+    if(!claimsValid(payload,Math.floor(now()/1000),auth))fail(code('CLAIMS'));
     return payload;
   }
   // Return only the verified uid, never return token bytes or untrusted claims.
@@ -94,7 +108,10 @@ export function createQaFirebaseVerifier749({send=fetch,now=Date.now,subtle=glob
       new URL(request.url).pathname!=='/qa730/verified/'+path)fail('REQUEST_INVALID');
     let auth;
     try{auth=await checkJwt(match[1],AUTH_JWKS,true)}
-    catch{fail('AUTH_VALIDATION')}
+    catch(error){
+      fail(AUTH_FAILURE_STAGES.includes(error?.qaStage)
+        ?error.qaStage:'AUTH_VALIDATION');
+    }
     try{await checkJwt(appCheck,APP_JWKS,false)}
     catch{fail('APPCHECK_VALIDATION')}
     if((path==='status'&&auth.sub!==actorUid&&auth.sub!==ownerUid)||

@@ -60,9 +60,11 @@ assert.equal(state.entries.length,1);
 assert.equal(writes,1);
 assert.equal(alarm,now()+1000);
 assert.equal((await store.find(input)).receipt.operationId,ticket.operationId);
+const issuedAfterCommit=generated;
 const same=await store.reserve(input);
 assert.equal(same.operationId,ticket.operationId,'duplicate must not allocate server receipt');
-assert.equal(generated,1);
+assert.equal(generated,issuedAfterCommit,
+ 'rolled-back issuance is not persisted; duplicate must mint zero additional IDs');
 assert.equal(state.entries.length,1);
 assert.equal((await store.find({...input,desired:false})).status,'unknown');
 assert.throws(()=>store.reserve({...input,ownerUid:'wrongOwner'}),/OWNER_SCOPE_OR_INPUT/);

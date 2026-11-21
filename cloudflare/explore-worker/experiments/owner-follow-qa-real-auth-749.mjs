@@ -44,28 +44,31 @@ function claimsValid(x,time,auth){
     APP_ID.test(x.sub||'');
 }
 const AUTH_FAILURE_STAGES=Object.freeze([
-  'AUTH_TOKEN_FORMAT','AUTH_PUBLIC_KEYS','AUTH_KID_MISMATCH',
-  'AUTH_SIGNATURE','AUTH_CLAIMS',
+  'AUTH_TOKEN_FORMAT','AUTH_PUBLIC_KEYS','AUTH_KEYS_NETWORK','AUTH_KEYS_HTTP',
+  'AUTH_KEYS_JSON','AUTH_KEYS_SHAPE','AUTH_KEYS_FILTER',
+  'AUTH_KID_MISMATCH','AUTH_SIGNATURE','AUTH_CLAIMS',
 ]);
 export function createQaFirebaseVerifier749({send=fetch,now=Date.now,subtle=globalThis.crypto?.subtle}={}){
   const cache=new Map();
   async function keys(endpoint,stage){
     const previous=cache.get(endpoint);
     if(previous&&now()<previous.expires)return previous.keys;
+    // No upstream status/body/key material is returned to the browser.
+    const reason=kind=>stage==='AUTH_PUBLIC_KEYS'?'AUTH_KEYS_'+kind:stage;
     let res;
     try{
       res=await send(endpoint,{method:'GET',redirect:'error',
         headers:{Accept:'application/json'},signal:AbortSignal.timeout(12000)});
-    }catch{fail(stage)}
-    if(!res?.ok||res.status!==200)fail(stage);
+    }catch{fail(reason('NETWORK'))}
+    if(!res?.ok||res.status!==200)fail(reason('HTTP'));
     let json;
-    try{json=await res.json()}catch{fail(stage)}
+    try{json=await res.json()}catch{fail(reason('JSON'))}
     if(!Array.isArray(json?.keys)||json.keys.length<1||json.keys.length>30)
-      fail(stage);
+      fail(reason('SHAPE'));
     const usable=json.keys.filter(k=>k?.kty==='RSA'&&k?.n&&k?.e&&
       /^[A-Za-z0-9_-]{1,256}$/.test(k?.kid||'')&&
       (!k.alg||k.alg==='RS256')&&(!k.use||k.use==='sig'));
-    if(!usable.length)fail(stage);
+    if(!usable.length)fail(reason('FILTER'));
     const maxAge=/\bmax-age=(\d+)\b/i.exec(res.headers?.get('cache-control')||'');
     const ttl=Math.min(21600,Math.max(0,Number(maxAge?.[1]||300)));
     cache.set(endpoint,{keys:usable,expires:now()+ttl*1000});

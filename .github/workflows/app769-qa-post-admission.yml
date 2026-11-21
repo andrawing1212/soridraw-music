@@ -6,11 +6,6 @@ on:
       - 'scripts/app769-qa-post-admission.mjs'
       - 'scripts/verify-769-qa-post-admission-offline.mjs'
       - '.github/workflows/app769-qa-post-admission.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/app769-qa-post-admission.mjs'
-      - '.github/workflows/app769-qa-post-admission.yml'
 permissions:
   contents: read
 concurrency:
@@ -35,7 +30,7 @@ jobs:
           node --check scripts/app769-qa-post-admission.mjs
           node scripts/verify-769-qa-post-admission-offline.mjs
   live:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'andrawing1212/soridraw-music'
+    if: false # APP769 approved once; physical QA PASS. New scope needs approval
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:

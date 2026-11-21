@@ -1,3 +1,13 @@
+## CURRENT — APP769 QA R2 접수 후 D1 장애·ACK 소실 합성 실검증 PASS / 자동 복구 HOLD (2026-11-22 KST)
+
+- **디렉터 YES 범위:** APP768 기존 격리 Cloudflare QA 계정·기존 D1 `soridraw-qa-app768-d1` 및 R2 `soridraw-qa-app768-r2`만 사용. 새 Worker·버킷·데이터베이스·토큰·권한 생성 0. 기존 APP583 원본 버전 `4ed70845-6a4b-4a80-9c51-ed95d0becc38` 활성 100% 검사. [PR #1336](https://github.com/andrawing1212/soridraw-music/pull/1336) 병합 `e98be05dad073b7cbc3b5fa8b0b9b6b6c831c1ba`.
+- **QA 실행:** [GitHub Actions #44953090705](https://github.com/andrawing1212/soridraw-music/actions/runs/44953090705) **SUCCESS**. 시험 A: R2 QA 관리 API를 이용한 합성 접수 객체 업로드 성공 후 기존 QA D1 합성 테이블에서 **실제 잘못된 열 SQL 실패**를 의도적으로 발생시킴. 해당 합성 키 D1 COUNT=0, 자동 동일 요청 재기록 0을 확인. 시험 B: 다른 합성 R2 객체 업로드 및 QA D1 합성 INSERT 성공, 시험 코드가 완료 응답을 의도적으로 버리는 **모의 ACK 소실**을 주입한 뒤 동일 합성 키 SELECT로 D1 행 존재 확인, 재INSERT 0. 기존 APP768 Workers R2 `onlyIf` 6중 경합 물리 PASS는 재사용하며 재실행하지 않음.
+- **정리 PASS:** 두 정확한 합성 R2 객체 삭제, QA D1 합성 행 정확 삭제 및 0건 재확인, 기존 APP583 100% 및 기존 QA D1·R2 그대로 보존. 운영 사용자·공유 Worker/D1/R2/Functions/RTDB/Rules/Hosting, PREVIEW/TEST/PRODUCTION 변경 0. 실제 계정 청구액은 미측정.
+- **증거의 한계:** R2 객체 업로드는 **관리 API**이며 이 실행에서 Workers R2 조건부 원자성 재검사를 하지 않음. SQL 실패는 의도적 열 이름 오류, 응답 소실은 **테스트 클라이언트가 모의로 주입**한 것으로 실제 통신 두절·장애 후 운영 재전송을 증명하지 않음. 실제 팔로우 canonical D1 W1~W2, 과거 ID 전체 원장, Auth epoch·외부 revision floor, 모든 구형 Writer 연동, DO PITR 후 정확한 settled R2↔D1 reconcile, PC↔모바일 실사용은 **NOT_TESTED**. 자동 복구는 **HOLD**이며 APP765/767 compile OFF, APP737/738 PRODUCTION 릴리스 HOLD.
+- **재검사 차단:** 이 한정된 QA 검증 완료로 동일 workflow 실서버 `push` 트리거 및 `live` job OFF. PR 오프라인 안전검사 코드는 보존. 이미 PASS한 APP768 QA 반복 호출 및 추가 과금 없음.
+
+---
+
 ## CURRENT — APP768 실제 QA R2 조건부 6중 경합 PASS · 자동 재실행 OFF (2026-11-22 KST)
 
 - **승인된 미완료 QA 마무리:** 디렉터 YES로 기존 격리 Cloudflare QA 계정의 R2 버킷을 재사용하여 임시 Worker 1개 생성 → 동일 작업 ID 6개 동시 요청 → 정확한 합성 객체 및 임시 Worker 삭제를 시행. [PR #1332](https://github.com/andrawing1212/soridraw-music/pull/1332)·[#1333](https://github.com/andrawing1212/soridraw-music/pull/1333)·[#1334](https://github.com/andrawing1212/soridraw-music/pull/1334)·[#1335](https://github.com/andrawing1212/soridraw-music/pull/1335)에서 실제 실패의 최소 원인만 해결, 합격한 기초 D1 검사는 반복하지 않음.

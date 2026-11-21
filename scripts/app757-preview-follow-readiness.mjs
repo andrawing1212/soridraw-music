@@ -1,0 +1,165 @@
+// APP757: canary PREVIEW follow backend live metadata ONLY.
+// Source-only metadata check, not a rollout. Never requests user data, RTDB
+// values, migrations, secrets, or Worker/Functions/Rules mutations.
+import {createHash} from 'node:crypto';
+import {readWorker} from './app728-direct-preflight.mjs';
+const PROJECT='soridraw-app-866a5';
+const PREVIEW='soridraw-explore-preview';
+const REGION='asia-northeast3';
+const EXPECTED_APP='91309780603';
+const FUNCTIONS=['enrollOwnerFollow544Candidate','verifyOwnerFollowEpoch547Candidate',
+ 'publishExploreOwnerFollower542'];
+const sha=value=>createHash('sha256').update(value).digest('hex');
+const need=(key)=>{
+ const value=String(process.env[key]||'').trim();
+ if(value.length<30)throw Error('APP757_REQUIRED_CREDENTIAL_UNAVAILABLE_'+key);
+ return value;
+};
+const safeHost=(url)=>{
+ try{
+  const u=new URL(url);
+  return u.protocol==='https:'&&u.username===''&&u.password===''&&
+    (u.hostname.endsWith('.firebasedatabase.app')||
+     u.hostname.endsWith('.firebaseio.com'))&&u.pathname==='/'&&
+    u.search===''&&u.hash==='';
+ }catch{return false}
+};
+const okBinding=(worker,name,type)=>worker?.bindings?.some(x=>x.name===name&&x.type===type);
+const names=worker=>(worker?.bindings||[]).map(x=>x.name);
+export function assessApp757CanaryReadiness({worker,functions,rtDb,gitRulesNode,
+  sourceHeadPinned}={}){
+ const blockers=[];
+ const add=x=>blockers.push(x);
+ if(!sourceHeadPinned)add('PREVIEW_SOURCE_NOT_PINNED');
+ if(worker?.name!==PREVIEW||!worker?.activeVersion||worker.trafficPercent!==100)
+   add('PREVIEW_ACTIVE_WORKER_NOT_PROVEN');
+ if(!worker?.pinnedBindingsVerified)add('PREVIEW_ACTIVE_BINDINGS_NOT_PINNED');
+ if(!worker?.schedulesVerified)add('PREVIEW_SCHEDULES_NOT_PROVEN');
+ const env=worker?.bindings?.find(x=>x.name==='SORIDRAW_ENVIRONMENT');
+ if(env?.type!=='plain_text'||env.plainHash!==sha('preview'))
+   add('PREVIEW_ENVIRONMENT_IDENTITY_UNVERIFIED');
+ for(const [name,type] of [
+  ['DB','d1'],['PROFILE_MEDIA','r2_bucket'],
+  ['OWNER_FOLLOW_RECOVERY_557','durable_object_namespace'],
+  ['OWNER_FOLLOW_RESERVATION_SERVICE_600','service'],
+  ['SORIDRAW_OWNER_FOLLOW_CANARY_UID_574','plain_text'],
+  ['SORIDRAW_OWNER_FOLLOW_HMAC_539','secret_text'],
+  ['SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544','secret_text'],
+ ]){
+  if(!okBinding(worker,name,type))add('PREVIEW_BINDING_MISSING_'+name);
+ }
+ const fnSummary=FUNCTIONS.map(name=>{
+  const item=functions?.[name];
+  if(item?.status!=='ACTIVE')
+    add('FUNCTION_NOT_ACTIVE_OR_UNVERIFIED_'+name);
+  return {name,status:item?.status||'UNKNOWN'};
+ });
+ if(rtDb?.status!=='READ'||rtDb?.singleInstance!==true)
+  add('SHARED_RTDB_ACTIVE_RULES_NOT_READ');
+ if(rtDb?.rulesNodePresent!==true)add('RTDB_OWNER_FOLLOW_PATH_NOT_PROVEN');
+ if(rtDb?.ownerReadOnly!==true)add('RTDB_OWNER_ONLY_READ_NOT_PROVEN');
+ if(rtDb?.clientWriteBlocked!==true)add('RTDB_CROSS_ACCOUNT_CLIENT_WRITE_NOT_BLOCKED');
+ if(gitRulesNode!==true)add('PREVIEW_GIT_RULES_PATH_NOT_PRESENT');
+ // Environment isolation cannot be inferred from metadata or a source flag;
+ // active function code, real DO exact receipt, rollback and scoped usage
+ // require independent proof before any shared-backend mutation.
+ add('CANARY_REAL_PROOF_AND_ROLLBACK_NOT_COMPLETE');
+ const previewFollowBindings=names(worker).filter(x=>
+   /OWNER_FOLLOW|PUBLIC_FOLLOW/.test(x)).sort();
+ return {
+  code:'APP757_PREVIEW_CANARY_METADATA_GET_ONLY',
+  status:'HOLD',sourceOnly:true,
+  previewWorker:{activeVersion:worker?.activeVersion||null,
+    bindingCount:worker?.bindings?.length||0,
+    pinnedBindingsVerified:worker?.pinnedBindingsVerified===true,
+    followRelatedBindingCount:previewFollowBindings.length,
+    knownRequiredNamesVerified:!blockers.some(x=>x.startsWith('PREVIEW_BINDING_MISSING_'))},
+  functions:fnSummary,
+  rtDb:{status:rtDb?.status||'UNKNOWN',singleInstance:rtDb?.singleInstance===true,
+    ownerReadOnly:rtDb?.ownerReadOnly===true,
+    clientWriteBlocked:rtDb?.clientWriteBlocked===true,
+    rulesNodePresent:rtDb?.rulesNodePresent===true},
+  sourceRulesNodePresent:gitRulesNode===true,
+  blockers:[...new Set(blockers)],
+  readOnly:true,externalWrites:0,
+  sharedUserDataReads:0,previewBackendMutationAllowed:false,
+  productionTouched:false,testTouched:false,
+ };
+}
+async function get(url,token,{allowMissing=false}={}){
+ const res=await fetch(url,{method:'GET',redirect:'manual',
+  headers:{Authorization:'Bearer '+token,Accept:'application/json'},
+  signal:AbortSignal.timeout(15000)});
+ if(allowMissing&&res.status===404)return {missing:true};
+ if(res.status!==200)throw Error('APP757_METADATA_READ_HOLD_HTTP_'+res.status);
+ try{return await res.json()}catch{throw Error('APP757_INVALID_METADATA_JSON')}
+}
+async function probeFunction(name,access){
+ const path=encodeURIComponent(name);
+ const url='https://cloudfunctions.googleapis.com/v2/projects/'+PROJECT+
+   '/locations/'+REGION+'/functions/'+path;
+ try{
+  const d=await get(url,access,{allowMissing:true});
+  if(d.missing)return {status:'NOT_DEPLOYED'};
+  if(d.name!=='projects/'+PROJECT+'/locations/'+REGION+'/functions/'+name)
+    return {status:'UNVERIFIED_NAME'};
+  return {status:d.state==='ACTIVE'?'ACTIVE':(d.state||'UNVERIFIED_STATE')};
+ }catch{return {status:'UNREADABLE'}}
+}
+export function summarizeOwnerRules(rules){
+ const item=rules?.rules?.ownerFollowerSync532?.$uid;
+ if(!item||typeof item!=='object')
+  return {rulesNodePresent:false,ownerReadOnly:false,clientWriteBlocked:false};
+ const read=String(item['.read']||'').replace(/\s+/g,' ');
+ // Restrict to an exact owner-only expression, not a permissive OR or root read.
+ const ownerReadOnly=/^(?:auth\s*!=\s*null\s*&&\s*auth\.uid\s*===\s*\$uid|auth\s*!==\s*null\s*&&\s*auth\.uid\s*===\s*\$uid)$/.test(read);
+ const ruleKeys=Object.keys(rules.rules);
+ const rootRead=rules.rules['.read'];
+ const rootWrite=rules.rules['.write'];
+ const clientWriteBlocked=item['.write']===false&&rootWrite===false&&
+   rootRead===false&&ruleKeys.every(x=>x!=='.validate'||rules.rules[x]===false);
+ return {rulesNodePresent:true,ownerReadOnly,clientWriteBlocked};
+}
+async function probeRtDb(access){
+ try{
+  const result=await get('https://firebasedatabase.googleapis.com/v1beta/projects/'+
+    PROJECT+'/locations/-/instances',access);
+  const instances=Array.isArray(result.instances)?result.instances:[];
+  const active=instances.filter(x=>x?.state==='ACTIVE'&&safeHost(x.databaseUrl||''));
+  // Multiple active RTDBs are not interchangeable. Never select an
+  // arbitrary instance to claim an owner-only shared-security rule.
+  if(active.length!==1||result.nextPageToken)
+    return {status:'AMBIGUOUS',singleInstance:false,...summarizeOwnerRules(null)};
+  const rules=await get(active[0].databaseUrl+'.settings/rules.json',access);
+  return {status:'READ',singleInstance:true,...summarizeOwnerRules(rules)};
+ }catch{return {status:'UNREADABLE',singleInstance:false,
+   ...summarizeOwnerRules(null)}}
+}
+async function main(){
+ if(process.env.GITHUB_REPOSITORY!=='andrawing1212/soridraw-music'||
+    process.env.GITHUB_REF!=='refs/heads/main')
+   throw Error('APP757_REQUIRE_MAIN_CONTROLLER');
+ const preview=String(process.env.APP757_PREVIEW_SHA||'');
+ if(!/^[0-9a-f]{40}$/.test(preview))throw Error('APP757_INVALID_PREVIEW_SHA');
+ const cf=need('CLOUDFLARE_API_TOKEN'),google=need('FIREBASE_ACCESS_TOKEN');
+ const [worker,functionsArr,rtDb]=await Promise.all([
+   readWorker(PREVIEW,cf),
+   Promise.all(FUNCTIONS.map(async name=>[name,await probeFunction(name,google)])),
+   probeRtDb(google),
+ ]);
+ const functions=Object.fromEntries(functionsArr);
+ // Existing checked-in RTDB rules are not automatically actual active rules.
+ const {readFileSync}=await import('node:fs');
+ let gitRulesNode=false;
+ try{
+   const rules=JSON.parse(readFileSync(process.env.APP757_SOURCE_RULES,'utf8'));
+   gitRulesNode=Boolean(rules?.rules?.ownerFollowerSync532?.$uid);
+ }catch{}
+ const report=assessApp757CanaryReadiness({
+   worker,functions,rtDb,gitRulesNode,sourceHeadPinned:true});
+ console.log(JSON.stringify(report,null,2));
+ console.log('APP757_LIVE_METADATA_ONLY=PASS; SHARED_CHANGES=0; ROLLOUT=HOLD');
+}
+if(process.argv[1]?.endsWith('/app757-preview-follow-readiness.mjs')){
+ main().catch(e=>{console.error(String(e?.message||e));process.exitCode=2});
+}

@@ -131,10 +131,17 @@ async function deploy(){
  if(sub.status!==200||sj?.success!==true)
   hold('QA_WORKER_SUBDOMAIN_'+sub.status+'_CODES_'+
    (sj?.errors||[]).map(e=>e?.code||'NA').join('_'));
- const available=await api(BASE+'/workers/scripts/'+worker,
-  process.env.CLOUDFLARE_QA_API_TOKEN);
- if(available.code!==200||available.json?.success!==true)
-  hold('QA_WORKER_UPLOAD_NOT_VISIBLE');
+ // GET /workers/scripts/:name returns raw Worker code, not API JSON.
+ // Wait only for this one newly created QA Worker to become readable.
+ let readable=false;
+ for(let i=0;i<12;i++){
+  const available=await api(BASE+'/workers/scripts/'+worker,
+   process.env.CLOUDFLARE_QA_API_TOKEN);
+  if(available.code===200){readable=true;break;}
+  if(available.code!==404)hold('QA_WORKER_VERIFY_HTTP_'+available.code);
+  if(i<11)await delay(1500);
+ }
+ if(!readable)hold('QA_WORKER_UPLOAD_NOT_VISIBLE');
  console.log('APP768_DISPOSABLE_QA_WORKER_DIRECT_UPLOAD=PASS');
 }
 

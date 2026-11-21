@@ -81,6 +81,12 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
           token_format: access_token
+          # Same narrow RTDB read scopes as the existing approved PREVIEW
+          # Rules workflow, plus Cloud Functions GET metadata access.
+          access_token_scopes: |
+            https://www.googleapis.com/auth/firebase.database
+            https://www.googleapis.com/auth/userinfo.email
+            https://www.googleapis.com/auth/cloud-platform
       - name: GET-only PREVIEW Worker / Firebase Functions / shared RTDB Rules metadata
         shell: bash
         env:

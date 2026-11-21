@@ -1,3 +1,12 @@
+## CURRENT — APP749 독립 QA 실제 A↔B 인증·팔로우/취소·PC↔모바일 자동 수신 PASS / 정식 승격은 별도 HOLD (2026-11-21 KST)
+
+- **최신 사용자 실사용 증거(같은 날 22:16~22:17 KST 화면):** QA 전용 `https://soridraw-qa-owner-584.web.app/qa749.html` PC에서 기존 A/B Firebase 실로그인, 서버 서명 인증과 RTDB 기준 0명 확인 PASS. B→A 팔로우 1회 후 A 수신 1명/버전 11, 취소 1회 후 0명/버전 12. PC 검증 기록에는 `팔로우·취소 검증 PASS · 최종 팔로워 0명`, `A PC↔모바일 + 서버 최종 반영 PASS`가 표시됐고, 모바일 A도 새로고침 없이 0명/버전 10 → 1명/버전 11 → 0명/버전 12 순서를 수신한 화면 제공. 이는 **APP749 독립 QA 실제 로그인·서명/동기화 경로 PASS**이며 이전 APP583 또는 APP730 합성 검사 PASS를 재표기한 것이 아님.
+- **고장 수정·재사용 기준:** 공개키 조회 과정의 `redirect:'error'`가 실제 Cloudflare Workers에서 `AUTH_KEYS_NETWORK`로 실패하던 원인을 `redirect:'manual'`(3xx는 기존 200-only 게이트에서 거절)로 수정. [PR #1301](https://github.com/andrawing1212/soridraw-music/pull/1301), main `1d7330f7bef1d0d646d5bc1eed767c264afcfa2f`, [오프라인+Google 공개키 검사 #44907298349](https://github.com/andrawing1212/soridraw-music/actions/runs/44907298349) PASS. GitHub issue-comment 실행 **#57 전체 SUCCESS**를 사용자 화면에서 확인(정확한 실행 ID 별도 기록 없음); 정해진 `always()` APP583 원본 100% 복구+원본 HTTP 확인 포함. 현장 QA A↔B 테스트는 새 실패/관련 코드·QA 바인딩·Auth/Rules 변경이 없으면 반복하지 않음.
+- **명확한 한계:** QA 전용 Firebase 프로젝트 `soridraw-app`·QA Worker에서 두 합성 계정으로 한정한 PASS. 모든 로그인 계정/실서비스 PREVIEW·PRODUCTION 서버, 장애 503 후 재전송, 비용·전체 기능 동등성까지 합격한 것으로 확대하지 않는다. 현재 `preview` 고정 HEAD `4363820117100cb03bcbc44a01e127aeb5de3cf4`와 실제 일반 사용자 서버 배포는 별개. 사용자 데이터/TEST/PRODUCTION 배포·변경 없음.
+- **배포 속도 원칙:** [직접 승격 계약](./PREVIEW_PRODUCTION_DIRECT_PROMOTION.md)대로 최초 PREVIEW↔PRODUCTION 서버/데이터/복구 호환성 증거를 1회 확보한 후, 백엔드 활성 버전·바인딩·함수/Rules·API/비용 계약이 동일하면 이후 일반 Hosting-only 승격에서 기존 백엔드 QA/전체 회귀를 재수행하지 않고 변경 범위+고정 활성 Hosting SHA·롤백·PC/모바일 영향 경로만 검증한다. **APP737/738 준비 코드 있음, PROD 실제 승격은 아직 HOLD**(PREVIEW 41 / PROD 12 Explore bindings, PREVIEW-only 31, 독립 승격 증거 파일 부재·운영 기능 동일성 미확정).
+
+---
+
 ## 0APP749J. APP749 CSP 안전 비교 수정 QA584 Hosting 실제 배포 PASS / A↔B 실기기 로그인·실시간 수신 미검증 (2026-11-21 KST)
 
 - 디렉터 QA 전용 Cloud Shell에서 고정 commit `89857fe5bd1dc19aba467cc33e0ca8e272ef7585`의 `scripts/app749-qa-hosting-scoped-csp.mjs --check && --deploy` 실행 사진 확인: `APP749_QA_SITE_EXISTING_RECEIVER=PASS`, `APP749_QA_ORIGINAL_RELEASE_AND_FILES_PINNED=PASS`, `APP749_QA_SCOPED_CSP_CONFIG_PINNED=PASS`, `APP749_QA_APPEND_RELEASE_CREATED=PASS`, `APP749_QA_AUTH_CONFIG_AND_SCOPED_CSP_HTTP=PASS`, `APP749_QA_NEW_PAGE_AND_OLD_RECEIVER_HTTP=PASS`, `APP749_QA_HOSTING_DEPLOY=PASS`, **종료코드 0**.

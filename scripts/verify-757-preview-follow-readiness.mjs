@@ -19,7 +19,9 @@ const worker={name:'soridraw-explore-preview',activeVersion:'cfd40718-6ab5-4133-
 const names=['enrollOwnerFollow544Candidate','verifyOwnerFollowEpoch547Candidate',
  'publishExploreOwnerFollower542'];
 const funcs=Object.fromEntries(names.map(n=>[n,{status:'ACTIVE',
- canaryScopeConfigured:true,generalPreviewDisabled:true}]));
+ canaryScopeConfigured:true,generalPreviewDisabled:true,
+ readyFlagConfigured:true,generalPreviewRequested:false,
+ sourceBoundaryPreview:true}]));
 const validRule={'rules':{'.read':false,'.write':false,
  ownerFollowerSync532:{$uid:{'.read':"auth != null && auth.uid === $uid && auth.token.soridrawFollowEpoch532 != null && (!data.exists() || auth.token.soridrawFollowEpoch532 === data.child('authEpoch').val())",
  '.write':false}}}};
@@ -33,13 +35,15 @@ assert.equal(summarizeOwnerRules({rules:{'.read':false,'.write':false,
 assert.deepEqual(summarizeOwnerRules({rules:{'.read':false,'.write':false}}),
  {rulesNodePresent:false,ownerReadOnly:false,clientWriteBlocked:false});
 const sample={worker,functions:funcs,rtDb:{status:'READ',singleInstance:true,...proof},
+ ownerService:{status:'PINNED_TARGET_OWNER_DO',activeVersion:'5a2d333c-f703-4ef7-9468-0293f7699268'},
  gitRulesNode:true,sourceHeadPinned:true};
 const ready=assessApp757CanaryReadiness(sample);
 assert.equal(ready.status,'HOLD');
 assert.deepEqual(ready.blockers,[
- 'OWNER_DO_SERVICE_TARGET_AND_ALARM_UNVERIFIED',
+ 'OWNER_DO_SERVICE_ACTUAL_RESERVATION_AND_ALARM_UNPROVEN',
  'CANARY_REAL_PROOF_AND_ROLLBACK_NOT_COMPLETE',
 ]);
+assert.equal(ready.previewWorker.ownerDoServiceTargetStatus,'PINNED_TARGET_OWNER_DO');
 assert.equal(ready.previewWorker.ownerDoDirectBound,true);
 assert.equal(ready.previewWorker.ownerDoServiceBound,true);
 assert.equal(ready.productionTouched,false);
@@ -59,6 +63,11 @@ for(const x of [
  {functions:{...funcs,publishExploreOwnerFollower542:{status:'ACTIVE',
    canaryScopeConfigured:false,generalPreviewDisabled:true}},
  marker:'FUNCTION_CANARY_GATE_UNVERIFIED_publishExploreOwnerFollower542'},
+ {functions:{...funcs,publishExploreOwnerFollower542:{status:'ACTIVE',
+   canaryScopeConfigured:false,generalPreviewDisabled:false,
+   generalPreviewRequested:true}},
+ marker:'FUNCTION_GENERAL_PREVIEW_FLAG_PRESENT_publishExploreOwnerFollower542'},
+ {ownerService:{status:'UNREADABLE'},marker:'OWNER_DO_SERVICE_TARGET_NOT_PINNED'},
  {rtDb:{status:'UNREADABLE',singleInstance:false,...summarizeOwnerRules(null)},
  marker:'SHARED_RTDB_ACTIVE_RULES_NOT_READ'},
  {rtDb:{status:'READ',singleInstance:true,...summarizeOwnerRules(null)},
@@ -83,3 +92,5 @@ console.log('APP757_PINNED_LIVE_RTDB_OWNER_EPOCH_RULE_AND_GIT_SNAPSHOT_DRIFT=PAS
 console.log('APP757_READONLY_RESOURCE_STATUS_AND_OWNER_RULE_FENCES=PASS');
 console.log('APP757_NO_AUTOMATIC_PREVIEW_BACKEND_DEPLOY_OR_DATA_ACCESS=PASS');
 console.log('APP757_CANARY_REAL_ROLLBACK_PROOF_REQUIRED_HOLD=PASS');
+
+console.log('APP757_APP600_SERVICE_TARGET_AND_SHARED_FUNCTION_GENERAL_SCOPE_GATES=PASS');

@@ -115,7 +115,21 @@ const invalidHeader=new Request(signed,{headers:{
 await assertStage(verify,invalidHeader,'AUTH_TOKEN_FORMAT');
 const noKeys=createQaFirebaseVerifier749({send:async()=>new Response('unavailable',{status:503}),
  now:()=>now});
-await assertStage(noKeys,signed,'AUTH_PUBLIC_KEYS');
+await assertStage(noKeys,signed,'AUTH_KEYS_HTTP');
+const network=createQaFirebaseVerifier749({send:async()=>{throw Error('network')},now:()=>now});
+await assertStage(network,signed,'AUTH_KEYS_NETWORK');
+const invalidJson=createQaFirebaseVerifier749({send:async()=>({
+  ok:true,status:200,json:async()=>{throw Error('bad json')},
+}),now:()=>now});
+await assertStage(invalidJson,signed,'AUTH_KEYS_JSON');
+const invalidShape=createQaFirebaseVerifier749({send:async()=>({
+  ok:true,status:200,json:async()=>({notKeys:[]}),
+}),now:()=>now});
+await assertStage(invalidShape,signed,'AUTH_KEYS_SHAPE');
+const filtered=createQaFirebaseVerifier749({send:async()=>({
+  ok:true,status:200,json:async()=>({keys:[{kty:'EC',kid:'x',n:'bad',e:'AQAB'}]}),
+}),now:()=>now});
+await assertStage(filtered,signed,'AUTH_KEYS_FILTER');
 const missingKid=createQaFirebaseVerifier749({send:async()=>({
  ok:true,status:200,headers:new Headers(),json:async()=>({keys:[{...jwk,kid:'not-current'}]})
 }),now:()=>now});

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {assessApp757CanaryReadiness,summarizeOwnerRules}
+import {assessApp757CanaryReadiness,summarizeOwnerRules,assessOwnerServiceTarget600}
  from './app757-preview-follow-readiness.mjs';
 const hash=x=>createHash('sha256').update(x).digest('hex');
 const required=[
@@ -34,6 +34,35 @@ assert.equal(summarizeOwnerRules({rules:{'.read':false,'.write':false,
  '.write':false}}}}).ownerReadOnly,false);
 assert.deepEqual(summarizeOwnerRules({rules:{'.read':false,'.write':false}}),
  {rulesNodePresent:false,ownerReadOnly:false,clientWriteBlocked:false});
+const exactOwner600={
+ name:'soridraw-owner-follow-preview-candidate',
+ activeVersion:'5a2d333c-f703-4ef7-9468-0293f7699268',
+ trafficPercent:100,pinnedBindingsVerified:true,schedulesVerified:true,
+ bindings:[{name:'OWNER_FOLLOW_DO_600',type:'durable_object_namespace',
+   class_name:'OwnerFollowerStandalone600'}],
+};
+assert.deepEqual(assessOwnerServiceTarget600(
+ exactOwner600,exactOwner600.name),{
+ status:'PINNED_TARGET_OWNER_DO',activeVersion:exactOwner600.activeVersion,
+ failedChecks:[],
+});
+for(const [patch,reason] of [
+ [{name:'unexpected-worker'},'exactTargetName'],
+ [{activeVersion:''},'activeVersionPresent'],
+ [{trafficPercent:0},'traffic100'],
+ [{pinnedBindingsVerified:false},'pinnedBindingIdentity'],
+ [{schedulesVerified:false},'schedulesMetadataReadable'],
+ [{bindings:[]},'exactDoClassBound'],
+]){
+ const checked=assessOwnerServiceTarget600({...exactOwner600,...patch},exactOwner600.name);
+ assert.equal(checked.status,'TARGET_BINDING_UNVERIFIED');
+ assert(checked.failedChecks.includes(reason));
+ assert(checked.failedChecks.every(x=>[
+  'exactTargetName','activeVersionPresent','traffic100','pinnedBindingIdentity',
+  'schedulesMetadataReadable','exactDoClassBound'].includes(x)));
+}
+assert.equal(assessOwnerServiceTarget600({},'wrong-worker').status,
+ 'TARGET_BINDING_UNVERIFIED');
 const sample={worker,functions:funcs,rtDb:{status:'READ',singleInstance:true,...proof},
  ownerService:{status:'PINNED_TARGET_OWNER_DO',activeVersion:'5a2d333c-f703-4ef7-9468-0293f7699268'},
  gitRulesNode:true,sourceHeadPinned:true};
@@ -44,6 +73,7 @@ assert.deepEqual(ready.blockers,[
  'CANARY_REAL_PROOF_AND_ROLLBACK_NOT_COMPLETE',
 ]);
 assert.equal(ready.previewWorker.ownerDoServiceTargetStatus,'PINNED_TARGET_OWNER_DO');
+assert.deepEqual(ready.previewWorker.ownerDoServiceTargetFailedChecks,[]);
 assert.equal(ready.previewWorker.ownerDoDirectBound,true);
 assert.equal(ready.previewWorker.ownerDoServiceBound,true);
 assert.equal(ready.productionTouched,false);
@@ -94,3 +124,5 @@ console.log('APP757_NO_AUTOMATIC_PREVIEW_BACKEND_DEPLOY_OR_DATA_ACCESS=PASS');
 console.log('APP757_CANARY_REAL_ROLLBACK_PROOF_REQUIRED_HOLD=PASS');
 
 console.log('APP757_APP600_SERVICE_TARGET_AND_SHARED_FUNCTION_GENERAL_SCOPE_GATES=PASS');
+
+console.log('APP757_OWNER_DO_TARGET_FAILURE_CODES_NO_SECRETS=PASS');

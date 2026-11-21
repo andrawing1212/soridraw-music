@@ -1,3 +1,12 @@
+## CURRENT — APP763 소유자 DO 10만 명 운영 비용·장기 보존 복구 검증 (2026-11-22 KST)
+
+- **작업 범위:** APP762 완료/held 기록을 owner별 영구 개별 키로 보관하는 정책에 대해 Cloudflare 공식 SQLite DO 요금/Free·Paid 한도/Legacy KV 차이를 조사하고 10만 owner × 5/50/500회/년, 10년 누적 사용량을 **가정으로만** 산출. 모델과 원본 공식 URL·전제·제외 비용은 `DOCS/APP763_OWNER_FOLLOW_STORAGE_COST_AND_RECOVERY.md`에 고정. 실제 계정별 플랜/사용량/물리 DB 바이트와 다른 Cloudflare/Firebase 기능의 공용 할당량 소모는 미확인.
+- **복구 안전:** 순수 코드의 합성 owner별 hot queue/archived key를 owner·receipt 식별값 유출 없이 SHA-256과 개수로 고정하는 오프라인 검사. 복구 뒤 1개 키 손실, hot state 되돌림, 다른 owner·operation ID 치환, 기록 중복 시 **HOLD**. 오프라인 저장소가 일치해도 외부 canonical D1/R2·Auth epoch·Functions 수신점이 최신이라는 보장이 없어 실서비스 복구/정식 배포 PASS로 보고하지 않는다.
+- **고위험 미해결:** APP762 `archiveUsed=true`에서 개별 archived key만 누락되면 현재 저장소 코드가 이를 `absent`로 해석할 여지가 있으므로 실제 재처리·운영 활성화 **HOLD**. DO storage의 PITR는 시점 복구로 다른 서버의 정본을 되돌리지 않으며, 실제 DO 복원/재전송 검사 전 별도 보호 구조가 필요하다. 보존 기록 삭제·TTL·마이그레이션·원본 데이터 접근 없이 위험을 문서화한다.
+- **불변 조건:** APP749 실기기 A/B PC↔모바일 및 APP760 QA 503→복구/원본 Worker 원복 PASS 재검사하지 않음. APP755/759/761/762 PRODUCTION source compile OFF, APP737/738 릴리스 HOLD. PREVIEW/TEST/PRODUCTION Cloudflare·Firebase·DO·Functions·D1/R2/RTDB/Hosting/공유 사용자 데이터 변경·배포 0.
+
+---
+
 ## CURRENT — APP762 24개 완료 예약 누적 차단 수정: 불변 보존 키 + 24개 처리 대기 목록 유지 (2026-11-22 KST)
 
 - **수정 대상:** 기존 APP755 owner Durable Object 예약 기록은 완료·보류 후에도 `app755-owner-follow-pending-v1` 한 목록(최대 24개)에 남아 누적 24번째 이후 새 요청을 거부했다. 새 APP762는 **목록이 실제로 가득 찼을 때에만** 가장 오래된 완료(`delivered`) 또는 보류(`held`) 예약을 같은 owner DO storage 내 canonical-operation-ID별 개별 영구 보존 키(`app762-owner-follow-final-*`)에 **하나만 원자적으로 이동**한 뒤 신규 예약을 추가한다. 보존 키에는 원래 server-issued operation ID·authEpoch/소유자·최종 상태가 유지되며, 재전송된 옛 canonical ID는 목록과 단일 보존 키를 조회하여 원래 예약을 반환한다. 삭제·TTL·일괄 scan·방문 시 쓰기·상시 polling·D1/R2/RTDB 접근 없음.

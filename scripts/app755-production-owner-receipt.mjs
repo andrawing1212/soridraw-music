@@ -11,6 +11,18 @@ const KEY='app755-owner-follow-pending-v1',MAX=24,DELAY=1000;
 // map to its original server-issued receipt, including across Worker upgrades.
 const FINAL_PREFIX='app762-owner-follow-final-';
 const finalKey=id=>FINAL_PREFIX+id;
+// APP764: independent monotonic per-owner index guards missing archive keys.
+// SHA-256 truncated to 128-bit: collisions fail closed; no false negatives
+// for an intact index. This is NOT proof across a full DO PITR rollback.
+const HEX128=/^[a-f0-9]{32}$/;
+const HEX256=/^[a-f0-9]{64}$/;
+const digest=async input=>{
+ const bytes=new TextEncoder().encode(input);
+ const hash=await crypto.subtle.digest('SHA-256',bytes);
+ return Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('');
+};
+const archiveWitness=id=>digest(id).then(h=>h.slice(0,32));
+const archiveSeal=hashes=>digest(JSON.stringify(hashes));
 const safe=n=>Number.isSafeInteger(n)&&n>=0;
 const validDelivery=d=>d===undefined||(
  d&&['pending','delivered','held'].includes(d.status)&&
@@ -54,6 +66,18 @@ export function createApp755ProductionOwnerReceiptStore({
    const state=await st.get(KEY);
    if(state===undefined||state===null)return {version:1,ownerUid,entries:[]};
    if(!validState(state,ownerUid))hold('PERSISTED_STATE_UNVERIFIED');
+   // Legacy APP755 v1 (no rollover) still reads without an extra key/CPU
+   // hash. An APP762-only archived state without witness is UNKNOWN, never
+   // authoritative absence: there is no safe silent backfill.
+   if(state.archiveUsed===true){
+     const hashes=state.archiveWitnesses;
+     if(!Array.isArray(hashes)||!HEX256.test(state.archiveWitnessSeal||'')||
+       hashes.some((v,i)=>!HEX128.test(v)||(i>0&&hashes[i-1]>=v))||
+       await archiveSeal(hashes)!==state.archiveWitnessSeal)
+       hold('ARCHIVE_WITNESS_MISSING_OR_UNVERIFIED');
+   }else if(state.archiveWitnesses!==undefined||
+            state.archiveWitnessSeal!==undefined)
+     hold('UNEXPECTED_ARCHIVE_WITNESS');
    return state;
  };
  // Legacy v1 storage with no archiveUsed flag retains the original single
@@ -62,9 +86,18 @@ export function createApp755ProductionOwnerReceiptStore({
  const receiptFor=async(st,state,id)=>{
    const current=state.entries.find(x=>x.canonicalOperationId===id);
    if(current||state.archiveUsed!==true)return current||null;
+   // One indexed read, no listing or remote canonical query. If an
+   // archived receipt disappears but its monotonic witness survives,
+   // it cannot be represented as 'absent' or minted a second receipt.
+   const fingerprint=await archiveWitness(id);
+   const seen=state.archiveWitnesses.includes(fingerprint);
    const finished=await st.get(finalKey(id));
-   if(finished===undefined||finished===null)return null;
-   if(!validFinal(finished,id,ownerUid))hold('ARCHIVED_RECEIPT_UNVERIFIED');
+   if(finished===undefined||finished===null){
+     if(seen)hold('ARCHIVED_RECEIPT_MISSING_WITH_WITNESS');
+     return null;
+   }
+   if(!seen||!validFinal(finished,id,ownerUid))
+     hold('ARCHIVED_RECEIPT_OR_WITNESS_UNVERIFIED');
    return finished;
  };
  const alarmReady=async(st,requestedAt)=>{
@@ -113,6 +146,8 @@ export function createApp755ProductionOwnerReceiptStore({
          }
          let entries=state.entries;
          let archived=false;
+         let nextWitnesses=null;
+         let nextSeal=null;
          if(entries.length>=MAX){
            // Only finished/held receipts leave the bounded hot queue.
            // Pending work is never lost, acknowledged, or replaced.
@@ -121,6 +156,11 @@ export function createApp755ProductionOwnerReceiptStore({
            if(finishedIndex<0)return {durable:false,reason:'owner-pending-queue-full'};
            const finished=entries[finishedIndex];
            const key=finalKey(finished.canonicalOperationId);
+           const fingerprint=await archiveWitness(finished.canonicalOperationId);
+           if((state.archiveWitnesses||[]).includes(fingerprint))
+             hold('ARCHIVE_WITNESS_COLLISION_OR_REPLAY');
+           nextWitnesses=[...(state.archiveWitnesses||[]),fingerprint].sort();
+           nextSeal=await archiveSeal(nextWitnesses);
            const prior=await tx.get(key);
            if(prior!==undefined&&prior!==null){
              // An unexpected prior archive must not be overwritten, even if
@@ -142,7 +182,8 @@ export function createApp755ProductionOwnerReceiptStore({
          // Transaction commits pending receipt and DO alarm together.
          // Any error fails closed; no canonical D1 write may follow.
          await tx.put(KEY,{...state,
-           ...(archived?{archiveUsed:true}:{}),
+           ...(archived?{archiveUsed:true,archiveWitnesses:nextWitnesses,
+             archiveWitnessSeal:nextSeal}:{}),
            entries:[...entries,receipt]});
          await alarmReady(tx);
          return receipt;

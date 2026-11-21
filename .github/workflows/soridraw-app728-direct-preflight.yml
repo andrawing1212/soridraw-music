@@ -43,6 +43,7 @@ on:
       - 'scripts/app755-production-follow-backend.mjs'
       - 'scripts/verify-755-production-follow-backend.mjs'
       - 'scripts/verify-762-owner-receipt-archive.mjs'
+      - 'scripts/verify-764-owner-receipt-witness.mjs'
       - 'scripts/app763-owner-receipt-capacity.mjs'
       - 'scripts/verify-763-owner-receipt-capacity.mjs'
       - 'DOCS/APP763_OWNER_FOLLOW_STORAGE_COST_AND_RECOVERY.md'
@@ -221,6 +222,7 @@ jobs:
           node --check scripts/app755-production-follow-backend.mjs
           node scripts/verify-755-production-follow-backend.mjs
           node scripts/verify-762-owner-receipt-archive.mjs
+          node scripts/verify-764-owner-receipt-witness.mjs
           node scripts/verify-763-owner-receipt-capacity.mjs
           node --check scripts/app759-production-owner-alarm.mjs
           node scripts/verify-759-production-owner-alarm.mjs
@@ -354,6 +356,7 @@ jobs:
           node --check scripts/app755-production-follow-backend.mjs
           node scripts/verify-755-production-follow-backend.mjs
           node scripts/verify-762-owner-receipt-archive.mjs
+          node scripts/verify-764-owner-receipt-witness.mjs
           node scripts/verify-763-owner-receipt-capacity.mjs
           node --check scripts/app759-production-owner-alarm.mjs
           node scripts/verify-759-production-owner-alarm.mjs

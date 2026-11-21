@@ -118,7 +118,7 @@ jobs:
           DIRECTOR_COMMAND: ${{ github.event.comment.body }}
         run: |
           set -euo pipefail
-          SHA="$(printf '%s' "$DIRECTOR_COMMAND" | sed -nE 's|^/app749-qa-(auth|browser) ([0-9a-f]{40})$|\2|p')"
+          SHA="$(printf '%s' "$DIRECTOR_COMMAND" | sed -nE 's#^/app749-qa-(auth|browser) ([0-9a-f]{40})$#\2#p')"
           test -n "$SHA" && test "$SHA" = "$(git rev-parse HEAD)" || exit 2
           test "$SHA" = "$(git ls-remote origin refs/heads/main | cut -f1)" || exit 2
           git fetch origin preview --no-tags

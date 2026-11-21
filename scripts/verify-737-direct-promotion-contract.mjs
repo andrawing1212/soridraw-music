@@ -184,17 +184,47 @@ assert.deepEqual(Object.fromEntries(triage.evidencePriority.map(x=>[x.key,x.coun
 });
 assert(triage.evidencePriority.every(x=>x.independentProofRequired&&
  !x.canAutoExclude&&!x.canAutoInheritFromPreview));
+// APP751: convert 31 missing config entries into five review/evidence batches,
+// while preserving every single binding's source/live proof and PROD HOLD.
+const plan=triage.releaseBlockerPlan;
+assert.equal(plan.status,'HOLD_NO_RELEASE_AUTHORITY');
+assert.equal(plan.readOnly,true);
+assert.equal(plan.totalMissingBindings,31);
+assert.equal(plan.functionalBindingCount,25);
+assert.equal(plan.environmentReviewCount,6);
+assert.equal(plan.independentEvidenceBatches,5);
+assert.deepEqual(plan.workstreams.map(x=>[x.key,x.count]),[
+ ['follow',18],['release-endpoint',4],['notification',3],
+ ['cache-cost',2],['environment-identity',4],
+]);
+assert.equal(plan.nextWorkstream,'follow');
+assert.equal(plan.unknownBindingsOrEntries,0);
+assert.equal(plan.legacyBindingsPreserved,true);
+assert.equal(plan.workstreams[0].coverage,'APP749_ISOLATED_QA_AB_PC_MOBILE_PARTIAL_REUSE');
+assert(plan.workstreams.every(x=>x.proofState==='HOLD_UNTIL_PRODUCTION_EVIDENCE'));
+assert(plan.workstreams.every(x=>x.review==='REVIEW_ALL_BINDING_NAMES_AND_ACTIVE_CODE'));
+assert.equal(plan.perBindingSourceAndActiveRuntimeProofStillRequired,true);
+assert.equal(plan.allProductionFunctionAndRollbackProofStillRequired,true);
+assert.equal(plan.noAutomaticExclusionOrActivation,true);
+assert.equal(plan.productionDeployAuthorized,false);
 const unknownTriage=summarizeApp737ProductionGaps({previewOnly:[
  'SORIDRAW_NEW_USER_FEATURE_FLAG:plain_text',
  'SORIDRAW_NEW_USER_FEATURE_FLAG:plain_text',
  '???:invalid',
 ]},prodLegacy);
 assert.equal(unknownTriage.unknownCount,3);
+assert.equal(unknownTriage.releaseBlockerPlan.unknownBindingsOrEntries,3);
+assert.equal(unknownTriage.releaseBlockerPlan.independentEvidenceBatches,1);
+assert.equal(unknownTriage.releaseBlockerPlan.nextWorkstream,'unclassified');
 assert.equal(unknownTriage.productionDeploymentAllowed,false);
 const removedMirror=summarizeApp737ProductionGaps({previewOnly:realPreviewOnly31},
  {productionExplore:{bindings:prodLegacy.productionExplore.bindings.slice(0,1)}});
 assert.equal(removedMirror.productionLegacyServicesPreserved,false);
+assert.equal(removedMirror.releaseBlockerPlan.legacyBindingsPreserved,false);
 const noInventory=summarizeApp737ProductionGaps();
 assert.equal(noInventory.productionDeploymentAllowed,false);
 assert.equal(noInventory.productionLegacyServicesPreserved,false);
+assert.equal(noInventory.releaseBlockerPlan.independentEvidenceBatches,0);
+assert.equal(noInventory.releaseBlockerPlan.nextWorkstream,null);
 console.log('APP742_ACTUAL_31_BINDING_WORKSTREAM_TRIAGE=PASS; NO_RELEASE_ELIGIBILITY_IMPLIED');
+console.log('APP751_FIVE_EVIDENCE_BATCHES_25_FUNCTIONAL_6_ENVIRONMENTAL=PASS; PROD_HOLD');

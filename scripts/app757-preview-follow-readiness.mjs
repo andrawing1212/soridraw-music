@@ -130,7 +130,8 @@ async function probeRtDb(access){
   // arbitrary instance to claim an owner-only shared-security rule.
   if(active.length!==1||result.nextPageToken)
     return {status:'AMBIGUOUS',singleInstance:false,...summarizeOwnerRules(null)};
-  const rules=await get(active[0].databaseUrl+'.settings/rules.json',access);
+  const rulesUrl=new URL('/.settings/rules.json',active[0].databaseUrl).toString();
+  const rules=await get(rulesUrl,access);
   return {status:'READ',singleInstance:true,...summarizeOwnerRules(rules)};
  }catch{return {status:'UNREADABLE',singleInstance:false,
    ...summarizeOwnerRules(null)}}

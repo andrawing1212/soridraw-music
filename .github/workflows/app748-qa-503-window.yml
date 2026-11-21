@@ -41,7 +41,33 @@ jobs:
           cp scripts/verify-747-qa-fault-injection.mjs "$RUNNER_TEMP/app748-offline/scripts/"
           cp cloudflare/explore-worker/experiments/owner-follow-qa730-bridge.mjs \
             "$RUNNER_TEMP/app748-offline/cloudflare/explore-worker/experiments/"
+          for name in owner-follow-qa730-entry.mjs owner-follow-qa-real-auth-749.mjs; do
+            cp "cloudflare/explore-worker/experiments/$name" \
+              "$RUNNER_TEMP/app748-offline/cloudflare/explore-worker/experiments/"
+          done
           (cd "$RUNNER_TEMP/app748-offline" && node scripts/verify-747-qa-fault-injection.mjs)
+          # APP760: the previous live QA upload failed before deployment
+          # because the entry imports real Auth 749 but it was not copied.
+          # Bundle this exact QA entry offline BEFORE any future QA upload.
+          cd "$RUNNER_TEMP/app748-offline/cloudflare/explore-worker"
+          node --input-type=module - <<'NODE'
+          import {readFileSync,writeFileSync} from 'node:fs';
+          import assert from 'node:assert/strict';
+          const config=JSON.parse(readFileSync('wrangler.owner-qa-583.json','utf8'));
+          assert.equal(config.name,'soridraw-owner-qa-583');
+          assert.equal(config.account_id,'b60fcd62c679c64db19f0b0e0c2f3429');
+          assert.equal(config.main,'./experiments/owner-follow-isolated-558-entry.mjs');
+          assert.equal(config.d1_databases,undefined);
+          assert.equal(config.r2_buckets,undefined);
+          config.main='./experiments/owner-follow-qa730-entry.mjs';
+          config.vars.SORIDRAW_QA747_INJECT503='1';
+          config.secrets={required:['OWNER583_QA_CONFIG']};
+          writeFileSync('wrangler.app748-dryrun.json',JSON.stringify(config,null,2)+'\n');
+          NODE
+          npx --yes wrangler@4.102.0 deploy --dry-run \
+            --config wrangler.app748-dryrun.json \
+            --outdir "$RUNNER_TEMP/app760-qa-bundle"
+          echo 'APP760_ALL_QA_IMPORTS_AND_BUNDLE_OFFLINE=PASS; QA_UPLOAD=0'
   qa_window:
     if: >-
       github.event_name == 'issue_comment' &&
@@ -83,6 +109,9 @@ jobs:
             "$RUNNER_TEMP/app748-qa/cloudflare/explore-worker/experiments/"
           cp cloudflare/explore-worker/experiments/owner-follow-qa730-entry.mjs \
             "$RUNNER_TEMP/app748-qa/cloudflare/explore-worker/experiments/"
+          cp cloudflare/explore-worker/experiments/owner-follow-qa-real-auth-749.mjs \
+            "$RUNNER_TEMP/app748-qa/cloudflare/explore-worker/experiments/"
+          test -f "$RUNNER_TEMP/app748-qa/cloudflare/explore-worker/experiments/owner-follow-qa-real-auth-749.mjs" || exit 2
           node scripts/verify-748-qa-version-guard.mjs
           cd "$RUNNER_TEMP/app748-qa/cloudflare/explore-worker"
           node --input-type=module - <<'NODE'

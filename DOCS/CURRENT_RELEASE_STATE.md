@@ -1,3 +1,11 @@
+## CURRENT — APP768 QA D1 정상, R2 계정 서비스 미활성화(Cloudflare 10042) — 물리 시험 HOLD (2026-11-22 KST)
+
+- **디렉터가 QA 전용 Secret 연결 완료:** GitHub Actions `CLOUDFLARE_QA_DATA_TOKEN` 실제 인식 PASS. [실제 #44942457830](https://github.com/andrawing1212/soridraw-music/actions/runs/44942457830) 기존 원본 APP583 Worker GET PASS, **QA D1 metadata GET PASS**, QA R2 metadata GET 403. 별도 권한을 임의로 추가하거나 PROD 토큰 사용하지 않음.
+- **원인 확정:** [PR #1328](https://github.com/andrawing1212/soridraw-music/pull/1328) 원본 데이터·비밀값 없이 Cloudflare 오류 숫자만 기록하도록 수정/병합 `81296d6bac0f55f0dc71ef2149c6199972f6881a`. [실제 #44944103380](https://github.com/andrawing1212/soridraw-music/actions/runs/44944103380) `APP768_QA_R2_DENIAL_CLOUDFLARE_CODES=10042`(공식 NotEntitled / R2 서비스 권한 미활성화). Cloudflare 공식 `Workers R2 Storage Write`는 Bucket 목록 권한을 포함하므로 누락된 Read 권한으로 단정하지 말 것. QA R2 구독/결제수단 및 활성화는 사용자 제품·비용 승인 전 **금지**. 사용자는 **SORIDRAW-QA → R2 Object Storage Overview**에서 서비스 활성화 상태를 읽기 전용으로 확인, 결제정보·토큰 캡처 금지.
+- **현재 물리 테스트:** 실제 QA R2 `If-None-Match:*`/6개 경합과 D1 `meta.rows_written` W1~W2는 **둘 다 NOT_TESTED**. R2 버킷 존재 여부도 현재 조회 불가능. 계정 자격 해결 및 격리 QA DB+R2 버킷 원본 확인 전 합성 기록 쓰기·테이블/버킷 생성·기타 자원 변경·배포 0. APP767 합성 PASS는 유지하되 실서버 PASS로 표시 금지. APP765/767 OFF 및 정식 APP737/738 HOLD.
+
+---
+
 ## CURRENT — APP768 독립 QA 실제 R2/D1 물리 검사: QA API 접근 HOLD (2026-11-22 KST)
 
 - **승인 범위:** 기존 격리 Cloudflare QA 계정 `b60fcd62c679c64db19f0b0e0c2f3429`만 활용해 APP767 R2 조건부 create-once와 실제 D1 `meta.rows_written` W1~W2 검증, 합성 기록만 생성/정리. 공유 PRODUCTION/PREVIEW/TEST 사용자 데이터·서버/배포 변경 금지.

@@ -167,6 +167,19 @@ async function race(){
  const duplicates=rs.filter(x=>x.code===409&&
    x.json?.status==='DUPLICATE_BLOCKED').length;
  const seen=await workerFetch(s,'/inspect');
+ // Only numeric HTTP codes and fixed QA outcome labels, never identities,
+ // object keys, access tokens, or raw Cloudflare response bodies.
+ const counts=new Map();
+ for(const value of rs){
+  const kind=String(value.json?.status||'NO_STATUS');
+  const reason=String(value.json?.reason||'NONE');
+  const label=String(value.code)+'_'+kind+'_'+reason;
+  counts.set(label,(counts.get(label)||0)+1);
+ }
+ console.log('APP768_R2_RACE_RESULT_COUNTS='+JSON.stringify([...counts]));
+ console.log('APP768_R2_RACE_INSPECT_HTTP='+seen.code+
+  '_EXISTS='+String(seen.json?.exists===true)+
+  '_CONTENTTYPE='+String(seen.json?.contentType||'NONE').slice(0,40));
  if(win!==1||duplicates!==5||seen.code!==200||
    seen.json?.exists!==true||seen.json?.contentType!=='application/json')
   hold('R2_PHYSICAL_RACE_NOT_PROVEN');

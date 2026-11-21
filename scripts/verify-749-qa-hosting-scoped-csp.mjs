@@ -66,12 +66,16 @@ const previousScoped=scoped.split(';').map(s=>{
 }).join(';');
 assert(!previousScoped.includes('https://content-firebaseappcheck.googleapis.com'));
 assert(previousScoped.includes("style-src 'unsafe-inline'"));
+// The live-hosting repair appends new sources at the end of each directive.
+// Full source-set equivalence is secure, but mock the exact patched order.
+const scopedFromLive=qa749ScopedCsp(previousScoped);
+assert.equal(qaCspSafeEquivalent(scoped,scopedFromLive).same,true);
 const serving={headers:[
  {glob:'/**',headers:{'Content-Security-Policy':policy}},
  {glob:'/qa749.html',headers:{'Content-Security-Policy':previousScoped}}],
  rewrites:[{glob:'/only-old',path:'/index.html'}],cleanUrls:false};
 const servingScoped={...serving,headers:serving.headers.map(h=>h.glob==='/qa749.html'?
- {...h,headers:{'Content-Security-Policy':scoped}}:h)};
+ {...h,headers:{'Content-Security-Policy':scopedFromLive}}:h)};
 function fake({oldDrift=false,cspBad=false,jsBad=false,concurrent=false,cspReordered=false,cspExtraOrigin=false,cspSecondPolicy=false,originalRuleMissing=false,originalRuleDrift=false}={}){
  let current=old,configured=false,final=false;
  const calls=[];
@@ -82,11 +86,11 @@ function fake({oldDrift=false,cspBad=false,jsBad=false,concurrent=false,cspReord
   const path=url.split('?')[0];calls.push({url,method:opts.method,body:opts.body});
   if(path===host+'/')return page(oldRoot,policy);
   if(path===host+'/qa749.html'){
-   let effective=current===old||cspBad?previousScoped:scoped;
+   let effective=current===old||cspBad?previousScoped:scopedFromLive;
    if(current===next){
      if(cspReordered)effective=equivalent;
-     if(cspExtraOrigin)effective=scoped.replace('connect-src ','connect-src https://evil.example ');
-     if(cspSecondPolicy)effective=scoped+', '+policy;
+     if(cspExtraOrigin)effective=scopedFromLive.replace('connect-src ','connect-src https://evil.example ');
+     if(cspSecondPolicy)effective=scopedFromLive+', '+policy;
    }
    return page(oldDrift?'changed':html,effective);
   }

@@ -95,7 +95,8 @@ export function assessApp757CanaryReadiness({worker,functions,rtDb,gitRulesNode,
     ownerDoDirectBound:ownerDoDirect,ownerDoServiceBound:ownerDoService,
     ownerDoServiceTargetStatus:ownerService?.status||'UNVERIFIED',
     ownerDoServiceTargetActiveVersion:ownerService?.activeVersion||null,
-    ownerDoServiceTargetFailedChecks:ownerService?.failedChecks||[]},
+    ownerDoServiceTargetFailedChecks:ownerService?.failedChecks||[],
+    ownerDoServicePinningMismatches:ownerService?.pinningMismatches||[]},
   functions:fnSummary,
   rtDb:{status:rtDb?.status||'UNKNOWN',singleInstance:rtDb?.singleInstance===true,
     ownerReadOnly:rtDb?.ownerReadOnly===true,
@@ -175,7 +176,8 @@ export function assessOwnerServiceTarget600(active,serviceName){
  };
  const failedChecks=Object.entries(checks).filter(([,ok])=>!ok).map(([key])=>key);
  return {status:failedChecks.length?'TARGET_BINDING_UNVERIFIED':'PINNED_TARGET_OWNER_DO',
-   activeVersion:checks.activeVersionPresent?active.activeVersion:null,failedChecks};
+   activeVersion:checks.activeVersionPresent?active.activeVersion:null,failedChecks,
+   pinningMismatches:active?.pinnedBindingMismatchPaths||[]};
 }
 async function probeOwnerService(worker,token){
  const b=worker?.bindings?.find(x=>

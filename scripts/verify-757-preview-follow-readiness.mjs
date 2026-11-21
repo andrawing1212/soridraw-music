@@ -38,13 +38,14 @@ const exactOwner600={
  name:'soridraw-owner-follow-preview-candidate',
  activeVersion:'5a2d333c-f703-4ef7-9468-0293f7699268',
  trafficPercent:100,pinnedBindingsVerified:true,schedulesVerified:true,
+ pinnedBindingMismatchPaths:[],
  bindings:[{name:'OWNER_FOLLOW_DO_600',type:'durable_object_namespace',
    class_name:'OwnerFollowerStandalone600'}],
 };
 assert.deepEqual(assessOwnerServiceTarget600(
  exactOwner600,exactOwner600.name),{
  status:'PINNED_TARGET_OWNER_DO',activeVersion:exactOwner600.activeVersion,
- failedChecks:[],
+ failedChecks:[],pinningMismatches:[],
 });
 for(const [patch,reason] of [
  [{name:'unexpected-worker'},'exactTargetName'],
@@ -61,6 +62,9 @@ for(const [patch,reason] of [
   'exactTargetName','activeVersionPresent','traffic100','pinnedBindingIdentity',
   'schedulesMetadataReadable','exactDoClassBound'].includes(x)));
 }
+assert.deepEqual(assessOwnerServiceTarget600({...exactOwner600,pinnedBindingsVerified:false,
+ pinnedBindingMismatchPaths:['OWNER_FOLLOW_DO_600:class_name']},exactOwner600.name).pinningMismatches,
+ ['OWNER_FOLLOW_DO_600:class_name']);
 assert.equal(assessOwnerServiceTarget600({},'wrong-worker').status,
  'TARGET_BINDING_UNVERIFIED');
 const sample={worker,functions:funcs,rtDb:{status:'READ',singleInstance:true,...proof},

@@ -120,6 +120,7 @@ export async function readWorker(name, token) {
   }));
   const bindings = bindingInfo(Array.isArray(settings.bindings) ? settings.bindings : []);
   let pinnedBindingsVerified = false;
+  let pinnedBindingMismatchPaths = [];
   let schedulesVerified = false;
   let schedules = [];
   let hasUnexpectedMigration = false;
@@ -138,16 +139,26 @@ export async function readWorker(name, token) {
       if (rows && rows.length) {
         const pinned = bindingInfo(rows);
         const labels = (items) => items.map((v) => `${v.name}:${v.type}`).sort();
-        pinnedBindingsVerified = JSON.stringify(labels(bindings)) === JSON.stringify(labels(pinned));
-        if (pinnedBindingsVerified) {
+        const liveNames = labels(bindings), pinnedNames = labels(pinned);
+        pinnedBindingsVerified = JSON.stringify(liveNames) === JSON.stringify(pinnedNames);
+        if (!pinnedBindingsVerified) {
+          // Names/types only. Never expose binding values or secrets.
+          const liveSet = new Set(liveNames), pinnedSet = new Set(pinnedNames);
+          pinnedBindingMismatchPaths = [
+            ...liveNames.filter(key => !pinnedSet.has(key)).map(key => `settings:${key}`),
+            ...pinnedNames.filter(key => !liveSet.has(key)).map(key => `version:${key}`),
+          ];
+        } else {
           for (const original of bindings) {
             const actual = pinned.find((item) => item.name === original.name && item.type === original.type);
             // If typed identity is absent from either response, DO NOT treat the
             // pinned version as verified. A name/type match is insufficient.
             for (const prop of ['id', 'bucket', 'class_name', 'namespace_id', 'service', 'serviceEnvironment', 'plainHash']) {
-              const left = original[prop];
-              const right = actual[prop];
-              if (left !== right) pinnedBindingsVerified = false;
+              const left = original[prop], right = actual[prop];
+              if (left !== right) {
+                pinnedBindingsVerified = false;
+                pinnedBindingMismatchPaths.push(`${original.name}:${prop}`);
+              }
             }
           }
         }
@@ -157,6 +168,7 @@ export async function readWorker(name, token) {
       // Unsupported GET response or missing permission is HOLD, never a fallback
       // to mutable `latest` bindings or a reason to bypass version proof.
       pinnedBindingsVerified = false;
+      pinnedBindingMismatchPaths = ['PINNED_VERSION_METADATA_UNREADABLE'];
     }
   }
   try {
@@ -173,7 +185,8 @@ export async function readWorker(name, token) {
   return {
     name, activeVersion, trafficPercent: active.length === 1 ? Number(active[0].percentage) : 0,
     compatibilityDate: String(settings.compatibility_date || '').slice(0, 10),
-    bindings, pinnedBindingsVerified, schedulesVerified, schedules, hasUnexpectedMigration,
+    bindings, pinnedBindingsVerified, pinnedBindingMismatchPaths,
+    schedulesVerified, schedules, hasUnexpectedMigration,
   };
 }
 async function readHosting(site, token) {

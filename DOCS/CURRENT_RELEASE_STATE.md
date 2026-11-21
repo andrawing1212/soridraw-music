@@ -1,3 +1,13 @@
+## CURRENT — APP768 독립 QA D1·R2 기초 물리 검증 PASS / R2 조건부 경합·정식 W2 미검증 (2026-11-22 KST)
+
+- **승인과 QA 자원 생성:** 디렉터 2026-11-22(KST) 명시 YES로 QA 계정 `b60fcd62c679c64db19f0b0e0c2f3429`에 **D1 `soridraw-qa-app768-d1` 1개, R2 `soridraw-qa-app768-r2` 버킷 1개**만 생성·보존 승인. [PR #1329](https://github.com/andrawing1212/soridraw-music/pull/1329) 병합 `8fa092ce`. QA Worker `soridraw-owner-qa-583` 기존 버전 `4ed70845-6a4b-4a80-9c51-ed95d0becc38` 100% 불변을 실 API GET으로 보호. 기존 0개/0개 QA 자원을 확인한 뒤 생성하고, 다음 실행에서 정확히 QA 리소스 1개씩만 존재하는 것 재확인(중복 생성 0). PROD/TEST/PREVIEW 공유 계정/사용자 데이터 영향 0.
+- **D1 실제 합성 SQL:** [Cloudflare 실제 #44948353103](https://github.com/andrawing1212/soridraw-music/actions/runs/44948353103)에서 생성된 QA D1 전용 `app768_qa_synthetic_follow` 테이블의 행당 초기 INSERT는 **`rows_written=2`(PK 인덱스 등 포함)**, UPDATE 단일 행은 **W1**, 두 행 동시 변경은 **W2**로 물리 관측. 해당 합성 행 2개 DELETE 후 COUNT=0 검증 PASS. **실제 운영 팔로우 Writer의 W1~W2 물리 측정이 아니며** 가상 합성 테이블 PASS를 정식 비용 PASS로 주장하지 않음. 이미 통과한 D1 측정은 이후 R2 오류 수정에서 반복하지 않음.
+- **R2 실제 객체 업로드:** 첫 관리 API 업로드 FormData가 [#44948595390](https://github.com/andrawing1212/soridraw-music/actions/runs/44948595390)에서 **HTTP 501 / code 10028**, DELETE는 10007(NoSuchKey)로 객체 부재 확인. 오류 처리/원시 바이너리 PUT으로 최소 수정 [PR #1330](https://github.com/andrawing1212/soridraw-music/pull/1330), [PR #1331](https://github.com/andrawing1212/soridraw-music/pull/1331); 최종 [실제 #44949079314](https://github.com/andrawing1212/soridraw-music/actions/runs/44949079314) **QA R2 관리 API 합성 객체 1건 업로드 PASS + 그 객체만 DELETE PASS**, QA D1·R2 동일 자원 확인 PASS. QA R2 버킷은 이후 QA 재사용을 위해 유지. 새 Worker·새 비밀값·대량 객체 생성/삭제 없음.
+- **반드시 구분할 미완료:** APP767 `R2Bucket.put(key,body,{onlyIf:{etagDoesNotMatch:'*'}})` / S3 `If-None-Match: *` **동일 ID 6회 동시 요청에서 1회만 생성되는 물리 경합/503·ACK 손실 검증은 NOT_TESTED**. 관리 REST API 업로드 1건은 그 조건부 동작의 증거가 아님. 실제 정본 팔로우 Worker의 D1 `meta.rows_written<=2` 물리 동작/기존 구형 Writer 호환/PC↔모바일도 **NOT_TESTED**. QA-only Worker 추가 배포 또는 별도 S3 QA 자격증명은 이 단계에서 임의 생성·설정하지 않음. APP765/767 production source 기본 OFF, APP737/738 PRODUCTION 릴리스 HOLD.
+- **릴리스/비용 보호:** QA-only D1+R2 자원 2개만 유지, 합성 행/객체 정리 PASS. QA R2 활성화는 디렉터가 직접 승인했고 무료 한도 초과 과금 가능; 실제 청구액은 미측정. TEST·PREVIEW·PRODUCTION Worker/Functions/RTDB Rules·공유 D1/R2/사용자 데이터/Hosting 변경·배포 **0**. 이전 APP749/760 합격 QA의 재실행 없음.
+
+---
+
 ## CURRENT — APP768 R2 구독 활성화 후 독립 QA 리소스 실제 인벤토리 검증 (2026-11-22 KST)
 
 - **디렉터 QA R2 구독 직접 활성화 완료:** Cloudflare `SORIDRAW-QA` 대시보드에서 R2 사용 가능, 버킷 0개·현재 저장 0B·청구 사용량 $0.00 확인. 운영 계정 아님.

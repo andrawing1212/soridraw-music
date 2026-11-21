@@ -1,3 +1,12 @@
+## CURRENT — APP772 최소 R2 접수·D1 W1~W2 장애 복구 경계 SOURCE-ONLY / 38케이스 PASS, 실제 자동 복구 HOLD (2026-11-22 KST)
+
+- **디렉터 YES 승인 범위:** APP771 실 D1 스키마 읽기 전용 조사 및 APP768 실제 R2 조건부 중복 QA, APP769 실제 QA D1 실패·모의 ACK 소실 PASS 재사용. 추가 Cloudflare/Firebase API 요청, 새 Worker/D1/R2/토큰/권한, 원본 접근/변경, PREVIEW·TEST·PRODUCTION 배포 **0**.
+- **재사용·최소 수정:** `scripts/app772-minimal-recovery-boundary.mjs` **새 OFF-only 소스**가 APP770의 exact admission+D1/R2 settle+independent complete history+external owner floor 판정 함수를 import하여 재사용. APP767 접수→D1 확정→별도 immutable settled R2→owner DO 외부 단조 floor를 후보로 설계. 관계별 미확정 작업이 다음 D1의 마지막 `mutation_id`로 덮이지 않도록 **모든 신/구 Writer와 전체 DO PITR로부터 독립된 pending fence**가 필요하며 현재 실제 구현·증거는 없음. 모의 완전 proof도 읽기 전용 `OFFLINE_EXACT_SETTLED_READ_ONLY_SHAPE_ONLY`만 허용, 다른 모든 불확정은 HOLD; D1 write/재쓰기/새 ID/DO 예약/relay/배포 허가 항상 false.
+- **검사:** `node --check`(양 파일), `node scripts/verify-772-minimal-recovery-boundary.mjs` Node 22 로컬 오프라인 **38 상태 케이스 PASS**, fetch 호출 시 실패하도록 설정하여 실제 서버 네트워크 호출 0. D1 W3 또는 추가 1행, 전체 스캔/폴링, 구형 Writer 누락, DO rollback, 데이터 삭제/UID 재사용 정책 누락, D1/R2/epoch/receipt 불일치 모두 HOLD. APP768/769 물리 QA 재실행 없음. 상세 후보 `DOCS/APP772_MINIMAL_R2_D1_RECOVERY_DESIGN.md`.
+- **명확한 차단:** 10만 명 기준 실제 R2 추가 PUT/settled/floor 비용, privacy retention, 외부 pending fence/단조 floor·immutable receipt·trusted callback, 구형 모든 Writer 동시 cutover, 장애 시 progress/liveness, 실제 운영 팔로우 D1 `rows_written<=2`, PC↔모바일 실사용 **NOT_TESTED**. 완전한 자동 복구 불가능할 수 있으므로 미확정 영구 HOLD를 실패 숨김 처리하지 않음. APP765/767, APP772 production runtime OFF / APP737·738 RELEASE HOLD.
+
+---
+
 ## CURRENT — APP770 팔로우 저장 확정 후 독립 복구 판단 계약·오프라인 코드 검사 PASS / 실제 자동 복구 HOLD (2026-11-22 KST)
 
 - **사용자 YES 승인 범위:** APP768(실 QA R2 중복 6회 중 1건 저장, Actions #44952152823)과 APP769(실 QA D1 오류 + 모의 ACK 소실, Actions #44953090705)의 이전 PASS 재사용. APP770은 기존 정본 수신점 재사용·저비용 복구 설계와 **source-only 검증**만 실행, 실 QA 자원과 공유 계정·사용자 원본 접근/변경/배포 0.

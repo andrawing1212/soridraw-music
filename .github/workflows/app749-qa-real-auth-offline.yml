@@ -53,11 +53,10 @@ jobs:
           const data=await response.json();
           assert(Array.isArray(data?.keys)&&data.keys.length>0&&data.keys.length<=30,
             'APP749_PUBLIC_KEYS_FORMAT');
-          assert(data.keys.some(k=>k?.kty==='RSA'&&
-            typeof k.kid==='string'&&k.kid.length>0&&k.kid.length<=256&&
-            typeof k.n==='string'&&k.n.length>0&&
-            typeof k.e==='string'&&k.e.length>0),
-            'APP749_PUBLIC_KEYS_CONTENT');
+          assert(data.keys.some(k=>k?.kty==='RSA'&&k?.n&&k?.e&&
+            /^[A-Za-z0-9_-]{1,256}$/.test(k?.kid||'')&&
+            (!k.alg||k.alg==='RS256')&&(!k.use||k.use==='sig')),
+            'APP749_PUBLIC_KEYS_CONTENT_FILTER');
           console.log('APP749_REAL_GOOGLE_FIREBASE_PUBLIC_JWKS=PASS');
           console.log('APP749_QA_SECRETS_AND_USER_DATA=NOT_ACCESSED');
           NODE
@@ -349,6 +348,25 @@ jobs:
             if(attempt<9)await new Promise(resolve=>setTimeout(resolve,2500));
           }
           if(!fenced)throw Error('APP749_QA_NEW_AUTH_ROUTE_NOT_CONVERGED_HOLD');
+          // Cloudflare runtime must fetch Google keys itself. A deliberately
+          // impossible kid forces signed-verifier public key discovery, but can
+          // never authenticate or reach DO, RTDB, Functions or user data.
+          const b64=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
+          const bogusToken=[
+            b64({alg:'RS256',typ:'JWT',kid:'app749-no-matching-qa-probe-kid'}),
+            b64({iat:1,exp:2}),Buffer.alloc(256).toString('base64url'),
+          ].join('.');
+          const keyProbe=await req('GET','/qa730/verified/status',{
+            Origin:'https://soridraw-qa-owner-584.web.app',
+            Authorization:'Bearer '+bogusToken,
+            'X-Firebase-AppCheck':'qa-public-key-probe-not-a-token'
+          });
+          const safeStage=String(keyProbe.body?.qa749AuthStage||'UNKNOWN');
+          console.log('APP749_QA_EDGE_PUBLIC_KEYS_STAGE='+
+            safeStage.replace(/[^A-Z_]/g,''));
+          if(keyProbe.status!==403||safeStage!=='AUTH_KID_MISMATCH')
+            throw Error('APP749_QA_EDGE_PUBLIC_KEYS_NOT_VERIFIED_HOLD');
+          console.log('APP749_QA_EDGE_FIREBASE_KEYS_READ=PASS; REAL_TOKENS=0; MUTATIONS=0');
           const legacy=await req('GET','/qa583/status');
           if(legacy.status!==403||legacy.body?.ok!==false||
              legacy.body?.syntheticOnly===true)

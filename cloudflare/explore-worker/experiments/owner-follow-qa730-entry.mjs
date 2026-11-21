@@ -86,6 +86,8 @@ export function createQaAuthEntry749({verify=qaVerify,legacy=originalWorker}={})
           // Never expose token bytes, identities, claims, key IDs or fetch errors.
           const stage=['REQUEST_INVALID','AUTH_VALIDATION','APPCHECK_VALIDATION',
             'PRINCIPAL_MISMATCH','AUTH_TOKEN_FORMAT','AUTH_PUBLIC_KEYS',
+            'AUTH_KEYS_NETWORK','AUTH_KEYS_HTTP','AUTH_KEYS_JSON',
+            'AUTH_KEYS_SHAPE','AUTH_KEYS_FILTER',
             'AUTH_KID_MISMATCH','AUTH_SIGNATURE','AUTH_CLAIMS'].includes(error?.qaStage)
             ?error.qaStage:'CREDENTIALS_REJECTED';
           // Suppress diagnostics on requests without the exact QA browser origin.

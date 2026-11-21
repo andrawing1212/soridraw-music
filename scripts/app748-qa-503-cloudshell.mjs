@@ -43,11 +43,15 @@ export async function runApp748Qa503({
  },body,'QA_DO_'+path);
  const baseline=await marker();
  check(baseline.authEpoch===cfg.authEpoch,'EPOCH_DRIFT');
- check(baseline.version===8&&baseline.followerCount===0,
-   'QA_RTDB_BASELINE_NOT_VERSION8_ZERO');
+ // APP760: QA data is monotonic. APP749 last proved version 12; never
+ // reset, write an older version, or accept a stale pre-APP749 baseline.
+ const initialVersion=baseline.version;
+ check(Number.isSafeInteger(initialVersion)&&initialVersion>=12&&
+   initialVersion<=Number.MAX_SAFE_INTEGER-2&&
+   baseline.followerCount===0,'QA_BASELINE_STALE_OR_NONZERO_HOLD');
  const state=await request('GET','status');
  check(state.ok===true&&state.syntheticOnly===true&&
-   state.version===8&&state.followerCount===0&&
+   state.version===initialVersion&&state.followerCount===0&&
    state.following===false&&state.pending===false&&state.hold===false,
    'QA_WORKER_BASELINE_OR_VERSION_NOT_READY');
  // New APP748 candidate is indispensable. Old APP741 and original APP583
@@ -55,22 +59,36 @@ export async function runApp748Qa503({
  check(Object.hasOwn(state,'injected503Version')&&
    Object.hasOwn(state,'recovered503Version')&&
    Object.hasOwn(state,'recoveryAttemptCount')&&
-   state.injected503Version===null&&state.recovered503Version===null,
+   ((state.injected503Version===null&&state.recovered503Version===null)||
+     (Number.isSafeInteger(state.injected503Version)&&
+      state.injected503Version<=initialVersion&&
+      state.recovered503Version===state.injected503Version&&
+      state.recoveryAttemptCount>=1)),
    'QA_APP748_NOT_ACTIVE_OR_DIRTY');
+ // Two independent reads must match before arming a one-time QA fault.
+ // A concurrent new revision causes HOLD before any mutation.
+ const beforeArm=await marker();
+ check(beforeArm.authEpoch===cfg.authEpoch&&
+   beforeArm.version===initialVersion&&beforeArm.followerCount===0,
+   'QA_BASELINE_CHANGED_BEFORE_ARM_HOLD');
  const armed=await request('POST','arm-503-747');
  check(armed.ok===true&&armed.syntheticOnly===true&&
-   armed.fault==='sender-503-once'&&armed.expectedVersion===9,
+   armed.fault==='sender-503-once'&&
+   armed.expectedVersion===initialVersion+1,
    'QA_SINGLE_503_NOT_ARMED');
  const committed=await request('PUT','follow');
  check(committed.ok===true&&committed.changed===true&&
-   committed.version===9,'QA_CANONICAL_FOLLOW9_NOT_COMMITTED');
+   committed.version===initialVersion+1,
+   'QA_CANONICAL_FOLLOW_NOT_COMMITTED');
  const settle=async(version,count,label,require503=false)=>{
   for(let n=0;n<polls;n++){
    const [m,s]=await Promise.all([marker(),request('GET','status')]);
    check(m.authEpoch===cfg.authEpoch,label+'_EPOCH_CHANGED');
-   check(Number.isSafeInteger(m.version)&&m.version<=version,
+   check(Number.isSafeInteger(m.version)&&m.version>=initialVersion&&
+     m.version<=version,
      label+'_RTDB_REVISION_OVERRUN');
-   check(Number.isSafeInteger(s.version)&&s.version<=version&&!s.hold,
+   check(Number.isSafeInteger(s.version)&&s.version>=initialVersion&&
+     s.version<=version&&!s.hold,
      label+'_QA_DO_VERSION_OR_HOLD');
    if(m.version===version&&m.followerCount===count&&
       s.version===version&&s.followerCount===count&&!s.pending){
@@ -84,16 +102,17 @@ export async function runApp748Qa503({
   }
   throw Error('APP748_QA_HOLD_'+label+'_NOT_SETTLED');
  };
- await settle(9,1,'FOLLOW9_503_RECOVERY',true);
+ await settle(initialVersion+1,1,'FOLLOW_503_RECOVERY',true);
  const cancel=await request('DELETE','follow');
  check(cancel.ok===true&&cancel.changed===true&&
-   cancel.version===10,'QA_UNFOLLOW10_NOT_COMMITTED');
- await settle(10,0,'UNFOLLOW10');
+   cancel.version===initialVersion+2,'QA_UNFOLLOW_NOT_COMMITTED');
+ await settle(initialVersion+2,0,'UNFOLLOW');
  return Object.freeze({
   status:'PASS',scope:'QA_SYNTHETIC_OWNER_ONLY_503_SENDER_FAULT',
-  followVersion:9,unfollowVersion:10,finalFollowerCount:0,
-  sender503InjectedVersion:9,durableRetryVerified:true,
-  firebaseFunctionsRtdbRevision10Verified:true,
+  baselineVersion:initialVersion,followVersion:initialVersion+1,
+  unfollowVersion:initialVersion+2,finalFollowerCount:0,
+  sender503InjectedVersion:initialVersion+1,durableRetryVerified:true,
+  firebaseFunctionsRtdbFinalRevisionVerified:true,
   productionAuthAppCheckVerified:false,productionDeploymentAllowed:false,
   noSharedDbOrR2Used:true,originalQaWorkerRestorationPending:true,
  });
@@ -112,7 +131,10 @@ async function main(){
   encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim();
  const result=await runApp748Qa503({config:cfg,accessToken:token});
  console.log('APP748_QA503_DO_RETRY_FUNCTIONS_RTDB='+result.status);
- console.log('APP748_QA_FOLLOW9_UNFOLLOW10_FINAL_COUNT=0');
+ console.log('APP760_QA_BASELINE_VERSION='+result.baselineVersion);
+ console.log('APP760_QA_503_FOLLOW_VERSION='+result.followVersion);
+ console.log('APP760_QA_UNFOLLOW_VERSION='+result.unfollowVersion+
+   '_FINAL_COUNT=0');
  console.log('APP748_QA_PROD_AUTH_APPCHECK=NOT_TESTED');
  console.log('APP748_QA_ORIGINAL_WORKER_RESTORE=WORKFLOW_REQUIRED');
 }

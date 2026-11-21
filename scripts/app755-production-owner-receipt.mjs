@@ -7,6 +7,10 @@ const UID=/^[A-Za-z0-9_-]{1,128}$/,OP=/^[A-Za-z0-9_-]{16,128}$/;
 const EPOCH=/^[0-9a-f]{32}$/;
 const KEY='app755-owner-follow-pending-v1',MAX=24,DELAY=1000;
 const safe=n=>Number.isSafeInteger(n)&&n>=0;
+const validDelivery=d=>d===undefined||(
+ d&&['pending','delivered','held'].includes(d.status)&&
+ safe(d.attempts)&&d.attempts<=3&&
+ (d.status!=='pending'||(safe(d.retryAt)&&d.retryAt>0)));
 const hold=x=>{throw Error('APP755_RECEIPT_HOLD_'+x)};
 const same=(a,b)=>a.actorUid===b.actorUid&&a.ownerUid===b.ownerUid&&
  a.canonicalOperationId===b.canonicalOperationId&&
@@ -20,11 +24,12 @@ const validReceipt=x=>validInput(x)&&OP.test(x.operationId||'')&&
  x.cutoverToken.length<=128&&safe(x.priorR2Revision)&&
  typeof x.beforeFollowing==='boolean'&&
  x.beforeFollowing!==x.desired&&x.durable===true&&
- x.ownerDoAlarmScheduled===true;
+ x.ownerDoAlarmScheduled===true&&validDelivery(x.delivery);
 const validState=(s,owner)=>s?.version===1&&s.ownerUid===owner&&
  Array.isArray(s.entries)&&s.entries.length<=MAX&&
  s.entries.every(validReceipt)&&
- new Set(s.entries.map(x=>x.canonicalOperationId)).size===s.entries.length;
+ new Set(s.entries.map(x=>x.canonicalOperationId)).size===s.entries.length&&
+ new Set(s.entries.map(x=>x.operationId)).size===s.entries.length;
 // Function has no HTTP endpoint. Pass only a trusted owner-specific DO storage,
 // never the browser request or an arbitrary remote service namespace.
 export function createApp755ProductionOwnerReceiptStore({
@@ -42,11 +47,12 @@ export function createApp755ProductionOwnerReceiptStore({
    if(!validState(state,ownerUid))hold('PERSISTED_STATE_UNVERIFIED');
    return state;
  };
- const alarmReady=async st=>{
+ const alarmReady=async(st,requestedAt)=>{
    const at=now();if(!safe(at)||at===0)hold('CLOCK');
+   const target=Math.max(at+1,requestedAt??at+DELAY);
    const due=await st.getAlarm();
-   if(!safe(due)||due<=at||due>at+DELAY){
-     await st.setAlarm(at+DELAY);
+   if(!safe(due)||due<=at||due>target){
+     await st.setAlarm(target);
    }
  };
  return {
@@ -61,7 +67,8 @@ export function createApp755ProductionOwnerReceiptStore({
        if(!same(conflict,input))return {status:'unknown'};
        // A partial failure between durable put and alarm cannot be a
        // successful reservation until the same receipt's alarm is rearmed.
-       await alarmReady(storage);
+       if(!conflict.delivery||conflict.delivery.status==='pending')
+         await alarmReady(storage,conflict.delivery?.retryAt);
        return {status:'found',receipt:conflict};
      }catch{return {status:'unknown'}}
    },
@@ -82,7 +89,8 @@ export function createApp755ProductionOwnerReceiptStore({
            if(!same(previous,input)||previous.authEpoch!==input.authEpoch||
               previous.cutoverToken!==input.cutoverToken)
              return {durable:false,reason:'conflict'};
-           await alarmReady(tx);
+           if(!previous.delivery||previous.delivery.status==='pending')
+             await alarmReady(tx,previous.delivery?.retryAt);
            return previous;
          }
          if(state.entries.length>=MAX)return {durable:false,reason:'owner-queue-full'};
@@ -91,7 +99,8 @@ export function createApp755ProductionOwnerReceiptStore({
            state.entries.some(x=>x.operationId===id))
            hold('SERVER_OPERATION_ID_UNVERIFIED');
          const receipt={...input,operationId:id,durable:true,
-           ownerDoAlarmScheduled:true};
+           ownerDoAlarmScheduled:true,delivery:{status:'pending',attempts:0,
+             retryAt:now()+DELAY}};
          // Transaction commits pending receipt and DO alarm together.
          // Any error fails closed; no canonical D1 write may follow.
          await tx.put(KEY,{version:1,ownerUid,
@@ -100,6 +109,58 @@ export function createApp755ProductionOwnerReceiptStore({
          return receipt;
        });
      }catch{return {durable:false,reason:'storage-or-alarm-uncertain'}}
+   },
+   // Read only the owner's pending, due receipts. No user data, D1, R2,
+   // Firebase or new DO namespace is accessed. An uncertain store is HOLD.
+   async duePending(){
+     const state=await load(storage);
+     const at=now();
+     if(!safe(at)||at<=0)hold('CLOCK');
+     return state.entries.filter(x=>
+       x.delivery===undefined||
+       (x.delivery.status==='pending'&&x.delivery.retryAt<=at))
+       .sort((a,b)=>a.expectedRevision-b.expectedRevision)
+       .slice(0,4);
+   },
+   // Only the trusted owner DO alarm coordinator calls this after exact
+   // canonical settle proof + signed receiver result. Never exposed to HTTP.
+   async markDelivery({receipt,result}={}){
+     scope(receipt);
+     if(!OP.test(receipt.operationId||'')||
+       !['delivered','relay-failed','rejected-generation'].includes(result))
+       hold('DELIVERY_RESULT_UNVERIFIED');
+     return storage.transaction(async tx=>{
+       const s=await load(tx);
+       const index=s.entries.findIndex(x=>x.operationId===receipt.operationId);
+       const old=s.entries[index];
+       if(!old||!same(old,receipt)||old.authEpoch!==receipt.authEpoch||
+          old.cutoverToken!==receipt.cutoverToken)
+         hold('DELIVERY_RECEIPT_MISMATCH');
+       const oldState=old.delivery?.status||'pending';
+       if(oldState!=='pending')return {status:oldState,changed:false};
+       const at=now();
+       if(!safe(at)||at<=0)hold('CLOCK');
+       const attempts=old.delivery?.attempts||0;
+       const nextAttempts=result==='relay-failed'?attempts+1:attempts;
+       const status=result==='delivered'?'delivered':
+         result==='rejected-generation'||nextAttempts>=3?'held':'pending';
+       const retryAt=status==='pending'?at+Math.min(4000,1000*2**nextAttempts):null;
+       const updated={...old,delivery:{status,attempts:nextAttempts,
+         ...(retryAt!==null?{retryAt}:{})}};
+       const entries=s.entries.slice();
+       entries[index]=updated;
+       await tx.put(KEY,{...s,entries});
+       // Always preserve other owners' pending receipts; no global
+       // polling, queue deletion, or fabricated success on a failed ACK.
+       const next=entries.filter(x=>(x.delivery?.status||'pending')==='pending');
+       if(next.length){
+         const earliest=Math.min(...next.map(x=>x.delivery?.retryAt||at+DELAY));
+         await tx.setAlarm(Math.max(at+1,earliest));
+       }else if(typeof tx.deleteAlarm==='function'){
+         await tx.deleteAlarm();
+       }
+       return {status,changed:true,attempts:nextAttempts};
+     });
    },
  };
 }

@@ -42,6 +42,8 @@ on:
       - 'scripts/app755-production-owner-receipt.mjs'
       - 'scripts/app755-production-follow-backend.mjs'
       - 'scripts/verify-755-production-follow-backend.mjs'
+      - 'scripts/app759-production-owner-alarm.mjs'
+      - 'scripts/verify-759-production-owner-alarm.mjs'
       - 'scripts/verify-756-production-off-candidate.mjs'
       - '.github/workflows/soridraw-app728-direct-preflight.yml'
 
@@ -212,6 +214,8 @@ jobs:
           node --check scripts/app755-production-owner-receipt.mjs
           node --check scripts/app755-production-follow-backend.mjs
           node scripts/verify-755-production-follow-backend.mjs
+          node --check scripts/app759-production-owner-alarm.mjs
+          node scripts/verify-759-production-owner-alarm.mjs
           node scripts/verify-756-production-off-candidate.mjs
 
   binding_diff:
@@ -339,6 +343,8 @@ jobs:
           node --check scripts/app755-production-owner-receipt.mjs
           node --check scripts/app755-production-follow-backend.mjs
           node scripts/verify-755-production-follow-backend.mjs
+          node --check scripts/app759-production-owner-alarm.mjs
+          node scripts/verify-759-production-owner-alarm.mjs
           node scripts/verify-756-production-off-candidate.mjs
       - name: Generate exact production baseline and quarantined PREVIEW modules in runner temp only
         env:

@@ -182,6 +182,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  const principalSource=readFileSync(resolve('scripts/app754-production-firebase-principal.mjs'),'utf8');
  const ownerReceiptSource=readFileSync(resolve('scripts/app755-production-owner-receipt.mjs'),'utf8');
  const backendSource=readFileSync(resolve('scripts/app755-production-follow-backend.mjs'),'utf8');
+ const ownerAlarmSource=readFileSync(resolve('scripts/app759-production-owner-alarm.mjs'),'utf8');
  if(!adapterSource.includes('APP729_PRODUCTION_OWNER_FOLLOW_COMPILED_OPEN = false'))
    fail('INTEGRATION_COMPILE_OFF_REQUIRED');
  if(!productionBridgeSource.includes('APP743_PRODUCTION_FOLLOW_COMPILED_OPEN=false'))
@@ -196,7 +197,9 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  if(!ownerReceiptSource.includes('APP755_PRODUCTION_OWNER_RECEIPT_COMPILED_OPEN=false')||
     !ownerReceiptSource.includes('OWNER_STORAGE_UNVERIFIED')||
     !backendSource.includes('APP755_PRODUCTION_BACKEND_COMPILED_OPEN=false')||
-    !backendSource.includes('VERIFIED_RUNTIME_COMPONENTS_MISSING'))
+    !backendSource.includes('VERIFIED_RUNTIME_COMPONENTS_MISSING')||
+    !ownerAlarmSource.includes('APP759_PRODUCTION_OWNER_ALARM_COMPILED_OPEN=false')||
+    !ownerAlarmSource.includes('VERIFIED_OWNER_DO_AND_PROOF_REQUIRED'))
    fail('PRODUCTION_OWNER_DO_AND_RELAY_MUST_REMAIN_OFF');
  mkdirSync(join(dir,'integration'),{recursive:true});
  const adapterPath=join(dir,'integration','app729-production-follow-adapter.mjs');
@@ -206,6 +209,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  const principalPath=join(dir,'integration','app754-production-firebase-principal.mjs');
  const ownerReceiptPath=join(dir,'integration','app755-production-owner-receipt.mjs');
  const backendPath=join(dir,'integration','app755-production-follow-backend.mjs');
+ const alarmPath=join(dir,'integration','app759-production-owner-alarm.mjs');
  if(!lifecycleSource.includes('APP730_PRODUCTION_RELAY_ENABLED = false'))
    fail('DURABLE_RELAY_COMPILE_OFF_REQUIRED');
  writeFileSync(adapterPath,adapterSource);
@@ -215,6 +219,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  writeFileSync(principalPath,principalSource);
  writeFileSync(ownerReceiptPath,ownerReceiptSource);
  writeFileSync(backendPath,backendSource);
+ writeFileSync(alarmPath,ownerAlarmSource);
  writeFileSync(entryPath,entry.code);
  if(sha256(readFileSync(entryPath))!==entry.sha256)
    fail('INTEGRATION_ENTRY_DRIFT');
@@ -225,15 +230,19 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  checkSyntax(principalPath);
  checkSyntax(ownerReceiptPath);
  checkSyntax(backendPath);
+ checkSyntax(alarmPath);
  checkSyntax(entryPath);
  candidate.manifest.integration={
    entrypoint:'production-follow-entry.mjs',
    entrypointSha256:entry.sha256,
    app755OwnerReceiptSha256:sha256(readFileSync(ownerReceiptPath)),
    app755BackendSha256:sha256(readFileSync(backendPath)),
+   app759AlarmSha256:sha256(readFileSync(alarmPath)),
    app755SourceFilesCopiedExactly:
      sha256(readFileSync(ownerReceiptPath))===sha256(ownerReceiptSource)&&
      sha256(readFileSync(backendPath))===sha256(backendSource),
+   app759OwnerAlarmSourceExactlyCopied:sha256(readFileSync(alarmPath))===
+     sha256(ownerAlarmSource),
    originalMainUntouched:true,
    existingProductionBindingCount:12,
    runtimeEnabled:false,
@@ -247,14 +256,16 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
    productionSignedPrincipalSourcePresent:true,
    productionSignedPrincipalNoCredentialsOrLiveCalls:true,
    productionOwnerDoReceiptSourceOnly:true,
+   productionOwnerAlarmReplaySourceOnly:true,
    productionOwnerDoBindingAndMigrationAdded:false,
    productionFunction542SenderUnconnected:true,
    // A source-only review bundle is NEVER an approved deployable worker.
    activeWorkerRuntimeParityNotVerified:true,
    productionDeployAuthorized:false,
  };
- if(!candidate.manifest.integration.app755SourceFilesCopiedExactly)
-   fail('APP755_REVIEW_SOURCE_NOT_IDENTICAL');
+ if(!candidate.manifest.integration.app755SourceFilesCopiedExactly||
+    !candidate.manifest.integration.app759OwnerAlarmSourceExactlyCopied)
+   fail('APP755_759_REVIEW_SOURCE_NOT_IDENTICAL');
  writeFileSync(join(dir,'review-manifest.json'),JSON.stringify(candidate.manifest,null,2)+'\n');
  return {outputDirectory:dir,manifest:candidate.manifest};
 }

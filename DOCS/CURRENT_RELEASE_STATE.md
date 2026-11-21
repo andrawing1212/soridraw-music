@@ -1,3 +1,10 @@
+## 0APP749I. CSP 서버 직렬화 불일치 검증 수정 코드 PASS / QA 실제 재배포 대기 (2026-11-21 KST)
+
+- QA584 실제 Cloud Shell APP749 서버 공개 후 결과: `qaPageCspExact:false`만 실패하고 `htmlUnchanged`, `scriptExactlyUpdated`, `stylesheetUnchanged`, `publicConfigUnchanged`, `qaPageCspHasSelf`, `qaPageCspHasAppCheck`, `receiverCspUnchanged`, `receiverHtmlUnchanged`, `configValid`, `configWebAppExact`는 모두 true. `APP749_QA_OLD_HOSTING_ROLLBACK_COMMAND=PASS` + 종료코드 2. 실제 QA 로그인 PASS 아님.
+- 이 결과만으로 원문 문자열과 의미가 동일한지 확정하지 않음. Firebase Hosting 겹치는 헤더 규칙 및 CSP 응답 직렬화 차이 가능. 기존 검사는 CSP 값을 문자 하나까지 동일하게 비교하여 거부; **필요한 접속 출처가 존재하는지만 확인해서 통과시키는 완화는 금지**.
+- PR #1294 squash main `89857fe5bd1dc19aba467cc33e0ca8e272ef7585` 소스 검사 [Actions #44840918896] **SUCCESS**. 변경은 `scripts/app749-qa-hosting-scoped-csp.mjs` + 기존 대상 모의 테스트 2파일. CSP 지시어·허용 출처의 **전체 집합과 중복 여부**를 비교, 순서·공백 차이만 허용. 누락/추가 외부 주소/둘 이상의 CSP 정책/구형 글로벌 헤더는 모두 실패+원본 QA 릴리스 복구. 결과에 `qaPageCspSafeEquivalent` 및 안전한 불일치 유형을 표시; raw 정책·비밀번호·토큰 출력 없음. 기존 HTML/JS/CSS/config/루트 보호는 그대로.
+- **HOLD:** GitHub 병합 ≠ 실제 Hosting 재배포 ≠ 브라우저 로그인·A/B 실팔로우 PASS. 디렉터 Cloud Shell에서 main SHA 고정 코드를 내려받아 QA584만 `--check` → `--deploy` 1회 확인 필요. 실패 시 재실행 금지, `APP749_QA_POST_RELEASE_DIAGNOSTIC`의 `qaPageCspComparison`으로 다음 원인 판단. 공유 사용자 데이터·PREVIEW/TEST/PRODUCTION 변경 없음. `preview` HEAD `4363820117100cb03bcbc44a01e127aeb5de3cf4` 보호.
+
 ## 0APP749H. QA584 진단 결과 확보, 마지막 HTTP 스모크 실패 항목 구분 코드 PASS / 실 QA 미배포 (2026-11-21 KST)
 
 - 디렉터가 이미 실행한 QA584 읽기 전용 진단 사진: 종료코드 `0`, `APP749_QA_READONLY_NO_WRITE=PASS`. 현재 활성버전 `e7bfc3a27e9ebe49`은 기존 전역 CSP 규칙 하나, 직전 실패 후보 `7a8b790e9f3449f`에는 기존 `glob:**` 규칙과 신규 `glob:/qa749.html` 전용 CSP 규칙 2개. 기존 루트와 QA749 공개 응답은 원본 CSP(해시 `66dd3d5dc2e4b4`)이고 QA App Check와 'self' 접속은 여전히 차단. **이는 롤백 후 라이브 응답이므로 실패 후보가 활성화돼 있을 때 어떤 CSP 헤더가 서비스됐는지는 보여주지 않음.**

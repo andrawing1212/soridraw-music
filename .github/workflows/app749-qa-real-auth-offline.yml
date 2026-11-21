@@ -26,6 +26,41 @@ on:
 permissions:
   contents: read
 jobs:
+  public_firebase_keys_readonly:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Confirm actual Google Firebase Auth JWKS JSON (public, GET only)
+        run: |
+          set -euo pipefail
+          node --input-type=module - <<'NODE'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const code=readFileSync('cloudflare/explore-worker/experiments/owner-follow-qa-real-auth-749.mjs','utf8');
+          const url='https://www.googleapis.com/service_accounts/v1/metadata/jwk/securetoken@system.gserviceaccount.com';
+          assert(code.includes("const AUTH_JWKS='"+url+"'"),'APP749_PUBLIC_KEYS_URL_DRIFT');
+          const response=await fetch(url,{method:'GET',redirect:'error',
+            headers:{Accept:'application/json'},signal:AbortSignal.timeout(12000)});
+          assert.equal(response.status,200,'APP749_PUBLIC_KEYS_HTTP_'+response.status);
+          const data=await response.json();
+          assert(Array.isArray(data?.keys)&&data.keys.length>0&&data.keys.length<=30,
+            'APP749_PUBLIC_KEYS_FORMAT');
+          assert(data.keys.some(k=>k?.kty==='RSA'&&
+            typeof k.kid==='string'&&k.kid.length>0&&k.kid.length<=256&&
+            typeof k.n==='string'&&k.n.length>0&&
+            typeof k.e==='string'&&k.e.length>0),
+            'APP749_PUBLIC_KEYS_CONTENT');
+          console.log('APP749_REAL_GOOGLE_FIREBASE_PUBLIC_JWKS=PASS');
+          console.log('APP749_QA_SECRETS_AND_USER_DATA=NOT_ACCESSED');
+          NODE
   offline:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04

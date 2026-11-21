@@ -6,7 +6,7 @@
 // No Admin credentials, Firestore/RTDB access or production connections.
 const PROJECT='soridraw-app';
 const NUMBER='1083981050742';
-const AUTH_JWKS='https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
+const AUTH_JWKS='https://www.googleapis.com/service_accounts/v1/metadata/jwk/securetoken@system.gserviceaccount.com';
 const APP_JWKS='https://firebaseappcheck.googleapis.com/v1/jwks';
 const UID=/^[A-Za-z0-9_-]{1,128}$/;
 const APP_ID=/^1:1083981050742:(?:web|android|ios):[A-Za-z0-9]+$/;

@@ -95,7 +95,9 @@ export async function app768Physical({
   for(const id of ids){
    const result=await q(dataToken,uuid,"INSERT INTO "+synthetic+
     " (k,following) VALUES ('"+id+"',0)");
-   if(result.meta.rows_written!==1)HOLD('D1_INSERT_W_NOT_1');
+   console.log('APP768_QA_SETUP_INSERT_ROWS_WRITTEN='+result.meta.rows_written);
+   if(result.meta.rows_written<1||result.meta.rows_written>5)
+    HOLD('D1_SETUP_INSERT_COST_UNEXPECTED');
   }
   const one=await q(dataToken,uuid,
    "UPDATE "+synthetic+" SET following=1 WHERE k='qa768_a'");

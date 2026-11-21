@@ -57,7 +57,7 @@ const admission=createApp767IsolatedR2Admission({
   if(proofMode==='writerGap')q.canonicalWriterCoverageProven=false;
   if(proofMode==='noDeletion')q.userDeletionLifecycleReviewed=false;
   if(proofMode==='doPitr')q.isolationFromOwnerDoPitrProven=false;
-  if(proofMode==='epoch')q.authEpoch='b'.repeat(32);
+  if(proofMode==='epoch')q.authEpoch='c'.repeat(32);
   if(proofMode==='503')throw Error('TRUSTED_CUTOVER_503');
   return q;
  },

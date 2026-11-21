@@ -1,3 +1,11 @@
+## CURRENT — APP768 R2 구독 활성화 후 독립 QA 리소스 실제 인벤토리 검증 (2026-11-22 KST)
+
+- **디렉터 QA R2 구독 직접 활성화 완료:** Cloudflare `SORIDRAW-QA` 대시보드에서 R2 사용 가능, 버킷 0개·현재 저장 0B·청구 사용량 $0.00 확인. 운영 계정 아님.
+- **실제 GitHub Actions 한 번 재확인:** [#44944103380](https://github.com/andrawing1212/soridraw-music/actions/runs/44944103380) 기존 `live_metadata` job의 재실행 **SUCCESS**. `APP768_QA_WORKER_ORIGINAL_GET=PASS`, `APP768_QA_D1_METADATA_GET=PASS`, `APP768_QA_R2_METADATA_GET=PASS`, `APP768_QA_D1_NAMES=[]`, `APP768_QA_R2_NAMES=[]`, **해당 격리 QA 계정 D1 0개 / R2 0개**. 실제 QA API 접근 및 기존 APP583 Worker 100% 원복 확인, 사용자 원본 행/객체 조회·쓰기/배포 0.
+- **APP768 현재 실제 차단점:** 인증 문제는 해결. 기존 QA D1과 R2 리소스가 전혀 없으므로 APP767 R2 create-once 물리 경합/503 시험과 D1 `meta.rows_written` W1~W2 **미실행**. 이전 APP767 합성 in-memory PASS를 실제 R2/D1 PASS로 보고 금지. 신규 독립 QA 전용 D1+R2 버킷 **생성은 추가 승인 전 금지**; 자원/비용/안전 정리 정책을 사용자에게 먼저 설명. TEST/PRODUCTION/공유 D1·R2·RTDB/Hosting/Functions 변화 0, APP765/767 OFF, 정식 배포 HOLD.
+
+---
+
 ## CURRENT — APP768 QA D1 정상, R2 계정 서비스 미활성화(Cloudflare 10042) — 물리 시험 HOLD (2026-11-22 KST)
 
 - **디렉터가 QA 전용 Secret 연결 완료:** GitHub Actions `CLOUDFLARE_QA_DATA_TOKEN` 실제 인식 PASS. [실제 #44942457830](https://github.com/andrawing1212/soridraw-music/actions/runs/44942457830) 기존 원본 APP583 Worker GET PASS, **QA D1 metadata GET PASS**, QA R2 metadata GET 403. 별도 권한을 임의로 추가하거나 PROD 토큰 사용하지 않음.

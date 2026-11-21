@@ -19,7 +19,7 @@ const appClaims=()=>({iss:'https://firebaseappcheck.googleapis.com/1083981050742
   iat:sec-60,exp:sec+900});
 let keyFetches=0;
 const getKeys=async url=>{
-  assert(['https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com',
+  assert(['https://www.googleapis.com/service_accounts/v1/metadata/jwk/securetoken@system.gserviceaccount.com',
     'https://firebaseappcheck.googleapis.com/v1/jwks'].includes(url));
   keyFetches++;
   return {ok:true,status:200,headers:new Headers({'Cache-Control':'public, max-age=120'}),

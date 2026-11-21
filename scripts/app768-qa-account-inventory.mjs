@@ -31,7 +31,24 @@ export async function inventoryApp768Qa({
     signal:AbortSignal.timeout(15000),redirect:'error',
    });
    code=response.status;
-   if(code===403||code===401)continue;
+   if(code===403||code===401){
+     // Log *numeric Cloudflare error codes only* from the R2 metadata
+     // denial. Never print error text, identity, Authorization, headers,
+     // token or raw response JSON.
+     if(path===paths.r2){
+       let codes=[];
+       try{
+         const data=await response.json();
+         codes=Array.isArray(data?.errors)?
+           data.errors.map(x=>x?.code)
+             .filter(x=>Number.isSafeInteger(x)&&x>=0&&x<1000000)
+             .slice(0,4):[];
+       }catch{/* provider may return an empty/non-JSON 403 */}
+       console.log('APP768_QA_R2_DENIAL_CLOUDFLARE_CODES='+
+         (codes.length?codes.join(','):'UNAVAILABLE'));
+     }
+     continue;
+   }
    if(!response.ok)hold('HTTP_'+String(code));
    const body=await response.json();
    if(body?.success!==true)hold('CF_API_RESPONSE_UNVERIFIED');

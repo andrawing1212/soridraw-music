@@ -20,7 +20,7 @@ const need=(key)=>{
 const okBinding=(worker,name,type)=>worker?.bindings?.some(x=>x.name===name&&x.type===type);
 const names=worker=>(worker?.bindings||[]).map(x=>x.name);
 export function assessApp757CanaryReadiness({worker,functions,rtDb,gitRulesNode,
-  sourceHeadPinned}={}){
+  ownerService,sourceHeadPinned}={}){
  const blockers=[];
  const add=x=>blockers.push(x);
  if(!sourceHeadPinned)add('PREVIEW_SOURCE_NOT_PINNED');
@@ -47,7 +47,11 @@ export function assessApp757CanaryReadiness({worker,functions,rtDb,gitRulesNode,
  if(!ownerDoDirect&&!ownerDoService)add('OWNER_DO_ROUTE_NOT_BOUND');
  // A service binding may replace the direct DO binding, but it does not prove
  // that the target Worker has a deployed DO class or correct alarms.
- if(ownerDoService)add('OWNER_DO_SERVICE_TARGET_AND_ALARM_UNVERIFIED');
+ if(ownerDoService){
+   if(ownerService?.status!=='PINNED_TARGET_OWNER_DO')
+     add('OWNER_DO_SERVICE_TARGET_NOT_PINNED');
+   add('OWNER_DO_SERVICE_ACTUAL_RESERVATION_AND_ALARM_UNPROVEN');
+ }
  const fnSummary=FUNCTIONS.map(name=>{
   const item=functions?.[name];
   if(item?.status!=='ACTIVE')
@@ -55,9 +59,14 @@ export function assessApp757CanaryReadiness({worker,functions,rtDb,gitRulesNode,
   // ACTIVE proves deployment, not actual canary invocation.
   if(item?.canaryScopeConfigured!==true)
     add('FUNCTION_CANARY_GATE_UNVERIFIED_'+name);
+  if(item?.generalPreviewRequested===true)
+    add('FUNCTION_GENERAL_PREVIEW_FLAG_PRESENT_'+name);
   return {name,status:item?.status||'UNKNOWN',
     canaryScopeConfigured:item?.canaryScopeConfigured===true,
-    generalPreviewDisabled:item?.generalPreviewDisabled===true};
+    generalPreviewDisabled:item?.generalPreviewDisabled===true,
+    readyFlagConfigured:item?.readyFlagConfigured===true,
+    generalPreviewRequested:item?.generalPreviewRequested===true,
+    sourceBoundaryPreview:item?.sourceBoundaryPreview===true};
  });
  if(rtDb?.status!=='READ'||rtDb?.singleInstance!==true)
   add('SHARED_RTDB_ACTIVE_RULES_NOT_READ');
@@ -83,7 +92,9 @@ export function assessApp757CanaryReadiness({worker,functions,rtDb,gitRulesNode,
     pinnedBindingsVerified:worker?.pinnedBindingsVerified===true,
     followRelatedBindingCount:previewFollowBindings.length,
     knownRequiredNamesVerified:!blockers.some(x=>x.startsWith('PREVIEW_BINDING_MISSING_')),
-    ownerDoDirectBound:ownerDoDirect,ownerDoServiceBound:ownerDoService},
+    ownerDoDirectBound:ownerDoDirect,ownerDoServiceBound:ownerDoService,
+    ownerDoServiceTargetStatus:ownerService?.status||'UNVERIFIED',
+    ownerDoServiceTargetActiveVersion:ownerService?.activeVersion||null},
   functions:fnSummary,
   rtDb:{status:rtDb?.status||'UNKNOWN',singleInstance:rtDb?.singleInstance===true,
     ownerReadOnly:rtDb?.ownerReadOnly===true,
@@ -116,13 +127,17 @@ async function probeFunction(name,access){
     return {status:'UNVERIFIED_NAME'};
   const vars=d.serviceConfig?.environmentVariables||{};
   const uid=String(vars.SORIDRAW_OWNER_FOLLOW_CANARY_UID_574||'');
+  const readyFlagConfigured=vars.SORIDRAW_OWNER_FOLLOW_READY_608==='1';
+  const generalPreviewRequested=
+    vars.SORIDRAW_OWNER_FOLLOW_GENERAL_PREVIEW_653==='1';
+  const sourceBoundaryPreview=
+    vars.SORIDRAW_OWNER_FOLLOW_SOURCE_BOUNDARY_653==='preview-only';
   const canaryScopeConfigured=d.state==='ACTIVE'&&
-    vars.SORIDRAW_OWNER_FOLLOW_READY_608==='1'&&
-    /^[A-Za-z0-9_-]{1,128}$/.test(uid)&&
-    vars.SORIDRAW_OWNER_FOLLOW_GENERAL_PREVIEW_653!=='1';
+    readyFlagConfigured&&/^[A-Za-z0-9_-]{1,128}$/.test(uid)&&
+    !generalPreviewRequested;
   return {status:d.state==='ACTIVE'?'ACTIVE':(d.state||'UNVERIFIED_STATE'),
-    canaryScopeConfigured,generalPreviewDisabled:
-      vars.SORIDRAW_OWNER_FOLLOW_GENERAL_PREVIEW_653!=='1'};
+    canaryScopeConfigured,readyFlagConfigured,generalPreviewRequested,
+    sourceBoundaryPreview,generalPreviewDisabled:!generalPreviewRequested};
  }catch{return {status:'UNREADABLE'}}
 }
 export function summarizeOwnerRules(rules){
@@ -141,6 +156,25 @@ export function summarizeOwnerRules(rules){
  const clientWriteBlocked=item['.write']===false&&rootWrite===false&&
    rootRead===false&&ruleKeys.every(x=>x!=='.validate'||rules.rules[x]===false);
  return {rulesNodePresent:true,ownerReadOnly,clientWriteBlocked};
+}
+async function probeOwnerService(worker,token){
+ const b=worker?.bindings?.find(x=>
+   x.name==='OWNER_FOLLOW_RESERVATION_SERVICE_600'&&x.type==='service');
+ // Only the known APP600 private standalone service is considered.
+ if(b?.service!=='soridraw-owner-follow-preview-candidate')
+   return {status:'UNVERIFIED_SERVICE_NAME'};
+ try{
+  const active=await readWorker(b.service,token);
+  const ownerDo=active.bindings?.some(x=>
+    x.name==='OWNER_FOLLOW_DO_600'&&
+    x.type==='durable_object_namespace'&&
+    x.class_name==='OwnerFollowerStandalone600');
+  if(active.name===b.service&&active.activeVersion&&
+     active.trafficPercent===100&&active.pinnedBindingsVerified&&
+     active.schedulesVerified&&ownerDo)
+    return {status:'PINNED_TARGET_OWNER_DO',activeVersion:active.activeVersion};
+  return {status:'TARGET_BINDING_UNVERIFIED'};
+ }catch{return {status:'UNREADABLE'}}
 }
 async function probeRtDb(access){
  try{
@@ -167,6 +201,7 @@ async function main(){
    Promise.all(FUNCTIONS.map(async name=>[name,await probeFunction(name,google)])),
    probeRtDb(google),
  ]);
+ const ownerService=await probeOwnerService(worker,cf);
  const functions=Object.fromEntries(functionsArr);
  // Existing checked-in RTDB rules are not automatically actual active rules.
  const {readFileSync}=await import('node:fs');
@@ -176,7 +211,7 @@ async function main(){
    gitRulesNode=Boolean(rules?.rules?.ownerFollowerSync532?.$uid);
  }catch{}
  const report=assessApp757CanaryReadiness({
-   worker,functions,rtDb,gitRulesNode,sourceHeadPinned:true});
+   worker,functions,rtDb,gitRulesNode,ownerService,sourceHeadPinned:true});
  console.log(JSON.stringify(report,null,2));
  console.log('APP757_LIVE_METADATA_ONLY=PASS; SHARED_CHANGES=0; ROLLOUT=HOLD');
 }

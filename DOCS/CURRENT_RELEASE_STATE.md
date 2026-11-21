@@ -1,3 +1,12 @@
+## CURRENT — APP766 기존 D1/R2 팔로우 이력 재사용 가능성 조사 (2026-11-22 KST)
+
+- **소스 사실:** D1 `explore_follow_overrides_348`는 `(follower_uid,following_uid)` 한 행에 최신 `mutation_id`를 저장하며 원천부터 append-only operation ID 이력이 아니다. R2 `internal/explore/follow-intents-v354/<cutoverToken>/<actor>/<owner>.json`도 해당 관계별 한 개의 최신 settled intent/current revision을 조회한다. owner 집계 Outbox 529 및 profile_stats epoch/revision candidate는 과거 개별 canonical ID 원장이 아니다. 정확한 출처·근거·재사용 범위는 `DOCS/APP766_EXISTING_FOLLOW_HISTORY_EVIDENCE.md`.
+- **안전한 결론:** 기존 D1 관계 상태 + R2 최신 intent + Firebase Auth epoch를 결합해도 APP765의 **owner DO PITR 독립/처음부터 완전한 단조 operation history의 `never-seen`을 증명할 수 없다**. 별도 원장 존재/실제 Writer 커버리지/보존기간/완전성 미확인. 불확실하면 APP765 source-only `HOLD` 유지. 안전하지 않은 임시 `completeFromOrigin:true` 매핑·신규 DB/공유 데이터 변경·W3+ 방지.
+- **현재 검증 추가:** `scripts/app766-live-d1-history-schema-readonly.mjs`와 기존 GitHub Secrets를 활용한 제한적 Actions 1회 검증. 실제 공유 D1의 **sqlite_schema 메타데이터만 단 1 SELECT** (Cloudflare API는 SQL 전송에 POST 사용), 사용자 원본 행 조회/변경 0. 스키마에 유사한 테이블이 있더라도 실제 canonical 전체 operation 원장으로 통과시키지 않음. 코드 테스트와 실제 메타데이터 접근 합격을 분리 보고. 실제 R2 사용자 객체 조회/목록화 없음.
+- **범위·상태:** 승인된 조건에 완전한 원장이 없어 APP765 실전 callback은 연결하지 않음(연결 가능하다고 가장하지 않음). APP749/760 독립 QA 실전송 PASS 기존 증거 재사용, 반복 QA 0. PREVIEW·TEST·PRODUCTION Worker/DO/Functions/Rules/D1/R2/RTDB/Hosting/공유 사용자 데이터 배포·변경 0. 정식 릴리스 APP737/738 HOLD.
+
+---
+
 ## CURRENT — APP765 DO 전체 복구 후 독립 정본·계정 세대·요청 이력 검증 게이트 (OFF-ONLY, 2026-11-22 KST)
 
 - **변경 범위:** APP755 백엔드에서 owner DO에 이미 동일 예약이 있으면 기존 수신 경로 그대로 재사용하고, **DO에서 신규 예약으로 판단돼 실제 reserve()하기 직전에만** `APP765` 독립 정본 재확인 게이트를 추가한다. 기존 APP743의 요청별 WeakMap/Auth App Check·APP354 expectedRevision·D1/R2 preflight를 재사용한다. `app765-production-canonical-recovery.mjs`는 추가 네트워크를 자체 수행하지 않는 순수 검증+서버 callback 인터페이스이며 기본 `COMPILED_OPEN=false`.

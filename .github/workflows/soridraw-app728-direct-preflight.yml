@@ -27,6 +27,8 @@ on:
       - 'scripts/verify-730-source-only-follow-bridge.mjs'
       - 'scripts/app743-production-follow-bridge.mjs'
       - 'scripts/verify-743-production-follow-bridge.mjs'
+      - 'scripts/app753-production-follow-composition.mjs'
+      - 'scripts/verify-753-production-follow-composition.mjs'
       - '.github/workflows/soridraw-app728-direct-preflight.yml'
 
 permissions:
@@ -143,6 +145,8 @@ jobs:
           node scripts/verify-730-source-only-follow-bridge.mjs
           node --check scripts/app743-production-follow-bridge.mjs
           node scripts/verify-743-production-follow-bridge.mjs
+          node --check scripts/app753-production-follow-composition.mjs
+          node scripts/verify-753-production-follow-composition.mjs
 
   binding_diff:
     if: >-
@@ -262,6 +266,8 @@ jobs:
           node scripts/verify-730-source-only-follow-bridge.mjs
           node --check scripts/app743-production-follow-bridge.mjs
           node scripts/verify-743-production-follow-bridge.mjs
+          node --check scripts/app753-production-follow-composition.mjs
+          node scripts/verify-753-production-follow-composition.mjs
       - name: Generate exact production baseline and quarantined PREVIEW modules in runner temp only
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

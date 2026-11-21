@@ -1,3 +1,12 @@
+## CURRENT — APP770 팔로우 저장 확정 후 독립 복구 판단 계약·오프라인 코드 검사 PASS / 실제 자동 복구 HOLD (2026-11-22 KST)
+
+- **사용자 YES 승인 범위:** APP768(실 QA R2 중복 6회 중 1건 저장, Actions #44952152823)과 APP769(실 QA D1 오류 + 모의 ACK 소실, Actions #44953090705)의 이전 PASS 재사용. APP770은 기존 정본 수신점 재사용·저비용 복구 설계와 **source-only 검증**만 실행, 실 QA 자원과 공유 계정·사용자 원본 접근/변경/배포 0.
+- **코드 변경:** `scripts/app770-post-admission-reconcile.mjs` 신규. `APP770_POST_ADMISSION_COMPILED_OPEN=false` 기본, 실제 APP755/765/767 Worker/backend에 import/연결 0. APP767과 동일한 canonical operation SHA-256 입장 해시 검증, Auth epoch·owner/actor/cutover·정본 D1 exact commit·R2 exact immutable settle·처음부터 완전한 모든 신/구 Writer operation history·DO 외부 owner revision floor를 **모두 요구**. 현존 D1 최신 pair/R2 최근 intent를 완전한 이력으로 간주하지 않음. 부족하거나 503/ACK 소실/DO PITR/세대 변경이면 `HOLD`. 모의 완전한 증거의 shape가 맞아도 `OFFLINE_EXACT_SETTLED_PROOF_SHAPE_MATCHED_ONLY`만 반환하며 신규 ID/원래 ID 재쓰기·DO 예약·Functions 송신/배포 허용은 항상 false.
+- **코드 검사:** `node scripts/verify-770-post-admission-reconcile.mjs` Node 22 직접 실행 **42가지 모의 케이스 PASS**, fetch를 실패로 막아 실제 네트워크/서버 읽기·쓰기 0. GitHub에 기록된 코드와 검사 로컬 원본 Git blob SHA가 각각 일치. 이전 QA는 재실행하지 않음. 상세 설계 `DOCS/APP770_POST_ADMISSION_RECOVERY_SOURCE_ONLY.md`.
+- **정확한 미완료:** 실제 운영의 독립 불변 canonical operation ledger와 trusted server callback, 구형 Writer 전체 cutover, Auth epoch 및 owner external revision floor, D1↔R2 원자성·장애 후 정확한 재전송 및 PC↔모바일 실사용 **NOT_TESTED**. 운영 팔로우 Writer의 D1 W1~W2 물리 비용도 미확인. **자동 복구/실서버 통합/PREVIEW/TEST/PRODUCTION 배포 없음**. APP765/767 기본 OFF, APP737/738 정식 릴리스 HOLD. 고위험 공유 데이터/권한·보존·마이그레이션 변경은 별도 승인이 필요.
+
+---
+
 ## CURRENT — APP769 QA R2 접수 후 D1 장애·ACK 소실 합성 실검증 PASS / 자동 복구 HOLD (2026-11-22 KST)
 
 - **디렉터 YES 범위:** APP768 기존 격리 Cloudflare QA 계정·기존 D1 `soridraw-qa-app768-d1` 및 R2 `soridraw-qa-app768-r2`만 사용. 새 Worker·버킷·데이터베이스·토큰·권한 생성 0. 기존 APP583 원본 버전 `4ed70845-6a4b-4a80-9c51-ed95d0becc38` 활성 100% 검사. [PR #1336](https://github.com/andrawing1212/soridraw-music/pull/1336) 병합 `e98be05dad073b7cbc3b5fa8b0b9b6b6c831c1ba`.

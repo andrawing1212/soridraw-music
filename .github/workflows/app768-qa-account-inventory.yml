@@ -1,0 +1,61 @@
+name: APP768 isolated QA D1-R2 resources (GET only)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/app768-qa-account-inventory.mjs'
+      - 'scripts/verify-768-qa-account-inventory.mjs'
+      - '.github/workflows/app768-qa-account-inventory.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/app768-qa-account-inventory.mjs'
+      - '.github/workflows/app768-qa-account-inventory.yml'
+permissions:
+  contents: read
+concurrency:
+  group: app768-qa-resources-inventory
+  cancel-in-progress: false
+jobs:
+  offline:
+    if: github.event_name == 'pull_request' && github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify QA-only GET paths and version fence (no secrets)
+        run: |
+          set -euo pipefail
+          node --check scripts/app768-qa-account-inventory.mjs
+          node scripts/verify-768-qa-account-inventory.mjs
+  live_metadata:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Pin main SHA and verified original QA version
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          node --check scripts/app768-qa-account-inventory.mjs
+      - name: GET only QA Cloudflare existing D1 and R2 resource names
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_QA_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+        run: |
+          set -euo pipefail
+          node scripts/app768-qa-account-inventory.mjs
+          echo 'APP768_QA_INVENTORY_ONLY=PASS; CF_MUTATIONS=0; SHARED_USER_DATA=0'

@@ -571,6 +571,8 @@ jobs:
           npx --yes wrangler@4.147.0 deploy --config wrangler.app518-qa-r2.generated.json
           echo 'APP518_QA_R2_EXACT_TEMP_UPLOAD=PASS'
       - name: Bootstrap exactly two QA synthetic keys using signed GitHub OIDC
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
         run: |
           set -euo pipefail
           test -f "$RUNNER_TEMP/app518-qa-r2-deploy-attempted"

@@ -1,11 +1,18 @@
-name: APP768 QA R2 real conditional six-way race and cleanup
+name: APP776 isolated QA HTTP legacy and ordered integration (one-shot)
 on:
   pull_request:
     branches: [main]
     paths:
-      - 'scripts/app768-qa-race-worker.mjs'
-      - 'scripts/app768-qa-race-runner.mjs'
-      - 'scripts/verify-768-qa-race-offline.mjs'
+      - 'scripts/app776-qa-integration-worker.mjs'
+      - 'scripts/app776-qa-integration-runner.mjs'
+      - 'scripts/verify-776-qa-integration-offline.mjs'
+      - '.github/workflows/app768-qa-r2-conditional-race.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/app776-qa-integration-worker.mjs'
+      - 'scripts/app776-qa-integration-runner.mjs'
+      - 'scripts/verify-776-qa-integration-offline.mjs'
       - '.github/workflows/app768-qa-r2-conditional-race.yml'
 permissions:
   contents: read
@@ -25,16 +32,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Offline six-way test using exact APP767 admission source
+      - name: APP776 QA-only syntax and isolated in-memory full HTTP flow
         run: |
           set -euo pipefail
-          node --check scripts/app768-qa-race-worker.mjs
-          node --check scripts/app768-qa-race-runner.mjs
-          node scripts/verify-768-qa-race-offline.mjs
+          node --check scripts/app776-qa-integration-worker.mjs
+          node --check scripts/app776-qa-integration-runner.mjs
+          node --check scripts/verify-776-qa-integration-offline.mjs
+          node scripts/verify-776-qa-integration-offline.mjs
   live:
-    if: false # APP768 one-time physical QA PASS; require new approval to reactivate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'andrawing1212/soridraw-music'
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 13
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,40 +51,43 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Check exact main revision and code with no cloud access
+      - name: Pin exact QA source revision and check offline safety
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          node --check scripts/app768-qa-race-runner.mjs
-          node scripts/verify-768-qa-race-offline.mjs
-      - name: Pin original APP583, reuse one D1 and one R2, prepare unique QA Worker
+          node scripts/verify-776-qa-integration-offline.mjs
+      - name: Inspect original APP583, QA D1/R2 isolation, insert one synthetic row
         env:
           CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
           CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
           CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
           CLOUDFLARE_QA_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
-        run: node scripts/app768-qa-race-runner.mjs preflight
-      - name: Bundle isolated QA Worker offline and upload via official Cloudflare API
+        run: node scripts/app776-qa-integration-runner.mjs preflight
+      - name: Bundle and upload ONE temporary QA HTTP Worker with QA-only D1/R2
         env:
           CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
           CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
           CLOUDFLARE_QA_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
         run: |
           set -euo pipefail
-          test -f "$RUNNER_TEMP/app768-r2-race-state.json"
-          npx --yes esbuild@0.25.12 scripts/app768-qa-race-worker.mjs \
+          test -f "$RUNNER_TEMP/app776-single-run-state.json"
+          npx --yes esbuild@0.25.12 scripts/app776-qa-integration-worker.mjs \
             --bundle --format=esm --platform=browser --target=es2022 \
-            --outfile=app768-r2-worker.bundle.mjs
-          node scripts/app768-qa-race-runner.mjs deploy
-      - name: Six real concurrent calls; one R2 object winner, five duplicates blocked
+            --outfile=app776-qa-integration-worker.bundle.mjs
+          node scripts/app776-qa-integration-runner.mjs upload
+      - name: Real QA HTTP legacy follow and ordered unfollow concurrent integration
         env:
           CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
-        run: node scripts/app768-qa-race-runner.mjs race
-      - name: Always delete exact synthetic object and disposable Worker
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
+          CLOUDFLARE_QA_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+        run: node scripts/app776-qa-integration-runner.mjs test
+      - name: Always purge exact two QA R2 objects, one QA D1 row and temporary Worker
         if: always()
         env:
           CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
           CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
           CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
           CLOUDFLARE_QA_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
-        run: node scripts/app768-qa-race-runner.mjs cleanup
+        run: node scripts/app776-qa-integration-runner.mjs cleanup

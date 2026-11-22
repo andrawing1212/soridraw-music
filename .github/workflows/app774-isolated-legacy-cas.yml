@@ -1,0 +1,86 @@
+name: APP774 isolated QA legacy ingress witness and D1 CAS race (one-shot)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/verify-774-legacy-ingress-offline.mjs'
+      - 'scripts/app774-qa-d1-conditional-race.mjs'
+      - '.github/workflows/app774-isolated-legacy-cas.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/app774-qa-d1-conditional-race.mjs'
+      - '.github/workflows/app774-isolated-legacy-cas.yml'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-app768-r2-physical-qa
+  cancel-in-progress: false
+jobs:
+  offline:
+    if: github.event_name == 'pull_request' && github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 4363820117100cb03bcbc44a01e127aeb5de3cf4
+          path: pinned-preview
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Pin actual unchanged PREVIEW code, verify one-shot QA syntax
+        run: |
+          set -euo pipefail
+          test "$(git -C pinned-preview rev-parse HEAD)" = "4363820117100cb03bcbc44a01e127aeb5de3cf4"
+          node --check scripts/verify-774-legacy-ingress-offline.mjs
+          node --check scripts/app774-qa-d1-conditional-race.mjs
+      - name: Demonstrate current legacy/unenrolled bypass without cloud access
+        run: node scripts/verify-774-legacy-ingress-offline.mjs
+  live:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 4363820117100cb03bcbc44a01e127aeb5de3cf4
+          path: pinned-preview
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: One-shot source witness and exact SHA pin
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C pinned-preview rev-parse HEAD)" = "4363820117100cb03bcbc44a01e127aeb5de3cf4"
+          node scripts/verify-774-legacy-ingress-offline.mjs
+      - name: Check original QA Worker 100%, exact one QA D1/R2, prepare one row
+        env:
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
+        run: node scripts/app774-qa-d1-conditional-race.mjs prepare
+      - name: Real QA synthetic D1 conditional concurrent 2 request single-winner
+        env:
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
+        run: node scripts/app774-qa-d1-conditional-race.mjs exercise
+      - name: Always remove exact synthetic row, recheck QA Worker active version
+        if: always()
+        env:
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
+        run: node scripts/app774-qa-d1-conditional-race.mjs cleanup

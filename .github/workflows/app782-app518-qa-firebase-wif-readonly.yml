@@ -469,3 +469,47 @@ jobs:
           set -euo pipefail
           test "$(gcloud projects describe soridraw-app --format='value(projectNumber)')" = '1083981050742'
           node qa/app518/live/readiness518.mjs --live-readonly
+
+  qa_firestore_one_song:
+    # APP518: exactly 1 synthetic favorites doc in QA Firestore.
+    # W4 max (create/delete/recreate/CAS cleanup), no Functions/Cloudflare.
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 528 &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/app518-qa-firestore-one-song 864f796da24413309567198c9de502b13cdedd50'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Mock exact favorite lifecycle and foreign document refusal
+        run: node qa/app518/live/verify-firestore-one-song518.mjs
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/1083981050742/locations/global/workloadIdentityPools/soridraw-qa-github/providers/app518-readonly
+          service_account: soridraw-qa-gh-deployer@soridraw-app.iam.gserviceaccount.com
+          project_id: soridraw-app
+          create_credentials_file: true
+          export_environment_variables: true
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Real QA synthetic favorite create-delete-recreate and exact CAS cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gcloud projects describe soridraw-app --format='value(projectNumber)')" = '1083981050742'
+          test "$(gcloud firestore databases describe --database='(default)' --project=soridraw-app --format='value(locationId)')" = 'asia-northeast3'
+          export APP518_QA_PROJECT_NUMBER=1083981050742
+          APP518_QA_FIRESTORE_BEARER="$(gcloud auth print-access-token)"
+          export APP518_QA_FIRESTORE_BEARER
+          node qa/app518/live/firestore-one-song518.mjs --live-one-song
+          unset APP518_QA_FIRESTORE_BEARER

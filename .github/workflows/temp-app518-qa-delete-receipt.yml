@@ -1,0 +1,33 @@
+name: APP518 QA exact delete receipt source-only check
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'qa/app518/firebase/**'
+      - '.github/workflows/temp-app518-qa-delete-receipt.yml'
+permissions:
+  contents: read
+jobs:
+  app518_qa_delete_receipt_source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build fixed PR528 exact-source modules and stage QA only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "864f796da24413309567198c9de502b13cdedd50^{commit}"
+          git worktree add --detach "$RUNNER_TEMP/app518-source" 864f796da24413309567198c9de502b13cdedd50
+          npm --prefix "$RUNNER_TEMP/app518-source/functions" ci --no-audit --no-fund
+          npm --prefix "$RUNNER_TEMP/app518-source/functions" run build
+          node qa/app518/firebase/stage.mjs "$RUNNER_TEMP/app518-source/functions/lib"
+          NODE_PATH="$RUNNER_TEMP/app518-source/functions/node_modules" node qa/app518/firebase/verify.mjs
+          node --check qa/app518/firebase/index.cjs
+          echo 'APP518_QA_TWO_FUNCTION_SOURCE_TEST=PASS; DEPLOY=0; CLOUD_MUTATIONS=0'

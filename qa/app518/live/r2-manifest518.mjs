@@ -1,6 +1,6 @@
 // APP518 QA-only Worker manifest from live Cloudflare read metadata.
 // No write, deployment, SQL migration or credential export. Fail closed.
-import {writeFileSync} from 'node:fs';
+import {writeFileSync,readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import assert from 'node:assert/strict';
 const account='b60fcd62c679c64db19f0b0e0c2f3429';
@@ -16,7 +16,8 @@ const assertRun=()=>{
  assert.equal(process.env.GITHUB_RUN_ATTEMPT,'1');
  assert.match(run,/^[0-9]{8,20}$/);
  assert.match(sha,/^[a-f0-9]{40}$/);
- const event=JSON.parse(process.env.GITHUB_EVENT_JSON||'{}');
+ const event=JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH,'utf8'));
+ assert.equal(event?.repository?.full_name,GIT);
  assert.equal(event?.issue?.number,528);
  assert.ok(event?.issue?.pull_request);
  assert.equal(event?.comment?.body,

@@ -159,9 +159,27 @@ const cloudflareNoOtherWorker=async(ctx,token,request=fetch)=>{
 const cleanup=async(env,ctx,readerToken,apiFetch)=>{
  await cloudflareNoOtherWorker(ctx,readerToken,apiFetch);
  await d1PilotZero(env,ctx);
+ const keys=await listPilot(env,ctx);
+ if(!keys.length)return {code:'QA518_R2_ALREADY_ABSENT'};
+ // If the second create failed, the one create-only BASE may safely be
+ // removed after proving no test Worker and zero D1 pilot rows.
+ if(keys.length===1){
+  if(keys[0]!==ctx.baseKey)fail('HOLD_QA_R2_UNKNOWN_PARTIAL_OBJECT');
+  const base=await read(env,ctx.baseKey,ctx.uid);
+  if(base?.json?.schemaVersion!==4||base.json.authority!=='server'
+   ||base.json.kind!=='musicNote'||base.json.complete!==true
+   ||base.json.ownerUid!==ctx.uid||base.json.revision!==1
+   ||base.json.itemCount!==0||!Array.isArray(base.json.items)
+   ||base.json.items.length!==0)
+   fail('HOLD_QA_R2_PARTIAL_BASE_UNTRUSTED');
+  await env.CATALOG.delete(ctx.baseKey);
+  if((await listPilot(env,ctx)).length)
+   fail('HOLD_QA_R2_PARTIAL_CLEANUP_NOT_CONFIRMED');
+  return {code:'QA518_R2_PARTIAL_BASE_CLEANED_PASS'};
+ }
  const state=await inspect(env,ctx);
- if(state.code==='QA518_R2_PREFIX_EMPTY')
-  return {code:'QA518_R2_ALREADY_ABSENT'};
+ if(state.code!=='QA518_R2_TWO_EXACT_KEYS_VALID')
+  fail('HOLD_QA_R2_CLEANUP_CONTRACT');
  // No CAS deletion in R2. It is safe ONLY because authenticated GitHub
  // inspection above proves the exact test Worker is ABSENT.
  for(const key of [ctx.headKey,ctx.baseKey]){

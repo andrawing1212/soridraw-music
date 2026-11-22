@@ -89,3 +89,57 @@ jobs:
           print('APP782_APP518_CHANGE_FUNCTION_PRESENT='+str('app518FavoriteCatalogChanged' in names).lower())
           print('APP782_QA_SERVER_MUTATIONS=0; FUNCTIONS_DEPLOY=0; CLOUD_SHELL=NOT_USED')
           PY
+
+
+  qa_exact_source_stage:
+    # No Google or Cloudflare credentials. Only stage the pinned APP518
+    # exact-source Firebase function, not the shared securedIndex or trigger.
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 528 &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/app518-qa-stage 864f796da24413309567198c9de502b13cdedd50'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build only the pinned PR candidate source; never deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHA=864f796da24413309567198c9de502b13cdedd50
+          git cat-file -e "$SHA^{commit}" || {
+            echo 'APP783_QA_EXACT_SOURCE_SHA_UNAVAILABLE';exit 2;
+          }
+          git worktree add --detach "$RUNNER_TEMP/app518-source" "$SHA"
+          npm --prefix "$RUNNER_TEMP/app518-source/functions" ci --no-audit --no-fund
+          npm --prefix "$RUNNER_TEMP/app518-source/functions" run build
+          test -f "$RUNNER_TEMP/app518-source/functions/lib/app518ServerTransport.js"
+          node qa/app518/firebase/stage.mjs "$RUNNER_TEMP/app518-source/functions/lib"
+          NODE_PATH="$RUNNER_TEMP/app518-source/functions/node_modules" \
+            node qa/app518/firebase/verify.mjs
+          node --check qa/app518/firebase/index.cjs
+          echo 'APP783_QA_ONLY_ONE_SOURCE_FUNCTION_STAGED=PASS'
+          echo 'APP783_FIREBASE_FUNCTIONS_DEPLOY=0; FIRESTORE_MUTATIONS=0'
+      - name: Preserve uncredentialed source-only package for exact QA review
+        uses: actions/upload-artifact@v4
+        with:
+          name: app783-qa-exact-source-off
+          path: |
+            qa/app518/firebase/index.cjs
+            qa/app518/firebase/package.json
+            qa/app518/firebase/lib/app518CanonicalSourceProvider.js
+            qa/app518/firebase/lib/app518EventSafetyFence.js
+            qa/app518/firebase/lib/app518ServerTransport.js
+          if-no-files-found: error
+          retention-days: 7

@@ -1,3 +1,13 @@
+## CURRENT — APP783 APP518 Firebase QA 단건 함수 분리 빌드 PASS / 실배포·E2E HOLD (2026-11-23 KST)
+
+- **APP782 실제 인증 PASS 재사용:** [Actions #45059378813](https://github.com/andrawing1212/soridraw-music/actions/runs/45059378813), QA Firebase WIF `soridraw-app` 읽기 전용 정상. 재검사하지 않음.
+- **APP783 새 안전한 산출물:** `qa/app518/firebase/index.cjs`는 `app518QaExactFavoriteSource` **한 개 HTTPS 함수만** 내보내며, PR #528 고정 소스의 `app518ServerTransport/CanonicalSourceProvider/EventSafetyFence` 컴파일 결과만 재사용. 공유 `functions/src/index.ts`, `securedIndex`, 원래 팔로우 Functions, Firestore trigger/cron, Firebase Rules, 사용자 UI는 수정하지 않음. `firebase.app783-qa.json`의 단독 codebase `app518qa`만 사용해 기존 default 코드베이스 삭제/덮어쓰기 위험 분리.
+- **CI 실제 검사:** [Actions #45060366022](https://github.com/andrawing1212/soridraw-music/actions/runs/45060366022) 성공. 정확 후보 SHA `864f796da24413309567198c9de502b13cdedd50` TypeScript 컴파일 후 QA 전용 패키지 구성 PASS, QA 기본 OFF 503 PASS, 운영 Firebase 프로젝트 및 타 프로젝트 거부 PASS, 실제 Firestore 호출 0 PASS. 7일 보존 GitHub 산출물 `app783-qa-exact-source-off` 생성(artifact id `14768878569`). 추가 `firebase.app783-qa.json` JSON 정적 격리 검사 PASS. **컴파일 PASS != 실제 서버 배포 PASS**.
+- **현재 원격 차단:** QA WIF 서비스 계정 `soridraw-qa-gh-reader`에는 **Browser+Cloud Functions Viewer만 있음**. Cloud Functions 배포·Secret Manager 자격증명 생성·Firestore 합성곡 쓰기 권한은 없음. 우회하거나 읽기 전용 계정에 임의로 관리자 권한을 추가하지 않음. QA Secret Manager `SORIDRAW_CATALOG_SERVER_HMAC_518`의 별도 인증·전용 실행 controller, APP518 QA D1 tables/계정 Writer proof도 미구성. 현재 APP518 원격 save→delete→resave/retry **NOT_TESTED/HOLD**.
+- **변경·보호:** GitHub QA 전용 패키지/워크플로 및 QA-only Firebase codebase 설정만 생성. Cloudflare QA Worker/D1/R2 실서버 변경 0, Firebase QA Functions·IAM·Firestore 변경 0, 운영/TEST/PRODUCTION/공유 데이터 변경 0. 새 QA Functions 배포는 별도 일시적인 최소권한 배포 실행계정·QA 전용 HMAC/DB 준비·비용 상한·정확 원복 경로 확보 후 가능. 현재 실 배포 승인으로 오해하지 말 것.
+
+---
+
 ## CURRENT — APP782 QA GitHub OIDC ↔ Firebase 실제 인증·Functions 조회 PASS (2026-11-23 KST)
 
 - **실서버 인증 완료:** 디렉터가 일반 Chrome의 Google Cloud QA IAM 콘솔에서 정확 QA 서비스 계정 `soridraw-qa-gh-reader@soridraw-app.iam.gserviceaccount.com`, WIF Pool `soridraw-qa-github`, OIDC Provider `app518-readonly`를 생성하고 QA 서비스 계정 가장 접근 권한을 `repository_id=1188157610`에 한정해 연결. Firebase QA Project `soridraw-app` (Number `1083981050742`)만 사용하고 운영 프로젝트 계정/키는 사용하지 않음. WIF Provider의 매핑 `google.subject`/`attribute.repository_id`/`attribute.repository_owner_id`/`attribute.repository` 및 정확 workflow/event 제한은 디렉터의 콘솔 입력 캡처와 설정서를 따름. 실제 IAM 정책 내용의 별도 API 덤프 검증은 수행하지 않음.

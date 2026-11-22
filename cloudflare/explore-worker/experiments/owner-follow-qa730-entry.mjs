@@ -8,6 +8,7 @@ import originalWorker,{
 import {parseOwnerQaConfig583} from './owner-follow-qa-live-583.mjs';
 import {createOwnerQa730Runtime} from './owner-follow-qa730-bridge.mjs';
 import {createQaFirebaseVerifier749} from './owner-follow-qa-real-auth-749.mjs';
+import {evaluateApp778SignedQaShadow} from './owner-follow-qa-shadow-778.mjs';
 
 const respond=(status)=>Response.json({ok:false,syntheticOnly:true},{status,headers:{'Cache-Control':'no-store'}});
 const qaVerify=createQaFirebaseVerifier749();
@@ -100,6 +101,19 @@ export function createQaAuthEntry749({verify=qaVerify,legacy=originalWorker}={})
           (action==='follow'&&principal.uid!==cfg.actorUid)||
           (action==='status'&&![cfg.actorUid,cfg.ownerUid].includes(principal.uid)))
           return deny(403);
+        // APP778: QA signed status invokes the APP775 common ingress as a
+        // passive FAIL-CLOSED shadow. It MUST not delegate follow commands,
+        // create an R2 admission or claim that the server Writer is connected.
+        // APP749 GET /verified/status remains the only audited read path.
+        if(action==='status'){
+          const shadow=await evaluateApp778SignedQaShadow({
+            verifiedPrincipal:principal,config:cfg,env,
+          });
+          if(shadow?.status!=='PASS_FAIL_CLOSED'||
+             shadow.realWriterConnected!==false||
+             shadow.serverWritesAdded!==0||shadow.doCallsAdded!==0)
+            return deny(503);
+        }
         // The browser sends signed tokens; only this QA gateway converts them
         // into the preexisting internal DO probe. Never forward JWTs to DO,
         // Functions, storage, logs, or other environments.

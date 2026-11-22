@@ -36,8 +36,10 @@ export async function runQa518FirestoreOneSong({
  let requests=0,writes=0,owned=false,stage='UNSTARTED',cleanup=false;
  const call=async(method,url,body)=>{
    if(++requests>MAX_REQUESTS)fail('HOLD_QA_FIRESTORE_REQUEST_CAP');
-   if(![collection,resource].includes(url.split('&currentDocument.updateTime=')[0]))
-     fail('HOLD_QA_FIRESTORE_FOREIGN_URL');
+   const exactUrl=url===collection||url===resource||
+     (method==='DELETE'&&url.startsWith(resource+'?currentDocument.updateTime=')&&
+      url.slice((resource+'?currentDocument.updateTime=').length).length>15);
+   if(!exactUrl)fail('HOLD_QA_FIRESTORE_FOREIGN_URL');
    if(!['GET','POST','DELETE'].includes(method))fail('HOLD_QA_FIRESTORE_METHOD');
    if(method!=='GET'&&++writes>MAX_WRITES)fail('HOLD_QA_FIRESTORE_WRITE_CAP');
    const response=await request(url,{

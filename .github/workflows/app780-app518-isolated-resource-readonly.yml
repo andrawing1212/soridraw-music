@@ -45,6 +45,25 @@ jobs:
           }else{
             report.existing_qa_account_separate=true;
             const base='https://api.cloudflare.com/client/v4/accounts/'+ACCOUNT;
+            // Verify token types without printing token, id, account profile or policies.
+            const verify=async(url)=>{
+              try{
+                const res=await fetch(url,{method:'GET',redirect:'error',
+                  headers:{Authorization:'Bearer '+TOKEN,Accept:'application/json'},
+                  signal:AbortSignal.timeout(12000)});
+                if(res.status!==200)return {http:res.status,active:false};
+                const data=await res.json();
+                return {http:200,active:data?.success===true&&data?.result?.status==='active'};
+              }catch{return {http:'NETWORK_HOLD',active:false}}
+            };
+            const [userVerify,accountVerify]=await Promise.all([
+              verify('https://api.cloudflare.com/client/v4/user/tokens/verify'),
+              verify(base+'/tokens/verify'),
+            ]);
+            report.token_verification={
+              user_token:userVerify,account_token:accountVerify,
+              used_for_worker_list_only:true,
+            };
             const request=async(path)=>{
               try{
                 const response=await fetch(base+path,{method:'GET',redirect:'error',

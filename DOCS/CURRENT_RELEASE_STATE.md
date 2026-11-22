@@ -1,3 +1,14 @@
+## CURRENT — APP518 QA Firebase 콘솔 인증·Functions 목록 확인 / Cloud Shell 접근 차단으로 실서버 E2E 미실행 (2026-11-23 KST)
+
+- **기준:** 시작 main `806879080ede0f51892934bac5f5a4daf7cc062c`, Draft PR #528 exact `864f796da24413309567198c9de502b13cdedd50`. APP781의 QA D1/R2 연결·임시 Worker HTTP 503/404·삭제 복원 PASS 및 기존 코드/Emulator PASS 재사용. 이번 작업에서 재실행하지 않음.
+- **실제 Firebase 확인:** 공식 콘솔 `https://console.firebase.google.com/project/soridraw-app/functions` 로그인 성공. QA 프로젝트 `soridraw-app`의 Functions 목록은 **1~1/1**, 기존 `publishExploreOwnerFollower542` 한 개(asia-northeast3, v2, min/max 0/1, timeout 15초). APP518 함수는 목록에 없음. Blaze 표시 확인. 이는 콘솔 로그인/목록 조회 증거이며 합성 Auth 사용자 토큰 검증, IAM 배포권한, APP518 서비스 인증 또는 E2E PASS가 아님.
+- **실행 차단 실증:** Firebase 내장 Cloud Shell과 `https://shell.cloud.google.com/?project=soridraw-app` 직접 접근 모두 **Site Unavailable / Unable to access this site**. 직접 페이지 browser report는 document HTTP **403**. 봇 차단인지/권한 문제인지 원인 확정하지 않음. 자동 재시도 중단. 현재 실행환경에 gcloud/firebase CLI는 없으며, 저장소 기존 QA 인증 검증 도구는 인증된 QA Cloud Shell을 전제로 함. Firebase 플러그인은 설치 표시이나 이 세션에는 실행 도구 노출 없음. 운영 credential을 대체 사용하거나 브라우저 인증값을 추출하지 않음.
+- **정확한 미완료:** 합성곡 1건 저장→삭제→재저장→장애 후 재전송 실제 Firebase↔Cloudflare **NOT_TESTED/HOLD**. 고정 후보 QA Worker default export는 inert이며 환경변수만으로 trusted proof를 대체할 수 없음. QA 전용 exact-source 함수/서비스 인증·검증된 실행 controller·APP518 D1 테이블·계정 Writer/예산 증거·무료 사용량 조건을 갖춘 뒤 실행해야 함. Blaze 현재 지출/잔여 무료량/$5 알림은 미확인; 기존 QA_BILLING_BASELINE 기록 재사용.
+- **변경·정리:** 이번 세션 서버 mutation/합성곡/임시 Worker·Functions·D1/R2 자원 생성 **0**, 따라서 신규 임시 자원 정리 대상 없음. 기존 팔로우 QA Worker·Functions, 운영 `soridraw-app-866a5`, 공유 원본, PREVIEW/TEST/PRODUCTION 배포·Rules 변경 0. GitHub 변경은 이 상태 기록뿐. **CODE: 기존 PASS 재사용 / LIVE E2E: NOT_TESTED**, 실제 검증 완료로 보고하지 않음.
+- **재개 지점:** Cloud Shell 접근 또는 동등한 기존 QA 전용 인증 실행 경로가 확보되면 QA 서비스 인증/비용 조건부터 이어감. 이미 PASS한 Cloudflare 기초 검사 및 콘솔 로그인 증거를 이유 없이 반복하지 않음.
+
+---
+
 ## CURRENT — APP781 Cloudflare QA 임시 Worker 물리 배포·실 HTTP·정리 PASS / Firebase 정본 연동 HOLD (2026-11-23 KST)
 
 - **QA 계정 D1 스키마 실조회(읽기 전용):** [Actions #45054221644](https://github.com/andrawing1212/soridraw-music/actions/runs/45054221644). 정확 QA D1 `soridraw-qa-app768-d1` 존재, 원본 APP583 Worker immutable 버전 `4ed70845-6a4b-4a80-9c51-ed95d0becc38` 활성 100% 및 D1/R2 바인딩 없음 PASS. D1 `sqlite_master`의 정해진 테이블 이름만 1회 SQL `SELECT` 수행하여 기존 `app768_qa_synthetic_follow` 있음, APP518 outbox/index/budget 테이블 **아직 없음** 확인. API 메서드는 Cloudflare 명세상 **POST SELECT**지만 결과 `rows_written=0`; 사용자 원본 행 조회 없음.

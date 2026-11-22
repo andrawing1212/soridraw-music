@@ -1,0 +1,88 @@
+name: APP780 APP518 isolated QA resource inventory (GET only)
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-app780-app518-isolated-resource-inventory
+  cancel-in-progress: false
+
+jobs:
+  qa_resource_inventory:
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 528 &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/app518-qa-resources 864f796da24413309567198c9de502b13cdedd50'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Existing isolated QA Cloudflare account metadata, strictly GET only
+        env:
+          CF_QA_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CF_QA_ACCOUNT: b60fcd62c679c64db19f0b0e0c2f3429
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const ACCOUNT=process.env.CF_QA_ACCOUNT||'';
+          const TOKEN=process.env.CF_QA_TOKEN||'';
+          const PRODUCTION='e1a30fc9ef497fda1d34f4ab3dc1da45';
+          const SHA='864f796da24413309567198c9de502b13cdedd50';
+          const report={scope:'APP780_APP518_QA_RESOURCE_INVENTORY_GET_ONLY',
+            candidate_sha:SHA,production_account_touched:false,
+            shared_data_reads:0,cloudflare_mutations:0,existing_qa_account_separate:false,
+            qa_d1:'UNVERIFIED',qa_r2:'UNVERIFIED',qa_workers:'UNVERIFIED',
+            firebase_qa_functions:'UNVERIFIED',billing_and_write_access:'UNVERIFIED',
+            app518_live_ready:false};
+          if(!/^[a-f0-9]{32}$/.test(ACCOUNT)||ACCOUNT===PRODUCTION||TOKEN.length<15){
+            console.log(JSON.stringify({...report,hold:'ISOLATED_QA_ACCOUNT_OR_AUTH_UNVERIFIED'}));
+            process.exitCode=2;
+          }else{
+            report.existing_qa_account_separate=true;
+            const base='https://api.cloudflare.com/client/v4/accounts/'+ACCOUNT;
+            const request=async(path)=>{
+              try{
+                const response=await fetch(base+path,{method:'GET',redirect:'error',
+                  headers:{Authorization:'Bearer '+TOKEN,Accept:'application/json'},
+                  signal:AbortSignal.timeout(12000)});
+                if(response.status!==200)return {status:'HOLD_METADATA_HTTP_'+response.status,items:[]};
+                const payload=await response.json();
+                if(payload?.success!==true)return {status:'HOLD_API_REJECTED',items:[]};
+                const result=payload.result;
+                const rows=Array.isArray(result)?result:
+                  Array.isArray(result?.buckets)?result.buckets:
+                  Array.isArray(result?.databases)?result.databases:
+                  Array.isArray(result?.scripts)?result.scripts:null;
+                if(!rows)return {status:'HOLD_UNEXPECTED_RESPONSE_SHAPE',items:[]};
+                if(rows.length>100)return {status:'HOLD_PAGE_TOO_LARGE',items:[]};
+                return {status:'PASS',items:rows};
+              }catch{
+                return {status:'HOLD_METADATA_NETWORK_OR_PARSE',items:[]};
+              }
+            };
+            const [d1,r2,workers]=await Promise.all([
+              request('/d1/database?per_page=100&page=1'),
+              request('/r2/buckets?per_page=100'),
+              request('/workers/scripts?per_page=100')
+            ]);
+            for(const [key,res] of [['qa_d1',d1],['qa_r2',r2],['qa_workers',workers]]){
+              const named=res.items.filter(x=>
+                /^soridraw-app518-qa(?:-|$)/.test(String(x?.name||x?.bucket_name||'')));
+              report[key]={query:res.status,visible_count:res.items.length,
+                explicit_app518_qa_candidate_count:named.length};
+            }
+            report.hold=d1.status!=='PASS'||r2.status!=='PASS'||workers.status!=='PASS'
+              ?'QA_RESOURCE_METADATA_INCOMPLETE'
+              :d1.items.length===0||r2.items.length===0
+                ?'APP518_QA_D1_OR_R2_NOT_PROVISIONED'
+                :'EXACT_APP518_QA_RESOURCE_PROOF_AND_WRITE_BILLING_AUTH_STILL_REQUIRED';
+            // A different account and matching resource names cannot authorize
+            // Cloudflare writes, Firebase service deployment, or real user data access.
+            console.log(JSON.stringify(report));
+          }
+          NODE

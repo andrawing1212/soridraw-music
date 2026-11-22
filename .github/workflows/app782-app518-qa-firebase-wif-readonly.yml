@@ -229,3 +229,59 @@ jobs:
             raise SystemExit(2)
           print('APP784_QA_FULL_E2E_READY=PASS_READONLY_METADATA_ONLY')
           PY
+
+
+  qa_windows_bootstrap_lint:
+    # Offline syntax and safety check; does NOT call Google/Cloudflare.
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 528 &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/app518-qa-bootstrap-lint 864f796da24413309567198c9de502b13cdedd50'
+    runs-on: windows-2022
+    timeout-minutes: 6
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Parse Windows PowerShell and verify QA-only guardrails
+        shell: pwsh
+        run: |
+          $f='scripts/app786-qa-windows-bootstrap.ps1'
+          $tokens=$null
+          $errors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $f).Path,[ref]$tokens,[ref]$errors) | Out-Null
+          if($errors.Count -ne 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            throw 'APP786_QA_PS_PARSE_FAIL'
+          }
+          $raw=Get-Content -Raw -Encoding UTF8 $f
+          foreach($required in @(
+            "1083981050742",
+            "soridraw-qa-app518-runtime@soridraw-app.iam.gserviceaccount.com",
+            "soridraw-qa-gh-deployer@soridraw-app.iam.gserviceaccount.com",
+            "principalSet://iam.googleapis.com/projects/",
+            "2026-12-01T15:00:00Z",
+            "soridraw-qa-github",
+            "APP786_QA_BOOTSTRAP_PASS",
+            "SORIDRAW-QA"
+          )){
+            if(!$raw.Contains($required)){throw "APP786_MISSING_REQUIRED_GUARDRAIL"}
+          }
+          foreach($forbidden in @(
+            "gcloud config set project",
+            "service-accounts keys create",
+            "firestore databases delete",
+            "roles/owner",
+            "roles/editor",
+            "soridraw-app-866a5"
+          )){
+            if($raw.Contains($forbidden)){throw "APP786_UNSAFE_OPERATION_FOUND"}
+          }
+          Write-Host 'APP786_QA_WINDOWS_POWERSHELL_PARSE=PASS'
+          Write-Host 'APP786_EXACT_PROJECT_BUDGET_WIF_EXPIRY_GUARDS=PASS'
+          Write-Host 'APP786_GOOGLE_IAM_MUTATIONS=0_OFFLINE_ONLY'

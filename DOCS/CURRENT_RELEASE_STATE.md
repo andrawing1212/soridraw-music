@@ -1,3 +1,12 @@
+## CURRENT — APP782 Cloud Shell 대체 GitHub QA Firebase 인증 경로 준비 / 신뢰 연결 미설정 HOLD (2026-11-23 KST)
+
+- **Cloud Shell 재시도 대신 GitHub OIDC 경로 준비:** `.github/workflows/app782-app518-qa-firebase-wif-readonly.yml` 신규 추가. PR #528에 저장소 소유자 고정 명령 `/app518-qa-firebase-auth 864f796da24413309567198c9de502b13cdedd50`를 게시했을 때만 실행. GitHub Actions의 단기 OIDC로 **오직 QA Google Cloud 프로젝트 `soridraw-app` (Project Number `1083981050742`)**의 서비스 계정을 인증하도록 설계. 운영 프로젝트/서비스 계정·기존 `FIREBASE_SERVICE_ACCOUNT_SORIDRAW` 등 운영 자격증명 사용 금지. Google/Firebase 데이터 쓰기·함수 배포·IAM 변경 없음.
+- **실제 GitHub 실행 결과:** [Actions #45056180022](https://github.com/andrawing1212/soridraw-music/actions/runs/45056180022) `qa_firebase_auth_readonly` job `completed/success`이나 실제 출력은 **`APP782_QA_FIREBASE_WIF=HOLD_QA_GITHUB_IDENTITY_NOT_CONFIGURED`**. QA WIF provider/QA service account를 지정하는 저장소 variables `SORIDRAW_QA_WIF_PROVIDER`, `SORIDRAW_QA_SERVICE_ACCOUNT`이 아직 등록되지 않아 **Google 인증·Functions 재조회 단계는 스킵**됨. GitHub Actions 녹색 status는 인증 PASS가 아님. Work에서 콘솔 로그인·Functions 1개 확인한 APP518 근거는 그대로 유지.
+- **남은 정확한 차단:** Cloud Shell HTTP 403을 추가 재시도할 이유 없음. Cloud Shell 없는 원격 QA E2E를 진행하려면 **QA 전용 Google Workload Identity Federation provider + 최소 권한 QA 서비스 계정 + GitHub Actions 단기 신뢰 연결**을 공식 콘솔에서 설정해야 함. 이는 QA IAM·연결 설정 변경이므로 기존 인증 검사에 포함되어 자동 수행되었다고 주장하지 않음. 프로젝트 번호를 고정하고 운영 프로젝트/공유 데이터/실사용 권한 확장 금지. 외부 QA IAM 변경의 정확한 승인·원격 접근이 확보될 때만 설정하고 기존 workflow로 1회 재검증.
+- **현재 종합 판정:** Cloudflare QA GET·정확 리소스 실확인 PASS, 임시 OFF Worker HTTP/정리 PASS 재사용; Firebase QA 공식 콘솔 로그인·1 Functions 목록 PASS 재사용; GitHub QA 단기 인증 **NOT_CONNECTED/HOLD**, APP518 실제 Firebase↔D1/R2 합성곡 E2E **NOT_TESTED/HOLD**. Cloudflare 검증/Emulator 검사를 반복하지 않음. 신규 데이터·Secrets·IAM·Functions·Worker 실서버 변경 0.
+
+---
+
 ## CURRENT — APP518 QA Firebase 콘솔 인증·Functions 목록 확인 / Cloud Shell 접근 차단으로 실서버 E2E 미실행 (2026-11-23 KST)
 
 - **기준:** 시작 main `806879080ede0f51892934bac5f5a4daf7cc062c`, Draft PR #528 exact `864f796da24413309567198c9de502b13cdedd50`. APP781의 QA D1/R2 연결·임시 Worker HTTP 503/404·삭제 복원 PASS 및 기존 코드/Emulator PASS 재사용. 이번 작업에서 재실행하지 않음.

@@ -46,6 +46,7 @@ function Assert-Project(){
   if($num -ne $Number){Stop-Hold 'QA project number does not match. No mutations.'}
 }
 function Find-MemberRole($policy,[string]$role,[string]$member){
+  if($null -eq $policy -or $null -eq $policy.PSObject.Properties['bindings']){return @()}
   return @(Rows $policy.bindings | Where-Object {
     $_.role -eq $role -and (@($_.members) -contains $member)
   })
@@ -54,6 +55,14 @@ function Ensure-ProjectRole([string]$member,[string]$role,[bool]$temporary){
   $policy=GJson @('projects','get-iam-policy',$Project)
   $exists=Find-MemberRole $policy $role $member
   if($exists.Count -gt 0){
+    if($temporary){
+      foreach($binding in $exists){
+        if($null -eq $binding.PSObject.Properties['condition'] -or
+          [string]$binding.condition.expression -notlike '*2026-12-01T15:00:00Z*'){
+          Stop-Hold "Pre-existing broad or differently expiring QA deployer role $role; manual IAM review required"
+        }
+      }
+    }
     Write-Host "SKIP existing role: $role"
     return
   }

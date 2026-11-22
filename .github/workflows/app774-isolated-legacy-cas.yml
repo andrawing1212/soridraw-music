@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - 'scripts/verify-774-legacy-ingress-offline.mjs'
+      - 'scripts/app775-unified-follow-ingress.mjs'
+      - 'scripts/verify-775-unified-follow-ingress.mjs'
       - 'scripts/app774-qa-d1-conditional-race.mjs'
       - '.github/workflows/app774-isolated-legacy-cas.yml'
 permissions:
@@ -35,8 +37,12 @@ jobs:
           test "$(git -C pinned-preview rev-parse HEAD)" = "4363820117100cb03bcbc44a01e127aeb5de3cf4"
           node --check scripts/verify-774-legacy-ingress-offline.mjs
           node --check scripts/app774-qa-d1-conditional-race.mjs
-      - name: Demonstrate current legacy/unenrolled bypass without cloud access
-        run: node scripts/verify-774-legacy-ingress-offline.mjs
+      - name: Verify APP775 unified ingress contract (OFF by default, no cloud access)
+        run: |
+          set -euo pipefail
+          node --check scripts/app775-unified-follow-ingress.mjs
+          node --check scripts/verify-775-unified-follow-ingress.mjs
+          node scripts/verify-775-unified-follow-ingress.mjs
   live:
     if: false # APP774 approved one-shot real QA complete; no automatic repetition
     runs-on: ubuntu-24.04

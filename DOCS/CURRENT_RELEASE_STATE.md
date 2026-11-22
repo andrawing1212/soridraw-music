@@ -1,3 +1,12 @@
+## CURRENT — APP775 구형·신형 팔로우 공통 진입 OFF-only 계약 46개 오프라인 QA PASS, 실제 모든 Writer 통합 HOLD (2026-11-22 KST)
+
+- **디렉터 YES 승인 범위:** APP774 다음 승인 작업으로 구형 empty envelope와 신형 ordered envelope를 공통 서버 검증 조건으로 분류하는 source-only 코드·오프라인 QA. 실제 PREVIEW·TEST·PRODUCTION Worker·Firebase/RTDB/D1/R2/Hosting, 사용자 원본·공유 자원·보안 규칙·권한/토큰 **변경 0**. 기존 APP768/769/774 물리 QA PASS는 재실행하지 않음.
+- **최소 변경:** `scripts/app775-unified-follow-ingress.mjs` 추가, `APP775_UNIFIED_FOLLOW_INGRESS_COMPILED_OPEN=false`. 기존 APP557/579/713, APP767/770/772 및 실제 canonical follow 경로에 import/접속 0. 구형(empty JSON) 요청 ID는 APP579와 동일한 서버 `SHA-256([cutover, actor, owner, revision, desired])`로 재생성하고, 신형 ID/revision은 서버 독립 확인 값과 비교. 양쪽 모두 Firebase Auth+AppCheck 서명된 actor epoch, owner enrollment, 모든 신·구 Writer와 서버 DO PITR를 포함한 cutover, 정확한 관계 revision, DO 외부 pending fence를 요구. 하나라도 증거 미확정이면 HOLD; 모두 모의 검증 통과하더라도 `OFFLINE_COMMON_INGRESS_PROOF_SHAPE_ONLY`라는 **쓰기 없는 후보**만 반환, 실서버 D1/R2/DO/relay·재전송·배포 허용 플래그 전부 false. OFF일 때 원래 canonical 팔로우 동작 보존.
+- **실제 오프라인 검사:** [Actions #45016545226](https://github.com/andrawing1212/soridraw-music/actions/runs/45016545226) PR SHA `04ae02db7983689ea7364e8993bf2e759493746d`에서 Node22 **46개 상태 PASS**, `REAL_CLOUDFLARE_CALLS=0`. 구형/신형 동일 서버 ID, 구형 DELETE/언팔로우, 동시 legacy 같은 ID, 잘못된 클라이언트/불일치, 모든 신·구 Writer coverage, Auth 세대, pending fence, DO PITR FAIL-CLOSED 확인. 기존 `.github/workflows/app774-isolated-legacy-cas.yml` PR **오프라인 검사만 확장**; live QA `if:false` 및 push 트리거 없음. 신규 QA Workflow/비밀값 없음.
+- **실제 미완료:** 검사는 신뢰할 수 있는 서버 내부 증거의 **모양 판정**이지 출처·진위를 실제 서버에서 검증한 것이 아니다. PREVIEW APP557의 구형·미등록 owner가 기존 canonical Writer로 돌아가는 동작은 정상 보존되며, **모든 구형/활성 Writer 강제 접수 = FAIL/HOLD**. 완전한 canonical operation ledger/owner revision floor 및 미확정 pair fence의 실제 구현·구형 회원 호환, 운영 canonical D1 W1~W2 물리 확인, 비용·삭제/재가입 정책, PC↔모바일 팔로우 실사용 **NOT_TESTED**. 자동 복구/PRODUCTION 승격 **HOLD**, 앱 배포 없음. 상세 `DOCS/APP775_UNIFIED_FOLLOW_INGRESS_OFFLINE.md`.
+
+---
+
 ## CURRENT — APP774 구형 팔로우 우회 실코드 검증 및 격리 QA D1 조건부 경합 완료, 전 Writer 강제 접수 FAIL/HOLD (2026-11-22 KST)
 
 - **디렉터 YES 범위:** 이미 승인된 APP774 격리 QA로만 신규 합성 테스트 실시. [PR #1340](https://github.com/andrawing1212/soridraw-music/pull/1340) 병합 `5a1b5d8811d17f403919e324a0ec27d7cacc3375`. PREVIEW pinned SOURCE SHA `4363820117100cb03bcbc44a01e127aeb5de3cf4`, APP557 원본 precommit 함수를 직접 오프라인 호출; 구형 무버전·일부 입력·미등록 owner의 기존 canonical Writer 우회 가능성 **실제 코드 경로 재현**. 동일 구형 요청 2회 병렬 호출 시 격리 모의 canonical callback 2회, 새 DO reserve 0. **전 구형 Writer 강제 신규 접수 = FAIL/HOLD**. 원래 사용자의 정상 follow legacy 경로를 이 작업에서 강제로 변경하지 않음.

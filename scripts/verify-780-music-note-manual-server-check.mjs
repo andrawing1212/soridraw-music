@@ -81,7 +81,7 @@ const cases=[
  {id:'optimistic',__studioHeartPendingLocal:true},
  {id:'remote-present-old-local',updatedAtMs:1},
 ];
-const keep=runInNewContext('(()=>{'+take+'return localNewer;})()',{
+const keep=runInNewContext(ts.transpileModule('(()=>{'+take+'return localNewer;})()',{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{
   previous:cases,
   localDeletedIds:new Set(['removed']),
   confirmedSaveId:'',

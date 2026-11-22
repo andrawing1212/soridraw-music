@@ -150,6 +150,17 @@ assert.deepEqual(new Set(r2.deletes),new Set([
 const empty=await check(request('inspect'),200);
 assert.equal(empty.body.code,'QA518_R2_PREFIX_EMPTY');
 assert.equal(empty.body.itemCount,undefined);
+r2.failHead=true;
+const partial=await check(request('bootstrap'),409);
+assert.equal(partial.body.code,'R2_TEMPORARY_FAILURE');
+assert.equal(r2.items.size,1);
+assert.equal(r2.items.has(base+'base-1.json'),true);
+r2.failHead=false;
+const recovered=await check(request('cleanup',{
+ 'x-soridraw-qa-cf-worker-read':readToken,
+}),200);
+assert.equal(recovered.body.code,'QA518_R2_PARTIAL_BASE_CLEANED_PASS');
+assert.equal(r2.items.size,0);
 assert.ok(oidcRequests>=10);
 console.log('APP518_QA_R2_EXACT_TWO_KEYS_CREATE_INSPECT_CLEANUP=PASS');
 console.log('APP518_QA_R2_FOREIGN_OWNER_D1_ROWS_OTHER_WORKER_ACTIVE_OR_BAD_JWT_DENIED=PASS');

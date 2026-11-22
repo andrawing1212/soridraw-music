@@ -16,11 +16,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Signed QA one-song gate and seed/rollback tests; networkless
-        run: node qa/app518/isolated/verify-qaGate518.mjs
+      - name: Signed QA one-song gate, pinned migrations and seed/rollback tests; networkless
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha=864f796da24413309567198c9de502b13cdedd50
+          git cat-file -e "$sha^{commit}"
+          git worktree add --detach "$RUNNER_TEMP/app518-pinned-candidate" "$sha"
+          APP518_PINNED_CANDIDATE_DIR="$RUNNER_TEMP/app518-pinned-candidate" \
+            node qa/app518/isolated/verify-qaGate518.mjs
       - name: Prevent accidental cloud/deploy commands in QA source
         shell: bash
         run: |

@@ -78,7 +78,7 @@ function Ensure-ServiceAccount([string]$id){
 }
 function Ensure-SaRole([string]$sa,[string]$member,[string]$role,[bool]$temporary){
   $policy=GJson @('iam','service-accounts','get-iam-policy',$sa,"--project=$Project")
-  $exists=Find-MemberRole $policy $role $member
+  $exists=@(Find-MemberRole $policy $role $member)
   if($exists.Count -gt 0){Write-Host "SKIP SA binding: $role";return}
   $cond=if($temporary){$TemporaryCondition}else{'None'}
   G @('iam','service-accounts','add-iam-policy-binding',$sa,"--project=$Project","--member=$member","--role=$role","--condition=$cond",'--quiet')|Out-Null

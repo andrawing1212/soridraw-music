@@ -1,4 +1,4 @@
-name: APP780 APP518 isolated QA resource inventory (GET only)
+name: APP780 APP518 isolated QA inventory and bounded schema preflight
 
 on:
   issue_comment:
@@ -128,5 +128,123 @@ jobs:
             // A different account and matching resource names cannot authorize
             // Cloudflare writes, Firebase service deployment, or real user data access.
             console.log(JSON.stringify(report));
+          }
+          NODE
+
+
+  qa_schema_inventory:
+    # One-shot schema read: Cloudflare D1 uses HTTP POST even for SQL SELECT.
+    # Not a storage mutation, and separate from the original GET-only job.
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 528 &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/app518-qa-schema 864f796da24413309567198c9de502b13cdedd50'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    permissions:
+      contents: read
+    steps:
+      - name: Verify original QA Worker and exact D1 schema (bounded metadata only)
+        env:
+          CF_QA_WORKER_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CF_QA_STORAGE_TOKEN: ${{ secrets.CLOUDFLARE_QA_STORAGE_READ_TOKEN }}
+          CF_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const ACCOUNT='b60fcd62c679c64db19f0b0e0c2f3429';
+          const PRODUCTION='e1a30fc9ef497fda1d34f4ab3dc1da45';
+          const ORIGINAL_VERSION='4ed70845-6a4b-4a80-9c51-ed95d0becc38';
+          const OLD_WORKER='soridraw-owner-qa-583',DB_NAME='soridraw-qa-app768-d1';
+          const WORKER=process.env.CF_QA_WORKER_TOKEN||'';
+          const STORAGE=process.env.CF_QA_STORAGE_TOKEN||'';
+          const DATA=process.env.CF_QA_DATA_TOKEN||'';
+          const BASE='https://api.cloudflare.com/client/v4/accounts/'+ACCOUNT;
+          const report={scope:'APP781_APP518_QA_D1_SCHEMA_AND_WORKER_READ_ONLY',
+            production_account_touched:false,shared_user_rows_read:0,
+            cloudflare_mutations:0,d1_sql_writes:0,app518_live_enabled:false,
+            exact_qa_d1:false,original_qa_worker_protected:false,
+            qa_schema:'UNVERIFIED',hold:'PREFLIGHT_NOT_COMPLETE'};
+          const finish=()=>console.log(JSON.stringify(report));
+          if(ACCOUNT===PRODUCTION||[WORKER,STORAGE,DATA].some(t=>t.length<20)){
+            report.hold='QA_READ_OR_DATA_CREDENTIAL_MISSING';finish();process.exit(0);
+          }
+          const get=async(path,token)=>{
+            const res=await fetch(BASE+path,{method:'GET',redirect:'error',
+              headers:{Authorization:'Bearer '+token,Accept:'application/json'},
+              signal:AbortSignal.timeout(15000)});
+            if(res.status!==200)return {ok:false,status:res.status};
+            const body=await res.json().catch(()=>null);
+            return {ok:body?.success===true,status:res.status,result:body?.result};
+          };
+          try{
+            const [dbs,deploy,settings]=await Promise.all([
+              get('/d1/database?per_page=100&page=1',STORAGE),
+              get('/workers/scripts/'+OLD_WORKER+'/deployments',WORKER),
+              get('/workers/scripts/'+OLD_WORKER+'/settings',WORKER)
+            ]);
+            const rows=Array.isArray(dbs.result)?dbs.result:
+              Array.isArray(dbs.result?.databases)?dbs.result.databases:null;
+            const versions=deploy.result?.deployments?.[0]?.versions;
+            const bindings=settings.result?.bindings;
+            const uniqueNames=Array.isArray(bindings)&&new Set(
+              bindings.map(b=>b?.name)).size===bindings.length;
+            const protectedBindings=uniqueNames&&bindings.length>=4&&bindings.length<=8
+              &&bindings.some(b=>b.name==='OWNER558_DO'&&b.type==='durable_object_namespace')
+              &&bindings.some(b=>b.name==='OWNER583_QA_CONFIG'&&b.type==='secret_text')
+              &&bindings.every(b=>!['d1','r2_bucket'].includes(b.type));
+            report.original_qa_worker_protected=deploy.ok&&settings.ok&&
+              Array.isArray(versions)&&versions.length===1&&
+              versions[0].version_id===ORIGINAL_VERSION&&
+              Number(versions[0].percentage)>=99.99&&protectedBindings;
+            report.exact_qa_d1=dbs.ok&&Array.isArray(rows)&&rows.length===1&&
+              rows[0]?.name===DB_NAME&&
+              /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(rows[0]?.uuid||'');
+            if(!report.exact_qa_d1||!report.original_qa_worker_protected){
+              report.hold='QA_ACCOUNT_D1_OR_PROTECTED_WORKER_NOT_PROVED';
+              report.evidence={d1_get_http:dbs.status,worker_settings_http:settings.status,
+                worker_deployment_http:deploy.status};
+              finish();process.exit(0);
+            }
+            // Constant SQL only inspects SQLite schema labels. No user data.
+            const sql="SELECT name FROM sqlite_master WHERE type='table' AND name IN ("+
+              "'app768_qa_synthetic_follow','music_note_catalog_outbox_518',"+
+              "'music_note_catalog_index_meta_518','music_note_catalog_daily_write_budget_518')"+
+              " ORDER BY name LIMIT 8";
+            const res=await fetch(BASE+'/d1/database/'+rows[0].uuid+'/query',{
+              method:'POST',redirect:'error',
+              headers:{Authorization:'Bearer '+DATA,Accept:'application/json',
+                'Content-Type':'application/json'},
+              body:JSON.stringify({sql}),signal:AbortSignal.timeout(15000)
+            });
+            if(res.status!==200){
+              report.hold='QA_READONLY_D1_SCHEMA_QUERY_HTTP_'+res.status;
+              finish();process.exit(0);
+            }
+            const body=await res.json().catch(()=>null);
+            const q=Array.isArray(body?.result)&&body.result.length===1?
+              body.result[0]:null;
+            if(body?.success!==true||q?.success!==true||!Array.isArray(q.results)||
+              q.results.length>8||q.results.some(x=>typeof x?.name!=='string')||
+              Number(q.meta?.rows_written)!==0){
+              report.hold='QA_D1_SCHEMA_RESPONSE_OR_W0_NOT_PROVED';
+              finish();process.exit(2);
+            }
+            const names=new Set(q.results.map(x=>x.name));
+            report.qa_schema={
+              query:'PASS_SELECT_SCHEMA_ONLY',
+              d1_meta_rows_written:0,
+              known_app768_synthetic_table:names.has('app768_qa_synthetic_follow'),
+              app518_outbox_table_present:names.has('music_note_catalog_outbox_518'),
+              app518_index_table_present:names.has('music_note_catalog_index_meta_518'),
+              app518_budget_table_present:names.has('music_note_catalog_daily_write_budget_518')
+            };
+            report.hold='APP518_EXACT_SOURCE_AND_WORKER_RELEASE_PROOF_REQUIRED';
+            finish();
+          }catch{
+            report.hold='QA_READONLY_PREFLIGHT_NETWORK_OR_PARSE';finish();
+            process.exit(0);
           }
           NODE

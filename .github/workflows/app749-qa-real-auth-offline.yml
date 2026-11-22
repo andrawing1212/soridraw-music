@@ -150,7 +150,7 @@ jobs:
       group: soridraw-app736-qa-zero-traffic
       cancel-in-progress: false
     runs-on: ubuntu-24.04
-    timeout-minutes: 18
+    timeout-minutes: 42
     steps:
       - uses: actions/checkout@v4
         with:
@@ -393,9 +393,9 @@ jobs:
       - name: Allow bounded QA A/B browser and two-device sync physical test
         if: startsWith(github.event.comment.body, '/app749-qa-browser ')
         run: |
-          echo 'APP749_QA_BROWSER_REAL_AUTH_WINDOW=OPEN_12_MINUTES'
+          echo 'APP749_QA_BROWSER_REAL_AUTH_WINDOW=OPEN_30_MINUTES'
           echo 'APP749_QA_BROWSER_TEST_HUMAN_RESULT=NOT_AUTOMATICALLY_ASSERTED'
-          sleep 720
+          sleep 1800
       - name: Always restore historical APP583 exact 100 percent
         if: always()
         env:

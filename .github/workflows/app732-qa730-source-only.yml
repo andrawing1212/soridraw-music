@@ -45,6 +45,8 @@ jobs:
             "$RUNNER_TEMP/app732-preview/cloudflare/explore-worker/experiments/"
           cp cloudflare/explore-worker/experiments/owner-follow-qa-shadow-778.mjs \
             "$RUNNER_TEMP/app732-preview/cloudflare/explore-worker/experiments/"
+          cp cloudflare/explore-worker/experiments/owner-follow-qa-ingress-779.mjs \
+            "$RUNNER_TEMP/app732-preview/cloudflare/explore-worker/experiments/"
           cd "$RUNNER_TEMP/app732-preview"
           node --check scripts/app730-source-only-follow-bridge.mjs
           node --check cloudflare/explore-worker/experiments/owner-follow-qa730-bridge.mjs

@@ -15,7 +15,6 @@ $Reader='soridraw-qa-gh-reader@soridraw-app.iam.gserviceaccount.com'
 $Deployer='soridraw-qa-gh-deployer@soridraw-app.iam.gserviceaccount.com'
 $Runtime='soridraw-qa-app518-runtime@soridraw-app.iam.gserviceaccount.com'
 $SecretName='SORIDRAW_CATALOG_SERVER_HMAC_518'
-$BudgetName='SORIDRAW-APP518-QA-MONTHLY-5USD'
 $Expires='2026-12-01T15:00:00Z'
 $TemporaryCondition="expression=request.time < timestamp('$Expires'),title=APP518_QA_TEMP_TO_20261202,description=QA_ONLY_AUTO_EXPIRES"
 $Principal="principalSet://iam.googleapis.com/projects/$Number/locations/global/workloadIdentityPools/$Pool/attribute.repository_id/$RepoId"
@@ -153,12 +152,29 @@ if($billing.billingEnabled -ne $true -or [string]$billing.billingAccountName -no
   Stop-Hold 'QA billing connection not verified'
 }
 $billingId=([string]$billing.billingAccountName).Substring('billingAccounts/'.Length)
+$billingAccount=GJson @('billing','accounts','describe',$billingId)
+$currency=[string]$billingAccount.currencyCode
+switch($currency){
+  'KRW' { $BudgetName='SORIDRAW-APP518-QA-MONTHLY-5000KRW'; $BudgetAmount='5000KRW'; $BudgetUnits=5000 }
+  'USD' { $BudgetName='SORIDRAW-APP518-QA-MONTHLY-5USD'; $BudgetAmount='5USD'; $BudgetUnits=5 }
+  default { Stop-Hold 'Unsupported QA billing currency. No budget created.' }
+}
 $budgets=@(Rows (GJson @('billing','budgets','list',"--billing-account=$billingId")))
-$existingBudget=@($budgets|Where-Object {
-  $_.displayName -eq $BudgetName -and (@($_.budgetFilter.projects) -contains "projects/$Number")
-})
-if($existingBudget.Count -eq 0){Write-Host 'PLAN $5/month QA-only budget alert'}
-else{Write-Host 'PASS existing QA-only $5 budget alert'}
+$sameName=@($budgets | Where-Object { $_.displayName -eq $BudgetName })
+if($sameName.Count -gt 1){Stop-Hold 'Duplicate named QA budgets; manual review required'}
+if($sameName.Count -eq 1){
+  $scope=@($sameName[0].budgetFilter.projects)
+  if($scope.Count -ne 1 -or $scope[0] -ne "projects/$Project"){
+    Stop-Hold 'Existing named QA budget is not scoped to exact QA project'
+  }
+  $amount=$sameName[0].amount.specifiedAmount
+  if([string]$amount.currencyCode -ne $currency -or [decimal]$amount.units -ne $BudgetUnits){
+    Stop-Hold 'Existing named QA budget amount/currency mismatch'
+  }
+  $existingBudget=$sameName
+}else{$existingBudget=@()}
+if($existingBudget.Count -eq 0){Write-Host "PLAN $BudgetAmount/month QA-only budget alert"}
+else{Write-Host "PASS existing QA-only $BudgetAmount budget alert"}
 $buildInfo=GJson @('builds','get-default-service-account',"--project=$Project","--region=$Region")
 $buildRef=[string]$buildInfo.serviceAccountEmail
 if($buildRef -notmatch ('^projects/[^/]+/serviceAccounts/'+[regex]::Escape($Number)+'(-compute@developer\.gserviceaccount\.com|@cloudbuild\.gserviceaccount\.com)$')){
@@ -178,8 +194,14 @@ Write-Host 'ABOUT TO MODIFY QA ONLY: budget, optional Firestore, two SAs, limite
 $answer=(Read-Host 'Type EXACTLY SORIDRAW-QA to proceed')
 if($answer -cne 'SORIDRAW-QA'){Stop-Hold 'No confirmation; no resources changed'}
 if($existingBudget.Count -eq 0){
-  G @('billing','budgets','create',"--billing-account=$billingId","--display-name=$BudgetName",'--budget-amount=5USD','--calendar-period=month',"--filter-projects=projects/$Number",'--threshold-rule=percent=0.5','--threshold-rule=percent=0.9','--threshold-rule=percent=1.0','--quiet')|Out-Null
-  Write-Host 'PASS QA $5 monthly alert (NOT a hard spending cap)'
+  G @('billing','budgets','create',"--billing-account=$billingId","--display-name=$BudgetName","--budget-amount=$BudgetAmount",'--calendar-period=month',"--filter-projects=projects/$Project",'--threshold-rule=percent=0.5','--threshold-rule=percent=0.9','--threshold-rule=percent=1.0','--quiet')|Out-Null
+  $createdBudgets=@(Rows (GJson @('billing','budgets','list',"--billing-account=$billingId")))
+  $created=@($createdBudgets|Where-Object {$_.displayName -eq $BudgetName})
+  if($created.Count -ne 1 -or @($created[0].budgetFilter.projects).Count -ne 1 -or
+     @($created[0].budgetFilter.projects)[0] -ne "projects/$Project"){
+    Stop-Hold 'QA budget create returned, but exact project scope not confirmed'
+  }
+  Write-Host "PASS QA $BudgetAmount monthly alert (NOT a hard spending cap)"
 }
 if($default.Count -eq 0){
   G @('firestore','databases','create',"--project=$Project",'--database=(default)',"--location=$Region",'--type=firestore-native','--edition=standard','--delete-protection','--quiet')|Out-Null

@@ -1,0 +1,110 @@
+name: APP782 APP518 QA Firebase WIF authentication (read-only, no Cloud Shell)
+
+# Owner-only manual command on pinned draft PR #528. This uses GitHub OIDC
+# and a QA-project-specific service account, never an operating credential.
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-app782-qa-firebase-wif-readonly
+  cancel-in-progress: false
+
+jobs:
+  qa_firebase_auth_readonly:
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 528 &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/app518-qa-firebase-auth 864f796da24413309567198c9de502b13cdedd50'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Fail-closed QA-only Workload Identity boundary, no Google call
+        id: gate
+        env:
+          QA_WIF_PROVIDER: ${{ vars.SORIDRAW_QA_WIF_PROVIDER }}
+          QA_SERVICE_ACCOUNT: ${{ vars.SORIDRAW_QA_SERVICE_ACCOUNT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'APP782_QA_FIREBASE_PROJECT=soridraw-app'
+          echo 'APP782_QA_FIREBASE_PROJECT_NUMBER=1083981050742'
+          echo 'APP782_PRODUCTION_CREDENTIALS=NOT_USED'
+          echo 'APP782_FIREBASE_MUTATIONS=0'
+          echo 'APP782_QA_FUNCTIONS_DEPLOY=0'
+          if [[ -z "$QA_WIF_PROVIDER" || -z "$QA_SERVICE_ACCOUNT" ]]; then
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo 'APP782_QA_FIREBASE_WIF=HOLD_QA_GITHUB_IDENTITY_NOT_CONFIGURED'
+            exit 0
+          fi
+          if [[ ! "$QA_WIF_PROVIDER" =~ ^projects/1083981050742/locations/global/workloadIdentityPools/[a-zA-Z0-9_-]+/providers/[a-zA-Z0-9_-]+$ ]]; then
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo 'APP782_QA_FIREBASE_WIF=HOLD_QA_WIF_PROVIDER_WRONG_PROJECT_OR_FORMAT'
+            exit 0
+          fi
+          if [[ ! "$QA_SERVICE_ACCOUNT" =~ ^[a-z][a-z0-9-]{4,62}@soridraw-app\.iam\.gserviceaccount\.com$ ]]; then
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo 'APP782_QA_FIREBASE_WIF=HOLD_QA_SERVICE_ACCOUNT_WRONG_PROJECT_OR_FORMAT'
+            exit 0
+          fi
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+          echo 'APP782_QA_FIREBASE_WIF_CONFIG=QA_PROJECT_ONLY_PASS'
+      - name: Authenticate QA Google Cloud through short-lived GitHub OIDC
+        if: steps.gate.outputs.ready == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.SORIDRAW_QA_WIF_PROVIDER }}
+          service_account: ${{ vars.SORIDRAW_QA_SERVICE_ACCOUNT }}
+          project_id: soridraw-app
+          create_credentials_file: true
+          export_environment_variables: true
+      - name: Install Cloud SDK for QA metadata GET only
+        if: steps.gate.outputs.ready == 'true'
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Query exact QA project number and existing Functions names only
+        if: steps.gate.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$(gcloud config get-value project 2>/dev/null)"
+          test "$project" = 'soridraw-app' || {
+            echo 'APP782_QA_FIREBASE_WIF=HOLD_AUTH_PROJECT_NOT_QA'
+            exit 2
+          }
+          number="$(gcloud projects describe soridraw-app --format='value(projectNumber)' 2>/dev/null)" || {
+            echo 'APP782_QA_FIREBASE_WIF=HOLD_QA_PROJECT_METADATA_PERMISSION'
+            exit 2
+          }
+          test "$number" = '1083981050742' || {
+            echo 'APP782_QA_FIREBASE_WIF=HOLD_QA_PROJECT_NUMBER_MISMATCH'
+            exit 2
+          }
+          # Metadata only. Never enumerate Firestore, Auth users, secrets,
+          # deployed source archives, data, or billing accounts.
+          gcloud functions list --regions=asia-northeast3 \
+            --project=soridraw-app --format=json > "$RUNNER_TEMP/qa-app518-functions.json" || {
+            echo 'APP782_QA_FIREBASE_WIF=HOLD_FUNCTIONS_LIST_PERMISSION_OR_API'
+            exit 2
+          }
+          python3 - "$RUNNER_TEMP/qa-app518-functions.json" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1],encoding='utf8'))
+          assert isinstance(d,list) and len(d)<100, 'QA_FUNCTIONS_LIST_FORMAT_HOLD'
+          names=[str(x.get('name','')).split('/')[-1] for x in d]
+          assert all(names) and all('/' not in n for n in names), 'QA_FUNCTION_NAMES_INVALID'
+          print('APP782_QA_FIREBASE_WIF=PASS_SHORT_LIVED_GITHUB_OIDC')
+          print('APP782_QA_FUNCTIONS_LIST_READ_ONLY=PASS')
+          print('APP782_QA_FUNCTIONS_COUNT='+str(len(names)))
+          print('APP782_EXISTING_FOLLOW_FUNCTION_PRESENT='+str('publishExploreOwnerFollower542' in names).lower())
+          print('APP782_APP518_EXACT_SOURCE_FUNCTION_PRESENT='+str('app518ExactFavoriteSource' in names).lower())
+          print('APP782_APP518_CHANGE_FUNCTION_PRESENT='+str('app518FavoriteCatalogChanged' in names).lower())
+          print('APP782_QA_SERVER_MUTATIONS=0; FUNCTIONS_DEPLOY=0; CLOUD_SHELL=NOT_USED')
+          PY

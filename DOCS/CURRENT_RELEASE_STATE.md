@@ -1,8 +1,9 @@
-## CURRENT — APP786 Windows QA 부분 적용 실증 / SA IAM empty `.Count` 수정, 실완료 HOLD (2026-11-23 KST)
+## CURRENT — APP786 Windows QA 초기설정 PASS + GitHub QA deployer admission PASS (2026-11-23 KST)
 
-- **디렉터 PowerShell 실증:** 정확 QA `soridraw-app` 프로젝트/WIF 확인, 기존 QA 한 프로젝트만 적용된 **5,000KRW 예산** 확인, `(default)` Seoul Firestore DB 생성, 전용 계정 `soridraw-qa-app518-runtime`·`soridraw-qa-gh-deployer` 생성, runtime `datastore.user` 1개와 QA deployer 5개 프로젝트 IAM 역할 추가 출력 확인. 별도 Google API 재조회 증거는 아님. 운영·공유 사용자 데이터 접근/배포 없음.
-- **마지막 HOLD:** `Ensure-SaRole` 진입 직후 PowerShell 5.1 `Set-StrictMode -Version Latest`에서 빈 IAM binding 조회값에 `.Count` 접근해 `PropertyNotFoundStrict`. 기존 QA 자원 부분 적용 후 중단. QA 서비스 계정 간 actAs/WIF 바인딩·QA HMAC Secret 생성·최종 APP786 PASS는 **미확인/미완료**.
-- **복구:** PR #1351 `fix/app786-krw-budget-cli`에서 `Ensure-SaRole` 조회 결과를 `@(...)` 배열로 감싸 empty/singleton 모두 처리. 예산은 **재생성 금지**, 정확 QA 금액·단일 프로젝트 확인 뒤만 진행. 수정본 **Windows 실제 재실행 전**, 사전검사→기존 승인된 `-Apply` 이어가기. 새 QA IAM/Rules·APP518 실제 E2E는 아직 통과 아님.
+- **Windows 실제 QA 설정 완료 (디렉터 화면):** `APP786_QA_BOOTSTRAP_PASS`. 정확 QA Firebase `soridraw-app` / 번호 `1083981050742`, 기존 GitHub WIF 조건 확인, 한 프로젝트에만 적용된 `5000KRW/month` 예산 알림, Seoul Firestore `(default)` Standard/Native, QA 전용 Runtime/Deployer 서비스 계정 2개, QA 한정 프로젝트 IAM 6건·서비스 계정 IAM 3건, QA HMAC Secret 접근 완료. 기존 자원은 재생성 없이 SKIP. 보안키 원문·서비스 계정 JSON 키 노출/생성 없음. **예산은 지출 차단 한도가 아님**.
+- **GitHub 원격 읽기 검증 PASS:** 기존 main 워크플로에 PR #528 댓글 `/app518-qa-deployer-admission 864f796da24413309567198c9de502b13cdedd50`를 저장소 소유자 계정으로 1회 제출; [Actions #45074260938](https://github.com/andrawing1212/soridraw-music/actions/runs/45074260938) `completed/success`. 실제 job 로그에 `APP786_QA_DEPLOYER_GITHUB_OIDC=PASS`, `APP786_QA_DEFAULT_FIRESTORE_METADATA=PASS`, `APP786_QA_EXISTING_FOLLOW_FUNCTION=PASS`, `APP786_QA_CLOUD_MUTATIONS=0; QA_APP518_E2E=NOT_TESTED` 모두 확인. 기존 팔로우 함수 조회 정상, APP518 배포 함수 없음.
+- **복구 코드:** [PR #1351](https://github.com/andrawing1212/soridraw-music/pull/1351) 에 Windows KRW/QA 단일 프로젝트 예산 확인·부분 적용 재개·PowerShell 5.1 SA 바인딩 빈 목록 `.Count` 수정을 저장했으나 **main 미병합**. 앱/Cloudflare/공유 데이터/TEST/PRODUCTION 배포 0.
+- **다음 범위 구분:** APP786 초기 관리자 구성 + GitHub 인증/읽기 검증 완료. QA 클라이언트 Firestore Rules deny-all, QA-only APP518 Function/Worker 실배포·Cloudflare D1/R2 실제 쓰기 및 합성곡 1건 save→delete→resave/retry는 **NOT_TESTED/HOLD**. 신규 백엔드 배포·규칙/데이터 변경은 비용·원복 경계 검증 및 디렉터 승인 없이는 강행하지 않음. APP786 임시 deployer IAM 권한은 **2026-12-02 00:00 KST 만료조건**; 실제 회수는 미검증.
 
 ---
 

@@ -53,7 +53,7 @@ function Find-MemberRole($policy,[string]$role,[string]$member){
 }
 function Ensure-ProjectRole([string]$member,[string]$role,[bool]$temporary){
   $policy=GJson @('projects','get-iam-policy',$Project)
-  $exists=Find-MemberRole $policy $role $member
+  $exists=@(Find-MemberRole $policy $role $member)
   if($exists.Count -gt 0){
     if($temporary){
       foreach($binding in $exists){
@@ -88,7 +88,7 @@ function Ensure-SaRole([string]$sa,[string]$member,[string]$role,[bool]$temporar
 function Ensure-SecretAccess([string]$email){
   $member="serviceAccount:$email"
   $policy=GJson @('secrets','get-iam-policy',$SecretName,"--project=$Project")
-  $exists=Find-MemberRole $policy 'roles/secretmanager.secretAccessor' $member
+  $exists=@(Find-MemberRole $policy 'roles/secretmanager.secretAccessor' $member)
   if($exists.Count -gt 0){return}
   G @('secrets','add-iam-policy-binding',$SecretName,"--project=$Project","--member=$member",'--role=roles/secretmanager.secretAccessor','--quiet')|Out-Null
   Write-Host 'PASS exact QA secret access'
@@ -113,7 +113,7 @@ if([string]$providerInfo.oidc.issuerUri -ne 'https://token.actions.githubusercon
   Stop-Hold 'Unexpected OIDC issuer in QA provider'
 }
 Write-Host 'PASS existing QA OIDC provider/condition (unchanged)'
-$databases=Rows (GJson @('firestore','databases','list',"--project=$Project"))
+$databases=@(Rows (GJson @('firestore','databases','list',"--project=$Project")))
 $default=@($databases | Where-Object {$_.name -eq "projects/$Project/databases/(default)"})
 if($default.Count -gt 1){Stop-Hold 'More than one default database'}
 if($default.Count -eq 0 -and $databases.Count -ne 0){
@@ -132,7 +132,7 @@ if($billing.billingEnabled -ne $true -or [string]$billing.billingAccountName -no
   Stop-Hold 'QA billing connection not verified'
 }
 $billingId=([string]$billing.billingAccountName).Substring('billingAccounts/'.Length)
-$budgets=Rows (GJson @('billing','budgets','list',"--billing-account=$billingId"))
+$budgets=@(Rows (GJson @('billing','budgets','list',"--billing-account=$billingId")))
 $existingBudget=@($budgets|Where-Object {
   $_.displayName -eq $BudgetName -and (@($_.budgetFilter.projects) -contains "projects/$Number")
 })
@@ -177,12 +177,12 @@ Ensure-SaRole $Runtime $deployerMember 'roles/iam.serviceAccountUser' $true
 Ensure-SaRole $buildSa $deployerMember 'roles/iam.serviceAccountUser' $true
 Ensure-SaRole $Deployer $Principal 'roles/iam.workloadIdentityUser' $false
 
-$secrets=Rows (GJson @('secrets','list',"--project=$Project"))
+$secrets=@(Rows (GJson @('secrets','list',"--project=$Project")))
 $found=@($secrets|Where-Object {$_.name -eq "projects/$Number/secrets/$SecretName" -or $_.name -eq "projects/$Project/secrets/$SecretName"})
 if($found.Count -eq 0){
   G @('secrets','create',$SecretName,"--project=$Project",'--replication-policy=automatic','--quiet')|Out-Null
 }
-$versions=Rows (GJson @('secrets','versions','list',$SecretName,"--project=$Project"))
+$versions=@(Rows (GJson @('secrets','versions','list',$SecretName,"--project=$Project")))
 if($versions.Count -eq 0){
   $random=New-Object byte[] 48
   $rng=[System.Security.Cryptography.RandomNumberGenerator]::Create()

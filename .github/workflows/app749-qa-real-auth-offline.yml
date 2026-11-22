@@ -8,8 +8,10 @@ on:
       - 'cloudflare/explore-worker/experiments/owner-follow-qa-real-auth-749.mjs'
       - 'cloudflare/explore-worker/experiments/owner-follow-qa730-entry.mjs'
       - 'cloudflare/explore-worker/experiments/owner-follow-qa-shadow-778.mjs'
+      - 'cloudflare/explore-worker/experiments/owner-follow-qa-ingress-779.mjs'
       - 'scripts/app775-unified-follow-ingress.mjs'
       - 'scripts/verify-778-signed-status-shadow.mjs'
+      - 'scripts/verify-779-qa-unified-signed-ingress.mjs'
       - 'scripts/verify-749-qa-real-auth.mjs'
       - 'scripts/app749-qa-real-login-cloudshell.mjs'
       - 'scripts/verify-749-qa-real-login-cloudshell.mjs'
@@ -84,6 +86,9 @@ jobs:
           node --check cloudflare/explore-worker/experiments/owner-follow-qa-shadow-778.mjs
           node --check scripts/verify-778-signed-status-shadow.mjs
           node scripts/verify-778-signed-status-shadow.mjs
+          node --check cloudflare/explore-worker/experiments/owner-follow-qa-ingress-779.mjs
+          node --check scripts/verify-779-qa-unified-signed-ingress.mjs
+          node scripts/verify-779-qa-unified-signed-ingress.mjs
           node --check scripts/app749-qa-real-login-cloudshell.mjs
           node scripts/verify-749-qa-real-login-cloudshell.mjs
           node scripts/verify-749-qa-hosting-fix-ui-init.mjs
@@ -103,7 +108,7 @@ jobs:
             "$RUNNER_TEMP/app749-preview/scripts/"
           cp scripts/app775-unified-follow-ingress.mjs \
             "$RUNNER_TEMP/app749-preview/scripts/"
-          for name in owner-follow-qa730-bridge.mjs owner-follow-qa730-entry.mjs owner-follow-qa-real-auth-749.mjs owner-follow-qa-shadow-778.mjs; do
+          for name in owner-follow-qa730-bridge.mjs owner-follow-qa730-entry.mjs owner-follow-qa-real-auth-749.mjs owner-follow-qa-shadow-778.mjs owner-follow-qa-ingress-779.mjs; do
             cp "cloudflare/explore-worker/experiments/$name" \
               "$RUNNER_TEMP/app749-preview/cloudflare/explore-worker/experiments/"
           done
@@ -169,7 +174,7 @@ jobs:
           git worktree add --detach "$RUNNER_TEMP/app749-qa" "$BASE"
           cp scripts/app730-source-only-follow-bridge.mjs "$RUNNER_TEMP/app749-qa/scripts/"
           cp scripts/app775-unified-follow-ingress.mjs "$RUNNER_TEMP/app749-qa/scripts/"
-          for name in owner-follow-qa730-bridge.mjs owner-follow-qa730-entry.mjs owner-follow-qa-real-auth-749.mjs owner-follow-qa-shadow-778.mjs; do
+          for name in owner-follow-qa730-bridge.mjs owner-follow-qa730-entry.mjs owner-follow-qa-real-auth-749.mjs owner-follow-qa-shadow-778.mjs owner-follow-qa-ingress-779.mjs; do
             cp "cloudflare/explore-worker/experiments/$name" \
               "$RUNNER_TEMP/app749-qa/cloudflare/explore-worker/experiments/"
           done
@@ -343,6 +348,7 @@ jobs:
           for(let attempt=0;attempt<10;attempt++){
             const bad=[
               await req('PUT','/qa730/verified/follow'),
+              await req('PUT','/qa730/verified/ingress'),
               await req('PUT','/qa730/verified/follow',{'X-Owner583-Token':'not-a-token'}),
               await req('GET','/qa730/verified/status',{Authorization:'Bearer invalid.jwt.token'})
             ];

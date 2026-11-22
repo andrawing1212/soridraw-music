@@ -9,6 +9,7 @@ import {parseOwnerQaConfig583} from './owner-follow-qa-live-583.mjs';
 import {createOwnerQa730Runtime} from './owner-follow-qa730-bridge.mjs';
 import {createQaFirebaseVerifier749} from './owner-follow-qa-real-auth-749.mjs';
 import {evaluateApp778SignedQaShadow} from './owner-follow-qa-shadow-778.mjs';
+import {handleApp779QaSignedIngress} from './owner-follow-qa-ingress-779.mjs';
 
 const respond=(status)=>Response.json({ok:false,syntheticOnly:true},{status,headers:{'Cache-Control':'no-store'}});
 const qaVerify=createQaFirebaseVerifier749();
@@ -58,16 +59,17 @@ export function createQaAuthEntry749({verify=qaVerify,legacy=originalWorker}={})
         // Explicit opt-in on an INACTIVE QA candidate; APP583 remains unchanged.
         if(env?.SORIDRAW_QA749_REAL_AUTH!=='1')return deny(403);
         const action=pathname.slice(verifiedPrefix.length);
-        if(!['status','follow'].includes(action))return deny(404);
+        if(!['status','follow','ingress'].includes(action))return deny(404);
         if(request.method==='OPTIONS'){
           if(!origin)return respond(403);
           const method=request.headers.get('Access-Control-Request-Method')||'';
           if(!((action==='status'&&method==='GET')||
-                (action==='follow'&&['PUT','DELETE'].includes(method))))
+                (['follow','ingress'].includes(action)&&['PUT','DELETE'].includes(method))))
             return deny(403);
           const requested=(request.headers.get('Access-Control-Request-Headers')||'')
             .toLowerCase().split(',').map(x=>x.trim()).filter(Boolean);
-          const allowed=['authorization','x-firebase-appcheck','accept','cache-control'];
+          const allowed=['authorization','x-firebase-appcheck','accept','cache-control',
+            ...(action==='ingress'?['content-type']:[])];
           if(requested.some(x=>!allowed.includes(x)))return deny(403);
           const headers=new Headers({'Access-Control-Allow-Methods':
             action==='status'?'GET, OPTIONS':'PUT, DELETE, OPTIONS',
@@ -76,7 +78,7 @@ export function createQaAuthEntry749({verify=qaVerify,legacy=originalWorker}={})
           return cors(new Response(null,{status:204,headers}));
         }
         if(!((action==='status'&&request.method==='GET')||
-              (action==='follow'&&['PUT','DELETE'].includes(request.method))))
+              (['follow','ingress'].includes(action)&&['PUT','DELETE'].includes(request.method))))
           return deny(404);
         let principal;
         try{
@@ -98,7 +100,7 @@ export function createQaAuthEntry749({verify=qaVerify,legacy=originalWorker}={})
               headers:{'Cache-Control':'no-store'}}));
         }
         if(principal?.verified!==true||
-          (action==='follow'&&principal.uid!==cfg.actorUid)||
+          (['follow','ingress'].includes(action)&&principal.uid!==cfg.actorUid)||
           (action==='status'&&![cfg.actorUid,cfg.ownerUid].includes(principal.uid)))
           return deny(403);
         // APP778: QA signed status invokes the APP775 common ingress as a
@@ -113,6 +115,15 @@ export function createQaAuthEntry749({verify=qaVerify,legacy=originalWorker}={})
              shadow.realWriterConnected!==false||
              shadow.serverWritesAdded!==0||shadow.doCallsAdded!==0)
             return deny(503);
+        }
+        // APP779: actual incoming legacy/ordered envelopes use the SAME
+        // APP775 evaluator, after APP749 signed Auth+AppCheck. Both remain
+        // read-only HOLD; never pass them to the existing follow DO.
+        if(action==='ingress'){
+          const held=await handleApp779QaSignedIngress({
+            request,verifiedPrincipal:principal,config:cfg,env,
+          });
+          return cors(held);
         }
         // The browser sends signed tokens; only this QA gateway converts them
         // into the preexisting internal DO probe. Never forward JWTs to DO,

@@ -107,9 +107,9 @@ export function createQaFirebaseVerifier749({send=fetch,now=Date.now,subtle=glob
     if(!match||!appCheck||!UID.test(actorUid||'')||
       !UID.test(ownerUid||'')||actorUid===ownerUid||
       !['GET','PUT','DELETE'].includes(method)||
-      !['status','follow'].includes(path)||
+      !['status','follow','ingress'].includes(path)||
       (path==='status'&&method!=='GET')||
-      (path==='follow'&&method==='GET')||request.method!==method||
+      (['follow','ingress'].includes(path)&&method==='GET')||request.method!==method||
       new URL(request.url).pathname!=='/qa730/verified/'+path)fail('REQUEST_INVALID');
     let auth;
     try{auth=await checkJwt(match[1],AUTH_JWKS,true)}
@@ -120,7 +120,7 @@ export function createQaFirebaseVerifier749({send=fetch,now=Date.now,subtle=glob
     try{await checkJwt(appCheck,APP_JWKS,false)}
     catch{fail('APPCHECK_VALIDATION')}
     if((path==='status'&&auth.sub!==actorUid&&auth.sub!==ownerUid)||
-       (path==='follow'&&auth.sub!==actorUid))fail('PRINCIPAL_MISMATCH');
+       (['follow','ingress'].includes(path)&&auth.sub!==actorUid))fail('PRINCIPAL_MISMATCH');
     return {verified:true,uid:auth.sub,qaProject:PROJECT};
   };
 }

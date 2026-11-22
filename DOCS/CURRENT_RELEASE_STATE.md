@@ -1,3 +1,13 @@
+## CURRENT — APP780 격리 QA Cloudflare D1/R2 권한 부족 HOLD (2026-11-23 KST)
+
+- **디렉터 승인 범위:** 기존 독립 QA 자원으로 APP518(PR #528) 합성곡 1건 저장→삭제→재저장/늦은 요청 차단 실서버 시험; 공유 사용자 원본, PREVIEW/TEST/PRODUCTION Worker, D1/R2, Functions, RTDB, Rules 변경 금지. QA 신규 유료 자원/권한 확대/Secret/배포는 별도 명시 승인.
+- **기존 검사 재사용:** PR #528 정확 SHA `864f796da24413309567198c9de502b13cdedd50`의 GitHub CI 5/5 **success** [APP518 Actions #41116655418](https://github.com/andrawing1212/soridraw-music/actions/runs/41116655418), [app517 #41116655317](https://github.com/andrawing1212/soridraw-music/actions/runs/41116655317) 등. 실제 firebase-admin↔Firestore **로컬 Emulator**, HMAC HTTP, Miniflare D1/R2로 `saved→removed→resaved`, 오래된 save/delete, 중복, 장애+재시도, ACK와 소유자 차단 PASS. **실제 Cloudflare/Firebase 연동 증거로 승격 금지**. 다시 실행하지 않음.
+- **실제 QA 계정 자원 확인:** [PR #1350](https://github.com/andrawing1212/soridraw-music/pull/1350) 읽기 전용 Workflow 1개만 main에 병합 `5e4d41277b5be4877da6edaf0d462cb2e0c7c3c0`, [Actions #45048303777](https://github.com/andrawing1212/soridraw-music/actions/runs/45048303777) `qa_resource_inventory completed/success` 실행. 기존 QA Cloudflare Account `b60fcd62c679c64db19f0b0e0c2f3429`은 운영 `e1a30fc9ef497fda1d34f4ab3dc1da45`와 분리, Worker 목록 GET 성공(1개·APP518 대상 0). **D1 메타데이터 GET HTTP 401 / R2 메타데이터 GET HTTP 403**, 생성 여부·권한·비용·실제 연결 **UNVERIFIED**. 기존 GitHub QA 토큰을 사용했지만 D1/R2 조회 권한이 없거나 API 접근이 허용되지 않음. `app518_live_ready=false`. Firebase QA Functions·별도 R2/D1 서비스 및 credential 분리·소유권·결제 안전성 미입증. 공유 계정 우회 조회·실서버 합성곡 전송/배포 없음.
+- **변경 범위:** GitHub의 독립 QA GET-only controller 1개만 추가. 기존 PR #528 소스·QA583 활성 버전·정식/Preview/Test 앱·사용자 데이터 모두 무변경, Cloudflare 읽기 요청 3종 외 서버 변경 0. **검증 원칙 준수: CODE PASS / 실클라우드 NOT_TESTED / PRODUCTION HOLD**.
+- **다음 차단점 하나:** QA D1/R2의 현재 존재·읽기/쓰기 권한과 무료/Blaze 비용 범위 및 Firebase QA 실제 Functions 범위가 확인되기 전까지 외부 실검증 보류. 권한 확대·신규 D1/R2/시크릿/Functions 설치·과금 가능 작업에는 별도 디렉터 명시 승인 필요. 공유 운영 데이터·서버로 대체 실험 불가. 첫 정식앱 배포 최우선, 새 관리자 수동 가져오기 기능 보류.
+
+---
+
 ## CURRENT — APP780 현행 공유 Media 정본 연결 및 Hosting 실물 스냅샷 확인 / RELEASE HOLD (2026-11-23 KST)
 
 - **APP738 실제 Firebase GET-only 현재 라이브 파일 확인 PASS:** [Actions #45045472062](https://github.com/andrawing1212/soridraw-music/actions/runs/45045472062), `run success`, PREVIEW `sites/soridraw-preview/versions/94f9a91ea84fe410` 파일 69개/파일 SHA256 `881244092d713d948882350c72b08b1921b660ddbb95134610213bc9f731b72b`, PRODUCTION 기존 복구점 `sites/soridraw/versions/aad8597799015e70` 파일 62개/SHA256 `3cd21d3a42a6a6f41cdb10392765e31e93cdc6ce68a63c3d981914b17caa6e72`. 활성 버전은 서로 다르며 정확한 ServingConfig 해시도 다름. **PRODUCTION Hosting 변경 0**. APP738 source-only 롤백 모의검사 PASS는 실제 rollback 리허설 PASS가 아님.

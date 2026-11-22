@@ -164,7 +164,7 @@ meter.reserve('d1RowsWritten',QA518_LIMITS.d1RowsWritten);
 rejection(()=>meter.reserve('d1RowsWritten',1),'HOLD_QA_OPERATION_BUDGET_EXCEEDED');
 meter.reserve('r2Writes',QA518_LIMITS.r2Writes);
 rejection(()=>meter.reserve('r2Writes',1),'HOLD_QA_OPERATION_BUDGET_EXCEEDED');
-assert.equal(meter.snapshot().firestoreWrites,4);
+assert.equal(meter.snapshot().firestoreWrites,QA518_LIMITS.firestoreWrites);
 clock=nowMs+QA518_LIMITS.runtimeMs+1;
 rejection(()=>meter.reserve('r2Reads',1),'HOLD_QA_WALL_CLOCK_BUDGET_EXCEEDED');
 console.log('APP518_QA_ACCOUNT_WRITE_BUDGET_AND_TIMEOUT_FAIL_CLOSED=PASS');

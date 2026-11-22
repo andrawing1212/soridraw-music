@@ -427,3 +427,45 @@ jobs:
           print('APP787_QA_RULE_SOURCE_SHA256='+hashlib.sha256(src.encode()).hexdigest())
           print('APP787_QA_READ_ONLY=PASS; RULES_WRITES=0; FIRESTORE_DOC_READS=0')
           PY
+
+  qa_live_readiness:
+    # APP518 exact pinned QA Cloudflare+Firebase GET/SQL SELECT only.
+    # No Firebase Rules Viewer re-grant, no Firestore data read, no secret value print.
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 528 &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/app518-qa-live-readiness 864f796da24413309567198c9de502b13cdedd50'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Simulated foreign-resource and unmetered D1 denial
+        run: node qa/app518/live/verify-readiness518.mjs
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/1083981050742/locations/global/workloadIdentityPools/soridraw-qa-github/providers/app518-readonly
+          service_account: soridraw-qa-gh-deployer@soridraw-app.iam.gserviceaccount.com
+          project_id: soridraw-app
+          create_credentials_file: true
+          export_environment_variables: true
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Exact live isolated QA GET and D1 sqlite_master SELECT only
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_QA_STORAGE_READ_TOKEN: ${{ secrets.CLOUDFLARE_QA_STORAGE_READ_TOKEN }}
+          CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$(gcloud projects describe soridraw-app --format='value(projectNumber)')" = '1083981050742'
+          node qa/app518/live/readiness518.mjs --live-readonly

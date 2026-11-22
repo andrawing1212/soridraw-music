@@ -1,3 +1,12 @@
+## CURRENT — APP787 QA Firestore 활성 규칙 실검증 PASS·임시 Viewer 권한 회수 PASS (2026-11-23 KST)
+
+- **정확한 QA 한정:** Firebase QA `soridraw-app` (프로젝트 번호 `1083981050742`)만 확인. [PR #1352](https://github.com/andrawing1212/soridraw-music/pull/1352) 병합 `cd68058d16c476abd053fc5d98423b521741fce8`: 기존 APP782 owner-only/OIDC QA reader 워크플로에 활성 `cloud.firestore` release→ruleset **GET 두 건**의 검증 추가. 기존 APP786 QA/Cloudflare PASS 재시험 불필요.
+- **실제 GitHub 인증·활성 규칙 PASS:** 첫 [Actions #45079218301](https://github.com/andrawing1212/soridraw-music/actions/runs/45079218301)은 Viewer 권한 추가 직후 `APP787_HOLD_RULES_HTTP_403`으로 **FAIL/HOLD**. 다른 역할·API·설정 변경 없이 동일 검사 1회 재실행한 [Actions #45079320076](https://github.com/andrawing1212/soridraw-music/actions/runs/45079320076)은 `completed/success`이며 실제 출력 `APP787_QA_ACTIVE_FIRESTORE_RELEASE=PASS`, `APP787_QA_ACTIVE_RULESET_EXACT_DENY_ALL=PASS`, `APP787_QA_READ_ONLY=PASS; RULES_WRITES=0; FIRESTORE_DOC_READS=0`. 활성 rule source SHA256 `ecf30f940747dcc3c5ba4993093e9a11ac9fc5df7e14b2a1512d2446923d84eb`. 정확 한 개 `match /{document=**} { allow read, write: if false; }`만 허용, 다른 허용 규칙 없음.
+- **임시 권한 회수 PASS (디렉터 Windows 화면):** QA reader 서비스 계정에 `roles/firebaserules.viewer`를 IAM 만료조건 `2026-11-22T23:11:52Z` (2026-11-23 08:11:52 KST)으로 한 번 부여. 읽기 검증 후 정확 해당 조건 IAM binding만 제거, Google IAM 정책 재조회 후 `APP787_TEMP_VIEWER_REVOKED_PASS` 직접 확인. 이는 디렉터 PowerShell 조회·회수 증거이며 별도 GitHub IAM 감사가 아님. 권한/규칙 추가 변경 없음.
+- **완료 경계:** APP787 실제 활성 보안 규칙 deny-all 검증 **PASS**. QA Firestore에 대한 앱 클라이언트 접근 차단이지 서버 IAM/Admin SDK 접근 통제를 입증하는 검사는 아님. APP518 QA 합성곡 save→delete→resave/retry 및 QA-only Firebase Function/Cloudflare Worker 배포 **NOT_TESTED/HOLD**; PREVIEW/TEST/PRODUCTION 앱·공유 원본·규칙 변경 0. APP786 QA deployer 별도 임시 IAM 역할은 2026-12-02 00:00 KST 만료조건으로 **남아 있음**; APP787 Viewer 권한 회수와 혼동 금지.
+
+---
+
 ## CURRENT — APP786 Windows QA 초기설정 PASS + GitHub QA deployer admission PASS (2026-11-23 KST)
 
 - **Windows 실제 QA 설정 완료 (디렉터 화면):** `APP786_QA_BOOTSTRAP_PASS`. 정확 QA Firebase `soridraw-app` / 번호 `1083981050742`, 기존 GitHub WIF 조건 확인, 한 프로젝트에만 적용된 `5000KRW/month` 예산 알림, Seoul Firestore `(default)` Standard/Native, QA 전용 Runtime/Deployer 서비스 계정 2개, QA 한정 프로젝트 IAM 6건·서비스 계정 IAM 3건, QA HMAC Secret 접근 완료. 기존 자원은 재생성 없이 SKIP. 보안키 원문·서비스 계정 JSON 키 노출/생성 없음. **예산은 지출 차단 한도가 아님**.

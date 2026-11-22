@@ -24,7 +24,11 @@ const responses={
  }],
 };
 const mkFetch=({change={},status=200}={})=>async(url,init)=>{
-  const path=new URL(url).pathname+new URL(url).search;
+  const parsed=new URL(url);
+  assert.equal(parsed.origin,'https://api.cloudflare.com');
+  const prefix='/client/v4/accounts/'+QA518.accountId;
+  assert.ok(parsed.pathname.startsWith(prefix+'/'));
+  const path=parsed.pathname.slice(prefix.length)+parsed.search;
   if(!Object.prototype.hasOwnProperty.call(responses,path))
     throw Error('UNEXPECTED_PATH '+path);
   if(path.includes('/d1/database/'+dbId+'/query')){

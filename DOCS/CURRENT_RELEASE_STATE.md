@@ -1,3 +1,11 @@
+## CURRENT — APP786 Windows QA 부분 적용 실증 / SA IAM empty `.Count` 수정, 실완료 HOLD (2026-11-23 KST)
+
+- **디렉터 PowerShell 실증:** 정확 QA `soridraw-app` 프로젝트/WIF 확인, 기존 QA 한 프로젝트만 적용된 **5,000KRW 예산** 확인, `(default)` Seoul Firestore DB 생성, 전용 계정 `soridraw-qa-app518-runtime`·`soridraw-qa-gh-deployer` 생성, runtime `datastore.user` 1개와 QA deployer 5개 프로젝트 IAM 역할 추가 출력 확인. 별도 Google API 재조회 증거는 아님. 운영·공유 사용자 데이터 접근/배포 없음.
+- **마지막 HOLD:** `Ensure-SaRole` 진입 직후 PowerShell 5.1 `Set-StrictMode -Version Latest`에서 빈 IAM binding 조회값에 `.Count` 접근해 `PropertyNotFoundStrict`. 기존 QA 자원 부분 적용 후 중단. QA 서비스 계정 간 actAs/WIF 바인딩·QA HMAC Secret 생성·최종 APP786 PASS는 **미확인/미완료**.
+- **복구:** PR #1351 `fix/app786-krw-budget-cli`에서 `Ensure-SaRole` 조회 결과를 `@(...)` 배열로 감싸 empty/singleton 모두 처리. 예산은 **재생성 금지**, 정확 QA 금액·단일 프로젝트 확인 뒤만 진행. 수정본 **Windows 실제 재실행 전**, 사전검사→기존 승인된 `-Apply` 이어가기. 새 QA IAM/Rules·APP518 실제 E2E는 아직 통과 아님.
+
+---
+
 ## CURRENT — APP786 Windows QA 관리자 1회 자동 설정 스크립트 준비·Windows 정적 검사 PASS / 실적용 대기 (2026-11-23 KST)
 
 - **디렉터 현재 지시:** 관리 화면을 하나씩 확인시키지 말고 Windows Google Cloud CLI 한 번 로그인 후 APP518 QA 초기 관리자 권한/자원 설정을 **한 번에** 실행. 짧고 핵심만 보고. Cloud Shell·Codex Linux 인증 재시도 금지.

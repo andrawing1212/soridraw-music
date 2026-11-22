@@ -195,7 +195,13 @@ jobs:
           services=load('app784-services.json',os.environ['S'])
           functions=load('app784-functions.json',os.environ['FN'])
           print('APP784_QA_PROJECT_AND_NUMBER=PASS')
-          if db is None: print('APP784_QA_FIRESTORE_DATABASE_METADATA=HOLD_UNAVAILABLE')
+          if db is None:
+            detail=(base/'app784-firestore.err').read_text('utf8',errors='replace').lower()
+            cause=('PERMISSION_DENIED' if ('permission' in detail or '403' in detail)
+              else 'API_DISABLED' if ('not enabled' in detail or 'disabled' in detail)
+              else 'CLI_INVALID' if ('invalid choice' in detail or 'unrecognized arguments' in detail)
+              else 'UNKNOWN')
+            print('APP784_QA_FIRESTORE_DATABASE_METADATA=HOLD_'+cause)
           else:
             print('APP784_QA_FIRESTORE_DATABASE_METADATA=PASS_READONLY')
             print('APP784_QA_FIRESTORE_DEFAULT_EXISTS='+str(any(x.get('name','').endswith('/databases/(default)') for x in db)).lower())
@@ -213,4 +219,13 @@ jobs:
             print('APP784_QA_APP518_ALREADY_DEPLOYED='+str(any('app518' in x.lower() for x in names)).lower())
             print('APP784_QA_FUNCTION_COUNT='+str(len(names)))
           print('APP784_QA_DATA_READS=0; MUTATIONS=0; PRODUCTION_ACCESS=0; CLOUD_SHELL=0')
+          # A missing/undiscoverable QA Firestore database is a blocker,
+          # not a green cloud readiness result.
+          if db is None or not any(x.get('name','').endswith('/databases/(default)') for x in db):
+            print('APP784_QA_FULL_E2E_READY=HOLD_FIRESTORE_DATABASE_UNVERIFIED')
+            raise SystemExit(2)
+          if services is None or functions is None:
+            print('APP784_QA_FULL_E2E_READY=HOLD_METADATA_INCOMPLETE')
+            raise SystemExit(2)
+          print('APP784_QA_FULL_E2E_READY=PASS_READONLY_METADATA_ONLY')
           PY

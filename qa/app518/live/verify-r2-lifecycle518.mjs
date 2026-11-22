@@ -102,14 +102,14 @@ assert.equal((await check(request('bootstrap'),503,{...env,
  FIREBASE_PROJECT_ID:'soridraw-app-866a5',CATALOG:r2,QA_D1:d1})).status,503);
 assert.equal(r2.items.size,0);
 let x=await check(request('bootstrap'),200);
-assert.equal(x.body.code,'QA518_R2_BOOTSTRAP_RESULT');
+assert.equal(x.body.code,'QA518_R2_BOOTSTRAP_EXACT_TWO_KEYS_PASS');
 assert.equal(x.body.code==='QA518_R2_BOOTSTRAP_RESULT'&&
  x.body.code!==x.body?.codeWrong,true);
-assert.equal(x.body.code,'QA518_R2_BOOTSTRAP_RESULT');
+assert.equal(x.body.code,'QA518_R2_BOOTSTRAP_EXACT_TWO_KEYS_PASS');
 assert.equal(x.body.code.length>0,true);
 assert.equal(r2.items.size,2);
 x=await check(request('inspect'),200);
-assert.equal(x.body.code,'QA518_R2_INSPECT_RESULT');
+assert.equal(x.body.code,'QA518_R2_TWO_EXACT_KEYS_VALID');
 assert.equal(x.body.itemCount,0);
 x=await check(request('bootstrap'),409);
 assert.equal(x.body.code,'HOLD_QA_R2_PILOT_NOT_EMPTY');
@@ -144,7 +144,7 @@ r2.items.set(base+'base-1.json',foreign);
 x=await check(request('cleanup',{
  'x-soridraw-qa-cf-worker-read':readToken,
 }),200);
-assert.equal(x.body.code,'QA518_R2_CLEANUP_RESULT');
+assert.equal(x.body.code,'QA518_R2_EXACT_TWO_KEYS_CLEANED_PASS');
 assert.equal(x.body.code==='QA518_R2_CLEANUP_RESULT'&&
  x.body.code.length>0,true);
 assert.equal(r2.items.size,0);
@@ -152,7 +152,7 @@ assert.deepEqual(new Set(r2.deletes),new Set([
  base+'journal.json',base+'base-1.json',
 ]));
 const empty=await check(request('inspect'),200);
-assert.equal(empty.body.code,'QA518_R2_INSPECT_RESULT');
+assert.equal(empty.body.code,'QA518_R2_PREFIX_EMPTY');
 assert.equal(empty.body.itemCount,undefined);
 assert.ok(oidcRequests>=10);
 console.log('APP518_QA_R2_EXACT_TWO_KEYS_CREATE_INSPECT_CLEANUP=PASS');

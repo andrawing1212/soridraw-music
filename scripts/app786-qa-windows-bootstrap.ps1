@@ -159,22 +159,41 @@ switch($currency){
   'USD' { $BudgetName='SORIDRAW-APP518-QA-MONTHLY-5USD'; $BudgetAmount='5USD'; $BudgetUnits=5 }
   default { Stop-Hold 'Unsupported QA billing currency. No budget created.' }
 }
-$budgets=@(Rows (GJson @('billing','budgets','list',"--billing-account=$billingId")))
-$sameName=@($budgets | Where-Object { $_.displayName -eq $BudgetName })
-if($sameName.Count -gt 1){Stop-Hold 'Duplicate named QA budgets; manual review required'}
-if($sameName.Count -eq 1){
-  $scope=@($sameName[0].budgetFilter.projects)
-  if($scope.Count -ne 1 -or $scope[0] -ne "projects/$Project"){
-    Stop-Hold 'Existing named QA budget is not scoped to exact QA project'
+# Resume-only protection: a previous -Apply already returned from budget creation.
+# Parse JSON before filtering; piping ConvertFrom-Json directly into Where-Object
+# on Windows PowerShell 5.1 can treat the entire JSON array as one object.
+$budgetJson=G @('billing','budgets','list',"--billing-account=$billingId",'--format=json','--quiet')
+try{$budgetList=ConvertFrom-Json -InputObject $budgetJson}
+catch{Stop-Hold 'QA billing budget list JSON could not be parsed'}
+$budgets=@()
+foreach($budget in $budgetList){
+  if($null -eq $budget -or $null -eq $budget.PSObject.Properties['displayName']){
+    Stop-Hold 'Unexpected QA billing budget list item'
   }
-  $amount=$sameName[0].amount.specifiedAmount
-  if([string]$amount.currencyCode -ne $currency -or [decimal]$amount.units -ne $BudgetUnits){
-    Stop-Hold 'Existing named QA budget amount/currency mismatch'
-  }
-  $existingBudget=$sameName
-}else{$existingBudget=@()}
-if($existingBudget.Count -eq 0){Write-Host "PLAN $BudgetAmount/month QA-only budget alert"}
-else{Write-Host "PASS existing QA-only $BudgetAmount budget alert"}
+  $budgets+=,$budget
+}
+$sameName=@()
+foreach($budget in $budgets){
+  if([string]$budget.displayName -ceq $BudgetName){$sameName+=,$budget}
+}
+if($sameName.Count -gt 1){Stop-Hold 'More than one budget with the exact QA name; no changes'}
+if($sameName.Count -eq 0){
+  Stop-Hold 'Previously created QA budget is not visible; new budget creation blocked to prevent duplicates'
+}
+$qaBudget=$sameName[0]
+$scope=@($qaBudget.budgetFilter.projects | Where-Object {$null -ne $_})
+$qaProjectId="projects/$Project"
+$qaProjectNumber="projects/$Number"
+if($scope.Count -ne 1 -or
+   ($scope[0] -cne $qaProjectId -and $scope[0] -cne $qaProjectNumber)){
+  Stop-Hold 'Named QA budget scope is not exactly the QA project (ID or canonical number)'
+}
+$amount=$qaBudget.amount.specifiedAmount
+if($null -eq $amount -or [string]$amount.currencyCode -cne $currency -or
+   [decimal]$amount.units -ne $BudgetUnits){
+  Stop-Hold 'Named QA budget amount/currency mismatch'
+}
+Write-Host "PASS existing QA-only $BudgetAmount budget alert (exact single project verified)"
 $buildInfo=GJson @('builds','get-default-service-account',"--project=$Project","--region=$Region")
 $buildRef=[string]$buildInfo.serviceAccountEmail
 if($buildRef -notmatch ('^projects/[^/]+/serviceAccounts/'+[regex]::Escape($Number)+'(-compute@developer\.gserviceaccount\.com|@cloudbuild\.gserviceaccount\.com)$')){
@@ -193,16 +212,6 @@ if([DateTimeOffset]::UtcNow -gt [DateTimeOffset]::Parse($Expires).AddDays(-1)){
 Write-Host 'ABOUT TO MODIFY QA ONLY: budget, optional Firestore, two SAs, limited IAM, one HMAC secret.'
 $answer=(Read-Host 'Type EXACTLY SORIDRAW-QA to proceed')
 if($answer -cne 'SORIDRAW-QA'){Stop-Hold 'No confirmation; no resources changed'}
-if($existingBudget.Count -eq 0){
-  G @('billing','budgets','create',"--billing-account=$billingId","--display-name=$BudgetName","--budget-amount=$BudgetAmount",'--calendar-period=month',"--filter-projects=projects/$Project",'--threshold-rule=percent=0.5','--threshold-rule=percent=0.9','--threshold-rule=percent=1.0','--quiet')|Out-Null
-  $createdBudgets=@(Rows (GJson @('billing','budgets','list',"--billing-account=$billingId")))
-  $created=@($createdBudgets|Where-Object {$_.displayName -eq $BudgetName})
-  if($created.Count -ne 1 -or @($created[0].budgetFilter.projects).Count -ne 1 -or
-     @($created[0].budgetFilter.projects)[0] -ne "projects/$Project"){
-    Stop-Hold 'QA budget create returned, but exact project scope not confirmed'
-  }
-  Write-Host "PASS QA $BudgetAmount monthly alert (NOT a hard spending cap)"
-}
 if($default.Count -eq 0){
   G @('firestore','databases','create',"--project=$Project",'--database=(default)',"--location=$Region",'--type=firestore-native','--edition=standard','--delete-protection','--quiet')|Out-Null
   $created=GJson @('firestore','databases','describe','--database=(default)',"--project=$Project")

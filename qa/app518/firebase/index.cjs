@@ -33,6 +33,7 @@ exports.app518QaExactFavoriteSource = onRequest({
   region:"asia-northeast3",
   memory:"256MiB",
   timeoutSeconds:30,
+  serviceAccount:"soridraw-qa-app518-runtime@soridraw-app.iam.gserviceaccount.com",
   minInstances:0,
   maxInstances:1,
   secrets:[secret],

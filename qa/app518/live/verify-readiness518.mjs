@@ -19,9 +19,9 @@ const responses={
     {name:'OTHER',type:'secret_text'},
     {name:'CONSTANT',type:'plain_text'}],
  },
- ['/d1/database/'+dbId+'/query']:{result:[{
+ ['/d1/database/'+dbId+'/query']:[{
   success:true,meta:{rows_written:0},results:[],
- }]},
+ }],
 };
 const mkFetch=({change={},status=200}={})=>async(url,init)=>{
   const path=new URL(url).pathname+new URL(url).search;
@@ -58,13 +58,12 @@ await fail(inspect({change:{
     {name:'EXTRA_D1',type:'d1_database'}],
  },
 }}),'HOLD_QA_ORIGINAL_WORKER_BINDING_CHANGED');
-await fail(inspect({change:{['/d1/database/'+dbId+'/query']:{
- result:[{success:true,meta:{rows_written:1},results:[]}],
-}}}),'HOLD_QA_D1_SELECT_NOT_W0');
-await fail(inspect({change:{['/d1/database/'+dbId+'/query']:{
- result:[{success:true,meta:{rows_written:0},
- results:[{name:'music_note_catalog_outbox_518'}]}],
-}}}),'HOLD_QA_PARTIAL_OR_OLD_APP518_TABLES');
+await fail(inspect({change:{['/d1/database/'+dbId+'/query']:[
+ {success:true,meta:{rows_written:1},results:[]}]
+}}),'HOLD_QA_D1_SELECT_NOT_W0');
+await fail(inspect({change:{['/d1/database/'+dbId+'/query']:[
+ {success:true,meta:{rows_written:0},results:[{name:'music_note_catalog_outbox_518'}]}]
+}}),'HOLD_QA_PARTIAL_OR_OLD_APP518_TABLES');
 await fail(inspectCloudflareQa518({
  ...auth,call:mkFetch({status:403}),
 }),'HOLD_QA_METADATA_HTTP_403');

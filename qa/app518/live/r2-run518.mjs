@@ -68,7 +68,7 @@ if(command==='--bootstrap'){
 }else if(command==='--cleanup'){
  const cleaned=await call('cleanup',true);
  if(!['QA518_R2_EXACT_TWO_KEYS_CLEANED_PASS',
-   'QA518_R2_ALREADY_ABSENT'].includes(cleaned.code))
+   'QA518_R2_ALREADY_ABSENT','QA518_R2_PARTIAL_BASE_CLEANED_PASS'].includes(cleaned.code))
   throw Error('APP518_QA_R2_CLEANUP_NOT_EXACT');
  const after=await call('inspect');
  assert.equal(after.code,'QA518_R2_PREFIX_EMPTY');

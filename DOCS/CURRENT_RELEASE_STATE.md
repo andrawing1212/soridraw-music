@@ -1,3 +1,13 @@
+## CURRENT — APP780 QA 읽기 권한 해결 / QA 비용 기준 보존 / APP518 실서버 HOLD (2026-11-23 KST)
+
+- **실제 토큰 등록·검증 완료:** 디렉터가 독립 QA Cloudflare 계정에 한정된 D1 Read + Workers R2 Storage Read 토큰을 새 GitHub Actions Secret `CLOUDFLARE_QA_STORAGE_READ_TOKEN`에 직접 등록. 기존 `CLOUDFLARE_QA_API_TOKEN` 수정 없음. [APP780 Actions #45050388649](https://github.com/andrawing1212/soridraw-music/actions/runs/45050388649) `qa_storage_read_token_configured=true`, QA D1 GET PASS 1건, R2 GET PASS 1건, Worker GET PASS 1건, 공유 데이터 읽기·Cloudflare 변경 0. GitHub Actions의 성공은 **목록 조회 PASS**이지 APP518 합성곡 실서버 검증 PASS가 아님.
+- **확인된 재사용 후보:** 기존 QA 전용 D1 `soridraw-qa-app768-d1`, R2 `soridraw-qa-app768-r2`는 과거 APP768/769/774/776 합성 QA 전용 코드의 정확한 자원명. APP780 신규 GET은 각 1개 존재를 확인했지만 **응답의 이름을 출력하지 않아 현재 이름의 정확한 일치를 독립 재검증하지 못했음**. Worker `soridraw-owner-qa-583`는 기존 팔로우 QA 보호 대상이므로 APP518용으로 덮어쓰지 않는다. APP518 전용 이름 일치 자원 0개.
+- **실제 요금제 확인 기록:** [DOCS/QA_BILLING_BASELINE.md](./QA_BILLING_BASELINE.md) 참조. 디렉터가 직접 제공한 **SORIDRAW-QA** 청구 화면 기준 Workers Free 활성, R2 Paid 활성, R2 Class A 작업 41회·Class B 9회, 각 청구 가능한 사용량 0, 화면상 $0.00. **D1/Workers 현재 잔여 사용량·전체 청구액·Firebase QA 지출/예산 알림 여부는 미확인**. 같은 정보의 스크린샷을 반복 요청하지 않는다.
+- **APP518 실서버 준비 판단:** PR #528 `864f796da24413309567198c9de502b13cdedd50`의 `app518IsolatedQaWorker518.js`는 기본 OFF이며 신뢰된 독립 QA 승인 증거, 정확한 Firebase QA 정본/서명 원천, 전용 D1/R2 바인딩, 검증된 서버 연결이 갖춰져야만 활성화할 수 있다. 현재 Firebase QA Functions·연동/신뢰 증거 및 결제 무료 상한은 검증되지 않음. **APP518 물리 저장→삭제→재저장/장애 재전송은 NOT_TESTED/HOLD.** 과거 Emulator/Miniflare PASS를 실서버 PASS로 격상하지 않는다.
+- **이번 범위:** PR/앱 코드/서버/Hosting/QA D1·R2 내용·Firebase/공유 사용자 데이터 변경 0, QA GET-only 1회 및 상태 기록. PRODUCTION·TEST·공유 자원 변경 없음. 무료 범위를 보장할 근거 없이 실서버 쓰기·신규 배포를 강행하지 않는다.
+
+---
+
 ## CURRENT — APP780 QA D1/R2 권한 직접 원인 확인 / 전용 Read Secret 등록 대기 (2026-11-23 KST)
 
 - **READ-only 토큰 실제 검증:** [Actions #45048741870](https://github.com/andrawing1212/soridraw-music/actions/runs/45048741870) 현재 GitHub `CLOUDFLARE_QA_API_TOKEN`은 사용자 소유 토큰 검증 `HTTP 200, active=true`, 기존 QA Worker 1건 조회 PASS, D1 목록 `401`·R2 버킷 목록 `403`. API 주소는 Cloudflare 문서상 정상, QA 토큰의 필요한 저장소 접근권한/대상 범위가 없다고 판단. PRODUCTION 계정 조회·변경 없음.

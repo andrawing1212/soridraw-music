@@ -143,3 +143,74 @@ jobs:
             qa/app518/firebase/lib/app518ServerTransport.js
           if-no-files-found: error
           retention-days: 7
+
+
+  qa_runtime_preflight:
+    # APP784: verify Firebase/Google QA metadata without reading user data,
+    # modifying IAM, enabling APIs, deploying Functions, or touching billing.
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 528 &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/app518-qa-runtime-preflight 864f796da24413309567198c9de502b13cdedd50'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/1083981050742/locations/global/workloadIdentityPools/soridraw-qa-github/providers/app518-readonly
+          service_account: soridraw-qa-gh-reader@soridraw-app.iam.gserviceaccount.com
+          project_id: soridraw-app
+          create_credentials_file: true
+          export_environment_variables: true
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Bounded QA-only cloud metadata inspection
+        run: |
+          set -euo pipefail
+          test "$(gcloud config get-value project 2>/dev/null)" = "soridraw-app"
+          test "$(gcloud projects describe soridraw-app --format='value(projectNumber)' 2>/dev/null)" = "1083981050742"
+          set +e
+          gcloud firestore databases list --project=soridraw-app --format=json > "$RUNNER_TEMP/app784-firestore.json" 2> "$RUNNER_TEMP/app784-firestore.err"
+          firestore_status=$?
+          gcloud services list --enabled --project=soridraw-app --format=json > "$RUNNER_TEMP/app784-services.json" 2> "$RUNNER_TEMP/app784-services.err"
+          service_status=$?
+          gcloud functions list --regions=asia-northeast3 --project=soridraw-app --format=json > "$RUNNER_TEMP/app784-functions.json" 2> "$RUNNER_TEMP/app784-functions.err"
+          functions_status=$?
+          set -e
+          F=$firestore_status S=$service_status FN=$functions_status python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          base=Path(os.environ['RUNNER_TEMP'])
+          def load(file,status):
+            if int(status)!=0:return None
+            try:
+              data=json.loads((base/file).read_text('utf8'))
+              return data if isinstance(data,list) and len(data)<=100 else None
+            except Exception:return None
+          db=load('app784-firestore.json',os.environ['F'])
+          services=load('app784-services.json',os.environ['S'])
+          functions=load('app784-functions.json',os.environ['FN'])
+          print('APP784_QA_PROJECT_AND_NUMBER=PASS')
+          if db is None: print('APP784_QA_FIRESTORE_DATABASE_METADATA=HOLD_UNAVAILABLE')
+          else:
+            print('APP784_QA_FIRESTORE_DATABASE_METADATA=PASS_READONLY')
+            print('APP784_QA_FIRESTORE_DEFAULT_EXISTS='+str(any(x.get('name','').endswith('/databases/(default)') for x in db)).lower())
+          if services is None: print('APP784_QA_ENABLED_APIS=HOLD_UNAVAILABLE')
+          else:
+            enabled={x.get('config',{}).get('name','') for x in services}
+            print('APP784_QA_ENABLED_APIS=PASS_READONLY')
+            for name in ('cloudfunctions.googleapis.com','run.googleapis.com','cloudbuild.googleapis.com','artifactregistry.googleapis.com','secretmanager.googleapis.com','firestore.googleapis.com','iamcredentials.googleapis.com'):
+              print('APP784_API_'+name.split('.')[0].upper()+'='+str(name in enabled).lower())
+          if functions is None: print('APP784_QA_FUNCTIONS=HOLD_UNAVAILABLE')
+          else:
+            names=[x.get('name','').rsplit('/',1)[-1] for x in functions]
+            print('APP784_QA_FUNCTIONS_LIST=PASS_READONLY')
+            print('APP784_QA_EXISTING_FOLLOW_PRESERVED='+str('publishExploreOwnerFollower542' in names).lower())
+            print('APP784_QA_APP518_ALREADY_DEPLOYED='+str(any('app518' in x.lower() for x in names)).lower())
+            print('APP784_QA_FUNCTION_COUNT='+str(len(names)))
+          print('APP784_QA_DATA_READS=0; MUTATIONS=0; PRODUCTION_ACCESS=0; CLOUD_SHELL=0')
+          PY

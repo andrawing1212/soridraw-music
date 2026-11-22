@@ -1,3 +1,12 @@
+## CURRENT — APP779 QA signed legacy/ordered 요청 읽기 전용 HOLD 실검증 PASS / 30분 창 원본 복원 대기 (2026-11-23 KST 확인)
+
+- **디렉터 제공 실제 브라우저 증거:** 기존 격리 QA A/B 로그인 및 서명된 `status` 검사 PASS, QA RTDB 팔로워 **0명 / 수신 버전 16** 유지. 사용자가 기존 QA 페이지에서 1회 실행한 APP779 콘솔 검사 출력 **`APP779 PASS · 구형 PUT 409 / 신형 DELETE 409 / 실제 저장 없이 안전 차단`** 확인 (2026-11-22 23:55 KST 사용자 캡처). 구형·신형 요청이 같은 APP775 검사기를 거친 결과 **409 HOLD**임을 확인하는 범위의 PASS. 기존 화면의 `작업 실패 / HOLD`는 콘솔 가로채기 이후 원래 QA749 버튼 흐름에서 발생한 문구이며 실제 follow commit PASS도, APP779 신규 Writer 활성화도 아니다. 추가 버튼/스크린샷 요구 없음.
+- **GitHub 코드·검사:** [PR #1345](https://github.com/andrawing1212/soridraw-music/pull/1345) 병합 `c1f2b4425dde40de82831656d0cb047a4930ecb8`. APP779 로컬 24개 검증, APP749+APP732 고정 QA 오프라인 호환 PASS [Actions #45033184409](https://github.com/andrawing1212/soridraw-music/actions/runs/45033184409), [#45033184292](https://github.com/andrawing1212/soridraw-music/actions/runs/45033184292). [PR #1346](https://github.com/andrawing1212/soridraw-music/pull/1346) 12→30분/잡 timeout 18→42분 변경 후 PASS·병합 `a0713c0886b197e64d765bdf681427b183dd7801`.
+- **한시 QA 복원은 분리:** 현재 [Actions #45035093218](https://github.com/andrawing1212/soridraw-music/actions/runs/45035093218)에서 QA 후보 활성화·5개 격리 바인딩·무인증 403·APP583 기존 경로 PASS, **30분 브라우저 창 진행**. 이 실행의 **APP583 원본 100% 자동 복원 및 원래 바인딩·HTTP 재검사 단계는 아직 PENDING**이므로 완료라고 보고 금지. 종료 후 두 단계 성공 별도 확인 필요.
+- **출시 차단 유지:** APP779은 QA 요청을 409로 차단하는 읽기 전용 검사, 실사용 canonical follow Writer 연결 0, 신규 D1/R2/DO 저장 0. 모든 구형/활성 Writer 강제 전환, 독립 epoch/ledger/pending fence/PITR, D1 W1–W2, PC↔모바일 사용자 실사용 및 자동 복구는 **NOT_TESTED/HOLD**. 운영·PREVIEW·TEST·PRODUCTION 배포/공유 원본 수정 0.
+
+---
+
 ## CURRENT — APP778 실제 QA Auth status → APP775 공통 진입 읽기 전용 shadow 연결, 브라우저 실검증·원본 복원 PASS / 출시 HOLD (2026-11-22 KST)
 
 - **디렉터 YES 범위:** 이미 실증된 APP749 QA 실제 Firebase Auth/App Check 서명 검증을 재사용해, **서명된 GET `/qa730/verified/status`** 뒤에서만 APP775 공통 진입 판정 두 고정 QA 입력(구형 빈/신형 ordered)을 읽기 전용으로 실행. [PR #1344](https://github.com/andrawing1212/soridraw-music/pull/1344) `main 4fc6dcfb573c18b5d9e37f21b39b39104c51108d` 병합. QA `/qa730/verified/follow` 실제 팔로우/취소 경로·원래 DO/RTDB 처리·Hosting/UI는 변경 0. 새 D1/R2/DO 읽기·쓰기, 자원·권한/Secret/보안 규칙·PREVIEW/TEST/PRODUCTION 배포 0.

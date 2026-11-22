@@ -24,7 +24,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\app786-qa-windows-boot
 - QA deployer 임시 역할은 2026-12-02 00:00 KST 자동 만료 조건을 붙이고 종료 직후 별도 회수. 서비스 계정 actAs는 QA 실행 계정과 실제 확인된 QA Cloud Build 서비스 계정에만.
 - QA HMAC Secret 1개를 기존 값 손대지 않고 최초 버전만 무작위 생성. 키 원문은 GitHub/채팅에 출력하지 않음. 서비스 계정 JSON 키도 생성하지 않음.
 - **앱/Functions/Cloudflare 배포, Firestore 합성 사용자 데이터 쓰기, R2/D1 변경은 이 스크립트에서 하지 않음.** 다음 단계 GitHub QA 자동 검사 통과 후 별도 진행.
-- `gcloud billing accounts describe`에서 실제 계정 통화를 조회한 뒤 그 통화로만 예산을 생성한다. 기존 같은 이름 예산이 잘못된 프로젝트·금액이면 임의 중복 생성하지 않고 HOLD한다.
+- **APP786 복구용 현재 수정본:** 앞선 `-Apply`에서 예산 생성 API가 성공하고 이후 확인만 실패했으므로, **새 예산 생성 자체를 금지**한다. 정확한 `SORIDRAW-APP518-QA-MONTHLY-5000KRW` 단일 예산이 이미 존재하고, 범위가 `projects/soridraw-app` 또는 Google이 정규화한 `projects/1083981050742` **하나**, 금액 5,000 KRW일 때만 다음 단계로 진행한다. 목록·이름·범위·금액이 불일치하면 HOLD하고 다른 프로젝트 예산은 건드리지 않는다.
+- Windows PowerShell 5.1에서는 `ConvertFrom-Json` 배열을 바로 `Where-Object`에 흘리면 여러 예산을 한 항목처럼 검사할 위험이 있어 먼저 JSON 파싱 후 개별 예산을 정확히 비교한다.
 - 중간 오류가 나면 안전 중단한다. 일부 QA 초기 리소스만 생성됐을 수 있으므로, 성공했다고 말하지 않고 오류 한 줄을 근거로 재개한다.
 
 ## 검사

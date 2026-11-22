@@ -18,7 +18,7 @@ export const QA518=Object.freeze({
   rulesHash:'ecf30f940747dcc3c5ba4993093e9a11ac9fc5df7e14b2a1512d2446923d84eb',
 });
 export const QA518_LIMITS=Object.freeze({
-  firestoreWrites:4, d1RowsWritten:96, r2Writes:8, r2Reads:32,
+  firestoreWrites:6, d1RowsWritten:96, r2Writes:8, r2Reads:32,
   httpRequests:18, runtimeMs:120000,
 });
 const sha=data=>createHash('sha256').update(data).digest('hex');

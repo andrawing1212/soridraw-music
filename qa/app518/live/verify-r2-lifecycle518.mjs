@@ -103,8 +103,6 @@ assert.equal((await check(request('bootstrap'),503,{...env,
 assert.equal(r2.items.size,0);
 let x=await check(request('bootstrap'),200);
 assert.equal(x.body.code,'QA518_R2_BOOTSTRAP_EXACT_TWO_KEYS_PASS');
-assert.equal(x.body.code==='QA518_R2_BOOTSTRAP_RESULT'&&
- x.body.code!==x.body?.codeWrong,true);
 assert.equal(x.body.code,'QA518_R2_BOOTSTRAP_EXACT_TWO_KEYS_PASS');
 assert.equal(x.body.code.length>0,true);
 assert.equal(r2.items.size,2);
@@ -145,8 +143,6 @@ x=await check(request('cleanup',{
  'x-soridraw-qa-cf-worker-read':readToken,
 }),200);
 assert.equal(x.body.code,'QA518_R2_EXACT_TWO_KEYS_CLEANED_PASS');
-assert.equal(x.body.code==='QA518_R2_CLEANUP_RESULT'&&
- x.body.code.length>0,true);
 assert.equal(r2.items.size,0);
 assert.deepEqual(new Set(r2.deletes),new Set([
  base+'journal.json',base+'base-1.json',

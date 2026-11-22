@@ -895,6 +895,34 @@ export const refreshCatalogSnapshotAfterKnownMutation = async (
   return promise;
 };
 
+// APP780: an explicit Music Note Sync click must actually verify the shared
+// R2 Catalog, even when the retained profile/version signal has not advanced.
+// This is GET-only, never bootstrap/rebuild/publish, and never runs on page entry.
+const catalogManualSyncReadInFlight780 = new Map<string, Promise<SoridrawCatalogSnapshot | null>>();
+export const readCatalogSnapshotForManualSync780 = async (
+  kind: SoridrawCatalogKind,
+  uid: string,
+): Promise<SoridrawCatalogSnapshot | null> => {
+  if (kind !== 'musicNote' || !uid || !isPreviewCatalogEnabled()
+    || auth.currentUser?.uid !== uid) return null;
+  const key = catalogKey(kind, uid);
+  const existing = catalogManualSyncReadInFlight780.get(key);
+  if (existing) return existing;
+  const promise = (async () => {
+    const local = await readCatalogSnapshotFromLocalCache(kind, uid);
+    const remote = await readRemoteCatalogSnapshot(
+      kind, uid, 0, local, false, true,
+    );
+    // The worker was older or unavailable; never claim a completed sync.
+    // The original local Catalog and pending favorite changes stay untouched.
+    if (!remote || (local && remote === local)) return null;
+    catalogLastReadSources.set(key, 'remote');
+    return remote;
+  })().finally(() => catalogManualSyncReadInFlight780.delete(key));
+  catalogManualSyncReadInFlight780.set(key, promise);
+  return promise;
+};
+
 // app517: Explicit owner-authenticated diagnostic only. This endpoint reads
 // exact shared R2 membership without legacy seeding, Firestore traversal,
 // IndexedDB writes or Catalog publication. Never invoke during page entry.

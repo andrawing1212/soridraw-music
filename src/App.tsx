@@ -11543,19 +11543,16 @@ const toggleCycleVariantSelection = (
 
     const uid = currentUser.uid;
     const localVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid);
-    const remoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, uid);
-    if (remoteVersion > 0 && localVersion >= remoteVersion) {
-      markCacheDiagnostic('musicNote', 'CACHE', 0);
-      return { ok: true, message: '변경된 뮤직노트가 없습니다.' };
-    }
-
+    // APP780: this is an explicit user-requested check, not a passive visit.
+    // Profile/RTDB version equality cannot prove two browsers' membership
+    // or that an older production Writer delivered an exact Catalog delta.
     let timeoutId: number | null = null;
     try {
       const timeoutPromise = new Promise<null>((_, reject) => {
         timeoutId = window.setTimeout(() => reject(new Error('MUSIC_NOTE_SYNC_TIMEOUT')), 8000);
       });
       const bundle = await Promise.race([
-        readListBundleFromServerOnce('musicNote', uid),
+        readListBundleFromServerOnce('musicNote', uid, { forceRemoteForManualMusicNote: true }),
         timeoutPromise,
       ]);
       if (!bundle) return { ok: false, message: '뮤직노트 변경 캐시가 아직 준비되지 않았습니다.' };
@@ -11572,18 +11569,33 @@ const toggleCycleVariantSelection = (
       });
       const previous = favoritesStore.getFavorites();
       const bundleVersion = Number(bundle.updatedAtMs || 0);
+      const catalogFavoriteIds = new Set(incoming.map((favorite: any) =>
+        String(favorite?.id || favorite?.firestoreId || '').trim()
+      ).filter(Boolean));
+      const latestCanonicalSignal = readPendingMusicNoteSyncSignal(uid);
+      const confirmedSaveId = latestCanonicalSignal
+        && ['save', 'restore', 'shared-note-save'].includes(latestCanonicalSignal.operation)
+        && latestCanonicalSignal.removed !== true
+        && Number(latestCanonicalSignal.version || 0) > Number(bundle.catalogRevision || 0)
+        ? String(latestCanonicalSignal.documentIds?.[0] || '').trim()
+        : '';
       const localNewer = (Array.isArray(previous) ? previous : []).filter((favorite: any) => {
         if (!favorite || isFavoriteSoftRemoved(favorite)) return false;
         if (isStudioHeartOptimisticFavorite(favorite)) return false;
         const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
         if (favoriteId && localDeletedIds.has(favoriteId)) return false;
+        // Absence in a possibly incomplete shared R2 Catalog is not a
+        // server-acknowledged deletion. Keep the browser's sole copy as
+        // provisional display only and NEVER publish it to shared R2.
+        if (confirmedSaveId && favoriteId === confirmedSaveId) return true;
+        if (favoriteId && !catalogFavoriteIds.has(favoriteId)) return true;
         const favoriteVersion = Number(favorite?.updatedAtMs || favorite?.createdAtMs || 0)
           || getTimestampMs(favorite?.updatedAt)
           || getTimestampMs(favorite?.createdAt)
           || 0;
         return bundleVersion > 0 && favoriteVersion > bundleVersion;
       });
-      const mergedFirstPage = mergeFavoritePages(localNewer, incoming);
+      const mergedFirstPage = mergeFavoritePages(incoming, localNewer);
       const merged = mergeFavoriteFirstPageWithCache(
         mergedFirstPage,
         Array.isArray(previous) ? previous : [],
@@ -11599,7 +11611,7 @@ const toggleCycleVariantSelection = (
       const nextLocalVersion = Math.max(localVersion, bundleVersion);
       if (nextLocalVersion > 0) writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, nextLocalVersion);
       markCacheDiagnostic('musicNote', 'SYNC', 1);
-      return { ok: true, message: '변경된 뮤직노트만 동기화했습니다.' };
+      return { ok: true, message: '공유 서버 목록을 다시 확인했습니다. 빠진 곡은 원본 확인이 필요합니다.' };
     } catch (error: any) {
       if (String(error?.message || '').includes('MUSIC_NOTE_SYNC_TIMEOUT')) {
         return { ok: false, message: '동기화 응답이 지연되어 중단했습니다. 다시 시도해주세요.' };

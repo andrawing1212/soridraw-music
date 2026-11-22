@@ -1,3 +1,14 @@
+## CURRENT — APP776 격리 QA HTTP 구형·신형 팔로우/취소 실제 통합 PASS, 운영 모든 Writer·Firebase Auth 연동 HOLD (2026-11-22 KST)
+
+- **승인 범위와 저장:** 디렉터 YES로 APP775의 공통 진입 판정 코드를 재사용하는 임시 격리 QA 전용 HTTP Worker를 기존 Cloudflare QA 계정에 1개 만들고 실제 QA D1 `soridraw-qa-app768-d1`·QA R2 `soridraw-qa-app768-r2`만 바인딩. [PR #1342](https://github.com/andrawing1212/soridraw-music/pull/1342) 병합 `a93e01c32120463003f20d2fd885039539bd0fce`. API 권한·QA DB/버킷 추가 생성, 실제 사용자/공유 자원/PRODUCTION/TEST/PREVIEW Worker·Firebase/Hosting 배포·변경 **0**.
+- **실제 실행 PASS:** [Actions #45017675502](https://github.com/andrawing1212/soridraw-music/actions/runs/45017675502) **SUCCESS**, 동일 QA 임시 HTTP `/v1/profiles/qa776OwnerSynthetic/follow`로 **구형 PUT 2건 병렬 → 실제 합성 D1 W1 1건만**, 신형 `followOperationId`·revision JSON을 이용한 **DELETE 2건 병렬 → 실제 합성 D1 W1 1건만**, 각각 동시 중복 요청에서 추가 정본 변경 0. 실제 QA R2 `onlyIf:{etagDoesNotMatch:'*'}` 조건부 PUT로 동일 operation ID 접수 1회만 반영, `following 0→1→0` 값 확인. 과거 구형 PUT 재전송 시 이전 R2 admission 객체 존재로 **409 차단**, 접근 키 누락 403 및 잘못된 owner 경로 404 확인. PR Node22 오프라인 mock D1/R2 HTTP 테스트 PASS [Actions #45017614436](https://github.com/andrawing1212/soridraw-music/actions/runs/45017614436). APP768/769/774 이전 물리 PASS는 재실행하지 않음.
+- **격리·정리 PASS:** 동일 실행의 `always()`에서 정확한 QA R2 접수 객체 2개 + `qa776_<random>` D1 합성 행 1개만 삭제, 부재 확인, **임시 APP776 Worker 삭제** PASS. 기존 QA Worker `soridraw-owner-qa-583` 원본 버전 `4ed70845-6a4b-4a80-9c51-ed95d0becc38` 100% 및 기존 QA D1/R2 각 1개 인벤토리 시작·종료 유지 PASS. QA 비용 별도 청구 실측은 미확인.
+- **입증 범위의 한계:** 실제 R2/D1을 통한 HTTP 경로였지만 **Firebase 서명 Auth/AppCheck·owner epoch·cutover/pending fence는 테스트가 입력한 합성 증거**다. 임시 테스트의 revision 1/2는 고정 fixture이며 장기 owner floor/DO PITR 이력이 아니다. 실제 APP557 기존 구형·미등록 owner canonical 우회 경로는 그대로 존재한다. 원래 활성 Worker·구형 앱 전체가 새 접수 경계를 통과한다는 증거, 실제 서비스 팔로우 D1 `rows_written<=2`, 완전한 operation ledger/삭제 보존 정책, PC↔모바일 사용자 실사용 및 안전한 장애 자동 복구는 **NOT_TESTED / FAIL-HOLD**. 앱 배포나 복구 기능 활성화 없음.
+- **재실행 방지:** 기존 재사용 workflow `.github/workflows/app768-qa-r2-conditional-race.yml`의 APP776 실제 QA `push` 트리거 제거, `live` 명시적 `if:false`. 오프라인 PR 검사는 보존. 임시 QA Worker/합성 데이터 재생성 자동 실행 0. APP765/767/770/772/775/776 실제 운영 복구 기본 OFF, APP737/738 PRODUCTION 릴리스 HOLD.
+- **다음 출시 안전 차단점:** 실제 서명된 actor Auth/owner enrollment 확인, 모든 활성·구형 Writer의 비우회 cutover와 구형 미등록 사용자 정상동작 보전, DO 전체 PITR 외부 immutable operation ledger/pending fence/revision floor, 실제 canonical W1~W2 및 R2 장기 요금/보존 삭제 검증. 위 항목은 새로운 독립 구현·고위험 공유 백엔드 변경 시 별도 승인 필요.
+
+---
+
 ## CURRENT — APP775 구형·신형 팔로우 공통 진입 OFF-only 계약 46개 오프라인 QA PASS, 실제 모든 Writer 통합 HOLD (2026-11-22 KST)
 
 - **디렉터 YES 승인 범위:** APP774 다음 승인 작업으로 구형 empty envelope와 신형 ordered envelope를 공통 서버 검증 조건으로 분류하는 source-only 코드·오프라인 QA. 실제 PREVIEW·TEST·PRODUCTION Worker·Firebase/RTDB/D1/R2/Hosting, 사용자 원본·공유 자원·보안 규칙·권한/토큰 **변경 0**. 기존 APP768/769/774 물리 QA PASS는 재실행하지 않음.

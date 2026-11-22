@@ -7,13 +7,6 @@ on:
       - 'scripts/app776-qa-integration-runner.mjs'
       - 'scripts/verify-776-qa-integration-offline.mjs'
       - '.github/workflows/app768-qa-r2-conditional-race.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/app776-qa-integration-worker.mjs'
-      - 'scripts/app776-qa-integration-runner.mjs'
-      - 'scripts/verify-776-qa-integration-offline.mjs'
-      - '.github/workflows/app768-qa-r2-conditional-race.yml'
 permissions:
   contents: read
 concurrency:
@@ -40,7 +33,7 @@ jobs:
           node --check scripts/verify-776-qa-integration-offline.mjs
           node scripts/verify-776-qa-integration-offline.mjs
   live:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'andrawing1212/soridraw-music'
+    if: false # APP776 approved one-shot QA completed; reenable only with new scope approval
     runs-on: ubuntu-24.04
     timeout-minutes: 13
     steps:

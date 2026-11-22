@@ -27,50 +27,31 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - name: Fail-closed QA-only Workload Identity boundary, no Google call
+      - name: Verify pinned QA identity only (no Google call)
         id: gate
         env:
-          QA_WIF_PROVIDER: ${{ vars.SORIDRAW_QA_WIF_PROVIDER }}
-          QA_SERVICE_ACCOUNT: ${{ vars.SORIDRAW_QA_SERVICE_ACCOUNT }}
+          QA_WIF_PROVIDER: projects/1083981050742/locations/global/workloadIdentityPools/soridraw-qa-github/providers/app518-readonly
+          QA_SERVICE_ACCOUNT: soridraw-qa-gh-reader@soridraw-app.iam.gserviceaccount.com
         shell: bash
         run: |
           set -euo pipefail
-          echo 'APP782_QA_FIREBASE_PROJECT=soridraw-app'
-          echo 'APP782_QA_FIREBASE_PROJECT_NUMBER=1083981050742'
-          echo 'APP782_PRODUCTION_CREDENTIALS=NOT_USED'
-          echo 'APP782_FIREBASE_MUTATIONS=0'
-          echo 'APP782_QA_FUNCTIONS_DEPLOY=0'
-          if [[ -z "$QA_WIF_PROVIDER" || -z "$QA_SERVICE_ACCOUNT" ]]; then
-            echo 'ready=false' >> "$GITHUB_OUTPUT"
-            echo 'APP782_QA_FIREBASE_WIF=HOLD_QA_GITHUB_IDENTITY_NOT_CONFIGURED'
-            exit 0
-          fi
-          if [[ ! "$QA_WIF_PROVIDER" =~ ^projects/1083981050742/locations/global/workloadIdentityPools/[a-zA-Z0-9_-]+/providers/[a-zA-Z0-9_-]+$ ]]; then
-            echo 'ready=false' >> "$GITHUB_OUTPUT"
-            echo 'APP782_QA_FIREBASE_WIF=HOLD_QA_WIF_PROVIDER_WRONG_PROJECT_OR_FORMAT'
-            exit 0
-          fi
-          if [[ ! "$QA_SERVICE_ACCOUNT" =~ ^[a-z][a-z0-9-]{4,62}@soridraw-app\.iam\.gserviceaccount\.com$ ]]; then
-            echo 'ready=false' >> "$GITHUB_OUTPUT"
-            echo 'APP782_QA_FIREBASE_WIF=HOLD_QA_SERVICE_ACCOUNT_WRONG_PROJECT_OR_FORMAT'
-            exit 0
-          fi
-          echo 'ready=true' >> "$GITHUB_OUTPUT"
-          echo 'APP782_QA_FIREBASE_WIF_CONFIG=QA_PROJECT_ONLY_PASS'
+          test "$QA_WIF_PROVIDER" = 'projects/1083981050742/locations/global/workloadIdentityPools/soridraw-qa-github/providers/app518-readonly'
+          test "$QA_SERVICE_ACCOUNT" = 'soridraw-qa-gh-reader@soridraw-app.iam.gserviceaccount.com'
+          echo 'APP782_QA_PROJECT=soridraw-app; QA_PROJECT_NUMBER=1083981050742'
+          echo 'APP782_QA_PROVIDER_AND_SERVICE_ACCOUNT=PINNED; REMOTE_IDENTITY=UNVERIFIED'
+          echo 'APP782_PRODUCTION_CREDENTIALS=NOT_USED; QA_MUTATIONS=0'
+          echo 'APP782_CLOUD_SHELL=NOT_USED'
       - name: Authenticate QA Google Cloud through short-lived GitHub OIDC
-        if: steps.gate.outputs.ready == 'true'
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.SORIDRAW_QA_WIF_PROVIDER }}
-          service_account: ${{ vars.SORIDRAW_QA_SERVICE_ACCOUNT }}
+          workload_identity_provider: projects/1083981050742/locations/global/workloadIdentityPools/soridraw-qa-github/providers/app518-readonly
+          service_account: soridraw-qa-gh-reader@soridraw-app.iam.gserviceaccount.com
           project_id: soridraw-app
           create_credentials_file: true
           export_environment_variables: true
       - name: Install Cloud SDK for QA metadata GET only
-        if: steps.gate.outputs.ready == 'true'
         uses: google-github-actions/setup-gcloud@v2
       - name: Query exact QA project number and existing Functions names only
-        if: steps.gate.outputs.ready == 'true'
         shell: bash
         run: |
           set -euo pipefail

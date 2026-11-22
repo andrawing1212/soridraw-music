@@ -6,6 +6,9 @@ const require=createRequire(import.meta.url);
 const app=require("./index.cjs");
 assert.deepEqual(Object.keys(app),["app518QaExactFavoriteSource"]);
 assert.equal(typeof app.app518QaExactFavoriteSource,"function");
+const source=require("node:fs").readFileSync(new URL("./index.cjs",import.meta.url),"utf8");
+assert(source.includes('serviceAccount:"soridraw-qa-app518-runtime@soridraw-app.iam.gserviceaccount.com"'),
+  "QA_RUNTIME_SA_PINNED");
 const request={method:"POST",url:"https://not-deployed.invalid",headers:{},
   rawBody:Buffer.from("{}")};
 const invoke=async()=>{

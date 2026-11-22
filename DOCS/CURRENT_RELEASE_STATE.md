@@ -1,3 +1,13 @@
+## CURRENT — APP782 QA GitHub OIDC ↔ Firebase 실제 인증·Functions 조회 PASS (2026-11-23 KST)
+
+- **실서버 인증 완료:** 디렉터가 일반 Chrome의 Google Cloud QA IAM 콘솔에서 정확 QA 서비스 계정 `soridraw-qa-gh-reader@soridraw-app.iam.gserviceaccount.com`, WIF Pool `soridraw-qa-github`, OIDC Provider `app518-readonly`를 생성하고 QA 서비스 계정 가장 접근 권한을 `repository_id=1188157610`에 한정해 연결. Firebase QA Project `soridraw-app` (Number `1083981050742`)만 사용하고 운영 프로젝트 계정/키는 사용하지 않음. WIF Provider의 매핑 `google.subject`/`attribute.repository_id`/`attribute.repository_owner_id`/`attribute.repository` 및 정확 workflow/event 제한은 디렉터의 콘솔 입력 캡처와 설정서를 따름. 실제 IAM 정책 내용의 별도 API 덤프 검증은 수행하지 않음.
+- **GitHub OIDC 실검증:** [Actions #45059378813](https://github.com/andrawing1212/soridraw-music/actions/runs/45059378813) `qa_firebase_auth_readonly` 완료/success. 실행 로그 **`APP782_QA_FIREBASE_WIF=PASS_SHORT_LIVED_GITHUB_OIDC`** 와 **`APP782_QA_FUNCTIONS_LIST_READ_ONLY=PASS`** 확인. Google Cloud `gcloud projects describe soridraw-app` ID/number 확인 및 `gcloud functions list --regions=asia-northeast3 --project=soridraw-app` 정상 완료. 이는 Google IAM/OIDC 토큰 교환 및 QA 함수 메타데이터 읽기 실제 PASS이며 Cloud Shell 미사용.
+- **Firebase QA 배포 함수 수:** 1개, 기존 `publishExploreOwnerFollower542` 확인. **`app518ExactFavoriteSource` 및 `app518FavoriteCatalogChanged` 둘 다 없음**. 따라서 APP518 실제 Firebase↔Cloudflare 합성곡 save→delete→resave→fault recovery E2E는 여전히 **NOT_TESTED/HOLD**.
+- **변경 범위:** QA Google IAM 서비스 계정/WIF 연결(디렉터가 승인 후 UI에서 구성), GitHub Actions 읽기 전용 검증 실행. Firebase Functions 배포 0, Firestore/Auth/RTDB/보안 규칙/QA 팔로우 기능 변경 0, 서비스 계정 JSON 키 생성 0, 운영 Firebase `soridraw-app-866a5` 접근 0, 공유 사용자 데이터 변경 0. 기존 Cloudflare APP781 PASS 재시험 없음.
+- **다음 독립 작업:** APP518 QA용 정확 한 곡 Firebase source/trigger 및 D1 QA-only migration, 검증된 release proof, 한정된 비용·원복 경계를 별도로 완성해야 실제 실전송 검증이 가능. APP782 읽기 전용 인증 PASS는 APP518 함수 배포 승인이나 종합 E2E PASS가 아님.
+
+---
+
 ## CURRENT — APP782 QA WIF 인증 경로 고정 / Google IAM 콘솔 신뢰 연결 생성 대기 (2026-11-23 KST)
 
 - **디렉터 승인:** 독립 Firebase QA `soridraw-app`에 국한된 GitHub Actions OIDC/WIF provider, 읽기 전용 서비스 계정 및 최소 권한 연결. 운영 프로젝트·공유 데이터·기존 팔로우 QA 변경/정식 배포 승인 아님.

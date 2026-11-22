@@ -1,3 +1,13 @@
+## CURRENT — APP780 기존 QA 자원 정확 식별 PASS / APP518 연결 차단점 좁힘 (2026-11-23 KST)
+
+- **실제 QA GET-only 정확 신원 검사 PASS:** [GitHub Actions #45053523562](https://github.com/andrawing1212/soridraw-music/actions/runs/45053523562), 실행 원본 `main` `9c23c332a5ec8ade61c4ef65e75bc182bb8d53bd`. 클라우드 독립 QA Account `b60fcd62c679c64db19f0b0e0c2f3429`에 존재하는 D1 1개=`soridraw-qa-app768-d1`, R2 1개=`soridraw-qa-app768-r2`, Worker 1개=`soridraw-owner-qa-583` **이름 정확 일치**. 그 외 APP518 전용 D1/R2/Worker 없음. 토큰 유효 및 QA metadata GET PASS, 작업 중 Cloudflare mutation=0.
+- **범위 구별:** D1·R2는 기존 APP768/769/774/776 합성 검증용 자원이며, 원래 Worker는 팔로우/APP583 QA 보호 대상. 기존 자원 사용 가능성의 확인은 APP518용 스키마, 임시 Worker, Firebase 연결을 증명하지 않음. 기존 팔로우 Worker 덮어쓰기 금지.
+- **APP518 원본 소스 실제 요구:** Draft PR #528 SHA `864f796da24413309567198c9de502b13cdedd50`는 `CATALOG_OUTBOX_518`, `ACCOUNT_D1_BUDGET_518` **두 바인딩**, QA R2 `CATALOG`, Firebase QA 정확 단건 소스/HMAC, 별도 신뢰된 QA 활성화 증거가 있어야만 `app518IsolatedQaWorker518.js`가 켜짐. 현재 QA D1은 1개 확인됨; 두 바인딩이 동일 DB를 재사용해도 안전한지는 미입증. Firebase QA 실제 exact-source Functions/로그인 연결도 미입증. 플래그 `VERIFIED`를 임의로 채우지 않음.
+- **비용 근거:** Cloudflare 디렉터 확인 요금제 Workers Free, R2 Paid/현재 가시적 R2 operations 청구액 $0.00. D1 Workers Free는 일별 하드쿼터에 도달하면 조회/쓰기가 실패하도록 Cloudflare가 제한. 그러나 R2 Standard 10GB·Class A/B 포함량 외 현재 잔여 사용량과 Firebase Blaze 실제 지출/예산 경보는 확인되지 않았으므로 *모든 비용 $0 보장* 주장은 하지 않음. 확인 기록은 `DOCS/QA_BILLING_BASELINE.md`에 유지; 동일 화면 반복 요구 금지.
+- **실행 범위와 결과:** 기존 격리 QA 메타데이터 조회만 실행; PR #528 원본 안전구조/사용자 원본/기존 QA Worker/공유 PREVIEW·TEST·PRODUCTION 배포 변경 없음. **APP518 Cloudflare↔Firebase 실제 합성 1곡 save→delete→resave 서버 연동 NOT_TESTED/HOLD**. 작업 완료 또는 QA PASS로 오표기 금지. 다음 실제 실행은 별도 QA 전용 Worker의 인증된 source/두 D1 바인딩/정확 한 곡 범위 및 bounded rollback을 사전 입증한 뒤에만. 새 테스트를 위해 운영 계정·공유 데이터 접근 또는 필수 proof bypass 금지.
+
+---
+
 ## CURRENT — APP780 QA 읽기 권한 해결 / QA 비용 기준 보존 / APP518 실서버 HOLD (2026-11-23 KST)
 
 - **실제 토큰 등록·검증 완료:** 디렉터가 독립 QA Cloudflare 계정에 한정된 D1 Read + Workers R2 Storage Read 토큰을 새 GitHub Actions Secret `CLOUDFLARE_QA_STORAGE_READ_TOKEN`에 직접 등록. 기존 `CLOUDFLARE_QA_API_TOKEN` 수정 없음. [APP780 Actions #45050388649](https://github.com/andrawing1212/soridraw-music/actions/runs/45050388649) `qa_storage_read_token_configured=true`, QA D1 GET PASS 1건, R2 GET PASS 1건, Worker GET PASS 1건, 공유 데이터 읽기·Cloudflare 변경 0. GitHub Actions의 성공은 **목록 조회 PASS**이지 APP518 합성곡 실서버 검증 PASS가 아님.

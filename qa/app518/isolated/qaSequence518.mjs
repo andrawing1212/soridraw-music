@@ -73,6 +73,7 @@ export async function runBoundedQaOneSong518({
     budget.reserve('httpRequests',1);
     if(index===2){
       stage='INJECT_SINGLE_R2_FAILURE';
+      budget.reserve('httpRequests',1);
       await actions.injectOneR2Failure({uid:pilot.uid,documentId:pilot.documentId});
     }
     stage='DISPATCH_'+index;
@@ -106,8 +107,8 @@ export async function runBoundedQaOneSong518({
     stage='BOOTSTRAP_EXACT_EMPTY_R2';
     budget.reserve('r2Reads',2);
     budget.reserve('r2Writes',2);
+    workerTouched=true; // even partial R2 seed must stop this exact temp Worker
     await seedEmptyQa518({proof,bucket,nowMs:now()});
-    workerTouched=true;
     const results=[];
     for(let i=0;i<kind.length;i++)results.push(await apply(kind[i],i));
     stage='STALE_REPLAY';
@@ -160,7 +161,7 @@ export async function runBoundedQaOneSong518({
       ||final?.pilotFirestoreDocs!==0)
       fail('HOLD_QA_FINAL_CLEANUP_NOT_VERIFIED');
     finished=true;
-    return {code:'QA518_ONE_SONG_CLOUD_VERIFIED_BY_ADAPTER',
+    return {code:'QA518_ONE_SONG_ADAPTER_SEQUENCE_COMPLETE',
       pilot,result:results,cleanup:cleanup.code,limits:budget.snapshot()};
   }catch(error){
     // Never erase D1 pending or an R2 journal when a previous stage failed:

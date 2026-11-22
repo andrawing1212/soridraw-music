@@ -1,0 +1,14 @@
+{
+  "functions": [
+    {
+      "source": "qa/app518/firebase",
+      "codebase": "app518qa",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log"
+      ]
+    }
+  ]
+}

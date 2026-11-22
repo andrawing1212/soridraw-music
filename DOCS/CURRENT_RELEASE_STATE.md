@@ -1,3 +1,12 @@
+## CURRENT — APP780 QA D1/R2 권한 직접 원인 확인 / 전용 Read Secret 등록 대기 (2026-11-23 KST)
+
+- **READ-only 토큰 실제 검증:** [Actions #45048741870](https://github.com/andrawing1212/soridraw-music/actions/runs/45048741870) 현재 GitHub `CLOUDFLARE_QA_API_TOKEN`은 사용자 소유 토큰 검증 `HTTP 200, active=true`, 기존 QA Worker 1건 조회 PASS, D1 목록 `401`·R2 버킷 목록 `403`. API 주소는 Cloudflare 문서상 정상, QA 토큰의 필요한 저장소 접근권한/대상 범위가 없다고 판단. PRODUCTION 계정 조회·변경 없음.
+- **연결 준비 GitHub 코드 완료:** 기존 APP780 검사 Workflow `app780-app518-isolated-resource-readonly.yml`에 새 `CLOUDFLARE_QA_STORAGE_READ_TOKEN` 전용 Secret 참조를 추가, 기존 `CLOUDFLARE_QA_API_TOKEN`은 **Worker GET·토큰 확인에만 유지**하여 과거 QA583/APP749 배포 경로 및 권한을 보호. 저장소 조회는 정확한 QA Account `b60fcd62c679c64db19f0b0e0c2f3429`에서만 D1 Read/R2 Storage Read 토큰으로 가능. **실제 토큰 발급, Cloudflare/GitHub Secret 등록·권한 변경은 아직 미실행.**
+- **연결 미설정 안전 중단 PASS:** [Actions #45048879029](https://github.com/andrawing1212/soridraw-music/actions/runs/45048879029) `qa_storage_read_token_configured=false`, D1/R2 `HOLD_QA_STORAGE_READ_TOKEN_NOT_CONFIGURED`, Worker GET PASS, QA Cloudflare mutations 0, 앱·사용자 원본 변경 0. Workflow 자체 success는 토큰 연결 또는 APP518 실서버 시험 PASS가 아님. 원격 실 QA **HOLD**.
+- **디렉터에게 필요한 단일 보안 설정:** Cloudflare의 **기존 독립 QA 계정에 한정** API Token 권한 `Account/D1 Read` + `Account/Workers R2 Storage Read`만 부여하고, 토큰 문자열은 채팅/코드가 아닌 GitHub Actions 저장소 Secret `CLOUDFLARE_QA_STORAGE_READ_TOKEN`에 직접 보관. 추가 Workers Edit/배포권한/공유 PROD 계정 접근권한 부여 금지. GitHub Secrets 직접 쓰기·Cloudflare 토큰 생성 도구는 이 채팅에 없어 연결은 사용자 관리 화면 작업 필요. Secret 등록 확인 후 기존 GET-only 재검사 1회만 실행, 실제 데이터 쓰기/QA D1/R2 생성·Worker·Functions 배포는 별도 승인.
+
+---
+
 ## CURRENT — APP780 격리 QA Cloudflare D1/R2 권한 부족 HOLD (2026-11-23 KST)
 
 - **디렉터 승인 범위:** 기존 독립 QA 자원으로 APP518(PR #528) 합성곡 1건 저장→삭제→재저장/늦은 요청 차단 실서버 시험; 공유 사용자 원본, PREVIEW/TEST/PRODUCTION Worker, D1/R2, Functions, RTDB, Rules 변경 금지. QA 신규 유료 자원/권한 확대/Secret/배포는 별도 명시 승인.

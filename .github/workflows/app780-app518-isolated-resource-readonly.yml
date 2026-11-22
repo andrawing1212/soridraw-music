@@ -351,3 +351,239 @@ jobs:
           test -d "$RUNNER_TEMP/app518-qa-inert-bundle"
           echo 'APP518_REAL_WRANGLER_BUNDLE=PASS_DRY_RUN'
           echo 'APP518_QA_DEPLOY=0; FIREBASE_OR_CLOUDFLARE_CALLS=0; ACTIVE_GATES=OFF'
+
+
+  qa_inert_stage:
+    # Owner-only single QA run: exact new Worker name, original Worker untouched.
+    # QA D1/R2 are bound but never queried/written. All app518 runtime flags OFF.
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 528 &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/app518-qa-inert-stage 864f796da24413309567198c9de502b13cdedd50'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 13
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 864f796da24413309567198c9de502b13cdedd50
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Exact resource isolation and inactive QA Worker config (GET only)
+        env:
+          CF_QA_WORKER_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CF_QA_STORAGE_TOKEN: ${{ secrets.CLOUDFLARE_QA_STORAGE_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 864f796da24413309567198c9de502b13cdedd50
+          cd cloudflare/media-worker
+          node --input-type=module <<'NODE'
+          import {readFileSync,writeFileSync} from 'node:fs';
+          import assert from 'node:assert/strict';
+          const ACCOUNT='b60fcd62c679c64db19f0b0e0c2f3429';
+          const PRODUCTION='e1a30fc9ef497fda1d34f4ab3dc1da45';
+          assert.notEqual(ACCOUNT,PRODUCTION);
+          const run=process.env.GITHUB_RUN_ID||'';
+          assert(/^[0-9]{8,20}$/.test(run),'QA_RUN_ID_REQUIRED');
+          const worker='soridraw-app518-qa-inert-'+run;
+          assert(/^soridraw-app518-qa-inert-[0-9]{8,20}$/.test(worker));
+          const token=process.env.CF_QA_WORKER_TOKEN||'';
+          const storage=process.env.CF_QA_STORAGE_TOKEN||'';
+          assert(token.length>=20&&storage.length>=20,'QA_TOKENS_REQUIRED');
+          const base='https://api.cloudflare.com/client/v4/accounts/'+ACCOUNT;
+          const read=async(path,credential)=>{
+            assert(path.startsWith('/'));
+            const r=await fetch(base+path,{
+              method:'GET',redirect:'error',
+              headers:{Authorization:'Bearer '+credential,Accept:'application/json'},
+              signal:AbortSignal.timeout(15000)
+            });
+            const j=await r.json().catch(()=>null);
+            return {status:r.status,success:j?.success,result:j?.result};
+          };
+          const [db,r2,list,dep,existing]=await Promise.all([
+            read('/d1/database?per_page=100&page=1',storage),
+            read('/r2/buckets?per_page=100',storage),
+            read('/workers/scripts?per_page=100',token),
+            read('/workers/scripts/soridraw-owner-qa-583/deployments',token),
+            read('/workers/scripts/'+worker,token)
+          ]);
+          for(const x of [db,r2,list,dep])assert(x.status===200&&x.success===true,
+            'QA_EXACT_ACCOUNT_METADATA');
+          assert.equal(existing.status,404,'QA_TEMP_NAME_MUST_NOT_EXIST');
+          const databases=Array.isArray(db.result)?db.result:db.result?.databases;
+          const buckets=Array.isArray(r2.result)?r2.result:r2.result?.buckets;
+          const workers=Array.isArray(list.result)?list.result:list.result?.scripts;
+          assert.equal(databases?.length,1);
+          assert.equal(databases[0]?.name,'soridraw-qa-app768-d1');
+          assert(/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(databases[0].uuid));
+          assert.equal(buckets?.length,1);
+          assert.equal(buckets[0]?.name||buckets[0]?.bucket_name,'soridraw-qa-app768-r2');
+          assert.equal(workers?.length,1);
+          assert.equal(workers[0]?.id||workers[0]?.name,'soridraw-owner-qa-583');
+          const active=dep.result?.deployments?.[0]?.versions;
+          assert.equal(active?.length,1);
+          assert.equal(active[0].version_id,'4ed70845-6a4b-4a80-9c51-ed95d0becc38');
+          assert(Number(active[0].percentage)>=99.99);
+          const c=JSON.parse(readFileSync('wrangler.app518-isolated-qa.jsonc.template','utf8'));
+          assert.equal(c.main,'./src/app518IsolatedQaWorker518.js');
+          c.account_id=ACCOUNT;c.name=worker;c.workers_dev=true;
+          c.vars.FIREBASE_PROJECT_ID='soridraw-app';
+          c.vars.FIREBASE_PROJECT_NUMBER='1083981050742';
+          c.vars.SORIDRAW_APP518_PILOT_UID='qa518-inert-owner-'+run;
+          c.vars.SORIDRAW_APP518_PILOT_FAVORITE_ID='qa518-inert-song-'+run;
+          c.vars.SORIDRAW_APP518_QA_ACCOUNT_ID_518=ACCOUNT;
+          c.r2_buckets[0].bucket_name='soridraw-qa-app768-r2';
+          assert.equal(c.d1_databases.length,2);
+          for(const b of c.d1_databases){
+            assert(['CATALOG_OUTBOX_518','ACCOUNT_D1_BUDGET_518'].includes(b.binding));
+            b.database_name='soridraw-qa-app768-d1';
+            b.database_id=databases[0].uuid;
+          }
+          assert.equal(c.keep_vars,false);
+          assert(!('routes' in c)&&!('triggers' in c)&&!('secrets' in c));
+          for(const k of ['SORIDRAW_CANONICAL_CATALOG_518',
+            'SORIDRAW_APP518_RELEASE_FENCES_VERIFIED',
+            'SORIDRAW_D1_ALL_ACCOUNT_WRITERS_518',
+            'SORIDRAW_D1_SHARED_ACCOUNT_LEDGER_518',
+            'SORIDRAW_APP518_QA_RELEASE_518'])
+              assert.equal(c.vars[k],'0');
+          writeFileSync('wrangler.app518-inert.generated.json',JSON.stringify(c),{mode:0o600});
+          writeFileSync(process.env.RUNNER_TEMP+'/app518-inert-name',worker,{mode:0o600});
+          console.log('APP518_QA_TEMP_WORKER_EXACT_ISOLATION=PASS; FLAGS_OFF; NEW_D1_R2=0');
+          NODE
+      - name: Compile exact isolated code; dry-run before a single QA upload
+        working-directory: cloudflare/media-worker
+        run: |
+          set -euo pipefail
+          npm install --ignore-scripts --no-audit --no-fund --no-save
+          npx --yes wrangler@4.147.0 deploy --dry-run \
+            --config wrangler.app518-inert.generated.json \
+            --outdir "$RUNNER_TEMP/app518-inert-bundle"
+          test -d "$RUNNER_TEMP/app518-inert-bundle"
+          echo 'APP518_QA_PRE_UPLOAD_INERT_BUNDLE=PASS'
+      - name: Upload only unique disabled QA Worker for one temporary check
+        working-directory: cloudflare/media-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -f "$RUNNER_TEMP/app518-inert-name"
+          test "$(cat "$RUNNER_TEMP/app518-inert-name")" = "soridraw-app518-qa-inert-$GITHUB_RUN_ID"
+          touch "$RUNNER_TEMP/app518-inert-upload-attempted"
+          npx --yes wrangler@4.147.0 deploy --config wrangler.app518-inert.generated.json
+          echo 'APP518_QA_INERT_TEMP_UPLOAD=PASS; FLAGS_OFF'
+      - name: One HTTP smoke; signed source is absent so 503 is mandatory
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const name=readFileSync(process.env.RUNNER_TEMP+'/app518-inert-name','utf8');
+          assert(/^soridraw-app518-qa-inert-[0-9]{8,20}$/.test(name));
+          const base='https://'+name+'.soridraw-qa.workers.dev';
+          let ok=false;
+          for(let i=0;i<12;i++){
+            try{
+              const r=await fetch(base+'/v1/server/catalog518',{
+                method:'POST',headers:{'Content-Type':'application/json'},
+                body:'{}',redirect:'manual',signal:AbortSignal.timeout(12000)
+              });
+              if(r.status===503){
+                const body=await r.json();
+                assert.equal(body?.code,'HOLD_ISOLATED_QA_NOT_AUTHORIZED');
+                const none=await fetch(base+'/unrelated',{
+                  method:'GET',redirect:'manual',signal:AbortSignal.timeout(12000)
+                });
+                assert.equal(none.status,404);
+                ok=true;break;
+              }
+              if(r.status!==404&&r.status!==522)
+                throw Error('APP518_QA_UNEXPECTED_HTTP_'+r.status);
+            }catch(e){
+              if(String(e?.message||'').includes('APP518_QA_UNEXPECTED_HTTP_'))
+                throw e;
+            }
+            if(i<11)await new Promise(r=>setTimeout(r,1800));
+          }
+          assert(ok,'APP518_QA_INERT_HTTP_NOT_CONFIRMED');
+          console.log('APP518_QA_INERT_REAL_HTTP_503_404=PASS; D1_R2_WRITES=0');
+          NODE
+      - name: Always delete ONLY this temporary QA Worker
+        if: always()
+        working-directory: cloudflare/media-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+        run: |
+          set -euo pipefail
+          f="$RUNNER_TEMP/app518-inert-name"
+          if [ ! -f "$f" ] || [ ! -f "$RUNNER_TEMP/app518-inert-upload-attempted" ]; then
+            echo 'APP518_QA_NO_UPLOAD_ATTEMPT_TO_CLEAN';exit 0
+          fi
+          name="$(cat "$f")"
+          test "$name" = "soridraw-app518-qa-inert-$GITHUB_RUN_ID"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          if ! npx --yes wrangler@4.147.0 delete --name "$name" --force \
+            --config wrangler.app518-inert.generated.json; then
+            echo 'APP518_QA_CLEANUP_WRANGLER_FAILED_TRY_EXACT_API'
+            NAME="$name" node --input-type=module <<'NODE'
+          const name=process.env.NAME||'',account=process.env.CLOUDFLARE_ACCOUNT_ID;
+          if(account!=='b60fcd62c679c64db19f0b0e0c2f3429'||
+            !/^soridraw-app518-qa-inert-[0-9]{8,20}$/.test(name)||
+            name!=='soridraw-app518-qa-inert-'+process.env.GITHUB_RUN_ID)
+            throw Error('APP518_QA_DELETE_SCOPE_INVALID');
+          const r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+account+
+            '/workers/scripts/'+name,{
+              method:'DELETE',redirect:'error',
+              headers:{Authorization:'Bearer '+process.env.CLOUDFLARE_API_TOKEN},
+              signal:AbortSignal.timeout(18000)
+            });
+          if(r.status!==200&&r.status!==404)
+            throw Error('APP518_QA_DELETE_HTTP_'+r.status);
+          NODE
+          fi
+          echo 'APP518_QA_TEMP_DELETE_ATTEMPT_COMPLETED'
+      - name: Verify temporary Worker absent and original QA untouched (GET only)
+        if: always()
+        env:
+          CF_QA_WORKER_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          f="$RUNNER_TEMP/app518-inert-name"
+          if [ ! -f "$f" ]; then echo 'APP518_QA_NO_DEPLOYMENT_ATTEMPT';exit 0; fi
+          node --input-type=module <<'NODE'
+          import {readFileSync} from 'node:fs';
+          import assert from 'node:assert/strict';
+          const account='b60fcd62c679c64db19f0b0e0c2f3429';
+          const base='https://api.cloudflare.com/client/v4/accounts/'+account;
+          const name=readFileSync(process.env.RUNNER_TEMP+'/app518-inert-name','utf8');
+          assert.equal(name,'soridraw-app518-qa-inert-'+process.env.GITHUB_RUN_ID);
+          const token=process.env.CF_QA_WORKER_TOKEN;
+          assert(token?.length>=20);
+          const get=async path=>{
+            const r=await fetch(base+path,{method:'GET',redirect:'error',
+              headers:{Authorization:'Bearer '+token,Accept:'application/json'},
+              signal:AbortSignal.timeout(15000)});
+            return {status:r.status,json:await r.json().catch(()=>null)};
+          };
+          const [temp,old]=await Promise.all([
+            get('/workers/scripts/'+name),
+            get('/workers/scripts/soridraw-owner-qa-583/deployments')
+          ]);
+          assert.equal(temp.status,404,'APP518_QA_TEMP_WORKER_LEFTOVER');
+          assert.equal(old.status,200,'APP518_QA_ORIGINAL_READ');
+          assert.equal(old.json?.success,true);
+          const ver=old.json.result?.deployments?.[0]?.versions;
+          assert.equal(ver?.length,1);
+          assert.equal(ver[0].version_id,'4ed70845-6a4b-4a80-9c51-ed95d0becc38');
+          assert(Number(ver[0].percentage)>=99.99);
+          console.log('APP518_QA_TEMP_ABSENT_AND_ORIGINAL_APP583_100=PASS');
+          NODE

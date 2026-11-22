@@ -102,11 +102,29 @@ jobs:
               report[key]={query:res.status,visible_count:res.items.length,
                 explicit_app518_qa_candidate_count:named.length};
             }
+            // APP518: pin the exact existing QA-only resources before any
+            // independent one-song cloud QA is even considered. Count-only
+            // evidence; do not print DB UUIDs, raw payloads, or credentials.
+            const onlyOneExact=(resource,name,getName)=>
+              resource.status==='PASS'&&resource.items.length===1&&
+              getName(resource.items[0])===name;
+            report.existing_qa_resources={
+              d1_name_exact:onlyOneExact(d1,'soridraw-qa-app768-d1',x=>x?.name),
+              r2_name_exact:onlyOneExact(r2,'soridraw-qa-app768-r2',x=>x?.name||x?.bucket_name),
+              worker_name_exact:onlyOneExact(workers,'soridraw-owner-qa-583',x=>x?.name||x?.id),
+            };
+            report.existing_qa_resources_exact=Object.values(report.existing_qa_resources)
+              .every(Boolean);
+            // The preexisting single QA D1 does not prove the two distinct
+            // account/outbox bindings required by APP518's manifest.
+            report.app518_required_outbox_budget_pair_proved=false;
             report.hold=d1.status!=='PASS'||r2.status!=='PASS'||workers.status!=='PASS'
               ?'QA_RESOURCE_METADATA_INCOMPLETE'
               :d1.items.length===0||r2.items.length===0
                 ?'APP518_QA_D1_OR_R2_NOT_PROVISIONED'
                 :'EXACT_APP518_QA_RESOURCE_PROOF_AND_WRITE_BILLING_AUTH_STILL_REQUIRED';
+            if(!report.existing_qa_resources_exact)
+              report.hold='EXACT_PREEXISTING_QA_RESOURCE_NAMES_UNVERIFIED';
             // A different account and matching resource names cannot authorize
             // Cloudflare writes, Firebase service deployment, or real user data access.
             console.log(JSON.stringify(report));

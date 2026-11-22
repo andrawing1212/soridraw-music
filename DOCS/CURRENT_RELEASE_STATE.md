@@ -1,3 +1,12 @@
+## CURRENT — APP785 QA 일괄 관리자 설정서·전용 Runtime 권한 고정 / 실서버 E2E HOLD (2026-11-23 KST)
+
+- 디렉터가 일반 Chrome에서 [QA Firestore 초기 화면]을 제공: 프로젝트 `soridraw-app`에 **Cloud Firestore '데이터베이스 만들기' 화면**이 표시됨. DB는 미생성으로 보이며, 기존 APP784 GitHub 읽기 서비스 계정의 실제 DB 목록 조회는 `PERMISSION_DENIED`였으므로 Firestore DB 존재를 인증 완료로 표시하지 않는다.
+- 매번 개별 스크린샷/권한 요청을 하지 않도록, [APP785 디렉터 최초 설정 일괄 안내](./APP785_QA_ONE_TIME_ADMIN_SETUP.md)에 **(default) Standard/Native Seoul·프로덕션 규칙, 독립 QA `soridraw-qa-gh-deployer`·`soridraw-qa-app518-runtime`, 제한된 배포/데이터 권한, 기존 WIF 재사용, Cloud Build Service Account User 범위 확인, QA 예산 보호**를 한 번에 정리. 기존 읽기 전용 `soridraw-qa-gh-reader`는 역할 확대하지 않음.
+- APP783 QA 전용 HTTPS Function 코드 `qa/app518/firebase/index.cjs`에 **실행 SA `soridraw-qa-app518-runtime@soridraw-app.iam.gserviceaccount.com` 명시**. 기본 Compute/운영 서비스 계정에 의존하지 않음. `verify.mjs`에서 해당 명시 바인딩을 정적 확인. [Actions #45062572749](https://github.com/andrawing1212/soridraw-music/actions/runs/45062572749) 실제 PR #528 고정 소스 컴파일/QA 함수 기본 OFF/운영 프로젝트 거절/1함수·0트리거 PASS; **실배포·DB 생성·Firestore 변경 0**.
+- **진행 상태:** Cloudflare APP781 PASS 및 GitHub→Firebase APP782 OIDC PASS 유지. APP784 Firestore 목록 `HOLD_PERMISSION_DENIED` 유지. 사용자 QA 초기 IAM·DB 구성 대기이며 GitHub 자동 배포/합성곡 E2E는 아직 `NOT_TESTED/HOLD`; 기존 팔로우 QA·공유 사용자 원본·PREVIEW·TEST·PRODUCTION 변경 없음. Cloudflare 자격증명/Blaze/토큰 정보를 반복 요구하지 않음.
+
+---
+
 ## CURRENT — APP784 QA Functions/APIs 읽기 전용 사전점검 / Firestore 메타데이터 403 HOLD (2026-11-23 KST)
 
 - **기준:** APP782 GitHub OIDC QA 인증 및 APP783 단일 Firebase QA function 소스 빌드 PASS 재사용; 별도 Functions/Firestore/D1/R2/cloud shell 재배포 없음. PR #528 SHA `864f796da24413309567198c9de502b13cdedd50`, main 검사 추가 후 최신.

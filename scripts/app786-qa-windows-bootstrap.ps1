@@ -106,8 +106,29 @@ Assert-Project
 Write-Host "PASS exact QA project $Project ($Number)"
 $providerInfo=GJson @('iam','workload-identity-pools','providers','describe',$Provider,"--workload-identity-pool=$Pool",'--location=global',"--project=$Project")
 $cond=[string]$providerInfo.attributeCondition
-foreach($required in @('1188157610','268937716','issue_comment','app782-app518-qa-firebase-wif-readonly.yml@refs/heads/main')){
-  if(!$cond.Contains($required)){Stop-Hold "Existing QA WIF provider condition missing $required"}
+$normalized=($cond -replace '\s+','')
+if($normalized.Contains('||') -or $normalized.Contains(' or ')){
+  Stop-Hold 'QA WIF provider contains an unapproved OR condition'
+}
+foreach($required in @(
+  "assertion.repository_id=='1188157610'",
+  "assertion.repository_owner_id=='268937716'",
+  "assertion.event_name=='issue_comment'",
+  "assertion.ref=='refs/heads/main'",
+  "assertion.workflow_ref=='andrawing1212/soridraw-music/.github/workflows/app782-app518-qa-firebase-wif-readonly.yml@refs/heads/main'"
+)){
+  if(!$normalized.Contains($required)){Stop-Hold "Existing QA WIF provider condition mismatch"}
+}
+$mapping=$providerInfo.attributeMapping
+foreach($entry in @(
+  @('google.subject','assertion.sub'),
+  @('attribute.repository_id','assertion.repository_id'),
+  @('attribute.repository_owner_id','assertion.repository_owner_id')
+)){
+  $mapped=$mapping.PSObject.Properties[$entry[0]]
+  if($null -eq $mapped -or [string]$mapped.Value -ne $entry[1]){
+    Stop-Hold 'Existing QA WIF provider attribute mapping mismatch'
+  }
 }
 if([string]$providerInfo.oidc.issuerUri -ne 'https://token.actions.githubusercontent.com'){
   Stop-Hold 'Unexpected OIDC issuer in QA provider'

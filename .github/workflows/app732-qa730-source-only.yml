@@ -36,11 +36,14 @@ jobs:
           mkdir -p "$RUNNER_TEMP/app732-preview/scripts"
           cp scripts/app730-source-only-follow-bridge.mjs "$RUNNER_TEMP/app732-preview/scripts/"
           cp scripts/verify-732-qa730-bridge.mjs "$RUNNER_TEMP/app732-preview/scripts/"
+          cp scripts/app775-unified-follow-ingress.mjs "$RUNNER_TEMP/app732-preview/scripts/"
           cp cloudflare/explore-worker/experiments/owner-follow-qa730-bridge.mjs \
             "$RUNNER_TEMP/app732-preview/cloudflare/explore-worker/experiments/"
           cp cloudflare/explore-worker/experiments/owner-follow-qa730-entry.mjs \
             "$RUNNER_TEMP/app732-preview/cloudflare/explore-worker/experiments/"
           cp cloudflare/explore-worker/experiments/owner-follow-qa-real-auth-749.mjs \
+            "$RUNNER_TEMP/app732-preview/cloudflare/explore-worker/experiments/"
+          cp cloudflare/explore-worker/experiments/owner-follow-qa-shadow-778.mjs \
             "$RUNNER_TEMP/app732-preview/cloudflare/explore-worker/experiments/"
           cd "$RUNNER_TEMP/app732-preview"
           node --check scripts/app730-source-only-follow-bridge.mjs

@@ -531,10 +531,7 @@ jobs:
           name="$(cat "$f")"
           test "$name" = "soridraw-app518-qa-inert-$GITHUB_RUN_ID"
           test -n "$CLOUDFLARE_API_TOKEN"
-          if ! npx --yes wrangler@4.147.0 delete --name "$name" --force \
-            --config wrangler.app518-inert.generated.json; then
-            echo 'APP518_QA_CLEANUP_WRANGLER_FAILED_TRY_EXACT_API'
-            NAME="$name" node --input-type=module <<'NODE'
+          NAME="$name" node --input-type=module <<'NODE'
           const name=process.env.NAME||'',account=process.env.CLOUDFLARE_ACCOUNT_ID;
           if(account!=='b60fcd62c679c64db19f0b0e0c2f3429'||
             !/^soridraw-app518-qa-inert-[0-9]{8,20}$/.test(name)||
@@ -549,8 +546,7 @@ jobs:
           if(r.status!==200&&r.status!==404)
             throw Error('APP518_QA_DELETE_HTTP_'+r.status);
           NODE
-          fi
-          echo 'APP518_QA_TEMP_DELETE_ATTEMPT_COMPLETED'
+          echo 'APP518_QA_TEMP_EXACT_API_DELETE=PASS; FINAL_GET_STILL_REQUIRED'
       - name: Verify temporary Worker absent and original QA untouched (GET only)
         if: always()
         env:

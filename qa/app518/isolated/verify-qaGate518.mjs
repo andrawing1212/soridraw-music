@@ -1,5 +1,8 @@
 // Node 22 source-only regression: no cloud connection, secrets, deploy, or data writes.
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {APP518_QA_MIGRATIONS,buildQaD1SchemaPlan518} from './qaD1Plan518.mjs';
 import {createHash,generateKeyPairSync,sign} from 'node:crypto';
 import {
  QA518,QA518_LIMITS,admitQa518,assertQaProof518,qaBootstrapPlan518,
@@ -197,3 +200,32 @@ assert.equal(buildAttestedQa518Handler(baseConfig).enabled,true);
 assert.equal(factoryInvoked,1);
 console.log('APP518_QA_CANDIDATE_HANDLER_ONLY_VIA_ATTESTED_BRIDGE=PASS');
 console.log('APP518_QA_SOURCE_ONLY_CLOUD_MUTATIONS=0; LIVE_E2E=NOT_TESTED');
+
+
+const candidateDirectory=process.env.APP518_PINNED_CANDIDATE_DIR;
+assert.ok(candidateDirectory,'APP518_PINNED_CANDIDATE_DIR_REQUIRED');
+const migrationFiles=Object.fromEntries(APP518_QA_MIGRATIONS.map(name=>
+ [name,readFileSync(join(candidateDirectory,'cloudflare/media-worker/migrations',name),'utf8')]));
+const exactSchema=buildQaD1SchemaPlan518({
+ proof,nowMs,files:migrationFiles,existingTableNames:['app768_qa_synthetic_follow'],
+});
+assert.equal(exactSchema.d1Id,d1Id);
+assert.equal(exactSchema.cloudMutations,0);
+assert.equal(exactSchema.statements.length,7);
+assert.equal(exactSchema.tableNames.length,5);
+assert.equal(exactSchema.indexNames.length,2);
+rejection(()=>buildQaD1SchemaPlan518({
+ proof,nowMs,files:migrationFiles,existingTableNames:['music_note_catalog_outbox_518'],
+}),'HOLD_QA_D1_MIGRATION_ALREADY_OR_PARTIALLY_PRESENT');
+const corruptSchema={...migrationFiles,[APP518_QA_MIGRATIONS[0]]:
+ migrationFiles[APP518_QA_MIGRATIONS[0]]+'; DROP TABLE app768_qa_synthetic_follow;'};
+rejection(()=>buildQaD1SchemaPlan518({
+ proof,nowMs,files:corruptSchema,existingTableNames:[],
+}),'HOLD_QA_D1_MUTATING_OR_UNKNOWN_SQL');
+const missingSchema={...migrationFiles};
+delete missingSchema[APP518_QA_MIGRATIONS[0]];
+rejection(()=>buildQaD1SchemaPlan518({
+ proof,nowMs,files:missingSchema,existingTableNames:[],
+}),'HOLD_QA_D1_SCHEMA_INPUT');
+console.log('APP518_QA_PINNED_MIGRATIONS_EXACT_SEVEN_DDL_STATEMENTS=PASS');
+console.log('APP518_QA_PARTIAL_SCHEMA_FOREIGN_DDL_AND_NONQA_D1_HOLD=PASS');

@@ -1,3 +1,15 @@
+## CURRENT — APP781 Cloudflare QA 임시 Worker 물리 배포·실 HTTP·정리 PASS / Firebase 정본 연동 HOLD (2026-11-23 KST)
+
+- **QA 계정 D1 스키마 실조회(읽기 전용):** [Actions #45054221644](https://github.com/andrawing1212/soridraw-music/actions/runs/45054221644). 정확 QA D1 `soridraw-qa-app768-d1` 존재, 원본 APP583 Worker immutable 버전 `4ed70845-6a4b-4a80-9c51-ed95d0becc38` 활성 100% 및 D1/R2 바인딩 없음 PASS. D1 `sqlite_master`의 정해진 테이블 이름만 1회 SQL `SELECT` 수행하여 기존 `app768_qa_synthetic_follow` 있음, APP518 outbox/index/budget 테이블 **아직 없음** 확인. API 메서드는 Cloudflare 명세상 **POST SELECT**지만 결과 `rows_written=0`; 사용자 원본 행 조회 없음.
+- **APP518 실제 소스 빌드와 기존 QA D1 재사용 검증:** [Actions #45054541922](https://github.com/andrawing1212/soridraw-music/actions/runs/45054541922). PR #528 고정 후보 `864f796da24413309567198c9de502b13cdedd50`의 `app518IsolatedQaWorker518.js`를 Wrangler 4.147.0으로 실제 번들링 `--dry-run` PASS. 새 D1 생성 없이 기존 QA D1 **한 개를 서로 다른 두 논리 바인딩** `CATALOG_OUTBOX_518`/`ACCOUNT_D1_BUDGET_518`에 지정하고 기존 QA R2 `soridraw-qa-app768-r2`를 `CATALOG`에 지정한 설정으로 PASS. 이 결과만으로 APP518 D1 원장/예산 테이블·실쓰기·총계정 quota 계측을 증명하지 않음.
+- **실제 독립 Cloudflare QA Worker 한시 배포/HTTP 성공:** [Actions #45054747523](https://github.com/andrawing1212/soridraw-music/actions/runs/45054747523) `completed/success`. 고유 실행 ID 이름의 APP518 QA 전용 임시 Worker 1개를 고정 QA Account에 **기능 OFF, 사용자·운영 도메인 연결 없음, cron/트리거 없음, QA D1·R2 바인딩만 구성**해 업로드. Workers.dev 실제 HTTP `POST /v1/server/catalog518` → `503 HOLD_ISOLATED_QA_NOT_AUTHORIZED`, 다른 경로 `GET` → `404` PASS. QA D1/R2 **행·객체 읽기/쓰기 0**, Firebase 요청 0, 운영 계정 접근 0.
+- **QA 자원 복원 확정:** Wrangler CLI 삭제가 비필수 KV 네임스페이스 조회 권한 `10000`으로 거절됐으나 같은 작업에서 **정확 임시 이름만 허용하는 Cloudflare API DELETE fallback 성공**. 삭제 후 임시 Worker GET 404, 원본 APP583 Worker 활성 버전 100% 유지 검증 PASS. 후속 커밋 `51160ec1c7de40e05436090d2ed8011576a7c502`은 이미 PASS한 직접 API DELETE를 기본 정리 경로로 고정(불필요한 KV 권한 확대 없음). **배포한 임시 Worker 잔존 0**.
+- **정리 후 실제 자원 수 재확인:** [Actions #45054875844](https://github.com/andrawing1212/soridraw-music/actions/runs/45054875844), 독립 QA Account D1 1개·R2 1개·원본 Worker 1개 각각 정확 이름 일치 GET PASS. QA 계정에 APP518 전용 영구 DB/버킷/Worker 추가 없음.
+- **엄격한 완료선:** Cloudflare **QA 일시 업로드·OFF 인증 경계·복원 실증 PASS**이나 **APP518 실제 Firebase QA Firestore 합성곡 1건 저장→삭제→재저장 → 서버 서명 → D1 원장/예산 예약 → R2 CAS/ACK → 재시도**는 **NOT_TESTED/HOLD**. Firebase QA 정확한 Functions/서비스 인증, QA-only DB migrations 및 계정 Writer/무료 한도·신뢰 증거는 아직 구축·검증되지 않았음. 기존 로컬 Emulator PASS를 원격 E2E PASS로 보고 금지.
+- **배포·데이터 보호:** `preview`, `TEST`, `PRODUCTION` 앱/Worker/Functions/보안규칙/공유 사용자 원본 변경 0; QA D1/R2 원본 행·객체 변경 0. 변경은 GitHub의 QA 전용 워크플로와 상태 기록, 일시 QA Worker 1개(최종 삭제 검증)만. 기존 QA 요금제 정보는 `DOCS/QA_BILLING_BASELINE.md`를 재사용하며 반복 요청하지 않음.
+
+---
+
 ## CURRENT — APP780 기존 QA 자원 정확 식별 PASS / APP518 연결 차단점 좁힘 (2026-11-23 KST)
 
 - **실제 QA GET-only 정확 신원 검사 PASS:** [GitHub Actions #45053523562](https://github.com/andrawing1212/soridraw-music/actions/runs/45053523562), 실행 원본 `main` `9c23c332a5ec8ade61c4ef65e75bc182bb8d53bd`. 클라우드 독립 QA Account `b60fcd62c679c64db19f0b0e0c2f3429`에 존재하는 D1 1개=`soridraw-qa-app768-d1`, R2 1개=`soridraw-qa-app768-r2`, Worker 1개=`soridraw-owner-qa-583` **이름 정확 일치**. 그 외 APP518 전용 D1/R2/Worker 없음. 토큰 유효 및 QA metadata GET PASS, 작업 중 Cloudflare mutation=0.

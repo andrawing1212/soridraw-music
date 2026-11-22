@@ -1,3 +1,12 @@
+## CURRENT — APP518 QA 격리 한곡 게이트·초기화·원복 소스와 Mock 검증 PASS / Live HOLD (2026-11-23 KST)
+
+- **현재 승인 범위는 소스 전용**이며 GitHub [Draft PR #1353](https://github.com/andrawing1212/soridraw-music/pull/1353) (`fix/app518-qa-isolated-controller`, base `main`)에만 신규 `qa/app518/isolated/*` 코드 5개를 저장. PR #528 (`864f796da24413309567198c9de502b13cdedd50`) 보호 구조·공유 앱·기존 QA583 Worker·Rules·Functions·UI 코드는 **변경 0**. main 미병합, PREVIEW/TEST/PRODUCTION 배포 없음.
+- **새 코드:** 서명된 별도 감사 키(보호된 공개키 SHA256)와 정확 QA Account `b60fcd62c679c64db19f0b0e0c2f3429`/Firebase `soridraw-app`/고정 PR 소스/기존 QA583 활성 버전/DB·R2·활성 deny-all hash/월 5,000KRW 알림 검증이 모두 일치할 때만 인메모리 신뢰 증명 발급; **env의 VERIFIED 문자열만으로 켜지지 않음**. GitHub 실행 ID에서 `qa518-{runId}-owner/song` 한곡만 도출. R2 빈 BASE/HEAD 2개 `onlyIf` 생성(기존 키 발견 시 HOLD), Worker 부재·QA583 복원·D1 pilot 0 등 확인 후 정확 두 키만 정리. PR #528 고정 D1 migration 3파일의 5표·2인덱스(총 7 DDL)만 계획, 부분 적용 기존 스키마면 HOLD. 최대 Firestore W6·D1 rowsWritten 예약96·R2 PUT8/GET32·HTTP18·2분의 **소스 수준 안전 상한**, 실제 클라우드 과금 실측 아님. 저장→서버 검증 hard-delete receipt→재저장→R2 장애 1회→유한 재시도→오래된 삭제 거부→정확 QA 자료 정리 또는 HOLD 상태 머신 추가.
+- **GitHub 시험 성공:** [Actions #45081586169](https://github.com/andrawing1212/soridraw-music/actions/runs/45081586169) (`completed/success`). Node 22 단독 테스트, PR #528 immutable SHA의 실제 SQL 파일을 Git worktree로 읽어 검사, 잘못된 서명·외부 소유자·다른 Worker/DB·파괴적인 DDL·부분 seed/원복·상한 초과 fail-closed, mock 서버 save/remove/resave/retry PASS. **실제 GCP/Cloudflare 인증·실서버 데이터 호출/쓰기 0**. 해당 검사만을 위한 일회성 Workflow는 PASS 이후 PR branch에서 제거; 최종 PR에는 남지 않음.
+- **남은 정확한 차단점:** 실제 Cloudflare/Firebase GET-only 관찰을 수집하고 **독립적으로 서명할 보호 키·릴리스 관리 실행기**는 아직 연결 안 됨. QA 전용 source/function 실제 배포·D1 518 migration·R2 seed·HMAC server transport·Firestore 합성곡 쓰기/정리 **전부 NOT_TESTED/HOLD**. 현 코드는 `qaGate`+일부 backend adapter 주입 규격이며 **완성된 live controller나 E2E 증거가 아님**. APP781/786/787 PASS 재사용, QA 개발 다음 승인 없이 운영 환경이나 공유 원본으로 대체 실험 금지.
+
+---
+
 ## CURRENT — APP518 실서버 합성곡 1건 승인 후 QA 릴리스 게이트 점검 / 실제 쓰기 HOLD (2026-11-23 KST)
 
 - **이번 승인 범위:** 격리 QA Firebase `soridraw-app`, Cloudflare 독립 QA 계정만 사용하여 합성곡 1건 save→remove→resave/장애 재전송, 필요한 최소 QA Function/Worker 배포 후 정확 원복. 운영·PREVIEW·TEST·PRODUCTION 및 공유 사용자 원본 변경 금지. 비용 상한·독립 신뢰·원복 불명확 시 쓰기 전에 중단.

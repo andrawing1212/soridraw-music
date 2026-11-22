@@ -1,0 +1,39 @@
+# APP518 isolated QA one-song admission and lifecycle (source only)
+
+Status: **SOURCE-ONLY / NO DEPLOYMENT / LIVE E2E HOLD**. This is not a production catalog writer, does not modify PR #528, and does not authorize live QA resource changes by merely being merged. No authenticated Cloudflare/Firebase adapter, public endpoint, or cloud mutation is exposed.
+
+## Existing proof reused
+- Fixed candidate: PR #528 at `864f796da24413309567198c9de502b13cdedd50`.
+- Firebase QA: `soridraw-app`, number `1083981050742`, default Firestore Standard/Native Seoul, live deny-all rules SHA256 `ecf30f940747dcc3c5ba4993093e9a11ac9fc5df7e14b2a1512d2446923d84eb` (APP787).
+- Cloudflare isolated QA account `b60fcd62c679c64db19f0b0e0c2f3429`, existing D1 `soridraw-qa-app768-d1` and R2 `soridraw-qa-app768-r2`. Existing QA583 Worker immutable version `4ed70845-6a4b-4a80-9c51-ed95d0becc38` must remain 100% active, with no D1/R2 bindings.
+- APP781 inert Worker temporary deploy→delete proof, APP786 Windows QA auth/bootstrap and APP787 Rules proof are historical PASS; do not replay them without changed evidence.
+
+## New source-only boundary
+
+`qaGate518.mjs` is a **Node 22 control-plane component**, not a Cloudflare Worker deploy entrypoint. It supplies:
+1. A signed and independently pinned Ed25519 release-evidence check. The trusted public-key SHA256 **must come from a protected independent approval source**, not the JSON/CLI/user field being verified. The signed payload fixes repository, immutable candidate SHA, CI run ID, QA account/DB/bucket/Firebase identities, exact pilot UID/document ID, spend/operation limits, a short expiry and a hash of a **fresh trusted GET-only resource observation**. Local unit tests use generated fake keys; these are never cloud authorization.
+2. A non-transferable in-process proof, never an environment string. Actual Cloudflare/Firebase GET evidence must be collected by an authenticated scoped release controller before any live trust claim. A fabricated snapshot/signature test is not equivalent to live proof.
+3. One fixed synthetic UID and document ID, derived from the bounded GitHub run ID: `qa518-{runId}-owner`, `qa518-{runId}-song`. No arbitrary user-supplied owner, full collection, or overwrite of another namespace.
+4. Empty v5 Music Note R2 BASE + journal HEAD generated with the existing `createEmptyCatalogJournal` helper and `canonicalAuthority518`; **exactly two create-only conditional PUTs**. Existing/partially seeded keys HOLD; no overwrite, no auto retry and no automatic deletion.
+5. Exact two-key cleanup only after an independently observed **temporary Worker absent**, original QA583 immutable Worker still active, zero pilot-scoped D1 rows and no other R2 writer. R2 deletion itself has no CAS: this is unsafe without the preceding live writer absence proof. Foreign object metadata or unexpected keys HOLD.
+6. A per-run finite quota counter; every attempt, including failed operations, consumes reserved budget. This is a safety guard, **not measured billing proof**. Limits: Firestore writes 4, D1 rows written 96, R2 PUT 8, R2 GET 32, HTTP requests 18, wall-clock 2 minutes. Hard stop on exhaustion; never automatically trigger another run.
+7. An attested adapter to the existing pinned `createApp518IsolatedQaHandler518` **factory**. It can pass `trustedIsolatedQaProof=true` only after signed exact proof. The candidate's default production-style Worker export remains OFF. Ordinary `VERIFIED` strings alone do not provide proof. No shared account or actual old Writer is switched.
+
+## Future live QA controller — required before any server mutation
+
+The source-only code intentionally has no permission to fetch live metadata, sign evidence, deploy a Worker/Function, run migrations, or write Firestore/D1/R2. A future authenticated QA controller must, in **one bounded release run**, prove all of these before calling the pure gate:
+
+- Read exact active QA account Worker list, 100% immutable version and bindings **at execution time**, not just rely on the earlier APP781 PASS. Only original QA583 exists before staging and it has zero D1/R2 bindings; check all routes, cron and indirect account writers. The existing QA D1 UUID must match the proof, and QA R2 bucket name must match. No operating account or shared D1/R2 is ever queried. Existing Workers Free/R2 Paid and KRW 5,000 monthly *alert* are not a hard cap.
+- Independently attest that the QA account has no other D1 writers; only then may the isolated factory's account-ledger flags be set. **Never** use this as a pretext for `ENABLED_AFTER_SHARED_ROLLOUT` on production/shared accounts. No change to existing QA583 bindings.
+- Obtain an externally signed, short-lived proof using the separately pinned auditor public-key hash. Verify fresh QA Firebase function identity/version and an exact QA-only pilot Firestore client deny-all rule. The existing `qa/app518/firebase/index.cjs` remains OFF until its dedicated function is explicitly staged and inspected. No default Function codebase overwrite.
+- Check only the exact pilot prefix is absent. Provision the **existing pinned PR #528** 518 migrations into QA D1 if approved, never apply `DROP`, reset unrelated tables, or recreate D1. No unmetered other Writer; use the metered ledger under the actual QA account.
+- Seed exactly the empty QA owner journal BASE/HEAD, verify content/ETag, then activate only the isolated Worker from pinned candidate and the one exact QA function. Existing QA583 remains 100%. The temporary Worker must use a unique run ID, no custom domain, no cron, min instances 0, max instances 1; source transport must be signed HMAC, no public client authentication bypass.
+- Synthetic song only: save → signed server exact-read/enqueue → wait for R2 CAS and exact D1 ACK → mark removed → repeat → resave → drop one attempt/503 → retry bounded by the deadline → ensure current song survives older stale save/delete. D1/R2/Firestore actual rows/objects, timing, retries and API billing must be recorded without secrets. No operation on actual user IDs.
+- On success/failure, stop/delete exact temporary Worker, confirm absence and QA583 original version/bindings, delete only the pilot-scoped D1 entries and R2 two-key namespace, and exact synthetic Firestore record/receipt. If cannot prove ownership, no cleanup deletion: **HOLD with evidence** rather than risk other data. Release any temporary QA IAM grant. Do not alter the APP787 already-revoked Viewer role.
+- Never claim W1/W2, R0/W0, same-account PC↔mobile, or real save/delete E2E PASS from this unit test. Verify these with an approved isolated real run and later explicit user-device testing.
+
+## Test
+
+Run `node qa/app518/isolated/verify-qaGate518.mjs` (Node 22; no cloud credentials). Tests verify signed-key trust, actual-snapshot mismatch, foreign account and Writer refusal, all-budget exhaustion, untrusted default factory OFF, R2 conditional seed/restart/partial failure, and exact cleanup.
+
+**Operational state:** user-approved source-only development; QA deployments, database migrations, QA synthetic writes, live signed evidence and final cleanup have **not** occurred in this change. TEST/PRODUCTION/PREVIEW and shared user data are untouched.

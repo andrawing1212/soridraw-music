@@ -57,6 +57,11 @@ if(command==='--bootstrap'){
  assert.equal(noToken.status,403,'MUST_DENY_UNSIGNED_R2_INSPECT');
  const before=await call('inspect');
  assert.equal(before.code,'QA518_R2_PREFIX_EMPTY','MUST_BE_EMPTY');
+ // Check that exact rollback prerequisites REALLY work before ANY R2 write:
+ // self Worker + original QA583 only, original version, D1 pilot rows zero.
+ const cleanupReady=await call('cleanup',true);
+ assert.equal(cleanupReady.code,'QA518_R2_ALREADY_ABSENT',
+  'MUST_PROVE_RESTORE_PATH_BEFORE_ANY_WRITE');
  const seeded=await call('bootstrap');
  assert.equal(seeded.code,'QA518_R2_BOOTSTRAP_EXACT_TWO_KEYS_PASS');
  const after=await call('inspect');

@@ -1,3 +1,13 @@
+## CURRENT — APP518 실서버 합성곡 1건 승인 후 QA 릴리스 게이트 점검 / 실제 쓰기 HOLD (2026-11-23 KST)
+
+- **이번 승인 범위:** 격리 QA Firebase `soridraw-app`, Cloudflare 독립 QA 계정만 사용하여 합성곡 1건 save→remove→resave/장애 재전송, 필요한 최소 QA Function/Worker 배포 후 정확 원복. 운영·PREVIEW·TEST·PRODUCTION 및 공유 사용자 원본 변경 금지. 비용 상한·독립 신뢰·원복 불명확 시 쓰기 전에 중단.
+- **재사용한 PASS:** APP786 QA Windows 초기설정 및 배포자 GitHub OIDC [#45074260938](https://github.com/andrawing1212/soridraw-music/actions/runs/45074260938), APP787 실제 활성 Firestore deny-all [#45079320076](https://github.com/andrawing1212/soridraw-music/actions/runs/45079320076)와 Viewer 임시 IAM 회수, APP781 QA 일시 OFF Worker 배포→복원 [#45054747523](https://github.com/andrawing1212/soridraw-music/actions/runs/45054747523), QA D1 Schema/리소스 선행 확인. 중복 검사·재배포 없음.
+- **직접 코드 차단 확인:** Draft PR #528 고정 SHA `864f796da24413309567198c9de502b13cdedd50`의 `cloudflare/media-worker/src/app518IsolatedQaWorker518.js`는 기본 export에 `trustedIsolatedQaProof`가 없어 실제 요청이 항상 OFF(503). `qaScopeValid`/R2 provider는 `SORIDRAW_CANONICAL_CATALOG_518=ENABLED_AFTER_SHARED_ROLLOUT` 및 공유 Writer·D1 account-wide ledger 독립 검증을 요구하는데, 운영 공유 Writer cutover는 QA 승인 범위 밖이며 QA 독립 릴리스 증거 대체 경로 없음. `catalogR2Provider518.js`는 `canonicalAuthority518`가 이미 붙은 정본 R2 HEAD/BASE를 요구하지만 QA 1곡 시작용 인증된 초기화·원복 경로가 없음. `qa/app518/firebase/index.cjs`는 OFF 기본값인 HTTPS 조회 함수 1개뿐이고 자동 이벤트/dispatcher는 미배포. D1 APP518 migration 3개는 dormant이며 선행 QA schema 조회에서 누락 확인. 이 상태로 쓰면 실제 검증이 아니며 임의 `VERIFIED` flag 주입 금지.
+- **실행 결과:** GitHub `preview` `4e8748236d59444ce4a23d5611e22323c4ea221d`, `main` 현재 기준 및 PR #528 확인. 이번 승인 이후 **QA 배포/Firestore 합성 데이터 쓰기/D1 migration/R2 seed/Worker 활성화 0**; 코드 및 기존 기능 수정 0. 실제 save→remove→resave **NOT_TESTED/HOLD**, 사전 PASS를 실사용 PASS로 격상하지 않음.
+- **다음 필요한 단일 개발 범위:** 운영 공유 cutover와 분리된 **QA 전용 신뢰 증명·정확 1곡 D1 쓰기 상한·R2 HEAD/BASE 안전 초기화·유한 재시도/정확 정리 컨트롤러**를 source-only로 설계·검증해야 함. 단순 환경변수 우회·전역 ledger 임의 `VERIFIED` 선언 금지. 독립 비용/기존 QA583 무변경/복원 증거가 확보되어야 실제 QA 배포 및 합성 쓰기 허용. 새로운 QA DB/R2 과금 자원 생성은 범위·비용 별도 승인 전 금지.
+
+---
+
 ## CURRENT — APP787 QA Firestore 활성 규칙 실검증 PASS·임시 Viewer 권한 회수 PASS (2026-11-23 KST)
 
 - **정확한 QA 한정:** Firebase QA `soridraw-app` (프로젝트 번호 `1083981050742`)만 확인. [PR #1352](https://github.com/andrawing1212/soridraw-music/pull/1352) 병합 `cd68058d16c476abd053fc5d98423b521741fce8`: 기존 APP782 owner-only/OIDC QA reader 워크플로에 활성 `cloud.firestore` release→ruleset **GET 두 건**의 검증 추가. 기존 APP786 QA/Cloudflare PASS 재시험 불필요.

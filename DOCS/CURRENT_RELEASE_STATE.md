@@ -1,3 +1,12 @@
+## CURRENT — APP786 Windows QA 초기설정 PASS + GitHub QA deployer admission PASS (2026-11-23 KST)
+
+- **Windows 실제 QA 설정 완료 (디렉터 화면):** `APP786_QA_BOOTSTRAP_PASS`. 정확 QA Firebase `soridraw-app` / 번호 `1083981050742`, 기존 GitHub WIF 조건 확인, 한 프로젝트에만 적용된 `5000KRW/month` 예산 알림, Seoul Firestore `(default)` Standard/Native, QA 전용 Runtime/Deployer 서비스 계정 2개, QA 한정 프로젝트 IAM 6건·서비스 계정 IAM 3건, QA HMAC Secret 접근 완료. 기존 자원은 재생성 없이 SKIP. 보안키 원문·서비스 계정 JSON 키 노출/생성 없음. **예산은 지출 차단 한도가 아님**.
+- **GitHub 원격 읽기 검증 PASS:** 기존 main 워크플로에 PR #528 댓글 `/app518-qa-deployer-admission 864f796da24413309567198c9de502b13cdedd50`를 저장소 소유자 계정으로 1회 제출; [Actions #45074260938](https://github.com/andrawing1212/soridraw-music/actions/runs/45074260938) `completed/success`. 실제 job 로그에 `APP786_QA_DEPLOYER_GITHUB_OIDC=PASS`, `APP786_QA_DEFAULT_FIRESTORE_METADATA=PASS`, `APP786_QA_EXISTING_FOLLOW_FUNCTION=PASS`, `APP786_QA_CLOUD_MUTATIONS=0; QA_APP518_E2E=NOT_TESTED` 모두 확인. 기존 팔로우 함수 조회 정상, APP518 배포 함수 없음.
+- **복구 코드:** [PR #1351](https://github.com/andrawing1212/soridraw-music/pull/1351) 에 Windows KRW/QA 단일 프로젝트 예산 확인·부분 적용 재개·PowerShell 5.1 SA 바인딩 빈 목록 `.Count` 수정을 저장했으나 **main 미병합**. 앱/Cloudflare/공유 데이터/TEST/PRODUCTION 배포 0.
+- **다음 범위 구분:** APP786 초기 관리자 구성 + GitHub 인증/읽기 검증 완료. QA 클라이언트 Firestore Rules deny-all, QA-only APP518 Function/Worker 실배포·Cloudflare D1/R2 실제 쓰기 및 합성곡 1건 save→delete→resave/retry는 **NOT_TESTED/HOLD**. 신규 백엔드 배포·규칙/데이터 변경은 비용·원복 경계 검증 및 디렉터 승인 없이는 강행하지 않음. APP786 임시 deployer IAM 권한은 **2026-12-02 00:00 KST 만료조건**; 실제 회수는 미검증.
+
+---
+
 ## CURRENT — APP786 Windows QA 관리자 1회 자동 설정 스크립트 준비·Windows 정적 검사 PASS / 실적용 대기 (2026-11-23 KST)
 
 - **디렉터 현재 지시:** 관리 화면을 하나씩 확인시키지 말고 Windows Google Cloud CLI 한 번 로그인 후 APP518 QA 초기 관리자 권한/자원 설정을 **한 번에** 실행. 짧고 핵심만 보고. Cloud Shell·Codex Linux 인증 재시도 금지.

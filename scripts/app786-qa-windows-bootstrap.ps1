@@ -15,7 +15,6 @@ $Reader='soridraw-qa-gh-reader@soridraw-app.iam.gserviceaccount.com'
 $Deployer='soridraw-qa-gh-deployer@soridraw-app.iam.gserviceaccount.com'
 $Runtime='soridraw-qa-app518-runtime@soridraw-app.iam.gserviceaccount.com'
 $SecretName='SORIDRAW_CATALOG_SERVER_HMAC_518'
-$BudgetName='SORIDRAW-APP518-QA-MONTHLY-5USD'
 $Expires='2026-12-01T15:00:00Z'
 $TemporaryCondition="expression=request.time < timestamp('$Expires'),title=APP518_QA_TEMP_TO_20261202,description=QA_ONLY_AUTO_EXPIRES"
 $Principal="principalSet://iam.googleapis.com/projects/$Number/locations/global/workloadIdentityPools/$Pool/attribute.repository_id/$RepoId"
@@ -79,7 +78,7 @@ function Ensure-ServiceAccount([string]$id){
 }
 function Ensure-SaRole([string]$sa,[string]$member,[string]$role,[bool]$temporary){
   $policy=GJson @('iam','service-accounts','get-iam-policy',$sa,"--project=$Project")
-  $exists=Find-MemberRole $policy $role $member
+  $exists=@(Find-MemberRole $policy $role $member)
   if($exists.Count -gt 0){Write-Host "SKIP SA binding: $role";return}
   $cond=if($temporary){$TemporaryCondition}else{'None'}
   G @('iam','service-accounts','add-iam-policy-binding',$sa,"--project=$Project","--member=$member","--role=$role","--condition=$cond",'--quiet')|Out-Null
@@ -153,12 +152,48 @@ if($billing.billingEnabled -ne $true -or [string]$billing.billingAccountName -no
   Stop-Hold 'QA billing connection not verified'
 }
 $billingId=([string]$billing.billingAccountName).Substring('billingAccounts/'.Length)
-$budgets=@(Rows (GJson @('billing','budgets','list',"--billing-account=$billingId")))
-$existingBudget=@($budgets|Where-Object {
-  $_.displayName -eq $BudgetName -and (@($_.budgetFilter.projects) -contains "projects/$Number")
-})
-if($existingBudget.Count -eq 0){Write-Host 'PLAN $5/month QA-only budget alert'}
-else{Write-Host 'PASS existing QA-only $5 budget alert'}
+$billingAccount=GJson @('billing','accounts','describe',$billingId)
+$currency=[string]$billingAccount.currencyCode
+switch($currency){
+  'KRW' { $BudgetName='SORIDRAW-APP518-QA-MONTHLY-5000KRW'; $BudgetAmount='5000KRW'; $BudgetUnits=5000 }
+  'USD' { $BudgetName='SORIDRAW-APP518-QA-MONTHLY-5USD'; $BudgetAmount='5USD'; $BudgetUnits=5 }
+  default { Stop-Hold 'Unsupported QA billing currency. No budget created.' }
+}
+# Resume-only protection: a previous -Apply already returned from budget creation.
+# Parse JSON before filtering; piping ConvertFrom-Json directly into Where-Object
+# on Windows PowerShell 5.1 can treat the entire JSON array as one object.
+$budgetJson=G @('billing','budgets','list',"--billing-account=$billingId",'--format=json','--quiet')
+try{$budgetList=ConvertFrom-Json -InputObject $budgetJson}
+catch{Stop-Hold 'QA billing budget list JSON could not be parsed'}
+$budgets=@()
+foreach($budget in $budgetList){
+  if($null -eq $budget -or $null -eq $budget.PSObject.Properties['displayName']){
+    Stop-Hold 'Unexpected QA billing budget list item'
+  }
+  $budgets+=,$budget
+}
+$sameName=@()
+foreach($budget in $budgets){
+  if([string]$budget.displayName -ceq $BudgetName){$sameName+=,$budget}
+}
+if($sameName.Count -gt 1){Stop-Hold 'More than one budget with the exact QA name; no changes'}
+if($sameName.Count -eq 0){
+  Stop-Hold 'Previously created QA budget is not visible; new budget creation blocked to prevent duplicates'
+}
+$qaBudget=$sameName[0]
+$scope=@($qaBudget.budgetFilter.projects | Where-Object {$null -ne $_})
+$qaProjectId="projects/$Project"
+$qaProjectNumber="projects/$Number"
+if($scope.Count -ne 1 -or
+   ($scope[0] -cne $qaProjectId -and $scope[0] -cne $qaProjectNumber)){
+  Stop-Hold 'Named QA budget scope is not exactly the QA project (ID or canonical number)'
+}
+$amount=$qaBudget.amount.specifiedAmount
+if($null -eq $amount -or [string]$amount.currencyCode -cne $currency -or
+   [decimal]$amount.units -ne $BudgetUnits){
+  Stop-Hold 'Named QA budget amount/currency mismatch'
+}
+Write-Host "PASS existing QA-only $BudgetAmount budget alert (exact single project verified)"
 $buildInfo=GJson @('builds','get-default-service-account',"--project=$Project","--region=$Region")
 $buildRef=[string]$buildInfo.serviceAccountEmail
 if($buildRef -notmatch ('^projects/[^/]+/serviceAccounts/'+[regex]::Escape($Number)+'(-compute@developer\.gserviceaccount\.com|@cloudbuild\.gserviceaccount\.com)$')){
@@ -177,10 +212,6 @@ if([DateTimeOffset]::UtcNow -gt [DateTimeOffset]::Parse($Expires).AddDays(-1)){
 Write-Host 'ABOUT TO MODIFY QA ONLY: budget, optional Firestore, two SAs, limited IAM, one HMAC secret.'
 $answer=(Read-Host 'Type EXACTLY SORIDRAW-QA to proceed')
 if($answer -cne 'SORIDRAW-QA'){Stop-Hold 'No confirmation; no resources changed'}
-if($existingBudget.Count -eq 0){
-  G @('billing','budgets','create',"--billing-account=$billingId","--display-name=$BudgetName",'--budget-amount=5USD','--calendar-period=month',"--filter-projects=projects/$Number",'--threshold-rule=percent=0.5','--threshold-rule=percent=0.9','--threshold-rule=percent=1.0','--quiet')|Out-Null
-  Write-Host 'PASS QA $5 monthly alert (NOT a hard spending cap)'
-}
 if($default.Count -eq 0){
   G @('firestore','databases','create',"--project=$Project",'--database=(default)',"--location=$Region",'--type=firestore-native','--edition=standard','--delete-protection','--quiet')|Out-Null
   $created=GJson @('firestore','databases','describe','--database=(default)',"--project=$Project")

@@ -1,0 +1,30 @@
+name: APP780 Music Note manual server check (Hosting source only)
+
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'src/lib/userDataEngine.ts'
+      - 'src/lib/adaptiveListIndexV2.ts'
+      - 'src/lib/listBundleCache.ts'
+      - 'src/App.tsx'
+      - 'scripts/verify-780-music-note-manual-server-check.mjs'
+      - '.github/workflows/verify-780-music-note-manual-server-check.yml'
+permissions:
+  contents: read
+jobs:
+  manual_source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - name: APP780 bounded explicit GET/no-write regression
+        run: node scripts/verify-780-music-note-manual-server-check.mjs
+      - name: TypeScript and build
+        run: |
+          npx tsc --noEmit
+          npm run build

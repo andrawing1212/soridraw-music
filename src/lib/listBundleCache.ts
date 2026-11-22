@@ -2,7 +2,7 @@ import { doc, getDocFromServer, serverTimestamp, setDoc, updateDoc } from './fir
 import { db } from '../firebase';
 import { isMusicNoteItemRemoved } from './musicNoteSavedState';
 import { markCacheDiagnosticWrite } from './cacheDiagnostics';
-import { isPreviewAdaptiveListIndexEnabled, readPreviewAdaptiveListIndexV2 } from './adaptiveListIndexV2';
+import { isPreviewAdaptiveListIndexEnabled, readPreviewAdaptiveListIndexV2, readPreviewAdaptiveListIndexManualServer780 } from './adaptiveListIndexV2';
 import { USER_PROFILE_CACHE_EVENT } from './userProfileCache';
 import { readCatalogProfileRevision, shouldRefreshCatalogForProfile } from './catalogWarmCachePolicy';
 
@@ -502,9 +502,12 @@ export const subscribeListBundle = (
 export const readListBundleFromServerOnce = async (
   kind: ListBundleKind,
   uid: string,
+  options: { forceRemoteForManualMusicNote?: boolean } = {},
 ): Promise<ListBundleSnapshot | null> => {
   if (!uid) return null;
-  const adaptiveBundle = await readPreviewAdaptiveListIndexV2(kind, uid);
+  const adaptiveBundle = options.forceRemoteForManualMusicNote === true && kind === 'musicNote'
+    ? await readPreviewAdaptiveListIndexManualServer780(kind, uid)
+    : await readPreviewAdaptiveListIndexV2(kind, uid);
   if (adaptiveBundle) return adaptiveBundle;
   if (isPreviewAdaptiveListIndexEnabled()) return null;
   const snapshot = await getDocFromServer(getBundleRef(kind, uid));

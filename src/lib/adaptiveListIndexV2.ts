@@ -1,5 +1,6 @@
 import {
   readCatalogSnapshotCacheFirst,
+  readCatalogSnapshotForManualSync780,
   readLastCatalogReadSource,
   scheduleCatalogSnapshotPublishIfDirty,
   type SoridrawCatalogKind,
@@ -93,6 +94,30 @@ export const readPreviewAdaptiveListIndexV2 = async (
     updatedAtMs: snapshot.generatedAtMs,
     catalogRevision: snapshot.revision,
     fromCache: readLastCatalogReadSource(kind, uid) === 'cache',
+  };
+};
+
+// Explicit existing manual Sync button only. Not called during normal navigation,
+// and deliberately refuses a partial local or older remote Catalog.
+export const readPreviewAdaptiveListIndexManualServer780 = async (
+  kind: AdaptiveListIndexKind,
+  uid: string,
+): Promise<AdaptiveListIndexSnapshot | null> => {
+  if (kind !== 'musicNote' || !uid || !isPreviewAdaptiveListIndexEnabled()) return null;
+  const snapshot = await readCatalogSnapshotForManualSync780(kind, uid);
+  if (!snapshot) return null;
+  const finalItem = snapshot.items[snapshot.items.length - 1];
+  return {
+    schemaVersion: 1001,
+    kind,
+    items: snapshot.items,
+    itemCount: snapshot.itemCount,
+    cursorCreatedAtMs: finalItem ? getItemCreatedAtMs(finalItem) : 0,
+    hasMore: false,
+    deletedIds: [],
+    updatedAtMs: snapshot.generatedAtMs,
+    catalogRevision: snapshot.revision,
+    fromCache: false,
   };
 };
 

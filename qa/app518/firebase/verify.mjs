@@ -7,6 +7,7 @@ const app=require("./index.cjs");
 assert.deepEqual(Object.keys(app).sort(),["app518QaExactFavoriteSource","app518QaSyntheticDeleteReceipt"].sort());
 assert.equal(typeof app.app518QaExactFavoriteSource,"function");
 assert.equal(typeof app.app518QaSyntheticDeleteReceipt,"function");
+assert.equal(typeof app.app518QaSyntheticDeleteReceipt.run,"function");
 const source=require("node:fs").readFileSync(new URL("./index.cjs",import.meta.url),"utf8");
 assert(source.includes('serviceAccount:"soridraw-qa-app518-runtime@soridraw-app.iam.gserviceaccount.com"'),
   "QA_RUNTIME_SA_PINNED");
@@ -47,13 +48,13 @@ process.env.SORIDRAW_APP518_QA_RUN_ID="45123456789";
 process.env.SORIDRAW_APP518_PILOT_UID="qa518-45123456789-owner";
 process.env.SORIDRAW_APP518_PILOT_FAVORITE_ID="qa518-45123456789-song";
 process.env.SORIDRAW_APP518_BRIDGE_ACTIVE="APPROVED_ISOLATED_ONE_SONG";
-await app.app518QaSyntheticDeleteReceipt({
+await app.app518QaSyntheticDeleteReceipt.run({
   id:"foreign-event",params:{favoriteId:"foreign-song"},
   data:{exists:true,data(){auditAttempts++;throw Error("FOREIGN_READ_FORBIDDEN");}}
 });
 if(auditAttempts!==0)throw Error("QA_FOREIGN_EVENT_INSPECTED");
 process.env.SORIDRAW_APP518_BRIDGE_ACTIVE="OFF";
-await app.app518QaSyntheticDeleteReceipt({
+await app.app518QaSyntheticDeleteReceipt.run({
   id:"fake-event",params:{favoriteId:"qa518-45123456789-song"},
   data:{exists:true,data(){auditAttempts++;throw Error("QA_OFF_UNEXPECTED_READ");}}
 });

@@ -4,8 +4,10 @@ import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const app=require("./index.cjs");
-assert.deepEqual(Object.keys(app),["app518QaExactFavoriteSource"]);
+assert.deepEqual(Object.keys(app).sort(),["app518QaExactFavoriteSource","app518QaSyntheticDeleteReceipt"].sort());
 assert.equal(typeof app.app518QaExactFavoriteSource,"function");
+assert.equal(typeof app.app518QaSyntheticDeleteReceipt,"function");
+assert.equal(typeof app.app518QaSyntheticDeleteReceipt.run,"function");
 const source=require("node:fs").readFileSync(new URL("./index.cjs",import.meta.url),"utf8");
 assert(source.includes('serviceAccount:"soridraw-qa-app518-runtime@soridraw-app.iam.gserviceaccount.com"'),
   "QA_RUNTIME_SA_PINNED");
@@ -38,4 +40,25 @@ for(const scenario of [
  assert.equal(r.headers["Cache-Control"],"no-store");
  console.log("APP783_"+scenario.label+"=PASS");
 }
+let auditAttempts=0;
+process.env.GCLOUD_PROJECT="soridraw-app";
+process.env.GOOGLE_CLOUD_PROJECT="soridraw-app";
+process.env.SORIDRAW_APP518_QA_PROJECT_NUMBER="1083981050742";
+process.env.SORIDRAW_APP518_QA_RUN_ID="45123456789";
+process.env.SORIDRAW_APP518_PILOT_UID="qa518-45123456789-owner";
+process.env.SORIDRAW_APP518_PILOT_FAVORITE_ID="qa518-45123456789-song";
+process.env.SORIDRAW_APP518_BRIDGE_ACTIVE="APPROVED_ISOLATED_ONE_SONG";
+await app.app518QaSyntheticDeleteReceipt.run({
+  id:"foreign-event",params:{favoriteId:"foreign-song"},
+  data:{exists:true,data(){auditAttempts++;throw Error("FOREIGN_READ_FORBIDDEN");}}
+});
+if(auditAttempts!==0)throw Error("QA_FOREIGN_EVENT_INSPECTED");
+process.env.SORIDRAW_APP518_BRIDGE_ACTIVE="OFF";
+await app.app518QaSyntheticDeleteReceipt.run({
+  id:"fake-event",params:{favoriteId:"qa518-45123456789-song"},
+  data:{exists:true,data(){auditAttempts++;throw Error("QA_OFF_UNEXPECTED_READ");}}
+});
+if(auditAttempts!==0)throw Error("QA_OFF_EVENT_INSPECTED");
+console.log("APP518_QA_DELETE_RECEIPT_FOREIGN_AND_OFF_EVENTS_NO_READ_WRITE=PASS");
+console.log("APP518_QA_TWO_EXACT_FUNCTIONS_NO_SHARED_TRIGGERS=PASS");
 console.log("APP783_QA_FUNCTIONS_ONLY_OFF_NO_REMOTE_FIRESTORE=PASS");

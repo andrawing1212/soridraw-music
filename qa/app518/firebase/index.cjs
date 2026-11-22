@@ -3,6 +3,8 @@
 // functions/src/index.ts or securedIndex. Does not register a Firestore
 // trigger, cron, existing production function, or browser-auth route.
 const {onRequest} = require("firebase-functions/v2/https");
+const {onDocumentDeleted} = require("firebase-functions/v2/firestore");
+const {recordHardDeleteApp518} = require("./lib/app518CanonicalSourceProvider");
 const {defineSecret} = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const {handleVerifiedApp518ExactSource} = require("./lib/app518ServerTransport");
@@ -63,4 +65,66 @@ exports.app518QaExactFavoriteSource = onRequest({
   }catch{
     deny(res,"HOLD_APP518_QA_SOURCE_UNAVAILABLE");
   }
+});
+
+
+// Independent QA ONLY, exact one synthetic ID. No user-data listeners in
+// shared/preview/test/production Functions. The Firestore event itself
+// supplies the verified BEFORE snapshot and event id; never a client field.
+const qaRun = () => {
+  const run = process.env.SORIDRAW_APP518_QA_RUN_ID;
+  return /^[0-9]{8,20}$/.test(String(run||""))
+    && process.env.SORIDRAW_APP518_PILOT_UID === "qa518-"+run+"-owner"
+    && process.env.SORIDRAW_APP518_PILOT_FAVORITE_ID === "qa518-"+run+"-song";
+};
+const beforeUpdateTime = (snapshot) => {
+  const stamp = snapshot?.updateTime;
+  if(!Number.isSafeInteger(stamp?.seconds)
+    ||!Number.isSafeInteger(stamp?.nanoseconds)
+    ||stamp.nanoseconds<0||stamp.nanoseconds>=1_000_000_000)return null;
+  const date=new Date(stamp.seconds*1000);
+  if(!Number.isFinite(date.getTime()))return null;
+  return date.toISOString().slice(0,19)+"."+
+    String(stamp.nanoseconds).padStart(9,"0")+"Z";
+};
+exports.app518QaSyntheticDeleteReceipt = onDocumentDeleted({
+  document:"favorites/{favoriteId}",
+  region:"asia-northeast3",
+  memory:"256MiB",
+  timeoutSeconds:30,
+  minInstances:0,
+  maxInstances:1,
+  retry:false,
+  serviceAccount:"soridraw-qa-app518-runtime@soridraw-app.iam.gserviceaccount.com",
+},async(event)=>{
+  // The trigger can receive other QA favorite events, but never reads/writes
+  // any such data. It is registered in the QA project only, never shared.
+  if(!runtimeQa()||!pilotQa()||!qaRun()
+    ||process.env.SORIDRAW_APP518_BRIDGE_ACTIVE!=="APPROVED_ISOLATED_ONE_SONG"
+    ||event?.params?.favoriteId!==process.env.SORIDRAW_APP518_PILOT_FAVORITE_ID)
+    return;
+  const before=event.data;
+  const item=before?.data();
+  const run=process.env.SORIDRAW_APP518_QA_RUN_ID;
+  if(!before?.exists||item?.qaOnly!==true||item?.qaRunId!==run
+    ||item?.uid!==process.env.SORIDRAW_APP518_PILOT_UID
+    ||typeof event.id!=="string"||!safeId(event.id,512))
+    throw new Error("APP518_QA_HOLD_UNVERIFIED_DELETE_EVENT");
+  // The final QA cleanup marks its own synthetic document before deletion.
+  // Only this exact run-owned marker may suppress the second receipt.
+  if(item.qa518CleanupFinal===true)return;
+  const updateTime=beforeUpdateTime(before);
+  if(!updateTime)throw new Error("APP518_QA_HOLD_MISSING_BEFORE_VERSION");
+  if(!admin.apps.length)admin.initializeApp({projectId:QA_PROJECT});
+  const result=await recordHardDeleteApp518({
+    db:admin.firestore(),
+    uid:process.env.SORIDRAW_APP518_PILOT_UID,
+    documentId:process.env.SORIDRAW_APP518_PILOT_FAVORITE_ID,
+    deleteEventId:event.id,
+    beforeOwnerUid:item.uid,
+    beforeUpdateTime:updateTime,
+    verifiedServerDeleteEvent:true,
+  });
+  if(!["VERIFIED_DELETE_RECEIPT","SKIP_NEWER_SAVE_PRESENT"].includes(result.code))
+    throw new Error("APP518_QA_HOLD_DELETE_RECEIPT_NOT_CONFIRMED");
 });

@@ -1,3 +1,13 @@
+## CURRENT — APP774 구형 팔로우 우회 실코드 검증 및 격리 QA D1 조건부 경합 완료, 전 Writer 강제 접수 FAIL/HOLD (2026-11-22 KST)
+
+- **디렉터 YES 범위:** 이미 승인된 APP774 격리 QA로만 신규 합성 테스트 실시. [PR #1340](https://github.com/andrawing1212/soridraw-music/pull/1340) 병합 `5a1b5d8811d17f403919e324a0ec27d7cacc3375`. PREVIEW pinned SOURCE SHA `4363820117100cb03bcbc44a01e127aeb5de3cf4`, APP557 원본 precommit 함수를 직접 오프라인 호출; 구형 무버전·일부 입력·미등록 owner의 기존 canonical Writer 우회 가능성 **실제 코드 경로 재현**. 동일 구형 요청 2회 병렬 호출 시 격리 모의 canonical callback 2회, 새 DO reserve 0. **전 구형 Writer 강제 신규 접수 = FAIL/HOLD**. 원래 사용자의 정상 follow legacy 경로를 이 작업에서 강제로 변경하지 않음.
+- **실제 물리 QA:** [Actions #45014666010](https://github.com/andrawing1212/soridraw-music/actions/runs/45014666010) **SUCCESS**. 기존 QA Cloudflare 계정 `b60fcd62c679c64db19f0b0e0c2f3429`의 기존 `soridraw-qa-app768-d1` 합성 테이블 `app768_qa_synthetic_follow`에 새로운 정확한 랜덤 QA 행 1개만 INSERT(물리 W1~W2), 동일 행의 조건부 SQL UPDATE 두 건 병렬에서 **W1 1건 / W0 1건**, 단일 반영과 최종 행 값 확인, 정해진 1건만 삭제 및 COUNT=0, **정리 PASS**. R2 신규 객체·임시 Worker·기존 Worker deploy 없음. 기존 `soridraw-owner-qa-583` 활성 버전 `4ed70845-6a4b-4a80-9c51-ed95d0becc38` 100%, QA D1+R2 각 1개 전후 인벤토리 확인 PASS.
+- **범위와 한계:** 구형 경로 우회는 **오프라인 실제 PREVIEW 모듈에 인가된 콜백을 모의 호출**한 결과이지 실제 배포 Worker의 API 요청을 보내 검증한 것이 아니다. D1 성공은 **합성 별도 QA 테이블 조건부 CAS** 물리 실측이며 실제 팔로우 canonical Writer, overlay trigger/index, 모든 구형 Worker·PC↔모바일·APP765/767/770/772 end-to-end의 **W1~W2/중복없는 복구 PASS가 아님**. R2 APP768/769 PASS 재사용(재실행 금지). 공유 D1/R2/RTDB/Functions/Firebase, PREVIEW/TEST/PRODUCTION 서비스·실사용자 데이터 변화 0. QA 계정 사용량 비용은 미측정.
+- **자동 반복 OFF:** 승인된 단발 격리 QA 종료 직후 APP774 workflow의 `push` 실 QA 트리거 제거 및 `live` job 명시적 `if: false`. PR 오프라인 검사는 유지. 추가 QA 과금/데이터 쓰기 자동 반복 없음.
+- **다음 출시에 필요한 실제 기술 수정:** (1) 정상 구형/미등록 사용자 기능을 보존하면서 전 활성·구형 Writer가 R2 admission/pending fence를 우회하지 못하는 **동시 호환 cutover** 설계, (2) 독립 canonical operation ledger/DO PITR 외부 floor와 사용자 삭제·재가입 기록 정책, (3) 실제 canonical Writer의 물리 D1 W1~W2 및 비용 검증, (4) PC↔모바일 정본·신호 실사용. 자동복구·PRODUCTION 릴리스 **HOLD**. 공유 데이터/Rules/Worker/PRODUCTION 실제 변경은 현재 승인에 포함되지 않음.
+
+---
+
 ## CURRENT — APP772 최소 R2 접수·D1 W1~W2 장애 복구 경계 SOURCE-ONLY / 38케이스 PASS, 실제 자동 복구 HOLD (2026-11-22 KST)
 
 - **디렉터 YES 승인 범위:** APP771 실 D1 스키마 읽기 전용 조사 및 APP768 실제 R2 조건부 중복 QA, APP769 실제 QA D1 실패·모의 ACK 소실 PASS 재사용. 추가 Cloudflare/Firebase API 요청, 새 Worker/D1/R2/토큰/권한, 원본 접근/변경, PREVIEW·TEST·PRODUCTION 배포 **0**.

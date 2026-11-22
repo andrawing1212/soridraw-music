@@ -6,11 +6,6 @@ on:
       - 'scripts/verify-774-legacy-ingress-offline.mjs'
       - 'scripts/app774-qa-d1-conditional-race.mjs'
       - '.github/workflows/app774-isolated-legacy-cas.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/app774-qa-d1-conditional-race.mjs'
-      - '.github/workflows/app774-isolated-legacy-cas.yml'
 permissions:
   contents: read
 concurrency:
@@ -43,7 +38,7 @@ jobs:
       - name: Demonstrate current legacy/unenrolled bypass without cloud access
         run: node scripts/verify-774-legacy-ingress-offline.mjs
   live:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'andrawing1212/soridraw-music'
+    if: false # APP774 approved one-shot real QA complete; no automatic repetition
     runs-on: ubuntu-24.04
     timeout-minutes: 9
     steps:

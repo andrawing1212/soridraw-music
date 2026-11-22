@@ -1,0 +1,29 @@
+name: APP518 isolated QA source-only gate (PR; no cloud credentials)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'qa/app518/isolated/**'
+      - '.github/workflows/temp-app518-qa-source-gate.yml'
+permissions:
+  contents: read
+jobs:
+  app518_qa_source_only:
+    if: github.repository == 'andrawing1212/soridraw-music'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Signed QA one-song gate and seed/rollback tests; networkless
+        run: node qa/app518/isolated/verify-qaGate518.mjs
+      - name: Prevent accidental cloud/deploy commands in QA source
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -ERn 'firebase[[:space:]]+deploy|wrangler[[:space:]]+deploy|gcloud[[:space:]]+.*add-iam-policy-binding' qa/app518/isolated/*.mjs
+          echo 'APP518_QA_SOURCE_ONLY_NO_CLOUD_DEPLOY=PASS'

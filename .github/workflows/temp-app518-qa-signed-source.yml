@@ -29,6 +29,7 @@ jobs:
           set -euo pipefail
           git cat-file -e "864f796da24413309567198c9de502b13cdedd50^{commit}"
           git worktree add --detach "$RUNNER_TEMP/app518-pinned-candidate" 864f796da24413309567198c9de502b13cdedd50
+          (cd "$RUNNER_TEMP/app518-pinned-candidate/cloudflare/media-worker" && npm install --ignore-scripts --no-audit --no-fund --no-save)
           APP518_PINNED_CANDIDATE_DIR="$RUNNER_TEMP/app518-pinned-candidate" \
             node qa/app518/live/verify-signed-worker-entry518.mjs
       - name: Make sure no cloud mutation function was introduced

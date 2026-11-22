@@ -1,3 +1,15 @@
+## CURRENT — APP784 QA Functions/APIs 읽기 전용 사전점검 / Firestore 메타데이터 403 HOLD (2026-11-23 KST)
+
+- **기준:** APP782 GitHub OIDC QA 인증 및 APP783 단일 Firebase QA function 소스 빌드 PASS 재사용; 별도 Functions/Firestore/D1/R2/cloud shell 재배포 없음. PR #528 SHA `864f796da24413309567198c9de502b13cdedd50`, main 검사 추가 후 최신.
+- **실제 독립 QA 조회:** [GitHub Actions #45060974039](https://github.com/andrawing1212/soridraw-music/actions/runs/45060974039) QA 전용 WIF `soridraw-qa-gh-reader` 인증, 정확 프로젝트 번호 `1083981050742` PASS. 활성 API 목록에 Cloud Functions/Cloud Run/Cloud Build/Artifact Registry/Secret Manager/Firestore/IAM Credentials 전부 존재 확인. 기존 `publishExploreOwnerFollower542` 1개 보존, APP518 배포 함수 0.
+- **차단 근거:** `gcloud firestore databases list --project=soridraw-app`은 현 서비스 계정에 Firestore 데이터베이스 **메타데이터 조회 권한이 없어 실패**. 실패 결과로 DB 실제 존재/부재는 판단하지 않음. 이 진단에서 사용자 레코드나 DB 내용을 읽지 않음.
+- **false-green 수정 및 실제 실패 확인:** APP784 전용 job을 `HOLD`면 적색 실패 처리하도록 바로 수정. [Actions #45061255570](https://github.com/andrawing1212/soridraw-music/actions/runs/45061255570) `APP784_QA_FIRESTORE_DATABASE_METADATA=HOLD_PERMISSION_DENIED`, `APP784_QA_FULL_E2E_READY=HOLD_FIRESTORE_DATABASE_UNVERIFIED`, job failure가 **의도한 안전 차단**임을 확인. 이전 #45060974039의 녹색 결과는 Firestore 준비 PASS 아님.
+- **승인 범위/진행:** 디렉터가 2026-11-23 KST 추가 승인한 것은 **독립 QA에서 필요한 한시적 최소 권한·합성곡 하나 실전송**이며 운영 Firebase `soridraw-app-866a5`·사용자 원본·기존 QA 팔로우·TEST/PRODUCTION 변경은 승인되지 않음. 현재 IAM 권한 추가/QA 데이터 쓰기/QA DB 생성/Function 배포/Cloudflare mutation은 **실행 0**. GitHub QA 읽기 전용 작업만 진행.
+- **다음 최단 안전 경로:** 사용자의 일반 Chrome 공식 Firebase QA 콘솔에서 `soridraw-app`의 Cloud Firestore `(default)` 존재 여부를 읽기 전용으로 한 번 확인. 없으면 기존 QA 원본·비용·Rules 상황 검토 후 분리 DB 여부 판단; 있음이 확인되면 **별도 최소권한 QA 런타임 계정과 일시적인 배포 주체 역할**만 설정하고, QA 전용 서명/임시 Worker 및 정확 합성 문서 1개로 E2E 진행. 단순 조회 403 해소를 이유로 운영 자격증명/QA 관리자 역할을 무제한 부여하거나 Firestore DB를 무단 생성하지 않음.
+- **절대 상태 구분:** APP783 빌드 PASS, APP782 IAM 읽기 PASS, APP784 API 메타데이터 일부 PASS 및 Firestore metadata 권한 HOLD, APP518 실제 Firebase↔Cloudflare save→delete→resave/retry E2E **NOT_TESTED/HOLD**.
+
+---
+
 ## CURRENT — APP783 APP518 Firebase QA 단건 함수 분리 빌드 PASS / 실배포·E2E HOLD (2026-11-23 KST)
 
 - **APP782 실제 인증 PASS 재사용:** [Actions #45059378813](https://github.com/andrawing1212/soridraw-music/actions/runs/45059378813), QA Firebase WIF `soridraw-app` 읽기 전용 정상. 재검사하지 않음.

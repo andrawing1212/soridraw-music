@@ -44,14 +44,19 @@ export async function assessApp775UnifiedFollowIngress({
  if(enabled!==true)return Object.freeze({
   status:'OFF_LEGACY_UNCHANGED',next:'KEEP_ACTIVE_CANONICAL_AS_IS',...unsafe,
  });
- if(scope!=='APP775_OFFLINE_SYNTHETIC_ONLY')return hold('OFFLINE_SCOPE_REQUIRED');
+ // APP777 isolated QA may check actual QA-issued signed JWTs. This is only
+ // a read-only evidence-shape branch: the live Worker is never wired to it.
+ const qaSigned=scope==='APP777_ISOLATED_QA_SIGNED_READ_ONLY';
+ if(scope!=='APP775_OFFLINE_SYNTHETIC_ONLY'&&!qaSigned)
+  return hold('OFFLINE_SCOPE_REQUIRED');
  if(method!=='PUT'&&method!=='DELETE')return hold('METHOD_UNSUPPORTED');
  if(!UID.test(ownerUid||''))return hold('OWNER_UNVERIFIED');
  const envelope=parseEnvelope(body);
  if(!envelope)return hold('INVALID_OR_PARTIAL_ENVELOPE');
  const actor=verifiedActor;
  if(actor?.source!=='SIGNED_FIREBASE_AUTH_APP_CHECK_775'||
-   actor.verified!==true||actor.firebaseProjectId!=='soridraw-app-866a5'||
+   actor.verified!==true||
+   actor.firebaseProjectId!==(qaSigned?'soridraw-app':'soridraw-app-866a5')||
    !UID.test(actor.uid||'')||actor.uid===ownerUid||
    !EPOCH.test(actor.authEpoch||''))
   return hold('SERVER_AUTH_OR_GENERATION_UNPROVEN');

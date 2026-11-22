@@ -1,6 +1,7 @@
 // Node 22 source-only regression: no cloud connection, secrets, deploy, or data writes.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {runBoundedQaOneSong518} from './qaSequence518.mjs';
 import {join} from 'node:path';
 import {APP518_QA_MIGRATIONS,buildQaD1SchemaPlan518} from './qaD1Plan518.mjs';
 import {createHash,generateKeyPairSync,sign} from 'node:crypto';
@@ -229,3 +230,88 @@ rejection(()=>buildQaD1SchemaPlan518({
 }),'HOLD_QA_D1_SCHEMA_INPUT');
 console.log('APP518_QA_PINNED_MIGRATIONS_EXACT_SEVEN_DDL_STATEMENTS=PASS');
 console.log('APP518_QA_PARTIAL_SCHEMA_FOREIGN_DDL_AND_NONQA_D1_HOLD=PASS');
+
+
+const scenarioR2=new FakeR2();
+let sourceGeneration=0,deliberateFailure=false,ack=null,stopCount=0;
+let cleanedD1=false,cleanedFirestore=false;
+const appActions={
+ async applyCanonical({uid,documentId,state,mode}){
+  assert.equal(uid,proof.pilot.uid);assert.equal(documentId,proof.pilot.documentId);
+  assert.equal(mode,state==='removed'?'verified-hard-delete-receipt':'exact-pilot-save');
+  sourceGeneration++;
+  return {uid,documentId,state,verifiedByServer:true,
+   origin:'server-exact-read',
+   updateTime:'2026-11-23T00:00:0'+sourceGeneration+'.123456789Z'};
+ },
+ async injectOneR2Failure({uid,documentId}){
+  assert.equal(uid,proof.pilot.uid);assert.equal(documentId,proof.pilot.documentId);
+  deliberateFailure=true;
+ },
+ async dispatchSigned({uid,documentId,source,sourceVersionNs,action}){
+  if(action==='stale-replay')return {code:'STALE_SIGNED_EVENT_NO_WRITE'};
+  if(deliberateFailure){
+   deliberateFailure=false;
+   return {code:'PERSISTED_RETRY_PENDING',sourceVersionNs,r2Acked:false};
+  }
+  ack={uid,documentId,sourceVersionNs,d1AckVersionNs:sourceVersionNs,
+   r2SourceVersionNs:sourceVersionNs,r2State:source.state,
+   r2MembershipPresent:source.state==='saved'};
+  return {code:'EXACT_R2_ACKED',sourceVersionNs};
+ },
+ async retryOnce({uid,documentId,sourceVersionNs,onlyAfterPersistedDeadline,maxAttempts}){
+  assert.equal(onlyAfterPersistedDeadline,true);assert.equal(maxAttempts,1);
+  ack={uid,documentId,sourceVersionNs,d1AckVersionNs:sourceVersionNs,
+   r2SourceVersionNs:sourceVersionNs,r2State:'saved',r2MembershipPresent:true};
+  return {code:'EXACT_R2_ACKED'};
+ },
+ async inspectExact(){return ack;},
+ async stopExactTempWorker({runId}){assert.equal(runId,proof.runId);stopCount++;
+  return {tempWorkerAbsent:true,originalWorkerVersion:QA518.originalVersion};},
+ async cleanupPilotD1({uid,documentId,preserveAccountDailyBudgetLedger}){
+  assert.equal(uid,proof.pilot.uid);assert.equal(documentId,proof.pilot.documentId);
+  assert.equal(preserveAccountDailyBudgetLedger,true);cleanedD1=true;
+  return {pilotRowsRemaining:0,unrelatedRowsDeleted:0};
+ },
+ async inspectCleanup(){return {tempWorkerAbsent:true,
+  originalWorkerVersion:QA518.originalVersion,
+  pilotD1Rows:cleanedD1?0:1,otherQaR2Writers:0,
+  pilotFirestoreDocs:cleanedFirestore?0:1};
+ },
+ async cleanupPilotFirestore({uid,documentId,onlyExactFavoriteAndDeleteReceipt}){
+  assert.equal(uid,proof.pilot.uid);assert.equal(documentId,proof.pilot.documentId);
+  assert.equal(onlyExactFavoriteAndDeleteReceipt,true);cleanedFirestore=true;
+  return {pilotDocsRemaining:0,unrelatedDocumentsDeleted:0};
+ },
+};
+const scenario=await runBoundedQaOneSong518({
+ proof,bucket:scenarioR2,actions:appActions,now:()=>nowMs,
+});
+assert.equal(scenario.code,'QA518_ONE_SONG_ADAPTER_SEQUENCE_COMPLETE');
+assert.deepEqual(scenario.result.map(x=>x.state),['saved','removed','saved']);
+assert.equal(stopCount,1);
+assert.equal(scenarioR2.objects.size,0);
+assert.equal(scenario.limits.d1RowsWritten,QA518_LIMITS.d1RowsWritten);
+assert.equal(scenario.limits.firestoreWrites,QA518_LIMITS.firestoreWrites);
+const maliciousActions={...appActions,
+ applyCanonical:async()=>({uid:'foreign',documentId:proof.pilot.documentId,
+  state:'saved',verifiedByServer:true,origin:'server-exact-read',
+  updateTime:'2026-11-23T00:00:01Z'}),
+};
+let stoppedOnFail=0,cleanedOnFail=0;
+maliciousActions.stopExactTempWorker=async()=>{stoppedOnFail++;return {
+ tempWorkerAbsent:true,originalWorkerVersion:QA518.originalVersion,
+};};
+maliciousActions.cleanupPilotD1=async()=>{cleanedOnFail++;return {
+ pilotRowsRemaining:0,unrelatedRowsDeleted:0,
+};};
+const held=await runBoundedQaOneSong518({
+ proof,bucket:new FakeR2(),actions:maliciousActions,now:()=>nowMs,
+});
+assert.equal(held.code,'HOLD_QA_EXACT_ONE_SONG_INCOMPLETE');
+assert.equal(held.reason,'HOLD_QA_WRONG_OWNER_DOCUMENT_OR_STATE');
+assert.equal(held.cleanup,'NOT_ATTEMPTED_PRESERVE_PILOT_EVIDENCE');
+assert.equal(stoppedOnFail,1);
+assert.equal(cleanedOnFail,0);
+console.log('APP518_QA_FINITE_SAVE_HARD_DELETE_RESAVE_FAULT_RETRY_AND_CLEANUP=PASS');
+console.log('APP518_QA_FOREIGN_OWNER_HOLD_STOP_WORKER_WITHOUT_DATA_ERASURE=PASS');

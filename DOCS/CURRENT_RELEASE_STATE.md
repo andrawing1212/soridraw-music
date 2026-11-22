@@ -1,3 +1,13 @@
+## CURRENT — APP777 격리 QA Firebase signed gate + 공통 진입 코드 검사 PASS / 실제 발급 토큰 검증 대기 (2026-11-22 KST)
+
+- **디렉터 YES 범위:** 기존 격리 Firebase QA `soridraw-app`(Project Number `1083981050742`)의 이미 존재하는 두 합성 계정과 App Check를 사용한 실제 서명 인증 연동. 운영 Firebase `soridraw-app-866a5` 및 공유 사용자 데이터 접근/변경 금지. 현재 GitHub를 통해 확인한 QA 토큰 저장 위치는 이전 Cloud Shell의 private 파일 `~/.soridraw-qa-749-auth.json`; 해당 세션/비밀 토큰을 이 채팅에서 읽거나 실행하는 접근은 확인되지 않음. **실제 Firebase 발급 JWT 시험 = NOT_TESTED/HOLD**.
+- **QA 소스 구현:** [PR #1343](https://github.com/andrawing1212/soridraw-music/pull/1343). 기존 APP749 공개 JWKS 기반 RSA256 Firebase Auth+App Check 검증기를 `scripts/app777-qa-signed-ingress.mjs`에서 재사용해 APP775 구형/신형 공통 진입 조건까지 통과시키는 **읽기 전용 QA gate** 구현. APP775의 `APP777_ISOLATED_QA_SIGNED_READ_ONLY`에서만 QA Firebase 프로젝트를 허용하고 기존 runtime OFF, 모든 실제 Worker/DO/D1/R2/relay/재전송/배포 권한 0 유지. 기존 프로덕션 프로젝트 요구 scope와 정상 기능 그대로 보호.
+- **Node 22 QA 검사:** [Actions #45019830008](https://github.com/andrawing1212/soridraw-music/actions/runs/45019830008) **SUCCESS**, APP775 기존 46개 영향 검사 및 APP777 신규 **15개** 오프라인 RSA256+AppCheck 확인 PASS, 운영 issuer/audience 또는 다른 actor/변조·만료 token, 불완전 cutover/독립 fence는 모두 HOLD. 공개키 fetch는 네트워크가 아닌 mock만 이용했고 **실제 Firebase 토큰 0, 실제 서버 호출 0**.
+- **실행 가능한 읽기 전용 후속:** `scripts/app777-qa-real-cloudshell-readonly.mjs --read-only`는 기존 QA Cloud Shell의 0600 비공개 파일을 로컬에서만 읽고, Google Cloud QA 프로젝트 ID·Number 확인, APP747의 공식 Firebase Admin 서명/토큰 취소 검사와 APP777 공통 진입점 검증을 수행하도록 준비됨. 실제 실행 기록은 아직 없으므로 PASS로 보고하지 않음. 비밀 토큰/UID를 GitHub/채팅/Actions에 저장하거나 출력하지 않음. 사용자의 기존 Cloud Shell 세션 접근 또는 별도 인증된 실행 환경 없이는 완료 불가.
+- **한계/출시 차단:** 실제 signed QA 토큰 및 APP776 QA HTTP Worker+Auth 통합, auth epoch revocation과 서버 신뢰 경계, 모든 legacy/active Writer 비우회 cutover, 운영 정본 D1 W1~W2·독립 operation ledger/DO PITR·PC↔모바일 실사용은 **NOT_TESTED/FAIL-HOLD**. QA Worker 원본 활성 버전 변경/Cloudflare 배포/DB·RTDB·Firestore write/PREVIEW·TEST·PRODUCTION 배포 0. APP765/767/770/772/775/776/777 기본 OFF, APP737/738 PRODUCTION 릴리스 HOLD.
+
+---
+
 ## CURRENT — APP776 격리 QA HTTP 구형·신형 팔로우/취소 실제 통합 PASS, 운영 모든 Writer·Firebase Auth 연동 HOLD (2026-11-22 KST)
 
 - **승인 범위와 저장:** 디렉터 YES로 APP775의 공통 진입 판정 코드를 재사용하는 임시 격리 QA 전용 HTTP Worker를 기존 Cloudflare QA 계정에 1개 만들고 실제 QA D1 `soridraw-qa-app768-d1`·QA R2 `soridraw-qa-app768-r2`만 바인딩. [PR #1342](https://github.com/andrawing1212/soridraw-music/pull/1342) 병합 `a93e01c32120463003f20d2fd885039539bd0fce`. API 권한·QA DB/버킷 추가 생성, 실제 사용자/공유 자원/PRODUCTION/TEST/PREVIEW Worker·Firebase/Hosting 배포·변경 **0**.

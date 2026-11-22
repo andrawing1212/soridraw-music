@@ -248,3 +248,73 @@ jobs:
             process.exit(0);
           }
           NODE
+
+
+  qa_worker_dryrun:
+    # Exact PR #528 candidate; cannot upload, deploy or route traffic.
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 528 &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/app518-qa-bundle 864f796da24413309567198c9de502b13cdedd50'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 864f796da24413309567198c9de502b13cdedd50
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Pin exact inert QA source and generate nondeployable template
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 864f796da24413309567198c9de502b13cdedd50
+          node scripts/verify-518-isolated-qa-setup.mjs --self-test
+          cd cloudflare/media-worker
+          node --input-type=module <<'NODE'
+          import {readFileSync,writeFileSync} from 'node:fs';
+          import assert from 'node:assert/strict';
+          const t=JSON.parse(readFileSync('wrangler.app518-isolated-qa.jsonc.template','utf8'));
+          assert.equal(t.main,'./src/app518IsolatedQaWorker518.js');
+          assert.equal(t.workers_dev,false);
+          assert.equal(t.keep_vars,false);
+          t.name='soridraw-app518-qa-dryrun-only';
+          t.account_id='b60fcd62c679c64db19f0b0e0c2f3429';
+          t.vars.FIREBASE_PROJECT_ID='soridraw-app';
+          t.vars.FIREBASE_PROJECT_NUMBER='1083981050742';
+          t.vars.SORIDRAW_APP518_PILOT_UID='qa518-dryrun-owner';
+          t.vars.SORIDRAW_APP518_PILOT_FAVORITE_ID='qa518-dryrun-song';
+          t.vars.SORIDRAW_APP518_QA_ACCOUNT_ID_518=t.account_id;
+          t.r2_buckets[0].bucket_name='soridraw-qa-app768-r2';
+          for(const b of t.d1_databases){
+            b.database_name='soridraw-qa-app768-d1';
+            // Valid dummy UUID for bundle compilation ONLY; never a real binding.
+            b.database_id='11111111-1111-4111-8111-111111111111';
+          }
+          for(const k of ['SORIDRAW_CANONICAL_CATALOG_518',
+            'SORIDRAW_APP518_RELEASE_FENCES_VERIFIED',
+            'SORIDRAW_D1_ALL_ACCOUNT_WRITERS_518',
+            'SORIDRAW_D1_SHARED_ACCOUNT_LEDGER_518',
+            'SORIDRAW_APP518_QA_RELEASE_518'])
+            assert.equal(t.vars[k],'0');
+          assert.equal(t.workers_dev,false);
+          assert(!('routes' in t)&&!('triggers' in t));
+          writeFileSync('wrangler.app518-dryrun-only.generated.json',JSON.stringify(t));
+          console.log('APP518_QA_PINNED_SAFE_DRYRUN_CONFIG=PASS; LIVE_BINDING_UUID=NOT_ACCESSED');
+          NODE
+      - name: Bundle exact APP518 isolated QA Worker (Wrangler dry-run only)
+        working-directory: cloudflare/media-worker
+        run: |
+          set -euo pipefail
+          npm install --ignore-scripts --no-audit --no-fund --no-save
+          npx --yes wrangler@4.147.0 deploy --dry-run \
+            --config wrangler.app518-dryrun-only.generated.json \
+            --outdir "$RUNNER_TEMP/app518-qa-inert-bundle"
+          test -d "$RUNNER_TEMP/app518-qa-inert-bundle"
+          echo 'APP518_REAL_WRANGLER_BUNDLE=PASS_DRY_RUN'
+          echo 'APP518_QA_DEPLOY=0; FIREBASE_OR_CLOUDFLARE_CALLS=0; ACTIVE_GATES=OFF'

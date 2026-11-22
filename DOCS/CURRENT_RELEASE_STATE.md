@@ -1,3 +1,14 @@
+## CURRENT — APP782 QA WIF 인증 경로 고정 / Google IAM 콘솔 신뢰 연결 생성 대기 (2026-11-23 KST)
+
+- **디렉터 승인:** 독립 Firebase QA `soridraw-app`에 국한된 GitHub Actions OIDC/WIF provider, 읽기 전용 서비스 계정 및 최소 권한 연결. 운영 프로젝트·공유 데이터·기존 팔로우 QA 변경/정식 배포 승인 아님.
+- **GitHub 준비 완료:** [APP782 GitHub 인증 워크플로](../.github/workflows/app782-app518-qa-firebase-wif-readonly.yml)에서 프로젝트 번호 `1083981050742` 고정, WIF provider `projects/1083981050742/locations/global/workloadIdentityPools/soridraw-qa-github/providers/app518-readonly`, QA 서비스 계정 `soridraw-qa-gh-reader@soridraw-app.iam.gserviceaccount.com` 고정. GitHub Variables·서비스 계정 JSON키·기존 운영 Firebase Secrets 불필요. GitHub 작업은 repo 소유자의 PR #528 정확한 명령만 허용. OIDC는 job에서만 `id-token:write`, `contents:read`; Firebase 연결 후 project ID·number·함수 이름 목록 GET만 실행.
+- **설정 가이드:** [APP782 QA Google Cloud Console 전용 구성](./APP782_QA_GITHUB_WIF_BOOTSTRAP.md). GitHub repository ID `1188157610` / owner ID `268937716` 및 `issue_comment`+`main`+APP782 정확한 워크플로로 IAM provider 입장조건 고정; `roles/browser`, `roles/cloudfunctions.viewer`은 QA 프로젝트에만, `roles/iam.workloadIdentityUser`는 정확 QA 서비스 계정에만. IAM 권한 확대·서비스 계정 키 생성·운영 자격증명 재사용 금지.
+- **실제 상태:** 현재 이 채팅에 Google Cloud IAM 관리자 조작/컴퓨터 브라우저 연결이 없고 Work Cloud Shell은 HTTP 403으로 차단되어 **WIF Pool/Provider/서비스 계정은 실제 생성·설정되지 않음**. GitHub Code/Runbook 작성 완료와 Google Cloud IAM 설정 완료는 서로 다름. APP782 과거 [Actions #45056180022](https://github.com/andrawing1212/soridraw-music/actions/runs/45056180022) `HOLD_QA_GITHUB_IDENTITY_NOT_CONFIGURED` 근거 유지. 새 고정 워크플로는 원격 IAM 연결 전 성공을 주장하거나 반복 재실행하지 않음.
+- **계속할 실행 지점:** QA Google Cloud 관리 UI에서 가이드의 고정 리소스와 최소 IAM 역할을 설정한 뒤, PR #528에 `/app518-qa-firebase-auth 864f796da24413309567198c9de502b13cdedd50` 1회 실행, **실제 로그 `APP782_QA_FIREBASE_WIF=PASS_SHORT_LIVED_GITHUB_OIDC`와 `APP782_QA_FUNCTIONS_LIST_READ_ONLY=PASS` 동시 확인**. 이후 APP518 원격 1곡 E2E는 아직 미완료, 별도의 안전·변경 범위 판단이 필요. 이전 Cloudflare PASS/Emulator PASS는 재실행하지 않음.
+- **현재 실제 서버 변경:** Google Cloud IAM/Functions/Firestore/Auth 변경 0, Cloudflare D1/R2/Worker 변경 0, PREVIEW·TEST·PRODUCTION 변경 0. GitHub 코드·문서만 변경.
+
+---
+
 ## CURRENT — APP782 Cloud Shell 대체 GitHub QA Firebase 인증 경로 준비 / 신뢰 연결 미설정 HOLD (2026-11-23 KST)
 
 - **Cloud Shell 재시도 대신 GitHub OIDC 경로 준비:** `.github/workflows/app782-app518-qa-firebase-wif-readonly.yml` 신규 추가. PR #528에 저장소 소유자 고정 명령 `/app518-qa-firebase-auth 864f796da24413309567198c9de502b13cdedd50`를 게시했을 때만 실행. GitHub Actions의 단기 OIDC로 **오직 QA Google Cloud 프로젝트 `soridraw-app` (Project Number `1083981050742`)**의 서비스 계정을 인증하도록 설계. 운영 프로젝트/서비스 계정·기존 `FIREBASE_SERVICE_ACCOUNT_SORIDRAW` 등 운영 자격증명 사용 금지. Google/Firebase 데이터 쓰기·함수 배포·IAM 변경 없음.

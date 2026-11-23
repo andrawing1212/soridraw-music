@@ -1,3 +1,12 @@
+## CURRENT — APP518 QA Firebase 배포 IAM ActAs 차단 / 함수 원복 PASS (2026-11-23 KST)
+
+- **실행:** 디렉터의 '빨리 마무리' 지시 아래 승인된 QA 2함수 배포를 실제 시도. [PR #1368](https://github.com/andrawing1212/soridraw-music/pull/1368) `d41f7ac1c1e5142e76e0e6e180f4cda392a64011` 병합: 정확 PR #528 SHA의 QA 전용 `app518qa` 2함수만 별도 codebase로 원샷 배포·항상 자동 삭제하는 owner-comment WIF job 추가. YAML root indentation `916ad1af7bedda5c8ac32a73ecc27b7e04776ca5`에서 바로 수정.
+- **실제 서버 검사:** [Actions #45098997077](https://github.com/andrawing1212/soridraw-music/actions/runs/45098997077): QA `soridraw-app` 프로젝트 번호 검증, 원래 `publishExploreOwnerFollower542` 함수 1개만 존재, 정확 불변 후보 컴파일·`app518qa` synthetic-only 2함수 준비 PASS. `firebase-tools@15.30.1 deploy --project soridraw-app --only functions:app518qa` 실행에서 **`iam.serviceAccounts.ActAs`가 `soridraw-app@appspot.gserviceaccount.com`에 없어 CLI 사전 검사 FAIL**. 두 QA 함수 **배포되지 않음**. `always()` 단계에서 정확 APP518 2함수 부재/기존 follow 함수 1개 보존 **PASS**. Firestore/D1/R2 추가 mutation 0.
+- **직접 원인·최소 조치:** 기존 `soridraw-qa-gh-deployer@soridraw-app.iam.gserviceaccount.com`에 QA 프로젝트의 **App Engine 기본 서비스 계정 `soridraw-app@appspot.gserviceaccount.com` 객체 하나에만** `roles/iam.serviceAccountUser`(ActAs)를 **일시적으로** 허용해야 Firebase CLI 배포 검사가 통과할 수 있음. 배포 함수들은 별도 최소 권한 runtime SA `soridraw-qa-app518-runtime` 사용. 프로젝트/운영에 권한 확대 금지; App Engine SA 접근은 새 IAM 권한이므로 별도 명시 승인 전에는 **변경 금지**. 승인 시 실제 QA IAM에서 확인 후 부여, 한 번의 테스트 후 즉시 회수하고 최종 검증. 직접 GCloud 대체 배포로 Firebase trigger 계약을 임의 변경하지 않는다.
+- **현재 상태:** 기존 실제 QA D1 5표/2색인 정상 유지 및 이전 PASS 재사용; R2 원본, QA583 팔로우 Worker, Firebase 기존 팔로우 Functions, 사용자 원본 **변경 없음**. Firebase APP518 2함수 미배포, Worker 미배포, 전체 Firebase→D1→R2 E2E **NOT_TESTED**. owner-comment 실행 job은 별도 재작업 없이 IAM 문제 해결 시 재사용 가능. 다음 확인은 IAM 단 한 항목이며, 그 외 과거 테스트 반복 금지.
+
+---
+
 ## CURRENT — APP518 QA D1 실제 5표·2색인 설치 PASS / Firebase 독립 코드 묶음 OFF·E2E 미완료 (2026-11-23 KST)
 
 - **승인 범위 재사용:** 디렉터가 승인한 독립 QA `soridraw-app` + Cloudflare `SORIDRAW-QA`의 APP518 합성곡 1건 저장→삭제→재저장·복구 통합 검증. 운영·TEST·PRODUCTION, PREVIEW 앱 코드/Hosting, 기존 QA 팔로우 및 공유 사용자 원본 변경 금지. PR #528 고정 후보 SHA `864f796da24413309567198c9de502b13cdedd50` 그대로. 추가 사용자 승인 없이 승인된 QA 범위에서 계속할 수 있으나, 안전 복구가 보장되지 않는 실서버 단계는 HOLD.

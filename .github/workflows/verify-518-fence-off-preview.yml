@@ -1,0 +1,34 @@
+name: APP518 Fence OFF Preview Integration (No Deploy)
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'cloudflare/media-worker/src/index.js'
+      - 'cloudflare/media-worker/src/catalogAuthorityPolicy518.js'
+      - 'cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js'
+      - '.deploy/release-media-worker-runtime.mjs'
+      - '.github/workflows/app518-media-fence-off-bootstrap.yml'
+      - 'scripts/verify-518-shared-writer-rollout.mjs'
+      - 'scripts/verify-518-live-media-writer-readonly.mjs'
+      - '.github/workflows/verify-518-fence-off-preview.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fence-off:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Existing APP518 release checks and bounded read-only self-test
+        run: |
+          node scripts/verify-518-shared-writer-rollout.mjs
+          node scripts/verify-518-live-media-writer-readonly.mjs --self-test
+      - name: Verify current Media Worker build
+        working-directory: cloudflare/media-worker
+        run: |
+          npm install --no-audit --no-fund
+          npm run check

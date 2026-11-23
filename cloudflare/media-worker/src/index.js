@@ -13,6 +13,8 @@ import {
   materializeCatalogJournal,
   shouldCompactCatalogJournal,
 } from './catalogJournal.js';
+import {decideCatalogWriterAuthority518,classifyCatalogAuthority518} from './catalogAuthorityPolicy518.js';
+import { FENCE_CONTRACT_518 } from './catalogSharedWriterRolloutGate518.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const AUTH_CERT_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
@@ -470,6 +472,9 @@ const CATALOG_JOURNAL_ENGINE_1053 = true;
 // SORIDRAW_SHARED_PRIVATE_CATALOG_AUTHORITY_356
 // Dormant until every release environment is wired to the same private CATALOG
 // bucket. MEDIA remains environment-local for media/archive objects.
+// Fence-only release: canonical writes remain disabled on all environments.
+const isCanonicalCatalogAuthority518 = (env) =>
+  text(env?.SORIDRAW_CANONICAL_CATALOG_518) === 'ENABLED_AFTER_SHARED_ROLLOUT';
 const isSharedCatalogEnabled = (env) => text(env?.SORIDRAW_SHARED_CATALOG_V1) === '1';
 const catalogBucket = (env) => (
   isSharedCatalogEnabled(env) && env?.CATALOG ? env.CATALOG : env.MEDIA
@@ -868,6 +873,9 @@ const readCatalogStateFromBucket = async (bucket, uid, kind) => {
 
 const seedSharedCatalogFromCurrentLegacy = async (identity, kind, requiredRevision, env) => {
   if (!isSharedCatalogEnabled(env) || !env?.CATALOG || !env?.MEDIA) return null;
+  if (kind === 'musicNote' && isCanonicalCatalogAuthority518(env)) {
+    throw new Error('CATALOG_518_LEGACY_SEED_DISABLED');
+  }
   const existingShared = await readCatalogStateFromBucket(env.CATALOG, identity.uid, kind);
   if (existingShared) return existingShared;
 
@@ -939,6 +947,11 @@ const bootstrapSharedCatalogFromCanonical = async (identity, kind, requiredRevis
   }
   const required = Math.max(0, Math.floor(Number(requiredRevision || 0)));
   const current = await readCatalogStateFromBucket(env.CATALOG, identity.uid, kind);
+  if (kind === 'musicNote' && isCanonicalCatalogAuthority518(env))
+    throw new Error('CATALOG_518_BOOTSTRAP_MUST_RECONCILE_EXACT');
+  if (kind === 'musicNote' && current &&
+      classifyCatalogAuthority518(current.head, kind).code !== 'LEGACY_UNFENCED')
+    throw new Error('CATALOG_518_FENCED_REBUILD_DENIED');
   if (current && (required <= 0 || Number(current.head?.headRevision || 0) >= required)) {
     return materializeCatalogState(current, kind);
   }
@@ -1078,6 +1091,11 @@ const applyCatalogDelta = async (identity, kind, delta, env, executionCtx = null
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const state = await getCatalogState(identity, kind, delta.baseRevision, env);
     const head = state.head;
+    if (kind === 'musicNote' && decideCatalogWriterAuthority518({
+      kind,head,operation:'legacy-delta',
+    }).code !== 'LEGACY_ALLOWED_WHILE_NOT_MIGRATED')
+      throw new Error('CATALOG_518_LEGACY_WRITER_DENIED');
+    // This executes again after each failed conditional HEAD put.
     const sanitizedDeletedIds = new Set(delta.deletedIds.map((id) => text(id)).filter(Boolean));
     // The existing base+journal are already in memory. Do not add per-item
     // canonical reads or rebuild the shared Catalog on old-client traffic.
@@ -1202,6 +1220,8 @@ const handleCatalog = async (request, env, origin, url, executionCtx = null) => 
     }
 
     if (request.method === 'POST' && route.action === 'delta') {
+      if (route.kind === 'musicNote' && isCanonicalCatalogAuthority518(env))
+        return jsonResponse({ok:false,code:'CATALOG_518_CANONICAL_WRITER_REQUIRED'},409,origin);
       const declaredLength = Number(request.headers.get('content-length') || 0);
       if (declaredLength > 2 * 1024 * 1024) return jsonResponse({ ok: false, code: 'CATALOG_DELTA_TOO_LARGE' }, 413, origin);
       const delta = await request.json();
@@ -1312,6 +1332,11 @@ export default {
         catalogCompactionAfter: 200,
         catalogBinding: Boolean(env.CATALOG),
         catalogAuthorityMode: catalogAuthorityMode(env),
+        catalogWriterFence518: {
+          fenceContract:FENCE_CONTRACT_518,
+          sourceInstalled: true,
+          canonicalEnabled: isCanonicalCatalogAuthority518(env),
+        },
       }, 200, origin);
     }
 

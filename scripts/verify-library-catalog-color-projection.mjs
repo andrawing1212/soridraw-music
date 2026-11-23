@@ -1,6 +1,7 @@
 // Narrow proof for canonical Suno track swatches surviving BOTH Catalog projections.
 // This does not read live user data or call any API. It must not rebuild R2.
 import assert from 'node:assert/strict';
+import {decideCatalogWriterAuthority518} from '../cloudflare/media-worker/src/catalogAuthorityPolicy518.js';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { appendCatalogJournalDelta as actualAppendCatalogJournalDelta } from '../cloudflare/media-worker/src/catalogJournal.js';
@@ -98,11 +99,11 @@ const actualWorkerApply = async ({ base, deltas = [], incoming, deletedIds = [],
   const baseRevision = 100 + deltas.length;
   const baseState = {
     base: { items: base },
-    head: { deltas, headRevision: baseRevision, itemCount: currentIds.size,
+    head: { kind, deltas, headRevision: baseRevision, itemCount: currentIds.size,
       recentMutations: [] },
     journalObject: { etag: 'base' },
   };
-  const states = [baseState, retryState || baseState];
+  const states = [baseState, retryState ? {...retryState,head:{...retryState.head,kind}} : baseState];
   let getCalls = 0;
   let putCalls = 0;
   let lastWritten = null;
@@ -114,6 +115,7 @@ const actualWorkerApply = async ({ base, deltas = [], incoming, deletedIds = [],
     projectCatalogFields: kind === 'musicNote' ? noteProject : workerProject,
     // Use the production journal's *actual* revision and count fences.
     appendCatalogJournalDelta: actualAppendCatalogJournalDelta,
+    decideCatalogWriterAuthority518,
     putCatalogJournalHead: async (_env, _uid, _kind, nextHead) => {
       putCalls++;
       lastWritten = nextHead;

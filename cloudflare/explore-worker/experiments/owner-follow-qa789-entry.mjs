@@ -118,7 +118,7 @@ export class OwnerFollowIsolated558 extends OriginalOwnerDO {
   return {engine,runtime,state,make};
  }
  async fetch(request){
-  if(!new URL(request.url).pathname.startsWith('/qa789/do/'))
+  if(!new URL(request.url).pathname.startsWith('/qa789/do/')&&new URL(request.url).pathname!=='/qa789/commit')
    return super.fetch(request);
   if(!this.qa789||!guard(request,this.env))
    return reply(403,{status:'DENIED'});
@@ -141,21 +141,68 @@ export class OwnerFollowIsolated558 extends OriginalOwnerDO {
      ...(v.status==='QA788_ADMITTED_AND_OWNER_DO_RESERVED'?
         {admission:v.admission,receipt:v.receipt}:{})});
    }
-   if(path==='/qa789/do/finalize'&&request.method==='POST'){
-    const b=await request.json(),selected=qa.make(
-     b?.canonicalOperationId,7,13,true);
-    if(!OP.test(selected.canonicalOperationId))return fail('INVALID_ID');
+   const finalizeExact=async(selected)=>{
     const stored=await qa.runtime.find(selected);
     if(stored?.status!=='found'||stored.receipt?.canonicalOperationId!==
-       selected.canonicalOperationId)return fail('DO_RECEIPT_NOT_FOUND');
+       selected.canonicalOperationId)return {status:'HOLD',reason:'DO_RECEIPT_NOT_FOUND'};
     const k=await keys(this.env,selected),admission={
      status:'ADMISSION_ONLY_NOT_D1_COMMIT',
      keyDigest:k.admission.split('/').pop(),
      productionDeployAuthorized:false,requiresCanonicalCommitProof:true,
      d1AdditionalRowsWritten:0};
-    const v=await qa.engine.finalize({operation:selected,
-     admission,receipt:stored.receipt});
+    return qa.engine.finalize({operation:selected,admission,receipt:stored.receipt});
+   };
+   if(path==='/qa789/do/finalize'&&request.method==='POST'){
+    const b=await request.json(),selected=qa.make(b?.canonicalOperationId,7,13,true);
+    if(!OP.test(selected.canonicalOperationId))return fail('INVALID_ID');
+    const v=await finalizeExact(selected);
     return reply(v.status==='HOLD'?409:200,{status:v.status,reason:v.reason||null});
+   }
+   if(path==='/qa789/commit'&&request.method==='POST'){
+    const env=this.env,b=await request.json();
+    const id=b?.canonicalOperationId;
+    if(!OP.test(id))return fail('CANONICAL_ID_INVALID');
+    const opA=op(env)(id);
+    const k=await keys(env,opA);
+    // Stop before D1 W1 unless exact conditional immutable R2 admission
+    // and genuine owner DO receipt exist in this run's isolated namespace.
+    // Verify the actual run-owned records, not just a generic 409 or key.
+    // APP788 may map different settlement failures to the same HOLD.
+    const [admissionRaw,floorRaw,settledRaw,projectionRaw]=await Promise.all([
+     env.QA789_R2.get(k.admission),env.QA789_R2.get(k.floor),
+     env.QA789_R2.head(k.settled),env.QA789_R2.head(k.projection)]);
+    if(!admissionRaw||!floorRaw||settledRaw||projectionRaw)
+     return fail('PRECOMMIT_EXACT_R2_RECORDS_UNAVAILABLE');
+    const admission=await admissionRaw.json(),floor=await floorRaw.json();
+    const matches=(record,fields)=>!!record&&fields.every(key=>record[key]===opA[key]);
+    if(admission?.kind!=='APP767_ADMISSION_NOT_CANONICAL_COMMIT'||
+       admission.version!==1||!matches(admission,['ownerUid','actorUid','authEpoch',
+        'canonicalOperationId','cutoverToken','expectedRevision','desired'])||
+       floor?.kind!=='APP788_QA_OWNER_FLOOR_V1'||!floorRaw.etag||
+       !matches(floor,['ownerUid','authEpoch','cutoverToken'])||
+       floor.d1Revision!==opA.expectedRevision||floor.r2Revision!==opA.priorR2Revision||
+       floor.lastOperationId!==''||
+       !matches(floor.pending,['actorUid','canonicalOperationId','expectedRevision','desired']))
+     return fail('PRECOMMIT_EXACT_R2_RECORDS_MISMATCH');
+    // Keep the original authenticated request inside this QA DO.
+    // Only an exact absent-commit proof permits the synthetic D1 mutation.
+    if(await pair(env)!==false)return fail('PRECOMMIT_D1_NOT_INITIAL');
+    const pre=await finalizeExact(opA);
+    if(pre.status!=='HOLD'||pre.reason!=='EXACT_CANONICAL_SETTLEMENT_NOT_PROVEN')
+     return fail('PRECOMMIT_NOT_EXACT_HOLD');
+    const w=await env.QA789_D1.prepare('UPDATE '+TABLE+
+      ' SET following=? WHERE k=? AND following=?')
+      .bind(1,env.QA789_ROW,0).run();
+    if(w?.meta?.rows_written!==1)return fail('CANONICAL_D1_W1_UNVERIFIED');
+    const p={ownerUid:OWNER,actorUid:ACTOR,authEpoch:opA.authEpoch,
+     operationId:id,desired:true,revision:8,r2Revision:14};
+    const put=await env.QA789_R2.put(k.projection,JSON.stringify(p),{
+     onlyIf:{etagDoesNotMatch:'*'},
+     httpMetadata:{contentType:'application/json'}});
+    if(!put?.etag)return fail('CANONICAL_R2_PROJECTION_UNCERTAIN');
+    const v=await finalizeExact(opA);
+    return reply(v.status==='HOLD'?409:200,{status:v.status,reason:v.reason||null,
+      d1RowsWritten:1,r2ProjectionSettled:true});
    }
    if(path==='/qa789/do/history'&&request.method==='GET'){
     const b=qa.engine, v=await b.inspect(a);
@@ -194,7 +241,7 @@ export default {
   const path=new URL(request.url).pathname;
   if(!path.startsWith('/qa789/'))return legacy.fetch(request,env,ctx);
   if(!guard(request,env))return reply(403,{status:'DENIED'});
-  if(path.startsWith('/qa789/do/'))return doCall(request,env);
+  if(path.startsWith('/qa789/do/')||path==='/qa789/commit')return doCall(request,env);
   const a=op(env)();
   try{
    if(path==='/qa789/health'&&request.method==='GET'){
@@ -203,42 +250,6 @@ export default {
     const f=await env.QA789_R2.head(k.floor);
     return reply(200,{status:'QA789_REAL_R2_D1_READY',
      following:p,floorPresent:!!f});
-   }
-   if(path==='/qa789/commit'&&request.method==='POST'){
-    const b=await request.json();
-    const id=b?.canonicalOperationId;
-    if(!OP.test(id))return fail('CANONICAL_ID_INVALID');
-    const opA=op(env)(id);
-    const k=await keys(env,opA);
-    // Stop before D1 W1 unless exact conditional immutable R2 admission
-    // and genuine owner DO receipt exist in this run's isolated namespace.
-    if(!await env.QA789_R2.head(k.admission))return fail('ADMISSION_MISSING');
-    const inspected=await doCall(new Request(
-     'https://qa.invalid/qa789/do/finalize',{method:'POST',
-      headers:{'X-QA789-Access':env.QA789_ACCESS},
-      body:JSON.stringify({canonicalOperationId:id})}),env);
-    // A 409 here is expected BEFORE D1 commit. No DO write by this check.
-    if(inspected.status!==409){
-     const detail=await inspected.clone().json().catch(()=>null);
-     return fail('PRECOMMIT_NOT_HELD_HTTP_'+inspected.status+'_CODE_'+
-       String(detail?.status||'NO_BODY').replace(/[^A-Z0-9_]/g,'').slice(0,45));
-    }
-    const w=await env.QA789_D1.prepare('UPDATE '+TABLE+
-      ' SET following=? WHERE k=? AND following=?')
-      .bind(1,env.QA789_ROW,0).run();
-    if(w?.meta?.rows_written!==1)return fail('CANONICAL_D1_W1_UNVERIFIED');
-    const p={ownerUid:OWNER,actorUid:ACTOR,authEpoch:opA.authEpoch,
-     operationId:id,desired:true,revision:8,r2Revision:14};
-    const put=await env.QA789_R2.put(k.projection,JSON.stringify(p),{
-     onlyIf:{etagDoesNotMatch:'*'},
-     httpMetadata:{contentType:'application/json'}});
-    if(!put?.etag)return fail('CANONICAL_R2_PROJECTION_UNCERTAIN');
-    const q=await doCall(new Request('https://qa.invalid/qa789/do/finalize',{
-      method:'POST',headers:{'X-QA789-Access':env.QA789_ACCESS},
-      body:JSON.stringify({canonicalOperationId:id})}),env);
-    const v=await q.json().catch(()=>null);
-    return reply(q.status,{status:v?.status||'HOLD',reason:v?.reason||null,
-      d1RowsWritten:1,r2ProjectionSettled:true});
    }
   }catch{return fail('D1_R2_OR_DO_UNCERTAIN')}
   return reply(404,{status:'NOT_FOUND'});

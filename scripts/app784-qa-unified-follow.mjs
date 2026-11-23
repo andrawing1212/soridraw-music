@@ -44,7 +44,15 @@ export function createApp784QaUnifiedFollow({
      c.verifiedActor.firebaseProjectId!=='soridraw-app-866a5'||
      !UID.test(c.verifiedActor.uid||'')||c.verifiedActor.uid===ownerUid||
      !/^[0-9a-f]{32}$/.test(c.verifiedActor.authEpoch||'')||
-     c.cutover?.verified!==true||!ID.test(c.cutover.token||''))
+     c.ownerEnrollment?.source!=='TRUSTED_OWNER_ENROLLMENT_775'||
+     c.ownerEnrollment.verified!==true||c.ownerEnrollment.enrolled!==true||
+     c.ownerEnrollment.ownerUid!==ownerUid||
+     !/^[0-9a-f]{32}$/.test(c.ownerEnrollment.ownerAuthEpoch||'')||
+     c.ownerEnrollment.ownerDeletionAndUidReuseReviewed!==true||
+     c.cutover?.verified!==true||!ID.test(c.cutover.token||'')||
+     c.cutover.everyActiveWriterCovered!==true||
+     c.cutover.everyLegacyWriterCovered!==true||
+     c.cutover.fullOwnerDoPitrCannotBypass!==true)
    return hold('QA_ACTOR_CUTOVER_UNVERIFIED');
   // An ordered replay must be exact and read-only. Never call settle() when
   // its immutable receipt is absent: that would create one on a replay.
@@ -52,12 +60,14 @@ export function createApp784QaUnifiedFollow({
    let r;try{r=await findExactSettledOperation({env,
     ownerUid,actorUid:c.verifiedActor.uid,
     authEpoch:c.verifiedActor.authEpoch,
+    ownerAuthEpoch:c.ownerEnrollment.ownerAuthEpoch,
     cutoverToken:c.cutover.token,canonicalOperationId:x.id,
     expectedRevision:x.revision,desired:method==='PUT'});}
    catch{return hold('REPLAY_LOOKUP_UNAVAILABLE')}
    if(r?.status==='verified-read-only'&&r.verified===true&&
       r.ownerUid===ownerUid&&r.actorUid===c.verifiedActor.uid&&
       r.authEpoch===c.verifiedActor.authEpoch&&
+      r.ownerAuthEpoch===c.ownerEnrollment.ownerAuthEpoch&&
       r.cutoverToken===c.cutover.token&&
       r.canonicalOperationId===x.id&&
       r.expectedRevision===x.revision&&

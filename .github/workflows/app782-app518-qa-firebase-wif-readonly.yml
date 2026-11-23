@@ -979,7 +979,7 @@ jobs:
             raise SystemExit('HOLD_QA518_FUNCTIONS_NOT_EXACT_PILOT_PLUS_FOLLOW')
           print('APP518_QA_FIREBASE_TWO_INSTALLED_FOLLOW_PRESERVED=PASS')
           PY
-      - name: QA one-song: actual saved delete receipt resave
+      - name: "QA one-song: actual saved delete receipt resave"
         shell: bash
         run: |
           set -euo pipefail

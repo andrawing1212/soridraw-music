@@ -1,7 +1,5 @@
 name: APP777 QA Firebase RS256 + common ingress offline safety
 on:
-  issue_comment:
-    types: [created]
   pull_request:
     branches: [main]
     paths:
@@ -49,13 +47,7 @@ jobs:
           node --check scripts/app783-qa-immutable-settled-history.mjs
           node scripts/verify-783-qa-immutable-settled-history.mjs
   live:
-    if: >-
-      github.event_name == 'issue_comment' &&
-      github.repository == 'andrawing1212/soridraw-music' &&
-      github.actor == github.repository_owner &&
-      github.event.issue.number == 1377 &&
-      github.event.issue.pull_request != null &&
-      startsWith(github.event.comment.body, '/app783-qa ')
+    if: false # APP783 isolated QA exact one-shot completed and cleaned, manual reapproval required
     env:
       APP783_QA_APPROVAL: APP783_ISOLATED_ONLY
     runs-on: ubuntu-24.04

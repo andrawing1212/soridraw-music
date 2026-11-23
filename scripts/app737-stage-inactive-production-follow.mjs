@@ -87,7 +87,7 @@ async function main(){
   [name,readFileSync(join(fileSource,'cloudflare/explore-worker/runtime',name),'utf8')]));
  const candidate=createApp728PreservedSourceCandidate({
    baseline,featureSources:features,sourceSha:source,lockedPreviewSha:source});
- if(candidate.manifest.runtimeEnabled!==false||
+ if(candidate.manifest.productionFollowSignalCompiledOpen!==false||
     candidate.manifest.unchangedProductionMain!==true)
    fail('CANDIDATE_SOURCE_UNSAFE');
  const root=join(resolve(process.env.RUNNER_TEMP||''),'app737-stage');

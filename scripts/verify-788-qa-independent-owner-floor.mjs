@@ -94,6 +94,7 @@ const prepared=await engine.reserve(a);
 assert.equal(prepared.status,'QA788_ADMITTED_AND_OWNER_DO_RESERVED');
 assert.equal(prepared.receipt.durable,true);
 assert.equal(d1Writes,0);assert.equal(objects.size,2);
+assert.equal((await engine.inspect(a)).pending,true);
 const args={operation:a,admission:prepared.admission,receipt:prepared.receipt};
 assert.equal((await engine.finalize(args)).status,'HOLD');
 now+=1000;
@@ -126,16 +127,46 @@ assert.equal((await engine.reserve({...a,authEpoch:'b'.repeat(32)})).status,'HOL
 assert.equal(classA,before);certified=true;
 committed=false;
 const b=op('qa788CanonicalOperation00002',8,14,false);
-const next=await engine.reserve(b);
-assert.equal(next.status,'QA788_ADMITTED_AND_OWNER_DO_RESERVED');
+const competitor=op('qa788CanonicalOperation00003',8,14,false);
+// Two distinct IDs racing at the same pair/owner revision must NOT both
+// create admissions or DO reservations. The R2 floor itself is CAS locked.
+const raced=await Promise.all([engine.reserve(b),engine.reserve(competitor)]);
+const wins=raced.filter(v=>v.status==='QA788_ADMITTED_AND_OWNER_DO_RESERVED');
+assert.equal(wins.length,1,'one revision can have only one pending ID');
+assert.equal(raced.filter(v=>v.status==='HOLD').length,1);
+const winnerOp=raced[0]===wins[0]?b:competitor;
+assert.equal(issued,2,'two distinct rev8 operations must not both reserve DO');
 committed=true;d1Revision=9;r2Revision=15;d1Writes++;
-assert.equal((await engine.finalize({operation:b,admission:next.admission,
- receipt:next.receipt})).status,'QA788_IMMUTABLE_SETTLED_AND_FLOOR_ADVANCED');
+assert.equal((await engine.finalize({operation:winnerOp,admission:wins[0].admission,
+ receipt:wins[0].receipt})).status,'QA788_IMMUTABLE_SETTLED_AND_FLOOR_ADVANCED');
 assert.equal(objects.size,5);
 assert.equal(d1Writes,2,'W1 per changed synthetic operation, ledger adds W0');
 assert.equal((await engine.reserve(b)).status,'HOLD');
+assert.equal((await engine.reserve(competitor)).status,'HOLD');
+// Simulate 503 AFTER a pending-floor CAS and BEFORE R2 admission.
+// Exact same ID may resume, but a different ID must remain blocked.
+committed=false;
+const third=op('qa788CanonicalOperation00004',9,15,true);
+uncertainAfterFloorCAS=true;
+const doBefore=issued;
+assert.equal((await engine.reserve(third)).reason,'PENDING_FLOOR_CAS_ACK_UNKNOWN');
+assert.equal(issued,doBefore,'no DO reservation after uncertain floor ACK');
+const unrelated=op('qa788CanonicalOperation00005',9,15,true);
+assert.equal((await engine.reserve(unrelated)).reason,
+ 'OWNER_REVISION_HAS_DIFFERENT_PENDING_OPERATION');
+const repaired=await engine.reserve(third);
+assert.equal(repaired.status,'QA788_ADMITTED_AND_OWNER_DO_RESERVED');
+assert.equal(issued,doBefore+1,'same ID resumes only once');
+committed=true;d1Revision=10;r2Revision=16;d1Writes++;
+assert.equal((await engine.finalize({operation:third,
+ admission:repaired.admission,receipt:repaired.receipt})).status,
+ 'QA788_IMMUTABLE_SETTLED_AND_FLOOR_ADVANCED');
+assert.equal(d1Writes,3);
+assert.equal(objects.size,7);
 console.log('APP788_R2_CONDITIONAL_ADMISSION_SETTLED_AND_OWNER_CAS_FLOOR=PASS');
 console.log('APP788_APP761_OWNER_DO_RESERVATION_ALARM_AND_PITR_FENCE=PASS');
 console.log('APP788_R2_503_AFTER_CAS_READ_ONLY_RECONCILIATION=PASS');
+console.log('APP788_SAME_REVISION_TWO_IDS_RACE_SINGLE_FLIGHT=PASS');
+console.log('APP788_PENDING_CAS_ACK_LOSS_SAME_ID_RECOVERY=PASS');
 console.log('APP788_SYNTHETIC_D1_W1_EACH_ADDITIONAL_HISTORY_D1_W0=PASS');
 console.log('APP788_LIVE_CUTOVER_AUTH_ERASURE_PROD_DO=NOT_VERIFIED_HOLD');

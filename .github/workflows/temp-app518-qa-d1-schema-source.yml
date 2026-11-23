@@ -4,6 +4,7 @@ on:
     branches: [feat/app518-qa-d1-isolated-schema]
     paths:
       - 'qa/app518/live/apply-qa-d1-schema518.mjs'
+      - 'qa/app518/live/readiness518.mjs'
       - 'qa/app518/live/verify-qa-d1-schema518.mjs'
       - '.github/workflows/app782-app518-qa-firebase-wif-readonly.yml'
       - '.github/workflows/temp-app518-qa-d1-schema-source.yml'

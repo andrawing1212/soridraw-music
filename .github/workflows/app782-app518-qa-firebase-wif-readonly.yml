@@ -30,7 +30,7 @@ jobs:
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: projects/1083981050742/locations/global/workloadIdentityPools/soridraw-qa-github/providers/app518-readonly
-          service_account: soridraw-qa-gh-deployer@soridraw-app.iam.gserviceaccount.com
+          service_account: soridraw-qa-gh-reader@soridraw-app.iam.gserviceaccount.com
           project_id: soridraw-app
           create_credentials_file: true
       - uses: google-github-actions/setup-gcloud@v2

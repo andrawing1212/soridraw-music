@@ -218,7 +218,11 @@ export default {
       headers:{'X-QA789-Access':env.QA789_ACCESS},
       body:JSON.stringify({canonicalOperationId:id})}),env);
     // A 409 here is expected BEFORE D1 commit. No DO write by this check.
-    if(inspected.status!==409)return fail('PRECOMMIT_MUST_NOT_SETTLE');
+    if(inspected.status!==409){
+     const detail=await inspected.clone().json().catch(()=>null);
+     return fail('PRECOMMIT_NOT_HELD_HTTP_'+inspected.status+'_CODE_'+
+       String(detail?.status||'NO_BODY').replace(/[^A-Z0-9_]/g,'').slice(0,45));
+    }
     const w=await env.QA789_D1.prepare('UPDATE '+TABLE+
       ' SET following=? WHERE k=? AND following=?')
       .bind(1,env.QA789_ROW,0).run();

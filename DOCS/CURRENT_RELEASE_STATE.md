@@ -1,3 +1,13 @@
+## CURRENT — APP518 독립 QA Firebase 실제 저장→삭제 영수증→재저장 PASS (2026-11-23 KST)
+
+- **실사용 서버 검증:** [GitHub Actions #45108566565](https://github.com/andrawing1212/soridraw-music/actions/runs/45108566565) **성공**. QA 프로젝트 `soridraw-app`(1083981050742)에서 실행별 합성곡 1건을 실제 Firestore에 저장 → Firestore hard-delete → Eventarc 원본 삭제 전 protobuf 이벤트 처리·서버 영수증 쓰기 → 정확한 `removed` 상태 원본 조회 → 같은 ID 재저장·더 최신 `saved` 상태 조회까지 확인. 로그 `APP518_QA_REAL_FIREBASE_SAVE_DELETE_RECEIPT_RESAVE=PASS`.
+- **직접 원인 및 수정:** Firebase SDK의 `onDocumentDeleted` 래퍼를 Firebase CLI 대신 `gcloud functions deploy`로 배포한 것이 이벤트 처리 방식 불일치의 핵심이었다. `qa/app518/firebase/index.cjs`의 QA 한정 삭제 수신기를 네이티브 `@google-cloud/functions-framework` CloudEvent + `protobufjs` Firestore `DocumentEventData.oldValue` 디코딩으로 교체. `main` QA 코드에만 반영, 원래 후보 PR #528 SHA `864f796da24413309567198c9de502b13cdedd50` 변경 없음.
+- **정리 완료:** 같은 Actions에서 `APP518_QA_ONE_SONG_FAVORITE_AND_RECEIPT_CLEANED=PASS` 및 `APP518_QA_FIREBASE_EXACT_TWO_CLEANED_ORIGINAL_FOLLOW_RESTORED=PASS`. 합성 favorite와 영수증 0건, 시험용 Firebase 함수 2개 자동 삭제, 기존 `publishExploreOwnerFollower542` 보존. 임시 `allUsers` Run Invoker는 QA run-bound 삭제 함수 1개에만 적용되었고 해당 함수 삭제로 함께 제거됨. 공유 사용자/운영·TEST·PRODUCTION 변경 없음.
+- **범위 구분:** 이 PASS는 **QA Firebase 저장·hard-delete 영수증·재저장 부분의 실서버 검증**. Cloudflare D1→R2 및 Worker와의 완전 통합, PREVIEW/PC/모바일 동작, PRODUCTION 배포는 **아직 미검증/미배포**. QA D1 5표·2색인의 기존 설치 PASS 재사용, 같은 Firebase QA 시험 반복 금지. QA 임시 공개 호출 설정은 정식 릴리스에 절대 사용 금지.
+- **정리:** 실패했던 QA 로그 조회용 일회성 job은 읽기 권한이 없어 `main`에서 제거. 추가 보안/진단 스텝 확대보다 실제 D1→R2 연결 구현·실검증을 다음 기술 잔여 작업으로 취급.
+
+---
+
 ## CURRENT — APP518 QA Firebase 배포 IAM ActAs 차단 / 함수 원복 PASS (2026-11-23 KST)
 
 - **실행:** 디렉터의 '빨리 마무리' 지시 아래 승인된 QA 2함수 배포를 실제 시도. [PR #1368](https://github.com/andrawing1212/soridraw-music/pull/1368) `d41f7ac1c1e5142e76e0e6e180f4cda392a64011` 병합: 정확 PR #528 SHA의 QA 전용 `app518qa` 2함수만 별도 codebase로 원샷 배포·항상 자동 삭제하는 owner-comment WIF job 추가. YAML root indentation `916ad1af7bedda5c8ac32a73ecc27b7e04776ca5`에서 바로 수정.

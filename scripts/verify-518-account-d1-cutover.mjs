@@ -5,12 +5,10 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash,createPublicKey,verify,generateKeyPairSync,sign} from 'node:crypto';
+import {ACCOUNT_WORKER_NAMES_518,INDIRECT_ONLY_518,exactIndirectBindings518}
+ from './app518-account-worker-inventory.mjs';
 
-const NAMES=Object.freeze([
- 'soridraw-explore-api','soridraw-explore-preview',
- 'soridraw-explore-test','soridraw-explore-migration-inspect',
- 'soridraw-media','soridraw-media-preview','soridraw-media-test',
-]);
+const NAMES=ACCOUNT_WORKER_NAMES_518;
 const MIGRATION='soridraw-explore-migration-inspect';
 const SHARED_DB='217ef5b1-5d80-4f7c-afc7-9e07eb05c06b';
 const RATE_PREVIEW='aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f';
@@ -54,6 +52,12 @@ export const assessAccountD1Cutover518=({
   ||external?.serviceAccountsEnumerated!==true
   ||external?.allDirectD1EditGrantsDisabled!==true
   ||external?.unmanagedExternalWriters===0!==true
+  // GitHub Actions, Wrangler and any other external D1 SQL routes bypass
+  // Worker budget wrappers. Independent evidence must enumerate and prove
+  // these callers unable to write outside the shared account reservation.
+  ||external?.gitHubDirectD1WorkflowsEnumerated!==true
+  ||external?.gitHubDirectD1PathsDisabledOrMetered!==true
+  ||!ref(external?.gitHubD1ExecutionAuditRef)
   ||!fresh(external?.checkedAtMs,nowMs)||!ref(external?.evidenceRef))
   return deny('HOLD_518_EXTERNAL_D1_API_WRITER_NOT_REVOKED');
  if(!Array.isArray(live?.workers)||live.workers.length!==NAMES.length
@@ -103,12 +107,26 @@ export const assessAccountD1Cutover518=({
   if(!Array.isArray(d1)||d1.some(b=>!allowedDbIds.has(b.databaseId))
    ||new Set(d1.map(b=>b.binding)).size!==d1.length)
    return deny('HOLD_518_D1_BINDINGS_UNKNOWN_'+name);
+  const actualIndirect=current?.indirectBindings;
+  if(!exactIndirectBindings518(actualIndirect,audited?.indirectBindings))
+   return deny('HOLD_518_INDIRECT_BINDING_VERSION_DRIFT_'+name);
   if(name===MIGRATION){
    // A read-only JS source is not enough while SOURCE_DB remains writable.
-   if(d1.length||current?.indirectBindings?.length
+   if(d1.length||actualIndirect.length
     ||audited?.state!=='RETIRED_NO_D1_BINDING'
     ||audited?.budgetAware!==false)
     return deny('HOLD_518_MIGRATION_INSPECT_SOURCE_DB_STILL_BOUND');
+  }else if(Object.hasOwn(INDIRECT_ONLY_518,name)){
+   // The two owner-follow Workers have no direct D1 binding but can reach
+   // shared D1 via services/DO. Never call them SAFE merely for D1=[].
+   if(d1.length||!exactIndirectBindings518(actualIndirect,INDIRECT_ONLY_518[name])
+    ||audited?.budgetAware!==false
+    ||audited?.state!=='INDIRECT_ONLY_NO_D1'
+    ||audited?.indirectPathsVerified!==true
+    ||audited?.downstreamD1WritersMeteredVerified!==true
+    ||!ref(audited?.indirectAuditRef)
+    ||audited?.sourceApprovedAfterIndependentAudit!==true)
+    return deny('HOLD_518_INDIRECT_D1_PATHS_UNVERIFIED_'+name);
   }else{
    if(audited?.budgetAware!==true
     ||audited?.accountLedgerDbId!==SHARED_DB
@@ -123,7 +141,13 @@ export const assessAccountD1Cutover518=({
    ||rollback.codeSha256!==audited.rollbackCodeSha256
    ||!Array.isArray(rollback.d1Bindings)||!Array.isArray(audited.rollbackD1Bindings)
    ||normalize(rollback.d1Bindings)!==normalize(audited.rollbackD1Bindings)
-   ||(name===MIGRATION&&rollback.d1Bindings.length!==0))
+   ||!exactIndirectBindings518(rollback.indirectBindings,
+     audited.rollbackIndirectBindings)
+   ||(name===MIGRATION&&rollback.d1Bindings.length!==0)
+   ||(Object.hasOwn(INDIRECT_ONLY_518,name)&&
+     (rollback.d1Bindings.length!==0
+      ||!exactIndirectBindings518(rollback.indirectBindings,
+        INDIRECT_ONLY_518[name]))))
    return deny('HOLD_518_ROLLBACK_IMMUTABLE_PROOF_MISSING_'+name);
   const approvedD1=audited?.d1Bindings;
   if(!Array.isArray(approvedD1)
@@ -147,10 +171,11 @@ const selfTest=()=>{
  const live={databaseIds:[...KNOWN_DBS],workers:NAMES.map((name,i)=>({
   name,active:[{versionId:versions[i],trafficPercent:100}],
   codeSha256:'b'.repeat(64),
-  d1Bindings:ids[name]||[],indirectBindings:[],
+  d1Bindings:ids[name]||[],indirectBindings:INDIRECT_ONLY_518[name]||[],
  })),
  rollbackVersions:NAMES.map((name,i)=>({name,
   versionId:versions[i],codeSha256:'b'.repeat(64),d1Bindings:ids[name]||[],
+  indirectBindings:INDIRECT_ONLY_518[name]||[],
  })),
  };
  const evidence={purpose:'APP518_ACCOUNT_D1_ALL_WRITER_CUTOVER',releaseSha,
@@ -160,7 +185,10 @@ const selfTest=()=>{
   externalD1Access:{source:'INDEPENDENT_CLOUDFLARE_ACCOUNT_AND_USER_TOKEN_AUDIT',
    checkedAtMs:nowMs-1000,accountTokensEnumerated:true,userTokensEnumerated:true,
    serviceAccountsEnumerated:true,allDirectD1EditGrantsDisabled:true,
-   unmanagedExternalWriters:0,evidenceRef:'independent-token-scope-audit-001'},
+   unmanagedExternalWriters:0,evidenceRef:'independent-token-scope-audit-001',
+   gitHubDirectD1WorkflowsEnumerated:true,
+   gitHubDirectD1PathsDisabledOrMetered:true,
+   gitHubD1ExecutionAuditRef:'independent-github-d1-execution-audit-001'},
   workers:live.workers.map(w=>({
    name:w.name,activeVersionId:w.active[0].versionId,
    rollbackVersionId:w.active[0].versionId,rollbackBudgetAware:true,
@@ -168,8 +196,15 @@ const selfTest=()=>{
    rollbackSourceAuditRef:'independent-rollback-source-proof-001',
    rollbackDrainProofRef:'independent-rollback-drain-proof-001',
    rollbackD1Bindings:w.d1Bindings,
-   bundleSha256:'b'.repeat(64),budgetAware:w.name!==MIGRATION,
-   state:w.name===MIGRATION?'RETIRED_NO_D1_BINDING':'BUDGET_AWARE',
+   rollbackIndirectBindings:w.indirectBindings,
+   bundleSha256:'b'.repeat(64),budgetAware:w.name!==MIGRATION&&
+    !Object.hasOwn(INDIRECT_ONLY_518,w.name),
+   state:w.name===MIGRATION?'RETIRED_NO_D1_BINDING':
+    Object.hasOwn(INDIRECT_ONLY_518,w.name)?'INDIRECT_ONLY_NO_D1':'BUDGET_AWARE',
+   indirectPathsVerified:Object.hasOwn(INDIRECT_ONLY_518,w.name),
+   downstreamD1WritersMeteredVerified:Object.hasOwn(INDIRECT_ONLY_518,w.name),
+   indirectAuditRef:'independent-owner-follow-d1-routing-audit-001',
+   indirectBindings:w.indirectBindings,
    accountLedgerDbId:SHARED_DB,sourceApprovedAfterIndependentAudit:true,
    sourceAuditRef:'independent-source-digest-evidence-001',
    drainedOldFlightsRef:'independent-old-flight-drain-001',
@@ -190,6 +225,34 @@ const selfTest=()=>{
  fail('untrusted token',()=>evidence.externalD1Access.allDirectD1EditGrantsDisabled=false,
   'HOLD_518_EXTERNAL_D1_API_WRITER_NOT_REVOKED');
  evidence.externalD1Access.allDirectD1EditGrantsDisabled=true;
+ fail('unmetered GitHub D1 path',
+  ()=>evidence.externalD1Access.gitHubDirectD1PathsDisabledOrMetered=false,
+  'HOLD_518_EXTERNAL_D1_API_WRITER_NOT_REVOKED');
+ evidence.externalD1Access.gitHubDirectD1PathsDisabledOrMetered=true;
+ fail('unlisted GitHub D1 workflow',
+  ()=>evidence.externalD1Access.gitHubDirectD1WorkflowsEnumerated=false,
+  'HOLD_518_EXTERNAL_D1_API_WRITER_NOT_REVOKED');
+ evidence.externalD1Access.gitHubDirectD1WorkflowsEnumerated=true;
+ const owner=NAMES.indexOf('soridraw-owner-follow-preview-candidate');
+ fail('indirect service changed',
+  ()=>live.workers[owner].indirectBindings=[{
+   name:'OWNER_FOLLOW_CANONICAL_REPLAY_600',type:'service',
+   service:'soridraw-explore-api'},
+   {name:'OWNER_FOLLOW_DO_600',type:'durable_object_namespace'}],
+  'HOLD_518_INDIRECT_BINDING_VERSION_DRIFT_'+NAMES[owner]);
+ live.workers[owner].indirectBindings=INDIRECT_ONLY_518[NAMES[owner]];
+ fail('indirect source not audited',
+  ()=>evidence.workers[owner].indirectPathsVerified=false,
+  'HOLD_518_INDIRECT_D1_PATHS_UNVERIFIED_'+NAMES[owner]);
+ evidence.workers[owner].indirectPathsVerified=true;
+ fail('indirect downstream unmetered',
+  ()=>evidence.workers[owner].downstreamD1WritersMeteredVerified=false,
+  'HOLD_518_INDIRECT_D1_PATHS_UNVERIFIED_'+NAMES[owner]);
+ evidence.workers[owner].downstreamD1WritersMeteredVerified=true;
+ fail('new direct DB in indirect-only worker',
+  ()=>live.workers[owner].d1Bindings=[{binding:'DB',databaseId:SHARED_DB}],
+  'HOLD_518_INDIRECT_D1_PATHS_UNVERIFIED_'+NAMES[owner]);
+ live.workers[owner].d1Bindings=[];
  fail('unknown worker',()=>live.workers[6].name='unrecognized-worker',
   'HOLD_518_UNKNOWN_OR_DUPLICATE_WORKER');
  live.workers[6].name=NAMES[6];
@@ -237,7 +300,9 @@ const selfTest=()=>{
  console.log('APP518_MIGRATION_RETIRE_SOURCE_NO_D1_BINDING=PASS');
  console.log('APP518_MIGRATION_D1_BINDING_RETIREMENT_REQUIRED=PASS');
  console.log('APP518_EXTERNAL_D1_API_TOKENS_FAIL_CLOSED=PASS');
- console.log('APP518_ALL_SEVEN_WORKER_VERSIONS_D1_DATABASES_ROLLBACK=PASS');
+ console.log('APP518_ALL_NINE_WORKER_VERSIONS_D1_DATABASES_ROLLBACK=PASS');
+ console.log('APP518_OWNER_FOLLOW_TWO_INDIRECT_WORKERS_EXACT_SERVICE_DO=PASS');
+ console.log('APP518_GITHUB_DIRECT_D1_PATH_UNPROVEN_HOLD=PASS');
  console.log('APP518_SIGNED_ACCOUNT_COVERAGE_CANNOT_AUTHORIZE_DEPLOY=PASS');
 };
 if(process.argv.includes('--self-test'))selfTest();

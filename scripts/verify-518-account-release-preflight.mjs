@@ -7,11 +7,11 @@ import {createHash,createPublicKey,verify} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {assessAccountD1Cutover518}
  from './verify-518-account-d1-cutover.mjs';
+import {ACCOUNT_WORKER_NAMES_518,exactIndirectBindings518}
+ from './app518-account-worker-inventory.mjs';
 const ACCOUNT='e1a30fc9ef497fda1d34f4ab3dc1da45';
 const API='https://api.cloudflare.com/client/v4/accounts/'+ACCOUNT;
-const NAMES=['soridraw-explore-api','soridraw-explore-preview',
- 'soridraw-explore-test','soridraw-explore-migration-inspect',
- 'soridraw-media','soridraw-media-preview','soridraw-media-test'];
+const NAMES=ACCOUNT_WORKER_NAMES_518;
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const deny=code=>{throw Error(code)};
 const validId=id=>/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(id||'');
@@ -52,7 +52,12 @@ export const normalizeLiveD1Bindings518=raw=>{
   ||new Set(d1.map(x=>x.binding)).size!==d1.length)
   deny('HOLD_518_BAD_D1_ID');
  const indirect=raw.filter(x=>['durable_object_namespace','dispatch_namespace','service']
-  .includes(x.type)).map(x=>({name:x.name,type:x.type}));
+  .includes(x.type)).map(x=>({
+   name:x.name,type:x.type,
+   ...(x.type==='service'?{service:x.service}:{}),
+  }));
+ if(!exactIndirectBindings518(indirect,indirect))
+  deny('HOLD_518_LIVE_INDIRECT_BINDINGS_UNKNOWN');
  return {d1,indirect};
 };
 const bindings=normalizeLiveD1Bindings518;
@@ -117,6 +122,8 @@ export const observeLiveAccount518=async({request,token,rollbackVersionIds=[]}={
   const normalize=d1=>JSON.stringify([...d1].sort((a,b)=>a.binding.localeCompare(b.binding)));
   if(normalize(meta.d1Bindings)!==normalize(current.d1))
    deny('HOLD_518_ACTIVE_D1_SETTINGS_DRIFT_'+name);
+  if(!exactIndirectBindings518(meta.indirectBindings,current.indirect))
+   deny('HOLD_518_ACTIVE_INDIRECT_SETTINGS_DRIFT_'+name);
   workers.push({name,active:[{versionId:id,trafficPercent:100}],
    codeSha256:meta.codeSha256,d1Bindings:meta.d1Bindings,
    indirectBindings:meta.indirectBindings});
@@ -177,6 +184,8 @@ export const verifyRestoredExact518=({signed,publicKeyPem,trustedHash,releaseSha
    ||worker?.rollbackCodeSha256!==observed?.codeSha256
    ||!Array.isArray(observed?.d1Bindings)
    ||!Array.isArray(worker?.rollbackD1Bindings)
+   ||!exactIndirectBindings518(observed?.indirectBindings,
+     worker?.rollbackIndirectBindings)
    ||normalize(observed.d1Bindings)!==normalize(worker.rollbackD1Bindings)
    ||observed?.activeVersionId!==restoreVersion
    ||observed?.trafficPercent!==100)
@@ -211,7 +220,7 @@ const live=async()=>{
  }else if(mode==='--post-compensate'){
   // No new mutable release evidence can be substituted for the original
   // trusted signed account snapshot. The original active version must be
-  // exactly restored and fully validated against all seven signed Writers.
+  // exactly restored and fully validated against all nine signed Workers.
   const original=process.argv[5];
   if(!validId(original))deny('HOLD_518_COMPENSATION_TARGET_MISSING');
   const snapshot=await observeLiveAccount518({request:fetch,token,rollbackVersionIds});

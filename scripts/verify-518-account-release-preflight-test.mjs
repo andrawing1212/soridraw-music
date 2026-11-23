@@ -21,7 +21,9 @@ const core={purpose:'APP518_ACCOUNT_D1_ALL_WRITER_CUTOVER',releaseSha:sha,
 const signed=()=>{const payload=JSON.stringify(core);
  return {payload,signature:sign(null,Buffer.from(payload),privateKey).toString('base64')}};
 const observed={activeVersionId:rollback,trafficPercent:100,
- codeSha256:'b'.repeat(64),d1Bindings:core.workers[0].rollbackD1Bindings};
+ codeSha256:'b'.repeat(64),d1Bindings:core.workers[0].rollbackD1Bindings,
+ indirectBindings:[]};
+core.workers[0].rollbackIndirectBindings=[];
 const input=()=>({signed:signed(),publicKeyPem:pem,trustedHash:trusted,
  releaseSha:sha,nowMs,restoreWorker:worker,restoreVersion:rollback,observed});
 assert.equal(verifyRestoredExact518(input()).pass,true);
@@ -82,28 +84,36 @@ assert.throws(()=>normalizeLiveD1Bindings518([
 // Exercise the authenticated live-version reader through every API endpoint,
 // not merely the normalization helper. Version-specific bindings and script
 // settings both contain the same active SOURCE_DB type='d1_database'.
-const seven=['soridraw-explore-api','soridraw-explore-preview',
+const nine=['soridraw-explore-api','soridraw-explore-preview',
  'soridraw-explore-test','soridraw-explore-migration-inspect',
- 'soridraw-media','soridraw-media-preview','soridraw-media-test'];
+ 'soridraw-media','soridraw-media-preview','soridraw-media-test',
+ 'soridraw-owner-follow-preview-candidate',
+ 'soridraw-owner558-proof-42959936171-1'];
 const version='aaaabbbb-2222-4222-8222-123456789abc';
 const mockRead=async(url,opts)=>{
  assert.equal(opts.method,'GET','read-only account probe');
  const path=new URL(url).pathname;
  const query=new URL(url).search;
- const target=seven.find(x=>path.includes('/'+x+'/'));
+ const target=nine.find(x=>path.includes('/'+x+'/'));
  const dbBinding=(path.includes('migration-inspect'))
   ?[{name:'SOURCE_DB',type:'d1_database',database_id:realDb}]:[];
+ const indirect=target==='soridraw-owner-follow-preview-candidate'?
+  [{name:'OWNER_FOLLOW_CANONICAL_REPLAY_600',type:'service',
+    service:'soridraw-explore-preview'},
+   {name:'OWNER_FOLLOW_DO_600',type:'durable_object_namespace'}]:
+  target==='soridraw-owner558-proof-42959936171-1'?
+   [{name:'OWNER558_DO',type:'durable_object_namespace'}]:[];
  let result;
- if(path.endsWith('/workers/scripts'))result=seven.map(id=>({id}));
+ if(path.endsWith('/workers/scripts'))result=nine.map(id=>({id}));
  else if(path.endsWith('/d1/database'))result=[
   {uuid:realDb},{uuid:'aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f'},
   {uuid:'31817dbd-d06e-415e-9bc0-5553b0f5dc43'}];
  else if(path.endsWith('/deployments'))result={deployments:[{
   versions:[{version_id:version,percentage:100}],
  }]};
- else if(path.endsWith('/settings'))result={bindings:dbBinding};
+ else if(path.endsWith('/settings'))result={bindings:[...dbBinding,...indirect]};
  else if(path.endsWith('/versions/'+version)&&!query)result={
-  resources:{bindings:dbBinding}};
+  resources:{bindings:[...dbBinding,...indirect]}};
  else if(path.endsWith('/versions/'+version)&&query.includes('include=modules'))
   result={id:version,modules:[{name:'index.js',content_type:'application/javascript',
    content_base64:Buffer.from('export default {fetch(){}}').toString('base64')}]};
@@ -112,12 +122,21 @@ const mockRead=async(url,opts)=>{
 };
 const observedSnapshot=await observeLiveAccount518({
  request:mockRead,token:'isolated-readonly-test-token',
- rollbackVersionIds:seven.map(name=>({name,versionId:version})),
+ rollbackVersionIds:nine.map(name=>({name,versionId:version})),
 });
 const migration=observedSnapshot.workers.find(x=>x.name.endsWith('migration-inspect'));
 assert.deepEqual(migration.d1Bindings,[{binding:'SOURCE_DB',databaseId:realDb}]);
 assert.deepEqual(observedSnapshot.rollbackVersions.find(x=>x.name===migration.name).d1Bindings,
  migration.d1Bindings);
+assert.equal(observedSnapshot.workers.length,9);
+const follow=observedSnapshot.workers.find(x=>
+ x.name==='soridraw-owner-follow-preview-candidate');
+assert.equal(follow.d1Bindings.length,0);
+assert.deepEqual(follow.indirectBindings,[
+ {name:'OWNER_FOLLOW_CANONICAL_REPLAY_600',type:'service',
+  service:'soridraw-explore-preview'},
+ {name:'OWNER_FOLLOW_DO_600',type:'durable_object_namespace'},
+]);
 // Even an independently valid signature must HOLD while the live inspector
 // has SOURCE_DB. A properly signed report cannot redefine live D1 bindings.
 const signedAccount={
@@ -129,6 +148,9 @@ const signedAccount={
   serviceAccountsEnumerated:true,allDirectD1EditGrantsDisabled:true,
   unmanagedExternalWriters:0,checkedAtMs:nowMs-1000,
   evidenceRef:'independent-token-evidence-001',
+  gitHubDirectD1WorkflowsEnumerated:true,
+  gitHubDirectD1PathsDisabledOrMetered:true,
+  gitHubD1ExecutionAuditRef:'independent-github-d1-audit-001',
  },
  ledger:{dbId:realDb,table:'music_note_catalog_daily_budget_518',
   atomicReservationVerified:true,schemaEvidenceRef:'independent-ledger-proof-001'},
@@ -138,8 +160,14 @@ const signedAccount={
   rollbackCodeSha256:w.codeSha256,
   rollbackSourceAuditRef:'independent-rollback-digest-001',
   rollbackDrainProofRef:'independent-rollback-drain-001',
-  rollbackD1Bindings:[],budgetAware:w.name!==migration.name,
-  state:w.name===migration.name?'RETIRED_NO_D1_BINDING':'BUDGET_AWARE',
+  rollbackD1Bindings:[],rollbackIndirectBindings:w.indirectBindings,
+  budgetAware:w.name!==migration.name&&!w.name.startsWith('soridraw-owner'),
+  state:w.name===migration.name?'RETIRED_NO_D1_BINDING':
+   w.name.startsWith('soridraw-owner')?'INDIRECT_ONLY_NO_D1':'BUDGET_AWARE',
+  indirectPathsVerified:w.name.startsWith('soridraw-owner'),
+  downstreamD1WritersMeteredVerified:w.name.startsWith('soridraw-owner'),
+  indirectAuditRef:'independent-indirect-service-path-001',
+  indirectBindings:w.indirectBindings,
   accountLedgerDbId:realDb,sourceApprovedAfterIndependentAudit:true,
   sourceAuditRef:'independent-source-digest-001',
   drainedOldFlightsRef:'independent-old-flights-001',
@@ -156,3 +184,4 @@ console.log('APP518_P1_D1_DATABASE_MIGRATION_SOURCE_DB_LIVE_READER_HOLD=PASS');
 console.log('APP518_RELEASE_CONTROLLER_PIN_FROM_GITHUB_SECRET=PASS');
 console.log('APP518_PROTECTED_ROLLBACK_EXACT_CODE_BINDINGS_AND_SIGNATURE=PASS');
 console.log('APP518_UNKNOWN_EXTERNAL_WORKER_AND_MISSING_TRUST_HOLD=PASS');
+console.log('APP518_ACCOUNT_NINE_WORKER_INDIRECT_LIVE_PROBE=PASS');

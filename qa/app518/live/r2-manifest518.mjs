@@ -24,6 +24,7 @@ const assertRun=()=>{
  assert.ok([
   '/app518-qa-r2-lifecycle 864f796da24413309567198c9de502b13cdedd50',
   '/app518-qa-integrated 864f796da24413309567198c9de502b13cdedd50',
+  '/app518-qa-orphan-cleanup 864f796da24413309567198c9de502b13cdedd50',
  ].includes(event?.comment?.body));
  assert.equal(event?.sender?.id,268937716);
 };
@@ -44,6 +45,9 @@ const get=async(path,tok)=>{
 };
 export async function prepareQaR2Manifest518(){
  assertRun();
+ const event=JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH,'utf8'));
+ const recovering=event.comment.body==='/app518-qa-orphan-cleanup 864f796da24413309567198c9de502b13cdedd50';
+ const targetRun=recovering?'45157596620':run;
  if(account==='e1a30fc9ef497fda1d34f4ab3dc1da45')
   fail('HOLD_QA_PRODUCTION_ACCOUNT');
  const [workers,dbs,buckets,dep,settings,existing]=await Promise.all([
@@ -89,8 +93,12 @@ export async function prepareQaR2Manifest518(){
    SORIDRAW_APP518_QA_RUN_ID:run,
    SORIDRAW_APP518_QA_WORKFLOW_SHA:sha,
    SORIDRAW_APP518_QA_ACCOUNT_ID_518:account,
-   SORIDRAW_APP518_PILOT_UID:'qa518-'+run+'-owner',
-   SORIDRAW_APP518_PILOT_FAVORITE_ID:'qa518-'+run+'-song',
+   SORIDRAW_APP518_PILOT_UID:'qa518-'+targetRun+'-owner',
+   SORIDRAW_APP518_PILOT_FAVORITE_ID:'qa518-'+targetRun+'-song',
+   ...(recovering?{
+    SORIDRAW_APP518_QA_RECOVERY_TARGET_RUN_ID:targetRun,
+    SORIDRAW_APP518_QA_RECOVERY_MODE:'APP518_ONLY_ORPHAN_R2_CLEANUP',
+   }:{}),
    FIREBASE_PROJECT_ID:'soridraw-app',
    FIREBASE_PROJECT_NUMBER:'1083981050742',
    SORIDRAW_APP518_QA_JWKS_JSON:JSON.stringify({keys:keys.keys}),

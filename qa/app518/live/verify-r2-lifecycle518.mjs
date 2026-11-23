@@ -93,7 +93,7 @@ const check=async(req,expected,environment={...env,CATALOG:r2,QA_D1:d1})=>{
 const unauthorized=await check(request('bootstrap',{
  'x-soridraw-qa-github-oidc':'bad',
 }),403);
-assert.equal(unauthorized.body.code,'QA518_GITHUB_OIDC_REJECTED');
+assert.equal(unauthorized.body.code,'QA518_GITHUB_OIDC_REJECTED_UNKNOWN');
 const noAuth=await handler.fetch(new Request(
  'https://'+name+'.soridraw-qa.workers.dev/v1/qa518/r2',{method:'POST',
  body:JSON.stringify({action:'bootstrap',runId:run})}),{...env,CATALOG:r2,QA_D1:d1});

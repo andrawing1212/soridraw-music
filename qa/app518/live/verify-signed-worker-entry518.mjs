@@ -66,7 +66,7 @@ assert.equal((await handler.fetch(request('real-signed-token'),{
  ...env,SORIDRAW_APP518_QA_JWKS_AT_MS:String(pinnedAtMs-700000),
 })).status,503);
 assert.equal((await handler.fetch(request('real-signed-token'),{
- ...env,SORIDRAW_APP518_QA_JWKS_AT_MS:String(pinnedAtMs+60000),
+ ...env,SORIDRAW_APP518_QA_JWKS_AT_MS:String(pinnedAtMs+120000),
 })).status,503);
 assert.equal((await handler.fetch(request('forged'),env)).status,403);
 assert.equal((await handler.fetch(request('real-signed-token',

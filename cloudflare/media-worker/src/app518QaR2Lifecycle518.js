@@ -28,6 +28,9 @@ const resource=(env)=>{
   ||env?.FIREBASE_PROJECT_NUMBER!=='1083981050742'
   ||env?.SORIDRAW_APP518_PILOT_UID!=='qa518-'+run+'-owner'
   ||env?.SORIDRAW_APP518_PILOT_FAVORITE_ID!=='qa518-'+run+'-song'
+  ||typeof env?.SORIDRAW_APP518_QA_JWKS_JSON!=='string'
+  ||env.SORIDRAW_APP518_QA_JWKS_JSON.length>8000
+  ||!Number.isSafeInteger(Number(env?.SORIDRAW_APP518_QA_JWKS_AT_MS))
   ||!env?.CATALOG?.list||!env?.CATALOG?.get
   ||!env?.CATALOG?.put||!env?.CATALOG?.delete
   ||!env?.QA_D1?.prepare)
@@ -204,9 +207,13 @@ export const createApp518QaR2Lifecycle518=({
   const token=request.headers.get('x-soridraw-qa-github-oidc');
   if(!token)return response('QA518_GITHUB_OIDC_REQUIRED',403);
   try{
+   let pinnedJwks;
+   try{pinnedJwks=JSON.parse(env.SORIDRAW_APP518_QA_JWKS_JSON);}
+   catch{throw Error('HOLD_QA_OIDC_PIN_MALFORMED');}
    const proof=await verifier({
     token,runId:ctx.run,workflowSha:env.SORIDRAW_APP518_QA_WORKFLOW_SHA,
-    nowMs:now(),
+    nowMs:now(),pinnedJwks,
+    pinnedAtMs:Number(env.SORIDRAW_APP518_QA_JWKS_AT_MS),
    });
    if(proof?.source!=='GITHUB_VERIFIED_OIDC_RSA_SIGNATURE'
     ||proof.runId!==ctx.run||proof.expiresAtMs<=now())
@@ -219,6 +226,7 @@ export const createApp518QaR2Lifecycle518=({
     'HOLD_QA_OIDC_TIME','HOLD_QA_OIDC_EXPIRED_OR_REPLAY',
     'HOLD_QA_OIDC_JWKS_UNAVAILABLE','HOLD_QA_OIDC_KID_UNTRUSTED',
     'HOLD_QA_OIDC_BAD_SIGNATURE',
+    'HOLD_QA_OIDC_PIN_EXPIRED','HOLD_QA_OIDC_DUPLICATE_SIGNING_KID',
    ]);
    const detail=codes.has(e?.message)?e.message:'UNKNOWN';
    return response('QA518_GITHUB_OIDC_REJECTED_'+detail,403);

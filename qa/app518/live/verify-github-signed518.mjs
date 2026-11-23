@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {generateKeyPairSync,sign} from 'node:crypto';
 import {verifyGithubOidcQa518} from '../../../cloudflare/media-worker/src/app518QaGithubOidc518.js';
+import {getPinnedGithubPublicJwks518} from './inspect-public-github-jwks518.mjs';
 const now=Date.parse('2026-11-23T02:00:00Z');
 const s=Math.floor(now/1000);
 const runId='45123456789',workflowSha='f'.repeat(40);
@@ -70,4 +71,67 @@ assert.ok(networkCalls>=3);
 console.log('APP518_QA_GITHUB_OIDC_REAL_RSA_SIGNATURE_VERIFY=PASS');
 console.log('APP518_QA_WRONG_REPO_OWNER_ACTOR_EVENT_WORKFLOW_SHA_TIME_RUN_DENIED=PASS');
 console.log('APP518_QA_JWKS_FAIL_CLOSED_AND_UNSIGNED_TOKENS_DENIED=PASS');
+
+const OFFICIAL='https://token.actions.githubusercontent.com';
+const jwtData=jwt();
+const fakePinFetch=async (url,opts)=>{
+ if(url===OFFICIAL+'/.well-known/openid-configuration'){
+  return {status:200,json:async()=>({
+   issuer:OFFICIAL,jwks_uri:OFFICIAL+'/.well-known/jwks',
+   id_token_signing_alg_values_supported:['RS256'],
+  })};
+ }
+ if(url===OFFICIAL+'/.well-known/jwks')
+  return {status:200,json:async()=>({keys:[jwk]})};
+ if(url.startsWith('https://actions.test.local/token?')){
+  assert.equal(new URL(url).searchParams.get('audience'),'soridraw-app518-qa-'+runId);
+  assert.equal(opts.headers.Authorization,'Bearer '+'z'.repeat(25));
+  return {status:200,json:async()=>({value:jwtData})};
+ }
+ throw Error('HOLD_QA_MOCK_UNKNOWN_ISSUER');
+};
+const pinOptions={runId,workflowSha,nowMs:now,
+ requestUrl:'https://actions.test.local/token',
+ requestToken:'z'.repeat(25),fetcher:fakePinFetch};
+const pin=await getPinnedGithubPublicJwks518(pinOptions);
+assert.equal(pin.issuedAtMs,now);
+assert.equal(pin.expiresAtMs,now+600000);
+assert.equal(pin.keys.length,1);
+const noNetwork=async()=>{throw Error('MUST_NOT_FETCH_JWKS_FROM_QA_WORKER')};
+const withPin={...base,pinnedJwks:{keys:pin.keys},pinnedAtMs:now,
+ fetcher:noNetwork,token:jwt()};
+const v2=await verifyGithubOidcQa518(withPin);
+assert.equal(v2.source,'GITHUB_VERIFIED_OIDC_RSA_SIGNATURE');
+await assert.rejects(()=>verifyGithubOidcQa518({
+ ...withPin,nowMs:now+600001,
+}),e=>e?.message==='HOLD_QA_OIDC_EXPIRED_OR_REPLAY'||
+ e?.message==='HOLD_QA_OIDC_PIN_EXPIRED');
+await assert.rejects(()=>verifyGithubOidcQa518({
+ ...withPin,pinnedAtMs:now-600001,
+}),e=>e?.message==='HOLD_QA_OIDC_PIN_EXPIRED');
+await assert.rejects(()=>verifyGithubOidcQa518({
+ ...withPin,pinnedJwks:{keys:[{...jwk,n:jwk.n.slice(0,-2)+'AB'}]},
+}),e=>e?.message==='HOLD_QA_OIDC_BAD_SIGNATURE');
+await assert.rejects(()=>verifyGithubOidcQa518({
+ ...withPin,pinnedJwks:{keys:[jwk,jwk]},
+}),e=>e?.message==='HOLD_QA_OIDC_DUPLICATE_SIGNING_KID');
+await assert.rejects(()=>getPinnedGithubPublicJwks518({
+ ...pinOptions,fetcher:async (url,opts)=>{
+  if(url.endsWith('openid-configuration'))
+   return {status:200,json:async()=>({
+    issuer:OFFICIAL,jwks_uri:'https://attacker.invalid/jwks',
+    id_token_signing_alg_values_supported:['RS256'],
+   })};
+  return fakePinFetch(url,opts);
+ },
+}),/HOLD_QA_GITHUB_SIGNING_DISCOVERY_CHANGED/);
+await assert.rejects(()=>getPinnedGithubPublicJwks518({
+ ...pinOptions,fetcher:async (url,opts)=>{
+  if(url.endsWith('/jwks'))return {status:403,json:async()=>({})};
+  return fakePinFetch(url,opts);
+ },
+}),/HOLD_QA_GITHUB_PUBLIC_KEY_OR_TOKEN_UNAVAILABLE/);
+console.log('APP518_QA_OFFICIAL_DISCOVERY_AND_REAL_JWT_PREVERIFIED_PUBLIC_PIN=PASS');
+console.log('APP518_QA_STALE_PIN_FORKED_KEY_DUPLICATE_KID_AND_FAKE_ISSUER_DENIED=PASS');
+
 console.log('APP518_QA_SIGNED_GATE_SOURCE_ONLY; CLOUD_MUTATIONS=0; LIVE_E2E=NOT_TESTED');

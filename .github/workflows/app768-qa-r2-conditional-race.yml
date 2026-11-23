@@ -31,6 +31,7 @@ on:
       - 'cloudflare/explore-worker/experiments/owner-follow-qa790-entry.mjs'
       - 'scripts/qa790-local-worker-fixture.mjs'
       - 'scripts/verify-790-qa-browser-local.mjs'
+      - 'scripts/app790-qa-browser-runner.mjs'
       - '.github/workflows/app768-qa-r2-conditional-race.yml'
 permissions:
   contents: read
@@ -100,6 +101,7 @@ jobs:
           cp scripts/app790-qa-auth-owner-connection.mjs scripts/qa790-local-worker-fixture.mjs "$RUNNER_TEMP/app789-frozen/scripts/"
           npx --yes esbuild@0.25.12 "$RUNNER_TEMP/app789-frozen/cloudflare/explore-worker/experiments/owner-follow-qa790-entry.mjs" --bundle --format=esm --platform=browser --target=es2022 --outfile=/tmp/app790-candidate.mjs
           npx --yes esbuild@0.25.12 "$RUNNER_TEMP/app789-frozen/scripts/qa790-local-worker-fixture.mjs" --bundle --format=esm --platform=browser --target=es2022 --outfile=/tmp/app790-local-fixture.mjs
+          node --check scripts/app790-qa-browser-runner.mjs
           node scripts/verify-790-qa-browser-local.mjs /tmp/app790-local-fixture.mjs "$RUNNER_TEMP/app789-local"
   live:
     if: false # APP785 QA exact one-shot PASS and exact cleanup complete; do not auto-repeat
@@ -266,3 +268,88 @@ jobs:
           else
             echo 'APP789_NO_STATE_NO_QA_WRITE'
           fi
+
+
+  physical790:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 1400 &&
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/app790-browser ')
+    concurrency:
+      group: soridraw-app736-qa-zero-traffic
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      APP790_QA_APPROVAL: APP790_EXISTING_QA_BROWSER_ONE_SHOT
+      CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+      CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+      CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
+      CLOUDFLARE_QA_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Pin exact main and isolated candidate
+        env:
+          DIRECTOR_COMMAND: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          SHA="$(printf '%s' "$DIRECTOR_COMMAND" | sed -nE 's|^/app790-browser ([0-9a-f]{40})$|\1|p')"
+          test -n "$SHA"
+          test "$(git rev-parse HEAD)" = "$SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SHA"
+          node --check scripts/app790-qa-browser-runner.mjs
+          node --check cloudflare/explore-worker/experiments/owner-follow-qa790-entry.mjs
+      - name: Verify existing QA resources and exact synthetic row
+        run: node scripts/app790-qa-browser-runner.mjs preflight
+      - name: Bundle exact QA candidate, not the test fixture
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin 4363820117100cb03bcbc44a01e127aeb5de3cf4
+          git worktree add --detach "$RUNNER_TEMP/app790-frozen" 4363820117100cb03bcbc44a01e127aeb5de3cf4
+          for file in owner-follow-qa790-entry.mjs owner-follow-qa-real-auth-749.mjs; do
+            cp "cloudflare/explore-worker/experiments/$file" "$RUNNER_TEMP/app790-frozen/cloudflare/explore-worker/experiments/"
+          done
+          for file in app790-qa-auth-owner-connection.mjs app788-qa-independent-owner-floor.mjs app755-production-owner-receipt.mjs app759-production-owner-alarm.mjs app767-r2-admission-candidate.mjs app783-qa-immutable-settled-history.mjs; do
+            cp "scripts/$file" "$RUNNER_TEMP/app790-frozen/scripts/"
+          done
+          npx --yes esbuild@0.25.12 "$RUNNER_TEMP/app790-frozen/cloudflare/explore-worker/experiments/owner-follow-qa790-entry.mjs" --bundle --format=esm --platform=browser --target=es2022 --outfile=app790-qa-worker.bundle.mjs
+      - name: Upload isolated inactive candidate
+        run: node scripts/app790-qa-browser-runner.mjs stage
+      - name: Activate exact candidate within QA only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+        run: |
+          set -euo pipefail
+          CANDIDATE="$(node -e 'const s=require(process.env.RUNNER_TEMP+"/app790-physical-state.json");if(!/^[0-9a-f-]{36}$/i.test(s.candidate||""))process.exit(2);process.stdout.write(s.candidate)')"
+          touch "$RUNNER_TEMP/app790-route-attempted"
+          cd "$RUNNER_TEMP/app790-frozen/cloudflare/explore-worker"
+          npx --yes wrangler@4.102.0 versions deploy "$CANDIDATE@100%" --config wrangler.owner-qa-583.json --yes
+          cd "$GITHUB_WORKSPACE"
+          node scripts/app790-qa-browser-runner.mjs verifyDeployed
+      - name: Existing A B browser sign-in and real RTDB one-shot window
+        run: node scripts/app790-qa-browser-runner.mjs waitBrowser
+      - name: ALWAYS cleanup exact completed or untouched run, preserve partial evidence
+        if: always()
+        run: node scripts/app790-qa-browser-runner.mjs cleanup
+      - name: ALWAYS restore original QA583 only 100 percent
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ ! -f "$RUNNER_TEMP/app790-route-attempted" ]; then exit 0; fi
+          cd "$RUNNER_TEMP/app790-frozen/cloudflare/explore-worker"
+          npx --yes wrangler@4.102.0 versions deploy '4ed70845-6a4b-4a80-9c51-ed95d0becc38@100%' --config wrangler.owner-qa-583.json --yes
+          echo 'APP790_ORIGINAL_QA583_ONLY_100_RESTORED'
+      - name: ALWAYS verify original QA version bindings and traffic
+        if: always()
+        run: node scripts/app790-qa-browser-runner.mjs verifyOriginal

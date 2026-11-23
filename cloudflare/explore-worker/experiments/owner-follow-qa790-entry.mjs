@@ -7,7 +7,7 @@ import {sendOwnerFollowHttp539} from '../runtime/owner-follow-http-539.mjs';
 import {createApp790QaOwnerConnection} from '../../../scripts/app790-qa-auth-owner-connection.mjs';
 const ORIGIN='https://soridraw-qa-owner-584.web.app';
 const RTDB='https://soridraw-qa-sg.asia-southeast1.firebasedatabase.app';
-const LEGACY='qa730-durable-state-v1',CONTROL='qa790-run-control-v1',RECEIPTS='app755-owner-follow-pending-v1';
+const LEGACY='qa730-durable-state-v1',CONTROL='qa790-run-control-v1',RECEIPTS='app755-owner-follow-pending-v1',FINISHED='qa790-last-closed-run-v1';
 const DO_NAME='qa730-isolated-owner-only',TABLE='app768_qa_synthetic_follow';
 const response=(status,body)=>Response.json(body,{status,headers:{'Cache-Control':'no-store'}});
 const hold=reason=>response(409,{ok:false,status:'HOLD',reason});
@@ -84,16 +84,29 @@ export class OwnerFollowIsolated558 extends Original{
   if(!this.enabled||req.method!=='POST'||req.headers.get('X-QA790-Internal')!==this.e.QA790_ACCESS)return response(403,{ok:false});
   const e=this.e,c=this.c,s=this.state.storage;
   try{
-   const b=await req.json(),old=await s.get(LEGACY),control=await s.get(CONTROL);
+   const b=await req.json(),old=await s.get(LEGACY),control=await s.get(CONTROL),finished=await s.get(FINISHED);
    if(!validOld(old,c))return hold('EXISTING_QA730_BASELINE_UNVERIFIED');
    if(control&&!exactControl(control,e,c))return hold('OTHER_QA_RUN_OR_CONTROL_UNVERIFIED');
+   if(path==='/qa790/internal/progress'){
+    const complete=!!control&&!control.inflight&&control.marker.version===control.base+2&&old.version===control.base+2&&old.desired===false;
+    return response(200,{status:'QA790_PROGRESS',phase:complete?'COMPLETE':control?.inflight?'IN_FLIGHT':control?.marker.version===control?.base+1?'FOLLOW_CONFIRMED':control?'BASELINE_READY':'AWAITING_LOGIN'});
+   }
    if(path==='/qa790/internal/status'){
     if(b.marker!==null&&!validMarker(b.marker,c))return hold('OWNER_MARKER_UNVERIFIED');
+    if(finished?.run===e.QA790_RUN){
+     if(b.marker!==null&&(b.marker.version!==old.version||b.marker.followerCount!==old.followerCount))return hold('CLOSED_RUN_MARKER_MISMATCH');
+     return response(200,status(old));
+    }
     if(!control){
      if(old.desired||await s.get(RECEIPTS)||await pair(e)!==false)return hold('QA_START_NOT_CLEAN');
      if(b.marker!==null){
       if(b.marker.version!==old.version||b.marker.followerCount!==0)return hold('REAL_RTDB_AND_LEGACY_BASELINE_MISMATCH');
-      await s.put(CONTROL,{run:e.QA790_RUN,base:old.version,marker:b.marker});
+      await s.transaction(async tx=>{
+       const prior=await tx.get(LEGACY);
+       if((await tx.get(FINISHED))?.run===e.QA790_RUN||await tx.get(CONTROL)||await tx.get(RECEIPTS)||
+         !validOld(prior,c)||prior.version!==old.version||prior.desired!==false)throw Error('BASELINE_RACE');
+       await tx.put(CONTROL,{run:e.QA790_RUN,base:old.version,marker:b.marker,inflight:null});
+      });
      }
      return response(200,status(old));
     }
@@ -102,7 +115,9 @@ export class OwnerFollowIsolated558 extends Original{
      if(b.marker.version!==control.marker.version+1||b.marker.version>control.base+2||
        b.marker.followerCount!==Number(desired)||old.version!==control.marker.version||old.desired!==Boolean(control.marker.followerCount))
       return hold('UNEXPECTED_REAL_RTDB_ADVANCE');
-     const a=operation(e,c,control.base,desired),k=await keys(a),floor=await read(e,k.floor),settled=await read(e,k.settled);
+     const a=operation(e,c,control.base,desired);
+     if(control.inflight!==a.canonicalOperationId)return hold('EXACT_INFLIGHT_REQUIRED');
+     const k=await keys(a),floor=await read(e,k.floor),settled=await read(e,k.settled);
      if(floor?.pending!==null||floor.lastOperationId!==a.canonicalOperationId||floor.d1Revision!==a.expectedRevision+1||
        floor.r2Revision!==a.priorR2Revision+1||!same(floor,a,['ownerUid','authEpoch','cutoverToken'])||
        settled?.kind!=='APP783_IMMUTABLE_QA_SETTLED'||!same(settled,a,identity)||
@@ -117,25 +132,40 @@ export class OwnerFollowIsolated558 extends Original{
      await s.transaction(async tx=>{
       const latest=await tx.get(LEGACY),current=await tx.get(CONTROL);
       if(!validOld(latest,c)||latest.version!==old.version||!exactControl(current,e,c)||!sameMarker(current.marker,control.marker))throw Error('BASELINE_RACE');
-      await tx.put(LEGACY,next);await tx.put(CONTROL,{...control,marker:b.marker});
+      if(current.inflight!==a.canonicalOperationId||(await tx.get(FINISHED))?.run===e.QA790_RUN)throw Error('RUN_CLOSED_OR_INFLIGHT_CHANGED');
+      await tx.put(LEGACY,next);await tx.put(CONTROL,{...control,marker:b.marker,inflight:null});
      });
      return response(200,status(next));
     }
     return response(200,status(old,(await pair(e))!==old.desired));
    }
    if(path==='/qa790/internal/cleanup'){
-    if(!control)return response(200,{status:'QA790_NO_RUN_STATE',clean:true});
+    if(!control){
+     await s.transaction(async tx=>{
+      if(await tx.get(CONTROL)||await tx.get(RECEIPTS))throw Error('RUN_BECAME_ACTIVE');
+      await tx.put(FINISHED,{run:e.QA790_RUN,completed:finished?.run===e.QA790_RUN&&finished.completed===true});
+     });
+     return response(200,{status:'QA790_NO_RUN_STATE',clean:true,completed:finished?.run===e.QA790_RUN&&finished.completed===true});
+    }
     const row=await pair(e),stored=await s.get(RECEIPTS);
     const a=operation(e,c,control.base,true),b=operation(e,c,control.base,false);
     const ka=await keys(a),kb=await keys(b);
-    const complete=old.version===control.base+2&&old.desired===false&&control.marker.version===old.version&&
+    const complete=!control.inflight&&old.version===control.base+2&&old.desired===false&&control.marker.version===old.version&&
      control.marker.followerCount===0&&row===false&&stored?.entries?.length===2&&
      stored.entries.every(x=>x.delivery?.status==='delivered'&&[a.canonicalOperationId,b.canonicalOperationId].includes(x.canonicalOperationId));
-    const untouched=old.version===control.base&&old.desired===false&&control.marker.version===old.version&&row===false&&
+    const untouched=!control.inflight&&old.version===control.base&&old.desired===false&&control.marker.version===old.version&&row===false&&
      !await e.QA790_R2.head(ka.projection)&&!await e.QA790_R2.head(kb.projection)&&
      (!stored||stored.entries?.every(x=>x.delivery?.status==='pending'));
     if(!complete&&!untouched)return hold('PARTIAL_RUN_PRESERVE_EXACT_EVIDENCE');
     if(stored?.archiveUsed||await s.get('pending'))return hold('UNRELATED_RECEIPT_OR_ALARM_PRESENT');
+    // Close the run atomically before cleanup. A new reservation cannot
+    // race the row/R2 deletion, and a partial in-flight run stays intact.
+    await s.transaction(async tx=>{
+     const current=await tx.get(CONTROL),prior=await tx.get(LEGACY);
+     if(!exactControl(current,e,c)||current.inflight||!sameMarker(current.marker,control.marker)||
+       !validOld(prior,c)||prior.version!==old.version)throw Error('CLEANUP_STATE_DRIFT');
+     await tx.put(FINISHED,{run:e.QA790_RUN,completed:complete});
+    });
     // Only exact run keys; no list or deleteAll. Legacy baseline remains.
     await s.deleteAlarm();
     for(const k of new Set([...Object.values(ka),...Object.values(kb)]))await e.QA790_R2.delete(k);
@@ -149,6 +179,7 @@ export class OwnerFollowIsolated558 extends Original{
     });
     return response(200,{status:'QA790_EXACT_CLEANUP',clean:true,completed:complete});
    }
+   if(finished?.run===e.QA790_RUN)return hold('QA_RUN_CLOSED');
    if(!control)return hold('REAL_OWNER_BASELINE_REQUIRED');
    const desired=b.desired;
    if(typeof desired!=='boolean')return hold('EXACT_DIRECTION_REQUIRED');
@@ -158,6 +189,15 @@ export class OwnerFollowIsolated558 extends Original{
     if(old.version!==a.expectedRevision||old.desired!==a.beforeFollowing||
       control.marker.version!==a.expectedRevision||control.marker.followerCount!==Number(a.beforeFollowing)||
       await pair(e)!==a.beforeFollowing)return hold('QA_ONE_SHOT_ORDER_OR_BASELINE_MISMATCH');
+    // Serialize the one-shot command before any external write. Cleanup
+    // refuses to delete evidence while a command is in flight.
+    await s.transaction(async tx=>{
+     const current=await tx.get(CONTROL),prior=await tx.get(LEGACY);
+     if((await tx.get(FINISHED))?.run===e.QA790_RUN||!exactControl(current,e,c)||current.inflight||
+       !sameMarker(current.marker,control.marker)||!validOld(prior,c)||prior.version!==a.expectedRevision)
+      throw Error('RUN_CLOSED_OR_INFLIGHT');
+     await tx.put(CONTROL,{...current,inflight:a.canonicalOperationId});
+    });
     if(desired){
      const start=await conn.bootstrap(a);
      if(!['QA788_SYNTHETIC_GENESIS_FLOOR_CREATED','QA788_GENESIS_ALREADY_VERIFIED_READ_ONLY'].includes(start.status))return hold('GENESIS_UNVERIFIED');
@@ -171,7 +211,7 @@ export class OwnerFollowIsolated558 extends Original{
     if(v.status!=='QA788_ADMITTED_AND_OWNER_DO_RESERVED')return hold(v.reason||'RESERVE_HOLD');
     return response(200,{status:v.status,receiptId:v.receipt.operationId,version:a.expectedRevision+1});
    }
-   if(!/^qa790_receipt_[a-f0-9]{32}$/.test(b.receiptId||''))return hold('EXACT_RECEIPT_REQUIRED');
+   if(control.inflight!==a.canonicalOperationId||!/^qa790_receipt_[a-f0-9]{32}$/.test(b.receiptId||''))return hold('EXACT_RECEIPT_REQUIRED');
    if(path==='/qa790/internal/commit'){
     const verified=await conn.inspectReceipt(a,b.receiptId);
     if(verified.status!=='found')return hold('EXACT_RECEIPT_UNVERIFIED');
@@ -229,6 +269,8 @@ export default {
    return call('cleanup',{});
   if(path==='/qa790/operator/health'&&req.method==='GET'&&!origin&&req.headers.get('X-QA790-Access')===e.QA790_ACCESS)
    return response(200,{status:'QA790_ISOLATED_CANDIDATE_READY'});
+  if(path==='/qa790/operator/progress'&&req.method==='GET'&&!origin&&req.headers.get('X-QA790-Access')===e.QA790_ACCESS)
+   return call('progress',{});
   const action=path==='/qa730/verified/status'?'status':path==='/qa730/verified/follow'?'follow':null;
   if(!action)return cors(response(403,{ok:false}),origin);
   if(req.method==='OPTIONS'&&origin===ORIGIN){

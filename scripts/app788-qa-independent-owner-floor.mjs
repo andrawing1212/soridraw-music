@@ -38,14 +38,18 @@ const certificate=(p,a)=>p?.source==='APP788_ISOLATED_SYNTHETIC_EPOCH_CERT'&&
  p.retentionAndAccountDeletionReviewed===true&&
  p.physicalNamespaceIsolatedFromProduction===true&&
  rev(p.firstD1Revision)&&rev(p.firstR2Revision);
+const validPending=p=>p===null||(p&&typeof p==='object'&&
+ ID.test(p.canonicalOperationId||'')&&UID.test(p.actorUid||'')&&
+ rev(p.expectedRevision)&&typeof p.desired==='boolean');
 const floorValid=(f,a)=>f?.kind==='APP788_QA_OWNER_FLOOR_V1'&&
  f.ownerUid===a.ownerUid&&f.authEpoch===a.authEpoch&&
  f.cutoverToken===a.cutoverToken&&rev(f.d1Revision)&&rev(f.r2Revision)&&
+ validPending(f.pending)&&
  typeof f.lastOperationId==='string'&&
  (f.lastOperationId===''||ID.test(f.lastOperationId));
 const floorObj=(a,d1,r2,id='')=>({kind:'APP788_QA_OWNER_FLOOR_V1',
  ownerUid:a.ownerUid,authEpoch:a.authEpoch,cutoverToken:a.cutoverToken,
- d1Revision:d1,r2Revision:r2,lastOperationId:id});
+ d1Revision:d1,r2Revision:r2,lastOperationId:id,pending:null});
 const options=onlyIf=>({onlyIf,httpMetadata:{contentType:'application/json'}});
 export function createApp788QaOwnerHistoryWithDo({
  enabled=APP788_QA_OWNER_HISTORY_DO_COMPILED_OPEN,
@@ -133,6 +137,17 @@ export function createApp788QaOwnerHistoryWithDo({
        found.ownerUid!==a.ownerUid||found.actorUid!==a.actorUid||
        found.canonicalOperationId!==a.canonicalOperationId)
      return hold('DO_RECEIPT_NOT_AUTHORITATIVELY_ABSENT');
+    // Atomic owner-floor CAS is a single-flight fence shared by distinct
+    // operation IDs for the same expected revision, including after DO PITR.
+    // An uncertain CAS holds: no admission, DO or D1 operation may follow.
+    if(f.value.pending!==null)return hold('OWNER_REVISION_HAS_PENDING_OPERATION');
+    const pending={actorUid:a.actorUid,canonicalOperationId:a.canonicalOperationId,
+      expectedRevision:a.expectedRevision,desired:a.desired};
+    let locked;
+    try{locked=await bucket.put(f.key,JSON.stringify({...f.value,pending}),
+       options({etagMatches:f.etag}));}
+    catch{return hold('PENDING_FLOOR_CAS_ACK_UNKNOWN')}
+    if(!locked?.etag)return hold('PENDING_FLOOR_CONCURRENT_CAS_OR_UNKNOWN');
     const entry=await claim.claim({env,reservation:a});
     if(entry.status!=='ADMISSION_ONLY_NOT_D1_COMMIT')
      return hold('R2_ADMISSION_DUPLICATE_OR_OUTCOME_UNKNOWN');
@@ -176,13 +191,18 @@ export function createApp788QaOwnerHistoryWithDo({
     const f=await floorRead(a);
     if(f.status!=='found')return hold('OWNER_FLOOR_MISSING_AFTER_SETTLEMENT');
     if(f.value.d1Revision===proof.committedRevision&&
-       f.value.r2Revision===proof.nextR2Revision&&
+       f.value.r2Revision===proof.nextR2Revision&&f.value.pending===null&&
        f.value.lastOperationId===a.canonicalOperationId)
      return {status:'QA788_FLOOR_ALREADY_SETTLED_NO_WRITE',
        canonicalRetryAuthorized:false,ownerDoAlarmMayVerifyExternal:true,...ready};
     if(f.value.d1Revision!==a.expectedRevision||
        f.value.r2Revision!==a.priorR2Revision)
      return hold('EXTERNAL_FLOOR_AHEAD_OR_CONCURRENT_COMMIT');
+    const pending=f.value.pending;
+    if(pending?.canonicalOperationId!==a.canonicalOperationId||
+       pending.actorUid!==a.actorUid||pending.expectedRevision!==a.expectedRevision||
+       pending.desired!==a.desired)
+     return hold('EXPECTED_PENDING_OWNER_FLOOR_FENCE_MISSING');
     let saved;
     try{saved=await bucket.put(f.key,JSON.stringify(floorObj(a,
       proof.committedRevision,proof.nextR2Revision,a.canonicalOperationId)),
@@ -203,7 +223,7 @@ export function createApp788QaOwnerHistoryWithDo({
     // writer coverage/retention proof and a matching external floor.
     return {status:'QA788_READ_ONLY_HISTORY',
       floorD1Revision:f.value.d1Revision,floorR2Revision:f.value.r2Revision,
-      admitted:!!admission,settled:!!settled,
+      admitted:!!admission,settled:!!settled,pending:!!f.value.pending,
       completeFromOrigin:false,automaticReplayAuthorized:false,...ready};
    }catch{return hold('HISTORY_READ_OR_CUTOVER_UNAVAILABLE')}
   },

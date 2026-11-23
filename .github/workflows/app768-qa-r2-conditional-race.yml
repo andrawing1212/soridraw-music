@@ -6,6 +6,8 @@ on:
       - 'scripts/app775-unified-follow-ingress.mjs'
       - 'scripts/app777-qa-signed-ingress.mjs'
       - 'scripts/verify-777-qa-signed-ingress-offline.mjs'
+      - 'scripts/app783-qa-immutable-settled-history.mjs'
+      - 'scripts/verify-783-qa-immutable-settled-history.mjs'
       - 'scripts/app777-qa-real-cloudshell-readonly.mjs'
       - '.github/workflows/app768-qa-r2-conditional-race.yml'
 permissions:
@@ -35,6 +37,8 @@ jobs:
           node --check scripts/app777-qa-real-cloudshell-readonly.mjs
           node scripts/verify-775-unified-follow-ingress.mjs
           node scripts/verify-777-qa-signed-ingress-offline.mjs
+          node --check scripts/app783-qa-immutable-settled-history.mjs
+          node scripts/verify-783-qa-immutable-settled-history.mjs
   live:
     if: false # APP776 approved one-shot QA completed; reenable only with new scope approval
     runs-on: ubuntu-24.04

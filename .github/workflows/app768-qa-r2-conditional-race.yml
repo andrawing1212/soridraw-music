@@ -26,6 +26,8 @@ on:
       - 'scripts/verify-789-qa-physical-source.mjs'
       - 'scripts/verify-789-qa-local-runtime.mjs'
       - 'scripts/app789-qa-settlement-recovery.mjs'
+      - 'scripts/app790-qa-auth-owner-connection.mjs'
+      - 'scripts/verify-790-qa-auth-owner-connection.mjs'
       - '.github/workflows/app768-qa-r2-conditional-race.yml'
 permissions:
   contents: read
@@ -77,6 +79,8 @@ jobs:
             cp "scripts/$file" "$RUNNER_TEMP/app789-frozen/scripts/"
           done
           npx --yes esbuild@0.25.12 "$RUNNER_TEMP/app789-frozen/cloudflare/explore-worker/experiments/owner-follow-qa789-entry.mjs" --bundle --format=esm --platform=browser --target=es2022 --outfile=/tmp/app789-qa-bundle-check.mjs
+      - name: APP790 signed QA Auth + exact settlement + existing QA HMAC source integration
+        run: node scripts/verify-790-qa-auth-owner-connection.mjs "$RUNNER_TEMP/app789-frozen"
       - name: Reproduce APP789 on local workerd SQLite DO, D1, R2 (no cloud)
         timeout-minutes: 4
         run: |

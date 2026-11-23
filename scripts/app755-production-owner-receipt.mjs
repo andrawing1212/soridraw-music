@@ -124,6 +124,23 @@ export function createApp755ProductionOwnerReceiptStore({
        return {status:'found',receipt:conflict};
      }catch{return {status:'unknown'}}
    },
+   // Settlement verification must never touch the alarm. Existing find()
+   // intentionally rearms pending receipts for admission/recovery callers.
+   async inspectReceipt(input){
+     scope(input);
+     try{
+       const state=await load(storage);
+       const receipt=await receiptFor(storage,state,input.canonicalOperationId);
+       if(!receipt)return {status:'absent',authoritative:true};
+       if(!same(receipt,input)||
+          receipt.authEpoch!==input.authEpoch||
+          receipt.cutoverToken!==input.cutoverToken||
+          receipt.priorR2Revision!==input.priorR2Revision||
+          receipt.beforeFollowing!==input.beforeFollowing)
+         return {status:'unknown',reason:'RECEIPT_IDENTITY_MISMATCH'};
+       return {status:'found',receipt};
+     }catch{return {status:'unknown',reason:'RECEIPT_READ_OR_STATE_UNVERIFIED'}}
+   },
    async reserve(input){
      scope(input);
      if(!EPOCH.test(input.authEpoch||'')||

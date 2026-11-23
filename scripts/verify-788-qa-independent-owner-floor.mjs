@@ -37,10 +37,12 @@ const bucket={
   return {etag:next.etag};
  }};
 let now=1800000000000,doMap=new Map(),alarm=null,issued=0,relayCalls=0;
+let alarmReadFailure=false,receiptReadFailure=false,alarmCalls=0;
 const storage={
- async get(k){return doMap.has(k)?structuredClone(doMap.get(k)):null},
- async getAlarm(){return alarm},
- async setAlarm(t){alarm=t},
+ async get(k){if(receiptReadFailure)throw Error('DO_READ_UNAVAILABLE');
+  return doMap.has(k)?structuredClone(doMap.get(k)):null},
+ async getAlarm(){alarmCalls++;if(alarmReadFailure)throw Error('DO_ALARM_READ_UNAVAILABLE');return alarm},
+ async setAlarm(t){alarmCalls++;alarm=t},
  async transaction(fn){
   const draft=new Map([...doMap].map(([k,v])=>[k,structuredClone(v)]));
   let due=alarm;
@@ -97,9 +99,30 @@ assert.equal(d1Writes,0);assert.equal(objects.size,2);
 assert.equal((await engine.inspect(a)).pending,true);
 const args={operation:a,admission:prepared.admission,receipt:prepared.receipt};
 assert.equal((await engine.finalize(args)).status,'HOLD');
+// Reproduce the ambiguous APP789 lookup: receipt is intact but find()
+// reports unknown when the alarm API fails. Settlement inspection is read-only.
+alarmReadFailure=true;
+assert.equal((await runtime.find(a)).status,'unknown');
+const alarmBeforeInspection=alarmCalls;
+const snapshotBeforeInspection=JSON.stringify([...doMap]);
+const inspected=await runtime.inspectReceipt(a);
+assert.equal(inspected.status,'found');
+assert.deepEqual(inspected.receipt,prepared.receipt);
+assert.equal(alarmCalls,alarmBeforeInspection);
+assert.equal(JSON.stringify([...doMap]),snapshotBeforeInspection);
+assert.equal((await runtime.inspectReceipt({...a,authEpoch:'b'.repeat(32)})).reason,'RECEIPT_IDENTITY_MISMATCH');
+assert.equal((await runtime.inspectReceipt({...a,priorR2Revision:99})).reason,'RECEIPT_IDENTITY_MISMATCH');
+assert.equal((await runtime.inspectReceipt({...a,canonicalOperationId:'qa788MissingOperation0001'})).status,'absent');
+receiptReadFailure=true;
+assert.equal((await runtime.inspectReceipt(a)).reason,'RECEIPT_READ_OR_STATE_UNVERIFIED');
+receiptReadFailure=false;alarmReadFailure=false;
+assert.equal((await runtime.find(a)).status,'found');
+console.log('APP789_RECEIPT_INSPECTION_ALARM_FAILURE_NO_WRITES_EXACT_IDENTITY=PASS');
 now+=1000;
 assert.equal((await runtime.alarm()).retried,1);
 assert.equal(relayCalls,0);
+assert.equal((await runtime.inspectReceipt(a)).receipt.operationId,prepared.receipt.operationId);
+assert.equal((await runtime.inspectReceipt(a)).receipt.delivery.attempts,1);
 committed=true;d1Writes++;uncertainAfterFloorCAS=true;
 const unknown=await engine.finalize(args);
 assert.equal(unknown.reason,'R2_FLOOR_CAS_ACK_UNKNOWN');
@@ -116,6 +139,7 @@ assert.equal(info.completeFromOrigin,false);
 now+=2000;
 assert.equal((await runtime.alarm()).delivered,1);
 assert.equal(relayCalls,1);
+assert.equal((await runtime.inspectReceipt(a)).receipt.delivery.status,'delivered');
 assert.equal((await runtime.alarm()).processed,0);
 doMap=new Map();alarm=null; // full owner DO PITR, external R2 remains
 assert.equal((await engine.reserve(a)).reason,'EXTERNAL_REVISION_FLOOR_NOT_AT_EXPECTED');

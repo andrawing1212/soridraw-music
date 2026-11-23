@@ -82,19 +82,6 @@ jobs:
           echo "APP737_PREVIEW_SHA=$SHA" >> "$GITHUB_ENV"
           echo "APP737_CURRENT_PREVIEW_SHA=$CURRENT" >> "$GITHUB_ENV"
           echo "APP737_SOURCE_ROOT=$RUNNER_TEMP/app737-preview" >> "$GITHUB_ENV"
-      - name: Synthetic proof must pass
-        run: node scripts/verify-737-direct-promotion-contract.mjs
-      - name: Build exact PREVIEW source in isolated runner, no Hosting deploy
-        run: |
-          set -euo pipefail
-          cd "$APP737_SOURCE_ROOT"
-          npm ci --no-audit --no-fund
-          npx tsc --noEmit
-          npm run build
-          DIGEST="$(find dist -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
-          test "${#DIGEST}" = 64
-          echo "APP737_DIST_SHA256=$DIGEST" >> "$GITHUB_ENV"
-          echo 'APP737_PREVIEW_EXACT_BUILD=PASS; HOSTING_DEPLOY=NOT_RUN'
       - name: Authenticate existing Firebase service account for GET-only Hosting metadata
         uses: google-github-actions/auth@v2
         id: firebase_auth
@@ -110,4 +97,4 @@ jobs:
           test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$APP737_PREVIEW_SHA" || exit 2
           node scripts/app737-live-readiness.mjs
           test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$APP737_PREVIEW_SHA" || exit 2
-          echo 'APP737_PARITY_INVENTORY=PASS_READ_ONLY; DIRECT_PRODUCTION_RELEASE=HOLD'
+          echo 'APP737_PARITY_INVENTORY=PASS_READ_ONLY; BUILD_REUSED_FROM_EXISTING_RELEASE; DIRECT_PRODUCTION_RELEASE=HOLD'

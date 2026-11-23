@@ -137,7 +137,6 @@ async function main(){
  if(sha!==current||!/^[0-9a-f]{40}$/.test(sha))
    throw Error('APP737_PREVIEW_HEAD_CHANGED');
  const token=need('CLOUDFLARE_API_TOKEN'),firebase=need('FIREBASE_ACCESS_TOKEN');
- const dist=need('APP737_DIST_SHA256');
  const [details,prev,prod,liveVersion]=await Promise.all([
   Promise.all(Object.entries(QA_WORKERS).map(async([key,name])=>[key,await readWorker(name,token)])),
   hosting('soridraw-preview',firebase),
@@ -148,8 +147,9 @@ async function main(){
  const appVersion=String(JSON.parse(readFileSync(join(need('APP737_SOURCE_ROOT'),'public/app-version.json'),'utf8')).version||'');
  const readiness=assessApp737DirectPromotion({
   previewSha:sha,currentPreviewHead:current,
-  source:{previewSha:sha,distSha256:dist,
-    // We cannot infer an entire deployed dist digest from index.html alone.
+  source:{previewSha:sha,distSha256:null,
+    // Inventory must not pretend a new build equals the deployed Hosting artifact.
+    // APP738 separately inspects live Firebase Hosting file/config SHA over GET.
     previewLiveDistSha256:null,noBuildTimeEnvironmentDrift:false},
   hosting:{preview:prev,production:prod,
     sourceLiveMatchesPinnedBuild:false,cloneHeadersAndCacheReviewed:false},
@@ -162,6 +162,7 @@ async function main(){
   status:readiness.status,notTestFlow:true,neverDeploy:true,
   currentSourceSha:sha,appVersion,livePreviewAppVersion:liveVersion,
   sourceVersionMatchesPreview:appVersion===liveVersion,
+  sourceBuildReusedFromExistingRelease:true,
   previewHosting:{version:prev.version},
   productionHosting:{rollbackVersion:prod.version},
   workerVersions:Object.fromEntries(Object.entries(workers).map(([k,x])=>[

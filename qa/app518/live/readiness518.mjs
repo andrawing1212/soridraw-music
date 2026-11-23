@@ -10,7 +10,7 @@ const fail=(code)=>{throw new Error(code)};
 const exactly=(rows,pred)=>Array.isArray(rows)&&rows.length===1&&pred(rows[0]);
 const uuid=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
 const fixedSql="SELECT name FROM sqlite_master WHERE type IN ('table','index')"+
- " AND (name LIKE 'music_note_catalog_%_518' OR name LIKE 'idx_music_note_catalog_%_518') ORDER BY name LIMIT 20";
+ " AND (name LIKE 'music_note_catalog_%_518' OR name LIKE 'idx_music_note_catalog_%') ORDER BY name LIMIT 20";
 const isArray=x=>Array.isArray(x)?x:x?.databases||x?.buckets||x?.scripts;
 const noExtraResourceUrl=path=>/^\/(?:workers\/scripts(?:\/soridraw-owner-qa-583\/(?:deployments|settings))?|d1\/database\?per_page=100&page=1|r2\/buckets\?per_page=100)$/.test(path);
 

@@ -142,6 +142,13 @@ assert.deepEqual(follow.indirectBindings,[
 ]);
 // Even an independently valid signature must HOLD while the live inspector
 // has SOURCE_DB. A properly signed report cannot redefine live D1 bindings.
+// The independent report and live GitHub observation are distinct objects.
+const syntheticGithub=Object.fromEntries(['main','preview'].map((ref,i)=>[
+ ref,{commitSha:String(i+1).repeat(40),sourceScopeSha256:'d'.repeat(64),
+  knownD1Paths:GITHUB_D1_SOURCE_PATHS_518.map(path=>({
+   path,blobSha:'e'.repeat(40)}))},
+]));
+observedSnapshot.gitHubD1Sources518=JSON.parse(JSON.stringify(syntheticGithub));
 const signedAccount={
  purpose:'APP518_ACCOUNT_D1_ALL_WRITER_CUTOVER',releaseSha:sha,
  checkedAtMs:nowMs-1000,
@@ -154,6 +161,7 @@ const signedAccount={
   gitHubDirectD1WorkflowsEnumerated:true,
   gitHubDirectD1PathsDisabledOrMetered:true,
   gitHubD1ExecutionAuditRef:'independent-github-d1-audit-001',
+  gitHubD1Sources518:syntheticGithub,
  },
  ledger:{dbId:realDb,table:'music_note_catalog_daily_budget_518',
   atomicReservationVerified:true,schemaEvidenceRef:'independent-ledger-proof-001'},
@@ -222,7 +230,7 @@ await assert.rejects(observeGitHubD1Sources518({
  request:async(url,opts)=>{
   moveReads++;
   const r=await githubReq(url,opts);
-  if(moveReads===5)branchHeads.main='d'.repeat(40);
+  if(moveReads===1)branchHeads.main='d'.repeat(40);
   return r;
  },token:'isolated-mock-github-token',
 }),/HOLD_518_GITHUB_CONTROLLER_REF_MOVED_main/);

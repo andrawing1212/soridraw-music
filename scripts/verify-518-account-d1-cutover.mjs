@@ -192,7 +192,7 @@ const selfTest=()=>{
    knownD1Paths:GITHUB_D1_SOURCE_PATHS_518.map(path=>({
     path,blobSha:'e'.repeat(40)}))},
  ]));
- live.gitHubD1Sources518=gitHubD1Sources518;
+ live.gitHubD1Sources518=JSON.parse(JSON.stringify(gitHubD1Sources518));
  const evidence={purpose:'APP518_ACCOUNT_D1_ALL_WRITER_CUTOVER',releaseSha,
   checkedAtMs:nowMs-1200,
   ledger:{dbId:SHARED_DB,table:'music_note_catalog_daily_budget_518',

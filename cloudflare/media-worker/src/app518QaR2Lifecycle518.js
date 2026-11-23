@@ -137,7 +137,7 @@ const cloudflareNoOtherWorker=async(ctx,token,request=fetch)=>{
   fail('HOLD_QA_CLOUDFLARE_READ_TOKEN_UNAVAILABLE');
  const url='https://api.cloudflare.com/client/v4/accounts/'+QA.account;
  const get=async path=>{
-  const r=await request(url+path,{method:'GET',redirect:'error',
+  const r=await request(url+path,{method:'GET',redirect:'manual',
    headers:{Authorization:'Bearer '+token,Accept:'application/json'},
    signal:AbortSignal.timeout(12000)});
   if(r?.status!==200)fail('HOLD_QA_CLOUDFLARE_WORKER_STATUS');

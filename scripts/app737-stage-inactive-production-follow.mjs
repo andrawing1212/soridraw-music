@@ -25,8 +25,14 @@ export function makeInactiveVersionBody({oldVersion,oldSettings,candidateDir,pin
   'EXPLORE_MIRROR_TOKEN:secret_text'];
  for(const item of allowed)if(!canonical(pinned).split('|').includes(item))
   fail('ORIGINAL_BINDING_MISSING');
- if(!/^20\d\d-\d\d-\d\d$/.test(pinnedVersion.compatibility_date)||
-    !Array.isArray(pinnedVersion.compatibility_flags))
+ const date=pinnedVersion.compatibility_date||oldSettings?.compatibility_date;
+ const flags=pinnedVersion.compatibility_flags??oldSettings?.compatibility_flags??[];
+ if(!/^20\d\d-\d\d-\d\d$/.test(date)||!Array.isArray(flags)||
+   (pinnedVersion.compatibility_date&&oldSettings?.compatibility_date&&
+     pinnedVersion.compatibility_date!==oldSettings.compatibility_date)||
+   (pinnedVersion.compatibility_flags&&oldSettings?.compatibility_flags&&
+     JSON.stringify(pinnedVersion.compatibility_flags)!==
+       JSON.stringify(oldSettings.compatibility_flags)))
    fail('ACTIVE_RUNTIME_FLAGS_NOT_PINNED');
  const files=['production-main.mjs','production-follow-entry.mjs',
   ...readdirSync(join(candidateDir,'integration')).map(n=>'integration/'+n)];
@@ -44,8 +50,8 @@ export function makeInactiveVersionBody({oldVersion,oldSettings,candidateDir,pin
      .includes('APP729_PRODUCTION_OWNER_FOLLOW_COMPILED_OPEN = false'))
     fail('OFF_MODE_OR_DO_EXPORT_UNVERIFIED');
  return {main_module:'production-follow-entry.mjs',
-  compatibility_date:pinnedVersion.compatibility_date,
-  compatibility_flags:pinnedVersion.compatibility_flags,
+  compatibility_date:date,
+  compatibility_flags:flags,
   bindings:pinned.map(b=>({name:b.name,type:'inherit',version_id:oldVersion})),
   modules,annotations:{'workers/message':'APP737 approved inactive follow candidate - no traffic',
    'workers/tag':'app737-inactive-follow'}};
@@ -104,7 +110,11 @@ async function main(){
  const response=await fetch(uri,{method:'POST',headers:{
   Authorization:'Bearer '+token,'Content-Type':'application/json'},
   body:JSON.stringify(body),signal:AbortSignal.timeout(60000)});
- if(!response.ok)fail('VERSION_UPLOAD_HTTP_'+response.status);
+ if(!response.ok){
+  const failed=await response.json().catch(()=>null);
+  const codes=(failed?.errors||[]).map(e=>Number(e?.code)).filter(Number.isSafeInteger).slice(0,3);
+  fail('VERSION_UPLOAD_HTTP_'+response.status+'_CODE_'+(codes.join('_')||'UNKNOWN'));
+ }
  const result=await response.json();
  const candidateVersion=result?.result?.id;
  if(result.success!==true||!UUID.test(candidateVersion))

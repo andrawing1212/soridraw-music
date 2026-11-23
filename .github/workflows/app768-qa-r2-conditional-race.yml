@@ -201,12 +201,13 @@ jobs:
           test -n "$CLOUDFLARE_API_TOKEN"
           CANDIDATE="$(node -e 'const s=require(process.env.RUNNER_TEMP+"/app789-physical-state.json");if(!/^[0-9a-f-]{36}$/i.test(s.candidate||""))process.exit(2);process.stdout.write(s.candidate)')"
           touch "$RUNNER_TEMP/app789-route-attempted"
-          cd cloudflare/explore-worker
+          test -f "$RUNNER_TEMP/app789-frozen/cloudflare/explore-worker/wrangler.owner-qa-583.json"
+          cd "$RUNNER_TEMP/app789-frozen/cloudflare/explore-worker"
           npx --yes wrangler@4.102.0 versions deploy \
             '4ed70845-6a4b-4a80-9c51-ed95d0becc38@100%' \
             "$CANDIDATE@0%" \
             --config wrangler.owner-qa-583.json --yes
-          cd ../..
+          cd "$GITHUB_WORKSPACE"
           node scripts/app789-qa-physical-runner.mjs verifyDeployed
       - name: Physical QA real R2 owner floor CAS + QA D1 W1 + isolated owner DO
         run: node scripts/app789-qa-physical-runner.mjs test
@@ -224,7 +225,8 @@ jobs:
             exit 0
           fi
           test -n "$CLOUDFLARE_API_TOKEN"
-          cd cloudflare/explore-worker
+          test -f "$RUNNER_TEMP/app789-frozen/cloudflare/explore-worker/wrangler.owner-qa-583.json"
+          cd "$RUNNER_TEMP/app789-frozen/cloudflare/explore-worker"
           npx --yes wrangler@4.102.0 versions deploy \
             '4ed70845-6a4b-4a80-9c51-ed95d0becc38@100%' \
             --config wrangler.owner-qa-583.json --yes

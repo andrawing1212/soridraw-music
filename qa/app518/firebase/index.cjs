@@ -20,7 +20,11 @@ const runtimeQa = () => {
   const config = process.env.FIREBASE_CONFIG;
   let configProject = null;
   if(config){try{configProject=JSON.parse(config).projectId;}catch{return false;}}
-  return projectIds.length>0 && projectIds.every(x=>x===QA_PROJECT)
+  // Direct QA gen2 gcloud deployments need not provide Firebase CLI's
+  // GCLOUD_PROJECT or FIREBASE_CONFIG. The QA-only deployment controller
+  // pins this explicit project ID together with the project number.
+  return process.env.SORIDRAW_APP518_QA_PROJECT_ID===QA_PROJECT
+    && projectIds.every(x=>x===QA_PROJECT)
     && (!configProject || configProject===QA_PROJECT);
 };
 const pilotQa = () => safeId(process.env.SORIDRAW_APP518_PILOT_UID,128)

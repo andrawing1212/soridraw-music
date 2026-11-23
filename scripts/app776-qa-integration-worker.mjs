@@ -2,6 +2,8 @@
 // Uses real QA-bound D1 and R2 but SIMULATED, private QA-only auth evidence.
 // This cannot prove real Firebase Auth, real canonical Writer or global cutover.
 import {assessApp775UnifiedFollowIngress} from './app775-unified-follow-ingress.mjs';
+import {createApp767IsolatedR2Admission} from './app767-r2-admission-candidate.mjs';
+import {createApp783QaSettledHistory} from './app783-qa-immutable-settled-history.mjs';
 const TABLE='app768_qa_synthetic_follow';
 const OWNER='qa776OwnerSynthetic',ACTOR='qa776ActorSynthetic';
 const KEY=/^qa776_[a-f0-9]{16}$/;
@@ -12,6 +14,7 @@ const valid=e=>e?.SORIDRAW_ENVIRONMENT==='isolated-qa'&&
  /^[a-f0-9]{64}$/.test(e.APP776_ACCESS||'')&&
  /^qa776_cutover_[a-f0-9]{32}$/.test(e.APP776_CUTOVER||'')&&
  EP.test(e.APP776_EPOCH||'')&&KEY.test(e.APP776_ROW||'')&&
+ typeof e.QA_APP776_R2?.get==='function'&&
  typeof e.QA_APP776_R2?.put==='function'&&
  typeof e.QA_APP776_R2?.delete==='function'&&
  typeof e.QA_APP776_R2?.head==='function'&&
@@ -40,6 +43,39 @@ async function read(e){
  return e.QA_APP776_D1.prepare('SELECT following FROM '+TABLE+
   ' WHERE k=? LIMIT 1').bind(e.APP776_ROW).first();
 }
+// APP783 physical QA is constrained to the exact synthetic run identity.
+async function op783(e){return {ownerUid:OWNER,actorUid:ACTOR,
+ authEpoch:e.APP776_EPOCH,cutoverToken:e.APP776_CUTOVER,
+ canonicalOperationId:await stableId(e,1,true),expectedRevision:7,desired:true};}
+async function keys783(e){
+ const x=await op783(e),s=JSON.stringify([x.cutoverToken,
+  x.ownerUid,x.actorUid,x.authEpoch,x.canonicalOperationId]);
+ const bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)));
+ const h=[...bytes].map(v=>v.toString(16).padStart(2,'0')).join('');
+ return {digest:h,admission:'internal/qa767/owner-follow-admissions/'+h,
+  settled:'internal/qa783/owner-follow-settled/'+h};
+}
+async function proof783(e,operation,kind){
+ if(kind==='fault')throw Error('QA783_SYNTHETIC_503');
+ const row=await read(e);
+ if(!row||Number(row.following)!==1)throw Error('QA783_D1_NOT_COMMITTED');
+ return {source:'QA783_EXACT_D1_R2_SETTLED',verified:true,changed:true,
+ canonicalD1Committed:true,r2ProjectionSettled:true,ownerEpochVerified:true,
+ ...operation,committedRevision:kind==='stale'?99:8,
+ d1OperationId:operation.canonicalOperationId,
+ r2OperationId:operation.canonicalOperationId};
+}
+async function settle783(e,kind){
+ const operation=await op783(e),k=await keys783(e);
+ const engine=createApp783QaSettledHistory({enabled:true,
+  scope:'APP783_ISOLATED_SYNTHETIC_QA',bucket:e.QA_APP776_R2,
+  verifySettledCanonical:x=>proof783(e,x,kind)});
+ return engine.settle({env:{SORIDRAW_ENVIRONMENT:'isolated-qa'},
+  operation,admission:{status:'ADMISSION_ONLY_NOT_D1_COMMIT',
+   keyDigest:k.digest,d1AdditionalRowsWritten:0,
+   productionDeployAuthorized:false,requiresCanonicalCommitProof:true}});
+}
+
 // Deliberately synthetic test evidence, NOT verified Firebase credentials.
 // In APP775's real runtime the corresponding server callback is not built.
 function evidence(e,id,revision,before){
@@ -75,7 +111,8 @@ function evidence(e,id,revision,before){
  };
 }
 async function wipe(e){
- const keys=await Promise.all([receiptKey(e,1,true),receiptKey(e,2,false)]);
+ const extra=await keys783(e);
+ const keys=[...(await Promise.all([receiptKey(e,1,true),receiptKey(e,2,false)])),extra.admission,extra.settled];
  await Promise.all(keys.map(k=>e.QA_APP776_R2.delete(k)));
  const d=await e.QA_APP776_D1.prepare('DELETE FROM '+TABLE+' WHERE k=?')
   .bind(e.APP776_ROW).run();
@@ -100,6 +137,51 @@ export default {async fetch(request,env){
   try{const x=await wipe(env);
    return respond(x.ok?200:503,{status:x.ok?'QA_CLEANED':'QA_CLEANUP_HOLD'});
   }catch{return respond(503,{status:'QA_CLEANUP_HOLD'})}
+ }
+ // APP783 QA only: additional exact R2 keys, no real follower/profile writes.
+ if(request.method==='GET'&&path==='/app783/health'){
+  try{const k=await keys783(env);
+   const [a,b]=await Promise.all([env.QA_APP776_R2.head(k.admission),
+    env.QA_APP776_R2.head(k.settled)]);
+   const row=await read(env);
+   return respond(200,{status:'QA783_READY',rowPresent:!!row,
+    following:Number(row?.following)===1,admissionPresent:!!a,
+    settledPresent:!!b,settledEtag:b?.etag||null});
+  }catch{return respond(503,{status:'QA783_READ_HOLD'});}
+ }
+ if(request.method==='POST'&&path==='/app783/claim'){
+  const operation=await op783(env);
+  const engine=createApp767IsolatedR2Admission({enabled:true,
+   scope:'APP767_ISOLATED_SYNTHETIC_QA',bucket:env.QA_APP776_R2,
+   verifyTrustedCutover:async x=>({source:'SERVER_ATTESTED_NEW_EPOCH_ONLY_767',
+    verified:true,...x,completeBeforeFirstAcceptedOperation:true,
+    canonicalWriterCoverageProven:true,noLegacyIdNamespaceOverlap:true,
+    userDeletionLifecycleReviewed:true,isolationFromOwnerDoPitrProven:true})});
+  const r=await engine.claim({env:{SORIDRAW_ENVIRONMENT:'isolated-qa'},reservation:operation});
+  return respond(r.status==='ADMISSION_ONLY_NOT_D1_COMMIT'?201:
+   r.reason==='PRIOR_OR_CONCURRENT_CLAIM_REQUIRES_RECONCILIATION'?409:503,
+   {status:r.status,reason:r.reason||null});
+ }
+ if(request.method==='POST'&&path==='/app783/commit'){
+  const key=(await keys783(env)).admission;
+  if(!await env.QA_APP776_R2.head(key))
+   return respond(409,{status:'QA783_ADMISSION_MISSING'});
+  try{const q=await env.QA_APP776_D1.prepare('UPDATE '+TABLE+
+   ' SET following=1 WHERE k=? AND following=0').bind(env.APP776_ROW).run();
+   if(q?.meta?.rows_written!==1)return respond(409,{status:'QA783_D1_NO_NEW_CHANGE'});
+   return respond(201,{status:'QA783_SYNTHETIC_D1_COMMIT',rowsWritten:1});
+  }catch{return respond(503,{status:'QA783_D1_COMMIT_HOLD'});}
+ }
+ if(request.method==='POST'&&
+  ['/app783/settle','/app783/fault','/app783/stale'].includes(path)){
+  const kind=path.endsWith('/fault')?'fault':path.endsWith('/stale')?'stale':'normal';
+  try{const r=await settle783(env,kind);
+   return respond(r.status==='QA_IMMUTABLE_SETTLED_ONLY'?201:
+    r.status==='EXACT_QA_SETTLED_REPLAY_READ_ONLY'?200:409,
+    {status:r.status,reason:r.reason||null,
+     canonicalWriteAuthorized:r.canonicalWriteAuthorized,
+     productionDeployAuthorized:r.productionDeployAuthorized});
+  }catch{return respond(503,{status:'QA783_SETTLE_HOLD'});}
  }
  if(path!=='/v1/profiles/'+OWNER+'/follow'||
     (request.method!=='PUT'&&request.method!=='DELETE'))

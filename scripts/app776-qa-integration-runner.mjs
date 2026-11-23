@@ -21,7 +21,8 @@ const delay=n=>new Promise(done=>setTimeout(done,n));
 function guard(){
  if(QA===PROD||!DIR||!/^[0-9]{8,20}$/.test(RUN)||
   process.env.GITHUB_REPOSITORY!=='andrawing1212/soridraw-music'||
-  process.env.GITHUB_EVENT_NAME!=='push'||
+  process.env.GITHUB_EVENT_NAME!=='issue_comment'||
+  process.env.APP783_QA_APPROVAL!=='APP783_ISOLATED_ONLY'||
   process.env.GITHUB_REF!=='refs/heads/main'||
   process.env.CLOUDFLARE_ACCOUNT_ID!==QA)issue('QA_IDENTITY');
  for(const name of ['CLOUDFLARE_QA_API_TOKEN','CLOUDFLARE_QA_DATA_TOKEN',
@@ -174,6 +175,15 @@ async function r2keys(s){
   output.push('internal/qa776/synthetic-follow/'+s.row+'/' +
     Array.from(bytes,n=>n.toString(16).padStart(2,'0')).join(''));
  }
+ // APP783 admission + settled objects, using exactly the current run's operation.
+ const id=await opId(s,1,true);
+ const raw=JSON.stringify([s.cutover,'qa776OwnerSynthetic',
+  'qa776ActorSynthetic',s.epoch,id]);
+ const bytes=new Uint8Array(await webcrypto.subtle.digest('SHA-256',
+  new TextEncoder().encode(raw)));
+ const hash=[...bytes].map(n=>n.toString(16).padStart(2,'0')).join('');
+ output.push('internal/qa767/owner-follow-admissions/'+hash,
+  'internal/qa783/owner-follow-settled/'+hash);
  return output;
 }
 async function test(){
@@ -237,6 +247,66 @@ async function test(){
  console.log('APP776_REAL_QA_WRONG_PRINCIPAL_DENIED=PASS');
  console.log('APP776_LIVE_FIREBASE_AUTH_AND_REAL_CANONICAL_WRITER=NOT_TESTED_HOLD');
 }
+async function test783(){
+ guard();const s=state();if(!s)issue('NO_EXACT_QA_STATE');
+ let ready=false;
+ for(let i=0;i<14;i++){
+  try{const h=await wfetch(s,'GET','/app783/health');
+   if(h.code===200&&h.value?.status==='QA783_READY'&&h.value.rowPresent===true&&
+    h.value.following===false&&!h.value.admissionPresent&&
+    !h.value.settledPresent){ready=true;break;}
+  }catch{}
+  if(i<13)await delay(1500);
+ }
+ if(!ready)issue('APP783_QA_EMPTY_BASELINE_NOT_READY');
+ const denied=await wfetch(s,'POST','/app783/claim',undefined,false);
+ if(denied.code!==403||denied.value?.status!=='DENIED')issue('QA_UNAUTHENTICATED_WRITE_ALLOWED');
+ const early=await wfetch(s,'POST','/app783/settle');
+ if(early.code!==409||early.value?.reason!=='IMMUTABLE_ADMISSION_NOT_FOUND_OR_MISMATCH')
+  issue('QA_SETTLED_WITHOUT_ADMISSION');
+ const claim=await wfetch(s,'POST','/app783/claim');
+ if(claim.code!==201||claim.value?.status!=='ADMISSION_ONLY_NOT_D1_COMMIT')
+  issue('QA_R2_ADMISSION_NOT_CREATED');
+ const repeat=await wfetch(s,'POST','/app783/claim');
+ if(repeat.code!==409||repeat.value?.reason!=='PRIOR_OR_CONCURRENT_CLAIM_REQUIRES_RECONCILIATION')
+  issue('QA_R2_DUPLICATE_NOT_BLOCKED');
+ const fault=await wfetch(s,'POST','/app783/fault');
+ if(fault.code!==409||fault.value?.reason!=='CANONICAL_PROOF_UNAVAILABLE')
+  issue('QA_INJECTED_503_NOT_HELD');
+ const noSettled=await wfetch(s,'GET','/app783/health');
+ if(noSettled.code!==200||noSettled.value?.settledPresent!==false||
+    noSettled.value?.admissionPresent!==true)issue('QA_FAULT_PRODUCED_UNVERIFIED_SETTLED');
+ const d=await wfetch(s,'POST','/app783/commit');
+ if(d.code!==201||d.value?.status!=='QA783_SYNTHETIC_D1_COMMIT'||d.value.rowsWritten!==1)
+  issue('QA_SYNTHETIC_D1_W1_NOT_COMMITTED');
+ const duplicateD1=await wfetch(s,'POST','/app783/commit');
+ if(duplicateD1.code!==409||duplicateD1.value?.status!=='QA783_D1_NO_NEW_CHANGE')
+  issue('QA_D1_DUPLICATE_NOT_HELD');
+ const first=await wfetch(s,'POST','/app783/settle');
+ if(first.code!==201||first.value?.status!=='QA_IMMUTABLE_SETTLED_ONLY'||
+    first.value.productionDeployAuthorized!==false)issue('QA_SETTLED_NOT_CREATED');
+ const head1=await wfetch(s,'GET','/app783/health');
+ if(head1.code!==200||!head1.value?.settledPresent||!head1.value.settledEtag)
+  issue('QA_R2_SETTLED_NOT_READABLE');
+ const replay=await wfetch(s,'POST','/app783/settle');
+ if(replay.code!==200||replay.value?.status!=='EXACT_QA_SETTLED_REPLAY_READ_ONLY')
+  issue('QA_REPLAY_NOT_READ_ONLY');
+ const stale=await wfetch(s,'POST','/app783/stale');
+ if(stale.code!==409||stale.value?.reason!=='REPLAY_EXACT_CANONICAL_REVISION_MISMATCH')
+  issue('QA_STALE_REVISION_NOT_REJECTED');
+ const head2=await wfetch(s,'GET','/app783/health');
+ if(head2.code!==200||head2.value?.settledEtag!==head1.value.settledEtag)
+  issue('QA_DUPLICATE_CHANGED_R2_ETAG');
+ const final=await d1(s,"SELECT following FROM app768_qa_synthetic_follow WHERE k='"+s.row+"'");
+ if(Number(final.results?.[0]?.following)!==1)issue('QA_D1_FINAL_STATE_WRONG');
+ console.log('APP783_REAL_QA_R2_ADMISSION_SETTLED_CREATE_ONCE=PASS');
+ console.log('APP783_REAL_QA_D1_SYNTHETIC_COMMIT_W1=PASS');
+ console.log('APP783_R2_REPLAY_SAME_ETAG_NO_SECOND_WRITE=PASS');
+ console.log('APP783_INJECTED_503_HOLD_SAME_ID_RECOVERY=PASS');
+ console.log('APP783_STALE_REVISION_REJECTED=PASS');
+ console.log('APP783_REAL_CANONICAL_GLOBAL_WRITERS_AUTO_RECOVERY=NOT_TESTED_HOLD');
+}
+
 async function cleanup(){
  guard();const s=state();if(!s){console.log('APP776_NO_STATE_TO_CLEAN');return;}
  const errors=[];
@@ -278,6 +348,6 @@ async function cleanup(){
  console.log('APP776_EXACT_QA_D1_ROW_AND_R2_OBJECTS_CLEANED=PASS');
  console.log('APP776_ORIGINAL_APP583_QA_RESOURCES_UNCHANGED=PASS');
 }
-const phases={preflight,upload,test,cleanup};
+const phases={preflight,upload,test,test783,cleanup};
 const p=process.argv[2];if(!Object.hasOwn(phases,p))issue('BAD_PHASE');
 phases[p]().catch(e=>{console.error(String(e?.message||e));process.exitCode=2});

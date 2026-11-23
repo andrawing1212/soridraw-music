@@ -832,7 +832,7 @@ jobs:
           print('APP518_QA_FUNCTION_DEPLOY=0; D1_WRITE=0; R2_WRITE=0')
           PY
 
-qa_d1_additive_one_shot:
+  qa_d1_additive_one_shot:
     # Director-approved isolated QA schema only. NO D1 DROP, user rows,
     # new Cloudflare resources, Firebase functions, or APP518 shared cutover.
     if: >-

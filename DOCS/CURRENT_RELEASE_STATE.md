@@ -1,3 +1,11 @@
+## CURRENT — APP518 QA 예산 화면 확인 완료 / Firebase→D1→R2 실통합 검증은 미완료 (2026-11-23 KST)
+
+- **새 확인:** 디렉터가 제공한 Google Cloud Budgets & caps 화면에서 QA `SORIDRAW-App` 프로젝트에 월 5,000원/7,000원 예산 알림과 Functions 월 3,000원 지출 제한 `구성됨`을 확인. Actions #45088345526의 Budget API 목록 조회 실패는 QA 서비스 계정 권한 부족이며, 예산이 없다는 뜻이 아님. 새 IAM 권한·예산·결제 변경 없이 화면 증거를 `DOCS/QA_BILLING_BASELINE.md`에 반영. 과금액과 실제 차단 동작은 미검증.
+- **검증 재사용:** APP518 실제 Firestore 합성 1곡 생성→삭제→재생성→삭제·정리 PASS [#45083717565](https://github.com/andrawing1212/soridraw-music/actions/runs/45083717565), R2 QA 임시 Worker 2키 생성→조회→정확 삭제 및 QA583 원복 PASS [#45087939049](https://github.com/andrawing1212/soridraw-music/actions/runs/45087939049). 변경 증거 없으면 반복 금지.
+- **남은 장애:** 실서버 Firebase Functions 2개/Cloudflare APP518 Worker/D1 APP518 migration 및 인증·원복까지 묶은 합성 1곡 실제 통합 실행기는 아직 준비되지 않았으므로 Firebase→D1→R2 E2E **NOT_TESTED**. 스크린샷 확인만으로 유료 함수나 D1 schema를 배포하지 않는다. 기존 PR #528 고정 SHA `864f796da24413309567198c9de502b13cdedd50`, QA583·운영·PREVIEW·TEST·PRODUCTION·사용자 원본 보호.
+
+---
+
 ## CURRENT — APP518 QA R2 실서버 생성·정리 PASS / Firebase 유료 백엔드 예산 검증 HOLD (2026-11-23 KST)
 
 - **실제 완료:** [PR #1360](https://github.com/andrawing1212/soridraw-music/pull/1360) `d89997cf8a85e565533af0e8bfd3e28742f8ac0d`에서 GitHub 공식 OIDC discovery/JWKS를 QA GitHub runner가 HTTPS로 가져와 **같은 실행의 실제 JWT RSA 서명을 먼저 검증**, 10분 만료 공개키만 QA 전용 Worker에 배포 시 전달; 위조·만료·외부 issuer 차단 모의 PASS [#45087475356](https://github.com/andrawing1212/soridraw-music/actions/runs/45087475356). [PR #1361](https://github.com/andrawing1212/soridraw-music/pull/1361) `b3b6c588260ac06b8af44820df4ef017467b433f`: Cloudflare Workers가 지원하지 않는 `redirect:error`를 **manual+HTTP 200만 허용**으로 수정, 서명/원본 QA583 방어 유지, 소스 PASS [#45087825105](https://github.com/andrawing1212/soridraw-music/actions/runs/45087825105).

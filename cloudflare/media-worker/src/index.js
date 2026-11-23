@@ -14,7 +14,7 @@ import {
   shouldCompactCatalogJournal,
 } from './catalogJournal.js';
 import {decideCatalogWriterAuthority518,classifyCatalogAuthority518} from './catalogAuthorityPolicy518.js';
-import {FENCE_CONTRACT_518} from './catalogSharedWriterRolloutGate518.js';
+import { FENCE_CONTRACT_518 } from './catalogSharedWriterRolloutGate518.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const AUTH_CERT_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
@@ -1334,8 +1334,8 @@ export default {
         catalogAuthorityMode: catalogAuthorityMode(env),
         catalogWriterFence518: {
           fenceContract:FENCE_CONTRACT_518,
-          sourceInstalled:true,
-          canonicalEnabled:isCanonicalCatalogAuthority518(env),
+          sourceInstalled: true,
+          canonicalEnabled: isCanonicalCatalogAuthority518(env),
         },
       }, 200, origin);
     }

@@ -1078,6 +1078,7 @@ jobs:
             assert.equal(b.status,404,'QA_FINAL_RECEIPT_PRESENT');
             console.log('APP518_QA_ONE_SONG_FAVORITE_AND_RECEIPT_CLEANED=PASS');
           };
+          const canonicalTime=t=>String(t).replace(/\.(\d{1,9})Z$/,(_,digits)=>'.'+digits.padEnd(9,'0')+'Z');
           let prior=null;
           try{
             const [a,b]=await Promise.all([fs('GET',doc),fs('GET',receipt)]);
@@ -1085,13 +1086,13 @@ jobs:
             assert.equal(b.status,404,'QA_RECEIPT_ALREADY_EXISTS');
             const saved=await save('APP518 QA synthetic save');
             const s1=await waitSource('saved');
-            assert.equal(s1.updateTime,saved.updateTime,'QA_SAVE_VERSION_NOT_EXACT');
+            assert.equal(canonicalTime(s1.updateTime),canonicalTime(saved.updateTime),'QA_SAVE_VERSION_NOT_EXACT');
             await remove(saved);
             const s2=await waitSource('removed');
             assert.ok(s2.updateTime>s1.updateTime,'QA_RECEIPT_VERSION_NOT_NEWER');
             const resaved=await save('APP518 QA synthetic resave');
             const s3=await waitSource('saved');
-            assert.equal(s3.updateTime,resaved.updateTime,'QA_RESAVE_VERSION_MISMATCH');
+            assert.equal(canonicalTime(s3.updateTime),canonicalTime(resaved.updateTime),'QA_RESAVE_VERSION_MISMATCH');
             assert.ok(s3.updateTime>s2.updateTime,'QA_RESAVE_NOT_NEWER');
             console.log('APP518_QA_REAL_FIREBASE_SAVE_DELETE_RECEIPT_RESAVE=PASS');
             complete=true;

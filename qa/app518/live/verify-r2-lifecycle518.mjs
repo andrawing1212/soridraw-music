@@ -55,6 +55,7 @@ const d1={prepare(sql){
 }};
 const apiFetch=async(url,request)=>{
  assert.equal(request.method,'GET');
+ assert.equal(request.redirect,'manual');
  assert.equal(request.headers.Authorization,'Bearer '+readToken);
  const path=new URL(url).pathname;
  if(path.endsWith('/workers/scripts?per_page=100'))

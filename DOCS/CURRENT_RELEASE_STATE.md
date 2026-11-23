@@ -1,3 +1,14 @@
+## CURRENT — APP784 구·신 팔로우 공통 QA 경로 실검증 PASS / 운영 활성화 HOLD (2026-11-24 KST)
+
+- **사용자 YES 승인 범위:** 과거 구버전 빈 본문(legacy) 요청과 신버전 작업 ID·기대 버전(ordered) 요청을 동일한 서버측 판단·조건부 R2 접수·D1 합성 W1 변경·immutable R2 완료 기록 경로에서 검증. 공유 사용자 원본, PREVIEW/TEST/PRODUCTION, 실제 운영 함수·보안 규칙·권한·영구 자원은 변경 금지. [PR #1379](https://github.com/andrawing1212/soridraw-music/pull/1379) **병합**, 기능 코드 커밋 `3351d93687b56cb03148c897ef1b3ccf2dc851d0`.
+- **실제 독립 QA 최종 PASS:** [Actions #45253168767](https://github.com/andrawing1212/soridraw-music/actions/runs/45253168767) `completed/success`, 실제 Cloudflare QA 계정 `b60fcd62c679c64db19f0b0e0c2f3429`의 기존 D1 `soridraw-qa-app768-d1`에서 **구버전 팔로우 1회 W1 → 신버전 같은 ID 재조회 W0 → 신버전 팔로우 취소 1회 W1 → 취소 같은 ID 재조회 W0**. 기존 QA R2 `soridraw-qa-app768-r2`에 해당 두 작업의 admission/settled 불변 영수증 **정확 4개**만 조건부 저장. 같은 ID 재조회 시 R2 ETag 변화 0, 구버전 빈 본문 재시도·오래된 신버전 작업 ID는 409 HOLD로 차단, 기록·D1 변경 0. 이는 QA 실제 D1/R2 저장 증거이며 이전 APP776/783 별도 성공 검사를 되풀이하지 않았음.
+- **원상복구 PASS:** 같은 실행에서 `APP776_QA_TEMPORARY_WORKER_DELETED=PASS`, `APP776_EXACT_QA_D1_ROW_AND_R2_OBJECTS_CLEANED=PASS`, `APP776_ORIGINAL_APP583_QA_RESOURCES_UNCHANGED=PASS`. 시험용 D1 행·R2 객체만 제거, 기존 QA583 Worker `4ed70845-6a4b-4a80-9c51-ed95d0becc38` 100% 보호. 신규 보안 규칙/Secret/계정·별도 영구 데이터베이스·버킷/운영 배포 0. 실청구액은 조회하지 않음.
+- **재실행 방지:** 기존 `.github/workflows/app768-qa-r2-conditional-race.yml`의 일회성 `issue_comment` 트리거 제거, `live if: false` 복귀. APP784 오프라인 PR 단위 안전 검사는 유지. 완료된 실 QA 비용·생성/정리 작업은 자동으로 반복하지 않음.
+- **보호 및 아직 해결되지 않은 근본 문제:** 이번 경로는 **서명된 실제 사용자 Auth 대신 격리된 합성 인증 증거**를 주입했다. 운영 모든 현재·구형 Writer, 브라우저/탭/버전 우회, 진짜 Firebase Auth/App Check, 계정 삭제·재가입/UID 재사용, DO PITR 독립의 처음부터 완전한 이력·외부 revision floor, 운영 D1 W1~W2, 실제 PC↔모바일·Functions/RTDB 자동 수신은 아직 검증되지 않았다. 구버전 빈 본문 요청은 팔로우→취소 후 **새로운 사용자 의도인지 과거 지연 요청인지 구별할 수 없어 HOLD**한다. 이를 그대로 운영에 켜면 일부 구버전 사용자는 다시 팔로우하기 어려우므로 정식 활성화 금지. 구버전 접수·신버전 전환의 실제 호환 절차와 모든 Writer 진입 경로가 먼저 확인돼야 한다.
+- **서버/배포 경계:** APP784와 APP775/783은 isolated QA / source-only, 정식 follow 연결 기본 OFF. APP737 운영 후보 업로드 이전 확인은 기존 운영 100%·후보 0%, 이번 작업에서 Cloudflare PRODUCTION 활성 트래픽을 다시 조회하지 않음. 공유 데이터, PREVIEW Hosting, TEST/PRODUCTION 변경 0. QA 실검증 PASS ≠ 운영 팔로우 기능 PASS. 추가 독립적인 운영 연결/전역 Writer 강제 전환/공유 권한·데이터 변경·정식 배포는 새 근거와 승인 필요.
+
+---
+
 ## CURRENT — APP783 팔로우 불변 완료 기록: 독립 Cloudflare QA R2·D1 1회 실검증 PASS / 운영 연결 HOLD (2026-11-24 KST)
 
 - **사용자 승인 작업 완료점:** [PR #1377](https://github.com/andrawing1212/soridraw-music/pull/1377) OFF·QA-only APP783 기록 코드(병합 `0996587de888811df9fb509af15e6af5d8f75953`), [PR #1378](https://github.com/andrawing1212/soridraw-music/pull/1378) 기존 APP776 격리 QA 실행기 재사용(병합 `2af4f01233a348e391ccc0898dc0ca64fbd77ebb`). 기존 APP776 실서버 QA 합격은 재실행하지 않고 **신규 APP783 test783 경로만** 실행.

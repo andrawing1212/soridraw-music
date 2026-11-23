@@ -5,6 +5,7 @@ import {assessApp775UnifiedFollowIngress} from './app775-unified-follow-ingress.
 import {createApp767IsolatedR2Admission} from './app767-r2-admission-candidate.mjs';
 import {createApp783QaSettledHistory} from './app783-qa-immutable-settled-history.mjs';
 import {createApp784QaUnifiedFollow} from './app784-qa-unified-follow.mjs';
+import {createApp785QaCompatibility} from './app785-qa-follow-compatibility.mjs';
 const TABLE='app768_qa_synthetic_follow';
 const OWNER='qa776OwnerSynthetic',ACTOR='qa776ActorSynthetic';
 const KEY=/^qa776_[a-f0-9]{16}$/;
@@ -191,6 +192,57 @@ function evidence(e,id,revision,before){
    allLegacyWritersCovered:true,fullOwnerDoPitrProtected:true},
  };
 }
+
+// APP785 ONE-SHOT QA: original canonical Writer is the ONLY change path.
+// This is a synthetic D1 pair and makes NO real follows/owner notifications.
+async function canonical785(e,request){
+ let text;try{text=await request.clone().text()}
+ catch{return respond(503,{status:'QA785_BODY_HOLD'})}
+ if(text.length>512)return respond(413,{status:'QA785_BODY_LIMIT'});
+ if(text.trim()){
+  let packet;try{packet=JSON.parse(text)}catch{
+   return respond(409,{status:'QA785_MALFORMED_HOLD'})}
+  if(!packet||typeof packet!=='object'||Array.isArray(packet))
+   return respond(409,{status:'QA785_MALFORMED_HOLD'});
+  const names=Object.keys(packet);
+  if(names.length>0){
+   const id=await stableId(e,3,false);
+   if(names.length!==2||!names.includes('followOperationId')||
+      !names.includes('followExpectedRevision')||
+      packet.followOperationId!==id||
+      packet.followExpectedRevision!==3||request.method!=='DELETE')
+    return respond(409,{status:'QA785_ORDERED_REVISION_HOLD'});
+  }
+ }
+ let row;
+ try{row=await read(e)}catch{return respond(503,{status:'QA785_D1_READ_HOLD'})}
+ if(!row)return respond(503,{status:'QA785_ROW_MISSING'});
+ const current=Number(row.following)===1,desired=request.method==='PUT';
+ if(current===desired)return respond(200,{status:'QA785_CANONICAL_NOOP',
+  following:current,rowsWritten:0});
+ try{
+  const w=await e.QA_APP776_D1.prepare('UPDATE '+TABLE+
+   ' SET following=? WHERE k=? AND following=?')
+   .bind(desired?1:0,e.APP776_ROW,current?1:0).run();
+  if(w?.meta?.rows_written!==1)return respond(503,{status:'QA785_W1_HOLD'});
+  return respond(200,{status:'QA785_CANONICAL_CHANGED',
+   following:desired,rowsWritten:1});
+ }catch{return respond(503,{status:'QA785_CANONICAL_WRITE_HOLD'})}
+}
+async function capability785(e,request){
+ const f=createApp785QaCompatibility({enabled:true,
+  scope:'APP785_ISOLATED_SYNTHETIC_QA',
+  canonical:r=>canonical785(e,r),
+  verifyNegotiationReady:async()=>({
+   scope:'APP785_ISOLATED_SYNTHETIC_QA',
+   canonicalWriterUnchanged:true,serverSupportsOrdered354:true,
+   noParallelWriterOrOwnerDelivery:true,
+  }),
+ });
+ return f.handle({request,env:{SORIDRAW_ENVIRONMENT:'isolated-qa'},
+  mode:'ORDER_NEGOTIATION_CANONICAL_ONLY'});
+}
+
 async function wipe(e){
  const extra=await keys783(e),second=await keys783(e,2,false);
  const keys=[...(await Promise.all([receiptKey(e,1,true),receiptKey(e,2,false)])),
@@ -290,6 +342,14 @@ export default {async fetch(request,env){
     d1RowsWritten:out.d1RowsWritten??0,
     productionDeployAuthorized:out.productionDeployAuthorized});
   }catch{return respond(503,{status:'QA784_HOLD'});}
+ }
+ // APP785: single QA-only version negotiation on the existing synthetic D1.
+ // Legacy without capability hint bypasses negotiation to the exact same
+ // synthetic canonical handler. This does not enable the APP784 R2 writer.
+ if(env.APP785_ISOLATED_TEST==='1'&&
+    path==='/v1/profiles/'+OWNER+'/follow'&&
+    (request.method==='PUT'||request.method==='DELETE')){
+  return capability785(env,request);
  }
  if(path!=='/v1/profiles/'+OWNER+'/follow'||
     (request.method!=='PUT'&&request.method!=='DELETE'))

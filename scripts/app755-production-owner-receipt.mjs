@@ -27,6 +27,8 @@ const safe=n=>Number.isSafeInteger(n)&&n>=0;
 const validDelivery=d=>d===undefined||(
  d&&['pending','delivered','held'].includes(d.status)&&
  safe(d.attempts)&&d.attempts<=3&&
+ (d.settlementChecks===undefined||safe(d.settlementChecks)&&d.settlementChecks<=4)&&
+ (d.holdReason===undefined||d.status==='held'&&d.holdReason==='settlement-unverified')&&
  (d.status!=='pending'||(safe(d.retryAt)&&d.retryAt>0)));
 const hold=x=>{throw Error('APP755_RECEIPT_HOLD_'+x)};
 const same=(a,b)=>a.actorUid===b.actorUid&&a.ownerUid===b.ownerUid&&
@@ -272,6 +274,54 @@ export function createApp755ProductionOwnerReceiptStore({
        .sort((a,b)=>a.expectedRevision-b.expectedRevision)
        .slice(0,4);
    },
+   // APP792: bounded precommit/proof recovery separate from relay attempts.
+   // Existing APP755/759 callers do not use this method. No network or D1.
+   async deferSettlement({receipt}={}){
+     scope(receipt);
+     return storage.transaction(async tx=>{
+       const s=await load(tx),index=s.entries.findIndex(x=>x.operationId===receipt.operationId);
+       const old=s.entries[index];
+       if(!old||!same(old,receipt)||old.authEpoch!==receipt.authEpoch||
+          old.cutoverToken!==receipt.cutoverToken||old.priorR2Revision!==receipt.priorR2Revision||
+          old.beforeFollowing!==receipt.beforeFollowing||old.generation!==receipt.generation||
+          old.delivery?.status!=='pending')hold('SETTLEMENT_RECEIPT_MISMATCH');
+       const at=now();if(!safe(at)||at<=0)hold('CLOCK');
+       const checks=(old.delivery.settlementChecks||0)+1;
+       const status=checks>=4?'held':'pending';
+       const delivery={status,attempts:old.delivery.attempts,settlementChecks:checks,
+         ...(status==='pending'?{retryAt:at+[0,2000,5000,15000][checks]}:{holdReason:'settlement-unverified'})};
+       const entries=s.entries.slice();entries[index]={...old,delivery};
+       await tx.put(KEY,{...s,entries});
+       const next=entries.filter(x=>(x.delivery?.status||'pending')==='pending');
+       if(next.length)await tx.setAlarm(Math.max(at+1,Math.min(...next.map(x=>x.delivery?.retryAt||at+DELAY))));
+       else if(typeof tx.deleteAlarm==='function')await tx.deleteAlarm();
+       return {status,changed:true,settlementChecks:checks};
+     });
+   },
+   // Explicit, exact settled proof only. Never revive a generation rejection
+   // or exhausted actual relay budget. Caller must verify immutable proof.
+   async rearmVerifiedSettlement({receipt}={}){
+     scope(receipt);
+     return storage.transaction(async tx=>{
+       const s=await load(tx),index=s.entries.findIndex(x=>x.operationId===receipt.operationId);
+       const old=s.entries[index];
+       if(!old||!same(old,receipt)||old.authEpoch!==receipt.authEpoch||
+          old.cutoverToken!==receipt.cutoverToken||old.priorR2Revision!==receipt.priorR2Revision||
+          old.beforeFollowing!==receipt.beforeFollowing||old.generation!==receipt.generation)
+         hold('SETTLEMENT_REARM_RECEIPT_MISMATCH');
+       if(old.delivery?.status==='delivered')return {status:'delivered',changed:false};
+       if(old.delivery?.status==='held'&&old.delivery.holdReason!=='settlement-unverified')
+         return {status:'held',changed:false};
+       if(old.delivery?.status==='held'){
+         const entries=s.entries.slice();
+         entries[index]={...old,delivery:{status:'pending',attempts:old.delivery.attempts,
+           settlementChecks:old.delivery.settlementChecks,retryAt:now()+DELAY}};
+         await tx.put(KEY,{...s,entries});
+       }
+       await alarmReady(tx);
+       return {status:'pending',changed:true};
+     });
+   },
    // Only the trusted owner DO alarm coordinator calls this after exact
    // canonical settle proof + signed receiver result. Never exposed to HTTP.
    async markDelivery({receipt,result}={}){
@@ -296,6 +346,7 @@ export function createApp755ProductionOwnerReceiptStore({
          result==='rejected-generation'||nextAttempts>=3?'held':'pending';
        const retryAt=status==='pending'?at+Math.min(4000,1000*2**nextAttempts):null;
        const updated={...old,delivery:{status,attempts:nextAttempts,
+         ...(old.delivery?.settlementChecks!==undefined?{settlementChecks:old.delivery.settlementChecks}:{}),
          ...(retryAt!==null?{retryAt}:{})}};
        const entries=s.entries.slice();
        entries[index]=updated;

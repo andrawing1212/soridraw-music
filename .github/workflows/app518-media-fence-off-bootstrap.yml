@@ -1,0 +1,188 @@
+name: APP518 Media Fence OFF First Install (Manual, Shared R2)
+
+# First-install-only wrapper around the existing guarded Media Worker runner.
+# It does NOT enable canonical writes, alter data, or replace the later
+# signed shared-writer cutover. No push/PR event can dispatch this job.
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: 'Exact approved 40-character SHA on preview'
+        required: true
+        type: string
+      approve_fence_install:
+        description: 'Type INSTALL_APP518_FENCE_OFF_3_WORKERS after separate shared Worker approval'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-media-shared-r2-mutation
+  cancel-in-progress: false
+
+jobs:
+  first-install:
+    if: ${{ inputs.approve_fence_install == 'INSTALL_APP518_FENCE_OFF_3_WORKERS' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha }}
+          fetch-depth: 0
+      - name: Require exact approved preview source and inactive canonical mode
+        env:
+          APPROVED_SHA: ${{ inputs.commit_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$APPROVED_SHA" =~ ^[a-f0-9]{40}$ ]] || exit 2
+          test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
+          git fetch origin preview --no-tags --quiet
+          git merge-base --is-ancestor "$APPROVED_SHA" FETCH_HEAD
+          git cat-file -e '4e8748236d59444ce4a23d5611e22323c4ea221d^{commit}'
+          git merge-base --is-ancestor 4e8748236d59444ce4a23d5611e22323c4ea221d HEAD
+          # Immutable file pins are declared here, not supplied by the
+          # candidate's own scripts or user dispatch inputs. Changes HOLD.
+          while read -r expected file; do
+            test "$(git hash-object "$file")" = "$expected" || {
+              echo "::error::HOLD_518_FENCE_BOOTSTRAP_UNAUDITED_BLOB:$file"; exit 2;
+            }
+          done <<'APP518_FENCE_OFF_PINNED_BLOBS'
+          8b2c4362c090d84efca35859fc499bed7d305b08 cloudflare/media-worker/src/index.js
+          be1a5f2cfa94a0c62130ff7ed5fe4f1f6f043889 cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js
+          a4ca103b0216a452935daab9d5222b51764db9d8 .deploy/release-media-worker-runtime.mjs
+          81f2a797c30dfd1d7e700e542bbd29c88987198f cloudflare/media-worker/package.json
+          01e6d7a6f280d421cf982552a3c9f2e824f60264 scripts/verify-518-shared-writer-rollout.mjs
+          APP518_FENCE_OFF_PINNED_BLOBS
+          node scripts/verify-518-shared-writer-rollout.mjs
+          node scripts/verify-518-live-media-writer-readonly.mjs --self-test
+          node - <<'NODE'
+          const assert=require('node:assert/strict');
+          const fs=require('node:fs');
+          const cfg=JSON.parse(fs.readFileSync('cloudflare/media-worker/wrangler.jsonc','utf8'));
+          for(const stage of [cfg,cfg.env.test,cfg.env.production]){
+            assert.equal(stage.vars.SORIDRAW_SHARED_CATALOG_V1,'1');
+            assert.equal(stage.vars.SORIDRAW_CANONICAL_CATALOG_518,undefined);
+            assert.equal(stage.r2_buckets.find(x=>x.binding==='CATALOG')?.bucket_name,
+              'soridraw-user-catalog');
+          }
+          console.log('APP518_FIRST_INSTALL_CANONICAL_OFF_SOURCE=PASS');
+          NODE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Reuse existing Worker build check
+        working-directory: cloudflare/media-worker
+        run: |
+          npm install --no-audit --no-fund
+          npm run check
+      - name: Observe all three original versions and reject unsafe live flags
+        shell: bash
+        run: |
+          set -euo pipefail
+          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID"
+          for stage in preview test production; do
+            case "$stage" in
+              preview) worker=soridraw-media-preview; media=soridraw-media-preview;;
+              test) worker=soridraw-media-test; media=soridraw-media-test;;
+              production) worker=soridraw-media; media=soridraw-media;;
+            esac
+            settings="$(curl -fsS --max-time 20 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API/workers/scripts/$worker/settings")"
+            deployment="$(curl -fsS --max-time 20 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API/workers/scripts/$worker/deployments")"
+            printf '%s' "$settings" | jq -e --arg media "$media" '
+              .success==true and
+              ([.result.bindings[]|select(.name=="MEDIA" and .type=="r2_bucket" and .bucket_name==$media)]|length)==1 and
+              ([.result.bindings[]|select(.name=="CATALOG" and .type=="r2_bucket" and .bucket_name=="soridraw-user-catalog")]|length)==1 and
+              ([.result.bindings[]|select(.name=="SORIDRAW_SHARED_CATALOG_V1" and .type=="plain_text" and (.text//.value)=="1")]|length)==1 and
+              ([.result.bindings[]|select(.name=="SORIDRAW_CANONICAL_CATALOG_518")]|length)==0' >/dev/null
+            old="$(printf '%s' "$deployment" | jq -er '.result.deployments[0].versions | select(length==1 and .[0].percentage==100) | .[0].version_id')"
+            prefix="${stage^^}"
+            echo "${prefix}_BEFORE=$old" >> "$GITHUB_ENV"
+            echo "${prefix}_WORKER=$worker" >> "$GITHUB_ENV"
+          done
+          echo 'APP518_FIRST_INSTALL_SHARED_R2_AND_CANONICAL_OFF_LIVE=PASS'
+      - name: Upload all three versions without traffic changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for stage in preview test production; do
+            prefix="${stage^^}"
+            node .deploy/release-media-worker-runtime.mjs "$stage" upload | tee "$RUNNER_TEMP/${stage}-upload"
+            before="$(sed -n "s/^${prefix}_MEDIA_WORKER_BEFORE=//p" "$RUNNER_TEMP/${stage}-upload"|tail -1)"
+            uploaded="$(sed -n "s/^${prefix}_MEDIA_WORKER_UPLOADED_VERSION=//p" "$RUNNER_TEMP/${stage}-upload"|tail -1)"
+            original_var="${prefix}_BEFORE"
+            [[ "$uploaded" =~ ^[a-f0-9-]{36}$ ]] && test "$before" = "${!original_var}" && test "$uploaded" != "$before" || exit 2
+            echo "${prefix}_UPLOADED=$uploaded" >> "$GITHUB_ENV"
+          done
+          echo 'APP518_FENCE_OFF_THREE_UPLOADS_NO_TRAFFIC=PASS'
+      - name: Activate OFF-only fence on all three with guarded rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID"
+          changed=0
+          active() {
+            curl -fsS --max-time 20 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API/workers/scripts/$1/deployments" |
+              jq -er '.result.deployments[0].versions | select(length==1 and .[0].percentage==100) | .[0].version_id'
+          }
+          restore_all() {
+            local failures=0
+            for stage in production test preview; do
+              prefix="${stage^^}"; old_var="${prefix}_BEFORE"; new_var="${prefix}_UPLOADED"; worker_var="${prefix}_WORKER"
+              old="${!old_var}"; new="${!new_var}"; worker="${!worker_var}"
+              current="$(active "$worker" 2>/dev/null)" || { failures=1; continue; }
+              [ "$current" = "$old" ] && continue
+              if [ "$current" != "$new" ]; then echo "::error::HOLD_EXTERNAL_MEDIA_VERSION_DRIFT_$stage"; failures=1; continue; fi
+              RELEASE_MEDIA_WORKER_VERSION="$old" node .deploy/release-media-worker-runtime.mjs "$stage" restore || { failures=1; continue; }
+              # The old immutable version alone is not proof of a usable
+              # rollback. Reuse the existing health/CORS/binding verifier.
+              if [ "$(active "$worker")" != "$old" ] ||
+                 ! node .deploy/release-media-worker-runtime.mjs "$stage" verify; then
+                echo "::error::HOLD_FENCE_OFF_RESTORED_WORKER_NOT_HEALTHY_$stage"
+                failures=1
+              fi
+            done
+            return "$failures"
+          }
+          on_exit() {
+            code=$?
+            trap - EXIT
+            if [ "$code" -ne 0 ] && [ "$changed" -eq 1 ]; then
+              restore_all || { echo "::error::HOLD_FENCE_OFF_ROLLBACK_MANUAL_RECOVERY"; exit 86; }
+            fi
+            exit "$code"
+          }
+          trap on_exit EXIT
+          for stage in preview test production; do
+            prefix="${stage^^}"; old_var="${prefix}_BEFORE"; new_var="${prefix}_UPLOADED"; worker_var="${prefix}_WORKER"
+            old="${!old_var}"; new="${!new_var}"; worker="${!worker_var}"
+            test "$(active "$worker")" = "$old" || { echo "::error::HOLD_PREACTIVATE_VERSION_DRIFT_$stage"; exit 2; }
+            changed=1
+            RELEASE_MEDIA_WORKER_VERSION="$new" node .deploy/release-media-worker-runtime.mjs "$stage" activate
+          done
+          for stage in preview test production; do
+            prefix="${stage^^}"; new_var="${prefix}_UPLOADED"; worker_var="${prefix}_WORKER"
+            test "$(active "${!worker_var}")" = "${!new_var}" || exit 2
+            node .deploy/release-media-worker-runtime.mjs "$stage" verify
+            case "$stage" in
+              preview) url=https://soridraw-media-preview.andrawing1212.workers.dev;;
+              test) url=https://soridraw-media-test.andrawing1212.workers.dev;;
+              production) url=https://soridraw-media.andrawing1212.workers.dev;;
+            esac
+            curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "$url/health" |
+              jq -e '.ok==true and .r2Binding==true and .catalogBinding==true and
+                .catalogAuthorityMode=="shared-catalog" and
+                .catalogWriterFence518.fenceContract=="app518-music-note-fence-v1" and
+                .catalogWriterFence518.sourceInstalled==true and
+                .catalogWriterFence518.canonicalEnabled==false' >/dev/null
+          done
+          trap - EXIT
+          echo 'APP518_FENCE_OFF_THREE_WORKERS=INSTALLED'
+          echo 'APP518_CANONICAL_WRITES=OFF'
+          echo 'APP518_SIGNED_CANONICAL_CUTOVER=NOT_AUTHORIZED'

@@ -13,14 +13,17 @@ const mutate=db.prepare(`WITH baseline(following) AS (SELECT EXISTS(SELECT 1 FRO
  WHERE explore_follow_overrides_348.updated_at<excluded.updated_at AND explore_follow_overrides_348.following<>excluded.following`);
 const ownerUid='owner792',actor1='actor792A',actor2='actor792B',authEpoch='a'.repeat(32),cutoverToken='fixture-cutover-792',generation='fixture_generation_792';
 db.prepare('INSERT INTO profile_stats VALUES(?,?)').run(ownerUid,authEpoch);
-const mKey='internal/explore/follow-cutover-v348/active.json',pKey='internal/explore/shared-profile-v113/'+ownerUid;
+const mKey='internal/explore/follow-cutover-v348/active.json',pKey='internal/explore/shared-profile-v113/'+ownerUid+'.json';
 const intentKey=actor=>'internal/explore/follow-intents-v354/'+cutoverToken+'/'+actor+'/'+ownerUid+'.json';
 const objs=new Map();let etag=0,r2writes=0,canonicalWrites=0,canonicalCalls=0,relayCalls=0,clock=1800000000000,relayFailure=false,ackLost=false,cutoverVerified=true,reset=false,armLost=false,issued=0;
 const seed=(k,v)=>objs.set(k,{etag:'e'+(++etag),v:structuredClone(v)});
-seed(mKey,{schemaVersion:1,relationMode:'overlay348',writeMode:'active',cutoverToken,profileCountsR2Exact:true,crashConsistentWriter354:true,orderedClientRequests354:true,oneWayAuthority348:true,legacyRelationWritersFrozen:true,legacyCounterWritersFrozen:true});
+seed(mKey,{schemaVersion:1,relationTable:'explore_follow_overrides_348',ownerProtocol:'follow-overlay-348',allEnvironmentReadersReady:true,allEnvironmentWritersReady:true,ownerFollowGeneration792:generation,relationMode:'overlay348',writeMode:'active',cutoverToken,profileCountsR2Exact:true,crashConsistentWriter354:true,orderedClientRequests354:true,oneWayAuthority348:true,legacyRelationWritersFrozen:true,legacyCounterWritersFrozen:true});
 let count=142,ownerRevision=81;
 const project=()=>seed(pKey,{schemaVersion:1,revision:ownerRevision,updatedAt:clock,followSync354:{token:cutoverToken,exact:true,pending:{}},body:{data:{items:[],profile:{uid:ownerUid,followerCount:count,followingCount:15}}}});
 project();
+const actorProjection=actor=>seed('internal/explore/shared-profile-v113/'+actor+'.json',{
+ schemaVersion:1,revision:ownerRevision,updatedAt:clock,followSync354:{token:cutoverToken,exact:true,pending:{}},
+ body:{data:{items:[],profile:{uid:actor,followerCount:8,followingCount:snapshot(actor).following?8:7}}}});
 const bucket={async get(k){const x=objs.get(k);return x?{etag:x.etag,text:async()=>JSON.stringify(x.v)}:null},
  async head(k){return objs.has(k)?{etag:objs.get(k).etag}:null},async put(k,v,{onlyIf:c}){const old=objs.get(k);
  if(c.etagDoesNotMatch==='*'&&old||c.etagMatches&&old?.etag!==c.etagMatches)return null;
@@ -51,11 +54,12 @@ const snapshot=actor=>{
  const row=db.prepare('SELECT following FROM explore_follow_overrides_348 WHERE follower_uid=? AND following_uid=?').get(actor,ownerUid);
  return {verified:true,ownerUid,actorUid:actor,authEpoch,generation,cutoverToken,pairRevision:intent?.revision||0,ownerProjectionRevision:ownerRevision,following:row?.following===1,followerCount:count,followingCount:15,actorFollowingCount:row?.following===1?8:7};
 };
+actorProjection(actor1);actorProjection(actor2);
 const ticket=(actor,id,desired)=>{const p=snapshot(actor);return {ownerUid,actorUid:actor,authEpoch,generation,cutoverToken,canonicalOperationId:id,expectedRevision:p.pairRevision,priorR2Revision:p.ownerProjectionRevision,desired,beforeFollowing:p.following}};
 assert.equal(APP792_PREVIEW_COMMON_FOLLOW_COMPILED_OPEN,false);assert.equal(createApp792PreviewFollowIngress(),null);assert.equal(createApp792PreviewOwnerConnection(),null);
 const ingress=createApp792PreviewFollowIngress({enabled:true,
  authenticate:async({request})=>({verified:request.headers.has('X-Verified-Fixture'),appCheckVerified:true,uid:request.headers.get('X-Verified-Fixture'),firebaseProjectId:'soridraw-app-866a5'}),
- readPair:async({actorUid})=>snapshot(actorUid),verifyCutover,
+ verifyCutover,
  ownerService:async()=>({admit:conn.admit,replay:conn.replay,arm:async r=>{if(armLost){armLost=false;throw Error('lost arm request')}return conn.arm(r)}}),
  callCanonical:async({request,actorUid})=>{
   canonicalCalls++;assert.equal(request.headers.get('X-Verified-Fixture'),actorUid);
@@ -64,7 +68,7 @@ const ingress=createApp792PreviewFollowIngress({enabled:true,
   const revision=Math.max(clock,prior.pairRevision+1);
   const x=mutate.run(actorUid,ownerUid,actorUid,ownerUid,Number(desired),revision,body.followOperationId,Number(desired),actorUid,ownerUid);
   canonicalWrites+=Number(x.changes);assert.equal(Number(x.changes),1);
-  ownerRevision+=4;count+=desired?1:-1;project();
+  ownerRevision+=4;count+=desired?1:-1;project();actorProjection(actorUid);
   seed(intentKey(actorUid),{token:cutoverToken,actor:actorUid,target:ownerUid,id:body.followOperationId,following:desired,expectedRevision:prior.pairRevision,revision,settled:true});
   if(ackLost){ackLost=false;throw Error('lost canonical ACK')}
   return Response.json({ok:true,data:{uid:ownerUid,following:desired,revision,duplicate:false,followerCount:count}});
@@ -73,6 +77,9 @@ const call=(actor,desired,body,verified=true)=>ingress({env,request:new Request(
 assert.equal((await conn.bootstrap(ticket(actor1,'genesis_fixture_00001',true))).status,'GENESIS_CREATED');
 const before=r2writes;cutoverVerified=false;assert.equal((await call(actor1,true)).status,'HOLD');assert.equal(r2writes,before);assert.equal(canonicalCalls,0);cutoverVerified=true;
 assert.equal((await call(actor1,true,undefined,false)).status,'HOLD');assert.equal(canonicalCalls,0);
+const manifest=structuredClone(objs.get(mKey).v);const {ownerFollowGeneration792:ignored,...oldManifest}=manifest;
+seed(mKey,oldManifest);assert.equal((await call(actor1,true)).status,'HOLD');assert.equal(canonicalCalls,0);
+seed(mKey,manifest);
 assert.equal((await call(actor1,true,{followOperationId:'partial_fixture_0001'})).status,'HOLD');
 assert.equal((await call(actor1,true,{followOperationId:'ordered_stale_fixture',followExpectedRevision:999})).status,'HOLD');
 const first=await call(actor1,true);assert.equal(first.status,'CANONICAL_RESPONSE');assert.equal(first.settlement,'ALARM_READY');

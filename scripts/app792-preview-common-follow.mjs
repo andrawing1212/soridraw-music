@@ -197,8 +197,8 @@ export function createApp792PreviewOwnerConnection({
   }
   return {delivered,retried,held,waiting,d1AdditionalWrites:0};
  }
- // Exact ordered response lost after canonical commit: read only the
- // immutable admission and existing receipt, never call the writer.
+ // Exact ordered response lost after canonical commit: inspect the
+ // immutable admission and existing receipt, never call the canonical writer.
  async function replay(a,currentPairRevision){
   try{
    await guard(a);
@@ -219,11 +219,73 @@ export function createApp792PreviewOwnerConnection({
  }
  return Object.freeze({bootstrap,admit,settle,arm,alarm,replay});
 }
+// Read actual existing canonical shapes without invoking repair or a writer.
+// The new generation field must be installed only during a separately
+// approved all-writer cutover; old manifests never enable the candidate.
+export async function readApp792CanonicalPair({env,actorUid,ownerUid,desired}={}){
+ if(env?.SORIDRAW_ENVIRONMENT!=='preview'||!UID.test(actorUid||'')||!UID.test(ownerUid||'')||
+    actorUid===ownerUid||typeof desired!=='boolean')return null;
+ try{
+  const bucket=env.PROFILE_MEDIA,mk='internal/explore/follow-cutover-v348/active.json';
+  const m=await parse(await bucket.get(mk));
+  const v=m?.v;
+  if(v?.schemaVersion!==1||v.relationMode!=='overlay348'||v.writeMode!=='active'||
+     v.relationTable!=='explore_follow_overrides_348'||v.ownerProtocol!=='follow-overlay-348'||
+     !['legacyRelationWritersFrozen','legacyCounterWritersFrozen','allEnvironmentReadersReady',
+       'allEnvironmentWritersReady','profileCountsR2Exact','crashConsistentWriter354',
+       'orderedClientRequests354','oneWayAuthority348'].every(k=>v[k]===true)||
+     typeof v.cutoverToken!=='string'||!v.cutoverToken||v.cutoverToken.length>128||
+     !OP.test(v.ownerFollowGeneration792||''))return null;
+  const cutoverToken=v.cutoverToken,generation=v.ownerFollowGeneration792;
+  const ik='internal/explore/follow-intents-v354/'+[cutoverToken,actorUid,ownerUid].map(encodeURIComponent).join('/')+'.json';
+  const i=await parse(await bucket.get(ik));
+  if(i&&(i.v.token!==cutoverToken||i.v.actor!==actorUid||i.v.target!==ownerUid||
+     !OP.test(i.v.id||'')||!rev(i.v.revision)||!rev(i.v.expectedRevision)||
+     i.v.revision<=i.v.expectedRevision||typeof i.v.following!=='boolean'||i.v.settled!==true))return null;
+  // APP719 single overlay PK lookup and legacy baseline plus owner epoch.
+  const row=await env.DB.prepare(`SELECT p.owner_follow_auth_epoch_532 AS epoch,
+   EXISTS(SELECT 1 FROM follows WHERE follower_uid=? AND following_uid=?) AS baseline_following,
+   o.following AS override_following,o.updated_at AS override_updated_at
+   FROM profile_stats p LEFT JOIN explore_follow_overrides_348 o
+   ON o.follower_uid=? AND o.following_uid=p.uid WHERE p.uid=? LIMIT 1`).bind(actorUid,ownerUid,actorUid,ownerUid).first();
+  if(!row||!EPOCH.test(row.epoch||'')||![0,1].includes(row.baseline_following)||
+     ![null,0,1].includes(row.override_following))return null;
+  const following=(row.override_following??row.baseline_following)===1;
+  if(i&&(i.v.following!==following||
+     row.override_updated_at!==null&&(!rev(row.override_updated_at)||row.override_updated_at>i.v.revision)))return null;
+  // An existing touched overlay without its exact pair intent is not an
+  // authoritative absence. No silent repair or automatic rebase here.
+  if(!i&&row.override_following!==null)return null;
+  const profileKey=uid=>'internal/explore/shared-profile-v113/'+encodeURIComponent(uid)+'.json';
+  const readProfile=async uid=>{
+   const key=profileKey(uid),raw=await bucket.get(key);
+   if(!raw?.etag)return null;
+   const text=await raw.text();if(text.length>8*1024*1024)return null;
+   const b=JSON.parse(text),p=b?.body?.data?.profile,s=b?.followSync354;
+   if(Number(b?.schemaVersion)!==1||p?.uid!==uid||!Array.isArray(b.body?.data?.items)||
+      s?.token!==cutoverToken||s.exact!==true||!s.pending||typeof s.pending!=='object'||
+      Array.isArray(s.pending)||Object.keys(s.pending).length||!rev(b.revision)||
+      ![p.followerCount,p.followingCount].every(x=>rev(x)&&x<=1000000000))return null;
+   return {key,etag:raw.etag,revision:b.revision,profile:p};
+  };
+  const owner=await readProfile(ownerUid);if(!owner)return null;
+  const actor=following===desired?await readProfile(actorUid):null;
+  if(following===desired&&!actor)return null;
+  const [m2,i2,o2,a2]=await Promise.all([bucket.head(mk),bucket.head(ik),bucket.head(owner.key),
+    actor?bucket.head(actor.key):Promise.resolve(null)]);
+  if(m2?.etag!==m.etag||(i2?.etag||null)!==(i?.etag||null)||o2?.etag!==owner.etag||
+     actor&&a2?.etag!==actor.etag)return null;
+  return {verified:true,ownerUid,actorUid,authEpoch:row.epoch,cutoverToken,generation,
+   pairRevision:i?.v.revision||0,ownerProjectionRevision:owner.revision,following,
+   followerCount:owner.profile.followerCount,followingCount:owner.profile.followingCount,
+   actorFollowingCount:actor?.profile.followingCount??null};
+ }catch{return null}
+}
 // Existing public HTTP wrapper calls this ONLY after a separately approved
 // common-writer cutover. Disabled returns null: caller retains old path.
 // All auth, current pair and generation proof are trusted server callbacks.
 export function createApp792PreviewFollowIngress({
- enabled=APP792_PREVIEW_COMMON_FOLLOW_COMPILED_OPEN,authenticate,readPair,
+ enabled=APP792_PREVIEW_COMMON_FOLLOW_COMPILED_OPEN,authenticate,readPair=readApp792CanonicalPair,
  verifyCutover,ownerService,callCanonical,
 }={}){
  if(enabled!==true)return null;

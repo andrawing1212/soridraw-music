@@ -1,3 +1,12 @@
+## CURRENT — APP792 PREVIEW 공통 팔로우 연결 후보 / 공유 활성화 HOLD (2026-11-24 KST)
+
+- 승인 범위: 기존 APP789/790 실제 QA PASS 및 APP791 정본 관찰 코드를 재사용해 PREVIEW 전체 사용자 공통 팔로우 저장·알림 소스 후보 구현 및 오프라인 필수 검사. 공유 backend 활성화, 실제 데이터 쓰기, Rules/IAM/Functions/Worker/Hosting 배포, TEST/PRODUCTION 배포 금지.
+- `scripts/app792-preview-common-follow.mjs` 기본 OFF, active Worker import 없음. 기존 348/354 canonical D1/R2 read shape와 기존 canonical Writer callback, APP755 receipt, APP791 exact changed-commit 관찰, APP787/542 HMAC을 조합. 새 generation이 포함된 정본 manifest와 독립적으로 검증된 모든 Writer cutover 증명이 없으면 활성화 불가. 구형 빈 본문은 현재 exact pair revision의 안정된 APP579 ID, 신형 ordered는 동일 admission 경로. owner-wide R2 floor와 actor-pair revision 구분. 동일 owner CAS 단일 승자, immutable admission/settled + floor CAS; D1 canonical writer 최대 1회 호출, 알림/완료 확인에서 재호출 불가. lost ACK 후 fresh alarm exact settlement, 동일 ordered ID exact ACK 재조회, legacy no-op W0, RTDB marker monotonic.
+- 기존 APP755에 proof check 최대 4회와 relay failure 최대 3회를 분리하는 opt-in 메서드 추가. 기존 APP759/790 호출은 기존 방식 유지. precommit failure/unknown은 HOLD evidence 유지; exact proof 확인 이후에만 별도 rearm. 503/409 relay semantics 유지. **사용자 전환 미완료**: 새 same-state ordered command는 기존 client advancing-revision ACK 계약 때문에 HOLD; 구형 무본문의 반대 상태 지연 요청은 본질적으로 새 클릭과 완전 구분 불가. 모든 Writer 전환 및 canonical replay/recovery path, 삭제·재가입 lifecycle, retained ledger 정책과 live service binding/Functions source parity는 아직 미확정. 후보 소스가 배포 가능한 active Worker라는 의미가 아님.
+- 후보 비용: 신규 changed operation R2 floor/admission/settled/floor 4 Class A + owner genesis 1회, 사전/완료 및 retry targeted R2 GET/HEAD, D1 indexed SELECT; 기존 canonical write 외 신규 D1 write 0 목표. 실제 공유 환경 row billing/RTDB/Functions 청구 및 PC/mobile 검증은 미실행. OFF 상태에서는 active traffic 비용 0. 기존 APP790 실제 [#45284339728](https://github.com/andrawing1212/soridraw-music/actions/runs/45284339728) 재사용; 실제 QA 재실행 없음.
+
+---
+
 ## CURRENT — APP791 PREVIEW 실제 정본 완료 증명 연결 준비 / 공유 Writer 전환 HOLD (2026-11-24 KST)
 
 - APP790 기존 실제 통합 PASS 재사용: PR #1400 main `bc6e34bc116a962310ee980f8225b8db5325305c`, [Actions #45284339728](https://github.com/andrawing1212/soridraw-music/actions/runs/45284339728) completed/success. 디렉터 제공 실제 QA 화면에서 A/B Firebase Auth/AppCheck, RTDB 0명/v16 → 1명/v17 → 0명/v18, 각 요청 D1 W1/완료 확인 추가 W0, 정확한 합성 데이터 정리 및 QA583 원본 100% 복원 PASS. APP789 [#45281350100](https://github.com/andrawing1212/soridraw-music/actions/runs/45281350100) 실제 분리 완료 확인 PASS도 재사용. APP790에서는 별도 모바일 실기기와 실제 503 주입 미검증(기존 APP749/760 별도 증거 재사용). APP790 one-shot job 비활성화, 추가 QA 없음.

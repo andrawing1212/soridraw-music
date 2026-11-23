@@ -539,7 +539,9 @@ jobs:
       - name: Test exact signed R2 lifecycle including partial seed failure
         run: |
           set -euo pipefail
+          node qa/app518/live/verify-github-signed518.mjs
           node qa/app518/live/verify-r2-lifecycle518.mjs
+          node --check qa/app518/live/inspect-public-github-jwks518.mjs
           node --check cloudflare/media-worker/src/app518QaR2Lifecycle518.js
           node --check qa/app518/live/r2-manifest518.mjs
           node --check qa/app518/live/r2-run518.mjs
@@ -580,7 +582,7 @@ jobs:
       - name: ALWAYS clean exact QA synthetic R2 keys before Worker deletion
         if: always()
         env:
-          CLOUDFLARE_QA_API_TOKEN: __SECRET_WORKER_READ__
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
         run: |
           set -euo pipefail
           if [ ! -f "$RUNNER_TEMP/app518-qa-r2-deploy-attempted" ]; then
@@ -617,7 +619,7 @@ jobs:
       - name: ALWAYS verify original QA583 still active and temp absent
         if: always()
         env:
-          CLOUDFLARE_QA_API_TOKEN: __SECRET_WORKER_READ__
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
         run: |
           set -euo pipefail
           if [ ! -f "$RUNNER_TEMP/app518-qa-r2-name" ]; then
@@ -638,10 +640,15 @@ jobs:
             });
             return {status:r.status,json:await r.json().catch(()=>null)};
           };
-          const [temp,old]=await Promise.all([
-            get('/workers/scripts/'+name),
-            get('/workers/scripts/soridraw-owner-qa-583/deployments')
-          ]);
+          let temp;
+          for(let i=0;i<10;i++){
+            temp=await get('/workers/scripts/'+name);
+            if(temp.status===404)break;
+            if(temp.status!==200||i===9)
+              throw Error('HOLD_QA_TEMP_WORKER_NOT_REMOVED');
+            await new Promise(resolve=>setTimeout(resolve,1200));
+          }
+          const old=await get('/workers/scripts/soridraw-owner-qa-583/deployments');
           if(temp.status!==404||old.status!==200||old.json?.success!==true)
             throw Error('HOLD_QA_ORIGINAL_OR_TEMP_WORKER_NOT_RESTORED');
           const versions=old.json.result?.deployments?.[0]?.versions;

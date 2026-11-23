@@ -77,7 +77,7 @@ assert.equal(ownerEnv.DB,undefined);assert.equal(ownerEnv.PROFILE_MEDIA,undefine
 assert.equal(APP794_PRIVATE_BRIDGE_COMPILED_OPEN,false);assert.equal(createApp794ExploreConnection(),null);
 const legacyState={storage:{get:async k=>k==='pending'?{entries:[{legacy:true}]}:undefined},id:idFromName(ownerUid)};
 assert.equal(await createApp794OwnerDoPort({state:legacyState,env:ownerEnv,enabled:true}).alarm(),null);
-const alarm=async()=>{insideAlarm=true;try{return await port.alarm()}finally{insideAlarm=false}};
+const runOwnerAlarm=async()=>{insideAlarm=true;try{return await port.alarm()}finally{insideAlarm=false}};
 
 const snapshot=actor=>{
  const intent=objs.get(intentKey(actor))?.v;
@@ -134,20 +134,20 @@ assert.equal((await explore.alarmRoute(new Request('https://owner-follow.interna
 const first=await call(actor1,true);assert.equal(first.status,'CANONICAL_RESPONSE');assert.equal(first.settlement,'ALARM_READY');
 assert.equal(canonicalCalls,1);assert.equal(canonicalWrites,1);assert.equal(count,143);
 const noop=await call(actor1,true);assert.equal(noop.status,'UNCHANGED');assert.equal((await noop.response.json()).data.followerCount,143);assert.equal(canonicalCalls,1);
-clock+=2000;relayFailure=true;assert.equal((await alarm()).retried,1);assert.equal(marker.followerCount,142);
-clock+=4000;assert.equal((await alarm()).delivered,1);assert.equal(marker.followerCount,143);assert.equal(canonicalCalls,1);
+clock+=2000;relayFailure=true;assert.equal((await runOwnerAlarm()).retried,1);assert.equal(marker.followerCount,142);
+clock+=4000;assert.equal((await runOwnerAlarm()).delivered,1);assert.equal(marker.followerCount,143);assert.equal(canonicalCalls,1);
 const op2={followOperationId:'ordered_actor2_fixture_0001',followExpectedRevision:0};
 ackLost=true;const second=await call(actor2,true,op2);assert.equal(second.reason,'CANONICAL_ACK_UNKNOWN_RECEIPT_RETAINED');
 assert.equal(canonicalWrites,2);assert.equal(count,144);
 clock+=2000;reset=true;
 // read failure may throw before receipt enumeration; Cloudflare alarm retry
 // will call a new context; no canonical writer involved.
-await assert.rejects(alarm());assert.equal(canonicalCalls,2);
-assert.equal((await alarm()).delivered,1);assert.equal(marker.followerCount,144);
+await assert.rejects(runOwnerAlarm());assert.equal(canonicalCalls,2);
+assert.equal((await runOwnerAlarm()).delivered,1);assert.equal(marker.followerCount,144);
 const replay=await call(actor2,true,op2);assert.equal(replay.status,'EXACT_REPLAY');assert.equal((await replay.response.json()).data.revision,snapshot(actor2).pairRevision);assert.equal(canonicalCalls,2);
 const cancel={followOperationId:'ordered_cancel_fixture_0001',followExpectedRevision:snapshot(actor1).pairRevision};
 armLost=true;const third=await call(actor1,false,cancel);assert.equal(third.reason,'CANONICAL_ACK_UNKNOWN_RECEIPT_RETAINED');
-clock+=2000;assert.equal((await alarm()).delivered,1);assert.equal(marker.followerCount,143);assert.equal(canonicalWrites,3);
+clock+=2000;assert.equal((await runOwnerAlarm()).delivered,1);assert.equal(marker.followerCount,143);assert.equal(canonicalWrites,3);
 // APP793: ordered same-state ACK advances pair intent only.
 const orderedNoop={followOperationId:'ordered_noop_fixture_00001',followExpectedRevision:snapshot(actor1).pairRevision};
 const beforeNoopRev=ownerRevision,beforeNoopRelay=relayCalls;
@@ -155,7 +155,7 @@ const n=await call(actor1,false,orderedNoop);
 assert.equal(n.status,'CANONICAL_RESPONSE');assert.equal(n.settlement,'ALARM_READY');
 const nAck=await n.response.json();assert.equal(nAck.data.duplicate,true);assert(nAck.data.revision>orderedNoop.followExpectedRevision);
 assert.equal(ownerRevision,beforeNoopRev);assert.equal(canonicalWrites,3);
-clock+=2000;await alarm();assert.equal(relayCalls,beforeNoopRelay);
+clock+=2000;await runOwnerAlarm();assert.equal(relayCalls,beforeNoopRelay);
 const nr=await call(actor1,false,orderedNoop);assert.equal(nr.status,'EXACT_REPLAY');
 assert.equal((await nr.response.json()).data.revision,nAck.data.revision);
 assert.equal(canonicalCalls,4);assert.equal(canonicalWrites,3);

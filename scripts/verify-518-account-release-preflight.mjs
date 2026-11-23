@@ -9,6 +9,8 @@ import {assessAccountD1Cutover518}
  from './verify-518-account-d1-cutover.mjs';
 import {ACCOUNT_WORKER_NAMES_518,exactIndirectBindings518}
  from './app518-account-worker-inventory.mjs';
+import {observeGitHubD1Sources518}
+ from './app518-external-d1-github-proof.mjs';
 const ACCOUNT='e1a30fc9ef497fda1d34f4ab3dc1da45';
 const API='https://api.cloudflare.com/client/v4/accounts/'+ACCOUNT;
 const NAMES=ACCOUNT_WORKER_NAMES_518;
@@ -210,6 +212,8 @@ const live=async()=>{
  const mode=process.argv[2];
  if(mode==='--pre-restore'){
   const liveSnapshot=await observeLiveAccount518({request:fetch,token,rollbackVersionIds});
+  liveSnapshot.gitHubD1Sources518=await observeGitHubD1Sources518({
+   request:fetch,token:process.env.GH_TOKEN});
   const result=verifyTrustedReleaseProof518({signed,publicKeyPem,trustedHash,
    releaseSha,live:liveSnapshot,nowMs,restoreWorker,restoreVersion});
   if(!result.pass)deny(result.code);
@@ -224,6 +228,8 @@ const live=async()=>{
   const original=process.argv[5];
   if(!validId(original))deny('HOLD_518_COMPENSATION_TARGET_MISSING');
   const snapshot=await observeLiveAccount518({request:fetch,token,rollbackVersionIds});
+  snapshot.gitHubD1Sources518=await observeGitHubD1Sources518({
+   request:fetch,token:process.env.GH_TOKEN});
   const verified=assessAccountD1Cutover518({signed,publicKeyPem,
    pinnedPublicKeySha256:trustedHash,releaseSha,live:snapshot,nowMs});
   if(!verified.pass)deny(verified.code);

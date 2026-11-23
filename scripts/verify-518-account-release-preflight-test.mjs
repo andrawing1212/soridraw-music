@@ -5,6 +5,9 @@ import {readFileSync} from 'node:fs';
 import {verifyTrustedReleaseProof518,verifyRestoredExact518,observeLiveAccount518,
  normalizeLiveD1Bindings518}
  from './verify-518-account-release-preflight.mjs';
+import {observeGitHubD1Sources518,exactGitHubD1SourceProof518,
+ GITHUB_D1_SOURCE_PATHS_518}
+ from './app518-external-d1-github-proof.mjs';
 const fingerprint=source=>createHash('sha256').update(source).digest('hex');
 const {publicKey,privateKey}=generateKeyPairSync('ed25519');
 const pem=publicKey.export({type:'spki',format:'pem'}).toString();
@@ -184,4 +187,44 @@ console.log('APP518_P1_D1_DATABASE_MIGRATION_SOURCE_DB_LIVE_READER_HOLD=PASS');
 console.log('APP518_RELEASE_CONTROLLER_PIN_FROM_GITHUB_SECRET=PASS');
 console.log('APP518_PROTECTED_ROLLBACK_EXACT_CODE_BINDINGS_AND_SIGNATURE=PASS');
 console.log('APP518_UNKNOWN_EXTERNAL_WORKER_AND_MISSING_TRUST_HOLD=PASS');
+// A fake repo transport tests strict GET-only source pinning and ref drift.
+// These are synthetic 40-hex IDs; no actual GitHub writes or network.
+const branchHeads={main:'a'.repeat(40),preview:'b'.repeat(40)};
+const githubReads=[];
+const githubReq=async(url,opts)=>{
+ assert.equal(opts.method,'GET');
+ const path=new URL(url).pathname,query=new URL(url).search;
+ githubReads.push(path);
+ let result;
+ if(path.endsWith('/branches/main'))
+  result={commit:{sha:branchHeads.main}};
+ else if(path.endsWith('/branches/preview'))
+  result={commit:{sha:branchHeads.preview}};
+ else if(path.includes('/git/trees/')&&query==='?recursive=1')
+  result={truncated:false,tree:[
+   ...GITHUB_D1_SOURCE_PATHS_518.map((p,i)=>({
+    path:p,type:'blob',sha:String(i+1).repeat(40)})),
+   {path:'scripts/new-external-d1-handler.mjs',type:'blob',sha:'5'.repeat(40)},
+  ]};
+ else throw Error('UNEXPECTED_GITHUB_SOURCE_READ');
+ return {ok:true,async json(){return result}};
+};
+const githubSources=await observeGitHubD1Sources518({
+ request:githubReq,token:'isolated-mock-github-token'});
+assert.equal(exactGitHubD1SourceProof518(githubSources,githubSources),true);
+assert.equal(githubSources.main.knownD1Paths.length,4);
+assert.equal(githubReads.length,6,'two heads, two trees and two drift checks');
+assert.equal(exactGitHubD1SourceProof518({...githubSources,
+ main:{...githubSources.main,commitSha:'c'.repeat(40)}},githubSources),false);
+branchHeads.main='c'.repeat(40);
+let moveReads=0;
+await assert.rejects(observeGitHubD1Sources518({
+ request:async(url,opts)=>{
+  moveReads++;
+  const r=await githubReq(url,opts);
+  if(moveReads===5)branchHeads.main='d'.repeat(40);
+  return r;
+ },token:'isolated-mock-github-token',
+}),/HOLD_518_GITHUB_CONTROLLER_REF_MOVED_main/);
 console.log('APP518_ACCOUNT_NINE_WORKER_INDIRECT_LIVE_PROBE=PASS');
+console.log('APP518_GITHUB_DIRECT_D1_BRANCH_AND_FILE_READONLY_PIN=PASS');

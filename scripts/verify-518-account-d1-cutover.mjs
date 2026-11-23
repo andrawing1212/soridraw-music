@@ -7,6 +7,8 @@ import {readFileSync} from 'node:fs';
 import {createHash,createPublicKey,verify,generateKeyPairSync,sign} from 'node:crypto';
 import {ACCOUNT_WORKER_NAMES_518,INDIRECT_ONLY_518,exactIndirectBindings518}
  from './app518-account-worker-inventory.mjs';
+import {exactGitHubD1SourceProof518,GITHUB_D1_SOURCE_PATHS_518}
+ from './app518-external-d1-github-proof.mjs';
 
 const NAMES=ACCOUNT_WORKER_NAMES_518;
 const MIGRATION='soridraw-explore-migration-inspect';
@@ -60,6 +62,13 @@ export const assessAccountD1Cutover518=({
   ||!ref(external?.gitHubD1ExecutionAuditRef)
   ||!fresh(external?.checkedAtMs,nowMs)||!ref(external?.evidenceRef))
   return deny('HOLD_518_EXTERNAL_D1_API_WRITER_NOT_REVOKED');
+ // Signed boolean flags alone do not tie the audit to current executable
+ // GitHub release/migration sources. In addition to the independent external
+ // token audit, pin BOTH active GitHub refs, their executable source scopes,
+ // and every recognized direct D1 entrypoint. Live data is fetched separately.
+ if(!exactGitHubD1SourceProof518(external?.gitHubD1Sources518,
+   live?.gitHubD1Sources518))
+  return deny('HOLD_518_GITHUB_DIRECT_D1_SOURCE_PROOF_MISSING_OR_DRIFTED');
  if(!Array.isArray(live?.workers)||live.workers.length!==NAMES.length
   ||!Array.isArray(evidence?.workers)||evidence.workers.length!==NAMES.length)
   return deny('HOLD_518_ACCOUNT_WORKER_INVENTORY_INCOMPLETE');
@@ -178,6 +187,12 @@ const selfTest=()=>{
   indirectBindings:INDIRECT_ONLY_518[name]||[],
  })),
  };
+ const gitHubD1Sources518=Object.fromEntries(['main','preview'].map((ref,i)=>[
+  ref,{commitSha:String(i+1).repeat(40),sourceScopeSha256:'d'.repeat(64),
+   knownD1Paths:GITHUB_D1_SOURCE_PATHS_518.map(path=>({
+    path,blobSha:'e'.repeat(40)}))},
+ ]));
+ live.gitHubD1Sources518=gitHubD1Sources518;
  const evidence={purpose:'APP518_ACCOUNT_D1_ALL_WRITER_CUTOVER',releaseSha,
   checkedAtMs:nowMs-1200,
   ledger:{dbId:SHARED_DB,table:'music_note_catalog_daily_budget_518',
@@ -188,7 +203,8 @@ const selfTest=()=>{
    unmanagedExternalWriters:0,evidenceRef:'independent-token-scope-audit-001',
    gitHubDirectD1WorkflowsEnumerated:true,
    gitHubDirectD1PathsDisabledOrMetered:true,
-   gitHubD1ExecutionAuditRef:'independent-github-d1-execution-audit-001'},
+   gitHubD1ExecutionAuditRef:'independent-github-d1-execution-audit-001',
+   gitHubD1Sources518},
   workers:live.workers.map(w=>({
    name:w.name,activeVersionId:w.active[0].versionId,
    rollbackVersionId:w.active[0].versionId,rollbackBudgetAware:true,
@@ -233,6 +249,18 @@ const selfTest=()=>{
   ()=>evidence.externalD1Access.gitHubDirectD1WorkflowsEnumerated=false,
   'HOLD_518_EXTERNAL_D1_API_WRITER_NOT_REVOKED');
  evidence.externalD1Access.gitHubDirectD1WorkflowsEnumerated=true;
+ fail('signed direct D1 executable changed',
+  ()=>live.gitHubD1Sources518.preview.knownD1Paths[0].blobSha='a'.repeat(40),
+  'HOLD_518_GITHUB_DIRECT_D1_SOURCE_PROOF_MISSING_OR_DRIFTED');
+ live.gitHubD1Sources518.preview.knownD1Paths[0].blobSha='e'.repeat(40);
+ fail('signed GitHub branch changed',
+  ()=>live.gitHubD1Sources518.main.commitSha='f'.repeat(40),
+  'HOLD_518_GITHUB_DIRECT_D1_SOURCE_PROOF_MISSING_OR_DRIFTED');
+ live.gitHubD1Sources518.main.commitSha='1'.repeat(40);
+ fail('new executable source without audit',
+  ()=>live.gitHubD1Sources518.main.sourceScopeSha256='a'.repeat(64),
+  'HOLD_518_GITHUB_DIRECT_D1_SOURCE_PROOF_MISSING_OR_DRIFTED');
+ live.gitHubD1Sources518.main.sourceScopeSha256='d'.repeat(64);
  const owner=NAMES.indexOf('soridraw-owner-follow-preview-candidate');
  fail('indirect service changed',
   ()=>live.workers[owner].indirectBindings=[{
@@ -303,6 +331,7 @@ const selfTest=()=>{
  console.log('APP518_ALL_NINE_WORKER_VERSIONS_D1_DATABASES_ROLLBACK=PASS');
  console.log('APP518_OWNER_FOLLOW_TWO_INDIRECT_WORKERS_EXACT_SERVICE_DO=PASS');
  console.log('APP518_GITHUB_DIRECT_D1_PATH_UNPROVEN_HOLD=PASS');
+ console.log('APP518_GITHUB_MAIN_PREVIEW_DIRECT_D1_CODE_PIN_AND_SOURCE_SCOPE=PASS');
  console.log('APP518_SIGNED_ACCOUNT_COVERAGE_CANNOT_AUTHORIZE_DEPLOY=PASS');
 };
 if(process.argv.includes('--self-test'))selfTest();

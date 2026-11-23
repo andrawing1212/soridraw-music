@@ -741,7 +741,7 @@ jobs:
           print('APP518_QA_NOTE=ALERT_DOES_NOT_STOP_BILLING')
           PY
 
-qa_backend_metadata_admission:
+  qa_backend_metadata_admission:
     # APP518 one-shot QA-only metadata; no credentials, secrets or data values.
     # Must run under the exact already approved WIF workflow identity.
     if: >-

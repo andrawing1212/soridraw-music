@@ -16,6 +16,8 @@ assert.ok(original.includes('trustedIsolatedQaProof=false'));
 assert.ok(original.includes('createApp518IsolatedQaHandler518({env}).fetch(request)'));
 const entry=await import(pathToFileURL(join(target,'app518QaSignedEntry518.js')).href);
 let factoryCalls=0,oidcCalls=0;
+const pinnedAtMs=Date.parse('2026-11-23T01:59:00Z');
+const pin=JSON.stringify({keys:[{kid:'trusted-qa-key',kty:'RSA',n:'test-public-modulus',e:'AQAB'}]});
 const handler=entry.createSignedQa518Entry({
  now:()=>Date.parse('2026-11-23T02:00:00Z'),
  candidateFactory:({trustedIsolatedQaProof})=>{
@@ -27,6 +29,8 @@ const handler=entry.createSignedQa518Entry({
   oidcCalls++;
   assert.equal(ctx.runId,'45123456789');
   assert.equal(ctx.workflowSha,'f'.repeat(40));
+  assert.equal(ctx.pinnedAtMs,pinnedAtMs);
+  assert.equal(ctx.pinnedJwks.keys[0].kid,'trusted-qa-key');
   if(ctx.token!=='real-signed-token')throw Error('BAD_SIGNATURE');
   return {source:'GITHUB_VERIFIED_OIDC_RSA_SIGNATURE',
    runId:ctx.runId,expiresAtMs:Date.parse('2026-11-23T02:03:00Z')};
@@ -40,6 +44,8 @@ const env={
  FIREBASE_PROJECT_ID:'soridraw-app',
  FIREBASE_PROJECT_NUMBER:'1083981050742',
  SORIDRAW_APP518_QA_ACCOUNT_ID_518:'b60fcd62c679c64db19f0b0e0c2f3429',
+ SORIDRAW_APP518_QA_JWKS_JSON:pin,
+ SORIDRAW_APP518_QA_JWKS_AT_MS:String(pinnedAtMs),
 };
 const url='https://qa518.example.invalid/v1/server/catalog518';
 const request=(token,uri=url)=>new Request(uri,{method:'POST',
@@ -47,6 +53,20 @@ const request=(token,uri=url)=>new Request(uri,{method:'POST',
 assert.equal((await handler.fetch(request(null),env)).status,403);
 assert.equal((await handler.fetch(request('real-signed-token'),{
  ...env,SORIDRAW_APP518_PILOT_UID:'real-user',
+})).status,503);
+// Missing, corrupt or stale verification keys must deny BEFORE invoking
+// the candidate factory or making any GitHub JWKS request from the Worker.
+assert.equal((await handler.fetch(request('real-signed-token'),{
+ ...env,SORIDRAW_APP518_QA_JWKS_JSON:undefined,
+})).status,503);
+assert.equal((await handler.fetch(request('real-signed-token'),{
+ ...env,SORIDRAW_APP518_QA_JWKS_JSON:'{not-json',
+})).status,503);
+assert.equal((await handler.fetch(request('real-signed-token'),{
+ ...env,SORIDRAW_APP518_QA_JWKS_AT_MS:String(pinnedAtMs-700000),
+})).status,503);
+assert.equal((await handler.fetch(request('real-signed-token'),{
+ ...env,SORIDRAW_APP518_QA_JWKS_AT_MS:String(pinnedAtMs+60000),
 })).status,503);
 assert.equal((await handler.fetch(request('forged'),env)).status,403);
 assert.equal((await handler.fetch(request('real-signed-token',
@@ -56,5 +76,7 @@ assert.equal(oidcCalls,1);
 assert.equal((await handler.fetch(request('real-signed-token'),env)).status,200);
 assert.equal(factoryCalls,1);
 console.log('APP518_QA_STAGED_PINNED_WORKER_WRAPPER_REQUIRES_SIGNED_GITHUB_PROOF=PASS');
+console.log('APP518_QA_SIGNED_ENTRY_OFFICIAL_JWKS_PIN_FRESHNESS_REQUIRED=PASS');
+console.log('APP518_QA_NO_WORKER_SIDE_JWKS_NETWORK_FALLBACK=PASS');
 console.log('APP518_QA_DEFAULT_PR528_WORKER_REMAINS_INERT=PASS');
 console.log('APP518_QA_STAGE_ONLY_NO_DEPLOY_OR_DATA_WRITE=PASS');

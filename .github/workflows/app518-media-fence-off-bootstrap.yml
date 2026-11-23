@@ -140,7 +140,13 @@ jobs:
               [ "$current" = "$old" ] && continue
               if [ "$current" != "$new" ]; then echo "::error::HOLD_EXTERNAL_MEDIA_VERSION_DRIFT_$stage"; failures=1; continue; fi
               RELEASE_MEDIA_WORKER_VERSION="$old" node .deploy/release-media-worker-runtime.mjs "$stage" restore || { failures=1; continue; }
-              test "$(active "$worker")" = "$old" || failures=1
+              # The old immutable version alone is not proof of a usable
+              # rollback. Reuse the existing health/CORS/binding verifier.
+              if [ "$(active "$worker")" != "$old" ] ||
+                 ! node .deploy/release-media-worker-runtime.mjs "$stage" verify; then
+                echo "::error::HOLD_FENCE_OFF_RESTORED_WORKER_NOT_HEALTHY_$stage"
+                failures=1
+              fi
             done
             return "$failures"
           }

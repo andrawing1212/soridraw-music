@@ -142,13 +142,14 @@ export class OwnerFollowIsolated558 extends OriginalOwnerDO {
         {admission:v.admission,receipt:v.receipt}:{})});
    }
    const finalizeExact=async(selected,{readOnly=false,expectedReceiptId}={})=>{
-    const stored=readOnly?await qa.runtime.inspectReceipt(selected):
+    const stored=readOnly?await qa.runtime.inspectReceipt(selected,{qaDiagnostic:true}):
      await qa.runtime.find(selected);
     if(stored?.status==='absent'&&stored.authoritative===true)
      return {status:'HOLD',reason:'DO_RECEIPT_AUTHORITATIVELY_ABSENT'};
     if(stored?.status!=='found')
      return {status:'HOLD',reason:stored?.reason==='RECEIPT_IDENTITY_MISMATCH'?
-      'DO_RECEIPT_IDENTITY_MISMATCH':'DO_RECEIPT_LOOKUP_UNCERTAIN'};
+      'DO_RECEIPT_IDENTITY_MISMATCH':'DO_RECEIPT_LOOKUP_UNCERTAIN',
+      diagnostic:stored?.diagnostic||null};
     if(stored.receipt?.canonicalOperationId!==selected.canonicalOperationId||
        (expectedReceiptId&&stored.receipt?.operationId!==expectedReceiptId))
      return {status:'HOLD',reason:'DO_RECEIPT_IDENTITY_MISMATCH'};
@@ -214,6 +215,7 @@ export class OwnerFollowIsolated558 extends OriginalOwnerDO {
     // for missing/corrupt storage; require the same server operation ID.
     const v=await finalizeExact(opA,{readOnly:true,expectedReceiptId:pre.receiptId});
     return reply(v.status==='HOLD'?409:200,{status:v.status,reason:v.reason||null,
+      diagnostic:v.diagnostic||null,stage:'POSTCOMMIT_RECEIPT',
       d1RowsWritten:1,r2ProjectionSettled:true});
    }
    if(path==='/qa789/do/history'&&request.method==='GET'){

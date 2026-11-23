@@ -51,6 +51,45 @@ const validState=(s,owner)=>s?.version===1&&s.ownerUid===owner&&
  s.entries.every(validReceipt)&&
  new Set(s.entries.map(x=>x.canonicalOperationId)).size===s.entries.length&&
  new Set(s.entries.map(x=>x.operationId)).size===s.entries.length;
+// Diagnostic codes are bounded enums only. Never return raw exception text,
+// stored values, owner IDs, credentials, or tokens.
+const readDiagnostic=(error,phase)=>{
+ const m=typeof error?.message==='string'?error.message:'';
+ const safeCode=[
+  'PERSISTED_STATE_UNVERIFIED','ARCHIVE_WITNESS_MISSING_OR_UNVERIFIED',
+  'UNEXPECTED_ARCHIVE_WITNESS','ARCHIVED_RECEIPT_MISSING_WITH_WITNESS',
+  'ARCHIVED_RECEIPT_OR_WITNESS_UNVERIFIED'
+ ].find(c=>m==='APP755_RECEIPT_HOLD_'+c);
+ if(safeCode)return phase+'__'+safeCode;
+ const kind=/different request|different durable object|different io context/i.test(m)?'CROSS_CONTEXT':
+  /no longer running|context.*closed|not currently running|outside.*request/i.test(m)?'CONTEXT_CLOSED':
+  /reset|restart|evict/i.test(m)?'OBJECT_RESET':
+  /overload|too many|limit exceeded/i.test(m)?'RESOURCE_LIMIT':
+  /timeout|timed out|deadline/i.test(m)?'TIMEOUT':
+  /disconnect|connection lost/i.test(m)?'DISCONNECTED':
+  /sqlite|database.*locked/i.test(m)?'SQLITE':
+  /serializ|deserializ|clone/i.test(m)?'SERIALIZATION':
+  /internal error/i.test(m)?'INTERNAL_ERROR':
+  'UNCLASSIFIED';
+ return phase+'__'+kind;
+};
+const invalidStateCode=(s,owner)=>{
+ if(s?.version!==1)return 'STATE_VERSION';
+ if(s.ownerUid!==owner)return 'STATE_OWNER';
+ if(s.archiveUsed!==undefined&&s.archiveUsed!==true)return 'STATE_ARCHIVE_FLAG';
+ if(!Array.isArray(s.entries)||s.entries.length>MAX)return 'STATE_ENTRIES_SHAPE';
+ for(const x of s.entries){
+  if(!validInput(x))return 'ENTRY_INPUT';
+  if(!OP.test(x.operationId||'')||x.operationId===x.canonicalOperationId)return 'ENTRY_OPERATION_ID';
+  if(!EPOCH.test(x.authEpoch||'')||typeof x.cutoverToken!=='string'||!x.cutoverToken||
+     x.cutoverToken.length>128)return 'ENTRY_EPOCH_CUTOVER';
+  if(!safe(x.priorR2Revision)||typeof x.beforeFollowing!=='boolean'||
+     x.beforeFollowing===x.desired)return 'ENTRY_PRIOR_STATE';
+  if(x.durable!==true||x.ownerDoAlarmScheduled!==true)return 'ENTRY_DURABILITY';
+  if(!validDelivery(x.delivery))return 'ENTRY_DELIVERY';
+ }
+ return 'STATE_DUPLICATE_IDS';
+};
 // Function has no HTTP endpoint. Pass only a trusted owner-specific DO storage,
 // never the browser request or an arbitrary remote service namespace.
 export function createApp755ProductionOwnerReceiptStore({
@@ -62,10 +101,16 @@ export function createApp755ProductionOwnerReceiptStore({
     !['get','getAlarm','setAlarm','transaction'].every(k=>typeof storage[k]==='function')||
     typeof now!=='function'||typeof issueId!=='function')hold('OWNER_STORAGE_UNVERIFIED');
  const scope=x=>{if(!validInput(x)||x.ownerUid!==ownerUid)hold('OWNER_SCOPE_OR_INPUT')};
- const load=async st=>{
+ const load=async(st,note)=>{
+   note?.('STATE_READ');
    const state=await st.get(KEY);
+   note?.('STATE_VALIDATE');
    if(state===undefined||state===null)return {version:1,ownerUid,entries:[]};
-   if(!validState(state,ownerUid))hold('PERSISTED_STATE_UNVERIFIED');
+   if(!validState(state,ownerUid)){
+     if(note)note('STATE_VALIDATE_'+invalidStateCode(state,ownerUid));
+     hold('PERSISTED_STATE_UNVERIFIED');
+   }
+   note?.('ARCHIVE_WITNESS_VALIDATE');
    // Legacy APP755 v1 (no rollover) still reads without an extra key/CPU
    // hash. An APP762-only archived state without witness is UNKNOWN, never
    // authoritative absence: there is no safe silent backfill.
@@ -83,15 +128,19 @@ export function createApp755ProductionOwnerReceiptStore({
  // Legacy v1 storage with no archiveUsed flag retains the original single
  // read path. Once the first terminal receipt is archived, lookups check
  // exactly one indexed key (no list scans, no background polling).
- const receiptFor=async(st,state,id)=>{
+ const receiptFor=async(st,state,id,note)=>{
+   note?.('HOT_RECEIPT_LOOKUP');
    const current=state.entries.find(x=>x.canonicalOperationId===id);
    if(current||state.archiveUsed!==true)return current||null;
    // One indexed read, no listing or remote canonical query. If an
    // archived receipt disappears but its monotonic witness survives,
    // it cannot be represented as 'absent' or minted a second receipt.
+   note?.('ARCHIVE_WITNESS_LOOKUP');
    const fingerprint=await archiveWitness(id);
    const seen=state.archiveWitnesses.includes(fingerprint);
+   note?.('ARCHIVE_RECEIPT_READ');
    const finished=await st.get(finalKey(id));
+   note?.('ARCHIVE_RECEIPT_VALIDATE');
    if(finished===undefined||finished===null){
      if(seen)hold('ARCHIVED_RECEIPT_MISSING_WITH_WITNESS');
      return null;
@@ -126,11 +175,14 @@ export function createApp755ProductionOwnerReceiptStore({
    },
    // Settlement verification must never touch the alarm. Existing find()
    // intentionally rearms pending receipts for admission/recovery callers.
-   async inspectReceipt(input){
+   async inspectReceipt(input,{qaDiagnostic=false}={}){
      scope(input);
+     let phase='START';
+     const note=qaDiagnostic===true?v=>{phase=v}:undefined;
      try{
-       const state=await load(storage);
-       const receipt=await receiptFor(storage,state,input.canonicalOperationId);
+       const state=await load(storage,note);
+       const receipt=await receiptFor(storage,state,input.canonicalOperationId,note);
+       note?.('RECEIPT_IDENTITY_VALIDATE');
        if(!receipt)return {status:'absent',authoritative:true};
        if(!same(receipt,input)||
           receipt.authEpoch!==input.authEpoch||
@@ -139,7 +191,8 @@ export function createApp755ProductionOwnerReceiptStore({
           receipt.beforeFollowing!==input.beforeFollowing)
          return {status:'unknown',reason:'RECEIPT_IDENTITY_MISMATCH'};
        return {status:'found',receipt};
-     }catch{return {status:'unknown',reason:'RECEIPT_READ_OR_STATE_UNVERIFIED'}}
+     }catch(error){return {status:'unknown',reason:'RECEIPT_READ_OR_STATE_UNVERIFIED',
+       ...(qaDiagnostic===true?{diagnostic:readDiagnostic(error,phase)}:{})}}
    },
    async reserve(input){
      scope(input);

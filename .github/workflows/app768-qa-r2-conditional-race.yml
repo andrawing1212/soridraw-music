@@ -24,6 +24,7 @@ on:
       - 'cloudflare/explore-worker/experiments/owner-follow-qa789-entry.mjs'
       - 'scripts/app789-qa-physical-runner.mjs'
       - 'scripts/verify-789-qa-physical-source.mjs'
+      - 'scripts/verify-789-qa-local-runtime.mjs'
       - '.github/workflows/app768-qa-r2-conditional-race.yml'
 permissions:
   contents: read
@@ -75,6 +76,12 @@ jobs:
             cp "scripts/$file" "$RUNNER_TEMP/app789-frozen/scripts/"
           done
           npx --yes esbuild@0.25.12 "$RUNNER_TEMP/app789-frozen/cloudflare/explore-worker/experiments/owner-follow-qa789-entry.mjs" --bundle --format=esm --platform=browser --target=es2022 --outfile=/tmp/app789-qa-bundle-check.mjs
+      - name: Reproduce APP789 on local workerd SQLite DO, D1, R2 (no cloud)
+        timeout-minutes: 4
+        run: |
+          set -euo pipefail
+          npm install --prefix "$RUNNER_TEMP/app789-local" --no-save --no-package-lock --no-audit --no-fund miniflare@4.20260730.0
+          node scripts/verify-789-qa-local-runtime.mjs /tmp/app789-qa-bundle-check.mjs "$RUNNER_TEMP/app789-local"
   live:
     if: false # APP785 QA exact one-shot PASS and exact cleanup complete; do not auto-repeat
     env:

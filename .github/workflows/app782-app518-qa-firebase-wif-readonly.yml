@@ -943,15 +943,6 @@ jobs:
           # official gcloud function deploy instead: no IAM change needed.
           sa='soridraw-qa-app518-runtime@soridraw-app.iam.gserviceaccount.com'
           envs="SORIDRAW_APP518_QA_PROJECT_NUMBER=1083981050742,SORIDRAW_APP518_QA_RUN_ID=$GITHUB_RUN_ID,SORIDRAW_APP518_PILOT_UID=qa518-$GITHUB_RUN_ID-owner,SORIDRAW_APP518_PILOT_FAVORITE_ID=qa518-$GITHUB_RUN_ID-song,SORIDRAW_APP518_BRIDGE_ACTIVE=APPROVED_ISOLATED_ONE_SONG"
-          gcloud functions deploy app518QaExactFavoriteSource \
-            --gen2 --project=soridraw-app --region=asia-northeast3 \
-            --runtime=nodejs22 --source="$stage/functions" \
-            --entry-point=app518QaExactFavoriteSource --trigger-http \
-            --allow-unauthenticated --service-account="$sa" \
-            --set-secrets=SORIDRAW_CATALOG_SERVER_HMAC_518=SORIDRAW_CATALOG_SERVER_HMAC_518:latest \
-            --set-env-vars="$envs" --memory=256MiB --timeout=30s \
-            --min-instances=0 --max-instances=1 --quiet
-          echo 'APP518_QA_EXACT_SOURCE_FUNCTION_DEPLOYED=PASS'
           gcloud functions deploy app518QaSyntheticDeleteReceipt \
             --gen2 --project=soridraw-app --region=asia-northeast3 \
             --runtime=nodejs22 --source="$stage/functions" \
@@ -963,6 +954,16 @@ jobs:
             --service-account="$sa" --trigger-service-account="$sa" \
             --set-env-vars="$envs" --memory=256MiB --timeout=30s \
             --min-instances=0 --max-instances=1 --quiet
+          echo 'APP518_QA_DELETE_TRIGGER_FUNCTION_DEPLOYED=PASS'
+          gcloud functions deploy app518QaExactFavoriteSource \
+            --gen2 --project=soridraw-app --region=asia-northeast3 \
+            --runtime=nodejs22 --source="$stage/functions" \
+            --entry-point=app518QaExactFavoriteSource --trigger-http \
+            --allow-unauthenticated --service-account="$sa" \
+            --set-secrets=SORIDRAW_CATALOG_SERVER_HMAC_518=SORIDRAW_CATALOG_SERVER_HMAC_518:latest \
+            --set-env-vars="$envs" --memory=256MiB --timeout=30s \
+            --min-instances=0 --max-instances=1 --quiet
+          echo 'APP518_QA_EXACT_SOURCE_FUNCTION_DEPLOYED=PASS'
           echo 'APP518_QA_FIREBASE_TWO_FUNCTIONS_DEPLOY_API=PASS'
       - name: Confirm exactly 3 QA Functions with original follow intact
         shell: bash

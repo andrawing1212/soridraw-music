@@ -42,7 +42,9 @@ const validReceipt=x=>validInput(x)&&OP.test(x.operationId||'')&&
  typeof x.cutoverToken==='string'&&x.cutoverToken.length>0&&
  x.cutoverToken.length<=128&&safe(x.priorR2Revision)&&
  typeof x.beforeFollowing==='boolean'&&
- x.beforeFollowing!==x.desired&&x.durable===true&&
+ (x.beforeFollowing!==x.desired||
+  x.sameStateOnly===true&&OP.test(x.generation||'')&&x.beforeFollowing===x.desired)&&
+ x.durable===true&&
  x.ownerDoAlarmScheduled===true&&validDelivery(x.delivery);
 const validFinal=(v,id,owner)=>validReceipt(v)&&
  v.canonicalOperationId===id&&v.ownerUid===owner&&
@@ -86,7 +88,7 @@ const invalidStateCode=(s,owner)=>{
   if(!EPOCH.test(x.authEpoch||'')||typeof x.cutoverToken!=='string'||!x.cutoverToken||
      x.cutoverToken.length>128)return 'ENTRY_EPOCH_CUTOVER';
   if(!safe(x.priorR2Revision)||typeof x.beforeFollowing!=='boolean'||
-     x.beforeFollowing===x.desired)return 'ENTRY_PRIOR_STATE';
+     x.beforeFollowing===x.desired&&!(x.sameStateOnly===true&&OP.test(x.generation||'')))return 'ENTRY_PRIOR_STATE';
   if(x.durable!==true||x.ownerDoAlarmScheduled!==true)return 'ENTRY_DURABILITY';
   if(!validDelivery(x.delivery))return 'ENTRY_DELIVERY';
  }
@@ -96,7 +98,7 @@ const invalidStateCode=(s,owner)=>{
 // never the browser request or an arbitrary remote service namespace.
 export function createApp755ProductionOwnerReceiptStore({
  storage,ownerUid,enabled=APP755_PRODUCTION_OWNER_RECEIPT_COMPILED_OPEN,
- now=Date.now,issueId=()=>('owner_755_'+crypto.randomUUID().replaceAll('-','')),
+ now=Date.now,issueId=()=>('owner_755_'+crypto.randomUUID().replaceAll('-','')),allowSameState792=false,
 }={}){
  if(enabled!==true) return null;
  if(!UID.test(ownerUid||'')||!storage||
@@ -190,7 +192,8 @@ export function createApp755ProductionOwnerReceiptStore({
           receipt.authEpoch!==input.authEpoch||
           receipt.cutoverToken!==input.cutoverToken||
           receipt.priorR2Revision!==input.priorR2Revision||
-          receipt.beforeFollowing!==input.beforeFollowing)
+          receipt.beforeFollowing!==input.beforeFollowing||receipt.generation!==input.generation||
+          receipt.sameStateOnly!==input.sameStateOnly)
          return {status:'unknown',reason:'RECEIPT_IDENTITY_MISMATCH'};
        return {status:'found',receipt};
      }catch(error){return {status:'unknown',reason:'RECEIPT_READ_OR_STATE_UNVERIFIED',
@@ -202,7 +205,8 @@ export function createApp755ProductionOwnerReceiptStore({
        typeof input.cutoverToken!=='string'||!input.cutoverToken||
        input.cutoverToken.length>128||!safe(input.priorR2Revision)||
        typeof input.beforeFollowing!=='boolean'||
-       input.beforeFollowing===input.desired)
+       input.beforeFollowing===input.desired&&!(allowSameState792===true&&
+        input.sameStateOnly===true&&OP.test(input.generation||'')))
        hold('TRUSTED_CANONICAL_PREFLIGHT_MISSING');
      try{
        return await storage.transaction(async tx=>{
@@ -210,7 +214,9 @@ export function createApp755ProductionOwnerReceiptStore({
          const previous=await receiptFor(tx,state,input.canonicalOperationId);
          if(previous){
            if(!same(previous,input)||previous.authEpoch!==input.authEpoch||
-              previous.cutoverToken!==input.cutoverToken)
+              previous.cutoverToken!==input.cutoverToken||
+              (allowSameState792===true&&(previous.generation!==input.generation||
+                previous.sameStateOnly!==input.sameStateOnly||previous.beforeFollowing!==input.beforeFollowing)))
              return {durable:false,reason:'conflict'};
            if(!previous.delivery||previous.delivery.status==='pending')
              await alarmReady(tx,previous.delivery?.retryAt);

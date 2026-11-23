@@ -9,14 +9,15 @@ const UID=/^[A-Za-z0-9_-]{1,128}$/,OP=/^[A-Za-z0-9_-]{16,128}$/,EPOCH=/^[a-f0-9]
 const rev=n=>Number.isSafeInteger(n)&&n>=0;
 const ENDPOINT='https://asia-northeast3-soridraw-app-866a5.cloudfunctions.net/publishExploreOwnerFollower542';
 const PREFIX='internal/explore/owner-follow-v792/';
-const fields=['ownerUid','actorUid','authEpoch','cutoverToken','generation','canonicalOperationId','expectedRevision','priorR2Revision','desired','beforeFollowing'];
+const fields=['ownerUid','actorUid','authEpoch','cutoverToken','generation','canonicalOperationId','expectedRevision','priorR2Revision','desired','beforeFollowing','sameStateOnly'];
 const same=(a,b)=>!!a&&!!b&&fields.every(k=>a[k]===b[k]);
 const hold=reason=>({status:'HOLD',reason,automaticCanonicalRetry:false,deployAuthorized:false});
 const hash=async values=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(values))))].map(x=>x.toString(16).padStart(2,'0')).join('');
 const valid=a=>a&&UID.test(a.ownerUid||'')&&UID.test(a.actorUid||'')&&a.ownerUid!==a.actorUid&&
  EPOCH.test(a.authEpoch||'')&&OP.test(a.generation||'')&&OP.test(a.canonicalOperationId||'')&&
  typeof a.cutoverToken==='string'&&a.cutoverToken.length>0&&a.cutoverToken.length<=128&&
- rev(a.expectedRevision)&&rev(a.priorR2Revision)&&typeof a.desired==='boolean'&&a.beforeFollowing===!a.desired;
+ rev(a.expectedRevision)&&rev(a.priorR2Revision)&&typeof a.desired==='boolean'&&
+ (a.sameStateOnly===true?a.beforeFollowing===a.desired:a.sameStateOnly===undefined&&a.beforeFollowing===!a.desired);
 const receiptMatches=(a,b)=>same(a,b)&&b.durable===true&&b.ownerDoAlarmScheduled===true&&
  OP.test(b.operationId||'')&&b.operationId!==a.canonicalOperationId;
 const keys=async a=>{
@@ -32,10 +33,15 @@ const parse=async o=>{
  return {etag:o.etag,v};
 };
 const put=(bucket,k,v,onlyIf)=>bucket.put(k,JSON.stringify(v),{onlyIf,httpMetadata:{contentType:'application/json'}});
-const proofOf=(a,e)=>e?.kind==='APP792_SETTLED_V1'&&same(a,e)&&e.receiptId===a.operationId&&
- rev(e.pairRevision)&&e.pairRevision>a.expectedRevision&&rev(e.event?.version)&&e.event.version>a.priorR2Revision&&
- e.event.ownerUid===a.ownerUid&&e.event.authEpoch===a.authEpoch&&rev(e.event.followerCount)&&e.event.followerCount<=1000000000&&
- rev(e.event.updatedAt)&&e.event.updatedAt>0;
+const ownerRevisionOf=e=>e.kind==='APP793_NOOP_SETTLED_V1'?e.ownerRevision:e.event.version;
+const proofOf=(a,e)=>!!e&&same(a,e)&&e.receiptId===a.operationId&&
+ rev(e.pairRevision)&&e.pairRevision>a.expectedRevision&&
+ (a.sameStateOnly===true?
+  e.kind==='APP793_NOOP_SETTLED_V1'&&e.event===null&&rev(e.ownerRevision)&&e.ownerRevision>=a.priorR2Revision:
+  e.kind==='APP792_SETTLED_V1'&&rev(e.event?.version)&&e.event.version>a.priorR2Revision&&
+  e.event.ownerUid===a.ownerUid&&e.event.authEpoch===a.authEpoch&&rev(e.event.followerCount)&&e.event.followerCount<=1000000000&&
+  rev(e.event.updatedAt)&&e.event.updatedAt>0);
+const settledResult=(status,e)=>({status,event:e.event,noSignal:e.kind==='APP793_NOOP_SETTLED_V1',d1AdditionalWrites:0});
 const floorOf=(a,f)=>f?.kind==='APP792_FLOOR_V1'&&f.ownerUid===a.ownerUid&&f.authEpoch===a.authEpoch&&
  f.generation===a.generation&&f.cutoverToken===a.cutoverToken&&rev(f.minOwnerRevision)&&
  (f.pending===null||valid(f.pending)&&f.pending.ownerUid===a.ownerUid&&f.pending.authEpoch===a.authEpoch&&
@@ -59,7 +65,7 @@ export function createApp792PreviewOwnerConnection({
     typeof env.SORIDRAW_OWNER_FOLLOW_HMAC_539!=='string'||env.SORIDRAW_OWNER_FOLLOW_HMAC_539.length<32)
   throw Error('APP792_PREVIEW_PRIVATE_DEPENDENCIES_REQUIRED');
  const bucket=env.PROFILE_MEDIA;
- const store=createApp755ProductionOwnerReceiptStore({enabled:true,storage:state.storage,ownerUid,now,issueId});
+ const store=createApp755ProductionOwnerReceiptStore({enabled:true,storage:state.storage,ownerUid,now,issueId,allowSameState792:true});
  const guard=async a=>{
   if(!valid(a)||a.ownerUid!==ownerUid)throw Error('SCOPE');
   const binding=await verifyBoundOwner({state,env,ownerUid});
@@ -132,21 +138,36 @@ export function createApp792PreviewOwnerConnection({
    if(!floorOf(a,f?.v))return hold('OWNER_FLOOR_UNVERIFIED');
    if(s&&!proofOf(receipt,s.v))return hold('IMMUTABLE_SETTLED_CONFLICT');
    if(s&&f.v.pending===null&&f.v.lastSettled===a.canonicalOperationId&&
-      f.v.minOwnerRevision===s.v.event.version)
-    return {status:'ALREADY_SETTLED',event:s.v.event,d1AdditionalWrites:0};
+      f.v.minOwnerRevision===ownerRevisionOf(s.v))
+    return settledResult('ALREADY_SETTLED',s.v);
    // Later operations cannot be used to reconstruct an old missing proof.
    // A settled immutable record + newer floor is sufficient for old relay;
    // receiver rejects older owner revisions.
-   if(s&&f.v.minOwnerRevision>=s.v.event.version&&
+   if(s&&f.v.minOwnerRevision>=ownerRevisionOf(s.v)&&
       (!f.v.pending||!same(a,f.v.pending)))
-    return {status:'ALREADY_SETTLED',event:s.v.event,d1AdditionalWrites:0};
+    return settledResult('ALREADY_SETTLED',s.v);
    if(!same(a,f.v.pending)||f.v.minOwnerRevision>a.priorR2Revision)
     return hold('PENDING_FLOOR_MISMATCH');
    if(!s){
-    const p=await observe({env,reservation:receipt});
-    if(p.status!=='CURRENT_EXACT_CHANGED_COMMIT_OBSERVED')return hold(p.reason||'EXACT_CANONICAL_PROOF_UNAVAILABLE');
-    const record={kind:'APP792_SETTLED_V1',...Object.fromEntries(fields.map(k=>[k,a[k]])),
-     receiptId:receipt.operationId,pairRevision:p.pairRevision,event:p.ownerEventCandidate};
+    const common={...Object.fromEntries(fields.map(k=>[k,a[k]])),receiptId:receipt.operationId};
+    let record;
+    if(a.sameStateOnly===true){
+     // The existing 354 no-op branch advances only its pair intent.
+     const p=await readApp792CanonicalPair({env,actorUid:a.actorUid,ownerUid:a.ownerUid,desired:a.desired});
+     if(!p||p.authEpoch!==a.authEpoch||p.generation!==a.generation||p.cutoverToken!==a.cutoverToken||
+        p.following!==a.desired||p.intentId!==a.canonicalOperationId||
+        p.intentExpectedRevision!==a.expectedRevision||p.pairRevision<=a.expectedRevision||
+        p.overlayMutationId===a.canonicalOperationId||
+        (p.overlayUpdatedAt!==null&&p.overlayUpdatedAt>=p.pairRevision)||
+        p.ownerProjectionRevision<a.priorR2Revision)
+      return hold('EXACT_NOOP_INTENT_UNVERIFIED');
+     record={kind:'APP793_NOOP_SETTLED_V1',...common,pairRevision:p.pairRevision,
+      ownerRevision:p.ownerProjectionRevision,event:null};
+    }else{
+     const p=await observe({env,reservation:receipt});
+     if(p.status!=='CURRENT_EXACT_CHANGED_COMMIT_OBSERVED')return hold(p.reason||'EXACT_CANONICAL_PROOF_UNAVAILABLE');
+     record={kind:'APP792_SETTLED_V1',...common,pairRevision:p.pairRevision,event:p.ownerEventCandidate};
+    }
     if(!proofOf(receipt,record))return hold('OBSERVED_EVENT_INVALID');
     const w=await put(bucket,k.settled,record,{etagDoesNotMatch:'*'});
     if(!w?.etag)return hold('SETTLEMENT_ACK_UNKNOWN');
@@ -154,10 +175,10 @@ export function createApp792PreviewOwnerConnection({
    }
    // R2 immutable record precedes floor release; if floor CAS ACK is lost
    // another settlement-only invocation can read it without repeating D1.
-   const w=await put(bucket,k.floor,{...f.v,pending:null,minOwnerRevision:s.v.event.version,
+   const w=await put(bucket,k.floor,{...f.v,pending:null,minOwnerRevision:ownerRevisionOf(s.v),
     lastSettled:a.canonicalOperationId},{etagMatches:f.etag});
    if(!w?.etag)return hold('FLOOR_SETTLEMENT_ACK_UNKNOWN');
-   return {status:'SETTLED',event:s.v.event,d1AdditionalWrites:0};
+   return settledResult('SETTLED',s.v);
   }catch{return hold('SETTLEMENT_UNAVAILABLE')}
  }
  async function arm(a){
@@ -185,11 +206,13 @@ export function createApp792PreviewOwnerConnection({
     if(q.status==='held')held++;else waiting++;
     continue;
    }
-   let outcome='relay-failed';
+   let outcome=v.noSignal===true?'delivered':'relay-failed';
    try{
+    if(v.noSignal!==true){
     const q=await relay(v.event,{endpoint:ENDPOINT,secret:env.SORIDRAW_OWNER_FOLLOW_HMAC_539});
     if(q.ok===true&&q.status===200)outcome='delivered';
     else if(q.status===409)outcome='rejected-generation';
+    }
    }catch{}
    const saved=await store.markDelivery({receipt:a,result:outcome});
    if(saved.changed!==true)throw Error('DELIVERY_ACK_UNVERIFIED');
@@ -204,7 +227,7 @@ export function createApp792PreviewOwnerConnection({
    await guard(a);
    const k=await keys(a),ad=await parse(await bucket.get(k.admission));
    if(ad?.v.kind!=='APP792_ADMISSION_V1'||!valid(ad.v)||
-      !fields.filter(k=>k!=='priorR2Revision').every(k=>ad.v[k]===a[k]))
+      !fields.filter(k=>!['priorR2Revision','beforeFollowing','sameStateOnly'].includes(k)).every(k=>ad.v[k]===a[k]))
     return hold('REPLAY_ADMISSION_UNVERIFIED');
    const stored=await store.inspectReceipt(ad.v);
    if(stored.status!=='found'||!receiptMatches(ad.v,stored.receipt))
@@ -245,7 +268,7 @@ export async function readApp792CanonicalPair({env,actorUid,ownerUid,desired}={}
   // APP719 single overlay PK lookup and legacy baseline plus owner epoch.
   const row=await env.DB.prepare(`SELECT p.owner_follow_auth_epoch_532 AS epoch,
    EXISTS(SELECT 1 FROM follows WHERE follower_uid=? AND following_uid=?) AS baseline_following,
-   o.following AS override_following,o.updated_at AS override_updated_at
+   o.following AS override_following,o.updated_at AS override_updated_at,o.mutation_id AS override_mutation_id
    FROM profile_stats p LEFT JOIN explore_follow_overrides_348 o
    ON o.follower_uid=? AND o.following_uid=p.uid WHERE p.uid=? LIMIT 1`).bind(actorUid,ownerUid,actorUid,ownerUid).first();
   if(!row||!EPOCH.test(row.epoch||'')||![0,1].includes(row.baseline_following)||
@@ -277,6 +300,8 @@ export async function readApp792CanonicalPair({env,actorUid,ownerUid,desired}={}
      actor&&a2?.etag!==actor.etag)return null;
   return {verified:true,ownerUid,actorUid,authEpoch:row.epoch,cutoverToken,generation,
    pairRevision:i?.v.revision||0,ownerProjectionRevision:owner.revision,following,
+   intentId:i?.v.id??null,intentExpectedRevision:i?.v.expectedRevision??null,
+   overlayMutationId:row.override_mutation_id??null,overlayUpdatedAt:row.override_updated_at??null,
    followerCount:owner.profile.followerCount,followingCount:owner.profile.followingCount,
    actorFollowingCount:actor?.profile.followingCount??null};
  }catch{return null}
@@ -315,7 +340,7 @@ export function createApp792PreviewFollowIngress({
    const id=legacy?'owner_follow_579_'+await hash([p.cutoverToken,actor.uid,ownerUid,p.pairRevision,desired]):body.followOperationId;
    const a={ownerUid,actorUid:actor.uid,authEpoch:p.authEpoch,generation:p.generation,cutoverToken:p.cutoverToken,
     canonicalOperationId:id,expectedRevision:p.pairRevision,priorR2Revision:p.ownerProjectionRevision,
-    desired,beforeFollowing:p.following};
+    desired,beforeFollowing:p.following,...(p.following===desired?{sameStateOnly:true}:{})};
    const c=await verifyCutover({env,ticket:a});
    if(!cert(a,c))return hold('SHARED_WRITER_CUTOVER_UNVERIFIED');
    // Old clients have no ordering token; never claim their opposite-intent
@@ -338,17 +363,14 @@ export function createApp792PreviewFollowIngress({
    };
    if(!legacy&&body.followExpectedRevision!==p.pairRevision){
     if(body.followExpectedRevision>=p.pairRevision||p.following!==desired)return hold('ORDERED_STALE');
-    const replay=await service.replay({...a,expectedRevision:body.followExpectedRevision,beforeFollowing:!desired},p.pairRevision);
+    if(p.intentId!==body.followOperationId)return hold('ORDERED_STALE_OR_REPLAY_UNVERIFIED');
+    const replay=await service.replay({...a,expectedRevision:body.followExpectedRevision},p.pairRevision);
     return replay?.status==='EXACT_REPLAY'&&replay.revision===p.pairRevision?
       ackNoWrite(replay.revision,'EXACT_REPLAY'):hold('ORDERED_STALE_OR_REPLAY_UNVERIFIED');
    }
-   if(p.following===desired){
-    // Existing ordered client requires a strictly advancing revision. A
-    // new same-state ordered request needs a compatible ACK contract before
-    // activation; do not fabricate a version or bypass admission.
-    if(!legacy)return hold('ORDERED_NOOP_REQUIRES_COMPATIBLE_ACK');
-    return ackNoWrite(p.pairRevision,'UNCHANGED');
-   }
+   if(p.following===desired&&legacy)return ackNoWrite(p.pairRevision,'UNCHANGED');
+   // Ordered no-op uses the same owner fence and existing pair-intent CAS.
+   // It must advance the pair revision, not mutate D1 or send a signal.
    const reserved=await service.admit(a);
    if(reserved?.status!=='ADMITTED_ONCE'||!receiptMatches(a,reserved.receipt))return hold('ADMISSION_NOT_CONFIRMED');
    const receipt=reserved.receipt;
@@ -362,7 +384,7 @@ export function createApp792PreviewFollowIngress({
    if(!response?.ok)return {status:'CANONICAL_RESPONSE',response,receiptRetained:true,automaticCanonicalRetry:false};
    const ack=await response.clone().json().catch(()=>null);
    if(ack?.ok!==true||ack.data?.uid!==ownerUid||ack.data?.following!==desired||
-      ack.data?.duplicate!==false||!rev(ack.data?.revision)||ack.data.revision<=p.pairRevision)
+      ack.data?.duplicate!==(a.sameStateOnly===true)||!rev(ack.data?.revision)||ack.data.revision<=p.pairRevision)
     return hold('CANONICAL_ACK_UNVERIFIED_RECEIPT_RETAINED');
    // ownerService.arm is a separate private service request, not the
    // storage context that performed canonical write (APP789 reset fix).

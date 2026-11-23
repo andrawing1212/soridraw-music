@@ -66,12 +66,15 @@ const ingress=createApp792PreviewFollowIngress({enabled:true,
   const body=await request.json(),prior=snapshot(actorUid),desired=request.method==='PUT';
   assert.equal(body.followExpectedRevision,prior.pairRevision);
   const revision=Math.max(clock,prior.pairRevision+1);
-  const x=mutate.run(actorUid,ownerUid,actorUid,ownerUid,Number(desired),revision,body.followOperationId,Number(desired),actorUid,ownerUid);
-  canonicalWrites+=Number(x.changes);assert.equal(Number(x.changes),1);
-  ownerRevision+=4;count+=desired?1:-1;project();actorProjection(actorUid);
+  const noop=prior.following===desired;
+  if(!noop){
+   const x=mutate.run(actorUid,ownerUid,actorUid,ownerUid,Number(desired),revision,body.followOperationId,Number(desired),actorUid,ownerUid);
+   canonicalWrites+=Number(x.changes);assert.equal(Number(x.changes),1);
+   ownerRevision+=4;count+=desired?1:-1;project();actorProjection(actorUid);
+  }
   seed(intentKey(actorUid),{token:cutoverToken,actor:actorUid,target:ownerUid,id:body.followOperationId,following:desired,expectedRevision:prior.pairRevision,revision,settled:true});
   if(ackLost){ackLost=false;throw Error('lost canonical ACK')}
-  return Response.json({ok:true,data:{uid:ownerUid,following:desired,revision,duplicate:false,followerCount:count}});
+  return Response.json({ok:true,data:{uid:ownerUid,following:desired,revision,duplicate:noop,followerCount:count}});
  }});
 const call=(actor,desired,body,verified=true)=>ingress({env,request:new Request('https://preview.invalid/v1/profiles/'+ownerUid+'/follow',{method:desired?'PUT':'DELETE',headers:verified?{'X-Verified-Fixture':actor}:{},...(body===undefined?{}:{body:JSON.stringify(body)})})});
 assert.equal((await conn.bootstrap(ticket(actor1,'genesis_fixture_00001',true))).status,'GENESIS_CREATED');
@@ -99,6 +102,18 @@ const replay=await call(actor2,true,op2);assert.equal(replay.status,'EXACT_REPLA
 const cancel={followOperationId:'ordered_cancel_fixture_0001',followExpectedRevision:snapshot(actor1).pairRevision};
 armLost=true;const third=await call(actor1,false,cancel);assert.equal(third.settlement,'DURABLE_RECOVERY_PENDING');
 clock+=2000;assert.equal((await conn.alarm()).delivered,1);assert.equal(marker.followerCount,143);assert.equal(canonicalWrites,3);
+// APP793: ordered same-state ACK advances pair intent only.
+const orderedNoop={followOperationId:'ordered_noop_fixture_00001',followExpectedRevision:snapshot(actor1).pairRevision};
+const beforeNoopRev=ownerRevision,beforeNoopRelay=relayCalls;
+const n=await call(actor1,false,orderedNoop);
+assert.equal(n.status,'CANONICAL_RESPONSE');assert.equal(n.settlement,'ALARM_READY');
+const nAck=await n.response.json();assert.equal(nAck.data.duplicate,true);assert(nAck.data.revision>orderedNoop.followExpectedRevision);
+assert.equal(ownerRevision,beforeNoopRev);assert.equal(canonicalWrites,3);
+clock+=2000;await conn.alarm();assert.equal(relayCalls,beforeNoopRelay);
+const nr=await call(actor1,false,orderedNoop);assert.equal(nr.status,'EXACT_REPLAY');
+assert.equal((await nr.response.json()).data.revision,nAck.data.revision);
+assert.equal(canonicalCalls,4);assert.equal(canonicalWrites,3);
+console.log('APP793_ORDERED_SAME_STATE_ADVANCING_ACK_D1_W0_RELAY0_EXACT_REPLAY=PASS');
 // Owner-wide independent floor is not tied to any actor's pair revision.
 // Two distinct IDs at same owner floor can never both reserve.
 const a=ticket(actor1,'concurrent_actor1_fixture',true),b=ticket(actor2,'concurrent_actor2_fixture',false);
@@ -107,7 +122,7 @@ const winner=race.find(x=>x.status==='ADMITTED_ONCE').receipt;assert.equal((awai
 for(const delta of [1000,3000,6000,16000]){clock+=delta;await conn.alarm()}
 const saved=memory.get('app755-owner-follow-pending-v1').entries.find(x=>x.operationId===winner.operationId);
 assert.equal(saved.delivery.status,'held');assert.equal(saved.delivery.attempts,0);assert.equal(saved.delivery.settlementChecks,4);
-assert.equal(canonicalCalls,3);assert.equal(canonicalWrites,3);assert.equal(relayCalls,4);
+assert.equal(canonicalCalls,4);assert.equal(canonicalWrites,3);assert.equal(relayCalls,4);
 assert.equal((await conn.arm(winner)).status,'HOLD');assert.equal((await conn.admit(winner)).status,'HOLD');
 console.log('APP792_LEGACY_ORDERED_MULTI_ACTOR_EXISTING_CANONICAL_SQL_W1_AND_HMAC=PASS');
 console.log('APP792_LOST_CANONICAL_ACK_AND_ARM_REQUEST_FRESH_ALARM_NO_D1_REPLAY=PASS');

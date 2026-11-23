@@ -10,7 +10,7 @@ permissions:
   contents: read
 jobs:
   inspect:
-    if: github.repository == 'andrawing1212/soridraw-music' && github.actor == github.repository_owner && github.event.pull_request.number == 1402 && github.event.pull_request.head.repo.full_name == github.repository
+    if: false # APP793 exact one-shot live inventory completed; no repetition
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

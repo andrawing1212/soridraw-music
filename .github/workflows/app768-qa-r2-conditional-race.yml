@@ -12,6 +12,8 @@ on:
       - 'scripts/app776-qa-integration-worker.mjs'
       - 'scripts/app776-qa-integration-runner.mjs'
       - 'scripts/verify-783-qa-worker-bridge.mjs'
+      - 'scripts/app784-qa-unified-follow.mjs'
+      - 'scripts/verify-784-qa-unified-follow.mjs'
       - '.github/workflows/app768-qa-r2-conditional-race.yml'
 permissions:
   contents: read
@@ -46,6 +48,8 @@ jobs:
           node scripts/verify-783-qa-worker-bridge.mjs
           node --check scripts/app783-qa-immutable-settled-history.mjs
           node scripts/verify-783-qa-immutable-settled-history.mjs
+          node --check scripts/app784-qa-unified-follow.mjs
+          node scripts/verify-784-qa-unified-follow.mjs
   live:
     if: false # APP783 isolated QA exact one-shot completed and cleaned, manual reapproval required
     env:

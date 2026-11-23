@@ -3,7 +3,6 @@
 // Candidate is active only in the bounded isolated QA browser window.
 // NO new DO namespace/migration, new D1/R2/secret, or user data.
 import {randomBytes} from 'node:crypto';
-import {continueQa789Settlement} from './app790-qa-settlement-recovery.mjs';
 import {readFileSync,writeFileSync,existsSync} from 'node:fs';
 import {resolve,join} from 'node:path';
 const ACCOUNT='b60fcd62c679c64db19f0b0e0c2f3429';

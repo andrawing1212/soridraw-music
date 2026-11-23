@@ -45,7 +45,7 @@ const raw={async batch(){throw Error('mock batch not used');},prepare(sql){
  }};
  }};
 const gate=createD1BudgetGate518({db:raw,allAccountWritersVerified:true,
- sharedAccountLedgerVerified:true});
+ sharedAccountLedgerVerified:true,signedAccountD1CutoverVerified:true});
 const db=createMeteredD1Database518({rawDb:raw,reserveWriteBudget:gate,clock:()=>time});
 const sql='INSERT OR IGNORE INTO music_note_catalog_member_518(owner_uid,generation,favorite_id) SELECT ?,?,value FROM json_each(?)';
 let stopped=false,owner=0;
@@ -69,6 +69,17 @@ assert.ok(ledger.get(day(time))>=mutated*2,
  'membership + idx_music_note_catalog_member_518_generation must be metered');
 assert.ok(mutated<=40000,'one UTC day may not insert 80k indexed members');
 const before=mutated;
+const beforeLedger=ledger.get(day(time));
+const unsigned=createD1BudgetGate518({db:raw,allAccountWritersVerified:true,
+ sharedAccountLedgerVerified:true});
+const unsignedDb=createMeteredD1Database518({
+ rawDb:raw,reserveWriteBudget:unsigned,clock:()=>time,
+});
+await assert.rejects(unsignedDb.prepare(sql).bind('unknown',1,
+ JSON.stringify(['unsigned'])).run(),e=>e.code==='HOLD_D1_GLOBAL_WRITERS_UNVERIFIED');
+assert.equal(mutated,before,'unattested D1 candidate must write zero');
+assert.equal(ledger.get(day(time)),beforeLedger,
+ 'unattested D1 candidate must not even reserve a budget row');
 const invalid=createD1BudgetGate518({db:raw});
 const off=createMeteredD1Database518({rawDb:raw,reserveWriteBudget:invalid,clock:()=>time});
 await assert.rejects(off.prepare(sql).bind('unknown',1,JSON.stringify(['x'])).run(),

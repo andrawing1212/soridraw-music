@@ -23,10 +23,14 @@ export const READ_BUDGET_518=[
 const day=ms=>new Date(ms).toISOString().slice(0,10);
 export const reserveD1WriteRows518=async({
  db,nowMs,requestedRows,allAccountWritersVerified=false,
- sharedAccountLedgerVerified=false,dailyCap=D1_MAX_RESERVED_ROWS_518,
+ sharedAccountLedgerVerified=false,signedAccountD1CutoverVerified=false,
+ dailyCap=D1_MAX_RESERVED_ROWS_518,
  purpose='normal',
 }={})=>{
- if(allAccountWritersVerified!==true||sharedAccountLedgerVerified!==true)
+ // A release-operator's signed, independent audit must reach the actual SQL
+ // reservation boundary. VERIFIED environment strings alone are never proof.
+ if(allAccountWritersVerified!==true||sharedAccountLedgerVerified!==true
+   ||signedAccountD1CutoverVerified!==true)
   return {code:'HOLD_D1_GLOBAL_WRITERS_UNVERIFIED',reserved:false,d1Writes:0};
  if(!db?.prepare||!Number.isSafeInteger(nowMs)||nowMs<0
   ||!Number.isSafeInteger(requestedRows)||requestedRows<1||requestedRows>2048
@@ -57,8 +61,8 @@ export const reserveD1WriteRows518=async({
 };
 export const createD1BudgetGate518=({
  db,allAccountWritersVerified=false,sharedAccountLedgerVerified=false,
- dailyCap=D1_MAX_RESERVED_ROWS_518,
+ signedAccountD1CutoverVerified=false,dailyCap=D1_MAX_RESERVED_ROWS_518,
 }={})=>({nowMs,requestedRows,purpose='normal'})=>reserveD1WriteRows518({
  db,nowMs,requestedRows,allAccountWritersVerified,
- sharedAccountLedgerVerified,dailyCap,purpose,
+ sharedAccountLedgerVerified,signedAccountD1CutoverVerified,dailyCap,purpose,
 });

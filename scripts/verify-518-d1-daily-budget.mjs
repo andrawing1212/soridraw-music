@@ -23,6 +23,8 @@ const at=1793354400000;
 for(const flags of [
  {},{allAccountWritersVerified:true},
  {sharedAccountLedgerVerified:true},
+ {allAccountWritersVerified:true,sharedAccountLedgerVerified:true},
+ {signedAccountD1CutoverVerified:true},
 ]){
  const result=await reserveD1WriteRows518({db,nowMs:at,
   requestedRows:1040,...flags});
@@ -31,7 +33,7 @@ for(const flags of [
 }
 assert.equal(calls.length,0,'unknown legacy account writers cost W0');
 const gate=createD1BudgetGate518({db,allAccountWritersVerified:true,
- sharedAccountLedgerVerified:true});
+ sharedAccountLedgerVerified:true,signedAccountD1CutoverVerified:true});
 const accepted=await gate({nowMs:at,requestedRows:1040});
 assert.equal(accepted.code,'RESERVED');
 assert.equal(accepted.guaranteedRows,1040);
@@ -43,7 +45,8 @@ assert.equal(hold.code,'HOLD_D1_DAILY_QUOTA');
 assert.equal(hold.d1Writes,0);
 const prior=used;assert.equal(used,prior);
 const outage=createD1BudgetGate518({db:{prepare(){throw Error('db down');}},
- allAccountWritersVerified:true,sharedAccountLedgerVerified:true});
+ allAccountWritersVerified:true,sharedAccountLedgerVerified:true,
+ signedAccountD1CutoverVerified:true});
 assert.equal((await outage({nowMs:at,requestedRows:1040})).code,
  'RETRYABLE_D1_BUDGET_IO');
 console.log('APP518_D1_GLOBAL_ATTESTATION_DEFAULT_OFF_R0_W0=PASS');

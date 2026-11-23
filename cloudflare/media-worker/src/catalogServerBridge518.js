@@ -47,6 +47,9 @@ export const createApp518ServerBridge=({
    env?.SORIDRAW_D1_ALL_ACCOUNT_WRITERS_518==='VERIFIED',
   sharedAccountLedgerVerified:sharedReleaseFencesVerified===true&&
    env?.SORIDRAW_D1_SHARED_ACCOUNT_LEDGER_518==='VERIFIED',
+  // This is supplied by an independent, source-level release verifier.
+  // No Worker environment flag can substitute for this sign-off.
+  signedAccountD1CutoverVerified:signedAccountD1CutoverVerified===true,
  });
  // Every app518 D1 mutation, not only >20k paged-index writes,
  // crosses this shared account daily budget. Index, outbox, ACK and

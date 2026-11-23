@@ -89,7 +89,8 @@ export const protectExploreEnv518=(env,{clock=()=>Date.now(),
  if(!raw?.prepare||!raw?.batch)
   deny('HOLD_518_ACCOUNT_LEDGER_BINDING_MISSING');
  const reserve=createD1BudgetGate518({db:raw,
-  allAccountWritersVerified:true,sharedAccountLedgerVerified:true});
+  allAccountWritersVerified:true,sharedAccountLedgerVerified:true,
+  signedAccountD1CutoverVerified});
  const charge=async n=>{
   if(!Number.isSafeInteger(n)||n<1||n>2048)deny('HOLD_518_ROW_RESERVATION_LIMIT');
   const now=clock();

@@ -166,7 +166,24 @@ export class OwnerFollowIsolated558 extends OriginalOwnerDO {
     const k=await keys(env,opA);
     // Stop before D1 W1 unless exact conditional immutable R2 admission
     // and genuine owner DO receipt exist in this run's isolated namespace.
-    if(!await env.QA789_R2.head(k.admission))return fail('ADMISSION_MISSING');
+    // Verify the actual run-owned records, not just a generic 409 or key.
+    // APP788 may map different settlement failures to the same HOLD.
+    const [admissionRaw,floorRaw,settledRaw,projectionRaw]=await Promise.all([
+     env.QA789_R2.get(k.admission),env.QA789_R2.get(k.floor),
+     env.QA789_R2.head(k.settled),env.QA789_R2.head(k.projection)]);
+    if(!admissionRaw||!floorRaw||settledRaw||projectionRaw)
+     return fail('PRECOMMIT_EXACT_R2_RECORDS_UNAVAILABLE');
+    const admission=await admissionRaw.json(),floor=await floorRaw.json();
+    const matches=(record,fields)=>!!record&&fields.every(key=>record[key]===opA[key]);
+    if(admission?.kind!=='APP767_ADMISSION_NOT_CANONICAL_COMMIT'||
+       admission.version!==1||!matches(admission,['ownerUid','actorUid','authEpoch',
+        'canonicalOperationId','cutoverToken','expectedRevision','desired'])||
+       floor?.kind!=='APP788_QA_OWNER_FLOOR_V1'||!floorRaw.etag||
+       !matches(floor,['ownerUid','authEpoch','cutoverToken'])||
+       floor.d1Revision!==opA.expectedRevision||floor.r2Revision!==opA.priorR2Revision||
+       floor.lastOperationId!==''||
+       !matches(floor.pending,['actorUid','canonicalOperationId','expectedRevision','desired']))
+     return fail('PRECOMMIT_EXACT_R2_RECORDS_MISMATCH');
     // Keep the original authenticated request inside this QA DO.
     // Only an exact absent-commit proof permits the synthetic D1 mutation.
     if(await pair(env)!==false)return fail('PRECOMMIT_D1_NOT_INITIAL');

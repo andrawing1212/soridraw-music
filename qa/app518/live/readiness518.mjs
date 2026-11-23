@@ -14,7 +14,8 @@ const fixedSql="SELECT name FROM sqlite_master WHERE type IN ('table','index')"+
 const isArray=x=>Array.isArray(x)?x:x?.databases||x?.buckets||x?.scripts;
 const noExtraResourceUrl=path=>/^\/(?:workers\/scripts(?:\/soridraw-owner-qa-583\/(?:deployments|settings))?|d1\/database\?per_page=100&page=1|r2\/buckets\?per_page=100)$/.test(path);
 
-export async function inspectCloudflareQa518({call,workerToken,storageToken,dataToken}={}){
+export async function inspectCloudflareQa518({call,workerToken,storageToken,dataToken,
+ expectedApp518Names=[]}={}){
   if(account!==QA518.accountId||account===forbidden)
     fail('HOLD_QA_CLOUDFLARE_ACCOUNT_PIN');
   if(typeof call!=='function'||[workerToken,storageToken,dataToken].some(x=>
@@ -63,11 +64,22 @@ export async function inspectCloudflareQa518({call,workerToken,storageToken,data
     ||data.results.length>20||data.results.some(row=>typeof row.name!=='string'))
     fail('HOLD_QA_D1_SELECT_NOT_W0');
   const names=data.results.map(x=>x.name);
-  if(names.length)fail('HOLD_QA_PARTIAL_OR_OLD_APP518_TABLES');
+  const installed=['music_note_catalog_daily_budget_518',
+   'music_note_catalog_index_meta_518','music_note_catalog_member_518',
+   'music_note_catalog_paged_stage_518','music_note_catalog_outbox_518',
+   'idx_music_note_catalog_member_518_generation',
+   'idx_music_note_catalog_outbox_518_due'].sort();
+  if(!Array.isArray(expectedApp518Names)
+    ||!(expectedApp518Names.length===0 ||
+      JSON.stringify([...expectedApp518Names].sort())===JSON.stringify(installed))
+    ||JSON.stringify([...names].sort())!==JSON.stringify([...expectedApp518Names].sort()))
+    fail('HOLD_QA_PARTIAL_OR_OLD_APP518_TABLES');
   return Object.freeze({accountId:account,d1Id,
     originalWorkerVersion:QA518.originalVersion,
     existingWorkerCount:1,d1DatabaseCount:1,r2BucketCount:1,
-    app518TablesPresent:0,d1RowsWritten:0,
+    app518TablesPresent:names.filter(x=>x.startsWith('music_note_catalog_')).length,
+    app518IndexesPresent:names.filter(x=>x.startsWith('idx_music_note_catalog_')).length,
+    d1RowsWritten:0,
     cloudMutations:0,sourceVersion:QA518.candidateSha});
 }
 const exec=(argv)=>execFileSync('gcloud',argv,{

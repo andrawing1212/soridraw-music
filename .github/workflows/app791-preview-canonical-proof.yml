@@ -25,3 +25,9 @@ jobs:
           node-version: '22'
       - run: node scripts/verify-791-preview-canonical-follow-proof.mjs
       - run: node scripts/verify-792-preview-common-follow.mjs
+
+      - name: Changed receipt store compatibility
+        run: |
+          node scripts/verify-761-production-owner-do-runtime.mjs
+          node scripts/verify-762-owner-receipt-archive.mjs
+          node scripts/verify-764-owner-receipt-witness.mjs

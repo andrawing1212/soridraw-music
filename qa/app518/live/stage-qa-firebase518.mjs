@@ -57,6 +57,7 @@ export function stageQaFirebase518({
  const uid='qa518-'+runId+'-owner';
  const id='qa518-'+runId+'-song';
  const vars={
+  SORIDRAW_APP518_QA_PROJECT_ID:'soridraw-app',
   SORIDRAW_APP518_QA_PROJECT_NUMBER:'1083981050742',
   SORIDRAW_APP518_QA_RUN_ID:String(runId),
   SORIDRAW_APP518_PILOT_UID:uid,

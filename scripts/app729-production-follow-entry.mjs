@@ -14,6 +14,7 @@ export function buildApp729ProductionIntegrationEntry(){
  const code=[
   '// APP753 review candidate ONLY. DO NOT DEPLOY. The original PROD module is untouched.',
   "import canonical from './production-main.mjs';",
+  "export * from './production-main.mjs';",
   "import {APP729_PRODUCTION_OWNER_FOLLOW_COMPILED_OPEN}",
   " from './integration/app729-production-follow-adapter.mjs';",
   "import {composeApp753ProductionFollow}",

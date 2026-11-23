@@ -1,0 +1,77 @@
+name: SORIDRAW APP737 Production Follow Inactive Candidate (0% only)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/app729-production-follow-entry.mjs'
+      - 'scripts/app737-stage-inactive-production-follow.mjs'
+      - 'scripts/verify-737-inactive-production-stage.mjs'
+      - '.github/workflows/app737-inactive-production-follow.yml'
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-app737-inactive-production-follow
+  cancel-in-progress: false
+
+jobs:
+  offline:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: '${{ github.event.pull_request.head.sha }}', persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Check upload payload, exact bindings and OFF runtime only
+        run: |
+          node --check scripts/app737-stage-inactive-production-follow.mjs
+          node scripts/verify-737-inactive-production-stage.mjs
+          node scripts/verify-729-production-follow-integration.mjs
+  stage:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 1261 &&
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/app737-stage-inactive ')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: '${{ github.workflow_sha }}', fetch-depth: 0, persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Pin exact main controller and PREVIEW source
+        env:
+          COMMAND: '${{ github.event.comment.body }}'
+        run: |
+          set -euo pipefail
+          SHA="$(printf '%s' "$COMMAND" | sed -nE 's|^/app737-stage-inactive ([0-9a-f]{40})$|\1|p')"
+          test -n "$SHA"
+          test "$(git rev-parse HEAD)" = "$(git ls-remote origin refs/heads/main | cut -f1)"
+          test "$SHA" = "$(git ls-remote origin refs/heads/preview | cut -f1)"
+          git fetch origin preview --no-tags
+          git worktree add --detach "$RUNNER_TEMP/app737-preview" "$SHA"
+          echo "APP728_SOURCE_DIR=$RUNNER_TEMP/app737-preview" >> "$GITHUB_ENV"
+          echo "APP728_SOURCE_SHA=$SHA" >> "$GITHUB_ENV"
+          echo "APP728_LOCKED_PREVIEW_SHA=$SHA" >> "$GITHUB_ENV"
+          echo 'APP737_STAGING_APPROVAL=STAGE_INACTIVE_ONLY' >> "$GITHUB_ENV"
+      - name: Minimal offline evidence
+        run: |
+          node scripts/verify-737-inactive-production-stage.mjs
+          node scripts/verify-729-production-follow-integration.mjs
+      - name: Upload new version without deployment or traffic
+        env:
+          CLOUDFLARE_API_TOKEN: '${{ secrets.CLOUDFLARE_API_TOKEN }}'
+        run: |
+          set -euo pipefail
+          test "$APP728_SOURCE_SHA" = "$(git ls-remote origin refs/heads/preview | cut -f1)"
+          node scripts/app737-stage-inactive-production-follow.mjs
+          echo 'APP737_INACTIVE_VERSION_UPLOAD=PASS; LIVE_DEPLOY=0; TEST_DATA_WRITES=0'

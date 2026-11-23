@@ -34,10 +34,10 @@ export function stageQaFirebase518({
  const entry=readFileSync(join(source,'index.cjs'),'utf8');
  const pkg=JSON.parse(readFileSync(join(source,'package.json'),'utf8'));
  if(pkg.main!=='index.cjs'||pkg.engines?.node!=='22'
-  ||Object.keys(pkg.dependencies||{}).sort().join(',')!=='firebase-admin,firebase-functions'
+  ||Object.keys(pkg.dependencies||{}).sort().join(',')!=='@google-cloud/functions-framework,firebase-admin,firebase-functions,protobufjs'
   ||!entry.includes('const QA_PROJECT = "soridraw-app";')
   ||!entry.includes('exports.app518QaExactFavoriteSource = onRequest(')
-  ||!entry.includes('exports.app518QaSyntheticDeleteReceipt = onDocumentDeleted(')
+  ||!entry.includes('functionsFramework.cloudEvent("app518QaSyntheticDeleteReceipt",nativeDeleteReceipt)')
   ||entry.includes('soridraw-app-866a5')
   ||entry.includes('exports.publishExploreOwnerFollower542')
   ||entry.includes('onDocumentWritten(')||entry.includes('onWrite('))

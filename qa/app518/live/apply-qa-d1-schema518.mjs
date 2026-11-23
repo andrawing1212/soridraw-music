@@ -25,7 +25,7 @@ export const QA518_SCHEMA_NAMES=[
  'idx_music_note_catalog_outbox_518_due',
 ].sort();
 const sqlList="SELECT name FROM sqlite_master WHERE type IN ('table','index') "+
- "AND (name LIKE 'music_note_catalog_%_518' OR name LIKE 'idx_music_note_catalog_%_518') "+
+ "AND (name LIKE 'music_note_catalog_%_518' OR name LIKE 'idx_music_note_catalog_%') "+
  "ORDER BY name LIMIT 20";
 const fail=code=>{throw Error(code);};
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);

@@ -1,0 +1,23 @@
+name: APP791 PREVIEW canonical proof offline
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/app791-preview-canonical-follow-proof.mjs'
+      - 'scripts/verify-791-preview-canonical-follow-proof.mjs'
+      - '.github/workflows/app791-preview-canonical-proof.yml'
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/verify-791-preview-canonical-follow-proof.mjs

@@ -1,3 +1,13 @@
+## CURRENT — APP791 PREVIEW 실제 정본 완료 증명 연결 준비 / 공유 Writer 전환 HOLD (2026-11-24 KST)
+
+- APP790 기존 실제 통합 PASS 재사용: PR #1400 main `bc6e34bc116a962310ee980f8225b8db5325305c`, [Actions #45284339728](https://github.com/andrawing1212/soridraw-music/actions/runs/45284339728) completed/success. 디렉터 제공 실제 QA 화면에서 A/B Firebase Auth/AppCheck, RTDB 0명/v16 → 1명/v17 → 0명/v18, 각 요청 D1 W1/완료 확인 추가 W0, 정확한 합성 데이터 정리 및 QA583 원본 100% 복원 PASS. APP789 [#45281350100](https://github.com/andrawing1212/soridraw-music/actions/runs/45281350100) 실제 분리 완료 확인 PASS도 재사용. APP790에서는 별도 모바일 실기기와 실제 503 주입 미검증(기존 APP749/760 별도 증거 재사용). APP790 one-shot job 비활성화, 추가 QA 없음.
+- PREVIEW HEAD `e254232f6014f1a75f8a959aca680319bd92eeb5` 및 APP719 기존 실제 모듈 패치 경로 대조. 실제 PREVIEW 활성 소스는 GitHub frozen bundle과 후속 live module patch가 다르므로 frozen 파일만으로 활성 버전과 일치한다고 단정하지 않음. 기존 전체 PREVIEW owner RTDB 수신·APP653/659 scope/Functions542·기존 private owner service 재사용, 정상 클라이언트/UI 변경 없음.
+- APP791 `scripts/app791-preview-canonical-follow-proof.mjs` compile OFF, no active import: 기존 348 D1 exact pair mutation_id/updated_at/owner epoch + 354 R2 exact intent/profile projection을 읽는 adapter. 실제 쌍 revision은 Date.now() 기반이며 owner profile revision과 다름. QA의 +1 가정과 0/1 count를 실제 앱에 적용하지 않음. 확정된 기존 durable receipt만 관찰; 정확한 D1 mutation과 settled R2 intent, exact/no-pending owner projection, manifest/intent ETag 불변 확인. R2 GET 3/HEAD 2, 단건 PK JOIN SELECT 1회, D1/R2 write 0; 실제 활성 경로 호출 0. 최신 owner projection count/version을 후보로만 반환하며 알림/쓰기/배포 권한 부여 0. 실제 청구 및 runtime 다중 Writer 동시성은 미검증.
+- **공유 전환 HOLD:** 현재 D1/R2는 PREVIEW/TEST/PRODUCTION 공유. APP790 단일 QA pair의 새로운 namespace와 실제 사용자 데이터의 owner-wide/pair revision·기존 pending·다중 사용자·이전 Writer 절체·계정 삭제/재가입을 동일하게 취급하면 안 됨. 기존 저장 경로를 유지하고 새 R2 admission/settled/floor를 운영에 쓰려면 모든 활성/구형 Writer 단일 진입 증명, 실제 새 epoch/genesis 기준, 보존/삭제 정책, 롤백 및 비용 검증이 선행되어야 함. PREVIEW만 새 ledger를 켜고 TEST/PROD 이전 Writer가 우회하는 구성은 금지. 기존 QA 성공 증거는 독립 이력 완전성이나 실사용 출시 승인 아님.
+- 다음 최소 구현: 실제 활성 PREVIEW/TEST/PROD canonical Writer 및 owner service의 경로를 기존 live inventory와 정확한 모듈/인증 기준으로 대조하고, 기존 공유 Writer 호환 유지하면서 단일 admission/finalization 계약으로 연결할 변경안을 확정. 새 공유 저장/Rules/IAM/트래픽 변경은 별도 승인 전 실행 금지. 정식 배포 미승인.
+
+---
+
 ## CURRENT — APP788 독립 R2 owner floor + 불변 operation 이력 ↔ 기존 Owner DO 연결 소스 PASS / 운영 이관 HOLD (2026-11-24 KST)
 
 - **최신 사용자 YES 승인 범위:** 기존 공유 백엔드에 필요한 최소 독립 operation 기록·PITR 외부 owner revision floor + 기존 APP761 Owner DO 구성 연결 구현/검증. 기존 사용자 데이터에 실제 쓰기, 새 유료 자원·권한/Rules/Secrets 변경, TEST/PRODUCTION 배포·트래픽 전환은 미승인. 이전 APP749/760/783/784/785 물리 QA는 재사용.

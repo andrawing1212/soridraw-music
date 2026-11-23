@@ -811,7 +811,7 @@ jobs:
           from pathlib import Path
           import sys
           value=Path(sys.argv[1]).read_bytes()
-          if len(value)<32 or len(value)>256 or b'\\n' in value or b'\\r' in value:
+          if len(value)<32 or len(value)>256 or b'\n' in value or b'\r' in value:
             raise SystemExit('APP518_QA_HMAC_SECRET=HOLD_INVALID_BYTES')
           print('APP518_QA_HMAC_SECRET_ACCESS=PASS_SAME_QA_SERVICE_ACCOUNT')
           print('APP518_QA_HMAC_SECRET_VALUE_REDACTED=PASS; CLOUD_MUTATIONS=0')

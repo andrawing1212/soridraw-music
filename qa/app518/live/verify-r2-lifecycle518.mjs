@@ -13,6 +13,10 @@ const env={
  SORIDRAW_APP518_PILOT_UID:uid,
  SORIDRAW_APP518_PILOT_FAVORITE_ID:'qa518-'+run+'-song',
  FIREBASE_PROJECT_ID:'soridraw-app',FIREBASE_PROJECT_NUMBER:'1083981050742',
+ SORIDRAW_APP518_QA_JWKS_JSON:JSON.stringify({keys:[{
+  kid:'synthetic-test-key',kty:'RSA',alg:'RS256',use:'sig',n:'fake-test-public-only',e:'AQAB',
+ }]}),
+ SORIDRAW_APP518_QA_JWKS_AT_MS:String(now),
 };
 class R2Mock{
  constructor(){this.items=new Map();this.writes=0;this.deletes=[];this.failHead=false}
@@ -76,6 +80,8 @@ const handler=createApp518QaR2Lifecycle518({
   oidcRequests++;
   assert.equal(ctx.runId,run);
   assert.equal(ctx.workflowSha,'a'.repeat(40));
+  assert.equal(ctx.pinnedAtMs,now);
+  assert.equal(ctx.pinnedJwks?.keys?.[0]?.kid,'synthetic-test-key');
   if(ctx.token!==token)throw Error('BAD_JWT');
   return {source:'GITHUB_VERIFIED_OIDC_RSA_SIGNATURE',runId:run,
    expiresAtMs:now+180000};
@@ -101,6 +107,9 @@ assert.equal(noAuth.status,403);
 assert.equal((await check(request('bootstrap'),503,{...env,
  FIREBASE_PROJECT_ID:'soridraw-app-866a5',CATALOG:r2,QA_D1:d1})).status,503);
 assert.equal(r2.items.size,0);
+assert.equal((await check(request('bootstrap'),503,{
+ ...env,SORIDRAW_APP518_QA_JWKS_JSON:undefined,CATALOG:r2,QA_D1:d1,
+})).status,503);
 let x=await check(request('bootstrap'),200);
 assert.equal(x.body.code,'QA518_R2_BOOTSTRAP_EXACT_TWO_KEYS_PASS');
 assert.equal(x.body.code,'QA518_R2_BOOTSTRAP_EXACT_TWO_KEYS_PASS');

@@ -68,7 +68,7 @@ const router=createApp784QaUnifiedFollow({
    canonicalOperationId:ticket.canonicalOperationId,rowsWritten:1};
  },
  settleImmutableReceipt:async({ticket})=>{
-  settlements++;stored=ticket;
+  settlements++;stored={...ticket,ownerAuthEpoch:ownerEpoch};
   return {status:'QA_IMMUTABLE_SETTLED_ONLY',productionDeployAuthorized:false};
  },
 });

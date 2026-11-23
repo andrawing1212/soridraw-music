@@ -1026,6 +1026,19 @@ jobs:
             raise SystemExit('HOLD_QA518_FUNCTIONS_NOT_EXACT_PILOT_PLUS_FOLLOW')
           print('APP518_QA_FIREBASE_TWO_INSTALLED_FOLLOW_PRESERVED=PASS')
           PY
+      - name: Bind QA event receiver to only its one temporary Cloud Run function
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gcloud projects describe soridraw-app --format='value(projectNumber)' 2>/dev/null)" = 1083981050742
+          service="$(gcloud functions describe app518QaSyntheticDeleteReceipt --gen2 --project=soridraw-app --region=asia-northeast3 --format='value(serviceConfig.service)')"
+          test "$(basename "$service")" = 'app518qasyntheticdeletereceipt'
+          member='serviceAccount:soridraw-qa-app518-runtime@soridraw-app.iam.gserviceaccount.com'
+          gcloud run services add-iam-policy-binding app518qasyntheticdeletereceipt \
+            --project=soridraw-app --region=asia-northeast3 \
+            --member="$member" --role=roles/run.invoker \
+            --quiet >/dev/null
+          echo 'APP518_QA_TEMP_DELETE_RECEIVER_RUN_INVOKER_GRANTED=PASS'
       - name: "QA one-song: actual saved delete receipt resave"
         shell: bash
         run: |

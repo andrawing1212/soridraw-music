@@ -1166,3 +1166,398 @@ jobs:
             raise SystemExit('HOLD_QA518_FINAL_FUNCTION_CLEANUP_OR_FOLLOW_DRIFT')
           print('APP518_QA_FIREBASE_EXACT_TWO_CLEANED_ORIGINAL_FOLLOW_RESTORED=PASS')
           PY
+
+  qa_live_integrated_one_song:
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 528 &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/app518-qa-integrated 864f796da24413309567198c9de502b13cdedd50'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 34
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/1083981050742/locations/global/workloadIdentityPools/soridraw-qa-github/providers/app518-readonly
+          service_account: soridraw-qa-gh-deployer@soridraw-app.iam.gserviceaccount.com
+          project_id: soridraw-app
+          create_credentials_file: true
+          export_environment_variables: true
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Stage immutable candidate and forbid other QA function changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(gcloud projects describe soridraw-app --format='value(projectNumber)' 2>/dev/null)" = 1083981050742
+          gcloud functions list --project=soridraw-app --regions=asia-northeast3 --format=json > "$RUNNER_TEMP/app518-pre-funcs.json"
+          python3 - "$RUNNER_TEMP/app518-pre-funcs.json" <<'PY'
+          import json,sys
+          names=sorted(x.get('name','').split('/')[-1] for x in json.load(open(sys.argv[1],encoding='utf8')))
+          if names!=['publishExploreOwnerFollower542']:
+            raise SystemExit('HOLD_QA518_ORIGINAL_FUNCTION_OR_DEPLOYED_APP518_DRIFT')
+          print('APP518_QA_BEFORE_FUNCTIONS=PASS_EXACT_ONE_FOLLOW_FUNCTION')
+          PY
+          export APP518_PINNED_CANDIDATE_DIR="$RUNNER_TEMP/app518-pinned-candidate"
+          git cat-file -e 864f796da24413309567198c9de502b13cdedd50^{commit}
+          git worktree add --detach "$APP518_PINNED_CANDIDATE_DIR" 864f796da24413309567198c9de502b13cdedd50
+          npm ci --prefix "$APP518_PINNED_CANDIDATE_DIR/functions" --ignore-scripts --no-audit --no-fund
+          "$APP518_PINNED_CANDIDATE_DIR/functions/node_modules/.bin/tsc" -p "$APP518_PINNED_CANDIDATE_DIR/functions/tsconfig.json"
+          export APP518_QA_FUNCTION_STAGE="$RUNNER_TEMP/app518-qa-firebase-stage-$GITHUB_RUN_ID"
+          node --input-type=module <<'NODE'
+          import {stageQaFirebase518} from './qa/app518/live/stage-qa-firebase518.mjs';
+          const result=stageQaFirebase518({
+            candidateDir:process.env.APP518_PINNED_CANDIDATE_DIR,
+            stageRoot:process.env.APP518_QA_FUNCTION_STAGE,
+            runId:process.env.GITHUB_RUN_ID,
+            bridgeActive:true,
+          });
+          if(result.code!=='APP518_QA_EXACT_FIREBASE_CODEBASE_STAGED'
+            ||!result.bridgeActive||result.functionNames.length!==2)
+            throw Error('HOLD_QA518_EXACT_TWO_FUNCTIONS_NOT_STAGED');
+          console.log('APP518_QA_ACTIVE_PILOT_ONLY_STAGED=PASS');
+          NODE
+          npm install --prefix "$APP518_QA_FUNCTION_STAGE/functions" --ignore-scripts --no-audit --no-fund --omit=dev
+          node "$APP518_QA_FUNCTION_STAGE/functions/verify.mjs"
+          echo "$APP518_QA_FUNCTION_STAGE" > "$RUNNER_TEMP/app518-staged-dir"
+      - name: Install ONLY app518qa isolated codebase, not existing follow Function
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/app518-staged-dir"
+          test "$(gcloud projects describe soridraw-app --format='value(projectNumber)' 2>/dev/null)" = 1083981050742
+          stage="$(cat "$RUNNER_TEMP/app518-staged-dir")"
+          test -f "$stage/firebase.json"
+          touch "$RUNNER_TEMP/app518-func-deploy-attempted"
+          cd "$stage"
+          # The Firebase CLI checks ActAs on the default appspot SA even when
+          # both QA functions explicitly pin their own runtime SA. Use the
+          # official gcloud function deploy instead: no IAM change needed.
+          sa='soridraw-qa-app518-runtime@soridraw-app.iam.gserviceaccount.com'
+          envs="SORIDRAW_APP518_QA_PROJECT_ID=soridraw-app,SORIDRAW_APP518_QA_PROJECT_NUMBER=1083981050742,SORIDRAW_APP518_QA_RUN_ID=$GITHUB_RUN_ID,SORIDRAW_APP518_PILOT_UID=qa518-$GITHUB_RUN_ID-owner,SORIDRAW_APP518_PILOT_FAVORITE_ID=qa518-$GITHUB_RUN_ID-song,SORIDRAW_APP518_BRIDGE_ACTIVE=APPROVED_ISOLATED_ONE_SONG"
+          gcloud functions deploy app518QaSyntheticDeleteReceipt \
+            --gen2 --project=soridraw-app --region=asia-northeast3 \
+            --runtime=nodejs22 --source="$stage/functions" \
+            --entry-point=app518QaSyntheticDeleteReceipt \
+            --trigger-event-filters=type=google.cloud.firestore.document.v1.deleted \
+            --trigger-event-filters=database='(default)' \
+            --trigger-event-filters-path-pattern='document=favorites/{favoriteId}' \
+            --trigger-location=asia-northeast3 \
+            --service-account="$sa" --trigger-service-account="$sa" \
+            --set-env-vars="$envs" --memory=256MiB --timeout=30s \
+            --min-instances=0 --max-instances=1 --quiet
+          echo 'APP518_QA_DELETE_TRIGGER_FUNCTION_DEPLOYED=PASS'
+          gcloud functions deploy app518QaExactFavoriteSource \
+            --gen2 --project=soridraw-app --region=asia-northeast3 \
+            --runtime=nodejs22 --source="$stage/functions" \
+            --entry-point=app518QaExactFavoriteSource --trigger-http \
+            --allow-unauthenticated --service-account="$sa" \
+            --set-secrets=SORIDRAW_CATALOG_SERVER_HMAC_518=SORIDRAW_CATALOG_SERVER_HMAC_518:latest \
+            --set-env-vars="$envs" --memory=256MiB --timeout=30s \
+            --min-instances=0 --max-instances=1 --quiet
+          echo 'APP518_QA_EXACT_SOURCE_FUNCTION_DEPLOYED=PASS'
+          echo 'APP518_QA_FIREBASE_TWO_FUNCTIONS_DEPLOY_API=PASS'
+      - name: Confirm exactly 3 QA Functions with original follow intact
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud functions list --project=soridraw-app --regions=asia-northeast3 --format=json > "$RUNNER_TEMP/app518-after-funcs.json"
+          python3 - "$RUNNER_TEMP/app518-after-funcs.json" <<'PY'
+          import json,sys
+          funcs=json.load(open(sys.argv[1],encoding='utf8'))
+          actual=sorted(x.get('name','').split('/')[-1] for x in funcs)
+          expected=sorted(['publishExploreOwnerFollower542','app518QaExactFavoriteSource','app518QaSyntheticDeleteReceipt'])
+          if actual!=expected:
+            raise SystemExit('HOLD_QA518_FUNCTIONS_NOT_EXACT_PILOT_PLUS_FOLLOW')
+          print('APP518_QA_FIREBASE_TWO_INSTALLED_FOLLOW_PRESERVED=PASS')
+          PY
+      - name: Bind QA event receiver to only its one temporary Cloud Run function
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gcloud projects describe soridraw-app --format='value(projectNumber)' 2>/dev/null)" = 1083981050742
+          service="$(gcloud functions describe app518QaSyntheticDeleteReceipt --gen2 --project=soridraw-app --region=asia-northeast3 --format='value(serviceConfig.service)')"
+          test "$(basename "$service")" = 'app518qasyntheticdeletereceipt'
+          trigger_sa="$(gcloud functions describe app518QaSyntheticDeleteReceipt --gen2 --project=soridraw-app --region=asia-northeast3 --format='value(eventTrigger.serviceAccountEmail)')"
+          test "$trigger_sa" = 'soridraw-qa-app518-runtime@soridraw-app.iam.gserviceaccount.com'
+          member="serviceAccount:$trigger_sa"
+          gcloud run services add-iam-policy-binding app518qasyntheticdeletereceipt \
+            --project=soridraw-app --region=asia-northeast3 \
+            --member="$member" --role=roles/run.invoker \
+            --quiet >/dev/null
+          # Isolated QA only. Cloud Run returned transport-level 403 for
+          # Eventarc POST despite its actual trigger identity being bound.
+          # Make ONLY this run's ephemeral QA delete target callable, with
+          # one exact synthetic ID enforced by index.cjs. The service and
+          # its IAM policy are removed in this job's ALWAYS cleanup step.
+          gcloud run services add-iam-policy-binding app518qasyntheticdeletereceipt \
+            --project=soridraw-app --region=asia-northeast3 \
+            --member=allUsers --role=roles/run.invoker \
+            --quiet >/dev/null
+          gcloud run services get-iam-policy app518qasyntheticdeletereceipt \
+            --project=soridraw-app --region=asia-northeast3 --format=json > "$RUNNER_TEMP/app518-qa-temp-run-iam.json"
+          python3 - "$RUNNER_TEMP/app518-qa-temp-run-iam.json" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1],encoding='utf8'))
+          allowed={x for b in d.get('bindings',[]) if b.get('role')=='roles/run.invoker' for x in b.get('members',[])}
+          if 'allUsers' not in allowed:
+              raise SystemExit('HOLD_QA518_EPHEMERAL_RUN_INVOCATION_UNAVAILABLE')
+          print('APP518_QA_EXACT_TEMP_DELETE_INVOKER=PASS')
+          PY
+          sleep 12
+      - name: Seed two run-bound R2 base/head objects through existing signed helper
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_QA_STORAGE_READ_TOKEN: ${{ secrets.CLOUDFLARE_QA_STORAGE_READ_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+          CLOUDFLARE_QA_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+        run: |
+          set -euo pipefail
+          node qa/app518/live/r2-manifest518.mjs
+          npm install --prefix cloudflare/media-worker --ignore-scripts --no-audit --no-fund --no-save
+          cd cloudflare/media-worker
+          npx --yes wrangler@4.147.0 deploy --config wrangler.app518-qa-r2.generated.json
+          cd ../..
+          node qa/app518/live/r2-run518.mjs --bootstrap
+          node qa/app518/live/catalog-cleanup518.mjs --stop
+          echo 'APP518_QA_R2_BOOTSTRAP_HELPER_STOPPED_BASE_HEAD_RETAINED=PASS'
+      - name: Deploy exact pinned QA catalog Worker with server HMAC and D1/R2 bindings
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_QA_STORAGE_READ_TOKEN: ${{ secrets.CLOUDFLARE_QA_STORAGE_READ_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+        run: |
+          set -euo pipefail
+          export APP518_PINNED_CANDIDATE_DIR="$RUNNER_TEMP/app518-pinned-candidate"
+          export APP518_QA_SOURCE_URI="$(gcloud functions describe app518QaExactFavoriteSource --gen2 --project=soridraw-app --region=asia-northeast3 --format='value(serviceConfig.uri)')"
+          node qa/app518/live/stage-pinned-worker518.mjs
+          node qa/app518/live/catalog-manifest518.mjs
+          cd "$APP518_PINNED_CANDIDATE_DIR/cloudflare/media-worker"
+          npm install --ignore-scripts --no-audit --no-fund --no-save
+          npx --yes wrangler@4.147.0 deploy --config wrangler.app518-qa-integrated.generated.json
+          hmac="$(gcloud secrets versions access latest --project=soridraw-app --secret=SORIDRAW_CATALOG_SERVER_HMAC_518)"
+          echo "::add-mask::$hmac"
+          test -n "$hmac"
+          printf '%s' "$hmac" | npx --yes wrangler@4.147.0 secret put CATALOG_SERVER_HMAC_518 --config wrangler.app518-qa-integrated.generated.json
+          unset hmac
+          echo 'APP518_QA_INTEGRATED_SIGNED_WORKER_ACTIVATED=PASS'
+      - name: "QA one-song: actual saved delete receipt resave"
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gcloud projects describe soridraw-app --format='value(projectNumber)' 2>/dev/null)" = 1083981050742
+          export APP518_QA_TOKEN="$(gcloud auth print-access-token)"
+          export APP518_QA_SECRET="$(gcloud secrets versions access latest --project=soridraw-app --secret=SORIDRAW_CATALOG_SERVER_HMAC_518)"
+          echo "::add-mask::$APP518_QA_SECRET"
+          export APP518_QA_SOURCE_URI="$(gcloud functions describe app518QaExactFavoriteSource --gen2 --project=soridraw-app --region=asia-northeast3 --format='value(serviceConfig.uri)')"
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {createHmac} from 'node:crypto';
+          import {dispatchExactQa518} from './qa/app518/live/dispatch-one-song518.mjs';
+          const run=process.env.GITHUB_RUN_ID;
+          const token=process.env.APP518_QA_TOKEN;
+          const secret=process.env.APP518_QA_SECRET;
+          const uri=process.env.APP518_QA_SOURCE_URI;
+          const uid='qa518-'+run+'-owner';
+          const id='qa518-'+run+'-song';
+          const root='https://firestore.googleapis.com/v1/projects/soridraw-app/databases/(default)/documents';
+          const doc=root+'/favorites/'+id;
+          const receiptId=Buffer.from(JSON.stringify([uid,id])).toString('base64url');
+          const receipt=root+'/server_music_note_delete_receipts_518/'+receiptId;
+          assert.match(run,/^[0-9]{8,20}$/);
+          assert.ok(token?.length>30&&secret?.length>=32);
+          const dest=new URL(uri);
+          assert.equal(dest.protocol,'https:');
+          assert.ok(dest.hostname.endsWith('.run.app')||dest.hostname.endsWith('.cloudfunctions.net'));
+          assert.equal(dest.pathname,'/');
+          let owned=false,complete=false;
+          const fs=async(method,url,body)=>{
+            const headers={Authorization:'Bearer '+token,Accept:'application/json'};
+            if(body!==undefined)headers['content-type']='application/json';
+            const res=await fetch(url,{method,headers,...(body===undefined?{}:{body:JSON.stringify(body)}),redirect:'error',signal:AbortSignal.timeout(20000)});
+            const data=res.status===204?null:await res.json().catch(()=>null);
+            return {status:res.status,data};
+          };
+          const exact=(d)=>d?.fields?.qaOnly?.booleanValue===true&&
+            d.fields?.qaRunId?.stringValue===run&&d.fields?.uid?.stringValue===uid;
+          const setField=(name,value)=>({[name]:typeof value==='boolean'?{booleanValue:value}:{stringValue:value}});
+          const save=async title=>{
+            const fields={...setField('uid',uid),...setField('qaRunId',run),
+              ...setField('qaOnly',true),...setField('saved',true),...setField('title',title)};
+            const x=await fs('POST',root+'/favorites?documentId='+id,{fields});
+            assert.equal(x.status,200,'QA_FIRESTORE_SAVE_HTTP_'+x.status);
+            assert.ok(exact(x.data),'QA_FIRESTORE_SAVE_OWNER');
+            owned=true;
+            return x.data;
+          };
+          const remove=async x=>{
+            assert.ok(exact(x)&&typeof x.updateTime==='string','QA_DELETE_NOT_OWNED');
+            const u=doc+'?currentDocument.updateTime='+encodeURIComponent(x.updateTime);
+            const d=await fs('DELETE',u);
+            assert.ok([200,204].includes(d.status),'QA_FIRESTORE_DELETE_'+d.status);
+          };
+          const source=async()=>{
+            const raw=JSON.stringify({action:'exact-source',uid,documentId:id});
+            const ts=String(Date.now());
+            const sig=createHmac('sha256',secret).update(ts+'\n'+raw).digest('hex');
+            const res=await fetch(uri,{method:'POST',redirect:'error',headers:{
+              'content-type':'application/json','x-soridraw-server-time-518':ts,
+              'x-soridraw-server-signature-518':sig
+            },body:raw,signal:AbortSignal.timeout(20000)});
+            return {http:res.status,data:await res.json().catch(()=>null)};
+          };
+          const waitSource=async(state)=>{
+            for(let i=0;i<35;i++){
+              const a=await source();
+              if(a.http===200&&a.data?.code==='SOURCE_VERIFIED'&&
+                 a.data?.source?.uid===uid&&a.data.source.documentId===id&&
+                 a.data.source.verifiedByServer===true&&a.data.source.state===state)
+                return a.data.source;
+              if(a.http===403||a.http===500||a.http===503)
+                throw Error('QA_SOURCE_FUNCTION_HTTP_'+a.http+'_'+String(a.data?.code||''));
+              if(i<34)await new Promise(r=>setTimeout(r,2000));
+            }
+            throw Error('QA_EVENTARC_DELETE_RECEIPT_NOT_DELIVERED_'+state);
+          };
+          const purgeOwned=async()=>{
+            if(!owned)return;
+            let current=await fs('GET',doc);
+            if(current.status===200){
+              assert.ok(exact(current.data),'QA_CLEANUP_NOT_OWNED');
+              const url=doc+'?updateMask.fieldPaths=qa518CleanupFinal&currentDocument.updateTime='+encodeURIComponent(current.data.updateTime);
+              const patched=await fs('PATCH',url,{fields:{qa518CleanupFinal:{booleanValue:true}}});
+              assert.equal(patched.status,200,'QA_CLEANUP_MARKER_FAIL_'+patched.status);
+              await remove(patched.data);
+            }else assert.equal(current.status,404,'QA_CLEANUP_DOC_UNKNOWN');
+            const r=await fs('GET',receipt);
+            if(r.status===200){
+              assert.equal(r.data?.fields?.uid?.stringValue,uid,'QA_RECEIPT_FOREIGN_OWNER');
+              assert.equal(r.data?.fields?.documentId?.stringValue,id,'QA_RECEIPT_FOREIGN_DOCUMENT');
+              const d=await fs('DELETE',receipt+'?currentDocument.updateTime='+encodeURIComponent(r.data.updateTime));
+              assert.ok([200,204].includes(d.status),'QA_RECEIPT_CLEANUP_FAIL_'+d.status);
+            }else assert.equal(r.status,404,'QA_RECEIPT_UNKNOWN');
+            const [a,b]=await Promise.all([fs('GET',doc),fs('GET',receipt)]);
+            assert.equal(a.status,404,'QA_FINAL_FAVORITE_PRESENT');
+            assert.equal(b.status,404,'QA_FINAL_RECEIPT_PRESENT');
+            console.log('APP518_QA_ONE_SONG_FAVORITE_AND_RECEIPT_CLEANED=PASS');
+          };
+          const canonicalTime=t=>String(t).replace(/\.(\d{1,9})Z$/,(_,digits)=>'.'+digits.padEnd(9,'0')+'Z');
+          let prior=null;
+          try{
+            const [a,b]=await Promise.all([fs('GET',doc),fs('GET',receipt)]);
+            assert.equal(a.status,404,'QA_FAVORITE_ALREADY_EXISTS');
+            assert.equal(b.status,404,'QA_RECEIPT_ALREADY_EXISTS');
+            const saved=await save('APP518 QA synthetic save');
+            const s1=await waitSource('saved');
+            assert.equal(canonicalTime(s1.updateTime),canonicalTime(saved.updateTime),'QA_SAVE_VERSION_NOT_EXACT');
+            await dispatchExactQa518({runId:run,source:s1,state:'saved',expectedCount:1,secret});
+            await remove(saved);
+            const s2=await waitSource('removed');
+            assert.ok(s2.updateTime>s1.updateTime,'QA_RECEIPT_VERSION_NOT_NEWER');
+            await dispatchExactQa518({runId:run,source:s2,state:'removed',expectedCount:0,secret});
+            const resaved=await save('APP518 QA synthetic resave');
+            const s3=await waitSource('saved');
+            assert.equal(canonicalTime(s3.updateTime),canonicalTime(resaved.updateTime),'QA_RESAVE_VERSION_MISMATCH');
+            assert.ok(s3.updateTime>s2.updateTime,'QA_RESAVE_NOT_NEWER');
+            await dispatchExactQa518({runId:run,source:s3,state:'saved',expectedCount:1,secret});
+            console.log('APP518_QA_REAL_FIREBASE_SAVE_DELETE_RECEIPT_RESAVE=PASS');
+            console.log('APP518_QA_FIREBASE_TO_CLOUDFLARE_D1_R2_REAL_E2E=PASS');
+            complete=true;
+          }catch(e){
+            prior=e;
+            console.error('APP518_QA_REAL_FIREBASE_SEQUENCE=FAIL_'+String(e?.message||'UNKNOWN').slice(0,120));
+          }finally{
+            try{await purgeOwned();}catch(e){
+              console.error('APP518_QA_REAL_FIREBASE_CLEANUP=FAIL_'+String(e?.message||'UNKNOWN').slice(0,110));
+              if(!prior)prior=e;
+            }
+          }
+          if(prior)throw prior;
+          if(!complete)throw Error('APP518_QA_SEQUENCE_INCOMPLETE');
+          NODE
+          unset APP518_QA_TOKEN APP518_QA_SECRET APP518_QA_SOURCE_URI
+      - name: ALWAYS stop only temporary QA Workers before clearing exact pilot state
+        if: always()
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_QA_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -f "$RUNNER_TEMP/app518-qa-r2-name" ]; then
+            node qa/app518/live/catalog-cleanup518.mjs --stop
+          fi
+      - name: ALWAYS clear only synthetic D1 owner rows and retain daily budget
+        if: always()
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_QA_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+          CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -f "$RUNNER_TEMP/app518-qa-r2-name" ]; then
+            node qa/app518/live/catalog-cleanup518.mjs --d1
+          fi
+      - name: ALWAYS clean only two synthetic R2 objects through signed QA helper
+        if: always()
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+          CLOUDFLARE_QA_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+        run: |
+          set -euo pipefail
+          if [ -f "$RUNNER_TEMP/app518-qa-r2-name" ]; then
+            node qa/app518/live/catalog-cleanup518.mjs --refresh-pin
+            cd cloudflare/media-worker
+            npx --yes wrangler@4.147.0 deploy --config wrangler.app518-qa-r2.generated.json
+            cd ../..
+            node qa/app518/live/r2-run518.mjs --cleanup
+          fi
+      - name: ALWAYS delete only QA helper and verify original QA583 unchanged
+        if: always()
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_QA_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -f "$RUNNER_TEMP/app518-qa-r2-name" ]; then
+            node qa/app518/live/catalog-cleanup518.mjs --stop
+            node qa/app518/live/catalog-cleanup518.mjs --verify
+          fi
+      - name: ALWAYS remove only this run's two QA functions, even on failed install
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f "$RUNNER_TEMP/app518-func-deploy-attempted" ]; then
+            echo 'APP518_QA_FUNCTIONS_NO_INSTALL_ATTEMPT=PASS';exit 0
+          fi
+          test "$(gcloud projects describe soridraw-app --format='value(projectNumber)' 2>/dev/null)" = 1083981050742
+          for name in app518QaExactFavoriteSource app518QaSyntheticDeleteReceipt; do
+            if gcloud functions describe "$name" --gen2 --region=asia-northeast3 --project=soridraw-app --format='value(name)' >/dev/null 2>&1; then
+              gcloud functions delete "$name" --gen2 --region=asia-northeast3 --project=soridraw-app --quiet
+            fi
+          done
+          gcloud functions list --project=soridraw-app --regions=asia-northeast3 --format=json > "$RUNNER_TEMP/app518-final-funcs.json"
+          python3 - "$RUNNER_TEMP/app518-final-funcs.json" <<'PY'
+          import json,sys
+          funcs=json.load(open(sys.argv[1],encoding='utf8'))
+          actual=[x.get('name','').split('/')[-1] for x in funcs]
+          if actual!=['publishExploreOwnerFollower542']:
+            raise SystemExit('HOLD_QA518_FINAL_FUNCTION_CLEANUP_OR_FOLLOW_DRIFT')
+          print('APP518_QA_FIREBASE_EXACT_TWO_CLEANED_ORIGINAL_FOLLOW_RESTORED=PASS')
+          PY

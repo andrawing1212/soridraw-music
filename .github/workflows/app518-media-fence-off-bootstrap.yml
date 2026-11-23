@@ -64,7 +64,8 @@ jobs:
           node scripts/verify-518-live-media-writer-readonly.mjs --self-test
           node - <<'NODE'
           const assert=require('node:assert/strict');
-          const cfg=require('./cloudflare/media-worker/wrangler.jsonc');
+          const fs=require('node:fs');
+          const cfg=JSON.parse(fs.readFileSync('cloudflare/media-worker/wrangler.jsonc','utf8'));
           for(const stage of [cfg,cfg.env.test,cfg.env.production]){
             assert.equal(stage.vars.SORIDRAW_SHARED_CATALOG_V1,'1');
             assert.equal(stage.vars.SORIDRAW_CANONICAL_CATALOG_518,undefined);

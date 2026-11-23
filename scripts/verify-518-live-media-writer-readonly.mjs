@@ -142,7 +142,7 @@ const selfTest=async()=>{
  // contract reports unavailable R2, Catalog, or an unexpected write mode.
  const unhealthy=changed=>async(url,opts)=>{
   const response=await fake(url,opts);
-  if(!url.includes('soridraw-media-preview.workers.dev/health'))
+  if(!url.startsWith('https://soridraw-media-preview.andrawing1212.workers.dev/health?'))
    return response;
   const payload=await response.json();
   return {ok:true,async json(){return {...payload,...changed};}};

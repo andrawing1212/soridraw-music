@@ -892,27 +892,6 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
       - uses: google-github-actions/setup-gcloud@v2
-      - name: Temporarily grant only QA pilot runtime Eventarc eventReceiver
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(gcloud projects describe soridraw-app --format='value(projectNumber)' 2>/dev/null)" = 1083981050742
-          target='serviceAccount:soridraw-qa-app518-runtime@soridraw-app.iam.gserviceaccount.com'
-          gcloud projects get-iam-policy soridraw-app --format=json > "$RUNNER_TEMP/app518-qa-iam-before.json"
-          python3 - "$RUNNER_TEMP/app518-qa-iam-before.json" <<'PY'
-          import json,sys
-          bindings=json.load(open(sys.argv[1],encoding='utf8')).get('bindings',[])
-          member='serviceAccount:soridraw-qa-app518-runtime@soridraw-app.iam.gserviceaccount.com'
-          existing=any(b.get('role')=='roles/eventarc.eventReceiver' and member in b.get('members',[]) for b in bindings)
-          if existing:
-            raise SystemExit('HOLD_QA518_EVENTARC_ALREADY_BOUND_NO_AUTOMATIC_REMOVAL')
-          print('APP518_QA_EVENTARC_RECEIVER_NOT_PREEXISTING=PASS')
-          PY
-          gcloud projects add-iam-policy-binding soridraw-app \
-            --member="$target" --role=roles/eventarc.eventReceiver \
-            --condition=None --quiet > /dev/null
-          touch "$RUNNER_TEMP/app518-eventarc-qa-granted"
-          echo 'APP518_QA_TEMP_EVENTARC_RECEIVER_GRANTED=PASS'
       - name: Stage immutable candidate and forbid other QA function changes
         shell: bash
         run: |
@@ -1023,16 +1002,3 @@ jobs:
             raise SystemExit('HOLD_QA518_FINAL_FUNCTION_CLEANUP_OR_FOLLOW_DRIFT')
           print('APP518_QA_FIREBASE_EXACT_TWO_CLEANED_ORIGINAL_FOLLOW_RESTORED=PASS')
           PY
-      - name: ALWAYS revoke temporary QA pilot Eventarc Event Receiver role
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ ! -f "$RUNNER_TEMP/app518-eventarc-qa-granted" ]; then
-            echo 'APP518_QA_EVENTARC_ROLE_NOT_GRANTED=NO_REVOKE';exit 0
-          fi
-          test "$(gcloud projects describe soridraw-app --format='value(projectNumber)' 2>/dev/null)" = 1083981050742
-          gcloud projects remove-iam-policy-binding soridraw-app \
-            --member='serviceAccount:soridraw-qa-app518-runtime@soridraw-app.iam.gserviceaccount.com' \
-            --role=roles/eventarc.eventReceiver --condition=None --quiet > /dev/null
-          echo 'APP518_QA_TEMP_EVENTARC_RECEIVER_REVOKED=PASS'

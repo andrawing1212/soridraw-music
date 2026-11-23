@@ -1,3 +1,14 @@
+## CURRENT — APP786 운영 팔로우 18개 정확 대조·OFF 0% 후보 업로드 PASS / 실제 기능 연결 HOLD (2026-11-24 KST)
+
+- **디렉터 승인 범위:** 운영 팔로우 18개 연결을 하나의 흐름으로 확인·코드/후보 정리·최소 검사 후 정식 활성화 없이 Cloudflare PRODUCTION 비활성 버전 0% 업로드. 운영 원본 데이터·Rules·Functions/DO migration·비밀키·활성 Worker·TEST/PRODUCTION Hosting 변경 금지. APP749/760/783/784/785 기존 QA 실검사 PASS 재실행 금지.
+- **실제 GitHub:** [PR #1385](https://github.com/andrawing1212/soridraw-music/pull/1385) main squash `b1457e74475d39a83ce466781c007a9abdc7c5e5`. APP786은 정확한 PREVIEW 활성 바인딩 41개와 기존 운영 12개를 읽기 전용 비교하고, 팔로우 **18개 = 정본 저장·내구성·복구 8개 / 서명된 Firebase 소유자 전달 4개 / 구버전·전체 사용자 적용 6개**, 그 외 PREVIEW 전용 13개를 구분한다. 비밀값·프로젝트 토큰·D1/R2 원본 ID를 출력/복사하지 않는다. APP728의 기존 PROD Worker 코드/12바인딩을 그대로 상속하고 APP786 미사용 소스 모듈을 OFF로만 포함한다.
+- **오프라인 PASS:** [Actions #45264367400](https://github.com/andrawing1212/soridraw-music/actions/runs/45264367400) APP737 OFF 후보·APP786 이름/유형 18개·2개 PROD-only 레거시 service 보호·비밀값 미노출·APP756 원본 Worker 객체/기존 fetch·scheduled·alarm 보존. [Actions #45264367350](https://github.com/andrawing1212/soridraw-music/actions/runs/45264367350) APP728 영향받는 소스 검사 PASS. 신규 공유 데이터/서버 호출 검사가 아님.
+- **실제 Cloudflare 비활성 버전 업로드 PASS:** [Actions #45264523135](https://github.com/andrawing1212/soridraw-music/actions/runs/45264523135) `APP737_INACTIVE_VERSION_UPLOAD=PASS; LIVE_DEPLOY=0; TEST_DATA_WRITES=0`. 기존 운영 활성 Worker 버전 `af81502a-298d-4ec6-bc2a-0c529d6dc29e` **트래픽 100%**, 새로운 0% 후보 버전 `649e4e0d-b7c9-4c54-8ea4-2ebf84e492ac`, 원본 바인딩 12개 상속. 실제 PREVIEW 활성 Worker 41개 vs PROD 12개 확인, **누락 18개는 후보에도 아직 바인딩되지 않음**, 기능 ON 불허. APP737 이전 비활성 후보 `76a7e457-ac88-4ea4-80fa-ab2f1f32e84a`는 사용자 트래픽 없음; 임의 삭제·승격 없음.
+- **단일 핵심 배포 차단:** 이번 후보는 ACTIVE 코드 변경이 없는 OFF 버전으로, Firebase 실서명 주체 검증, 구/신 Writer 단일 정본 ID 및 구버전 반복 클릭 호환, APP765 처음부터 완전한 DO-PITR 독립 작업 이력·외부 revision floor, 실제 운영 Owner DO alarm, Functions 542 서명 수신점·RTDB 소유자별 Rules·정본 완료 후 신호, 실사용 PC/모바일 동기화가 **하나의 운영 서버 경로에서 연결·검증되지 않음**. APP755 진짜 backend 콜백과 APP761 실제 deployable DO class/관리 자원 연결이 빠져 있어 단순히 18개 플래그·Secrets 복사/ON으로 해결 불가. **추가 PRODUCTION 자원/비밀키/Rules/Functions 또는 공유 원본 데이터 변경은 별도 명확 승인 이전에 실행 금지**.
+- **배포 운영 방향:** 작은 UI/Hosting-only 변경은 APP737/738 기존 읽기 전용 환경 parity 기준 재사용 후 검증된 PREVIEW Hosting 활성 버전 그대로 PROD 승격 승인받아 진행; 매번 모든 QA/TEST/신규 릴리스 절차 반복 금지. 서버 기능은 실제 변경된 생산자·수신자·롤백만 검증. 이번 단계에서 PREVIEW Hosting 재배포·정식앱 Hosting 승격 없음. 사용자 기능 실제 PC/모바일 미검증을 PASS로 표시하지 않음.
+
+---
+
 ## CURRENT — APP785 실제 QA 통과 및 재검사 차단 / 빠른 정식배포 준비·운영 기능 HOLD (2026-11-24 KST)
 
 - **제품 방향(디렉터 최신 지시):** PREVIEW→PRODUCTION 승격에 며칠/몇 주 반복하는 방식 중단. 작은 Hosting-only 변경은 기존 PREVIEW 기능·비용 보호 검사를 재사용, 안전한 변경 부분만 확인해 정식 승격 지시가 나오면 기존 APP737/738 동일 활성 Hosting 버전 복제 경로 활용. TEST 미사용, 공유 사용자 데이터·보안 규칙 변경·PRODUCTION 활성화는 별도 명확 승인 필요. 모든 기능을 검증하지 않은 채 실제 사용자에게 위험한 팔로우 Worker를 켜지 않음.

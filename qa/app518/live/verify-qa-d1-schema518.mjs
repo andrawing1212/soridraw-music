@@ -51,6 +51,15 @@ console.log('APP518_QA_D1_PINNED_OUTBOX_STALE_REPLAY_DENIED=PASS');
 await assert.rejects(()=>applyExactQa518Schema({
  plan,d1Id:D1,query:queryFor(db),approved:true,
 }),/HOLD_QA518_D1_EXISTING_OR_PARTIAL_SCHEMA/);
+const orphan=make();
+orphan.exec("CREATE TABLE unrelated_qa_holder (id TEXT);"+
+ "CREATE INDEX idx_music_note_catalog_member_518_generation ON unrelated_qa_holder(id)");
+await assert.rejects(()=>applyExactQa518Schema({
+ plan,d1Id:D1,query:queryFor(orphan),approved:true,
+}),/HOLD_QA518_D1_EXISTING_OR_PARTIAL_SCHEMA/);
+assert.equal(orphan.prepare("SELECT COUNT(*) AS n FROM unrelated_qa_holder").get().n,0);
+orphan.close();
+console.log('APP518_QA_D1_ORPHAN_SUFFIXED_INDEX_COLLISION_DENIED=PASS');
 const another=make();
 const partial=plan.map(x=>({...x}));
 let steps=0;

@@ -192,7 +192,9 @@ async function ask(s,method,path,body,auth=true){
  return {code:response.status,value:await response.json().catch(()=>null)};
 }
 const assertStatus=(v,c,t)=>{if(v.code!==c||v.value?.status!==t)
-  HOLD('HTTP_EXPECTED_'+c+'_'+t+'_RECEIVED_'+v.code+'_'+String(v.value?.status).slice(0,40));};
+  HOLD('HTTP_EXPECTED_'+c+'_'+t+'_RECEIVED_'+v.code+'_'+
+   String(v.value?.status).slice(0,40)+'_REASON_'+
+   String(v.value?.reason||'NONE').replace(/[^A-Z0-9_]/g,'').slice(0,80));};
 async function test(){
  guarded();const s=state();if(!s?.candidate||!s.deployed)HOLD('TEST_NOT_STAGED');
  const get=(method,path,body,auth=true)=>ask(s,method,path,body,auth);

@@ -3,6 +3,7 @@
 import {writeFileSync,readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import assert from 'node:assert/strict';
+import {getPinnedGithubPublicJwks518} from './inspect-public-github-jwks518.mjs';
 const account='b60fcd62c679c64db19f0b0e0c2f3429';
 const oldVersion='4ed70845-6a4b-4a80-9c51-ed95d0becc38';
 const run=process.env.GITHUB_RUN_ID||'';
@@ -77,6 +78,7 @@ export async function prepareQaR2Manifest518(){
   ||!bindings.some(b=>b.name==='OWNER558_DO'&&b.type==='durable_object_namespace')
   ||!bindings.some(b=>b.name==='OWNER583_QA_CONFIG'&&b.type==='secret_text'))
   fail('HOLD_QA_ORIGINAL_WORKER_BINDING_DRIFT');
+ const keys=await getPinnedGithubPublicJwks518({runId:run,workflowSha:sha});
  const config={
   name,main:'./src/app518QaR2Lifecycle518.js',
   account_id:account,compatibility_date:'2026-09-01',
@@ -89,6 +91,8 @@ export async function prepareQaR2Manifest518(){
    SORIDRAW_APP518_PILOT_FAVORITE_ID:'qa518-'+run+'-song',
    FIREBASE_PROJECT_ID:'soridraw-app',
    FIREBASE_PROJECT_NUMBER:'1083981050742',
+   SORIDRAW_APP518_QA_JWKS_JSON:JSON.stringify({keys:keys.keys}),
+   SORIDRAW_APP518_QA_JWKS_AT_MS:String(keys.issuedAtMs),
   },
   r2_buckets:[{binding:'CATALOG',bucket_name:'soridraw-qa-app768-r2'}],
   d1_databases:[{binding:'QA_D1',database_name:'soridraw-qa-app768-d1',
@@ -98,6 +102,7 @@ export async function prepareQaR2Manifest518(){
  writeFileSync(dest,JSON.stringify(config),{mode:0o600,flag:'wx'});
  writeFileSync(process.env.RUNNER_TEMP+'/app518-qa-r2-name',name,{mode:0o600,flag:'wx'});
  console.log('APP518_QA_R2_LIFECYCLE_PREFLIGHT=PASS');
+ console.log('APP518_QA_JWKS_OFFICIAL_AND_RUN_RSA_VERIFIED=PASS');
  console.log('APP518_QA_ORIGINAL_WORKER_100_AND_SINGLE_D1_R2=PASS');
  console.log('APP518_QA_R2_LIFECYCLE_DEPLOYMENTS=0; R2_WRITES=0');
  return name;

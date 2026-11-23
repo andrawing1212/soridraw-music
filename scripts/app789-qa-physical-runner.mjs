@@ -196,17 +196,28 @@ const assertStatus=(v,c,t)=>{if(v.code!==c||v.value?.status!==t)
 async function test(){
  guarded();const s=state();if(!s?.candidate||!s.deployed)HOLD('TEST_NOT_STAGED');
  const get=(method,path,body,auth=true)=>ask(s,method,path,body,auth);
- const unauthorized=await get('GET','/qa789/health',undefined,false);
+ // Version overrides for a newly deployed 0% version can take time
+ // to propagate. Reuse APP736's bounded 3-second read-only probe. Never
+ // write QA D1/R2/DO before the distinctive candidate 403 is observed.
+ let unauthorized;
+ for(let i=0;i<6;i++){
+  unauthorized=await get('GET','/qa789/health',undefined,false);
+  if(unauthorized.code===403&&unauthorized.value?.status==='DENIED')break;
+  if(i<5)await new Promise(done=>setTimeout(done,3000));
+ }
  assertStatus(unauthorized,403,'DENIED');
  let ready;
- for(let i=0;i<8;i++){
+ for(let i=0;i<6;i++){
   ready=await get('GET','/qa789/health');
   if(ready.code===200&&ready.value?.status==='QA789_REAL_R2_D1_READY')break;
-  await new Promise(done=>setTimeout(done,1000));
+  if(i<5)await new Promise(done=>setTimeout(done,1500));
  }
  assertStatus(ready,200,'QA789_REAL_R2_D1_READY');
  if(ready.value.following!==false||ready.value.floorPresent!==false)
   HOLD('INITIAL_SYNTHETIC_STATE_UNCLEAN');
+ // Mark DO mutation attempt BEFORE sending the first write; an ACK-lost
+ // bootstrap still requires exact synthetic-DO cleanup.
+ s.doTouched=true;save(s);
  assertStatus(await get('POST','/qa789/do/bootstrap'),200,
   'QA788_SYNTHETIC_GENESIS_FLOOR_CREATED');
  const race=await Promise.all([OP_A,OP_B].map(canonicalOperationId=>
@@ -252,11 +263,16 @@ async function cleanup(){
  if(!s){console.log('APP789_NO_STATE_NO_MUTATIONS');return}
  const errors=[];
  // The DO owns only QA789_<run> state; do not touch default QA583 ID.
- if(s.candidate&&s.deployed){
-  try{const x=await ask(s,'POST','/qa789/do/wipe');
-   if(x.code!==200||x.value?.status!=='QA789_EXACT_SYNTHETIC_DO_WIPED')
-    errors.push('SYNTHETIC_OWNER_DO_NOT_WIPED')}
-  catch{errors.push('SYNTHETIC_OWNER_DO_CLEANUP_UNAVAILABLE')}
+ if(s.candidate&&s.deployed&&s.doTouched){
+  let wiped=false;
+  for(let i=0;i<5;i++){
+   try{const x=await ask(s,'POST','/qa789/do/wipe');
+    if(x.code===200&&x.value?.status==='QA789_EXACT_SYNTHETIC_DO_WIPED'){
+     wiped=true;break}
+   }catch{}
+   if(i<4)await new Promise(done=>setTimeout(done,1500));
+  }
+  if(!wiped)errors.push('SYNTHETIC_OWNER_DO_NOT_WIPED');
  }
  for(const k of r2keys(s)){
   try{

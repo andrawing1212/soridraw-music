@@ -740,3 +740,81 @@ jobs:
           print('APP518_QA_BILLING_PREFLIGHT=PASS_READONLY_MUTATIONS_ZERO')
           print('APP518_QA_NOTE=ALERT_DOES_NOT_STOP_BILLING')
           PY
+
+qa_backend_metadata_admission:
+    # APP518 one-shot QA-only metadata; no credentials, secrets or data values.
+    # Must run under the exact already approved WIF workflow identity.
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 528 &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/app518-qa-backend-admission 864f796da24413309567198c9de502b13cdedd50'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/1083981050742/locations/global/workloadIdentityPools/soridraw-qa-github/providers/app518-readonly
+          service_account: soridraw-qa-gh-deployer@soridraw-app.iam.gserviceaccount.com
+          project_id: soridraw-app
+          create_credentials_file: true
+          export_environment_variables: true
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Check only QA exact runtime service account and HMAC metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gcloud config get-value project 2>/dev/null)" = 'soridraw-app'
+          test "$(gcloud projects describe soridraw-app --format='value(projectNumber)' 2>/dev/null)" = '1083981050742'
+          sa='soridraw-qa-app518-runtime@soridraw-app.iam.gserviceaccount.com'
+          if ! gcloud iam service-accounts describe "$sa" --project=soridraw-app --format=json > "$RUNNER_TEMP/app518-runtime.json" 2> "$RUNNER_TEMP/app518-runtime.err"; then
+            echo 'APP518_QA_RUNTIME_SA=HOLD_NOT_ACCESSIBLE_OR_ABSENT'; exit 2
+          fi
+          python3 - "$RUNNER_TEMP/app518-runtime.json" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1],encoding='utf8'))
+          if d.get('email')!='soridraw-qa-app518-runtime@soridraw-app.iam.gserviceaccount.com' or d.get('disabled',False):
+            raise SystemExit('APP518_QA_RUNTIME_SA=HOLD_MISMATCH_OR_DISABLED')
+          print('APP518_QA_RUNTIME_SA=PASS_EXACT_QA')
+          PY
+          if ! gcloud secrets describe SORIDRAW_CATALOG_SERVER_HMAC_518 --project=soridraw-app --format=json > "$RUNNER_TEMP/app518-secret.json" 2> "$RUNNER_TEMP/app518-secret.err"; then
+            echo 'APP518_QA_HMAC_SECRET=HOLD_METADATA_UNAVAILABLE'; exit 2
+          fi
+          if ! gcloud secrets versions list SORIDRAW_CATALOG_SERVER_HMAC_518 --project=soridraw-app --format=json > "$RUNNER_TEMP/app518-secret-versions.json" 2> "$RUNNER_TEMP/app518-secret-versions.err"; then
+            echo 'APP518_QA_HMAC_SECRET=HOLD_VERSIONS_METADATA_UNAVAILABLE'; exit 2
+          fi
+          python3 - "$RUNNER_TEMP/app518-secret.json" "$RUNNER_TEMP/app518-secret-versions.json" <<'PY'
+          import json,sys
+          secret=json.load(open(sys.argv[1],encoding='utf8'))
+          versions=json.load(open(sys.argv[2],encoding='utf8'))
+          if secret.get('name','').split('/')[-2:]!=['secrets','SORIDRAW_CATALOG_SERVER_HMAC_518']:
+            raise SystemExit('APP518_QA_HMAC_SECRET=HOLD_WRONG_SECRET')
+          if not isinstance(versions,list) or len(versions)>30:
+            raise SystemExit('APP518_QA_HMAC_SECRET=HOLD_INVALID_VERSIONS')
+          enabled=[x for x in versions if x.get('state')=='ENABLED'
+                   and x.get('name','').startswith('projects/')
+                   and '/secrets/SORIDRAW_CATALOG_SERVER_HMAC_518/versions/' in x.get('name','')]
+          if len(enabled)!=1:
+            raise SystemExit('APP518_QA_HMAC_SECRET=HOLD_NOT_EXACTLY_ONE_ENABLED_VERSION')
+          print('APP518_QA_HMAC_SECRET_METADATA=PASS_ONE_ENABLED_VERSION')
+          print('APP518_QA_SECRET_CONTENT_READS=0; AUTH_KEYS_EXPORTED=0')
+          PY
+          # Recheck that we are not colliding with another QA APP518 deployment.
+          gcloud functions list --regions=asia-northeast3 --project=soridraw-app --format=json > "$RUNNER_TEMP/app518-functions.json"
+          python3 - "$RUNNER_TEMP/app518-functions.json" <<'PY'
+          import json,sys
+          funcs=json.load(open(sys.argv[1],encoding='utf8'))
+          if not isinstance(funcs,list) or len(funcs)>20:
+            raise SystemExit('APP518_QA_FUNCTIONS=HOLD_UNEXPECTED_INVENTORY')
+          names=[x.get('name','').split('/')[-1] for x in funcs]
+          if names!=['publishExploreOwnerFollower542']:
+            raise SystemExit('APP518_QA_FUNCTIONS=HOLD_ORIGINAL_OR_518_DRIFT')
+          print('APP518_QA_EXISTING_FOLLOW_FUNCTION=PASS_UNCHANGED')
+          print('APP518_QA_BACKEND_METADATA=PASS_READ_ONLY')
+          print('APP518_QA_FUNCTION_DEPLOY=0; D1_WRITE=0; R2_WRITE=0')
+          PY
+

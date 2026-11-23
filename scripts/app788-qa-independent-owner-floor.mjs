@@ -140,14 +140,25 @@ export function createApp788QaOwnerHistoryWithDo({
     // Atomic owner-floor CAS is a single-flight fence shared by distinct
     // operation IDs for the same expected revision, including after DO PITR.
     // An uncertain CAS holds: no admission, DO or D1 operation may follow.
-    if(f.value.pending!==null)return hold('OWNER_REVISION_HAS_PENDING_OPERATION');
     const pending={actorUid:a.actorUid,canonicalOperationId:a.canonicalOperationId,
       expectedRevision:a.expectedRevision,desired:a.desired};
-    let locked;
-    try{locked=await bucket.put(f.key,JSON.stringify({...f.value,pending}),
-       options({etagMatches:f.etag}));}
-    catch{return hold('PENDING_FLOOR_CAS_ACK_UNKNOWN')}
-    if(!locked?.etag)return hold('PENDING_FLOOR_CONCURRENT_CAS_OR_UNKNOWN');
+    if(f.value.pending!==null){
+      // Same ID can resume only when its immutable admission AND DO
+      // receipt are both authoritatively absent (checked above). This
+      // repairs a lost ACK for the floor CAS without inventing a new ID.
+      const prior=f.value.pending;
+      if(prior.actorUid!==pending.actorUid||
+         prior.canonicalOperationId!==pending.canonicalOperationId||
+         prior.expectedRevision!==pending.expectedRevision||
+         prior.desired!==pending.desired)
+        return hold('OWNER_REVISION_HAS_DIFFERENT_PENDING_OPERATION');
+    }else{
+      let locked;
+      try{locked=await bucket.put(f.key,JSON.stringify({...f.value,pending}),
+         options({etagMatches:f.etag}));}
+      catch{return hold('PENDING_FLOOR_CAS_ACK_UNKNOWN')}
+      if(!locked?.etag)return hold('PENDING_FLOOR_CONCURRENT_CAS_OR_UNKNOWN');
+    }
     const entry=await claim.claim({env,reservation:a});
     if(entry.status!=='ADMISSION_ONLY_NOT_D1_COMMIT')
      return hold('R2_ADMISSION_DUPLICATE_OR_OUTCOME_UNKNOWN');

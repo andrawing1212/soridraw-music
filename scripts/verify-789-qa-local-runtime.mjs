@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {resolve} from 'node:path';
+import {readFileSync} from 'node:fs';
 const [bundle,installDir]=process.argv.slice(2);
 assert(bundle&&installDir);
 const require=createRequire(resolve(installDir,'package.json'));
@@ -14,7 +15,7 @@ async function scenario(waitMs){
   QA789_CUTOVER:'qa789_cutover_'+'b'.repeat(32),QA789_EPOCH:'c'.repeat(32),
   QA789_ACCESS:'d'.repeat(64),QA789_DO_NAME:'qa789_123456789'};
  const mf=new Miniflare({
-  modules:true,scriptPath:resolve(bundle),compatibilityDate:'2026-06-17',
+  modules:true,script:readFileSync(resolve(bundle),'utf8'),compatibilityDate:'2026-06-17',
   cf:false,bindings,
   durableObjects:{OWNER558_DO:{className:'OwnerFollowIsolated558',useSQLite:true}},
   d1Databases:{QA789_D1:'00000000-0000-4000-8000-000000000789'},

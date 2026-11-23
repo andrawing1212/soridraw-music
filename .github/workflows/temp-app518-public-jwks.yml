@@ -1,16 +1,21 @@
-name: APP518 QA official public GitHub JWKS lookup
+name: APP518 QA signed official public key pin source verification
 on:
+  push:
+    branches: [fix/app518-qa-static-github-jwks]
+    paths:
+      - 'cloudflare/media-worker/src/app518QaGithubOidc518.js'
+      - 'cloudflare/media-worker/src/app518QaR2Lifecycle518.js'
+      - 'qa/app518/live/**'
+      - '.github/workflows/app782-app518-qa-firebase-wif-readonly.yml'
+      - '.github/workflows/temp-app518-public-jwks.yml'
   pull_request:
     branches: [main]
-    paths:
-      - 'qa/app518/live/inspect-public-github-jwks518.mjs'
-      - '.github/workflows/temp-app518-public-jwks.yml'
 permissions:
   contents: read
 jobs:
-  official_public_keys_only:
+  source_only:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 7
     steps:
       - uses: actions/checkout@v4
         with:
@@ -18,5 +23,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Fetch official public-only signing keys, no credentials
-        run: node qa/app518/live/inspect-public-github-jwks518.mjs
+      - name: Verify synthetic RSA signature, pinned JWKS expiry and fake issuer rejection
+        run: |
+          set -euo pipefail
+          node qa/app518/live/verify-github-signed518.mjs
+          node qa/app518/live/verify-r2-lifecycle518.mjs
+          node --check qa/app518/live/inspect-public-github-jwks518.mjs
+          node --check qa/app518/live/r2-manifest518.mjs
+          node --check cloudflare/media-worker/src/app518QaR2Lifecycle518.js
+          echo 'APP518_QA_PINNED_RSA_SOURCE_ONLY_PASS_CLOUD_MUTATIONS_ZERO'

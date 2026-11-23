@@ -39,7 +39,7 @@ const bucket={
 let now=1800000000000,doMap=new Map(),alarm=null,issued=0,relayCalls=0;
 let alarmReadFailure=false,receiptReadFailure=false,alarmCalls=0;
 const storage={
- async get(k){if(receiptReadFailure)throw Error('DO_READ_UNAVAILABLE');
+ async get(k){if(receiptReadFailure)throw Error(typeof receiptReadFailure==='string'?receiptReadFailure:'DO_READ_UNAVAILABLE');
   return doMap.has(k)?structuredClone(doMap.get(k)):null},
  async getAlarm(){alarmCalls++;if(alarmReadFailure)throw Error('DO_ALARM_READ_UNAVAILABLE');return alarm},
  async setAlarm(t){alarmCalls++;alarm=t},
@@ -115,8 +115,21 @@ assert.equal((await runtime.inspectReceipt({...a,priorR2Revision:99})).reason,'R
 assert.equal((await runtime.inspectReceipt({...a,canonicalOperationId:'qa788MissingOperation0001'})).status,'absent');
 receiptReadFailure=true;
 assert.equal((await runtime.inspectReceipt(a)).reason,'RECEIPT_READ_OR_STATE_UNVERIFIED');
+assert.equal((await runtime.inspectReceipt(a,{qaDiagnostic:true})).diagnostic,'STATE_READ__UNCLASSIFIED');
+receiptReadFailure='Cannot perform I/O on behalf of a different request. sentinel-secret';
+assert.equal((await runtime.inspectReceipt(a,{qaDiagnostic:true})).diagnostic,'STATE_READ__CROSS_CONTEXT');
+assert.equal((await runtime.inspectReceipt(a)).diagnostic,undefined);
 receiptReadFailure=false;alarmReadFailure=false;
+const savedMap=doMap;
+doMap=new Map([...savedMap].map(([k,v])=>[k,structuredClone(v)]));
+const badState=doMap.get('app755-owner-follow-pending-v1');
+badState.entries[0].delivery.attempts=4;
+assert.equal((await runtime.inspectReceipt(a,{qaDiagnostic:true})).diagnostic,
+ 'STATE_VALIDATE_ENTRY_DELIVERY__PERSISTED_STATE_UNVERIFIED');
+assert.equal((await runtime.inspectReceipt(a)).diagnostic,undefined);
+doMap=savedMap;
 assert.equal((await runtime.find(a)).status,'found');
+console.log('APP789_QA_DIAGNOSTIC_CLASSIFIES_CONTEXT_AND_INVALID_RECORD_NO_RAW_DATA=PASS');
 console.log('APP789_RECEIPT_INSPECTION_ALARM_FAILURE_NO_WRITES_EXACT_IDENTITY=PASS');
 now+=1000;
 assert.equal((await runtime.alarm()).retried,1);

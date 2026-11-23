@@ -50,6 +50,8 @@ async function scenario(waitMs){
   check(commit,200,'QA788_IMMUTABLE_SETTLED_AND_FLOOR_ADVANCED');
   assert.equal(commit.value.d1RowsWritten,1);
   assert.equal(commit.value.r2ProjectionSettled,true);
+  assert.equal(commit.value.stage,'POSTCOMMIT_RECEIPT');
+  assert.equal(commit.value.diagnostic,null);
   assert.equal(d1.following,1);
   const history=await call('GET','/qa789/do/history');
   check(history,200,'QA788_READ_ONLY_HISTORY');assert.equal(history.value.floorD1Revision,8);assert.equal(history.value.pending,false);

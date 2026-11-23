@@ -43,9 +43,9 @@ export function createApp761ProductionOwnerDoRuntime({
      await guard();
      return receipts.find(ticket);
    },
-   async inspectReceipt(ticket){
+   async inspectReceipt(ticket,options){
      await guard();
-     return receipts.inspectReceipt(ticket);
+     return receipts.inspectReceipt(ticket,options);
    },
    async reserve(ticket){
      await guard();

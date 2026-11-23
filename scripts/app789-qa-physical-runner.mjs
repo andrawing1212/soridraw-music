@@ -231,6 +231,15 @@ async function test(){
   HOLD('TWO_DIFFERENT_OPS_SAME_REVISION_NOT_SINGLE_FLIGHT');
  const winner=winners[0].id;
  const commit=await get('POST','/qa789/commit',{canonicalOperationId:winner});
+ // Log only fixed diagnostic codes and boolean/number evidence, never raw
+ // body, receipt, authorization header, exception text or any identifiers.
+ const diagnostic=commit.value?.diagnostic;
+ const safeDiagnostic=typeof diagnostic==='string'&&/^[A-Z_]{1,120}$/.test(diagnostic)?
+  diagnostic:'NONE';
+ console.log('APP789_COMMIT_DIAGNOSTIC '+JSON.stringify({
+  http:commit.code,stage:commit.value?.stage==='POSTCOMMIT_RECEIPT'?'POSTCOMMIT_RECEIPT':'BEFORE_OR_UNKNOWN',
+  d1W1:commit.value?.d1RowsWritten===1,r2Projection:commit.value?.r2ProjectionSettled===true,
+  diagnostic:safeDiagnostic}));
  assertStatus(commit,200,'QA788_IMMUTABLE_SETTLED_AND_FLOOR_ADVANCED');
  if(commit.value.d1RowsWritten!==1||commit.value.r2ProjectionSettled!==true)
   HOLD('REAL_QA_D1_W1_AND_R2_PROJECTION_MISSING');

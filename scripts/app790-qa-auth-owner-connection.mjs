@@ -130,6 +130,12 @@ export function createApp790QaOwnerConnection({
  return Object.freeze({
   async bootstrap(a){await guard();if(!scopeTicket(a)||!await markerMatches(a))return hold('QA_GENESIS_MARKER_UNVERIFIED');return engine.bootstrap(a)},
   async reserve(request,a){await guard();if(!await authenticate(request,a)||!await markerMatches(a))return hold('QA_SIGNED_ACTOR_OR_BASELINE_UNVERIFIED');return engine.reserve(a)},
+  async inspectReceipt(a,expectedReceiptId){
+   await guard();if(!scopeTicket(a)||!ID.test(expectedReceiptId||''))return hold('QA_EXACT_RECEIPT_REQUIRED');
+   const v=await store.inspectReceipt(a,{qaDiagnostic:true});
+   if(v.status!=='found'||v.receipt.operationId!==expectedReceiptId)return hold('QA_EXACT_RECEIPT_UNVERIFIED');
+   return v;
+  },
   async finalize(a,expectedReceiptId){
    await guard();if(!scopeTicket(a)||!ID.test(expectedReceiptId||''))return hold('QA_EXACT_RECEIPT_REQUIRED');
    const v=await store.inspectReceipt(a);

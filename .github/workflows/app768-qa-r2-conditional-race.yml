@@ -28,6 +28,9 @@ on:
       - 'scripts/app789-qa-settlement-recovery.mjs'
       - 'scripts/app790-qa-auth-owner-connection.mjs'
       - 'scripts/verify-790-qa-auth-owner-connection.mjs'
+      - 'cloudflare/explore-worker/experiments/owner-follow-qa790-entry.mjs'
+      - 'scripts/qa790-local-worker-fixture.mjs'
+      - 'scripts/verify-790-qa-browser-local.mjs'
       - '.github/workflows/app768-qa-r2-conditional-race.yml'
 permissions:
   contents: read
@@ -87,6 +90,17 @@ jobs:
           set -euo pipefail
           npm install --prefix "$RUNNER_TEMP/app789-local" --no-save --no-package-lock --no-audit --no-fund miniflare@4.20260730.0
           node scripts/verify-789-qa-local-runtime.mjs /tmp/app789-qa-bundle-check.mjs "$RUNNER_TEMP/app789-local"
+      - name: APP790 exact QA browser candidate local workerd integration
+        timeout-minutes: 4
+        run: |
+          set -euo pipefail
+          for file in owner-follow-qa790-entry.mjs owner-follow-qa-real-auth-749.mjs; do
+            cp "cloudflare/explore-worker/experiments/$file" "$RUNNER_TEMP/app789-frozen/cloudflare/explore-worker/experiments/"
+          done
+          cp scripts/app790-qa-auth-owner-connection.mjs scripts/qa790-local-worker-fixture.mjs "$RUNNER_TEMP/app789-frozen/scripts/"
+          npx --yes esbuild@0.25.12 "$RUNNER_TEMP/app789-frozen/cloudflare/explore-worker/experiments/owner-follow-qa790-entry.mjs" --bundle --format=esm --platform=browser --target=es2022 --outfile=/tmp/app790-candidate.mjs
+          npx --yes esbuild@0.25.12 "$RUNNER_TEMP/app789-frozen/scripts/qa790-local-worker-fixture.mjs" --bundle --format=esm --platform=browser --target=es2022 --outfile=/tmp/app790-local-fixture.mjs
+          node scripts/verify-790-qa-browser-local.mjs /tmp/app790-local-fixture.mjs "$RUNNER_TEMP/app789-local"
   live:
     if: false # APP785 QA exact one-shot PASS and exact cleanup complete; do not auto-repeat
     env:

@@ -25,7 +25,7 @@ export function createApp790QaOwnerConnection({
     !env.QA790_R2||!state?.storage||config?.projectId!=='soridraw-app'||
     String(config.projectNumber)!=='1083981050742'||!UID.test(config.ownerUid||'')||
     !UID.test(config.actorUid||'')||config.ownerUid===config.actorUid||
-    !EPOCH.test(config.authEpoch||'')||!/^[a-f0-9]{64}$/.test(config.hmacSecret||'')||
+    !EPOCH.test(config.authEpoch||'')||!/^[a-f0-9]{64}\n?$/.test(config.hmacSecret||'')||
     [verifyBoundOwner,verifyTrustedEpoch,verifySettledCanonical,readQaOwnerMarker,
      sendOwnerFollowHttp539,send,now].some(x=>typeof x!=='function'))
   throw Error('APP790_ISOLATED_QA_DEPENDENCIES_REQUIRED');

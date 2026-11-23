@@ -138,9 +138,15 @@ export class OwnerFollowIsolated558 extends Original{
     if(stored?.archiveUsed||await s.get('pending'))return hold('UNRELATED_RECEIPT_OR_ALARM_PRESENT');
     // Only exact run keys; no list or deleteAll. Legacy baseline remains.
     await s.deleteAlarm();
-    await s.delete(RECEIPTS);
     for(const k of new Set([...Object.values(ka),...Object.values(kb)]))await e.QA790_R2.delete(k);
-    await s.delete(CONTROL);
+    // Keep the run receipt and control until ALL exact R2 deletes succeeded.
+    // Retrying cleanup after a failed delete never discards the evidence.
+    await s.transaction(async tx=>{
+     const latest=await tx.get(CONTROL),prior=await tx.get(LEGACY);
+     if(!exactControl(latest,e,c)||!sameMarker(latest.marker,control.marker)||
+       !validOld(prior,c)||prior.version!==old.version)throw Error('CLEANUP_STATE_DRIFT');
+     await tx.delete(RECEIPTS);await tx.delete(CONTROL);
+    });
     return response(200,{status:'QA790_EXACT_CLEANUP',clean:true,completed:complete});
    }
    if(!control)return hold('REAL_OWNER_BASELINE_REQUIRED');

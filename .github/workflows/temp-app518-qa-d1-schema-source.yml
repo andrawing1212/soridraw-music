@@ -1,0 +1,34 @@
+name: APP518 QA D1 schema source test one-shot
+on:
+  push:
+    branches: [feat/app518-qa-d1-isolated-schema]
+    paths:
+      - 'qa/app518/live/apply-qa-d1-schema518.mjs'
+      - 'qa/app518/live/verify-qa-d1-schema518.mjs'
+      - '.github/workflows/app782-app518-qa-firebase-wif-readonly.yml'
+      - '.github/workflows/temp-app518-qa-d1-schema-source.yml'
+permissions:
+  contents: read
+jobs:
+  schema-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Execute pinned candidate D1 migrations in SQLite RAM only
+        shell: bash
+        run: |
+          set -euo pipefail
+          pin=864f796da24413309567198c9de502b13cdedd50
+          git cat-file -e "$pin^{commit}"
+          export APP518_PINNED_CANDIDATE_DIR="$RUNNER_TEMP/app518-pinned-candidate"
+          git worktree add --detach "$APP518_PINNED_CANDIDATE_DIR" "$pin"
+          node --check qa/app518/live/apply-qa-d1-schema518.mjs
+          node --experimental-sqlite qa/app518/live/verify-qa-d1-schema518.mjs
+          echo 'APP518_QA_D1_SCHEMA_SOURCE_AND_SQLITE=PASS; CLOUD_MUTATIONS=0'

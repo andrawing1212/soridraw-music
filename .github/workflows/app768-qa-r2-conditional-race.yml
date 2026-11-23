@@ -1,7 +1,5 @@
 name: APP777 QA Firebase RS256 + common ingress offline safety
 on:
-  issue_comment:
-    types: [created]
   pull_request:
     branches: [main]
     paths:
@@ -59,13 +57,7 @@ jobs:
           node --check scripts/app785-qa-follow-compatibility.mjs
           node scripts/verify-785-qa-worker-bridge.mjs
   live:
-    if: >-
-      github.event_name == 'issue_comment' &&
-      github.repository == 'andrawing1212/soridraw-music' &&
-      github.actor == github.repository_owner &&
-      github.event.issue.number == 1380 &&
-      github.event.issue.pull_request != null &&
-      startsWith(github.event.comment.body, '/app785-qa ')
+    if: false # APP785 QA exact one-shot PASS and exact cleanup complete; do not auto-repeat
     env:
       APP785_QA_APPROVAL: APP785_ISOLATED_ONLY
     runs-on: ubuntu-24.04

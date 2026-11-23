@@ -28,6 +28,11 @@ try{
  assert(body.bindings.every(x=>x.type==='inherit'&&x.version_id===version));
  assert.equal(body.modules.length,3);
  assert.equal(body.deploy,undefined);
+ const inheritedDate=makeInactiveVersionBody({oldVersion:version,
+  oldSettings:{bindings,compatibility_date:'2026-10-01',compatibility_flags:[]},
+  pinnedVersion:{...v,compatibility_date:undefined,compatibility_flags:undefined},candidateDir:root});
+ assert.equal(inheritedDate.compatibility_date,'2026-10-01');
+ assert.deepEqual(inheritedDate.compatibility_flags,[]);
  assert.throws(()=>makeInactiveVersionBody({oldVersion:version,
   oldSettings:{bindings},pinnedVersion:{...v,id:'00000000-0000-0000-0000-000000000000'},candidateDir:root}),/HOLD/);
  assert.throws(()=>makeInactiveVersionBody({oldVersion:version,

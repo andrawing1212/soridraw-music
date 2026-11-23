@@ -259,8 +259,19 @@ async function test783(){
   if(i<13)await delay(1500);
  }
  if(!ready)issue('APP783_QA_EMPTY_BASELINE_NOT_READY');
- const denied=await wfetch(s,'POST','/app783/claim',undefined,false);
- if(denied.code!==403||denied.value?.status!=='DENIED')issue('QA_UNAUTHENTICATED_WRITE_ALLOWED');
+ let denied=null;
+ for(let n=0;n<6;n++){
+  try{denied=await wfetch(s,'POST','/app783/claim',undefined,false);}
+  catch{denied={code:0,value:null};}
+  const label=denied.value?.status==='DENIED'?'DENIED':
+   denied.value?.status==='NO_ROUTE'?'NO_ROUTE':'OTHER_OR_NON_JSON';
+  console.log('APP783_UNAUTH_QA_HTTP='+denied.code+'_STATUS='+label);
+  if(denied.code===403&&denied.value?.status==='DENIED')break;
+  if(![0,404,503].includes(denied.code))break;
+  if(n<5)await delay(1500);
+ }
+ if(denied.code!==403||denied.value?.status!=='DENIED')
+  issue('QA_UNAUTHENTICATED_WRITE_NOT_PROVEN');
  const early=await wfetch(s,'POST','/app783/settle');
  if(early.code!==409||early.value?.reason!=='IMMUTABLE_ADMISSION_NOT_FOUND_OR_MISMATCH')
   issue('QA_SETTLED_WITHOUT_ADMISSION');

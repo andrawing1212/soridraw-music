@@ -22,18 +22,12 @@ const validRun=x=>/^[0-9]{8,20}$/.test(clean(x));
 const validSha=x=>/^[a-f0-9]{40}$/.test(clean(x));
 const resource=(env)=>{
  const run=env?.SORIDRAW_APP518_QA_RUN_ID;
- const recoveryTarget=env?.SORIDRAW_APP518_QA_RECOVERY_TARGET_RUN_ID;
- const recovery=recoveryTarget==='45157596620'
-  &&env?.SORIDRAW_APP518_QA_RECOVERY_MODE==='APP518_ONLY_ORPHAN_R2_CLEANUP';
- if(recoveryTarget!==undefined&&!recovery)
-  fail('HOLD_QA_R2_RECOVERY_TARGET_NOT_AUTHORIZED');
- const target=recovery?recoveryTarget:run;
- if(!validRun(run)||!validRun(target)||!validSha(env?.SORIDRAW_APP518_QA_WORKFLOW_SHA)
+ if(!validRun(run)||!validSha(env?.SORIDRAW_APP518_QA_WORKFLOW_SHA)
   ||env?.SORIDRAW_APP518_QA_ACCOUNT_ID_518!==QA.account
   ||env?.FIREBASE_PROJECT_ID!=='soridraw-app'
   ||env?.FIREBASE_PROJECT_NUMBER!=='1083981050742'
-  ||env?.SORIDRAW_APP518_PILOT_UID!=='qa518-'+target+'-owner'
-  ||env?.SORIDRAW_APP518_PILOT_FAVORITE_ID!=='qa518-'+target+'-song'
+  ||env?.SORIDRAW_APP518_PILOT_UID!=='qa518-'+run+'-owner'
+  ||env?.SORIDRAW_APP518_PILOT_FAVORITE_ID!=='qa518-'+run+'-song'
   ||typeof env?.SORIDRAW_APP518_QA_JWKS_JSON!=='string'
   ||env.SORIDRAW_APP518_QA_JWKS_JSON.length>8000
   ||!Number.isSafeInteger(Number(env?.SORIDRAW_APP518_QA_JWKS_AT_MS))
@@ -43,7 +37,7 @@ const resource=(env)=>{
   fail('HOLD_QA_R2_ENV_NOT_VERIFIED');
  const uid=env.SORIDRAW_APP518_PILOT_UID;
  const prefix=prefixFor(uid);
- return {run,uid,recovery,prefix,baseKey:prefix+'base-1.json',headKey:prefix+'journal.json',
+ return {run,uid,prefix,baseKey:prefix+'base-1.json',headKey:prefix+'journal.json',
   worker:'soridraw-app518-qa-r2-'+run};
 };
 const listPilot=async(env,ctx)=>{
@@ -189,19 +183,6 @@ const cleanup=async(env,ctx,readerToken,apiFetch)=>{
  const state=await inspect(env,ctx);
  if(state.code!=='QA518_R2_TWO_EXACT_KEYS_VALID')
   fail('HOLD_QA_R2_CLEANUP_CONTRACT');
- if(ctx.recovery){
-  const record=await read(env,ctx.headKey,ctx.uid);
-  const value=record?.json,id='qa518-45157596620-song';
-  if(value?.itemCount!==1||value?.deltas?.length!==3
-   ||value.deltas.some(d=>
-     d.upserts?.some(x=>x?.id!==id)||d.deletedIds?.some(x=>x!==id))
-   ||value.deltas[0]?.nextItemCount!==1
-   ||value.deltas[1]?.nextItemCount!==0
-   ||value.deltas[2]?.nextItemCount!==1
-   ||value.recentMutations?.length!==3
-   ||value.recentMutations.some(x=>!String(x?.id||'').startsWith('canonical518:'+id+':')))
-   fail('HOLD_QA_R2_RECOVERY_ORPHAN_NOT_EXACT_THREE_GENERATIONS');
- }
  // No CAS deletion in R2. It is safe ONLY because authenticated GitHub
  // inspection above proves the exact test Worker is ABSENT.
  for(const key of [ctx.headKey,ctx.baseKey]){
@@ -261,10 +242,8 @@ export const createApp518QaR2Lifecycle518=({
      fail('HOLD_QA_R2_REQUEST_SCOPE');
   }catch{return response('HOLD_QA_R2_REQUEST_SCOPE',409);}
   try{
-   if(body.action==='bootstrap'){
-    if(ctx.recovery)fail('HOLD_QA_R2_RECOVERY_CANNOT_BOOTSTRAP');
+   if(body.action==='bootstrap')
     return response('QA518_R2_BOOTSTRAP_RESULT',200,await bootstrap(env,ctx,now()));
-   }
    if(body.action==='inspect')
     return response('QA518_R2_INSPECT_RESULT',200,await inspect(env,ctx));
    const readerToken=request.headers.get('x-soridraw-qa-cf-worker-read');

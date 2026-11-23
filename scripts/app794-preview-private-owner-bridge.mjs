@@ -78,7 +78,7 @@ export function createApp794OwnerDoPort({state,env,enabled=APP794_PRIVATE_BRIDGE
     const store=storeFor(a.ownerUid);
     if(op==='inspect')return reply(200,await store.inspectReceipt(a));
     if(op==='reserve'){
-     if(a.operationId!==undefined)return reply(400,hold('SERVER_ID_REQUIRED'));
+     if(a.operationId!==undefined||a.durable!==undefined||a.ownerDoAlarmScheduled!==undefined||a.delivery!==undefined)return reply(400,hold('SERVER_ID_REQUIRED'));
      const v=await store.reserve(a);
      return receipt(v)&&fields.every(k=>v[k]===a[k])?reply(200,{status:'reserved',receipt:v}):reply(409,hold('RESERVE'));
     }
@@ -127,12 +127,12 @@ function core(env,uid,store,verifyCutover,now,send){
  return createApp792PreviewOwnerConnection({enabled:true,env,ownerUid:uid,privateReceiptStore:store,
   // The DO port checks the real idFromName binding on each receipt request;
   // this callback attests the private service boundary, not a new DO identity.
-  verifyBoundOwner:async()=>({verifiedOwnerDoIdentity:true,ownerUid:uid}),verifyCutover,now,send});
+  verifyBoundOwner:async()=>({verifiedPrivateReceiptBoundary:true,ownerUid:uid}),verifyCutover,now,send});
 }
 export function createApp794ExploreConnection({env,enabled=APP794_PRIVATE_BRIDGE_COMPILED_OPEN,
  verifyCutover,authenticate,preauthorizeCanonical,callCanonical,readPair,now=Date.now,send=fetch}={}){
  if(!enabled)return null;
- if(!scope(env)||[verifyCutover,authenticate,preauthorizeCanonical,callCanonical].some(x=>typeof x!=='function'))
+ if(!scope(env)||typeof env.OWNER_FOLLOW_RESERVATION_SERVICE_600?.fetch!=='function'||[verifyCutover,authenticate,preauthorizeCanonical,callCanonical].some(x=>typeof x!=='function'))
   throw Error('APP794_CANONICAL_DEPENDENCIES');
  const ownerService=async uid=>core(env,uid,remoteStore(env,uid),verifyCutover,now,send);
  const ingress=createApp792PreviewFollowIngress({enabled:true,verifyCutover,authenticate,preauthorizeCanonical,

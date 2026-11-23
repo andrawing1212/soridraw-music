@@ -71,7 +71,7 @@ export function createApp792PreviewOwnerConnection({
  const guard=async a=>{
   if(!valid(a)||a.ownerUid!==ownerUid)throw Error('SCOPE');
   const binding=await verifyBoundOwner({state,env,ownerUid});
-  if(binding?.verifiedOwnerDoIdentity!==true||binding.ownerUid!==ownerUid)throw Error('OWNER_BINDING');
+  if(binding?.ownerUid!==ownerUid||(privateReceiptStore?binding.verifiedPrivateReceiptBoundary!==true:binding.verifiedOwnerDoIdentity!==true))throw Error('OWNER_BINDING');
   const p=await verifyCutover({env,ticket:a});
   if(!cert(a,p))throw Error('SHARED_WRITER_CUTOVER_UNVERIFIED');
   return p;
@@ -116,10 +116,12 @@ export function createApp792PreviewOwnerConnection({
    const ticket=Object.fromEntries(fields.map(k=>[k,a[k]]));
    const w=await put(bucket,k.floor,{...f.v,pending:ticket},{etagMatches:f.etag});
    if(!w?.etag)return hold('OWNER_FLOOR_CAS_UNKNOWN');
-   const claimed=await put(bucket,k.admission,{kind:'APP792_ADMISSION_V1',...ticket},{etagDoesNotMatch:'*'});
-   if(!claimed?.etag)return hold('ADMISSION_ACK_UNKNOWN');
    const receipt=await store.reserve(ticket);
    if(!receiptMatches(ticket,receipt))return hold('DURABLE_RESERVATION_UNKNOWN');
+   // Persist the exact durable receipt ID in the independent admission.
+   // If reserve/claim ACK is lost the floor stays held: no writer permit.
+   const claimed=await put(bucket,k.admission,{kind:'APP792_ADMISSION_V1',...ticket,receiptId:receipt.operationId},{etagDoesNotMatch:'*'});
+   if(!claimed?.etag)return hold('ADMISSION_ACK_UNKNOWN');
    // This response can be issued once by the successful create-only
    // admission. Any replay receives HOLD, never a second writer permit.
    return {status:'ADMITTED_ONCE',receipt,deployAuthorized:false};
@@ -134,7 +136,7 @@ export function createApp792PreviewOwnerConnection({
    if(q.status!=='found')return q;
    const receipt=q.receipt,k=await keys(a);
    const admission=await parse(await bucket.get(k.admission));
-   if(admission?.v.kind!=='APP792_ADMISSION_V1'||!same(a,admission.v))
+   if(admission?.v.kind!=='APP792_ADMISSION_V1'||!same(a,admission.v)||admission.v.receiptId!==receipt.operationId)
     return hold('ADMISSION_MISSING_OR_CONFLICT');
    let f=await parse(await bucket.get(k.floor)),s=await parse(await bucket.get(k.settled));
    if(!floorOf(a,f?.v))return hold('OWNER_FLOOR_UNVERIFIED');
@@ -248,7 +250,7 @@ export function createApp792PreviewOwnerConnection({
       !fields.filter(k=>!['priorR2Revision','beforeFollowing','sameStateOnly'].includes(k)).every(k=>ad.v[k]===a[k]))
     return hold('REPLAY_ADMISSION_UNVERIFIED');
    const stored=await store.inspectReceipt(ad.v);
-   if(stored.status!=='found'||!receiptMatches(ad.v,stored.receipt))
+   if(stored.status!=='found'||!receiptMatches(ad.v,stored.receipt)||ad.v.receiptId!==stored.receipt.operationId)
     return hold('REPLAY_RECEIPT_UNVERIFIED');
    const v=await settle(stored.receipt);
    if(!['SETTLED','ALREADY_SETTLED'].includes(v.status))return v;
@@ -259,6 +261,35 @@ export function createApp792PreviewOwnerConnection({
   }catch{return hold('REPLAY_UNAVAILABLE')}
  }
  return Object.freeze({bootstrap,admit,settle,arm,alarm,replay,settleAndDeliver});
+}
+// APP794: exact lower-level writer fence for the canonical 354 intent
+// creation and 350 relation mutation (including 354 repair/recovery).
+// Called from the future pinned canonical module, not from public HTTP.
+// Only independently admitted work is eligible; no repair for pre-cutover
+// pending work until that work has been drained under the old writer.
+export async function verifyApp794CanonicalWriterFence({env,reservation:a,operation,phase,verifyCutover}={}){
+ if(env?.SORIDRAW_ENVIRONMENT!=='preview'||!valid(a)||!OP.test(a.operationId||'')||
+    a.operationId===a.canonicalOperationId||a.durable!==true||a.ownerDoAlarmScheduled!==true||
+    !['intent','relation'].includes(phase)||typeof verifyCutover!=='function')return false;
+ try{
+  if(!cert(a,await verifyCutover({env,ticket:a})))return false;
+  if(operation?.actor!==a.actorUid||operation.target!==a.ownerUid||operation.token!==a.cutoverToken||
+     operation.id!==a.canonicalOperationId||operation.following!==a.desired||
+     operation.expectedRevision!==a.expectedRevision||!rev(operation.revision)||operation.revision<=a.expectedRevision||
+     operation.settled!==false)return false;
+  const b=env.PROFILE_MEDIA,k=await keys(a);
+  const [f,ad,settled]=await Promise.all([parse(await b.get(k.floor)),parse(await b.get(k.admission)),b.head(k.settled)]);
+  if(!floorOf(a,f?.v)||!same(a,f.v.pending)||f.v.minOwnerRevision>a.priorR2Revision||settled||
+     ad?.v.kind!=='APP792_ADMISSION_V1'||!same(a,ad.v)||ad.v.receiptId!==a.operationId)return false;
+  if(phase==='relation'){
+   if(a.sameStateOnly===true)return false;
+   const ik='internal/explore/follow-intents-v354/'+[a.cutoverToken,a.actorUid,a.ownerUid].map(encodeURIComponent).join('/')+'.json';
+   const current=await parse(await b.get(ik));
+   if(!current||!['actor','target','token','id','following','expectedRevision','revision','settled'].every(k=>current.v[k]===operation[k]))return false;
+  }
+  const [f2,ad2]=await Promise.all([b.head(k.floor),b.head(k.admission)]);
+  return f2?.etag===f.etag&&ad2?.etag===ad.etag;
+ }catch{return false}
 }
 // Read actual existing canonical shapes without invoking repair or a writer.
 // The new generation field must be installed only during a separately

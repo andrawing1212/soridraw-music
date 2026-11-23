@@ -1,16 +1,11 @@
 import assert from 'node:assert/strict';
-import {copyFileSync,readFileSync} from 'node:fs';
+import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
+import {stagePinnedQaWorker518} from './stage-pinned-worker518.mjs';
 const candidate=process.env.APP518_PINNED_CANDIDATE_DIR;
 assert.ok(candidate?.includes('app518-pinned-candidate'));
-const target=join(candidate,'cloudflare/media-worker/src');
-const origin=join(process.cwd(),'cloudflare/media-worker/src');
-for(const name of ['app518QaGithubOidc518.js','app518QaSignedEntry518.js']){
- const src=readFileSync(join(origin,name),'utf8');
- assert.ok(src.includes('APP518'));
- copyFileSync(join(origin,name),join(target,name));
-}
+const {target}=stagePinnedQaWorker518({candidate});
 const original=readFileSync(join(target,'app518IsolatedQaWorker518.js'),'utf8');
 assert.ok(original.includes('trustedIsolatedQaProof=false'));
 assert.ok(original.includes('createApp518IsolatedQaHandler518({env}).fetch(request)'));
@@ -75,6 +70,23 @@ assert.equal(factoryCalls,0);
 assert.equal(oidcCalls,1);
 assert.equal((await handler.fetch(request('real-signed-token'),env)).status,200);
 assert.equal(factoryCalls,1);
+const fetcherModule=await import(pathToFileURL(join(target,'catalogFirebaseFetcher518.js')).href);
+let redirectMode='';
+const exact=fetcherModule.createExactFirebaseFetcher518({
+ sourceUrl:'https://qa-source.example.invalid/exact',
+ expectedHostname:'qa-source.example.invalid',
+ secret:'x'.repeat(48),
+ clock:()=>Date.parse('2026-11-23T02:00:00Z'),
+ fetcher:async(_url,options)=>{
+   redirectMode=options.redirect;
+   return new Response(null,{status:302,headers:{Location:'https://qa-source.example.invalid/foreign'}});
+ },
+});
+assert.equal(typeof exact,'function');
+await assert.rejects(exact('qa518-45123456789-owner','qa518-45123456789-song'),
+ /APP518_EXACT_SOURCE_UNAVAILABLE/);
+assert.equal(redirectMode,'manual');
+console.log('APP518_QA_FIREBASE_REDIRECT_302_DENIED=PASS');
 console.log('APP518_QA_STAGED_PINNED_WORKER_WRAPPER_REQUIRES_SIGNED_GITHUB_PROOF=PASS');
 console.log('APP518_QA_SIGNED_ENTRY_OFFICIAL_JWKS_PIN_FRESHNESS_REQUIRED=PASS');
 console.log('APP518_QA_NO_WORKER_SIDE_JWKS_NETWORK_FALLBACK=PASS');

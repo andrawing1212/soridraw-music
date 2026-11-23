@@ -12,6 +12,7 @@ const OWNER='qa789OwnerSynthetic',ACTOR='qa789ActorSynthetic';
 const TABLE='app768_qa_synthetic_follow';
 const UUID=/^qa789_[a-f0-9]{16}$/;
 const OP=/^qa789_operation_[a-z0-9_]{16,50}$/;
+const RECEIPT=/^qa789_do_receipt_[a-f0-9]{32}$/;
 const reply=(status,body)=>Response.json(body,{status,headers:{'Cache-Control':'no-store'}});
 const fail=reason=>reply(409,{status:'HOLD',reason});
 const exactEnv=e=>e?.SORIDRAW_ENVIRONMENT==='preview'&&
@@ -163,14 +164,19 @@ export class OwnerFollowIsolated558 extends OriginalOwnerDO {
    };
    if(path==='/qa789/do/finalize'&&request.method==='POST'){
     const b=await request.json(),selected=qa.make(b?.canonicalOperationId,7,13,true);
-    if(!OP.test(selected.canonicalOperationId))return fail('INVALID_ID');
-    const v=await finalizeExact(selected,{readOnly:true});
-    return reply(v.status==='HOLD'?409:200,{status:v.status,reason:v.reason||null});
+    if(!OP.test(b?.canonicalOperationId||'')||!RECEIPT.test(b?.expectedReceiptId||''))
+     return fail('EXACT_RECOVERY_ID_REQUIRED');
+    // A fresh DO request only verifies the existing receipt and exact
+    // D1/R2 proof, then completes conditional settlement. No canonical write.
+    const v=await finalizeExact(selected,{readOnly:true,expectedReceiptId:b.expectedReceiptId});
+    return reply(v.status==='HOLD'?409:200,{status:v.status,reason:v.reason||null,
+     diagnostic:v.diagnostic||null,stage:'POSTCOMMIT_RECEIPT',
+     d1RowsWritten:0,canonicalRetryAuthorized:false});
    }
    if(path==='/qa789/commit'&&request.method==='POST'){
     const env=this.env,b=await request.json();
     const id=b?.canonicalOperationId;
-    if(!OP.test(id))return fail('CANONICAL_ID_INVALID');
+    if(!OP.test(id||'')||!RECEIPT.test(b?.expectedReceiptId||''))return fail('EXACT_COMMIT_ID_REQUIRED');
     const opA=op(env)(id);
     const k=await keys(env,opA);
     // Stop before D1 W1 unless exact conditional immutable R2 admission
@@ -196,7 +202,7 @@ export class OwnerFollowIsolated558 extends OriginalOwnerDO {
     // Keep the original authenticated request inside this QA DO.
     // Only an exact absent-commit proof permits the synthetic D1 mutation.
     if(await pair(env)!==false)return fail('PRECOMMIT_D1_NOT_INITIAL');
-    const pre=await finalizeExact(opA);
+    const pre=await finalizeExact(opA,{expectedReceiptId:b.expectedReceiptId});
     if(!pre.receiptId)return fail('PRECOMMIT_'+pre.reason);
     if(pre.status!=='HOLD'||pre.reason!=='EXACT_CANONICAL_SETTLEMENT_NOT_PROVEN')
      return fail('PRECOMMIT_NOT_EXACT_HOLD');
@@ -210,13 +216,12 @@ export class OwnerFollowIsolated558 extends OriginalOwnerDO {
      onlyIf:{etagDoesNotMatch:'*'},
      httpMetadata:{contentType:'application/json'}});
     if(!put?.etag)return fail('CANONICAL_R2_PROJECTION_UNCERTAIN');
-    // Re-read the exact durable receipt, but do not rearm the alarm while
-    // checking the completed write. Never substitute the earlier receipt
-    // for missing/corrupt storage; require the same server operation ID.
-    const v=await finalizeExact(opA,{readOnly:true,expectedReceiptId:pre.receiptId});
-    return reply(v.status==='HOLD'?409:200,{status:v.status,reason:v.reason||null,
-      diagnostic:v.diagnostic||null,stage:'POSTCOMMIT_RECEIPT',
-      d1RowsWritten:1,r2ProjectionSettled:true});
+    // End the canonical write request before the postcommit DO storage
+    // read that physically failed with STATE_READ__OBJECT_RESET.
+    // The caller may only continue on a separate settlement-only request.
+    return reply(200,{status:'QA789_CANONICAL_WRITTEN_PENDING_SETTLEMENT',
+      stage:'CANONICAL_WRITTEN',d1RowsWritten:1,r2ProjectionSettled:true,
+      canonicalRetryAuthorized:false});
    }
    if(path==='/qa789/do/history'&&request.method==='GET'){
     const b=qa.engine, v=await b.inspect(a);

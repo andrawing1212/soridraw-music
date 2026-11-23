@@ -3,6 +3,7 @@
 // Candidate version is 0% traffic; always restore original QA583 100%.
 // NO new DO namespace/migration, new D1/R2/secret, or user data.
 import {randomBytes,createHash} from 'node:crypto';
+import {continueQa789Settlement} from './app789-qa-settlement-recovery.mjs';
 import {readFileSync,writeFileSync,existsSync} from 'node:fs';
 import {resolve,join} from 'node:path';
 const ACCOUNT='b60fcd62c679c64db19f0b0e0c2f3429';
@@ -230,19 +231,37 @@ async function test(){
  if(winners.length!==1||race.filter(v=>v.code===409).length!==1)
   HOLD('TWO_DIFFERENT_OPS_SAME_REVISION_NOT_SINGLE_FLIGHT');
  const winner=winners[0].id;
- const commit=await get('POST','/qa789/commit',{canonicalOperationId:winner});
+ const expectedReceiptId=winners[0].x.value?.receipt?.operationId;
+ if(!/^qa789_do_receipt_[a-f0-9]{32}$/.test(expectedReceiptId||'')||
+    winners[0].x.value?.receipt?.canonicalOperationId!==winner)
+  HOLD('EXACT_RESERVED_RECEIPT_ID_UNVERIFIED');
+ const commit=await get('POST','/qa789/commit',{canonicalOperationId:winner,expectedReceiptId});
  // Log only fixed diagnostic codes and boolean/number evidence, never raw
  // body, receipt, authorization header, exception text or any identifiers.
  const diagnostic=commit.value?.diagnostic;
  const safeDiagnostic=typeof diagnostic==='string'&&/^[A-Z_]{1,120}$/.test(diagnostic)?
   diagnostic:'NONE';
  console.log('APP789_COMMIT_DIAGNOSTIC '+JSON.stringify({
-  http:commit.code,stage:commit.value?.stage==='POSTCOMMIT_RECEIPT'?'POSTCOMMIT_RECEIPT':'BEFORE_OR_UNKNOWN',
+  http:commit.code,stage:commit.value?.stage==='CANONICAL_WRITTEN'?'CANONICAL_WRITTEN':'BEFORE_OR_UNKNOWN',
   d1W1:commit.value?.d1RowsWritten===1,r2Projection:commit.value?.r2ProjectionSettled===true,
   diagnostic:safeDiagnostic}));
- assertStatus(commit,200,'QA788_IMMUTABLE_SETTLED_AND_FLOOR_ADVANCED');
- if(commit.value.d1RowsWritten!==1||commit.value.r2ProjectionSettled!==true)
+ assertStatus(commit,200,'QA789_CANONICAL_WRITTEN_PENDING_SETTLEMENT');
+ if(commit.value.d1RowsWritten!==1||commit.value.r2ProjectionSettled!==true||
+    commit.value.canonicalRetryAuthorized!==false)
   HOLD('REAL_QA_D1_W1_AND_R2_PROJECTION_MISSING');
+ const {attempts,result:finalized}=await continueQa789Settlement({
+  get,commit,canonicalOperationId:winner,expectedReceiptId});
+ const finalDiagnostic=finalized.value?.diagnostic;
+ console.log('APP789_SETTLEMENT_DIAGNOSTIC '+JSON.stringify({
+  http:finalized.code,attempts,d1W0:finalized.value?.d1RowsWritten===0,
+  diagnostic:typeof finalDiagnostic==='string'&&/^[A-Z_]{1,120}$/.test(finalDiagnostic)?
+   finalDiagnostic:'NONE'}));
+ if(finalized.code!==200||
+    !['QA788_IMMUTABLE_SETTLED_AND_FLOOR_ADVANCED','QA788_FLOOR_ALREADY_SETTLED_NO_WRITE']
+      .includes(finalized.value?.status))
+  assertStatus(finalized,200,'QA788_IMMUTABLE_SETTLED_AND_FLOOR_ADVANCED');
+ if(finalized.value?.d1RowsWritten!==0||finalized.value?.canonicalRetryAuthorized!==false)
+  HOLD('RECOVERY_CANONICAL_W0_UNVERIFIED');
  const history=await get('GET','/qa789/do/history');
  assertStatus(history,200,'QA788_READ_ONLY_HISTORY');
  if(history.value.floorD1Revision!==8||history.value.pending!==false)

@@ -1,0 +1,154 @@
+name: APP518 Retire Unused Migration Inspect Worker (Manual, One Worker)
+
+# Does not execute on push. Changes exactly one diagnostic Worker, NOT D1/R2 objects.
+# A 30-day zero-request screenshot and zero-trigger screenshot were supplied
+# by the director. All runtime safety conditions must still be checked here.
+on:
+  workflow_dispatch:
+    inputs:
+      approve_single_worker_retirement:
+        description: "Type RETIRE_ONLY_MIGRATION_INSPECT to authorize replacing ONLY the unused diagnostic Worker"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Serialize with the existing shared D1 release workflow.
+concurrency:
+  group: soridraw-shared-d1-release
+  cancel-in-progress: false
+
+jobs:
+  retire:
+    if: ${{ inputs.approve_single_worker_retirement == 'RETIRE_ONLY_MIGRATION_INSPECT' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      TARGET: soridraw-explore-migration-inspect
+      OLD_VERSION: 077b801f-1661-4f90-b99a-42c0c046fda9
+      CANDIDATE_SHA: 95174aba64e2dfa41e3c17606a4d75d654a5965f
+
+    steps:
+      - name: Checkout exact source-only retirement candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 95174aba64e2dfa41e3c17606a4d75d654a5965f
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify immutable source, disabled bindings and tested fail-closed gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git hash-object cloudflare/explore-worker/migration-inspect-retire-518.mjs)" = "1addff89c8e2e888fbf99a66c0cc2a38dd0f3440"
+          test "$(git hash-object cloudflare/explore-worker/wrangler.migration-inspect-retire-518.jsonc)" = "598e603196b68af50c9ded1ce5acec41573ae274"
+          test "$(git hash-object cloudflare/explore-worker/package.json)" = "b57f50c1273d3efba340b99ee242f0161b1e7ebb"
+          node --check cloudflare/explore-worker/migration-inspect-retire-518.mjs
+          node scripts/verify-518-account-d1-cutover.mjs --self-test
+          node - <<'NODE'
+          const fs=require('node:fs'), assert=require('node:assert/strict');
+          const cfg=JSON.parse(fs.readFileSync('cloudflare/explore-worker/wrangler.migration-inspect-retire-518.jsonc','utf8'));
+          assert.equal(cfg.name,'soridraw-explore-migration-inspect');
+          assert.equal(cfg.main,'./migration-inspect-retire-518.mjs');
+          assert.equal(cfg.keep_vars,false);
+          for(const key of ['d1_databases','r2_buckets','services'])
+            assert.deepEqual(cfg[key],[]);
+          assert.deepEqual(cfg.durable_objects?.bindings,[]);
+          assert.deepEqual(cfg.triggers?.crons,[]);
+          assert.deepEqual(cfg.vars,{});
+          console.log('APP518_DIAGNOSTIC_RETIRE_SOURCE_AND_ZERO_BINDINGS=PASS');
+          NODE
+      - name: Install already pinned Wrangler, only for dry-run and scoped deploy
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Preflight exact inactive diagnostic Worker and original rollback version
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo 'HOLD_CLOUDFLARE_TOKEN_UNAVAILABLE'; exit 2; }
+          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$TARGET"
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Accept: application/json")
+          deployment="$(curl -fsS --max-time 20 "${auth[@]}" "$API/deployments")"
+          settings="$(curl -fsS --max-time 20 "${auth[@]}" "$API/settings")"
+          curl -fsS --max-time 20 "${auth[@]}" "$API/versions/$OLD_VERSION" | jq -e '.success==true' >/dev/null
+          printf '%s' "$deployment" | jq -e --arg old "$OLD_VERSION" '
+            .success==true and (.result.deployments[0].versions | length==1)
+            and .result.deployments[0].versions[0].percentage==100
+            and .result.deployments[0].versions[0].version_id==$old' >/dev/null
+          # Allow ONLY the two exact old diagnostic resource bindings.
+          printf '%s' "$settings" | jq -e '
+            .success==true and (.result.bindings | type=="array" and length==2)
+            and ([.result.bindings[] | select(.name=="SOURCE_DB" and
+              (.type=="d1" or .type=="d1_database") and
+              (.database_id // .id)=="217ef5b1-5d80-4f7c-afc7-9e07eb05c06b")] | length==1)
+            and ([.result.bindings[] | select(.name=="SOURCE_MEDIA" and
+              .type=="r2_bucket" and (.bucket_name // .bucket)=="soridraw-profile-media")] | length==1)' >/dev/null
+          schedules="$(curl -fsS --max-time 20 "${auth[@]}" "$API/schedules")"
+          printf '%s' "$schedules" | jq -e '
+            .success==true and ((.result.schedules // .result) | type=="array" and length==0)' >/dev/null
+          echo 'APP518_MIGRATION_OLD_VERSION_ROLLBACK_AVAILABLE=PASS'
+          echo 'APP518_MIGRATION_OLD_EXACT_D1_R2_BINDINGS_AND_NO_CRON=PASS'
+      - name: Dry-run one-Worker replacement (no user data)
+        working-directory: cloudflare/explore-worker
+        run: node node_modules/wrangler/bin/wrangler.js deploy --config wrangler.migration-inspect-retire-518.jsonc --dry-run
+      - name: Replace only migration-inspect and verify removal, rollback on failure
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$TARGET"
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Accept: application/json")
+          WRANGLER=node_modules/wrangler/bin/wrangler.js
+          CFG=wrangler.migration-inspect-retire-518.jsonc
+          active() {
+            curl -fsS --max-time 20 "${auth[@]}" "$API/deployments" |
+              jq -er '.result.deployments[0].versions | select(length==1 and .[0].percentage==100) | .[0].version_id'
+          }
+          bindings_match_old() {
+            curl -fsS --max-time 20 "${auth[@]}" "$API/settings" |
+              jq -e '.success==true and
+                ([.result.bindings[] | select(.name=="SOURCE_DB")] | length==1) and
+                ([.result.bindings[] | select(.name=="SOURCE_MEDIA")] | length==1)' >/dev/null
+          }
+          started=0
+          finish() {
+            code=$?
+            trap - EXIT
+            if [ "$code" -ne 0 ] && [ "$started" -eq 1 ]; then
+              current="$(active 2>/dev/null)" || current="UNKNOWN"
+              if [ "$current" != "$OLD_VERSION" ]; then
+                node "$WRANGLER" rollback "$OLD_VERSION" --name "$TARGET" --config "$CFG" --message "APP518 automatic diagnostic retirement rollback" ||
+                  { echo "::error::HOLD_APP518_RETIRE_ROLLBACK_FAILED_MANUAL_RECOVERY"; exit 86; }
+              fi
+              if [ "$(active)" != "$OLD_VERSION" ] || ! bindings_match_old; then
+                echo "::error::HOLD_APP518_RETIRE_OLD_VERSION_NOT_RESTORED"
+                exit 86
+              fi
+              echo 'APP518_DIAGNOSTIC_ORIGINAL_WORKER_RESTORED=PASS'
+            fi
+            exit "$code"
+          }
+          trap finish EXIT
+          test "$(active)" = "$OLD_VERSION" || { echo 'HOLD_EXTERNAL_VERSION_DRIFT'; exit 2; }
+          started=1
+          node "$WRANGLER" deploy --config "$CFG" --message "APP518 retire unused diagnostic Worker only; remove old bindings"
+          current="$(active)"
+          test "$current" != "$OLD_VERSION"
+          curl -fsS --max-time 20 "${auth[@]}" "$API/settings" | jq -e '
+            .success==true and (.result.bindings | type=="array" and length==0)' >/dev/null
+          http="$(curl -sS --max-time 20 -o "$RUNNER_TEMP/app518-retire-response.txt" -w '%{http_code}'             "https://$TARGET.andrawing1212.workers.dev/__app518_retired_probe")"
+          test "$http" = "410"
+          grep -q '^Diagnostic worker retired\.$' "$RUNNER_TEMP/app518-retire-response.txt"
+          started=0
+          trap - EXIT
+          echo 'APP518_MIGRATION_INSPECT_WORKER_ONLY=REPLACED'
+          echo 'APP518_MIGRATION_INSPECT_D1_R2_BINDINGS=REMOVED'
+          echo 'APP518_MIGRATION_INSPECT_RETURN_410=PASS'
+          echo 'APP518_OTHER_WORKERS_AND_ORIGINAL_USER_DATA=UNCHANGED_BY_THIS_WORKFLOW'
+          echo 'APP518_CANONICAL_WRITER=OFF_NOT_AUTHORIZED'

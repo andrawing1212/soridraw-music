@@ -54,7 +54,7 @@ jobs:
               echo "::error::HOLD_518_FENCE_BOOTSTRAP_UNAUDITED_BLOB:$file"; exit 2;
             }
           done <<'APP518_FENCE_OFF_PINNED_BLOBS'
-          b6964c4ac8fe56ca2fd297d8a78f0b1d22d4af86 cloudflare/media-worker/src/index.js
+          8b2c4362c090d84efca35859fc499bed7d305b08 cloudflare/media-worker/src/index.js
           be1a5f2cfa94a0c62130ff7ed5fe4f1f6f043889 cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js
           a4ca103b0216a452935daab9d5222b51764db9d8 .deploy/release-media-worker-runtime.mjs
           81f2a797c30dfd1d7e700e542bbd29c88987198f cloudflare/media-worker/package.json

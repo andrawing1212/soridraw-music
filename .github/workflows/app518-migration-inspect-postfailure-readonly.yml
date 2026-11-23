@@ -1,0 +1,87 @@
+name: APP518 Migration Inspect Post-Failure Readonly Verification
+
+# One-shot read-only inspection of the diagnostic Worker only.
+# Does not use Wrangler, change settings, deploy, access D1/R2 objects,
+# or output secret values. Active immutable version bindings are examined
+# separately from current script settings (which may differ after rollback).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-shared-d1-release
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_READONLY_API_TOKEN: ${{ secrets.CLOUDFLARE_READONLY_API_TOKEN }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Read only deployed version and its exact bound resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const token=process.env.CLOUDFLARE_READONLY_API_TOKEN;
+          if(!token||token.length<8)throw Error('HOLD_APP518_READONLY_TOKEN_MISSING');
+          const root='https://api.cloudflare.com/client/v4/accounts/e1a30fc9ef497fda1d34f4ab3dc1da45/workers/scripts/soridraw-explore-migration-inspect';
+          const get=async suffix=>{
+            if(!['/deployments','/settings'].includes(suffix)
+              && !/^\/versions\/[a-f0-9-]{36}$/i.test(suffix))
+                throw Error('DENY_READONLY_PATH');
+            const response=await fetch(root+suffix,{method:'GET',headers:{
+              Authorization:'Bearer '+token,Accept:'application/json'
+            },signal:AbortSignal.timeout(20000)});
+            if(!response.ok)throw Error('HOLD_APP518_READONLY_HTTP_'+response.status);
+            const d=await response.json();
+            if(d?.success!==true)throw Error('HOLD_APP518_READONLY_API_RESPONSE');
+            return d.result;
+          };
+          const deployments=await get('/deployments');
+          const versions=deployments?.deployments?.[0]?.versions;
+          if(!Array.isArray(versions)||versions.length!==1
+            ||Number(versions[0]?.percentage)!==100)
+            throw Error('HOLD_APP518_MULTIPLE_ACTIVE_VERSIONS');
+          const id=versions[0].version_id;
+          if(!/^[a-f0-9-]{36}$/i.test(id))throw Error('HOLD_APP518_BAD_VERSION_ID');
+          const [settings,version]=await Promise.all([get('/settings'),get('/versions/'+id)]);
+          const active=version?.resources?.bindings;
+          const script=settings?.bindings;
+          if(!Array.isArray(active)||!Array.isArray(script))
+            throw Error('HOLD_APP518_BINDING_READ_UNAVAILABLE');
+          const status=rows=>{
+            const db=rows.filter(x=>x?.name==='SOURCE_DB'&&
+              ['d1','d1_database'].includes(x?.type)&&
+              (x.database_id??x.id)==='217ef5b1-5d80-4f7c-afc7-9e07eb05c06b');
+            const media=rows.filter(x=>x?.name==='SOURCE_MEDIA'&&
+              x?.type==='r2_bucket'&&
+              (x.bucket_name??x.bucket)==='soridraw-profile-media');
+            const other=rows.filter(x=>!['SOURCE_DB','SOURCE_MEDIA'].includes(x?.name));
+            return {db:db.length===1,media:media.length===1,
+              count:rows.length,other:other.length};
+          };
+          const a=status(active),s=status(script);
+          const old='077b801f-1661-4f90-b99a-42c0c046fda9';
+          const newId='bc7f92cf-cb54-469d-a992-380bc2da3c5e';
+          console.log('APP518_MIGRATION_ACTIVE_VERSION='+id);
+          console.log('APP518_MIGRATION_ACTIVE_OLD='+(id===old));
+          console.log('APP518_MIGRATION_ACTIVE_TEMPORARY_NEW='+(id===newId));
+          console.log('APP518_ACTIVE_VERSION_SOURCE_DB_PRESENT='+a.db);
+          console.log('APP518_ACTIVE_VERSION_SOURCE_MEDIA_PRESENT='+a.media);
+          console.log('APP518_ACTIVE_VERSION_BINDINGS_COUNT='+a.count);
+          console.log('APP518_ACTIVE_VERSION_OTHER_BINDINGS_COUNT='+a.other);
+          console.log('APP518_SCRIPT_SETTINGS_SOURCE_DB_PRESENT='+s.db);
+          console.log('APP518_SCRIPT_SETTINGS_SOURCE_MEDIA_PRESENT='+s.media);
+          console.log('APP518_SCRIPT_SETTINGS_BINDINGS_COUNT='+s.count);
+          console.log('APP518_MIGRATION_READONLY_ONLY=TRUE');
+          if(id===old&&a.db&&a.media&&a.count===2)
+            console.log('APP518_MIGRATION_OLD_VERSION_AND_RESOURCE_BINDINGS_RESTORED=PASS');
+          else console.log('APP518_MIGRATION_OLD_VERSION_AND_RESOURCE_BINDINGS_RESTORED=HOLD');
+          NODE

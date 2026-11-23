@@ -17,6 +17,8 @@ on:
       - 'scripts/verify-784-qa-http-offline.mjs'
       - 'scripts/app785-qa-follow-compatibility.mjs'
       - 'scripts/verify-785-qa-worker-bridge.mjs'
+      - 'scripts/app788-qa-independent-owner-floor.mjs'
+      - 'scripts/verify-788-qa-independent-owner-floor.mjs'
       - '.github/workflows/app768-qa-r2-conditional-race.yml'
 permissions:
   contents: read
@@ -56,6 +58,8 @@ jobs:
           node scripts/verify-784-qa-http-offline.mjs
           node --check scripts/app785-qa-follow-compatibility.mjs
           node scripts/verify-785-qa-worker-bridge.mjs
+          node --check scripts/app788-qa-independent-owner-floor.mjs
+          node scripts/verify-788-qa-independent-owner-floor.mjs
   live:
     if: false # APP785 QA exact one-shot PASS and exact cleanup complete; do not auto-repeat
     env:

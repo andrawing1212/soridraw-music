@@ -186,6 +186,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  const ownerDoRuntimeSource=readFileSync(resolve('scripts/app761-production-owner-do-runtime.mjs'),'utf8');
  const recoveryGateSource=readFileSync(resolve('scripts/app765-production-canonical-recovery.mjs'),'utf8');
  const r2AdmissionSource=readFileSync(resolve('scripts/app767-r2-admission-candidate.mjs'),'utf8');
+ const connectionSource=readFileSync(resolve('scripts/app786-production-owner-connections.mjs'),'utf8');
  if(!adapterSource.includes('APP729_PRODUCTION_OWNER_FOLLOW_COMPILED_OPEN = false'))
    fail('INTEGRATION_COMPILE_OFF_REQUIRED');
  if(!productionBridgeSource.includes('APP743_PRODUCTION_FOLLOW_COMPILED_OPEN=false'))
@@ -211,6 +212,10 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
     !r2AdmissionSource.includes("scope!=='APP767_ISOLATED_SYNTHETIC_QA'")||
     !backendSource.includes('verifyIndependentCanonicalHistory'))
    fail('PRODUCTION_OWNER_DO_AND_RELAY_MUST_REMAIN_OFF');
+ if(!connectionSource.includes('APP786_PRODUCTION_OWNER_CONNECTIONS_COMPILED_OPEN=false')||
+    !connectionSource.includes('HOLD_NO_LIVE_FOLLOW_ENABLE')||
+    !connectionSource.includes('INDEPENDENT_OF_DO_PITR'))
+   fail('APP786_EXACT_18_CONNECTIONS_OFF_AND_RECOVERY_PROOF_REQUIRED');
  mkdirSync(join(dir,'integration'),{recursive:true});
  const adapterPath=join(dir,'integration','app729-production-follow-adapter.mjs');
  const lifecyclePath=join(dir,'integration','app730-source-only-follow-bridge.mjs');
@@ -223,6 +228,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  const ownerDoRuntimePath=join(dir,'integration','app761-production-owner-do-runtime.mjs');
  const recoveryGatePath=join(dir,'integration','app765-production-canonical-recovery.mjs');
  const r2AdmissionPath=join(dir,'integration','app767-r2-admission-candidate.mjs');
+ const connectionPath=join(dir,'integration','app786-production-owner-connections.mjs');
  if(!lifecycleSource.includes('APP730_PRODUCTION_RELAY_ENABLED = false'))
    fail('DURABLE_RELAY_COMPILE_OFF_REQUIRED');
  writeFileSync(adapterPath,adapterSource);
@@ -236,6 +242,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  writeFileSync(ownerDoRuntimePath,ownerDoRuntimeSource);
  writeFileSync(recoveryGatePath,recoveryGateSource);
  writeFileSync(r2AdmissionPath,r2AdmissionSource);
+ writeFileSync(connectionPath,connectionSource);
  writeFileSync(entryPath,entry.code);
  if(sha256(readFileSync(entryPath))!==entry.sha256)
    fail('INTEGRATION_ENTRY_DRIFT');
@@ -250,6 +257,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  checkSyntax(ownerDoRuntimePath);
  checkSyntax(recoveryGatePath);
  checkSyntax(r2AdmissionPath);
+ checkSyntax(connectionPath);
  checkSyntax(entryPath);
  candidate.manifest.integration={
    entrypoint:'production-follow-entry.mjs',
@@ -260,6 +268,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
    app761OwnerDoRuntimeSha256:sha256(readFileSync(ownerDoRuntimePath)),
    app765RecoveryGateSha256:sha256(readFileSync(recoveryGatePath)),
    app767R2AdmissionQaOnlySha256:sha256(readFileSync(r2AdmissionPath)),
+   app786ExactOwnerConnectionsSha256:sha256(readFileSync(connectionPath)),
    app755SourceFilesCopiedExactly:
      sha256(readFileSync(ownerReceiptPath))===sha256(ownerReceiptSource)&&
      sha256(readFileSync(backendPath))===sha256(backendSource),
@@ -271,6 +280,10 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
      sha256(recoveryGateSource),
    app767R2AdmissionQaOnlyExactlyCopied:sha256(readFileSync(r2AdmissionPath))===
      sha256(r2AdmissionSource),
+   app786OwnerConnectionsExactlyCopied:sha256(readFileSync(connectionPath))===
+     sha256(connectionSource),
+   app786OwnerConnectionsSourceOnlyOff:true,
+   app786NewProdBindingsAdded:0,
    originalMainUntouched:true,
    existingProductionBindingCount:12,
    runtimeEnabled:false,
@@ -298,7 +311,8 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
     !candidate.manifest.integration.app759OwnerAlarmSourceExactlyCopied||
     !candidate.manifest.integration.app761OwnerDoRuntimeSourceExactlyCopied||
     !candidate.manifest.integration.app765RecoveryGateSourceExactlyCopied||
-    !candidate.manifest.integration.app767R2AdmissionQaOnlyExactlyCopied)
+    !candidate.manifest.integration.app767R2AdmissionQaOnlyExactlyCopied||
+    !candidate.manifest.integration.app786OwnerConnectionsExactlyCopied)
    fail('APP755_759_761_765_767_REVIEW_SOURCE_NOT_IDENTICAL');
  writeFileSync(join(dir,'review-manifest.json'),JSON.stringify(candidate.manifest,null,2)+'\n');
  return {outputDirectory:dir,manifest:candidate.manifest};

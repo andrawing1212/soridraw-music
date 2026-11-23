@@ -6,6 +6,8 @@ import {createHash} from 'node:crypto';
 import {APP728_QUARANTINED_SOURCE_FILES,readPinnedProductionCode728,
  createApp728PreservedSourceCandidate,writeApp728CandidateToTemp}
  from './app728-production-source-candidate.mjs';
+import {assessApp786InactiveOwnerConnections}
+ from './app786-production-owner-connections.mjs';
 const ACCOUNT='e1a30fc9ef497fda1d34f4ab3dc1da45';
 const WORKER='soridraw-explore-api';
 const UUID=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
@@ -44,6 +46,10 @@ export function makeInactiveVersionBody({oldVersion,oldSettings,candidateDir,pin
    content_base64:content.toString('base64')};
  });
  const source=readFileSync(join(candidateDir,'production-follow-entry.mjs'),'utf8');
+ const reportPath=join(candidateDir,'integration','app786-production-owner-connections.mjs');
+ if(!files.includes('integration/app786-production-owner-connections.mjs')||
+    !readFileSync(reportPath,'utf8').includes('APP786_PRODUCTION_OWNER_CONNECTIONS_COMPILED_OPEN=false'))
+   fail('REVIEWED_18_CONNECTION_CANDIDATE_OFF_MODULE_MISSING');
  if(!source.includes("export * from './production-main.mjs'")||
     !source.includes('APP729_PRODUCTION_OWNER_FOLLOW_COMPILED_OPEN')||
     !readFileSync(join(candidateDir,'integration/app729-production-follow-adapter.mjs'),'utf8')
@@ -86,6 +92,27 @@ async function main(){
  if(token.length<25)fail('CLOUDFLARE_TOKEN_MISSING');
  const baseline=await readPinnedProductionCode728(token);
  const pinned=await get(versionPath(baseline.activeVersion),token);
+ // GET the exact active PREVIEW worker rather than trusting .toml, source
+ // branch or a stale setting. No secret VALUE is read by the binding audit.
+ const previewScript='soridraw-explore-preview';
+ const previewDeploy='/workers/scripts/'+previewScript+'/deployments';
+ const previewVersion=activeId(await get(previewDeploy,token));
+ const [previewSettings,previewPinned]=await Promise.all([
+  get('/workers/scripts/'+previewScript+'/settings',token),
+  get('/workers/workers/'+previewScript+'/versions/'+previewVersion,token),
+ ]);
+ const previewBindings=previewPinned?.bindings||previewPinned?.resources?.bindings||[];
+ if(previewBindings.length!==41||
+    canonical(previewBindings)!==canonical(previewSettings?.bindings||[]))
+   fail('PREVIEW_ACTIVE_41_BINDING_NAMES_TYPES_DRIFT');
+ const coverage=assessApp786InactiveOwnerConnections({
+  previewBindings,productionBindings:pinned.bindings,candidateBindings:pinned.bindings,
+ });
+ if(coverage.missingFollowConnections!==18||
+    coverage.missingOtherConnections!==13||
+    coverage.zeroTrafficCandidateAllowed!==true||
+    coverage.productionReleaseAuthorized!==false)
+   fail('OWNER_FOLLOW_18_RUNTIME_COVERAGE_UNVERIFIED');
  if(activeId(await get(deployPath,token))!==baseline.activeVersion)
    fail('ACTIVE_VERSION_MOVED_BEFORE_STAGE');
  const fileSource=resolve(process.env.APP728_SOURCE_DIR||'');
@@ -131,7 +158,13 @@ async function main(){
   uploadedCandidateVersion:candidateVersion,bindingCount:rows.length,
   inheritedFromExactActive:true,sourceSha:source,
   liveDeploy:false,sharedUserDataWrites:0,testTouched:false,
-  originalCodeSha256:digest(baseline.code)},null,2));
+  originalCodeSha256:digest(baseline.code),
+  ownerFollowMissingInProd:coverage.missingFollowConnections,
+  otherPreviewOnlyMissingInProd:coverage.missingOtherConnections,
+  ownerFollowRequiredProofGroups:Object.keys(coverage.evidenceGroups),
+  all18OwnerConnectionsRemainUnbound:true,
+  actualNewServerResourcesCreated:0,
+  prodFollowEnableAuthorized:false},null,2));
 }
 if(process.argv[1]?.endsWith('/app737-stage-inactive-production-follow.mjs'))
  main().catch(e=>{console.error(String(e?.message||e));process.exitCode=2});

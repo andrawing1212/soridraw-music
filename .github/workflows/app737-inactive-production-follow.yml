@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - 'scripts/app729-production-follow-entry.mjs'
+      - 'scripts/app728-production-source-candidate.mjs'
+      - 'scripts/app786-production-owner-connections.mjs'
+      - 'scripts/verify-786-production-owner-connections.mjs'
+      - 'scripts/verify-756-production-off-candidate.mjs'
       - 'scripts/app737-stage-inactive-production-follow.mjs'
       - 'scripts/verify-737-inactive-production-stage.mjs'
       - '.github/workflows/app737-inactive-production-follow.yml'
@@ -33,6 +37,8 @@ jobs:
           node --check scripts/app737-stage-inactive-production-follow.mjs
           node scripts/verify-737-inactive-production-stage.mjs
           node scripts/verify-729-production-follow-integration.mjs
+          node scripts/verify-786-production-owner-connections.mjs
+          node scripts/verify-756-production-off-candidate.mjs
   stage:
     if: >-
       github.event_name == 'issue_comment' &&
@@ -67,6 +73,8 @@ jobs:
         run: |
           node scripts/verify-737-inactive-production-stage.mjs
           node scripts/verify-729-production-follow-integration.mjs
+          node scripts/verify-786-production-owner-connections.mjs
+          node scripts/verify-756-production-off-candidate.mjs
       - name: Upload new version without deployment or traffic
         env:
           CLOUDFLARE_API_TOKEN: '${{ secrets.CLOUDFLARE_API_TOKEN }}'

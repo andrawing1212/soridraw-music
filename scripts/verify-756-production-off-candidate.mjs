@@ -54,6 +54,12 @@ try{
  assert.equal(built.manifest.integration.app761OwnerDoRuntimeSourceExactlyCopied,true);
  assert.equal(built.manifest.integration.app765RecoveryGateSourceExactlyCopied,true);
  assert.equal(built.manifest.integration.app767R2AdmissionQaOnlyExactlyCopied,true);
+ assert.equal(built.manifest.integration.app786OwnerConnectionsExactlyCopied,true);
+ assert.equal(built.manifest.integration.app786OwnerConnectionsSourceOnlyOff,true);
+ assert.equal(built.manifest.integration.app786NewProdBindingsAdded,0);
+ const app786Source=readFileSync(join(built.outputDirectory,'integration','app786-production-owner-connections.mjs'),'utf8');
+ assert(app786Source.includes('APP786_PRODUCTION_OWNER_CONNECTIONS_COMPILED_OPEN=false'));
+ assert.equal(sha(app786Source),built.manifest.integration.app786ExactOwnerConnectionsSha256);
  assert.equal(built.manifest.integration.app767AdmissionIsolatedQaSourceOnly,true);
  assert.equal(built.manifest.integration.productionOwnerIndependentRecoveryGateSourceOnly,true);
  assert.equal(built.manifest.integration.productionOwnerRuntimeCompositionSourceOnly,true);

@@ -8,6 +8,22 @@ const deny=(code,status=403)=>new Response(JSON.stringify({code}),{
 });
 const runOk=x=>/^[0-9]{8,20}$/.test(String(x||''));
 const shaOk=x=>/^[a-f0-9]{40}$/.test(String(x||''));
+// The trusted QA deploy controller obtains and verifies GitHub's public JWKS
+// within the same owner-triggered run. Never fall back to an outbound lookup
+// inside a Cloudflare Worker; APP518's earlier R2 QA proved that path fails.
+const publicPin=env=>{
+ const raw=env?.SORIDRAW_APP518_QA_JWKS_JSON;
+ const timestamp=env?.SORIDRAW_APP518_QA_JWKS_AT_MS;
+ if(typeof raw!=='string'||raw.length>8000
+  ||typeof timestamp!=='string'||!/^\d{13}$/.test(timestamp))
+  return null;
+ let jwks;
+ try{jwks=JSON.parse(raw);}catch{return null;}
+ if(!Array.isArray(jwks?.keys)||jwks.keys.length<1||jwks.keys.length>10)
+  return null;
+ const pinnedAtMs=Number(timestamp);
+ return Number.isSafeInteger(pinnedAtMs)?{jwks,pinnedAtMs}:null;
+};
 const exactEnv=env=>{
  const runId=env?.SORIDRAW_APP518_QA_RUN_ID;
  return runOk(runId)
@@ -27,10 +43,16 @@ export const createSignedQa518Entry=({candidateFactory=createApp518IsolatedQaHan
   if(!exactEnv(env))return deny('QA518_RELEASE_UNCONFIGURED',503);
   const token=request.headers.get('x-soridraw-qa-github-oidc');
   if(!token)return deny('QA518_SIGNED_GITHUB_TOKEN_REQUIRED');
+  const pin=publicPin(env);
+  const nowMs=now();
+  if(!pin||!Number.isSafeInteger(nowMs)
+   ||pin.pinnedAtMs>nowMs+20000||nowMs-pin.pinnedAtMs>600000)
+   return deny('QA518_FRESH_OFFICIAL_JWKS_PIN_REQUIRED',503);
   try{
    const proof=await oidcVerifier({
     token,runId:env.SORIDRAW_APP518_QA_RUN_ID,
-    workflowSha:env.SORIDRAW_APP518_QA_WORKFLOW_SHA,nowMs:now(),
+    workflowSha:env.SORIDRAW_APP518_QA_WORKFLOW_SHA,nowMs,
+    pinnedJwks:pin.jwks,pinnedAtMs:pin.pinnedAtMs,
    });
    if(proof?.source!=='GITHUB_VERIFIED_OIDC_RSA_SIGNATURE'
      ||proof?.runId!==env.SORIDRAW_APP518_QA_RUN_ID

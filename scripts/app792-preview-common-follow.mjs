@@ -197,7 +197,27 @@ export function createApp792PreviewOwnerConnection({
   }
   return {delivered,retried,held,waiting,d1AdditionalWrites:0};
  }
- return Object.freeze({bootstrap,admit,settle,arm,alarm});
+ // Exact ordered response lost after canonical commit: read only the
+ // immutable admission and existing receipt, never call the writer.
+ async function replay(a,currentPairRevision){
+  try{
+   await guard(a);
+   const k=await keys(a),ad=await parse(await bucket.get(k.admission));
+   if(ad?.v.kind!=='APP792_ADMISSION_V1'||!valid(ad.v)||
+      !fields.filter(k=>k!=='priorR2Revision').every(k=>ad.v[k]===a[k]))
+    return hold('REPLAY_ADMISSION_UNVERIFIED');
+   const stored=await store.inspectReceipt(ad.v);
+   if(stored.status!=='found'||!receiptMatches(ad.v,stored.receipt))
+    return hold('REPLAY_RECEIPT_UNVERIFIED');
+   const v=await settle(stored.receipt);
+   if(!['SETTLED','ALREADY_SETTLED'].includes(v.status))return v;
+   const settled=await parse(await bucket.get(k.settled));
+   if(!proofOf(stored.receipt,settled?.v)||settled.v.pairRevision!==currentPairRevision)
+    return hold('REPLAY_SUPERSEDED_OR_UNKNOWN');
+   return {status:'EXACT_REPLAY',revision:settled.v.pairRevision,d1AdditionalWrites:0};
+  }catch{return hold('REPLAY_UNAVAILABLE')}
+ }
+ return Object.freeze({bootstrap,admit,settle,arm,alarm,replay});
 }
 // Existing public HTTP wrapper calls this ONLY after a separately approved
 // common-writer cutover. Disabled returns null: caller retains old path.
@@ -239,16 +259,34 @@ export function createApp792PreviewFollowIngress({
    // Old clients have no ordering token; never claim their opposite-intent
    // delayed replays are exactly-once. Preserve existing compatibility
    // during an approved cutover; no automatic replay of a previous command.
-   if(!legacy&&body.followExpectedRevision!==p.pairRevision)
-    return hold('ORDERED_STALE_OR_REPLAY_REQUIRES_EXACT_RECEIPT');
-   if(p.following===desired){
-    // Current client requires a strictly advancing ordered ACK; do not
-    // fabricate one or use the canonical writer without an admission.
-    if(!legacy)return hold('ORDERED_NOOP_REQUIRES_COMPATIBLE_ACK');
-    return {status:'UNCHANGED',following:desired,revision:p.pairRevision,d1AdditionalWrites:0,deployAuthorized:false};
-   }
    const service=await ownerService(ownerUid);
-   if(!service||typeof service.admit!=='function'||typeof service.arm!=='function')return hold('OWNER_SERVICE_UNAVAILABLE');
+   if(!service||typeof service.admit!=='function'||typeof service.arm!=='function'||typeof service.replay!=='function')
+    return hold('OWNER_SERVICE_UNAVAILABLE');
+   // Replay ACKs must be based on the currently exact pair, not old counts
+   // or a delayed opposite intent. Current owner/actor counts are trusted
+   // preflight values, never derived from the boolean.
+   const ackNoWrite=(revision,status)=>{
+    if(![p.followerCount,p.followingCount,p.actorFollowingCount].every(x=>rev(x)&&x<=1000000000))
+     return hold('NOOP_EXACT_COUNTS_UNAVAILABLE');
+    return {status,response:Response.json({ok:true,data:{uid:ownerUid,following:desired,revision,
+      duplicate:true,followProtocol:354,canonicalCounts662:true,
+      followerCount:p.followerCount,followingCount:p.followingCount,actorFollowingCount:p.actorFollowingCount}},
+      {headers:{'X-Soridraw-Follow-Protocol':'354','Cache-Control':'no-store'}}),
+      d1AdditionalWrites:0,deployAuthorized:false};
+   };
+   if(!legacy&&body.followExpectedRevision!==p.pairRevision){
+    if(body.followExpectedRevision>=p.pairRevision||p.following!==desired)return hold('ORDERED_STALE');
+    const replay=await service.replay({...a,expectedRevision:body.followExpectedRevision,beforeFollowing:!desired},p.pairRevision);
+    return replay?.status==='EXACT_REPLAY'&&replay.revision===p.pairRevision?
+      ackNoWrite(replay.revision,'EXACT_REPLAY'):hold('ORDERED_STALE_OR_REPLAY_UNVERIFIED');
+   }
+   if(p.following===desired){
+    // Existing ordered client requires a strictly advancing revision. A
+    // new same-state ordered request needs a compatible ACK contract before
+    // activation; do not fabricate a version or bypass admission.
+    if(!legacy)return hold('ORDERED_NOOP_REQUIRES_COMPATIBLE_ACK');
+    return ackNoWrite(p.pairRevision,'UNCHANGED');
+   }
    const reserved=await service.admit(a);
    if(reserved?.status!=='ADMITTED_ONCE'||!receiptMatches(a,reserved.receipt))return hold('ADMISSION_NOT_CONFIRMED');
    const receipt=reserved.receipt;

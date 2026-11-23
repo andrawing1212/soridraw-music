@@ -49,14 +49,14 @@ const conn=createApp792PreviewOwnerConnection({enabled:true,env,state:{storage},
 const snapshot=actor=>{
  const intent=objs.get(intentKey(actor))?.v;
  const row=db.prepare('SELECT following FROM explore_follow_overrides_348 WHERE follower_uid=? AND following_uid=?').get(actor,ownerUid);
- return {verified:true,ownerUid,actorUid:actor,authEpoch,generation,cutoverToken,pairRevision:intent?.revision||0,ownerProjectionRevision:ownerRevision,following:row?.following===1};
+ return {verified:true,ownerUid,actorUid:actor,authEpoch,generation,cutoverToken,pairRevision:intent?.revision||0,ownerProjectionRevision:ownerRevision,following:row?.following===1,followerCount:count,followingCount:15,actorFollowingCount:row?.following===1?8:7};
 };
 const ticket=(actor,id,desired)=>{const p=snapshot(actor);return {ownerUid,actorUid:actor,authEpoch,generation,cutoverToken,canonicalOperationId:id,expectedRevision:p.pairRevision,priorR2Revision:p.ownerProjectionRevision,desired,beforeFollowing:p.following}};
 assert.equal(APP792_PREVIEW_COMMON_FOLLOW_COMPILED_OPEN,false);assert.equal(createApp792PreviewFollowIngress(),null);assert.equal(createApp792PreviewOwnerConnection(),null);
 const ingress=createApp792PreviewFollowIngress({enabled:true,
  authenticate:async({request})=>({verified:request.headers.has('X-Verified-Fixture'),appCheckVerified:true,uid:request.headers.get('X-Verified-Fixture'),firebaseProjectId:'soridraw-app-866a5'}),
  readPair:async({actorUid})=>snapshot(actorUid),verifyCutover,
- ownerService:async()=>({admit:conn.admit,arm:async r=>{if(armLost){armLost=false;throw Error('lost arm request')}return conn.arm(r)}}),
+ ownerService:async()=>({admit:conn.admit,replay:conn.replay,arm:async r=>{if(armLost){armLost=false;throw Error('lost arm request')}return conn.arm(r)}}),
  callCanonical:async({request,actorUid})=>{
   canonicalCalls++;assert.equal(request.headers.get('X-Verified-Fixture'),actorUid);
   const body=await request.json(),prior=snapshot(actorUid),desired=request.method==='PUT';
@@ -77,7 +77,7 @@ assert.equal((await call(actor1,true,{followOperationId:'partial_fixture_0001'})
 assert.equal((await call(actor1,true,{followOperationId:'ordered_stale_fixture',followExpectedRevision:999})).status,'HOLD');
 const first=await call(actor1,true);assert.equal(first.status,'CANONICAL_RESPONSE');assert.equal(first.settlement,'ALARM_READY');
 assert.equal(canonicalCalls,1);assert.equal(canonicalWrites,1);assert.equal(count,143);
-assert.equal((await call(actor1,true)).status,'UNCHANGED');assert.equal(canonicalCalls,1);
+const noop=await call(actor1,true);assert.equal(noop.status,'UNCHANGED');assert.equal((await noop.response.json()).data.followerCount,143);assert.equal(canonicalCalls,1);
 clock+=2000;relayFailure=true;assert.equal((await conn.alarm()).retried,1);assert.equal(marker.followerCount,142);
 clock+=4000;assert.equal((await conn.alarm()).delivered,1);assert.equal(marker.followerCount,143);assert.equal(canonicalCalls,1);
 const op2={followOperationId:'ordered_actor2_fixture_0001',followExpectedRevision:0};
@@ -88,7 +88,7 @@ clock+=2000;reset=true;
 // will call a new context; no canonical writer involved.
 await assert.rejects(conn.alarm());assert.equal(canonicalCalls,2);
 assert.equal((await conn.alarm()).delivered,1);assert.equal(marker.followerCount,144);
-assert.equal((await call(actor2,true,op2)).status,'HOLD');assert.equal(canonicalCalls,2);
+const replay=await call(actor2,true,op2);assert.equal(replay.status,'EXACT_REPLAY');assert.equal((await replay.response.json()).data.revision,snapshot(actor2).pairRevision);assert.equal(canonicalCalls,2);
 const cancel={followOperationId:'ordered_cancel_fixture_0001',followExpectedRevision:snapshot(actor1).pairRevision};
 armLost=true;const third=await call(actor1,false,cancel);assert.equal(third.settlement,'DURABLE_RECOVERY_PENDING');
 clock+=2000;assert.equal((await conn.alarm()).delivered,1);assert.equal(marker.followerCount,143);assert.equal(canonicalWrites,3);

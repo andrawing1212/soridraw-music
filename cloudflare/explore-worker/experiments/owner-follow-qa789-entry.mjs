@@ -141,21 +141,29 @@ export class OwnerFollowIsolated558 extends OriginalOwnerDO {
      ...(v.status==='QA788_ADMITTED_AND_OWNER_DO_RESERVED'?
         {admission:v.admission,receipt:v.receipt}:{})});
    }
-   const finalizeExact=async(selected)=>{
-    const stored=await qa.runtime.find(selected);
-    if(stored?.status!=='found'||stored.receipt?.canonicalOperationId!==
-       selected.canonicalOperationId)return {status:'HOLD',reason:'DO_RECEIPT_NOT_FOUND'};
+   const finalizeExact=async(selected,{readOnly=false,expectedReceiptId}={})=>{
+    const stored=readOnly?await qa.runtime.inspectReceipt(selected):
+     await qa.runtime.find(selected);
+    if(stored?.status==='absent'&&stored.authoritative===true)
+     return {status:'HOLD',reason:'DO_RECEIPT_AUTHORITATIVELY_ABSENT'};
+    if(stored?.status!=='found')
+     return {status:'HOLD',reason:stored?.reason==='RECEIPT_IDENTITY_MISMATCH'?
+      'DO_RECEIPT_IDENTITY_MISMATCH':'DO_RECEIPT_LOOKUP_UNCERTAIN'};
+    if(stored.receipt?.canonicalOperationId!==selected.canonicalOperationId||
+       (expectedReceiptId&&stored.receipt?.operationId!==expectedReceiptId))
+     return {status:'HOLD',reason:'DO_RECEIPT_IDENTITY_MISMATCH'};
     const k=await keys(this.env,selected),admission={
      status:'ADMISSION_ONLY_NOT_D1_COMMIT',
      keyDigest:k.admission.split('/').pop(),
      productionDeployAuthorized:false,requiresCanonicalCommitProof:true,
      d1AdditionalRowsWritten:0};
-    return qa.engine.finalize({operation:selected,admission,receipt:stored.receipt});
+    const v=await qa.engine.finalize({operation:selected,admission,receipt:stored.receipt});
+    return {...v,receiptId:stored.receipt.operationId};
    };
    if(path==='/qa789/do/finalize'&&request.method==='POST'){
     const b=await request.json(),selected=qa.make(b?.canonicalOperationId,7,13,true);
     if(!OP.test(selected.canonicalOperationId))return fail('INVALID_ID');
-    const v=await finalizeExact(selected);
+    const v=await finalizeExact(selected,{readOnly:true});
     return reply(v.status==='HOLD'?409:200,{status:v.status,reason:v.reason||null});
    }
    if(path==='/qa789/commit'&&request.method==='POST'){
@@ -188,6 +196,7 @@ export class OwnerFollowIsolated558 extends OriginalOwnerDO {
     // Only an exact absent-commit proof permits the synthetic D1 mutation.
     if(await pair(env)!==false)return fail('PRECOMMIT_D1_NOT_INITIAL');
     const pre=await finalizeExact(opA);
+    if(!pre.receiptId)return fail('PRECOMMIT_'+pre.reason);
     if(pre.status!=='HOLD'||pre.reason!=='EXACT_CANONICAL_SETTLEMENT_NOT_PROVEN')
      return fail('PRECOMMIT_NOT_EXACT_HOLD');
     const w=await env.QA789_D1.prepare('UPDATE '+TABLE+
@@ -200,7 +209,10 @@ export class OwnerFollowIsolated558 extends OriginalOwnerDO {
      onlyIf:{etagDoesNotMatch:'*'},
      httpMetadata:{contentType:'application/json'}});
     if(!put?.etag)return fail('CANONICAL_R2_PROJECTION_UNCERTAIN');
-    const v=await finalizeExact(opA);
+    // Re-read the exact durable receipt, but do not rearm the alarm while
+    // checking the completed write. Never substitute the earlier receipt
+    // for missing/corrupt storage; require the same server operation ID.
+    const v=await finalizeExact(opA,{readOnly:true,expectedReceiptId:pre.receiptId});
     return reply(v.status==='HOLD'?409:200,{status:v.status,reason:v.reason||null,
       d1RowsWritten:1,r2ProjectionSettled:true});
    }

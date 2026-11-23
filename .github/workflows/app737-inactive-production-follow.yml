@@ -7,6 +7,8 @@ on:
       - 'scripts/app729-production-follow-entry.mjs'
       - 'scripts/app728-production-source-candidate.mjs'
       - 'scripts/app786-production-owner-connections.mjs'
+      - 'scripts/app787-production-signed-owner-relay.mjs'
+      - 'scripts/verify-787-production-signed-owner-relay.mjs'
       - 'scripts/verify-786-production-owner-connections.mjs'
       - 'scripts/verify-756-production-off-candidate.mjs'
       - 'scripts/app737-stage-inactive-production-follow.mjs'
@@ -38,6 +40,7 @@ jobs:
           node scripts/verify-737-inactive-production-stage.mjs
           node scripts/verify-729-production-follow-integration.mjs
           node scripts/verify-786-production-owner-connections.mjs
+          node scripts/verify-787-production-signed-owner-relay.mjs
           node scripts/verify-756-production-off-candidate.mjs
   stage:
     if: >-
@@ -74,6 +77,7 @@ jobs:
           node scripts/verify-737-inactive-production-stage.mjs
           node scripts/verify-729-production-follow-integration.mjs
           node scripts/verify-786-production-owner-connections.mjs
+          node scripts/verify-787-production-signed-owner-relay.mjs
           node scripts/verify-756-production-off-candidate.mjs
       - name: Upload new version without deployment or traffic
         env:

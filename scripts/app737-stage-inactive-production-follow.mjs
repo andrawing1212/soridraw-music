@@ -47,9 +47,13 @@ export function makeInactiveVersionBody({oldVersion,oldSettings,candidateDir,pin
  });
  const source=readFileSync(join(candidateDir,'production-follow-entry.mjs'),'utf8');
  const reportPath=join(candidateDir,'integration','app786-production-owner-connections.mjs');
+ const relayPath=join(candidateDir,'integration','app787-production-signed-owner-relay.mjs');
  if(!files.includes('integration/app786-production-owner-connections.mjs')||
     !readFileSync(reportPath,'utf8').includes('APP786_PRODUCTION_OWNER_CONNECTIONS_COMPILED_OPEN=false'))
    fail('REVIEWED_18_CONNECTION_CANDIDATE_OFF_MODULE_MISSING');
+ if(!files.includes('integration/app787-production-signed-owner-relay.mjs')||
+    !readFileSync(relayPath,'utf8').includes('APP787_PRODUCTION_SIGNED_RELAY_COMPILED_OPEN=false'))
+   fail('APP787_SIGNED_FUNCTION542_RELAY_OFF_SOURCE_MISSING');
  if(!source.includes("export * from './production-main.mjs'")||
     !source.includes('APP729_PRODUCTION_OWNER_FOLLOW_COMPILED_OPEN')||
     !readFileSync(join(candidateDir,'integration/app729-production-follow-adapter.mjs'),'utf8')

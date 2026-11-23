@@ -863,3 +863,118 @@ jobs:
           node qa/app518/live/post-schema-readiness518.mjs --live-post-schema-readonly
           echo 'APP518_QA_POST_SCHEMA_GET_ONLY=PASS'
 
+qa_live_two_functions_once:
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 528 &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/app518-qa-live-two-functions 864f796da24413309567198c9de502b13cdedd50'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/1083981050742/locations/global/workloadIdentityPools/soridraw-qa-github/providers/app518-readonly
+          service_account: soridraw-qa-gh-deployer@soridraw-app.iam.gserviceaccount.com
+          project_id: soridraw-app
+          create_credentials_file: true
+          export_environment_variables: true
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Stage immutable candidate and forbid other QA function changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(gcloud projects describe soridraw-app --format='value(projectNumber)' 2>/dev/null)" = 1083981050742
+          gcloud functions list --project=soridraw-app --regions=asia-northeast3 --format=json > "$RUNNER_TEMP/app518-pre-funcs.json"
+          python3 - "$RUNNER_TEMP/app518-pre-funcs.json" <<'PY'
+          import json,sys
+          names=sorted(x.get('name','').split('/')[-1] for x in json.load(open(sys.argv[1],encoding='utf8')))
+          if names!=['publishExploreOwnerFollower542']:
+            raise SystemExit('HOLD_QA518_ORIGINAL_FUNCTION_OR_DEPLOYED_APP518_DRIFT')
+          print('APP518_QA_BEFORE_FUNCTIONS=PASS_EXACT_ONE_FOLLOW_FUNCTION')
+          PY
+          export APP518_PINNED_CANDIDATE_DIR="$RUNNER_TEMP/app518-pinned-candidate"
+          git cat-file -e 864f796da24413309567198c9de502b13cdedd50^{commit}
+          git worktree add --detach "$APP518_PINNED_CANDIDATE_DIR" 864f796da24413309567198c9de502b13cdedd50
+          npm ci --prefix "$APP518_PINNED_CANDIDATE_DIR/functions" --ignore-scripts --no-audit --no-fund
+          "$APP518_PINNED_CANDIDATE_DIR/functions/node_modules/.bin/tsc" -p "$APP518_PINNED_CANDIDATE_DIR/functions/tsconfig.json"
+          export APP518_QA_FUNCTION_STAGE="$RUNNER_TEMP/app518-qa-firebase-stage-$GITHUB_RUN_ID"
+          node --input-type=module <<'NODE'
+          import {stageQaFirebase518} from './qa/app518/live/stage-qa-firebase518.mjs';
+          const result=stageQaFirebase518({
+            candidateDir:process.env.APP518_PINNED_CANDIDATE_DIR,
+            stageRoot:process.env.APP518_QA_FUNCTION_STAGE,
+            runId:process.env.GITHUB_RUN_ID,
+            bridgeActive:true,
+          });
+          if(result.code!=='APP518_QA_EXACT_FIREBASE_CODEBASE_STAGED'
+            ||!result.bridgeActive||result.functionNames.length!==2)
+            throw Error('HOLD_QA518_EXACT_TWO_FUNCTIONS_NOT_STAGED');
+          console.log('APP518_QA_ACTIVE_PILOT_ONLY_STAGED=PASS');
+          NODE
+          npm install --prefix "$APP518_QA_FUNCTION_STAGE/functions" --ignore-scripts --no-audit --no-fund --omit=dev
+          node "$APP518_QA_FUNCTION_STAGE/functions/verify.mjs"
+          echo "$APP518_QA_FUNCTION_STAGE" > "$RUNNER_TEMP/app518-staged-dir"
+      - name: Install ONLY app518qa isolated codebase, not existing follow Function
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/app518-staged-dir"
+          test "$(gcloud projects describe soridraw-app --format='value(projectNumber)' 2>/dev/null)" = 1083981050742
+          stage="$(cat "$RUNNER_TEMP/app518-staged-dir")"
+          test -f "$stage/firebase.json"
+          touch "$RUNNER_TEMP/app518-func-deploy-attempted"
+          cd "$stage"
+          npx --yes firebase-tools@15.30.1 deploy --project soridraw-app --only functions:app518qa --non-interactive
+          echo 'APP518_QA_FIREBASE_TWO_FUNCTIONS_DEPLOY_API=PASS'
+      - name: Confirm exactly 3 QA Functions with original follow intact
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud functions list --project=soridraw-app --regions=asia-northeast3 --format=json > "$RUNNER_TEMP/app518-after-funcs.json"
+          python3 - "$RUNNER_TEMP/app518-after-funcs.json" <<'PY'
+          import json,sys
+          funcs=json.load(open(sys.argv[1],encoding='utf8'))
+          actual=sorted(x.get('name','').split('/')[-1] for x in funcs)
+          expected=sorted(['publishExploreOwnerFollower542','app518QaExactFavoriteSource','app518QaSyntheticDeleteReceipt'])
+          if actual!=expected:
+            raise SystemExit('HOLD_QA518_FUNCTIONS_NOT_EXACT_PILOT_PLUS_FOLLOW')
+          print('APP518_QA_FIREBASE_TWO_INSTALLED_FOLLOW_PRESERVED=PASS')
+          PY
+      - name: ALWAYS remove only this run's two QA functions, even on failed install
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f "$RUNNER_TEMP/app518-func-deploy-attempted" ]; then
+            echo 'APP518_QA_FUNCTIONS_NO_INSTALL_ATTEMPT=PASS';exit 0
+          fi
+          test "$(gcloud projects describe soridraw-app --format='value(projectNumber)' 2>/dev/null)" = 1083981050742
+          for name in app518QaExactFavoriteSource app518QaSyntheticDeleteReceipt; do
+            if gcloud functions describe "$name" --gen2 --region=asia-northeast3 --project=soridraw-app --format='value(name)' >/dev/null 2>&1; then
+              gcloud functions delete "$name" --gen2 --region=asia-northeast3 --project=soridraw-app --quiet
+            fi
+          done
+          gcloud functions list --project=soridraw-app --regions=asia-northeast3 --format=json > "$RUNNER_TEMP/app518-final-funcs.json"
+          python3 - "$RUNNER_TEMP/app518-final-funcs.json" <<'PY'
+          import json,sys
+          funcs=json.load(open(sys.argv[1],encoding='utf8'))
+          actual=[x.get('name','').split('/')[-1] for x in funcs]
+          if actual!=['publishExploreOwnerFollower542']:
+            raise SystemExit('HOLD_QA518_FINAL_FUNCTION_CLEANUP_OR_FOLLOW_DRIFT')
+          print('APP518_QA_FIREBASE_EXACT_TWO_CLEANED_ORIGINAL_FOLLOW_RESTORED=PASS')
+          PY
+

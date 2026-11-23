@@ -3,6 +3,7 @@ on:
   pull_request:
     branches: [preview]
     paths:
+      - 'cloudflare/media-worker/package.json'
       - 'cloudflare/media-worker/src/index.js'
       - 'cloudflare/media-worker/src/catalogAuthorityPolicy518.js'
       - 'cloudflare/media-worker/src/catalogSharedWriterRolloutGate518.js'
@@ -27,6 +28,7 @@ jobs:
         run: |
           node scripts/verify-518-shared-writer-rollout.mjs
           node scripts/verify-518-live-media-writer-readonly.mjs --self-test
+          node -e "const p=require('./cloudflare/media-worker/package.json'); if(!p.scripts.deploy.includes('MEDIA_DIRECT_DEPLOY_BLOCKED_USE_APPROVED_SHARED_RELEASE_CONTROLLER')) process.exit(2)"
       - name: Verify current Media Worker build
         working-directory: cloudflare/media-worker
         run: |

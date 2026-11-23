@@ -22,12 +22,13 @@ for(const s of ["ORIGINAL='4ed70845-6a4b-4a80-9c51-ed95d0becc38'",
  "e1a30fc9ef497fda1d34f4ab3dc1da45",
  "APP789_EXISTING_RESOURCES_ONE_SHOT",
  "/versions?deploy=false",
- "type:'inherit'","etagDoesNotMatch",
+ "type:'inherit'",
  "APP789_ORIGINAL_QA583_EXCLUSIVE_100",
  "qa789_"+ "'+RUN",
 ])assert(runner.includes(s),'missing exact runner guard: '+s);
 assert(runner.includes("method='GET'"));
 assert(runner.includes("GET"));assert(entry.includes("QA789_EXACT_SYNTHETIC_DO_WIPED"));
+assert(entry.includes('etagDoesNotMatch'));
 assert(entry.includes("if(!guard(request,env))return reply(403"));
 assert(runner.includes("if(![0,1].includes(x.meta.rows_written))"));
 assert(workflow.includes("if: false # APP785 QA exact one-shot PASS"));

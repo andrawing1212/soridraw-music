@@ -979,6 +979,135 @@ jobs:
             raise SystemExit('HOLD_QA518_FUNCTIONS_NOT_EXACT_PILOT_PLUS_FOLLOW')
           print('APP518_QA_FIREBASE_TWO_INSTALLED_FOLLOW_PRESERVED=PASS')
           PY
+      - name: QA one-song: actual saved delete receipt resave
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gcloud projects describe soridraw-app --format='value(projectNumber)' 2>/dev/null)" = 1083981050742
+          export APP518_QA_TOKEN="$(gcloud auth print-access-token)"
+          export APP518_QA_SECRET="$(gcloud secrets versions access latest --project=soridraw-app --secret=SORIDRAW_CATALOG_SERVER_HMAC_518)"
+          echo "::add-mask::$APP518_QA_SECRET"
+          export APP518_QA_SOURCE_URI="$(gcloud functions describe app518QaExactFavoriteSource --gen2 --project=soridraw-app --region=asia-northeast3 --format='value(serviceConfig.uri)')"
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {createHmac} from 'node:crypto';
+          const run=process.env.GITHUB_RUN_ID;
+          const token=process.env.APP518_QA_TOKEN;
+          const secret=process.env.APP518_QA_SECRET;
+          const uri=process.env.APP518_QA_SOURCE_URI;
+          const uid='qa518-'+run+'-owner';
+          const id='qa518-'+run+'-song';
+          const root='https://firestore.googleapis.com/v1/projects/soridraw-app/databases/(default)/documents';
+          const doc=root+'/favorites/'+id;
+          const receiptId=Buffer.from(JSON.stringify([uid,id])).toString('base64url');
+          const receipt=root+'/server_music_note_delete_receipts_518/'+receiptId;
+          assert.match(run,/^[0-9]{8,20}$/);
+          assert.ok(token?.length>30&&secret?.length>=32);
+          const dest=new URL(uri);
+          assert.equal(dest.protocol,'https:');
+          assert.ok(dest.hostname.endsWith('.run.app')||dest.hostname.endsWith('.cloudfunctions.net'));
+          assert.equal(dest.pathname,'/');
+          let owned=false,complete=false;
+          const fs=async(method,url,body)=>{
+            const headers={Authorization:'Bearer '+token,Accept:'application/json'};
+            if(body!==undefined)headers['content-type']='application/json';
+            const res=await fetch(url,{method,headers,...(body===undefined?{}:{body:JSON.stringify(body)}),redirect:'error',signal:AbortSignal.timeout(20000)});
+            const data=res.status===204?null:await res.json().catch(()=>null);
+            return {status:res.status,data};
+          };
+          const exact=(d)=>d?.fields?.qaOnly?.booleanValue===true&&
+            d.fields?.qaRunId?.stringValue===run&&d.fields?.uid?.stringValue===uid;
+          const setField=(name,value)=>({[name]:typeof value==='boolean'?{booleanValue:value}:{stringValue:value}});
+          const save=async title=>{
+            const fields={...setField('uid',uid),...setField('qaRunId',run),
+              ...setField('qaOnly',true),...setField('saved',true),...setField('title',title)};
+            const x=await fs('POST',root+'/favorites?documentId='+id,{fields});
+            assert.equal(x.status,200,'QA_FIRESTORE_SAVE_HTTP_'+x.status);
+            assert.ok(exact(x.data),'QA_FIRESTORE_SAVE_OWNER');
+            owned=true;
+            return x.data;
+          };
+          const remove=async x=>{
+            assert.ok(exact(x)&&typeof x.updateTime==='string','QA_DELETE_NOT_OWNED');
+            const u=doc+'?currentDocument.updateTime='+encodeURIComponent(x.updateTime);
+            const d=await fs('DELETE',u);
+            assert.ok([200,204].includes(d.status),'QA_FIRESTORE_DELETE_'+d.status);
+          };
+          const source=async()=>{
+            const raw=JSON.stringify({action:'exact-source',uid,documentId:id});
+            const ts=String(Date.now());
+            const sig=createHmac('sha256',secret).update(ts+'\n'+raw).digest('hex');
+            const res=await fetch(uri,{method:'POST',redirect:'error',headers:{
+              'content-type':'application/json','x-soridraw-server-time-518':ts,
+              'x-soridraw-server-signature-518':sig
+            },body:raw,signal:AbortSignal.timeout(20000)});
+            return {http:res.status,data:await res.json().catch(()=>null)};
+          };
+          const waitSource=async(state)=>{
+            for(let i=0;i<35;i++){
+              const a=await source();
+              if(a.http===200&&a.data?.code==='SOURCE_VERIFIED'&&
+                 a.data?.source?.uid===uid&&a.data.source.documentId===id&&
+                 a.data.source.verifiedByServer===true&&a.data.source.state===state)
+                return a.data.source;
+              if(a.http===403||a.http===500||a.http===503)
+                throw Error('QA_SOURCE_FUNCTION_HTTP_'+a.http+'_'+String(a.data?.code||''));
+              if(i<34)await new Promise(r=>setTimeout(r,2000));
+            }
+            throw Error('QA_EVENTARC_DELETE_RECEIPT_NOT_DELIVERED_'+state);
+          };
+          const purgeOwned=async()=>{
+            if(!owned)return;
+            let current=await fs('GET',doc);
+            if(current.status===200){
+              assert.ok(exact(current.data),'QA_CLEANUP_NOT_OWNED');
+              const url=doc+'?updateMask.fieldPaths=qa518CleanupFinal&currentDocument.updateTime='+encodeURIComponent(current.data.updateTime);
+              const patched=await fs('PATCH',url,{fields:{qa518CleanupFinal:{booleanValue:true}}});
+              assert.equal(patched.status,200,'QA_CLEANUP_MARKER_FAIL_'+patched.status);
+              await remove(patched.data);
+            }else assert.equal(current.status,404,'QA_CLEANUP_DOC_UNKNOWN');
+            const r=await fs('GET',receipt);
+            if(r.status===200){
+              assert.equal(r.data?.fields?.uid?.stringValue,uid,'QA_RECEIPT_FOREIGN_OWNER');
+              assert.equal(r.data?.fields?.documentId?.stringValue,id,'QA_RECEIPT_FOREIGN_DOCUMENT');
+              const d=await fs('DELETE',receipt+'?currentDocument.updateTime='+encodeURIComponent(r.data.updateTime));
+              assert.ok([200,204].includes(d.status),'QA_RECEIPT_CLEANUP_FAIL_'+d.status);
+            }else assert.equal(r.status,404,'QA_RECEIPT_UNKNOWN');
+            const [a,b]=await Promise.all([fs('GET',doc),fs('GET',receipt)]);
+            assert.equal(a.status,404,'QA_FINAL_FAVORITE_PRESENT');
+            assert.equal(b.status,404,'QA_FINAL_RECEIPT_PRESENT');
+            console.log('APP518_QA_ONE_SONG_FAVORITE_AND_RECEIPT_CLEANED=PASS');
+          };
+          let prior=null;
+          try{
+            const [a,b]=await Promise.all([fs('GET',doc),fs('GET',receipt)]);
+            assert.equal(a.status,404,'QA_FAVORITE_ALREADY_EXISTS');
+            assert.equal(b.status,404,'QA_RECEIPT_ALREADY_EXISTS');
+            const saved=await save('APP518 QA synthetic save');
+            const s1=await waitSource('saved');
+            assert.equal(s1.updateTime,saved.updateTime,'QA_SAVE_VERSION_NOT_EXACT');
+            await remove(saved);
+            const s2=await waitSource('removed');
+            assert.ok(s2.updateTime>s1.updateTime,'QA_RECEIPT_VERSION_NOT_NEWER');
+            const resaved=await save('APP518 QA synthetic resave');
+            const s3=await waitSource('saved');
+            assert.equal(s3.updateTime,resaved.updateTime,'QA_RESAVE_VERSION_MISMATCH');
+            assert.ok(s3.updateTime>s2.updateTime,'QA_RESAVE_NOT_NEWER');
+            console.log('APP518_QA_REAL_FIREBASE_SAVE_DELETE_RECEIPT_RESAVE=PASS');
+            complete=true;
+          }catch(e){
+            prior=e;
+            console.error('APP518_QA_REAL_FIREBASE_SEQUENCE=FAIL_'+String(e?.message||'UNKNOWN').slice(0,120));
+          }finally{
+            try{await purgeOwned();}catch(e){
+              console.error('APP518_QA_REAL_FIREBASE_CLEANUP=FAIL_'+String(e?.message||'UNKNOWN').slice(0,110));
+              if(!prior)prior=e;
+            }
+          }
+          if(prior)throw prior;
+          if(!complete)throw Error('APP518_QA_SEQUENCE_INCOMPLETE');
+          NODE
+          unset APP518_QA_TOKEN APP518_QA_SECRET APP518_QA_SOURCE_URI
       - name: ALWAYS remove only this run's two QA functions, even on failed install
         if: always()
         shell: bash

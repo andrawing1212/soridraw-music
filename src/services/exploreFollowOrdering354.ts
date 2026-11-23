@@ -87,7 +87,17 @@ export const requestOrderedExploreFollow354 = (
     return task;
   };
   if (!revisions354.has(key) && !pending354.has(key)) {
-    return request(path, { method: following ? 'PUT' : 'DELETE' }).catch(error => {
+    // APP785: advertise *capability*, never a server-authoritative receipt.
+    // Older servers ignore this standard Accept parameter and retain the
+    // exact existing legacy single-write behavior (no new HTTP request).
+    // A QA-verified compatible server may reject it with FOLLOW_ORDER_REQUIRED
+    // BEFORE writing; only then do we fetch the revision and send ordered.
+    // Accept is CORS-safelisted; unlike a custom header it requires no extra
+    // preflight solely for this signal.
+    return request(path, {
+      method: following ? 'PUT' : 'DELETE',
+      headers: { Accept: 'application/json; soridraw-follow=ordered-354' },
+    }).catch(error => {
       if ((error as { code?: string })?.code !== 'FOLLOW_ORDER_REQUIRED') throw error;
       return ordered();
     });

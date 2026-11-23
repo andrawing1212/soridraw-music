@@ -1040,12 +1040,26 @@ jobs:
             --project=soridraw-app --region=asia-northeast3 \
             --member="$member" --role=roles/run.invoker \
             --quiet >/dev/null
-          echo 'APP518_QA_EVENTARC_ACTUAL_TRIGGER_IDENTITY_BOUND=PASS'
-          # The previous run's deletion arrived 41s and 60s after granting
-          # Invoker but Cloud Run returned 403 before entering the handler.
-          # Allow the just-written service IAM permission to propagate once.
-          sleep 120
-          echo 'APP518_QA_EVENTARC_INVOKER_PROPAGATION_WINDOW_COMPLETE=PASS'
+          # Isolated QA only. Cloud Run returned transport-level 403 for
+          # Eventarc POST despite its actual trigger identity being bound.
+          # Make ONLY this run's ephemeral QA delete target callable, with
+          # one exact synthetic ID enforced by index.cjs. The service and
+          # its IAM policy are removed in this job's ALWAYS cleanup step.
+          gcloud run services add-iam-policy-binding app518qasyntheticdeletereceipt \
+            --project=soridraw-app --region=asia-northeast3 \
+            --member=allUsers --role=roles/run.invoker \
+            --quiet >/dev/null
+          gcloud run services get-iam-policy app518qasyntheticdeletereceipt \
+            --project=soridraw-app --region=asia-northeast3 --format=json > "$RUNNER_TEMP/app518-qa-temp-run-iam.json"
+          python3 - "$RUNNER_TEMP/app518-qa-temp-run-iam.json" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1],encoding='utf8'))
+          allowed={x for b in d.get('bindings',[]) if b.get('role')=='roles/run.invoker' for x in b.get('members',[])}
+          if 'allUsers' not in allowed:
+              raise SystemExit('HOLD_QA518_EPHEMERAL_RUN_INVOCATION_UNAVAILABLE')
+          print('APP518_QA_EXACT_TEMP_DELETE_INVOKER=PASS')
+          PY
+          sleep 12
       - name: "QA one-song: actual saved delete receipt resave"
         shell: bash
         run: |

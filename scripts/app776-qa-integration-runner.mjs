@@ -22,7 +22,7 @@ function guard(){
  if(QA===PROD||!DIR||!/^[0-9]{8,20}$/.test(RUN)||
   process.env.GITHUB_REPOSITORY!=='andrawing1212/soridraw-music'||
   process.env.GITHUB_EVENT_NAME!=='issue_comment'||
-  process.env.APP784_QA_APPROVAL!=='APP784_ISOLATED_ONLY'||
+  process.env.APP785_QA_APPROVAL!=='APP785_ISOLATED_ONLY'||
   process.env.GITHUB_REF!=='refs/heads/main'||
   process.env.CLOUDFLARE_ACCOUNT_ID!==QA)issue('QA_IDENTITY');
  for(const name of ['CLOUDFLARE_QA_API_TOKEN','CLOUDFLARE_QA_DATA_TOKEN',
@@ -120,6 +120,7 @@ async function upload(){
    {type:'plain_text',name:'APP776_EPOCH',text:s.epoch},
    {type:'plain_text',name:'APP776_CUTOVER',text:s.cutover},
    {type:'plain_text',name:'APP776_ROW',text:s.row},
+   {type:'plain_text',name:'APP785_ISOLATED_TEST',text:'1'},
   ]};
  const form=new FormData();
  form.append('metadata',new Blob([JSON.stringify(metadata)],
@@ -150,10 +151,11 @@ async function upload(){
  console.log('APP776_DISPOSABLE_QA_WORKER_WITH_D1_R2=PASS');
 }
 function resultCheck(x,n){if(x.http!==200||!x.ok)issue(n+'_HTTP_'+x.http)}
-async function wfetch(s,method,path,body,access=true){
+async function wfetch(s,method,path,body,access=true,accept){
  const res=await fetch('https://'+NAME+'.soridraw-qa.workers.dev'+path,{
   method,redirect:'error',signal:AbortSignal.timeout(20000),
-  headers:{'Cache-Control':'no-store',...(access?{'X-APP776-QA-Access':s.access}:{}),
+  headers:{'Cache-Control':'no-store',...(accept?{Accept:accept}:{}),
+   ...(access?{'X-APP776-QA-Access':s.access}:{}),
    ...(body===undefined?{}:{'Content-Type':'application/json'})},
   ...(body===undefined?{}:{body}),
  });
@@ -410,6 +412,69 @@ async function test784(){
  console.log('APP784_REAL_PROD_AUTH_GLOBAL_WRITERS_AND_PITR=NOT_TESTED_HOLD');
 }
 
+async function test785(){
+ guard();const s=state();if(!s)issue('QA785_EXACT_RUN_STATE_REQUIRED');
+ const route='/v1/profiles/qa776OwnerSynthetic/follow';
+ const cap='application/json; soridraw-follow=ordered-354';
+ let ready=false;
+ for(let i=0;i<14;i++){
+  try{const h=await wfetch(s,'GET','/health');
+   if(h.code===200&&h.value?.status==='QA_READY'&&h.value.present===true&&
+      h.value.following===false){ready=true;break}
+  }catch{}
+  if(i<13)await delay(1500);
+ }
+ if(!ready)issue('QA785_EMPTY_SYNTHETIC_ROW_NOT_READY');
+ const forbidden=await wfetch(s,'PUT',route,undefined,false,cap);
+ if(forbidden.code!==403||forbidden.value?.status!=='DENIED')
+  issue('QA785_UNAUTHENTICATED_WRITE_NOT_DENIED');
+ // Existing old browser: no capability hint, 3 sequential clicks are allowed.
+ for(const [method,desired] of [['PUT',true],['DELETE',false],['PUT',true]]){
+  const old=await wfetch(s,method,route);
+  if(old.code!==200||old.value?.status!=='QA785_CANONICAL_CHANGED'||
+     old.value?.following!==desired||old.value?.rowsWritten!==1)
+   issue('QA785_LEGACY_FOLLOW_UNFOLLOW_REFOLLOW_CHANGED');
+ }
+ const afterLegacy=await wfetch(s,'GET','/health');
+ if(afterLegacy.code!==200||afterLegacy.value?.following!==true)
+  issue('QA785_LEGACY_FINAL_STATE_NOT_FOLLOWING');
+ // New browser is opted in; response is a ZERO-write 409 requiring the
+ // existing client revision GET, not a second legacy mutation.
+ const probe=await wfetch(s,'DELETE',route,undefined,true,cap);
+ if(probe.code!==409||
+    probe.value?.error?.code!=='FOLLOW_ORDER_REQUIRED')
+  issue('QA785_NEGOTIATION_NOT_WRITE_FREE_409');
+ const afterProbe=await wfetch(s,'GET','/health');
+ if(afterProbe.code!==200||afterProbe.value?.following!==true)
+  issue('QA785_NEGOTIATION_MODIFIED_SYNTHETIC_D1');
+ const operation=await opId(s,3,false);
+ const next=await wfetch(s,'DELETE',route,JSON.stringify({
+  followOperationId:operation,followExpectedRevision:3}),true,cap);
+ if(next.code!==200||next.value?.status!=='QA785_CANONICAL_CHANGED'||
+    next.value?.following!==false||next.value?.rowsWritten!==1)
+  issue('QA785_ORDERED_UNFOLLOW_NOT_W1');
+ const duplicate=await wfetch(s,'DELETE',route,JSON.stringify({
+  followOperationId:operation,followExpectedRevision:3}),true,cap);
+ if(duplicate.code!==200||duplicate.value?.status!=='QA785_CANONICAL_NOOP'||
+    duplicate.value?.rowsWritten!==0)
+  issue('QA785_ORDERED_REPLAY_NOT_W0');
+ const malformed=await wfetch(s,'PUT',route,JSON.stringify({
+  followOperationId:'invalid',followExpectedRevision:2}),true,cap);
+ if(malformed.code!==409||malformed.value?.status!=='QA785_ORDERED_REVISION_HOLD')
+  issue('QA785_MALFORMED_ORDERED_NOT_HELD');
+ const final=await wfetch(s,'GET','/app784/health');
+ if(final.code!==200||final.value?.status!=='QA784_HEALTH'||
+    final.value?.following!==false||final.value?.objectsPresent!==0)
+  issue('QA785_UNEXPECTED_R2_OBJECT_OR_FINAL_STATE');
+ const rows=await d1(s,"SELECT following FROM app768_qa_synthetic_follow WHERE k='"+s.row+"'");
+ if(Number(rows.results?.[0]?.following)!==0)issue('QA785_D1_UNFOLLOW_FINAL_STATE_FAILED');
+ console.log('APP785_PHYSICAL_QA_LEGACY_FOLLOW_UNFOLLOW_REFOLLOW_W1_EACH=PASS');
+ console.log('APP785_PHYSICAL_QA_ACCEPT_PROBE_409_AND_NO_D1_WRITE=PASS');
+ console.log('APP785_PHYSICAL_QA_ORDERED_UNFOLLOW_W1_REPLAY_W0=PASS');
+ console.log('APP785_PHYSICAL_QA_R2_NO_NEW_OBJECTS_AND_CLEANUP_REQUIRED=PASS');
+ console.log('APP785_REAL_SIGNED_AUTH_PC_MOBILE_AND_GLOBAL_WRITER_CUTOVER=NOT_TESTED');
+}
+
 async function cleanup(){
  guard();const s=state();if(!s){console.log('APP776_NO_STATE_TO_CLEAN');return;}
  const errors=[];
@@ -451,6 +516,6 @@ async function cleanup(){
  console.log('APP776_EXACT_QA_D1_ROW_AND_R2_OBJECTS_CLEANED=PASS');
  console.log('APP776_ORIGINAL_APP583_QA_RESOURCES_UNCHANGED=PASS');
 }
-const phases={preflight,upload,test,test783,test784,cleanup};
+const phases={preflight,upload,test,test783,test784,test785,cleanup};
 const p=process.argv[2];if(!Object.hasOwn(phases,p))issue('BAD_PHASE');
 phases[p]().catch(e=>{console.error(String(e?.message||e));process.exitCode=2});

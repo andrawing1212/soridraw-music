@@ -68,7 +68,13 @@ jobs:
           node --check scripts/app789-qa-physical-runner.mjs
           node --check cloudflare/explore-worker/experiments/owner-follow-qa789-entry.mjs
           node scripts/verify-789-qa-physical-source.mjs
-          npx --yes esbuild@0.25.12 cloudflare/explore-worker/experiments/owner-follow-qa789-entry.mjs --bundle --format=esm --platform=browser --target=es2022 --outfile=/tmp/app789-qa-bundle-check.mjs
+          git fetch --no-tags origin 4363820117100cb03bcbc44a01e127aeb5de3cf4
+          git worktree add --detach "$RUNNER_TEMP/app789-frozen" 4363820117100cb03bcbc44a01e127aeb5de3cf4
+          cp cloudflare/explore-worker/experiments/owner-follow-qa789-entry.mjs "$RUNNER_TEMP/app789-frozen/cloudflare/explore-worker/experiments/"
+          for file in app788-qa-independent-owner-floor.mjs app761-production-owner-do-runtime.mjs app755-production-owner-receipt.mjs app759-production-owner-alarm.mjs app767-r2-admission-candidate.mjs app783-qa-immutable-settled-history.mjs; do
+            cp "scripts/$file" "$RUNNER_TEMP/app789-frozen/scripts/"
+          done
+          npx --yes esbuild@0.25.12 "$RUNNER_TEMP/app789-frozen/cloudflare/explore-worker/experiments/owner-follow-qa789-entry.mjs" --bundle --format=esm --platform=browser --target=es2022 --outfile=/tmp/app789-qa-bundle-check.mjs
   live:
     if: false # APP785 QA exact one-shot PASS and exact cleanup complete; do not auto-repeat
     env:
@@ -176,7 +182,13 @@ jobs:
       - name: Bundle existing QA DO class with APP788 isolated R2 owner-floor runtime
         run: |
           set -euo pipefail
-          npx --yes esbuild@0.25.12 cloudflare/explore-worker/experiments/owner-follow-qa789-entry.mjs \
+          git fetch --no-tags origin 4363820117100cb03bcbc44a01e127aeb5de3cf4
+          git worktree add --detach "$RUNNER_TEMP/app789-frozen" 4363820117100cb03bcbc44a01e127aeb5de3cf4
+          cp cloudflare/explore-worker/experiments/owner-follow-qa789-entry.mjs "$RUNNER_TEMP/app789-frozen/cloudflare/explore-worker/experiments/"
+          for file in app788-qa-independent-owner-floor.mjs app761-production-owner-do-runtime.mjs app755-production-owner-receipt.mjs app759-production-owner-alarm.mjs app767-r2-admission-candidate.mjs app783-qa-immutable-settled-history.mjs; do
+            cp "scripts/$file" "$RUNNER_TEMP/app789-frozen/scripts/"
+          done
+          npx --yes esbuild@0.25.12 "$RUNNER_TEMP/app789-frozen/cloudflare/explore-worker/experiments/owner-follow-qa789-entry.mjs" \
             --bundle --format=esm --platform=browser --target=es2022 \
             --outfile=app789-qa-worker.bundle.mjs
       - name: Upload OFF candidate version with inherited DO namespace and QA D1/R2 only

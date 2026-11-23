@@ -187,6 +187,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  const recoveryGateSource=readFileSync(resolve('scripts/app765-production-canonical-recovery.mjs'),'utf8');
  const r2AdmissionSource=readFileSync(resolve('scripts/app767-r2-admission-candidate.mjs'),'utf8');
  const connectionSource=readFileSync(resolve('scripts/app786-production-owner-connections.mjs'),'utf8');
+ const relaySource=readFileSync(resolve('scripts/app787-production-signed-owner-relay.mjs'),'utf8');
  if(!adapterSource.includes('APP729_PRODUCTION_OWNER_FOLLOW_COMPILED_OPEN = false'))
    fail('INTEGRATION_COMPILE_OFF_REQUIRED');
  if(!productionBridgeSource.includes('APP743_PRODUCTION_FOLLOW_COMPILED_OPEN=false'))
@@ -216,6 +217,10 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
     !connectionSource.includes('HOLD_NO_LIVE_FOLLOW_ENABLE')||
     !connectionSource.includes('INDEPENDENT_OF_DO_PITR'))
    fail('APP786_EXACT_18_CONNECTIONS_OFF_AND_RECOVERY_PROOF_REQUIRED');
+ if(!relaySource.includes('APP787_PRODUCTION_SIGNED_RELAY_COMPILED_OPEN=false')||
+    !relaySource.includes('APP787_VERIFIED_OWNER_ALARM_ONLY')||
+    !relaySource.includes('X-Soridraw-Follow-Relay529-Signature'))
+   fail('APP787_SIGNED_RECEIVER_SOURCE_MISSING_OR_ENABLED');
  mkdirSync(join(dir,'integration'),{recursive:true});
  const adapterPath=join(dir,'integration','app729-production-follow-adapter.mjs');
  const lifecyclePath=join(dir,'integration','app730-source-only-follow-bridge.mjs');
@@ -229,6 +234,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  const recoveryGatePath=join(dir,'integration','app765-production-canonical-recovery.mjs');
  const r2AdmissionPath=join(dir,'integration','app767-r2-admission-candidate.mjs');
  const connectionPath=join(dir,'integration','app786-production-owner-connections.mjs');
+ const relayPath=join(dir,'integration','app787-production-signed-owner-relay.mjs');
  if(!lifecycleSource.includes('APP730_PRODUCTION_RELAY_ENABLED = false'))
    fail('DURABLE_RELAY_COMPILE_OFF_REQUIRED');
  writeFileSync(adapterPath,adapterSource);
@@ -243,6 +249,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  writeFileSync(recoveryGatePath,recoveryGateSource);
  writeFileSync(r2AdmissionPath,r2AdmissionSource);
  writeFileSync(connectionPath,connectionSource);
+ writeFileSync(relayPath,relaySource);
  writeFileSync(entryPath,entry.code);
  if(sha256(readFileSync(entryPath))!==entry.sha256)
    fail('INTEGRATION_ENTRY_DRIFT');
@@ -258,6 +265,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
  checkSyntax(recoveryGatePath);
  checkSyntax(r2AdmissionPath);
  checkSyntax(connectionPath);
+ checkSyntax(relayPath);
  checkSyntax(entryPath);
  candidate.manifest.integration={
    entrypoint:'production-follow-entry.mjs',
@@ -269,6 +277,7 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
    app765RecoveryGateSha256:sha256(readFileSync(recoveryGatePath)),
    app767R2AdmissionQaOnlySha256:sha256(readFileSync(r2AdmissionPath)),
    app786ExactOwnerConnectionsSha256:sha256(readFileSync(connectionPath)),
+   app787SignedRelaySha256:sha256(readFileSync(relayPath)),
    app755SourceFilesCopiedExactly:
      sha256(readFileSync(ownerReceiptPath))===sha256(ownerReceiptSource)&&
      sha256(readFileSync(backendPath))===sha256(backendSource),
@@ -282,6 +291,9 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
      sha256(r2AdmissionSource),
    app786OwnerConnectionsExactlyCopied:sha256(readFileSync(connectionPath))===
      sha256(connectionSource),
+   app787SignedRelayExactlyCopied:sha256(readFileSync(relayPath))===
+     sha256(relaySource),
+   app787TransportSourceOnlyOff:true,
    app786OwnerConnectionsSourceOnlyOff:true,
    app786NewProdBindingsAdded:0,
    originalMainUntouched:true,
@@ -312,7 +324,8 @@ export function writeApp728CandidateToTemp(candidate,tempRoot){
     !candidate.manifest.integration.app761OwnerDoRuntimeSourceExactlyCopied||
     !candidate.manifest.integration.app765RecoveryGateSourceExactlyCopied||
     !candidate.manifest.integration.app767R2AdmissionQaOnlyExactlyCopied||
-    !candidate.manifest.integration.app786OwnerConnectionsExactlyCopied)
+    !candidate.manifest.integration.app786OwnerConnectionsExactlyCopied||
+    !candidate.manifest.integration.app787SignedRelayExactlyCopied)
    fail('APP755_759_761_765_767_REVIEW_SOURCE_NOT_IDENTICAL');
  writeFileSync(join(dir,'review-manifest.json'),JSON.stringify(candidate.manifest,null,2)+'\n');
  return {outputDirectory:dir,manifest:candidate.manifest};

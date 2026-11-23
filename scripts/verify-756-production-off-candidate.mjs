@@ -55,6 +55,8 @@ try{
  assert.equal(built.manifest.integration.app765RecoveryGateSourceExactlyCopied,true);
  assert.equal(built.manifest.integration.app767R2AdmissionQaOnlyExactlyCopied,true);
  assert.equal(built.manifest.integration.app786OwnerConnectionsExactlyCopied,true);
+ assert.equal(built.manifest.integration.app787SignedRelayExactlyCopied,true);
+ assert.equal(built.manifest.integration.app787TransportSourceOnlyOff,true);
  assert.equal(built.manifest.integration.app786OwnerConnectionsSourceOnlyOff,true);
  assert.equal(built.manifest.integration.app786NewProdBindingsAdded,0);
  const app786Source=readFileSync(join(built.outputDirectory,'integration','app786-production-owner-connections.mjs'),'utf8');
@@ -94,6 +96,9 @@ try{
  const ownerDoRuntimeSource=readFileSync(join(built.outputDirectory,'integration','app761-production-owner-do-runtime.mjs'),'utf8');
  const recoveryGateSource=readFileSync(join(built.outputDirectory,'integration','app765-production-canonical-recovery.mjs'),'utf8');
  const r2AdmissionSource=readFileSync(join(built.outputDirectory,'integration','app767-r2-admission-candidate.mjs'),'utf8');
+ const relaySource=readFileSync(join(built.outputDirectory,'integration','app787-production-signed-owner-relay.mjs'),'utf8');
+ assert(relaySource.includes('APP787_PRODUCTION_SIGNED_RELAY_COMPILED_OPEN=false'));
+ assert.equal(sha(relaySource),built.manifest.integration.app787SignedRelaySha256);
  assert(backendSource.includes('APP755_PRODUCTION_BACKEND_COMPILED_OPEN=false'));
  assert(receiptSource.includes('APP755_PRODUCTION_OWNER_RECEIPT_COMPILED_OPEN=false'));
  assert(alarmSource.includes('APP759_PRODUCTION_OWNER_ALARM_COMPILED_OPEN=false'));

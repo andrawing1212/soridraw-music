@@ -22,13 +22,17 @@ writeFileSync(join(root,'integration','app729-production-follow-adapter.mjs'),
  'export const APP729_PRODUCTION_OWNER_FOLLOW_COMPILED_OPEN = false;\n');
 writeFileSync(join(root,'integration','app786-production-owner-connections.mjs'),
  'export const APP786_PRODUCTION_OWNER_CONNECTIONS_COMPILED_OPEN=false;\n');
+writeFileSync(join(root,'integration','app787-production-signed-owner-relay.mjs'),
+ 'export const APP787_PRODUCTION_SIGNED_RELAY_COMPILED_OPEN=false;\n');
 try{
  const body=makeInactiveVersionBody({oldVersion:version,oldSettings:{bindings},
   pinnedVersion:v,candidateDir:root});
  assert.equal(body.main_module,'production-follow-entry.mjs');
  assert.equal(body.bindings.length,12);
  assert(body.bindings.every(x=>x.type==='inherit'&&x.version_id===version));
- assert.equal(body.modules.length,4);
+ assert.equal(body.modules.length,5);
+ assert(body.modules.some(x=>x.name==='integration/app787-production-signed-owner-relay.mjs'));
+ assert(body.bindings.every(x=>x.type==='inherit'&&x.version_id===version));
  assert(body.modules.some(x=>x.name==='integration/app786-production-owner-connections.mjs'));
  assert.equal(body.bindings.filter(x=>x.type==='inherit').length,12);
  assert.equal(body.deploy,undefined);

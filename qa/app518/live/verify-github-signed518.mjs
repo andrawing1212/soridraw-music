@@ -27,7 +27,7 @@ let networkCalls=0;
 const fetcher=async (url,opts)=>{
  assert.equal(url,'https://token.actions.githubusercontent.com/.well-known/jwks');
  assert.equal(opts.method,'GET');
- assert.equal(opts.redirect,'error');
+ assert.equal(opts.redirect,'manual');
  networkCalls++;
  return {status:200,json:async()=>({keys:[jwk]})};
 };

@@ -76,7 +76,7 @@ export const verifyGithubOidcQa518=async({
   let response;
   try{
    response=await fetcher(JWKS,{
-    method:'GET',redirect:'error',headers:{Accept:'application/json'},
+    method:'GET',redirect:'manual',headers:{Accept:'application/json'},
     signal:AbortSignal.timeout(10000),
    });
   }catch{fail('HOLD_QA_OIDC_JWKS_UNAVAILABLE');}

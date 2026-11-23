@@ -832,3 +832,48 @@ jobs:
           print('APP518_QA_FUNCTION_DEPLOY=0; D1_WRITE=0; R2_WRITE=0')
           PY
 
+qa_d1_additive_one_shot:
+    # Director-approved isolated QA schema only. NO D1 DROP, user rows,
+    # new Cloudflare resources, Firebase functions, or APP518 shared cutover.
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 528 &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/app518-qa-d1-additive 864f796da24413309567198c9de502b13cdedd50'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test immutable PR 528 SQLite schema and latest-version CAS before any QA writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          pinned=864f796da24413309567198c9de502b13cdedd50
+          git cat-file -e "$pinned^{commit}"
+          export APP518_PINNED_CANDIDATE_DIR="$RUNNER_TEMP/app518-pinned-candidate"
+          git worktree add --detach "$APP518_PINNED_CANDIDATE_DIR" "$pinned"
+          node --check qa/app518/live/apply-qa-d1-schema518.mjs
+          node --experimental-sqlite qa/app518/live/verify-qa-d1-schema518.mjs
+      - name: One-time strictly additive D1 schema in isolated QA account only
+        shell: bash
+        env:
+          CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+          CLOUDFLARE_QA_STORAGE_READ_TOKEN: ${{ secrets.CLOUDFLARE_QA_STORAGE_READ_TOKEN }}
+          CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
+        run: |
+          set -euo pipefail
+          export APP518_PINNED_CANDIDATE_DIR="$RUNNER_TEMP/app518-pinned-candidate"
+          node qa/app518/live/apply-qa-d1-schema518.mjs --exact-qa-run
+          echo 'APP518_QA_D1_ADD_ONLY_COMPLETE=PASS'
+

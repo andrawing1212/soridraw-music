@@ -32,6 +32,7 @@ const timeClaims=(p,nowMs)=>{
 };
 export const verifyGithubOidcQa518=async({
  token,runId,workflowSha,nowMs=Date.now(),fetcher=fetch,
+ pinnedJwks=null,pinnedAtMs=null,
 }={})=>{
  if(!/^[0-9]{8,20}$/.test(text(runId))
   ||!/^[a-f0-9]{40}$/.test(text(workflowSha))
@@ -62,19 +63,31 @@ export const verifyGithubOidcQa518=async({
   ||String(claims.run_attempt)!=='1')
   fail('HOLD_QA_OIDC_IMMUTABLE_CLAIMS');
  timeClaims(claims,nowMs);
- let response;
- try{
-  response=await fetcher(JWKS,{
-   method:'GET',redirect:'error',headers:{Accept:'application/json'},
-   signal:AbortSignal.timeout(10000),
-  });
- }catch{fail('HOLD_QA_OIDC_JWKS_UNAVAILABLE');}
- if(response?.status!==200)fail('HOLD_QA_OIDC_JWKS_UNAVAILABLE');
  let jwks;
- try{jwks=await response.json();}
- catch{fail('HOLD_QA_OIDC_JWKS_UNAVAILABLE');}
- if(!Array.isArray(jwks?.keys)||jwks.keys.length>30)
+ if(pinnedJwks!==null){
+  // QA-only deploy-time official GitHub PUBLIC verification material,
+  // pre-verified with a real JWT from the exact owner issue-comment run.
+  // Not accepted from request headers, token claims or user-supplied input.
+  if(!Number.isSafeInteger(pinnedAtMs)
+   ||pinnedAtMs>nowMs+20000||nowMs-pinnedAtMs>600000)
+   fail('HOLD_QA_OIDC_PIN_EXPIRED');
+  jwks=pinnedJwks;
+ }else{
+  let response;
+  try{
+   response=await fetcher(JWKS,{
+    method:'GET',redirect:'error',headers:{Accept:'application/json'},
+    signal:AbortSignal.timeout(10000),
+   });
+  }catch{fail('HOLD_QA_OIDC_JWKS_UNAVAILABLE');}
+  if(response?.status!==200)fail('HOLD_QA_OIDC_JWKS_UNAVAILABLE');
+  try{jwks=await response.json();}
+  catch{fail('HOLD_QA_OIDC_JWKS_UNAVAILABLE');}
+ }
+ if(!Array.isArray(jwks?.keys)||jwks.keys.length<1||jwks.keys.length>10)
   fail('HOLD_QA_OIDC_JWKS_UNAVAILABLE');
+ if(new Set(jwks.keys.map(k=>k?.kid)).size!==jwks.keys.length)
+  fail('HOLD_QA_OIDC_DUPLICATE_SIGNING_KID');
  const keys=jwks.keys.filter(x=>x.kid===header.kid&&x.kty==='RSA'
   &&(!x.use||x.use==='sig')&&(!x.alg||x.alg==='RS256')
   &&typeof x.n==='string'&&typeof x.e==='string');

@@ -211,7 +211,18 @@ export const createApp518QaR2Lifecycle518=({
    if(proof?.source!=='GITHUB_VERIFIED_OIDC_RSA_SIGNATURE'
     ||proof.runId!==ctx.run||proof.expiresAtMs<=now())
     return response('QA518_GITHUB_OIDC_REJECTED',403);
-  }catch{return response('QA518_GITHUB_OIDC_REJECTED',403);}
+  }catch(e){
+   // Fixed error categories only, NEVER a JWT, identity claim or secret.
+   const codes=new Set([
+    'HOLD_QA_OIDC_BOUND_CONTEXT','HOLD_QA_MALFORMED_OIDC',
+    'HOLD_QA_OIDC_UNTRUSTED_ALGORITHM','HOLD_QA_OIDC_IMMUTABLE_CLAIMS',
+    'HOLD_QA_OIDC_TIME','HOLD_QA_OIDC_EXPIRED_OR_REPLAY',
+    'HOLD_QA_OIDC_JWKS_UNAVAILABLE','HOLD_QA_OIDC_KID_UNTRUSTED',
+    'HOLD_QA_OIDC_BAD_SIGNATURE',
+   ]);
+   const detail=codes.has(e?.message)?e.message:'UNKNOWN';
+   return response('QA518_GITHUB_OIDC_REJECTED_'+detail,403);
+  }
   let body;
   try{
    const raw=await request.text();

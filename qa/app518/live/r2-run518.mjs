@@ -50,11 +50,29 @@ const call=async(action,withReadToken=false)=>{
 };
 const command=process.argv[2];
 if(command==='--bootstrap'){
- const noToken=await fetch(url,{method:'POST',
-  headers:{'content-type':'application/json'},
-  body:JSON.stringify({action:'inspect',runId:run}),redirect:'error',
-  signal:AbortSignal.timeout(12000)});
- assert.equal(noToken.status,403,'MUST_DENY_UNSIGNED_R2_INSPECT');
+ let workerReady=false;
+ for(let i=0;i<12;i++){
+  try{
+   const noToken=await fetch(url,{method:'POST',
+    headers:{'content-type':'application/json'},
+    body:JSON.stringify({action:'inspect',runId:run}),redirect:'error',
+    signal:AbortSignal.timeout(12000)});
+   if(noToken.status===403){
+    const doc=await noToken.json();
+    assert.equal(doc?.code,'QA518_GITHUB_OIDC_REQUIRED',
+      'QA518_ONLY_EXACT_UNSIGNED_GUARD_ACCEPTED');
+    workerReady=true;break;
+   }
+   if(![404,522,503].includes(noToken.status))
+    throw Error('HOLD_QA_R2_UNEXPECTED_SMOKE_HTTP_'+noToken.status);
+  }catch(e){
+   if(String(e?.message||'').startsWith('HOLD_QA_R2_UNEXPECTED_SMOKE_HTTP_')||
+      String(e?.message||'').includes('QA518_ONLY_EXACT_UNSIGNED_GUARD_ACCEPTED'))
+    throw e;
+  }
+  if(i<11)await new Promise(resolve=>setTimeout(resolve,1800));
+ }
+ assert.equal(workerReady,true,'HOLD_QA_R2_WORKER_READY_NOT_VERIFIED');
  const before=await call('inspect');
  assert.equal(before.code,'QA518_R2_PREFIX_EMPTY','MUST_BE_EMPTY');
  // Check that exact rollback prerequisites REALLY work before ANY R2 write:

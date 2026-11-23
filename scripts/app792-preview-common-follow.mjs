@@ -56,16 +56,18 @@ const cert=(a,p)=>p?.source==='VERIFIED_SHARED_WRITER_CUTOVER_792'&&p.verified==
 export function createApp792PreviewOwnerConnection({
  enabled=APP792_PREVIEW_COMMON_FOLLOW_COMPILED_OPEN,env,state,ownerUid,
  verifyBoundOwner,verifyCutover,now=Date.now,issueId,send=fetch,
+ privateReceiptStore,
 }={}){
  if(enabled!==true)return null;
- if(env?.SORIDRAW_ENVIRONMENT!=='preview'||!UID.test(ownerUid||'')||!state?.storage||
+ if(env?.SORIDRAW_ENVIRONMENT!=='preview'||!UID.test(ownerUid||'')||(!state?.storage&&!privateReceiptStore)||
     typeof verifyBoundOwner!=='function'||typeof verifyCutover!=='function'||
     !env?.PROFILE_MEDIA?.get||!env.PROFILE_MEDIA.head||!env.PROFILE_MEDIA.put||
     !env?.DB?.prepare||env.SORIDRAW_OWNER_FOLLOW_ENDPOINT_539!==ENDPOINT||
     typeof env.SORIDRAW_OWNER_FOLLOW_HMAC_539!=='string'||env.SORIDRAW_OWNER_FOLLOW_HMAC_539.length<32)
   throw Error('APP792_PREVIEW_PRIVATE_DEPENDENCIES_REQUIRED');
  const bucket=env.PROFILE_MEDIA;
- const store=createApp755ProductionOwnerReceiptStore({enabled:true,storage:state.storage,ownerUid,now,issueId,allowSameState792:true});
+ const store=privateReceiptStore||createApp755ProductionOwnerReceiptStore({enabled:true,storage:state.storage,ownerUid,now,issueId,allowSameState792:true});
+ if(['inspectReceipt','reserve','rearmVerifiedSettlement'].some(k=>typeof store[k]!=='function'))throw Error('APP794_RECEIPT_PORT_REQUIRED');
  const guard=async a=>{
   if(!valid(a)||a.ownerUid!==ownerUid)throw Error('SCOPE');
   const binding=await verifyBoundOwner({state,env,ownerUid});
@@ -192,7 +194,23 @@ export function createApp792PreviewOwnerConnection({
    return {status:'ALARM_READY',d1AdditionalWrites:0};
   }catch{return hold('ALARM_REARM_UNAVAILABLE')}
  }
+ // APP794: called only by the private owner-alarm endpoint. The receipt
+ // port in that request is restricted to the already inspected exact receipt;
+ // no service call back into the invoking DO and no canonical writer.
+ async function settleAndDeliver(a){
+  const v=await settle(a);
+  if(!['SETTLED','ALREADY_SETTLED'].includes(v.status))
+   return {status:'PROOF_WAIT',d1AdditionalWrites:0};
+  if(v.noSignal===true)return {status:'delivered',noSignal:true,d1AdditionalWrites:0};
+  try{
+   const q=await relay(v.event,{endpoint:ENDPOINT,secret:env.SORIDRAW_OWNER_FOLLOW_HMAC_539});
+   if(q.ok===true&&q.status===200)return {status:'delivered',d1AdditionalWrites:0};
+   if(q.status===409)return {status:'rejected-generation',d1AdditionalWrites:0};
+  }catch{}
+  return {status:'relay-failed',d1AdditionalWrites:0};
+ }
  async function alarm(){
+  if(privateReceiptStore)throw Error('APP794_REMOTE_STORE_ALARM_FORBIDDEN');
   const binding=await verifyBoundOwner({state,env,ownerUid});
   if(binding?.verifiedOwnerDoIdentity!==true||binding.ownerUid!==ownerUid)throw Error('OWNER_BINDING');
   const due=await store.duePending();let delivered=0,retried=0,held=0,waiting=0;
@@ -240,7 +258,7 @@ export function createApp792PreviewOwnerConnection({
    return {status:'EXACT_REPLAY',revision:settled.v.pairRevision,d1AdditionalWrites:0};
   }catch{return hold('REPLAY_UNAVAILABLE')}
  }
- return Object.freeze({bootstrap,admit,settle,arm,alarm,replay});
+ return Object.freeze({bootstrap,admit,settle,arm,alarm,replay,settleAndDeliver});
 }
 // Read actual existing canonical shapes without invoking repair or a writer.
 // The new generation field must be installed only during a separately
@@ -311,7 +329,7 @@ export async function readApp792CanonicalPair({env,actorUid,ownerUid,desired}={}
 // All auth, current pair and generation proof are trusted server callbacks.
 export function createApp792PreviewFollowIngress({
  enabled=APP792_PREVIEW_COMMON_FOLLOW_COMPILED_OPEN,authenticate,readPair=readApp792CanonicalPair,
- verifyCutover,ownerService,callCanonical,
+ verifyCutover,ownerService,callCanonical,preauthorizeCanonical,
 }={}){
  if(enabled!==true)return null;
  if([authenticate,readPair,verifyCutover,ownerService,callCanonical].some(x=>typeof x!=='function'))
@@ -371,6 +389,15 @@ export function createApp792PreviewFollowIngress({
    if(p.following===desired&&legacy)return ackNoWrite(p.pairRevision,'UNCHANGED');
    // Ordered no-op uses the same owner fence and existing pair-intent CAS.
    // It must advance the pair revision, not mutate D1 or send a signal.
+   // APP794 production-shaped integration must supply the canonical
+   // precondition gate before reservation. A failed HTTP response after
+   // admission is never interpreted as proof that no commit happened.
+   if(preauthorizeCanonical){
+    const pre=await preauthorizeCanonical({request,env,ticket:a,actorUid:actor.uid,ownerUid});
+    if(pre?.verified!==true||pre.actorUid!==actor.uid||pre.ownerUid!==ownerUid||
+       pre.canonicalOperationId!==a.canonicalOperationId)
+     return hold('CANONICAL_PRECONDITIONS_UNVERIFIED');
+   }
    const reserved=await service.admit(a);
    if(reserved?.status!=='ADMITTED_ONCE'||!receiptMatches(a,reserved.receipt))return hold('ADMISSION_NOT_CONFIRMED');
    const receipt=reserved.receipt;

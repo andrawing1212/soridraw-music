@@ -942,7 +942,7 @@ jobs:
           # both QA functions explicitly pin their own runtime SA. Use the
           # official gcloud function deploy instead: no IAM change needed.
           sa='soridraw-qa-app518-runtime@soridraw-app.iam.gserviceaccount.com'
-          envs="SORIDRAW_APP518_QA_PROJECT_NUMBER=1083981050742,SORIDRAW_APP518_QA_RUN_ID=$GITHUB_RUN_ID,SORIDRAW_APP518_PILOT_UID=qa518-$GITHUB_RUN_ID-owner,SORIDRAW_APP518_PILOT_FAVORITE_ID=qa518-$GITHUB_RUN_ID-song,SORIDRAW_APP518_BRIDGE_ACTIVE=APPROVED_ISOLATED_ONE_SONG"
+          envs="SORIDRAW_APP518_QA_PROJECT_ID=soridraw-app,SORIDRAW_APP518_QA_PROJECT_NUMBER=1083981050742,SORIDRAW_APP518_QA_RUN_ID=$GITHUB_RUN_ID,SORIDRAW_APP518_PILOT_UID=qa518-$GITHUB_RUN_ID-owner,SORIDRAW_APP518_PILOT_FAVORITE_ID=qa518-$GITHUB_RUN_ID-song,SORIDRAW_APP518_BRIDGE_ACTIVE=APPROVED_ISOLATED_ONE_SONG"
           gcloud functions deploy app518QaSyntheticDeleteReceipt \
             --gen2 --project=soridraw-app --region=asia-northeast3 \
             --runtime=nodejs22 --source="$stage/functions" \

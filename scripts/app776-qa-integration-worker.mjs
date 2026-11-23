@@ -4,6 +4,7 @@
 import {assessApp775UnifiedFollowIngress} from './app775-unified-follow-ingress.mjs';
 import {createApp767IsolatedR2Admission} from './app767-r2-admission-candidate.mjs';
 import {createApp783QaSettledHistory} from './app783-qa-immutable-settled-history.mjs';
+import {createApp784QaUnifiedFollow} from './app784-qa-unified-follow.mjs';
 const TABLE='app768_qa_synthetic_follow';
 const OWNER='qa776OwnerSynthetic',ACTOR='qa776ActorSynthetic';
 const KEY=/^qa776_[a-f0-9]{16}$/;
@@ -47,8 +48,9 @@ async function read(e){
 async function op783(e){return {ownerUid:OWNER,actorUid:ACTOR,
  authEpoch:e.APP776_EPOCH,cutoverToken:e.APP776_CUTOVER,
  canonicalOperationId:await stableId(e,1,true),expectedRevision:7,desired:true};}
-async function keys783(e){
- const x=await op783(e),s=JSON.stringify([x.cutoverToken,
+async function keys783(e,revision=1,desired=true){
+ const x={...await op783(e),canonicalOperationId:await stableId(e,revision,desired)};
+ const s=JSON.stringify([x.cutoverToken,
   x.ownerUid,x.actorUid,x.authEpoch,x.canonicalOperationId]);
  const bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)));
  const h=[...bytes].map(v=>v.toString(16).padStart(2,'0')).join('');
@@ -74,6 +76,85 @@ async function settle783(e,kind){
   operation,admission:{status:'ADMISSION_ONLY_NOT_D1_COMMIT',
    keyDigest:k.digest,d1AdditionalRowsWritten:0,
    productionDeployAuthorized:false,requiresCanonicalCommitProof:true}});
+}
+
+
+// APP784: both formats share one synthetic QA sequence. A prior settled
+// unfollow is checked by one exact R2 HEAD, never by a bucket listing.
+async function context784(e,method){
+ const row=await read(e);if(!row)throw Error('QA784_ROW_MISSING');
+ const before=Number(row.following)===1;
+ const priorUnfollow=await e.QA_APP776_R2.head((await keys783(e,2,false)).settled);
+ const firstAdmission=await e.QA_APP776_R2.head((await keys783(e)).admission);
+ const revision=priorUnfollow?3:before?2:1;
+ const desired=method==='PUT',id=await stableId(e,revision,desired);
+ const c=evidence(e,id,revision,before);
+ return {...c,source:'APP784_SYNTHETIC_QA_ONLY',syntheticOnly:true,
+  cutover:{...c.cutover,firstRevision:1},
+  legacySafeFirstOperation:revision===1&&!firstAdmission,
+  legacyHistoryInitiallyEmpty:revision===1&&!firstAdmission};
+}
+const admission784=async(e,ticket)=>{
+ const engine=createApp767IsolatedR2Admission({enabled:true,
+  scope:'APP767_ISOLATED_SYNTHETIC_QA',bucket:e.QA_APP776_R2,
+  verifyTrustedCutover:async a=>({source:'SERVER_ATTESTED_NEW_EPOCH_ONLY_767',
+   verified:true,...a,completeBeforeFirstAcceptedOperation:true,
+   canonicalWriterCoverageProven:true,noLegacyIdNamespaceOverlap:true,
+   userDeletionLifecycleReviewed:true,isolationFromOwnerDoPitrProven:true})});
+ return engine.claim({env:{SORIDRAW_ENVIRONMENT:'isolated-qa'},reservation:ticket});
+};
+const settle784=async(e,ticket,claim)=>{
+ const engine=createApp783QaSettledHistory({enabled:true,
+  scope:'APP783_ISOLATED_SYNTHETIC_QA',bucket:e.QA_APP776_R2,
+  verifySettledCanonical:async a=>{
+   const row=await read(e);
+   if(!row||Number(row.following)!==(a.desired?1:0))
+    throw Error('QA784_SYNTHETIC_D1_NOT_SETTLED');
+   return {source:'QA783_EXACT_D1_R2_SETTLED',verified:true,changed:true,
+    canonicalD1Committed:true,r2ProjectionSettled:true,ownerEpochVerified:true,
+    ...a,committedRevision:a.expectedRevision+1,
+    d1OperationId:a.canonicalOperationId,r2OperationId:a.canonicalOperationId};
+  }});
+ return engine.settle({env:{SORIDRAW_ENVIRONMENT:'isolated-qa'},operation:ticket,
+  admission:claim});
+};
+async function unified784(e,method,body){
+ const router=createApp784QaUnifiedFollow({enabled:true,
+  scope:'APP784_ISOLATED_SYNTHETIC_QA',
+  getSyntheticServerEvidence:()=>context784(e,method),
+  findExactSettledOperation:async op=>{
+   const key=await keys783(e,op.expectedRevision,op.desired);
+   const stored=await e.QA_APP776_R2.get(key.settled);
+   if(!stored)return {status:'absent',authoritative:true};
+   let value;try{value=JSON.parse(await stored.text())}catch{return {status:'unknown'};}
+   if(value?.kind!=='APP783_IMMUTABLE_QA_SETTLED'||value.ownerUid!==OWNER||
+      value.actorUid!==ACTOR||value.authEpoch!==e.APP776_EPOCH||
+      value.cutoverToken!==e.APP776_CUTOVER||
+      value.canonicalOperationId!==op.canonicalOperationId||
+      value.expectedRevision!==op.expectedRevision||
+      value.desired!==op.desired||value.committedRevision!==op.expectedRevision+1||
+      value.d1OperationId!==op.canonicalOperationId||
+      value.r2OperationId!==op.canonicalOperationId)
+    return {status:'unknown'};
+   const row=await read(e);
+   if(Number(row?.following)!==(op.desired?1:0))return {status:'unknown'};
+   return {status:'verified-read-only',verified:true,...op,
+    ownerAuthEpoch:'b'.repeat(32)};
+  },
+  claimImmutableAdmission:({ticket})=>admission784(e,ticket),
+  commitExactQaPair:async({ticket})=>{
+   const desired=ticket.desired?1:0;
+   const q=await e.QA_APP776_D1.prepare('UPDATE '+TABLE+
+    ' SET following=? WHERE k=? AND following=?')
+    .bind(desired,e.APP776_ROW,desired?0:1).run();
+   if(q?.meta?.rows_written!==1)return {status:'HOLD'};
+   return {status:'QA784_EXACT_D1_COMMITTED',
+    canonicalOperationId:ticket.canonicalOperationId,rowsWritten:1};
+  },
+  settleImmutableReceipt:({ticket,claim})=>settle784(e,ticket,claim),
+ });
+ return router.handle({env:{SORIDRAW_ENVIRONMENT:'isolated-qa'},
+  ownerUid:OWNER,method,body});
 }
 
 // Deliberately synthetic test evidence, NOT verified Firebase credentials.
@@ -111,8 +192,9 @@ function evidence(e,id,revision,before){
  };
 }
 async function wipe(e){
- const extra=await keys783(e);
- const keys=[...(await Promise.all([receiptKey(e,1,true),receiptKey(e,2,false)])),extra.admission,extra.settled];
+ const extra=await keys783(e),second=await keys783(e,2,false);
+ const keys=[...(await Promise.all([receiptKey(e,1,true),receiptKey(e,2,false)])),
+  extra.admission,extra.settled,second.admission,second.settled];
  await Promise.all(keys.map(k=>e.QA_APP776_R2.delete(k)));
  const d=await e.QA_APP776_D1.prepare('DELETE FROM '+TABLE+' WHERE k=?')
   .bind(e.APP776_ROW).run();
@@ -182,6 +264,32 @@ export default {async fetch(request,env){
      canonicalWriteAuthorized:r.canonicalWriteAuthorized,
      productionDeployAuthorized:r.productionDeployAuthorized});
   }catch{return respond(503,{status:'QA783_SETTLE_HOLD'});}
+ }
+ if(request.method==='GET'&&path==='/app784/health'){
+  try{
+   const f=await keys783(env),u=await keys783(env,2,false);
+   const keys=[f.admission,f.settled,u.admission,u.settled];
+   const heads=await Promise.all(keys.map(k=>env.QA_APP776_R2.head(k)));
+   const row=await read(env);
+   return respond(200,{status:'QA784_HEALTH',
+    following:Number(row?.following)===1,
+    objectsPresent:heads.filter(Boolean).length,
+    firstSettledEtag:heads[1]?.etag||null,
+    secondSettledEtag:heads[3]?.etag||null});
+  }catch{return respond(503,{status:'QA784_HEALTH_HOLD'});}
+ }
+ if(path==='/v1/qa784/profiles/'+OWNER+'/follow'&&
+    (request.method==='PUT'||request.method==='DELETE')){
+  let body;try{body=await request.text()}catch{return respond(409,{status:'QA784_HOLD'});}
+  if(body.length>512)return respond(409,{status:'QA784_HOLD'});
+  try{const out=await unified784(env,request.method,body);
+   const code=out.status==='QA784_ONE_SYNTHETIC_CHANGE_SETTLED'?201:
+    out.status==='QA784_ORDERED_REPLAY_READ_ONLY'?200:409;
+   return respond(code,{status:out.status,kind:out.kind||null,
+    reason:out.reason||null,operationId:out.operationId||null,
+    d1RowsWritten:out.d1RowsWritten??0,
+    productionDeployAuthorized:out.productionDeployAuthorized});
+  }catch{return respond(503,{status:'QA784_HOLD'});}
  }
  if(path!=='/v1/profiles/'+OWNER+'/follow'||
     (request.method!=='PUT'&&request.method!=='DELETE'))

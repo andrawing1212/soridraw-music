@@ -1,5 +1,7 @@
 name: APP777 QA Firebase RS256 + common ingress offline safety
 on:
+  issue_comment:
+    types: [created]
   pull_request:
     branches: [main]
     paths:
@@ -19,6 +21,9 @@ on:
       - 'scripts/verify-785-qa-worker-bridge.mjs'
       - 'scripts/app788-qa-independent-owner-floor.mjs'
       - 'scripts/verify-788-qa-independent-owner-floor.mjs'
+      - 'cloudflare/explore-worker/experiments/owner-follow-qa789-entry.mjs'
+      - 'scripts/app789-qa-physical-runner.mjs'
+      - 'scripts/verify-789-qa-physical-source.mjs'
       - '.github/workflows/app768-qa-r2-conditional-race.yml'
 permissions:
   contents: read
@@ -60,6 +65,10 @@ jobs:
           node scripts/verify-785-qa-worker-bridge.mjs
           node --check scripts/app788-qa-independent-owner-floor.mjs
           node scripts/verify-788-qa-independent-owner-floor.mjs
+          node --check scripts/app789-qa-physical-runner.mjs
+          node --check cloudflare/explore-worker/experiments/owner-follow-qa789-entry.mjs
+          node scripts/verify-789-qa-physical-source.mjs
+          npx --yes esbuild@0.25.12 cloudflare/explore-worker/experiments/owner-follow-qa789-entry.mjs --bundle --format=esm --platform=browser --target=es2022 --outfile=/tmp/app789-qa-bundle-check.mjs
   live:
     if: false # APP785 QA exact one-shot PASS and exact cleanup complete; do not auto-repeat
     env:
@@ -122,3 +131,98 @@ jobs:
           CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
           CLOUDFLARE_QA_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
         run: node scripts/app776-qa-integration-runner.mjs cleanup
+
+  physical789:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 1389 &&
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/app789-physical ')
+    concurrency:
+      group: soridraw-app736-qa-zero-traffic
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    env:
+      APP789_QA_APPROVAL: APP789_EXISTING_RESOURCES_ONE_SHOT
+      CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
+      CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
+      CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
+      CLOUDFLARE_QA_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Pin EXACT main, QA account, existing class, and scripts before any write
+        env:
+          DIRECTOR_COMMAND: '${{ github.event.comment.body }}'
+        run: |
+          set -euo pipefail
+          SHA="$(printf '%s' "$DIRECTOR_COMMAND" | sed -nE 's|^/app789-physical ([0-9a-f]{40})$|\1|p')"
+          test -n "$SHA"
+          test "$(git rev-parse HEAD)" = "$SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SHA"
+          node scripts/verify-789-qa-physical-source.mjs
+          node --check scripts/app789-qa-physical-runner.mjs
+          node --check cloudflare/explore-worker/experiments/owner-follow-qa789-entry.mjs
+      - name: GET-only verify original QA583 100 and exact existing namespace, D1 and R2; one synthetic row
+        run: node scripts/app789-qa-physical-runner.mjs preflight
+      - name: Bundle existing QA DO class with APP788 isolated R2 owner-floor runtime
+        run: |
+          set -euo pipefail
+          npx --yes esbuild@0.25.12 cloudflare/explore-worker/experiments/owner-follow-qa789-entry.mjs \
+            --bundle --format=esm --platform=browser --target=es2022 \
+            --outfile=app789-qa-worker.bundle.mjs
+      - name: Upload OFF candidate version with inherited DO namespace and QA D1/R2 only
+        run: node scripts/app789-qa-physical-runner.mjs stage
+      - name: Route QA583 original 100%, single APP789 candidate 0%
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          CANDIDATE="$(node -e 'const s=require(process.env.RUNNER_TEMP+"/app789-physical-state.json");if(!/^[0-9a-f-]{36}$/i.test(s.candidate||""))process.exit(2);process.stdout.write(s.candidate)')"
+          touch "$RUNNER_TEMP/app789-route-attempted"
+          cd cloudflare/explore-worker
+          npx --yes wrangler@4.102.0 versions deploy \
+            '4ed70845-6a4b-4a80-9c51-ed95d0becc38@100%' \
+            "$CANDIDATE@0%" \
+            --config wrangler.owner-qa-583.json --yes
+          cd ../..
+          node scripts/app789-qa-physical-runner.mjs verifyDeployed
+      - name: Physical QA real R2 owner floor CAS + QA D1 W1 + isolated owner DO
+        run: node scripts/app789-qa-physical-runner.mjs test
+      - name: ALWAYS wipe only exact run-owned DO key, R2 objects, D1 synthetic row
+        if: always()
+        run: node scripts/app789-qa-physical-runner.mjs cleanup
+      - name: ALWAYS restore QA583 original single version 100 percent
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ ! -f "$RUNNER_TEMP/app789-route-attempted" ]; then
+            echo 'APP789_NO_QA_ROUTE_CHANGE_ATTEMPT'
+            exit 0
+          fi
+          test -n "$CLOUDFLARE_API_TOKEN"
+          cd cloudflare/explore-worker
+          npx --yes wrangler@4.102.0 versions deploy \
+            '4ed70845-6a4b-4a80-9c51-ed95d0becc38@100%' \
+            --config wrangler.owner-qa-583.json --yes
+          echo 'APP789_ORIGINAL_QA583_ONLY_100_RESTORED'
+      - name: ALWAYS read-only verify QA583 original version, exact bindings and traffic
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -f "$RUNNER_TEMP/app789-physical-state.json" ]; then
+            node scripts/app789-qa-physical-runner.mjs verifyOriginal
+          else
+            echo 'APP789_NO_STATE_NO_QA_WRITE'
+          fi

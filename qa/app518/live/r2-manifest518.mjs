@@ -21,8 +21,10 @@ const assertRun=()=>{
  assert.equal(event?.repository?.full_name,GIT);
  assert.equal(event?.issue?.number,528);
  assert.ok(event?.issue?.pull_request);
- assert.equal(event?.comment?.body,
-  '/app518-qa-r2-lifecycle 864f796da24413309567198c9de502b13cdedd50');
+ assert.ok([
+  '/app518-qa-r2-lifecycle 864f796da24413309567198c9de502b13cdedd50',
+  '/app518-qa-integrated 864f796da24413309567198c9de502b13cdedd50',
+ ].includes(event?.comment?.body));
  assert.equal(event?.sender?.id,268937716);
 };
 const listItems=x=>Array.isArray(x)?x:x?.databases||x?.buckets||x?.scripts||null;

@@ -1,3 +1,14 @@
+## CURRENT — APP787 운영 알림 HMAC 전송 구현 PASS / 정본·Owner DO 미연결로 활성화 HOLD (2026-11-24 KST)
+
+- **진행 승인:** 운영 팔로우 Auth→DO→D1/R2→Functions542/RTDB 통합을 하나의 흐름으로 추진하되, 기존 운영 트래픽·데이터·PRODUCTION 배포는 건드리지 않고 신규 유료 자원/Rules는 별도 승인 대상. 이전 APP749/760/783/784/785/786 성공 검사를 재실행하지 않음.
+- **실제 구현:** [PR #1387](https://github.com/andrawing1212/soridraw-music/pull/1387) main `ad7a5e28376a195f76483089c9d239926325b70e`. 기존 PREVIEW APP539 ↔ Firebase Functions542의 정확한 수신 규격을 재사용해 `scripts/app787-production-signed-owner-relay.mjs`에 **운영 후보용 실제 HMAC-SHA256 HTTP 전송 콜백** 구현. APP729 엔트리에서 APP755 `sendSignedOwnerRelay` 의존성으로 연결(기본 OFF). 바이트 동일한 timestamp/body 서명, owner UID/epoch/revision/count 검증, 운영 Function542 URL 고정, 요청 당 POST 최대 1회, timeout·403/503은 성공 처리하지 않고 기존 APP759 DO 재전송에 맡김, 409 generation 충돌만 중단, 200 응답의 `ok:true, applied:boolean`을 검증. URL/서명 Secret은 소스·로그에 저장하지 않음.
+- **검사:** [Actions #45266240951](https://github.com/andrawing1212/soridraw-music/actions/runs/45266240951) APP787 Node WebCrypto HMAC와 APP542 Node HMAC 호환, 200/403/409/503·malformed 응답, APP729 원본 Worker 동일 참조, APP756 OFF 전제, APP737 12개 원본 바인딩 유지 **PASS**. [Actions #45266241082](https://github.com/andrawing1212/soridraw-music/actions/runs/45266241082) 관련 APP728 읽기 전용 오프라인 검사 PASS. 이 검사는 **실제 운영 Function542 호출이나 Auth→DO→D1→RTDB 실사용 검증이 아님**.
+- **안전 상태:** APP787 기능 플래그 OFF. PREVIEW/TEST/PRODUCTION Worker·Hosting, Firebase Functions/RTDB Rules, 비밀키·IAM·공유 사용자 데이터 변경 0. 기존 활성 PROD Worker `af81502a-298d-4ec6-bc2a-0c529d6dc29e` 100%와 APP786 0% 비활성 후보 `649e4e0d-b7c9-4c54-8ea4-2ebf84e492ac`는 **마지막 실확인 기준**이며 이번 턴에 Cloudflare 새 후보를 업로드/트래픽을 변경하지 않음. APP787 구현은 GitHub main 소스에만 반영돼 이전 0% 후보에 아직 들어 있지 않음.
+- **미연결·차단 원인:** APP755의 `ownerStore`, `readCanonicalPair`, `verifyExactCommit`, `verifyIndependentCanonicalHistory`는 실제 운영 콜백이 아직 없음. APP761은 deployable DO class가 아니고 실제 owner namespace/service/secret 연결 없음. APP766 확인상 D1 `explore_follow_overrides_348`와 R2 `follow-intents-v354`는 최근 상태만 보관하므로 과거 operation ID 전체 이력·DO PITR 독립 owner revision floor를 증명할 수 없음. 구형 Writer의 무본문 팔로우↔취소↔재팔로우 경로, 신형 Writer 단일 접수, Auth 삭제·재생성/epoch와 server receipts를 보호하려면 실제 정본 전체 Writer cutover 및 독립 이력·복구 설계가 필요. 기존 APP542 수신 기능의 단일 canary guard/Rules 및 전체 로그인 사용자 호환성도 독립 확인 필요. 따라서 **APP787 sender PASS ≠ 실제 운영 팔로우 자동 동기화 PASS**. 임의로 ON, Secrets 복사, 새 DB/R2 장기 보존, DO migration, RTDB Rules 확대 또는 PRODUCTION 승격 금지.
+- **최소 다음 판단:** 새 유료 자원·권한 확대 없이 기존 backend에서 APP765 독립 불변 이력·외부 owner revision floor가 가능한지 근거 확인. 불가능하면 비용·보존/삭제 정책·W1~W2 물리 비용·PITR 및 구형 Writer 전환을 포함한 **하나의 구체적 공유 백엔드 변경안**을 디렉터에게 승인받고 진행. 이미 완료한 QA와 0% 후보 업로드를 관례적으로 반복하지 않음.
+
+---
+
 ## CURRENT — APP786 운영 팔로우 18개 정확 대조·OFF 0% 후보 업로드 PASS / 실제 기능 연결 HOLD (2026-11-24 KST)
 
 - **디렉터 승인 범위:** 운영 팔로우 18개 연결을 하나의 흐름으로 확인·코드/후보 정리·최소 검사 후 정식 활성화 없이 Cloudflare PRODUCTION 비활성 버전 0% 업로드. 운영 원본 데이터·Rules·Functions/DO migration·비밀키·활성 Worker·TEST/PRODUCTION Hosting 변경 금지. APP749/760/783/784/785 기존 QA 실검사 PASS 재실행 금지.

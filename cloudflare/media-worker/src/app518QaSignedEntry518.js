@@ -37,8 +37,9 @@ const exactEnv=env=>{
 export const createSignedQa518Entry=({candidateFactory=createApp518IsolatedQaHandler518,
   oidcVerifier=verifyGithubOidcQa518,now=Date.now}={})=>({
  async fetch(request,env){
-  if(!request || request.method!=='POST'
-    ||new URL(request.url).pathname!=='/v1/server/catalog518')
+  const route=request?new URL(request.url).pathname:'';
+  if(!request ||request.method!=='POST'
+    ||!['/v1/server/catalog518','/v1/qa518/inspect'].includes(route))
     return deny('QA518_NOT_FOUND',404);
   if(!exactEnv(env))return deny('QA518_RELEASE_UNCONFIGURED',503);
   const token=request.headers.get('x-soridraw-qa-github-oidc');
@@ -61,6 +62,36 @@ export const createSignedQa518Entry=({candidateFactory=createApp518IsolatedQaHan
   }catch{return deny('QA518_INVALID_SIGNED_GITHUB_PROOF');}
   const handler=candidateFactory({env,trustedIsolatedQaProof:true,clock:now});
   if(handler?.enabled!==true)return deny('QA518_CANDIDATE_RELEASE_NOT_READY',503);
+  if(route==='/v1/qa518/inspect'){
+   // Run-bound read-only proof. No browser URL, arbitrary UID, D1 scan or write.
+   const run=env.SORIDRAW_APP518_QA_RUN_ID;
+   const uid='qa518-'+run+'-owner';
+   const id='qa518-'+run+'-song';
+   const key='catalog/v5/'+encodeURIComponent(uid)+'/musicNote/journal.json';
+   try{
+    const object=await env.CATALOG.get(key);
+    const head=object?await object.json():null;
+    const outbox=await env.CATALOG_OUTBOX_518.prepare(
+      'SELECT source_version_ns,desired_state,ack_version_ns,hold_reason FROM music_note_catalog_outbox_518 WHERE owner_uid=? AND favorite_id=?'
+    ).bind(uid,id).first();
+    if(!head||head.authority!=='server'||head.kind!=='musicNote'
+      ||head.canonicalAuthority518!==true||!Array.isArray(head.deltas)
+      ||!Array.isArray(head.recentMutations))
+      return deny('QA518_HEAD_NOT_SERVER_CANONICAL',409);
+    return new Response(JSON.stringify({code:'QA518_EXACT_CATALOG_READ',
+      uid,id,headRevision:head.headRevision,itemCount:head.itemCount,
+      recentMutations:head.recentMutations.filter(x=>String(x.id||'').startsWith('canonical518:'+id+':')).map(x=>x.id),
+      lastDelta:head.deltas.at(-1)?{
+        upsert:head.deltas.at(-1).upserts?.some(x=>x?.id===id)===true,
+        deleted:head.deltas.at(-1).deletedIds?.includes(id)===true,
+      }:null,
+      outbox:outbox?{
+        version:outbox.source_version_ns,state:outbox.desired_state,
+        ack:outbox.ack_version_ns,hold:outbox.hold_reason,
+      }:null,
+    }),{status:200,headers:{'content-type':'application/json','cache-control':'no-store'}});
+   }catch{return deny('QA518_EXACT_STATE_UNAVAILABLE',503);}
+  }
   return handler.fetch(request);
  },
  async scheduled(){return {code:'QA518_NO_AUTOMATIC_SCHEDULE'};},

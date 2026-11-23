@@ -64,6 +64,12 @@ export const captureMediaWriterSnapshot518=async({
   });
   if(!healthResponse.ok)throw Error('HOLD_CLOUDFLARE_HEALTH_HTTP');
   const health=await healthResponse.json();
+  // A fence marker by itself does not prove the Worker is healthy or that
+  // the shared R2 bindings actually work. Reject before signing any snapshot.
+  if(health?.ok!==true||health?.r2Binding!==true
+    ||health?.catalogBinding!==true
+    ||health?.catalogAuthorityMode!=='shared-catalog')
+    throw Error('HOLD_CLOUDFLARE_HEALTH_CONTRACT');
   workers.push({
    stage:target.stage,script:target.script,
    mediaBucket:bucket(bindings,'MEDIA'),catalogBucket:bucket(bindings,'CATALOG'),
@@ -98,7 +104,8 @@ const selfTest=async()=>{
   };
   assert.ok(url.includes('/health?writer_fence_probe=518'));
   assert.ok(opts.headers.Origin);
-  return {ok:true,async json(){return {ok:true,catalogWriterFence518:{
+  return {ok:true,async json(){return {ok:true,r2Binding:true,
+   catalogBinding:true,catalogAuthorityMode:'shared-catalog',catalogWriterFence518:{
    fenceContract:FENCE_CONTRACT_518,sourceInstalled:true,
    canonicalEnabled:false,
   }};}};
@@ -131,6 +138,25 @@ const selfTest=async()=>{
   request:spoof({type:'r2_bucket',name:'CATALOG',bucket_name:'soridraw-user-catalog'}),
   accountId:'test-account',token:'test-token',atMs:102,
  }),/HOLD_CLOUDFLARE_AMBIGUOUS_BINDING/);
+ // A forged/stale fence marker must never pass when the actual health
+ // contract reports unavailable R2, Catalog, or an unexpected write mode.
+ const unhealthy=changed=>async(url,opts)=>{
+  const response=await fake(url,opts);
+  if(!url.includes('soridraw-media-preview.workers.dev/health'))
+   return response;
+  const payload=await response.json();
+  return {ok:true,async json(){return {...payload,...changed};}};
+ };
+ for(const changed of [
+  {ok:false},{r2Binding:false},{catalogBinding:false},
+  {catalogAuthorityMode:'legacy-media'},
+ ]){
+  await assert.rejects(captureMediaWriterSnapshot518({
+   request:unhealthy(changed),accountId:'test-account',
+   token:'test-token',atMs:103,
+  }),/HOLD_CLOUDFLARE_HEALTH_CONTRACT/);
+ }
+ console.log('APP518_UNHEALTHY_FENCED_WORKER_RELEASE_PROOF_DENIED=PASS');
  console.log('APP518_CANONICAL_SECRET_AND_DUPLICATE_BINDINGS_DENIED=PASS');
  console.log('APP518_LIVE_COLLECTOR_GET_ONLY_THREE_WORKERS=PASS');
  console.log('APP518_LIVE_COLLECTOR_NO_SECRETS_NO_R2_DATA=PASS');

@@ -45,8 +45,8 @@ jobs:
           test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
           git fetch origin preview --no-tags --quiet
           git merge-base --is-ancestor "$APPROVED_SHA" FETCH_HEAD
-          git cat-file -e '430d64e5d7f3f573a8ca1c7c7c4d23561408624e^{commit}'
-          git merge-base --is-ancestor 430d64e5d7f3f573a8ca1c7c7c4d23561408624e HEAD
+          git cat-file -e '4e8748236d59444ce4a23d5611e22323c4ea221d^{commit}'
+          git merge-base --is-ancestor 4e8748236d59444ce4a23d5611e22323c4ea221d HEAD
           # Immutable file pins are declared here, not supplied by the
           # candidate's own scripts or user dispatch inputs. Changes HOLD.
           while read -r expected file; do

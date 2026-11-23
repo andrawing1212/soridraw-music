@@ -280,6 +280,9 @@ async function test783(){
  if(d.code!==201||d.value?.status!=='QA783_SYNTHETIC_D1_COMMIT'||d.value.rowsWritten!==1)
   issue('QA_SYNTHETIC_D1_W1_NOT_COMMITTED');
  const duplicateD1=await wfetch(s,'POST','/app783/commit');
+ const safeStatus=/^QA783_[A-Z_]{1,60}$/.test(duplicateD1.value?.status||'')
+  ? duplicateD1.value.status:'UNRECOGNIZED';
+ console.log('APP783_DUPLICATE_QA_D1_HTTP='+duplicateD1.code+'_STATUS='+safeStatus);
  if(duplicateD1.code!==409||duplicateD1.value?.status!=='QA783_D1_NO_NEW_CHANGE')
   issue('QA_D1_DUPLICATE_NOT_HELD');
  const first=await wfetch(s,'POST','/app783/settle');

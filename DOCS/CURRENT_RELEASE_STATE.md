@@ -1,3 +1,13 @@
+## CURRENT — APP518 QA Firebase→Cloudflare D1→R2 실제 합성곡 1건 통합 PASS 및 정리 PASS (2026-11-23 KST)
+
+- **통합 실검증:** [Actions #45157596620](https://github.com/andrawing1212/soridraw-music/actions/runs/45157596620)에서 QA 전용 Firebase `soridraw-app`의 synthetic favorite `qa518-45157596620-song`을 저장→서버 검증→Cloudflare 독립 Worker→D1 outbox exact-version ACK→R2 CAS itemCount=1 반영, hard-delete→Eventarc receipt→D1 ACK→R2 itemCount=0, 같은 ID 재저장→최신 source version ACK→R2 itemCount=1 모두 **실제 PASS**. 로그 `APP518_QA_FIREBASE_TO_CLOUDFLARE_D1_R2_REAL_E2E=PASS`, `APP518_QA_REAL_CLOUDFLARE_SAVED_D1_R2=PASS`(2회), `APP518_QA_REAL_CLOUDFLARE_REMOVED_D1_R2=PASS`.
+- **첫 Actions 전체 결과는 FAIL로 정확히 구분:** 기능 검증은 PASS했으나 종료 중 새 R2 helper 배포 직후 `/v1/qa518/r2`가 404를 반환해 R2 시험 객체 2개 cleanup가 그 실행에서 실패. 이 호출 준비 지연만 `qa/app518/live/r2-run518.mjs`에 최대 12회/1.8초 404 제한 재시도로 수정했고 **Firebase 통합 검사를 재실행하지 않음**.
+- **실패했던 실제 R2 정리 완료:** [Actions #45158826382](https://github.com/andrawing1212/soridraw-music/actions/runs/45158826382) **전체 성공**: 원래 합성 UID의 `base-1.json`과 `journal.json` 정확 2개만 삭제, `APP518_QA_REAL_R2_EXACT_PILOT_CLEANUP=PASS`, `APP518_QA_ORPHAN_R2_EXACT_TWO_KEYS_CLEANED=PASS`, 임시 helper 삭제 및 원래 `soridraw-owner-qa-583` 100% 보존 PASS. 위 통합 실행에서도 합성 Firestore favorite/receipt 삭제, 4개 owner-scoped D1 표의 합성 레코드 0, 임시 Firebase 함수 2개 삭제, QA583/원본 팔로우 함수 보존 각각 PASS. D1 일일 예산 예약 ledger는 비용 사실 보존을 위해 삭제하지 않음.
+- **QA 전용 개발 산출물:** Cloudflare immutable PR #528를 **QA에만 복사**해 서명된 GitHub OIDC + HMAC 기반 Worker, D1 outbox/account ledger 바인딩, R2 HEAD 검증 및 합성곡 source-version ACK를 구현. 정식 Worker나 PR #528의 불변 SHA `864f796da24413309567198c9de502b13cdedd50` 수정 없음. Cloudflare QA 계정 `b60fcd62c679c64db19f0b0e0c2f3429`와 Firebase QA 외 변경 없음. 임시 orphan 전용 예외와 일회용 GitHub Action은 성공 직후 제거; 기존 signed R2 helper에는 배포 직후 404 제한 재시도만 유지.
+- **범위:** 이는 **격리 QA의 실제 Firebase→Cloudflare D1→R2 합성곡 1건 E2E PASS**. 실제 PREVIEW 앱 및 PC↔모바일 사용자 경험, 다중 사용자, 변경당 D1 W1~W2 및 정식 PRODUCTION 릴리스는 **아직 검증·배포하지 않음**. PREVIEW·TEST·PRODUCTION 공유 사용자 데이터나 보안 규칙/권한은 임의로 변경하지 않는다. 기존 성공한 QA 검사는 반복하지 않는다.
+
+---
+
 ## CURRENT — APP518 독립 QA Firebase 실제 저장→삭제 영수증→재저장 PASS (2026-11-23 KST)
 
 - **실사용 서버 검증:** [GitHub Actions #45108566565](https://github.com/andrawing1212/soridraw-music/actions/runs/45108566565) **성공**. QA 프로젝트 `soridraw-app`(1083981050742)에서 실행별 합성곡 1건을 실제 Firestore에 저장 → Firestore hard-delete → Eventarc 원본 삭제 전 protobuf 이벤트 처리·서버 영수증 쓰기 → 정확한 `removed` 상태 원본 조회 → 같은 ID 재저장·더 최신 `saved` 상태 조회까지 확인. 로그 `APP518_QA_REAL_FIREBASE_SAVE_DELETE_RECEIPT_RESAVE=PASS`.

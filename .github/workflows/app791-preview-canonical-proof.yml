@@ -5,6 +5,9 @@ on:
     paths:
       - 'scripts/app791-preview-canonical-follow-proof.mjs'
       - 'scripts/verify-791-preview-canonical-follow-proof.mjs'
+      - 'scripts/app792-preview-common-follow.mjs'
+      - 'scripts/verify-792-preview-common-follow.mjs'
+      - 'scripts/app755-production-owner-receipt.mjs'
       - '.github/workflows/app791-preview-canonical-proof.yml'
 permissions:
   contents: read
@@ -21,3 +24,10 @@ jobs:
         with:
           node-version: '22'
       - run: node scripts/verify-791-preview-canonical-follow-proof.mjs
+      - run: node scripts/verify-792-preview-common-follow.mjs
+
+      - name: Changed receipt store compatibility
+        run: |
+          node scripts/verify-761-production-owner-do-runtime.mjs
+          node scripts/verify-762-owner-receipt-archive.mjs
+          node scripts/verify-764-owner-receipt-witness.mjs

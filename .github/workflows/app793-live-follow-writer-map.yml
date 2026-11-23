@@ -1,0 +1,27 @@
+name: APP793 actual follow writer map (GET only)
+on:
+  pull_request:
+    types: [synchronize]
+    branches: [main]
+    paths:
+      - 'scripts/app793-live-follow-writer-map.mjs'
+      - '.github/workflows/app793-live-follow-writer-map.yml'
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: false # APP793 exact one-shot live inventory completed; no repetition
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: node --check scripts/app793-live-follow-writer-map.mjs
+      - name: Inspect exact existing active Worker modules, no mutation
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/app793-live-follow-writer-map.mjs

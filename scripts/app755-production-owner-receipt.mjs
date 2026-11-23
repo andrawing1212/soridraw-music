@@ -27,6 +27,8 @@ const safe=n=>Number.isSafeInteger(n)&&n>=0;
 const validDelivery=d=>d===undefined||(
  d&&['pending','delivered','held'].includes(d.status)&&
  safe(d.attempts)&&d.attempts<=3&&
+ (d.settlementChecks===undefined||safe(d.settlementChecks)&&d.settlementChecks<=4)&&
+ (d.holdReason===undefined||d.status==='held'&&d.holdReason==='settlement-unverified')&&
  (d.status!=='pending'||(safe(d.retryAt)&&d.retryAt>0)));
 const hold=x=>{throw Error('APP755_RECEIPT_HOLD_'+x)};
 const same=(a,b)=>a.actorUid===b.actorUid&&a.ownerUid===b.ownerUid&&
@@ -40,7 +42,9 @@ const validReceipt=x=>validInput(x)&&OP.test(x.operationId||'')&&
  typeof x.cutoverToken==='string'&&x.cutoverToken.length>0&&
  x.cutoverToken.length<=128&&safe(x.priorR2Revision)&&
  typeof x.beforeFollowing==='boolean'&&
- x.beforeFollowing!==x.desired&&x.durable===true&&
+ (x.beforeFollowing!==x.desired||
+  x.sameStateOnly===true&&OP.test(x.generation||'')&&x.beforeFollowing===x.desired)&&
+ x.durable===true&&
  x.ownerDoAlarmScheduled===true&&validDelivery(x.delivery);
 const validFinal=(v,id,owner)=>validReceipt(v)&&
  v.canonicalOperationId===id&&v.ownerUid===owner&&
@@ -84,7 +88,7 @@ const invalidStateCode=(s,owner)=>{
   if(!EPOCH.test(x.authEpoch||'')||typeof x.cutoverToken!=='string'||!x.cutoverToken||
      x.cutoverToken.length>128)return 'ENTRY_EPOCH_CUTOVER';
   if(!safe(x.priorR2Revision)||typeof x.beforeFollowing!=='boolean'||
-     x.beforeFollowing===x.desired)return 'ENTRY_PRIOR_STATE';
+     x.beforeFollowing===x.desired&&!(x.sameStateOnly===true&&OP.test(x.generation||'')))return 'ENTRY_PRIOR_STATE';
   if(x.durable!==true||x.ownerDoAlarmScheduled!==true)return 'ENTRY_DURABILITY';
   if(!validDelivery(x.delivery))return 'ENTRY_DELIVERY';
  }
@@ -94,7 +98,7 @@ const invalidStateCode=(s,owner)=>{
 // never the browser request or an arbitrary remote service namespace.
 export function createApp755ProductionOwnerReceiptStore({
  storage,ownerUid,enabled=APP755_PRODUCTION_OWNER_RECEIPT_COMPILED_OPEN,
- now=Date.now,issueId=()=>('owner_755_'+crypto.randomUUID().replaceAll('-','')),
+ now=Date.now,issueId=()=>('owner_755_'+crypto.randomUUID().replaceAll('-','')),allowSameState792=false,
 }={}){
  if(enabled!==true) return null;
  if(!UID.test(ownerUid||'')||!storage||
@@ -188,7 +192,8 @@ export function createApp755ProductionOwnerReceiptStore({
           receipt.authEpoch!==input.authEpoch||
           receipt.cutoverToken!==input.cutoverToken||
           receipt.priorR2Revision!==input.priorR2Revision||
-          receipt.beforeFollowing!==input.beforeFollowing)
+          receipt.beforeFollowing!==input.beforeFollowing||receipt.generation!==input.generation||
+          receipt.sameStateOnly!==input.sameStateOnly)
          return {status:'unknown',reason:'RECEIPT_IDENTITY_MISMATCH'};
        return {status:'found',receipt};
      }catch(error){return {status:'unknown',reason:'RECEIPT_READ_OR_STATE_UNVERIFIED',
@@ -200,7 +205,8 @@ export function createApp755ProductionOwnerReceiptStore({
        typeof input.cutoverToken!=='string'||!input.cutoverToken||
        input.cutoverToken.length>128||!safe(input.priorR2Revision)||
        typeof input.beforeFollowing!=='boolean'||
-       input.beforeFollowing===input.desired)
+       input.beforeFollowing===input.desired&&!(allowSameState792===true&&
+        input.sameStateOnly===true&&OP.test(input.generation||'')))
        hold('TRUSTED_CANONICAL_PREFLIGHT_MISSING');
      try{
        return await storage.transaction(async tx=>{
@@ -208,7 +214,9 @@ export function createApp755ProductionOwnerReceiptStore({
          const previous=await receiptFor(tx,state,input.canonicalOperationId);
          if(previous){
            if(!same(previous,input)||previous.authEpoch!==input.authEpoch||
-              previous.cutoverToken!==input.cutoverToken)
+              previous.cutoverToken!==input.cutoverToken||
+              (allowSameState792===true&&(previous.generation!==input.generation||
+                previous.sameStateOnly!==input.sameStateOnly||previous.beforeFollowing!==input.beforeFollowing)))
              return {durable:false,reason:'conflict'};
            if(!previous.delivery||previous.delivery.status==='pending')
              await alarmReady(tx,previous.delivery?.retryAt);
@@ -272,6 +280,54 @@ export function createApp755ProductionOwnerReceiptStore({
        .sort((a,b)=>a.expectedRevision-b.expectedRevision)
        .slice(0,4);
    },
+   // APP792: bounded precommit/proof recovery separate from relay attempts.
+   // Existing APP755/759 callers do not use this method. No network or D1.
+   async deferSettlement({receipt}={}){
+     scope(receipt);
+     return storage.transaction(async tx=>{
+       const s=await load(tx),index=s.entries.findIndex(x=>x.operationId===receipt.operationId);
+       const old=s.entries[index];
+       if(!old||!same(old,receipt)||old.authEpoch!==receipt.authEpoch||
+          old.cutoverToken!==receipt.cutoverToken||old.priorR2Revision!==receipt.priorR2Revision||
+          old.beforeFollowing!==receipt.beforeFollowing||old.generation!==receipt.generation||
+          old.delivery?.status!=='pending')hold('SETTLEMENT_RECEIPT_MISMATCH');
+       const at=now();if(!safe(at)||at<=0)hold('CLOCK');
+       const checks=(old.delivery.settlementChecks||0)+1;
+       const status=checks>=4?'held':'pending';
+       const delivery={status,attempts:old.delivery.attempts,settlementChecks:checks,
+         ...(status==='pending'?{retryAt:at+[0,2000,5000,15000][checks]}:{holdReason:'settlement-unverified'})};
+       const entries=s.entries.slice();entries[index]={...old,delivery};
+       await tx.put(KEY,{...s,entries});
+       const next=entries.filter(x=>(x.delivery?.status||'pending')==='pending');
+       if(next.length)await tx.setAlarm(Math.max(at+1,Math.min(...next.map(x=>x.delivery?.retryAt||at+DELAY))));
+       else if(typeof tx.deleteAlarm==='function')await tx.deleteAlarm();
+       return {status,changed:true,settlementChecks:checks};
+     });
+   },
+   // Explicit, exact settled proof only. Never revive a generation rejection
+   // or exhausted actual relay budget. Caller must verify immutable proof.
+   async rearmVerifiedSettlement({receipt}={}){
+     scope(receipt);
+     return storage.transaction(async tx=>{
+       const s=await load(tx),index=s.entries.findIndex(x=>x.operationId===receipt.operationId);
+       const old=s.entries[index];
+       if(!old||!same(old,receipt)||old.authEpoch!==receipt.authEpoch||
+          old.cutoverToken!==receipt.cutoverToken||old.priorR2Revision!==receipt.priorR2Revision||
+          old.beforeFollowing!==receipt.beforeFollowing||old.generation!==receipt.generation)
+         hold('SETTLEMENT_REARM_RECEIPT_MISMATCH');
+       if(old.delivery?.status==='delivered')return {status:'delivered',changed:false};
+       if(old.delivery?.status==='held'&&old.delivery.holdReason!=='settlement-unverified')
+         return {status:'held',changed:false};
+       if(old.delivery?.status==='held'){
+         const entries=s.entries.slice();
+         entries[index]={...old,delivery:{status:'pending',attempts:old.delivery.attempts,
+           settlementChecks:0,retryAt:now()+DELAY}};
+         await tx.put(KEY,{...s,entries});
+       }
+       await alarmReady(tx);
+       return {status:'pending',changed:true};
+     });
+   },
    // Only the trusted owner DO alarm coordinator calls this after exact
    // canonical settle proof + signed receiver result. Never exposed to HTTP.
    async markDelivery({receipt,result}={}){
@@ -296,6 +352,7 @@ export function createApp755ProductionOwnerReceiptStore({
          result==='rejected-generation'||nextAttempts>=3?'held':'pending';
        const retryAt=status==='pending'?at+Math.min(4000,1000*2**nextAttempts):null;
        const updated={...old,delivery:{status,attempts:nextAttempts,
+         ...(old.delivery?.settlementChecks!==undefined?{settlementChecks:old.delivery.settlementChecks}:{}),
          ...(retryAt!==null?{retryAt}:{})}};
        const entries=s.entries.slice();
        entries[index]=updated;

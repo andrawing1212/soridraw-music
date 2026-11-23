@@ -271,13 +271,7 @@ jobs:
 
 
   physical790:
-    if: >-
-      github.event_name == 'issue_comment' &&
-      github.repository == 'andrawing1212/soridraw-music' &&
-      github.actor == github.repository_owner &&
-      github.event.issue.number == 1400 &&
-      github.event.issue.pull_request != null &&
-      startsWith(github.event.comment.body, '/app790-browser ')
+    if: false # APP790 actual signed A/B RTDB one-shot PASS; do not repeat
     concurrency:
       group: soridraw-app736-qa-zero-traffic
       cancel-in-progress: false

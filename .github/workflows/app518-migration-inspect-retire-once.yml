@@ -76,19 +76,27 @@ jobs:
           auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Accept: application/json")
           deployment="$(curl -fsS --max-time 20 "${auth[@]}" "$API/deployments")"
           settings="$(curl -fsS --max-time 20 "${auth[@]}" "$API/settings")"
-          curl -fsS --max-time 20 "${auth[@]}" "$API/versions/$OLD_VERSION" | jq -e '.success==true' >/dev/null
+          original="$(curl -fsS --max-time 20 "${auth[@]}" "$API/versions/$OLD_VERSION")"
           printf '%s' "$deployment" | jq -e --arg old "$OLD_VERSION" '
             .success==true and (.result.deployments[0].versions | length==1)
             and .result.deployments[0].versions[0].percentage==100
             and .result.deployments[0].versions[0].version_id==$old' >/dev/null
-          # Allow ONLY the two exact old diagnostic resource bindings.
-          printf '%s' "$settings" | jq -e '
-            .success==true and (.result.bindings | type=="array" and length==2)
-            and ([.result.bindings[] | select(.name=="SOURCE_DB" and
+          # Inspect the immutable active VERSION; rollback does not necessarily
+          # rehydrate /settings bindings (observed in #45214539288).
+          printf '%s' "$original" | jq -e --arg old "$OLD_VERSION" '
+            .success==true and .result.id==$old and
+            (.result.resources.bindings | type=="array" and length==2) and
+            ([.result.resources.bindings[] | select(.name=="SOURCE_DB" and
               (.type=="d1" or .type=="d1_database") and
-              (.database_id // .id)=="217ef5b1-5d80-4f7c-afc7-9e07eb05c06b")] | length==1)
-            and ([.result.bindings[] | select(.name=="SOURCE_MEDIA" and
+              (.database_id // .id)=="217ef5b1-5d80-4f7c-afc7-9e07eb05c06b")] | length==1) and
+            ([.result.resources.bindings[] | select(.name=="SOURCE_MEDIA" and
               .type=="r2_bucket" and (.bucket_name // .bucket)=="soridraw-profile-media")] | length==1)' >/dev/null
+          # /settings may be 0 after a rollback or still show the old 2.
+          printf '%s' "$settings" | jq -e '
+            .success==true and (.result.bindings | type=="array") and
+            ((.result.bindings|length)==0 or
+             ((.result.bindings|length)==2 and
+              ([.result.bindings[]|.name]|sort)==["SOURCE_DB","SOURCE_MEDIA"]))' >/dev/null
           schedules="$(curl -fsS --max-time 20 "${auth[@]}" "$API/schedules")"
           printf '%s' "$schedules" | jq -e '
             .success==true and ((.result.schedules // .result) | type=="array" and length==0)' >/dev/null
@@ -111,10 +119,21 @@ jobs:
               jq -er '.result.deployments[0].versions | select(length==1 and .[0].percentage==100) | .[0].version_id'
           }
           bindings_match_old() {
-            curl -fsS --max-time 20 "${auth[@]}" "$API/settings" |
-              jq -e '.success==true and
-                ([.result.bindings[] | select(.name=="SOURCE_DB")] | length==1) and
-                ([.result.bindings[] | select(.name=="SOURCE_MEDIA")] | length==1)' >/dev/null
+            curl -fsS --max-time 20 "${auth[@]}" "$API/versions/$OLD_VERSION" |
+              jq -e --arg old "$OLD_VERSION" '
+                .success==true and .result.id==$old and
+                (.result.resources.bindings | type=="array" and length==2) and
+                ([.result.resources.bindings[] | select(.name=="SOURCE_DB" and
+                  (.type=="d1" or .type=="d1_database") and
+                  (.database_id // .id)=="217ef5b1-5d80-4f7c-afc7-9e07eb05c06b")] | length==1) and
+                ([.result.resources.bindings[] | select(.name=="SOURCE_MEDIA" and
+                  .type=="r2_bucket" and (.bucket_name // .bucket)=="soridraw-profile-media")] | length==1)' >/dev/null
+          }
+          no_active_bindings() {
+            local version="$1"
+            curl -fsS --max-time 20 "${auth[@]}" "$API/versions/$version" |
+              jq -e --arg id "$version" '.success==true and .result.id==$id and
+                (.result.resources.bindings | type=="array" and length==0)' >/dev/null
           }
           started=0
           finish() {
@@ -139,12 +158,20 @@ jobs:
           started=1
           node "$WRANGLER" deploy --config "$CFG" --message "APP518 retire unused diagnostic Worker only; remove old bindings"
           current="$(active)"
-          test "$current" != "$OLD_VERSION"
-          curl -fsS --max-time 20 "${auth[@]}" "$API/settings" | jq -e '
-            .success==true and (.result.bindings | type=="array" and length==0)' >/dev/null
-          http="$(curl -sS --max-time 20 -o "$RUNNER_TEMP/app518-retire-response.txt" -w '%{http_code}'             "https://$TARGET.andrawing1212.workers.dev/__app518_retired_probe")"
-          test "$http" = "410"
-          grep -q '^Diagnostic worker retired\.$' "$RUNNER_TEMP/app518-retire-response.txt"
+          test "$current" != "$OLD_VERSION" || { echo "::error::HOLD_NEW_VERSION_NOT_ACTIVE"; exit 2; }
+          no_active_bindings "$current" || { echo "::error::HOLD_ACTIVE_VERSION_BINDINGS_REMAIN"; exit 2; }
+          echo 'APP518_MIGRATION_ACTIVE_VERSION_ZERO_BINDINGS=PASS'
+          # Wait only for propagation of the already deployed replacement.
+          healthy=0
+          for attempt in 1 2 3 4 5; do
+            http="$(curl -sS --max-time 20 -o "$RUNNER_TEMP/app518-retire-response.txt" -w '%{http_code}'               "https://$TARGET.andrawing1212.workers.dev/__app518_retired_probe" || true)"
+            if [ "$http" = "410" ] && grep -Fxq 'Diagnostic worker retired.' "$RUNNER_TEMP/app518-retire-response.txt"; then
+              healthy=1
+              break
+            fi
+            sleep 2
+          done
+          test "$healthy" = 1 || { echo "::error::HOLD_DIAGNOSTIC_RETIRE_410_NOT_CONFIRMED"; exit 2; }
           started=0
           trap - EXIT
           echo 'APP518_MIGRATION_INSPECT_WORKER_ONLY=REPLACED'

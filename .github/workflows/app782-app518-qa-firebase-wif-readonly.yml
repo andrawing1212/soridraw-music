@@ -863,7 +863,7 @@ jobs:
           node qa/app518/live/post-schema-readiness518.mjs --live-post-schema-readonly
           echo 'APP518_QA_POST_SCHEMA_GET_ONLY=PASS'
 
-qa_live_two_functions_once:
+  qa_live_two_functions_once:
     if: >-
       github.repository == 'andrawing1212/soridraw-music' &&
       github.actor == github.repository_owner &&

@@ -22,7 +22,7 @@ function guard(){
  if(QA===PROD||!DIR||!/^[0-9]{8,20}$/.test(RUN)||
   process.env.GITHUB_REPOSITORY!=='andrawing1212/soridraw-music'||
   process.env.GITHUB_EVENT_NAME!=='issue_comment'||
-  process.env.APP783_QA_APPROVAL!=='APP783_ISOLATED_ONLY'||
+  process.env.APP784_QA_APPROVAL!=='APP784_ISOLATED_ONLY'||
   process.env.GITHUB_REF!=='refs/heads/main'||
   process.env.CLOUDFLARE_ACCOUNT_ID!==QA)issue('QA_IDENTITY');
  for(const name of ['CLOUDFLARE_QA_API_TOKEN','CLOUDFLARE_QA_DATA_TOKEN',
@@ -184,6 +184,14 @@ async function r2keys(s){
  const hash=[...bytes].map(n=>n.toString(16).padStart(2,'0')).join('');
  output.push('internal/qa767/owner-follow-admissions/'+hash,
   'internal/qa783/owner-follow-settled/'+hash);
+ const secondId=await opId(s,2,false);
+ const secondRaw=JSON.stringify([s.cutover,'qa776OwnerSynthetic',
+  'qa776ActorSynthetic',s.epoch,secondId]);
+ const secondBytes=new Uint8Array(await webcrypto.subtle.digest('SHA-256',
+  new TextEncoder().encode(secondRaw)));
+ const secondHash=[...secondBytes].map(n=>n.toString(16).padStart(2,'0')).join('');
+ output.push('internal/qa767/owner-follow-admissions/'+secondHash,
+  'internal/qa783/owner-follow-settled/'+secondHash);
  return output;
 }
 async function test(){
@@ -321,6 +329,87 @@ async function test783(){
  console.log('APP783_REAL_CANONICAL_GLOBAL_WRITERS_AUTO_RECOVERY=NOT_TESTED_HOLD');
 }
 
+async function test784(){
+ guard();const s=state();if(!s)issue('APP784_QA_RUN_STATE_UNAVAILABLE');
+ let ready=false;
+ for(let i=0;i<14;i++){
+  try{const h=await wfetch(s,'GET','/app784/health');
+   if(h.code===200&&h.value?.status==='QA784_HEALTH'&&
+    h.value.following===false&&h.value.objectsPresent===0){ready=true;break;}
+  }catch{}
+  if(i<13)await delay(1500);
+ }
+ if(!ready)issue('APP784_QA_INITIAL_EMPTY_HEALTH_NOT_PROVEN');
+ const route='/v1/qa784/profiles/qa776OwnerSynthetic/follow';
+ let denied;
+ for(let n=0;n<6;n++){
+  try{denied=await wfetch(s,'PUT',route,'{}',false);}
+  catch{denied={code:0,value:null};}
+  if(denied.code===403&&denied.value?.status==='DENIED')break;
+  if(![0,404,503].includes(denied.code))break;
+  if(n<5)await delay(1500);
+ }
+ if(denied.code!==403||denied.value?.status!=='DENIED')
+  issue('APP784_UNAUTHENTICATED_REQUEST_NOT_DENIED');
+ const idFollow=await opId(s,1,true),idUnfollow=await opId(s,2,false);
+ const old=await wfetch(s,'PUT',route,'{}');
+ if(old.code!==201||old.value?.status!=='QA784_ONE_SYNTHETIC_CHANGE_SETTLED'||
+    old.value.kind!=='legacy'||old.value.operationId!==idFollow||
+    old.value.d1RowsWritten!==1||old.value.productionDeployAuthorized!==false)
+   issue('APP784_LEGACY_FOLLOW_SHARED_GATE_FAIL');
+ const h1=await wfetch(s,'GET','/app784/health');
+ if(h1.code!==200||h1.value?.objectsPresent!==2||
+    h1.value.following!==true||!h1.value.firstSettledEtag)
+   issue('APP784_FOLLOW_FIRST_R2_SETTLED_NOT_PROVEN');
+ const replay=await wfetch(s,'PUT',route,JSON.stringify({
+  followOperationId:idFollow,followExpectedRevision:1}));
+ if(replay.code!==200||replay.value?.status!=='QA784_ORDERED_REPLAY_READ_ONLY'||
+    replay.value.productionDeployAuthorized!==false||
+    replay.value.d1RowsWritten!==0)
+   issue('APP784_ORDERED_SAME_ID_REPLAY_NOT_READ_ONLY');
+ const hReplay=await wfetch(s,'GET','/app784/health');
+ if(hReplay.code!==200||hReplay.value?.objectsPresent!==2||
+    hReplay.value.firstSettledEtag!==h1.value.firstSettledEtag)
+   issue('APP784_REPLAY_MODIFIED_IMMUTABLE_R2');
+ const newRequest=await wfetch(s,'DELETE',route,JSON.stringify({
+  followOperationId:idUnfollow,followExpectedRevision:2}));
+ if(newRequest.code!==201||
+    newRequest.value?.status!=='QA784_ONE_SYNTHETIC_CHANGE_SETTLED'||
+    newRequest.value.kind!=='ordered'||newRequest.value.operationId!==idUnfollow||
+    newRequest.value.d1RowsWritten!==1)
+   issue('APP784_ORDERED_UNFOLLOW_SHARED_GATE_FAIL');
+ const h2=await wfetch(s,'GET','/app784/health');
+ if(h2.code!==200||h2.value?.objectsPresent!==4||
+    h2.value.following!==false||!h2.value.secondSettledEtag)
+   issue('APP784_UNFOLLOW_SECOND_R2_SETTLED_NOT_PROVEN');
+ const secondReplay=await wfetch(s,'DELETE',route,JSON.stringify({
+  followOperationId:idUnfollow,followExpectedRevision:2}));
+ if(secondReplay.code!==200||
+    secondReplay.value?.status!=='QA784_ORDERED_REPLAY_READ_ONLY'||
+    secondReplay.value.d1RowsWritten!==0)
+   issue('APP784_UNFOLLOW_REPLAY_NOT_READ_ONLY');
+ const obsolete=await wfetch(s,'PUT',route,'{}');
+ if(obsolete.code!==409||obsolete.value?.status!=='HOLD'||
+    obsolete.value.reason!=='LEGACY_ABA_REPLAY_AMBIGUOUS')
+   issue('APP784_OLD_LEGACY_AFTER_UNFOLLOW_NOT_HELD');
+ const stale=await wfetch(s,'PUT',route,JSON.stringify({
+  followOperationId:idFollow,followExpectedRevision:1}));
+ if(stale.code!==409||stale.value?.status!=='HOLD')
+   issue('APP784_OLD_ORDERED_AFTER_UNFOLLOW_NOT_HELD');
+ const hf=await wfetch(s,'GET','/app784/health');
+ if(hf.code!==200||hf.value?.objectsPresent!==4||
+    hf.value.firstSettledEtag!==h1.value.firstSettledEtag||
+    hf.value.secondSettledEtag!==h2.value.secondSettledEtag)
+   issue('APP784_STALE_REPLAY_CHANGED_R2');
+ const d=await d1(s,"SELECT following FROM app768_qa_synthetic_follow WHERE k='"+s.row+"'");
+ if(Number(d.results?.[0]?.following)!==0)issue('APP784_D1_FINAL_STATE_NOT_UNFOLLOWED');
+ console.log('APP784_REAL_QA_ONE_LEGACY_FOLLOW_AND_ORDERED_UNFOLLOW=PASS');
+ console.log('APP784_REAL_QA_TWO_EXACT_D1_W1_WRITES_AND_FOUR_R2_RECEIPTS=PASS');
+ console.log('APP784_REAL_QA_ORDERED_REPLAY_R2_ETAG_STABLE=PASS');
+ console.log('APP784_REAL_QA_UNVERSIONED_ABA_AND_STALE_REQUEST_HOLD=PASS');
+ console.log('APP784_REAL_PROD_AUTH_GLOBAL_WRITERS_AND_PITR=NOT_TESTED_HOLD');
+}
+
 async function cleanup(){
  guard();const s=state();if(!s){console.log('APP776_NO_STATE_TO_CLEAN');return;}
  const errors=[];
@@ -362,6 +451,6 @@ async function cleanup(){
  console.log('APP776_EXACT_QA_D1_ROW_AND_R2_OBJECTS_CLEANED=PASS');
  console.log('APP776_ORIGINAL_APP583_QA_RESOURCES_UNCHANGED=PASS');
 }
-const phases={preflight,upload,test,test783,cleanup};
+const phases={preflight,upload,test,test783,test784,cleanup};
 const p=process.argv[2];if(!Object.hasOwn(phases,p))issue('BAD_PHASE');
 phases[p]().catch(e=>{console.error(String(e?.message||e));process.exitCode=2});

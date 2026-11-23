@@ -1,5 +1,7 @@
 name: APP777 QA Firebase RS256 + common ingress offline safety
 on:
+  issue_comment:
+    types: [created]
   pull_request:
     branches: [main]
     paths:
@@ -12,6 +14,9 @@ on:
       - 'scripts/app776-qa-integration-worker.mjs'
       - 'scripts/app776-qa-integration-runner.mjs'
       - 'scripts/verify-783-qa-worker-bridge.mjs'
+      - 'scripts/app784-qa-unified-follow.mjs'
+      - 'scripts/verify-784-qa-unified-follow.mjs'
+      - 'scripts/verify-784-qa-http-offline.mjs'
       - '.github/workflows/app768-qa-r2-conditional-race.yml'
 permissions:
   contents: read
@@ -46,10 +51,19 @@ jobs:
           node scripts/verify-783-qa-worker-bridge.mjs
           node --check scripts/app783-qa-immutable-settled-history.mjs
           node scripts/verify-783-qa-immutable-settled-history.mjs
+          node --check scripts/app784-qa-unified-follow.mjs
+          node scripts/verify-784-qa-unified-follow.mjs
+          node scripts/verify-784-qa-http-offline.mjs
   live:
-    if: false # APP783 isolated QA exact one-shot completed and cleaned, manual reapproval required
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 1379 &&
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/app784-qa ')
     env:
-      APP783_QA_APPROVAL: APP783_ISOLATED_ONLY
+      APP784_QA_APPROVAL: APP784_ISOLATED_ONLY
     runs-on: ubuntu-24.04
     timeout-minutes: 13
     steps:
@@ -65,12 +79,14 @@ jobs:
           COMMAND: '${{ github.event.comment.body }}'
         run: |
           set -euo pipefail
-          SHA="$(printf '%s' "$COMMAND" | sed -nE 's|^/app783-qa ([0-9a-f]{40})$|\1|p')"
+          SHA="$(printf '%s' "$COMMAND" | sed -nE 's|^/app784-qa ([0-9a-f]{40})$|\1|p')"
           test -n "$SHA"
           test "$(git rev-parse HEAD)" = "$SHA"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SHA"
           node scripts/verify-783-qa-immutable-settled-history.mjs
           node scripts/verify-783-qa-worker-bridge.mjs
+          node scripts/verify-784-qa-unified-follow.mjs
+          node scripts/verify-784-qa-http-offline.mjs
       - name: Inspect original APP583, QA D1/R2 isolation, insert one synthetic row
         env:
           CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
@@ -91,13 +107,13 @@ jobs:
             --bundle --format=esm --platform=browser --target=es2022 \
             --outfile=app776-qa-integration-worker.bundle.mjs
           node scripts/app776-qa-integration-runner.mjs upload
-      - name: Physical QA APP783 immutable settled R2 and bounded error recovery
+      - name: Physical QA APP784 legacy and ordered shared R2 and D1 gate
         env:
           CLOUDFLARE_ACCOUNT_ID: b60fcd62c679c64db19f0b0e0c2f3429
           CLOUDFLARE_QA_API_TOKEN: ${{ secrets.CLOUDFLARE_QA_API_TOKEN }}
           CLOUDFLARE_QA_DATA_TOKEN: ${{ secrets.CLOUDFLARE_QA_DATA_TOKEN }}
           CLOUDFLARE_QA_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_QA_DEPLOY_TOKEN }}
-        run: node scripts/app776-qa-integration-runner.mjs test783
+        run: node scripts/app776-qa-integration-runner.mjs test784
       - name: Always purge exact synthetic R2 objects, D1 row and temporary Worker
         if: always()
         env:

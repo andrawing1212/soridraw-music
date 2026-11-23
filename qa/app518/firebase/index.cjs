@@ -3,7 +3,6 @@
 // functions/src/index.ts or securedIndex. Does not register a Firestore
 // trigger, cron, existing production function, or browser-auth route.
 const {onRequest} = require("firebase-functions/v2/https");
-const {onDocumentDeleted} = require("firebase-functions/v2/firestore");
 const {recordHardDeleteApp518} = require("./lib/app518CanonicalSourceProvider");
 const {defineSecret} = require("firebase-functions/params");
 const admin = require("firebase-admin");
@@ -72,63 +71,74 @@ exports.app518QaExactFavoriteSource = onRequest({
 });
 
 
-// Independent QA ONLY, exact one synthetic ID. No user-data listeners in
-// shared/preview/test/production Functions. The Firestore event itself
-// supplies the verified BEFORE snapshot and event id; never a client field.
+// QA-only native CloudEvent target for *gcloud* deployment. Firebase SDK's
+// onDocumentDeleted wrapper must be deployed with Firebase CLI, not gcloud.
+// Google Cloud's Eventarc Firestore data is protobuf DocumentEventData.
+// Decode exactly the before snapshot; no collection scan or user data writes.
+const functionsFramework = require("@google-cloud/functions-framework");
+const protobuf = require("protobufjs");
+const eventRoot = new protobuf.Root();
+protobuf.parse('syntax = "proto3"; package google.protobuf; message Timestamp { int64 seconds = 1; int32 nanos = 2; }',eventRoot);
+protobuf.parse('syntax = "proto3"; package google.firestore.v1; message Value { bool boolean_value = 1; string string_value = 17; } message Document { string name = 1; map<string, Value> fields = 2; google.protobuf.Timestamp update_time = 4; }',eventRoot);
+protobuf.parse('syntax = "proto3"; package google.events.cloud.firestore.v1; message DocumentEventData { google.firestore.v1.Document old_value = 2; }',eventRoot);
+const firestoreDeleteEvent = eventRoot.lookupType("google.events.cloud.firestore.v1.DocumentEventData");
 const qaRun = () => {
-  const run = process.env.SORIDRAW_APP518_QA_RUN_ID;
-  return /^[0-9]{8,20}$/.test(String(run||""))
-    && process.env.SORIDRAW_APP518_PILOT_UID === "qa518-"+run+"-owner"
-    && process.env.SORIDRAW_APP518_PILOT_FAVORITE_ID === "qa518-"+run+"-song";
-};
-const beforeUpdateTime = (snapshot) => {
-  const stamp = snapshot?.updateTime;
-  if(!Number.isSafeInteger(stamp?.seconds)
-    ||!Number.isSafeInteger(stamp?.nanoseconds)
-    ||stamp.nanoseconds<0||stamp.nanoseconds>=1_000_000_000)return null;
-  const date=new Date(stamp.seconds*1000);
-  if(!Number.isFinite(date.getTime()))return null;
-  return date.toISOString().slice(0,19)+"."+
-    String(stamp.nanoseconds).padStart(9,"0")+"Z";
-};
-exports.app518QaSyntheticDeleteReceipt = onDocumentDeleted({
-  document:"favorites/{favoriteId}",
-  region:"asia-northeast3",
-  memory:"256MiB",
-  timeoutSeconds:30,
-  minInstances:0,
-  maxInstances:1,
-  retry:false,
-  serviceAccount:"soridraw-qa-app518-runtime@soridraw-app.iam.gserviceaccount.com",
-},async(event)=>{
-  // The trigger can receive other QA favorite events, but never reads/writes
-  // any such data. It is registered in the QA project only, never shared.
-  if(!runtimeQa()||!pilotQa()||!qaRun()
-    ||process.env.SORIDRAW_APP518_BRIDGE_ACTIVE!=="APPROVED_ISOLATED_ONE_SONG"
-    ||event?.params?.favoriteId!==process.env.SORIDRAW_APP518_PILOT_FAVORITE_ID)
-    return;
-  const before=event.data;
-  const item=before?.data();
   const run=process.env.SORIDRAW_APP518_QA_RUN_ID;
-  if(!before?.exists||item?.qaOnly!==true||item?.qaRunId!==run
-    ||item?.uid!==process.env.SORIDRAW_APP518_PILOT_UID
-    ||typeof event.id!=="string"||!safeId(event.id,512))
-    throw new Error("APP518_QA_HOLD_UNVERIFIED_DELETE_EVENT");
-  // The final QA cleanup marks its own synthetic document before deletion.
-  // Only this exact run-owned marker may suppress the second receipt.
-  if(item.qa518CleanupFinal===true)return;
-  const updateTime=beforeUpdateTime(before);
-  if(!updateTime)throw new Error("APP518_QA_HOLD_MISSING_BEFORE_VERSION");
+  return /^[0-9]{8,20}$/.test(String(run||""))
+    &&process.env.SORIDRAW_APP518_PILOT_UID==="qa518-"+run+"-owner"
+    &&process.env.SORIDRAW_APP518_PILOT_FAVORITE_ID==="qa518-"+run+"-song";
+};
+const safeTimestamp = stamp => {
+  const sec=Number(stamp?.seconds);
+  const nanos=Number(stamp?.nanos||0);
+  if(!Number.isSafeInteger(sec)||sec<=0
+    ||!Number.isSafeInteger(nanos)||nanos<0||nanos>=1000000000)return null;
+  const date=new Date(sec*1000);
+  if(!Number.isFinite(date.getTime()))return null;
+  return date.toISOString().slice(0,19)+"."+String(nanos).padStart(9,"0")+"Z";
+};
+const nativeDeleteReceipt = async event => {
+  if(!runtimeQa()||!pilotQa()||!qaRun()
+    ||process.env.SORIDRAW_APP518_BRIDGE_ACTIVE!=="APPROVED_ISOLATED_ONE_SONG")
+    return;
+  const id=process.env.SORIDRAW_APP518_PILOT_FAVORITE_ID;
+  const run=process.env.SORIDRAW_APP518_QA_RUN_ID;
+  if(event?.type!=="google.cloud.firestore.document.v1.deleted"
+    ||event?.source!=="//firestore.googleapis.com/projects/soridraw-app/databases/(default)"
+    ||event?.subject!=="documents/favorites/"+id)
+    return;
+  if(typeof event?.id!=="string"||!safeId(event.id,512))
+    throw Error("APP518_QA_DELETE_EVENT_ID_INVALID");
+  if(!(event.data instanceof Uint8Array))
+    throw Error("APP518_QA_DELETE_EVENT_PROTOBUF_REQUIRED");
+  const decoded=firestoreDeleteEvent.decode(event.data);
+  const before=decoded?.oldValue;
+  const exactName="projects/soridraw-app/databases/(default)/documents/favorites/"+id;
+  if(before?.name!==exactName)return;
+  const fields=before.fields||{};
+  if(fields.qaOnly?.booleanValue!==true
+    ||fields.qaRunId?.stringValue!==run
+    ||fields.uid?.stringValue!==process.env.SORIDRAW_APP518_PILOT_UID)
+    throw Error("APP518_QA_DELETE_EVENT_OWNER_OR_RUN_MISMATCH");
+  if(fields.qa518CleanupFinal?.booleanValue===true)return;
+  const updateTime=safeTimestamp(before.updateTime);
+  if(!updateTime)throw Error("APP518_QA_DELETE_BEFORE_VERSION_INVALID");
   if(!admin.apps.length)admin.initializeApp({projectId:QA_PROJECT});
   const result=await recordHardDeleteApp518({
     db:admin.firestore(),
     uid:process.env.SORIDRAW_APP518_PILOT_UID,
-    documentId:process.env.SORIDRAW_APP518_PILOT_FAVORITE_ID,
+    documentId:id,
     deleteEventId:event.id,
-    beforeOwnerUid:item.uid,
+    beforeOwnerUid:fields.uid.stringValue,
     beforeUpdateTime:updateTime,
     verifiedServerDeleteEvent:true,
   });
   if(!["VERIFIED_DELETE_RECEIPT","SKIP_NEWER_SAVE_PRESENT"].includes(result.code))
-    throw new Error("APP518_QA_HOLD_DELETE_RECEIPT_NOT_CONFIRMED");
-});
+    throw Error("APP518_QA_DELETE_RECEIPT_"+String(result.code).slice(0,60));
+  console.log("APP518_QA_NATIVE_FIRESTORE_DELETE_RECEIPT="+result.code);
+};
+// The target is explicitly registered as CloudEvent for gcloud's Functions
+// Framework, not as an HTTP handler or a Firebase SDK trigger.
+functionsFramework.cloudEvent("app518QaSyntheticDeleteReceipt",nativeDeleteReceipt);
+nativeDeleteReceipt.run=nativeDeleteReceipt; // existing networkless QA guard test
+exports.app518QaSyntheticDeleteReceipt=nativeDeleteReceipt;

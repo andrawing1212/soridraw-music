@@ -89,7 +89,14 @@ if(command==='--bootstrap'){
  console.log('APP518_QA_REAL_R2_BOOTSTRAP_EXACT_TWO_KEYS=PASS');
  console.log('APP518_QA_REAL_R2_SIGNED_ONLY_AND_WRONG_URL_BLOCK=PASS');
 }else if(command==='--cleanup'){
- const cleaned=await call('cleanup',true);
+ let cleaned;
+ for(let i=0;i<12;i++){
+  try{cleaned=await call('cleanup',true);break;}
+  catch(error){
+   if(!String(error?.message||'').endsWith('_HOLD_404')||i===11)throw error;
+   await new Promise(resolve=>setTimeout(resolve,1800));
+  }
+ }
  if(!['QA518_R2_EXACT_TWO_KEYS_CLEANED_PASS',
    'QA518_R2_ALREADY_ABSENT','QA518_R2_PARTIAL_BASE_CLEANED_PASS'].includes(cleaned.code))
   throw Error('APP518_QA_R2_CLEANUP_NOT_EXACT');

@@ -239,9 +239,14 @@ export function createApp792PreviewFollowIngress({
    // Old clients have no ordering token; never claim their opposite-intent
    // delayed replays are exactly-once. Preserve existing compatibility
    // during an approved cutover; no automatic replay of a previous command.
-   if(!legacy&&body.followExpectedRevision!==p.pairRevision)return hold('ORDERED_STALE');
-   if(p.following===desired)
+   if(!legacy&&body.followExpectedRevision!==p.pairRevision)
+    return hold('ORDERED_STALE_OR_REPLAY_REQUIRES_EXACT_RECEIPT');
+   if(p.following===desired){
+    // Current client requires a strictly advancing ordered ACK; do not
+    // fabricate one or use the canonical writer without an admission.
+    if(!legacy)return hold('ORDERED_NOOP_REQUIRES_COMPATIBLE_ACK');
     return {status:'UNCHANGED',following:desired,revision:p.pairRevision,d1AdditionalWrites:0,deployAuthorized:false};
+   }
    const service=await ownerService(ownerUid);
    if(!service||typeof service.admit!=='function'||typeof service.arm!=='function')return hold('OWNER_SERVICE_UNAVAILABLE');
    const reserved=await service.admit(a);

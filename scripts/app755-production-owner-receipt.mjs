@@ -315,7 +315,7 @@ export function createApp755ProductionOwnerReceiptStore({
        if(old.delivery?.status==='held'){
          const entries=s.entries.slice();
          entries[index]={...old,delivery:{status:'pending',attempts:old.delivery.attempts,
-           settlementChecks:old.delivery.settlementChecks,retryAt:now()+DELAY}};
+           settlementChecks:0,retryAt:now()+DELAY}};
          await tx.put(KEY,{...s,entries});
        }
        await alarmReady(tx);

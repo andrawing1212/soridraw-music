@@ -25,6 +25,7 @@ on:
       - 'scripts/app789-qa-physical-runner.mjs'
       - 'scripts/verify-789-qa-physical-source.mjs'
       - 'scripts/verify-789-qa-local-runtime.mjs'
+      - 'scripts/app789-qa-settlement-recovery.mjs'
       - '.github/workflows/app768-qa-r2-conditional-race.yml'
 permissions:
   contents: read

@@ -4,6 +4,12 @@ import {readFileSync} from 'node:fs';
 const entry=readFileSync('cloudflare/explore-worker/experiments/owner-follow-qa789-entry.mjs','utf8');
 const runner=readFileSync('scripts/app789-qa-physical-runner.mjs','utf8');
 const workflow=readFileSync('.github/workflows/app768-qa-r2-conditional-race.yml','utf8');
+const recovery=readFileSync('scripts/app789-qa-settlement-recovery.mjs','utf8');
+assert.equal((runner.match(/get\('POST','\/qa789\/commit'/g)||[]).length,1);
+assert(recovery.includes("get('POST','/qa789/do/finalize',body)"));
+assert(!recovery.includes("'/qa789/commit'")&&!recovery.includes('QA789_D1')&&!recovery.includes('QA789_R2'));
+assert(entry.includes('QA789_CANONICAL_WRITTEN_PENDING_SETTLEMENT'));
+assert(entry.includes('EXACT_RECOVERY_ID_REQUIRED'));
 for(const s of [
  "import legacy, {OwnerFollowIsolated558 as OriginalOwnerDO}",
  "export class OwnerFollowIsolated558 extends OriginalOwnerDO",

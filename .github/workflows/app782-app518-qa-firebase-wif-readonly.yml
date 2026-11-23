@@ -658,3 +658,85 @@ jobs:
             throw Error('HOLD_QA_ORIGINAL_QA583_VERSION_DRIFT');
           console.log('APP518_QA_R2_TEMP_ABSENT_AND_ORIGINAL_QA583_100=PASS');
           NODE
+
+
+  qa_billing_bound_readonly:
+    # APP518: READ ONLY. Existing QA project billing and project-scoped alert.
+    # Never changes budgets, billing accounts, IAM, APIs, or Function resources.
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' &&
+      github.actor == github.repository_owner &&
+      github.event.issue.number == 528 &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/app518-qa-billing-bound 864f796da24413309567198c9de502b13cdedd50'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/1083981050742/locations/global/workloadIdentityPools/soridraw-qa-github/providers/app518-readonly
+          service_account: soridraw-qa-gh-deployer@soridraw-app.iam.gserviceaccount.com
+          project_id: soridraw-app
+          create_credentials_file: true
+          export_environment_variables: true
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Bounded QA-only billing link and alert visibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gcloud projects describe soridraw-app --format='value(projectNumber)' 2>/dev/null)" = '1083981050742'
+          if ! gcloud billing projects describe soridraw-app --format=json > "$RUNNER_TEMP/app518-billing-link.json" 2>/dev/null; then
+            echo 'APP518_QA_BILLING_LINK=HOLD_READ_PERMISSION'
+            exit 2
+          fi
+          account="$(python3 - "$RUNNER_TEMP/app518-billing-link.json" <<'PY'
+          import json,re,sys
+          d=json.load(open(sys.argv[1],encoding='utf8'))
+          if d.get('projectId')!='soridraw-app' or d.get('billingEnabled') is not True:
+            print('APP518_QA_BILLING_LINK_NOT_CONFIRMED',file=sys.stderr)
+            raise SystemExit(2)
+          v=d.get('billingAccountName','')
+          if not re.fullmatch(r'billingAccounts/[A-Za-z0-9-]{10,40}',v):
+            print('APP518_QA_BILLING_ACCOUNT_FORMAT_HOLD',file=sys.stderr)
+            raise SystemExit(2)
+          print(v.split('/')[-1])
+          PY
+          )"
+          echo 'APP518_QA_BILLING_LINK_ENABLED=PASS'
+          if ! gcloud billing budgets list --billing-account="$account" --format=json > "$RUNNER_TEMP/app518-budget.json" 2>/dev/null; then
+            echo 'APP518_QA_BUDGET=HOLD_BUDGET_LIST_PERMISSION_OR_API'
+            exit 2
+          fi
+          python3 - "$RUNNER_TEMP/app518-budget.json" <<'PY'
+          import json,sys
+          budgets=json.load(open(sys.argv[1],encoding='utf8'))
+          if not isinstance(budgets,list) or len(budgets)>100:
+            raise SystemExit('APP518_QA_BUDGET_LIST_INVALID')
+          def eligible(b):
+            f=b.get('budgetFilter',{})
+            ids=f.get('projects',[])
+            if ids!=['projects/1083981050742']:
+              return False
+            if f.get('calendarPeriod') not in ('MONTH','CALENDAR_PERIOD_MONTH'):
+              return False
+            amount=b.get('amount',{}).get('specifiedAmount',{})
+            try:
+              units=int(amount.get('units',0))
+              nano=int(amount.get('nanos',0))
+            except (TypeError,ValueError):
+              return False
+            c=amount.get('currencyCode')
+            threshold=(units*1_000_000_000+nano)
+            if c=='USD': cap=5_000_000_000
+            elif c=='KRW': cap=5_000_000_000_000
+            else: return False
+            return 0<threshold<=cap and bool(b.get('thresholdRules'))
+          if not any(eligible(x) for x in budgets):
+            raise SystemExit('APP518_QA_BUDGET_ALERT=HOLD_QA_SPECIFIC_MONTHLY_ALERT_NOT_PROVED')
+          print('APP518_QA_BUDGET_ALERT=PASS_QA_PROJECT_SPECIFIC_MONTHLY')
+          print('APP518_QA_BILLING_PREFLIGHT=PASS_READONLY_MUTATIONS_ZERO')
+          print('APP518_QA_NOTE=ALERT_DOES_NOT_STOP_BILLING')
+          PY

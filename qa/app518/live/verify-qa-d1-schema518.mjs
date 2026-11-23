@@ -27,7 +27,7 @@ const result=await applyExactQa518Schema({plan,d1Id:D1,query:queryFor(db),approv
 assert.equal(result.code,'APP518_QA_D1_EXACT_ADDITIVE_SCHEMA_PASS');
 assert.equal(db.prepare("SELECT value FROM qa583_protected WHERE id='preserve'").get().value,'keep');
 const names=db.prepare("SELECT name FROM sqlite_master WHERE type IN ('table','index') "+
- "AND (name LIKE 'music_note_catalog_%_518' OR name LIKE 'idx_music_note_catalog_%_518')").all().map(r=>r.name).sort();
+ "AND (name LIKE 'music_note_catalog_%_518' OR name LIKE 'idx_music_note_catalog_%')").all().map(r=>r.name).sort();
 assert.deepEqual(names,QA518_SCHEMA_NAMES);
 console.log('APP518_QA_D1_REAL_SQLITE_PINNED_SCHEMA=PASS');
 console.log('APP518_QA_OTHER_QA_TABLE_PRESERVED=PASS');

@@ -1,0 +1,22 @@
+name: APP518 QA official public GitHub JWKS lookup
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'qa/app518/live/inspect-public-github-jwks518.mjs'
+      - '.github/workflows/temp-app518-public-jwks.yml'
+permissions:
+  contents: read
+jobs:
+  official_public_keys_only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fetch official public-only signing keys, no credentials
+        run: node qa/app518/live/inspect-public-github-jwks518.mjs

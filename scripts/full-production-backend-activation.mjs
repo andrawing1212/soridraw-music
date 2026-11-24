@@ -3,12 +3,13 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
-import {readFileSync,writeFileSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdirSync,mkdtempSync,rmSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
-import {join} from 'node:path';
+import {join,dirname} from 'node:path';
 import {sameStagedWorkerRuntime660} from './lib/owner-follow-general660.mjs';
 const base='https://api.cloudflare.com/client/v4/accounts/e1a30fc9ef497fda1d34f4ab3dc1da45/';
-const PRO='soridraw-explore-api',PRE='soridraw-explore-preview',old='5313d378-351b-412c-b1d9-a7e6e9eb23fa',fresh='a8c3615f-5d69-48eb-b535-dc9235f36991';
+const PRO='soridraw-explore-api',PRE='soridraw-explore-preview',old='5313d378-351b-412c-b1d9-a7e6e9eb23fa',tested='a8c3615f-5d69-48eb-b535-dc9235f36991';
+let fresh=tested;
 const pins={
  [PRO]:old,[PRE]:'87ee8915-fe13-4715-88d3-0f5d1dd10ee3',
  'soridraw-explore-test':'ddd2255a-75cc-4db9-8905-b47338558cb0',
@@ -22,7 +23,7 @@ const ct=process.env.CLOUDFLARE_API_TOKEN,ft=process.env.FIREBASE_ACCESS_TOKEN;
 const state=join(process.env.RUNNER_TEMP||'/tmp','full-prod-activation-state.json');
 const delay=n=>new Promise(r=>setTimeout(r,n));
 async function api(method,path,body){
- need(method==='GET'||(method==='POST'&&path==='workers/scripts/'+PRO+'/deployments'),'METHOD_SCOPE');
+ need(method==='GET'||(method==='POST'&&['workers/scripts/'+PRO+'/deployments','workers/workers/'+PRO+'/versions?deploy=false'].includes(path)),'METHOD_SCOPE');
  const r=await fetch(base+path,{method,redirect:'error',headers:{Authorization:'Bearer '+ct,'Content-Type':'application/json','Cache-Control':'no-cache'},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(30000)});
  const j=await r.json().catch(()=>null);
  need(r.ok&&j?.success===true,'CF_'+method+'_'+r.status+'_CODE_'+(j?.errors||[]).map(e=>Number(e.code)).filter(Number.isSafeInteger).join('_'));
@@ -48,7 +49,7 @@ async function snapshot(name,id){
 }
 async function preflight(){
  await checkPins(old);
- const [a,b,c,p]=await Promise.all([snapshot(PRO,old),snapshot(PRO,fresh),snapshot(PRO,'c8c528df-008c-4eba-95f9-26952dabe0bc'),snapshot(PRE,pins[PRE])]);
+ const [a,b,c,p]=await Promise.all([snapshot(PRO,old),snapshot(PRO,tested),snapshot(PRO,'c8c528df-008c-4eba-95f9-26952dabe0bc'),snapshot(PRE,pins[PRE])]);
  const map=new Map(b.bindings.map(x=>[x.name,x])),pm=new Map(p.bindings.map(x=>[x.name,x]));
  need(a.bindings.length===20&&b.bindings.length===27&&c.bindings.length===27&&b.modules.size===15,'INVENTORY');
  need(a.bindings.every(x=>isDeepStrictEqual(x,map.get(x.name)))&&c.bindings.every(x=>isDeepStrictEqual(x,map.get(x.name))),'BINDING_DRIFT');
@@ -70,6 +71,55 @@ async function preflight(){
   if(!name.includes('Config'))need(f.serviceConfig?.secretEnvironmentVariables?.some(x=>x.key==='SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET'&&x.version==='1'),'FUNCTION_SECRET_'+name);
  }
  console.log('PROD_EXACT_CANDIDATE_QA_SOURCE_BINDINGS_RECEIVERS_ROLLBACK=PASS');
+}
+// 448 shares the high-volume manifest publisher, but the live read route
+// was still guarded by disabled Stage416. Change ONLY this read guard.
+// Do not enable any legacy write route or change the shared PREVIEW Worker.
+async function stageReadRouteRepair(){
+ const [meta,code]=await Promise.all([api('GET','workers/scripts/'+PRO+'/versions/'+tested),api('GET','workers/workers/'+PRO+'/versions/'+tested+'?include=modules')]);
+ const modules=code.modules.map(m=>({name:m.name,content_type:m.content_type||'application/javascript+module',content_base64:m.content_base64}));
+ const target=modules.find(m=>m.name==='production-main.mjs');
+ const before=Buffer.from(target.content_base64,'base64').toString('utf8');
+ need(sha(before)==='19d5e6d8a9d1dff6ce45c2498d2194abddb409f6fb8679539f35c752eca7a149','BASE_SOURCE_PIN');
+ const guard=/if\s*\(\s*STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE\s*&&\s*url\.pathname\s*===\s*PUBLIC_LIKE_MANIFEST_ROUTE_416\s*\)/g;
+ const matches=[...before.matchAll(guard)];need(matches.length===1,'MANIFEST_READ_GUARD_ANCHOR_'+matches.length);
+ const original=matches[0][0];
+ const replacement=original.replace('STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE','(STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE || COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448)');
+ const fixed=before.replace(original,replacement);
+ need(fixed.replace(replacement,original)===before&&fixed!==before,'MANIFEST_CHANGE_SCOPE');
+ need(/(?:const|var|let)\s+COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448\s*=\s*true/.test(fixed)&&/(?:const|var|let)\s+STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE\s*=\s*false/.test(fixed),'MODE_FLAGS');
+ const dir=mkdtempSync(join(process.env.RUNNER_TEMP,'exact-manifest-'));
+ try{
+  for(const m of modules){
+   need(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*\.mjs$/.test(m.name)&&!m.name.split('/').some(x=>x==='.'||x==='..'),'MODULE_PATH');
+   const f=join(dir,m.name);mkdirSync(dirname(f),{recursive:true});writeFileSync(f,Buffer.from(m.content_base64,'base64'));
+  }
+  // Exact old bundle must reproduce 404; exact new bundle must serve a
+  // synthetic 300-track local R2 manifest. Child has no cloud credentials.
+  const childEnv={PATH:process.env.PATH,HOME:process.env.HOME,RUNNER_TEMP:process.env.RUNNER_TEMP};
+  const test=['scripts/verify-full-release-common-manifest-route.mjs',dir,join(process.env.RUNNER_TEMP,'manifest-local-deps')];
+  execFileSync(process.execPath,[...test,'before'],{stdio:'inherit',env:childEnv,timeout:60000});
+  writeFileSync(join(dir,'production-main.mjs'),fixed);
+  execFileSync(process.execPath,['--check',join(dir,'production-main.mjs')],{stdio:'pipe',env:childEnv});
+  execFileSync(process.execPath,[...test,'after'],{stdio:'inherit',env:childEnv,timeout:60000});
+ }finally{rmSync(dir,{recursive:true,force:true})}
+ const patched=modules.map(m=>m.name===target.name?{...m,content_base64:Buffer.from(fixed).toString('base64')}:m);
+ await checkPins(old);
+ const upload=await api('POST','workers/workers/'+PRO+'/versions?deploy=false',{
+  main_module:'entry.mjs',compatibility_date:meta.resources.script_runtime.compatibility_date,
+  compatibility_flags:meta.resources.script_runtime.compatibility_flags||[],
+  bindings:meta.resources.bindings.map(b=>({name:b.name,type:'inherit',version_id:tested})),modules:patched,
+  annotations:{'workers/tag':'common-manifest-read-fix','workers/message':'Approved production candidate read-only common 448 manifest guard repair'}
+ });
+ const id=upload?.id;need(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id)&&id!==tested,'REPAIRED_VERSION_ID');
+ console.log('PROD_MANIFEST_FIXED_INACTIVE='+id+';CORE_SHA256='+sha(fixed));
+ const actual=await snapshot(PRO,id),originalMeta=await snapshot(PRO,old);
+ need(actual.bindings.length===meta.resources.bindings.length&&actual.bindings.every(x=>isDeepStrictEqual(x,meta.resources.bindings.find(y=>y.name===x.name))),'REPAIR_BINDINGS');
+ need(sameStagedWorkerRuntime660(originalMeta.runtime,actual.runtime),'REPAIR_RUNTIME');
+ need(actual.modules.size===patched.length&&patched.every(x=>actual.modules.get(x.name)?.hash===sha(Buffer.from(x.content_base64,'base64'))),'REPAIR_SOURCE_READBACK');
+ await checkPins(old);
+ console.log('PROD_MANIFEST_ONLY_PATCH_ISOLATED_AND_INACTIVE_READBACK=PASS');
+ return id;
 }
 const origin='https://soridraw.com',root='https://soridraw-explore-api.andrawing1212.workers.dev',preview='https://soridraw-explore-preview.andrawing1212.workers.dev';
 async function req(host,path,method='GET',site=origin){
@@ -131,8 +181,10 @@ async function rollback(){
  console.log('PROD_EXACT_VERSION_ROLLBACK=PASS;NO_DATA_REWRITE');
 }
 async function main(){
- need(process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REPOSITORY==='andrawing1212/soridraw-music'&&process.env.GITHUB_ACTOR===process.env.GITHUB_REPOSITORY_OWNER&&process.env.GITHUB_REF==='refs/heads/release/full-production-backend-activation'&&process.env.GITHUB_EVENT_NAME==='push'&&process.env.GITHUB_RUN_ATTEMPT==='1'&&execFileSync('git',['rev-parse','HEAD^'],{encoding:'utf8'}).trim()==='4bfba5c2005e2aaeac5f73b07e572d9a3eab4810'&&ct&&ft,'APPROVAL_SCOPE');
+ need(process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REPOSITORY==='andrawing1212/soridraw-music'&&process.env.GITHUB_ACTOR===process.env.GITHUB_REPOSITORY_OWNER&&process.env.GITHUB_REF==='refs/heads/release/full-production-backend-activation'&&process.env.GITHUB_EVENT_NAME==='push'&&process.env.GITHUB_RUN_ATTEMPT==='1'&&execFileSync('git',['rev-parse','HEAD^'],{encoding:'utf8'}).trim()==='c6939d8be5050cb8a60281430f49879a4f029e3d'&&ct&&ft,'APPROVAL_SCOPE');
  await preflight();await legacySmoke();await checkPins(old);
+ fresh=await stageReadRouteRepair();
+ await checkPins(old);
  writeFileSync(state,JSON.stringify({old,fresh,phase:'attempt'}),{mode:0o600});
  try{
   await deploy(fresh);

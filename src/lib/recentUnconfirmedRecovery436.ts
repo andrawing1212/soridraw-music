@@ -87,7 +87,7 @@ export const patchExactRecentTextRow436 = (
     const oldApplied = original.appliedKeywords || {};
     const nextApplied: RecentRecoverySong = { ...oldApplied };
     for (const key of ['secondaryLanguage', 'titleLanguages', 'titlesByLanguage',
-      'lyricsByLanguage', 'editedInStudio', 'editedInStudioAt']) {
+      'lyricsByLanguage', 'lyricLanguages', 'hasAddedLyricsLanguage', 'addedLyricsLanguage', 'addedLyricsLanguageAt', 'isNoLyrics', 'editedInStudio', 'editedInStudioAt']) {
       if (!Object.prototype.hasOwnProperty.call(editedSong.appliedKeywords, key)) continue;
       if (key === 'lyricsByLanguage' || key === 'titlesByLanguage') {
         nextApplied[key] = { ...(oldApplied[key] || {}), ...(editedSong.appliedKeywords[key] || {}) };

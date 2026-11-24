@@ -110,7 +110,7 @@ import { markCacheDiagnostic } from './lib/cacheDiagnostics';
 import { canUseWarmCatalogWithoutRemote, readCatalogProfileRevision } from './lib/catalogWarmCachePolicy';
 import { scheduleListBundleWrite, subscribeListBundle, readListBundleFromServerOnce } from './lib/listBundleCache';
 import { schedulePreviewAdaptiveListIndexPublishIfDirty } from './lib/adaptiveListIndexV2';
-import { refreshCatalogSnapshotAfterKnownMutation } from './lib/userDataEngine';
+import { refreshCatalogSnapshotAfterKnownMutation, rememberMusicNoteMediaPreview, readPreservedMusicNoteMedia } from './lib/userDataEngine';
 const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
 const SORIDRAW_COMMON_USER_DATA_ENGINE_1033 = true;
 
@@ -391,7 +391,7 @@ const RECENT_SONGS_SYNC_VERSION_EVENT = 'soridraw:recent-songs-sync-version-v2';
 const RECENT_SONG_TEXT_BATCH_MS = 150_000;
 const RECENT_SONG_TEXT_PENDING_STORAGE_BASE = 'soridraw_recent_text_pending_v2';
 type RecentSongTextPendingMarker = {
-  operation: 'regenerate' | 'edit' | 'pre-favorite-edit';
+  operation: 'regenerate' | 'edit' | 'pre-favorite-edit' | 'add-lyrics-language';
   activeIndex: number;
   mutationEpoch: number;
   updatedAtMs: number;
@@ -404,7 +404,7 @@ const readRecentSongTextPendingMarker = (uid: string): RecentSongTextPendingMark
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     const operation = String(parsed?.operation || '');
-    if (!['regenerate', 'edit', 'pre-favorite-edit'].includes(operation)) return null;
+    if (!['regenerate', 'edit', 'pre-favorite-edit', 'add-lyrics-language'].includes(operation)) return null;
     return {
       operation: operation as RecentSongTextPendingMarker['operation'],
       activeIndex: Math.floor(Number(parsed?.activeIndex ?? -1)),
@@ -5693,6 +5693,11 @@ function App() {
     const map = new Map<string, any>();
     [...(current || []), ...(incoming || [])].forEach((item) => {
       if (!item?.id) return;
+      if (item?.__musicNoteTrashSync === true && item.hidden === true && Number(item.updatedAtMs || 0) > 0) {
+        const existing = map.get(item.id);
+        if (!existing || Number(existing.updatedAtMs || 0) <= Number(item.updatedAtMs || 0)) map.set(item.id, item);
+        return;
+      }
       if (isFavoriteSoftRemoved(item)) {
         Array.from(map.entries()).forEach(([cachedId, cachedItem]) => {
           if (doesFavoriteUnsaveSignalMatchFavorite(item, cachedItem)) {
@@ -5702,7 +5707,10 @@ function App() {
         map.delete(item.id);
         return;
       }
-      map.set(item.id, { ...(map.get(item.id) || {}), ...item });
+      const prior = map.get(item.id);
+      if (prior?.__musicNoteTrashSync === true && prior.hidden === true
+        && Number(prior.updatedAtMs || 0) >= Number(item.updatedAtMs || 0)) return;
+      map.set(item.id, { ...(prior || {}), ...item });
     });
     return sortFavoriteList(Array.from(map.values()));
   };
@@ -10680,7 +10688,7 @@ const toggleCycleVariantSelection = (
         if (!musicNoteCacheNeedsFullBootstrap && hasAnyMusicNotePayload
           && (!preferVerifiedCatalog || hasVerifiedWarmMusicNoteList)) {
           markCacheDiagnostic('musicNote', 'CACHE', 0);
-          setFavorites(sortFavoriteList(cachedFavs.filter((favorite) => !isFavoriteSoftRemoved(favorite))));
+          setFavorites(sortFavoriteList(cachedFavs.filter((favorite) => !isFavoriteSoftRemoved(favorite) || favorite?.__musicNoteTrashSync === true)));
         } else {
           // A cache with no valid Catalog receipt is still withheld until the
           // route-gated canonical Catalog check completes.
@@ -10792,7 +10800,7 @@ const toggleCycleVariantSelection = (
                 const previous = Array.isArray(prev) && prev.length > 0 ? prev : cachedFavs;
                 const bundleVersion = Number(bundle.updatedAtMs || 0);
                 const localNewer = previous.filter((favorite: any) => {
-                  if (!favorite || isFavoriteSoftRemoved(favorite)) return false;
+                  if (!favorite || (isFavoriteSoftRemoved(favorite) && favorite.__musicNoteTrashSync !== true)) return false;
                   // A speculative RTDB preview must not become canonical.
                   if (isStudioHeartOptimisticFavorite(favorite)) return false;
                   const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
@@ -10801,6 +10809,10 @@ const toggleCycleVariantSelection = (
                   // not the earlier optimistic heart. An older Catalog cannot
                   // discard this row while its changed-item delta is pending.
                   if (confirmedSaveId && favoriteId === confirmedSaveId) return true;
+                  if (favorite.__musicNoteTrashSync === true && favorite.hidden === true) {
+                    const active = catalogFavorites.find((row: any) => String(row.id || row.firestoreId || '') === favoriteId);
+                    return !active || Number(favorite.updatedAtMs || 0) >= Number(active.updatedAtMs || 0);
+                  }
                   // Do not erase a browser's sole surviving copy just because
                   // the shared Catalog omitted this active ID. This is local
                   // display retention, not Firestore/remote proof or R2 upsert.
@@ -10972,6 +10984,10 @@ const toggleCycleVariantSelection = (
     const localNewer = currentCanonical.filter((favorite: any) => {
       const favoriteId = String(favorite?.firestoreId || favorite?.id || '').trim();
       if (favoriteId && localDeletedIds.has(favoriteId)) return false;
+      if (favorite.__musicNoteTrashSync === true && favorite.hidden === true) {
+        const active = catalogFavorites.find((row: any) => String(row.id || row.firestoreId || '') === favoriteId);
+        return !active || Number(favorite.updatedAtMs || 0) >= Number(active.updatedAtMs || 0);
+      }
       // The exact RTDB mutation does not certify completeness of the R2
       // journal. Do not drop unrelated old local originals on this catch-up.
       if (favoriteId && !catalogFavoriteIds.has(favoriteId)) return true;
@@ -11005,6 +11021,7 @@ const toggleCycleVariantSelection = (
       if (hasPending) continue;
 
       const activeFavorite = authoritative.find((favorite: any) => {
+        if (isFavoriteSoftRemoved(favorite)) return false;
         const favoriteId = String(favorite?.firestoreId || favorite?.id || '').trim();
         if (linkedFavoriteId && favoriteId === linkedFavoriteId) return true;
         return isSameRecentSongSyncItem(recentSong, favorite);
@@ -11149,9 +11166,11 @@ const toggleCycleVariantSelection = (
           ? [parsedItemPayload]
           : [];
       const remoteItem: any = remoteItems[0] || null;
+      const isTrashSignal = normalizedOperation === 'update' && remoteItem?.__musicNoteTrashSync === true;
       const isRemovalOperation = normalizedOperation === 'unsave'
         || normalizedOperation === 'permanent-delete'
-        || normalizedOperation === 'bulk-delete';
+        || normalizedOperation === 'bulk-delete'
+        || (normalizedOperation === 'update' && removed) || isTrashSignal;
 
       // app285 — Save and unsave must identify the Recent Song the same way.
       // Previously save carried the song identity, but modern unsave often carried
@@ -11237,7 +11256,7 @@ const toggleCycleVariantSelection = (
           // A live preview belongs in memory until canonical confirmation.
           // Do not persist its UNSAVE marker to Recent Songs' durable cache.
           if (isRemovalOperation) {
-            if (recentLegacySourceId) {
+            if (recentLegacySourceId || isTrashSignal || removed) {
               nextSong.recentFavoriteExplicitlyUnsavedAt = Number(
                 remoteItem?.favoriteRemovedAt || remoteItem?.unsavedAt || remoteVersion || Date.now(),
               );
@@ -11307,7 +11326,7 @@ const toggleCycleVariantSelection = (
           }
         }
 
-        if (isRemovalOperation) {
+        if (isRemovalOperation && !isTrashSignal) {
           rememberFavoriteDeletedTombstones(uid, exactDocumentIds);
         } else if (
           normalizedOperation === 'save'
@@ -11328,10 +11347,10 @@ const toggleCycleVariantSelection = (
             (item) => !changedIds.has(String(item?.id || item?.firestoreId || '').trim())
           );
           for (const item of remoteItems) {
-            if (isFavoriteSoftRemoved(item)) continue;
+            if (isFavoriteSoftRemoved(item) && !isTrashSignal) continue;
             const itemId = String(item?.id || item?.firestoreId || '').trim();
             const previousItem = itemId ? previousById.get(itemId) : null;
-            const incomingItem = item?.__musicNoteCompactActiveSync === true && previousItem
+            const incomingItem = (item?.__musicNoteCompactActiveSync === true || isTrashSignal) && previousItem
               ? {
                   ...previousItem,
                   ...item,
@@ -11341,10 +11360,15 @@ const toggleCycleVariantSelection = (
                   },
                 }
               : item;
-            next = mergeFavoritePages([incomingItem], next);
+            if (isTrashSignal) {
+              if (previousItem && !isFavoriteSoftRemoved(previousItem)) rememberMusicNoteMediaPreview(uid, previousItem, remoteVersion);
+              next.push({ ...incomingItem, hidden: true, favoriteHidden: true, __musicNoteTrashSync: true });
+            } else {
+              next = mergeFavoritePages([incomingItem], next);
+            }
           }
           const sorted = sortFavoriteList(next);
-          writeFavoritesCache(uid, sorted, { publishDerived: false });
+          writeFavoritesCache(uid, sorted, { publishDerived: false, immediate: true });
           return sorted;
         });
         queueMusicNoteCatalogRecoveryAfterRemoteCanonical(
@@ -12136,7 +12160,7 @@ const toggleCycleVariantSelection = (
         'sunoShareUrl', 'sunoUrl', 'sunoSongUrl', 'sunoTitle',
         'sunoDurationSeconds', 'sunoDurationText', 'sunoShareUrlUpdatedAt', 'sunoCoverFetchedAt',
       ] as const;
-      const favoriteMediaPayload = Object.fromEntries(
+      let favoriteMediaPayload = Object.fromEntries(
         favoriteMediaKeys
           .filter((key) => {
             const value = (song as any)?.[key];
@@ -12144,6 +12168,24 @@ const toggleCycleVariantSelection = (
           })
           .map((key) => [key, (song as any)[key]]),
       );
+      const exactResaveId = String((song as any)?.favoriteFirestoreId || '').trim();
+      let preservedOriginal: any = null;
+      let preservedMedia: Record<string, any> = {};
+      if (exactResaveId && options?.intendedAction === 'save'
+        && ((song as any)?.recentFavoriteExplicitlyUnsavedAt
+          || Object.keys(readPreservedMusicNoteMedia(user.uid, exactResaveId)).length > 0)) {
+        // Explicit re-save only. Read the exact original, never scan. Do not
+        // write its media back: a concurrent explicit URL edit must win.
+        const original = await getDocFromServer(doc(db, 'favorites', exactResaveId));
+        if (original.exists()) {
+          preservedOriginal = mapFavoriteFirestoreDoc(original);
+          if (preservedOriginal.uid !== user.uid || preservedOriginal.isLocked) throw new Error('favorite-resave-protected');
+          preservedMedia = Object.fromEntries(favoriteMediaKeys
+            .filter(key => Object.prototype.hasOwnProperty.call(preservedOriginal, key))
+            .map(key => [key, preservedOriginal[key]]));
+          favoriteMediaPayload = {};
+        }
+      }
       const favoritePayload = sanitizeForFirestore({
         uid: user.uid,
         soridrawSongId: favoriteSoridrawSongId,
@@ -12193,7 +12235,7 @@ const toggleCycleVariantSelection = (
           : null;
       if (favoriteDocRef) {
         await runV1MutationBoundary(
-          { domain: 'musicNote', operation: 'save', uid: user.uid, documentIds: [favoriteDocRef.id], affectedCount: 1, syncItem: { ...favoritePayload, id: favoriteDocRef.id, firestoreId: favoriteDocRef.id } },
+          { domain: 'musicNote', operation: 'save', uid: user.uid, documentIds: [favoriteDocRef.id], affectedCount: 1, syncItem: { ...favoritePayload, ...preservedMedia, id: favoriteDocRef.id, firestoreId: favoriteDocRef.id } },
           setDoc(favoriteDocRef, favoritePayload, { merge: true }),
         );
       }
@@ -12206,6 +12248,7 @@ const toggleCycleVariantSelection = (
 
       const localFavorite = sanitizeForFirestore({
         ...song,
+        ...(preservedOriginal || {}),
         ...favoritePayload,
         id: createdFavoriteDocRef.id,
         firestoreId: createdFavoriteDocRef.id,
@@ -12821,6 +12864,9 @@ const toggleCycleVariantSelection = (
     // Trash transitions; title, lyrics, settings and lock toasts stay unchanged.
     const isMusicNoteTrashStateMutation = ['hidden', 'favoriteHidden', 'deletedAt', 'trashedAt']
       .every((key) => Object.prototype.hasOwnProperty.call(updates, key));
+    const isTrashMove = isMusicNoteTrashStateMutation && updates.hidden === true;
+    const isTrashRestore = isMusicNoteTrashStateMutation && updates.hidden === false;
+    if (isTrashMove && user?.uid && currentFavorite) rememberMusicNoteMediaPreview(user.uid, currentFavorite);
 
     const applyFavoriteUpdateToLocalState = (targetIds: string[], localIdsToRemove: string[] = []) => {
       const targetIdSet = new Set(targetIds.filter(Boolean));
@@ -12842,7 +12888,7 @@ const toggleCycleVariantSelection = (
                 : favorite.appliedKeywords,
             };
           });
-        if (user?.uid) writeFavoritesCache(user.uid, sortFavoriteList(next));
+        if (user?.uid) writeFavoritesCache(user.uid, sortFavoriteList(next), { publishDerived: !isMusicNoteTrashStateMutation, immediate: isMusicNoteTrashStateMutation });
         return next;
       });
     };
@@ -12921,7 +12967,8 @@ const toggleCycleVariantSelection = (
       sanitizedUpdates = sanitizeForFirestore({ ...sanitizedUpdates, updatedAtMs: favoriteUpdatedAtMs });
       await runV1MutationBoundary({
         domain: 'musicNote',
-        operation: 'update',
+        operation: isTrashRestore ? 'restore' : 'update',
+        trashCatalogChanged: isTrashMove,
         // Only an exact, canonical-confirmed swatch edit stages a Catalog
         // color upsert. Keep the existing 'update' RTDB operation unchanged.
         colorCatalogChanged: Boolean(currentFavorite)
@@ -12930,7 +12977,7 @@ const toggleCycleVariantSelection = (
         uid: user?.uid || currentFavorite?.uid || '',
         documentIds: [id],
         affectedCount: 1,
-        syncItem: sanitizeForFirestore({ ...(currentFavorite || {}), ...sanitizedUpdates, id, firestoreId: id }),
+        syncItem: sanitizeForFirestore({ ...(currentFavorite || {}), ...sanitizedUpdates, id, firestoreId: id, ...(isTrashMove ? { __musicNoteTrashSync: true } : {}) }),
       }, updateDoc(doc(db, 'favorites', id), sanitizedUpdates));
       const updatedFavoriteSnapshot = sanitizeForFirestore({
         ...(currentFavorite || {}),
@@ -12941,9 +12988,20 @@ const toggleCycleVariantSelection = (
         favoriteKey: (currentFavorite?.favoriteKey || buildFavoriteIdentityKey({ ...(currentFavorite || {}), ...sanitizedUpdates, id })),
         searchTokens: (sanitizedUpdates.searchTokens || (currentFavorite ? buildFavoriteSearchTokens({ ...currentFavorite, ...sanitizedUpdates, id }) : undefined)),
       });
-      if (!isRemovalLikeUpdate) applyFavoriteUpdateToLocalState([id]);
+      if (isTrashMove) {
+        sanitizedUpdates = { ...sanitizedUpdates, __musicNoteTrashSync: true };
+        applyFavoriteUpdateToLocalState([id]);
+        if (user?.uid && currentFavorite) rememberRecentHeartAuthority(user.uid, currentFavorite, false, id, favoriteUpdatedAtMs, true);
+      } else if (!isRemovalLikeUpdate) {
+        if (isTrashRestore && user?.uid) {
+          forgetFavoriteDeletedTombstones(user.uid, [id]);
+          sanitizedUpdates = { ...sanitizedUpdates, __musicNoteTrashSync: false };
+          if (currentFavorite) rememberRecentHeartAuthority(user.uid, currentFavorite, true, id, favoriteUpdatedAtMs, true);
+        }
+        applyFavoriteUpdateToLocalState([id]);
+      }
       if (user?.uid) {
-        patchFavoriteCacheImmediately(user.uid, id, updates);
+        if (!isMusicNoteTrashStateMutation) patchFavoriteCacheImmediately(user.uid, id, updates);
         // Cross-device UI sync is now carried by the bounded RTDB mutation signal.
       }
       if ('isLocked' in updates) {
@@ -13954,7 +14012,11 @@ const unlockAllFavorites = async () => {
         ? pickRecentSongLiveAppliedKeywords457(incomingApplied)
         : incomingApplied;
       let mergedAppliedKeywords = safeIncomingApplied
-        ? { ...(currentSong.appliedKeywords || {}), ...safeIncomingApplied }
+        ? { ...(currentSong.appliedKeywords || {}), ...safeIncomingApplied,
+            ...(safeIncomingApplied.lyricsByLanguage ? {
+              lyricsByLanguage: { ...(currentSong.appliedKeywords?.lyricsByLanguage || {}), ...safeIncomingApplied.lyricsByLanguage },
+            } : {}),
+          }
         : currentSong.appliedKeywords;
 
       if (
@@ -16670,7 +16732,7 @@ ${normalizePromptForDisplay(result.prompt)}
   };
 
   const recentSongTextWriteTimerRef = useRef<number | null>(null);
-  const recentSongTextWritePendingRef = useRef<{ uid: string; songs: any[]; operation: 'regenerate' | 'edit' | 'pre-favorite-edit'; mirrorTargets?: V1MutationMirrorTarget[]; mutationEpoch: number; syncItem?: any } | null>(null);
+  const recentSongTextWritePendingRef = useRef<{ uid: string; songs: any[]; operation: 'regenerate' | 'edit' | 'pre-favorite-edit' | 'add-lyrics-language'; mirrorTargets?: V1MutationMirrorTarget[]; mutationEpoch: number; syncItem?: any } | null>(null);
 
   // Stage414: hidden + pagehide + trailing timer must share one canonical write.
   const recentSongTextFlushInFlightRef = useRef<Promise<void> | null>(null);
@@ -16723,13 +16785,13 @@ ${normalizePromptForDisplay(result.prompt)}
     }
   }, []);
 
-  const queueRecentSongTextWrite = useCallback((uid: string, songs: any[], operation: 'regenerate' | 'edit' | 'pre-favorite-edit', mirrorTargets?: V1MutationMirrorTarget[]) => {
+  const queueRecentSongTextWrite = useCallback((uid: string, songs: any[], operation: 'regenerate' | 'edit' | 'pre-favorite-edit' | 'add-lyrics-language', mirrorTargets?: V1MutationMirrorTarget[]) => {
     if (!uid || !Array.isArray(songs)) return;
 
     const activeIndex = historyIndexRef.current;
     let nextSongs = songs;
 
-    if (activeIndex >= 0 && activeIndex < songs.length) {
+    if (operation !== 'add-lyrics-language' && activeIndex >= 0 && activeIndex < songs.length) {
       const detachedSong = { ...(songs[activeIndex] as any) };
       delete detachedSong.favoriteFirestoreId;
       delete detachedSong.musicNoteFavoriteId;
@@ -16999,7 +17061,9 @@ ${normalizePromptForDisplay(result.prompt)}
   const handleAddLyricsLanguage = async (targetLanguage: LanguageCode) => {
     if (!result || isAddingLyricsLanguage) return;
 
-    const activeSong = result;
+    const activeSong = resultRef.current || result;
+    const sourceUid = String(user?.uid || '');
+    const sourceKey = buildRecentSongSyncKey(activeSong);
     const existingLanguages = getGeneratedLyricLanguages(activeSong);
     if (existingLanguages.includes(targetLanguage)) {
       showToast('이미 생성된 가사 언어입니다.');
@@ -17084,7 +17148,22 @@ ${normalizePromptForDisplay(result.prompt)}
         throw new Error('empty-translated-lyrics');
       }
 
-      const previousApplied = (activeSong.appliedKeywords || {}) as any;
+      // Translation may finish after navigation or a newer edit. Do not write
+      // the old array position or replace a different song/account.
+      if (sourceUid && String(auth.currentUser?.uid || '') !== sourceUid) return;
+      const latestHistory = historyRef.current;
+      const targetIndex = latestHistory.findIndex(song => sourceKey && buildRecentSongSyncKey(song) === sourceKey);
+      if (targetIndex < 0 || targetIndex !== historyIndexRef.current || currentHistoryIndex !== targetIndex
+        || JSON.stringify(latestHistory[targetIndex].lyrics) !== JSON.stringify(activeSong.lyrics)
+        || JSON.stringify(latestHistory[targetIndex].appliedKeywords?.lyricLanguages) !== JSON.stringify(activeSong.appliedKeywords?.lyricLanguages)
+        || latestHistory[targetIndex].koreanTitle !== activeSong.koreanTitle
+        || latestHistory[targetIndex].englishTitle !== activeSong.englishTitle) {
+        showToast('곡 상태가 변경되었습니다. 다시 시도해주세요.');
+        return;
+      }
+      const latestSong = latestHistory[targetIndex];
+      const previousApplied = (latestSong.appliedKeywords || {}) as any;
+      const languageEditedAt = Date.now();
       const nextLanguages = Array.from(new Set([...existingLanguages, targetLanguage])).slice(0, 2) as LanguageCode[];
       const nextLyricsByLanguage: Partial<Record<LanguageCode, string>> = {
         ...existingLyricsMap,
@@ -17097,7 +17176,8 @@ ${normalizePromptForDisplay(result.prompt)}
       const firstForeignLanguage = nextLanguages.find((lang) => lang !== 'ko') || previousApplied.secondaryLanguage || 'en';
 
       const nextSong: SongResult = {
-        ...activeSong,
+        ...latestSong,
+        recentSongSyncKey: sourceKey,
         koreanTitle: nextTitlesByLanguage.ko || activeSong.koreanTitle || '',
         englishTitle: firstForeignLanguage ? (nextTitlesByLanguage[firstForeignLanguage as LanguageCode] || activeSong.englishTitle || '') : (activeSong.englishTitle || ''),
         lyrics: {
@@ -17115,29 +17195,23 @@ ${normalizePromptForDisplay(result.prompt)}
           isNoLyrics: false,
           hasAddedLyricsLanguage: true,
           addedLyricsLanguage: targetLanguage,
-          addedLyricsLanguageAt: Date.now(),
+          addedLyricsLanguageAt: languageEditedAt,
+          editedInStudioAt: languageEditedAt,
         } as any,
       };
 
+      const nextHistory = latestHistory.map((song, index) => index === targetIndex ? nextSong : song);
+      resultRef.current = nextSong;
+      historyRef.current = nextHistory;
+      historyIndexRef.current = targetIndex;
+      preserveHistoryIndexOnNextSnapshotRef.current = targetIndex;
+      recentSongsReadyToCacheRef.current = true;
       setResult(nextSong);
-      if (currentHistoryIndex >= 0) {
-        setHistoryIndex(currentHistoryIndex);
-        historyIndexRef.current = currentHistoryIndex;
-        preserveHistoryIndexOnNextSnapshotRef.current = currentHistoryIndex;
+      setHistory(nextHistory);
+      setHistoryIndex(targetIndex);
+      if (user?.uid) {
+        queueRecentSongTextWrite(user.uid, nextHistory, 'add-lyrics-language', buildRecentMirrorTargets([nextSong], 'upsert'));
       }
-      setHistory(prev => {
-        const next = prev.map((song, index) => index === currentHistoryIndex ? nextSong : song);
-        if (currentHistoryIndex < 0) return prev;
-        if (user) {
-          const ref = doc(db, "user_recent_songs", user.uid);
-          runV1MutationBoundary({ domain: 'recent', operation: 'add-lyrics-language', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextSong], 'upsert') }, persistRecentSongsDocument(ref, next, readRecentSongsMutationEpoch(user.uid)))
-            .then((version) => { if (version) markCacheDiagnostic('recentSongs', 'SYNC', 0, 1); })
-            .catch((error) => {
-            console.error('Failed to persist added lyric language:', error);
-          });
-        }
-        return next;
-      });
 
       showToast(`${label.ko} 가사를 추가 생성했습니다.`);
     } catch (error) {
@@ -17503,6 +17577,8 @@ ${normalizePromptForDisplay(result.prompt)}
           } else {
           const batchedSong = normalizeFavoriteTitleFields({
             ...heartSnapshot,
+            ...(intendedFavoriteAction === 'save' && exactCanonicalFavorite && !isFavoriteSoftRemoved(exactCanonicalFavorite)
+              ? {} : intendedFavoriteAction === 'save' ? readPreservedMusicNoteMedia(user.uid, batchDocumentId) : {}),
             favoriteFirestoreId: batchDocumentId,
             musicNoteFavoriteId: batchDocumentId,
           } as SongResult) as SongResult;

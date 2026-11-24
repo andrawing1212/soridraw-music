@@ -283,11 +283,20 @@ const projectMusicNoteItemForSignal = (
     return buildStudioHeartPreviewItem(source, id, projectMusicNoteItemForSignal, MAX_SYNC_ITEM_JSON_CHARS);
   }
 
+  const isTrash = source.__musicNoteTrashSync === true && source.hidden === true;
+  const trashState = isTrash ? {
+    __musicNoteTrashSync: true, hidden: true, favoriteHidden: true,
+    trashedAt: toSyncTimestamp(source.trashedAt || source.updatedAtMs),
+    deletedAt: toSyncTimestamp(source.trashedAt || source.updatedAtMs),
+    isPublic: false,
+  } : {};
   const projected = projectCatalogItemForSync('musicNote', {
     ...source,
+    ...(isTrash ? { hidden: false, favoriteHidden: false, deletedAt: null, trashedAt: null, favoriteRemoved: false, saved: true } : {}),
     id,
     firestoreId: id,
   });
+  if (projected && isTrash) Object.assign(projected, trashState);
   if (!projected) return null;
 
   try {
@@ -343,6 +352,7 @@ const projectMusicNoteItemForSignal = (
     favoriteHidden: false,
     favoriteRemoved: false,
     saved: true,
+    ...trashState,
     createdAtMs: toSyncTimestamp(source.createdAtMs || source.createdAt),
     updatedAtMs: toSyncTimestamp(source.updatedAtMs || source.updatedAt),
   }, projected);
@@ -385,7 +395,14 @@ const projectRecentSongForSync = (raw: unknown): Record<string, unknown> | null 
       appliedKeywords: {
         generationBatchId: applied.generationBatchId ?? null,
         generationIndex: applied.generationIndex ?? null,
+        lyricsByLanguage: Object.fromEntries(Object.entries(applied.lyricsByLanguage || {}).filter(([key, value]) =>
+          (key !== 'ko' && key !== applied.secondaryLanguage) || (value !== source.lyrics?.korean && value !== source.lyrics?.english))),
         secondaryLanguage: applied.secondaryLanguage ?? null,
+        lyricLanguages: applied.lyricLanguages ?? null,
+        hasAddedLyricsLanguage: applied.hasAddedLyricsLanguage ?? null,
+        addedLyricsLanguage: applied.addedLyricsLanguage ?? null,
+        addedLyricsLanguageAt: applied.addedLyricsLanguageAt ?? null,
+        isNoLyrics: applied.isNoLyrics ?? null,
         titleLanguages: applied.titleLanguages ?? null,
         titlesByLanguage: applied.titlesByLanguage ?? null,
         editedInStudio: applied.editedInStudio ?? null,
@@ -472,6 +489,11 @@ const projectRecentSongForSync = (raw: unknown): Record<string, unknown> | null 
       generationBatchId: applied.generationBatchId ?? null,
       generationIndex: applied.generationIndex ?? null,
       secondaryLanguage: applied.secondaryLanguage ?? null,
+        lyricLanguages: applied.lyricLanguages ?? null,
+        hasAddedLyricsLanguage: applied.hasAddedLyricsLanguage ?? null,
+        addedLyricsLanguage: applied.addedLyricsLanguage ?? null,
+        addedLyricsLanguageAt: applied.addedLyricsLanguageAt ?? null,
+        isNoLyrics: applied.isNoLyrics ?? null,
       titleLanguages: applied.titleLanguages ?? null,
       titlesByLanguage: applied.titlesByLanguage ?? null,
       editedInStudio: applied.editedInStudio ?? null,
@@ -497,7 +519,7 @@ const buildSignal = (
     && Number.isFinite(result) && result > 0 ? Math.floor(result) : 0;
 
   let itemJson = '';
-  let removed = false;
+  let removed = kind === 'musicNote' && context.trashCatalogChanged === true;
   if (kind === 'musicNote') {
     try {
       if (context.syncStructure && typeof context.syncStructure === 'object') {
@@ -1111,6 +1133,18 @@ export const stageCommittedMusicNoteMembershipDelta = (
       scheduleCatalogSnapshotPublishIfDirty('musicNote', context.uid, exactItems, {
         confirmedChangedIds: exactItems.map(item => String(item.id || '')),
       });
+    }
+    return;
+  }
+  if (context.domain === 'musicNote' && context.operation === 'update'
+    && context.trashCatalogChanged === true && context.uid && context.documentIds?.length === 1
+    && context.syncItem && typeof context.syncItem === 'object') {
+    const source = context.syncItem as Record<string, any>;
+    const id = String(context.documentIds[0] || '').trim();
+    if (id && String(source.firestoreId || source.id || '') === id
+      && String(source.uid || context.uid) === context.uid && source.hidden === true
+      && source.favoriteHidden === true && Number(source.trashedAt || 0) > 0) {
+      scheduleCatalogSnapshotPublishIfDirty('musicNote', context.uid, [], { deletedIds: [id] });
     }
     return;
   }

@@ -77,7 +77,7 @@ async function rollback(s){
 const probePath='/internal/app797-connection-probe';
 const origin='https://soridraw.com',url='https://soridraw-explore-api.andrawing1212.workers.dev';
 async function run(){
- need(process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REPOSITORY==='andrawing1212/soridraw-music'&&process.env.GITHUB_ACTOR===process.env.GITHUB_REPOSITORY_OWNER&&process.env.GITHUB_REF==='refs/heads/prep/production-follow-existing-writer'&&process.env.GITHUB_RUN_ATTEMPT==='1'&&execFileSync('git',['rev-parse','HEAD^'],{encoding:'utf8'}).trim()==='7001f7ff0fd2f3ae9dc0c45bdb6c1c52278b1f27','ONE_TIME_APPROVED_CONTEXT');
+ need(process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REPOSITORY==='andrawing1212/soridraw-music'&&process.env.GITHUB_ACTOR===process.env.GITHUB_REPOSITORY_OWNER&&process.env.GITHUB_REF==='refs/heads/prep/production-follow-existing-writer'&&process.env.GITHUB_RUN_ATTEMPT==='1'&&execFileSync('git',['rev-parse','HEAD^'],{encoding:'utf8'}).trim()==='8d48818ac94704239b170df4e776ff562614c000','ONE_TIME_APPROVED_CONTEXT');
  need(token.length>20,'TOKEN');
  for(const n of Object.keys(active))await check(n,expected(active[n]));
  const [ow,prod]=await Promise.all([snapshot(OW,staged[OW]),snapshot(PROD,staged[PROD])]);
@@ -96,8 +96,18 @@ async function run(){
   const map=new Map(on.bindings.map(x=>[x.name,x]));
   need(on.bindings.length===off.bindings.length&&map.get(flags[on.name])?.text==='1','PROVEN_ON_BINDING_COUNT');
   for(const b of off.bindings)if(b.name!==flags[on.name])need(isDeepStrictEqual(b,map.get(b.name)),'PROVEN_BINDING_DRIFT_'+b.name);
-  need(sameStagedWorkerRuntime660(off.runtime,on.runtime),'PROVEN_RUNTIME_DRIFT');
-  need(isDeepStrictEqual(off.modules,on.modules),'PROVEN_SOURCE_DRIFT');
+  // Once a version has been deployed its migration tag can be exposed again
+  // even if the inactive upload omitted it. Compare BOTH against the exact
+  // active original, not against an inactive snapshot missing its tag.
+  const original=await snapshot(on.name,active[on.name]);
+  const runtimeOK=sameStagedWorkerRuntime660(original.runtime,off.runtime)&&sameStagedWorkerRuntime660(original.runtime,on.runtime);
+  if(!runtimeOK){
+   const changed=Object.keys({...original.runtime,...on.runtime,...off.runtime}).filter(k=>!isDeepStrictEqual(original.runtime[k],on.runtime[k])||!isDeepStrictEqual(original.runtime[k],off.runtime[k]));
+   console.log('APP797_RUNTIME_MISMATCH='+JSON.stringify({worker:on.name,fields:changed,originalMigrationTag:original.runtime.migration_tag||null,offMigrationTag:off.runtime.migration_tag||null,onMigrationTag:on.runtime.migration_tag||null}));
+  }
+  need(runtimeOK,'PROVEN_RUNTIME_DRIFT_'+on.name);
+  const moduleHashes=x=>x.modules.map(m=>[m.name,m.content_type,hash(Buffer.from(m.content_base64,'base64'))]).sort((a,b)=>a[0].localeCompare(b[0]));
+  need(isDeepStrictEqual(moduleHashes(off),moduleHashes(on)),'PROVEN_SOURCE_DRIFT_'+on.name);
  }
  // The previously tested probe was uploaded AFTER the production ON version.
  // Use a fresh, identical final version (no probe route/secret) so Cloudflare

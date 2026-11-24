@@ -26,7 +26,7 @@ import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck, canAcknowled
 import {useNotificationDots017} from './services/notifications/useNotificationDots017';
 import {projectCompletedExistingGenerations004} from './services/notifications/notificationInbox004';
 import {rememberCompletedGenerationLog016} from './services/notifications/notificationRecentLog016';
-import { planRecentUnconfirmedRecovery436, patchExactRecentTextRow436, readRecentLyricHistory, appendRecentLyricVersion, mergeRecentLyricHistory, sameLyricVersionContent, resolveRecentLyricLocalView, stepRecentLyricLocalView, recentLyricCursorKey, captureDisplayedKoreanLyric, assertRecentLyricHistoryBudget, recentLyricBytes, type LyricHistoryEntry, type LyricHistoryLane, type LyricHistoryV1 } from './lib/recentUnconfirmedRecovery436';
+import { planRecentUnconfirmedRecovery436, patchExactRecentTextRow436, readRecentLyricHistory, appendRecentLyricVersion, mergeRecentLyricHistory, sameLyricVersionContent, resolveRecentLyricLocalView, stepRecentLyricLocalView, recentLyricCursorKey, captureDisplayedKoreanLyric, musicNoteLyricFingerprint, assertRecentLyricHistoryBudget, recentLyricBytes, type LyricHistoryEntry, type LyricHistoryLane, type LyricHistoryV1 } from './lib/recentUnconfirmedRecovery436';
 import { protectRecentCanonicalSnapshotFromPreview453, pickRecentSongLiveTextPreview457, pickRecentSongLiveAppliedKeywords457 } from './lib/recentSongCanonicalPreviewGuard453';
 import './data/v2PreviewShadowMirror';
 import { createSoridrawSongId, isSoridrawSongId } from './data/v2LiveMutation';
@@ -7785,7 +7785,7 @@ function App() {
   const [recentSongRegeneratingTarget, setRecentSongRegeneratingTarget] = useState<string | null>(null);
   const [recentSongLocalVersionHistory, setRecentSongLocalVersionHistory] = useState<Record<string, RecentSongLocalVersionHistoryItem>>({});
   const recentSongLocalVersionHistoryRef = useRef<Record<string, RecentSongLocalVersionHistoryItem>>({});
-  const [lyricReadingCursors, setLyricReadingCursors] = useState<Record<string,string>>({});
+  const [, setLyricReadingCursors] = useState<Record<string,string>>({});
   const lyricReadingCursorsRef = useRef<Record<string,string>>({});
 
   const pushStudioModalHistory = useCallback((modalName: string) => {
@@ -12845,7 +12845,7 @@ const toggleCycleVariantSelection = (
     };
   }, [user?.uid]);
 
-  const updateFavorite = async (id: string, updates: Partial<any>) => {
+  const updateFavorite = async (id: string, updates: Partial<any>, lyricExpectedFingerprint?:string) => {
     const safeFavoriteDocumentId = String(id || '').trim();
     const currentFavorite = favoritesStore.getFavorites().find((favorite) => (
       String(favorite?.firestoreId || favorite?.id || '').trim() === safeFavoriteDocumentId
@@ -12982,11 +12982,34 @@ const toggleCycleVariantSelection = (
     };
 
     try {
-      const favoriteUpdatedAtMs = Date.now();
+      let favoriteUpdatedAtMs = Date.now();
       sanitizedUpdates = sanitizeForFirestore({ ...sanitizedUpdates, updatedAtMs: favoriteUpdatedAtMs });
+      const syncItem = sanitizeForFirestore({ ...(currentFavorite || {}), ...sanitizedUpdates, id, firestoreId: id, ...(isTrashMove ? { __musicNoteTrashSync: true } : {}) });
+      const favoriteRef = doc(db,'favorites',id);
+      // A new lyric version must not overwrite a version saved by another device.
+      // Only this explicit lyric action uses an exact-document transaction.
+      const writeFavorite = lyricExpectedFingerprint !== undefined
+        ? () => runTransaction(db,async transaction=>{
+          const snapshot=await transaction.get(favoriteRef);
+          if(!snapshot.exists()) throw new Error('music-note-lyric-target-missing');
+          const canonical=snapshot.data();
+          if(!user?.uid || auth.currentUser?.uid!==user.uid || canonical.uid!==user.uid || isFavoriteSoftRemoved(canonical) || canonical.hidden===true || canonical.favoriteHidden===true || canonical.sharedReadOnly===true)
+            throw new Error('music-note-lyric-target-unavailable');
+          if(musicNoteLyricFingerprint(canonical)!==lyricExpectedFingerprint) throw new Error('music-note-lyric-concurrent-change');
+          favoriteUpdatedAtMs=Math.max(Date.now(),Number(canonical.updatedAtMs||0)+1);
+          sanitizedUpdates=sanitizeForFirestore({...sanitizedUpdates,updatedAtMs:favoriteUpdatedAtMs,
+            lyrics:{...(canonical.lyrics||{}),...(updates.lyrics||{})},
+            appliedKeywords:{...(canonical.appliedKeywords||{}),...(updates.appliedKeywords||{})}});
+          const merged={...canonical,...sanitizedUpdates,id,firestoreId:id};
+          sanitizedUpdates.searchTokens=buildFavoriteSearchTokens(merged);
+          Object.assign(syncItem,merged,{searchTokens:sanitizedUpdates.searchTokens});
+          transaction.update(favoriteRef,sanitizedUpdates);
+        })
+        : () => updateDoc(favoriteRef,sanitizedUpdates);
       await runV1MutationBoundary({
         domain: 'musicNote',
         operation: isTrashRestore ? 'restore' : 'update',
+        lyricHistoryChanged: lyricExpectedFingerprint !== undefined,
         trashCatalogChanged: isTrashMove,
         // Only an exact, canonical-confirmed swatch edit stages a Catalog
         // color upsert. Keep the existing 'update' RTDB operation unchanged.
@@ -12996,8 +13019,8 @@ const toggleCycleVariantSelection = (
         uid: user?.uid || currentFavorite?.uid || '',
         documentIds: [id],
         affectedCount: 1,
-        syncItem: sanitizeForFirestore({ ...(currentFavorite || {}), ...sanitizedUpdates, id, firestoreId: id, ...(isTrashMove ? { __musicNoteTrashSync: true } : {}) }),
-      }, updateDoc(doc(db, 'favorites', id), sanitizedUpdates));
+        syncItem,
+      }, writeFavorite);
       const updatedFavoriteSnapshot = sanitizeForFirestore({
         ...(currentFavorite || {}),
         ...sanitizedUpdates,
@@ -13020,7 +13043,7 @@ const toggleCycleVariantSelection = (
         applyFavoriteUpdateToLocalState([id]);
       }
       if (user?.uid) {
-        if (!isMusicNoteTrashStateMutation) patchFavoriteCacheImmediately(user.uid, id, updates);
+        if (!isMusicNoteTrashStateMutation) patchFavoriteCacheImmediately(user.uid, id, lyricExpectedFingerprint !== undefined ? sanitizedUpdates : updates);
         // Cross-device UI sync is now carried by the bounded RTDB mutation signal.
       }
       if ('isLocked' in updates) {
@@ -13029,6 +13052,9 @@ const toggleCycleVariantSelection = (
         showToast('수정되었습니다.');
       }
     } catch (error: any) {
+      // A rejected lyric transaction must not trigger legacy recovery, deletion
+      // or a write to a different favorite.
+      if (lyricExpectedFingerprint !== undefined) throw error;
       const code = String(error?.code || '');
       const message = String(error?.message || error || '');
       const looksLikeMissingOrBadLocalFavorite = code === 'not-found'
@@ -16715,7 +16741,7 @@ ${normalizePromptForDisplay(result.prompt)}
     const key = recentLyricCursorKey(String(user?.uid || ''),buildRecentSongSyncKey(song),lyricHistoryLane(song,lang));
     const current = {lang,text:getLyricsByLanguage(song,lang),title:getTitleLanguageMap(song)[lang] || (lang === 'ko' ? song.koreanTitle : song.englishTitle) || ''};
     // State subscribes the render; the ref captures the latest click immediately.
-    return {key,...resolveRecentLyricLocalView(readLyricLane(song,lang),current,lyricReadingCursorsRef.current[key] || lyricReadingCursors[key])};
+    return {key,...resolveRecentLyricLocalView(readLyricLane(song,lang),current,lyricReadingCursorsRef.current[key])};
   };
   const setLocalLyricCursor = (key:string, cursor:string|null) => {
     const next = {...lyricReadingCursorsRef.current};
@@ -17543,7 +17569,7 @@ ${normalizePromptForDisplay(result.prompt)}
   };
 
   const openRecentSongEditor = (focus: RecentSongEditFocus = 'title', lyricLang?:LanguageCode) => {
-    if (!result || lyricGenerationInFlight.current) return;
+    if (!result || lyricGenerationInFlight.current || isSavingRecentSongEdit) return;
     const visible = focus === 'lyrics' && lyricLang ? readLocalLyricView(result,lyricLang) : null;
     recentLyricEditorRef.current = visible && lyricLang ? {source:result,lang:lyricLang,visible:{...visible.entry},key:visible.key} : null;
 
@@ -17779,7 +17805,7 @@ ${normalizePromptForDisplay(result.prompt)}
 
   const handleToggleCurrentStudioFavorite = async () => {
     if (isTogglingCurrentStudioFavorite) return;
-    if (recentLyricEditorRef.current) {showToast('가사 수정을 저장하거나 취소한 후 이용해주세요.');return;}
+    if (recentLyricEditorRef.current && recentSongInlineEditMode === 'lyrics' && recentSongEditDraft) {showToast('가사 수정을 저장하거나 취소한 후 이용해주세요.');return;}
     const snapshot = getStudioFavoriteSaveSnapshot();
     if (!snapshot) return;
 

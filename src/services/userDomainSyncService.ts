@@ -138,6 +138,8 @@ const getDeviceId = (kind: UserDomainSyncKind): string => kind === 'musicNote'
   ? getStoredDeviceId(MUSIC_NOTE_DEVICE_STORAGE_KEY, 'mn')
   : getStoredDeviceId(GENERIC_DEVICE_STORAGE_KEY, 'd');
 
+export const getMusicNoteSyncOriginDeviceId = () => getDeviceId('musicNote');
+
 const scopedVersionKey = (base: string, uid: string) => `${base}_${uid}`;
 
 const readLocalNumber = (key: string): number => {
@@ -590,7 +592,7 @@ const buildSignal = (
     version: persistedRecentVersion || now,
     at: now,
     originDeviceId: getDeviceId(kind),
-    operation: String(context.operation || '').slice(0, 48),
+    operation: kind === 'musicNote' && context.lyricHistoryChanged === true ? 'lyric-history-update' : String(context.operation || '').slice(0, 48),
     affectedCount: Math.max(0, Math.min(1_000_000, Number(context.affectedCount || uniqueIds.length || 1) || 1)),
     documentIds: uniqueIds.slice(0, MAX_DOCUMENT_IDS),
     truncated: uniqueIds.length > MAX_DOCUMENT_IDS,

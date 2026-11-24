@@ -65,7 +65,7 @@ assert.match(app,/!hasRecentSongsCacheRecoveryFence\(uid\)\) writeRecentSongsLoc
 assert.match(sync,/!initialRetained && !hasRecentSongsCacheRecoveryFence\(uid\)/);
 assert.match(app,/persistLyricHistoryLocallyOrExactly\(latestSong,nextSong,sourceUid,'add-lyrics-language'\)/);
 assert.match(app,/persistLyricHistoryLocallyOrExactly\(source,nextSong,user.uid,'regenerate'\)/);
-assert.match(app,/persistLyricHistoryLocallyOrExactly\(latest,nextSong,user.uid,'add-lyrics-language'\)/);
+assert.match(app,/persistLyricHistoryLocallyOrExactly\(latest,nextSong,uid,'add-lyrics-language'\)/);
 console.log('LOCAL_QUOTA_EXACT_FALLBACK_AND_RECOVERY_FENCE=PASS');
 
 const {resolveRecentLyricLocalView,stepRecentLyricLocalView,recentLyricCursorKey}=await load('src/lib/recentUnconfirmedRecovery436.ts');
@@ -114,3 +114,17 @@ assert.match(app,/const koreanSource = captureStudioKoreanSource\(activeSong\)/)
 assert.match(app,/translateLyrics\(koreanSource.text,lyricLanguageLabels\[targetLang\].api/);
 assert.match(app,/sourceLyrics = koreanSource\?\.text \|\|/);
 console.log('DISPLAYED_KOREAN_REFERENCE_CAPTURE_AND_EXPLICIT_EDIT_ONLY=PASS');
+
+const {musicNoteLyricSlots,musicNoteLyricFingerprint,buildMusicNoteLyricVersionPatch}=await load('src/lib/recentUnconfirmedRecovery436.ts');
+const note={uid:'owner',lyrics:{korean:'한국어',english:'English'},koreanTitle:'제목',englishTitle:'Title',appliedKeywords:{lyricLanguages:['ko','en'],secondaryLanguage:'en',style:['keep']},coverUrl:'keep'};
+const noteFp=musicNoteLyricFingerprint(note);
+const spanish={id:'note-new',at:100,lang:'es',text:'Español',title:'Título'};
+const notePatch=buildMusicNoteLyricVersionPatch(note,'english',spanish);
+assert.equal(notePatch.lyrics.korean,'한국어');
+assert.equal(notePatch.lyricGenerationHistoryV1.foreign.entries.length,2);
+assert.deepEqual(notePatch.appliedKeywords.lyricLanguages,['ko','es']);
+assert.equal(musicNoteLyricFingerprint(note),noteFp);
+assert.equal(musicNoteLyricSlots({lyrics:{korean:'bonjour',english:'hallo'},appliedKeywords:{lyricLanguages:['fr','de']}}).english.lane,'secondForeign');
+assert.match(app,/musicNoteLyricFingerprint\(canonical\)!==lyricExpectedFingerprint/);
+assert.match(sync,/context.lyricHistoryChanged === true \? 'lyric-history-update'/);
+console.log('MUSIC_NOTE_EXACT_LYRIC_TRANSACTION_SOURCE_AND_HISTORY=PASS');

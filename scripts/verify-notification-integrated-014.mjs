@@ -23,7 +23,7 @@ assert.match(worker,/NOTIFICATION_PREFS_003_COMPILED_OPEN = false/);
 assert.match(worker,/NOTIFICATION_INBOX_004_COMPILED_OPEN = false/);
 assert.match(worker,/NOTIFICATION_RETENTION_013_COMPILED_OPEN = true/);
 assert.match(worker,/env\?\.SORIDRAW_ENVIRONMENT !== 'preview'/);
-assert.match(client,/canUsePreviewInbox022\(window.location.hostname,EXPLORE_API_BASE\)/);
+assert.match(client,/canUseReleaseInbox\(window.location.hostname,EXPLORE_API_BASE\)/);
 assert.doesNotMatch(client,/NOTIFICATION_INBOX_ENABLED_004=false/);
 assert.match(prefsClient,/NOTIFICATION_ACCOUNT_SYNC_ENABLED_003 = false/);
 assert.deepEqual(wrangler.triggers?.crons,[NOTIFICATION_RETENTION_CRON_013]);

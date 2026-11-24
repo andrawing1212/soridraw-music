@@ -22,7 +22,7 @@ assert.match(entry,/NOTIFICATION_INBOX_004_COMPILED_OPEN = false/);
 assert.match(entry,/validateExploreAuth307\(request,env,ctx\)/);
 assert.match(entry,/readOwnStaffProfile307\(actor\)/);
 assert.match(entry,/RELEASE_ALLOWED_ORIGINS_036\.has\(origin\)/);
-assert.match(client,/canUsePreviewInbox022\(window.location.hostname,EXPLORE_API_BASE\)/);
+assert.match(client,/canUseReleaseInbox\(window.location.hostname,EXPLORE_API_BASE\)/);
 assert.doesNotMatch(client,/NOTIFICATION_INBOX_ENABLED_004=false/);
 assert.match(client,/projectCompletedExistingGenerations004/);
 assert.match(client,/recentResult=typeof song\.status==='undefined'/);

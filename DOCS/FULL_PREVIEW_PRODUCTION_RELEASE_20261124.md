@@ -1,0 +1,18 @@
+# Full PREVIEW → PRODUCTION release, 2026-11-24 KST
+
+Director priority: identical PREVIEW and PRODUCTION user features, UI and version; no unrelated feature development. Baseline PREVIEW `909a911646b774695b3ae88607d15a79c9ab55b8`, app-version 507. Prior production hosting app-version 377. No TEST involvement.
+
+## Completed evidence (do not repeat without drift)
+- APP797 existing production follow connection active, user confirmed production-mobile B → preview-PC A follow/unfollow. PROD Explore active `5313d378-351b-412c-b1d9-a7e6e9eb23fa`; owner service active `c71d7c12-ace4-4405-ab1a-d8c651c90559`.
+- #45391831271: exact active source inventory. Media bundles byte-identical SHA256 `cf6c86115676cafdcc45a768fbe5fb447d09b9daf698654c8f60f55268c9f775`; no Media redeploy. Canonical D1/R2 same.
+- #45392931994 and #45393440529: exact PREVIEW Explore core + existing APP797 ingress linked; notification scope regression, queue handoff synthetic fixture, lint PASS. No actual canonical queue mutation.
+- #45393711677: existing PREVIEW common scheduler namespace `186f808d1e4c4dffb2320ff2ad737388`, legacy production scheduler `730132f063f44332afc10d940a5f3118`; PREVIEW retention cron 37 hourly, PROD none; three existing signed candidate Functions ACTIVE on secret version 1.
+- #45394208337: actual existing publication receiver invalid signature 403, signed invalid claim 400; credential version 1 verified in memory; no user data writes/rotation.
+- #45396118668: exact inactive PROD candidate `c8c528df-008c-4eba-95f9-26952dabe0bc` registered and read back; 27 bindings, existing PROD bindings and runtime unchanged, new binding points to exact existing shared scheduler. Prior active PROD version 100%, PREVIEW/TEST/Media/owner unchanged, no new namespace or secret rotation. Candidate's core SHA256 `fb6cf9218097e731fa6a4a26216c0fc68ce8e803c1478dd32c909bb3e70665e3`.
+- #45396457660: frontend job PASS, existing notification tests, production-host pairing, Vite production build. Inactive version HTTP job FAIL: all four direct candidate version URLs returned 404 (no candidate route execution proven); do not misrepresent as authentication pass.
+
+## Remaining work / safety boundary
+- Candidate reuses existing PREVIEW scheduler as common queue authority. Old PROD namespace stays present and legacy alarm forwards rather than re-drains. Existing PREVIEW owner service and notification retention remain unchanged. This creates explicit cross-environment shared scheduler dependency: future changes to that scheduler must be treated as shared-backend releases. Verify pending legacy alarms and in-flight writer handoff, actual integrated queue/receipt/rollback in isolated QA and actual runtime access. Do not enable public preview access or bypass security solely to run a smoke test.
+- The PREVIEW frontend patch only widens the read-only notification inbox host/API pair to actual production hosts; PREVIEW behavior, TEST disabled, wrong API overrides rejected. No shared rules or data change. Publish exact PREVIEW Hosting with the normal trigger; preserve existing app-version and local cache behavior.
+- After necessary independent validation and explicit shared-backend activation approval, activate candidate using exact prior version rollback; verify current user-facing behavior including old clients. Never auto-activate a candidate because upload succeeded.
+- APP738 direct Hosting controller must use actual latest PREVIEW Hosting artifact and reviewed configuration/rollback evidence; no fabricated feature evidence or bypass. Production Hosting not executed. Only after actual parity evidence and director's final approval. User real device test follows the agreed whole-app release; do not request repeated small feature checks.

@@ -22,11 +22,25 @@ for(const wrong of ['https://soridraw-explore-api.andrawing1212.workers.dev',
  assert.equal(hostMod.canUsePreviewInbox022('preview.soridraw.com',wrong),false,
   'MISMATCHED_WORKER_BLOCKED');
 }
+// Preserve the original PREVIEW gate tests above; also check the actual release gate.
+const productionBase=hostMod.NOTIFICATION_PRODUCTION_WORKER_RELEASE;
+for(const host of ['preview.soridraw.com','soridraw-preview.web.app','soridraw-preview.firebaseapp.com']){
+ assert.equal(hostMod.canUseReleaseInbox(host,base),true);
+ assert.equal(hostMod.canUseReleaseInbox(host,productionBase),false);
+}
+for(const host of ['soridraw.com','soridraw.web.app','soridraw.firebaseapp.com']){
+ assert.equal(hostMod.canUseReleaseInbox(host,productionBase),true);
+ assert.equal(hostMod.canUseReleaseInbox(host,base),false);
+}
+for(const host of ['test.soridraw.com','soridraw-test.web.app','localhost','127.0.0.1','soridraw.com.evil','www.soridraw.com','']){
+ assert.equal(hostMod.canUseReleaseInbox(host,base),false);
+ assert.equal(hostMod.canUseReleaseInbox(host,productionBase),false);
+}
 const src=read('src/services/notifications/notificationInbox004.ts');
 const panel=read('src/components/studio/NotificationPanel.tsx');
 const dots=read('src/services/notifications/useNotificationDots017.ts');
 const sync=read('src/services/notifications/notificationAccountSyncCore003.ts');
-assert.match(src,/NOTIFICATION_INBOX_ENABLED_004=[\s\S]*?canUsePreviewInbox022\(window.location.hostname,EXPLORE_API_BASE\)/);
+assert.match(src,/NOTIFICATION_INBOX_ENABLED_004=[\s\S]*?canUseReleaseInbox\(window.location.hostname,EXPLORE_API_BASE\)/);
 assert.match(panel,/if \(!open \|\| !NOTIFICATION_INBOX_ENABLED_004\) return;/);
 assert.match(panel,/loadOwnNotifications004\(current,controller.signal\)/);
 assert.match(panel,/return \(\) => \{ live = false; controller.abort\(\); \}/);

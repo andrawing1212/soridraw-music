@@ -1,17 +1,17 @@
 import type {User} from 'firebase/auth';
 import {getFirebaseAppCheckToken} from '../../firebase';
 import {EXPLORE_API_BASE} from '../../config/exploreEnvironment';
-import {canUsePreviewInbox022} from './notificationPreviewHost022';
+import {canUseReleaseInbox} from './notificationPreviewHost022';
 import type {InboxNotification} from './notificationModel';
 import {parseNotificationAccountSettings003,
   type NotificationAccountSettings003} from './notificationAccountSyncCore003';
 
 // Stage022: the already deployed PREVIEW Worker permits authenticated inbox
-// GET only. TEST/PRODUCTION and an overridden API base remain OFF.
+// GET only. Release host/API pairs only; TEST and mismatched overrides remain OFF.
 // This constant never triggers a request until the notification panel opens.
 export const NOTIFICATION_INBOX_ENABLED_004=
   typeof window!=='undefined' &&
-  canUsePreviewInbox022(window.location.hostname,EXPLORE_API_BASE);
+  canUseReleaseInbox(window.location.hostname,EXPLORE_API_BASE);
 const LIMIT_004=30;
 const limitText=(value:unknown,max:number)=>
   typeof value==='string'?value.trim().slice(0,max):'';

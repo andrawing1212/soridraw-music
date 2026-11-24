@@ -13051,6 +13051,7 @@ const toggleCycleVariantSelection = (
       } else if (!isMusicNoteTrashStateMutation) {
         showToast('수정되었습니다.');
       }
+      if(lyricExpectedFingerprint!==undefined)return sanitizedUpdates;
     } catch (error: any) {
       // A rejected lyric transaction must not trigger legacy recovery, deletion
       // or a write to a different favorite.

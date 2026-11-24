@@ -18183,3 +18183,17 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-result-lyrics-card[aria-busy="true"]::after {
   box-shadow: inset 0 0 36px 6px rgba(255,179,54,.72), inset 0 0 12px 1px rgba(255,201,95,.48) !important;
 }
+
+/* Same generation feedback and local version controls in owned Music Note detail.
+ * Keep the Note's existing red controls and all unrelated layout unchanged. */
+.soridraw-musicnote-lyric-card {position:relative;isolation:isolate;overflow:hidden;}
+.soridraw-musicnote-lyric-card[aria-busy="true"]::after {
+  content:"";position:absolute;inset:0;z-index:40;pointer-events:none;border-radius:inherit;
+  box-shadow:inset 0 0 36px 6px rgba(255,179,54,.72),inset 0 0 12px 1px rgba(255,201,95,.48);
+  animation:soridraw-lyric-inner-pulse 2.8s ease-in-out infinite;
+}
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-musicnote-lyric-card[aria-busy="true"]::after {
+  box-shadow:inset 0 0 36px 6px rgba(255,179,54,.72),inset 0 0 12px 1px rgba(255,201,95,.48)!important;
+}
+@media(prefers-reduced-motion:reduce){.soridraw-musicnote-lyric-card[aria-busy="true"]::after{animation:none;opacity:.75;}}
+@media(max-width:767px){.soridraw-musicnote-lyric-body{height:440px;max-height:440px;}}

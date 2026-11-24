@@ -128,3 +128,17 @@ assert.equal(musicNoteLyricSlots({lyrics:{korean:'bonjour',english:'hallo'},appl
 assert.match(app,/musicNoteLyricFingerprint\(canonical\)!==lyricExpectedFingerprint/);
 assert.match(sync,/context.lyricHistoryChanged === true \? 'lyric-history-update'/);
 console.log('MUSIC_NOTE_EXACT_LYRIC_TRANSACTION_SOURCE_AND_HISTORY=PASS');
+
+const noteSource=read('src/pages/FavoritesPage.tsx');
+const noteNav=noteSource.slice(noteSource.indexOf('const navigateNoteLyric='),noteSource.indexOf('const noteKoreanSource='));
+assert.match(noteNav,/setNoteLyricCursor\(view.key,step.cursor\)/);
+assert.doesNotMatch(noteNav,/getDoc|updateFavorite|await |setSelectedSong|publish|queueFavorite/);
+assert.match(noteSource,/const korean=noteKoreanSource\(source\)/);
+assert.match(noteSource,/translateLyrics\(korean.text,noteLanguageLabels\[target\].api/);
+assert.match(noteSource,/updateFavorite\(id,patch,expected\)/);
+assert.match(noteSource,/signal.operation!=='lyric-history-update'/);
+assert.match(noteSource,/signal.originDeviceId===getMusicNoteSyncOriginDeviceId\(\)/);
+assert.match(noteSource,/getDocFromServer\(doc\(db,'favorites',pending.id\)\)/);
+assert.match(noteSource,/isSelectedSongReadOnly\|\|isFavoriteDetailOpening/);
+assert.match(css,/\.soridraw-musicnote-lyric-card\[aria-busy="true"\]::after/);
+console.log('MUSIC_NOTE_LOCAL_BROWSE_KOREAN_SOURCE_AND_EXACT_SYNC_SOURCE=PASS; REAL_DEVICE_REQUIRED');

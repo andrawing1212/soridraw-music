@@ -36,7 +36,7 @@ const fetchWorker=async([name,id])=>{
 // One release candidate: same exact PREVIEW core + the already deployed
 // APP797 production ingress. No new ledger, scheduler, or data schema.
 import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync,mkdirSync,rmSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,mkdirSync,rmSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,dirname} from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -90,6 +90,11 @@ for(const r of expectedRoutes)assert(final.includes(r),'RELEASE_ROUTE_'+r);
 // and single shared active public-window authority are independently proven.
 const mods=new Map(b.source.map(x=>[x.name,x.content]));
 mods.set('production-main.mjs',final);
+const adapter=readFileSync('scripts/full-release-shared-like-scheduler.mjs','utf8');
+mods.set('release-shared-like-scheduler.mjs',adapter);
+const composed=one(entry,/import canonical,\{validateExploreAuth307\} from '\.\/production-main\.mjs';/,"import releaseCore,{validateExploreAuth307,ExploreLikeBatchScheduler103 as ExistingLikeScheduler} from './production-main.mjs';\nimport {composeSharedScheduler,legacySchedulerClass} from './release-shared-like-scheduler.mjs';\nconst canonical=composeSharedScheduler(releaseCore);\nexport const ExploreLikeBatchScheduler103=legacySchedulerClass(ExistingLikeScheduler);",'PRODUCTION_ENTRY_IMPORT');
+mods.set('entry.mjs',composed);
+
 const folder=mkdtempSync(join(tmpdir(),'soridraw-full-release-'));
 try{
  for(const [name,code] of mods){
@@ -119,6 +124,6 @@ try{
  const id=x=>x.namespace_id||x.id||null;
  const sameNamespace=!!id(namespace(a))&&id(namespace(a))===id(namespace(b));
  const missing=a.rows.filter(x=>!bind(b,x.name));
- console.log(JSON.stringify({status:'FULL_RELEASE_EXACT_CORE_CANDIDATE_LINKED',sourceSha:'909a911646b774695b3ae88607d15a79c9ab55b8',previewCore:sha(core),productionPriorCore:sha(old),candidateCore:sha(final),productionWrapperUnchanged:mods.get('entry.mjs')===entry,moduleCount:mods.size,routes:expectedRoutes,notificationOwnerAuthPreserved:true,existingProductionBindingsPreserved:true,scheduler:{sameNamespace,previewClass:namespace(a).class_name,productionClass:namespace(b).class_name,namespaceIdentityExposed:!!id(namespace(a))&&!!id(namespace(b)),needsSingleAuthorityProof:!sameNamespace},missingBindings:missing.map(x=>({name:x.name,type:x.type})),activationAllowed:false,cloudWrites:0}));
+ console.log(JSON.stringify({status:'FULL_RELEASE_EXACT_CORE_CANDIDATE_LINKED',sourceSha:'909a911646b774695b3ae88607d15a79c9ab55b8',previewCore:sha(core),productionPriorCore:sha(old),candidateCore:sha(final),productionFollowWrapperUnchanged:mods.get('production-follow-797.mjs')===b.source.find(x=>x.name==='production-follow-797.mjs').content,sharedSchedulerAdapterAdded:true,moduleCount:mods.size,routes:expectedRoutes,notificationOwnerAuthPreserved:true,existingProductionBindingsPreserved:true,scheduler:{sameNamespace,previewClass:namespace(a).class_name,productionClass:namespace(b).class_name,namespaceIdentityExposed:!!id(namespace(a))&&!!id(namespace(b)),needsSingleAuthorityProof:!sameNamespace},missingBindings:missing.map(x=>({name:x.name,type:x.type})),activationAllowed:false,cloudWrites:0}));
  console.log('FULL_RELEASE_OFFLINE_ASSEMBLY_AND_IMPORT_LINK=PASS');
 }finally{rmSync(folder,{recursive:true,force:true})}

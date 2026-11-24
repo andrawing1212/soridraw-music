@@ -4,6 +4,8 @@ on:
     branches: [prep/full-preview-production-parity]
     paths:
       - 'scripts/build-full-production-release-candidate.mjs'
+      - 'scripts/full-release-shared-like-scheduler.mjs'
+      - 'scripts/verify-full-release-shared-like-scheduler.mjs'
       - 'scripts/verify-full-production-notification-host.mjs'
       - 'src/services/notifications/notificationPreviewHost022.ts'
       - 'src/services/notifications/notificationInbox004.ts'
@@ -24,6 +26,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: node --experimental-vm-modules scripts/build-full-production-release-candidate.mjs
+      - run: node scripts/verify-full-release-shared-like-scheduler.mjs
       - run: npm ci --no-audit --no-fund
       - run: node scripts/verify-full-production-notification-host.mjs
       - run: npm run lint

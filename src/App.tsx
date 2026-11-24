@@ -16746,7 +16746,7 @@ ${normalizePromptForDisplay(result.prompt)}
 
   const handleNavigateRecentSongLocalVersion = async (target: RecentSongLocalVersionTarget, direction: 'prev' | 'next') => {
     const activeSong = resultRef.current;
-    if (!activeSong || lyricGenerationInFlight.current || isRecentSongEditOpen || recentSongInlineEditMode) return;
+    if (!activeSong || isRecentSongEditOpen || recentSongInlineEditMode) return;
     if (target !== 'title') {
       if (!user?.uid || (activeSong as any).__recentSongHistoryIncomplete === true) return;
       const lang = target.replace(/^lyrics-/, '') as LanguageCode;
@@ -16758,6 +16758,8 @@ ${normalizePromptForDisplay(result.prompt)}
       return;
     }
 
+    // Title selection still mutates the current result; lyric browsing above does not.
+    if (lyricGenerationInFlight.current) return;
     const key = getRecentSongLocalVersionKey(activeSong, target);
     const item = recentSongLocalVersionHistoryRef.current[key] || recentSongLocalVersionHistory[key];
     if (!item || item.values.length <= 1) return;
@@ -18151,6 +18153,8 @@ ${normalizePromptForDisplay(result.prompt)}
       ? 'h-11 w-8 sm:w-9 rounded-xl text-sm'
       : 'h-11 w-8 rounded-xl text-sm';
     const label = target === 'title' ? '제목' : '가사';
+    const navigationBusy = Boolean(recentSongInlineEditMode) || isRecentSongEditOpen
+      || (target === 'title' && (Boolean(recentSongRegeneratingTarget) || isAddingLyricsLanguage));
 
     return (
       <div className="flex items-center gap-1" aria-label={`${label} 이전/다음 버전`}>
@@ -18160,7 +18164,7 @@ ${normalizePromptForDisplay(result.prompt)}
             e.stopPropagation();
             handleNavigateRecentSongLocalVersion(target, 'prev');
           }}
-          disabled={!meta.canPrev || Boolean(recentSongRegeneratingTarget) || isAddingLyricsLanguage || Boolean(recentSongInlineEditMode)}
+          disabled={!meta.canPrev || navigationBusy}
           onMouseEnter={() => setHoveredItem({ id: `local-prev-${target}`, label: `${label} 이전 버전`, description: '저장된 이전 가사 버전을 불러옵니다.' })}
           onMouseLeave={() => setHoveredItem(null)}
           className={`flex shrink-0 items-center justify-center bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-sm disabled:opacity-30 disabled:cursor-not-allowed ${sizeClass}`}
@@ -18175,7 +18179,7 @@ ${normalizePromptForDisplay(result.prompt)}
             e.stopPropagation();
             handleNavigateRecentSongLocalVersion(target, 'next');
           }}
-          disabled={!meta.canNext || Boolean(recentSongRegeneratingTarget) || isAddingLyricsLanguage || Boolean(recentSongInlineEditMode)}
+          disabled={!meta.canNext || navigationBusy}
           onMouseEnter={() => setHoveredItem({ id: `local-next-${target}`, label: `${label} 다음 버전`, description: '저장된 다음 가사 버전을 불러옵니다.' })}
           onMouseLeave={() => setHoveredItem(null)}
           className={`flex shrink-0 items-center justify-center bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-sm disabled:opacity-30 disabled:cursor-not-allowed ${sizeClass}`}

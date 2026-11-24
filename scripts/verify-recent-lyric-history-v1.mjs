@@ -89,3 +89,14 @@ const css=read('src/components/studio/studioLayout.css');
 assert.match(css,/\.soridraw-result-lyrics-card\[aria-busy="true"\]::after/);
 assert.match(css,/grid-template-columns: minmax\(0,1fr\) auto minmax\(0,1fr\)/);
 console.log('LYRIC_LOCAL_BROWSE_ZERO_NETWORK_AND_DEVICE_ISOLATION=PASS; REAL_DEVICE_REQUIRED');
+
+const browseHandler=app.slice(app.indexOf('const handleNavigateRecentSongLocalVersion'),app.indexOf('const applyViewedLyricVersion'));
+const beforeLocalBrowse=browseHandler.slice(0,browseHandler.indexOf("if (target !== 'title')"));
+assert.doesNotMatch(beforeLocalBrowse,/lyricGenerationInFlight|recentSongRegeneratingTarget|isAddingLyricsLanguage/);
+assert.match(browseHandler,/if \(lyricGenerationInFlight.current\) return;\s*const key = getRecentSongLocalVersionKey/);
+const versionButtons=app.slice(app.indexOf('const renderRecentSongLocalVersionButtons'),app.indexOf('const renderRecentSongInlineEditActions'));
+assert.match(versionButtons,/target === 'title' && \(Boolean\(recentSongRegeneratingTarget\) \|\| isAddingLyricsLanguage\)/);
+assert.match(versionButtons,/disabled=\{!meta.canPrev \|\| navigationBusy\}/);
+assert.match(versionButtons,/disabled=\{!meta.canNext \|\| navigationBusy\}/);
+assert.match(css,/html\[data-soridraw-theme="studio-black"\] body #root \.soridraw-app-root\s*\.soridraw-result-lyrics-card\[aria-busy="true"\]::after\s*\{\s*box-shadow: inset 0 0 36px 6px[^}]+!important;/);
+console.log('LYRIC_BROWSE_DURING_GENERATION_AND_STUDIO_BLACK_GLOW_OVERRIDE=PASS; REAL_DEVICE_REQUIRED');

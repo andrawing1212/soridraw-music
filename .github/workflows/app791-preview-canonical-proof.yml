@@ -6,6 +6,8 @@ on:
       - 'scripts/app791-preview-canonical-follow-proof.mjs'
       - 'scripts/verify-791-preview-canonical-follow-proof.mjs'
       - 'scripts/app792-preview-common-follow.mjs'
+      - 'scripts/app794-preview-private-owner-bridge.mjs'
+      - 'scripts/verify-794-preview-private-owner-bridge.mjs'
       - 'scripts/verify-792-preview-common-follow.mjs'
       - 'scripts/app755-production-owner-receipt.mjs'
       - '.github/workflows/app791-preview-canonical-proof.yml'
@@ -25,6 +27,7 @@ jobs:
           node-version: '22'
       - run: node scripts/verify-791-preview-canonical-follow-proof.mjs
       - run: node scripts/verify-792-preview-common-follow.mjs
+      - run: node scripts/verify-794-preview-private-owner-bridge.mjs
 
       - name: Changed receipt store compatibility
         run: |

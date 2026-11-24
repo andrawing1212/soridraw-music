@@ -34,7 +34,7 @@ async function protectedPins(){
  }
 }
 export async function stageFullRelease({a,b,mods}){
- guard(process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REPOSITORY==='andrawing1212/soridraw-music'&&process.env.GITHUB_ACTOR===process.env.GITHUB_REPOSITORY_OWNER&&process.env.GITHUB_REF==='refs/heads/prep/full-preview-production-parity'&&process.env.GITHUB_EVENT_NAME==='push'&&process.env.GITHUB_RUN_ATTEMPT==='1'&&process.env.FULL_RELEASE_STAGE_INACTIVE==='1'&&execFileSync('git',['rev-parse','HEAD^'],{encoding:'utf8'}).trim()==='5fb8bc0a7032a1268cc4eb588bddad609d20bccc','SCOPE');
+ guard(process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REPOSITORY==='andrawing1212/soridraw-music'&&process.env.GITHUB_ACTOR===process.env.GITHUB_REPOSITORY_OWNER&&process.env.GITHUB_REF==='refs/heads/prep/full-preview-production-parity'&&process.env.GITHUB_EVENT_NAME==='push'&&process.env.GITHUB_RUN_ATTEMPT==='1'&&process.env.FULL_RELEASE_STAGE_INACTIVE==='1'&&execFileSync('git',['rev-parse','HEAD^'],{encoding:'utf8'}).trim()==='99998565aa46cd53e80025701ced1aaa2950e6fc','SCOPE');
  guard(token&&ft,'EXISTING_AUTH');
  await protectedPins();
  const [pa,pb]=await Promise.all([api('workers/scripts/'+PRE+'/schedules'),api('workers/scripts/'+PRO+'/schedules')]);

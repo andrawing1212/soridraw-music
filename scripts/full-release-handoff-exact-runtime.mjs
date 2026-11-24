@@ -40,7 +40,7 @@ export default {async fetch(req,env){
 `;
 writeFileSync(join(dir,'adapter.mjs'),adapter);
 writeFileSync(join(dir,'entry.mjs'),harness);
-const mf=new Miniflare({modules:true,modulesRoot:dir,scriptPath:join(dir,'entry.mjs'),compatibilityDate:'2026-08-28',cf:false,
+const mf=new Miniflare({modules:true,modulesRoot:dir,scriptPath:join(dir,'entry.mjs'),compatibilityDate:'2026-08-06',cf:false,
  bindings:{SORIDRAW_ENVIRONMENT:'production',ENV_NAME:'production',SORIDRAW_PRIVATE_BATCH416_HMAC_SECRET:'local-test-only-never-live-secret',SORIDRAW_PUBLIC_RELEASE416_ENDPOINT:'https://local.invalid/release'},
  durableObjects:{EXPLORE_LIKE_BATCH_SCHEDULER:{className:'Legacy',useSQLite:true},RELEASE_SHARED_LIKE_SCHEDULER:{className:'Shared',useSQLite:true}},
  d1Databases:['DB','RATE_DB'],r2Buckets:['PROFILE_MEDIA','EXPLORE_CACHE'],
@@ -50,6 +50,7 @@ const mf=new Miniflare({modules:true,modulesRoot:dir,scriptPath:join(dir,'entry.
   return new Response('ISOLATED_EXTERNAL_BLOCKED',{status:503});
  }});
 try{
+ console.log('EXACT_SOURCE_LOCAL_RUNTIME_COMPAT_DATE=2026-08-06; DEPLOYED_COMPAT_DATE_2026-08-28_NOT_CLAIMED');
  const db=await mf.getD1Database('DB'),r2=await mf.getR2Bucket('PROFILE_MEDIA');
  const sql=readFileSync('cloudflare/explore-worker/scripts/fixtures/canonical-schema.sql','utf8');
  // D1 exec processes one statement per line; the historical fixture has complete single-line statements.

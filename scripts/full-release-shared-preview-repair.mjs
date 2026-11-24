@@ -90,7 +90,7 @@ async function deploy(id){
  need(await active(PRE)===id,'DEPLOY_NOT_EXACT');
 }
 async function run(){
- need(process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REPOSITORY==='andrawing1212/soridraw-music'&&process.env.GITHUB_ACTOR===process.env.GITHUB_REPOSITORY_OWNER&&process.env.GITHUB_REF==='refs/heads/prep/full-release-verified-handoff'&&process.env.GITHUB_RUN_ATTEMPT==='1'&&process.env.GITHUB_EVENT_NAME==='push'&&execFileSync('git',['rev-parse','HEAD^'],{encoding:'utf8'}).trim()==='8d7476173626b5cfeee162a607440d8d6b97ff59'&&token.length>20,'ONE_SHOT_APPROVAL');
+ need(process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REPOSITORY==='andrawing1212/soridraw-music'&&process.env.GITHUB_ACTOR===process.env.GITHUB_REPOSITORY_OWNER&&process.env.GITHUB_REF==='refs/heads/prep/full-release-verified-handoff'&&process.env.GITHUB_RUN_ATTEMPT==='1'&&process.env.GITHUB_EVENT_NAME==='push'&&execFileSync('git',['rev-parse','HEAD^'],{encoding:'utf8'}).trim()==='ecf5cab1f06fa359a870f4929b1e1d6a6a4e42da'&&token.length>20,'ONE_SHOT_APPROVAL');
  await protectedPins();
  const before=await snapshot(PRE,old);verifyBindings(before);
  const source=bytes(before.modules.find(x=>x.name===target)).toString('utf8');

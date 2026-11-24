@@ -84,13 +84,14 @@ const navBlock=app.slice(app.indexOf("if (target !== 'title') {",app.indexOf('co
 assert.match(navBlock,/setLocalLyricCursor\(key,step.cursor\)/);
 assert.doesNotMatch(navBlock,/prepareLyricEdit|persistLyricHistoryLocallyOrExactly|queueRecentSongTextWrite|setResult\(|setHistory\(|await |fetch\(|runTransaction|publishRecentSong/);
 assert.match(app,/historical \? localView.entry.text/);
-assert.match(app,/applyViewedLyricVersion\(lang\)/);
+assert.doesNotMatch(app,/이 버전 사용|applyViewedLyricVersion/);
+assert.match(app,/saveDisplayedLyricEdit\(editor,text\)/);
 const css=read('src/components/studio/studioLayout.css');
 assert.match(css,/\.soridraw-result-lyrics-card\[aria-busy="true"\]::after/);
 assert.match(css,/grid-template-columns: minmax\(0,1fr\) auto minmax\(0,1fr\)/);
 console.log('LYRIC_LOCAL_BROWSE_ZERO_NETWORK_AND_DEVICE_ISOLATION=PASS; REAL_DEVICE_REQUIRED');
 
-const browseHandler=app.slice(app.indexOf('const handleNavigateRecentSongLocalVersion'),app.indexOf('const applyViewedLyricVersion'));
+const browseHandler=app.slice(app.indexOf('const handleNavigateRecentSongLocalVersion'),app.indexOf('const saveDisplayedLyricEdit'));
 const beforeLocalBrowse=browseHandler.slice(0,browseHandler.indexOf("if (target !== 'title')"));
 assert.doesNotMatch(beforeLocalBrowse,/lyricGenerationInFlight|recentSongRegeneratingTarget|isAddingLyricsLanguage/);
 assert.match(browseHandler,/if \(lyricGenerationInFlight.current\) return;\s*const key = getRecentSongLocalVersionKey/);
@@ -100,3 +101,16 @@ assert.match(versionButtons,/disabled=\{!meta.canPrev \|\| navigationBusy\}/);
 assert.match(versionButtons,/disabled=\{!meta.canNext \|\| navigationBusy\}/);
 assert.match(css,/html\[data-soridraw-theme="studio-black"\] body #root \.soridraw-app-root\s*\.soridraw-result-lyrics-card\[aria-busy="true"\]::after\s*\{\s*box-shadow: inset 0 0 36px 6px[^}]+!important;/);
 console.log('LYRIC_BROWSE_DURING_GENERATION_AND_STUDIO_BLACK_GLOW_OVERRIDE=PASS; REAL_DEVICE_REQUIRED');
+
+const {captureDisplayedKoreanLyric}=await load('src/lib/recentUnconfirmedRecovery436.ts');
+const ko1=entry('ko1',1,'ko','첫 가사'),ko2=entry('ko2',2,'ko','두번째 가사'),ko3=entry('ko3',3,'ko','세번째 가사');
+const koHistory=appendRecentLyricVersion(appendRecentLyricVersion(null,'ko',ko1,ko2),'ko',ko2,ko3);
+const captured=captureDisplayedKoreanLyric(resolveRecentLyricLocalView(koHistory.ko,ko3,'ko2'));
+assert.equal(captured.text,'두번째 가사');
+assert.equal(captureDisplayedKoreanLyric(resolveRecentLyricLocalView(koHistory.ko,ko3,'ko3')).text,'세번째 가사');
+assert.equal(captured.text,'두번째 가사');
+assert.equal(captureDisplayedKoreanLyric(undefined),null);
+assert.match(app,/const koreanSource = captureStudioKoreanSource\(activeSong\)/);
+assert.match(app,/translateLyrics\(koreanSource.text,lyricLanguageLabels\[targetLang\].api/);
+assert.match(app,/sourceLyrics = koreanSource\?\.text \|\|/);
+console.log('DISPLAYED_KOREAN_REFERENCE_CAPTURE_AND_EXPLICIT_EDIT_ONLY=PASS');

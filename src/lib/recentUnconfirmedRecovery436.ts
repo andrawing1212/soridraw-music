@@ -193,3 +193,12 @@ export const stepRecentLyricLocalView = (view: ReturnType<typeof resolveRecentLy
   return {cursor:index === view.canonicalIndex ? null : view.entries[index].id};
 };
 export const recentLyricCursorKey = (uid:string,songKey:string,lane:LyricHistoryLane) => JSON.stringify([uid,songKey,lane]);
+
+// A reference is a detached value captured at the actual generation click.
+// Browsing afterwards cannot change a running request or the canonical row.
+export const captureDisplayedKoreanLyric = (
+  view: ReturnType<typeof resolveRecentLyricLocalView> | undefined,
+): RecentLyricLocalViewEntry | null => {
+  const entry = view?.entry;
+  return entry?.lang === 'ko' && entry.text.trim() ? { ...entry } : null;
+};

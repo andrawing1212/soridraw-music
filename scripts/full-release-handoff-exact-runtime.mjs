@@ -25,9 +25,24 @@ export class Legacy extends Adapted{
  }
 }
 export class Shared extends New{
+ constructor(ctx,env){
+  const fault={afterBatch:false};
+  const db=new Proxy(env.DB,{get(target,prop){
+   if(prop==='batch')return async (...args)=>{
+    const result=await target.batch(...args);
+    if(fault.afterBatch){fault.afterBatch=false;throw Error('QA_CRASH_AFTER_CANONICAL_COMMIT')}
+    return result;
+   };
+   const v=Reflect.get(target,prop,target);return typeof v==='function'?v.bind(target):v;
+  }});
+  super(ctx,new Proxy(env,{get(t,p){return p==='DB'?db:Reflect.get(t,p,t)}}));
+  this.qaFault=fault;
+ }
  async fetch(req){
   const p=new URL(req.url).pathname;
   if(p==='/state'){const s=this.ctx.storage;return Response.json({marker:(await s.get(key))??null,rows:[...(await s.list()).keys()]})}
+  if(p==='/inject'){await this.ctx.storage.delete(key);await this.ctx.storage.deleteAlarm();this.qaFault.afterBatch=true;return Response.json({ok:true})}
+
   return super.fetch(req);
  }
 }
@@ -69,9 +84,9 @@ try{
  };
  const pending=async()=>Number((await db.prepare('SELECT COUNT(*) AS n FROM explore_like_batches_069').first()).n);
  const likes=async()=>Number((await db.prepare("SELECT COUNT(*) AS n FROM likes WHERE track_id='qa-song'").first()).n);
- const batch=async(uid,liked,ch)=>{
+ const batch=async(uid,liked,ch,trackId='qa-song')=>{
   const t=Date.now()-1000,id='l069_'+String(t).padStart(13,'0')+'_'+ch.repeat(64);
-  await db.prepare('INSERT INTO explore_like_batches_069(batch_id,user_uid,created_at,mutation_count,mutations_json) VALUES (?,?,?,1,?)').bind(id,uid,t,JSON.stringify([{trackId:'qa-song',liked}])).run();return id;
+  await db.prepare('INSERT INTO explore_like_batches_069(batch_id,user_uid,created_at,mutation_count,mutations_json) VALUES (?,?,?,1,?)').bind(id,uid,t,JSON.stringify([{trackId,liked}])).run();return id;
  };
  await batch('qa-a',true,'a');await call('/legacy/seed');await call('/legacy/handoff');
  assert.equal(await pending(),0);assert.equal(await likes(),1);assert.equal((await call('/legacy/state')).marker,null);
@@ -87,5 +102,20 @@ try{
  await call('/legacy/rollback');
  assert.equal(await pending(),0);assert.equal(await likes(),2);
  console.log('PINNED_CANONICAL_LEASE_HANDOFF_AND_OLD_ROLLBACK=PASS');
+ // A legacy alarm has no expectedTrackIds. Deliberately interrupt after the
+ // real atomic membership+queue batch returns but before the DO joins public tracks.
+ await db.prepare("INSERT INTO tracks(id,owner_uid,source_type,source_id,suno_url_primary,published_at,created_at,updated_at) VALUES ('qa-crash-song','qa-owner','music_note','qa-source-crash','https://invalid.invalid',1,1,1)").run();
+ await db.prepare("INSERT INTO track_stats(track_id,like_count,updated_at) VALUES ('qa-crash-song',0,1)").run();
+ await batch('qa-c',true,'c','qa-crash-song');await call('/legacy/seed');await call('/shared/inject');
+ const interrupted=await mf.dispatchFetch('http://localhost/legacy/handoff',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+ assert(interrupted.status>=500,'INJECTED_CRASH_NOT_OBSERVED');
+ assert.equal(await pending(),0,'CANONICAL_QUEUE_NOT_COMMITTED');
+ assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM likes WHERE track_id='qa-crash-song'").first()).n,1,'CANONICAL_RELATION_NOT_COMMITTED');
+ assert.notEqual((await call('/legacy/state')).marker,null,'LEGACY_MARKER_LOST');
+ const publicRows=(await call('/shared/state')).rows;
+ const registered=publicRows.some(x=>x.endsWith('/track/qa-crash-song'));
+ console.log('EXACT_LEGACY_HANDOFF_POSTCOMMIT_CRASH_REGISTERED='+registered);
+ assert.equal(registered,true,'LEGACY_069_PUBLIC_TRACK_MISSING_AFTER_COMMIT_CRASH');
+
  console.log('SCOPE=LOCAL_EXACT_SCHEDULER_D1_R2; PUBLIC_RELEASE_AND_EXTERNAL_FUNCTIONS_NOT_VERIFIED');
 }finally{await mf.dispose()}

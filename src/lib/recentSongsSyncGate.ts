@@ -88,7 +88,7 @@ export const markRecentSongsCacheRecoveryFence = (uid: string, storage?: Version
     return hasRecentSongsCacheRecoveryFence(uid, target);
   } catch { return false; }
 };
-export async function stageRecentLyricOrCommitExact<T>(persistLocal: () => boolean, commitExact: () => Promise<T>): Promise<{ mode: 'local' } | { mode: 'server'; value: T }> {
+export function stageRecentLyricOrCommitExact<T>(persistLocal: () => boolean, commitExact: () => Promise<T>): { mode: 'local' } | { mode: 'server'; value: Promise<T> } {
   if (persistLocal()) return { mode: 'local' };
-  return { mode: 'server', value: await commitExact() };
+  return { mode: 'server', value: commitExact() };
 }

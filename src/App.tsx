@@ -16757,8 +16757,8 @@ ${normalizePromptForDisplay(result.prompt)}
         const nextSong = selectLyricHistoryVersion(latest,lang,nextEntry,archive);
         const nextHistory = historyRef.current.map((song,index) => index === historyIndexRef.current ? nextSong : song);
         assertRecentLyricHistoryBudget(archive,nextHistory);
-        if (await persistLyricHistoryLocallyOrExactly(latest,nextSong,user.uid,'add-lyrics-language')) return;
-        latestLyricEditTarget(latest,user.uid);
+        const serverSave = persistLyricHistoryLocallyOrExactly(latest,nextSong,user.uid,'add-lyrics-language');
+        if (serverSave) { await serverSave; return; }
         resultRef.current = nextSong; historyRef.current = nextHistory;
         setResult(nextSong); setHistory(nextHistory);
         preserveHistoryIndexOnNextSnapshotRef.current = historyIndexRef.current;
@@ -17089,14 +17089,14 @@ ${normalizePromptForDisplay(result.prompt)}
   // Only the demonstrated browser-cache failure uses the existing exact-row
   // canonical transaction immediately. The normal 150-second outbox stays intact.
   // Return true when already committed; callers must not queue another write.
-  const persistLyricHistoryLocallyOrExactly = async (
+  const persistLyricHistoryLocallyOrExactly = (
     source: SongResult, nextSong: SongResult, uid: string,
     operation: 'regenerate' | 'add-lyrics-language',
-  ): Promise<boolean> => {
+  ): false | Promise<number> => {
     latestLyricEditTarget(source,uid);
     const initialIndex = historyIndexRef.current;
     const rows = historyRef.current.map((song,index) => index === initialIndex ? nextSong : song);
-    const outcome = await stageRecentLyricOrCommitExact(
+    const outcome = stageRecentLyricOrCommitExact(
       () => saveRecentSongsCache(uid,{history:rows,historyIndex:initialIndex,latestGenerationBatchId:(rows[0]?.appliedKeywords as any)?.generationBatchId || null}),
       async () => {
         const stableId = getLiveSoridrawSongId(source);
@@ -17131,7 +17131,7 @@ ${normalizePromptForDisplay(result.prompt)}
               && JSON.stringify(current.appliedKeywords?.lyricLanguages) === JSON.stringify(source.appliedKeywords?.lyricLanguages)
               && JSON.stringify(current.lyricGenerationHistoryV1) === JSON.stringify(source.lyricGenerationHistoryV1)
               && current.koreanTitle === source.koreanTitle && current.englishTitle === source.englishTitle
-              && Number(current.appliedKeywords?.editedInStudioAt || 0) === Number(source.appliedKeywords?.editedInStudioAt || 0)) {
+              && Number((current.appliedKeywords as any)?.editedInStudioAt || 0) === Number((source.appliedKeywords as any)?.editedInStudioAt || 0)) {
               const applied = { ...current, title:committedRow.title,koreanTitle:committedRow.koreanTitle,englishTitle:committedRow.englishTitle,
                 lyrics:committedRow.lyrics,lyricGenerationHistoryV1:committedRow.lyricGenerationHistoryV1,
                 updatedAt:Math.max(Number(current.updatedAt || 0),Number(committedRow.appliedKeywords?.editedInStudioAt || 0)),
@@ -17156,12 +17156,12 @@ ${normalizePromptForDisplay(result.prompt)}
         }
       },
     );
-    return outcome.mode === 'server';
+    return outcome.mode === 'server' ? outcome.value : false;
   };
 
   const persistRegeneratedCurrentSong = async (nextSong: SongResult, source: SongResult) => {
-    if (user?.uid && await persistLyricHistoryLocallyOrExactly(source,nextSong,user.uid,'regenerate')) return;
-    if (user?.uid) latestLyricEditTarget(source,user.uid);
+    const serverSave = user?.uid && persistLyricHistoryLocallyOrExactly(source,nextSong,user.uid,'regenerate');
+    if (serverSave) { await serverSave; return; }
     const currentIndex = historyIndexRef.current;
     const currentHistory = historyRef.current;
     const nextHistory = currentIndex >= 0 && currentHistory[currentIndex]
@@ -17466,11 +17466,12 @@ ${normalizePromptForDisplay(result.prompt)}
       };
 
       const nextSong = withLyricHistory(latestSong,languageSong,replaceLanguage || null,targetLanguage);
-      if (await persistLyricHistoryLocallyOrExactly(latestSong,nextSong,sourceUid,'add-lyrics-language')) {
+      const serverSave = persistLyricHistoryLocallyOrExactly(latestSong,nextSong,sourceUid,'add-lyrics-language');
+      if (serverSave) {
+        await serverSave;
         showToast(`${label.ko} 가사를 추가 생성했습니다.`);
         return;
       }
-      latestLyricEditTarget(latestSong,sourceUid);
       const nextHistory = latestHistory.map((song, index) => index === targetIndex ? nextSong : song);
       resultRef.current = nextSong;
       historyRef.current = nextHistory;

@@ -51,7 +51,7 @@ try{
  // The existing PREVIEW named entrypoint still owns replay/relay and
  // no PROD reverse entrypoint is added. Preserve the module dependencies
  // in the temporary package, with no route/export from public Worker.
- save('app605/owner-follow-service-601.mjs',one(srv,"env?.SORIDRAW_ENVIRONMENT==='preview'&&",guard+'&&'));
+ save('app605/owner-follow-service-601.mjs',one(srv,"\n env?.SORIDRAW_ENVIRONMENT==='preview'&&",'\n '+guard+'&&'));
  for(const m of pv.modules.filter(m=>m.name.startsWith('app605/')&&m.name!=='app605/owner-follow-service-601.mjs')){
   if(!/^app605\/[A-Za-z0-9_.-]+\.mjs$/.test(m.name))throw Error('APP797_MODULE_NAME');
   save(m.name,Buffer.from(m.content_base64,'base64').toString('utf8'));

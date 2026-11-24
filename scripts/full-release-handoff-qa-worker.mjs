@@ -22,7 +22,7 @@ export class Legacy extends Wrapped {
 export class Shared extends DurableObject {
  async fetch(req){
   const p=new URL(req.url).pathname,s=this.ctx.storage;
-  if(p==='/mode'){const mode=await req.text();if(!['fail','ambiguous','settled'].includes(mode))return new Response('bad',{status:400});await s.put('mode',mode);return Response.json({ok:true})}
+  if(p==='/mode'){const {mode}=await req.json();if(!['fail','ambiguous','settled'].includes(mode))return new Response('bad',{status:400});await s.put('mode',mode);return Response.json({ok:true})}
   if(p==='/state')return Response.json({attempts:(await s.get('attempts'))??0,writes:(await s.get('writes'))??0});
   if(p==='/clean'){await s.deleteAlarm();await s.deleteAll();return Response.json({ok:true})}
   if(p!=='/schedule'||req.method!=='POST')return new Response('not found',{status:404});
@@ -48,7 +48,9 @@ export default {async fetch(req,env){
  const m=/^(legacy|shared)\/(seed|state|invoke|mode|clean|schedule)$/.exec(target);
  if(!m)return reply({code:'QA_COMMAND'},404);
  const ns=m[1]==='shared'?env.RELEASE_SHARED_LIKE_SCHEDULER:env.EXPLORE_LIKE_BATCH_SCHEDULER;
- const body=await req.text();
+ const payload=await req.json().catch(()=>null);
+ if(!payload||typeof payload!=='object'||Array.isArray(payload))return reply({code:'QA_INVALID_JSON'},400);
+ const body=JSON.stringify(payload);
  const response=await ns.get(ns.idFromName('shared-like-batch')).fetch(new Request('https://qa.internal/'+m[2],{method:'POST',headers:{'Content-Type':'application/json'},body}));
  const headers=new Headers(response.headers);
  headers.set('X-SORIDRAW-QA-Route',m[1]);

@@ -24,8 +24,9 @@ async function baseline(){
 }
 const origin='https://'+NAME+'.soridraw-qa.workers.dev';
 async function request(access,p,body){
- const r=await fetch(origin+'/qa',{method:'POST',redirect:'error',headers:{'X-QA-Access':access,'X-QA-Command':p.slice(1),'Content-Type':'application/json'},...(body===undefined?{}:{body:typeof body==='string'?body:JSON.stringify(body)}),signal:AbortSignal.timeout(10000)});
+ const r=await fetch(origin+'/qa',{method:'POST',redirect:'error',headers:{'X-QA-Access':access,'X-QA-Command':p.slice(1),'Content-Type':'application/json'},body:JSON.stringify(typeof body==='string'?{mode:body}:body??{}),signal:AbortSignal.timeout(10000)});
  const data=await r.json().catch(()=>null);
+ if(r.status===404)console.log('QA_HTTP_404 '+JSON.stringify({command:p,marked:r.headers.has('X-SORIDRAW-QA-Route'),contentType:r.headers.get('content-type'),server:r.headers.get('server')}));
  return {status:r.status,data,route:r.headers.get('X-SORIDRAW-QA-Route')||'provider-or-unmarked',code:typeof data?.code==='string'?data.code:'none'};
 }
 async function run(){
@@ -47,7 +48,7 @@ async function run(){
  checked(await api(path,'PUT',form,deploy),'UPLOAD_SQLITE_QA_ONLY');
  checked(await api(path+'/subdomain','POST',{enabled:true,previews_enabled:false},deploy),'QA_ROUTE');
  let ready=false;
- for(let i=0;i<12;i++){try{if((await request('invalid','/legacy/state')).status===403&&(await request(access,'/legacy/state')).route==='legacy'&&(await request(access,'/shared/state')).route==='shared'){ready=true;break}}catch{}await delay(1500)}
+ for(let i=0;i<12;i++){try{const denied=await request('invalid','/legacy/state'),legacy=await request(access,'/legacy/state'),shared=await request(access,'/shared/state');if(denied.status===403&&denied.route==='entry'&&legacy.status===200&&legacy.route==='legacy'&&shared.status===200&&shared.route==='shared'){ready=true;break}}catch{}await delay(1500)}
  assert(ready,'QA_HTTP_NOT_READY');
  console.log('PHYSICAL_QA_SQLITE_WORKER_AND_ACCESS=PASS');
  const call=async(p,b)=>{const x=await request(access,p,b);assert.equal(x.status,200,p+' route='+x.route+' code='+x.code);return x.data};

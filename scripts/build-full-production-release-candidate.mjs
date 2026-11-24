@@ -58,14 +58,24 @@ const one=(x,re,replacement,label)=>{
 // Restrict the change to the existing read-only notification handler.
 // Existing authentication, owner UID selection, methods and error handling
 // are byte-identical. The entire remaining PREVIEW module is unchanged.
-const anchor=core.indexOf('NOTIFICATION_PREVIEW_INBOX_019_COMPILED_OPEN');
-const next=core.indexOf('NOTIFICATION_PREFS_003_COMPILED_OPEN',anchor+1);
-assert(anchor>=0&&next>anchor,'NOTIFICATION_SYMBOL_ANCHORS');
-const at=core.lastIndexOf('\n',anchor)+1;
-const fallback=core.lastIndexOf('\n',next)+1;
-assert(fallback>at,'NOTIFICATION_SCOPE_ANCHOR');
+// Bundler removes the disabled next branch, so anchor to the exact live
+// binding and match the indentation of the enclosing handler itself.
+const anchor=core.indexOf('SORIDRAW_NOTIFICATION_INBOX_READ_ONLY_019');
+assert(anchor>=0&&core.indexOf('SORIDRAW_NOTIFICATION_INBOX_READ_ONLY_019',anchor+1)===-1,'NOTIFICATION_BINDING_ANCHOR');
+const leading=core.slice(Math.max(0,anchor-1500),anchor);
+const match=[...leading.matchAll(/^([ \t]*)if\s*\(/gm)].at(-1);
+assert(match,'NOTIFICATION_IF_ANCHOR');
+const at=Math.max(0,anchor-1500)+match.index;
+const closing=new RegExp('^'+match[1]+'\\}(?:\\r?$|\\s*else\\b)','gm');
+closing.lastIndex=anchor;
+const end=closing.exec(core);
+assert(end&&end.index-at<8000,'NOTIFICATION_HANDLER_END');
+const fallback=end.index+match[1].length+1;
 let original=core.slice(at,fallback);
-assert(original.includes('validateExploreAuth307')&&original.includes('verifyUid')&&original.includes('verifyAdmin')&&original.includes('ORIGIN_FORBIDDEN'),'ORIGINAL_AUTH');
+if(!original.includes('validateExploreAuth307')||!original.includes('verifyUid')||!original.includes('verifyAdmin')||!original.includes('ORIGIN_FORBIDDEN')){
+ console.log('NOTIFICATION_ACTUAL_HANDLER_SOURCE '+JSON.stringify(original.slice(0,5000)));
+ throw Error('ORIGINAL_AUTH');
+}
 let patch=one(original,/env\?\.SORIDRAW_ENVIRONMENT\s*===\s*(['"])preview\1/,"env?.SORIDRAW_ENVIRONMENT === 'production'",'NOTIFICATION_ENV');
 for(const [a,b] of [['https://preview.soridraw.com','https://soridraw.com'],['https://soridraw-preview.web.app','https://soridraw.web.app'],['https://soridraw-preview.firebaseapp.com','https://soridraw.firebaseapp.com']]){
  assert.equal(patch.split(a).length,2,'ORIGIN_ANCHOR');patch=patch.replace(a,b);

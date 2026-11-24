@@ -5,13 +5,15 @@ on:
     paths:
       - 'scripts/app797-build-production-follow-readonly.mjs'
       - 'scripts/verify-797-active-owner-connection.mjs'
+      - 'scripts/verify-683-visitor-and-own-profile-shell.mjs'
+      - 'src/services/explorePublicFollowSync668.ts'
       - '.github/workflows/app797-production-follow-candidate.yml'
 permissions:
   contents: read
 jobs:
   candidate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 4
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with: {persist-credentials: false}
@@ -22,3 +24,8 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           APP797_EXISTING_BRIDGE_SECRET: ${{ secrets.SORIDRAW_OWNER_DO_BRIDGE_SECRET_600 }}
+
+      - name: Corrected APP683 host regression (existing subscriber behavior protected)
+        run: |
+          npm ci --no-audit --no-fund
+          node scripts/verify-683-visitor-and-own-profile-shell.mjs

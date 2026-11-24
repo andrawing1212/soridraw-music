@@ -4,6 +4,8 @@
 // B's own cached profile shell should not wait for the independent count GET.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
 const page=readFileSync('src/pages/ExplorePage.tsx','utf8');
 const transport=readFileSync('src/services/explorePublicFollowSync668.ts','utf8');
 const slice=(start,end)=>{
@@ -49,9 +51,17 @@ assert.match(mount,/getExploreOwnProfileFollowCounts\(user\)/);
 assert.doesNotMatch(mount,/setExploreFollow\(/,
  'own-profile read-only entry must not commit a follow again');
 assert.match(transport,/PUBLIC_FOLLOW_VISITOR_668_ENABLED=true/);
-assert.match(transport,/window\.location\.hostname!=='preview\.soridraw\.com'/);
+assert.match(transport,/!mayListenToPublicFollowHost797\(window\.location\.hostname\)/);
+// Exercise the actual host helper rather than weakening the old guard.
+const helper=readFileSync('src/lib/ownerFollowCanaryTab634.ts','utf8');
+const exports={};
+vm.runInNewContext(ts.transpileModule(helper,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,URLSearchParams});
+const allowed=exports.mayListenToPublicFollowHost797;
+assert.equal(allowed('preview.soridraw.com'),true);
+assert.equal(allowed('soridraw.com'),true);
+for(const host of ['test.soridraw.com','evil.soridraw.com','soridraw.com.evil','localhost',''])assert.equal(allowed(host),false);
 assert.match(transport,/onValue\(databaseRef\(realtimeDb,/);
 console.log('APP683_A_VIEWING_C_SUBSCRIBES_WITHOUT_EXACT_FOLLOW_GET=PASS');
 console.log('APP683_PUBLIC_SIGNAL_LATE_OLD_GET_CANNOT_OVERWRITE_NEW_COUNTER=PASS');
 console.log('APP683_OWN_PROFILE_LOCAL_SHELL_NO_REPEAT_FOLLOW_WRITE=PASS');
-console.log('APP683_PREVIEW_ONLY_VISITOR_PROTECTION=PASS');
+console.log('APP683_PREVIEW_PRODUCTION_VISITOR_TEST_AND_OTHER_HOSTS_DENIED=PASS');

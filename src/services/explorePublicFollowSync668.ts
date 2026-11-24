@@ -15,8 +15,8 @@ export const subscribePublicProfileFollow668=(
  profileUid:string,
  onConfirmed:(signal:PublicProfileFollowSignal668)=>void,
 ):Unsubscribe=>{
- // All non-PREVIEW hosts and current deployed clients stay OFF until a
- // separately verified shared-server activation. No initial RTDB read.
+ // Release hosts only. TEST and other hosts remain OFF. The production
+ // candidate must not be deployed before separately verified backend parity.
  if(!PUBLIC_FOLLOW_VISITOR_668_ENABLED||
     typeof window==='undefined'||!mayListenToPublicFollowHost797(window.location.hostname)||
     !UID.test(profileUid)||auth.currentUser===null)return ()=>{};

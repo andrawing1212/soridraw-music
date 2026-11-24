@@ -58,9 +58,12 @@ const one=(x,re,replacement,label)=>{
 // Restrict the change to the existing read-only notification handler.
 // Existing authentication, owner UID selection, methods and error handling
 // are byte-identical. The entire remaining PREVIEW module is unchanged.
-const at=core.indexOf('const NOTIFICATION_PREVIEW_INBOX_019_COMPILED_OPEN');
-const fallback=core.indexOf('const NOTIFICATION_PREFS_003_COMPILED_OPEN',at);
-assert(at>=0&&fallback>at,'NOTIFICATION_SCOPE_ANCHOR');
+const anchor=core.indexOf('NOTIFICATION_PREVIEW_INBOX_019_COMPILED_OPEN');
+const next=core.indexOf('NOTIFICATION_PREFS_003_COMPILED_OPEN',anchor+1);
+assert(anchor>=0&&next>anchor,'NOTIFICATION_SYMBOL_ANCHORS');
+const at=core.lastIndexOf('\n',anchor)+1;
+const fallback=core.lastIndexOf('\n',next)+1;
+assert(fallback>at,'NOTIFICATION_SCOPE_ANCHOR');
 let original=core.slice(at,fallback);
 assert(original.includes('validateExploreAuth307')&&original.includes('verifyUid')&&original.includes('verifyAdmin')&&original.includes('ORIGIN_FORBIDDEN'),'ORIGINAL_AUTH');
 let patch=one(original,/env\?\.SORIDRAW_ENVIRONMENT\s*===\s*(['"])preview\1/,"env?.SORIDRAW_ENVIRONMENT === 'production'",'NOTIFICATION_ENV');

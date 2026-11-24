@@ -22,7 +22,7 @@ import {
   queueMusicNoteFavoriteCountDelta,
   resumeMusicNoteFavoriteCountDelta,
 } from './services/musicNoteFavoriteCountBatch';
-import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck, canAcknowledgeRecentSongsInlineSignal, needsRecentSongsRetainedDraftGapRead460, shouldDeferRecentSongsServerReadForPendingText } from './lib/recentSongsSyncGate';
+import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck, canAcknowledgeRecentSongsInlineSignal, needsRecentSongsRetainedDraftGapRead460, shouldDeferRecentSongsServerReadForPendingText, hasRecentSongsCacheRecoveryFence, markRecentSongsCacheRecoveryFence, stageRecentLyricOrCommitExact } from './lib/recentSongsSyncGate';
 import {useNotificationDots017} from './services/notifications/useNotificationDots017';
 import {projectCompletedExistingGenerations004} from './services/notifications/notificationInbox004';
 import {rememberCompletedGenerationLog016} from './services/notifications/notificationRecentLog016';
@@ -504,6 +504,7 @@ const persistRecentSongsDocument = async (
   expectedMutationEpoch?: number,
   changedTextSong?: any,
   onCommittedTextRow?: (row: any) => void,
+  requireExactTextRow = false,
 ): Promise<number | null> => {
   const uid = String(ref?.id || '').trim();
 
@@ -520,6 +521,7 @@ const persistRecentSongsDocument = async (
     let syncVersion = Math.max(Date.now(), previousVersion + 1);
 
     const editedStableId = changedTextSong ? getLiveSoridrawSongId(changedTextSong) : null;
+    if (requireExactTextRow && (!editedStableId || auth.currentUser?.uid !== uid)) return null;
     if (editedStableId) {
       // A settled 150s text edit modifies only its own canonical row. A
       // different device may have recovered/generated a tenth song while
@@ -531,6 +533,7 @@ const persistRecentSongsDocument = async (
         const stored = snapshot.data() as Record<string, any>;
         const authoritative = stored?.songs;
         if (!Array.isArray(authoritative)) return null;
+        if (requireExactTextRow && auth.currentUser?.uid !== uid) return null;
         if (uid && Number.isFinite(expectedMutationEpoch)
           && Number(expectedMutationEpoch) !== readRecentSongsMutationEpoch(uid)) return null;
         const merged = patchExactRecentTextRow436(
@@ -554,7 +557,7 @@ const persistRecentSongsDocument = async (
     markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
 
     if (!uid) return syncVersion;
-    writeRecentSongsLocalVersion(uid, syncVersion);
+    if (!hasRecentSongsCacheRecoveryFence(uid)) writeRecentSongsLocalVersion(uid, syncVersion);
 
     try {
       await updateDoc(doc(db, 'users', uid), { 'syncVersions.recentSongs': syncVersion });
@@ -7771,6 +7774,7 @@ function App() {
   const [lyricsLanguageChange, setLyricsLanguageChange] = useState<{lang: LanguageCode; songKey: string} | null>(null);
   const [replacingLyricsLanguage, setReplacingLyricsLanguage] = useState<LanguageCode | null>(null);
   const lyricGenerationInFlight = useRef(false);
+  const [lyricGenerationSongKey, setLyricGenerationSongKey] = useState<string | null>(null);
   useEffect(() => {
     if (!lyricsLanguageChange) return;
     const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setLyricsLanguageChange(null); };
@@ -13814,7 +13818,7 @@ const unlockAllFavorites = async () => {
       // legitimately empty account in the same signed-in session.
       const hasVerifiedVisibleCache = Boolean(latestCache?.history?.length)
         || Boolean(latestCache && recentSongsSessionVerifiedUids.has(user.uid));
-      const needsServerRead = unverifiedRetainedGap || needsRecentSongsServerRead({
+      const needsServerRead = hasRecentSongsCacheRecoveryFence(user.uid) || unverifiedRetainedGap || needsRecentSongsServerRead({
         hasLocalCache: hasVerifiedVisibleCache,
         profileVersion: remoteVersion,
         localDocumentVersion: localVersion,
@@ -14153,7 +14157,7 @@ const unlockAllFavorites = async () => {
         return;
       }
 
-      if (canAcknowledgeRecentSongsInlineSignal({
+      if (!hasRecentSongsCacheRecoveryFence(user.uid) && canAcknowledgeRecentSongsInlineSignal({
         itemApplied: itemResult.applied,
         itemPersisted: itemResult.cachedSuccessfully,
         itemPartial: itemResult.partial,
@@ -14235,7 +14239,7 @@ const unlockAllFavorites = async () => {
       // Canonical transaction has committed. Only now acknowledge original
       // generated IDs, then send the normal single changed-domain signal.
       acknowledgeRecentGeneratedSongs(uid, recovered.songs);
-      writeRecentSongsLocalVersion(uid, recovered.syncVersion);
+      if (!hasRecentSongsCacheRecoveryFence(uid)) writeRecentSongsLocalVersion(uid, recovered.syncVersion);
       await runV1MutationBoundary({
         domain: 'recent', operation: 'save-batch', uid,
         affectedCount: recovered.recovered.length,
@@ -16500,8 +16504,6 @@ ${normalizePromptForDisplay(result.prompt)}
     const next = { ...after, lyricGenerationHistoryV1: history, updatedAt: at, appliedKeywords: { ...after.appliedKeywords, editedInStudioAt: at } } as SongResult;
     const rows = historyRef.current.map((row,index) => index === historyIndexRef.current ? next : row);
     assertRecentLyricHistoryBudget(history,rows);
-    if (user?.uid && !saveRecentSongsCache(user.uid,{history:rows,historyIndex:historyIndexRef.current,latestGenerationBatchId:(rows[0]?.appliedKeywords as any)?.generationBatchId || null}))
-      throw new Error('recent-lyric-local-capacity');
     return next;
   };
   const selectLyricHistoryVersion = (song: SongResult, oldLang: LanguageCode, entry: LyricHistoryEntry, history: LyricHistoryV1): SongResult => {
@@ -16546,7 +16548,10 @@ ${normalizePromptForDisplay(result.prompt)}
   };
   const lyricGenerationFailureMessage = (error: unknown, fallback: string) => {
     const message = error instanceof Error ? error.message : '';
-    if (message.includes('history-capacity') || message.includes('local-capacity')) return '가사 이력 저장 용량이 부족합니다. 기존 가사는 유지됩니다.';
+    if (message.includes('history-capacity')) return '가사 이력 저장 한도에 도달했습니다. 기존 가사는 유지됩니다.';
+    if (message.includes('local-capacity')) return '브라우저에 새 가사를 저장하지 못했습니다. 기존 가사는 유지됩니다.';
+    if (message.includes('exact-save-failed')) return '새 가사의 서버 저장이 완료되지 않았습니다. 기존 가사는 유지됩니다.';
+    if (message.includes('empty-regenerated-lyrics') || message.includes('empty-translated-lyrics') || message.includes('empty-lyric-version')) return '새 가사를 받지 못했습니다. 기존 가사는 유지됩니다.';
     if (message.includes('history-syncing')) return '다른 기기의 가사 이력을 동기화하는 중입니다.';
     if (message.includes('pending-other-song')) return '이전 곡의 저장이 완료되지 않았습니다. 다시 시도해주세요.';
     if (message.includes('song-changed')) return '곡 상태가 변경되었습니다. 다시 시도해주세요.';
@@ -16752,8 +16757,8 @@ ${normalizePromptForDisplay(result.prompt)}
         const nextSong = selectLyricHistoryVersion(latest,lang,nextEntry,archive);
         const nextHistory = historyRef.current.map((song,index) => index === historyIndexRef.current ? nextSong : song);
         assertRecentLyricHistoryBudget(archive,nextHistory);
-        if (!saveRecentSongsCache(user.uid,{history:nextHistory,historyIndex:historyIndexRef.current,latestGenerationBatchId:(nextHistory[0]?.appliedKeywords as any)?.generationBatchId || null}))
-          throw new Error('recent-lyric-local-capacity');
+        const serverSave = persistLyricHistoryLocallyOrExactly(latest,nextSong,user.uid,'add-lyrics-language');
+        if (serverSave) { await serverSave; return; }
         resultRef.current = nextSong; historyRef.current = nextHistory;
         setResult(nextSong); setHistory(nextHistory);
         preserveHistoryIndexOnNextSnapshotRef.current = historyIndexRef.current;
@@ -17081,7 +17086,82 @@ ${normalizePromptForDisplay(result.prompt)}
     };
   }, [user?.uid, flushRecentSongTextWrite]);
 
-  const persistRegeneratedCurrentSong = async (nextSong: SongResult) => {
+  // Only the demonstrated browser-cache failure uses the existing exact-row
+  // canonical transaction immediately. The normal 150-second outbox stays intact.
+  // Return true when already committed; callers must not queue another write.
+  const persistLyricHistoryLocallyOrExactly = (
+    source: SongResult, nextSong: SongResult, uid: string,
+    operation: 'regenerate' | 'add-lyrics-language',
+  ): false | Promise<number> => {
+    latestLyricEditTarget(source,uid);
+    const initialIndex = historyIndexRef.current;
+    const rows = historyRef.current.map((song,index) => index === initialIndex ? nextSong : song);
+    const outcome = stageRecentLyricOrCommitExact(
+      () => saveRecentSongsCache(uid,{history:rows,historyIndex:initialIndex,latestGenerationBatchId:(rows[0]?.appliedKeywords as any)?.generationBatchId || null}),
+      async () => {
+        const stableId = getLiveSoridrawSongId(source);
+        // Never take the legacy whole-aggregate fallback or recreate a deleted row.
+        if (!stableId || getLiveSoridrawSongId(nextSong) !== stableId) throw new Error('recent-lyric-local-capacity');
+        if (recentSongTextWritePendingRef.current) await flushRecentSongTextWrite();
+        latestLyricEditTarget(source,uid);
+        if (recentSongTextWritePendingRef.current || hasRecentSongTextPendingMarker(uid) || recentSongsSaveInFlightRef.current > 0)
+          throw new Error('recent-lyric-pending-other-song');
+        // If even the tiny recovery fence cannot be made durable, do not claim
+        // the edit is saved or allow an old local cache to masquerade as current.
+        if (!markRecentSongsCacheRecoveryFence(uid)) throw new Error('recent-lyric-local-capacity');
+        const epoch = readRecentSongsMutationEpoch(uid);
+        const signalItem = { ...nextSong };
+        let committedRow: any = null;
+        recentSongsSaveInFlightRef.current += 1;
+        try {
+          const version = await runV1MutationBoundary(
+            { domain:'recent',operation,uid,affectedCount:1,mirrorTargets:buildRecentMirrorTargets([nextSong],'upsert'),syncItem:signalItem },
+            persistRecentSongsDocument(doc(db,'user_recent_songs',uid),rows,epoch,nextSong,row => {
+              committedRow = row;
+              for (const key of Object.keys(signalItem)) delete (signalItem as any)[key];
+              Object.assign(signalItem,row);
+            },true),
+          );
+          if (!version || !committedRow) throw new Error('recent-lyric-exact-save-failed');
+          // Do not overwrite a newer edit, another account, or another selection.
+          if (auth.currentUser?.uid === uid && epoch === readRecentSongsMutationEpoch(uid)) {
+            const index = historyRef.current.findIndex(song => getLiveSoridrawSongId(song) === stableId);
+            const current = historyRef.current[index];
+            if (current && JSON.stringify(current.lyrics) === JSON.stringify(source.lyrics)
+              && JSON.stringify(current.appliedKeywords?.lyricLanguages) === JSON.stringify(source.appliedKeywords?.lyricLanguages)
+              && JSON.stringify(current.lyricGenerationHistoryV1) === JSON.stringify(source.lyricGenerationHistoryV1)
+              && current.koreanTitle === source.koreanTitle && current.englishTitle === source.englishTitle
+              && Number((current.appliedKeywords as any)?.editedInStudioAt || 0) === Number((source.appliedKeywords as any)?.editedInStudioAt || 0)) {
+              const applied = { ...current, title:committedRow.title,koreanTitle:committedRow.koreanTitle,englishTitle:committedRow.englishTitle,
+                lyrics:committedRow.lyrics,lyricGenerationHistoryV1:committedRow.lyricGenerationHistoryV1,
+                updatedAt:Math.max(Number(current.updatedAt || 0),Number(committedRow.appliedKeywords?.editedInStudioAt || 0)),
+                appliedKeywords:{...current.appliedKeywords,...pickRecentSongLiveAppliedKeywords457(committedRow.appliedKeywords)} } as SongResult;
+              if (operation === 'regenerate') {
+                delete (applied as any).favoriteFirestoreId;
+                delete (applied as any).musicNoteFavoriteId;
+                (applied as any).recentFavoriteDetachedAt = Date.now();
+              }
+              const updated = historyRef.current.map((song,i) => i === index ? applied : song);
+              historyRef.current = updated; setHistory(updated);
+              if (historyIndexRef.current === index) { resultRef.current = applied; setResult(applied); }
+              recentSongsReadyToCacheRef.current = true;
+              // Best effort only; the fence remains until a full canonical read
+              // is successfully cached, not merely an exact-row ACK.
+              saveRecentSongsCache(uid,{history:updated,historyIndex:historyIndexRef.current,latestGenerationBatchId:(updated[0]?.appliedKeywords as any)?.generationBatchId || null});
+            }
+          }
+          return version;
+        } finally {
+          recentSongsSaveInFlightRef.current = Math.max(0,recentSongsSaveInFlightRef.current-1);
+        }
+      },
+    );
+    return outcome.mode === 'server' ? outcome.value : false;
+  };
+
+  const persistRegeneratedCurrentSong = async (nextSong: SongResult, source: SongResult) => {
+    const serverSave = user?.uid && persistLyricHistoryLocallyOrExactly(source,nextSong,user.uid,'regenerate');
+    if (serverSave) { await serverSave; return; }
     const currentIndex = historyIndexRef.current;
     const currentHistory = historyRef.current;
     const nextHistory = currentIndex >= 0 && currentHistory[currentIndex]
@@ -17127,8 +17207,8 @@ ${normalizePromptForDisplay(result.prompt)}
       setIsRecentSongEditOpen(false);
       setRecentSongInlineEditMode(null);
       setRecentSongEditDraft(null);
+      setLyricGenerationSongKey(buildRecentSongSyncKey(activeSong));
       setRecentSongRegeneratingTarget(targetKey);
-      showToast(`${targetLabel}를 다시 생성합니다.`);
 
       const personalGeminiApiKey = await resolveGoogleGeminiApiKey(user);
       if (!personalGeminiApiKey) {
@@ -17217,7 +17297,7 @@ ${normalizePromptForDisplay(result.prompt)}
       } as SongResult;
 
       const recorded = withLyricHistory(latest,nextSong,targetLang,targetLang);
-      await persistRegeneratedCurrentSong(recorded);
+      await persistRegeneratedCurrentSong(recorded,latest);
       showToast(`${targetLabel}를 다시 생성했습니다.`);
     } catch (error) {
       console.error('Failed to regenerate generated song part:', error);
@@ -17228,6 +17308,7 @@ ${normalizePromptForDisplay(result.prompt)}
     } finally {
       lyricGenerationInFlight.current = false;
       setRecentSongRegeneratingTarget(null);
+      setLyricGenerationSongKey(null);
     }
   };
 
@@ -17267,6 +17348,7 @@ ${normalizePromptForDisplay(result.prompt)}
       latestLyricEditTarget(activeSong,sourceUid);
       setLyricsLanguageChange(null);
       setReplacingLyricsLanguage(replaceLanguage || null);
+      setLyricGenerationSongKey(sourceKey);
       setIsAddingLyricsLanguage(true);
       setAddingLyricsLanguageTarget(targetLanguage);
 
@@ -17384,6 +17466,12 @@ ${normalizePromptForDisplay(result.prompt)}
       };
 
       const nextSong = withLyricHistory(latestSong,languageSong,replaceLanguage || null,targetLanguage);
+      const serverSave = persistLyricHistoryLocallyOrExactly(latestSong,nextSong,sourceUid,'add-lyrics-language');
+      if (serverSave) {
+        await serverSave;
+        showToast(`${label.ko} 가사를 추가 생성했습니다.`);
+        return;
+      }
       const nextHistory = latestHistory.map((song, index) => index === targetIndex ? nextSong : song);
       resultRef.current = nextSong;
       historyRef.current = nextHistory;
@@ -17409,6 +17497,7 @@ ${normalizePromptForDisplay(result.prompt)}
       setIsAddingLyricsLanguage(false);
       setAddingLyricsLanguageTarget(null);
       setReplacingLyricsLanguage(null);
+      setLyricGenerationSongKey(null);
     }
   };
 
@@ -22629,6 +22718,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       const displayLyricLanguages = getDisplayLyricLanguages(result);
                       const missingLyricLanguages = getMissingLyricLanguages(result);
 
+                      const generationIsForCurrentSong = lyricGenerationSongKey !== null && lyricGenerationSongKey === buildRecentSongSyncKey(result);
+                      const addingFirstLanguage = generationIsForCurrentSong && isAddingLyricsLanguage && !replacingLyricsLanguage;
+                      const renderLyricGenerationGlow = () => (
+                        <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-10 rounded-[inherit] shadow-[inset_0_0_16px_2px_rgba(227,161,58,0.48)] opacity-70 motion-safe:animate-pulse motion-safe:[animation-duration:2.8s]" />
+                      );
                       const renderLyricsGenerationProgress = (lang: LanguageCode) => (
                         <div role="status" aria-live="polite" className="flex min-h-[180px] flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
                           <div aria-hidden="true" className="flex h-12 items-center justify-center gap-1.5 text-[#e3a13a]">
@@ -22636,18 +22730,18 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           </div>
                           <div className="font-bold text-[var(--text-primary)]">{lyricLanguageLabels[lang]?.ko || lang} 가사를 생성하고 있습니다</div>
                           <p className="text-xs leading-relaxed text-[var(--text-secondary)]">현재 곡을 바탕으로 새 가사를 생성하는 중입니다.</p>
-                          <div aria-hidden="true" className="h-1 w-2/3 max-w-[200px] overflow-hidden rounded-full bg-white/10"><div className="h-full w-1/2 rounded-full bg-[#e3a13a] motion-safe:animate-pulse" /></div>
                         </div>
                       );
                       const renderAddLyricsLanguageCard = () => missingLyricLanguages.length > 0 ? (
-                        <div className="soridraw-result-lyrics-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-dashed border-[#e3a13a]/[0.22] overflow-hidden flex flex-col shadow-[0_14px_36px_rgba(0,0,0,0.26)] transition-colors duration-150">
+                        <div aria-busy={addingFirstLanguage} className="relative soridraw-result-lyrics-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-dashed border-[#e3a13a]/[0.22] overflow-hidden flex flex-col shadow-[0_14px_36px_rgba(0,0,0,0.26)] transition-colors duration-150">
+                          {addingFirstLanguage && renderLyricGenerationGlow()}
                           <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                             <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                               <Languages className="w-4 h-4 text-[#e3a13a]" />
                               가사 언어 추가
                             </h3>
                           </div>
-                          {isAddingLyricsLanguage && addingLyricsLanguageTarget ? renderLyricsGenerationProgress(addingLyricsLanguageTarget) : <div data-soridraw-selectable-text="true" className="flex-1 p-6 overflow-y-auto custom-scrollbar flex flex-col justify-center gap-4">
+                          {addingFirstLanguage && addingLyricsLanguageTarget ? renderLyricsGenerationProgress(addingLyricsLanguageTarget) : <div data-soridraw-selectable-text="true" className="flex-1 p-6 overflow-y-auto custom-scrollbar flex flex-col justify-center gap-4">
                             <div className="text-center space-y-2">
                               <p className="text-sm font-bold text-[var(--text-primary)]">다른 언어 가사가 필요해?</p>
                               <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
@@ -22678,9 +22772,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         if (!lyricsText) return null;
                         const label = lyricLanguageLabels[lang]?.ko || lang;
                         const copyType = `lyrics-${lang}`;
+                        const cardBusy = generationIsForCurrentSong && (recentSongRegeneratingTarget === `lyrics-${lang}` || (isAddingLyricsLanguage && replacingLyricsLanguage === lang));
 
                         return (
-                          <div key={lang} className="soridraw-result-lyrics-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col group/lyrics shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-colors duration-150">
+                          <div key={lang} aria-busy={cardBusy} className="relative soridraw-result-lyrics-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col group/lyrics shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-colors duration-150">
+                            {cardBusy && renderLyricGenerationGlow()}
                             <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                               <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                                 <Music className="w-4 h-4 text-[#e3a13a]" />
@@ -22699,7 +22795,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                   className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-btn disabled:opacity-50 disabled:cursor-not-allowed"
                                   title={`${label} 가사 다시 생성`}
                                 >
-                                  {recentSongRegeneratingTarget === `lyrics-${lang}` ? <Loader2 className="w-5 h-5 animate-spin opacity-90" /> : <RefreshCw className="w-5 h-5 opacity-80" />}
+                                  <RefreshCw className="w-5 h-5 opacity-80" />
                                 </button>
                                 {renderRecentSongInlineEditActions('lyrics', `edit-${copyType}`, `${label} 가사 수정`, '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'section')}
                                 <button
@@ -22717,7 +22813,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                               {lang !== 'ko' && <button type="button" className="flex items-center gap-1.5 rounded-xl bg-[#e3a13a]/10 px-3 py-2 text-xs font-bold text-[#e3a13a] hover:bg-[#e3a13a]/20 disabled:opacity-40" disabled={isAddingLyricsLanguage || Boolean(recentSongRegeneratingTarget) || Boolean(recentSongInlineEditMode)} onClick={() => setLyricsLanguageChange({lang,songKey:buildRecentSongSyncKey(result)})}><Languages className="h-4 w-4" />언어 변경</button>}
                               {(result as any).__recentSongHistoryIncomplete === true ? <span className="text-xs text-[var(--text-secondary)]">이력 동기화 중</span> : renderRecentSongLocalVersionButtons(`lyrics-${lang}` as RecentSongLocalVersionTarget,'section')}
                             </div>
-                            {isAddingLyricsLanguage && addingLyricsLanguageTarget && replacingLyricsLanguage === lang ? renderLyricsGenerationProgress(addingLyricsLanguageTarget) : recentSongRegeneratingTarget === `lyrics-${lang}` ? renderLyricsGenerationProgress(lang) : <div data-soridraw-selectable-text="true" className="soridraw-result-lyrics-scroll flex-1 p-5 sm:p-8 overflow-y-scroll custom-scrollbar flex flex-col items-center h-full">
+                            <div data-soridraw-selectable-text="true" className="soridraw-result-lyrics-scroll flex-1 p-5 sm:p-8 overflow-y-scroll custom-scrollbar flex flex-col items-center h-full">
                               {isRecentSongSectionEditing('lyrics') && recentSongEditDraft ? (
                                 <textarea
                                   value={getRecentSongLyricsDraftValue(lang)}
@@ -22734,7 +22830,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                   <div className="flex-1" />
                                 </>
                               )}
-                            </div>}
+                            </div>
                           </div>
                         );
                       };

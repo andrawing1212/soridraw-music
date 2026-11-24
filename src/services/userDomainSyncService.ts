@@ -1,6 +1,7 @@
 import { onAuthStateChanged } from 'firebase/auth';
 import { onValue, ref, runTransaction, set, type Unsubscribe } from 'firebase/database';
 import { auth, realtimeDb } from '../firebase';
+import { hasRecentSongsCacheRecoveryFence } from '../lib/recentSongsSyncGate';
 import { projectCatalogItemForSync, rememberMusicNoteMediaPreview, scheduleCatalogSnapshotPublishIfDirty, readCatalogSnapshotFromLocalCache } from '../lib/userDataEngine';
 import { rememberLibraryColorReceipts } from '../lib/libraryColorReceipts';
 import { readColorPending } from '../lib/colorPendingOutbox';
@@ -1003,7 +1004,7 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
     // after attaching an origin may hide older canonical changes to other songs.
     // Save a distinct bounded gap token, not a canonical version or ACK.
     if (initialRetained) rememberRecentSongsRetainedDraftGap460(uid, signal.version);
-  } else if (signal.originDeviceId === getDeviceId('recentSongs') && !initialRetained) {
+  } else if (signal.originDeviceId === getDeviceId('recentSongs') && !initialRetained && !hasRecentSongsCacheRecoveryFence(uid)) {
     // A live ACK of our own confirmed write is safe. A retained old own-device
     // signal is not proof of complete membership after offline changes.
     // Recent-song writes save the aggregate document before this mirror fires.

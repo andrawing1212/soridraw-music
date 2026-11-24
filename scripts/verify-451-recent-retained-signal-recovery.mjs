@@ -97,7 +97,8 @@ assert.equal(needsRead(afterFailedStore),true,
 
 assert.match(rtdb, /if \(initialRetained\) rememberRecentSongsRetainedDraftGap460\(uid, signal\.version\)/);
 assert.match(app, /const unverifiedRetainedGap = needsRecentSongsRetainedDraftGapRead460\(/);
-assert.match(app, /const needsServerRead = unverifiedRetainedGap \|\| needsRecentSongsServerRead\(/);
+assert.match(app, /const needsServerRead = hasRecentSongsCacheRecoveryFence\(user.uid\) \|\| unverifiedRetainedGap \|\| needsRecentSongsServerRead\(/,
+ 'quota recovery must add a canonical-read fence without removing the retained-gap or existing read gate');
 assert.match(app, /if \(cachedSuccessfully && retainedGapAtRead > 0\) \{\s*verifyRecentSongsRetainedDraftGap460\(user\.uid, retainedGapAtRead\)/);
 const versionGuardSource = app.match(/if \(cachedSuccessfully && documentVersion > 0\) \{[\s\S]{0,700}writeRecentSongsLocalVersion\(user\.uid, documentVersion\);[\s\S]{0,15}\}/)?.[0];
 assert.ok(versionGuardSource, 'must persist recovered B before recording canonical version');

@@ -6,8 +6,7 @@ const token=process.env.CLOUDFLARE_API_TOKEN;
 if(process.env.GITHUB_ACTIONS!=='true'||process.env.GITHUB_REPOSITORY!=='andrawing1212/soridraw-music'||!token)throw Error('APP795_SCOPE');
 const targets=[
  ['soridraw-explore-preview','cfd40718-6ab5-4133-bdb2-fa69332d6810',[
-  ['preview-entry.mjs','1692f74fe9c38f38a66b5669a5f3d03540f34225ef94a7f4badd65af5c0eb18a',['handleFollowOverlay354','orchestrateFollowOverlay354','completeFollowIntent354','mutateFollowOverlayRelation350','readFollowStateSnapshot354','repairFollowProfile354']],
-  ['owner-follow-entry-607.mjs','94d96147c57d741362935b3742e5d582174c387d671a0eaa3e9c9cdf6a8f7b91',['OwnerFollowReplayEntrypoint607']]]],
+  ['owner-follow-entry-607.mjs','94d96147c57d741362935b3742e5d582174c387d671a0eaa3e9c9cdf6a8f7b91',['defaultWorker']]]],
  ['soridraw-owner-follow-preview-candidate','1e987bc3-36d3-4bb0-861f-4df17f536592',[
   ['worker.js','76c9d6df31bac01ceeaac1d171d0701621fac751a5017df19c6f8280e4c5c4d9',['OwnerFollowerStandalone600','handleOwnerWorker600']]]]
 ];
@@ -32,7 +31,7 @@ for(const [name,id,modules] of targets){
   // Restrict output to selected declarations and their callsites. Do not
   // output full modules, configuration, bindings, or arbitrary literals.
   for(const symbol of names){
-   const decl=lines.flatMap((line,i)=>new RegExp('^\\s*(?:(?:export|async)\\s+)*(?:function|class)\\s+'+symbol+'\\b').test(line)?[i]:[]);
+   const decl=lines.flatMap((line,i)=>symbol==='defaultWorker'?(/^export default \{/.test(line)?[i]:[]):symbol==='OwnerFollowerStandalone600'?(/^\s*(?:var|let|const) OwnerFollowerStandalone600 = class\b/.test(line)?[i]:[]):new RegExp('^\\s*(?:(?:export|async)\\s+)*(?:function|class)\\s+'+symbol+'\\b').test(line)?[i]:[]);
    if(decl.length!==1)throw Error('APP795_DECL_COUNT_'+symbol);
    const start=decl[0],indent=lines[start].match(/^\s*/)[0];
    let end=start+1;while(end<lines.length&&lines[end]!==indent+'}'&&lines[end]!==indent+'};')end++;

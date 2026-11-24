@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os';
 import {join,dirname} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {verifyActiveOwnerConnection797} from './verify-797-active-owner-connection.mjs';
+import {stageInactiveProductionConnection797} from './app797-stage-inactive-connection.mjs';
 const token=process.env.CLOUDFLARE_API_TOKEN;
 if(process.env.GITHUB_ACTIONS!=='true'||process.env.GITHUB_REPOSITORY!=='andrawing1212/soridraw-music'||!token)throw Error('APP797_SCOPE');
 const base='https://api.cloudflare.com/client/v4/accounts/e1a30fc9ef497fda1d34f4ab3dc1da45/';
@@ -79,5 +80,8 @@ try{
  if(!canProvision)console.log('APP797_HOLD_EXISTING_BRIDGE_CAPABILITY_SOURCE_UNAVAILABLE');
  else console.log('APP797_HOLD_EXISTING_BRIDGE_CAPABILITY_MATCH_NOT_YET_PROVEN');
  console.log('APP797_EXACT_ACTIVE_SOURCE_AND_ISOLATED_RUNTIME=PASS;DEPLOY=0;CLOUD_WRITE=0');
+ if(process.env.APP797_STAGE_INACTIVE_CONNECTION==='1'){
+  await stageInactiveProductionConnection797({folder,ownerSource,pins,get,active,base,token});
+ }
 }finally{rmSync(folder,{recursive:true,force:true})}
 await Promise.all(Object.values(pins).map(active));

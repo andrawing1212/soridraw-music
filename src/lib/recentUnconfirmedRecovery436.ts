@@ -170,3 +170,26 @@ export const appendRecentLyricVersion = (history: unknown, lane: LyricHistoryLan
   assertRecentLyricHistoryBudget(out);
   return out;
 };
+
+// A device-local reading cursor never changes the persisted history's selectedId.
+// The current live text is also reachable when it has been manually edited.
+export type RecentLyricLocalViewEntry = { id: string | null; lang: string; text: string; title: string };
+export const resolveRecentLyricLocalView = (
+  lane: LyricHistoryV1[LyricHistoryLane] | undefined,
+  current: Pick<LyricHistoryEntry,'lang'|'text'|'title'>,
+  cursor?: string,
+) => {
+  const entries: RecentLyricLocalViewEntry[] = (lane?.entries || []).map(x => ({id:x.id,lang:x.lang,text:x.text,title:x.title}));
+  let canonicalIndex = entries.findIndex(x => x.id === lane?.selectedId && sameLyricVersionContent(x,current));
+  if (canonicalIndex < 0) canonicalIndex = entries.findIndex(x => sameLyricVersionContent(x,current));
+  if (canonicalIndex < 0) { canonicalIndex = entries.length; entries.push({...current,id:null}); }
+  const cursorIndex = cursor ? entries.findIndex(x => x.id === cursor) : -1;
+  const index = cursorIndex >= 0 ? cursorIndex : canonicalIndex;
+  return {entries,index,canonicalIndex,entry:entries[index],historical:index !== canonicalIndex};
+};
+export const stepRecentLyricLocalView = (view: ReturnType<typeof resolveRecentLyricLocalView>, direction: 'prev'|'next') => {
+  const index = view.index + (direction === 'prev' ? -1 : 1);
+  if (index < 0 || index >= view.entries.length) return undefined;
+  return {cursor:index === view.canonicalIndex ? null : view.entries[index].id};
+};
+export const recentLyricCursorKey = (uid:string,songKey:string,lane:LyricHistoryLane) => JSON.stringify([uid,songKey,lane]);

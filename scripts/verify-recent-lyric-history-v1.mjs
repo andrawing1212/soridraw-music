@@ -67,3 +67,25 @@ assert.match(app,/persistLyricHistoryLocallyOrExactly\(latestSong,nextSong,sourc
 assert.match(app,/persistLyricHistoryLocallyOrExactly\(source,nextSong,user.uid,'regenerate'\)/);
 assert.match(app,/persistLyricHistoryLocallyOrExactly\(latest,nextSong,user.uid,'add-lyrics-language'\)/);
 console.log('LOCAL_QUOTA_EXACT_FALLBACK_AND_RECOVERY_FENCE=PASS');
+
+const {resolveRecentLyricLocalView,stepRecentLyricLocalView,recentLyricCursorKey}=await load('src/lib/recentUnconfirmedRecovery436.ts');
+const original=JSON.stringify(archive);
+const current={lang:'fr',text:'French',title:'fr'};
+let aView=resolveRecentLyricLocalView(archive.foreign,current), bView=resolveRecentLyricLocalView(archive.foreign,current);
+for(let i=0;i<40;i++){const step=stepRecentLyricLocalView(aView,'prev'); if(step)aView=resolveRecentLyricLocalView(archive.foreign,current,step.cursor||undefined);}
+assert.equal(aView.entry.id,'a');assert.equal(bView.entry.id,'d');assert.equal(JSON.stringify(archive),original);
+assert.notEqual(recentLyricCursorKey('a','song','ko'),recentLyricCursorKey('b','song','ko'));
+assert.notEqual(recentLyricCursorKey('a','song','ko'),recentLyricCursorKey('a','song','foreign'));
+assert.notEqual(recentLyricCursorKey('a','song','ko'),recentLyricCursorKey('a','song2','ko'));
+const manual=resolveRecentLyricLocalView(archive.foreign,{...current,text:'manual edit'});
+assert.equal(manual.entry.text,'manual edit');assert.equal(manual.entries.length,5);
+assert.equal(resolveRecentLyricLocalView(archive.foreign,current,'missing').entry.id,'d');
+const navBlock=app.slice(app.indexOf("if (target !== 'title') {",app.indexOf('const handleNavigateRecentSongLocalVersion')),app.indexOf('const key = getRecentSongLocalVersionKey(activeSong, target);',app.indexOf('const handleNavigateRecentSongLocalVersion')));
+assert.match(navBlock,/setLocalLyricCursor\(key,step.cursor\)/);
+assert.doesNotMatch(navBlock,/prepareLyricEdit|persistLyricHistoryLocallyOrExactly|queueRecentSongTextWrite|setResult\(|setHistory\(|await |fetch\(|runTransaction|publishRecentSong/);
+assert.match(app,/historical \? localView.entry.text/);
+assert.match(app,/applyViewedLyricVersion\(lang\)/);
+const css=read('src/components/studio/studioLayout.css');
+assert.match(css,/\.soridraw-result-lyrics-card\[aria-busy="true"\]::after/);
+assert.match(css,/grid-template-columns: minmax\(0,1fr\) auto minmax\(0,1fr\)/);
+console.log('LYRIC_LOCAL_BROWSE_ZERO_NETWORK_AND_DEVICE_ISOLATION=PASS; REAL_DEVICE_REQUIRED');

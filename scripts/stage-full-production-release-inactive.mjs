@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 const account='https://api.cloudflare.com/client/v4/accounts/e1a30fc9ef497fda1d34f4ab3dc1da45/';
 const PRE='soridraw-explore-preview',PRO='soridraw-explore-api';
 const PIN={
- [PRE]:'cfd40718-6ab5-4133-bdb2-fa69332d6810',
+ [PRE]:'87ee8915-fe13-4715-88d3-0f5d1dd10ee3',
  [PRO]:'5313d378-351b-412c-b1d9-a7e6e9eb23fa',
  'soridraw-explore-test':'ddd2255a-75cc-4db9-8905-b47338558cb0',
  'soridraw-owner-follow-preview-candidate':'c71d7c12-ace4-4405-ab1a-d8c651c90559',
@@ -34,11 +34,11 @@ async function protectedPins(){
  }
 }
 export async function stageFullRelease({a,b,mods}){
- guard(process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REPOSITORY==='andrawing1212/soridraw-music'&&process.env.GITHUB_ACTOR===process.env.GITHUB_REPOSITORY_OWNER&&process.env.GITHUB_REF==='refs/heads/prep/full-preview-production-parity'&&process.env.GITHUB_EVENT_NAME==='push'&&process.env.GITHUB_RUN_ATTEMPT==='1'&&process.env.FULL_RELEASE_STAGE_INACTIVE==='1'&&execFileSync('git',['rev-parse','HEAD^'],{encoding:'utf8'}).trim()==='99998565aa46cd53e80025701ced1aaa2950e6fc','SCOPE');
+ guard(process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REPOSITORY==='andrawing1212/soridraw-music'&&process.env.GITHUB_ACTOR===process.env.GITHUB_REPOSITORY_OWNER&&process.env.GITHUB_REF==='refs/heads/prep/full-production-repaired-inactive'&&process.env.GITHUB_EVENT_NAME==='push'&&process.env.GITHUB_RUN_ATTEMPT==='1'&&process.env.FULL_RELEASE_STAGE_INACTIVE==='1'&&execFileSync('git',['rev-parse','HEAD^'],{encoding:'utf8'}).trim()==='4815c5063d21e56664df44aecf5073591384099c','SCOPE');
  guard(token&&ft,'EXISTING_AUTH');
- // Explicit fail-closed fence until a separately approved shared backend
- // activation proves the repaired scheduler is active. Do not bypass it.
- throw Error('FULL_RELEASE_STAGE_HOLD_SHARED_SCHEDULER_REPAIR_NOT_ACTIVATED');
+ // Previously blocked until the approved shared repair was live. Require exact
+ // deployed source and active version from #45450634562, not a bypass flag.
+ guard(a.id===PIN[PRE]&&sha(a.source.find(x=>x.name==='preview-entry.mjs')?.content||'')==='68783e7b7367261001b429291356326843db9248d9a3def6781f04c1cac9358e','SHARED_SCHEDULER_REPAIR_ACTIVE_PROOF');
  await protectedPins();
  const [pa,pb]=await Promise.all([api('workers/scripts/'+PRE+'/schedules'),api('workers/scripts/'+PRO+'/schedules')]);
  guard(isDeepStrictEqual(pa.schedules?.map(x=>x.cron),['37 * * * *'])&&pb.schedules?.length===0,'EXACT_SCHEDULES');
@@ -48,7 +48,17 @@ export async function stageFullRelease({a,b,mods}){
  for(const n of ['DB','PROFILE_MEDIA'])guard(isDeepStrictEqual(bind(a,n),bind(b,n)),'CANONICAL_'+n);
  const shared=bind(a,'EXPLORE_LIKE_BATCH_SCHEDULER'),legacy=bind(b,'EXPLORE_LIKE_BATCH_SCHEDULER');
  guard(shared?.namespace_id==='186f808d1e4c4dffb2320ff2ad737388'&&legacy?.namespace_id==='730132f063f44332afc10d940a5f3118'&&shared.class_name==='ExploreLikeBatchScheduler103'&&legacy.class_name===shared.class_name,'QUEUE_NAMESPACE');
- guard(sha(mods.get('production-main.mjs'))==='fb6cf9218097e731fa6a4a26216c0fc68ce8e803c1478dd32c909bb3e70665e3','PASSED_CORE');
+ guard(sha(mods.get('production-main.mjs'))==='19d5e6d8a9d1dff6ce45c2498d2194abddb409f6fb8679539f35c752eca7a149','PASSED_CORE');
+ // Reuse prior inactive version evidence and require only the two intended
+ // module changes relative to it. No unrelated wrapper or dependency drift.
+ const priorId='c8c528df-008c-4eba-95f9-26952dabe0bc';
+ const [priorMeta,priorCode]=await Promise.all([api('workers/scripts/'+PRO+'/versions/'+priorId),api('workers/workers/'+PRO+'/versions/'+priorId+'?include=modules')]);
+ guard(priorMeta.id===priorId&&priorMeta.resources?.bindings?.length===27&&sameStagedWorkerRuntime660(b.runtime,priorMeta.resources?.script_runtime),'PRIOR_INACTIVE_METADATA');
+ const priorModules=new Map(priorCode.modules?.map(x=>[x.name,sha(Buffer.from(x.content_base64,'base64'))]));
+ guard(priorModules.size===mods.size&&[...mods.keys()].every(x=>priorModules.has(x)),'PRIOR_MODULE_INVENTORY');
+ const changed=[...mods].filter(([n,s])=>sha(s)!==priorModules.get(n)).map(([n])=>n).sort();
+ guard(isDeepStrictEqual(changed,['production-main.mjs','release-shared-like-scheduler.mjs']),'UNRELATED_CANDIDATE_MODULE_CHANGE');
+ console.log('FULL_RELEASE_CANDIDATE_ONLY_VERIFIED_CORE_AND_ADAPTER_CHANGED=PASS');
  const names=['privateLikeFinalReceipt416Candidate','publicLikeRelease416Candidate','publicationRelease431Candidate','publicLikeWindowConfig448Candidate'];
  const base='https://cloudfunctions.googleapis.com/v2/projects/soridraw-app-866a5/locations/asia-northeast3/functions/';
  for(const name of names){
@@ -101,6 +111,11 @@ export async function stageFullRelease({a,b,mods}){
  guard(sameStagedWorkerRuntime660(b.runtime,m.resources?.script_runtime),'RUNTIME');
  guard(code.modules?.length===modules.length,'MODULE_COUNT');
  for(const x of modules){const y=code.modules.find(v=>v.name===x.name);guard(y&&sha(Buffer.from(y.content_base64,'base64'))===sha(Buffer.from(x.content_base64,'base64')),'MODULE_'+x.name)}
+ const priorBindings=new Map(priorMeta.resources.bindings.map(x=>[x.name,x]));
+ guard(rows.every(x=>isDeepStrictEqual(x,priorBindings.get(x.name))),'PRIOR_INACTIVE_BINDING_DRIFT');
  await protectedPins();
+ const [afterPre,afterProd]=await Promise.all([api('workers/scripts/'+PRE+'/schedules'),api('workers/scripts/'+PRO+'/schedules')]);
+ guard(isDeepStrictEqual(afterPre.schedules,pa.schedules)&&isDeepStrictEqual(afterProd.schedules,pb.schedules),'SCHEDULE_POSTFLIGHT');
+ console.log('FULL_RELEASE_ACTIVE_TRAFFIC_AND_SCHEDULES_UNCHANGED=PASS');
  console.log(JSON.stringify({status:'FULL_RELEASE_INACTIVE_EXACT_CANDIDATE_READY',version:id,rollback:b.id,bindings:rows.length,legacyNamespacePreserved:true,sharedExistingNamespaceVerified:true,oldLiveTrafficUnchanged:true,previewTestMediaOwnerUnchanged:true,newNamespace:false,secretRotation:false,hostingChanged:false,userWrites:0,activationAuthorized:false}));
 }

@@ -3,6 +3,7 @@
 // Do not use the owner's private ownerFollowerSync532 signal for visitors.
 import {onValue,ref as databaseRef,type Unsubscribe} from 'firebase/database';
 import {auth,realtimeDb} from '../firebase';
+import {mayListenToPublicFollowHost797} from '../lib/ownerFollowCanaryTab634';
 import {normalizePublicProfileFollow668,acceptPublicProfileFollow668,
  type PublicProfileFollowSignal668} from './explorePublicFollowCore668';
 
@@ -17,7 +18,7 @@ export const subscribePublicProfileFollow668=(
  // All non-PREVIEW hosts and current deployed clients stay OFF until a
  // separately verified shared-server activation. No initial RTDB read.
  if(!PUBLIC_FOLLOW_VISITOR_668_ENABLED||
-    typeof window==='undefined'||window.location.hostname!=='preview.soridraw.com'||
+    typeof window==='undefined'||!mayListenToPublicFollowHost797(window.location.hostname)||
     !UID.test(profileUid)||auth.currentUser===null)return ()=>{};
  const principal=auth.currentUser;
  let seen:PublicProfileFollowSignal668|null=null;

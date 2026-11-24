@@ -6,7 +6,7 @@ import {onCall,HttpsError} from 'firebase-functions/v2/https';
 import {defineSecret} from 'firebase-functions/params';
 import {getAuth,type Auth} from 'firebase-admin/auth';
 import {getFirestore,type Firestore} from 'firebase-admin/firestore';
-import {ownerFollowScope653,isPreviewOwnerEnrollmentOrigin653} from './ownerFollowScope653';
+import {ownerFollowScope653,isPreviewOwnerEnrollmentOrigin653,isProductionOwnerEnrollmentOrigin797} from './ownerFollowScope653';
 import {
  enrollOwnerFollowEpoch534,readOwnerFollowLifecycleState534,
 } from './ownerFollowLifecycle534';
@@ -96,7 +96,8 @@ export const enrollOwnerFollow544Candidate=onCall({
  // (enforceAppCheck:true above) and exact browser host. No page-entry writes:
  // the client attempts enrollment once only when its token has no epoch.
  if(scope.general &&
-    !isPreviewOwnerEnrollmentOrigin653(request.rawRequest?.get('origin')))
+    !isPreviewOwnerEnrollmentOrigin653(request.rawRequest?.get('origin'))&&
+    !isProductionOwnerEnrollmentOrigin797(request.rawRequest?.get('origin'),process.env))
   throw new HttpsError('permission-denied','PREVIEW_ORIGIN_REQUIRED');
  if(scope.canaryUid!==undefined&&request.auth.uid!==scope.canaryUid)
   throw new HttpsError('permission-denied','OWNER_FOLLOW_CANARY_ONLY');

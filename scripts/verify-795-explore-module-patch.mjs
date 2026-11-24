@@ -38,3 +38,34 @@ assert.equal(old,2);assert.equal(alarms,1);
 assert(canonicalAppend.includes('admittedPrecondition=null'));
 console.log('APP795_CANONICAL_INTENT_RELATION_RECOVERY_FAIL_CLOSED=PASS');
 console.log('APP795_PRIVATE_ALARM_ROUTE_LEGACY_OFF_PRESERVED=PASS');
+
+ // APP796: actual appended recovery function, with in-memory R2/D1 boundary.
+ const rec={actorUid:'actor',ownerUid:'owner',cutoverToken:'token',canonicalOperationId:'operation',operationId:'receipt',desired:true};
+ const op={id:'operation',actor:'actor',target:'owner',token:'token',following:true,expectedRevision:0,revision:5,settled:false,ownerFollowReservation795:rec};
+ const runRecovery=async(mode)=>{
+  let writes=0,invalidations=0,reads=0,settled=false;
+  const state=(uid)=>({object:{etag:uid+'-etag'},sync:{token:'token',exact:true,pending:{operation:structuredClone(op)}}});
+  const states={actor:state('actor'),owner:state('owner')};
+  if(mode==='foreign')states.owner.sync.pending.other={id:'other'};
+  const env={PROFILE_MEDIA:{put:async(key,value,options)=>{
+   assert.equal(key,'pair');assert.equal(options.onlyIf.etagMatches,'pair-etag');
+   assert.equal(JSON.parse(value).settled,true);writes++;settled=true;return {etag:'settled'};
+  }}};
+  const scope=vm.createContext({app795WriterEnabled:()=>true,immutableApp795Receipt,
+   readFollowCutoverState348:async()=>({mode:'overlay348',readOnly:false,cutoverToken:'token'}),
+   readFollowIntent354:async()=>({key:'pair',object:{etag:'pair-etag'},value:mode==='missing'?null:structuredClone(op)}),
+   requireApp795WriterFence:async()=>{if(mode==='denied')throw Error('denied')},
+   readEffectiveFollowMembership348:async()=>({following:true,override:{mutationId:mode==='uncommitted'?'other':'operation',updatedAt:5}}),
+   readFollowProfile354:async(e,uid)=>structuredClone(states[uid]),
+   readExactEffectiveFollowCounts351:async()=>{reads++;return {followerCount:1,followingCount:1}},
+   saveFollowProfile354:async(e,s,sync)=>{if(mode==='cas')return null;writes++;const uid=s.object.etag.split('-')[0];states[uid].sync=sync;return {etag:'next'}},
+   invalidateFollowProfiles355:async()=>{invalidations++}
+  });
+  const src=canonicalAppend.slice(canonicalAppend.indexOf('async function recoverApp796CommittedCanonical'));
+  vm.runInContext(src+'\nglobalThis.recover=recoverApp796CommittedCanonical',scope);
+  return {result:await scope.recover({env,reservation:rec}),writes,reads,settled,invalidations};
+ };
+ assert.deepEqual(await runRecovery('committed'),{result:true,writes:3,reads:2,settled:true,invalidations:1});
+ for(const mode of ['foreign','uncommitted','missing','denied'])assert.deepEqual(await runRecovery(mode),{result:false,writes:0,reads:0,settled:false,invalidations:0});
+ assert.deepEqual(await runRecovery('cas'),{result:false,writes:0,reads:1,settled:false,invalidations:0});
+ console.log('APP796_EXACT_COMMITTED_RECOVERY_WITHOUT_RELATION_REWRITE=PASS');

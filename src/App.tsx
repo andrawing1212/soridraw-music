@@ -16486,6 +16486,7 @@ ${normalizePromptForDisplay(result.prompt)}
     return { id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : at + '-' + Math.random().toString(36).slice(2), at, lang, text, title };
   };
   const readLyricLane = (song: SongResult, lang: LanguageCode) => {
+    if ((song as any).__recentSongHistoryIncomplete === true) return undefined;
     try { return readRecentLyricHistory(song.lyricGenerationHistoryV1)[lyricHistoryLane(song,lang)]; }
     catch { return undefined; }
   };
@@ -16497,7 +16498,10 @@ ${normalizePromptForDisplay(result.prompt)}
     const history = appendRecentLyricVersion(before.lyricGenerationHistoryV1,lane,
       oldLang ? lyricHistoryEntry(before,oldLang,Math.min(at-1,Number((before.appliedKeywords as any)?.editedInStudioAt || before.updatedAt || before.createdAt || 0))) : null,item);
     const next = { ...after, lyricGenerationHistoryV1: history, updatedAt: at, appliedKeywords: { ...after.appliedKeywords, editedInStudioAt: at } } as SongResult;
-    assertRecentLyricHistoryBudget(history,historyRef.current.map((row,index) => index === historyIndexRef.current ? next : row));
+    const rows = historyRef.current.map((row,index) => index === historyIndexRef.current ? next : row);
+    assertRecentLyricHistoryBudget(history,rows);
+    if (user?.uid && !saveRecentSongsCache(user.uid,{history:rows,historyIndex:historyIndexRef.current,latestGenerationBatchId:(rows[0]?.appliedKeywords as any)?.generationBatchId || null}))
+      throw new Error('recent-lyric-local-capacity');
     return next;
   };
   const selectLyricHistoryVersion = (song: SongResult, oldLang: LanguageCode, entry: LyricHistoryEntry, history: LyricHistoryV1): SongResult => {
@@ -16519,6 +16523,7 @@ ${normalizePromptForDisplay(result.prompt)}
     };
   };
   const ensureLyricGenerationCapacity = (song: SongResult) => {
+    if ((song as any).__recentSongHistoryIncomplete === true) throw new Error('recent-lyric-history-syncing');
     if (recentLyricBytes(song.lyricGenerationHistoryV1) > 40000 || recentLyricBytes(historyRef.current) > 780000)
       throw new Error('recent-lyric-history-capacity');
   };
@@ -16541,7 +16546,8 @@ ${normalizePromptForDisplay(result.prompt)}
   };
   const lyricGenerationFailureMessage = (error: unknown, fallback: string) => {
     const message = error instanceof Error ? error.message : '';
-    if (message.includes('history-capacity')) return '가사 이력 저장 용량이 부족합니다. 기존 가사는 유지됩니다.';
+    if (message.includes('history-capacity') || message.includes('local-capacity')) return '가사 이력 저장 용량이 부족합니다. 기존 가사는 유지됩니다.';
+    if (message.includes('history-syncing')) return '다른 기기의 가사 이력을 동기화하는 중입니다.';
     if (message.includes('pending-other-song')) return '이전 곡의 저장이 완료되지 않았습니다. 다시 시도해주세요.';
     if (message.includes('song-changed')) return '곡 상태가 변경되었습니다. 다시 시도해주세요.';
     if (message.includes('language-conflict')) return '다른 가사 카드에서 이미 사용하는 언어입니다.';
@@ -16727,6 +16733,7 @@ ${normalizePromptForDisplay(result.prompt)}
       try {
         await prepareLyricEdit(activeSong);
         const latest = latestLyricEditTarget(activeSong,user.uid);
+        if ((latest as any).__recentSongHistoryIncomplete === true) throw new Error('recent-lyric-history-syncing');
         const lang = target.replace(/^lyrics-/, '') as LanguageCode;
         const laneKey = lyricHistoryLane(latest,lang);
         let archive = readRecentLyricHistory(latest.lyricGenerationHistoryV1);
@@ -16745,6 +16752,8 @@ ${normalizePromptForDisplay(result.prompt)}
         const nextSong = selectLyricHistoryVersion(latest,lang,nextEntry,archive);
         const nextHistory = historyRef.current.map((song,index) => index === historyIndexRef.current ? nextSong : song);
         assertRecentLyricHistoryBudget(archive,nextHistory);
+        if (!saveRecentSongsCache(user.uid,{history:nextHistory,historyIndex:historyIndexRef.current,latestGenerationBatchId:(nextHistory[0]?.appliedKeywords as any)?.generationBatchId || null}))
+          throw new Error('recent-lyric-local-capacity');
         resultRef.current = nextSong; historyRef.current = nextHistory;
         setResult(nextSong); setHistory(nextHistory);
         preserveHistoryIndexOnNextSnapshotRef.current = historyIndexRef.current;
@@ -16902,6 +16911,7 @@ ${normalizePromptForDisplay(result.prompt)}
         persistRecentSongsDocument(ref, pending.songs, pending.mutationEpoch, pending.syncItem, row => {
           if (!signalItem?.lyricGenerationHistoryV1) return;
           committedRow = row;
+          for (const key of Object.keys(signalItem)) delete signalItem[key];
           Object.assign(signalItem,row);
         }),
       );
@@ -16915,7 +16925,7 @@ ${normalizePromptForDisplay(result.prompt)}
           historyRef.current = rows; setHistory(rows);
           if (historyIndexRef.current === index) { resultRef.current = reconciled; setResult(reconciled); }
           saveRecentSongsCache(pending.uid,{history:rows,historyIndex:historyIndexRef.current,
-            latestGenerationBatchId: rows[0]?.appliedKeywords?.generationBatchId || null});
+            latestGenerationBatchId: (rows[0]?.appliedKeywords as any)?.generationBatchId || null});
         }
       }
       if (!persistedVersion) {
@@ -16928,6 +16938,8 @@ ${normalizePromptForDisplay(result.prompt)}
       // The same pending payload stays in memory + local cache/marker. A later
       // edit, explicit flush, or reload can retry it without losing the draft.
       console.error('Failed to flush batched recent-song text edits:', error);
+      if (pending.syncItem?.lyricGenerationHistoryV1 && auth.currentUser?.uid === pending.uid)
+        showToast('가사 이력 서버 저장이 완료되지 않았습니다. 기존 기록과 저장 대기 상태를 유지합니다.');
     }
     })();
     recentSongTextFlushInFlightRef.current = task;
@@ -22702,7 +22714,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             </div>
                             <div className="flex flex-wrap items-center justify-center gap-2 px-3 py-1">
                               {lang !== 'ko' && <button type="button" className="flex items-center gap-1.5 rounded-xl bg-[#e3a13a]/10 px-3 py-2 text-xs font-bold text-[#e3a13a] hover:bg-[#e3a13a]/20 disabled:opacity-40" disabled={isAddingLyricsLanguage || Boolean(recentSongRegeneratingTarget) || Boolean(recentSongInlineEditMode)} onClick={() => setLyricsLanguageChange({lang,songKey:buildRecentSongSyncKey(result)})}><Languages className="h-4 w-4" />언어 변경</button>}
-                              {renderRecentSongLocalVersionButtons(`lyrics-${lang}` as RecentSongLocalVersionTarget,'section')}
+                              {(result as any).__recentSongHistoryIncomplete === true ? <span className="text-xs text-[var(--text-secondary)]">이력 동기화 중</span> : renderRecentSongLocalVersionButtons(`lyrics-${lang}` as RecentSongLocalVersionTarget,'section')}
                             </div>
                             {isAddingLyricsLanguage && addingLyricsLanguageTarget && replacingLyricsLanguage === lang ? renderLyricsGenerationProgress(addingLyricsLanguageTarget) : recentSongRegeneratingTarget === `lyrics-${lang}` ? renderLyricsGenerationProgress(lang) : <div data-soridraw-selectable-text="true" className="soridraw-result-lyrics-scroll flex-1 p-5 sm:p-8 overflow-y-scroll custom-scrollbar flex flex-col items-center h-full">
                               {isRecentSongSectionEditing('lyrics') && recentSongEditDraft ? (

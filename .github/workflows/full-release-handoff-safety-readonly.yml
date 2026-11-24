@@ -1,0 +1,69 @@
+name: Full release legacy scheduler safety (read only)
+on:
+  push:
+    branches: [qa/full-release-handoff-safety]
+    paths: ['.github/workflows/full-release-handoff-safety-readonly.yml']
+permissions:
+  contents: read
+jobs:
+  inventory:
+    if: github.repository == 'andrawing1212/soridraw-music' && github.actor == github.repository_owner && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false, fetch-depth: 2}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Read exact legacy scheduler source and flags; no user data or deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "baa7066c6bc117acab8977f64dc9caaef91bd4f2"
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {createHash} from 'node:crypto';
+          const token=process.env.CLOUDFLARE_API_TOKEN;
+          assert(token,'EXISTING_READ_AUTH_REQUIRED');
+          const account='https://api.cloudflare.com/client/v4/accounts/e1a30fc9ef497fda1d34f4ab3dc1da45/';
+          const name='soridraw-explore-api', old='5313d378-351b-412c-b1d9-a7e6e9eb23fa', candidate='c8c528df-008c-4eba-95f9-26952dabe0bc';
+          const get=async path=>{
+            const r=await fetch(account+path,{method:'GET',redirect:'error',headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(20000)});
+            const j=await r.json().catch(()=>null);
+            assert(r.ok&&j?.success===true,'READ_ONLY_GET_'+r.status);
+            return j.result;
+          };
+          const active=async()=>{
+            const d=await get('workers/scripts/'+name+'/deployments?per_page=1');
+            const v=d.deployments?.[0]?.versions;
+            assert(v?.length===1&&v[0].version_id===old&&Number(v[0].percentage)===100,'ACTIVE_DRIFT');
+          };
+          await active();
+          const source=async(id,mod,hash)=>{
+            const r=await get('workers/workers/'+name+'/versions/'+id+'?include=modules');
+            const x=r.modules?.find(m=>m.name===mod);
+            assert(x,'MISSING_PINNED_MODULE');
+            const s=Buffer.from(x.content_base64,'base64').toString('utf8');
+            assert.equal(createHash('sha256').update(s).digest('hex'),hash,'SOURCE_DRIFT');
+            return s;
+          };
+          const legacy=await source(old,'production-main.mjs','8b932f13cbc87652d3e4a28b757e8bc219a3d8dc484fa217857e9b150487406f');
+          const next=await source(candidate,'production-main.mjs','fb6cf9218097e731fa6a4a26216c0fc68ce8e803c1478dd32c909bb3e70665e3');
+          const report=(s,label)=>{
+            const lines=s.split('\n');
+            const classStart=lines.findIndex(l=>/class ExploreLikeBatchScheduler103\b|ExploreLikeBatchScheduler103\s*=\s*class\b/.test(l));
+            assert(classStart>=0,'CLASS_NOT_FOUND_'+label);
+            const region=lines.slice(classStart,classStart+1200);
+            const relevant=region.flatMap((l,i)=>/async (alarm|fetch|runAggregate194|finalizeAggregate195|ensurePublicAlarm416|ensurePendingCuratedAlarm470)\(|storage\.(get|put|delete|transaction|getAlarm|setAlarm|deleteAlarm)\(|(?:PUBLIC_LIKE_WINDOW_KEY_416|CURATED_REPAIR_KEY_468|EXPLORE_LIKE_ACTIVE_SCHEDULE_KEY_194)|releaseDue(?:Common)?PublicLikeWindow|runCuratedRepair468|expectedBatchId418|expectedTrackIds448|scheduledAt:|explore_like_batches_069|publicOnly448|curatedOnlyAlarm469/.test(l)?[{line:classStart+i+1,code:l.trim().slice(0,240)}]:[]).slice(0,95);
+            const flags=lines.flatMap((l,i)=>/^\s*(?:var|const|let)\s+(?:STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE|COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448)\s*=/.test(l)?[{line:i+1,code:l.trim().slice(0,200)}]:[]).slice(0,8);
+            console.log('HANDOFF_PINNED_SOURCE '+JSON.stringify({label,classLine:classStart+1,flags,relevant}));
+          };
+          report(legacy,'old-production'); report(next,'candidate-core');
+          const meta=await get('workers/scripts/'+name+'/versions/'+old);
+          const rows=meta.resources?.bindings||[];
+          const flags=['SORIDRAW_CURATED_WRITER_SHADOW471','SORIDRAW_CURATED_SHARED_V466','SORIDRAW_CURATED_ALL_WRITERS_READY466'];
+          console.log('HANDOFF_CURATED_FLAGS '+JSON.stringify(Object.fromEntries(flags.map(n=>[n,rows.find(x=>x.name===n)?.type==='plain_text'&&rows.find(x=>x.name===n)?.text==='1'?'ON':'NOT_ON']))));
+          await active();
+          console.log('HANDOFF_PINNED_SOURCE_READ=PASS; CLOUD_WRITES=0; LIVE_TRAFFIC_UNCHANGED; QA_RUNTIME_NOT_RUN');
+          NODE

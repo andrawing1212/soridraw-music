@@ -2,7 +2,7 @@
 // Inherit the staged credential values without reading or rotating them.
 // Probe uses a temporary zero-traffic version and malformed reservation:
 // no valid UID/ticket, no DO instantiation, D1/R2/RTDB writes or Auth enrollment.
-import {createHash,randomBytes} from 'node:crypto';
+import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
@@ -24,7 +24,15 @@ const state=join(process.env.RUNNER_TEMP||'/tmp','app797-worker-state.json');
 async function api(method,p,body){
  const res=await fetch(base+p,{method,redirect:'error',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(60000)});
  const j=await res.json().catch(()=>null);
- if(!res.ok||j?.success!==true)hold('HTTP_'+method+'_'+res.status+'_CODE_'+(j?.errors||[]).map(e=>Number(e.code)).filter(Number.isSafeInteger).slice(0,3).join('_'));
+ if(!res.ok||j?.success!==true){
+  // Only deployment errors: payload has version UUIDs and percentages,
+  // not credential values. Keep the provider's actionable error text.
+  if(method==='POST'&&p.endsWith('/deployments')){
+   const msg=(j?.errors||[]).map(e=>String(e.message||'')).join(' | ').slice(0,1000);
+   console.log('APP797_DEPLOYMENT_REJECTION='+JSON.stringify({path:p,versions:body.versions,message:msg}));
+  }
+  hold('HTTP_'+method+'_'+res.status+'_CODE_'+(j?.errors||[]).map(e=>Number(e.code)).filter(Number.isSafeInteger).slice(0,3).join('_'));
+ }
  return j.result;
 }
 async function versions(name){const x=await api('GET','workers/scripts/'+name+'/deployments?per_page=1');need(Array.isArray(x?.deployments?.[0]?.versions),'DEPLOYMENT_MISSING');return norm(x.deployments[0].versions)}
@@ -69,7 +77,7 @@ async function rollback(s){
 const probePath='/internal/app797-connection-probe';
 const origin='https://soridraw.com',url='https://soridraw-explore-api.andrawing1212.workers.dev';
 async function run(){
- need(process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REPOSITORY==='andrawing1212/soridraw-music'&&process.env.GITHUB_ACTOR===process.env.GITHUB_REPOSITORY_OWNER&&process.env.GITHUB_REF==='refs/heads/prep/production-follow-existing-writer'&&process.env.GITHUB_RUN_ATTEMPT==='1'&&execFileSync('git',['rev-parse','HEAD^'],{encoding:'utf8'}).trim()==='e9f6f36c428b93a54af5635bafc0906ca0f64d3e','ONE_TIME_APPROVED_CONTEXT');
+ need(process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REPOSITORY==='andrawing1212/soridraw-music'&&process.env.GITHUB_ACTOR===process.env.GITHUB_REPOSITORY_OWNER&&process.env.GITHUB_REF==='refs/heads/prep/production-follow-existing-writer'&&process.env.GITHUB_RUN_ATTEMPT==='1'&&execFileSync('git',['rev-parse','HEAD^'],{encoding:'utf8'}).trim()==='7001f7ff0fd2f3ae9dc0c45bdb6c1c52278b1f27','ONE_TIME_APPROVED_CONTEXT');
  need(token.length>20,'TOKEN');
  for(const n of Object.keys(active))await check(n,expected(active[n]));
  const [ow,prod]=await Promise.all([snapshot(OW,staged[OW]),snapshot(PROD,staged[PROD])]);
@@ -81,49 +89,32 @@ async function run(){
  }
  need(ow.bindings.length===15&&prod.bindings.length===20,'CANDIDATE_COUNT');
  need(prod.bindings.some(b=>b.name==='OWNER_FOLLOW_RESERVATION_SERVICE_600'&&b.service===OW)&&ow.bindings.some(b=>b.name==='SORIDRAW_OWNER_DO_PRODUCTION_BRIDGE_797'&&b.type==='secret_text')&&prod.bindings.some(b=>b.name==='SORIDRAW_OWNER_DO_BRIDGE_SECRET_600'&&b.type==='secret_text'),'STAGED_CREDENTIAL_BINDINGS');
- const onOwner=await stage(ow,{bindings:[plain(flags[OW],'1')]});
- const onProd=await stage(prod,{bindings:[plain(flags[PROD],'1')]});
- // Only an authenticated, temporary probe can test the real private binding.
- // No reservation is valid: '{}' fails before owner namespace lookup.
- const probeSecret=randomBytes(32).toString('base64url');
- const code=`import original from './entry.mjs';
- export * from './entry.mjs';
- export default {...original,async fetch(request,env,ctx){
-  if(new URL(request.url).pathname!=='${probePath}')return original.fetch.call(original,request,env,ctx);
-  if(request.method!=='POST'||request.headers.get('X-Soridraw-App797-Probe')!==env.APP797_ONE_TIME_PROBE_SECRET)return Response.json({ok:false},{status:403});
-  const send=key=>env.OWNER_FOLLOW_RESERVATION_SERVICE_600.fetch(new Request('https://owner-follow.internal/internal/owner-follow/reserve600',{method:'POST',headers:{'Content-Type':'application/json','X-Soridraw-Owner-Bridge-600':key},body:'{}'}));
-  const invalid=await send('not-a-valid-bridge-key');
-  const matched=await send(env.SORIDRAW_OWNER_DO_BRIDGE_SECRET_600);
-  return Response.json({probe:'app797',invalid:invalid.status,matched:matched.status},{headers:{'Cache-Control':'no-store'}});
- }};`;
- const probe=await stage(onProd,{entry:'probe-entry.mjs',bindings:[{name:'APP797_ONE_TIME_PROBE_SECRET',type:'secret_text',text:probeSecret}],extraModules:[{name:'probe-entry.mjs',content_type:'application/javascript+module',content_base64:Buffer.from(code).toString('base64')}]});
- const s={ownerOn:onOwner.id,prodOn:onProd.id,probe:probe.id};save(s);
- // Before any real traffic shift: enrollment update permission + exact
- // source archive are independently verified by the previous workflow step.
+ // Reuse the exact versions whose private binding and auth denial already
+ // passed in run 45371145323. No new credential or repeat live probe.
+ const [onOwner,provedProd]=await Promise.all([snapshot(OW,'c71d7c12-ace4-4405-ab1a-d8c651c90559'),snapshot(PROD,'a3a3d85c-d519-495b-b5eb-8e87d83ec574')]);
+ for(const [off,on] of [[ow,onOwner],[prod,provedProd]]){
+  const map=new Map(on.bindings.map(x=>[x.name,x]));
+  need(on.bindings.length===off.bindings.length&&map.get(flags[on.name])?.text==='1','PROVEN_ON_BINDING_COUNT');
+  for(const b of off.bindings)if(b.name!==flags[on.name])need(isDeepStrictEqual(b,map.get(b.name)),'PROVEN_BINDING_DRIFT_'+b.name);
+  need(sameStagedWorkerRuntime660(off.runtime,on.runtime),'PROVEN_RUNTIME_DRIFT');
+  need(isDeepStrictEqual(off.modules,on.modules),'PROVEN_SOURCE_DRIFT');
+ }
+ // The previously tested probe was uploaded AFTER the production ON version.
+ // Use a fresh, identical final version (no probe route/secret) so Cloudflare
+ // can validate the actual release candidate at 0% before touching Firebase.
+ const onProd=await stage(provedProd);
+ const s={ownerOn:onOwner.id,prodOn:onProd.id,probe:onProd.id};save(s);
  need(readFileSync(join(process.env.RUNNER_TEMP,'app797-function','before.json'),'utf8').includes('enrollOwnerFollow544Candidate'),'FUNCTION_PREFLIGHT');
  try{
   for(const n of Object.keys(active))await check(n,expected(active[n]));
   await deploy(OW,expected(s.ownerOn));
-  await deploy(PROD,expected(active[PROD],s.probe));
-  let valid=false;
-  for(let i=0;i<3;i++){
-   const response=await fetch(url+probePath,{method:'POST',redirect:'error',headers:{'Cloudflare-Workers-Version-Overrides':PROD+'="'+s.probe+'"','X-Soridraw-App797-Probe':probeSecret},signal:AbortSignal.timeout(20000)});
-   const v=await response.json().catch(()=>null);
-   if(response.status===200&&v?.probe==='app797'&&v.invalid===403&&v.matched===400){valid=true;break}
-   if(i<2)await new Promise(r=>setTimeout(r,2000));
-  }
-  need(valid,'REAL_PRIVATE_CREDENTIAL_PROBE');
-  console.log('APP797_LIVE_PRIVATE_SERVICE_AUTHENTICATION=PASS;INVALID=403;MATCHED_MALFORMED=400;USER_DATA_WRITES=0');
-  // Production traffic remains 100% old while the temporary probe exists.
-  const unauthorized=await fetch(url+'/v1/profiles/SyntheticOwner797/follow',{method:'PUT',redirect:'error',headers:{Origin:origin,'Content-Type':'application/json','Cloudflare-Workers-Version-Overrides':PROD+'="'+s.probe+'"'},body:'{}',signal:AbortSignal.timeout(15000)});
-  need([401,403].includes(unauthorized.status),'PRODUCTION_AUTH_DENIAL_'+unauthorized.status);
-  console.log('APP797_LIVE_ZERO_TRAFFIC_UNAUTHENTICATED_FOLLOW_DENIED=PASS');
-  await deploy(PROD,expected(active[PROD]));
+  await deploy(PROD,expected(active[PROD],s.prodOn));
+  console.log('APP797_FINAL_VERSION_ZERO_TRAFFIC_ACCEPTED;PREVIOUS_LIVE_PRIVATE_AUTH_REUSED');
   await check(EX,expected(active[EX]));await check(TEST,expected(active[TEST]));
   // Shared callable only: source/environment patch, existing Auth/AppCheck,
   // HMAC, lifecycle, permissions and other Functions unchanged.
   execFileSync('python3',['scripts/app797-enrollment-activation.py','apply'],{stdio:'inherit',timeout:1000000});
-  await check(OW,expected(s.ownerOn));await check(PROD,expected(active[PROD]));await check(EX,expected(active[EX]));await check(TEST,expected(active[TEST]));
+  await check(OW,expected(s.ownerOn));await check(PROD,expected(active[PROD],s.prodOn));await check(EX,expected(active[EX]));await check(TEST,expected(active[TEST]));
   await deploy(PROD,expected(s.prodOn));
   await check(EX,expected(active[EX]));await check(TEST,expected(active[TEST]));await check(OW,expected(s.ownerOn));
   const after=await fetch(url+'/v1/profiles/SyntheticOwner797/follow',{method:'PUT',redirect:'error',headers:{Origin:origin,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(15000)});

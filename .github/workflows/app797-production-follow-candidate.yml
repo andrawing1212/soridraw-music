@@ -24,7 +24,7 @@ jobs:
       - name: One-time approved activation source pin
         run: |
           test "$GITHUB_RUN_ATTEMPT" = "1"
-          test "$(git rev-parse HEAD^)" = "e9f6f36c428b93a54af5635bafc0906ca0f64d3e"
+          test "$(git rev-parse HEAD^)" = "7001f7ff0fd2f3ae9dc0c45bdb6c1c52278b1f27"
           node --check scripts/app797-activate-backend.mjs
       - uses: google-github-actions/auth@v2
         with:
@@ -32,7 +32,7 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
       - name: Existing callable exact source and update permission (read-only)
         run: python3 scripts/app797-enrollment-activation.py preflight
-      - name: Staged capability, actual no-data private binding probe, backend-only activation and rollback
+      - name: Reuse proven private connection, final version zero-traffic acceptance and backend-only activation
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: node scripts/app797-activate-backend.mjs

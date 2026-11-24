@@ -22,7 +22,7 @@ import {
   queueMusicNoteFavoriteCountDelta,
   resumeMusicNoteFavoriteCountDelta,
 } from './services/musicNoteFavoriteCountBatch';
-import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck, canAcknowledgeRecentSongsInlineSignal, needsRecentSongsRetainedDraftGapRead460, shouldDeferRecentSongsServerReadForPendingText } from './lib/recentSongsSyncGate';
+import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck, canAcknowledgeRecentSongsInlineSignal, needsRecentSongsRetainedDraftGapRead460, shouldDeferRecentSongsServerReadForPendingText, hasRecentSongsCacheRecoveryFence, markRecentSongsCacheRecoveryFence, stageRecentLyricOrCommitExact } from './lib/recentSongsSyncGate';
 import {useNotificationDots017} from './services/notifications/useNotificationDots017';
 import {projectCompletedExistingGenerations004} from './services/notifications/notificationInbox004';
 import {rememberCompletedGenerationLog016} from './services/notifications/notificationRecentLog016';
@@ -504,6 +504,7 @@ const persistRecentSongsDocument = async (
   expectedMutationEpoch?: number,
   changedTextSong?: any,
   onCommittedTextRow?: (row: any) => void,
+  requireExactTextRow = false,
 ): Promise<number | null> => {
   const uid = String(ref?.id || '').trim();
 
@@ -520,6 +521,7 @@ const persistRecentSongsDocument = async (
     let syncVersion = Math.max(Date.now(), previousVersion + 1);
 
     const editedStableId = changedTextSong ? getLiveSoridrawSongId(changedTextSong) : null;
+    if (requireExactTextRow && (!editedStableId || auth.currentUser?.uid !== uid)) return null;
     if (editedStableId) {
       // A settled 150s text edit modifies only its own canonical row. A
       // different device may have recovered/generated a tenth song while
@@ -531,6 +533,7 @@ const persistRecentSongsDocument = async (
         const stored = snapshot.data() as Record<string, any>;
         const authoritative = stored?.songs;
         if (!Array.isArray(authoritative)) return null;
+        if (requireExactTextRow && auth.currentUser?.uid !== uid) return null;
         if (uid && Number.isFinite(expectedMutationEpoch)
           && Number(expectedMutationEpoch) !== readRecentSongsMutationEpoch(uid)) return null;
         const merged = patchExactRecentTextRow436(
@@ -554,7 +557,7 @@ const persistRecentSongsDocument = async (
     markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
 
     if (!uid) return syncVersion;
-    writeRecentSongsLocalVersion(uid, syncVersion);
+    if (!hasRecentSongsCacheRecoveryFence(uid)) writeRecentSongsLocalVersion(uid, syncVersion);
 
     try {
       await updateDoc(doc(db, 'users', uid), { 'syncVersions.recentSongs': syncVersion });
@@ -13815,7 +13818,7 @@ const unlockAllFavorites = async () => {
       // legitimately empty account in the same signed-in session.
       const hasVerifiedVisibleCache = Boolean(latestCache?.history?.length)
         || Boolean(latestCache && recentSongsSessionVerifiedUids.has(user.uid));
-      const needsServerRead = unverifiedRetainedGap || needsRecentSongsServerRead({
+      const needsServerRead = hasRecentSongsCacheRecoveryFence(user.uid) || unverifiedRetainedGap || needsRecentSongsServerRead({
         hasLocalCache: hasVerifiedVisibleCache,
         profileVersion: remoteVersion,
         localDocumentVersion: localVersion,
@@ -14154,7 +14157,7 @@ const unlockAllFavorites = async () => {
         return;
       }
 
-      if (canAcknowledgeRecentSongsInlineSignal({
+      if (!hasRecentSongsCacheRecoveryFence(user.uid) && canAcknowledgeRecentSongsInlineSignal({
         itemApplied: itemResult.applied,
         itemPersisted: itemResult.cachedSuccessfully,
         itemPartial: itemResult.partial,
@@ -14236,7 +14239,7 @@ const unlockAllFavorites = async () => {
       // Canonical transaction has committed. Only now acknowledge original
       // generated IDs, then send the normal single changed-domain signal.
       acknowledgeRecentGeneratedSongs(uid, recovered.songs);
-      writeRecentSongsLocalVersion(uid, recovered.syncVersion);
+      if (!hasRecentSongsCacheRecoveryFence(uid)) writeRecentSongsLocalVersion(uid, recovered.syncVersion);
       await runV1MutationBoundary({
         domain: 'recent', operation: 'save-batch', uid,
         affectedCount: recovered.recovered.length,
@@ -16501,8 +16504,6 @@ ${normalizePromptForDisplay(result.prompt)}
     const next = { ...after, lyricGenerationHistoryV1: history, updatedAt: at, appliedKeywords: { ...after.appliedKeywords, editedInStudioAt: at } } as SongResult;
     const rows = historyRef.current.map((row,index) => index === historyIndexRef.current ? next : row);
     assertRecentLyricHistoryBudget(history,rows);
-    if (user?.uid && !saveRecentSongsCache(user.uid,{history:rows,historyIndex:historyIndexRef.current,latestGenerationBatchId:(rows[0]?.appliedKeywords as any)?.generationBatchId || null}))
-      throw new Error('recent-lyric-local-capacity');
     return next;
   };
   const selectLyricHistoryVersion = (song: SongResult, oldLang: LanguageCode, entry: LyricHistoryEntry, history: LyricHistoryV1): SongResult => {
@@ -16549,6 +16550,7 @@ ${normalizePromptForDisplay(result.prompt)}
     const message = error instanceof Error ? error.message : '';
     if (message.includes('history-capacity')) return '가사 이력 저장 한도에 도달했습니다. 기존 가사는 유지됩니다.';
     if (message.includes('local-capacity')) return '브라우저에 새 가사를 저장하지 못했습니다. 기존 가사는 유지됩니다.';
+    if (message.includes('exact-save-failed')) return '새 가사의 서버 저장이 완료되지 않았습니다. 기존 가사는 유지됩니다.';
     if (message.includes('empty-regenerated-lyrics') || message.includes('empty-translated-lyrics') || message.includes('empty-lyric-version')) return '새 가사를 받지 못했습니다. 기존 가사는 유지됩니다.';
     if (message.includes('history-syncing')) return '다른 기기의 가사 이력을 동기화하는 중입니다.';
     if (message.includes('pending-other-song')) return '이전 곡의 저장이 완료되지 않았습니다. 다시 시도해주세요.';
@@ -16755,8 +16757,8 @@ ${normalizePromptForDisplay(result.prompt)}
         const nextSong = selectLyricHistoryVersion(latest,lang,nextEntry,archive);
         const nextHistory = historyRef.current.map((song,index) => index === historyIndexRef.current ? nextSong : song);
         assertRecentLyricHistoryBudget(archive,nextHistory);
-        if (!saveRecentSongsCache(user.uid,{history:nextHistory,historyIndex:historyIndexRef.current,latestGenerationBatchId:(nextHistory[0]?.appliedKeywords as any)?.generationBatchId || null}))
-          throw new Error('recent-lyric-local-capacity');
+        if (await persistLyricHistoryLocallyOrExactly(latest,nextSong,user.uid,'add-lyrics-language')) return;
+        latestLyricEditTarget(latest,user.uid);
         resultRef.current = nextSong; historyRef.current = nextHistory;
         setResult(nextSong); setHistory(nextHistory);
         preserveHistoryIndexOnNextSnapshotRef.current = historyIndexRef.current;
@@ -17084,7 +17086,82 @@ ${normalizePromptForDisplay(result.prompt)}
     };
   }, [user?.uid, flushRecentSongTextWrite]);
 
-  const persistRegeneratedCurrentSong = async (nextSong: SongResult) => {
+  // Only the demonstrated browser-cache failure uses the existing exact-row
+  // canonical transaction immediately. The normal 150-second outbox stays intact.
+  // Return true when already committed; callers must not queue another write.
+  const persistLyricHistoryLocallyOrExactly = async (
+    source: SongResult, nextSong: SongResult, uid: string,
+    operation: 'regenerate' | 'add-lyrics-language',
+  ): Promise<boolean> => {
+    latestLyricEditTarget(source,uid);
+    const initialIndex = historyIndexRef.current;
+    const rows = historyRef.current.map((song,index) => index === initialIndex ? nextSong : song);
+    const outcome = await stageRecentLyricOrCommitExact(
+      () => saveRecentSongsCache(uid,{history:rows,historyIndex:initialIndex,latestGenerationBatchId:(rows[0]?.appliedKeywords as any)?.generationBatchId || null}),
+      async () => {
+        const stableId = getLiveSoridrawSongId(source);
+        // Never take the legacy whole-aggregate fallback or recreate a deleted row.
+        if (!stableId || getLiveSoridrawSongId(nextSong) !== stableId) throw new Error('recent-lyric-local-capacity');
+        if (recentSongTextWritePendingRef.current) await flushRecentSongTextWrite();
+        latestLyricEditTarget(source,uid);
+        if (recentSongTextWritePendingRef.current || hasRecentSongTextPendingMarker(uid) || recentSongsSaveInFlightRef.current > 0)
+          throw new Error('recent-lyric-pending-other-song');
+        // If even the tiny recovery fence cannot be made durable, do not claim
+        // the edit is saved or allow an old local cache to masquerade as current.
+        if (!markRecentSongsCacheRecoveryFence(uid)) throw new Error('recent-lyric-local-capacity');
+        const epoch = readRecentSongsMutationEpoch(uid);
+        const signalItem = { ...nextSong };
+        let committedRow: any = null;
+        recentSongsSaveInFlightRef.current += 1;
+        try {
+          const version = await runV1MutationBoundary(
+            { domain:'recent',operation,uid,affectedCount:1,mirrorTargets:buildRecentMirrorTargets([nextSong],'upsert'),syncItem:signalItem },
+            persistRecentSongsDocument(doc(db,'user_recent_songs',uid),rows,epoch,nextSong,row => {
+              committedRow = row;
+              for (const key of Object.keys(signalItem)) delete (signalItem as any)[key];
+              Object.assign(signalItem,row);
+            },true),
+          );
+          if (!version || !committedRow) throw new Error('recent-lyric-exact-save-failed');
+          // Do not overwrite a newer edit, another account, or another selection.
+          if (auth.currentUser?.uid === uid && epoch === readRecentSongsMutationEpoch(uid)) {
+            const index = historyRef.current.findIndex(song => getLiveSoridrawSongId(song) === stableId);
+            const current = historyRef.current[index];
+            if (current && JSON.stringify(current.lyrics) === JSON.stringify(source.lyrics)
+              && JSON.stringify(current.appliedKeywords?.lyricLanguages) === JSON.stringify(source.appliedKeywords?.lyricLanguages)
+              && JSON.stringify(current.lyricGenerationHistoryV1) === JSON.stringify(source.lyricGenerationHistoryV1)
+              && current.koreanTitle === source.koreanTitle && current.englishTitle === source.englishTitle
+              && Number(current.appliedKeywords?.editedInStudioAt || 0) === Number(source.appliedKeywords?.editedInStudioAt || 0)) {
+              const applied = { ...current, title:committedRow.title,koreanTitle:committedRow.koreanTitle,englishTitle:committedRow.englishTitle,
+                lyrics:committedRow.lyrics,lyricGenerationHistoryV1:committedRow.lyricGenerationHistoryV1,
+                updatedAt:Math.max(Number(current.updatedAt || 0),Number(committedRow.appliedKeywords?.editedInStudioAt || 0)),
+                appliedKeywords:{...current.appliedKeywords,...pickRecentSongLiveAppliedKeywords457(committedRow.appliedKeywords)} } as SongResult;
+              if (operation === 'regenerate') {
+                delete (applied as any).favoriteFirestoreId;
+                delete (applied as any).musicNoteFavoriteId;
+                (applied as any).recentFavoriteDetachedAt = Date.now();
+              }
+              const updated = historyRef.current.map((song,i) => i === index ? applied : song);
+              historyRef.current = updated; setHistory(updated);
+              if (historyIndexRef.current === index) { resultRef.current = applied; setResult(applied); }
+              recentSongsReadyToCacheRef.current = true;
+              // Best effort only; the fence remains until a full canonical read
+              // is successfully cached, not merely an exact-row ACK.
+              saveRecentSongsCache(uid,{history:updated,historyIndex:historyIndexRef.current,latestGenerationBatchId:(updated[0]?.appliedKeywords as any)?.generationBatchId || null});
+            }
+          }
+          return version;
+        } finally {
+          recentSongsSaveInFlightRef.current = Math.max(0,recentSongsSaveInFlightRef.current-1);
+        }
+      },
+    );
+    return outcome.mode === 'server';
+  };
+
+  const persistRegeneratedCurrentSong = async (nextSong: SongResult, source: SongResult) => {
+    if (user?.uid && await persistLyricHistoryLocallyOrExactly(source,nextSong,user.uid,'regenerate')) return;
+    if (user?.uid) latestLyricEditTarget(source,user.uid);
     const currentIndex = historyIndexRef.current;
     const currentHistory = historyRef.current;
     const nextHistory = currentIndex >= 0 && currentHistory[currentIndex]
@@ -17220,7 +17297,7 @@ ${normalizePromptForDisplay(result.prompt)}
       } as SongResult;
 
       const recorded = withLyricHistory(latest,nextSong,targetLang,targetLang);
-      await persistRegeneratedCurrentSong(recorded);
+      await persistRegeneratedCurrentSong(recorded,latest);
       showToast(`${targetLabel}를 다시 생성했습니다.`);
     } catch (error) {
       console.error('Failed to regenerate generated song part:', error);
@@ -17389,6 +17466,11 @@ ${normalizePromptForDisplay(result.prompt)}
       };
 
       const nextSong = withLyricHistory(latestSong,languageSong,replaceLanguage || null,targetLanguage);
+      if (await persistLyricHistoryLocallyOrExactly(latestSong,nextSong,sourceUid,'add-lyrics-language')) {
+        showToast(`${label.ko} 가사를 추가 생성했습니다.`);
+        return;
+      }
+      latestLyricEditTarget(latestSong,sourceUid);
       const nextHistory = latestHistory.map((song, index) => index === targetIndex ? nextSong : song);
       resultRef.current = nextSong;
       historyRef.current = nextHistory;

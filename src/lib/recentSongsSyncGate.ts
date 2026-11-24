@@ -69,3 +69,26 @@ export const needsRecentSongsRetainedDraftGapRead460 = (
   Number.isFinite(retainedDraftVersion)
   && retainedDraftVersion > 0
   && retainedDraftVersion > Math.max(0, Number(verifiedDraftVersion) || 0);
+
+// Quota-only recovery fence. Reuse the existing tiny UID-scoped version slot:
+// overwriting it is possible even when adding the larger cache is not.
+// A negative value is NOT a server revision. Only a durably cached full
+// canonical snapshot may replace this fence with a positive revision.
+const recoveryVersionKey = (uid: string) => `soridraw_recent_songs_local_sync_version_v2_${uid}`;
+type VersionStorage = Pick<Storage, 'getItem' | 'setItem'>;
+export const hasRecentSongsCacheRecoveryFence = (uid: string, storage?: VersionStorage): boolean => {
+  try { return Boolean(uid && (storage ?? localStorage).getItem(recoveryVersionKey(uid)) === '-1'); }
+  catch { return false; }
+};
+export const markRecentSongsCacheRecoveryFence = (uid: string, storage?: VersionStorage): boolean => {
+  if (!uid) return false;
+  try {
+    const target = storage ?? localStorage;
+    target.setItem(recoveryVersionKey(uid), '-1');
+    return hasRecentSongsCacheRecoveryFence(uid, target);
+  } catch { return false; }
+};
+export async function stageRecentLyricOrCommitExact<T>(persistLocal: () => boolean, commitExact: () => Promise<T>): Promise<{ mode: 'local' } | { mode: 'server'; value: T }> {
+  if (persistLocal()) return { mode: 'local' };
+  return { mode: 'server', value: await commitExact() };
+}

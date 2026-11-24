@@ -1,3 +1,13 @@
+## CURRENT — APP797 정식 팔로우 서버 활성화 PASS / PREVIEW Hosting 연결 소스 반영 준비 (2026-11-24 KST)
+
+- 디렉터 승인: 기존 정상 PREVIEW 저장 구조 유지, 정식 서버 연결 및 안전 검증 후 활성화, 정식앱 Hosting 제외. 2026-11-24 사용자 보고 PREVIEW PC A / 모바일 B 팔로우·취소 자동 반영 정상. 신규 APP795/796 저장 장부 전환 보류(PR #1405).
+- **정식 백엔드 실배포 PASS:** [Actions #45385219346](https://github.com/andrawing1212/soridraw-music/actions/runs/45385219346), SHA `382733e3e3ff1c3caa806a09fa702d603cb1d531`, 2026-11-24 20:34 KST. 기존 PREVIEW Explore `cfd40718-6ab5-4133-bdb2-fa69332d6810`, TEST `ddd2255a-75cc-4db9-8905-b47338558cb0` 유지. 기존 owner service 활성 `c71d7c12-ace4-4405-ab1a-d8c651c90559`, 정식 Explore 활성 100% `5313d378-351b-412c-b1d9-a7e6e9eb23fa`. 기존 owner/PROD 복구 UUID 각각 `1e987bc3-36d3-4bb0-861f-4df17f536592` / `af81502a-298d-4ec6-bc2a-0c529d6dc29e`. 새 production-only capability는 기존 PREVIEW 키를 회전하지 않음. 기존 shared enrollment callable 한 개의 기존 코드·AppCheck·HMAC·권한을 보존하고 정식 origin 추가, 나머지 Functions/Rules/DB schema/원본 미변경.
+- 증거: [#45371145323](https://github.com/andrawing1212/soridraw-music/actions/runs/45371145323) 실제 private service 인증(잘못된 키 403, 올바른 키+무효 body 400), 무인증 follow 차단 PASS; 당시 10210 최종 배포 실패 후 Worker/Functions 원복 실증 PASS. [#45369733410](https://github.com/andrawing1212/soridraw-music/actions/runs/45369733410) 정확한 실행 소스의 격리 follow/unfollow/alarm/retry proof PASS, 실제 사용자 쓰기 없음. [#45385233714](https://github.com/andrawing1212/soridraw-music/actions/runs/45385233714) Follow-only, [#45385233938](https://github.com/andrawing1212/soridraw-music/actions/runs/45385233938) Product quality PASS. 기존 검사는 새 실패/변경 근거 없이 반복 금지.
+- [PR #1406](https://github.com/andrawing1212/soridraw-music/pull/1406): 정식 host listener와 enrollment origin 소스를 PREVIEW 기준에 반영. 완료된 1회성 활성화 workflow 제거(이력 보존). 이번 release trigger는 PREVIEW Hosting만, shared backend 변경 0. 기존 app version 507 및 로컬 캐시 정책 유지.
+- **미완료:** 이 기록 작성 시점 PREVIEW 새 Hosting 빌드/실사용 미확인. 정식 인증 사용자 팔로우 전 과정과 PC/모바일 실사용, 실제 비용, 다른 기능 동등성 및 APP737/738 직접 승격 증거는 아직 HOLD. 실제 정식 Hosting 변경 금지(별도 승인 전). 기존 사용자 데이터 삭제/이전·신규 장부·TEST 변경 없음.
+
+---
+
 ## CURRENT — APP727 팔로우 재조회 사유·본인 RTDB retained 신호 중복 처리 수정 PREVIEW Hosting PASS / 사용자 실사용 비용 QA 대기 (2026-11-19 KST)
 
 - **승인·기준:** 디렉터 2026-11-19 11:31:04Z APP727 원인 진단·직접 수정·필수 검사·PREVIEW Hosting. 시작 `preview 945b8c0be9724c7355a41b827eab12c56b86f679`. 근거는 APP726 이후 1분 32초 CACHE LIVE 사용자 영상: 약 45→60초 동안 팔로우 변경 2회 그대로인데 팔로우 상태 확인 Worker 1→4, R2 읽기 5→20. 이후 Worker 정체·LOCAL 재사용 증가. 영상만으로 서버 내부 개별 요청 원인은 미확정.

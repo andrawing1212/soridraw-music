@@ -9,8 +9,8 @@ const require=createRequire(resolve(install,'package.json'));
 const {Miniflare}=require('miniflare');
 const adapter=readFileSync('scripts/full-release-shared-like-scheduler.mjs','utf8');
 const harness=`
-import {ExploreLikeBatchScheduler103 as Old} from './legacy.mjs';
-import {ExploreLikeBatchScheduler103 as New} from './shared.mjs';
+import {ExploreLikeBatchScheduler103 as Old} from './legacy/production-main.mjs';
+import {ExploreLikeBatchScheduler103 as New} from './shared/production-main.mjs';
 import {legacySchedulerClass} from './adapter.mjs';
 const key='active-scheduled-at-194';
 const Adapted=legacySchedulerClass(Old);

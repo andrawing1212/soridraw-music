@@ -24,8 +24,9 @@ async function baseline(){
 }
 const origin='https://'+NAME+'.soridraw-qa.workers.dev';
 async function request(access,p,body){
- const r=await fetch(origin+p,{method:'POST',redirect:'error',headers:{'X-QA-Access':access,'Content-Type':'application/json'},...(body===undefined?{}:{body:typeof body==='string'?body:JSON.stringify(body)}),signal:AbortSignal.timeout(10000)});
- return {status:r.status,data:await r.json().catch(()=>null)};
+ const r=await fetch(origin+'/qa',{method:'POST',redirect:'error',headers:{'X-QA-Access':access,'X-QA-Command':p.slice(1),'Content-Type':'application/json'},...(body===undefined?{}:{body:typeof body==='string'?body:JSON.stringify(body)}),signal:AbortSignal.timeout(10000)});
+ const data=await r.json().catch(()=>null);
+ return {status:r.status,data,route:r.headers.get('X-SORIDRAW-QA-Route')||'provider-or-unmarked',code:typeof data?.code==='string'?data.code:'none'};
 }
 async function run(){
  await baseline();
@@ -46,10 +47,10 @@ async function run(){
  checked(await api(path,'PUT',form,deploy),'UPLOAD_SQLITE_QA_ONLY');
  checked(await api(path+'/subdomain','POST',{enabled:true,previews_enabled:false},deploy),'QA_ROUTE');
  let ready=false;
- for(let i=0;i<12;i++){try{if((await request('invalid','/legacy/state')).status===403&&(await request(access,'/legacy/state')).status===200){ready=true;break}}catch{}await delay(1500)}
+ for(let i=0;i<12;i++){try{if((await request('invalid','/legacy/state')).status===403&&(await request(access,'/legacy/state')).route==='legacy'&&(await request(access,'/shared/state')).route==='shared'){ready=true;break}}catch{}await delay(1500)}
  assert(ready,'QA_HTTP_NOT_READY');
  console.log('PHYSICAL_QA_SQLITE_WORKER_AND_ACCESS=PASS');
- const call=async(p,b)=>{const x=await request(access,p,b);assert.equal(x.status,200,p);return x.data};
+ const call=async(p,b)=>{const x=await request(access,p,b);assert.equal(x.status,200,p+' route='+x.route+' code='+x.code);return x.data};
  const until=async(fn)=>{for(let i=0;i<25;i++){if(await fn())return;await delay(1500)}throw Error('BOUNDED_ALARM_TIMEOUT')};
  await call('/shared/mode','fail');await call('/legacy/seed',{marker:100,alarm:true});
  await until(async()=> (await call('/shared/state')).attempts>=1);

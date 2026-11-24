@@ -38,10 +38,19 @@ export class Shared extends DurableObject {
   return Response.json({ok:true,scheduledAt:123,newlyScheduled:true,activeRecovery194:true,settled:true});
  }
 }
+// One authenticated external endpoint; explicit namespace, path and method.
+// Mark every application response so a provider-edge 404 is distinguishable.
 export default {async fetch(req,env){
- if(req.method!=='POST'||!env.QA_ACCESS||req.headers.get('X-QA-Access')!==env.QA_ACCESS)return new Response('denied',{status:403});
- const u=new URL(req.url),m=/^\/(legacy|shared)\/(seed|state|invoke|mode|clean|schedule)$/.exec(u.pathname);
- if(!m)return new Response('not found',{status:404});
+ const reply=(body,status)=>Response.json(body,{status,headers:{'X-SORIDRAW-QA-Route':'entry'}});
+ if(req.method!=='POST'||!env.QA_ACCESS||req.headers.get('X-QA-Access')!==env.QA_ACCESS)return reply({code:'DENIED'},403);
+ if(new URL(req.url).pathname!=='/qa')return reply({code:'QA_ENTRY_PATH'},404);
+ const target=req.headers.get('X-QA-Command')||'';
+ const m=/^(legacy|shared)\/(seed|state|invoke|mode|clean|schedule)$/.exec(target);
+ if(!m)return reply({code:'QA_COMMAND'},404);
  const ns=m[1]==='shared'?env.RELEASE_SHARED_LIKE_SCHEDULER:env.EXPLORE_LIKE_BATCH_SCHEDULER;
- return ns.get(ns.idFromName('shared-like-batch')).fetch(new Request('https://qa.internal/'+m[2],req));
+ const body=await req.text();
+ const response=await ns.get(ns.idFromName('shared-like-batch')).fetch(new Request('https://qa.internal/'+m[2],{method:'POST',headers:{'Content-Type':'application/json'},body}));
+ const headers=new Headers(response.headers);
+ headers.set('X-SORIDRAW-QA-Route',m[1]);
+ return new Response(response.body,{status:response.status,headers});
 }};

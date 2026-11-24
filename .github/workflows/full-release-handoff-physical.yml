@@ -21,6 +21,10 @@ jobs:
         with: {persist-credentials: false}
       - uses: actions/setup-node@v4
         with: {node-version: '22'}
+      - name: Verify exact QA command routing locally before upload
+        run: |
+          npm install --prefix "$RUNNER_TEMP/full-release-route-local" --no-save --no-package-lock --no-audit --no-fund miniflare@4.20260730.0
+          node scripts/verify-full-release-handoff-qa-routes.mjs "$RUNNER_TEMP/full-release-route-local"
       - name: Source checks and isolated free QA physical test
         run: |
           node --check scripts/full-release-handoff-qa-worker.mjs

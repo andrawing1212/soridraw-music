@@ -1,3 +1,12 @@
+## CURRENT — PREVIEW and PROD manifest parity active PASS / real-device verification and Hosting pending (2026-11-25 KST)
+
+- Director approval 2026-11-24T18:36:09Z, PREVIEW same 404 repair and deployment. PR #1411 merged `b90af8bc7e1ccde20f255f80e2f9dde1d181f635` after quality PASS.
+- [Actions #45461526791](https://github.com/andrawing1212/soridraw-music/actions/runs/45461526791) SUCCESS at 03:37 KST, source `60693f325c58f8bc307d7e0b04080f5c58d87e77`. PREVIEW active 100% `65a4d20d-2d74-4e03-96f6-f3b98a181411`, exact rollback `87ee8915-fe13-4715-88d3-0f5d1dd10ee3`. Patched preview-entry.mjs SHA256 `742e10e4700c8e74fda5393f7a5f9358cb2499f9e85ec129e851744ed4763ad5`. Exact full core equals active PROD core after only established notification host transform; reused isolated 300-track manifest QA #45459942923. Canonical preview-entry.js guard also corrected, no unrelated gate changes.
+- Live old 404 reproduced before deployment, repaired manifest invalid request returns 400 with expected error/CORS and D1 R0/W0, OPTIONS 204, existing follow/inbox auth and like CORS baseline unchanged. PROD active `9257b708-4b76-43fe-9c87-3abe0fb071b7`, TEST/owner/media versions unchanged. Namespace, bindings, runtime, schedules unchanged. No direct live authenticated synthetic mutation, no schema/Functions/Rules/Hosting change.
+- Remaining: real authenticated PC/mobile like/unlike, public-count update at configured deadline, actual billing not measured. Actual 300-track production release not claimed. PREVIEW and PROD backend parity for this repair established; whole-app Hosting promotion remains pending separate final approval and direct-promotion safeguards. Do not repeat verified checks absent drift.
+
+---
+
 ## CURRENT — full release PROD backend active PASS / PREVIEW manifest gate parity and Hosting pending (2026-11-25 KST)
 
 - Director explicit approval 2026-11-24T18:23:48Z, production backend activation and safety verification only; no Hosting change. PR #1410 merged `4bfba5c2005e2aaeac5f73b07e572d9a3eab4810`.

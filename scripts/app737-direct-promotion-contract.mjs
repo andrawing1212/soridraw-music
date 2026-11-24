@@ -67,6 +67,37 @@ function verifiedApp797Replacement({name,type,disposition,workers,gate}){
     a.serviceEnvironment===b.serviceEnvironment&&
     d.get('SORIDRAW_OWNER_DO_BRIDGE_SECRET_600')?.type==='secret_text';
 }
+// The shared notification store has exactly one authorized retention owner.
+// PROD must not duplicate the PREVIEW maintenance cron or lose inbox access.
+function verifiedSharedNotificationRetention({name,type,disposition,workers,gate}){
+ if(name!=='SORIDRAW_NOTIFICATION_RETENTION_013'||type!=='plain_text'||
+    !reviewedBindingEvidence(disposition)||
+    disposition.previewActiveVersion!==workers.previewExplore.activeVersion||
+    disposition.productionActiveVersion!==workers.productionExplore.activeVersion||
+    disposition.sharedRetentionOwnerVerified!==true||
+    disposition.authenticatedInboxParityVerified!==true||
+    disposition.retentionPolicyAndCostVerified!==true||
+    gate.exploreWorkerCodeAndFeatureFlags!==true||
+    gate.firebaseRulesAndAuthAppCheck!==true||
+    gate.productionEnvironmentAndLegacyBindingsCompatible!==true||
+    gate.costAndNoPassiveWritesVerified!==true)return false;
+ const p=workers.previewExplore,d=workers.productionExplore;
+ const pm=new Map(p.bindings.map(b=>[b.name,b])),dm=new Map(d.bindings.map(b=>[b.name,b]));
+ const on=(m,k)=>m.get(k)?.type==='plain_text'&&m.get(k)?.plainHash===app797OnHash;
+ const identity=(m,value)=>m.get('SORIDRAW_ENVIRONMENT')?.type==='plain_text'&&
+  m.get('SORIDRAW_ENVIRONMENT')?.plainHash===createHash('sha256').update(value).digest('hex');
+ const cron='37 * * * *';
+ const scheduleCount=w=>Array.isArray(w.schedules)?w.schedules.filter(x=>x.cron===cron).length:-1;
+ return p.schedulesVerified===true&&d.schedulesVerified===true&&
+  identity(pm,'preview')&&identity(dm,'production')&&
+  on(pm,name)&&!dm.has(name)&&
+  ['SORIDRAW_NOTIFICATION_SCHEMA_READY_013','SORIDRAW_NOTIFICATION_INBOX_READ_ONLY_019']
+   .every(k=>on(pm,k)&&on(dm,k))&&
+  scheduleCount(p)===1&&scheduleCount(d)===0&&
+  pm.get('DB')?.type==='d1'&&!!pm.get('DB')?.id&&pm.get('DB').id===dm.get('DB')?.id&&
+  pm.get('PROFILE_MEDIA')?.type==='r2_bucket'&&!!pm.get('PROFILE_MEDIA')?.bucket&&
+  pm.get('PROFILE_MEDIA').bucket===dm.get('PROFILE_MEDIA')?.bucket;
+}
 const fingerprint=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 function different(a,b){return a!==b}
 function formatBindings(report){
@@ -152,6 +183,11 @@ export function assessApp737DirectPromotion(input={}){
            gate.productionEnvironmentAndLegacyBindingsCompatible!==true)
           hold('ENVIRONMENT_IDENTITY_BINDING_UNVERIFIED_'+name);
         else reviewedExclusions.push({name,classification:'ENVIRONMENT_IDENTITY'});
+      }else if(disposition?.classification==='SHARED_NOTIFICATION_RETENTION'){
+        if(!verifiedSharedNotificationRetention({name,type,disposition,workers,gate}))
+          hold('SHARED_NOTIFICATION_RETENTION_UNVERIFIED_'+name);
+        else reviewedExclusions.push({name,classification:'SHARED_NOTIFICATION_RETENTION',
+          maintenanceOwner:'preview'});
       }else if(disposition?.classification==='APP797_PRODUCTION_INGRESS'){
         if(!verifiedApp797Replacement({name,type,disposition,workers,gate}))
           hold('APP797_PRODUCTION_INGRESS_UNVERIFIED_'+name);

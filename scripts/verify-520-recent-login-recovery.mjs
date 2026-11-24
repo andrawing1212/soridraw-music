@@ -223,7 +223,7 @@ console.log('APP_HEART_PENDING_SURVIVES_RTDB_PREVIEW_AND_FIRST_SAVE_PATH=PASS');
 // A newer remote heart must win visual display without deleting any
 // uncommitted local outbox; only matching canonical confirmation may retire it.
 const heartOverlay=within('  function overlayStudioHeartPendingIntentsOnFavorites(', '  const getFavoriteCreatedSortTime =');
-const heartCanonical=within('        const isCanonicalMembershipSignal =', '        if (isRemovalOperation) {');
+const heartCanonical=within('        const isCanonicalMembershipSignal =', '        if (isRemovalOperation && !isTrashSignal) {');
 assert.match(heartOverlay,/intent\.pendingRemotePreviewVersion > intent\.signalVersion/);
 assert.match(heartOverlay,/studioHeartRemotePreviewRef\.current\.get\(documentId\)/);
 assert.match(heartCanonical,/reconcileStudioHeartPendingFromCanonicalSignal\(/);

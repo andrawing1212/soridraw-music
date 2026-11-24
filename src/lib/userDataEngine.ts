@@ -474,6 +474,11 @@ export const rememberMusicNoteMediaPreview = (
   return true;
 };
 
+export const readPreservedMusicNoteMedia = (uid: string, documentId: string): Record<string, any> => {
+  const record = readMusicNoteMediaOverlays(uid)[String(documentId || '').trim()];
+  return record ? { ...record.patch } : {};
+};
+
 const normalizeCatalogItems = (kind: SoridrawCatalogKind, sourceItems: any[]): any[] => {
   const seen = new Set<string>();
   const normalized: any[] = [];

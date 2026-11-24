@@ -10,6 +10,9 @@ const previewEqual = (remote: Record<string, any>, local: Record<string, any>): 
   for (const key of ['korean','english','foreign']) {
     if ((remote.lyrics?.[key] ?? null) !== (local.lyrics?.[key] ?? null)) return false;
   }
+  for (const key of ['secondaryLanguage','titleLanguages','titlesByLanguage','lyricLanguages']) {
+    if (JSON.stringify(remote.appliedKeywords?.[key] ?? null) !== JSON.stringify(local.appliedKeywords?.[key] ?? null)) return false;
+  }
   const remoteLanguages = remote.appliedKeywords?.lyricsByLanguage;
   const localLanguages = local.appliedKeywords?.lyricsByLanguage;
   if (remoteLanguages || localLanguages) {
@@ -83,6 +86,7 @@ export const protectRecentCanonicalSnapshotFromPreview453 = <T extends Record<st
       if (cachedLanguages && typeof cachedLanguages === 'object' && !Array.isArray(cachedLanguages)) {
         (merged as Record<string, any>).appliedKeywords = {
           ...(canonical.appliedKeywords || {}),
+          ...(pickRecentSongLiveAppliedKeywords457(cached.appliedKeywords || null) || {}),
           lyricsByLanguage: {
             ...(canonical.appliedKeywords?.lyricsByLanguage || {}),
             ...cachedLanguages,
@@ -121,7 +125,7 @@ export const pickRecentSongLiveAppliedKeywords457 = (
 ): Record<string, any> | null => {
   if (!incoming) return null;
   const result: Record<string, any> = {};
-  for (const key of ['secondaryLanguage','titleLanguages','titlesByLanguage','editedInStudio','editedInStudioAt']) {
+  for (const key of ['secondaryLanguage','titleLanguages','titlesByLanguage','lyricLanguages','lyricsByLanguage','hasAddedLyricsLanguage','addedLyricsLanguage','addedLyricsLanguageAt','isNoLyrics','editedInStudio','editedInStudioAt']) {
     if (Object.prototype.hasOwnProperty.call(incoming, key)
       && incoming[key] !== null && incoming[key] !== undefined) {
       result[key] = incoming[key];

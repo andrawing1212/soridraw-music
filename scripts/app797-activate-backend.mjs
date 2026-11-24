@@ -69,7 +69,7 @@ async function rollback(s){
 const probePath='/internal/app797-connection-probe';
 const origin='https://soridraw.com',url='https://soridraw-explore-api.andrawing1212.workers.dev';
 async function run(){
- need(process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REPOSITORY==='andrawing1212/soridraw-music'&&process.env.GITHUB_ACTOR===process.env.GITHUB_REPOSITORY_OWNER&&process.env.GITHUB_REF==='refs/heads/prep/production-follow-existing-writer'&&process.env.GITHUB_RUN_ATTEMPT==='1'&&execFileSync('git',['rev-parse','HEAD^'],{encoding:'utf8'}).trim()==='296090b4156af620ff878a63d0d3f308bde2dfbe','ONE_TIME_APPROVED_CONTEXT');
+ need(process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REPOSITORY==='andrawing1212/soridraw-music'&&process.env.GITHUB_ACTOR===process.env.GITHUB_REPOSITORY_OWNER&&process.env.GITHUB_REF==='refs/heads/prep/production-follow-existing-writer'&&process.env.GITHUB_RUN_ATTEMPT==='1'&&execFileSync('git',['rev-parse','HEAD^'],{encoding:'utf8'}).trim()==='e9f6f36c428b93a54af5635bafc0906ca0f64d3e','ONE_TIME_APPROVED_CONTEXT');
  need(token.length>20,'TOKEN');
  for(const n of Object.keys(active))await check(n,expected(active[n]));
  const [ow,prod]=await Promise.all([snapshot(OW,staged[OW]),snapshot(PROD,staged[PROD])]);

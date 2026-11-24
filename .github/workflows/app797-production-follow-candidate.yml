@@ -24,7 +24,7 @@ jobs:
       - name: One-time approved activation source pin
         run: |
           test "$GITHUB_RUN_ATTEMPT" = "1"
-          test "$(git rev-parse HEAD^)" = "296090b4156af620ff878a63d0d3f308bde2dfbe"
+          test "$(git rev-parse HEAD^)" = "e9f6f36c428b93a54af5635bafc0906ca0f64d3e"
           node --check scripts/app797-activate-backend.mjs
       - uses: google-github-actions/auth@v2
         with:

@@ -45,12 +45,33 @@ def preflight():
  a=files[scope].decode();c=files[enroll].decode()
  need('exports.APP544_ENROLLMENT_COMPILED_OPEN = true;' in c and 'enforceAppCheck: true' in c,'LIVE_ENROLLMENT_AUTH')
  need("https://soridraw-explore-preview.andrawing1212.workers.dev/internal/owner-follow/epoch-544" in c,'SHARED_EPOCH_TARGET')
- old="!(0, ownerFollowScope653_1.isPreviewOwnerEnrollmentOrigin653)(request.rawRequest?.get('origin'))"
- new=old+" && !(0, ownerFollowScope653_1.isProductionOwnerEnrollmentOrigin797)(request.rawRequest?.get('origin'), process.env)"
- c=replace_once(c,old,new)
- helper="\nexports.isProductionOwnerEnrollmentOrigin797 = (origin, env) => origin === 'https://soridraw.com' && env.SORIDRAW_OWNER_FOLLOW_GENERAL_PREVIEW_653 === '1' && env.SORIDRAW_OWNER_FOLLOW_SOURCE_BOUNDARY_653 === 'preview-only' && env.SORIDRAW_OWNER_FOLLOW_PRODUCTION_ENROLL_797 === '1';\n"
- need('isProductionOwnerEnrollmentOrigin797' not in a,'ALREADY_PATCHED')
- files[scope]=(a+helper).encode();files[enroll]=c.encode()
+ # TypeScript output may lower optional chaining into a temporary variable.
+ # Locate the single existing general-origin denial and balance its condition,
+ # preserving every byte of the old predicate, Auth and AppCheck checks.
+ matches=list(re.finditer(r'\bif\s*\(\s*scope\.general\s*&&',c))
+ need(len(matches)==1,'GENERAL_ORIGIN_CONDITION')
+ start=c.index('(',matches[0].start());depth=0;end=None;quote=None;escape=False
+ for i in range(start,len(c)):
+  ch=c[i]
+  if quote:
+   if escape:escape=False
+   elif ch=='\\':escape=True
+   elif ch==quote:quote=None
+  elif ch in ('"',"'"):quote=ch
+  elif ch=='(':depth+=1
+  elif ch==')':
+   depth-=1
+   if depth==0:end=i;break
+ need(end is not None,'ORIGIN_CONDITION_BALANCE')
+ condition=c[start+1:end]
+ need('isPreviewOwnerEnrollmentOrigin653' in condition and 'rawRequest' in condition and 'origin' in condition,'ORIGIN_CONDITION_IDENTITY')
+ need('PREVIEW_ORIGIN_REQUIRED' in c[end+1:end+220],'ORIGIN_DENIAL_IDENTITY')
+ need(FLAG not in c,'ALREADY_PATCHED')
+ # Same explicit production-only predicate as the reviewed TS source.
+ # Keep the existing preview helper untouched and add no dependency.
+ extra=" && !(request.rawRequest?.get('origin') === 'https://soridraw.com' && process.env.SORIDRAW_OWNER_FOLLOW_GENERAL_PREVIEW_653 === '1' && process.env.SORIDRAW_OWNER_FOLLOW_SOURCE_BOUNDARY_653 === 'preview-only' && process.env.SORIDRAW_OWNER_FOLLOW_PRODUCTION_ENROLL_797 === '1')"
+ c=c[:end]+extra+c[end:]
+ files[enroll]=c.encode()
  for name in [scope,enroll]:
   p=DIR/Path(name).name;p.write_bytes(files[name]);subprocess.run(['node','--check',str(p)],check=True,capture_output=True)
  with zipfile.ZipFile(DIR/'new.zip','w',zipfile.ZIP_DEFLATED) as z:

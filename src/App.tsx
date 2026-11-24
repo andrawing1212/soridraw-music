@@ -7771,6 +7771,7 @@ function App() {
   const [lyricsLanguageChange, setLyricsLanguageChange] = useState<{lang: LanguageCode; songKey: string} | null>(null);
   const [replacingLyricsLanguage, setReplacingLyricsLanguage] = useState<LanguageCode | null>(null);
   const lyricGenerationInFlight = useRef(false);
+  const [lyricGenerationSongKey, setLyricGenerationSongKey] = useState<string | null>(null);
   useEffect(() => {
     if (!lyricsLanguageChange) return;
     const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setLyricsLanguageChange(null); };
@@ -16546,7 +16547,9 @@ ${normalizePromptForDisplay(result.prompt)}
   };
   const lyricGenerationFailureMessage = (error: unknown, fallback: string) => {
     const message = error instanceof Error ? error.message : '';
-    if (message.includes('history-capacity') || message.includes('local-capacity')) return '가사 이력 저장 용량이 부족합니다. 기존 가사는 유지됩니다.';
+    if (message.includes('history-capacity')) return '가사 이력 저장 한도에 도달했습니다. 기존 가사는 유지됩니다.';
+    if (message.includes('local-capacity')) return '브라우저에 새 가사를 저장하지 못했습니다. 기존 가사는 유지됩니다.';
+    if (message.includes('empty-regenerated-lyrics') || message.includes('empty-translated-lyrics') || message.includes('empty-lyric-version')) return '새 가사를 받지 못했습니다. 기존 가사는 유지됩니다.';
     if (message.includes('history-syncing')) return '다른 기기의 가사 이력을 동기화하는 중입니다.';
     if (message.includes('pending-other-song')) return '이전 곡의 저장이 완료되지 않았습니다. 다시 시도해주세요.';
     if (message.includes('song-changed')) return '곡 상태가 변경되었습니다. 다시 시도해주세요.';
@@ -17127,8 +17130,8 @@ ${normalizePromptForDisplay(result.prompt)}
       setIsRecentSongEditOpen(false);
       setRecentSongInlineEditMode(null);
       setRecentSongEditDraft(null);
+      setLyricGenerationSongKey(buildRecentSongSyncKey(activeSong));
       setRecentSongRegeneratingTarget(targetKey);
-      showToast(`${targetLabel}를 다시 생성합니다.`);
 
       const personalGeminiApiKey = await resolveGoogleGeminiApiKey(user);
       if (!personalGeminiApiKey) {
@@ -17228,6 +17231,7 @@ ${normalizePromptForDisplay(result.prompt)}
     } finally {
       lyricGenerationInFlight.current = false;
       setRecentSongRegeneratingTarget(null);
+      setLyricGenerationSongKey(null);
     }
   };
 
@@ -17267,6 +17271,7 @@ ${normalizePromptForDisplay(result.prompt)}
       latestLyricEditTarget(activeSong,sourceUid);
       setLyricsLanguageChange(null);
       setReplacingLyricsLanguage(replaceLanguage || null);
+      setLyricGenerationSongKey(sourceKey);
       setIsAddingLyricsLanguage(true);
       setAddingLyricsLanguageTarget(targetLanguage);
 
@@ -17409,6 +17414,7 @@ ${normalizePromptForDisplay(result.prompt)}
       setIsAddingLyricsLanguage(false);
       setAddingLyricsLanguageTarget(null);
       setReplacingLyricsLanguage(null);
+      setLyricGenerationSongKey(null);
     }
   };
 
@@ -22629,6 +22635,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       const displayLyricLanguages = getDisplayLyricLanguages(result);
                       const missingLyricLanguages = getMissingLyricLanguages(result);
 
+                      const generationIsForCurrentSong = lyricGenerationSongKey !== null && lyricGenerationSongKey === buildRecentSongSyncKey(result);
+                      const addingFirstLanguage = generationIsForCurrentSong && isAddingLyricsLanguage && !replacingLyricsLanguage;
+                      const renderLyricGenerationGlow = () => (
+                        <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-10 rounded-[inherit] shadow-[inset_0_0_16px_2px_rgba(227,161,58,0.48)] opacity-70 motion-safe:animate-pulse motion-safe:[animation-duration:2.8s]" />
+                      );
                       const renderLyricsGenerationProgress = (lang: LanguageCode) => (
                         <div role="status" aria-live="polite" className="flex min-h-[180px] flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
                           <div aria-hidden="true" className="flex h-12 items-center justify-center gap-1.5 text-[#e3a13a]">
@@ -22636,18 +22647,18 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           </div>
                           <div className="font-bold text-[var(--text-primary)]">{lyricLanguageLabels[lang]?.ko || lang} 가사를 생성하고 있습니다</div>
                           <p className="text-xs leading-relaxed text-[var(--text-secondary)]">현재 곡을 바탕으로 새 가사를 생성하는 중입니다.</p>
-                          <div aria-hidden="true" className="h-1 w-2/3 max-w-[200px] overflow-hidden rounded-full bg-white/10"><div className="h-full w-1/2 rounded-full bg-[#e3a13a] motion-safe:animate-pulse" /></div>
                         </div>
                       );
                       const renderAddLyricsLanguageCard = () => missingLyricLanguages.length > 0 ? (
-                        <div className="soridraw-result-lyrics-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-dashed border-[#e3a13a]/[0.22] overflow-hidden flex flex-col shadow-[0_14px_36px_rgba(0,0,0,0.26)] transition-colors duration-150">
+                        <div aria-busy={addingFirstLanguage} className="relative soridraw-result-lyrics-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-dashed border-[#e3a13a]/[0.22] overflow-hidden flex flex-col shadow-[0_14px_36px_rgba(0,0,0,0.26)] transition-colors duration-150">
+                          {addingFirstLanguage && renderLyricGenerationGlow()}
                           <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                             <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                               <Languages className="w-4 h-4 text-[#e3a13a]" />
                               가사 언어 추가
                             </h3>
                           </div>
-                          {isAddingLyricsLanguage && addingLyricsLanguageTarget ? renderLyricsGenerationProgress(addingLyricsLanguageTarget) : <div data-soridraw-selectable-text="true" className="flex-1 p-6 overflow-y-auto custom-scrollbar flex flex-col justify-center gap-4">
+                          {addingFirstLanguage && addingLyricsLanguageTarget ? renderLyricsGenerationProgress(addingLyricsLanguageTarget) : <div data-soridraw-selectable-text="true" className="flex-1 p-6 overflow-y-auto custom-scrollbar flex flex-col justify-center gap-4">
                             <div className="text-center space-y-2">
                               <p className="text-sm font-bold text-[var(--text-primary)]">다른 언어 가사가 필요해?</p>
                               <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
@@ -22678,9 +22689,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         if (!lyricsText) return null;
                         const label = lyricLanguageLabels[lang]?.ko || lang;
                         const copyType = `lyrics-${lang}`;
+                        const cardBusy = generationIsForCurrentSong && (recentSongRegeneratingTarget === `lyrics-${lang}` || (isAddingLyricsLanguage && replacingLyricsLanguage === lang));
 
                         return (
-                          <div key={lang} className="soridraw-result-lyrics-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col group/lyrics shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-colors duration-150">
+                          <div key={lang} aria-busy={cardBusy} className="relative soridraw-result-lyrics-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col group/lyrics shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-colors duration-150">
+                            {cardBusy && renderLyricGenerationGlow()}
                             <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                               <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                                 <Music className="w-4 h-4 text-[#e3a13a]" />
@@ -22699,7 +22712,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                   className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-btn disabled:opacity-50 disabled:cursor-not-allowed"
                                   title={`${label} 가사 다시 생성`}
                                 >
-                                  {recentSongRegeneratingTarget === `lyrics-${lang}` ? <Loader2 className="w-5 h-5 animate-spin opacity-90" /> : <RefreshCw className="w-5 h-5 opacity-80" />}
+                                  <RefreshCw className="w-5 h-5 opacity-80" />
                                 </button>
                                 {renderRecentSongInlineEditActions('lyrics', `edit-${copyType}`, `${label} 가사 수정`, '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'section')}
                                 <button
@@ -22717,7 +22730,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                               {lang !== 'ko' && <button type="button" className="flex items-center gap-1.5 rounded-xl bg-[#e3a13a]/10 px-3 py-2 text-xs font-bold text-[#e3a13a] hover:bg-[#e3a13a]/20 disabled:opacity-40" disabled={isAddingLyricsLanguage || Boolean(recentSongRegeneratingTarget) || Boolean(recentSongInlineEditMode)} onClick={() => setLyricsLanguageChange({lang,songKey:buildRecentSongSyncKey(result)})}><Languages className="h-4 w-4" />언어 변경</button>}
                               {(result as any).__recentSongHistoryIncomplete === true ? <span className="text-xs text-[var(--text-secondary)]">이력 동기화 중</span> : renderRecentSongLocalVersionButtons(`lyrics-${lang}` as RecentSongLocalVersionTarget,'section')}
                             </div>
-                            {isAddingLyricsLanguage && addingLyricsLanguageTarget && replacingLyricsLanguage === lang ? renderLyricsGenerationProgress(addingLyricsLanguageTarget) : recentSongRegeneratingTarget === `lyrics-${lang}` ? renderLyricsGenerationProgress(lang) : <div data-soridraw-selectable-text="true" className="soridraw-result-lyrics-scroll flex-1 p-5 sm:p-8 overflow-y-scroll custom-scrollbar flex flex-col items-center h-full">
+                            <div data-soridraw-selectable-text="true" className="soridraw-result-lyrics-scroll flex-1 p-5 sm:p-8 overflow-y-scroll custom-scrollbar flex flex-col items-center h-full">
                               {isRecentSongSectionEditing('lyrics') && recentSongEditDraft ? (
                                 <textarea
                                   value={getRecentSongLyricsDraftValue(lang)}
@@ -22734,7 +22747,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                   <div className="flex-1" />
                                 </>
                               )}
-                            </div>}
+                            </div>
                           </div>
                         );
                       };

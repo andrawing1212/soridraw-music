@@ -1,3 +1,11 @@
+## CURRENT — Full release shared scheduler PREVIEW activation PASS / PROD inactive restage pending (2026-11-25 KST)
+
+- Director explicitly approved PREVIEW shared server repair and safe deploy/verification 2026-11-24T17:34:17Z. Reused #45440348334 exact canonical D1 handoff and crash proof; no repeat physical fixture or free-plan query.
+- [Actions #45450634562](https://github.com/andrawing1212/soridraw-music/actions/runs/45450634562) SUCCESS at 2026-11-25 02:38 KST, source `ed689a4334aebb0946ddbeec4e08cf1f2876223b`. PREVIEW Explore active 100% `87ee8915-fe13-4715-88d3-0f5d1dd10ee3`; exact rollback `cfd40718-6ab5-4133-bdb2-fa69332d6810`. Patched preview-entry.mjs SHA256 `68783e7b7367261001b429291356326843db9248d9a3def6781f04c1cac9358e`; exact changed function equals QA-tested patched production core. All other modules, bindings, namespace and compatible runtime unchanged. Existing PREVIEW cron 37 hourly unchanged. PROD, TEST, owner and both media active version pins unchanged. No direct data mutation, schema, Rules, Functions or Hosting change. Before/after real auth denial and CORS smoke identical; no live authenticated mutation or PC/mobile real-device proof. Source-only earlier workflow #45450351451 failed YAML parsing before any job; corrected same PR and passed.
+- Next: update pinned PREVIEW source in production candidate builder; use repaired active core without applying patch twice, retain production host/auth and legacy handoff adapter, verify exact core SHA256 `19d5e6d8a9d1dff6ce45c2498d2194abddb409f6fb8679539f35c752eca7a149`, restage new inactive PROD version only after scope approval. Earlier inactive `c8c528df-008c-4eba-95f9-26952dabe0bc` must not be activated. Production uploader currently fenced; do not bypass it without explicit matching active proof. Remaining actual public release/Functions and PC/mobile parity are not claimed; bounded aggregate read-cost impact not measured. Separate explicit PROD activation approval required.
+
+---
+
 ## CURRENT — APP797 정식 팔로우 서버 활성화 PASS / PREVIEW Hosting 연결 소스 반영 준비 (2026-11-24 KST)
 
 - 디렉터 승인: 기존 정상 PREVIEW 저장 구조 유지, 정식 서버 연결 및 안전 검증 후 활성화, 정식앱 Hosting 제외. 2026-11-24 사용자 보고 PREVIEW PC A / 모바일 B 팔로우·취소 자동 반영 정상. 신규 APP795/796 저장 장부 전환 보류(PR #1405).

@@ -36,6 +36,7 @@ const fetchWorker=async([name,id])=>{
 // One release candidate: same exact PREVIEW core + the already deployed
 // APP797 production ingress. No new ledger, scheduler, or data schema.
 import assert from 'node:assert/strict';
+import {patchLegacyLikePreregister448} from './full-release-handoff-exact-preregister.mjs';
 import {mkdtempSync,writeFileSync,mkdirSync,rmSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,dirname} from 'node:path';
@@ -82,6 +83,10 @@ for(const [a,b] of [['https://preview.soridraw.com','https://soridraw.com'],['ht
 }
 let final=core.slice(0,at)+patch+core.slice(fallback);
 assert.equal(final.replace(patch,original),core,'UNRELATED_CORE_CHANGE');
+// Source repair proven in #45440348334. The shared PREVIEW scheduler must
+// receive the same repair before this production candidate can be activated.
+final=patchLegacyLikePreregister448(final);
+assert.equal(sha(final),'19d5e6d8a9d1dff6ce45c2498d2194abddb409f6fb8679539f35c752eca7a149','VERIFIED_HANDOFF_CORE');
 const expectedRoutes=['/v1/me/likes/batch','/v1/public-like-release-manifest-416','/v1/publication-live-card','/v1/me/notifications/inbox','/v1/internal/private-like-handoff-416','/v1/internal/public-like-release-416'];
 for(const r of expectedRoutes)assert(final.includes(r),'RELEASE_ROUTE_'+r);
 // Actual existing production wrapper and private capability stay unmodified.

@@ -1,11 +1,12 @@
-name: APP795 owner module connection offline and read-only assembly
+name: APP795 canonical and private relay connection (OFF)
 on:
   push:
     branches: [prep/app795-active-follow-connection]
     paths:
-      - 'scripts/app795-owner-module-patch.mjs'
-      - 'scripts/verify-795-owner-module-patch.mjs'
-      - 'scripts/app795-build-owner-readonly.mjs'
+      - 'scripts/app795-explore-module-patch.mjs'
+      - 'scripts/app795-canonical-runtime.mjs'
+      - 'scripts/verify-795-explore-module-patch.mjs'
+      - 'scripts/app795-build-explore-readonly.mjs'
       - '.github/workflows/app795-active-follow-callsites.yml'
 permissions:
   contents: read
@@ -18,7 +19,7 @@ jobs:
         with: {persist-credentials: false}
       - uses: actions/setup-node@v4
         with: {node-version: '22'}
-      - run: node scripts/verify-795-owner-module-patch.mjs
-      - run: node scripts/app795-build-owner-readonly.mjs
+      - run: node scripts/verify-795-explore-module-patch.mjs
+      - run: node scripts/app795-build-explore-readonly.mjs
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

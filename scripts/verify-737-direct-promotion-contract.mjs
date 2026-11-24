@@ -173,7 +173,7 @@ for(const mutate of [
 }
 const unknown797=with797();
 unknown797.workers.previewExplore.bindings.push({name:'UNKNOWN_FUNCTIONAL_FLAG',type:'plain_text'});
-unknown797.bindingDisposition.UNKNOWN_FUNCTIONAL_FLAG={...unknown797.bindingDisposition.SORIDRAW_OWNER_FOLLOW_HMAC_539'};
+unknown797.bindingDisposition.UNKNOWN_FUNCTIONAL_FLAG={...unknown797.bindingDisposition.SORIDRAW_OWNER_FOLLOW_HMAC_539};
 assert(assessApp737DirectPromotion(unknown797).unproven.includes('APP797_PRODUCTION_INGRESS_UNVERIFIED_UNKNOWN_FUNCTIONAL_FLAG'));
 console.log('APP797_PINNED_PRODUCTION_INGRESS_CONTRACT=PASS_SYNTHETIC; LIVE_PROOF_REQUIRED');
 const unproven=assessApp737DirectPromotion({

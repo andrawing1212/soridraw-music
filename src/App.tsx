@@ -26,7 +26,7 @@ import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck, canAcknowled
 import {useNotificationDots017} from './services/notifications/useNotificationDots017';
 import {projectCompletedExistingGenerations004} from './services/notifications/notificationInbox004';
 import {rememberCompletedGenerationLog016} from './services/notifications/notificationRecentLog016';
-import { planRecentUnconfirmedRecovery436, patchExactRecentTextRow436, readRecentLyricHistory, appendRecentLyricVersion, mergeRecentLyricHistory, sameLyricVersionContent, assertRecentLyricHistoryBudget, recentLyricBytes, type LyricHistoryEntry, type LyricHistoryLane, type LyricHistoryV1 } from './lib/recentUnconfirmedRecovery436';
+import { planRecentUnconfirmedRecovery436, patchExactRecentTextRow436, readRecentLyricHistory, appendRecentLyricVersion, mergeRecentLyricHistory, sameLyricVersionContent, resolveRecentLyricLocalView, stepRecentLyricLocalView, recentLyricCursorKey, assertRecentLyricHistoryBudget, recentLyricBytes, type LyricHistoryEntry, type LyricHistoryLane, type LyricHistoryV1 } from './lib/recentUnconfirmedRecovery436';
 import { protectRecentCanonicalSnapshotFromPreview453, pickRecentSongLiveTextPreview457, pickRecentSongLiveAppliedKeywords457 } from './lib/recentSongCanonicalPreviewGuard453';
 import './data/v2PreviewShadowMirror';
 import { createSoridrawSongId, isSoridrawSongId } from './data/v2LiveMutation';
@@ -7784,6 +7784,8 @@ function App() {
   const [recentSongRegeneratingTarget, setRecentSongRegeneratingTarget] = useState<string | null>(null);
   const [recentSongLocalVersionHistory, setRecentSongLocalVersionHistory] = useState<Record<string, RecentSongLocalVersionHistoryItem>>({});
   const recentSongLocalVersionHistoryRef = useRef<Record<string, RecentSongLocalVersionHistoryItem>>({});
+  const [lyricReadingCursors, setLyricReadingCursors] = useState<Record<string,string>>({});
+  const lyricReadingCursorsRef = useRef<Record<string,string>>({});
 
   const pushStudioModalHistory = useCallback((modalName: string) => {
     if (typeof window === 'undefined') return;
@@ -16708,13 +16710,26 @@ ${normalizePromptForDisplay(result.prompt)}
     });
   };
 
+  const readLocalLyricView = (song: SongResult, lang: LanguageCode) => {
+    const key = recentLyricCursorKey(String(user?.uid || ''),buildRecentSongSyncKey(song),lyricHistoryLane(song,lang));
+    const current = {lang,text:getLyricsByLanguage(song,lang),title:getTitleLanguageMap(song)[lang] || (lang === 'ko' ? song.koreanTitle : song.englishTitle) || ''};
+    return {key,...resolveRecentLyricLocalView(readLyricLane(song,lang),current,lyricReadingCursors[key])};
+  };
+  const setLocalLyricCursor = (key:string, cursor:string|null) => {
+    const next = {...lyricReadingCursorsRef.current};
+    if (cursor === null) delete next[key]; else next[key] = cursor;
+    // At most 30 local reading positions; no song payload or shared state.
+    const bounded = Object.fromEntries(Object.entries(next).slice(-30));
+    lyricReadingCursorsRef.current = bounded;
+    setLyricReadingCursors(bounded);
+  };
   const getRecentSongLocalVersionMeta = (song: SongResult | null | undefined, target: RecentSongLocalVersionTarget) => {
     const key = getRecentSongLocalVersionKey(song, target);
     if (song && target !== 'title') {
       const lang = target.replace(/^lyrics-/, '') as LanguageCode;
-      const lane = readLyricLane(song,lang);
-      const total = lane?.entries.length || 0;
-      const index = lane ? lane.entries.findIndex(x => x.id === lane.selectedId) : -1;
+      const view = readLocalLyricView(song,lang);
+      const total = view.entries.length;
+      const index = view.index;
       return { key, total, index, canPrev: total > 1 && index > 0, canNext: total > 1 && index >= 0 && index < total-1 };
     }
     const item = recentSongLocalVersionHistory[key];
@@ -16733,39 +16748,13 @@ ${normalizePromptForDisplay(result.prompt)}
     const activeSong = resultRef.current;
     if (!activeSong || lyricGenerationInFlight.current || isRecentSongEditOpen || recentSongInlineEditMode) return;
     if (target !== 'title') {
-      if (!user?.uid) return;
-      lyricGenerationInFlight.current = true;
-      try {
-        await prepareLyricEdit(activeSong);
-        const latest = latestLyricEditTarget(activeSong,user.uid);
-        if ((latest as any).__recentSongHistoryIncomplete === true) throw new Error('recent-lyric-history-syncing');
-        const lang = target.replace(/^lyrics-/, '') as LanguageCode;
-        const laneKey = lyricHistoryLane(latest,lang);
-        let archive = readRecentLyricHistory(latest.lyricGenerationHistoryV1);
-        const lane = archive[laneKey];
-        if (!lane) return;
-        const selected = lane.entries.find(x => x.id === lane.selectedId);
-        const current = lyricHistoryEntry(latest,lang,Date.now());
-        if (current && selected && !sameLyricVersionContent(selected,current))
-          archive = appendRecentLyricVersion(archive,laneKey,null,current);
-        const updatedLane = archive[laneKey]!;
-        const index = updatedLane.entries.findIndex(x => x.id === updatedLane.selectedId);
-        const nextIndex = direction === 'prev' ? index-1 : index+1;
-        if (nextIndex < 0 || nextIndex >= updatedLane.entries.length) return;
-        const nextEntry = updatedLane.entries[nextIndex];
-        archive = { ...archive, [laneKey]: { ...updatedLane, selectedId: nextEntry.id } };
-        const nextSong = selectLyricHistoryVersion(latest,lang,nextEntry,archive);
-        const nextHistory = historyRef.current.map((song,index) => index === historyIndexRef.current ? nextSong : song);
-        assertRecentLyricHistoryBudget(archive,nextHistory);
-        const serverSave = persistLyricHistoryLocallyOrExactly(latest,nextSong,user.uid,'add-lyrics-language');
-        if (serverSave) { await serverSave; return; }
-        resultRef.current = nextSong; historyRef.current = nextHistory;
-        setResult(nextSong); setHistory(nextHistory);
-        preserveHistoryIndexOnNextSnapshotRef.current = historyIndexRef.current;
-        recentSongsReadyToCacheRef.current = true;
-        queueRecentSongTextWrite(user.uid,nextHistory,'add-lyrics-language',buildRecentMirrorTargets([nextSong],'upsert'));
-      } catch (error) { showToast(lyricGenerationFailureMessage(error,'가사 이력을 불러오지 못했습니다.')); }
-      finally { lyricGenerationInFlight.current = false; }
+      if (!user?.uid || (activeSong as any).__recentSongHistoryIncomplete === true) return;
+      const lang = target.replace(/^lyrics-/, '') as LanguageCode;
+      const key = recentLyricCursorKey(user.uid,buildRecentSongSyncKey(activeSong),lyricHistoryLane(activeSong,lang));
+      const current = {lang,text:getLyricsByLanguage(activeSong,lang),title:getTitleLanguageMap(activeSong)[lang] || (lang === 'ko' ? activeSong.koreanTitle : activeSong.englishTitle) || ''};
+      const view = resolveRecentLyricLocalView(readLyricLane(activeSong,lang),current,lyricReadingCursorsRef.current[key]);
+      const step = stepRecentLyricLocalView(view,direction);
+      if (step) setLocalLyricCursor(key,step.cursor);
       return;
     }
 
@@ -16801,6 +16790,46 @@ ${normalizePromptForDisplay(result.prompt)}
         index: nextIndex,
       },
     }));
+  };
+
+  // Only an explicit "use this version" action changes the shared current lyric.
+  const applyViewedLyricVersion = async (lang:LanguageCode) => {
+    const active = resultRef.current;
+    if (!active || !user?.uid || lyricGenerationInFlight.current || recentSongInlineEditMode) return;
+    const view = readLocalLyricView(active,lang);
+    if (!view.historical || !view.entry?.id) return;
+    const uid = user.uid, wantedId = view.entry.id;
+    lyricGenerationInFlight.current = true;
+    try {
+      await prepareLyricEdit(active);
+      const latest = latestLyricEditTarget(active,uid);
+      if ((latest as any).__recentSongHistoryIncomplete === true) throw new Error('recent-lyric-history-syncing');
+      const laneKey = lyricHistoryLane(latest,lang);
+      let archive = readRecentLyricHistory(latest.lyricGenerationHistoryV1);
+      let lane = archive[laneKey];
+      const entry = lane?.entries.find(x=>x.id === wantedId);
+      if (!lane || !entry) return;
+      const current = lyricHistoryEntry(latest,lang,Date.now());
+      if (current && !lane.entries.some(x=>sameLyricVersionContent(x,current))) {
+        archive = appendRecentLyricVersion(archive,laneKey,null,current);
+        lane = archive[laneKey]!;
+      }
+      archive = {...archive,[laneKey]:{...lane,selectedId:entry.id}};
+      const nextSong = selectLyricHistoryVersion(latest,lang,entry,archive);
+      const nextHistory = historyRef.current.map((song,index)=>index === historyIndexRef.current ? nextSong : song);
+      assertRecentLyricHistoryBudget(archive,nextHistory);
+      const serverSave = persistLyricHistoryLocallyOrExactly(latest,nextSong,user.uid,'add-lyrics-language');
+      if (serverSave) await serverSave;
+      else {
+        resultRef.current = nextSong; historyRef.current = nextHistory;
+        setResult(nextSong); setHistory(nextHistory);
+        preserveHistoryIndexOnNextSnapshotRef.current = historyIndexRef.current;
+        recentSongsReadyToCacheRef.current = true;
+        queueRecentSongTextWrite(uid,nextHistory,'add-lyrics-language',buildRecentMirrorTargets([nextSong],'upsert'));
+      }
+      setLocalLyricCursor(view.key,null);
+    } catch(error) { showToast(lyricGenerationFailureMessage(error,'가사 버전을 적용하지 못했습니다.')); }
+    finally { lyricGenerationInFlight.current = false; }
   };
 
   const buildSongRegenerationPayload = (song: SongResult, geminiApiKey: string) => {
@@ -22720,9 +22749,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                       const generationIsForCurrentSong = lyricGenerationSongKey !== null && lyricGenerationSongKey === buildRecentSongSyncKey(result);
                       const addingFirstLanguage = generationIsForCurrentSong && isAddingLyricsLanguage && !replacingLyricsLanguage;
-                      const renderLyricGenerationGlow = () => (
-                        <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-10 rounded-[inherit] shadow-[inset_0_0_16px_2px_rgba(227,161,58,0.48)] opacity-70 motion-safe:animate-pulse motion-safe:[animation-duration:2.8s]" />
-                      );
                       const renderLyricsGenerationProgress = (lang: LanguageCode) => (
                         <div role="status" aria-live="polite" className="flex min-h-[180px] flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
                           <div aria-hidden="true" className="flex h-12 items-center justify-center gap-1.5 text-[#e3a13a]">
@@ -22734,7 +22760,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       );
                       const renderAddLyricsLanguageCard = () => missingLyricLanguages.length > 0 ? (
                         <div aria-busy={addingFirstLanguage} className="relative soridraw-result-lyrics-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-dashed border-[#e3a13a]/[0.22] overflow-hidden flex flex-col shadow-[0_14px_36px_rgba(0,0,0,0.26)] transition-colors duration-150">
-                          {addingFirstLanguage && renderLyricGenerationGlow()}
                           <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                             <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                               <Languages className="w-4 h-4 text-[#e3a13a]" />
@@ -22768,15 +22793,17 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       ) : null;
 
                       const renderLyricsCard = (lang: LanguageCode) => {
-                        const lyricsText = getLyricsByLanguage(result, lang);
+                        const localView = readLocalLyricView(result,lang);
+                        const historical = localView.historical && !isRecentSongSectionEditing('lyrics');
+                        const visibleLang = historical ? localView.entry.lang as LanguageCode : lang;
+                        const lyricsText = historical ? localView.entry.text : getLyricsByLanguage(result,lang);
                         if (!lyricsText) return null;
-                        const label = lyricLanguageLabels[lang]?.ko || lang;
+                        const label = lyricLanguageLabels[visibleLang]?.ko || visibleLang;
                         const copyType = `lyrics-${lang}`;
                         const cardBusy = generationIsForCurrentSong && (recentSongRegeneratingTarget === `lyrics-${lang}` || (isAddingLyricsLanguage && replacingLyricsLanguage === lang));
 
                         return (
-                          <div key={lang} aria-busy={cardBusy} className="relative soridraw-result-lyrics-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col group/lyrics shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-colors duration-150">
-                            {cardBusy && renderLyricGenerationGlow()}
+                          <div key={lang} aria-busy={cardBusy} className="relative soridraw-result-lyrics-card soridraw-result-lyrics-content-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col group/lyrics shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-colors duration-150">
                             <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                               <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                                 <Music className="w-4 h-4 text-[#e3a13a]" />
@@ -22789,7 +22816,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                     e.stopPropagation();
                                     handleRegenerateCurrentSongPart({ type: 'lyrics', lang });
                                   }}
-                                  disabled={Boolean(recentSongRegeneratingTarget) || isAddingLyricsLanguage}
+                                  disabled={historical || Boolean(recentSongRegeneratingTarget) || isAddingLyricsLanguage}
                                   onMouseEnter={() => setHoveredItem({ id: `regenerate-${copyType}`, label: `${label} 가사 다시 생성`, description: `${label} 가사만 독립적으로 다시 생성합니다.` })}
                                   onMouseLeave={() => setHoveredItem(null)}
                                   className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-btn disabled:opacity-50 disabled:cursor-not-allowed"
@@ -22797,7 +22824,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 >
                                   <RefreshCw className="w-5 h-5 opacity-80" />
                                 </button>
-                                {renderRecentSongInlineEditActions('lyrics', `edit-${copyType}`, `${label} 가사 수정`, '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'section')}
+                                {historical ? <button type="button" disabled title="이 버전 사용 후 수정할 수 있습니다." className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/5 opacity-40"><Edit2 className="w-5 h-5" /></button> : renderRecentSongInlineEditActions('lyrics', `edit-${copyType}`, `${label} 가사 수정`, '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'section')}
                                 <button
                                   type="button"
                                   onClick={() => copyToClipboard(isRecentSongSectionEditing('lyrics') && recentSongEditDraft ? getRecentSongLyricsDraftValue(lang) : normalizeLyricsForDisplay(lyricsText), copyType)}
@@ -22809,10 +22836,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 </button>
                               </div>
                             </div>
-                            <div className="flex flex-wrap items-center justify-center gap-2 px-3 py-1">
-                              {lang !== 'ko' && <button type="button" className="flex items-center gap-1.5 rounded-xl bg-[#e3a13a]/10 px-3 py-2 text-xs font-bold text-[#e3a13a] hover:bg-[#e3a13a]/20 disabled:opacity-40" disabled={isAddingLyricsLanguage || Boolean(recentSongRegeneratingTarget) || Boolean(recentSongInlineEditMode)} onClick={() => setLyricsLanguageChange({lang,songKey:buildRecentSongSyncKey(result)})}><Languages className="h-4 w-4" />언어 변경</button>}
-                              {(result as any).__recentSongHistoryIncomplete === true ? <span className="text-xs text-[var(--text-secondary)]">이력 동기화 중</span> : renderRecentSongLocalVersionButtons(`lyrics-${lang}` as RecentSongLocalVersionTarget,'section')}
+                            <div className="soridraw-lyric-history-controls">
+                              <div className="soridraw-lyric-history-nav">{(result as any).__recentSongHistoryIncomplete === true ? <span className="text-xs text-[var(--text-secondary)]">이력 동기화 중</span> : renderRecentSongLocalVersionButtons(`lyrics-${lang}` as RecentSongLocalVersionTarget,'section')}</div>
+                              {lang !== 'ko' && <button type="button" className="soridraw-lyric-language-change flex items-center gap-1.5 rounded-xl bg-[#e3a13a]/10 px-3 py-2 text-xs font-bold text-[#e3a13a] hover:bg-[#e3a13a]/20 disabled:opacity-40" disabled={historical || isAddingLyricsLanguage || Boolean(recentSongRegeneratingTarget) || Boolean(recentSongInlineEditMode)} onClick={() => setLyricsLanguageChange({lang,songKey:buildRecentSongSyncKey(result)})}><Languages className="h-4 w-4" />언어 변경</button>}
                             </div>
+                            {historical && <div className="flex shrink-0 items-center justify-center gap-2 px-3 pb-1 text-xs text-[var(--text-secondary)]">
+                              <span>이전 버전 열람 중</span><button type="button" onClick={()=>void applyViewedLyricVersion(lang)} disabled={Boolean(recentSongRegeneratingTarget) || isAddingLyricsLanguage || Boolean(recentSongInlineEditMode)} className="rounded-lg bg-[#e3a13a]/10 px-2 py-1 font-bold text-[#e3a13a] disabled:opacity-40">이 버전 사용</button>
+                            </div>}
                             <div data-soridraw-selectable-text="true" className="soridraw-result-lyrics-scroll flex-1 p-5 sm:p-8 overflow-y-scroll custom-scrollbar flex flex-col items-center h-full">
                               {isRecentSongSectionEditing('lyrics') && recentSongEditDraft ? (
                                 <textarea

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {assessApp737DirectPromotion} from './app737-direct-promotion-contract.mjs';
 import {summarizeApp737ProductionGaps} from './app737-live-readiness.mjs';
 const s='f'.repeat(40),sha='a'.repeat(64);
@@ -176,6 +177,48 @@ unknown797.workers.previewExplore.bindings.push({name:'UNKNOWN_FUNCTIONAL_FLAG',
 unknown797.bindingDisposition.UNKNOWN_FUNCTIONAL_FLAG={...unknown797.bindingDisposition.SORIDRAW_OWNER_FOLLOW_HMAC_539};
 assert(assessApp737DirectPromotion(unknown797).unproven.includes('APP797_PRODUCTION_INGRESS_UNVERIFIED_UNKNOWN_FUNCTIONAL_FLAG'));
 console.log('APP797_PINNED_PRODUCTION_INGRESS_CONTRACT=PASS_SYNTHETIC; LIVE_PROOF_REQUIRED');
+// Single shared notification retention schedule is a functional maintenance
+// alternative, not a QA exclusion. All live evidence remains mandatory.
+const retentionName='SORIDRAW_NOTIFICATION_RETENTION_013';
+const retentionCron='37 * * * *';
+const withRetention=()=>{
+ const x=make(),hash=value=>createHash('sha256').update(value).digest('hex');
+ const p=x.workers.previewExplore,d=x.workers.productionExplore;
+ p.bindings.find(b=>b.name==='SORIDRAW_ENVIRONMENT').plainHash=hash('preview');
+ d.bindings.find(b=>b.name==='SORIDRAW_ENVIRONMENT').plainHash=hash('production');
+ for(const name of ['SORIDRAW_NOTIFICATION_SCHEMA_READY_013','SORIDRAW_NOTIFICATION_INBOX_READ_ONLY_019']){
+  p.bindings.push({name,type:'plain_text',plainHash:hash('1')});
+  d.bindings.push({name,type:'plain_text',plainHash:hash('1')});
+ }
+ p.bindings.push({name:retentionName,type:'plain_text',plainHash:hash('1')});
+ p.schedules=[{cron:retentionCron}];
+ x.bindingDisposition[retentionName]={
+  classification:'SHARED_NOTIFICATION_RETENTION',evidenceVerified:true,evidenceSha256:sha,
+  sourceAndActiveRuntimeVerified:true,previewActiveVersion:p.activeVersion,
+  productionActiveVersion:d.activeVersion,sharedRetentionOwnerVerified:true,
+  authenticatedInboxParityVerified:true,retentionPolicyAndCostVerified:true};
+ return x;
+};
+const retained=assessApp737DirectPromotion(withRetention());
+assert.equal(retained.status,'READY_FOR_DIRECTOR_APPROVAL',retained.unproven.join(','));
+assert(retained.bindingInventory.reviewedExclusions.some(x=>x.name===retentionName&&x.maintenanceOwner==='preview'));
+for(const mutate of [
+ x=>{x.bindingDisposition[retentionName].authenticatedInboxParityVerified=false},
+ x=>{x.bindingDisposition[retentionName].retentionPolicyAndCostVerified=false},
+ x=>{x.bindingDisposition[retentionName].previewActiveVersion=v('f')},
+ x=>{x.workers.previewExplore.schedules=[]},
+ x=>{x.workers.productionExplore.schedules=[{cron:retentionCron}]},
+ x=>{x.workers.previewExplore.bindings.find(b=>b.name===retentionName).plainHash='off'},
+ x=>{x.workers.productionExplore.bindings.find(b=>b.name==='SORIDRAW_NOTIFICATION_INBOX_READ_ONLY_019').plainHash='off'},
+ x=>{x.workers.productionExplore.bindings.find(b=>b.name==='DB').id='different'},
+ x=>{x.verification.costAndNoPassiveWritesVerified=false},
+]){
+ const x=withRetention();mutate(x);
+ const result=assessApp737DirectPromotion(x);
+ assert.equal(result.status,'HOLD');
+ assert(result.unproven.includes('SHARED_NOTIFICATION_RETENTION_UNVERIFIED_'+retentionName));
+}
+console.log('SHARED_NOTIFICATION_RETENTION_CONTRACT=PASS_SYNTHETIC; LIVE_PROOF_REQUIRED');
 const unproven=assessApp737DirectPromotion({
  previewSha:s,currentPreviewHead:s,
  workers:make().workers,hosting:make().hosting,bindingDisposition:{},

@@ -1,0 +1,37 @@
+name: Full release inactive HTTP and frontend build
+on:
+  push:
+    branches: [prep/full-preview-production-parity]
+    paths:
+      - 'scripts/verify-full-release-inactive-http.mjs'
+      - '.github/workflows/full-production-release-final-preflight.yml'
+permissions:
+  contents: read
+jobs:
+  inactive:
+    if: github.actor == github.repository_owner
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Existing version URL only, invalid auth and invalid claims
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/verify-full-release-inactive-http.mjs
+  frontend:
+    if: github.actor == github.repository_owner
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: npm ci --no-audit --no-fund
+      - run: node scripts/verify-notification-unified-inbox-004.mjs
+      - run: node scripts/verify-notification-release-readiness-005.mjs
+      - run: node scripts/verify-full-production-notification-host.mjs
+      - run: npm run build

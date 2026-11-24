@@ -21,7 +21,7 @@ assert.match(entry,/cache:env\?\.PROFILE_MEDIA,enabled:true,cors/,
   'announcements must use the shared PROFILE_MEDIA, not per-env Explore cache');
 // Stage022: GET-only client activation is restricted to real PREVIEW Hosting
 // with the exact PREVIEW Worker. Shared collector and admin writes stay OFF.
-assert.match(client,/canUsePreviewInbox022\(window.location.hostname,EXPLORE_API_BASE\)/);
+assert.match(client,/canUseReleaseInbox\(window.location.hostname,EXPLORE_API_BASE\)/);
 assert.doesNotMatch(client,/NOTIFICATION_INBOX_ENABLED_004=false/);
 assert.match(settings,/NOTIFICATION_ACCOUNT_SYNC_ENABLED_003 = false/);
 assert.match(entry,/staffRolePresent: Object\.prototype\.hasOwnProperty\.call\(fields,'staffRole'\)/);

@@ -135,6 +135,7 @@ type MusicNoteDetailPendingPatch = {
   baseVersion: number;
   updatedAtMs: number;
   updates: Record<string, any>;
+  lyricExpectedFingerprint?: string;
 };
 
 const mergeMusicNoteDetailPatch = (base: Record<string, any>, patch: Record<string, any>) => ({
@@ -1196,6 +1197,7 @@ export default function FavoritesPage({
   const [,setNoteLyricCursors]=useState<Record<string,string>>({});
   const noteLyricCursorsRef=useRef<Record<string,string>>({});
   const noteLyricBusyRef=useRef(false);
+  const noteLyricConflictRef=useRef<string|null>(null);
   const [noteLyricBusy,setNoteLyricBusy]=useState<{id:string;slot:MusicNoteLyricSlot;first:boolean}|null>(null);
   const [noteLyricPicker,setNoteLyricPicker]=useState<{id:string;slot:MusicNoteLyricSlot}|null>(null);
   const noteLyricEditorRef=useRef<{source:any;slot:MusicNoteLyricSlot;visible:ReturnType<typeof resolveRecentLyricLocalView>['entry'];initialText:string;key:string;request:number}|null>(null);
@@ -1932,7 +1934,14 @@ export default function FavoritesPage({
 
     const task = (async () => {
       try {
-        await updateFavorite(pending.songId, pending.updates);
+        let committedUpdates=pending.updates;
+        if(pending.lyricExpectedFingerprint!==undefined){
+          const committed=await updateFavorite(pending.songId,pending.updates,pending.lyricExpectedFingerprint);
+          if(!committed)throw new Error('music-note-lyric-save-failed');
+          committedUpdates=committed;
+        }else{
+          await updateFavorite(pending.songId, pending.updates);
+        }
 
         // app428: public metadata follows the existing canonical Music Note
         // settlement, never editor keystrokes. A derived Explore failure must not
@@ -1961,12 +1970,12 @@ export default function FavoritesPage({
         }
 
         const latest = favoritesStore.getFavorites().find((song: any) => getFavoriteDocumentId(song) === pending.songId);
-        const committedVersion = getMusicNoteDetailSourceVersion(latest) || Date.now();
+        const committedVersion = getMusicNoteDetailSourceVersion(committedUpdates) || getMusicNoteDetailSourceVersion(latest) || Date.now();
         await patchMusicNoteDetailCache({
           uid: user.uid,
           sourceId: pending.songId,
           sourceVersion: committedVersion,
-          updates: pending.updates,
+          updates: committedUpdates,
         });
 
         const baselineEntry = favoriteDetailServerBaselineRef.current;
@@ -1974,7 +1983,7 @@ export default function FavoritesPage({
           favoriteDetailServerBaselineRef.current = {
             songId: pending.songId,
             data: mergeMusicNoteDetailDraft(baselineEntry.data, {
-              ...pending.updates,
+              ...committedUpdates,
               updatedAtMs: committedVersion,
             }),
           };
@@ -1992,9 +2001,11 @@ export default function FavoritesPage({
               baseVersion: committedVersion,
               updatedAtMs: Date.now(),
               updates: rebasedUpdates,
+              ...(newerPending.lyricExpectedFingerprint!==undefined && favoriteDetailServerBaselineRef.current?.songId===pending.songId
+                ? {lyricExpectedFingerprint:musicNoteLyricFingerprint(favoriteDetailServerBaselineRef.current.data)} : {}),
             };
             favoriteDetailPendingPatchRef.current = rebasedPending;
-            await writeMusicNoteDetailDraft(user.uid, rebasedPending.songId, rebasedPending.baseVersion, rebasedPending.updates);
+            await writeMusicNoteDetailDraft(user.uid, rebasedPending.songId, rebasedPending.baseVersion, rebasedPending.updates,rebasedPending.lyricExpectedFingerprint);
           }
         } else {
           await clearMusicNoteDetailDraft(user.uid, pending.songId);
@@ -2020,10 +2031,15 @@ export default function FavoritesPage({
           baseVersion: pending.baseVersion || newerPending?.baseVersion || 0,
           updatedAtMs: Date.now(),
           updates: restoredUpdates,
+          lyricExpectedFingerprint:pending.lyricExpectedFingerprint ?? (newerPending?.songId===pending.songId?newerPending.lyricExpectedFingerprint:undefined),
         };
-        favoriteDetailPendingPatchRef.current = restored;
+        if(!newerPending || newerPending.songId===pending.songId || pending.lyricExpectedFingerprint===undefined)favoriteDetailPendingPatchRef.current = restored;
         setFavoriteDetailSaveStatus('pending');
-        await writeMusicNoteDetailDraft(user.uid, restored.songId, restored.baseVersion, restored.updates);
+        await writeMusicNoteDetailDraft(user.uid, restored.songId, restored.baseVersion, restored.updates,restored.lyricExpectedFingerprint);
+        if(String((error as any)?.message||'').includes('music-note-lyric-concurrent-change')){
+          noteLyricConflictRef.current=pending.songId;
+          showFavoriteToast('다른 기기의 가사와 임시 저장본이 겹칩니다. 기존 가사와 임시 저장본을 보존했습니다.');
+        }
       } finally {
         favoriteDetailFlushInFlightRef.current = null;
       }
@@ -2140,7 +2156,7 @@ export default function FavoritesPage({
     return () => { cancelled = true; };
   }, [user?.uid, favorites, isMusicNoteSharedView]);
 
-  const queueFavoriteDetailPatch = (songId: string, patch: Record<string, any>) => {
+  const queueFavoriteDetailPatch = (songId: string, patch: Record<string, any>, lyricExpectedFingerprint?:string) => {
     const safeSongId = String(songId || '').trim();
     if (!safeSongId || !user?.uid || !patch || Object.keys(patch).length === 0) return;
 
@@ -2185,11 +2201,12 @@ export default function FavoritesPage({
       baseVersion,
       updatedAtMs: Date.now(),
       updates,
+      lyricExpectedFingerprint:(existing?.songId===safeSongId?existing.lyricExpectedFingerprint:undefined)??lyricExpectedFingerprint,
     };
     favoriteDetailPendingPatchRef.current = pending;
     setFavoriteDetailSaveStatus('pending');
 
-    const persistTask = writeMusicNoteDetailDraft(user.uid, safeSongId, baseVersion, updates);
+    const persistTask = writeMusicNoteDetailDraft(user.uid, safeSongId, baseVersion, updates,pending.lyricExpectedFingerprint);
     const trackedPersistTask = persistTask.finally(() => {
       if (favoriteDetailDraftPersistInFlightRef.current === trackedPersistTask) {
         favoriteDetailDraftPersistInFlightRef.current = null;
@@ -2210,14 +2227,19 @@ export default function FavoritesPage({
     for (const draft of drafts) {
       if (!draft?.sourceId || draft.sourceId === stillPendingSongId) continue;
       try {
-        await updateFavorite(draft.sourceId, draft.updates);
+        let committedUpdates=draft.updates;
+        if(draft.lyricExpectedFingerprint!==undefined){
+          const committed=await updateFavorite(draft.sourceId,draft.updates,draft.lyricExpectedFingerprint);
+          if(!committed)throw new Error('music-note-lyric-save-failed');
+          committedUpdates=committed;
+        }else await updateFavorite(draft.sourceId, draft.updates);
         const latest = favoritesStore.getFavorites().find((song: any) => String(song?.id || '') === draft.sourceId);
-        const committedVersion = getMusicNoteDetailSourceVersion(latest) || Date.now();
+        const committedVersion = getMusicNoteDetailSourceVersion(committedUpdates) || getMusicNoteDetailSourceVersion(latest) || Date.now();
         await patchMusicNoteDetailCache({
 uid,
 sourceId: draft.sourceId,
 sourceVersion: committedVersion,
-updates: draft.updates,
+updates: committedUpdates,
         });
         await clearMusicNoteDetailDraft(uid, draft.sourceId);
       } catch (error) {
@@ -4717,7 +4739,7 @@ updates: draft.updates,
     let timer:ReturnType<typeof setTimeout>;
     return Promise.race([work,new Promise<T>((_,reject)=>{timer=setTimeout(()=>reject(new Error('music-note-lyric-timeout')),ms);})]).finally(()=>clearTimeout(timer));
   };
-  const applyCommittedNoteLyricFields=(id:string,patch:Record<string,any>)=>{
+  const applyCommittedNoteLyricFields=(id:string,patch:Record<string,any>,committed=true)=>{
     const current=noteLyricSelectedRef.current;
     if(!current||getFavoriteDocumentId(current)!==id)return;
     const next=mergeMusicNoteDetailDraft(current,patch);
@@ -4729,33 +4751,33 @@ updates: draft.updates,
     setOriginalKoreanTitle(cleanTitlePart(next.koreanTitle||''));setEditedKoreanTitle(cleanTitlePart(next.koreanTitle||''));
     setOriginalEnglishTitle(cleanTitlePart(next.englishTitle||''));setEditedEnglishTitle(cleanTitlePart(next.englishTitle||''));
     const baseline=favoriteDetailServerBaselineRef.current;
-    if(baseline?.songId===id)favoriteDetailServerBaselineRef.current={songId:id,data:mergeMusicNoteDetailDraft(baseline.data,patch)};
+    if(committed&&baseline?.songId===id)favoriteDetailServerBaselineRef.current={songId:id,data:mergeMusicNoteDetailDraft(baseline.data,patch)};
   };
   const commitNoteLyricPatch=async(source:any,patch:Record<string,any>,request:number,uid:string)=>{
     const id=getFavoriteDocumentId(source);
     const expected=musicNoteLyricFingerprint(source);
     const stillOpen=()=>auth.currentUser?.uid===uid&&favoriteDetailOpenRequestRef.current===request&&getFavoriteDocumentId(noteLyricSelectedRef.current)===id;
-    if(!id||!stillOpen())throw new Error('music-note-lyric-target-unavailable');
-    // An actual lyric save, never browsing, may settle earlier explicit edits.
-    if(favoriteDetailPendingPatchRef.current||favoriteDetailFlushInFlightRef.current)await flushFavoriteDetailPendingPatch('manual');
-    if(favoriteDetailPendingPatchRef.current||!stillOpen()||musicNoteLyricFingerprint(noteLyricSelectedRef.current)!==expected)
-      throw new Error('music-note-lyric-concurrent-change');
-    const committed=await updateFavorite(id,patch,expected);
-    if(!committed||!committed.lyricGenerationHistoryV1)throw new Error('music-note-lyric-save-failed');
-    if(auth.currentUser?.uid!==uid)return;
-    await patchMusicNoteDetailCache({uid,sourceId:id,sourceVersion:getMusicNoteDetailSourceVersion(committed),updates:committed});
-    if(stillOpen()) {
-      applyCommittedNoteLyricFields(id,committed);
-      setFavoriteDetailSaveStatus('saved');
-    }
-    // Preserve the existing publication-content settlement only after a real save.
-    try {
-      const publicationState=await getExploreMusicNotePublicationState(user!,id);
-      if(publicationState.status==='public'&&publicationState.registered){
-        const refreshed=await refreshExploreMusicNotePublicationContent428(user!,id,publicationState);
-        if(auth.currentUser?.uid===uid)setExplorePublicationStateBySongId(prev=>({...prev,[id]:refreshed}));
-      }
-    }catch(error){console.warn('Public Music Note lyric refresh deferred:',error);}
+    if(!id||!stillOpen()||noteLyricConflictRef.current===id)throw new Error('music-note-lyric-target-unavailable');
+    if(favoriteDetailFlushInFlightRef.current)await favoriteDetailFlushInFlightRef.current;
+    if(!stillOpen()||musicNoteLyricFingerprint(noteLyricSelectedRef.current)!==expected)throw new Error('music-note-lyric-concurrent-change');
+    // Preserve the existing page-exit batch and the original server baseline.
+    const baseline=favoriteDetailServerBaselineRef.current;
+    if(baseline?.songId!==id)throw new Error('music-note-lyric-target-unavailable');
+    if(favoriteDetailDraftPersistInFlightRef.current)await favoriteDetailDraftPersistInFlightRef.current;
+    if(!stillOpen())throw new Error('music-note-lyric-target-unavailable');
+    const pending=favoriteDetailPendingPatchRef.current;
+    const guardedFingerprint=pending?.songId===id&&pending.lyricExpectedFingerprint!==undefined
+      ?pending.lyricExpectedFingerprint:musicNoteLyricFingerprint(baseline.data);
+    queueFavoriteDetailPatch(id,patch,guardedFingerprint);
+    applyCommittedNoteLyricFields(id,patch,false);
+    if(favoriteDetailDraftPersistInFlightRef.current)await favoriteDetailDraftPersistInFlightRef.current;
+    if(!stillOpen())return;
+    const persisted=await readMusicNoteDetailDraft(uid,id);
+    if(persisted?.lyricExpectedFingerprint!==guardedFingerprint || JSON.stringify(persisted?.updates?.lyricGenerationHistoryV1)!==JSON.stringify(patch.lyricGenerationHistoryV1)){
+      // Exceptional local storage failure only: settle the exact pending draft.
+      await flushFavoriteDetailPendingPatch('manual');
+      if(favoriteDetailPendingPatchRef.current?.songId===id)throw new Error('music-note-lyric-save-failed');
+    }else showFavoriteToast('가사 이력이 저장 대기 중입니다.');
   };
   const noteLyricError=(error:unknown)=>{
     const message=String((error as any)?.message||error||'');
@@ -4769,6 +4791,7 @@ updates: draft.updates,
     const uid=String(user?.uid||'');
     if(!source||!uid||isSelectedSongReadOnly||isFavoriteDetailOpening||source.__catalogSummary===true||noteLyricBusyRef.current||isEditing)return;
     const id=getFavoriteDocumentId(source),request=favoriteDetailOpenRequestRef.current;
+    if(noteLyricConflictRef.current===id){showFavoriteToast('다른 기기 변경과 임시 저장본이 겹칩니다. 기존 가사를 보호하고 있습니다.');return;}
     const view=readNoteLyricView(source,slot),other=readNoteLyricView(source,slot==='korean'?'english':'korean');
     const target=(requested||view.entry.lang) as LanguageCode;
     const korean=noteKoreanSource(source);
@@ -4798,7 +4821,8 @@ updates: draft.updates,
   };
   const startNoteLyricEdit=(slot:MusicNoteLyricSlot)=>{
     const source=noteLyricSelectedRef.current;
-    if(!source||isSelectedSongReadOnly||isFavoriteDetailOpening||noteLyricBusyRef.current||isEditing)return;
+    if(!source||isSelectedSongReadOnly||isFavoriteDetailOpening||source.__catalogSummary===true||noteLyricBusyRef.current||isEditing)return;
+    if(noteLyricConflictRef.current===getFavoriteDocumentId(source)){showFavoriteToast('다른 기기 변경과 임시 저장본이 겹칩니다. 기존 가사를 보호하고 있습니다.');return;}
     const view=readNoteLyricView(source,slot);
     const initialText=normalizeFavoriteLyricsForDisplay(view.entry.text);
     noteLyricEditorRef.current={source,slot,visible:{...view.entry},initialText,key:view.key,request:favoriteDetailOpenRequestRef.current};
@@ -4829,7 +4853,9 @@ updates: draft.updates,
       }
       await commitNoteLyricPatch(editor.source,patch,editor.request,uid);
       setNoteLyricCursor(editor.key,null);
-      noteLyricEditorRef.current=null;setIsEditing(false);setActiveEditSection(null);setIsSyncEnabled(false);
+      if(auth.currentUser?.uid===uid&&favoriteDetailOpenRequestRef.current===editor.request&&noteLyricEditorRef.current===editor){
+        noteLyricEditorRef.current=null;setIsEditing(false);setActiveEditSection(null);setIsSyncEnabled(false);
+      }
     }catch(error){console.error('Music Note lyric edit failed:',error);showFavoriteToast(noteLyricError(error));}
     finally{noteLyricBusyRef.current=false;setIsTranslating(false);}
   };
@@ -4884,8 +4910,8 @@ updates: draft.updates,
       try{
         const snapshot=await getDocFromServer(doc(db,'favorites',pending.id));
         const canonical=snapshot.exists()?snapshot.data():null;
-        if(!canonical||canonical.uid!==pending.uid||auth.currentUser?.uid!==pending.uid||favoriteDetailOpenRequestRef.current!==request||getFavoriteDocumentId(noteLyricSelectedRef.current)!==pending.id)return;
-        if(noteLyricBusyRef.current||noteLyricEditorRef.current||favoriteDetailPendingPatchRef.current){noteLyricRemotePendingRef.current=pending;return;}
+        if(!canonical||canonical.uid!==pending.uid||auth.currentUser?.uid!==pending.uid||favoriteDetailOpenRequestRef.current!==request||getFavoriteDocumentId(noteLyricSelectedRef.current)!==pending.id||noteLyricRemoteSeenRef.current[pending.uid+':'+pending.id]!==pending.version)return;
+        if(noteLyricBusyRef.current||noteLyricEditorRef.current||favoriteDetailPendingPatchRef.current){if(!noteLyricRemotePendingRef.current||noteLyricRemotePendingRef.current.version<pending.version)noteLyricRemotePendingRef.current=pending;return;}
         const patch={lyrics:canonical.lyrics,appliedKeywords:canonical.appliedKeywords,lyricGenerationHistoryV1:canonical.lyricGenerationHistoryV1,koreanTitle:canonical.koreanTitle,englishTitle:canonical.englishTitle,updatedAtMs:canonical.updatedAtMs};
         applyCommittedNoteLyricFields(pending.id,patch);
         await patchMusicNoteDetailCache({uid:pending.uid,sourceId:pending.id,sourceVersion:getMusicNoteDetailSourceVersion(canonical),updates:patch});
@@ -5680,7 +5706,7 @@ updates: draft.updates,
   }, [isSelectionMode]);
 
   const closeSelectedSong = async (source: 'ui' | 'history' = 'ui') => {
-    noteLyricEditorRef.current=null;setNoteLyricPicker(null);
+    noteLyricEditorRef.current=null;setNoteLyricPicker(null);noteLyricRemotePendingRef.current=null;
     ++favoriteDetailOpenRequestRef.current;
     setIsFavoriteDetailOpening(false);
     const shouldPopOverlayHistory = source === 'ui' && detailHistoryPushedRef.current;
@@ -7372,7 +7398,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
   const openFavoriteDetail = async (song: any) => {
     if (!song) return;
-    noteLyricEditorRef.current=null;setNoteLyricPicker(null);
+    noteLyricEditorRef.current=null;setNoteLyricPicker(null);noteLyricRemotePendingRef.current=null;noteLyricConflictRef.current=null;
     const requestId = ++favoriteDetailOpenRequestRef.current;
     // Open at tap time, not after a potentially slow exact-song/IndexedDB read.
     // Block edits until hydrated originals and pending-draft reconciliation finish.
@@ -7405,7 +7431,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       );
       const mediaVersionCompatible = recoveredMediaVersion > 0
         && (hydratedMediaVersion <= 0 || hydratedMediaVersion <= recoveredMediaVersion);
-      if (compatible || mediaVersionCompatible) {
+      const lyricCompatible=recovered.lyricExpectedFingerprint===undefined||recovered.lyricExpectedFingerprint===musicNoteLyricFingerprint(hydrated);
+      if ((compatible || mediaVersionCompatible) && lyricCompatible) {
         const recoveredUpdates = pruneFavoriteDetailPatchAgainstBaseline(sourceId, recovered.updates);
           if (Object.keys(recoveredUpdates).length > 0) {
             nextSong = mergeMusicNoteDetailDraft(hydrated, recoveredUpdates);
@@ -7414,6 +7441,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               baseVersion: recovered.baseVersion || currentVersion,
               updatedAtMs: recovered.updatedAtMs || Date.now(),
               updates: recoveredUpdates,
+              lyricExpectedFingerprint:recovered.lyricExpectedFingerprint,
             };
             scheduleFavoriteDetailFlush();
           } else {
@@ -7421,6 +7449,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             void clearMusicNoteDetailDraft(user.uid, sourceId);
           }
         } else {
+          if(!lyricCompatible){noteLyricConflictRef.current=sourceId;showFavoriteToast('다른 기기의 가사와 임시 저장본이 겹칩니다. 두 기록을 보존했습니다.');}
           console.warn('music note detail recovery kept pending because server version advanced', { sourceId });
         }
       }

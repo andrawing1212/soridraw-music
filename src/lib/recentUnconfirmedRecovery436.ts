@@ -222,7 +222,11 @@ export const musicNoteLyricSlots = (song:any) => {
 };
 export const musicNoteLyricFingerprint = (song:any) => {
   const slots=musicNoteLyricSlots(song);
-  const history=readRecentLyricHistory(song?.lyricGenerationHistoryV1);
+  const archive=readRecentLyricHistory(song?.lyricGenerationHistoryV1);
+  const history=lyricLanes.flatMap(lane=>{
+    const value=archive[lane];
+    return value?[[lane,value.selectedId,value.entries.map(x=>[x.id,x.at,x.lang,x.text,x.title])]]:[];
+  });
   return JSON.stringify({slots,history});
 };
 export const buildMusicNoteLyricVersionPatch = (song:any,slot:MusicNoteLyricSlot,entry:LyricHistoryEntry) => {

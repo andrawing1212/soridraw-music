@@ -2,10 +2,12 @@
 // The old production DO namespace stays bound; its remaining alarm forwards
 // the accepted work in the SAME canonical D1 queue to the shared scheduler.
 // This is a source-only candidate, not an authorization to activate.
-// Never clear the old alarm marker/queue or create a second writer.
+// Never clear the queue, alarm or unrelated legacy storage. Only retire the
+// exact consumed legacy marker after the shared scheduler confirms settlement.
 const BINDING='RELEASE_SHARED_LIKE_SCHEDULER';
 const EXISTING='EXPLORE_LIKE_BATCH_SCHEDULER';
 const NAME='shared-like-batch';
+const LEGACY_ACTIVE_MARKER='active-scheduled-at-194';
 const ROUTES=new Set(['/schedule','/public-register','/public-release','/public-ack','/curated-repair-468/reserve','/curated-repair-468/confirm','/curated-repair-468/ack']);
 export function sharedScheduler(env){
  const ns=env?.[BINDING];
@@ -28,7 +30,19 @@ export function legacySchedulerClass(Original){
    if(request.method!=='POST'||!ROUTES.has(new URL(request.url).pathname))return new Response('Not found',{status:404});
    return forwardLegacySchedule(this.env,request);
   }
-  async alarm(){await wakeAcceptedQueue(this.env);}
+  async alarm(){
+   const storage=this.ctx.storage;
+   const previous=await storage.get(LEGACY_ACTIVE_MARKER);
+   const result=await wakeAcceptedQueue(this.env);
+   // An existing active window or a mere scheduling ACK is not a completion
+   // receipt. Preserve the old marker on ambiguity, failure, or replacement.
+   if(result.newlyScheduled===true&&result.activeRecovery194===true&&result.settled===true&&
+      typeof previous==='number'&&Number.isFinite(previous)&&previous>0){
+    await storage.transaction(async tx=>{
+     if(await tx.get(LEGACY_ACTIVE_MARKER)===previous)await tx.delete(LEGACY_ACTIVE_MARKER);
+    });
+   }
+  }
  };
 }
 export function composeSharedScheduler(core){

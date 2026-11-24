@@ -1,3 +1,12 @@
+## CURRENT — repaired full-release PROD candidate inactive PASS / activation not approved (2026-11-25 KST)
+
+- Director approval 2026-11-24T18:09:50Z: prepare and verify new production candidate, no active traffic switch.
+- [Actions #45456695362](https://github.com/andrawing1212/soridraw-music/actions/runs/45456695362) SUCCESS, exact source `f40537fc73f0e39d85644efea475c36e4112d12a`. Corrected builder reuses active repaired PREVIEW core (no duplicate patch); production-specific host/auth and existing APP797 wrapper preserved. Exact production core SHA256 `19d5e6d8a9d1dff6ce45c2498d2194abddb409f6fb8679539f35c752eca7a149`, identical to QA-proven repaired core. Only core and legacy scheduler adapter differ from previous inactive candidate; all other modules and 27 bindings match. Runtime compatible, four existing receiver Functions active and existing secret version reused without rotation.
+- New inactive PROD version `a8c3615f-5d69-48eb-b535-dc9235f36991`. Active PROD remains 100% `5313d378-351b-412c-b1d9-a7e6e9eb23fa` (exact rollback). PREVIEW remains `87ee8915-fe13-4715-88d3-0f5d1dd10ee3`, other protected Worker versions and schedules unchanged; same existing shared scheduler namespace and legacy namespace retained, no schema, Hosting, Functions, Rules or user-data write from staging. No new paid resource or plan change. Prior candidate `c8c528df-008c-4eba-95f9-26952dabe0bc` superseded and must not activate.
+- Evidence scope: actual Cloudflare version registration/readback plus reused exact-source local D1 crash/lease/rollback proof and physical synthetic alarm recovery proof. Inactive candidate authenticated live execution, end-to-end real public release/Functions, production billing, and actual PC/mobile parity remain unverified; candidate registration is not active release PASS. No repeat of unsupported per-version URLs. Separate explicit approval required for active production backend change; preserve old active version, old-client compatibility and rollback, stop on drift or failed actual validation. Production Hosting remains excluded until approved release readiness.
+
+---
+
 ## CURRENT — Full release shared scheduler PREVIEW activation PASS / PROD inactive restage pending (2026-11-25 KST)
 
 - Director explicitly approved PREVIEW shared server repair and safe deploy/verification 2026-11-24T17:34:17Z. Reused #45440348334 exact canonical D1 handoff and crash proof; no repeat physical fixture or free-plan query.

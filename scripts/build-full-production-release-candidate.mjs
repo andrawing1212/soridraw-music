@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
 const cf='https://api.cloudflare.com/client/v4/accounts/e1a30fc9ef497fda1d34f4ab3dc1da45/';
 const pins={
- 'soridraw-explore-preview':'cfd40718-6ab5-4133-bdb2-fa69332d6810',
+ 'soridraw-explore-preview':'87ee8915-fe13-4715-88d3-0f5d1dd10ee3',
  'soridraw-explore-api':'5313d378-351b-412c-b1d9-a7e6e9eb23fa',
  'soridraw-media-preview':'eca146eb-d50a-44b9-bab3-12fead33fb59',
  'soridraw-media':'41b74bf4-812b-4088-878d-f1b24a207869',
@@ -36,7 +36,6 @@ const fetchWorker=async([name,id])=>{
 // One release candidate: same exact PREVIEW core + the already deployed
 // APP797 production ingress. No new ledger, scheduler, or data schema.
 import assert from 'node:assert/strict';
-import {patchLegacyLikePreregister448} from './full-release-handoff-exact-preregister.mjs';
 import {mkdtempSync,writeFileSync,mkdirSync,rmSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,dirname} from 'node:path';
@@ -47,7 +46,7 @@ const source=(w,n,h)=>{
  const x=w.source.find(x=>x.name===n);
  assert(x&&sha(x.content)===h,'PINNED_MODULE_'+n);return x.content;
 };
-const core=source(a,'preview-entry.mjs','1692f74fe9c38f38a66b5669a5f3d03540f34225ef94a7f4badd65af5c0eb18a');
+const core=source(a,'preview-entry.mjs','68783e7b7367261001b429291356326843db9248d9a3def6781f04c1cac9358e');
 const old=source(b,'production-main.mjs','8b932f13cbc87652d3e4a28b757e8bc219a3d8dc484fa217857e9b150487406f');
 const entry=source(b,'entry.mjs','cb872a10e52d1f9932a609220745dd3be295ca25f405409e9dcdeb3efe7df58c');
 source(b,'production-follow-797.mjs','8c30881bad3f7cab96eca95a5d907041b5e33df3a3b30e025a762b8a63f9c160');
@@ -83,9 +82,7 @@ for(const [a,b] of [['https://preview.soridraw.com','https://soridraw.com'],['ht
 }
 let final=core.slice(0,at)+patch+core.slice(fallback);
 assert.equal(final.replace(patch,original),core,'UNRELATED_CORE_CHANGE');
-// Source repair proven in #45440348334. The shared PREVIEW scheduler must
-// receive the same repair before this production candidate can be activated.
-final=patchLegacyLikePreregister448(final);
+// Reuse the exact repaired active PREVIEW core (#45450634562). Do not patch twice.
 assert.equal(sha(final),'19d5e6d8a9d1dff6ce45c2498d2194abddb409f6fb8679539f35c752eca7a149','VERIFIED_HANDOFF_CORE');
 const expectedRoutes=['/v1/me/likes/batch','/v1/public-like-release-manifest-416','/v1/publication-live-card','/v1/me/notifications/inbox','/v1/internal/private-like-handoff-416','/v1/internal/public-like-release-416'];
 for(const r of expectedRoutes)assert(final.includes(r),'RELEASE_ROUTE_'+r);
@@ -129,7 +126,7 @@ try{
  const id=x=>x.namespace_id||x.id||null;
  const sameNamespace=!!id(namespace(a))&&id(namespace(a))===id(namespace(b));
  const missing=a.rows.filter(x=>!bind(b,x.name));
- console.log(JSON.stringify({status:'FULL_RELEASE_EXACT_CORE_CANDIDATE_LINKED',sourceSha:'909a911646b774695b3ae88607d15a79c9ab55b8',previewCore:sha(core),productionPriorCore:sha(old),candidateCore:sha(final),productionFollowWrapperUnchanged:mods.get('production-follow-797.mjs')===b.source.find(x=>x.name==='production-follow-797.mjs').content,sharedSchedulerAdapterAdded:true,moduleCount:mods.size,routes:expectedRoutes,notificationOwnerAuthPreserved:true,existingProductionBindingsPreserved:true,scheduler:{sameNamespace,previewClass:namespace(a).class_name,productionClass:namespace(b).class_name,namespaceIdentityExposed:!!id(namespace(a))&&!!id(namespace(b)),needsSingleAuthorityProof:!sameNamespace},missingBindings:missing.map(x=>({name:x.name,type:x.type})),activationAllowed:false,cloudWrites:0}));
+ console.log(JSON.stringify({status:'FULL_RELEASE_EXACT_CORE_CANDIDATE_LINKED',sourceSha:'4815c5063d21e56664df44aecf5073591384099c',previewCore:sha(core),productionPriorCore:sha(old),candidateCore:sha(final),productionFollowWrapperUnchanged:mods.get('production-follow-797.mjs')===b.source.find(x=>x.name==='production-follow-797.mjs').content,sharedSchedulerAdapterAdded:true,moduleCount:mods.size,routes:expectedRoutes,notificationOwnerAuthPreserved:true,existingProductionBindingsPreserved:true,scheduler:{sameNamespace,previewClass:namespace(a).class_name,productionClass:namespace(b).class_name,namespaceIdentityExposed:!!id(namespace(a))&&!!id(namespace(b)),needsSingleAuthorityProof:!sameNamespace},missingBindings:missing.map(x=>({name:x.name,type:x.type})),activationAllowed:false,cloudWrites:0}));
  console.log('FULL_RELEASE_OFFLINE_ASSEMBLY_AND_IMPORT_LINK=PASS');
  if(process.env.FULL_RELEASE_STAGE_INACTIVE==='1')await (await import('./stage-full-production-release-inactive.mjs')).stageFullRelease({a,b,mods});
 }finally{rmSync(folder,{recursive:true,force:true})}

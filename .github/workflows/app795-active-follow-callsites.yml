@@ -1,14 +1,16 @@
-name: APP795 exact active callsite source (read only)
+name: APP795 owner module connection offline and read-only assembly
 on:
   push:
     branches: [prep/app795-active-follow-connection]
     paths:
-      - 'scripts/app795-active-follow-callsites.mjs'
+      - 'scripts/app795-owner-module-patch.mjs'
+      - 'scripts/verify-795-owner-module-patch.mjs'
+      - 'scripts/app795-build-owner-readonly.mjs'
       - '.github/workflows/app795-active-follow-callsites.yml'
 permissions:
   contents: read
 jobs:
-  inspect:
+  verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     steps:
@@ -16,7 +18,7 @@ jobs:
         with: {persist-credentials: false}
       - uses: actions/setup-node@v4
         with: {node-version: '22'}
-      - run: node --check scripts/app795-active-follow-callsites.mjs
-      - run: node scripts/app795-active-follow-callsites.mjs
+      - run: node scripts/verify-795-owner-module-patch.mjs
+      - run: node scripts/app795-build-owner-readonly.mjs
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {mayListenToProductionOwner797,mayListenToPublicFollowHost797,mayListenToPreviewOwnerGeneral659,captureOwnerFollowCanaryOptIn634} from '../src/lib/ownerFollowCanaryTab634';
-import {ownerFollowScope653,isProductionOwnerEnrollmentOrigin797,isPreviewOwnerEnrollmentOrigin653} from '../functions/src/ownerFollowScope653';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url);
+const {ownerFollowScope653,isProductionOwnerEnrollmentOrigin797,isPreviewOwnerEnrollmentOrigin653}=require('../functions/src/ownerFollowScope653.ts');
 const env={SORIDRAW_OWNER_FOLLOW_READY_608:'1',SORIDRAW_OWNER_FOLLOW_GENERAL_PREVIEW_653:'1',SORIDRAW_OWNER_FOLLOW_SOURCE_BOUNDARY_653:'preview-only',SORIDRAW_OWNER_FOLLOW_PRODUCTION_ENROLL_797:'1'};
 assert(mayListenToProductionOwner797('soridraw.com','owner'));
 assert(mayListenToPreviewOwnerGeneral659('preview.soridraw.com','owner',true));

@@ -3477,7 +3477,7 @@ export default {
         }
       });
     }
-    if(STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE&&
+    if((STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE||COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448)&&
        url.pathname===PUBLIC_LIKE_MANIFEST_ROUTE_416){
       return handlePublicLikeManifestIntersect416(request,env);
     }

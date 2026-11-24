@@ -1,4 +1,4 @@
-// Director-approved exact one-module PREVIEW shared scheduler repair.
+// Director-approved exact one-module PREVIEW manifest read parity repair.
 // Reuses the APP719 immutable version upload/readback/owned rollback pattern.
 // No changes to other Workers, schedules, bindings, schema, data or Hosting.
 import assert from 'node:assert/strict';
@@ -8,13 +8,12 @@ import {execFileSync} from 'node:child_process';
 import {writeFileSync,mkdtempSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {patchLegacyLikePreregister448} from './full-release-handoff-exact-preregister.mjs';
 import {sameStagedWorkerRuntime660} from './lib/owner-follow-general660.mjs';
 const account='https://api.cloudflare.com/client/v4/accounts/e1a30fc9ef497fda1d34f4ab3dc1da45/';
 const PRE='soridraw-explore-preview',PRO='soridraw-explore-api';
 const pins={
- [PRE]:'cfd40718-6ab5-4133-bdb2-fa69332d6810',
- [PRO]:'5313d378-351b-412c-b1d9-a7e6e9eb23fa',
+ [PRE]:'87ee8915-fe13-4715-88d3-0f5d1dd10ee3',
+ [PRO]:'9257b708-4b76-43fe-9c87-3abe0fb071b7',
  'soridraw-explore-test':'ddd2255a-75cc-4db9-8905-b47338558cb0',
  'soridraw-owner-follow-preview-candidate':'c71d7c12-ace4-4405-ab1a-d8c651c90559',
  'soridraw-media-preview':'eca146eb-d50a-44b9-bab3-12fead33fb59',
@@ -67,12 +66,51 @@ async function verifyVersion(id,original,modules){
  const mm=new Map(s.modules.map(x=>[x.name,x]));
  need(mm.size===modules.length&&modules.every(x=>mm.has(x.name)&&mm.get(x.name).content_type===x.content_type&&sha(bytes(mm.get(x.name)))===sha(bytes(x))),'SOURCE_DRIFT');
 }
-const range=s=>{
- const start=s.indexOf('async function processExploreLikeAggregateWave035(');
- const end=s.indexOf('const statements = [',start);
- need(start>=0&&end>start,'QA_FUNCTION_RANGE');
- return s.slice(start,end);
+// Reuse the exact one-route repair already exercised in #45459942923.
+const patchManifest=s=>{
+ const guard=/if\s*\(\s*STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE\s*&&\s*url\.pathname\s*===\s*PUBLIC_LIKE_MANIFEST_ROUTE_416\s*\)/g;
+ const matches=[...s.matchAll(guard)];need(matches.length===1,'MANIFEST_READ_GUARD');
+ const prior=matches[0][0],next=prior.replace('STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE','(STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE || COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448)');
+ const patched=s.replace(prior,next);
+ need(patched!==s&&patched.replace(next,prior)===s,'ONE_READ_GUARD_ONLY');
+ need(/(?:const|var|let)\s+COMMON_PUBLIC_LIKE_WINDOW_ACTIVE_448\s*=\s*true/.test(patched)&&/(?:const|var|let)\s+STAGE416_PUBLIC_FIVE_MINUTE_ACTIVE\s*=\s*false/.test(patched),'MODE_FLAGS');
+ return patched;
 };
+// Same production host-only transform already used by the candidate builder.
+function productionEquivalent(core){
+ const anchor=core.indexOf('SORIDRAW_NOTIFICATION_INBOX_READ_ONLY_019');
+ need(anchor>=0&&core.indexOf('SORIDRAW_NOTIFICATION_INBOX_READ_ONLY_019',anchor+1)===-1,'NOTIFICATION_ANCHOR');
+ const leading=core.slice(Math.max(0,anchor-1500),anchor);
+ const match=[...leading.matchAll(/^([ \t]*)if\s*\(/gm)].at(-1);
+ need(match,'NOTIFICATION_IF');
+ const at=Math.max(0,anchor-1500)+match.index;
+ const closing=new RegExp('^'+match[1]+'\\}(?:\\r?$|\\s*else\\b)','gm');
+ closing.lastIndex=anchor;
+ const end=closing.exec(core);
+ need(end&&end.index-at<8000,'NOTIFICATION_END');
+ const fallback=end.index+match[1].length+1;
+ const original=core.slice(at,fallback);
+ need(original.includes('validateExploreAuth307')&&original.includes('verifyUid')&&original.includes('verifyAdmin')&&original.includes('ORIGIN_FORBIDDEN'),'AUTH_SCOPE');
+ let patch=original;
+ const once=(from,to)=>{need(patch.split(from).length===2,'HOST_ANCHOR');patch=patch.replace(from,to)};
+ const env=[...patch.matchAll(/env\?\.SORIDRAW_ENVIRONMENT\s*===\s*(['"])preview\1/g)];
+ need(env.length===1,'NOTIFICATION_ENV');
+ once(env[0][0],"env?.SORIDRAW_ENVIRONMENT === 'production'");
+ for(const [a,b] of [['https://preview.soridraw.com','https://soridraw.com'],['https://soridraw-preview.web.app','https://soridraw.web.app'],['https://soridraw-preview.firebaseapp.com','https://soridraw.firebaseapp.com']])once(a,b);
+ return core.slice(0,at)+patch+core.slice(fallback);
+}
+async function manifestSmoke(host,origin,expected){
+ const r=await fetch(host+'/v1/public-like-release-manifest-416',{method:'POST',redirect:'error',headers:{Origin:origin,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(15000)});
+ const j=await r.json().catch(()=>null);
+ need(r.status===expected,'MANIFEST_HTTP_'+r.status);
+ if(expected===400)need(j?.error?.code==='416_PUBLIC_MANIFEST_REQUEST_INVALID'&&r.headers.get('access-control-allow-origin')===origin&&r.headers.get('X-SORIDRAW-D1-Read')==='0'&&r.headers.get('X-SORIDRAW-D1-Write')==='0','MANIFEST_VALIDATION_OR_IO');
+ if(expected===400){
+  const opt=await fetch(host+'/v1/public-like-release-manifest-416',{method:'OPTIONS',redirect:'error',headers:{Origin:origin,'Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'content-type'},signal:AbortSignal.timeout(15000)});
+  need(opt.status===204&&opt.headers.get('access-control-allow-origin')===origin,'MANIFEST_CORS');
+  await opt.body?.cancel();
+ }
+}
+const previewHost='https://soridraw-explore-preview.andrawing1212.workers.dev',prodHost='https://soridraw-explore-api.andrawing1212.workers.dev';
 async function smoke(){
  const root='https://soridraw-explore-preview.andrawing1212.workers.dev';
  const origin='https://preview.soridraw.com';
@@ -86,34 +124,35 @@ async function smoke(){
  return result;
 }
 async function deploy(id){
- await api('POST','workers/scripts/'+PRE+'/deployments',{strategy:'percentage',versions:[{version_id:id,percentage:100}],annotations:{'workers/message':'Approved PREVIEW shared like handoff crash repair / exact rollback'}});
+ await api('POST','workers/scripts/'+PRE+'/deployments',{strategy:'percentage',versions:[{version_id:id,percentage:100}],annotations:{'workers/message':'Approved PREVIEW common manifest read parity / exact rollback'}});
  need(await active(PRE)===id,'DEPLOY_NOT_EXACT');
 }
 async function run(){
- need(process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REPOSITORY==='andrawing1212/soridraw-music'&&process.env.GITHUB_ACTOR===process.env.GITHUB_REPOSITORY_OWNER&&process.env.GITHUB_REF==='refs/heads/prep/full-release-verified-handoff'&&process.env.GITHUB_RUN_ATTEMPT==='1'&&process.env.GITHUB_EVENT_NAME==='push'&&execFileSync('git',['rev-parse','HEAD^'],{encoding:'utf8'}).trim()==='ecf5cab1f06fa359a870f4929b1e1d6a6a4e42da'&&token.length>20,'ONE_SHOT_APPROVAL');
+ need(process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REPOSITORY==='andrawing1212/soridraw-music'&&process.env.GITHUB_ACTOR===process.env.GITHUB_REPOSITORY_OWNER&&process.env.GITHUB_REF==='refs/heads/release/preview-common-manifest-parity'&&process.env.GITHUB_RUN_ATTEMPT==='1'&&process.env.GITHUB_EVENT_NAME==='push'&&execFileSync('git',['rev-parse','HEAD^'],{encoding:'utf8'}).trim()==='b90af8bc7e1ccde20f255f80e2f9dde1d181f635'&&token.length>20,'ONE_SHOT_APPROVAL');
  await protectedPins();
  const before=await snapshot(PRE,old);verifyBindings(before);
  const source=bytes(before.modules.find(x=>x.name===target)).toString('utf8');
- need(sha(source)==='1692f74fe9c38f38a66b5669a5f3d03540f34225ef94a7f4badd65af5c0eb18a','ACTIVE_CORE_PIN');
- // Compare exact changed function against prior real D1 QA, not a fresh synthetic claim.
- const qa=await snapshot(PRO,'c8c528df-008c-4eba-95f9-26952dabe0bc');
- const qaSource=bytes(qa.modules.find(x=>x.name==='production-main.mjs')).toString('utf8');
- need(sha(qaSource)==='fb6cf9218097e731fa6a4a26216c0fc68ce8e803c1478dd32c909bb3e70665e3','QA_BASE_PIN');
- const qaFixed=patchLegacyLikePreregister448(qaSource),fixed=patchLegacyLikePreregister448(source);
- need(sha(qaFixed)==='19d5e6d8a9d1dff6ce45c2498d2194abddb409f6fb8679539f35c752eca7a149','QA_FIXED_PIN');
- need(range(source)===range(qaSource)&&range(fixed)===range(qaFixed),'QA_CHANGED_FUNCTION_PARITY');
- need(fixed.replace(range(fixed),range(source))===source,'UNRELATED_SOURCE_CHANGE');
+ need(sha(source)==='68783e7b7367261001b429291356326843db9248d9a3def6781f04c1cac9358e','ACTIVE_CORE_PIN');
+ const fixed=patchManifest(source);
+ const prod=await snapshot(PRO,pins[PRO]);
+ const prodSource=bytes(prod.modules.find(x=>x.name==='production-main.mjs')).toString('utf8');
+ need(sha(prodSource)==='3e40fefc09f976c560b38b83d9698bd5f36c096e7779258993b702733faa0a48','PROD_PROVEN_CORE_PIN');
+ need(productionEquivalent(fixed)===prodSource,'EXACT_PROVEN_PRODUCTION_CORE_PARITY');
+ console.log('PREVIEW_MANIFEST_EXACT_PRODUCTION_CORE_PARITY=PASS;REUSE_300_TRACK_QA_45459942923');
+ await manifestSmoke(previewHost,'https://preview.soridraw.com',404);
+ await manifestSmoke(prodHost,'https://soridraw.com',400);
+ console.log('PREVIEW_OLD_404_AND_PROD_FIXED_ROUTE_CONFIRMED=PASS');
  const dir=mkdtempSync(join(tmpdir(),'shared-preview-'));
  try{const f=join(dir,'preview-entry.mjs');writeFileSync(f,fixed);execFileSync(process.execPath,['--check',f],{stdio:'pipe'});}finally{rmSync(dir,{recursive:true,force:true})}
  const modules=before.modules.map(x=>x.name===target?{...x,content_base64:Buffer.from(fixed).toString('base64')}:x);
  need(modules.filter((m,i)=>m.content_base64!==before.modules[i].content_base64).length===1,'MODULE_SCOPE');
  const smokeBefore=await smoke();
  await protectedPins();
- console.log('SHARED_PREVIEW_QA_EXACT_FUNCTION_AND_BASELINE_SMOKE=PASS;PATCHED_SHA256='+sha(fixed));
+ console.log('PREVIEW_MANIFEST_EXACT_SOURCE_AND_BASELINE_SMOKE=PASS;PATCHED_SHA256='+sha(fixed));
  const staged=await api('POST','workers/workers/'+PRE+'/versions?deploy=false',{
   main_module:main,compatibility_date:before.runtime.compatibility_date,compatibility_flags:before.runtime.compatibility_flags||[],
   bindings:before.bindings.map(x=>({name:x.name,type:'inherit',version_id:old})),modules,
-  annotations:{'workers/tag':'shared-like-handoff-repair','workers/message':'One exact PREVIEW core repair, existing namespace unchanged'}
+  annotations:{'workers/tag':'common-manifest-read-parity','workers/message':'One exact PREVIEW read-route guard, existing namespace unchanged'}
  });
  const fresh=staged?.id;need(uuid.test(fresh)&&fresh!==old,'VERSION_ID');
  console.log('SHARED_PREVIEW_INACTIVE_VERSION='+fresh);
@@ -125,10 +164,11 @@ async function run(){
   await verifyVersion(fresh,before,modules);
   await protectedPins(fresh);
   const after=await smoke();
+  await manifestSmoke(previewHost,'https://preview.soridraw.com',400);
   need(isDeepStrictEqual(after,smokeBefore),'SMOKE_PARITY');
   await protectedPins(fresh);
   console.log('SHARED_PREVIEW_ACTIVE='+fresh+';ROLLBACK='+old+';PATCHED_SHA256='+sha(fixed));
-  console.log('SHARED_PREVIEW_POSTFLIGHT=PASS;AUTH_AND_CORS_ONLY;NO_SYNTHETIC_LIVE_MUTATION;PROD_TEST_OWNER_MEDIA_UNCHANGED;NAMESPACE_AND_BINDINGS_UNCHANGED;NO_SCHEMA_OR_HOSTING_CHANGE');
+  console.log('PREVIEW_MANIFEST_POSTFLIGHT=PASS;REAL_INVALID_REQUEST_400_CORS_D1_R0_W0;AUTH_AND_CORS_ONLY;NO_SYNTHETIC_LIVE_MUTATION;PROD_TEST_OWNER_MEDIA_UNCHANGED;NAMESPACE_AND_BINDINGS_UNCHANGED;NO_SCHEMA_OR_HOSTING_CHANGE');
  }catch(e){
   const actual=await active(PRE).catch(()=>null);
   if(actual===fresh){await deploy(old);await protectedPins();console.log('SHARED_PREVIEW_OWNED_ROLLBACK=PASS');}

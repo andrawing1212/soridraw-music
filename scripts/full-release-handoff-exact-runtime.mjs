@@ -3,11 +3,20 @@
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
+import {createHash} from 'node:crypto';
+import {patchLegacyLikePreregister448} from './full-release-handoff-exact-preregister.mjs';
 import {resolve,join} from 'node:path';
 const [dir,install]=process.argv.slice(2);assert(dir&&install);
 const require=createRequire(resolve(install,'package.json'));
 const {Miniflare}=require('miniflare');
 const adapter=readFileSync('scripts/full-release-shared-like-scheduler.mjs','utf8');
+const sharedFile=join(dir,'shared','production-main.mjs');
+const sharedBase=readFileSync(sharedFile,'utf8');
+const fixed=patchLegacyLikePreregister448(sharedBase);
+assert.notEqual(fixed,sharedBase);
+writeFileSync(sharedFile,fixed);
+console.log('LOCAL_PATCHED_SHARED_CORE_SHA256='+createHash('sha256').update(fixed).digest('hex'));
+
 const harness=`
 import {ExploreLikeBatchScheduler103 as Old} from './legacy/production-main.mjs';
 import {ExploreLikeBatchScheduler103 as New} from './shared/production-main.mjs';
@@ -26,9 +35,13 @@ export class Legacy extends Adapted{
 }
 export class Shared extends New{
  constructor(ctx,env){
-  const fault={afterBatch:false};
+  const fault={afterBatch:false,lateBatch:null};
   const db=new Proxy(env.DB,{get(target,prop){
    if(prop==='batch')return async (...args)=>{
+    if(fault.lateBatch){
+     const row=fault.lateBatch;fault.lateBatch=null;
+     await target.prepare('INSERT INTO explore_like_batches_069(batch_id,user_uid,created_at,mutation_count,mutations_json) VALUES (?,?,?,1,?)').bind(row.id,row.uid,row.time,JSON.stringify([{trackId:row.trackId,liked:true}])).run();
+    }
     const result=await target.batch(...args);
     if(fault.afterBatch){fault.afterBatch=false;throw Error('QA_CRASH_AFTER_CANONICAL_COMMIT')}
     return result;
@@ -42,6 +55,8 @@ export class Shared extends New{
   const p=new URL(req.url).pathname;
   if(p==='/state'){const s=this.ctx.storage;return Response.json({marker:(await s.get(key))??null,rows:[...(await s.list()).keys()]})}
   if(p==='/inject'){await this.ctx.storage.delete(key);await this.ctx.storage.deleteAlarm();this.qaFault.afterBatch=true;return Response.json({ok:true})}
+  if(p==='/inject-late'){await this.ctx.storage.delete(key);await this.ctx.storage.deleteAlarm();this.qaFault.lateBatch=await req.json();return Response.json({ok:true})}
+  if(p==='/reset-marker'){await this.ctx.storage.delete(key);await this.ctx.storage.deleteAlarm();return Response.json({ok:true})}
 
   return super.fetch(req);
  }
@@ -116,6 +131,25 @@ try{
  const registered=publicRows.some(x=>x.endsWith('/track/qa-crash-song'));
  console.log('EXACT_LEGACY_HANDOFF_POSTCOMMIT_CRASH_REGISTERED='+registered);
  assert.equal(registered,true,'LEGACY_069_PUBLIC_TRACK_MISSING_AFTER_COMMIT_CRASH');
+ console.log('PATCHED_LEGACY_069_POSTCOMMIT_CRASH_TRACK_RETAINED=PASS');
+ for(const id of ['qa-before-late','qa-late']){
+  await db.prepare("INSERT INTO tracks(id,owner_uid,source_type,source_id,suno_url_primary,published_at,created_at,updated_at) VALUES (?,'qa-owner','music_note',?,'https://invalid.invalid',1,1,1)").bind(id,id).run();
+  await db.prepare("INSERT INTO track_stats(track_id,like_count,updated_at) VALUES (?,0,1)").bind(id).run();
+ }
+ await batch('qa-d',true,'d','qa-before-late');await call('/legacy/seed');
+ const lateTime=Date.now()-60000;
+ await call('/shared/inject-late',{id:'l069_'+String(lateTime).padStart(13,'0')+'_'+'e'.repeat(64),uid:'qa-e',time:lateTime,trackId:'qa-late'});
+ const fenced=await mf.dispatchFetch('http://localhost/legacy/handoff',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+ assert(fenced.status>=500,'LATE_TRACK_FENCE_NOT_OBSERVED');
+ assert.equal(await pending(),2,'LATE_TRACK_QUEUE_LOST');
+ assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM likes WHERE track_id IN ('qa-before-late','qa-late')").first()).n,0,'LATE_TRACK_PARTIAL_MEMBERSHIP');
+ await call('/shared/reset-marker');await call('/legacy/handoff');
+ assert.equal(await pending(),0);
+ assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM likes WHERE track_id IN ('qa-before-late','qa-late')").first()).n,2);
+ const finalRows=(await call('/shared/state')).rows;
+ assert(finalRows.some(x=>x.endsWith('/track/qa-before-late'))&&finalRows.some(x=>x.endsWith('/track/qa-late')));
+ console.log('PATCHED_LATE_ENQUEUE_FENCE_AND_RETRY=PASS');
+
 
  console.log('SCOPE=LOCAL_EXACT_SCHEDULER_D1_R2; PUBLIC_RELEASE_AND_EXTERNAL_FUNCTIONS_NOT_VERIFIED');
 }finally{await mf.dispose()}

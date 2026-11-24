@@ -126,4 +126,5 @@ try{
  const missing=a.rows.filter(x=>!bind(b,x.name));
  console.log(JSON.stringify({status:'FULL_RELEASE_EXACT_CORE_CANDIDATE_LINKED',sourceSha:'909a911646b774695b3ae88607d15a79c9ab55b8',previewCore:sha(core),productionPriorCore:sha(old),candidateCore:sha(final),productionFollowWrapperUnchanged:mods.get('production-follow-797.mjs')===b.source.find(x=>x.name==='production-follow-797.mjs').content,sharedSchedulerAdapterAdded:true,moduleCount:mods.size,routes:expectedRoutes,notificationOwnerAuthPreserved:true,existingProductionBindingsPreserved:true,scheduler:{sameNamespace,previewClass:namespace(a).class_name,productionClass:namespace(b).class_name,namespaceIdentityExposed:!!id(namespace(a))&&!!id(namespace(b)),needsSingleAuthorityProof:!sameNamespace},missingBindings:missing.map(x=>({name:x.name,type:x.type})),activationAllowed:false,cloudWrites:0}));
  console.log('FULL_RELEASE_OFFLINE_ASSEMBLY_AND_IMPORT_LINK=PASS');
+ if(process.env.FULL_RELEASE_STAGE_INACTIVE==='1')await (await import('./stage-full-production-release-inactive.mjs')).stageFullRelease({a,b,mods});
 }finally{rmSync(folder,{recursive:true,force:true})}

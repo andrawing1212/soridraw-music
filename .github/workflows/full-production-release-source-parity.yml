@@ -3,7 +3,6 @@ on:
   push:
     branches: [prep/full-preview-production-parity]
     paths:
-      - 'scripts/build-full-production-release-candidate.mjs'
       - 'scripts/full-release-shared-like-scheduler.mjs'
       - 'scripts/verify-full-release-shared-like-scheduler.mjs'
       - 'scripts/verify-full-production-notification-host.mjs'

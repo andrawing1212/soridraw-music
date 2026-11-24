@@ -1,0 +1,29 @@
+name: Full PREVIEW release exact inactive production candidate
+on:
+  push:
+    branches: [prep/full-preview-production-parity]
+    paths:
+      - 'scripts/stage-full-production-release-inactive.mjs'
+permissions:
+  contents: read
+jobs:
+  stage:
+    if: github.actor == github.repository_owner
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: google-github-actions/auth@v2
+        id: firebase
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          token_format: access_token
+      - name: Register exact candidate without any traffic switch
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          FIREBASE_ACCESS_TOKEN: ${{ steps.firebase.outputs.access_token }}
+          FULL_RELEASE_STAGE_INACTIVE: '1'
+        run: node --experimental-vm-modules scripts/build-full-production-release-candidate.mjs

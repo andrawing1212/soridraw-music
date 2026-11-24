@@ -18,6 +18,14 @@ const previewEqual = (remote: Record<string, any>, local: Record<string, any>): 
   if (remoteLanguages || localLanguages) {
     if (JSON.stringify(remoteLanguages ?? null) !== JSON.stringify(localLanguages ?? null)) return false;
   }
+  // The canonical row may include additional concurrently committed entries.
+  // Only require that every complete preview entry is actually present.
+  if (local.lyricGenerationHistoryV1 && local.__recentSongHistoryIncomplete !== true) {
+    for (const [lane, draft] of Object.entries(local.lyricGenerationHistoryV1) as [string, any][]) {
+      const saved = remote.lyricGenerationHistoryV1?.[lane];
+      if (!saved || saved.selectedId !== draft.selectedId || !draft.entries.every((x:any) => saved.entries.some((y:any) => JSON.stringify(x) === JSON.stringify(y)))) return false;
+    }
+  }
   return true;
 };
 
@@ -92,6 +100,15 @@ export const protectRecentCanonicalSnapshotFromPreview453 = <T extends Record<st
             ...cachedLanguages,
           },
         };
+      }
+      if (cached.lyricGenerationHistoryV1 && cached.__recentSongHistoryIncomplete !== true) {
+        const history = { ...(canonical.lyricGenerationHistoryV1 || {}) };
+        for (const [lane,draft] of Object.entries(cached.lyricGenerationHistoryV1) as [string, any][]) {
+          const entries = new Map((history[lane]?.entries || []).map((x:any) => [x.id,x]));
+          for (const x of draft.entries) if (!entries.has(x.id)) entries.set(x.id,x);
+          history[lane] = { entries: [...entries.values()].sort((a:any,b:any)=>a.at-b.at||a.id.localeCompare(b.id)), selectedId: draft.selectedId };
+        }
+        (merged as Record<string, any>).lyricGenerationHistoryV1 = history;
       }
       (merged as Record<string, any>).__recentSongEditPreview = true;
       songs[index] = merged;

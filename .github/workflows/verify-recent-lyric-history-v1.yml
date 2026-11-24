@@ -1,0 +1,34 @@
+name: SORIDRAW Recent lyric language and durable history
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - 'src/App.tsx'
+      - 'src/types.ts'
+      - 'src/lib/recentUnconfirmedRecovery436.ts'
+      - 'src/lib/recentSongCanonicalPreviewGuard453.ts'
+      - 'src/services/userDomainSyncService.ts'
+      - 'scripts/verify-recent-lyric-history-v1.mjs'
+      - '.github/workflows/verify-recent-lyric-history-v1.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: |
+          node scripts/verify-recent-lyric-history-v1.mjs
+          node scripts/verify-recent-language-trash-media-regression.mjs
+          node scripts/verify-291-recent-lyrics-live-preview.mjs
+          npx tsc --noEmit
+          npm run build

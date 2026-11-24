@@ -18176,3 +18176,10 @@ html:not([data-soridraw-theme="studio-black"]) .soridraw-split-rail-only {
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-pane[data-pane-mode="mobile"] .soridraw-result-lyrics-card.soridraw-result-lyrics-content-card {
   height: 520px !important; min-height: 520px !important; max-height: 520px !important;
 }
+
+/* Studio Black normally removes every shadow, including pseudo-elements.
+ * Exception: the active lyric-generation indicator only. Same glow as mobile. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-result-lyrics-card[aria-busy="true"]::after {
+  box-shadow: inset 0 0 36px 6px rgba(255,179,54,.72), inset 0 0 12px 1px rgba(255,201,95,.48) !important;
+}

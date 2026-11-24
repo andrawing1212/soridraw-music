@@ -1,3 +1,13 @@
+## CURRENT — full release PROD backend active PASS / PREVIEW manifest gate parity and Hosting pending (2026-11-25 KST)
+
+- Director explicit approval 2026-11-24T18:23:48Z, production backend activation and safety verification only; no Hosting change. PR #1410 merged `4bfba5c2005e2aaeac5f73b07e572d9a3eab4810`.
+- #45459553600: exact preflight PASS, active candidate manifest route POST returned 404; immediate rollback to prior production version `5313d378-351b-412c-b1d9-a7e6e9eb23fa` verified. No direct user-data rewrite.
+- Root cause: common public window 448 actively produces manifests for >256 changed tracks, but read-only manifest route remained gated by disabled Stage416 flag. Client consumes manifest metadata. Corrected only that read-route condition, not legacy write flags or writer logic. Exact deployed bundle old 404 reproduced in isolated local workerd, repaired bundle returned exact requested IDs from synthetic 300-track R2 manifest with D1 R0/W0, CORS and invalid request checks PASS. Local compatibility date 2026-08-06, not deployed runtime parity.
+- [Actions #45459942923](https://github.com/andrawing1212/soridraw-music/actions/runs/45459942923) SUCCESS, source `ed595e469088ef56b73fd0d80a9ca90e398a99df`. New PROD active 100% `9257b708-4b76-43fe-9c87-3abe0fb071b7`, exact rollback `5313d378-351b-412c-b1d9-a7e6e9eb23fa`. Core SHA256 `3e40fefc09f976c560b38b83d9698bd5f36c096e7779258993b702733faa0a48`. All 27 candidate bindings, runtime and other modules unchanged. Previous inactive candidate a8c3615f-5d69-48eb-b535-dc9235f36991 superseded. Real production authentication/CORS/invalid signed claim checks PASS; public latest/popular first-page content equals live PREVIEW, D1 R0/W0 in response diagnostics. Other Worker version pins and schedules unchanged. PREVIEW remains 87ee8915-fe13-4715-88d3-0f5d1dd10ee3. No direct live authenticated synthetic mutation, schema/Functions/Rules/IAM or Hosting change.
+- Remaining: existing PREVIEW core also has the legacy-only manifest read gate; parity fix for PREVIEW read-only route requires separately scoped shared backend approval (do not alter other gates). Keep exact active production source. Actual authenticated PC/mobile like/public release and billing not independently verified, and 300-track test is isolated not live. Production Hosting remains unchanged and is a separate release step requiring final approval and the direct-promotion safeguards. Do not repeat passing tests absent source/version drift.
+
+---
+
 ## CURRENT — repaired full-release PROD candidate inactive PASS / activation not approved (2026-11-25 KST)
 
 - Director approval 2026-11-24T18:09:50Z: prepare and verify new production candidate, no active traffic switch.

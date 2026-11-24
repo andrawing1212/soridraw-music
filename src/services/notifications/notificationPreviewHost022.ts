@@ -10,3 +10,13 @@ export function canUsePreviewInbox022(hostname:string,apiBase:string):boolean {
   return PREVIEW_HOSTS_022.has(String(hostname||'').toLowerCase()) &&
     String(apiBase||'').replace(/\/+$/,'')===NOTIFICATION_PREVIEW_WORKER_022;
 }
+
+// Production uses the same read-only owner inbox with its own canonical API.
+// Existing PREVIEW contract remains unchanged, TEST/local/overrides stay OFF.
+const PRODUCTION_HOSTS_RELEASE = new Set(['soridraw.com','soridraw.web.app','soridraw.firebaseapp.com']);
+export const NOTIFICATION_PRODUCTION_WORKER_RELEASE='https://soridraw-explore-api.andrawing1212.workers.dev';
+export function canUseReleaseInbox(hostname:string,apiBase:string):boolean {
+ return canUsePreviewInbox022(hostname,apiBase)||(
+  PRODUCTION_HOSTS_RELEASE.has(String(hostname||'').toLowerCase())&&
+  String(apiBase||'').replace(/\/+$/,'')===NOTIFICATION_PRODUCTION_WORKER_RELEASE);
+}

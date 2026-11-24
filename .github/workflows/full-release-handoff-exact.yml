@@ -1,0 +1,28 @@
+name: Full release exact canonical handoff integration
+on:
+  push:
+    branches: [qa/full-release-handoff-safety]
+    paths: ['scripts/full-release-handoff-exact-*.mjs','.github/workflows/full-release-handoff-exact.yml']
+permissions:
+  contents: read
+jobs:
+  integration:
+    if: github.repository == 'andrawing1212/soridraw-music' && github.actor == github.repository_owner && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Fetch pinned source only (no cloud writes)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/full-release-handoff-exact-source.mjs "$RUNNER_TEMP/handoff-exact"
+      - name: Execute exact schedulers and synthetic D1 locally (no live credentials)
+        run: |
+          npm install --prefix "$RUNNER_TEMP/handoff-exact-deps" --no-save --no-package-lock --no-audit --no-fund miniflare@4.20260730.0
+          node scripts/full-release-handoff-exact-runtime.mjs "$RUNNER_TEMP/handoff-exact" "$RUNNER_TEMP/handoff-exact-deps"
+      - name: Remove temporary local source
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/handoff-exact"

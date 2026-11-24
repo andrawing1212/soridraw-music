@@ -23,8 +23,8 @@ const active=readFileSync('cloudflare/explore-worker/canonical/preview-entry.js'
 const client=readFileSync('src/services/notifications/notificationInbox004.ts','utf8');
 assert.match(active,/NOTIFICATION_INBOX_004_COMPILED_OPEN = false/);
 assert.match(active,/NOTIFICATION_PREFS_003_COMPILED_OPEN = false/);
-assert.match(client,/canUsePreviewInbox022\(window.location.hostname,EXPLORE_API_BASE\)/,
-  'PREVIEW-only explicit authenticated GET; all other environments remain OFF');
+assert.match(client,/canUseReleaseInbox\(window.location.hostname,EXPLORE_API_BASE\)/,
+  'Exact PREVIEW/PRODUCTION host and API pairs only; TEST/local and mismatched overrides remain OFF');
 assert.doesNotMatch(client,/NOTIFICATION_INBOX_ENABLED_004=false/);
 
 const ddl=[

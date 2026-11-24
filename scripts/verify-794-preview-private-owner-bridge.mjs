@@ -91,15 +91,24 @@ const explore=createApp794ExploreConnection({env,enabled:true,now:()=>clock,send
  authenticate:async({request})=>({verified:request.headers.has('X-Verified-Fixture'),appCheckVerified:true,uid:request.headers.get('X-Verified-Fixture'),firebaseProjectId:'soridraw-app-866a5'}),
  verifyCutover,
  preauthorizeCanonical:async({ticket:a})=>{preconditionCalls++;return {verified:preconditionOK,actorUid:a.actorUid,ownerUid:a.ownerUid,canonicalOperationId:a.canonicalOperationId}},
- callCanonical:async({request,actorUid})=>{
+ callCanonical:async({request,actorUid,reservation:a})=>{
   canonicalCalls++;assert.equal(request.headers.get('X-Verified-Fixture'),actorUid);
   const body=await request.json(),prior=snapshot(actorUid),desired=request.method==='PUT';
   assert.equal(body.followExpectedRevision,prior.pairRevision);
   const revision=Math.max(clock,prior.pairRevision+1);
-  const a=memory.get('app755-owner-follow-pending-v1').entries.find(x=>x.canonicalOperationId===body.followOperationId);
+  // Explore cannot inspect owner DO storage directly in production.
+  // Exercise the actual private server argument passed by ingress.
+  assert(Object.isFrozen(a));assert.equal(a.canonicalOperationId,body.followOperationId);
+  assert.equal(a.actorUid,actorUid);assert.equal(a.ownerUid,ownerUid);
+  assert.equal(a.expectedRevision,body.followExpectedRevision);
+  assert.equal(a.desired,desired);assert.equal(a.durable,true);assert.equal(a.ownerDoAlarmScheduled,true);
+  assert.deepEqual(Object.keys(body).sort(),['followExpectedRevision','followOperationId']);
+  assert.equal(request.headers.has('X-Soridraw-Owner-Bridge-600'),false);
   const operation={actor:actorUid,target:ownerUid,token:cutoverToken,id:body.followOperationId,following:desired,
    expectedRevision:prior.pairRevision,revision,settled:false};
   assert.equal(await verifyApp794CanonicalWriterFence({env,reservation:a,operation,phase:'intent',verifyCutover}),true);
+  assert.equal(await verifyApp794CanonicalWriterFence({env,reservation:undefined,operation,phase:'intent',verifyCutover}),false);
+  assert.equal(await verifyApp794CanonicalWriterFence({env,reservation:{...a,operationId:'forged_private_receipt_0001'},operation,phase:'intent',verifyCutover}),false);
   seed(intentKey(actorUid),operation);
   assert.equal(await verifyApp794CanonicalWriterFence({env,reservation:a,operation:{...operation,id:'foreign_operation_0001'},phase:'relation',verifyCutover}),false);
   if(prior.following!==desired)assert.equal(await verifyApp794CanonicalWriterFence({env,reservation:a,operation,phase:'relation',verifyCutover}),true);

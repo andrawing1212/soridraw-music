@@ -437,7 +437,11 @@ export function createApp792PreviewFollowIngress({
    let response;
    // Exactly ONE invocation of existing authenticated canonical writer.
    // Even an exception/503 may have committed: the alarm checks the receipt.
-   try{response=await callCanonical({request:normalized,env,actorUid:actor.uid,ownerUid})}
+   // Pass the server-issued exact admission in private JS context, never
+   // in an HTTP header/body or through the client's supplied values.
+   // The canonical intent/relation fence must consume this reservation.
+   try{response=await callCanonical({request:normalized,env,actorUid:actor.uid,ownerUid,
+    reservation:Object.freeze({...receipt})})}
    catch{return hold('CANONICAL_ACK_UNKNOWN_RECEIPT_RETAINED')}
    if(!response?.ok)return {status:'CANONICAL_RESPONSE',response,receiptRetained:true,automaticCanonicalRetry:false};
    const ack=await response.clone().json().catch(()=>null);

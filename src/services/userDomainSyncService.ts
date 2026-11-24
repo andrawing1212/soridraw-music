@@ -385,6 +385,7 @@ const projectRecentSongForSync = (raw: unknown): Record<string, unknown> | null 
       genre: source.genre ?? null,
       prompt: source.prompt ?? '',
       lyrics: source.lyrics ?? null,
+      ...(source.lyricGenerationHistoryV1 ? { lyricGenerationHistoryV1: source.lyricGenerationHistoryV1 } : {}),
       favoriteFirestoreId: source.favoriteFirestoreId ?? null,
       musicNoteFavoriteId: source.musicNoteFavoriteId ?? null,
       recentFavoriteDetachedAt: source.recentFavoriteDetachedAt ?? null,
@@ -411,11 +412,18 @@ const projectRecentSongForSync = (raw: unknown): Record<string, unknown> | null 
     };
     try {
       if (JSON.stringify(preview).length <= MAX_SYNC_ITEM_JSON_CHARS) return preview;
+      if (source.lyricGenerationHistoryV1) {
+        delete preview.lyricGenerationHistoryV1;
+        preview.__recentSongPartial = true;
+        preview.__recentSongHistoryIncomplete = true;
+        if (JSON.stringify(preview).length <= MAX_SYNC_ITEM_JSON_CHARS) return preview;
+      }
     } catch {}
     return {
       __recentSongSync: true,
       __recentSongPartial: true,
       __recentSongEditPreview: true,
+      ...(source.lyricGenerationHistoryV1 ? { __recentSongHistoryIncomplete:true } : {}),
       id: source.id ?? null,
       taskId: source.taskId ?? null,
       sourceId: source.sourceId ?? null,
@@ -450,6 +458,7 @@ const projectRecentSongForSync = (raw: unknown): Record<string, unknown> | null 
     genre: source.genre ?? null,
     prompt: source.prompt ?? '',
     lyrics: source.lyrics ?? null,
+    ...(source.lyricGenerationHistoryV1 ? { lyricGenerationHistoryV1: source.lyricGenerationHistoryV1 } : {}),
     appliedKeywords: source.appliedKeywords ?? null,
     userInput: source.userInput ?? null,
     situationSummary: source.situationSummary ?? null,
@@ -468,6 +477,7 @@ const projectRecentSongForSync = (raw: unknown): Record<string, unknown> | null 
   return {
     __recentSongSync: true,
     __recentSongPartial: true,
+    ...(source.lyricGenerationHistoryV1 ? { __recentSongHistoryIncomplete:true } : {}),
     id: source.id ?? null,
     taskId: source.taskId ?? null,
     sourceId: source.sourceId ?? null,

@@ -575,6 +575,7 @@ export interface GenerateSongParams {
 }
 
 export interface SongResult {
+  lyricGenerationHistoryV1?: import('./lib/recentUnconfirmedRecovery436').LyricHistoryV1;
   title: string;
   createdAt?: number;
   updatedAt?: number;

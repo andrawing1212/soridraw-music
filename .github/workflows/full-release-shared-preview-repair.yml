@@ -1,0 +1,29 @@
+name: PREVIEW shared like handoff repair (approved exact release)
+on:
+  push:
+    branches: [prep/full-release-verified-handoff]
+    paths: ['.github/workflows/full-release-shared-preview-repair.yml']
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-preview-explore-worker-release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.repository == 'andrawing1212/soridraw-music' && github.actor == github.repository_owner && github.run_attempt == 1 && github.event.head_commit.message == 'release: approved exact PREVIEW shared scheduler repair'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false, fetch-depth: 2}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Exact source and approved scope
+        run: |
+          node --check scripts/full-release-shared-preview-repair.mjs
+          node --check scripts/full-release-handoff-exact-preregister.mjs
+          node scripts/verify-full-release-shared-like-scheduler.mjs
+      - name: Verify existing QA proof and activate only pinned PREVIEW Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/full-release-shared-preview-repair.mjs

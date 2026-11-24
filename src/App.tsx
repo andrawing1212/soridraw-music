@@ -16908,12 +16908,13 @@ ${normalizePromptForDisplay(result.prompt)}
       let committedRow: any = null;
       const persistedVersion = await runV1MutationBoundary(
         { domain: 'recent', operation: pending.operation, uid: pending.uid, affectedCount: 1, mirrorTargets: pending.mirrorTargets, syncItem: signalItem },
-        persistRecentSongsDocument(ref, pending.songs, pending.mutationEpoch, pending.syncItem, row => {
-          if (!signalItem?.lyricGenerationHistoryV1) return;
-          committedRow = row;
-          for (const key of Object.keys(signalItem)) delete signalItem[key];
-          Object.assign(signalItem,row);
-        }),
+        pending.syncItem?.lyricGenerationHistoryV1
+          ? persistRecentSongsDocument(ref, pending.songs, pending.mutationEpoch, pending.syncItem, row => {
+              committedRow = row;
+              for (const key of Object.keys(signalItem)) delete signalItem[key];
+              Object.assign(signalItem,row);
+            })
+          : persistRecentSongsDocument(ref, pending.songs, pending.mutationEpoch, pending.syncItem),
       );
       if (persistedVersion && committedRow && recentSongTextWritePendingRef.current === pending && auth.currentUser?.uid === pending.uid) {
         const targetId = getLiveSoridrawSongId(committedRow);

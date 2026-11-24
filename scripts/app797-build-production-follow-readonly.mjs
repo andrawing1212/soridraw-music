@@ -5,6 +5,7 @@ import {mkdtempSync,writeFileSync,readFileSync,mkdirSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,dirname} from 'node:path';
 import {execFileSync} from 'node:child_process';
+import {verifyActiveOwnerConnection797} from './verify-797-active-owner-connection.mjs';
 const token=process.env.CLOUDFLARE_API_TOKEN;
 if(process.env.GITHUB_ACTIONS!=='true'||process.env.GITHUB_REPOSITORY!=='andrawing1212/soridraw-music'||!token)throw Error('APP797_SCOPE');
 const base='https://api.cloudflare.com/client/v4/accounts/e1a30fc9ef497fda1d34f4ab3dc1da45/';
@@ -64,6 +65,19 @@ try{
  "import {reserveOwnerFollowViaService601} from './app605/owner-follow-service-601.mjs';",
  "export default composeProductionFollow797(canonical,{authenticate:validateExploreAuth307,precommit:runOwnerFollowPrecommit557,reserve:reserveOwnerFollowViaService601});"
  ].join('\n'));
- console.log('APP797_EXACT_ACTIVE_SOURCE_SYNTAX_AND_SHARED_OWNER_ROUTE=PASS;DEPLOY=0;CLOUD_WRITE=0');
+ // The live-owner module is loaded ONLY into the isolated synthetic harness,
+ // never into the production upload or an active Worker.
+ const ownerSource=source(owner,'worker.js','76c9d6df31bac01ceeaac1d171d0701621fac751a5017df19c6f8280e4c5c4d9');
+ save('owner-live.mjs',ownerSource);
+ await verifyActiveOwnerConnection797(folder);
+ // Metadata confirms the active PROD worker lacks this capability. Existing
+ // secret values are never fetched or copied across workers. Only check if
+ // the exact named, already-configured Actions secret is available.
+ const supplied=process.env.APP797_EXISTING_BRIDGE_SECRET||'';
+ const canProvision=/^[A-Za-z0-9_-]{32,256}$/.test(supplied);
+ console.log(JSON.stringify({status:'APP797_SERVER_CONNECTION_PREFLIGHT',productionOwnerServicePresent:!!bind(prod,'OWNER_FOLLOW_RESERVATION_SERVICE_600'),productionBridgeSecretPresent:bind(prod,'SORIDRAW_OWNER_DO_BRIDGE_SECRET_600')?.type==='secret_text',existingActionsBridgeSecretAvailable:canProvision,secretValueReadFromCloudflare:false,previewOwnerRoutePinned:true,productionTrafficUnchanged:true,liveReservationTest:false,uploadPerformed:false}));
+ if(!canProvision)console.log('APP797_HOLD_EXISTING_BRIDGE_CAPABILITY_SOURCE_UNAVAILABLE');
+ else console.log('APP797_HOLD_EXISTING_BRIDGE_CAPABILITY_MATCH_NOT_YET_PROVEN');
+ console.log('APP797_EXACT_ACTIVE_SOURCE_AND_ISOLATED_RUNTIME=PASS;DEPLOY=0;CLOUD_WRITE=0');
 }finally{rmSync(folder,{recursive:true,force:true})}
 await Promise.all(Object.values(pins).map(active));

@@ -21,6 +21,52 @@ const ENVIRONMENT_IDENTITY_BINDINGS=Object.freeze({
 const reviewedBindingEvidence=p=>p?.evidenceVerified===true&&
  SHA64.test(String(p?.evidenceSha256||''))&&
  p?.sourceAndActiveRuntimeVerified===true;
+// APP797 uses a production-specific authenticated ingress to the same owner
+// service. A different binding name is not by itself evidence of equivalence.
+// Accept only the known replaced bindings, pinned actual runtime and reviewed
+// proof of the complete authenticated follow/RTDB/rollback behavior.
+const APP797_REPLACED_BINDINGS=Object.freeze({
+ SORIDRAW_OWNER_FOLLOW_AUTH_PROOF_547:'plain_text',
+ SORIDRAW_OWNER_FOLLOW_BIND_544:'plain_text',
+ SORIDRAW_OWNER_FOLLOW_CANARY_UID_574:'plain_text',
+ SORIDRAW_OWNER_FOLLOW_ENDPOINT_539:'plain_text',
+ SORIDRAW_OWNER_FOLLOW_ENROLL_HMAC_544:'secret_text',
+ SORIDRAW_OWNER_FOLLOW_GENERAL_PREVIEW_653:'plain_text',
+ SORIDRAW_OWNER_FOLLOW_HMAC_539:'secret_text',
+ SORIDRAW_OWNER_FOLLOW_SOURCE_BOUNDARY_653:'plain_text',
+ SORIDRAW_PUBLIC_FOLLOW_ENDPOINT_669:'plain_text',
+ SORIDRAW_PUBLIC_FOLLOW_READY_669:'plain_text',
+ SORIDRAW_PUBLIC_FOLLOW_SCOPE_669:'plain_text',
+});
+const app797OnHash=createHash('sha256').update('1').digest('hex');
+function verifiedApp797Replacement({name,type,disposition,workers,gate}){
+ if(APP797_REPLACED_BINDINGS[name]!==type||
+    !reviewedBindingEvidence(disposition)||
+    disposition.previewActiveVersion!==workers.previewExplore.activeVersion||
+    disposition.productionActiveVersion!==workers.productionExplore.activeVersion||
+    disposition.productionFeatureParityVerified!==true||
+    disposition.independentAuthenticatedFollowAndRtdbVerified!==true||
+    disposition.allUserScopeVerified!==true||
+    disposition.oldClientAndRecoveryVerified!==true||
+    disposition.dataAndCostSafetyVerified!==true||
+    gate.exploreWorkerCodeAndFeatureFlags!==true||
+    gate.functionsReceiverParity!==true||
+    gate.firebaseRulesAndAuthAppCheck!==true||
+    gate.productionEnvironmentAndLegacyBindingsCompatible!==true||
+    gate.rollbackSnapshotAndRehearsalPass!==true||
+    gate.costAndNoPassiveWritesVerified!==true)return false;
+ const p=new Map(workers.previewExplore.bindings.map(b=>[b.name,b]));
+ const d=new Map(workers.productionExplore.bindings.map(b=>[b.name,b]));
+ const required=['SORIDRAW_OWNER_FOLLOW_PRODUCTION_797','SORIDRAW_OWNER_FOLLOW_W2_PUSH_555',
+ 'SORIDRAW_OWNER_DO_STANDALONE_600','SORIDRAW_OWNER_FOLLOW_BRIDGE_READY_607',
+ 'SORIDRAW_OWNER_FOLLOW_RECEIVER_VERIFIED_607','SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680'];
+ if(!required.every(k=>d.get(k)?.type==='plain_text'&&d.get(k)?.plainHash===app797OnHash))return false;
+ const a=p.get('OWNER_FOLLOW_RESERVATION_SERVICE_600'),b=d.get('OWNER_FOLLOW_RESERVATION_SERVICE_600');
+ return a?.type==='service'&&b?.type==='service'&&
+    a.service==='soridraw-owner-follow-preview-candidate'&&b.service===a.service&&
+    a.serviceEnvironment===b.serviceEnvironment&&
+    d.get('SORIDRAW_OWNER_DO_BRIDGE_SECRET_600')?.type==='secret_text';
+}
 const fingerprint=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 function different(a,b){return a!==b}
 function formatBindings(report){
@@ -106,6 +152,11 @@ export function assessApp737DirectPromotion(input={}){
            gate.productionEnvironmentAndLegacyBindingsCompatible!==true)
           hold('ENVIRONMENT_IDENTITY_BINDING_UNVERIFIED_'+name);
         else reviewedExclusions.push({name,classification:'ENVIRONMENT_IDENTITY'});
+      }else if(disposition?.classification==='APP797_PRODUCTION_INGRESS'){
+        if(!verifiedApp797Replacement({name,type,disposition,workers,gate}))
+          hold('APP797_PRODUCTION_INGRESS_UNVERIFIED_'+name);
+        else reviewedExclusions.push({name,classification:'APP797_PRODUCTION_INGRESS',
+          productionFallback:'SORIDRAW_OWNER_FOLLOW_PRODUCTION_797'});
       }else{
         // Functional bindings (follow, notifications, release) remain blocked
         // until their actual PROD behavior and receiver are independently proven.

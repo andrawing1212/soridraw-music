@@ -129,6 +129,53 @@ const alteredEvidence=withEnv();
 alteredEvidence.bindingDisposition.RATE_DB.evidenceSha256='b'.repeat(64);
 assert.notEqual(assessApp737DirectPromotion(alteredEvidence).manifestSha256,
  provenEnv.manifestSha256,'digest must cover the reviewed binding proof');
+// APP797 may account for known legacy PREVIEW flags only with complete,
+// version-pinned independent proof. No production evidence is asserted here.
+const with797=()=>{
+ const x=make(),one='6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b';
+ const sharedService={name:'OWNER_FOLLOW_RESERVATION_SERVICE_600',type:'service',
+   service:'soridraw-owner-follow-preview-candidate'};
+ x.workers.previewExplore.bindings.push(sharedService,
+   {name:'SORIDRAW_OWNER_FOLLOW_HMAC_539',type:'secret_text'});
+ x.workers.productionExplore.bindings.push({...sharedService},
+   {name:'SORIDRAW_OWNER_DO_BRIDGE_SECRET_600',type:'secret_text'});
+ for(const name of ['SORIDRAW_OWNER_FOLLOW_PRODUCTION_797','SORIDRAW_OWNER_FOLLOW_W2_PUSH_555',
+ 'SORIDRAW_OWNER_DO_STANDALONE_600','SORIDRAW_OWNER_FOLLOW_BRIDGE_READY_607',
+ 'SORIDRAW_OWNER_FOLLOW_RECEIVER_VERIFIED_607','SORIDRAW_PUBLIC_FOLLOW_UNENROLLED_680']){
+   const row={name,type:'plain_text',plainHash:one};
+   x.workers.productionExplore.bindings.push(row);
+   if(name!=='SORIDRAW_OWNER_FOLLOW_PRODUCTION_797')x.workers.previewExplore.bindings.push({...row});
+ }
+ x.bindingDisposition.SORIDRAW_OWNER_FOLLOW_HMAC_539={
+   classification:'APP797_PRODUCTION_INGRESS',evidenceVerified:true,evidenceSha256:sha,
+   sourceAndActiveRuntimeVerified:true,previewActiveVersion:x.workers.previewExplore.activeVersion,
+   productionActiveVersion:x.workers.productionExplore.activeVersion,productionFeatureParityVerified:true,
+   independentAuthenticatedFollowAndRtdbVerified:true,allUserScopeVerified:true,
+   oldClientAndRecoveryVerified:true,dataAndCostSafetyVerified:true};
+ return x;
+};
+const sample797=with797();
+assert.equal(assessApp737DirectPromotion(sample797).status,'READY_FOR_DIRECTOR_APPROVAL');
+for(const mutate of [
+ x=>{x.bindingDisposition.SORIDRAW_OWNER_FOLLOW_HMAC_539.independentAuthenticatedFollowAndRtdbVerified=false},
+ x=>{x.bindingDisposition.SORIDRAW_OWNER_FOLLOW_HMAC_539.productionActiveVersion=v('f')},
+ x=>{x.bindingDisposition.SORIDRAW_OWNER_FOLLOW_HMAC_539.allUserScopeVerified=false},
+ x=>{x.bindingDisposition.SORIDRAW_OWNER_FOLLOW_HMAC_539.oldClientAndRecoveryVerified=false},
+ x=>{x.workers.productionExplore.bindings.find(b=>b.name==='SORIDRAW_OWNER_FOLLOW_PRODUCTION_797').plainHash='off'},
+ x=>{x.workers.productionExplore.bindings.find(b=>b.name==='OWNER_FOLLOW_RESERVATION_SERVICE_600').service='wrong'},
+ x=>{x.workers.productionExplore.bindings=x.workers.productionExplore.bindings.filter(b=>b.name!=='SORIDRAW_OWNER_DO_BRIDGE_SECRET_600')},
+ x=>{x.verification.costAndNoPassiveWritesVerified=false},
+]){
+ const x=with797();mutate(x);
+ const result=assessApp737DirectPromotion(x);
+ assert.equal(result.status,'HOLD');
+ assert(result.unproven.includes('APP797_PRODUCTION_INGRESS_UNVERIFIED_SORIDRAW_OWNER_FOLLOW_HMAC_539'));
+}
+const unknown797=with797();
+unknown797.workers.previewExplore.bindings.push({name:'UNKNOWN_FUNCTIONAL_FLAG',type:'plain_text'});
+unknown797.bindingDisposition.UNKNOWN_FUNCTIONAL_FLAG={...unknown797.bindingDisposition.SORIDRAW_OWNER_FOLLOW_HMAC_539'};
+assert(assessApp737DirectPromotion(unknown797).unproven.includes('APP797_PRODUCTION_INGRESS_UNVERIFIED_UNKNOWN_FUNCTIONAL_FLAG'));
+console.log('APP797_PINNED_PRODUCTION_INGRESS_CONTRACT=PASS_SYNTHETIC; LIVE_PROOF_REQUIRED');
 const unproven=assessApp737DirectPromotion({
  previewSha:s,currentPreviewHead:s,
  workers:make().workers,hosting:make().hosting,bindingDisposition:{},

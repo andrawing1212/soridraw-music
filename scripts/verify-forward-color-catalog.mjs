@@ -9,7 +9,7 @@ const appBlock=app.slice(app.indexOf('  const updateFavorite = async'),app.index
 assert.match(appBlock,/colorCatalogChanged: Boolean\(currentFavorite\)/);
 assert.match(appBlock,/Object\.keys\(updates\)\.length === 1/);
 assert.match(appBlock,/hasOwnProperty\.call\(updates, 'favoriteColorTag'\)/);
-assert.match(appBlock,/operation: 'update'/);
+assert.match(appBlock,/operation: isTrashRestore \? 'restore' : 'update'/);
 const committed=sync.slice(sync.indexOf('export const stageCommittedMusicNoteMembershipDelta'),sync.indexOf('addV1MutationPostSuccessHook',sync.indexOf('export const stageCommittedMusicNoteMembershipDelta')));
 assert.match(committed,/context\.operation === 'update' && context\.colorCatalogChanged === true/);
 assert.match(committed,/scheduleCatalogSnapshotPublishIfDirty\('musicNote', context\.uid, \[item\]\)/);

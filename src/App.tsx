@@ -17175,7 +17175,7 @@ ${normalizePromptForDisplay(result.prompt)}
       };
       const firstForeignLanguage = nextLanguages.find((lang) => lang !== 'ko') || previousApplied.secondaryLanguage || 'en';
 
-      const nextSong: SongResult = {
+      const nextSong: SongResult & { recentSongSyncKey: string } = {
         ...latestSong,
         recentSongSyncKey: sourceKey,
         koreanTitle: nextTitlesByLanguage.ko || activeSong.koreanTitle || '',

@@ -7,7 +7,7 @@ import {getFunctions,httpsCallable} from 'firebase/functions';
 import {onValue,ref as databaseRef,type Unsubscribe} from 'firebase/database';
 import {auth,realtimeDb} from '../firebase';
 import { hasOwnerFollowCanaryOptIn634, mayListenToApprovedOwnerOnPreview658,
- mayListenToPreviewOwnerGeneral659 } from '../lib/ownerFollowCanaryTab634';
+ mayListenToPreviewOwnerGeneral659,mayListenToProductionOwner797 } from '../lib/ownerFollowCanaryTab634';
 
 export const EXPLORE_OWNER_FOLLOW_REALTIME_542_ENABLED=true;
 export const APP608_APPROVED_CANARY_UID='rcZ2GZrBndOZzT8C635eiNBjYIJ2';
@@ -18,6 +18,8 @@ const isGeneralPreviewOwner659=(uid:string):boolean=>
  typeof window!=='undefined'&&mayListenToPreviewOwnerGeneral659(
   window.location.hostname,uid,APP659_GENERAL_PREVIEW_OWNERS_ENABLED,
  );
+const isGeneralReleaseOwner797=(uid:string):boolean=>isGeneralPreviewOwner659(uid)||
+ (typeof window!=='undefined'&&mayListenToProductionOwner797(window.location.hostname,uid));
 // APP575: PREVIEW explicit QA URL only, never a general login/page-entry
 // registration, scan, poll or Firestore mutation. Kept OFF until server
 // canary UID, Rules, Functions and DO are safely installed and checked.
@@ -41,14 +43,14 @@ export const isApp608OwnerCanaryVisible=(uid:string):boolean=>
  (uid===APP608_APPROVED_CANARY_UID&&typeof window!=='undefined'&&
   mayListenToApprovedOwnerOnPreview658(
    window.location.hostname,uid,APP608_APPROVED_CANARY_UID,
-  ))||isGeneralPreviewOwner659(uid);
+  ))||isGeneralReleaseOwner797(uid);
 const enrollmentAttempts575=new WeakMap<object,Promise<boolean>>();
 const tryOwnerFollowCanaryEnrollment575=(
  uid:string,principal:NonNullable<typeof auth.currentUser>,
 ):Promise<boolean>=>{
  // PREVIEW: enroll a missing epoch once per principal; an existing claim skips it.
  if(!isApp608OwnerCanaryVisible(uid)||
-    !(isGeneralPreviewOwner659(uid)||hasExplicitOwnerFollowTabOptIn634())||
+    !(isGeneralReleaseOwner797(uid)||hasExplicitOwnerFollowTabOptIn634())||
     auth.currentUser!==principal)return Promise.resolve(false);
  // Initial lifecycle enrollment at most once per authenticated principal;
  // no repeated profile-entry D1/RTDB list query or focus poll.

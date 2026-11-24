@@ -34,3 +34,10 @@ export const mayListenToPreviewOwnerGeneral659=(
  hostname:string,uid:string,enabled:boolean,
 ):boolean=>enabled&&hostname.toLowerCase()===PREVIEW_HOST_634&&
  /^[A-Za-z0-9_-]{1,128}$/.test(uid);
+
+// Production uses the same existing authenticated listener, never the QA opt-in.
+// This source is for coordinated release; TEST and arbitrary hosts remain OFF.
+export const mayListenToProductionOwner797=(hostname:string,uid:string):boolean=>
+ hostname.toLowerCase()==='soridraw.com'&&/^[A-Za-z0-9_-]{1,128}$/.test(uid);
+export const mayListenToPublicFollowHost797=(hostname:string):boolean=>
+ hostname==='preview.soridraw.com'||hostname==='soridraw.com';

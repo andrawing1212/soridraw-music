@@ -25,3 +25,13 @@ export const ownerFollowScope653=(
 export const isPreviewOwnerEnrollmentOrigin653=(
  origin:unknown,
 )=>origin==='https://preview.soridraw.com';
+
+// Do not widen the canary or HMAC receiver scopes. Only the existing general
+// enrollment callable gains a second browser origin after explicit rollout.
+// The shared Auth/D1 epoch is bound by the same pinned APP544 endpoint.
+export const isProductionOwnerEnrollmentOrigin797=(
+ origin:unknown,env:Record<string,string|undefined>,
+)=>origin==='https://soridraw.com'&&
+ env.SORIDRAW_OWNER_FOLLOW_GENERAL_PREVIEW_653==='1'&&
+ env.SORIDRAW_OWNER_FOLLOW_SOURCE_BOUNDARY_653==='preview-only'&&
+ env.SORIDRAW_OWNER_FOLLOW_PRODUCTION_ENROLL_797==='1';

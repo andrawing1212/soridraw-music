@@ -1,6 +1,6 @@
 import LyricLanguageAddCard from '../components/music/LyricLanguageAddCard';
 import LyricCueSwitch from '../components/music/LyricCueSwitch';
-import { projectLyricCues } from '../lib/lyricCueProjection';
+import { projectLyricCues, lyricCueCustomSectionNames } from '../lib/lyricCueProjection';
 import { isLyricLanguageChoiceBlocked } from '../lib/recentUnconfirmedRecovery436';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import { resolveNextSongApplyRoute, stageNextSongKeywords } from '../lib/nextSongPendingBridge';
@@ -4867,6 +4867,7 @@ updates: committedUpdates,
     }catch(error){console.error('Music Note lyric edit failed:',error);showFavoriteToast(noteLyricError(error));}
     finally{noteLyricBusyRef.current=false;setIsTranslating(false);}
   };
+  const noteCueCustomNames=()=>lyricCueCustomSectionNames(selectedSong?.appliedKeywords?.customStructure);
   const noteLyricLabel=(slot:MusicNoteLyricSlot)=>noteLanguageLabels[readNoteLyricView(selectedSong,slot).entry.lang]?.ko||'외국어';
   const noteLyricText=(slot:MusicNoteLyricSlot)=>normalizeFavoriteLyricsForDisplay(readNoteLyricView(selectedSong,slot).entry.text);
   const noteLyricIsBusy=(slot:MusicNoteLyricSlot)=>noteLyricBusy?.id===getFavoriteDocumentId(selectedSong)&&noteLyricBusy.slot===slot;
@@ -4916,7 +4917,7 @@ updates: committedUpdates,
         accent="note"
       />;
     }
-    return <div className="soridraw-musicnote-lyric-body custom-scrollbar max-h-[380px] overflow-y-auto overscroll-auto rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 whitespace-pre-wrap">{projectLyricCues(noteLyricText(slot),noteLyricCardCues[slot])}</div>;
+    return <div className="soridraw-musicnote-lyric-body custom-scrollbar max-h-[380px] overflow-y-auto overscroll-auto rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 whitespace-pre-wrap">{projectLyricCues(noteLyricText(slot),noteLyricCardCues[slot],noteCueCustomNames())}</div>;
   };
 
   // Existing UID-scoped signal; only an actual saved lyric change to an open
@@ -11093,7 +11094,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           </button>
                         )}
                         <button
-                          onClick={() => copyToClipboard(projectLyricCues(normalizeFavoriteLyricsForDisplay(isEditing && activeEditSection === 'lyrics-ko' ? editedKoreanLyrics : noteLyricText('korean')),noteLyricCardCues.korean), 'lyrics-korean')}
+                          onClick={() => copyToClipboard(projectLyricCues(normalizeFavoriteLyricsForDisplay(isEditing && activeEditSection === 'lyrics-ko' ? editedKoreanLyrics : noteLyricText('korean')),noteLyricCardCues.korean,noteCueCustomNames()), 'lyrics-korean')}
                           onMouseEnter={() => onHover({ id: 'detail-lyrics-ko-copy', label: '한글 가사 복사', description: '한글 가사를 복사합니다.' })}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-ko-copy', label: '한글 가사 복사', description: '한글 가사를 복사합니다.' })}
@@ -11194,7 +11195,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           </button>
                         )}
                         <button
-                          onClick={() => copyToClipboard(projectLyricCues(normalizeFavoriteLyricsForDisplay(isEditing && activeEditSection === 'lyrics-en' ? editedEnglishLyrics : noteLyricText('english')),noteLyricCardCues.english), 'lyrics-foreign')}
+                          onClick={() => copyToClipboard(projectLyricCues(normalizeFavoriteLyricsForDisplay(isEditing && activeEditSection === 'lyrics-en' ? editedEnglishLyrics : noteLyricText('english')),noteLyricCardCues.english,noteCueCustomNames()), 'lyrics-foreign')}
                           onMouseEnter={() => onHover({ id: 'detail-lyrics-foreign-copy', label: '외국어 가사 복사', description: '외국어 가사를 복사합니다.' })}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-foreign-copy', label: '외국어 가사 복사', description: '외국어 가사를 복사합니다.' })}

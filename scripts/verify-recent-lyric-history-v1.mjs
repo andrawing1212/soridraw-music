@@ -196,7 +196,7 @@ assert.match(css,/prefers-reduced-motion:no-preference\)\{\.soridraw-lyric-picke
 console.log('LYRIC_IN_CARD_PICKER_AND_COMPACT_HISTORY_CONTROLS=PASS; REAL_DEVICE_REQUIRED');
 
 
-const {projectLyricCues}=await load('src/lib/lyricCueProjection.ts');
+const {projectLyricCues,lyricCueCustomSectionNames}=await load('src/lib/lyricCueProjection.ts');
 const cueOriginal='[Verse: restrained vocal delivery]\n[Soft guitar enters]\n조용한 밤\n(oh)\n말 속 [괄호] 유지\n\n[Chorus: Male A Main, open vocal delivery]\n다시 불러';
 assert.equal(projectLyricCues(cueOriginal,true),cueOriginal);
 assert.equal(projectLyricCues(cueOriginal,false),'[Verse]\n조용한 밤\n(oh)\n말 속 [괄호] 유지\n\n[Chorus: Male A Main]\n다시 불러');
@@ -206,7 +206,10 @@ assert.equal(projectLyricCues('[My Section: gentle phrasing]\nWords',false,['My 
 assert.match(app,/copyToClipboard\(editingThisLyric && recentSongEditDraft \? projectLyricCues/);
 assert.match(app,/renderLyricsWithCueHighlight\(visibleLyrics\)/);
 const noteCueSource=read('src/pages/FavoritesPage.tsx');
-assert.match(noteCueSource,/projectLyricCues\(noteLyricText\(slot\),noteLyricCardCues\[slot\]\)/);
-assert.match(noteCueSource,/noteLyricCardCues\.korean\), 'lyrics-korean'/);
-assert.match(noteCueSource,/noteLyricCardCues\.english\), 'lyrics-foreign'/);
+assert.match(noteCueSource,/projectLyricCues\(noteLyricText\(slot\),noteLyricCardCues\[slot\],noteCueCustomNames\(\)\)/);
+assert.match(noteCueSource,/noteLyricCardCues\.korean,noteCueCustomNames\(\)\), 'lyrics-korean'/);
+assert.match(noteCueSource,/noteLyricCardCues\.english,noteCueCustomNames\(\)\), 'lyrics-foreign'/);
 console.log('LYRIC_CUE_VIEW_AND_COPY_PROJECTION=PASS');
+
+assert.deepEqual(lyricCueCustomSectionNames([{section:'My Section'},null,{section:42}]),['My Section']);
+assert.equal(projectLyricCues('[My Section 2]\n[Drums: enter]\nWords',false,lyricCueCustomSectionNames([{section:'My Section'}])),'[My Section 2]\nWords');

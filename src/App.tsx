@@ -1,4 +1,6 @@
 import LyricLanguageAddCard from './components/music/LyricLanguageAddCard';
+import LyricCueSwitch from './components/music/LyricCueSwitch';
+import { projectLyricCues, lyricCueCustomSectionNames } from './lib/lyricCueProjection';
 import { isLyricLanguageChoiceBlocked } from './lib/recentUnconfirmedRecovery436';
 import { runV1MutationBoundary, type V1MutationMirrorTarget } from './data/v1MutationBoundary';
 import { readNextSongKeywords, clearNextSongKeywords } from './lib/nextSongPendingBridge';
@@ -7776,6 +7778,7 @@ function App() {
   const [isAddingLyricsLanguage, setIsAddingLyricsLanguage] = useState(false);
   const [addingLyricsLanguageTarget, setAddingLyricsLanguageTarget] = useState<LanguageCode | null>(null);
   const [lyricsLanguageChange, setLyricsLanguageChange] = useState<{lang: LanguageCode; songKey: string} | null>(null);
+  const [lyricCardCues, setLyricCardCues] = useState({ko:true,foreign:true});
   const [replacingLyricsLanguage, setReplacingLyricsLanguage] = useState<LanguageCode | null>(null);
   const lyricGenerationInFlight = useRef(false);
   const [lyricGenerationSongKey, setLyricGenerationSongKey] = useState<string | null>(null);
@@ -22855,6 +22858,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         if (!lyricsText) return null;
                         const label = lyricLanguageLabels[visibleLang]?.ko || visibleLang;
                         const copyType = `lyrics-${lang}`;
+                        const cueSlot = lang === 'ko' ? 'ko' : 'foreign';
+                        const showCardCues = lyricCardCues[cueSlot];
+                        const cueCustomNames = lyricCueCustomSectionNames(result.appliedKeywords?.customStructure);
+                        const visibleLyrics = projectLyricCues(normalizeLyricsForDisplay(lyricsText),showCardCues,cueCustomNames);
                         const cardBusy = generationIsForCurrentSong && (recentSongRegeneratingTarget === `lyrics-${lang}` || (isAddingLyricsLanguage && replacingLyricsLanguage === lang));
 
                         const pickerOpen = lyricsLanguageChange?.songKey === buildRecentSongSyncKey(result) && lyricsLanguageChange.lang === lang;
@@ -22879,9 +22886,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             <div className="soridraw-lyric-card-header shrink-0 p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                               <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                                 <Music className="w-4 h-4 text-[#e3a13a]" />
-                                {label} 가사
+                                <span className="soridraw-lyric-card-title">{label} 가사</span>
                               </h3>
-                              <div className="flex items-center gap-2">
+                              <div className="soridraw-lyric-card-actions flex items-center gap-2">
+                                <LyricCueSwitch enabled={showCardCues} disabled={editingThisLyric} onChange={enabled=>setLyricCardCues(prev=>({...prev,[cueSlot]:enabled}))}/>
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -22899,7 +22907,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 {renderRecentSongInlineEditActions('lyrics', `edit-${copyType}`, `${label} 가사 수정`, '현재 표시된 가사를 수정합니다.', 'section',lang)}
                                 <button
                                   type="button"
-                                  onClick={() => copyToClipboard(editingThisLyric && recentSongEditDraft ? getRecentSongLyricsDraftValue(lang) : normalizeLyricsForDisplay(lyricsText), copyType)}
+                                  onClick={() => copyToClipboard(editingThisLyric && recentSongEditDraft ? projectLyricCues(normalizeLyricsForDisplay(getRecentSongLyricsDraftValue(lang)),showCardCues,cueCustomNames) : visibleLyrics, copyType)}
                                   onMouseEnter={() => setHoveredItem({ id: `copy-${copyType}`, label: `${label} 가사 복사`, description: `${label} 가사 전체를 복사합니다.` })}
                                   onMouseLeave={() => setHoveredItem(null)}
                                   className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#e3a13a]/[0.12] hover:bg-[#e3a13a]/[0.18] text-[#e3a13a]/85 hover:text-[#f4bc63] transition-all border border-[#e3a13a]/[0.16] active:scale-95 shadow-btn"
@@ -22924,7 +22932,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 <>
                                   <div className="flex-1" />
                                   <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
-                                    {renderLyricsWithCueHighlight(lyricsText)}
+                                    {renderLyricsWithCueHighlight(visibleLyrics)}
                                   </pre>
                                   <div className="flex-1" />
                                 </>

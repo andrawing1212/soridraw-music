@@ -18223,3 +18223,42 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 .soridraw-lyric-picker-back {color:var(--text-primary,#fff);}
 @keyframes soridraw-lyric-picker-enter {from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:translateX(0)}}
 @media(prefers-reduced-motion:no-preference){.soridraw-lyric-picker-transition{animation:soridraw-lyric-picker-enter 180ms ease-out both;}}
+
+
+/* Output lyric cards only: same readable vertical area regardless of split width.
+ * Do not change split engine, generation cue settings, or persistent lyric data. */
+@media (min-width:768px) {
+  .soridraw-result-lyrics-content-card { aspect-ratio:auto; height:520px; min-height:520px; max-height:520px; }
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content .soridraw-result-lyrics-card.soridraw-result-lyrics-content-card { aspect-ratio:auto!important;height:520px!important;min-height:520px!important;max-height:520px!important; }
+  .soridraw-musicnote-lyric-body {height:440px;max-height:440px;}
+}
+.soridraw-result-lyrics-content-card > .soridraw-result-lyrics-scroll {height:0!important;min-height:0!important;flex:1 1 0%!important;}
+.soridraw-lyric-card-header > h3 {min-width:0;flex:1;}
+.soridraw-lyric-card-header > h3 > svg {flex-shrink:0;}
+.soridraw-lyric-card-title {min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.soridraw-lyric-card-actions {flex-shrink:0;flex-wrap:nowrap;gap:4px;align-items:center;max-width:100%;}
+.soridraw-lyric-card-actions > button:not(.soridraw-lyric-cue-switch),
+.soridraw-lyric-card-actions > div > button {flex-shrink:0;}
+html body #root .soridraw-app-root button.soridraw-lyric-cue-switch {
+  position:relative;width:44px;height:24px;min-width:44px;min-height:24px;flex:0 0 auto;
+  padding:0!important;border:0!important;border-radius:999px!important;box-shadow:none!important;
+  background:#4a4a4a!important;cursor:pointer;
+}
+html body #root .soridraw-app-root button.soridraw-lyric-cue-switch[aria-checked="true"] {background:#ffb400!important;}
+.soridraw-lyric-cue-switch > span {position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff!important;transition:transform .18s;}
+.soridraw-lyric-cue-switch[aria-checked="true"] > span {transform:translateX(20px);}
+.soridraw-lyric-cue-switch:disabled {opacity:.5;cursor:not-allowed;}
+.soridraw-lyric-cue-switch:focus-visible {outline:2px solid #ffb400!important;outline-offset:2px;}
+/* The two-card split can become narrower than a phone even on a large screen.
+ * Flex the controls to fit the header itself, not the browser width. */
+.soridraw-lyric-card-header:has(.soridraw-lyric-card-actions) {container-type:inline-size;}
+.soridraw-musicnote-lyric-card > div:has(> .soridraw-lyric-card-actions) {container-type:inline-size;}
+@container (max-width:380px) {
+  html body #root .soridraw-app-root .soridraw-lyric-card-actions {gap:3px;}
+  html body #root .soridraw-app-root .soridraw-lyric-card-actions button:not(.soridraw-lyric-cue-switch) {width:30px!important;height:30px!important;min-width:30px!important;min-height:30px!important;padding:0!important;}
+  html body #root .soridraw-app-root .soridraw-lyric-card-actions button:not(.soridraw-lyric-cue-switch) svg {width:16px!important;height:16px!important;}
+  html body #root .soridraw-app-root button.soridraw-lyric-cue-switch {width:36px;min-width:36px;height:20px;min-height:20px;}
+  .soridraw-lyric-cue-switch > span {width:14px;height:14px;}
+  .soridraw-lyric-cue-switch[aria-checked="true"] > span {transform:translateX(16px);}
+}
+@media (prefers-reduced-motion:reduce) {.soridraw-lyric-cue-switch > span {transition:none;}}

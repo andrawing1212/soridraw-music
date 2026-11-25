@@ -1,3 +1,5 @@
+import LyricLanguageAddCard from './components/music/LyricLanguageAddCard';
+import { isLyricLanguageChoiceBlocked } from './lib/recentUnconfirmedRecovery436';
 import { runV1MutationBoundary, type V1MutationMirrorTarget } from './data/v1MutationBoundary';
 import { readNextSongKeywords, clearNextSongKeywords } from './lib/nextSongPendingBridge';
 import { pickOwnedSunoOriginalLinkForFavorite } from './lib/musicNoteFavoriteSourceLink';
@@ -16752,6 +16754,10 @@ ${normalizePromptForDisplay(result.prompt)}
     lyricReadingCursorsRef.current = bounded;
     setLyricReadingCursors(bounded);
   };
+  const studioLyricLanguageChoiceBlocked = (song: SongResult, slot: LanguageCode, target: LanguageCode, fromPicker = true, busy = false) => {
+    const otherLanguages = getDisplayLyricLanguages(song).filter(lang => lang !== slot).flatMap(lang => [lang,readLocalLyricView(song,lang).entry.lang]);
+    return isLyricLanguageChoiceBlocked(target,fromPicker ? readLocalLyricView(song,slot).entry.lang : undefined,otherLanguages,busy);
+  };
   const captureStudioKoreanSource = (song: SongResult) =>
     captureDisplayedKoreanLyric(getDisplayLyricLanguages(song).includes('ko') ? readLocalLyricView(song,'ko') : undefined);
   const getRecentSongLocalVersionMeta = (song: SongResult | null | undefined, target: RecentSongLocalVersionTarget) => {
@@ -17375,7 +17381,7 @@ ${normalizePromptForDisplay(result.prompt)}
     }
   };
 
-  const handleAddLyricsLanguage = async (targetLanguage: LanguageCode, replaceLanguage?: LanguageCode) => {
+  const handleAddLyricsLanguage = async (targetLanguage: LanguageCode, replaceLanguage?: LanguageCode, fromPicker = false) => {
     if (!result || isAddingLyricsLanguage || lyricGenerationInFlight.current) return;
     if (!user?.uid) { showToast('로그인이 필요합니다.'); handleLogin(); return; }
 
@@ -17383,11 +17389,12 @@ ${normalizePromptForDisplay(result.prompt)}
     const sourceUid = String(user?.uid || '');
     const sourceKey = buildRecentSongSyncKey(activeSong);
     const existingLanguages = getGeneratedLyricLanguages(activeSong);
-    if (existingLanguages.includes(targetLanguage)) {
-      showToast('이미 생성된 가사 언어입니다.');
+    if (replaceLanguage && (!existingLanguages.includes(replaceLanguage) || replaceLanguage === 'ko' || targetLanguage === 'ko')) return;
+    if ((existingLanguages.includes(targetLanguage) && targetLanguage !== replaceLanguage) ||
+        (replaceLanguage && studioLyricLanguageChoiceBlocked(activeSong,replaceLanguage,targetLanguage,fromPicker))) {
+      showToast('이미 표시된 가사 언어입니다.');
       return;
     }
-    if (replaceLanguage && (!existingLanguages.includes(replaceLanguage) || replaceLanguage === 'ko' || targetLanguage === 'ko')) return;
     if (!replaceLanguage && existingLanguages.length >= 2) {
       showToast('가사 언어는 최대 2개까지 표시됩니다.');
       return;
@@ -22824,32 +22831,16 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                             <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                               <Languages className="w-4 h-4 text-[#e3a13a]" />
-                              가사 언어 추가
+                              {displayLyricLanguages.includes('ko') ? '외국어 가사' : '가사 언어 추가'}
                             </h3>
                           </div>
-                          {addingFirstLanguage && addingLyricsLanguageTarget ? renderLyricsGenerationProgress(addingLyricsLanguageTarget) : <div data-soridraw-selectable-text="true" className="flex-1 p-6 overflow-y-auto custom-scrollbar flex flex-col justify-center gap-4">
-                            <div className="text-center space-y-2">
-                              <p className="text-sm font-bold text-[var(--text-primary)]">다른 언어 가사가 필요해?</p>
-                              <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                                현재 곡의 제목과 가사를 기준으로<br />추가 언어 가사를 생성합니다.
-                              </p>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              {missingLyricLanguages.map((lang) => (
-                                <button
-                                  key={lang}
-                                  onClick={() => handleAddLyricsLanguage(lang)}
-                                  disabled={isAddingLyricsLanguage || Boolean(recentSongRegeneratingTarget)}
-                                  className="px-3 py-3 rounded-2xl border border-[#e3a13a]/35 bg-[#e3a13a]/15 hover:bg-[#e3a13a] hover:text-white text-[#e3a13a] text-xs font-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  {addingLyricsLanguageTarget === lang ? '생성 중...' : `${lyricLanguageLabels[lang]?.ko || lang} 추가`}
-                                </button>
-                              ))}
-                            </div>
-                            <p className="text-[10px] text-center text-[var(--text-secondary)]">
-                              가사 언어는 최대 2개까지 표시됩니다.
-                            </p>
-                          </div>}
+                          {addingFirstLanguage && addingLyricsLanguageTarget ? renderLyricsGenerationProgress(addingLyricsLanguageTarget) : <LyricLanguageAddCard
+                            key={buildRecentSongSyncKey(result)}
+                            options={missingLyricLanguages.map(lang=>({value:lang,label:lyricLanguageLabels[lang]?.ko||lang}))}
+                            sourceLabel={captureStudioKoreanSource(result) ? `한글 ${readLocalLyricView(result,'ko').index+1}번 가사` : '현재 곡의 제목과 가사'}
+                            disabled={isAddingLyricsLanguage || Boolean(recentSongRegeneratingTarget) || Boolean(recentSongInlineEditMode)}
+                            onGenerate={lang=>void handleAddLyricsLanguage(lang)}
+                          />}
                         </div>
                       ) : null;
 
@@ -22935,7 +22926,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4" onClick={() => setLyricsLanguageChange(null)}>
                               <section role="dialog" aria-modal="true" aria-label="가사 언어 변경" className="w-full max-w-sm max-h-[90dvh] overflow-auto rounded-3xl bg-[var(--card-bg)] p-5 shadow-2xl" onClick={event => event.stopPropagation()}>
                                 <div className="mb-4 flex items-center justify-between gap-2"><h3 className="font-bold text-[var(--text-primary)]">가사 언어 변경</h3><button type="button" autoFocus aria-label="닫기" onClick={() => setLyricsLanguageChange(null)} className="rounded-xl bg-white/5 p-2 text-[var(--text-primary)]"><X className="h-5 w-5" /></button></div>
-                                <div className="grid grid-cols-2 gap-2">{(['en','ja','zh','es','fr','de','ru','th'] as LanguageCode[]).map(lang => <button key={lang} type="button" disabled={displayLyricLanguages.includes(lang) || isAddingLyricsLanguage} onClick={() => handleAddLyricsLanguage(lang,lyricsLanguageChange.lang)} className="rounded-xl bg-[#e3a13a]/10 px-3 py-3 text-sm font-bold text-[#e3a13a] hover:bg-[#e3a13a]/20 disabled:opacity-30">{lyricLanguageLabels[lang].ko}{lang === lyricsLanguageChange.lang ? ' (현재)' : ''}</button>)}</div>
+                                <div className="grid grid-cols-2 gap-2">{(['en','ja','zh','es','fr','de','ru','th'] as LanguageCode[]).map(lang => <button key={lang} type="button" disabled={studioLyricLanguageChoiceBlocked(result,lyricsLanguageChange.lang,lang,true,isAddingLyricsLanguage || Boolean(recentSongRegeneratingTarget) || Boolean(recentSongInlineEditMode))} onClick={() => handleAddLyricsLanguage(lang,lyricsLanguageChange.lang,true)} className="rounded-xl bg-[#e3a13a]/10 px-3 py-3 text-sm font-bold text-[#e3a13a] hover:bg-[#e3a13a]/20 disabled:opacity-30">{lyricLanguageLabels[lang].ko}{lang === readLocalLyricView(result,lyricsLanguageChange.lang).entry.lang ? ' (현재)' : ''}</button>)}</div>
                                 <p className="mt-4 text-center text-xs text-[var(--text-secondary)]">기존 가사는 생성 이력에 남습니다.</p>
                               </section>
                             </div>,document.body)}

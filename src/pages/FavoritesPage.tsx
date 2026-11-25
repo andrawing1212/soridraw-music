@@ -1,3 +1,5 @@
+import LyricLanguageAddCard from '../components/music/LyricLanguageAddCard';
+import { isLyricLanguageChoiceBlocked } from '../lib/recentUnconfirmedRecovery436';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import { resolveNextSongApplyRoute, stageNextSongKeywords } from '../lib/nextSongPendingBridge';
 import { stageNextSongOriginalProbeSelection } from '../lib/nextSongOriginalProbe';
@@ -4796,14 +4798,15 @@ updates: committedUpdates,
     const target=(requested||view.entry.lang) as LanguageCode;
     const korean=noteKoreanSource(source);
     const startCursor=noteLyricCursorsRef.current[view.key];
-    if(!noteLanguageLabels[target]||(other.current.text.trim()&&other.current.lang===target))return;
+    const otherLanguages=[other.current,other.entry].filter(x=>x.text.trim()).map(x=>x.lang);
+    if(!noteLanguageLabels[target]||isLyricLanguageChoiceBlocked(target,requested&&view.current.text.trim()?view.entry.lang:undefined,otherLanguages))return;
     if(!view.entry.text.trim()&&!other.entry.text.trim()){showFavoriteToast('기준이 될 가사가 없습니다.');return;}
     noteLyricBusyRef.current=true;setNoteLyricPicker(null);
     setNoteLyricBusy({id,slot,first:!view.current.text.trim()});
     try{
       const basis=target!=='ko'&&korean?korean:other.entry;
       let text='',title=view.entry.title||view.current.title||source.title||'';
-      if(!view.current.text.trim()||target!==view.current.lang){
+      if(requested!==undefined||!view.current.text.trim()||target!==view.current.lang){
         const bundle=await noteLyricRequest(translateTitleAndLyrics(basis.title||title,basis.text,noteLanguageLabels[target].api,'server-managed'),45000);
         text=String(bundle.lyrics||'').trim();title=String(bundle.title||title).trim();
       }else if(target!=='ko'&&korean){
@@ -4877,8 +4880,16 @@ updates: committedUpdates,
     const view=readNoteLyricView(selectedSong,slot);
     if(noteLyricIsBusy(slot)&&noteLyricBusy?.first)return <div role="status" aria-live="polite" className="flex h-[380px] flex-col items-center justify-center gap-3 text-sm"><Music className="h-8 w-8 text-[#FFC1BC] motion-safe:animate-pulse"/>가사를 생성하고 있습니다.</div>;
     if(!view.entry.text.trim()&&!isSelectedSongReadOnly&&slot==='english'&&musicNoteLyricSlots(selectedSong).korean.text.trim()){
-      const other=musicNoteLyricSlots(selectedSong).korean.lang;
-      return <div className="flex min-h-[260px] flex-col justify-center gap-3 text-center"><p className="text-sm text-white/70">다른 언어 가사를 생성합니다.</p><div className="grid grid-cols-2 gap-2">{Object.keys(noteLanguageLabels).filter(lang=>lang!=='ko'&&lang!==other).map(lang=><button key={lang} type="button" disabled={isEditing||!!noteLyricBusy} onClick={()=>void generateNoteLyric(slot,lang as LanguageCode)} className="rounded-xl bg-[#FF7A72]/10 px-3 py-3 text-xs font-bold text-[#FFC1BC] disabled:opacity-40">{noteLanguageLabels[lang].ko} 추가</button>)}</div></div>;
+      const other=readNoteLyricView(selectedSong,'korean');
+      const korean=noteKoreanSource(selectedSong);
+      return <LyricLanguageAddCard
+        key={getFavoriteDocumentId(selectedSong)}
+        options={Object.keys(noteLanguageLabels).filter(lang=>lang!=='ko'&&lang!==other.current.lang&&lang!==other.entry.lang).map(lang=>({value:lang as LanguageCode,label:noteLanguageLabels[lang].ko}))}
+        sourceLabel={korean ? `한글 ${other.index+1}번 가사` : '현재 곡의 제목과 가사'}
+        disabled={isEditing||!!noteLyricBusy||isFavoriteDetailOpening}
+        onGenerate={lang=>void generateNoteLyric(slot,lang)}
+        accent="note"
+      />;
     }
     return <div className="soridraw-musicnote-lyric-body custom-scrollbar max-h-[380px] overflow-y-auto overscroll-auto rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 whitespace-pre-wrap">{noteLyricText(slot)}</div>;
   };
@@ -11182,7 +11193,13 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4" onClick={()=>setNoteLyricPicker(null)}>
                     <section role="dialog" aria-modal="true" aria-label="가사 언어 변경" className="w-full max-w-sm rounded-3xl bg-[#202022] p-5 text-white shadow-2xl" onClick={event=>event.stopPropagation()}>
                       <div className="mb-4 flex items-center justify-between"><h3 className="font-bold">가사 언어 변경</h3><button type="button" aria-label="닫기" onClick={()=>setNoteLyricPicker(null)}><X className="h-5 w-5"/></button></div>
-                      <div className="grid grid-cols-2 gap-2">{Object.keys(noteLanguageLabels).filter(lang=>lang!=='ko'&&lang!==musicNoteLyricSlots(selectedSong)[noteLyricPicker.slot].lang&&lang!==musicNoteLyricSlots(selectedSong)[noteLyricPicker.slot==='korean'?'english':'korean'].lang).map(lang=><button type="button" key={lang} onClick={()=>void generateNoteLyric(noteLyricPicker.slot,lang as LanguageCode)} className="rounded-xl bg-white/5 px-3 py-3 text-sm">{noteLanguageLabels[lang].ko}</button>)}</div>
+                      <div className="grid grid-cols-2 gap-2">{Object.keys(noteLanguageLabels).filter(lang=>lang!=='ko').map(lang=>{
+                        const visible=readNoteLyricView(selectedSong,noteLyricPicker.slot).entry.lang;
+                        const other=readNoteLyricView(selectedSong,noteLyricPicker.slot==='korean'?'english':'korean');
+                        const otherLanguages=[other.current,other.entry].filter(x=>x.text.trim()).map(x=>x.lang);
+                        return <button type="button" key={lang} disabled={isLyricLanguageChoiceBlocked(lang,visible,otherLanguages,isEditing||!!noteLyricBusy||isFavoriteDetailOpening)} onClick={()=>void generateNoteLyric(noteLyricPicker.slot,lang as LanguageCode)} className="rounded-xl bg-white/5 px-3 py-3 text-sm disabled:opacity-30">{noteLanguageLabels[lang].ko}{lang===visible?' (현재)':''}</button>;
+                      })}</div>
+                      <p className="mt-4 text-center text-xs text-white/60">기존 가사는 생성 이력에 남습니다.</p>
                     </section>
                   </div>,document.body)}
                 <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">

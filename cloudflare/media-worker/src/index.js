@@ -725,10 +725,11 @@ const buildCanonicalCatalog = async (identity, kind, minimumRevision, env) => {
   return payload;
 };
 
-const putCatalogObjectAtKey = async (env, key, uid, payload) => {
+const putCatalogObjectAtKey = async (env, key, uid, payload, onlyIf = undefined) => {
   const encoded = JSON.stringify(payload);
   if (new TextEncoder().encode(encoded).length > CATALOG_MAX_BYTES) throw new Error('CATALOG_TOO_LARGE');
   return catalogBucket(env).put(key, encoded, {
+    ...(onlyIf ? { onlyIf } : {}),
     httpMetadata: { contentType: 'application/json; charset=utf-8', cacheControl: 'private, no-store' },
     customMetadata: {
       uid,
@@ -876,7 +877,10 @@ const seedSharedCatalogFromCurrentLegacy = async (identity, kind, requiredRevisi
   if (kind === 'musicNote' && isCanonicalCatalogAuthority518(env)) {
     throw new Error('CATALOG_518_LEGACY_SEED_DISABLED');
   }
-  const existingShared = await readCatalogStateFromBucket(env.CATALOG, identity.uid, kind);
+  const readShared = () => kind === 'musicNote'
+    ? readStrictCatalogStateForInspection(env.CATALOG, identity.uid, kind)
+    : readCatalogStateFromBucket(env.CATALOG, identity.uid, kind);
+  const existingShared = await readShared();
   if (existingShared) return existingShared;
 
   // One user/kind at a time: reuse the current environment's already-materialized
@@ -889,8 +893,14 @@ const seedSharedCatalogFromCurrentLegacy = async (identity, kind, requiredRevisi
   const required = Math.max(0, Math.floor(Number(requiredRevision || 0)));
   if (required <= 0 || legacyPayload.revision < required) return null;
 
-  const baseKey = catalogCompactedBaseKey(identity.uid, kind, legacyPayload.revision);
-  await putCatalogObjectAtKey(env, baseKey, identity.uid, legacyPayload);
+  // A losing legacy seed must not overwrite the winning HEAD's base.
+  const baseKey = kind === 'musicNote'
+    ? catalogCompactedBaseKey(identity.uid, kind, legacyPayload.revision)
+      .replace(/\.json$/, '-seed-' + crypto.randomUUID() + '.json')
+    : catalogCompactedBaseKey(identity.uid, kind, legacyPayload.revision);
+  const baseStored = await putCatalogObjectAtKey(env, baseKey, identity.uid, legacyPayload,
+    kind === 'musicNote' ? { etagDoesNotMatch: '*' } : undefined);
+  if (kind === 'musicNote' && !baseStored) return readShared();
   const head = createEmptyCatalogJournal({
     kind,
     baseKey,
@@ -898,7 +908,7 @@ const seedSharedCatalogFromCurrentLegacy = async (identity, kind, requiredRevisi
     itemCount: legacyPayload.itemCount,
   });
   const stored = await putCatalogJournalHead(env, identity.uid, kind, head, null);
-  if (!stored) return readCatalogStateFromBucket(env.CATALOG, identity.uid, kind);
+  if (!stored) return readShared();
   return { base: legacyPayload, head, journalObject: stored };
 };
 
@@ -946,12 +956,18 @@ const bootstrapSharedCatalogFromCanonical = async (identity, kind, requiredRevis
     throw new Error('SHARED_CATALOG_BOOTSTRAP_DISABLED');
   }
   const required = Math.max(0, Math.floor(Number(requiredRevision || 0)));
-  const current = await readCatalogStateFromBucket(env.CATALOG, identity.uid, kind);
-  if (kind === 'musicNote' && isCanonicalCatalogAuthority518(env))
+  const current = kind === 'musicNote'
+    ? await readStrictCatalogStateForInspection(env.CATALOG, identity.uid, kind)
+    : await readCatalogStateFromBucket(env.CATALOG, identity.uid, kind);
+  if (kind === 'musicNote' && isCanonicalCatalogAuthority518(env)) {
+    // Do not run an entire Firestore scan or replace a fenced journal HEAD.
     throw new Error('CATALOG_518_BOOTSTRAP_MUST_RECONCILE_EXACT');
+  }
   if (kind === 'musicNote' && current &&
-      classifyCatalogAuthority518(current.head, kind).code !== 'LEGACY_UNFENCED')
+      classifyCatalogAuthority518(current.head, kind).code !== 'LEGACY_UNFENCED') {
+    // Disabled flag does not permit resetting an already fenced HEAD.
     throw new Error('CATALOG_518_FENCED_REBUILD_DENIED');
+  }
   if (current && (required <= 0 || Number(current.head?.headRevision || 0) >= required)) {
     return materializeCatalogState(current, kind);
   }
@@ -960,6 +976,31 @@ const bootstrapSharedCatalogFromCanonical = async (identity, kind, requiredRevis
   // authenticated, per-user/per-kind and reached only when a cold/missing/stale
   // shared Catalog cannot satisfy the shared profile revision.
   const canonical = await buildCanonicalCatalog(identity, kind, required, env);
+  // The canonical scan may have overlapped a newer legacy mutation or the
+  // first canonical owner fence. Never rebase its stale result onto a newer
+  // HEAD. Keep the initial ETag, and use a new immutable base key so a losing
+  // bootstrap cannot overwrite a base referenced by the winning HEAD.
+  if (kind === 'musicNote') {
+    const originalEtag = current?.journalObject?.etag || null;
+    const latest = await readStrictCatalogObjectForInspection(
+      env.CATALOG, catalogJournalKey(identity.uid, kind), kind, true,
+    );
+    if (latest && classifyCatalogAuthority518(latest.payload, kind).code !== 'LEGACY_UNFENCED')
+      throw new Error('CATALOG_518_FENCED_REBUILD_DENIED');
+    if ((latest?.object?.etag || null) !== originalEtag
+        || (latest && !latest.object?.etag))
+      throw new Error('CATALOG_BOOTSTRAP_CONFLICT');
+    const baseKey = catalogCompactedBaseKey(identity.uid, kind, canonical.revision)
+      .replace(/\.json$/, '-bootstrap-' + crypto.randomUUID() + '.json');
+    const base = await putCatalogObjectAtKey(env, baseKey, identity.uid, canonical, { etagDoesNotMatch: '*' });
+    if (!base) throw new Error('CATALOG_BOOTSTRAP_CONFLICT');
+    const head = createEmptyCatalogJournal({
+      kind, baseKey, baseRevision: canonical.revision, itemCount: canonical.itemCount,
+    });
+    const stored = await putCatalogJournalHead(env, identity.uid, kind, head, latest?.object || null);
+    if (!stored) throw new Error('CATALOG_BOOTSTRAP_CONFLICT');
+    return canonical;
+  }
   const baseKey = catalogCompactedBaseKey(identity.uid, kind, canonical.revision);
   await putCatalogObjectAtKey(env, baseKey, identity.uid, canonical);
 
@@ -1012,11 +1053,21 @@ const validateCatalogDelta = (payload, kind) => {
 const compactCatalogJournal = async (env, uid, kind) => {
   const journalRecord = await readCatalogJournalObject(env, uid, kind);
   if (!journalRecord || journalRecord.payload.deltas.length === 0) return false;
+  // Delayed legacy compaction must not mutate a newly fenced owner.
+  // Canonical compaction belongs to the indexed source-versioned writer.
+  if (kind === 'musicNote' && (isCanonicalCatalogAuthority518(env)
+    || classifyCatalogAuthority518(journalRecord.payload, kind).code !== 'LEGACY_UNFENCED'
+    || !journalRecord.object?.etag)) return false;
   const base = await readCatalogObjectAtKey(env, journalRecord.payload.baseKey, kind);
   if (!base) return false;
   const materialized = materializeCatalogState({ base, head: journalRecord.payload }, kind);
-  const newBaseKey = catalogCompactedBaseKey(uid, kind, materialized.revision);
-  await putCatalogObjectAtKey(env, newBaseKey, uid, materialized);
+  const newBaseKey = kind === 'musicNote'
+    ? catalogCompactedBaseKey(uid, kind, materialized.revision)
+      .replace(/\.json$/, '-compact-' + crypto.randomUUID() + '.json')
+    : catalogCompactedBaseKey(uid, kind, materialized.revision);
+  const baseStored = await putCatalogObjectAtKey(env, newBaseKey, uid, materialized,
+    kind === 'musicNote' ? { etagDoesNotMatch: '*' } : undefined);
+  if (kind === 'musicNote' && !baseStored) return false;
   const compactedHead = createCompactedCatalogJournal({ head: journalRecord.payload, baseKey: newBaseKey });
   const stored = await putCatalogJournalHead(env, uid, kind, compactedHead, journalRecord.object);
   return Boolean(stored);

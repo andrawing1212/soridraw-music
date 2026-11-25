@@ -32,7 +32,7 @@ assert.throws(()=>assertRecentLyricHistoryBudget({foreign:{entries:[entry('x',1,
 assert.throws(()=>assertRecentLyricHistoryBudget(archive,{x:'a'.repeat(800001)}),/capacity/);
 assert.throws(()=>mergeRecentLyricHistory(archive,{foreign:{entries:[{...en,text:'collision'}],selectedId:'a'}}),/conflict/);
 const app=read('src/App.tsx'),sync=read('src/services/userDomainSyncService.ts');
-assert.match(app,/handleAddLyricsLanguage\(lang,lyricsLanguageChange.lang\)/);
+assert.match(app,/handleAddLyricsLanguage\(lang,lyricsLanguageChange\.lang,true\)/);
 assert.match(app,/withLyricHistory\(latest,nextSong,targetLang,targetLang\)/);
 assert.match(app,/withLyricHistory\(latestSong,languageSong,replaceLanguage \|\| null,targetLanguage\)/);
 assert.match(app,/role="status" aria-live="polite"/);

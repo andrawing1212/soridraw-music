@@ -3,6 +3,7 @@ import { resolveNextSongApplyRoute, stageNextSongKeywords } from '../lib/nextSon
 import { stageNextSongOriginalProbeSelection } from '../lib/nextSongOriginalProbe';
 import {
   MUSIC_NOTE_SYNC_EVENT,
+  getMusicNoteSyncOriginDeviceId,
   COLOR_SELECTION_SYNC_EVENT,
   publishColorSelectionPreview,
   publishMusicNoteDetailPreviewDelta,
@@ -23,7 +24,8 @@ import { useFolderStripMouseScroll } from '../lib/folderStripMouseScroll';
 import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
-import { translateLyrics } from '../services/geminiService';
+import { translateLyrics, translateTitleAndLyrics, regenerateLyricsOnly } from '../services/geminiService';
+import { readRecentLyricHistory, resolveRecentLyricLocalView, stepRecentLyricLocalView, recentLyricCursorKey, captureDisplayedKoreanLyric, musicNoteLyricSlots, musicNoteLyricFingerprint, buildMusicNoteLyricVersionPatch, type MusicNoteLyricSlot, type LyricHistoryEntry } from '../lib/recentUnconfirmedRecovery436';
 import MusicApiGenerateModal, { LanguageCode, SunoModelVersion } from '../components/MusicApiGenerateModal';
 import StudioCenterModalPortal from '../components/studio/StudioCenterModalPortal';
 import CacheDiagnosticBadge from '../components/CacheDiagnosticBadge';
@@ -70,6 +72,7 @@ import {
   RefreshCw,
   Settings,
   Loader2,
+  Languages,
   MessageCircle,
   Mail,
   Facebook,
@@ -132,6 +135,7 @@ type MusicNoteDetailPendingPatch = {
   baseVersion: number;
   updatedAtMs: number;
   updates: Record<string, any>;
+  lyricExpectedFingerprint?: string;
 };
 
 const mergeMusicNoteDetailPatch = (base: Record<string, any>, patch: Record<string, any>) => ({
@@ -1169,7 +1173,7 @@ export default function FavoritesPage({
 }: { 
   favorites: any[]; 
   toggleFavorite: (song: any) => void | Promise<void>; 
-  updateFavorite: (id: string, updates: Partial<any>) => void | Promise<void>;
+  updateFavorite: (id: string, updates: Partial<any>, lyricExpectedFingerprint?:string) => void | Promise<any>;
   clearAllFavorites: () => void;
   unlockAllFavorites: () => void;
   lockAllFavorites: () => void;
@@ -1188,6 +1192,18 @@ export default function FavoritesPage({
   showMusicApiGeneration?: boolean;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
+  const noteLyricSelectedRef=useRef<any>(null);
+  noteLyricSelectedRef.current=selectedSong;
+  const [,setNoteLyricCursors]=useState<Record<string,string>>({});
+  const noteLyricCursorsRef=useRef<Record<string,string>>({});
+  const noteLyricBusyRef=useRef(false);
+  const noteLyricConflictRef=useRef<string|null>(null);
+  const [noteLyricBusy,setNoteLyricBusy]=useState<{id:string;slot:MusicNoteLyricSlot;first:boolean}|null>(null);
+  const [noteLyricPicker,setNoteLyricPicker]=useState<{id:string;slot:MusicNoteLyricSlot}|null>(null);
+  const noteLyricEditorRef=useRef<{source:any;slot:MusicNoteLyricSlot;visible:ReturnType<typeof resolveRecentLyricLocalView>['entry'];initialText:string;key:string;request:number}|null>(null);
+  const noteLyricRemotePendingRef=useRef<{uid:string;id:string;version:number}|null>(null);
+  const noteLyricRemoteSeenRef=useRef<Record<string,number>>({});
+  const [noteLyricRemoteTick,setNoteLyricRemoteTick]=useState(0);
   const [isFavoriteDetailOpening, setIsFavoriteDetailOpening] = useState(false);
   const favoriteDetailOpenRequestRef = useRef(0);
   const musicNotePageRootRef = useRef<HTMLDivElement | null>(null);
@@ -1764,8 +1780,8 @@ export default function FavoritesPage({
     editedPrompt !== originalPrompt
   );
   const isTitleEditChanged = titleEditHasChanged;
-  const isKoreanLyricsEditChanged = Boolean(selectedSong && editedKoreanLyrics !== originalLyricsKo);
-  const isForeignLyricsEditChanged = Boolean(selectedSong && editedEnglishLyrics !== originalLyricsEn);
+  const isKoreanLyricsEditChanged = Boolean(selectedSong && editedKoreanLyrics !== (noteLyricEditorRef.current?.slot==='korean'?noteLyricEditorRef.current.initialText:originalLyricsKo));
+  const isForeignLyricsEditChanged = Boolean(selectedSong && editedEnglishLyrics !== (noteLyricEditorRef.current?.slot==='english'?noteLyricEditorRef.current.initialText:originalLyricsEn));
   const isPromptEditChanged = Boolean(selectedSong && editedPrompt !== originalPrompt);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(0); // 0: none, 1: warning, 2: execute
   const [confirmUnlockAll, setConfirmUnlockAll] = useState(0);
@@ -1918,7 +1934,14 @@ export default function FavoritesPage({
 
     const task = (async () => {
       try {
-        await updateFavorite(pending.songId, pending.updates);
+        let committedUpdates=pending.updates;
+        if(pending.lyricExpectedFingerprint!==undefined){
+          const committed=await updateFavorite(pending.songId,pending.updates,pending.lyricExpectedFingerprint);
+          if(!committed)throw new Error('music-note-lyric-save-failed');
+          committedUpdates=committed;
+        }else{
+          await updateFavorite(pending.songId, pending.updates);
+        }
 
         // app428: public metadata follows the existing canonical Music Note
         // settlement, never editor keystrokes. A derived Explore failure must not
@@ -1947,12 +1970,12 @@ export default function FavoritesPage({
         }
 
         const latest = favoritesStore.getFavorites().find((song: any) => getFavoriteDocumentId(song) === pending.songId);
-        const committedVersion = getMusicNoteDetailSourceVersion(latest) || Date.now();
+        const committedVersion = getMusicNoteDetailSourceVersion(committedUpdates) || getMusicNoteDetailSourceVersion(latest) || Date.now();
         await patchMusicNoteDetailCache({
           uid: user.uid,
           sourceId: pending.songId,
           sourceVersion: committedVersion,
-          updates: pending.updates,
+          updates: committedUpdates,
         });
 
         const baselineEntry = favoriteDetailServerBaselineRef.current;
@@ -1960,7 +1983,7 @@ export default function FavoritesPage({
           favoriteDetailServerBaselineRef.current = {
             songId: pending.songId,
             data: mergeMusicNoteDetailDraft(baselineEntry.data, {
-              ...pending.updates,
+              ...committedUpdates,
               updatedAtMs: committedVersion,
             }),
           };
@@ -1978,9 +2001,11 @@ export default function FavoritesPage({
               baseVersion: committedVersion,
               updatedAtMs: Date.now(),
               updates: rebasedUpdates,
+              ...(newerPending.lyricExpectedFingerprint!==undefined && favoriteDetailServerBaselineRef.current?.songId===pending.songId
+                ? {lyricExpectedFingerprint:musicNoteLyricFingerprint(favoriteDetailServerBaselineRef.current.data)} : {}),
             };
             favoriteDetailPendingPatchRef.current = rebasedPending;
-            await writeMusicNoteDetailDraft(user.uid, rebasedPending.songId, rebasedPending.baseVersion, rebasedPending.updates);
+            await writeMusicNoteDetailDraft(user.uid, rebasedPending.songId, rebasedPending.baseVersion, rebasedPending.updates,rebasedPending.lyricExpectedFingerprint);
           }
         } else {
           await clearMusicNoteDetailDraft(user.uid, pending.songId);
@@ -2006,10 +2031,15 @@ export default function FavoritesPage({
           baseVersion: pending.baseVersion || newerPending?.baseVersion || 0,
           updatedAtMs: Date.now(),
           updates: restoredUpdates,
+          lyricExpectedFingerprint:pending.lyricExpectedFingerprint ?? (newerPending?.songId===pending.songId?newerPending.lyricExpectedFingerprint:undefined),
         };
-        favoriteDetailPendingPatchRef.current = restored;
+        if(!newerPending || newerPending.songId===pending.songId || pending.lyricExpectedFingerprint===undefined)favoriteDetailPendingPatchRef.current = restored;
         setFavoriteDetailSaveStatus('pending');
-        await writeMusicNoteDetailDraft(user.uid, restored.songId, restored.baseVersion, restored.updates);
+        await writeMusicNoteDetailDraft(user.uid, restored.songId, restored.baseVersion, restored.updates,restored.lyricExpectedFingerprint);
+        if(String((error as any)?.message||'').includes('music-note-lyric-concurrent-change')){
+          noteLyricConflictRef.current=pending.songId;
+          showFavoriteToast('다른 기기의 가사와 임시 저장본이 겹칩니다. 기존 가사와 임시 저장본을 보존했습니다.');
+        }
       } finally {
         favoriteDetailFlushInFlightRef.current = null;
       }
@@ -2126,7 +2156,7 @@ export default function FavoritesPage({
     return () => { cancelled = true; };
   }, [user?.uid, favorites, isMusicNoteSharedView]);
 
-  const queueFavoriteDetailPatch = (songId: string, patch: Record<string, any>) => {
+  const queueFavoriteDetailPatch = (songId: string, patch: Record<string, any>, lyricExpectedFingerprint?:string) => {
     const safeSongId = String(songId || '').trim();
     if (!safeSongId || !user?.uid || !patch || Object.keys(patch).length === 0) return;
 
@@ -2171,11 +2201,12 @@ export default function FavoritesPage({
       baseVersion,
       updatedAtMs: Date.now(),
       updates,
+      lyricExpectedFingerprint:(existing?.songId===safeSongId?existing.lyricExpectedFingerprint:undefined)??lyricExpectedFingerprint,
     };
     favoriteDetailPendingPatchRef.current = pending;
     setFavoriteDetailSaveStatus('pending');
 
-    const persistTask = writeMusicNoteDetailDraft(user.uid, safeSongId, baseVersion, updates);
+    const persistTask = writeMusicNoteDetailDraft(user.uid, safeSongId, baseVersion, updates,pending.lyricExpectedFingerprint);
     const trackedPersistTask = persistTask.finally(() => {
       if (favoriteDetailDraftPersistInFlightRef.current === trackedPersistTask) {
         favoriteDetailDraftPersistInFlightRef.current = null;
@@ -2196,14 +2227,19 @@ export default function FavoritesPage({
     for (const draft of drafts) {
       if (!draft?.sourceId || draft.sourceId === stillPendingSongId) continue;
       try {
-        await updateFavorite(draft.sourceId, draft.updates);
+        let committedUpdates=draft.updates;
+        if(draft.lyricExpectedFingerprint!==undefined){
+          const committed=await updateFavorite(draft.sourceId,draft.updates,draft.lyricExpectedFingerprint);
+          if(!committed)throw new Error('music-note-lyric-save-failed');
+          committedUpdates=committed;
+        }else await updateFavorite(draft.sourceId, draft.updates);
         const latest = favoritesStore.getFavorites().find((song: any) => String(song?.id || '') === draft.sourceId);
-        const committedVersion = getMusicNoteDetailSourceVersion(latest) || Date.now();
+        const committedVersion = getMusicNoteDetailSourceVersion(committedUpdates) || getMusicNoteDetailSourceVersion(latest) || Date.now();
         await patchMusicNoteDetailCache({
 uid,
 sourceId: draft.sourceId,
 sourceVersion: committedVersion,
-updates: draft.updates,
+updates: committedUpdates,
         });
         await clearMusicNoteDetailDraft(uid, draft.sourceId);
       } catch (error) {
@@ -4663,6 +4699,226 @@ updates: draft.updates,
     }
   };
 
+  // Music Note uses the same archive and local-only cursor as Studio.
+  // Canonical persistence remains an exact owned favorite document mutation.
+  const noteLanguageLabels:Record<string,{ko:string;api:string}> = {
+    ko:{ko:'한글',api:'Korean'},en:{ko:'영어',api:'English'},ja:{ko:'일본어',api:'Japanese'},
+    zh:{ko:'중국어',api:'Chinese'},es:{ko:'스페인어',api:'Spanish'},fr:{ko:'프랑스어',api:'French'},
+    de:{ko:'독일어',api:'German'},ru:{ko:'러시아어',api:'Russian'},th:{ko:'태국어',api:'Thai'},
+  };
+  const readNoteLyricView = (song:any,slot:MusicNoteLyricSlot) => {
+    const current=musicNoteLyricSlots(song)[slot];
+    const key=recentLyricCursorKey(String(user?.uid||''),getFavoriteDocumentId(song),current.lane);
+    let archive;
+    try {archive=readRecentLyricHistory(song?.lyricGenerationHistoryV1)[current.lane];}catch{archive=undefined;}
+    return {key,current,...resolveRecentLyricLocalView(archive,current,noteLyricCursorsRef.current[key])};
+  };
+  const setNoteLyricCursor=(key:string,cursor:string|null)=>{
+    const next={...noteLyricCursorsRef.current};
+    if(cursor===null)delete next[key];else next[key]=cursor;
+    const bounded=Object.fromEntries(Object.entries(next).slice(-30));
+    noteLyricCursorsRef.current=bounded;setNoteLyricCursors(bounded);
+  };
+  const navigateNoteLyric=(slot:MusicNoteLyricSlot,direction:'prev'|'next')=>{
+    const song=noteLyricSelectedRef.current;
+    if(!song||isEditing||isFavoriteDetailOpening)return;
+    const view=readNoteLyricView(song,slot);
+    const step=stepRecentLyricLocalView(view,direction);
+    if(step)setNoteLyricCursor(view.key,step.cursor);
+  };
+  const noteKoreanSource=(song:any)=>{
+    const slots=musicNoteLyricSlots(song);
+    const slot=(['korean','english'] as const).find(x=>slots[x].lang==='ko'&&slots[x].text.trim());
+    return captureDisplayedKoreanLyric(slot?readNoteLyricView(song,slot):undefined);
+  };
+  const noteLyricEntry=(lang:string,text:string,title:string):LyricHistoryEntry=>{
+    const at=Date.now();
+    return {id:typeof crypto.randomUUID==='function'?crypto.randomUUID():at+'-'+Math.random().toString(36).slice(2),at,lang,text:text.trim(),title};
+  };
+  const noteLyricRequest=<T,>(work:Promise<T>,ms:number):Promise<T>=>{
+    let timer:ReturnType<typeof setTimeout>;
+    return Promise.race([work,new Promise<T>((_,reject)=>{timer=setTimeout(()=>reject(new Error('music-note-lyric-timeout')),ms);})]).finally(()=>clearTimeout(timer));
+  };
+  const applyCommittedNoteLyricFields=(id:string,patch:Record<string,any>,committed=true)=>{
+    const current=noteLyricSelectedRef.current;
+    if(!current||getFavoriteDocumentId(current)!==id)return;
+    const next=mergeMusicNoteDetailDraft(current,patch);
+    noteLyricSelectedRef.current=next;setSelectedSong(next);
+    setOriginalLyricsKo(normalizeFavoriteLyricsForDisplay(next.lyrics?.korean||''));
+    setOriginalLyricsEn(normalizeFavoriteLyricsForDisplay(next.lyrics?.english||''));
+    setEditedKoreanLyrics(normalizeFavoriteLyricsForDisplay(next.lyrics?.korean||''));
+    setEditedEnglishLyrics(normalizeFavoriteLyricsForDisplay(next.lyrics?.english||''));
+    setOriginalKoreanTitle(cleanTitlePart(next.koreanTitle||''));setEditedKoreanTitle(cleanTitlePart(next.koreanTitle||''));
+    setOriginalEnglishTitle(cleanTitlePart(next.englishTitle||''));setEditedEnglishTitle(cleanTitlePart(next.englishTitle||''));
+    const baseline=favoriteDetailServerBaselineRef.current;
+    if(committed&&baseline?.songId===id)favoriteDetailServerBaselineRef.current={songId:id,data:mergeMusicNoteDetailDraft(baseline.data,patch)};
+  };
+  const commitNoteLyricPatch=async(source:any,patch:Record<string,any>,request:number,uid:string)=>{
+    const id=getFavoriteDocumentId(source);
+    const expected=musicNoteLyricFingerprint(source);
+    const stillOpen=()=>auth.currentUser?.uid===uid&&favoriteDetailOpenRequestRef.current===request&&getFavoriteDocumentId(noteLyricSelectedRef.current)===id;
+    if(!id||!stillOpen()||noteLyricConflictRef.current===id)throw new Error('music-note-lyric-target-unavailable');
+    if(favoriteDetailFlushInFlightRef.current)await favoriteDetailFlushInFlightRef.current;
+    if(!stillOpen()||musicNoteLyricFingerprint(noteLyricSelectedRef.current)!==expected)throw new Error('music-note-lyric-concurrent-change');
+    // Preserve the existing page-exit batch and the original server baseline.
+    const baseline=favoriteDetailServerBaselineRef.current;
+    if(baseline?.songId!==id)throw new Error('music-note-lyric-target-unavailable');
+    if(favoriteDetailDraftPersistInFlightRef.current)await favoriteDetailDraftPersistInFlightRef.current;
+    if(!stillOpen())throw new Error('music-note-lyric-target-unavailable');
+    const pending=favoriteDetailPendingPatchRef.current;
+    const guardedFingerprint=pending?.songId===id&&pending.lyricExpectedFingerprint!==undefined
+      ?pending.lyricExpectedFingerprint:musicNoteLyricFingerprint(baseline.data);
+    queueFavoriteDetailPatch(id,patch,guardedFingerprint);
+    applyCommittedNoteLyricFields(id,patch,false);
+    if(favoriteDetailDraftPersistInFlightRef.current)await favoriteDetailDraftPersistInFlightRef.current;
+    if(!stillOpen())return;
+    const persisted=await readMusicNoteDetailDraft(uid,id);
+    if(persisted?.lyricExpectedFingerprint!==guardedFingerprint || JSON.stringify(persisted?.updates?.lyricGenerationHistoryV1)!==JSON.stringify(patch.lyricGenerationHistoryV1)){
+      // Exceptional local storage failure only: settle the exact pending draft.
+      await flushFavoriteDetailPendingPatch('manual');
+      if(favoriteDetailPendingPatchRef.current?.songId===id)throw new Error('music-note-lyric-save-failed');
+    }else showFavoriteToast('가사 이력이 저장 대기 중입니다.');
+  };
+  const noteLyricError=(error:unknown)=>{
+    const message=String((error as any)?.message||error||'');
+    return message.includes('capacity')?'가사 이력 저장 한도에 도달했습니다. 기존 가사는 유지됩니다.'
+      :message.includes('concurrent')?'다른 기기 또는 기존 수정 내용이 변경되었습니다. 다시 시도해주세요.'
+      :message.includes('timeout')?'가사 생성 시간이 너무 오래 걸립니다. 다시 시도해주세요.'
+      :'가사 생성 또는 저장에 실패했습니다. 기존 가사는 유지됩니다.';
+  };
+  const generateNoteLyric=async(slot:MusicNoteLyricSlot,requested?:LanguageCode)=>{
+    const source=noteLyricSelectedRef.current;
+    const uid=String(user?.uid||'');
+    if(!source||!uid||isSelectedSongReadOnly||isFavoriteDetailOpening||source.__catalogSummary===true||noteLyricBusyRef.current||isEditing)return;
+    const id=getFavoriteDocumentId(source),request=favoriteDetailOpenRequestRef.current;
+    if(noteLyricConflictRef.current===id){showFavoriteToast('다른 기기 변경과 임시 저장본이 겹칩니다. 기존 가사를 보호하고 있습니다.');return;}
+    const view=readNoteLyricView(source,slot),other=readNoteLyricView(source,slot==='korean'?'english':'korean');
+    const target=(requested||view.entry.lang) as LanguageCode;
+    const korean=noteKoreanSource(source);
+    const startCursor=noteLyricCursorsRef.current[view.key];
+    if(!noteLanguageLabels[target]||(other.current.text.trim()&&other.current.lang===target))return;
+    if(!view.entry.text.trim()&&!other.entry.text.trim()){showFavoriteToast('기준이 될 가사가 없습니다.');return;}
+    noteLyricBusyRef.current=true;setNoteLyricPicker(null);
+    setNoteLyricBusy({id,slot,first:!view.current.text.trim()});
+    try{
+      const basis=target!=='ko'&&korean?korean:other.entry;
+      let text='',title=view.entry.title||view.current.title||source.title||'';
+      if(!view.current.text.trim()||target!==view.current.lang){
+        const bundle=await noteLyricRequest(translateTitleAndLyrics(basis.title||title,basis.text,noteLanguageLabels[target].api,'server-managed'),45000);
+        text=String(bundle.lyrics||'').trim();title=String(bundle.title||title).trim();
+      }else if(target!=='ko'&&korean){
+        text=String(await noteLyricRequest(translateLyrics(korean.text,noteLanguageLabels[target].api,'server-managed'),45000)).trim();
+      }else{
+        const result=await noteLyricRequest(regenerateLyricsOnly({title,prompt:source.prompt||'',targetLanguage:target,targetLanguageName:noteLanguageLabels[target].api,currentLyrics:view.entry.text,siblingLyrics:other.entry.text,appliedKeywords:source.appliedKeywords||{},geminiApiKey:'server-managed'}),55000);
+        text=String(result.lyrics||'').trim();
+      }
+      if(!text)throw new Error('music-note-lyric-empty');
+      const patch=buildMusicNoteLyricVersionPatch(source,slot,noteLyricEntry(target,text,title));
+      await commitNoteLyricPatch(source,patch,request,uid);
+      if(noteLyricCursorsRef.current[view.key]===startCursor)setNoteLyricCursor(view.key,null);
+    }catch(error){console.error('Music Note lyric generation failed:',error);showFavoriteToast(noteLyricError(error));}
+    finally{noteLyricBusyRef.current=false;setNoteLyricBusy(null);}
+  };
+  const startNoteLyricEdit=(slot:MusicNoteLyricSlot)=>{
+    const source=noteLyricSelectedRef.current;
+    if(!source||isSelectedSongReadOnly||isFavoriteDetailOpening||source.__catalogSummary===true||noteLyricBusyRef.current||isEditing)return;
+    if(noteLyricConflictRef.current===getFavoriteDocumentId(source)){showFavoriteToast('다른 기기 변경과 임시 저장본이 겹칩니다. 기존 가사를 보호하고 있습니다.');return;}
+    const view=readNoteLyricView(source,slot);
+    const initialText=normalizeFavoriteLyricsForDisplay(view.entry.text);
+    noteLyricEditorRef.current={source,slot,visible:{...view.entry},initialText,key:view.key,request:favoriteDetailOpenRequestRef.current};
+    if(slot==='korean')setEditedKoreanLyrics(initialText);else setEditedEnglishLyrics(initialText);
+    setIsEditing(true);setActiveEditSection(slot==='korean'?'lyrics-ko':'lyrics-en');
+  };
+  const saveNoteLyricEdit=async()=>{
+    const editor=noteLyricEditorRef.current,uid=String(user?.uid||'');
+    if(!editor||!uid||noteLyricBusyRef.current)return;
+    const text=(editor.slot==='korean'?editedKoreanLyrics:editedEnglishLyrics).trim();
+    if(!text){showFavoriteToast('가사를 입력해주세요.');return;}
+    if(text===editor.initialText.trim()){cancelModalEditing();return;}
+    noteLyricBusyRef.current=true;setIsTranslating(true);
+    try{
+      let patch=buildMusicNoteLyricVersionPatch(editor.source,editor.slot,noteLyricEntry(editor.visible.lang,text,editor.visible.title));
+      // Preserve the existing opt-in manual edit linking; no implicit translation.
+      if(isSyncEnabled){
+        const otherSlot=editor.slot==='korean'?'english':'korean';
+        const other=readNoteLyricView(editor.source,otherSlot);
+        const target=editor.slot==='korean'?(Object.keys(noteLanguageLabels).find(x=>noteLanguageLabels[x].api===foreignTargetLanguage)||other.entry.lang):'ko';
+        if(target!==editor.visible.lang){
+          const translated=String(await noteLyricRequest(translateLyrics(text,buildLyricContentOnlyTranslationTarget(noteLanguageLabels[target]?.api||foreignTargetLanguage),'server-managed'),45000)).trim();
+          if(!translated)throw new Error('music-note-lyric-empty');
+          const intermediate=mergeMusicNoteDetailDraft(editor.source,patch);
+          const linked=buildMusicNoteLyricVersionPatch(intermediate,otherSlot,noteLyricEntry(target,translated,other.entry.title));
+          patch=mergeMusicNoteDetailDraft(patch,linked) as typeof patch;
+        }
+      }
+      await commitNoteLyricPatch(editor.source,patch,editor.request,uid);
+      setNoteLyricCursor(editor.key,null);
+      if(auth.currentUser?.uid===uid&&favoriteDetailOpenRequestRef.current===editor.request&&noteLyricEditorRef.current===editor){
+        noteLyricEditorRef.current=null;setIsEditing(false);setActiveEditSection(null);setIsSyncEnabled(false);
+      }
+    }catch(error){console.error('Music Note lyric edit failed:',error);showFavoriteToast(noteLyricError(error));}
+    finally{noteLyricBusyRef.current=false;setIsTranslating(false);}
+  };
+  const noteLyricLabel=(slot:MusicNoteLyricSlot)=>noteLanguageLabels[readNoteLyricView(selectedSong,slot).entry.lang]?.ko||'외국어';
+  const noteLyricText=(slot:MusicNoteLyricSlot)=>normalizeFavoriteLyricsForDisplay(readNoteLyricView(selectedSong,slot).entry.text);
+  const noteLyricIsBusy=(slot:MusicNoteLyricSlot)=>noteLyricBusy?.id===getFavoriteDocumentId(selectedSong)&&noteLyricBusy.slot===slot;
+  const renderNoteLyricNavigation=(slot:MusicNoteLyricSlot)=>{
+    const view=readNoteLyricView(selectedSong,slot),total=view.entries.length;
+    return <div className="soridraw-lyric-history-controls">
+      <div className="soridraw-lyric-history-nav">{total>1&&<div className="flex items-center gap-1">
+        <button type="button" aria-label="이전 가사" disabled={isEditing||view.index<=0} onClick={()=>navigateNoteLyric(slot,'prev')} className="h-10 w-8 rounded-xl bg-white/5 disabled:opacity-30">{'<'}</button>
+        <span className="text-xs tabular-nums text-white/65">{view.index+1}/{total}</span>
+        <button type="button" aria-label="다음 가사" disabled={isEditing||view.index>=total-1} onClick={()=>navigateNoteLyric(slot,'next')} className="h-10 w-8 rounded-xl bg-white/5 disabled:opacity-30">{'>'}</button>
+      </div>}</div>
+      {!isSelectedSongReadOnly&&view.current.text.trim()&&view.current.lang!=='ko'&&<button type="button" disabled={isEditing||!!noteLyricBusy} onClick={()=>setNoteLyricPicker({id:getFavoriteDocumentId(selectedSong),slot})} className="soridraw-lyric-language-change flex items-center gap-1 rounded-xl bg-[#FF7A72]/10 px-3 py-2 text-xs font-bold text-[#FFC1BC] disabled:opacity-40"><Languages className="h-4 w-4"/>언어 변경</button>}
+    </div>;
+  };
+  const renderNoteLyricBody=(slot:MusicNoteLyricSlot)=>{
+    const view=readNoteLyricView(selectedSong,slot);
+    if(noteLyricIsBusy(slot)&&noteLyricBusy?.first)return <div role="status" aria-live="polite" className="flex h-[380px] flex-col items-center justify-center gap-3 text-sm"><Music className="h-8 w-8 text-[#FFC1BC] motion-safe:animate-pulse"/>가사를 생성하고 있습니다.</div>;
+    if(!view.entry.text.trim()&&!isSelectedSongReadOnly&&slot==='english'&&musicNoteLyricSlots(selectedSong).korean.text.trim()){
+      const other=musicNoteLyricSlots(selectedSong).korean.lang;
+      return <div className="flex min-h-[260px] flex-col justify-center gap-3 text-center"><p className="text-sm text-white/70">다른 언어 가사를 생성합니다.</p><div className="grid grid-cols-2 gap-2">{Object.keys(noteLanguageLabels).filter(lang=>lang!=='ko'&&lang!==other).map(lang=><button key={lang} type="button" disabled={isEditing||!!noteLyricBusy} onClick={()=>void generateNoteLyric(slot,lang as LanguageCode)} className="rounded-xl bg-[#FF7A72]/10 px-3 py-3 text-xs font-bold text-[#FFC1BC] disabled:opacity-40">{noteLanguageLabels[lang].ko} 추가</button>)}</div></div>;
+    }
+    return <div className="soridraw-musicnote-lyric-body custom-scrollbar max-h-[380px] overflow-y-auto overscroll-auto rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 whitespace-pre-wrap">{noteLyricText(slot)}</div>;
+  };
+
+  // Existing UID-scoped signal; only an actual saved lyric change to an open
+  // exact note may fetch its full archive. No page-entry or arrow-click reads.
+  useEffect(()=>{
+    const uid=String(user?.uid||'');
+    if(!uid||isSelectedSongReadOnly||!selectedSong?.id)return;
+    const id=getFavoriteDocumentId(selectedSong);
+    const onSignal=(event:Event)=>{
+      const signal=(event as CustomEvent).detail;
+      if(signal?.uid!==uid||signal.operation!=='lyric-history-update'||signal.originDeviceId===getMusicNoteSyncOriginDeviceId()||!signal.documentIds?.includes(id))return;
+      const version=Number(signal.version||0),key=uid+':'+id;
+      if(version<=(noteLyricRemoteSeenRef.current[key]||0))return;
+      noteLyricRemoteSeenRef.current[key]=version;
+      noteLyricRemotePendingRef.current={uid,id,version};
+      setNoteLyricRemoteTick(v=>v+1);
+    };
+    window.addEventListener(MUSIC_NOTE_SYNC_EVENT,onSignal);
+    return()=>window.removeEventListener(MUSIC_NOTE_SYNC_EVENT,onSignal);
+  },[user?.uid,selectedSong?.id,isSelectedSongReadOnly]);
+  useEffect(()=>{
+    const pending=noteLyricRemotePendingRef.current;
+    if(!pending||pending.uid!==user?.uid||pending.id!==getFavoriteDocumentId(selectedSong)||isSelectedSongReadOnly||isFavoriteDetailOpening||isEditing||noteLyricBusyRef.current||favoriteDetailPendingPatchRef.current)return;
+    noteLyricRemotePendingRef.current=null;
+    const request=favoriteDetailOpenRequestRef.current;
+    void (async()=>{
+      try{
+        const snapshot=await getDocFromServer(doc(db,'favorites',pending.id));
+        const canonical=snapshot.exists()?snapshot.data():null;
+        if(!canonical||canonical.uid!==pending.uid||auth.currentUser?.uid!==pending.uid||favoriteDetailOpenRequestRef.current!==request||getFavoriteDocumentId(noteLyricSelectedRef.current)!==pending.id||noteLyricRemoteSeenRef.current[pending.uid+':'+pending.id]!==pending.version)return;
+        if(noteLyricBusyRef.current||noteLyricEditorRef.current||favoriteDetailPendingPatchRef.current){if(!noteLyricRemotePendingRef.current||noteLyricRemotePendingRef.current.version<pending.version)noteLyricRemotePendingRef.current=pending;return;}
+        const patch={lyrics:canonical.lyrics,appliedKeywords:canonical.appliedKeywords,lyricGenerationHistoryV1:canonical.lyricGenerationHistoryV1,koreanTitle:canonical.koreanTitle,englishTitle:canonical.englishTitle,updatedAtMs:canonical.updatedAtMs};
+        applyCommittedNoteLyricFields(pending.id,patch);
+        await patchMusicNoteDetailCache({uid:pending.uid,sourceId:pending.id,sourceVersion:getMusicNoteDetailSourceVersion(canonical),updates:patch});
+      }catch(error){console.warn('Music Note exact lyric refresh failed:',error);showFavoriteToast('다른 기기의 새 가사를 불러오지 못했습니다. 다시 열어주세요.');}
+    })();
+  },[noteLyricRemoteTick,user?.uid,selectedSong?.id,isSelectedSongReadOnly,isFavoriteDetailOpening,isEditing,noteLyricBusy,isTranslating,favoriteDetailSaveStatus]);
+
   const handleSave = async () => {
     if (isSelectedSongReadOnly) {
       setIsEditing(false);
@@ -4671,6 +4927,7 @@ updates: draft.updates,
       showFavoriteToast('공유 노트는 수정할 수 없습니다.');
       return;
     }
+    if(noteLyricEditorRef.current){await saveNoteLyricEdit();return;}
     await commitFavoriteDraftIfNeeded();
     setIsEditing(false);
     setActiveEditSection(null);
@@ -5449,6 +5706,7 @@ updates: draft.updates,
   }, [isSelectionMode]);
 
   const closeSelectedSong = async (source: 'ui' | 'history' = 'ui') => {
+    noteLyricEditorRef.current=null;setNoteLyricPicker(null);noteLyricRemotePendingRef.current=null;
     ++favoriteDetailOpenRequestRef.current;
     setIsFavoriteDetailOpening(false);
     const shouldPopOverlayHistory = source === 'ui' && detailHistoryPushedRef.current;
@@ -5492,6 +5750,7 @@ updates: draft.updates,
 
   const cancelModalEditing = () => {
     if (!selectedSong) return;
+    noteLyricEditorRef.current=null;
 
     const normalizedTitles = getNormalizedTitles(selectedSong);
 
@@ -7139,6 +7398,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
   const openFavoriteDetail = async (song: any) => {
     if (!song) return;
+    noteLyricEditorRef.current=null;setNoteLyricPicker(null);noteLyricRemotePendingRef.current=null;noteLyricConflictRef.current=null;
     const requestId = ++favoriteDetailOpenRequestRef.current;
     // Open at tap time, not after a potentially slow exact-song/IndexedDB read.
     // Block edits until hydrated originals and pending-draft reconciliation finish.
@@ -7171,7 +7431,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       );
       const mediaVersionCompatible = recoveredMediaVersion > 0
         && (hydratedMediaVersion <= 0 || hydratedMediaVersion <= recoveredMediaVersion);
-      if (compatible || mediaVersionCompatible) {
+      const lyricCompatible=recovered.lyricExpectedFingerprint===undefined||recovered.lyricExpectedFingerprint===musicNoteLyricFingerprint(hydrated);
+      if ((compatible || mediaVersionCompatible) && lyricCompatible) {
         const recoveredUpdates = pruneFavoriteDetailPatchAgainstBaseline(sourceId, recovered.updates);
           if (Object.keys(recoveredUpdates).length > 0) {
             nextSong = mergeMusicNoteDetailDraft(hydrated, recoveredUpdates);
@@ -7180,6 +7441,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               baseVersion: recovered.baseVersion || currentVersion,
               updatedAtMs: recovered.updatedAtMs || Date.now(),
               updates: recoveredUpdates,
+              lyricExpectedFingerprint:recovered.lyricExpectedFingerprint,
             };
             scheduleFavoriteDetailFlush();
           } else {
@@ -7187,6 +7449,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             void clearMusicNoteDetailDraft(user.uid, sourceId);
           }
         } else {
+          if(!lyricCompatible){noteLyricConflictRef.current=sourceId;showFavoriteToast('다른 기기의 가사와 임시 저장본이 겹칩니다. 두 기록을 보존했습니다.');}
           console.warn('music note detail recovery kept pending because server version advanced', { sourceId });
         }
       }
@@ -10718,11 +10981,11 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 )}
 
                 <div className="grid gap-5 xl:grid-cols-2">
-                  <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
+                  <section aria-busy={noteLyricIsBusy('korean')} className="soridraw-musicnote-lyric-card rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
                     <div className="mb-4 flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFC1BC]">lyrics ko</div>
-                        <h4 className="mt-1 text-xl font-bold text-white">한글 가사</h4>
+                        <h4 className="mt-1 text-xl font-bold text-white">{noteLyricText('korean')?noteLyricLabel('korean'):'한글'} 가사</h4>
                         {!isSelectedSongReadOnly && isEditing && (activeEditSection === 'lyrics-ko' || activeEditSection === 'lyrics-en') && (
                           <div className="mt-3 space-y-2">
                             <button
@@ -10755,6 +11018,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         )}
                       </div>
                       <div className="flex items-center gap-2">
+                        {!isSelectedSongReadOnly&&noteLyricText('korean')&&<button type="button" title="가사 다시 생성" disabled={isEditing||!!noteLyricBusy||isFavoriteDetailOpening} onClick={()=>void generateNoteLyric('korean')} className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/[0.045] text-white/82 disabled:opacity-40"><RefreshCw className="h-4 w-4"/></button>}
                         {!isSelectedSongReadOnly && isEditing && activeEditSection === 'lyrics-ko' ? (
                           <>
                             {isKoreanLyricsEditChanged && (
@@ -10779,7 +11043,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           </>
                         ) : !isEditing && !isSelectedSongReadOnly && (
                           <button
-                            onClick={() => { setIsEditing(true); setActiveEditSection('lyrics-ko'); }}
+                            disabled={!!noteLyricBusy||isFavoriteDetailOpening}
+                            onClick={() => startNoteLyricEdit('korean')}
                             onMouseEnter={() => onHover({ id: 'detail-lyrics-ko-edit', label: '한글 가사 수정', description: '한글 가사를 수정합니다.' })}
                             onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                             onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-ko-edit', label: '한글 가사 수정', description: '한글 가사를 수정합니다.' })}
@@ -10790,7 +11055,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           </button>
                         )}
                         <button
-                          onClick={() => copyToClipboard(isEditing && activeEditSection === 'lyrics-ko' ? editedKoreanLyrics : normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.korean || ''), 'lyrics-korean')}
+                          onClick={() => copyToClipboard(isEditing && activeEditSection === 'lyrics-ko' ? editedKoreanLyrics : noteLyricText('korean'), 'lyrics-korean')}
                           onMouseEnter={() => onHover({ id: 'detail-lyrics-ko-copy', label: '한글 가사 복사', description: '한글 가사를 복사합니다.' })}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-ko-copy', label: '한글 가사 복사', description: '한글 가사를 복사합니다.' })}
@@ -10802,24 +11067,23 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       </div>
                     </div>
 
+                    {renderNoteLyricNavigation('korean')}
                     {!isSelectedSongReadOnly && isEditing && activeEditSection === 'lyrics-ko' ? (
                       <textarea
                         value={editedKoreanLyrics}
                         onChange={(e) => setEditedKoreanLyrics(e.target.value)}
-                        className="custom-scrollbar h-[380px] w-full resize-none rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 outline-none transition-all focus:border-[#FF7A72]/30"
+                        className="soridraw-musicnote-lyric-body custom-scrollbar h-[380px] w-full resize-none rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 outline-none transition-all focus:border-[#FF7A72]/30"
                       />
                     ) : (
-                      <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-auto rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 whitespace-pre-wrap">
-                        {normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.korean || '')}
-                      </div>
+                      renderNoteLyricBody('korean')
                     )}
                   </section>
 
-                  <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
+                  <section aria-busy={noteLyricIsBusy('english')} className="soridraw-musicnote-lyric-card rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
                     <div className="mb-4 flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFC1BC]">lyrics foreign</div>
-                        <h4 className="mt-1 text-xl font-bold text-white">외국어 가사</h4>
+                        <h4 className="mt-1 text-xl font-bold text-white">{noteLyricText('english')?noteLyricLabel('english'):'외국어'} 가사</h4>
                         {!isSelectedSongReadOnly && isEditing && (activeEditSection === 'lyrics-ko' || activeEditSection === 'lyrics-en') && (
                           <div className="mt-3 space-y-2">
                             <button
@@ -10852,6 +11116,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         )}
                       </div>
                       <div className="flex items-center gap-2">
+                        {!isSelectedSongReadOnly&&noteLyricText('english')&&<button type="button" title="가사 다시 생성" disabled={isEditing||!!noteLyricBusy||isFavoriteDetailOpening} onClick={()=>void generateNoteLyric('english')} className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/[0.045] text-white/82 disabled:opacity-40"><RefreshCw className="h-4 w-4"/></button>}
                         {!isSelectedSongReadOnly && isEditing && activeEditSection === 'lyrics-en' ? (
                           <>
                             {isForeignLyricsEditChanged && (
@@ -10876,7 +11141,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           </>
                         ) : !isEditing && !isSelectedSongReadOnly && (
                           <button
-                            onClick={() => { setIsEditing(true); setActiveEditSection('lyrics-en'); }}
+                            disabled={!!noteLyricBusy||isFavoriteDetailOpening}
+                            onClick={() => startNoteLyricEdit('english')}
                             onMouseEnter={() => onHover({ id: 'detail-lyrics-foreign-edit', label: '외국어 가사 수정', description: '외국어 가사를 수정합니다.' })}
                             onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                             onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-foreign-edit', label: '외국어 가사 수정', description: '외국어 가사를 수정합니다.' })}
@@ -10887,7 +11153,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           </button>
                         )}
                         <button
-                          onClick={() => copyToClipboard(isEditing && activeEditSection === 'lyrics-en' ? editedEnglishLyrics : normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.english || ''), 'lyrics-foreign')}
+                          onClick={() => copyToClipboard(isEditing && activeEditSection === 'lyrics-en' ? editedEnglishLyrics : noteLyricText('english'), 'lyrics-foreign')}
                           onMouseEnter={() => onHover({ id: 'detail-lyrics-foreign-copy', label: '외국어 가사 복사', description: '외국어 가사를 복사합니다.' })}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-foreign-copy', label: '외국어 가사 복사', description: '외국어 가사를 복사합니다.' })}
@@ -10899,20 +11165,26 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       </div>
                     </div>
 
+                    {renderNoteLyricNavigation('english')}
                     {!isSelectedSongReadOnly && isEditing && activeEditSection === 'lyrics-en' ? (
                       <textarea
                         value={editedEnglishLyrics}
                         onChange={(e) => setEditedEnglishLyrics(e.target.value)}
-                        className="custom-scrollbar h-[380px] w-full resize-none rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/72 italic outline-none transition-all focus:border-[#FF7A72]/30"
+                        className="soridraw-musicnote-lyric-body custom-scrollbar h-[380px] w-full resize-none rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/72 italic outline-none transition-all focus:border-[#FF7A72]/30"
                       />
                     ) : (
-                      <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-auto rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/72 whitespace-pre-wrap">
-                        {normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.english || '')}
-                      </div>
+                      renderNoteLyricBody('english')
                     )}
                   </section>
                 </div>
 
+                {noteLyricPicker&&noteLyricPicker.id===getFavoriteDocumentId(selectedSong)&&createPortal(
+                  <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4" onClick={()=>setNoteLyricPicker(null)}>
+                    <section role="dialog" aria-modal="true" aria-label="가사 언어 변경" className="w-full max-w-sm rounded-3xl bg-[#202022] p-5 text-white shadow-2xl" onClick={event=>event.stopPropagation()}>
+                      <div className="mb-4 flex items-center justify-between"><h3 className="font-bold">가사 언어 변경</h3><button type="button" aria-label="닫기" onClick={()=>setNoteLyricPicker(null)}><X className="h-5 w-5"/></button></div>
+                      <div className="grid grid-cols-2 gap-2">{Object.keys(noteLanguageLabels).filter(lang=>lang!=='ko'&&lang!==musicNoteLyricSlots(selectedSong)[noteLyricPicker.slot].lang&&lang!==musicNoteLyricSlots(selectedSong)[noteLyricPicker.slot==='korean'?'english':'korean'].lang).map(lang=><button type="button" key={lang} onClick={()=>void generateNoteLyric(noteLyricPicker.slot,lang as LanguageCode)} className="rounded-xl bg-white/5 px-3 py-3 text-sm">{noteLanguageLabels[lang].ko}</button>)}</div>
+                    </section>
+                  </div>,document.body)}
                 <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div>

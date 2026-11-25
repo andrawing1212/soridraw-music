@@ -193,3 +193,58 @@ export const stepRecentLyricLocalView = (view: ReturnType<typeof resolveRecentLy
   return {cursor:index === view.canonicalIndex ? null : view.entries[index].id};
 };
 export const recentLyricCursorKey = (uid:string,songKey:string,lane:LyricHistoryLane) => JSON.stringify([uid,songKey,lane]);
+
+// A reference is a detached value captured at the actual generation click.
+// Browsing afterwards cannot change a running request or the canonical row.
+export const captureDisplayedKoreanLyric = (
+  view: ReturnType<typeof resolveRecentLyricLocalView> | undefined,
+): RecentLyricLocalViewEntry | null => {
+  const entry = view?.entry;
+  return entry?.lang === 'ko' && entry.text.trim() ? { ...entry } : null;
+};
+
+// Music Note legacy korean/english fields are slots, not proof of language.
+// Existing full documents may hold two foreign languages or no Korean.
+export type MusicNoteLyricSlot = 'korean' | 'english';
+export const musicNoteLyricSlots = (song:any) => {
+  const applied = song?.appliedKeywords || {};
+  const declared: string[] = Array.isArray(applied.lyricLanguages) ? [...new Set<string>(applied.lyricLanguages.filter((x:any)=>lyricLangs.has(x)))] : [];
+  const leftText = String(song?.lyrics?.korean || '');
+  const rightText = String(song?.lyrics?.english || song?.lyrics?.foreign || '');
+  const leftLang = leftText && declared.length && !declared.includes('ko') ? declared[0] : 'ko';
+  const rightLang = declared.find(x=>x!==leftLang && x!=='ko') || (lyricLangs.has(applied.secondaryLanguage) && applied.secondaryLanguage !== 'ko' && applied.secondaryLanguage !== leftLang ? applied.secondaryLanguage : 'en');
+  const leftLane:LyricHistoryLane = leftLang === 'ko' ? 'ko' : 'foreign';
+  const rightLane:LyricHistoryLane = leftLang !== 'ko' && leftText ? 'secondForeign' : 'foreign';
+  return {
+    korean:{lang:leftLang,text:leftText,title:String(song?.koreanTitle || ''),lane:leftLane},
+    english:{lang:rightLang,text:rightText,title:String(song?.englishTitle || ''),lane:rightLane},
+  };
+};
+export const musicNoteLyricFingerprint = (song:any) => {
+  const slots=musicNoteLyricSlots(song);
+  const archive=readRecentLyricHistory(song?.lyricGenerationHistoryV1);
+  const history=lyricLanes.flatMap(lane=>{
+    const value=archive[lane];
+    return value?[[lane,value.selectedId,value.entries.map(x=>[x.id,x.at,x.lang,x.text,x.title])]]:[];
+  });
+  return JSON.stringify({slots,history});
+};
+export const buildMusicNoteLyricVersionPatch = (song:any,slot:MusicNoteLyricSlot,entry:LyricHistoryEntry) => {
+  const slots=musicNoteLyricSlots(song);
+  const current=slots[slot], other=slots[slot==='korean'?'english':'korean'];
+  if (other.text.trim() && other.lang===entry.lang) throw new Error('lyric-version-language-conflict');
+  const before:LyricHistoryEntry|null=current.text.trim()?{id:entry.id+'-previous',at:Math.max(0,entry.at-1),lang:current.lang,text:current.text,title:current.title}:null;
+  const archive=appendRecentLyricVersion(song?.lyricGenerationHistoryV1,current.lane,before,entry);
+  const nextSlots={...slots,[slot]:{...current,lang:entry.lang,text:entry.text,title:entry.title}};
+  const languages=([nextSlots.korean,nextSlots.english]).filter(x=>x.text.trim()).map(x=>x.lang);
+  const applied=song?.appliedKeywords || {};
+  const lyricsByLanguage={...(applied.lyricsByLanguage||{})};
+  const titlesByLanguage={...(applied.titlesByLanguage||{})};
+  for(const x of [nextSlots.korean,nextSlots.english]) if(x.text.trim()){lyricsByLanguage[x.lang]=x.text;titlesByLanguage[x.lang]=x.title;}
+  return {
+    lyrics:{...(song?.lyrics||{}),[slot]:entry.text},
+    ...(entry.title !== current.title ? {[slot==='korean'?'koreanTitle':'englishTitle']:entry.title} : {}),
+    lyricGenerationHistoryV1:archive,
+    appliedKeywords:{lyricLanguages:languages,titleLanguages:languages,secondaryLanguage:nextSlots.english.lang,lyricsByLanguage,titlesByLanguage},
+  };
+};

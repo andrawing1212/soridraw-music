@@ -65,7 +65,7 @@ assert.match(app,/!hasRecentSongsCacheRecoveryFence\(uid\)\) writeRecentSongsLoc
 assert.match(sync,/!initialRetained && !hasRecentSongsCacheRecoveryFence\(uid\)/);
 assert.match(app,/persistLyricHistoryLocallyOrExactly\(latestSong,nextSong,sourceUid,'add-lyrics-language'\)/);
 assert.match(app,/persistLyricHistoryLocallyOrExactly\(source,nextSong,user.uid,'regenerate'\)/);
-assert.match(app,/persistLyricHistoryLocallyOrExactly\(latest,nextSong,user.uid,'add-lyrics-language'\)/);
+assert.match(app,/persistLyricHistoryLocallyOrExactly\(latest,nextSong,uid,'add-lyrics-language'\)/);
 console.log('LOCAL_QUOTA_EXACT_FALLBACK_AND_RECOVERY_FENCE=PASS');
 
 const {resolveRecentLyricLocalView,stepRecentLyricLocalView,recentLyricCursorKey}=await load('src/lib/recentUnconfirmedRecovery436.ts');
@@ -84,13 +84,14 @@ const navBlock=app.slice(app.indexOf("if (target !== 'title') {",app.indexOf('co
 assert.match(navBlock,/setLocalLyricCursor\(key,step.cursor\)/);
 assert.doesNotMatch(navBlock,/prepareLyricEdit|persistLyricHistoryLocallyOrExactly|queueRecentSongTextWrite|setResult\(|setHistory\(|await |fetch\(|runTransaction|publishRecentSong/);
 assert.match(app,/historical \? localView.entry.text/);
-assert.match(app,/applyViewedLyricVersion\(lang\)/);
+assert.doesNotMatch(app,/이 버전 사용|applyViewedLyricVersion/);
+assert.match(app,/saveDisplayedLyricEdit\(editor,text\)/);
 const css=read('src/components/studio/studioLayout.css');
 assert.match(css,/\.soridraw-result-lyrics-card\[aria-busy="true"\]::after/);
 assert.match(css,/grid-template-columns: minmax\(0,1fr\) auto minmax\(0,1fr\)/);
 console.log('LYRIC_LOCAL_BROWSE_ZERO_NETWORK_AND_DEVICE_ISOLATION=PASS; REAL_DEVICE_REQUIRED');
 
-const browseHandler=app.slice(app.indexOf('const handleNavigateRecentSongLocalVersion'),app.indexOf('const applyViewedLyricVersion'));
+const browseHandler=app.slice(app.indexOf('const handleNavigateRecentSongLocalVersion'),app.indexOf('const saveDisplayedLyricEdit'));
 const beforeLocalBrowse=browseHandler.slice(0,browseHandler.indexOf("if (target !== 'title')"));
 assert.doesNotMatch(beforeLocalBrowse,/lyricGenerationInFlight|recentSongRegeneratingTarget|isAddingLyricsLanguage/);
 assert.match(browseHandler,/if \(lyricGenerationInFlight.current\) return;\s*const key = getRecentSongLocalVersionKey/);
@@ -100,3 +101,54 @@ assert.match(versionButtons,/disabled=\{!meta.canPrev \|\| navigationBusy\}/);
 assert.match(versionButtons,/disabled=\{!meta.canNext \|\| navigationBusy\}/);
 assert.match(css,/html\[data-soridraw-theme="studio-black"\] body #root \.soridraw-app-root\s*\.soridraw-result-lyrics-card\[aria-busy="true"\]::after\s*\{\s*box-shadow: inset 0 0 36px 6px[^}]+!important;/);
 console.log('LYRIC_BROWSE_DURING_GENERATION_AND_STUDIO_BLACK_GLOW_OVERRIDE=PASS; REAL_DEVICE_REQUIRED');
+
+const {captureDisplayedKoreanLyric}=await load('src/lib/recentUnconfirmedRecovery436.ts');
+const ko1=entry('ko1',1,'ko','첫 가사'),ko2=entry('ko2',2,'ko','두번째 가사'),ko3=entry('ko3',3,'ko','세번째 가사');
+const koHistory=appendRecentLyricVersion(appendRecentLyricVersion(null,'ko',ko1,ko2),'ko',ko2,ko3);
+const captured=captureDisplayedKoreanLyric(resolveRecentLyricLocalView(koHistory.ko,ko3,'ko2'));
+assert.equal(captured.text,'두번째 가사');
+assert.equal(captureDisplayedKoreanLyric(resolveRecentLyricLocalView(koHistory.ko,ko3,'ko3')).text,'세번째 가사');
+assert.equal(captured.text,'두번째 가사');
+assert.equal(captureDisplayedKoreanLyric(undefined),null);
+assert.match(app,/const koreanSource = captureStudioKoreanSource\(activeSong\)/);
+assert.match(app,/translateLyrics\(koreanSource.text,lyricLanguageLabels\[targetLang\].api/);
+assert.match(app,/sourceLyrics = koreanSource\?\.text \|\|/);
+console.log('DISPLAYED_KOREAN_REFERENCE_CAPTURE_AND_EXPLICIT_EDIT_ONLY=PASS');
+
+const {musicNoteLyricSlots,musicNoteLyricFingerprint,buildMusicNoteLyricVersionPatch}=await load('src/lib/recentUnconfirmedRecovery436.ts');
+const note={uid:'owner',lyrics:{korean:'한국어',english:'English'},koreanTitle:'제목',englishTitle:'Title',appliedKeywords:{lyricLanguages:['ko','en'],secondaryLanguage:'en',style:['keep']},coverUrl:'keep'};
+const noteFp=musicNoteLyricFingerprint(note);
+const spanish={id:'note-new',at:100,lang:'es',text:'Español',title:'Título'};
+const notePatch=buildMusicNoteLyricVersionPatch(note,'english',spanish);
+assert.equal(notePatch.lyrics.korean,'한국어');
+assert.equal(notePatch.lyricGenerationHistoryV1.foreign.entries.length,2);
+assert.deepEqual(notePatch.appliedKeywords.lyricLanguages,['ko','es']);
+assert.equal(musicNoteLyricFingerprint(note),noteFp);
+assert.equal(musicNoteLyricSlots({lyrics:{korean:'bonjour',english:'hallo'},appliedKeywords:{lyricLanguages:['fr','de']}}).english.lane,'secondForeign');
+assert.match(app,/musicNoteLyricFingerprint\(canonical\)!==lyricExpectedFingerprint/);
+assert.match(sync,/context.lyricHistoryChanged === true \? 'lyric-history-update'/);
+console.log('MUSIC_NOTE_EXACT_LYRIC_TRANSACTION_SOURCE_AND_HISTORY=PASS');
+
+const noteSource=read('src/pages/FavoritesPage.tsx');
+const noteNav=noteSource.slice(noteSource.indexOf('const navigateNoteLyric='),noteSource.indexOf('const noteKoreanSource='));
+assert.match(noteNav,/setNoteLyricCursor\(view.key,step.cursor\)/);
+assert.doesNotMatch(noteNav,/getDoc|updateFavorite|await |setSelectedSong|publish|queueFavorite/);
+assert.match(noteSource,/const korean=noteKoreanSource\(source\)/);
+assert.match(noteSource,/translateLyrics\(korean.text,noteLanguageLabels\[target\].api/);
+assert.match(noteSource,/queueFavoriteDetailPatch\(id,patch,guardedFingerprint\)/);
+assert.match(noteSource,/updateFavorite\(pending.songId,pending.updates,pending.lyricExpectedFingerprint\)/);
+assert.match(noteSource,/signal.operation!=='lyric-history-update'/);
+assert.match(noteSource,/signal.originDeviceId===getMusicNoteSyncOriginDeviceId\(\)/);
+assert.match(noteSource,/getDocFromServer\(doc\(db,'favorites',pending.id\)\)/);
+assert.match(noteSource,/isSelectedSongReadOnly\|\|isFavoriteDetailOpening/);
+assert.match(css,/\.soridraw-musicnote-lyric-card\[aria-busy="true"\]::after/);
+console.log('MUSIC_NOTE_LOCAL_BROWSE_KOREAN_SOURCE_AND_EXACT_SYNC_SOURCE=PASS; REAL_DEVICE_REQUIRED');
+
+const noteCommit=noteSource.slice(noteSource.indexOf('const commitNoteLyricPatch='),noteSource.indexOf('const noteLyricError='));
+assert.doesNotMatch(noteCommit,/await updateFavorite\(/);
+assert.match(noteCommit,/queueFavoriteDetailPatch\(id,patch,guardedFingerprint\)/);
+assert.match(noteCommit,/persisted\?\.lyricExpectedFingerprint/);
+const noteDraft=read('src/lib/musicNoteDetailDraft.ts');
+assert.match(noteDraft,/lyricExpectedFingerprint\?: string/);
+assert.match(noteSource,/recovered.lyricExpectedFingerprint===musicNoteLyricFingerprint\(hydrated\)/);
+console.log('MUSIC_NOTE_LYRIC_HISTORY_DURABLE_BATCH_GUARD=PASS');

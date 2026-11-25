@@ -65,6 +65,8 @@ export interface V1MutationBoundaryContext {
   colorCatalogChanged?: boolean;
   // Exact, successfully committed move to Trash; no list-derived deletion.
   trashCatalogChanged?: boolean;
+  // Only a committed exact lyric-version mutation needs an open-detail refresh.
+  lyricHistoryChanged?: boolean;
   // Optional bounded changed-item summaries for one canonical mutation that touches
   // multiple Music Note rows (for example a folder move/rename).
   syncItems?: readonly unknown[];

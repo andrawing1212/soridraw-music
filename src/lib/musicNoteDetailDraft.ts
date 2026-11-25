@@ -7,6 +7,7 @@ export type MusicNoteDetailPendingDraft = {
   baseVersion: number;
   updatedAtMs: number;
   updates: Record<string, any>;
+  lyricExpectedFingerprint?: string;
 };
 
 const DB_NAME = 'soridraw_music_note_detail_draft_v1';
@@ -84,6 +85,7 @@ export const writeMusicNoteDetailDraft = async (
   sourceId: string,
   baseVersion: number,
   updates: Record<string, any>,
+  lyricExpectedFingerprint?: string,
 ): Promise<void> => {
   const safeUid = String(uid || '').trim();
   const safeSourceId = String(sourceId || '').trim();
@@ -99,6 +101,7 @@ export const writeMusicNoteDetailDraft = async (
     baseVersion: Math.max(0, Math.floor(Number(baseVersion || 0))),
     updatedAtMs: Date.now(),
     updates: cleanedUpdates,
+    ...(lyricExpectedFingerprint !== undefined ? {lyricExpectedFingerprint} : {}),
   };
   try {
     await new Promise<void>((resolve) => {

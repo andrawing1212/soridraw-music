@@ -18241,6 +18241,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 .soridraw-lyric-card-actions > div > button {flex-shrink:0;}
 html body :is(#root .soridraw-app-root, .soridraw-detail-modal-portal-scope.soridraw-musicnote-theme .soridraw-musicnote-lyric-card) button.soridraw-lyric-cue-switch {
   position:relative;width:44px;height:24px;min-width:44px;min-height:24px;flex:0 0 auto;
+  margin-inline-end:6px;
   padding:0!important;border:0!important;border-radius:999px!important;box-shadow:none!important;
   background:#4a4a4a!important;cursor:pointer;
 }
@@ -18258,6 +18259,7 @@ html body :is(#root .soridraw-app-root, .soridraw-detail-modal-portal-scope.sori
   html body :is(#root .soridraw-app-root, .soridraw-detail-modal-portal-scope.soridraw-musicnote-theme .soridraw-musicnote-lyric-card) .soridraw-lyric-card-actions button:not(.soridraw-lyric-cue-switch) {width:30px!important;height:30px!important;min-width:30px!important;min-height:30px!important;padding:0!important;}
   html body :is(#root .soridraw-app-root, .soridraw-detail-modal-portal-scope.soridraw-musicnote-theme .soridraw-musicnote-lyric-card) .soridraw-lyric-card-actions button:not(.soridraw-lyric-cue-switch) svg {width:16px!important;height:16px!important;}
   html body :is(#root .soridraw-app-root, .soridraw-detail-modal-portal-scope.soridraw-musicnote-theme .soridraw-musicnote-lyric-card) button.soridraw-lyric-cue-switch {width:36px;min-width:36px;height:20px;min-height:20px;}
+  .soridraw-lyric-card-actions > button.soridraw-lyric-cue-switch {margin-inline-end:4px;}
   .soridraw-lyric-cue-switch > span {width:14px;height:14px;}
   .soridraw-lyric-cue-switch[aria-checked="true"] > span {transform:translateX(16px);}
 }

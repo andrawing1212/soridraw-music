@@ -69,6 +69,8 @@ import {
   Link2,
   Link2Off,
   Play,
+  ChevronLeft,
+  ChevronRight,
   ChevronDown,
   ChevronUp,
   RefreshCw,
@@ -4869,12 +4871,32 @@ updates: committedUpdates,
     const view=readNoteLyricView(selectedSong,slot),total=view.entries.length;
     return <div className="soridraw-lyric-history-controls">
       <div className="soridraw-lyric-history-nav">{total>1&&<div className="flex items-center gap-1">
-        <button type="button" aria-label="이전 가사" disabled={isEditing||view.index<=0} onClick={()=>navigateNoteLyric(slot,'prev')} className="h-10 w-8 rounded-xl bg-white/5 disabled:opacity-30">{'<'}</button>
-        <span className="text-xs tabular-nums text-white/65">{view.index+1}/{total}</span>
-        <button type="button" aria-label="다음 가사" disabled={isEditing||view.index>=total-1} onClick={()=>navigateNoteLyric(slot,'next')} className="h-10 w-8 rounded-xl bg-white/5 disabled:opacity-30">{'>'}</button>
+        <button type="button" aria-label="이전 가사" disabled={isEditing||view.index<=0} onClick={()=>navigateNoteLyric(slot,'prev')} className="soridraw-lyric-version-button flex h-8 w-8 items-center justify-center rounded-full"><ChevronLeft className="h-4 w-4"/></button>
+        <span className="soridraw-lyric-version-count text-xs tabular-nums text-white/85">{view.index+1}/{total}</span>
+        <button type="button" aria-label="다음 가사" disabled={isEditing||view.index>=total-1} onClick={()=>navigateNoteLyric(slot,'next')} className="soridraw-lyric-version-button flex h-8 w-8 items-center justify-center rounded-full"><ChevronRight className="h-4 w-4"/></button>
       </div>}</div>
-      {!isSelectedSongReadOnly&&view.current.text.trim()&&view.current.lang!=='ko'&&<button type="button" disabled={isEditing||!!noteLyricBusy} onClick={()=>setNoteLyricPicker({id:getFavoriteDocumentId(selectedSong),slot})} className="soridraw-lyric-language-change flex items-center gap-1 rounded-xl bg-[#FF7A72]/10 px-3 py-2 text-xs font-bold text-[#FFC1BC] disabled:opacity-40"><Languages className="h-4 w-4"/>언어 변경</button>}
+      {!isSelectedSongReadOnly&&view.current.text.trim()&&view.current.lang!=='ko'&&<button type="button" disabled={isEditing||!!noteLyricBusy} onClick={()=>setNoteLyricPicker({id:getFavoriteDocumentId(selectedSong),slot})} className="soridraw-lyric-language-change flex items-center gap-1 rounded-xl bg-[#FF7A72]/10 px-3 py-2 text-xs font-bold text-[#FFC1BC] disabled:opacity-40"><Languages className="h-4 w-4"/>외국어추가</button>}
     </div>;
+  };
+  const noteLyricPickerOpen=(slot:MusicNoteLyricSlot)=>!isSelectedSongReadOnly&&noteLyricPicker?.id===getFavoriteDocumentId(selectedSong)&&noteLyricPicker.slot===slot;
+  const renderNoteLyricPickerCard=(slot:MusicNoteLyricSlot)=>{
+    const visible=readNoteLyricView(selectedSong,slot).entry.lang;
+    const other=readNoteLyricView(selectedSong,slot==='korean'?'english':'korean');
+    const otherLanguages=[other.current,other.entry].filter(x=>x.text.trim()).map(x=>x.lang);
+    const korean=noteKoreanSource(selectedSong);
+    return <>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="min-w-0"><div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFC1BC]">lyrics foreign</div><h4 className="mt-1 text-xl font-bold text-white">외국어 가사</h4></div>
+        <button type="button" aria-label="가사로 돌아가기" title="가사로 돌아가기" className="soridraw-lyric-picker-back flex h-10 w-10 items-center justify-center rounded-xl" onClick={()=>setNoteLyricPicker(null)}><ArrowLeft className="h-5 w-5"/></button>
+      </div>
+      <LyricLanguageAddCard replacing key={getFavoriteDocumentId(selectedSong)+':'+slot}
+        options={Object.keys(noteLanguageLabels).filter(lang=>lang!=='ko').map(lang=>({value:lang as LanguageCode,label:noteLanguageLabels[lang].ko+(lang===visible?' (현재)':''),disabled:isLyricLanguageChoiceBlocked(lang,visible,otherLanguages)}))}
+        sourceLabel={korean ? `한글 ${other.index+1}번 가사` : '현재 곡의 제목과 가사'}
+        disabled={isEditing||!!noteLyricBusy||isFavoriteDetailOpening}
+        onGenerate={lang=>void generateNoteLyric(slot,lang)}
+        accent="note"
+      />
+    </>;
   };
   const renderNoteLyricBody=(slot:MusicNoteLyricSlot)=>{
     const view=readNoteLyricView(selectedSong,slot);
@@ -10993,6 +11015,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
                 <div className="grid gap-5 xl:grid-cols-2">
                   <section aria-busy={noteLyricIsBusy('korean')} className="soridraw-musicnote-lyric-card rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
+                    {noteLyricPickerOpen('korean') ? renderNoteLyricPickerCard('korean') : <>
                     <div className="mb-4 flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFC1BC]">lyrics ko</div>
@@ -11088,9 +11111,11 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     ) : (
                       renderNoteLyricBody('korean')
                     )}
+                  </>}
                   </section>
 
                   <section aria-busy={noteLyricIsBusy('english')} className="soridraw-musicnote-lyric-card rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
+                    {noteLyricPickerOpen('english') ? renderNoteLyricPickerCard('english') : <>
                     <div className="mb-4 flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFC1BC]">lyrics foreign</div>
@@ -11186,22 +11211,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     ) : (
                       renderNoteLyricBody('english')
                     )}
+                  </>}
                   </section>
                 </div>
 
-                {noteLyricPicker&&noteLyricPicker.id===getFavoriteDocumentId(selectedSong)&&createPortal(
-                  <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4" onClick={()=>setNoteLyricPicker(null)}>
-                    <section role="dialog" aria-modal="true" aria-label="가사 언어 변경" className="w-full max-w-sm rounded-3xl bg-[#202022] p-5 text-white shadow-2xl" onClick={event=>event.stopPropagation()}>
-                      <div className="mb-4 flex items-center justify-between"><h3 className="font-bold">가사 언어 변경</h3><button type="button" aria-label="닫기" onClick={()=>setNoteLyricPicker(null)}><X className="h-5 w-5"/></button></div>
-                      <div className="grid grid-cols-2 gap-2">{Object.keys(noteLanguageLabels).filter(lang=>lang!=='ko').map(lang=>{
-                        const visible=readNoteLyricView(selectedSong,noteLyricPicker.slot).entry.lang;
-                        const other=readNoteLyricView(selectedSong,noteLyricPicker.slot==='korean'?'english':'korean');
-                        const otherLanguages=[other.current,other.entry].filter(x=>x.text.trim()).map(x=>x.lang);
-                        return <button type="button" key={lang} disabled={isLyricLanguageChoiceBlocked(lang,visible,otherLanguages,isEditing||!!noteLyricBusy||isFavoriteDetailOpening)} onClick={()=>void generateNoteLyric(noteLyricPicker.slot,lang as LanguageCode)} className="rounded-xl bg-white/5 px-3 py-3 text-sm disabled:opacity-30">{noteLanguageLabels[lang].ko}{lang===visible?' (현재)':''}</button>;
-                      })}</div>
-                      <p className="mt-4 text-center text-xs text-white/60">기존 가사는 생성 이력에 남습니다.</p>
-                    </section>
-                  </div>,document.body)}
                 <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div>

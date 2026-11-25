@@ -209,6 +209,14 @@ const noteCueSource=read('src/pages/FavoritesPage.tsx');
 assert.match(noteCueSource,/projectLyricCues\(noteLyricText\(slot\),noteLyricCardCues\[slot\],noteCueCustomNames\(\),view.entry.lang\)/);
 assert.match(noteCueSource,/noteLyricCardCues\.korean,noteCueCustomNames\(\),readNoteLyricView\(selectedSong,'korean'\).entry.lang\), 'lyrics-korean'/);
 assert.match(noteCueSource,/noteLyricCardCues\.english,noteCueCustomNames\(\),readNoteLyricView\(selectedSong,'english'\).entry.lang\), 'lyrics-foreign'/);
+const cueStyleScope='html body :is(#root .soridraw-app-root, .soridraw-detail-modal-portal-scope.soridraw-musicnote-theme .soridraw-musicnote-lyric-card)';
+assert.ok(css.includes(cueStyleScope+' button.soridraw-lyric-cue-switch {\n  position:relative;width:44px;height:24px;'));
+assert.ok(css.includes(cueStyleScope+' button.soridraw-lyric-cue-switch[aria-checked="true"] {background:#ffb400!important;}'));
+assert.ok(css.includes(cueStyleScope+' button.soridraw-lyric-cue-switch {width:36px;min-width:36px;height:20px;min-height:20px;}'));
+assert.ok(css.includes(cueStyleScope+' .soridraw-lyric-card-actions {gap:3px;}'));
+assert.ok(noteCueSource.includes('<StudioCenterModalPortal themeClassName="soridraw-musicnote-theme">'));
+assert.ok(read('src/components/studio/StudioCenterModalPortal.tsx').includes("'soridraw-detail-modal-portal-scope'"));
+console.log('LYRIC_CUE_PORTAL_STYLE_SCOPE_AND_COMPACT_CONTROLS=PASS');
 console.log('LYRIC_CUE_VIEW_AND_COPY_PROJECTION=PASS');
 
 assert.deepEqual(lyricCueCustomSectionNames([{section:'My Section'},null,{section:42}]),['My Section']);

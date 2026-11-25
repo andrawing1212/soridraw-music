@@ -196,20 +196,42 @@ assert.match(css,/prefers-reduced-motion:no-preference\)\{\.soridraw-lyric-picke
 console.log('LYRIC_IN_CARD_PICKER_AND_COMPACT_HISTORY_CONTROLS=PASS; REAL_DEVICE_REQUIRED');
 
 
-const {projectLyricCues,lyricCueCustomSectionNames}=await load('src/lib/lyricCueProjection.ts');
+const {projectLyricCues,lyricCueCustomSectionNames,normalizeLyricSectionTags}=await load('src/lib/lyricCueProjection.ts');
 const cueOriginal='[Verse: restrained vocal delivery]\n[Soft guitar enters]\n조용한 밤\n(oh)\n말 속 [괄호] 유지\n\n[Chorus: Male A Main, open vocal delivery]\n다시 불러';
 assert.equal(projectLyricCues(cueOriginal,true),cueOriginal);
 assert.equal(projectLyricCues(cueOriginal,false),'[Verse]\n조용한 밤\n(oh)\n말 속 [괄호] 유지\n\n[Chorus: Male A Main]\n다시 불러');
-assert.equal(projectLyricCues('[Couplet : doux]\n[Effet de balayage et basses 808 glissantes]\nJe marche\n[Refrain : mélodique]\nJe chante',false),'[Couplet]\nJe marche\n[Refrain]\nJe chante');
+assert.equal(projectLyricCues('[Couplet : doux]\n[Effet de balayage et basses 808 glissantes]\nJe marche\n[Refrain : mélodique]\nJe chante',false,[],'fr'),'[Verse]\nJe marche\n[Chorus]\nJe chante');
 assert.equal(projectLyricCues('[Verse]\n[Sound effect: distant rain]\n[Female B Lead]\nhello',false),'[Verse]\n[Female B Lead]\nhello');
 assert.equal(projectLyricCues('[My Section: gentle phrasing]\nWords',false,['My Section']),'[My Section]\nWords');
 assert.match(app,/copyToClipboard\(editingThisLyric && recentSongEditDraft \? projectLyricCues/);
 assert.match(app,/renderLyricsWithCueHighlight\(visibleLyrics\)/);
 const noteCueSource=read('src/pages/FavoritesPage.tsx');
-assert.match(noteCueSource,/projectLyricCues\(noteLyricText\(slot\),noteLyricCardCues\[slot\],noteCueCustomNames\(\)\)/);
-assert.match(noteCueSource,/noteLyricCardCues\.korean,noteCueCustomNames\(\)\), 'lyrics-korean'/);
-assert.match(noteCueSource,/noteLyricCardCues\.english,noteCueCustomNames\(\)\), 'lyrics-foreign'/);
+assert.match(noteCueSource,/projectLyricCues\(noteLyricText\(slot\),noteLyricCardCues\[slot\],noteCueCustomNames\(\),view.entry.lang\)/);
+assert.match(noteCueSource,/noteLyricCardCues\.korean,noteCueCustomNames\(\),readNoteLyricView\(selectedSong,'korean'\).entry.lang\), 'lyrics-korean'/);
+assert.match(noteCueSource,/noteLyricCardCues\.english,noteCueCustomNames\(\),readNoteLyricView\(selectedSong,'english'\).entry.lang\), 'lyrics-foreign'/);
 console.log('LYRIC_CUE_VIEW_AND_COPY_PROJECTION=PASS');
 
 assert.deepEqual(lyricCueCustomSectionNames([{section:'My Section'},null,{section:42}]),['My Section']);
 assert.equal(projectLyricCues('[My Section 2]\n[Drums: enter]\nWords',false,lyricCueCustomSectionNames([{section:'My Section'}])),'[My Section 2]\nWords');
+
+
+const canonicalSource='[Intro 4]\n[Verse: Female A Lead, warm]\nA\n[Chorus 3]\nB\n[Verse 8]\nC\n[Chorus]\nD\n[Bridge 2]\nE\n[Final Chorus 9]\nF\n[Outro]';
+const canonicalExpected='[Intro]\n[Verse 1: Female A Lead, warm]\nA\n[Chorus 1]\nB\n[Verse 2]\nC\n[Chorus 2]\nD\n[Bridge]\nE\n[Final Chorus]\nF\n[Outro]';
+assert.equal(normalizeLyricSectionTags(canonicalSource),canonicalExpected);
+assert.equal(normalizeLyricSectionTags(canonicalExpected),canonicalExpected);
+assert.equal(projectLyricCues(canonicalSource,true),canonicalExpected);
+assert.equal(projectLyricCues(canonicalSource,false),canonicalExpected.replace('Female A Lead, warm','Female A Lead'));
+for(const [lang,verse,chorus] of [['fr','Couplet','Refrain'],['es','Estrofa','Coro'],['de','Strophe','Refrain'],['ru','Куплет','Припев'],['zh','主歌','副歌'],['ja','ヴァース','サビ'],['th','ท่อนร้อง','ท่อนฮุก'],['ko','벌스','후렴']]){
+  const source='['+verse+' 2]\nOne\n['+chorus+']\nTwo\n['+verse+']\nThree\n['+chorus+' 7]\nFour';
+  const expected='[Verse 1]\nOne\n[Chorus 1]\nTwo\n[Verse 2]\nThree\n[Chorus 2]\nFour';
+  assert.equal(projectLyricCues(source,true,[],lang),expected);
+  assert.equal(projectLyricCues(source,false,[],lang),expected);
+}
+assert.equal(normalizeLyricSectionTags('[My Section 7: guitar]\nA [Verse] lyric\n[Theme A]\n[Theme B]\n[Refrain]\n[Verse A]\n[Verse B]', ['My Section'],'en'),'[My Section 7: guitar]\nA [Verse] lyric\n[Theme A]\n[Theme B]\n[Refrain]\n[Verse 1]\n[Verse 2]');
+assert.equal(normalizeLyricSectionTags('[Verse 2]\r\nLine\r\n[Chorus 4]\r\nWords'),'[Verse]\r\nLine\r\n[Chorus]\r\nWords');
+assert.equal(normalizeLyricSectionTags('Ordinary title'),'Ordinary title');
+const geminiSectionSource=read('src/services/geminiService.ts');
+assert.match(geminiSectionSource,/!\(params.isLyricMode && params.lyricMode === 'preserve'\)/);
+assert.match(geminiSectionSource,/normalizeLyricSectionTags\(lyrics,lyricCueCustomSectionNames\(applied.customStructure\),targetLanguage\)/);
+assert.match(geminiSectionSource,/normalizeLyricSectionTags\(result.lyrics,\[\],targetLanguage\)/);
+console.log('CANONICAL_SECTION_TAGS_MULTILINGUAL_REPEAT_CUE_AND_ORIGINAL_GUARDS=PASS');

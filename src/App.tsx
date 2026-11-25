@@ -16302,10 +16302,10 @@ ${keywords}
 ${songTitleCopy}
 
 [Lyrics - English]
-${normalizeLyricsForDisplay(result.lyrics.english)}
+${projectLyricCues(normalizeLyricsForDisplay(result.lyrics.english),lyricCardCues.foreign,lyricCueCustomSectionNames(result.appliedKeywords?.customStructure),String((result.appliedKeywords as any)?.secondaryLanguage || getDisplayLyricLanguages(result).find((lang) => lang !== 'ko') || 'en'))}
 
 [Lyrics - Korean]
-${normalizeLyricsForDisplay(result.lyrics.korean)}
+${projectLyricCues(normalizeLyricsForDisplay(result.lyrics.korean),lyricCardCues.ko,lyricCueCustomSectionNames(result.appliedKeywords?.customStructure),'ko')}
 
 [Music Prompt]
 ${normalizePromptForDisplay(result.prompt)}
@@ -22861,7 +22861,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         const cueSlot = lang === 'ko' ? 'ko' : 'foreign';
                         const showCardCues = lyricCardCues[cueSlot];
                         const cueCustomNames = lyricCueCustomSectionNames(result.appliedKeywords?.customStructure);
-                        const visibleLyrics = projectLyricCues(normalizeLyricsForDisplay(lyricsText),showCardCues,cueCustomNames);
+                        const visibleLyrics = projectLyricCues(normalizeLyricsForDisplay(lyricsText),showCardCues,cueCustomNames,visibleLang);
                         const cardBusy = generationIsForCurrentSong && (recentSongRegeneratingTarget === `lyrics-${lang}` || (isAddingLyricsLanguage && replacingLyricsLanguage === lang));
 
                         const pickerOpen = lyricsLanguageChange?.songKey === buildRecentSongSyncKey(result) && lyricsLanguageChange.lang === lang;
@@ -22907,7 +22907,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 {renderRecentSongInlineEditActions('lyrics', `edit-${copyType}`, `${label} 가사 수정`, '현재 표시된 가사를 수정합니다.', 'section',lang)}
                                 <button
                                   type="button"
-                                  onClick={() => copyToClipboard(editingThisLyric && recentSongEditDraft ? projectLyricCues(normalizeLyricsForDisplay(getRecentSongLyricsDraftValue(lang)),showCardCues,cueCustomNames) : visibleLyrics, copyType)}
+                                  onClick={() => copyToClipboard(editingThisLyric && recentSongEditDraft ? projectLyricCues(normalizeLyricsForDisplay(getRecentSongLyricsDraftValue(lang)),showCardCues,cueCustomNames,visibleLang) : visibleLyrics, copyType)}
                                   onMouseEnter={() => setHoveredItem({ id: `copy-${copyType}`, label: `${label} 가사 복사`, description: `${label} 가사 전체를 복사합니다.` })}
                                   onMouseLeave={() => setHoveredItem(null)}
                                   className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#e3a13a]/[0.12] hover:bg-[#e3a13a]/[0.18] text-[#e3a13a]/85 hover:text-[#f4bc63] transition-all border border-[#e3a13a]/[0.16] active:scale-95 shadow-btn"

@@ -4917,7 +4917,7 @@ updates: committedUpdates,
         accent="note"
       />;
     }
-    return <div className="soridraw-musicnote-lyric-body custom-scrollbar max-h-[380px] overflow-y-auto overscroll-auto rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 whitespace-pre-wrap">{projectLyricCues(noteLyricText(slot),noteLyricCardCues[slot],noteCueCustomNames())}</div>;
+    return <div className="soridraw-musicnote-lyric-body custom-scrollbar max-h-[380px] overflow-y-auto overscroll-auto rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 whitespace-pre-wrap">{projectLyricCues(noteLyricText(slot),noteLyricCardCues[slot],noteCueCustomNames(),view.entry.lang)}</div>;
   };
 
   // Existing UID-scoped signal; only an actual saved lyric change to an open
@@ -6103,10 +6103,10 @@ ${keywords}
 ${songTitleCopy}
 
 [Lyrics - English]
-${normalizeFavoriteLyricsForDisplay(song.lyrics.english || '')}
+${projectLyricCues(normalizeFavoriteLyricsForDisplay(song.lyrics.english || ''),noteLyricCardCues.english,lyricCueCustomSectionNames(song.appliedKeywords?.customStructure),String(song.appliedKeywords?.secondaryLanguage||'en'))}
 
 [Lyrics - Korean]
-${normalizeFavoriteLyricsForDisplay(song.lyrics.korean || '')}
+${projectLyricCues(normalizeFavoriteLyricsForDisplay(song.lyrics.korean || ''),noteLyricCardCues.korean,lyricCueCustomSectionNames(song.appliedKeywords?.customStructure),'ko')}
 
 [Music Prompt]
 ${normalizeFavoritePromptForDisplay(song.prompt || '')}
@@ -11094,7 +11094,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           </button>
                         )}
                         <button
-                          onClick={() => copyToClipboard(projectLyricCues(normalizeFavoriteLyricsForDisplay(isEditing && activeEditSection === 'lyrics-ko' ? editedKoreanLyrics : noteLyricText('korean')),noteLyricCardCues.korean,noteCueCustomNames()), 'lyrics-korean')}
+                          onClick={() => copyToClipboard(projectLyricCues(normalizeFavoriteLyricsForDisplay(isEditing && activeEditSection === 'lyrics-ko' ? editedKoreanLyrics : noteLyricText('korean')),noteLyricCardCues.korean,noteCueCustomNames(),readNoteLyricView(selectedSong,'korean').entry.lang), 'lyrics-korean')}
                           onMouseEnter={() => onHover({ id: 'detail-lyrics-ko-copy', label: '한글 가사 복사', description: '한글 가사를 복사합니다.' })}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-ko-copy', label: '한글 가사 복사', description: '한글 가사를 복사합니다.' })}
@@ -11195,7 +11195,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           </button>
                         )}
                         <button
-                          onClick={() => copyToClipboard(projectLyricCues(normalizeFavoriteLyricsForDisplay(isEditing && activeEditSection === 'lyrics-en' ? editedEnglishLyrics : noteLyricText('english')),noteLyricCardCues.english,noteCueCustomNames()), 'lyrics-foreign')}
+                          onClick={() => copyToClipboard(projectLyricCues(normalizeFavoriteLyricsForDisplay(isEditing && activeEditSection === 'lyrics-en' ? editedEnglishLyrics : noteLyricText('english')),noteLyricCardCues.english,noteCueCustomNames(),readNoteLyricView(selectedSong,'english').entry.lang), 'lyrics-foreign')}
                           onMouseEnter={() => onHover({ id: 'detail-lyrics-foreign-copy', label: '외국어 가사 복사', description: '외국어 가사를 복사합니다.' })}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-foreign-copy', label: '외국어 가사 복사', description: '외국어 가사를 복사합니다.' })}

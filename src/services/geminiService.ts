@@ -1,3 +1,4 @@
+import { normalizeLyricSectionTags, lyricCueCustomSectionNames } from '../lib/lyricCueProjection';
 import { Type, type GoogleGenAI } from "@google/genai";
 import { auth } from "../firebase";
 import { createGeminiServerProxy } from "./geminiProxyClient";
@@ -36086,6 +36087,18 @@ export async function generateSong(
       getAuditedAI(params.geminiApiKey, auditSessionId),
     );
     assertNoFinalLyricHardBanViolations(guarded, params);
+    // Public label formatting only, after the frozen section/cue integrity guards.
+    if (guarded.lyrics && !params.isNoLyrics && !(params.isLyricMode && params.lyricMode === 'preserve')) {
+      const names = lyricCueCustomSectionNames(params.customStructure);
+      const slots = getV1SelectedLyricSlotLanguages(params);
+      guarded.lyrics.korean = normalizeLyricSectionTags(String(guarded.lyrics.korean || ''),names,slots.koreanSlotLanguage || 'ko');
+      guarded.lyrics.english = normalizeLyricSectionTags(String(guarded.lyrics.english || ''),names,slots.englishSlotLanguage || 'en');
+      const applied = guarded.appliedKeywords as any;
+      if (applied?.lyricsByLanguage) {
+        if (slots.koreanSlotLanguage) applied.lyricsByLanguage[slots.koreanSlotLanguage] = guarded.lyrics.korean;
+        if (slots.englishSlotLanguage) applied.lyricsByLanguage[slots.englishSlotLanguage] = guarded.lyrics.english;
+      }
+    }
     delete (generated as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY];
     delete (guarded as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY];
     delete (generated as any)?.[V1_INTERNAL_SECTION_BLUEPRINT_CONTRACT_KEY];
@@ -38020,7 +38033,7 @@ ${storedV1StoryContext}
 - If a section in the current template has 0 lyric lines, output that exact section tag only and do not invent placeholder tags such as [ : , ].
 - Do not add extra Verse/Chorus/Bridge/Outro sections that are not in the current lyric.
 - Keep lyric length, density, section count, and breath close to the current lyric.
-- Keep the same section-tag style as the current lyric.
+- Keep the same section-tag structure and vocal ownership as the current lyric. Standard section names are English in every lyric language; do not translate them.
 - If the current lyric has multi-vocal tags, keep stable vocalist anchors and role separation.
 - If the current lyric has no Korean/English/foreign mixing, do not add unnecessary mixing.
 - Do not leak production instructions into lyrics.
@@ -38143,6 +38156,7 @@ ${storedV1StoryContext}
     clicheGuardParams as unknown as GenerateSongParams,
   );
   lyrics = applySectionCueOutputPolicy(lyrics, clicheGuardParams as unknown as GenerateSongParams);
+  lyrics = normalizeLyricSectionTags(lyrics,lyricCueCustomSectionNames(applied.customStructure),targetLanguage);
 
   if (!lyrics) {
     throw new Error("정상적인 가사를 다시 생성하지 못했습니다. 다시 시도해주세요.");
@@ -38175,7 +38189,7 @@ Translate the provided song title and lyrics into ${targetLanguage}.
 - Return valid JSON only.
 - title: one short natural translated title. If the source title is empty, return an empty string.
 - lyrics: translated lyrics.
-- Keep the original lyric section tags, structure, and line breaks.
+- Keep the original lyric section tags, structure, vocal ownership, cues and line breaks. Translate only sung lyric text. Standard section names must be in English; never localize them.
 - Do not translate literally. Keep it natural and lyrical.
 `.trim();
 
@@ -38223,6 +38237,7 @@ Translate the provided song title and lyrics into ${targetLanguage}.
         lyrics: String(response?.text || "").trim(),
       };
     }
+    result.lyrics = normalizeLyricSectionTags(result.lyrics,[],targetLanguage);
     finishGeminiAuditSession(auditSessionId, 'success', { resultLabel: `${targetLanguage} 제목·가사 번역` });
     return result;
   } catch (error) {
@@ -38243,7 +38258,7 @@ export async function translateLyrics(
     const systemInstruction = `
 You are a professional lyricist and translator.
 Translate the provided text into ${targetLanguage}.
-- Maintain the original structure and line breaks when the input is lyrics.
+- Maintain the original structure and line breaks when the input is lyrics. Translate only sung lyric text, never structural section labels or vocal/instrument cues. Standard section names must be in English.
 - If the input is a title, return one short natural title only.
 - Do not translate literally. Keep it natural and lyrical.
 - Return only the translated text.
@@ -38268,7 +38283,7 @@ Translate the provided text into ${targetLanguage}.
       handleGeminiError(error, "translateLyrics");
     }
 
-    const result = response?.text || "";
+    const result = normalizeLyricSectionTags(response?.text || "",[],targetLanguage);
     finishGeminiAuditSession(auditSessionId, 'success', { resultLabel: `${targetLanguage} 가사 번역` });
     return result;
   } catch (error) {

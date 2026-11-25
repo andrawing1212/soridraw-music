@@ -16302,7 +16302,7 @@ ${keywords}
 ${songTitleCopy}
 
 [Lyrics - English]
-${projectLyricCues(normalizeLyricsForDisplay(result.lyrics.english),lyricCardCues.foreign,lyricCueCustomSectionNames(result.appliedKeywords?.customStructure),String(result.appliedKeywords?.secondaryLanguage||'en'))}
+${projectLyricCues(normalizeLyricsForDisplay(result.lyrics.english),lyricCardCues.foreign,lyricCueCustomSectionNames(result.appliedKeywords?.customStructure),String((result.appliedKeywords as any)?.secondaryLanguage || getDisplayLyricLanguages(result).find((lang) => lang !== 'ko') || 'en'))}
 
 [Lyrics - Korean]
 ${projectLyricCues(normalizeLyricsForDisplay(result.lyrics.korean),lyricCardCues.ko,lyricCueCustomSectionNames(result.appliedKeywords?.customStructure),'ko')}

@@ -1,4 +1,6 @@
 import LyricLanguageAddCard from '../components/music/LyricLanguageAddCard';
+import LyricCueSwitch from '../components/music/LyricCueSwitch';
+import { projectLyricCues } from '../lib/lyricCueProjection';
 import { isLyricLanguageChoiceBlocked } from '../lib/recentUnconfirmedRecovery436';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import { resolveNextSongApplyRoute, stageNextSongKeywords } from '../lib/nextSongPendingBridge';
@@ -1204,6 +1206,7 @@ export default function FavoritesPage({
   const noteLyricConflictRef=useRef<string|null>(null);
   const [noteLyricBusy,setNoteLyricBusy]=useState<{id:string;slot:MusicNoteLyricSlot;first:boolean}|null>(null);
   const [noteLyricPicker,setNoteLyricPicker]=useState<{id:string;slot:MusicNoteLyricSlot}|null>(null);
+  const [noteLyricCardCues,setNoteLyricCardCues]=useState({korean:true,english:true});
   const noteLyricEditorRef=useRef<{source:any;slot:MusicNoteLyricSlot;visible:ReturnType<typeof resolveRecentLyricLocalView>['entry'];initialText:string;key:string;request:number}|null>(null);
   const noteLyricRemotePendingRef=useRef<{uid:string;id:string;version:number}|null>(null);
   const noteLyricRemoteSeenRef=useRef<Record<string,number>>({});
@@ -4913,7 +4916,7 @@ updates: committedUpdates,
         accent="note"
       />;
     }
-    return <div className="soridraw-musicnote-lyric-body custom-scrollbar max-h-[380px] overflow-y-auto overscroll-auto rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 whitespace-pre-wrap">{noteLyricText(slot)}</div>;
+    return <div className="soridraw-musicnote-lyric-body custom-scrollbar max-h-[380px] overflow-y-auto overscroll-auto rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 whitespace-pre-wrap">{projectLyricCues(noteLyricText(slot),noteLyricCardCues[slot])}</div>;
   };
 
   // Existing UID-scoped signal; only an actual saved lyric change to an open
@@ -11051,7 +11054,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="soridraw-lyric-card-actions flex items-center gap-2">
+                        {noteLyricText('korean')&&<LyricCueSwitch enabled={noteLyricCardCues.korean} disabled={isEditing} onChange={enabled=>setNoteLyricCardCues(prev=>({...prev,korean:enabled}))}/>}
                         {!isSelectedSongReadOnly&&noteLyricText('korean')&&<button type="button" title="가사 다시 생성" disabled={isEditing||!!noteLyricBusy||isFavoriteDetailOpening} onClick={()=>void generateNoteLyric('korean')} className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/[0.045] text-white/82 disabled:opacity-40"><RefreshCw className="h-4 w-4"/></button>}
                         {!isSelectedSongReadOnly && isEditing && activeEditSection === 'lyrics-ko' ? (
                           <>
@@ -11089,7 +11093,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           </button>
                         )}
                         <button
-                          onClick={() => copyToClipboard(isEditing && activeEditSection === 'lyrics-ko' ? editedKoreanLyrics : noteLyricText('korean'), 'lyrics-korean')}
+                          onClick={() => copyToClipboard(projectLyricCues(normalizeFavoriteLyricsForDisplay(isEditing && activeEditSection === 'lyrics-ko' ? editedKoreanLyrics : noteLyricText('korean')),noteLyricCardCues.korean), 'lyrics-korean')}
                           onMouseEnter={() => onHover({ id: 'detail-lyrics-ko-copy', label: '한글 가사 복사', description: '한글 가사를 복사합니다.' })}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-ko-copy', label: '한글 가사 복사', description: '한글 가사를 복사합니다.' })}
@@ -11151,7 +11155,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="soridraw-lyric-card-actions flex items-center gap-2">
+                        {noteLyricText('english')&&<LyricCueSwitch enabled={noteLyricCardCues.english} disabled={isEditing} onChange={enabled=>setNoteLyricCardCues(prev=>({...prev,english:enabled}))}/>}
                         {!isSelectedSongReadOnly&&noteLyricText('english')&&<button type="button" title="가사 다시 생성" disabled={isEditing||!!noteLyricBusy||isFavoriteDetailOpening} onClick={()=>void generateNoteLyric('english')} className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/[0.045] text-white/82 disabled:opacity-40"><RefreshCw className="h-4 w-4"/></button>}
                         {!isSelectedSongReadOnly && isEditing && activeEditSection === 'lyrics-en' ? (
                           <>
@@ -11189,7 +11194,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           </button>
                         )}
                         <button
-                          onClick={() => copyToClipboard(isEditing && activeEditSection === 'lyrics-en' ? editedEnglishLyrics : noteLyricText('english'), 'lyrics-foreign')}
+                          onClick={() => copyToClipboard(projectLyricCues(normalizeFavoriteLyricsForDisplay(isEditing && activeEditSection === 'lyrics-en' ? editedEnglishLyrics : noteLyricText('english')),noteLyricCardCues.english), 'lyrics-foreign')}
                           onMouseEnter={() => onHover({ id: 'detail-lyrics-foreign-copy', label: '외국어 가사 복사', description: '외국어 가사를 복사합니다.' })}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-foreign-copy', label: '외국어 가사 복사', description: '외국어 가사를 복사합니다.' })}

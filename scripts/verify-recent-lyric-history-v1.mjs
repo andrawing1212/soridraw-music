@@ -194,3 +194,19 @@ assert.match(versionButtons,/ChevronRight className="h-4 w-4"/);
 assert.match(css,/\.soridraw-lyric-version-button:disabled[^}]+background:transparent!important/);
 assert.match(css,/prefers-reduced-motion:no-preference\)\{\.soridraw-lyric-picker-transition/);
 console.log('LYRIC_IN_CARD_PICKER_AND_COMPACT_HISTORY_CONTROLS=PASS; REAL_DEVICE_REQUIRED');
+
+
+const {projectLyricCues}=await load('src/lib/lyricCueProjection.ts');
+const cueOriginal='[Verse: restrained vocal delivery]\n[Soft guitar enters]\n조용한 밤\n(oh)\n말 속 [괄호] 유지\n\n[Chorus: Male A Main, open vocal delivery]\n다시 불러';
+assert.equal(projectLyricCues(cueOriginal,true),cueOriginal);
+assert.equal(projectLyricCues(cueOriginal,false),'[Verse]\n조용한 밤\n(oh)\n말 속 [괄호] 유지\n\n[Chorus: Male A Main]\n다시 불러');
+assert.equal(projectLyricCues('[Couplet : doux]\n[Effet de balayage et basses 808 glissantes]\nJe marche\n[Refrain : mélodique]\nJe chante',false),'[Couplet]\nJe marche\n[Refrain]\nJe chante');
+assert.equal(projectLyricCues('[Verse]\n[Sound effect: distant rain]\n[Female B Lead]\nhello',false),'[Verse]\n[Female B Lead]\nhello');
+assert.equal(projectLyricCues('[My Section: gentle phrasing]\nWords',false,['My Section']),'[My Section]\nWords');
+assert.match(app,/copyToClipboard\(editingThisLyric && recentSongEditDraft \? projectLyricCues/);
+assert.match(app,/renderLyricsWithCueHighlight\(visibleLyrics\)/);
+const noteCueSource=read('src/pages/FavoritesPage.tsx');
+assert.match(noteCueSource,/projectLyricCues\(noteLyricText\(slot\),noteLyricCardCues\[slot\]\)/);
+assert.match(noteCueSource,/noteLyricCardCues\.korean\), 'lyrics-korean'/);
+assert.match(noteCueSource,/noteLyricCardCues\.english\), 'lyrics-foreign'/);
+console.log('LYRIC_CUE_VIEW_AND_COPY_PROJECTION=PASS');

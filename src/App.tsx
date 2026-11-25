@@ -147,6 +147,7 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
   ChevronRight,
   Pin,
   PinOff,
@@ -18214,7 +18215,7 @@ ${normalizePromptForDisplay(result.prompt)}
 
     const sizeClass = variant === 'title'
       ? 'h-11 w-8 sm:w-9 rounded-xl text-sm'
-      : 'h-11 w-8 rounded-xl text-sm';
+      : 'soridraw-lyric-version-button h-8 w-8 rounded-full text-sm';
     const label = target === 'title' ? '제목' : '가사';
     const navigationBusy = Boolean(recentSongInlineEditMode) || isRecentSongEditOpen
       || (target === 'title' && (Boolean(recentSongRegeneratingTarget) || isAddingLyricsLanguage));
@@ -18230,12 +18231,12 @@ ${normalizePromptForDisplay(result.prompt)}
           disabled={!meta.canPrev || navigationBusy}
           onMouseEnter={() => setHoveredItem({ id: `local-prev-${target}`, label: `${label} 이전 버전`, description: '저장된 이전 가사 버전을 불러옵니다.' })}
           onMouseLeave={() => setHoveredItem(null)}
-          className={`flex shrink-0 items-center justify-center bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-sm disabled:opacity-30 disabled:cursor-not-allowed ${sizeClass}`}
+          className={`flex shrink-0 items-center justify-center text-[var(--text-primary)] transition-all active:scale-95 disabled:cursor-not-allowed ${variant === 'title' ? 'bg-white/5 hover:bg-white/15 border border-white/10 shadow-sm disabled:opacity-30' : ''} ${sizeClass}`}
           title={`${label} 이전 버전`}
         >
-          <span className="font-black leading-none">{'<'}</span>
+          {variant === 'title' ? <span className="font-black leading-none">{'<'}</span> : <ChevronLeft className="h-4 w-4" />}
         </button>
-        <span className="text-xs tabular-nums text-[var(--text-secondary)]">{meta.index + 1}/{meta.total}</span>
+        <span className={variant === 'title' ? 'text-xs tabular-nums text-[var(--text-secondary)]' : 'soridraw-lyric-version-count text-xs tabular-nums text-[var(--text-primary)]'}>{meta.index + 1}/{meta.total}</span>
         <button
           type="button"
           onClick={(e) => {
@@ -18245,10 +18246,10 @@ ${normalizePromptForDisplay(result.prompt)}
           disabled={!meta.canNext || navigationBusy}
           onMouseEnter={() => setHoveredItem({ id: `local-next-${target}`, label: `${label} 다음 버전`, description: '저장된 다음 가사 버전을 불러옵니다.' })}
           onMouseLeave={() => setHoveredItem(null)}
-          className={`flex shrink-0 items-center justify-center bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-sm disabled:opacity-30 disabled:cursor-not-allowed ${sizeClass}`}
+          className={`flex shrink-0 items-center justify-center text-[var(--text-primary)] transition-all active:scale-95 disabled:cursor-not-allowed ${variant === 'title' ? 'bg-white/5 hover:bg-white/15 border border-white/10 shadow-sm disabled:opacity-30' : ''} ${sizeClass}`}
           title={`${label} 다음 버전`}
         >
-          <span className="font-black leading-none">{'>'}</span>
+          {variant === 'title' ? <span className="font-black leading-none">{'>'}</span> : <ChevronRight className="h-4 w-4" />}
         </button>
       </div>
     );
@@ -22827,12 +22828,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         </div>
                       );
                       const renderAddLyricsLanguageCard = () => missingLyricLanguages.length > 0 ? (
-                        <div aria-busy={addingFirstLanguage} className="relative soridraw-result-lyrics-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-dashed border-[#e3a13a]/[0.22] overflow-hidden flex flex-col shadow-[0_14px_36px_rgba(0,0,0,0.26)] transition-colors duration-150">
-                          <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
+                        <div aria-busy={addingFirstLanguage} className="relative soridraw-result-lyrics-card soridraw-result-lyrics-content-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-dashed border-[#e3a13a]/[0.22] overflow-hidden flex flex-col shadow-[0_14px_36px_rgba(0,0,0,0.26)] transition-colors duration-150">
+                          <div className="soridraw-lyric-card-header shrink-0 p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                             <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                               <Languages className="w-4 h-4 text-[#e3a13a]" />
                               {displayLyricLanguages.includes('ko') ? '외국어 가사' : '가사 언어 추가'}
                             </h3>
+                            <span aria-hidden="true" className="h-11 w-0 shrink-0" />
                           </div>
                           {addingFirstLanguage && addingLyricsLanguageTarget ? renderLyricsGenerationProgress(addingLyricsLanguageTarget) : <LyricLanguageAddCard
                             key={buildRecentSongSyncKey(result)}
@@ -22855,9 +22857,26 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         const copyType = `lyrics-${lang}`;
                         const cardBusy = generationIsForCurrentSong && (recentSongRegeneratingTarget === `lyrics-${lang}` || (isAddingLyricsLanguage && replacingLyricsLanguage === lang));
 
+                        const pickerOpen = lyricsLanguageChange?.songKey === buildRecentSongSyncKey(result) && lyricsLanguageChange.lang === lang;
+                        if (pickerOpen) return (
+                          <div key={lang} className="relative soridraw-result-lyrics-card soridraw-result-lyrics-content-card aspect-square bg-[var(--card-bg)] rounded-3xl overflow-hidden flex flex-col">
+                            <div className="soridraw-lyric-card-header shrink-0 p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
+                              <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm"><Languages className="w-4 h-4 text-[#e3a13a]" />외국어 가사</h3>
+                              <button type="button" aria-label="가사로 돌아가기" title="가사로 돌아가기" className="soridraw-lyric-picker-back flex h-11 w-11 items-center justify-center rounded-xl" onClick={()=>setLyricsLanguageChange(null)}><ArrowLeft className="h-5 w-5" /></button>
+                            </div>
+                            <LyricLanguageAddCard replacing
+                              key={buildRecentSongSyncKey(result)+':'+lang}
+                              options={(['en','ja','zh','es','fr','de','ru','th'] as LanguageCode[]).map(target=>({value:target,label:lyricLanguageLabels[target].ko+(target===visibleLang?' (현재)':''),disabled:studioLyricLanguageChoiceBlocked(result,lang,target)}))}
+                              sourceLabel={captureStudioKoreanSource(result) ? `한글 ${readLocalLyricView(result,'ko').index+1}번 가사` : '현재 곡의 제목과 가사'}
+                              disabled={isAddingLyricsLanguage || Boolean(recentSongRegeneratingTarget) || Boolean(recentSongInlineEditMode)}
+                              onGenerate={target=>void handleAddLyricsLanguage(target,lang,true)}
+                            />
+                          </div>
+                        );
+
                         return (
                           <div key={lang} aria-busy={cardBusy} className="relative soridraw-result-lyrics-card soridraw-result-lyrics-content-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col group/lyrics shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-colors duration-150">
-                            <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
+                            <div className="soridraw-lyric-card-header shrink-0 p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                               <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                                 <Music className="w-4 h-4 text-[#e3a13a]" />
                                 {label} 가사
@@ -22891,7 +22910,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             </div>
                             <div className="soridraw-lyric-history-controls">
                               <div className="soridraw-lyric-history-nav">{(result as any).__recentSongHistoryIncomplete === true ? <span className="text-xs text-[var(--text-secondary)]">이력 동기화 중</span> : renderRecentSongLocalVersionButtons(`lyrics-${lang}` as RecentSongLocalVersionTarget,'section')}</div>
-                              {lang !== 'ko' && <button type="button" className="soridraw-lyric-language-change flex items-center gap-1.5 rounded-xl bg-[#e3a13a]/10 px-3 py-2 text-xs font-bold text-[#e3a13a] hover:bg-[#e3a13a]/20 disabled:opacity-40" disabled={isAddingLyricsLanguage || Boolean(recentSongRegeneratingTarget) || Boolean(recentSongInlineEditMode)} onClick={() => setLyricsLanguageChange({lang,songKey:buildRecentSongSyncKey(result)})}><Languages className="h-4 w-4" />언어 변경</button>}
+                              {lang !== 'ko' && <button type="button" className="soridraw-lyric-language-change flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-[#e3a13a] disabled:opacity-40" disabled={isAddingLyricsLanguage || Boolean(recentSongRegeneratingTarget) || Boolean(recentSongInlineEditMode)} onClick={() => setLyricsLanguageChange({lang,songKey:buildRecentSongSyncKey(result)})}><Languages className="h-4 w-4" />외국어추가</button>}
                             </div>
                             <div data-soridraw-selectable-text="true" className="soridraw-result-lyrics-scroll flex-1 p-5 sm:p-8 overflow-y-scroll custom-scrollbar flex flex-col items-center h-full">
                               {editingThisLyric && recentSongEditDraft ? (
@@ -22922,14 +22941,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <>
                           {firstCard}
                           {secondCard}
-                          {lyricsLanguageChange && lyricsLanguageChange.songKey === buildRecentSongSyncKey(result) && createPortal(
-                            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4" onClick={() => setLyricsLanguageChange(null)}>
-                              <section role="dialog" aria-modal="true" aria-label="가사 언어 변경" className="w-full max-w-sm max-h-[90dvh] overflow-auto rounded-3xl bg-[var(--card-bg)] p-5 shadow-2xl" onClick={event => event.stopPropagation()}>
-                                <div className="mb-4 flex items-center justify-between gap-2"><h3 className="font-bold text-[var(--text-primary)]">가사 언어 변경</h3><button type="button" autoFocus aria-label="닫기" onClick={() => setLyricsLanguageChange(null)} className="rounded-xl bg-white/5 p-2 text-[var(--text-primary)]"><X className="h-5 w-5" /></button></div>
-                                <div className="grid grid-cols-2 gap-2">{(['en','ja','zh','es','fr','de','ru','th'] as LanguageCode[]).map(lang => <button key={lang} type="button" disabled={studioLyricLanguageChoiceBlocked(result,lyricsLanguageChange.lang,lang,true,isAddingLyricsLanguage || Boolean(recentSongRegeneratingTarget) || Boolean(recentSongInlineEditMode))} onClick={() => handleAddLyricsLanguage(lang,lyricsLanguageChange.lang,true)} className="rounded-xl bg-[#e3a13a]/10 px-3 py-3 text-sm font-bold text-[#e3a13a] hover:bg-[#e3a13a]/20 disabled:opacity-30">{lyricLanguageLabels[lang].ko}{lang === readLocalLyricView(result,lyricsLanguageChange.lang).entry.lang ? ' (현재)' : ''}</button>)}</div>
-                                <p className="mt-4 text-center text-xs text-[var(--text-secondary)]">기존 가사는 생성 이력에 남습니다.</p>
-                              </section>
-                            </div>,document.body)}
                         </>
                       );
                     })()}

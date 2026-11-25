@@ -3,7 +3,8 @@ import { Languages } from 'lucide-react';
 import type { LanguageCode } from '../MusicApiGenerateModal';
 
 type Props = {
-  options: {value:LanguageCode;label:string}[];
+  options: {value:LanguageCode;label:string;disabled?:boolean}[];
+  replacing?:boolean;
   sourceLabel:string;
   disabled:boolean;
   onGenerate:(lang:LanguageCode)=>void;
@@ -12,15 +13,16 @@ type Props = {
 
 // Only the explicit button invokes generation. The selection belongs to
 // this mounted song/card and is never persisted or sent to the server.
-export default function LyricLanguageAddCard({options,sourceLabel,disabled,onGenerate,accent}:Props) {
+export default function LyricLanguageAddCard({options,sourceLabel,disabled,onGenerate,accent,replacing}:Props) {
   const [selected,setSelected]=useState<LanguageCode|''>('');
-  const choice=options.find(x=>x.value===selected)||options[0];
+  const choice=options.find(x=>x.value===selected&&!x.disabled)||options.find(x=>!x.disabled);
   const tone=accent==='note'?'text-[#FFC1BC]':'text-[#e3a13a]';
-  return <div className="flex min-h-[240px] flex-1 flex-col gap-4 overflow-y-auto p-4">
+  return <div className={`flex min-h-[240px] flex-1 flex-col gap-4 overflow-y-auto p-4 ${replacing?'soridraw-lyric-picker-transition':''}`}>
     <select aria-label="추가할 가사 언어" value={choice?.value||''} disabled={disabled||!choice}
       onChange={event=>setSelected(event.target.value as LanguageCode)}
       className="w-full rounded-xl bg-[var(--card-bg,#202022)] px-3 py-2 text-sm font-semibold text-[var(--text-primary,#fff)] disabled:opacity-40">
-      {options.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
+      {!choice&&<option value="" disabled>추가할 언어가 없습니다.</option>}
+      {options.map(option=><option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</option>)}
     </select>
     <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
       <Languages className={`h-7 w-7 ${tone}`}/>

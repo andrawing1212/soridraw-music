@@ -18197,3 +18197,29 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 }
 @media(prefers-reduced-motion:reduce){.soridraw-musicnote-lyric-card[aria-busy="true"]::after{animation:none;opacity:.75;}}
 @media(max-width:767px){.soridraw-musicnote-lyric-body{height:440px;max-height:440px;}}
+
+/* Lyric cards: same header footprint and compact history controls; no title
+ * navigation, storage, or shared theme surface changes. */
+.soridraw-lyric-card-header { flex-shrink:0; }
+.soridraw-lyric-history-controls .soridraw-lyric-version-button,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-lyric-history-controls .soridraw-lyric-version-button {
+  width:28px!important;height:28px!important;min-width:28px!important;min-height:28px!important;
+  border:0!important;border-radius:999px!important;box-shadow:none!important;
+  background:color-mix(in srgb,currentColor 11%,transparent)!important;
+}
+.soridraw-lyric-history-controls .soridraw-lyric-version-button:hover:not(:disabled),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-lyric-history-controls .soridraw-lyric-version-button:hover:not(:disabled) {background:color-mix(in srgb,currentColor 19%,transparent)!important;}
+.soridraw-lyric-history-controls .soridraw-lyric-version-button:disabled,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-lyric-history-controls .soridraw-lyric-version-button:disabled {background:transparent!important;opacity:.34!important;}
+.soridraw-lyric-history-controls .soridraw-lyric-version-count {font-weight:600;white-space:nowrap;}
+.soridraw-lyric-history-controls .soridraw-lyric-language-change,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-lyric-history-controls .soridraw-lyric-language-change {
+  border:0!important;border-radius:10px!important;min-height:30px;
+  background:color-mix(in srgb,var(--text-primary,#fff) 10%,transparent)!important;
+}
+.soridraw-lyric-history-controls .soridraw-lyric-language-change:hover:not(:disabled),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-lyric-history-controls .soridraw-lyric-language-change:hover:not(:disabled),
+.soridraw-lyric-picker-back:hover {background:color-mix(in srgb,var(--text-primary,#fff) 17%,transparent)!important;}
+.soridraw-lyric-picker-back {color:var(--text-primary,#fff);}
+@keyframes soridraw-lyric-picker-enter {from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:translateX(0)}}
+@media(prefers-reduced-motion:no-preference){.soridraw-lyric-picker-transition{animation:soridraw-lyric-picker-enter 180ms ease-out both;}}

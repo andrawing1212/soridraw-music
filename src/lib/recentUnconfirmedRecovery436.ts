@@ -248,3 +248,8 @@ export const buildMusicNoteLyricVersionPatch = (song:any,slot:MusicNoteLyricSlot
     appliedKeywords:{lyricLanguages:languages,titleLanguages:languages,secondaryLanguage:nextSlots.english.lang,lyricsByLanguage,titlesByLanguage},
   };
 };
+
+// A language change belongs to its existing card/lane, not the last stored
+// language. Protect the other card's visible AND canonical languages.
+export const isLyricLanguageChoiceBlocked = (target:string, visible:string|undefined, otherLanguages:readonly string[], busy=false) =>
+  busy || target===visible || otherLanguages.includes(target);

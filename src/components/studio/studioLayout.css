@@ -1383,7 +1383,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 :root[data-soridraw-theme="studio-black"] .soridraw-result-prompt-card textarea,
 :root[data-soridraw-theme="studio-black"] .soridraw-result-lyrics-card pre,
 :root[data-soridraw-theme="studio-black"] .soridraw-result-lyrics-card textarea {
-  color: #c8c8cb !important;
+  color: #ffffff !important;
   -webkit-text-fill-color: currentColor !important;
 }
 
@@ -1391,7 +1391,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
  * Only plain lyric text follows the neutral white/gray text palette.
  */
 :root[data-soridraw-theme="studio-black"] .soridraw-result-lyrics-card pre span.font-semibold {
-  color: rgba(205, 140, 49, 0.55) !important;
+  color: #f4bc63 !important;
   -webkit-text-fill-color: currentColor !important;
 }
 
@@ -2045,7 +2045,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content .soridraw-result-prompt-card :is(pre, textarea),
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content .soridraw-result-lyrics-card :is(pre, textarea) {
-  color: var(--sb-nav-muted) !important;
+  color: #ffffff !important;
   -webkit-text-fill-color: currentColor !important;
 }
 

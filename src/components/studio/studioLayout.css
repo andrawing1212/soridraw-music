@@ -18239,12 +18239,13 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 .soridraw-lyric-card-actions {flex-shrink:0;flex-wrap:nowrap;gap:4px;align-items:center;max-width:100%;}
 .soridraw-lyric-card-actions > button:not(.soridraw-lyric-cue-switch),
 .soridraw-lyric-card-actions > div > button {flex-shrink:0;}
-html body #root .soridraw-app-root button.soridraw-lyric-cue-switch {
+html body :is(#root .soridraw-app-root, .soridraw-detail-modal-portal-scope.soridraw-musicnote-theme .soridraw-musicnote-lyric-card) button.soridraw-lyric-cue-switch {
   position:relative;width:44px;height:24px;min-width:44px;min-height:24px;flex:0 0 auto;
+  margin-inline-end:6px;
   padding:0!important;border:0!important;border-radius:999px!important;box-shadow:none!important;
   background:#4a4a4a!important;cursor:pointer;
 }
-html body #root .soridraw-app-root button.soridraw-lyric-cue-switch[aria-checked="true"] {background:#ffb400!important;}
+html body :is(#root .soridraw-app-root, .soridraw-detail-modal-portal-scope.soridraw-musicnote-theme .soridraw-musicnote-lyric-card) button.soridraw-lyric-cue-switch[aria-checked="true"] {background:#ffb400!important;}
 .soridraw-lyric-cue-switch > span {position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff!important;transition:transform .18s;}
 .soridraw-lyric-cue-switch[aria-checked="true"] > span {transform:translateX(20px);}
 .soridraw-lyric-cue-switch:disabled {opacity:.5;cursor:not-allowed;}
@@ -18254,10 +18255,11 @@ html body #root .soridraw-app-root button.soridraw-lyric-cue-switch[aria-checked
 .soridraw-lyric-card-header:has(.soridraw-lyric-card-actions) {container-type:inline-size;}
 .soridraw-musicnote-lyric-card > div:has(> .soridraw-lyric-card-actions) {container-type:inline-size;}
 @container (max-width:380px) {
-  html body #root .soridraw-app-root .soridraw-lyric-card-actions {gap:3px;}
-  html body #root .soridraw-app-root .soridraw-lyric-card-actions button:not(.soridraw-lyric-cue-switch) {width:30px!important;height:30px!important;min-width:30px!important;min-height:30px!important;padding:0!important;}
-  html body #root .soridraw-app-root .soridraw-lyric-card-actions button:not(.soridraw-lyric-cue-switch) svg {width:16px!important;height:16px!important;}
-  html body #root .soridraw-app-root button.soridraw-lyric-cue-switch {width:36px;min-width:36px;height:20px;min-height:20px;}
+  html body :is(#root .soridraw-app-root, .soridraw-detail-modal-portal-scope.soridraw-musicnote-theme .soridraw-musicnote-lyric-card) .soridraw-lyric-card-actions {gap:3px;}
+  html body :is(#root .soridraw-app-root, .soridraw-detail-modal-portal-scope.soridraw-musicnote-theme .soridraw-musicnote-lyric-card) .soridraw-lyric-card-actions button:not(.soridraw-lyric-cue-switch) {width:30px!important;height:30px!important;min-width:30px!important;min-height:30px!important;padding:0!important;}
+  html body :is(#root .soridraw-app-root, .soridraw-detail-modal-portal-scope.soridraw-musicnote-theme .soridraw-musicnote-lyric-card) .soridraw-lyric-card-actions button:not(.soridraw-lyric-cue-switch) svg {width:16px!important;height:16px!important;}
+  html body :is(#root .soridraw-app-root, .soridraw-detail-modal-portal-scope.soridraw-musicnote-theme .soridraw-musicnote-lyric-card) button.soridraw-lyric-cue-switch {width:36px;min-width:36px;height:20px;min-height:20px;}
+  .soridraw-lyric-card-actions > button.soridraw-lyric-cue-switch {margin-inline-end:4px;}
   .soridraw-lyric-cue-switch > span {width:14px;height:14px;}
   .soridraw-lyric-cue-switch[aria-checked="true"] > span {transform:translateX(16px);}
 }

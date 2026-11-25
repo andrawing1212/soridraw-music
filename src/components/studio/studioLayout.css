@@ -1382,7 +1382,11 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 :root[data-soridraw-theme="studio-black"] .soridraw-result-prompt-card pre,
 :root[data-soridraw-theme="studio-black"] .soridraw-result-prompt-card textarea,
 :root[data-soridraw-theme="studio-black"] .soridraw-result-lyrics-card pre,
-:root[data-soridraw-theme="studio-black"] .soridraw-result-lyrics-card textarea {
+:root[data-soridraw-theme="studio-black"] .soridraw-result-lyrics-card textarea,
+:root[data-soridraw-device="phone"][data-soridraw-color-mode="dark"] .soridraw-result-prompt-card pre,
+:root[data-soridraw-device="phone"][data-soridraw-color-mode="dark"] .soridraw-result-prompt-card textarea,
+:root[data-soridraw-device="phone"][data-soridraw-color-mode="dark"] .soridraw-result-lyrics-card pre,
+:root[data-soridraw-device="phone"][data-soridraw-color-mode="dark"] .soridraw-result-lyrics-card textarea {
   color: #ffffff !important;
   font-weight: 400 !important;
   -webkit-text-fill-color: currentColor !important;
@@ -1391,7 +1395,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 /* 195 — Keep semantic lyric cues in their original accent color.
  * Only plain lyric text follows the neutral white/gray text palette.
  */
-:root[data-soridraw-theme="studio-black"] .soridraw-result-lyrics-card pre span.font-semibold {
+:root[data-soridraw-theme="studio-black"] .soridraw-result-lyrics-card pre span.font-semibold,
+:root[data-soridraw-device="phone"][data-soridraw-color-mode="dark"] .soridraw-result-lyrics-card pre span.font-semibold {
   color: #f4bc63 !important;
   font-weight: 400 !important;
   -webkit-text-fill-color: currentColor !important;

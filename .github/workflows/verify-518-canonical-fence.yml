@@ -134,6 +134,7 @@ jobs:
           set -euo pipefail
           node scripts/verify-518-canonical-fence.mjs
           node scripts/verify-518-stale-save-delete-race.mjs
+          node scripts/verify-518-legacy-rebuild-redteam.mjs
           node scripts/verify-518-worker-compat-switch.mjs
           node scripts/verify-518-shared-writer-rollout.mjs
           node scripts/verify-518-media-workflow-mutex.mjs

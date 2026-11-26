@@ -20,6 +20,8 @@ export interface InboxNotification {
   read?: boolean;
   /** Stable generation identity, optional on earlier local notices. */
   recentKey?: string;
+  /** Local generation aliases only. Never remote or media payload. */
+  creationLink?: { songId?:string; noteId?:string; sourceId?:string; sourceCreatedAt?:number };
   song?: {
     id: string;
     title: string;

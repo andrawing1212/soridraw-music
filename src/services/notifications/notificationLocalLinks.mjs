@@ -9,14 +9,37 @@ export function notificationRecentKey(song){
  const sid=String(song.soridrawSongId||'').trim();
  return sid?'sid:'+sid:'';
 }
+export function notificationCreationLink(song){
+ if(!song||typeof song!=='object')return undefined;
+ const exact=value=>typeof value==='string'&&value.trim().length<=256?value.trim():'';
+ const songId=exact(song.soridrawSongId);
+ const noteId=exact(song.favoriteFirestoreId||song.musicNoteFavoriteId);
+ const sourceId=exact(song.id||song.taskId||song.sourceId);
+ const sourceCreatedAt=notificationGenerationTime(song.createdAtMs)||notificationGenerationTime(song.createdAt);
+ return songId||noteId||sourceId?{
+  ...(songId?{songId}:{}),...(noteId?{noteId}:{}),
+  ...(sourceId?{sourceId}:{}),...(sourceId&&sourceCreatedAt?{sourceCreatedAt}:{})
+ }:undefined;
+}
+// Same deterministic first-save document ID used by App's existing Studio-heart
+// path. This is a lookup in the already-owned local notes, never a new read.
+function notificationDerivedNoteId(uid,key){
+ if(!uid||!key||!(/^(generation:|sid:)/.test(key)))return '';
+ let hash=2166136261;
+ const raw=uid+'|'+key;
+ for(let i=0;i<raw.length;i++){hash^=raw.charCodeAt(i);hash=Math.imul(hash,16777619)}
+ return 'rs_'+(key.replace(/[^A-Za-z0-9_-]+/g,'_').slice(0,72)||'song')+'_'+(hash>>>0).toString(36);
+}
 export function notificationOwnNote(notes,uid,row,source){
  if(!uid||!row||!Array.isArray(notes))return null;
  const key=String(row.recentKey||notificationRecentKey(source)||'').trim();
  const raw=typeof row.id==='string'&&row.id.startsWith('generated:')?row.id.slice(10):'';
- const original=String(source?.id||source?.taskId||source?.sourceId||'').trim();
+ const aliases=notificationCreationLink(source)||row.creationLink||{};
+ const original=String(aliases.sourceId||'').trim();
  const legacy=original||(raw&&!raw.startsWith('recent-')?raw:'');
- const sourceSid=String(source?.soridrawSongId||'').trim();
- const linkedId=String(source?.favoriteFirestoreId||'').trim();
+ const sourceSid=String(aliases.songId||'').trim();
+ const linkedId=String(aliases.noteId||'').trim();
+ const derivedId=notificationDerivedNoteId(uid,key);
  const generation=key.startsWith('generation:')?key:raw.startsWith('generation:')?raw:'';
  const matches=notes.filter(note=>{
   if(note?.uid!==uid)return false;
@@ -25,15 +48,19 @@ export function notificationOwnNote(notes,uid,row,source){
   const sid=String(note.soridrawSongId||'').trim();
   const noteGeneration=noteKey.startsWith('generation:')?noteKey:explicit.startsWith('generation:')?explicit:'';
   if(generation&&noteGeneration&&generation!==noteGeneration)return false;
-  if(linkedId&&String(note.firestoreId||note.id||'')===linkedId)return true;
+  const noteId=String(note.firestoreId||note.id||'').trim();
+  if(linkedId&&noteId===linkedId)return true;
+  // A deterministic document ID is useful for old cached summaries missing the
+  // exact identity fields, but never override a conflicting identity.
+  if(derivedId&&noteId===derivedId&&(!noteKey||noteKey===key)&&(!explicit||explicit===key))return true;
   if(key&&(key===noteKey||key===explicit||(sid&&key==='sid:'+sid)))return true;
   if(generation&&generation===noteGeneration)return true;
   if(sid&&(sourceSid===sid||raw===sid||raw==='sid:'+sid))return true;
   if(!legacy||String(note.recentLegacySourceId||'').trim()!==legacy)return false;
-  const a=notificationGenerationTime(source?.createdAtMs)||notificationGenerationTime(source?.createdAt)||notificationGenerationTime(row.createdAt);
+  const a=notificationGenerationTime(aliases.sourceCreatedAt)||notificationGenerationTime(row.createdAt);
   const b=notificationGenerationTime(note.recentLegacyCreatedAtMs);
   if(a&&b&&a!==b)return false;
-  return !generation&&!noteGeneration;
+  return (!generation&&!noteGeneration)||(!generation&&a>0&&b>0&&a===b);
  });
  return matches.length===1?matches[0]:null;
 }

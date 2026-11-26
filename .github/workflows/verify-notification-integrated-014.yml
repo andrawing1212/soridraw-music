@@ -19,7 +19,7 @@ permissions:
 jobs:
   isolated:
     runs-on: ubuntu-24.04
-    timeout-minutes: 7
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,5 +37,10 @@ jobs:
           node scripts/verify-notification-panel-ui.mjs
           node scripts/verify-notification-unified-inbox-004.mjs
           node scripts/verify-notification-preview-connect-022.mjs
+      - name: Actual isolated Chromium image persistence and reload
+        run: |
+          npm install --prefix "$RUNNER_TEMP/notification-browser" --no-save --no-audit --no-fund playwright@1.56.1
+          "$RUNNER_TEMP/notification-browser/node_modules/.bin/playwright" install chromium
+          NOTIFICATION_PLAYWRIGHT_ENTRY="$RUNNER_TEMP/notification-browser/node_modules/playwright/index.mjs" node scripts/verify-notification-browser-cache.mjs
       - name: Explicitly no cloud resources or deploy
         run: echo 'NOTIFICATION_014_IN_MEMORY_ONLY=PASS;NO_SHARED_D1;NO_R2;NO_WORKER_DEPLOY'

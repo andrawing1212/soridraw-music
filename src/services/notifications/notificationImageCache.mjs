@@ -34,17 +34,24 @@ function copySquare(source,width,height,target){
 }
 export function createNotificationImageCache(){
  let owner='',doc=null,current=null,persistent=null;
- const users=new Set(),pixels=new Map();
+ const users=new Set(),pixels=new Map(),readableAttempts=new Set();
  const remember=image=>{
   if(!doc||!owner||!current?.())return;
   const key=readyUrl(image);
-  if(!key||pixels.has(key))return;
-  const canvas=doc.createElement('canvas');
-  canvas.width=canvas.height=SIZE;
-  if(!copySquare(image,image.naturalWidth,image.naturalHeight,canvas))return;
-  if(pixels.size>=MAX_IMAGES)pixels.delete(pixels.keys().next().value);
-  pixels.set(key,canvas);
-  if(persistent){
+  if(!key)return;
+  const readable=image.crossOrigin==='anonymous'||image.crossOrigin==='use-credentials'||
+   (doc.location?.origin&&new URL(key).origin===doc.location.origin);
+  if(!pixels.has(key)){
+   const canvas=doc.createElement('canvas');
+   canvas.width=canvas.height=SIZE;
+   if(!copySquare(image,image.naturalWidth,image.naturalHeight,canvas))return;
+   if(pixels.size>=MAX_IMAGES)pixels.delete(pixels.keys().next().value);
+   pixels.set(key,canvas);
+  }
+  // An earlier opaque load must not suppress a later readable load.
+  if(persistent&&readable&&!readableAttempts.has(key)){
+   if(readableAttempts.size>=MAX_IMAGES*4)readableAttempts.delete(readableAttempts.values().next().value);
+   readableAttempts.add(key);
    const uid=owner,store=persistent,active=()=>owner===uid&&store===persistent&&!!current?.();
    const thumb=doc.createElement('canvas');
    thumb.width=thumb.height=THUMB_SIZE;
@@ -61,7 +68,7 @@ export function createNotificationImageCache(){
  const clear=()=>{
   doc?.removeEventListener('load',onLoad,true);
   persistent?.close();persistent=null;
-  pixels.clear();users.clear();doc=null;owner='';current=null;
+  pixels.clear();readableAttempts.clear();users.clear();doc=null;owner='';current=null;
  };
  const attach=(uid,document,isCurrent)=>{
   if(!uid||!isCurrent())return ()=>{};

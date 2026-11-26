@@ -253,7 +253,14 @@ const isFeedRequest = (url: string) => {
   }
 };
 
-// Notification display metadata from already-loaded public feed memory only.
+// Restore only the exact existing home-feed snapshots. No network or full storage scan.
+export const restoreNotificationFeedMetadata = (apiBase:string):void => {
+  for(const sort of ['popular','latest']){
+    const url=apiBase+'/v1/feed?sort='+sort+'&limit=40';
+    if(!exploreFeedMemoryCache.has(url))readExploreFeedSessionCache(url);
+  }
+};
+// Notification display metadata from existing public feed cache.
 export const readNotificationFeedImage = (ownerUid: string, trackId?: string): string => {
   if (!ownerUid) return '';
   let inspected = 0;
@@ -262,7 +269,7 @@ export const readNotificationFeedImage = (ownerUid: string, trackId?: string): s
       if (++inspected > 1200) return '';
       if (row.ownerUid !== ownerUid) continue;
       if (trackId && String(row.id || row.trackId || '') !== trackId) continue;
-      const value = trackId ? row.coverUrl : row.ownerAvatarUrl;
+      const value = trackId ? row.coverUrl : (row.ownerAvatarUrl || row.avatarUrl);
       if (typeof value === 'string' && value) return value;
     }
   }

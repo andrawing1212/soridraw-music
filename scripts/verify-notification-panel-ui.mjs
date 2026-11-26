@@ -428,3 +428,19 @@ assert.equal(await createNotificationPersistentThumbs(null).restore('owner','htt
 assert.match(panel,/notificationImageCache\.drawStored\(uid,urls,canvas,isActive\)/);
 console.log('NOTIFICATION_PERSISTENT_THUMB_ENCODE_BOUNDARY=PASS');
 }
+
+{
+const {notificationCachedNotes,notificationOwnPublishedNote,notificationOwnNote,notificationMedia}=await import('../src/services/notifications/notificationLocalLinks.mjs');
+const older={uid:'owner',id:'note',soridrawSongId:'stable',sunoShareUrl:'https://suno.com/s/old',sunoShareUrlUpdatedAt:10};
+const newer={...older,sunoShareUrl:'https://suno.com/s/new',sunoShareUrlUpdatedAt:20};
+const storage={getItem:k=>k==='soridraw_favorites_cache_owner'?JSON.stringify([newer]):null};
+assert.equal(notificationMedia(notificationCachedNotes('owner',[older],[older],storage)[0]).shareUrl,newer.sunoShareUrl);
+assert.equal(notificationCachedNotes('owner',[],[],storage).length,0);
+assert.equal(notificationCachedNotes('owner',[{...older,saved:false}],[older],storage)[0].saved,false);
+assert.equal(notificationOwnNote([newer],'owner',{id:'generated:old'},{favoriteFirestoreId:'note'}),newer);
+const published={...newer,isPublic:true,exploreTrackId:'track'};
+assert.equal(notificationOwnPublishedNote([published],'owner','track'),published);
+assert.equal(notificationOwnPublishedNote([{...published,isPublic:false}],'owner','track'),null);
+assert.match(panel,/restoreNotificationFeedMetadata\(EXPLORE_API_BASE\)/);
+console.log('NOTIFICATION_WARM_MEDIA_AND_EXACT_LINK=PASS');
+}

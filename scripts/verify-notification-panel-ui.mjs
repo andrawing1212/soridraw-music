@@ -414,7 +414,8 @@ assert.match(panel,/if\(row.category==='complete'\)\{[\s\S]*?result.set\(row.id,
 assert.match(panel,/const canPlayRow=\(row:InboxNotification\)=>row.category!=='complete'/);
 assert.match(panel,/onClick=\{\(\)=>openRecent\(row\)\}\>\{row.text.replace\(/);
 assert.match(panel,/data-recent=\{\(artwork.get\(row.id\)\?\.recentIndex\?\?-1\)>=0\}/);
-assert.match(panelCss,/\[data-type="complete"\]\[data-recent="true"\]\{color:#ffbb22\}/);
+assert.doesNotMatch(panelCss,/\[data-type="complete"\]\[data-recent="true"\]\{color:#ffbb22\}/);
+assert.match(panelCss,/\.soridraw-notification-recent-link\{[^}]*font:inherit;font-weight:600;/);
 console.log('NOTIFICATION_CREATION_NAVIGATION_ONLY=PASS');
 }
 {

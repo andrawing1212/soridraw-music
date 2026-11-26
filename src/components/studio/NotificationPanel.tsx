@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Bell, Check, ChevronRight, Heart, Mail, Megaphone, Music2, Settings2, UserRoundPlus, X } from 'lucide-react';
 import { auth } from '../../firebase';
 import { useGlobalPlayerControls } from '../../contexts/GlobalPlayerContext';
@@ -28,7 +28,8 @@ import { readCachedExplorePublicProfileFirstView684 } from '../../services/explo
 import { readNotificationFeedImage, readNotificationFeedTrack } from '../../services/exploreSessionCache';
 import { favoritesStore } from '../../hooks/useFavoritesStore';
 import { isMusicNoteItemRemoved } from '../../lib/musicNoteSavedState';
-import { notificationOwnNote, notificationMedia, notificationHttps } from '../../services/notifications/notificationLocalLinks.mjs';
+import { readCatalogSnapshotFromLocalCache } from '../../lib/userDataEngine';
+import { notificationOwnNote, notificationMedia, notificationHttps, notificationRecentSnapshot, notificationCachedNotes } from '../../services/notifications/notificationLocalLinks.mjs';
 import './notificationPanel.css';
 
 type Props = {
@@ -107,8 +108,9 @@ const validInternalSharePath = (path: string | undefined): string | null => {
   return path;
 };
 
-export default function NotificationPanel({ open, anchorRef, onClose, recentHistory = [], onOpenRecentSong }: Props) {
+export default function NotificationPanel({ open, anchorRef, onClose, recentHistory: suppliedRecentHistory = [], onOpenRecentSong }: Props) {
   const navigate = useNavigate();
+  const location=useLocation();
   const panelRef = useRef<HTMLDivElement>(null);
   const detailCloseRef = useRef<HTMLButtonElement>(null);
   const { playTrack } = useGlobalPlayerControls();
@@ -303,6 +305,11 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
     window.addEventListener('storage',onStorage);
     return ()=>window.removeEventListener('storage',onStorage);
   },[open,localGenerationEnabled,uid]);
+  const recentHistory=useMemo(()=>{
+    if(!open||!uid||auth.currentUser?.uid!==uid)return suppliedRecentHistory;
+    try{return notificationRecentSnapshot(uid,suppliedRecentHistory,window.localStorage,location.pathname!=='/studio');}
+    catch{return location.pathname==='/studio'?suppliedRecentHistory:[];}
+  },[open,uid,suppliedRecentHistory,location.pathname,localLogVersion]);
   const localCompletions = useMemo(() => (
     localGenerationEnabled && uid && auth.currentUser?.uid === uid
       ? mergeCompletedGenerationNotices016(
@@ -334,6 +341,16 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   const rows=useMemo(()=>allRows.filter(row=>
     notificationSectionFor(row.category)===activeSection),[allRows,activeSection]);
   const [noteMediaVersion,setNoteMediaVersion]=useState(0);
+  const [localNoteCatalog,setLocalNoteCatalog]=useState<{uid:string;items:any[]}>({uid:'',items:[]});
+  useEffect(()=>{
+    if(!open||activeSection!=='creation'||!uid||auth.currentUser?.uid!==uid)return;
+    let live=true;
+    // Existing account Catalog only: memory/IndexedDB, never remote fallback.
+    void readCatalogSnapshotFromLocalCache('musicNote',uid).then(snapshot=>{
+      if(live&&auth.currentUser?.uid===uid)setLocalNoteCatalog({uid,items:snapshot?.items||[]});
+    }).catch(()=>{if(live)setLocalNoteCatalog({uid,items:[]});});
+    return ()=>{live=false;};
+  },[open,activeSection,uid,noteMediaVersion]);
   useEffect(()=>{
     if(!open||!uid)return;
     return favoritesStore.subscribe(()=>setNoteMediaVersion(v=>v+1));
@@ -350,7 +367,11 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
       }
       return profiles.get(owner) || null;
     };
-    const ownNotes=favoritesStore.getFavorites().filter(note=>note?.uid===uid&&!isMusicNoteItemRemoved(note));
+    const liveNotes=favoritesStore.getFavorites();
+    const scopedNotes=activeSection==='creation'?
+      notificationCachedNotes(uid,liveNotes,localNoteCatalog.uid===uid?localNoteCatalog.items:[],window.localStorage):
+      liveNotes;
+    const ownNotes=scopedNotes.filter(note=>note?.uid===uid&&!isMusicNoteItemRemoved(note));
     const own = auth.currentUser?.photoURL || '';
     const ownProfile = profileFor(uid);
     for (const row of rows) {
@@ -378,7 +399,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
         shareUrl:media.shareUrl,coverUrl:media.coverUrl||notificationHttps(row.song?.coverUrl) });
     }
     return result;
-  }, [open, uid, rows, settingsOpen, recentHistory, noteMediaVersion]);
+  }, [open, uid, rows, settingsOpen, recentHistory, noteMediaVersion, localNoteCatalog, activeSection]);
 
   const {dots,acknowledge}=useNotificationDots017(
     uid,recentHistory,remoteInbox.uid===uid?remoteInbox.items:[],effectivePreferences);

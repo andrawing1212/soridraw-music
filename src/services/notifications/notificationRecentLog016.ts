@@ -58,8 +58,11 @@ const parseStored=(uid:string,now:number):StoredCompleted016[]=>{
 };
 const combine=(rows:StoredCompleted016[]):StoredCompleted016[]=>{
   const unique=new Map<string,StoredCompleted016>();
+  const recentKeys=new Set<string>();
   for(const row of rows){
-    if(!unique.has(row.id))unique.set(row.id,row);
+    if(unique.has(row.id)||(row.recentKey&&recentKeys.has(row.recentKey)))continue;
+    unique.set(row.id,row);
+    if(row.recentKey)recentKeys.add(row.recentKey);
   }
   return [...unique.values()].sort((a,b)=>b.createdAt-a.createdAt)
     .slice(0,MAX_STORED_016);
@@ -100,7 +103,13 @@ export function mergeCompletedGenerationNotices016(
   recent:readonly InboxNotification[],stored:readonly InboxNotification[],
   now=Date.now()
 ):InboxNotification[]{
-  const fromBoth=[...recent,...stored].map(x=>fromNotification(x,now))
-    .filter((x):x is StoredCompleted016=>!!x);
-  return combine(fromBoth).map(toNotification);
+  // Current canonical results remain visible even if older than the log
+  // retention window; retention still applies to the independent stored log.
+  const current=recent.filter(x=>x.category==='complete'&&x.id.startsWith('generated:'));
+  const currentIds=new Set(current.map(x=>x.id));
+  const currentKeys=new Set(current.map(x=>x.recentKey).filter(Boolean));
+  const old=stored.map(x=>fromNotification(x,now))
+    .filter((x):x is StoredCompleted016=>!!x)
+    .filter(x=>!currentIds.has(x.id)&&(!x.recentKey||!currentKeys.has(x.recentKey)));
+  return [...current,...combine(old).map(toNotification)].slice(0,MAX_STORED_016);
 }

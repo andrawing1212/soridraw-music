@@ -11,6 +11,7 @@ const SELECTOR=[
  '.soridraw-explore-connection-avatar-376 img',
  '.soridraw-explore-cover-wrap img',
  '.soridraw-explore-more-cover img',
+ '.soridraw-musicnote-song-media img',
  '.soridraw-musicnote-suno-cover-image'
 ].join(',');
 const exactUrl=value=>{

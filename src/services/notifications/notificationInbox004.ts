@@ -3,7 +3,7 @@ import {getFirebaseAppCheckToken} from '../../firebase';
 import {EXPLORE_API_BASE} from '../../config/exploreEnvironment';
 import {canUseReleaseInbox} from './notificationPreviewHost022';
 import type {InboxNotification} from './notificationModel';
-import {notificationRecentKey} from './notificationLocalLinks.mjs';
+import {notificationRecentKey,notificationGenerationTime} from './notificationLocalLinks.mjs';
 import {parseNotificationAccountSettings003,
   type NotificationAccountSettings003} from './notificationAccountSyncCore003';
 
@@ -21,7 +21,8 @@ const timestamp=(v:unknown):number|null=>
 
 type ExistingGeneration004={
   id?:unknown;taskId?:unknown;title?:unknown;status?:unknown;
-  createdAt?:unknown;updatedAt?:unknown;audioUrl?:unknown;
+  createdAt?:unknown;updatedAt?:unknown;createdAtMs?:unknown;updatedAtMs?:unknown;audioUrl?:unknown;
+  koreanTitle?:unknown;englishTitle?:unknown;
   imageUrl?:unknown;coverUrl?:unknown;prompt?:unknown;lyrics?:unknown;
 };
 
@@ -39,23 +40,28 @@ export function projectCompletedExistingGenerations004(
     // Recent Studio keeps *completed* prompt/lyrics SongResult entries
     // without a status field or a Suno track id. Never mark a draft pending
     // Suno response as complete; the existing canonical history is the proof.
+    const key=notificationRecentKey(song);
     const recentResult=typeof song.status==='undefined' &&
-      typeof song.prompt==='string' && !!song.prompt.trim() &&
-      !!song.lyrics && typeof song.lyrics==='object';
-    if(song.status!=='completed' && !recentResult)continue;
-    const title=limitText(song.title,150);
-    const at=timestamp(song.updatedAt)||timestamp(song.createdAt);
-    if(!title||!at||at>now+300000||
-       at<now-30*24*60*60*1000)continue;
-    const stable=limitText(song.id||song.taskId,256)||
-      ('recent-'+at+'-'+title);
+      (Boolean(key)||(typeof song.prompt==='string' && !!song.prompt.trim() &&
+      !!song.lyrics && typeof song.lyrics==='object'));
+    const canonicalResult=(song.status===null||song.status==='success')&&Boolean(key);
+    if(song.status!=='completed' && !recentResult&&!canonicalResult)continue;
+    const title=limitText(song.title,150)||limitText(song.koreanTitle,150)||limitText(song.englishTitle,150);
+    const at=notificationGenerationTime(song.createdAt)||notificationGenerationTime(song.createdAtMs)||
+      notificationGenerationTime(song.updatedAt)||notificationGenerationTime(song.updatedAtMs);
+    if(!title||!at||at>now+300000)continue;
+    // Preserve old notice IDs when possible. Stable keys disambiguate generation
+    // batches, even when the title/time were edited or two results share a title.
+    const legacyAt=notificationGenerationTime(song.updatedAt)||at;
+    let stable=limitText(song.id||song.taskId,256)||('recent-'+legacyAt+'-'+title);
+    if(seen.has(stable)&&key)stable=key;
     if(seen.has(stable))continue;
     seen.add(stable);
     const audio=limitText(song.audioUrl,4096);
     const image=limitText(song.imageUrl||song.coverUrl,4096);
     out.push({id:'generated:'+stable,category:'complete',actorName:'SORIDRAW',
       text:title+' 생성이 완료되었습니다.',createdAt:at,
-      ...(notificationRecentKey(song)?{recentKey:notificationRecentKey(song)}:{}),
+      ...(key?{recentKey:key}:{}),
       ...(song.status==='completed' && /^https:\/\//i.test(audio)
         ? {song:{id:stable,title,audioUrl:audio,
           ...(/^https:\/\//i.test(image)?{coverUrl:image}:{})}}:{})});
@@ -67,8 +73,12 @@ export function projectCompletedExistingGenerations004(
 /** Only an exact notice in the current canonical ten can be opened. */
 export function findNotificationRecentIndex(history:readonly unknown[],id:string,now=Date.now()):number{
   const matches:number[]=[];
+  const projected=projectCompletedExistingGenerations004(history.slice(0,10),now);
+  const notice=projected.find(row=>row.id===id);
+  if(!notice)return -1;
   history.slice(0,10).forEach((song,index)=>{
-    if(projectCompletedExistingGenerations004([song],now,1)[0]?.id===id)matches.push(index);
+    if(notice.recentKey?notificationRecentKey(song)===notice.recentKey:
+      projectCompletedExistingGenerations004([song],now,1)[0]?.id===id)matches.push(index);
   });
   return matches.length===1?matches[0]:-1;
 }

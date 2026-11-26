@@ -310,3 +310,46 @@ console.log('NOTIFICATION_ADMIN_MESSAGE_DETAIL_MODAL=PASS');
 
 console.log('NOTIFICATION_PANEL_UI_AND_ADMIN_SCHEDULE_SOURCE=PASS');
 console.log('NOTIFICATION_PANEL_NO_POLLING_OR_REAL_USER_EVENTS=PASS');
+
+{
+const source = file('src/services/notifications/notificationImageCache.mjs');
+assert.doesNotMatch(source, /\bfetch\s*\(|new\s+Image\s*\(|\.src\s*=|\.toDataURL\s*\(|\.toBlob\s*\(|\.getImageData\s*\(|localStorage|indexedDB|XMLHttpRequest/);
+assert.doesNotMatch(panel, /<img\b/);
+const {createNotificationImageCache} = await import('../src/services/notifications/notificationImageCache.mjs');
+const imageCache = createNotificationImageCache();
+let active = 'A', reads = 0, attached = 0, listener;
+const makeCanvas = () => ({width:64,height:64,getContext:()=>({clearRect(){},drawImage(source){
+  if (source.broken) throw Error('cannot decode');
+  reads++;
+}})});
+const loaded = url => ({tagName:'IMG',complete:true,naturalWidth:128,naturalHeight:96,currentSrc:url,matches:()=>true});
+const images = [loaded('https://cdn.example/known'),{...loaded('https://cdn.example/unloaded'),complete:false}];
+const fakeDocument = {images,createElement:tag=>{assert.equal(tag,'canvas');return makeCanvas()},
+  querySelectorAll:()=>images,
+  addEventListener:(type,fn,capture)=>{assert.equal(type,'load');assert.equal(capture,true);attached++;listener=fn},
+  removeEventListener:()=>{attached--}};
+const offA = imageCache.attach('A',fakeDocument,()=>active==='A');
+const offA2 = imageCache.attach('A',fakeDocument,()=>active==='A');
+assert.equal(attached,1,'shared listener for PC and mobile panels');
+assert.equal(imageCache.draw('A',['https://cdn.example/known'],makeCanvas()),true);
+assert.equal(imageCache.draw('A',['https://cdn.example/missing'],makeCanvas()),false);
+assert.equal(imageCache.draw('A',['https://cdn.example/unloaded'],makeCanvas()),false);
+assert.equal(imageCache.draw('A',['javascript:alert(1)'],makeCanvas()),false);
+assert.equal(imageCache.draw('A',['https://cdn.example/known?different=1'],makeCanvas()),false);
+listener({target:loaded('https://cdn.example/visited')});
+images.length=0;
+assert.equal(imageCache.draw('A',['https://cdn.example/visited'],makeCanvas()),true);
+for(let i=0;i<70;i++)listener({target:loaded('https://cdn.example/bounded/'+i)});
+assert.equal(imageCache.draw('A',['https://cdn.example/visited'],makeCanvas()),false);
+active='B';
+assert.equal(imageCache.draw('A',['https://cdn.example/bounded/69'],makeCanvas()),false);
+const offB=imageCache.attach('B',fakeDocument,()=>active==='B');
+offA();offA2();
+assert.equal(attached,1);
+assert.equal(imageCache.draw('B',['https://cdn.example/bounded/69'],makeCanvas()),false);
+offB();assert.equal(attached,0);assert.ok(reads>0);
+assert.match(panel,/cached\?\.profile\.uid === owner/);
+assert.match(panel,/String\(item\.id \|\| item\.trackId \|\| ''\) === trackId/);
+assert.match(panel,/readNotificationFeedImage\(uid, trackId\)/);
+console.log('NOTIFICATION_DECODED_IMAGE_CACHE_ONLY_MISS_ACCOUNT_BOUNDARY_AND_BUDGET=PASS');
+}

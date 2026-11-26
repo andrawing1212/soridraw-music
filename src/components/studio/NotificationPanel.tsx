@@ -23,6 +23,9 @@ import {NOTIFICATION_INBOX_ENABLED_004,loadOwnNotifications004,
 import {readCompletedGenerationLog016,mergeCompletedGenerationNotices016,
   notificationRecentLogKey016} from '../../services/notifications/notificationRecentLog016';
 import {useNotificationDots017} from '../../services/notifications/useNotificationDots017';
+import { notificationImageCache } from '../../services/notifications/notificationImageCache.mjs';
+import { readCachedExplorePublicProfileFirstView684 } from '../../services/exploreProfileFirstViewService';
+import { readNotificationFeedImage } from '../../services/exploreSessionCache';
 import './notificationPanel.css';
 
 type Props = {
@@ -63,6 +66,24 @@ function NotificationSwitch({ checked, onChange, label, disabled = false }: {
   );
 }
 const isPreviewSample = (row: InboxNotification): boolean => row.id.startsWith('example-');
+
+// Only draw existing pixels; never assign a remote image source in the inbox.
+const EMPTY_ARTWORK_URLS: readonly string[] = [];
+function CachedNotificationImage({ uid, urls, fallback }: {
+  uid: string; urls: readonly string[]; fallback: React.ReactNode;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [ready, setReady] = useState(false);
+  useLayoutEffect(() => {
+    setReady(Boolean(canvasRef.current && auth.currentUser?.uid === uid &&
+      notificationImageCache.draw(uid, urls, canvasRef.current)));
+  }, [uid, urls]);
+  return <>
+    {!ready && fallback}
+    <canvas ref={canvasRef} width={64} height={64} aria-hidden="true"
+      style={{ width:'100%', height:'100%', pointerEvents:'none', display:ready?'block':'none' }} />
+  </>;
+}
 const displayElapsedMs = (row: InboxNotification): number =>
   isPreviewSample(row) ? row.createdAt : Math.max(0, Date.now() - row.createdAt);
 const hasPlayableSong = (row: InboxNotification): boolean =>
@@ -112,6 +133,10 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   const [notice, setNotice] = useState('');
   const [selectedMessage, setSelectedMessage] = useState<InboxNotification | null>(null);
   const uid = auth.currentUser?.uid || '';
+  useEffect(() => {
+    if (!uid || typeof document === 'undefined') return;
+    return notificationImageCache.attach(uid, document, () => auth.currentUser?.uid === uid);
+  }, [uid]);
 
   useEffect(() => {
     if (!open) return;
@@ -303,6 +328,38 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   },[visualExample,localCompletions,remoteInbox,uid]);
   const rows=useMemo(()=>allRows.filter(row=>
     notificationSectionFor(row.category)===activeSection),[allRows,activeSection]);
+  const artwork = useMemo(() => {
+    const result = new Map<string, { avatar: string[]; cover: string[] }>();
+    if (!open || !uid || auth.currentUser?.uid !== uid || settingsOpen) return result;
+    const profiles = new Map<string, ReturnType<typeof readCachedExplorePublicProfileFirstView684>>();
+    const profileFor = (owner: string) => {
+      if (!owner) return null;
+      if (!profiles.has(owner)) {
+        const cached = readCachedExplorePublicProfileFirstView684(owner);
+        profiles.set(owner, cached?.profile.uid === owner ? cached : null);
+      }
+      return profiles.get(owner) || null;
+    };
+    const own = auth.currentUser?.photoURL || '';
+    const ownProfile = profileFor(uid);
+    for (const row of rows) {
+      if (isPreviewSample(row) || !['like','follow','complete'].includes(row.category)) continue;
+      const actor = row.category === 'complete' ? uid : row.actorUid || '';
+      const actorProfile = profileFor(actor);
+      const avatar = [actorProfile?.profile.avatarUrl || '',
+        actor === uid ? own : '', actor ? row.actorAvatarUrl || '' : '',
+        actor && row.category !== 'complete' ? readNotificationFeedImage(actor) : ''];
+      const trackId = row.category === 'like' ? row.song?.id || '' : '';
+      const track = trackId ? ownProfile?.tracks.find(item =>
+        String(item.id || item.trackId || '') === trackId &&
+        (!item.ownerUid || item.ownerUid === uid)) : undefined;
+      const cover = [row.song?.coverUrl || '',
+        typeof track?.coverUrl === 'string' ? track.coverUrl : '',
+        trackId ? readNotificationFeedImage(uid, trackId) : ''];
+      result.set(row.id, { avatar, cover });
+    }
+    return result;
+  }, [open, uid, rows, settingsOpen]);
   const sampleHeader = visualExample && rows.some(isPreviewSample);
   const {dots,acknowledge}=useNotificationDots017(
     uid,recentHistory,remoteInbox.uid===uid?remoteInbox.items:[],effectivePreferences);
@@ -510,8 +567,8 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
                 <button className="soridraw-notification-avatar" type="button"
                   aria-label={row.actorName + ' 프로필'} onClick={() => openProfile(row)}
                   disabled={(visualExample && isPreviewSample(row)) || !row.actorUid}>
-                  {row.actorAvatarUrl ? <img src={row.actorAvatarUrl} alt="" referrerPolicy="no-referrer" /> :
-                    <span>{row.actorName.slice(0, 1)}</span>}
+                  <CachedNotificationImage uid={uid} urls={artwork.get(row.id)?.avatar || EMPTY_ARTWORK_URLS}
+                    fallback={<span>{row.actorName.slice(0, 1)}</span>} />
                 </button>
               )}
               <div className="soridraw-notification-content">
@@ -546,8 +603,8 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
               ) : row.song ? (
                 <button type="button" className="soridraw-notification-cover" onClick={() => playSong(row)}
                   disabled={(visualExample && isPreviewSample(row)) || !hasPlayableSong(row)} aria-label={row.song.title + ' 재생'}>
-                  {row.song.coverUrl ? <img src={row.song.coverUrl} alt="" referrerPolicy="no-referrer" /> :
-                    <Music2 size={22} aria-hidden="true" />}
+                  <CachedNotificationImage uid={uid} urls={artwork.get(row.id)?.cover || EMPTY_ARTWORK_URLS}
+                    fallback={<Music2 size={22} aria-hidden="true" />} />
                   <span className="soridraw-notification-play">▶</span>
                 </button>
               ) : <span className="soridraw-notification-end-icon" data-type={row.category} aria-hidden="true">{iconFor(row.category)}</span>}

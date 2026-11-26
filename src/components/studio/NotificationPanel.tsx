@@ -80,8 +80,17 @@ function CachedNotificationImage({ uid, urls, fallback }: {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [ready, setReady] = useState(false);
   useLayoutEffect(() => {
-    setReady(Boolean(canvasRef.current && auth.currentUser?.uid === uid &&
-      notificationImageCache.draw(uid, urls, canvasRef.current)));
+    let active=true;
+    const canvas=canvasRef.current;
+    const isActive=()=>active&&canvasRef.current===canvas&&auth.currentUser?.uid===uid;
+    const readyNow=Boolean(canvas&&isActive()&&notificationImageCache.draw(uid,urls,canvas));
+    setReady(readyNow);
+    if(!readyNow&&canvas&&isActive()){
+      void notificationImageCache.drawStored(uid,urls,canvas,isActive).then(found=>{
+        if(isActive())setReady(found);
+      }).catch(()=>{});
+    }
+    return ()=>{active=false};
   }, [uid, urls]);
   return <>
     {!ready && fallback}
@@ -341,14 +350,14 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   const rows=useMemo(()=>allRows.filter(row=>
     notificationSectionFor(row.category)===activeSection),[allRows,activeSection]);
   const [noteMediaVersion,setNoteMediaVersion]=useState(0);
-  const [localNoteCatalog,setLocalNoteCatalog]=useState<{uid:string;items:any[]}>({uid:'',items:[]});
+  const [localNoteCatalog,setLocalNoteCatalog]=useState<{uid:string;items:any[]|null}>({uid:'',items:null});
   useEffect(()=>{
     if(!open||activeSection!=='creation'||!uid||auth.currentUser?.uid!==uid)return;
     let live=true;
     // Existing account Catalog only: memory/IndexedDB, never remote fallback.
     void readCatalogSnapshotFromLocalCache('musicNote',uid).then(snapshot=>{
-      if(live&&auth.currentUser?.uid===uid)setLocalNoteCatalog({uid,items:snapshot?.items||[]});
-    }).catch(()=>{if(live)setLocalNoteCatalog({uid,items:[]});});
+      if(live&&auth.currentUser?.uid===uid)setLocalNoteCatalog({uid,items:snapshot?.items??null});
+    }).catch(()=>{if(live)setLocalNoteCatalog({uid,items:null});});
     return ()=>{live=false;};
   },[open,activeSection,uid,noteMediaVersion]);
   useEffect(()=>{
@@ -369,7 +378,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
     };
     const liveNotes=favoritesStore.getFavorites();
     const scopedNotes=activeSection==='creation'?
-      notificationCachedNotes(uid,liveNotes,localNoteCatalog.uid===uid?localNoteCatalog.items:[],window.localStorage):
+      notificationCachedNotes(uid,liveNotes,localNoteCatalog.uid===uid?localNoteCatalog.items:null,window.localStorage):
       liveNotes;
     const ownNotes=scopedNotes.filter(note=>note?.uid===uid&&!isMusicNoteItemRemoved(note));
     const own = auth.currentUser?.photoURL || '';
@@ -506,12 +515,14 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
       onClose();
       return;
     }
-    const path = validInternalSharePath(row.song?.sharePath);
+    const path = row.category==='complete'&&(media?.recentIndex??-1)<0
+      ? null : validInternalSharePath(row.song?.sharePath);
     if (path) closeAndNavigate(path);
     else setNotice('이 곡의 재생 주소를 확인할 수 없습니다.');
   };
+  const isArchivedCreation=(row:InboxNotification)=>row.category==='complete'&&(artwork.get(row.id)?.recentIndex??-1)<0;
   const canPlayRow=(row:InboxNotification)=>Boolean(artwork.get(row.id)?.audioUrl||
-    artwork.get(row.id)?.shareUrl||hasPlayableSong(row));
+    artwork.get(row.id)?.shareUrl||(!isArchivedCreation(row)&&hasPlayableSong(row)));
   const openRecent=(row:InboxNotification)=>{
     if(auth.currentUser?.uid!==uid||findNotificationRecentIndex(recentHistory,row.id)<0)return;
     if(onOpenRecentSong?.(row.id))onClose();
@@ -656,11 +667,12 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
                   onClick={() => void follow(row)}>
                   {row.actorUid && followed[row.actorUid] ? '팔로잉' : '팔로우'}
                 </button>
-              ) : row.song || artwork.get(row.id)?.coverUrl || canPlayRow(row) ? (
+              ) : (isArchivedCreation(row)?canPlayRow(row):row.song||artwork.get(row.id)?.coverUrl||canPlayRow(row)) ? (
                 <button type="button" className="soridraw-notification-cover" onClick={() => playSong(row)}
                   disabled={isPreviewSample(row) || !canPlayRow(row)} aria-label={(row.song?.title||row.text) + ' 재생'}>
-                  <CachedNotificationImage uid={uid} urls={artwork.get(row.id)?.cover || EMPTY_ARTWORK_URLS}
-                    fallback={<Music2 size={22} aria-hidden="true" />} />
+                  {isArchivedCreation(row) ? <Music2 size={22} aria-hidden="true" /> :
+                    <CachedNotificationImage uid={uid} urls={artwork.get(row.id)?.cover || EMPTY_ARTWORK_URLS}
+                      fallback={<Music2 size={22} aria-hidden="true" />} />}
                   {canPlayRow(row)&&<span className="soridraw-notification-play">▶</span>}
                 </button>
               ) : <span className="soridraw-notification-end-icon" data-type={row.category} aria-hidden="true">{iconFor(row.category)}</span>}

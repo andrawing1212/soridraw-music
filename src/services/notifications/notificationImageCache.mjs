@@ -1,6 +1,7 @@
+import {createNotificationPersistentThumbs,THUMB_SIZE} from './notificationPersistentThumbs.mjs';
 // Display only: bounded decoded pixels, per signed-in account and browser tab.
 // Already-loaded cross-origin images can be drawn without reading or exporting
-// pixels. No new request, persistent storage or server write.
+// pixels. Persist readable compressed pixels only; no new request or server write.
 const SIZE=64, MAX_IMAGES=64;
 const SELECTOR=[
  '.soridraw-profile-trigger img',
@@ -32,7 +33,7 @@ function copySquare(source,width,height,target){
  }catch{return false}
 }
 export function createNotificationImageCache(){
- let owner='',doc=null,current=null;
+ let owner='',doc=null,current=null,persistent=null;
  const users=new Set(),pixels=new Map();
  const remember=image=>{
   if(!doc||!owner||!current?.())return;
@@ -43,6 +44,15 @@ export function createNotificationImageCache(){
   if(!copySquare(image,image.naturalWidth,image.naturalHeight,canvas))return;
   if(pixels.size>=MAX_IMAGES)pixels.delete(pixels.keys().next().value);
   pixels.set(key,canvas);
+  if(persistent){
+   const uid=owner,store=persistent,active=()=>owner===uid&&store===persistent&&!!current?.();
+   const thumb=doc.createElement('canvas');
+   thumb.width=thumb.height=THUMB_SIZE;
+   // A tainted canvas still works for the temporary display. Encoding fails
+   // safely and must never trigger a second download.
+   if(copySquare(image,image.naturalWidth,image.naturalHeight,thumb))
+    void store.remember(uid,key,thumb,active);
+  }
  };
  const onLoad=event=>{
   const image=event.target;
@@ -50,12 +60,14 @@ export function createNotificationImageCache(){
  };
  const clear=()=>{
   doc?.removeEventListener('load',onLoad,true);
+  persistent?.close();persistent=null;
   pixels.clear();users.clear();doc=null;owner='';current=null;
  };
  const attach=(uid,document,isCurrent)=>{
   if(!uid||!isCurrent())return ()=>{};
   if(owner!==uid||doc!==document){
    clear();owner=uid;doc=document;current=isCurrent;
+   persistent=document.defaultView?createNotificationPersistentThumbs(document.defaultView):null;
    document.addEventListener('load',onLoad,true);
    document.querySelectorAll(SELECTOR).forEach(remember);
   }
@@ -78,6 +90,21 @@ export function createNotificationImageCache(){
   }
   return false;
  };
- return {attach,draw};
+ const drawStored=async(uid,urls,target,isActive)=>{
+  const cache=persistent;
+  const active=()=>owner===uid&&cache===persistent&&!!current?.()&&isActive();
+  if(!uid||!cache||!active())return false;
+  for(const raw of urls){
+   if(!active())return false;
+   const key=exactUrl(raw);if(!key)continue;
+   const bitmap=await cache.restore(uid,key);
+   if(!bitmap)continue;
+   try{
+    if(active()&&copySquare(bitmap,bitmap.width,bitmap.height,target))return true;
+   }finally{bitmap.close?.()}
+  }
+  return false;
+ };
+ return {attach,draw,drawStored};
 }
 export const notificationImageCache=createNotificationImageCache();

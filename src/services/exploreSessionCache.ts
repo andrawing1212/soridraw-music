@@ -253,6 +253,21 @@ const isFeedRequest = (url: string) => {
   }
 };
 
+// Notification display metadata from already-loaded public feed memory only.
+export const readNotificationFeedImage = (ownerUid: string, trackId?: string): string => {
+  if (!ownerUid) return '';
+  let inspected = 0;
+  for (const entry of exploreFeedMemoryCache.values()) {
+    for (const row of entry.rows) {
+      if (++inspected > 1200) return '';
+      if (row.ownerUid !== ownerUid) continue;
+      if (trackId && String(row.id || row.trackId || '') !== trackId) continue;
+      const value = trackId ? row.coverUrl : row.ownerAvatarUrl;
+      if (typeof value === 'string' && value) return value;
+    }
+  }
+  return '';
+};
 const getFeedCacheKey = (url: string) => `explore-feed:${url}`;
 const cloneRows = (rows: Array<Record<string, unknown>>) => rows.map((row) => ({ ...row }));
 const normalizeRevision = (value: unknown) => {

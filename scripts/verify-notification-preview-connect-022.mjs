@@ -48,8 +48,10 @@ assert.match(panel,/remoteInbox.uid===uid \? \[\.\.\.remoteInbox.items,\.\.\.loc
 assert.match(panel,/NOTIFICATION_INBOX_ENABLED_004 && NOTIFICATION_ACCOUNT_SYNC_ENABLED_003/);
 assert.match(panel,/readCompletedGenerationLog016\(uid\)/);
 assert.match(panel,/visualExample = isNotificationVisualPreview\(\)/);
-assert.match(panel,/withPreviewNotificationExamples023\(collapseRepeatedFollowNoticesByActor554\(genuineRows\),visualExample\)/);
-assert.match(panel,/sampleHeader = visualExample && rows\.some\(isPreviewSample\)/);
+// Actual inbox must never render fixture notices, even while loading or empty.
+assert.match(panel,/collapseRepeatedFollowNoticesByActor554\(genuineRows\)\.filter\(row=>!isPreviewSample\(row\)\)/);
+assert.doesNotMatch(panel,/withPreviewNotificationExamples023\(/);
+assert.doesNotMatch(panel,/sampleHeader/);
 // Stage027: real signed-account GET result is visible, but never requests
 // additional endpoints or mistakes clearly labelled sample rows as genuine.
 assert.match(panel,/setRemoteAuthProof027\(\{uid:current\.uid,state:'checking'/);

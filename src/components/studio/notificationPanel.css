@@ -83,7 +83,7 @@
 .soridraw-notification-content span{display:block;overflow-wrap:anywhere}
 .soridraw-notification-content small{display:block;color:#929298;margin-top:3px;font-size:11px}
 .soridraw-notification-content .soridraw-notification-song-title{
-  color:#bcbcc2;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+  color:#fff;font-size:13px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
 }
 .soridraw-notification-follow{
   flex:none;font-weight:700;font-size:12px;border:0;border-radius:13px;

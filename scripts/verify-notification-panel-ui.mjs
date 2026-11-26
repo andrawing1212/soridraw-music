@@ -466,3 +466,6 @@ assert.equal(notificationOwnNote([{...note,id:'another',title:'same'}],owner,{id
 assert.match(panel,/if \(row.category==='complete'\|\|isPreviewSample\(row\)/);
 console.log('NOTIFICATION_CREATION_NO_URL_PLAYBACK=PASS');
 }
+
+assert.match(panel,/\{row\.actorName\}\{' 님이'\}/);
+assert.match(panelCss,/\.soridraw-notification-content \.soridraw-notification-song-title\{\s*color:#fff;font-size:13px;/);

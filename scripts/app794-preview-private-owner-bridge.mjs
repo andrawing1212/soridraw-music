@@ -130,7 +130,7 @@ function core(env,uid,store,verifyCutover,now,send){
   verifyBoundOwner:async()=>({verifiedPrivateReceiptBoundary:true,ownerUid:uid}),verifyCutover,now,send});
 }
 export function createApp794ExploreConnection({env,enabled=APP794_PRIVATE_BRIDGE_COMPILED_OPEN,
- verifyCutover,authenticate,preauthorizeCanonical,callCanonical,readPair,now=Date.now,send=fetch}={}){
+ verifyCutover,authenticate,preauthorizeCanonical,callCanonical,readPair,recoverCommittedCanonical,now=Date.now,send=fetch}={}){
  if(!enabled)return null;
  if(!scope(env)||typeof env.OWNER_FOLLOW_RESERVATION_SERVICE_600?.fetch!=='function'||[verifyCutover,authenticate,preauthorizeCanonical,callCanonical].some(x=>typeof x!=='function'))
   throw Error('APP794_CANONICAL_DEPENDENCIES');
@@ -151,7 +151,13 @@ export function createApp794ExploreConnection({env,enabled=APP794_PRIVATE_BRIDGE
     const deny=async()=>{throw Error('APP794_ALARM_BACKCALL_FORBIDDEN')};
     const store={inspectReceipt:async b=>exact(a,b)?{status:'found',receipt:a}:hold('EXACT_RECEIPT'),
      reserve:deny,rearmVerifiedSettlement:deny};
-    const v=await core(env,a.ownerUid,store,verifyCutover,now,send).settleAndDeliver(a);
+    const connection=core(env,a.ownerUid,store,verifyCutover,now,send);
+    let v=await connection.settleAndDeliver(a);
+    // Only exact D1-committed, still-pending canonical operations may repair
+    // materialization. No replay of the mutation or owner DO backcall.
+    if(v.status==='PROOF_WAIT'&&typeof recoverCommittedCanonical==='function'&&
+       await recoverCommittedCanonical({env,reservation:a})===true)
+     v=await connection.settleAndDeliver(a);
     return reply(200,v);
    }catch{return reply(503,hold('ALARM_UNAVAILABLE'))}
   }

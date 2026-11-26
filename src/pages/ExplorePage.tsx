@@ -1,3 +1,4 @@
+import NotificationCacheableImage from '../components/studio/NotificationCacheableImage';
 import { stageNextSongKeywords } from '../lib/nextSongPendingBridge';
 import { EXPLORE_VIEWER_GENRES_EVENT, readExploreViewerGenres } from '../services/exploreCreatorProfileCache';
 import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
@@ -1640,7 +1641,7 @@ function ExploreCreatorCard221({
     >
       <span className="soridraw-explore-recommend-creator-avatar" aria-hidden="true">
         {creator.avatarUrl
-          ? <img src={creator.avatarUrl} alt="" referrerPolicy="no-referrer" />
+          ? <NotificationCacheableImage src={creator.avatarUrl} alt="" referrerPolicy="no-referrer" />
           : creator.displayName.charAt(0).toUpperCase()}
       </span>
       <strong>{creator.displayName}</strong>
@@ -1742,7 +1743,7 @@ function ExploreTrackCard({
         {variant === 'profilePinnedBanner' ? (
           <div className="soridraw-explore-pinned-banner-235">
             {track.coverUrl && !imageFailed && (
-              <img
+              <NotificationCacheableImage
                 className="soridraw-explore-pinned-banner-blur-235"
                 src={track.coverUrl}
                 alt=""
@@ -1753,7 +1754,7 @@ function ExploreTrackCard({
             )}
             <div className="soridraw-explore-pinned-banner-image-235">
               {track.coverUrl && !imageFailed ? (
-                <img
+                <NotificationCacheableImage
                   src={track.coverUrl}
                   alt=""
                   loading="lazy"
@@ -1779,7 +1780,7 @@ function ExploreTrackCard({
           <div className="soridraw-explore-cover-button">
             <span className="soridraw-explore-cover-shell">
               {track.coverUrl && !imageFailed ? (
-                <img
+                <NotificationCacheableImage
                   src={track.coverUrl}
                   alt=""
                   loading="lazy"
@@ -1906,7 +1907,7 @@ function ExploreTrackCard({
             title={track.ownerUid ? `${track.displayName} 공개 프로필` : track.displayName}
           >
             <span className="soridraw-explore-avatar" aria-hidden="true">
-              {track.avatarUrl ? <img src={track.avatarUrl} alt="" referrerPolicy="no-referrer" /> : track.displayName.charAt(0).toUpperCase()}
+              {track.avatarUrl ? <NotificationCacheableImage src={track.avatarUrl} alt="" referrerPolicy="no-referrer" /> : track.displayName.charAt(0).toUpperCase()}
             </span>
             <span>{track.displayName}</span>
           </button>
@@ -6127,7 +6128,7 @@ export default function ExplorePage() {
             <>
               <div className="soridraw-explore-more-track">
                 <div className="soridraw-explore-more-cover" aria-hidden="true">
-                  {moreTrack.coverUrl ? <img src={moreTrack.coverUrl} alt="" referrerPolicy="no-referrer" /> : <Music2 />}
+                  {moreTrack.coverUrl ? <NotificationCacheableImage src={moreTrack.coverUrl} alt="" referrerPolicy="no-referrer" /> : <Music2 />}
                 </div>
                 <div>
                   <strong>{formatExploreDisplayTitle(moreTrack.title)}</strong>
@@ -6482,7 +6483,7 @@ export default function ExplorePage() {
                     >
                       <span className="soridraw-explore-connection-avatar-376" aria-hidden="true">
                         {person.avatarUrl
-                          ? <img src={person.avatarUrl} alt="" referrerPolicy="no-referrer" />
+                          ? <NotificationCacheableImage src={person.avatarUrl} alt="" referrerPolicy="no-referrer" />
                           : (person.nickname || 'S').charAt(0).toUpperCase()}
                       </span>
                       <span className="soridraw-explore-connection-copy-376">
@@ -6553,7 +6554,7 @@ export default function ExplorePage() {
               <div className="soridraw-explore-profile-content">
                 <div className="soridraw-explore-profile-avatar-column-244">
                   <div className="soridraw-explore-profile-avatar" aria-hidden="true">
-                    {profile.avatarUrl ? <img src={profile.avatarUrl} alt="" referrerPolicy="no-referrer" /> : profile.nickname.charAt(0).toUpperCase()}
+                    {profile.avatarUrl ? <NotificationCacheableImage src={profile.avatarUrl} alt="" referrerPolicy="no-referrer" /> : profile.nickname.charAt(0).toUpperCase()}
                   </div>
                   {profile.bio && <p className="soridraw-explore-profile-bio">{profile.bio}</p>}
                 </div>

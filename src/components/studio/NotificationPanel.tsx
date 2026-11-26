@@ -25,11 +25,12 @@ import {readCompletedGenerationLog016,mergeCompletedGenerationNotices016,
 import {useNotificationDots017} from '../../services/notifications/useNotificationDots017';
 import { notificationImageCache } from '../../services/notifications/notificationImageCache.mjs';
 import { readCachedExplorePublicProfileFirstView684 } from '../../services/exploreProfileFirstViewService';
-import { readNotificationFeedImage, readNotificationFeedTrack } from '../../services/exploreSessionCache';
+import { readNotificationFeedImage, readNotificationFeedTrack, restoreNotificationFeedMetadata } from '../../services/exploreSessionCache';
+import { EXPLORE_API_BASE } from '../../config/exploreEnvironment';
 import { favoritesStore } from '../../hooks/useFavoritesStore';
 import { isMusicNoteItemRemoved } from '../../lib/musicNoteSavedState';
 import { readCatalogSnapshotFromLocalCache } from '../../lib/userDataEngine';
-import { notificationOwnNote, notificationMedia, notificationHttps, notificationRecentSnapshot, notificationCachedNotes } from '../../services/notifications/notificationLocalLinks.mjs';
+import { notificationOwnNote, notificationOwnPublishedNote, notificationMedia, notificationHttps, notificationRecentSnapshot, notificationCachedNotes } from '../../services/notifications/notificationLocalLinks.mjs';
 import './notificationPanel.css';
 
 type Props = {
@@ -86,9 +87,12 @@ function CachedNotificationImage({ uid, urls, fallback }: {
     const readyNow=Boolean(canvas&&isActive()&&notificationImageCache.draw(uid,urls,canvas));
     setReady(readyNow);
     if(!readyNow&&canvas&&isActive()){
-      void notificationImageCache.drawStored(uid,urls,canvas,isActive).then(found=>{
-        if(isActive())setReady(found);
-      }).catch(()=>{});
+      // Children can commit before the parent's cache attachment.
+      void Promise.resolve().then(()=>{
+        if(!isActive())return false;
+        return notificationImageCache.draw(uid,urls,canvas)||
+          notificationImageCache.drawStored(uid,urls,canvas,isActive);
+      }).then(found=>{if(isActive())setReady(found)}).catch(()=>{});
     }
     return ()=>{active=false};
   }, [uid, urls]);
@@ -148,7 +152,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   const [notice, setNotice] = useState('');
   const [selectedMessage, setSelectedMessage] = useState<InboxNotification | null>(null);
   const uid = auth.currentUser?.uid || '';
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!uid || typeof document === 'undefined') return;
     return notificationImageCache.attach(uid, document, () => auth.currentUser?.uid === uid);
   }, [uid]);
@@ -352,7 +356,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   const [noteMediaVersion,setNoteMediaVersion]=useState(0);
   const [localNoteCatalog,setLocalNoteCatalog]=useState<{uid:string;items:any[]|null}>({uid:'',items:null});
   useEffect(()=>{
-    if(!open||activeSection!=='creation'||!uid||auth.currentUser?.uid!==uid)return;
+    if(!open||activeSection==='announcement'||!uid||auth.currentUser?.uid!==uid)return;
     let live=true;
     // Existing account Catalog only: memory/IndexedDB, never remote fallback.
     void readCatalogSnapshotFromLocalCache('musicNote',uid).then(snapshot=>{
@@ -376,8 +380,9 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
       }
       return profiles.get(owner) || null;
     };
+    if(activeSection==='activity')restoreNotificationFeedMetadata(EXPLORE_API_BASE);
     const liveNotes=favoritesStore.getFavorites();
-    const scopedNotes=activeSection==='creation'?
+    const scopedNotes=activeSection!=='announcement'?
       notificationCachedNotes(uid,liveNotes,localNoteCatalog.uid===uid?localNoteCatalog.items:null,window.localStorage):
       liveNotes;
     const ownNotes=scopedNotes.filter(note=>note?.uid===uid&&!isMusicNoteItemRemoved(note));
@@ -398,7 +403,8 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
       const source=recentIndex>=0?recentHistory[recentIndex]:null;
       const note=row.category==='complete'?notificationOwnNote(ownNotes,uid,row,source):
         track?.sourceType==='music_note' && typeof track.sourceId==='string'
-          ? ownNotes.find(item=>String(item.id||item.firestoreId||'')===track.sourceId):null;
+          ? ownNotes.find(item=>String(item.firestoreId||item.id||'')===track.sourceId):
+            !track&&trackId?notificationOwnPublishedNote(ownNotes,uid,trackId):null;
       const media=notificationMedia(note||track||source);
       const cover = [media.coverUrl,row.song?.coverUrl || '',
         typeof track?.coverUrl === 'string' ? track.coverUrl : '',

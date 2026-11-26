@@ -1,3 +1,4 @@
+import NotificationCacheableImage from './NotificationCacheableImage';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -292,7 +293,7 @@ export default function StudioLeftRail({
           >
             <span className="soridraw-studio-rail-profile-avatar" aria-hidden="true">
               {effectiveProfilePhotoURL ? (
-                <img src={effectiveProfilePhotoURL} alt="" referrerPolicy="no-referrer" />
+                <NotificationCacheableImage src={effectiveProfilePhotoURL} alt="" referrerPolicy="no-referrer" />
               ) : (
                 <span>{profileInitial}</span>
               )}

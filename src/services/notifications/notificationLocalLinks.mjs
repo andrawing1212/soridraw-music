@@ -16,6 +16,7 @@ export function notificationOwnNote(notes,uid,row,source){
  const original=String(source?.id||source?.taskId||source?.sourceId||'').trim();
  const legacy=original||(raw&&!raw.startsWith('recent-')?raw:'');
  const sourceSid=String(source?.soridrawSongId||'').trim();
+ const linkedId=String(source?.favoriteFirestoreId||'').trim();
  const generation=key.startsWith('generation:')?key:raw.startsWith('generation:')?raw:'';
  const matches=notes.filter(note=>{
   if(note?.uid!==uid)return false;
@@ -24,6 +25,7 @@ export function notificationOwnNote(notes,uid,row,source){
   const sid=String(note.soridrawSongId||'').trim();
   const noteGeneration=noteKey.startsWith('generation:')?noteKey:explicit.startsWith('generation:')?explicit:'';
   if(generation&&noteGeneration&&generation!==noteGeneration)return false;
+  if(linkedId&&String(note.firestoreId||note.id||'')===linkedId)return true;
   if(key&&(key===noteKey||key===explicit||(sid&&key==='sid:'+sid)))return true;
   if(generation&&generation===noteGeneration)return true;
   if(sid&&(sourceSid===sid||raw===sid||raw==='sid:'+sid))return true;
@@ -33,6 +35,11 @@ export function notificationOwnNote(notes,uid,row,source){
   if(a&&b&&a!==b)return false;
   return !generation&&!noteGeneration;
  });
+ return matches.length===1?matches[0]:null;
+}
+export function notificationOwnPublishedNote(notes,uid,trackId){
+ if(!uid||!trackId||!Array.isArray(notes))return null;
+ const matches=notes.filter(note=>note?.uid===uid&&note.isPublic===true&&String(note.exploreTrackId||'')===trackId);
  return matches.length===1?matches[0]:null;
 }
 export function notificationHttps(value){
@@ -77,21 +84,35 @@ export function notificationCachedNotes(uid,live,cached,storage){
   const raw=JSON.parse(storage?.getItem('soridraw_favorite_deleted_tombstones_'+uid)||'[]');
   if(Array.isArray(raw))deleted=new Set(raw.map(String));
  }catch{return []}
- // Existing UID-scoped payload is a fallback only when the Catalog is missing.
- // A present, empty Catalog must never resurrect an older saved row.
  let payload=[];
- if(!Array.isArray(cached)){
-  try{
-   const raw=storage?.getItem('soridraw_favorites_cache_'+uid);
-   const value=raw?JSON.parse(raw):[];
-   if(Array.isArray(value))payload=value;
-  }catch{}
- }
- const byId=new Map();
- for(const note of [...payload,...(cached||[]),...(live||[])]){
-  if(note?.uid!==uid)continue;
-  const id=String(note.firestoreId||note.id||'').trim();
-  if(id&&!deleted.has(id))byId.set(id,note);
+ try{
+  const raw=storage?.getItem('soridraw_favorites_cache_'+uid);
+  const value=raw?JSON.parse(raw):[];
+  if(Array.isArray(value))payload=value;
+ }catch{}
+ const byId=new Map(),payloadById=new Map();
+ const idOf=note=>String(note?.firestoreId||note?.id||'').trim();
+ const owned=note=>note?.uid===uid&&idOf(note)&&!deleted.has(idOf(note));
+ const removed=note=>note?.favoriteRemoved===true||note?.saved===false||note?.hidden===true||
+  note?.favoriteHidden===true||!!note?.deletedAt||!!note?.trashedAt||
+  (note?.saved!==true&&note?.favoriteRemoved!==false&&!!(note?.favoriteRemovedAt||note?.unlikedAt||note?.unsavedAt));
+ const mediaTime=note=>Math.max(0,Number(note?.sunoShareUrlUpdatedAt)||0,Number(note?.sunoCoverFetchedAt)||0);
+ const mediaKeys=['sunoLinks','sunoShareLinks','mainSunoIndex','sunoShareUrl','sunoUrl','sunoSongUrl',
+  'sunoCoverUrl','sunoImageUrl','sunoArtworkUrl','imageUrl','coverUrl','audioUrl','audio_url',
+  'sunoAudioUrl','streamAudioUrl','stream_audio_url','sunoShareUrlUpdatedAt','sunoCoverFetchedAt'];
+ const newerMedia=(row,alternative)=>{
+  if(!alternative||removed(row)||removed(alternative)||mediaTime(alternative)<=mediaTime(row))return row;
+  const next={...row};
+  for(const key of mediaKeys){
+   if(Object.prototype.hasOwnProperty.call(alternative,key))next[key]=alternative[key];
+  }
+  return next;
+ };
+ for(const note of payload)if(owned(note))payloadById.set(idOf(note),note);
+ for(const note of [...(Array.isArray(cached)?cached:payload),...(live||[])]){
+  if(!owned(note))continue;
+  const id=idOf(note),prior=byId.get(id);
+  byId.set(id,newerMedia(newerMedia(note,prior),payloadById.get(id)));
  }
  return [...byId.values()];
 }

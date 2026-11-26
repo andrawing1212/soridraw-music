@@ -1,3 +1,4 @@
+import NotificationCacheableImage from '../components/studio/NotificationCacheableImage';
 import LyricLanguageAddCard from '../components/music/LyricLanguageAddCard';
 import LyricCueSwitch from '../components/music/LyricCueSwitch';
 import { projectLyricCues, lyricCueCustomSectionNames } from '../lib/lyricCueProjection';
@@ -9108,7 +9109,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         )}
                         {getFavoriteSunoCoverUrl(song) ? (
                           <>
-                            <img
+                            <NotificationCacheableImage
                               src={getFavoriteSunoCoverUrl(song)}
                               alt=""
                               className="absolute inset-0 h-full w-full object-cover opacity-100 brightness-110 contrast-105 transition-transform duration-300 group-hover:scale-105"
@@ -10840,7 +10841,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           >
                             <div className="soridraw-musicnote-suno-cover-media relative aspect-[16/9] bg-black/25">
                               {link?.coverUrl ? (
-                                <img
+                                <NotificationCacheableImage
                                   src={link.coverUrl}
                                   alt={`수노 URL ${index + 1} 커버`}
                                   className="soridraw-musicnote-suno-cover-image h-full w-full object-cover"

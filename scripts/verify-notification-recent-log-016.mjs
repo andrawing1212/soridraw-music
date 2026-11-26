@@ -59,6 +59,15 @@ try{
  const many=Array.from({length:350},(_,i)=>notice('bulk'+i,i,now-i*1000));
  lib.rememberCompletedGenerationLog016('alice',many,now);
  assert.equal(lib.readCompletedGenerationLog016('alice',now).length,300);
+ // Capture aliases before the result is evicted and retain them on a later
+ // projection which lacks the original metadata. No local write on reads.
+ const linked={...notice('linked',1,now),recentKey:'generation:b:1',creationLink:{songId:'sid',noteId:'favorite',sourceId:'original',sourceCreatedAt:now-1000}};
+ lib.rememberCompletedGenerationLog016('link-owner',[linked],now);
+ const without={...linked};delete without.creationLink;
+ lib.rememberCompletedGenerationLog016('link-owner',[without],now);
+ assert.deepEqual(lib.readCompletedGenerationLog016('link-owner',now)[0].creationLink,linked.creationLink);
+ assert.deepEqual(lib.mergeCompletedGenerationNotices016([without],lib.readCompletedGenerationLog016('link-owner',now),now)[0].creationLink,linked.creationLink);
+ assert.equal(lib.readCompletedGenerationLog016('foreign',now).length,0);
  const failedNoPermission=()=>{throw Error('Storage disabled')};
  globalThis.window.localStorage.setItem=failedNoPermission;
  assert.doesNotThrow(()=>lib.rememberCompletedGenerationLog016('alice',[notice('newer',1)],now));

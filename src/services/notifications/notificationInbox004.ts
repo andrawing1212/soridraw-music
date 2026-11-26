@@ -3,7 +3,7 @@ import {getFirebaseAppCheckToken} from '../../firebase';
 import {EXPLORE_API_BASE} from '../../config/exploreEnvironment';
 import {canUseReleaseInbox} from './notificationPreviewHost022';
 import type {InboxNotification} from './notificationModel';
-import {notificationRecentKey,notificationGenerationTime} from './notificationLocalLinks.mjs';
+import {notificationRecentKey,notificationGenerationTime,notificationCreationLink} from './notificationLocalLinks.mjs';
 import {parseNotificationAccountSettings003,
   type NotificationAccountSettings003} from './notificationAccountSyncCore003';
 
@@ -57,11 +57,13 @@ export function projectCompletedExistingGenerations004(
     if(seen.has(stable)&&key)stable=key;
     if(seen.has(stable))continue;
     seen.add(stable);
+    const creationLink=notificationCreationLink(song);
     const audio=limitText(song.audioUrl,4096);
     const image=limitText(song.imageUrl||song.coverUrl,4096);
     out.push({id:'generated:'+stable,category:'complete',actorName:'SORIDRAW',
       text:title+' 생성이 완료되었습니다.',createdAt:at,
       ...(key?{recentKey:key}:{}),
+      ...(creationLink?{creationLink}:{}),
       ...(song.status==='completed' && /^https:\/\//i.test(audio)
         ? {song:{id:stable,title,audioUrl:audio,
           ...(/^https:\/\//i.test(image)?{coverUrl:image}:{})}}:{})});

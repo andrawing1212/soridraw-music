@@ -12,6 +12,7 @@ type StoredCompleted016={
   title:string;
   createdAt:number;
   recentKey?:string;
+  creationLink?:InboxNotification['creationLink'];
   song?:{id:string;title:string;audioUrl?:string;coverUrl?:string};
 };
 export const notificationRecentLogKey016=(uid:string)=>
@@ -36,13 +37,22 @@ const asStored=(value:unknown,now:number):StoredCompleted016|null=>{
     title:sanitize(songRaw.title,150)||title,
     audioUrl:safeAudio,...(safeCover?{coverUrl:safeCover}:{})}:undefined;
   const recentKey=sanitize(x.recentKey,MAX_ID_016);
-  return {id,title,createdAt:x.createdAt as number,...(recentKey?{recentKey}:{}),...(song?{song}:{})};
+  const rawLink=x.creationLink&&typeof x.creationLink==='object'?x.creationLink as Record<string,unknown>:{};
+  const exact=(v:unknown)=>typeof v==='string'&&v.trim().length<=256?v.trim():'';
+  const songId=exact(rawLink.songId),noteId=exact(rawLink.noteId),sourceId=exact(rawLink.sourceId);
+  const sourceCreatedAt=typeof rawLink.sourceCreatedAt==='number'&&Number.isSafeInteger(rawLink.sourceCreatedAt)&&rawLink.sourceCreatedAt>0?rawLink.sourceCreatedAt:0;
+  const creationLink=songId||noteId||sourceId?{
+    ...(songId?{songId}:{}),...(noteId?{noteId}:{}),...(sourceId?{sourceId}:{}),
+    ...(sourceId&&sourceCreatedAt?{sourceCreatedAt}:{})
+  }:undefined;
+  return {id,title,createdAt:x.createdAt as number,...(recentKey?{recentKey}:{}),
+    ...(creationLink?{creationLink}:{}),...(song?{song}:{})};
 };
 const fromNotification=(row:InboxNotification,now:number):StoredCompleted016|null=>{
   if(row.category!=='complete')return null;
   const title=sanitize(row.song?.title,150) ||
     sanitize(row.text.replace(/ 생성이 완료되었습니다\.$/,'').trim(),150);
-  return asStored({id:row.id,title,createdAt:row.createdAt,recentKey:row.recentKey,
+  return asStored({id:row.id,title,createdAt:row.createdAt,recentKey:row.recentKey,creationLink:row.creationLink,
     ...(row.song?{song:row.song}:{})},now);
 };
 const parseStored=(uid:string,now:number):StoredCompleted016[]=>{
@@ -58,11 +68,26 @@ const parseStored=(uid:string,now:number):StoredCompleted016[]=>{
 };
 const combine=(rows:StoredCompleted016[]):StoredCompleted016[]=>{
   const unique=new Map<string,StoredCompleted016>();
-  const recentKeys=new Set<string>();
+  const recentKeys=new Map<string,string>();
   for(const row of rows){
-    if(unique.has(row.id)||(row.recentKey&&recentKeys.has(row.recentKey)))continue;
+    const found=unique.get(row.id)||(row.recentKey?unique.get(recentKeys.get(row.recentKey)||''):undefined);
+    if(found){
+      // Repeated projections can lack a previously captured link. Fill only
+      // missing aliases for the same immutable key (or exact id and time).
+      const same=found.recentKey&&row.recentKey?found.recentKey===row.recentKey:
+        found.id===row.id&&found.createdAt===row.createdAt;
+      if(same&&row.creationLink){
+        const a=found.creationLink||{},b=row.creationLink;
+        const conflict=(a.songId&&b.songId&&a.songId!==b.songId)||
+          (a.noteId&&b.noteId&&a.noteId!==b.noteId)||
+          (a.sourceId&&b.sourceId&&a.sourceId!==b.sourceId)||
+          (a.sourceCreatedAt&&b.sourceCreatedAt&&a.sourceCreatedAt!==b.sourceCreatedAt);
+        if(!conflict)unique.set(found.id,{...found,creationLink:{...b,...a}});
+      }
+      continue;
+    }
     unique.set(row.id,row);
-    if(row.recentKey)recentKeys.add(row.recentKey);
+    if(row.recentKey)recentKeys.set(row.recentKey,row.id);
   }
   return [...unique.values()].sort((a,b)=>b.createdAt-a.createdAt)
     .slice(0,MAX_STORED_016);
@@ -71,6 +96,7 @@ const toNotification=(row:StoredCompleted016):InboxNotification=>({
   id:row.id,category:'complete',actorName:'SORIDRAW',
   text:row.title+' 생성이 완료되었습니다.',createdAt:row.createdAt,
   ...(row.recentKey?{recentKey:row.recentKey}:{}),
+  ...(row.creationLink?{creationLink:row.creationLink}:{}),
   ...(row.song?{song:row.song}:{})
 });
 
@@ -92,7 +118,19 @@ export function rememberCompletedGenerationLog016(
   if(!additions.length)return;
   const merged=combine([...additions,...old]);
   if(JSON.stringify(merged)===JSON.stringify(old))return;
-  try{window.localStorage.setItem(notificationRecentLogKey016(uid),JSON.stringify(merged));
+  // Keep the same 250k-character storage ceiling. Drop optional media from
+  // the oldest rows first, then oldest rows only if necessary. Never touch
+  // original song/Note storage or write on a panel read.
+  let bounded=merged;
+  let serialized=JSON.stringify(bounded);
+  if(serialized.length>250000){
+    bounded=bounded.map(({song,...row})=>row);
+    serialized=JSON.stringify(bounded);
+    while(serialized.length>250000&&bounded.length){
+      bounded=bounded.slice(0,-1);serialized=JSON.stringify(bounded);
+    }
+  }
+  try{window.localStorage.setItem(notificationRecentLogKey016(uid),serialized);
     window.dispatchEvent?.(new Event('soridraw:notification-dot-change'));}
   catch{/* Quota or disabled storage: Recent Studio remains canonical and untouched. */}
 }
@@ -111,5 +149,15 @@ export function mergeCompletedGenerationNotices016(
   const old=stored.map(x=>fromNotification(x,now))
     .filter((x):x is StoredCompleted016=>!!x)
     .filter(x=>!currentIds.has(x.id)&&(!x.recentKey||!currentKeys.has(x.recentKey)));
-  return [...current,...combine(old).map(toNotification)].slice(0,MAX_STORED_016);
+  const previous=stored.map(x=>fromNotification(x,now)).filter((x):x is StoredCompleted016=>!!x);
+  const enriched=current.map(row=>{
+    const local=fromNotification(row,now);
+    if(!local)return row;
+    const prior=previous.find(x=>row.recentKey&&x.recentKey?row.recentKey===x.recentKey:
+      row.id===x.id&&row.createdAt===x.createdAt);
+    if(!prior)return row;
+    const merged=combine([local,prior])[0];
+    return merged?.creationLink?{...row,creationLink:merged.creationLink}:row;
+  });
+  return [...enriched,...combine(old).map(toNotification)].slice(0,MAX_STORED_016);
 }

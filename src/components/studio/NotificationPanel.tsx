@@ -405,13 +405,18 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
         track?.sourceType==='music_note' && typeof track.sourceId==='string'
           ? ownNotes.find(item=>String(item.firestoreId||item.id||'')===track.sourceId):
             !track&&trackId?notificationOwnPublishedNote(ownNotes,uid,trackId):null;
+      const archived=row.category==='complete'&&recentIndex<0;
+      // Old creation notices resolve media exclusively through the current
+      // exact active Music Note. Never revive a removed or changed URL.
       const media=notificationMedia(note||track||source);
-      const cover = [media.coverUrl,row.song?.coverUrl || '',
+      const archivedRegistered=archived&&Boolean(note&&(media.shareUrl||media.audioUrl));
+      const cover = archived?(archivedRegistered?[media.coverUrl]:[]):[media.coverUrl,row.song?.coverUrl || '',
         typeof track?.coverUrl === 'string' ? track.coverUrl : '',
         trackId ? readNotificationFeedImage(uid, trackId) : ''];
       result.set(row.id, { avatar, cover, recentIndex,
-        audioUrl:media.audioUrl||notificationHttps(row.song?.audioUrl),
-        shareUrl:media.shareUrl,coverUrl:media.coverUrl||notificationHttps(row.song?.coverUrl) });
+        audioUrl:archived?(archivedRegistered?media.audioUrl:''):media.audioUrl||notificationHttps(row.song?.audioUrl),
+        shareUrl:archived?(archivedRegistered?media.shareUrl:''):media.shareUrl,
+        coverUrl:archived?(archivedRegistered?media.coverUrl:''):media.coverUrl||notificationHttps(row.song?.coverUrl) });
     }
     return result;
   }, [open, uid, rows, settingsOpen, recentHistory, noteMediaVersion, localNoteCatalog, activeSection]);
@@ -507,7 +512,8 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   const playSong = (row: InboxNotification) => {
     if (isPreviewSample(row) || auth.currentUser?.uid !== uid) return;
     const media=artwork.get(row.id);
-    const audioUrl=media?.audioUrl||notificationHttps(row.song?.audioUrl);
+    const archived=row.category==='complete'&&(media?.recentIndex??-1)<0;
+    const audioUrl=media?.audioUrl||(!archived?notificationHttps(row.song?.audioUrl):'');
     const title=row.song?.title||row.text.replace(/ 생성이 완료되었습니다\.$/,'');
     if (audioUrl) {
       playTrack({ id: row.song?.id||row.id, url: audioUrl, audioUrl, title,
@@ -676,9 +682,8 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
               ) : (isArchivedCreation(row)?canPlayRow(row):row.song||artwork.get(row.id)?.coverUrl||canPlayRow(row)) ? (
                 <button type="button" className="soridraw-notification-cover" onClick={() => playSong(row)}
                   disabled={isPreviewSample(row) || !canPlayRow(row)} aria-label={(row.song?.title||row.text) + ' 재생'}>
-                  {isArchivedCreation(row) ? <Music2 size={22} aria-hidden="true" /> :
-                    <CachedNotificationImage uid={uid} urls={artwork.get(row.id)?.cover || EMPTY_ARTWORK_URLS}
-                      fallback={<Music2 size={22} aria-hidden="true" />} />}
+                  <CachedNotificationImage uid={uid} urls={artwork.get(row.id)?.cover || EMPTY_ARTWORK_URLS}
+                    fallback={<Music2 size={22} aria-hidden="true" />} />
                   {canPlayRow(row)&&<span className="soridraw-notification-play">▶</span>}
                 </button>
               ) : <span className="soridraw-notification-end-icon" data-type={row.category} aria-hidden="true">{iconFor(row.category)}</span>}

@@ -410,7 +410,8 @@ assert.deepEqual(notificationCachedNotes('owner',[],[],storage),[]);
 assert.deepEqual(notificationCachedNotes('other',[],null,storage),[]);
 assert.deepEqual(notificationCachedNotes('owner',[],null,{getItem:k=>k==='soridraw_favorite_deleted_tombstones_owner'?'["note"]':storage.getItem(k)}),[]);
 assert.equal(notificationMedia({streamAudioUrl:'https://cdn.example/old.mp3'}).audioUrl,'https://cdn.example/old.mp3');
-assert.match(panel,/isArchivedCreation\(row\) \? <Music2/);
+assert.match(panel,/const cover = archived\?\(archivedRegistered\?\[media\.coverUrl\]:\[\]\)/);
+assert.match(panel,/archivedRegistered=archived&&Boolean\(note&&\(media\.shareUrl\|\|media\.audioUrl\)\)/);
 assert.match(panel,/!isArchivedCreation\(row\)&&hasPlayableSong\(row\)/);
 console.log('NOTIFICATION_ARCHIVED_EXACT_PLAYBACK_ONLY=PASS');
 }
@@ -443,4 +444,22 @@ assert.equal(notificationOwnPublishedNote([published],'owner','track'),published
 assert.equal(notificationOwnPublishedNote([{...published,isPublic:false}],'owner','track'),null);
 assert.match(panel,/restoreNotificationFeedMetadata\(EXPLORE_API_BASE\)/);
 console.log('NOTIFICATION_WARM_MEDIA_AND_EXACT_LINK=PASS');
+}
+
+{
+const {notificationCreationLink,notificationOwnNote,notificationMedia}=await import('../src/services/notifications/notificationLocalLinks.mjs');
+const owner='owner',song={id:'source',createdAtMs:100,soridrawSongId:'sid-stable',favoriteFirestoreId:'favorite',appliedKeywords:{generationBatchId:'batch',generationIndex:1}};
+const row={id:'generated:source',recentKey:'generation:batch:1',creationLink:notificationCreationLink(song),createdAt:100};
+const note={uid:owner,id:'favorite',sunoLinks:[{url:'https://suno.com/s/registered',coverUrl:'https://cdn.example/cover'}]};
+assert.equal(notificationOwnNote([note],owner,row,null),note,'evicted source still links by exact saved document id');
+assert.deepEqual(notificationMedia(notificationOwnNote([note],owner,row,null)),{audioUrl:'',shareUrl:'https://suno.com/s/registered',coverUrl:'https://cdn.example/cover'});
+assert.equal(notificationOwnNote([{...note,uid:'other'}],owner,row,null),null);
+assert.equal(notificationOwnNote([{...note,recentSongSyncKey:'generation:batch:2'}],owner,row,null),null);
+const legacy={uid:owner,id:'legacy-note',recentLegacySourceId:'source',recentLegacyCreatedAtMs:100};
+assert.equal(notificationOwnNote([legacy],owner,{id:'generated:source',createdAt:100},null),legacy);
+assert.equal(notificationOwnNote([legacy],owner,{id:'generated:source',createdAt:101},null),null);
+assert.equal(notificationOwnNote([{...note,id:'another',soridrawSongId:'sid-stable'}],owner,row,null)?.id,'another');
+assert.equal(notificationOwnNote([{...note,id:'another',title:'same'}],owner,{id:'generated:recent-100-same',createdAt:100},null),null);
+assert.match(panel,/const audioUrl=media\?\.audioUrl\|\|\(!archived\?notificationHttps\(row\.song\?\.audioUrl\):''\)/);
+console.log('NOTIFICATION_ARCHIVE_NOTE_EXACT_LINK_MEDIA_NO_REMOTE=PASS');
 }

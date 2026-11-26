@@ -679,7 +679,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
                         disabled={!(visualExample && isPreviewSample(row)) && !row.actorUid}
                         aria-label={row.actorName + ' 공개 프로필 열기'}
                         onClick={() => openProfile(row)}>
-                        {row.actorName}
+                        {row.actorName}{' 님이'}
                       </button>
                       {' '}{row.text}
                     </>

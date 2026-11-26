@@ -410,10 +410,12 @@ assert.deepEqual(notificationCachedNotes('owner',[],[],storage),[]);
 assert.deepEqual(notificationCachedNotes('other',[],null,storage),[]);
 assert.deepEqual(notificationCachedNotes('owner',[],null,{getItem:k=>k==='soridraw_favorite_deleted_tombstones_owner'?'["note"]':storage.getItem(k)}),[]);
 assert.equal(notificationMedia({streamAudioUrl:'https://cdn.example/old.mp3'}).audioUrl,'https://cdn.example/old.mp3');
-assert.match(panel,/const cover = archived\?\(archivedRegistered\?\[media\.coverUrl\]:\[\]\)/);
-assert.match(panel,/archivedRegistered=archived&&Boolean\(note&&\(media\.shareUrl\|\|media\.audioUrl\)\)/);
-assert.match(panel,/!isArchivedCreation\(row\)&&hasPlayableSong\(row\)/);
-console.log('NOTIFICATION_ARCHIVED_EXACT_PLAYBACK_ONLY=PASS');
+assert.match(panel,/if\(row.category==='complete'\)\{[\s\S]*?result.set\(row.id,\{avatar,cover:\[\],recentIndex,audioUrl:'',shareUrl:'',coverUrl:''\}\);\s*continue;/);
+assert.match(panel,/const canPlayRow=\(row:InboxNotification\)=>row.category!=='complete'/);
+assert.match(panel,/onClick=\{\(\)=>openRecent\(row\)\}\>\{row.text.replace\(/);
+assert.match(panel,/data-recent=\{\(artwork.get\(row.id\)\?\.recentIndex\?\?-1\)>=0\}/);
+assert.match(panelCss,/\[data-type="complete"\]\[data-recent="true"\]\{color:#ffbb22\}/);
+console.log('NOTIFICATION_CREATION_NAVIGATION_ONLY=PASS');
 }
 {
 const source=file('src/services/notifications/notificationPersistentThumbs.mjs');
@@ -460,6 +462,6 @@ assert.equal(notificationOwnNote([legacy],owner,{id:'generated:source',createdAt
 assert.equal(notificationOwnNote([legacy],owner,{id:'generated:source',createdAt:101},null),null);
 assert.equal(notificationOwnNote([{...note,id:'another',soridrawSongId:'sid-stable'}],owner,row,null)?.id,'another');
 assert.equal(notificationOwnNote([{...note,id:'another',title:'same'}],owner,{id:'generated:recent-100-same',createdAt:100},null),null);
-assert.match(panel,/const audioUrl=media\?\.audioUrl\|\|\(!archived\?notificationHttps\(row\.song\?\.audioUrl\):''\)/);
-console.log('NOTIFICATION_ARCHIVE_NOTE_EXACT_LINK_MEDIA_NO_REMOTE=PASS');
+assert.match(panel,/if \(row.category==='complete'\|\|isPreviewSample\(row\)/);
+console.log('NOTIFICATION_CREATION_NO_URL_PLAYBACK=PASS');
 }

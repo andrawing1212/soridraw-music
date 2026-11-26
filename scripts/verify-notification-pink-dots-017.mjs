@@ -37,6 +37,9 @@ try{
  const partial={...pref,message:false,like:false,follow:false};
  assert.deepEqual(dot.getNotificationPinkDots017('alice',records,true,partial,clock),
   {activity:false,creation:true,announcement:true},'category switches hide only corresponding dots');
+ assert.deepEqual([...dot.getNotificationUnseenCreationIds017('alice',records,true,pref,clock)],['generated:good']);
+ assert.equal(dot.getNotificationUnseenCreationIds017('alice',records,false,pref,clock).size,0);
+ assert.equal(dot.getNotificationUnseenCreationIds017('alice',records,true,{...pref,complete:false},clock).size,0);
  assert.equal(calls.writes,0,'notification indicator read cannot write storage');
  assert.equal(dot.acknowledgeNotificationTab017('alice','activity',records,clock),true);
  assert.deepEqual(dot.getNotificationPinkDots017('alice',records,true,pref,clock),
@@ -49,6 +52,9 @@ try{
  assert.equal(dot.acknowledgeNotificationTab017('alice','creation',records,clock),true);
  assert.deepEqual(dot.getNotificationPinkDots017('alice',records,true,pref,clock),
   {activity:false,creation:false,announcement:false});
+ assert.equal(dot.getNotificationUnseenCreationIds017('alice',records,true,pref,clock).size,0);
+ assert.deepEqual([...dot.getNotificationUnseenCreationIds017('alice',[...records,row('complete','generated:new',clock)],true,pref,clock)],['generated:new']);
+ assert.deepEqual([...dot.getNotificationUnseenCreationIds017('bob',records,true,pref,clock)],['generated:good']);
  assert.deepEqual(dot.getNotificationPinkDots017('bob',records,true,pref,clock),base,
   'different account must not inherit read flags');
  assert.equal(dot.getNotificationPinkDots017('alice',[row('like','new-like',clock-700)],true,pref,clock).activity,true,
@@ -61,7 +67,9 @@ try{
 }finally{globalThis.window=previous;}
 assert.match(panel,/\['announcement','공지'\]/);
 assert.match(panel,/const allRows=useMemo/);
-assert.match(panel,/acknowledge\(activeSection\)/);
+assert.match(panel,/activeSection!=='creation'\)acknowledge\(activeSection\)/);
+assert.match(panel,/acknowledgeNotificationTab017\(uid,'creation',viewed\)/);
+assert.match(panel,/unseenCreationIds.has\(row.id\)/);
 assert.match(css,/grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
 assert.match(css,/#ff59b5/);
 assert.match(app,/soridraw-notification-mobile-dot/);

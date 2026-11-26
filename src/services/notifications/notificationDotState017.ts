@@ -43,7 +43,17 @@ export function getNotificationPinkDots017(uid:string,rows:readonly InboxNotific
    result[section(item.category)]=true;
  return result;
 }
-/** Only opening a category acknowledges its current real records.
+/** Row indicators reuse the same account-scoped seen marker and settings. */
+export function getNotificationUnseenCreationIds017(uid:string,rows:readonly InboxNotification[],
+ master:boolean,prefs:NotificationPreferences,now=Date.now()):Set<string>{
+ const ids=new Set<string>();
+ if(!uid||!master||!prefs.complete)return ids;
+ const seen=seenFor(uid);
+ for(const item of rows)
+  if(item.category==='complete'&&real(item,now)&&newer(item,seen))ids.add(item.id);
+ return ids;
+}
+/** Only acknowledging a category marks its current real records.
  * No server call, user-data update, or message deletion. */
 export function acknowledgeNotificationTab017(uid:string,tab:NotificationSection,
  rows:readonly InboxNotification[],now=Date.now()):boolean{

@@ -238,3 +238,8 @@
 .soridraw-notification-row.is-archived-creation{opacity:.78}
 .soridraw-notification-recent-link{display:inline;padding:0;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .soridraw-notification-recent-link:hover,.soridraw-notification-recent-link:focus-visible{text-decoration:underline;text-underline-offset:3px}
+
+/* Creation history is not a player: the note icon alone marks Recent Studio availability. */
+.soridraw-notification-end-icon[data-type="complete"]{position:relative;flex:none}
+.soridraw-notification-end-icon[data-type="complete"][data-recent="true"]{color:#ffbb22}
+.soridraw-notification-creation-dot{top:-5px;right:2px}

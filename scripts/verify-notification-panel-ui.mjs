@@ -392,3 +392,39 @@ assert.match(panel,/notificationRecentSnapshot\(uid,suppliedRecentHistory,window
 assert.match(app,/notificationRecentSnapshot\(user.uid,historyRef.current,window.localStorage,outside\)/);
 console.log('NOTIFICATION_LOCAL_RECENT_TEN_AND_NOTE_CATALOG_RESTORE=PASS');
 }
+
+{
+const {notificationOwnNote,notificationCachedNotes,notificationMedia}=await import('../src/services/notifications/notificationLocalLinks.mjs');
+const note={uid:'owner',id:'note',soridrawSongId:'stable',recentSongSyncKey:'generation:batch:2',sunoShareUrl:'https://suno.com/s/old'};
+assert.equal(notificationOwnNote([note],'owner',{id:'generated:stable'},null),note);
+assert.equal(notificationOwnNote([note],'owner',{id:'generated:recent-1-old',recentKey:'sid:stable'},null),note);
+assert.equal(notificationOwnNote([note],'owner',{id:'generated:stable',recentKey:'generation:batch:1'},null),null);
+assert.equal(notificationOwnNote([note],'owner',{id:'generated:recent-1-old'},null),null);
+assert.equal(notificationOwnNote([note],'other',{id:'generated:stable'},null),null);
+const legacy={uid:'owner',recentLegacySourceId:'legacy',recentLegacyCreatedAtMs:100};
+assert.equal(notificationOwnNote([legacy],'owner',{id:'generated:legacy',createdAt:101},null),null);
+assert.equal(notificationOwnNote([legacy],'owner',{id:'generated:legacy',createdAt:100},null),legacy);
+const storage={getItem:k=>k==='soridraw_favorites_cache_owner'?JSON.stringify([note]):null};
+assert.deepEqual(notificationCachedNotes('owner',[],null,storage),[note]);
+assert.deepEqual(notificationCachedNotes('owner',[],[],storage),[]);
+assert.deepEqual(notificationCachedNotes('other',[],null,storage),[]);
+assert.deepEqual(notificationCachedNotes('owner',[],null,{getItem:k=>k==='soridraw_favorite_deleted_tombstones_owner'?'["note"]':storage.getItem(k)}),[]);
+assert.equal(notificationMedia({streamAudioUrl:'https://cdn.example/old.mp3'}).audioUrl,'https://cdn.example/old.mp3');
+assert.match(panel,/isArchivedCreation\(row\) \? <Music2/);
+assert.match(panel,/!isArchivedCreation\(row\)&&hasPlayableSong\(row\)/);
+console.log('NOTIFICATION_ARCHIVED_EXACT_PLAYBACK_ONLY=PASS');
+}
+{
+const source=file('src/services/notifications/notificationPersistentThumbs.mjs');
+assert.doesNotMatch(source,/\bfetch\s*\(|new\s+Image\s*\(|\.src\s*=|localStorage|XMLHttpRequest/);
+const {encodeNotificationThumb,THUMB_SIZE,THUMB_BYTES,THUMB_COUNT,THUMB_BUDGET,createNotificationPersistentThumbs}=await import('../src/services/notifications/notificationPersistentThumbs.mjs');
+assert.deepEqual([THUMB_SIZE,THUMB_BYTES,THUMB_COUNT,THUMB_BUDGET],[96,5000,1000,5000000]);
+let calls=0;
+const compressed=await encodeNotificationThumb({toBlob(cb,type){assert.equal(type,'image/webp');cb({type,size:++calls===1?8000:3000})}});
+assert.equal(compressed.size,3000);assert.equal(calls,2);
+assert.equal(await encodeNotificationThumb({toBlob(){throw Error('tainted')}}),null);
+assert.equal(await encodeNotificationThumb({toBlob(cb){cb({type:'image/png',size:100})}}),null);
+assert.equal(await createNotificationPersistentThumbs(null).restore('owner','https://cdn.example/a'),null);
+assert.match(panel,/notificationImageCache\.drawStored\(uid,urls,canvas,isActive\)/);
+console.log('NOTIFICATION_PERSISTENT_THUMB_ENCODE_BOUNDARY=PASS');
+}

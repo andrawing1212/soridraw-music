@@ -11,16 +11,27 @@ export function notificationRecentKey(song){
 }
 export function notificationOwnNote(notes,uid,row,source){
  if(!uid||!row||!Array.isArray(notes))return null;
- const key=row.recentKey||notificationRecentKey(source);
- const original=String(source?.id||source?.taskId||'').trim();
- const legacy=original||(/^generated:(?!recent-).+/.test(row.id)?row.id.slice(10):'');
+ const key=String(row.recentKey||notificationRecentKey(source)||'').trim();
+ const raw=typeof row.id==='string'&&row.id.startsWith('generated:')?row.id.slice(10):'';
+ const original=String(source?.id||source?.taskId||source?.sourceId||'').trim();
+ const legacy=original||(raw&&!raw.startsWith('recent-')?raw:'');
+ const sourceSid=String(source?.soridrawSongId||'').trim();
+ const generation=key.startsWith('generation:')?key:raw.startsWith('generation:')?raw:'';
  const matches=notes.filter(note=>{
   if(note?.uid!==uid)return false;
-  if(key&&notificationRecentKey(note)===key)return true;
-  // Older saved notes may carry a stable source ID rather than the modern
-  // generation key. Reject conflicting generation identities, never use title.
-  if(key&&notificationRecentKey(note))return false;
-  return !!legacy&&String(note.recentLegacySourceId||'')===legacy;
+  const noteKey=notificationRecentKey(note);
+  const explicit=String(note.recentSongSyncKey||'').trim();
+  const sid=String(note.soridrawSongId||'').trim();
+  const noteGeneration=noteKey.startsWith('generation:')?noteKey:explicit.startsWith('generation:')?explicit:'';
+  if(generation&&noteGeneration&&generation!==noteGeneration)return false;
+  if(key&&(key===noteKey||key===explicit||(sid&&key==='sid:'+sid)))return true;
+  if(generation&&generation===noteGeneration)return true;
+  if(sid&&(sourceSid===sid||raw===sid||raw==='sid:'+sid))return true;
+  if(!legacy||String(note.recentLegacySourceId||'').trim()!==legacy)return false;
+  const a=notificationGenerationTime(source?.createdAtMs)||notificationGenerationTime(source?.createdAt)||notificationGenerationTime(row.createdAt);
+  const b=notificationGenerationTime(note.recentLegacyCreatedAtMs);
+  if(a&&b&&a!==b)return false;
+  return !generation&&!noteGeneration;
  });
  return matches.length===1?matches[0]:null;
 }
@@ -40,7 +51,7 @@ export function notificationMedia(source){
   source.sunoShareUrl||source.sunoUrl||source.sunoSongUrl||source.openUrl||source.sunoUrlPrimary);
  // An old top-level audio/cover may belong to the other ranked link.
  const legacyMatches=!main||notificationHttps(source.sunoShareUrl||source.sunoUrl||source.sunoSongUrl)===shareUrl;
- const audioUrl=notificationHttps(main?.audioUrl||(legacyMatches?(source.sunoAudioUrl||source.audioUrl):''));
+ const audioUrl=notificationHttps(main?.audioUrl||main?.streamAudioUrl||(legacyMatches?(source.sunoAudioUrl||source.audioUrl||source.audio_url||source.streamAudioUrl||source.stream_audio_url):''));
  const coverUrl=notificationHttps(main?.coverUrl||main?.imageUrl||main?.thumbnailUrl||
   (legacyMatches?(source.sunoCoverUrl||source.sunoImageUrl||source.sunoArtworkUrl||source.coverUrl||source.imageUrl||source.thumbnailUrl):''));
  return {audioUrl,shareUrl,coverUrl};
@@ -66,8 +77,18 @@ export function notificationCachedNotes(uid,live,cached,storage){
   const raw=JSON.parse(storage?.getItem('soridraw_favorite_deleted_tombstones_'+uid)||'[]');
   if(Array.isArray(raw))deleted=new Set(raw.map(String));
  }catch{return []}
+ // Existing UID-scoped payload is a fallback only when the Catalog is missing.
+ // A present, empty Catalog must never resurrect an older saved row.
+ let payload=[];
+ if(!Array.isArray(cached)){
+  try{
+   const raw=storage?.getItem('soridraw_favorites_cache_'+uid);
+   const value=raw?JSON.parse(raw):[];
+   if(Array.isArray(value))payload=value;
+  }catch{}
+ }
  const byId=new Map();
- for(const note of [...(cached||[]),...(live||[])]){
+ for(const note of [...payload,...(cached||[]),...(live||[])]){
   if(note?.uid!==uid)continue;
   const id=String(note.firestoreId||note.id||'').trim();
   if(id&&!deleted.has(id))byId.set(id,note);

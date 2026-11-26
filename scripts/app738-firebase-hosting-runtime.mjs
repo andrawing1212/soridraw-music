@@ -24,7 +24,9 @@ export function createApp738HostingApi(token,{send=fetch,sleep=ms=>new Promise(r
  async function request(method,path,body){
   if(!/^(sites\/(soridraw-preview|soridraw)\/(channels\/live\/releases|versions\/[A-Za-z0-9_-]{4,128}(?:\/files)?|versions:clone|releases)|projects\/soridraw\/operations\/[A-Za-z0-9_-]+)(?:\?.*)?$/.test(path))
     fail('FOREIGN_RESOURCE_OR_OPERATION');
-  if(method!=='GET'&&method!=='POST')fail('HTTP_METHOD_FORBIDDEN');
+  if(!['GET','POST','PATCH'].includes(method))fail('HTTP_METHOD_FORBIDDEN');
+  if(method==='PATCH'&&(!/^sites\/soridraw\/versions\/[A-Za-z0-9_-]{4,128}\?updateMask=config,status$/.test(path)||body?.status!=='FINALIZED'||!body.config))
+    fail('NONPRODUCTION_OR_UNSCOPED_PATCH_FORBIDDEN');
   if(method==='POST'&&!(/^(sites\/soridraw\/versions:clone|sites\/soridraw\/releases\?versionName=)/.test(path)))
     fail('NONPRODUCTION_WRITE_FORBIDDEN');
   const result=await send(BASE+path,{
@@ -33,7 +35,7 @@ export function createApp738HostingApi(token,{send=fetch,sleep=ms=>new Promise(r
       'Content-Type':'application/json',
       'Cache-Control':'no-store',
     },
-    ...(method==='POST'?{body:JSON.stringify(body||{})}:{}),
+    ...(method!=='GET'?{body:JSON.stringify(body||{})}:{}),
     redirect:'error',
   });
   if(!result?.ok)fail('API_'+method+'_HTTP_'+String(result?.status||'UNKNOWN'));
@@ -86,10 +88,12 @@ export function createApp738HostingApi(token,{send=fetch,sleep=ms=>new Promise(r
     fail('LIVE_CHANGED_DURING_SNAPSHOT');
   return {...detail,release:release.release};
  }
- async function clone(sourceVersion){
+ async function clone(sourceVersion,{productionConfig,rollbackVersion}={}){
   requireVersion(sourceVersion,SITES.preview);
+  const preserve=productionConfig!==undefined;
+  if(preserve)requireVersion(rollbackVersion,SITES.production);
   const op=await request('POST','sites/soridraw/versions:clone',{
-    sourceVersion,finalize:true,
+    sourceVersion,finalize:!preserve,
   });
   if(typeof op.name!=='string'||!/^projects\/soridraw\/operations\/[A-Za-z0-9_-]+$/.test(op.name))
     fail('CLONE_OPERATION_IDENTITY');
@@ -101,6 +105,18 @@ export function createApp738HostingApi(token,{send=fetch,sleep=ms=>new Promise(r
   if(!result.done||result.error)fail('CLONE_OPERATION_NOT_FINALIZED');
   const name=result.response?.name;
   requireVersion(name,SITES.production);
+  if(preserve){
+    // Only the newly cloned, non-live CREATED version can be finalized.
+    if(name===rollbackVersion||(await live(SITES.production)).version!==rollbackVersion)
+      fail('CLONE_TARGET_OR_LIVE_VERSION_DRIFT');
+    const draft=await request('GET',name);
+    if(draft.name!==name||draft.status!=='CREATED')fail('CLONE_NOT_CREATED');
+    const final=await request('PATCH',name+'?updateMask=config,status',{
+      config:productionConfig,status:'FINALIZED',
+    });
+    if(final.name!==name||final.status!=='FINALIZED'||digest(final.config)!==digest(productionConfig))
+      fail('FINALIZED_PRODUCTION_CONFIG_MISMATCH');
+  }
   return name;
  }
  async function release(version,message){
@@ -126,4 +142,40 @@ export function compareHostingArtifacts(source,candidate){
    sourceFiles:source.assetCount,targetFiles:candidate.assetCount,
    sourceConfigSha256:source.configSha256,targetConfigSha256:candidate.configSha256,
    filesSha256:source.filesSha256};
+}
+
+// Compare all non-cache rules, including their order. Never ignore redirects,
+// rewrites, security headers or other serving config. Only Cache-Control
+// entries may differ; production's exact complete config is retained.
+export function reviewHostingCacheDifference(source,production){
+ const split=config=>{
+  if(!config||typeof config!=='object'||Array.isArray(config))return null;
+  const {headers,...rest}=config;
+  if(headers!==undefined&&!Array.isArray(headers))return null;
+  const nonCache=[],cache=[];
+  for(const row of headers||[]){
+   if(!row||typeof row!=='object'||Array.isArray(row)||typeof row.glob!=='string'||
+      !row.headers||typeof row.headers!=='object'||Array.isArray(row.headers)||
+      Object.keys(row).some(k=>!['glob','headers'].includes(k)))return null;
+   const entries=Object.entries(row.headers);
+   if(entries.some(([k,v])=>!k||typeof v!=='string'))return null;
+   const cacheEntries=entries.filter(([k])=>k.toLowerCase()==='cache-control');
+   if(cacheEntries.length>1)return null;
+   if(cacheEntries.length)cache.push({glob:row.glob,value:cacheEntries[0][1]});
+   const kept=entries.filter(([k])=>k.toLowerCase()!=='cache-control');
+   if(kept.length)nonCache.push({glob:row.glob,headers:Object.fromEntries(kept)});
+   else if(!cacheEntries.length)return null;
+  }
+  return {nonCache:{...rest,headers:nonCache},cache};
+ };
+ const a=split(source),b=split(production);
+ if(!a||!b)return {compatible:false,reason:'UNRECOGNIZED_SERVING_CONFIG'};
+ const nonCacheMatch=digest(a.nonCache)===digest(b.nonCache);
+ const sameConfig=digest(source)===digest(production);
+ // Existing update polling must continue to bypass stale version metadata.
+ const versionNoCache=b.cache.some(x=>x.glob==='/app-version.json'&&/\bno-store\b/i.test(x.value));
+ const compatible=nonCacheMatch&&(sameConfig||versionNoCache);
+ return {compatible,sameConfig,nonCacheMatch,productionVersionNoStore:versionNoCache,
+   previewCache:a.cache,productionCache:b.cache,
+   reason:compatible?'REVIEWED_CONFIG_SHAPE_ONLY':'NON_CACHE_DRIFT_OR_VERSION_POLICY_UNPROVEN'};
 }

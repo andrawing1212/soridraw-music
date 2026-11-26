@@ -11,6 +11,7 @@ type StoredCompleted016={
   id:string;
   title:string;
   createdAt:number;
+  recentKey?:string;
   song?:{id:string;title:string;audioUrl?:string;coverUrl?:string};
 };
 export const notificationRecentLogKey016=(uid:string)=>
@@ -34,13 +35,14 @@ const asStored=(value:unknown,now:number):StoredCompleted016|null=>{
   const song=songRaw&&safeAudio ? {id:sanitize(songRaw.id,MAX_ID_016)||id,
     title:sanitize(songRaw.title,150)||title,
     audioUrl:safeAudio,...(safeCover?{coverUrl:safeCover}:{})}:undefined;
-  return {id,title,createdAt:x.createdAt as number,...(song?{song}:{})};
+  const recentKey=sanitize(x.recentKey,MAX_ID_016);
+  return {id,title,createdAt:x.createdAt as number,...(recentKey?{recentKey}:{}),...(song?{song}:{})};
 };
 const fromNotification=(row:InboxNotification,now:number):StoredCompleted016|null=>{
   if(row.category!=='complete')return null;
   const title=sanitize(row.song?.title,150) ||
     sanitize(row.text.replace(/ 생성이 완료되었습니다\.$/,'').trim(),150);
-  return asStored({id:row.id,title,createdAt:row.createdAt,
+  return asStored({id:row.id,title,createdAt:row.createdAt,recentKey:row.recentKey,
     ...(row.song?{song:row.song}:{})},now);
 };
 const parseStored=(uid:string,now:number):StoredCompleted016[]=>{
@@ -65,6 +67,7 @@ const combine=(rows:StoredCompleted016[]):StoredCompleted016[]=>{
 const toNotification=(row:StoredCompleted016):InboxNotification=>({
   id:row.id,category:'complete',actorName:'SORIDRAW',
   text:row.title+' 생성이 완료되었습니다.',createdAt:row.createdAt,
+  ...(row.recentKey?{recentKey:row.recentKey}:{}),
   ...(row.song?{song:row.song}:{})
 });
 

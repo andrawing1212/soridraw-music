@@ -10,9 +10,10 @@ import { flushSoridrawPageSync } from '../../lib/pageSyncCoordinator';
 type ExploreShellProps = {
   isAdminUser?: boolean;
   recentHistory?: readonly unknown[];
+  onOpenRecentSong?: (noticeId:string)=>boolean;
 };
 
-export default function ExploreShell({ isAdminUser = false, recentHistory }: ExploreShellProps) {
+export default function ExploreShell({ isAdminUser = false, recentHistory, onOpenRecentSong }: ExploreShellProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
@@ -51,6 +52,7 @@ export default function ExploreShell({ isAdminUser = false, recentHistory }: Exp
     <StudioLeftRail
       activeWorkspace={'__explore__' as StudioWorkspaceView}
       recentHistory={recentHistory}
+      onOpenRecentSong={onOpenRecentSong}
       onCreate={() => go('/studio')}
       onRecentSongs={() => go('/studio?view=recent')}
       onMusicNote={() => go('/history')}

@@ -18,6 +18,8 @@ export interface InboxNotification {
   body?: string;
   createdAt: number;
   read?: boolean;
+  /** Stable generation identity, optional on earlier local notices. */
+  recentKey?: string;
   song?: {
     id: string;
     title: string;

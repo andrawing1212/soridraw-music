@@ -7,7 +7,7 @@ import { useGlobalPlayerControls } from '../../contexts/GlobalPlayerContext';
 import { setExploreFollow } from '../../services/exploreSocialService';
 import {
   NOTIFICATION_EXAMPLE_ROWS, NOTIFICATION_PREFERENCES_DEFAULT,
-  isNotificationVisualPreview, withPreviewNotificationExamples023, collapseRepeatedFollowNoticesByActor554, readNotificationMasterEnabled,
+  isNotificationVisualPreview, collapseRepeatedFollowNoticesByActor554, readNotificationMasterEnabled,
   readNotificationPreferences, saveNotificationMasterEnabled, saveNotificationPreferences,
   notificationSectionFor, type InboxNotification, type NotificationCategory,
   type NotificationPreferences, type NotificationSection,
@@ -18,14 +18,17 @@ import {
   type NotificationAccountSettings003,
 } from '../../services/notifications/notificationAccountSync003';
 import {NOTIFICATION_INBOX_ENABLED_004,loadOwnNotifications004,
-  projectCompletedExistingGenerations004}
+  projectCompletedExistingGenerations004,findNotificationRecentIndex}
   from '../../services/notifications/notificationInbox004';
 import {readCompletedGenerationLog016,mergeCompletedGenerationNotices016,
   notificationRecentLogKey016} from '../../services/notifications/notificationRecentLog016';
 import {useNotificationDots017} from '../../services/notifications/useNotificationDots017';
 import { notificationImageCache } from '../../services/notifications/notificationImageCache.mjs';
 import { readCachedExplorePublicProfileFirstView684 } from '../../services/exploreProfileFirstViewService';
-import { readNotificationFeedImage } from '../../services/exploreSessionCache';
+import { readNotificationFeedImage, readNotificationFeedTrack } from '../../services/exploreSessionCache';
+import { favoritesStore } from '../../hooks/useFavoritesStore';
+import { isMusicNoteItemRemoved } from '../../lib/musicNoteSavedState';
+import { notificationOwnNote, notificationMedia, notificationHttps } from '../../services/notifications/notificationLocalLinks.mjs';
 import './notificationPanel.css';
 
 type Props = {
@@ -33,6 +36,7 @@ type Props = {
   anchorRef: React.RefObject<HTMLButtonElement | null>;
   onClose: () => void;
   recentHistory?: readonly unknown[];
+  onOpenRecentSong?: (noticeId: string) => boolean;
 };
 
 const TYPES: Array<{ key: NotificationCategory; label: string; detail: string }> = [
@@ -103,7 +107,7 @@ const validInternalSharePath = (path: string | undefined): string | null => {
   return path;
 };
 
-export default function NotificationPanel({ open, anchorRef, onClose, recentHistory = [] }: Props) {
+export default function NotificationPanel({ open, anchorRef, onClose, recentHistory = [], onOpenRecentSong }: Props) {
   const navigate = useNavigate();
   const panelRef = useRef<HTMLDivElement>(null);
   const detailCloseRef = useRef<HTMLButtonElement>(null);
@@ -324,12 +328,18 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
     const genuineRows=NOTIFICATION_INBOX_ENABLED_004
       ? (remoteInbox.uid===uid ? [...remoteInbox.items,...localCompletions] : [...localCompletions])
       : [...localCompletions];
-    return withPreviewNotificationExamples023(collapseRepeatedFollowNoticesByActor554(genuineRows),visualExample);
+    // Real inbox only, including during initial loading, empty tabs and errors.
+    return collapseRepeatedFollowNoticesByActor554(genuineRows).filter(row=>!isPreviewSample(row));
   },[visualExample,localCompletions,remoteInbox,uid]);
   const rows=useMemo(()=>allRows.filter(row=>
     notificationSectionFor(row.category)===activeSection),[allRows,activeSection]);
+  const [noteMediaVersion,setNoteMediaVersion]=useState(0);
+  useEffect(()=>{
+    if(!open||!uid)return;
+    return favoritesStore.subscribe(()=>setNoteMediaVersion(v=>v+1));
+  },[open,uid]);
   const artwork = useMemo(() => {
-    const result = new Map<string, { avatar: string[]; cover: string[] }>();
+    const result = new Map<string, { avatar: string[]; cover: string[]; recentIndex: number; audioUrl: string; shareUrl: string; coverUrl: string }>();
     if (!open || !uid || auth.currentUser?.uid !== uid || settingsOpen) return result;
     const profiles = new Map<string, ReturnType<typeof readCachedExplorePublicProfileFirstView684>>();
     const profileFor = (owner: string) => {
@@ -340,6 +350,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
       }
       return profiles.get(owner) || null;
     };
+    const ownNotes=favoritesStore.getFavorites().filter(note=>note?.uid===uid&&!isMusicNoteItemRemoved(note));
     const own = auth.currentUser?.photoURL || '';
     const ownProfile = profileFor(uid);
     for (const row of rows) {
@@ -350,17 +361,25 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
         actor === uid ? own : '', actor ? row.actorAvatarUrl || '' : '',
         actor && row.category !== 'complete' ? readNotificationFeedImage(actor) : ''];
       const trackId = row.category === 'like' ? row.song?.id || '' : '';
-      const track = trackId ? ownProfile?.tracks.find(item =>
+      const track = trackId ? (ownProfile?.tracks.find(item =>
         String(item.id || item.trackId || '') === trackId &&
-        (!item.ownerUid || item.ownerUid === uid)) : undefined;
-      const cover = [row.song?.coverUrl || '',
+        (!item.ownerUid || item.ownerUid === uid)) || readNotificationFeedTrack(uid,trackId)) : undefined;
+      const recentIndex=row.category==='complete'?findNotificationRecentIndex(recentHistory,row.id):-1;
+      const source=recentIndex>=0?recentHistory[recentIndex]:null;
+      const note=row.category==='complete'?notificationOwnNote(ownNotes,uid,row,source):
+        track?.sourceType==='music_note' && typeof track.sourceId==='string'
+          ? ownNotes.find(item=>String(item.id||item.firestoreId||'')===track.sourceId):null;
+      const media=notificationMedia(note||track||source);
+      const cover = [media.coverUrl,row.song?.coverUrl || '',
         typeof track?.coverUrl === 'string' ? track.coverUrl : '',
         trackId ? readNotificationFeedImage(uid, trackId) : ''];
-      result.set(row.id, { avatar, cover });
+      result.set(row.id, { avatar, cover, recentIndex,
+        audioUrl:media.audioUrl||notificationHttps(row.song?.audioUrl),
+        shareUrl:media.shareUrl,coverUrl:media.coverUrl||notificationHttps(row.song?.coverUrl) });
     }
     return result;
-  }, [open, uid, rows, settingsOpen]);
-  const sampleHeader = visualExample && rows.some(isPreviewSample);
+  }, [open, uid, rows, settingsOpen, recentHistory, noteMediaVersion]);
+
   const {dots,acknowledge}=useNotificationDots017(
     uid,recentHistory,remoteInbox.uid===uid?remoteInbox.items:[],effectivePreferences);
   useEffect(()=>{
@@ -450,17 +469,31 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
     } finally { setFollowBusy(null); }
   };
   const playSong = (row: InboxNotification) => {
-    if ((visualExample && isPreviewSample(row)) || !row.song) return;
-    const audioUrl = String(row.song.audioUrl || '').trim();
-    if (/^https:\/\//i.test(audioUrl)) {
-      playTrack({ id: row.song.id, url: audioUrl, audioUrl, title: row.song.title,
-        imageUrl: row.song.coverUrl });
+    if (isPreviewSample(row) || auth.currentUser?.uid !== uid) return;
+    const media=artwork.get(row.id);
+    const audioUrl=media?.audioUrl||notificationHttps(row.song?.audioUrl);
+    const title=row.song?.title||row.text.replace(/ 생성이 완료되었습니다\.$/,'');
+    if (audioUrl) {
+      playTrack({ id: row.song?.id||row.id, url: audioUrl, audioUrl, title,
+        imageUrl: media?.coverUrl||row.song?.coverUrl });
       onClose();
       return;
     }
-    const path = validInternalSharePath(row.song.sharePath);
+    // Suno share links use the same explicit new-tab playback path as Music Note.
+    if(media?.shareUrl){
+      window.open(media.shareUrl,'_blank','noopener,noreferrer');
+      onClose();
+      return;
+    }
+    const path = validInternalSharePath(row.song?.sharePath);
     if (path) closeAndNavigate(path);
     else setNotice('이 곡의 재생 주소를 확인할 수 없습니다.');
+  };
+  const canPlayRow=(row:InboxNotification)=>Boolean(artwork.get(row.id)?.audioUrl||
+    artwork.get(row.id)?.shareUrl||hasPlayableSong(row));
+  const openRecent=(row:InboxNotification)=>{
+    if(auth.currentUser?.uid!==uid||findNotificationRecentIndex(recentHistory,row.id)<0)return;
+    if(onOpenRecentSong?.(row.id))onClose();
   };
 
   if (!open || typeof document === 'undefined') return null;
@@ -472,7 +505,6 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
         <div className="soridraw-notification-heading">
           <Bell size={20} aria-hidden="true" />
           <strong>{settingsOpen ? '알림 설정' : '알림'}</strong>
-          {sampleHeader && !settingsOpen && <span className="soridraw-notification-preview-tag">예시</span>}
         </div>
         <div className="soridraw-notification-header-actions">
           {settingsOpen ? (
@@ -558,7 +590,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
           aria-label={activeSection==='activity'?'활동·소식 알림':
             activeSection==='creation'?'생성 기록 알림':'공지 알림'}>
           {rows.length ? rows.map((row) => ( 
-            <div className="soridraw-notification-row" key={row.id}>
+            <div className={`soridraw-notification-row${row.category==='complete'&&(artwork.get(row.id)?.recentIndex??-1)<0?' is-archived-creation':''}`} key={row.id}>
               {row.category === 'announcement' || row.category === 'message' ? (
                 <span className="soridraw-notification-avatar-icon" data-type={row.category} aria-hidden="true">
                   {iconFor(row.category)}
@@ -583,6 +615,9 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
                       </button>
                       {' '}{row.text}
                     </>
+                  ) : row.category==='complete'&&onOpenRecentSong&&(artwork.get(row.id)?.recentIndex??-1)>=0 ? (
+                    <button type="button" className="soridraw-notification-recent-link"
+                      onClick={()=>openRecent(row)}>{row.text}</button>
                   ) : row.text}
                 </span>
                 {row.song && <small className="soridraw-notification-song-title">{row.song.title}</small>}
@@ -600,12 +635,12 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
                   onClick={() => void follow(row)}>
                   {row.actorUid && followed[row.actorUid] ? '팔로잉' : '팔로우'}
                 </button>
-              ) : row.song ? (
+              ) : row.song || artwork.get(row.id)?.coverUrl || canPlayRow(row) ? (
                 <button type="button" className="soridraw-notification-cover" onClick={() => playSong(row)}
-                  disabled={(visualExample && isPreviewSample(row)) || !hasPlayableSong(row)} aria-label={row.song.title + ' 재생'}>
+                  disabled={isPreviewSample(row) || !canPlayRow(row)} aria-label={(row.song?.title||row.text) + ' 재생'}>
                   <CachedNotificationImage uid={uid} urls={artwork.get(row.id)?.cover || EMPTY_ARTWORK_URLS}
                     fallback={<Music2 size={22} aria-hidden="true" />} />
-                  <span className="soridraw-notification-play">▶</span>
+                  {canPlayRow(row)&&<span className="soridraw-notification-play">▶</span>}
                 </button>
               ) : <span className="soridraw-notification-end-icon" data-type={row.category} aria-hidden="true">{iconFor(row.category)}</span>}
             </div>

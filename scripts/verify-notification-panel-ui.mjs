@@ -17,7 +17,7 @@ assert.match(panel,/soridraw-notification-avatar/);
 assert.match(panel,/soridraw-notification-content/);
 assert.match(panel,/soridraw-notification-cover/);
 assert.match(panel,/setExploreFollow\(auth.currentUser, row.actorUid, true\)/);
-assert.match(panel,/playTrack\(\{ id: row.song.id, url: audioUrl/);
+assert.match(panel,/playTrack\(\{ id: row.song\?\.id\|\|row.id, url: audioUrl/);
 assert.match(panel,/validInternalSharePath/);
 assert.match(panel,/aria-label="알림 설정 열기"/);
 assert.match(panel,/visualExample &&/);
@@ -198,14 +198,14 @@ console.log('NOTIFICATION_MOBILE_OPEN_CLOSE_HAS_NO_NEW_BACKEND_IO=PASS');
 
 assert.match(panel,/localGenerationEnabled && uid && auth\.currentUser\?\.uid === uid/);
 assert.match(panel,/projectCompletedExistingGenerations004\(recentHistory\)/);
-assert.match(panel,/withPreviewNotificationExamples023\(collapseRepeatedFollowNoticesByActor554\(genuineRows\),visualExample\)/,
-  'PREVIEW samples fill empty sections without replacing real records');
+assert.match(panel,/collapseRepeatedFollowNoticesByActor554\(genuineRows\)\.filter\(row=>!isPreviewSample\(row\)\)/,
+  'Real panel never inserts sample notifications, including pending and empty inbox');
+assert.doesNotMatch(panel,/withPreviewNotificationExamples023\(/);
 assert.match(panel,/isPreviewSample\(row\) \? row\.createdAt : Math\.max\(0, Date\.now\(\) - row\.createdAt\)/,
   'sample elapsed-time labels and actual epoch timestamps stay distinct');
-assert.match(panel,/disabled=\{\(visualExample && isPreviewSample\(row\)\) \|\| !hasPlayableSong\(row\)\}/,
+assert.match(panel,/disabled=\{isPreviewSample\(row\) \|\| !canPlayRow\(row\)\}/,
   'fake sample songs and invalid playback targets cannot be played');
-assert.match(panel,/sampleHeader = visualExample && rows\.some\(isPreviewSample\)/,
-  'only tabs containing PREVIEW examples are labelled as examples');
+assert.doesNotMatch(panel,/sampleHeader/);
 const previewSamples=preferenceModule.NOTIFICATION_EXAMPLE_ROWS;
 assert.equal(previewSamples.length,5);
 assert.deepEqual(preferenceModule.withPreviewNotificationExamples023([],true),previewSamples,
@@ -259,8 +259,7 @@ assert.match(panelCss,/\.soridraw-notification-end-icon\[data-type="message"\],[
 assert.match(panel,/<span className="soridraw-notification-end-icon" data-type=\{row.category\}/);
 assert.doesNotMatch(panelCss,/#b089ef|#ee7da2|#ad90dc|#77b4ee|#FFB400/,
   'unrequested colorful notification accents must remain removed');
-assert.match(panel,/sampleHeader && !settingsOpen && <span className="soridraw-notification-preview-tag">예시<\/span>/,
-  'preview samples must still be distinguishable from actual user notifications');
+assert.doesNotMatch(panel,/sampleHeader/);
 // Only social notifications show the actor name. System/admin items show their content alone.
 assert.match(panel, /\) : row\.text\}/,
   'completion, announcement and message notifications render their body without the SORIDRAW sender prefix');
@@ -352,4 +351,26 @@ assert.match(panel,/cached\?\.profile\.uid === owner/);
 assert.match(panel,/String\(item\.id \|\| item\.trackId \|\| ''\) === trackId/);
 assert.match(panel,/readNotificationFeedImage\(uid, trackId\)/);
 console.log('NOTIFICATION_DECODED_IMAGE_CACHE_ONLY_MISS_ACCOUNT_BOUNDARY_AND_BUDGET=PASS');
+}
+
+{
+const {notificationRecentKey,notificationOwnNote,notificationMedia}=await import('../src/services/notifications/notificationLocalLinks.mjs');
+const source={id:'source-a',appliedKeywords:{generationBatchId:'batch',generationIndex:1}};
+const key=notificationRecentKey(source);
+const row={id:'generated:old-fallback',recentKey:key};
+const correct={uid:'owner',recentSongSyncKey:key,sunoLinks:[{url:'https://suno.com/s/a',coverUrl:'https://cdn.example/a'},{url:'https://suno.com/s/b',coverUrl:'https://cdn.example/b'}],mainSunoIndex:1,sunoShareUrl:'https://suno.com/s/a',sunoAudioUrl:'https://cdn.example/wrong.mp3'};
+assert.equal(key,'generation:batch:1');
+assert.equal(notificationOwnNote([correct,{...correct,uid:'other'}],'owner',row,null),correct);
+assert.equal(notificationOwnNote([correct,{...correct}],'owner',row,null),null);
+assert.equal(notificationOwnNote([{uid:'owner',title:'same'}],'owner',{id:'generated:recent-1-same'},null),null);
+assert.equal(notificationOwnNote([{uid:'owner',recentLegacySourceId:'source-a'}],'owner',{id:'generated:source-a'},null)?.recentLegacySourceId,'source-a');
+assert.deepEqual(notificationMedia(correct),{audioUrl:'',shareUrl:'https://suno.com/s/b',coverUrl:'https://cdn.example/b'});
+assert.equal(notificationMedia({audioUrl:'https://cdn.example/a.mp3'}).audioUrl,'https://cdn.example/a.mp3');
+assert.equal(notificationMedia({sunoShareUrl:'javascript:alert(1)'}).shareUrl,'');
+assert.match(panel,/findNotificationRecentIndex\(recentHistory,row.id\)/);
+assert.match(panel,/is-archived-creation/);
+assert.match(panel,/window.open\(media.shareUrl,'_blank','noopener,noreferrer'\)/);
+assert.match(panel,/note\?\.uid===uid&&!isMusicNoteItemRemoved\(note\)/);
+assert.match(app,/findNotificationRecentIndex\(current,noticeId\)/);
+console.log('NOTIFICATION_RECENT_LINK_AND_OWN_CACHED_MEDIA_ONLY=PASS');
 }

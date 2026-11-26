@@ -233,3 +233,8 @@
 @media(max-width:640px){
   .soridraw-notification-detail-modal{max-height:calc(100dvh - 32px)}
 }
+
+/* Historical creation remains readable and independent of playback availability. */
+.soridraw-notification-row.is-archived-creation{opacity:.78}
+.soridraw-notification-recent-link{display:inline;padding:0;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.soridraw-notification-recent-link:hover,.soridraw-notification-recent-link:focus-visible{text-decoration:underline;text-underline-offset:3px}

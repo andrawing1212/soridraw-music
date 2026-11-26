@@ -28,7 +28,7 @@ import {
 } from './services/musicNoteFavoriteCountBatch';
 import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck, canAcknowledgeRecentSongsInlineSignal, needsRecentSongsRetainedDraftGapRead460, shouldDeferRecentSongsServerReadForPendingText, hasRecentSongsCacheRecoveryFence, markRecentSongsCacheRecoveryFence, stageRecentLyricOrCommitExact } from './lib/recentSongsSyncGate';
 import {useNotificationDots017} from './services/notifications/useNotificationDots017';
-import {projectCompletedExistingGenerations004} from './services/notifications/notificationInbox004';
+import {projectCompletedExistingGenerations004,findNotificationRecentIndex} from './services/notifications/notificationInbox004';
 import {rememberCompletedGenerationLog016} from './services/notifications/notificationRecentLog016';
 import { planRecentUnconfirmedRecovery436, patchExactRecentTextRow436, readRecentLyricHistory, appendRecentLyricVersion, mergeRecentLyricHistory, sameLyricVersionContent, resolveRecentLyricLocalView, stepRecentLyricLocalView, recentLyricCursorKey, captureDisplayedKoreanLyric, musicNoteLyricFingerprint, assertRecentLyricHistoryBudget, recentLyricBytes, type LyricHistoryEntry, type LyricHistoryLane, type LyricHistoryV1 } from './lib/recentUnconfirmedRecovery436';
 import { protectRecentCanonicalSnapshotFromPreview453, pickRecentSongLiveTextPreview457, pickRecentSongLiveAppliedKeywords457 } from './lib/recentSongCanonicalPreviewGuard453';
@@ -3947,6 +3947,7 @@ function Navigation({
   studioWorkspaceView = 'create',
   onStudioWorkspaceSelect,
   recentHistory,
+  onOpenRecentSong,
 }: {
   user: User | null;
   cachedHeaderIdentity: CachedHeaderIdentity | null;
@@ -3964,6 +3965,7 @@ function Navigation({
   studioWorkspaceView?: StudioWorkspaceView;
   onStudioWorkspaceSelect?: (view: StudioWorkspaceView) => void;
   recentHistory?: readonly SongResult[];
+  onOpenRecentSong?: (noticeId:string)=>boolean;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -4758,6 +4760,7 @@ function Navigation({
       <NotificationPanel
         open={isMobileNotificationOpen && Boolean(user?.uid)}
         recentHistory={recentHistory}
+        onOpenRecentSong={onOpenRecentSong}
         anchorRef={mobileProfileButtonRef}
         onClose={() => setIsMobileNotificationOpen(false)}
       />
@@ -19720,6 +19723,19 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
       resultAreaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   };
+  const openNotificationRecentSong = (noticeId:string):boolean => {
+    if(!user?.uid||auth.currentUser?.uid!==user.uid||!canAccessNavigationMenu('studio'))return false;
+    const current=historyRef.current;
+    const index=findNotificationRecentIndex(current,noticeId);
+    if(index<0||!current[index])return false;
+    if(location.pathname==='/studio')navigateStudioWorkspaceView('recent');
+    else {
+      selectStudioWorkspaceView('recent');
+      navigate('/studio?view=recent');
+    }
+    openStudioDashboardSong(current[index],index);
+    return true;
+  };
 
   return (
     <div className="soridraw-app-root min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans selection:bg-brand-orange/30">
@@ -20191,6 +20207,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
       <Navigation
         recentHistory={history}
+        onOpenRecentSong={canAccessNavigationMenu('studio')?openNotificationRecentSong:undefined}
         user={user}
         cachedHeaderIdentity={cachedHeaderIdentity}
         isAuthReady={isAuthReady}
@@ -20223,7 +20240,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         } />
         <Route path="/explore" element={
           canAccessNavigationMenu('explore') ? (
-            <ExploreShellLazy isAdminUser={isAdminUser} recentHistory={history} />
+            <ExploreShellLazy isAdminUser={isAdminUser} recentHistory={history} onOpenRecentSong={canAccessNavigationMenu('studio')?openNotificationRecentSong:undefined} />
           ) : (
             <FeatureUnavailablePage label="익스플로어" fallbackPath={navigationFallbackPath} />
           )
@@ -20237,6 +20254,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               <StudioLeftRail
                 activeWorkspace={studioRailActiveWorkspace}
                 recentHistory={history}
+                onOpenRecentSong={openNotificationRecentSong}
                 onCreate={() => {
                   navigateStudioWorkspaceView('create');
                   window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: window.scrollX, behavior: 'auto' }));
@@ -23048,6 +23066,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   leftRail={
                     <StudioLeftRail
                       activeWorkspace="music-note"
+                      recentHistory={history}
+                      onOpenRecentSong={canAccessNavigationMenu('studio')?openNotificationRecentSong:undefined}
                       onCreate={() => {
                         selectStudioWorkspaceView('create');
                         navigate('/studio');

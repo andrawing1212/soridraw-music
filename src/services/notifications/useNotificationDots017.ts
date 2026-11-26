@@ -5,7 +5,7 @@ import {NOTIFICATION_INBOX_ENABLED_004,projectCompletedExistingGenerations004} f
 import {mergeCompletedGenerationNotices016,readCompletedGenerationLog016,
  notificationRecentLogKey016} from './notificationRecentLog016';
 import {NOTIFICATION_DOT_EVENT_017,notificationSeenKey017,
- getNotificationPinkDots017,acknowledgeNotificationTab017} from './notificationDotState017';
+ getNotificationPinkDots017,getNotificationUnseenCreationIds017,acknowledgeNotificationTab017} from './notificationDotState017';
 
 // Hook subscribes only to local changes. No polling or network reads.
 export function useNotificationDots017(uid:string,recentHistory:readonly unknown[]=[],
@@ -44,5 +44,7 @@ export function useNotificationDots017(uid:string,recentHistory:readonly unknown
   uid,rows,preferences.master,preferences),[uid,rows,preferences]);
  const acknowledge=(section:NotificationSection)=>
   acknowledgeNotificationTab017(uid,section,rows);
- return {dots,acknowledge};
+ const unseenCreationIds=useMemo(()=>getNotificationUnseenCreationIds017(
+  uid,rows,preferences.master,preferences),[uid,rows,preferences]);
+ return {dots,acknowledge,unseenCreationIds};
 }

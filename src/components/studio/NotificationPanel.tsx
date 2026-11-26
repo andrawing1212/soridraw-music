@@ -23,6 +23,7 @@ import {NOTIFICATION_INBOX_ENABLED_004,loadOwnNotifications004,
 import {readCompletedGenerationLog016,mergeCompletedGenerationNotices016,
   notificationRecentLogKey016} from '../../services/notifications/notificationRecentLog016';
 import {useNotificationDots017} from '../../services/notifications/useNotificationDots017';
+import {NOTIFICATION_DOT_EVENT_017,acknowledgeNotificationTab017} from '../../services/notifications/notificationDotState017';
 import { notificationImageCache } from '../../services/notifications/notificationImageCache.mjs';
 import { readCachedExplorePublicProfileFirstView684 } from '../../services/exploreProfileFirstViewService';
 import { readNotificationFeedImage, readNotificationFeedTrack, restoreNotificationFeedMetadata } from '../../services/exploreSessionCache';
@@ -30,7 +31,7 @@ import { EXPLORE_API_BASE } from '../../config/exploreEnvironment';
 import { favoritesStore } from '../../hooks/useFavoritesStore';
 import { isMusicNoteItemRemoved } from '../../lib/musicNoteSavedState';
 import { readCatalogSnapshotFromLocalCache } from '../../lib/userDataEngine';
-import { notificationOwnNote, notificationOwnPublishedNote, notificationMedia, notificationHttps, notificationRecentSnapshot, notificationCachedNotes } from '../../services/notifications/notificationLocalLinks.mjs';
+import { notificationOwnPublishedNote, notificationMedia, notificationHttps, notificationRecentSnapshot, notificationCachedNotes } from '../../services/notifications/notificationLocalLinks.mjs';
 import './notificationPanel.css';
 
 type Props = {
@@ -315,8 +316,13 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
       if(event.key===notificationRecentLogKey016(uid))
         setLocalLogVersion(value=>value+1);
     };
+    const onLocalChange=()=>setLocalLogVersion(value=>value+1);
     window.addEventListener('storage',onStorage);
-    return ()=>window.removeEventListener('storage',onStorage);
+    window.addEventListener(NOTIFICATION_DOT_EVENT_017,onLocalChange);
+    return ()=>{
+      window.removeEventListener('storage',onStorage);
+      window.removeEventListener(NOTIFICATION_DOT_EVENT_017,onLocalChange);
+    };
   },[open,localGenerationEnabled,uid]);
   const recentHistory=useMemo(()=>{
     if(!open||!uid||auth.currentUser?.uid!==uid)return suppliedRecentHistory;
@@ -356,7 +362,7 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
   const [noteMediaVersion,setNoteMediaVersion]=useState(0);
   const [localNoteCatalog,setLocalNoteCatalog]=useState<{uid:string;items:any[]|null}>({uid:'',items:null});
   useEffect(()=>{
-    if(!open||activeSection==='announcement'||!uid||auth.currentUser?.uid!==uid)return;
+    if(!open||activeSection!=='activity'||!uid||auth.currentUser?.uid!==uid)return;
     let live=true;
     // Existing account Catalog only: memory/IndexedDB, never remote fallback.
     void readCatalogSnapshotFromLocalCache('musicNote',uid).then(snapshot=>{
@@ -365,9 +371,9 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
     return ()=>{live=false;};
   },[open,activeSection,uid,noteMediaVersion]);
   useEffect(()=>{
-    if(!open||!uid)return;
+    if(!open||!uid||activeSection!=='activity')return;
     return favoritesStore.subscribe(()=>setNoteMediaVersion(v=>v+1));
-  },[open,uid]);
+  },[open,uid,activeSection]);
   const artwork = useMemo(() => {
     const result = new Map<string, { avatar: string[]; cover: string[]; recentIndex: number; audioUrl: string; shareUrl: string; coverUrl: string }>();
     if (!open || !uid || auth.currentUser?.uid !== uid || settingsOpen) return result;
@@ -381,10 +387,10 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
       return profiles.get(owner) || null;
     };
     if(activeSection==='activity')restoreNotificationFeedMetadata(EXPLORE_API_BASE);
-    const liveNotes=favoritesStore.getFavorites();
-    const scopedNotes=activeSection!=='announcement'?
+    const liveNotes=activeSection==='activity'?favoritesStore.getFavorites():[];
+    const scopedNotes=activeSection==='activity'?
       notificationCachedNotes(uid,liveNotes,localNoteCatalog.uid===uid?localNoteCatalog.items:null,window.localStorage):
-      liveNotes;
+      [];
     const ownNotes=scopedNotes.filter(note=>note?.uid===uid&&!isMusicNoteItemRemoved(note));
     const own = auth.currentUser?.photoURL || '';
     const ownProfile = profileFor(uid);
@@ -395,37 +401,58 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
       const avatar = [actorProfile?.profile.avatarUrl || '',
         actor === uid ? own : '', actor ? row.actorAvatarUrl || '' : '',
         actor && row.category !== 'complete' ? readNotificationFeedImage(actor) : ''];
+      // Creation history is navigation only. No Music Note/media lookup.
+      if(row.category==='complete'){
+        const recentIndex=findNotificationRecentIndex(recentHistory,row.id);
+        result.set(row.id,{avatar,cover:[],recentIndex,audioUrl:'',shareUrl:'',coverUrl:''});
+        continue;
+      }
       const trackId = row.category === 'like' ? row.song?.id || '' : '';
       const track = trackId ? (ownProfile?.tracks.find(item =>
         String(item.id || item.trackId || '') === trackId &&
         (!item.ownerUid || item.ownerUid === uid)) || readNotificationFeedTrack(uid,trackId)) : undefined;
-      const recentIndex=row.category==='complete'?findNotificationRecentIndex(recentHistory,row.id):-1;
-      const source=recentIndex>=0?recentHistory[recentIndex]:null;
-      const note=row.category==='complete'?notificationOwnNote(ownNotes,uid,row,source):
-        track?.sourceType==='music_note' && typeof track.sourceId==='string'
-          ? ownNotes.find(item=>String(item.firestoreId||item.id||'')===track.sourceId):
-            !track&&trackId?notificationOwnPublishedNote(ownNotes,uid,trackId):null;
-      const archived=row.category==='complete'&&recentIndex<0;
-      // Old creation notices resolve media exclusively through the current
-      // exact active Music Note. Never revive a removed or changed URL.
-      const media=notificationMedia(note||track||source);
-      const archivedRegistered=archived&&Boolean(note&&(media.shareUrl||media.audioUrl));
-      const cover = archived?(archivedRegistered?[media.coverUrl]:[]):[media.coverUrl,row.song?.coverUrl || '',
+      const note=track?.sourceType==='music_note' && typeof track.sourceId==='string'
+        ? ownNotes.find(item=>String(item.firestoreId||item.id||'')===track.sourceId):
+          !track&&trackId?notificationOwnPublishedNote(ownNotes,uid,trackId):null;
+      const media=notificationMedia(note||track);
+      const cover = [media.coverUrl,row.song?.coverUrl || '',
         typeof track?.coverUrl === 'string' ? track.coverUrl : '',
         trackId ? readNotificationFeedImage(uid, trackId) : ''];
-      result.set(row.id, { avatar, cover, recentIndex,
-        audioUrl:archived?(archivedRegistered?media.audioUrl:''):media.audioUrl||notificationHttps(row.song?.audioUrl),
-        shareUrl:archived?(archivedRegistered?media.shareUrl:''):media.shareUrl,
-        coverUrl:archived?(archivedRegistered?media.coverUrl:''):media.coverUrl||notificationHttps(row.song?.coverUrl) });
+      result.set(row.id, { avatar, cover, recentIndex:-1,
+        audioUrl:media.audioUrl||notificationHttps(row.song?.audioUrl),
+        shareUrl:media.shareUrl,coverUrl:media.coverUrl||notificationHttps(row.song?.coverUrl) });
     }
     return result;
   }, [open, uid, rows, settingsOpen, recentHistory, noteMediaVersion, localNoteCatalog, activeSection]);
 
-  const {dots,acknowledge}=useNotificationDots017(
+  const {dots,acknowledge,unseenCreationIds}=useNotificationDots017(
     uid,recentHistory,remoteInbox.uid===uid?remoteInbox.items:[],effectivePreferences);
+  // Keep creation indicators visible for the entire viewing session. Mark
+  // only creation rows actually shown in this panel, once it closes/unmounts.
+  const viewedCreations=useRef(new Map<string,InboxNotification>());
+  const creationSessionReady=useRef(false);
   useEffect(()=>{
-    // Acknowledging a tab only clears its pink point, never its messages.
-    if(open&&!settingsOpen&&uid)acknowledge(activeSection);
+    viewedCreations.current.clear();
+    creationSessionReady.current=false;
+    if(!open||!uid)return;
+    return ()=>{
+      const viewed=[...viewedCreations.current.values()];
+      viewedCreations.current.clear();
+      if(viewed.length)acknowledgeNotificationTab017(uid,'creation',viewed);
+    };
+  },[open,uid]);
+  useEffect(()=>{
+    if(!open||!uid||settingsOpen)return;
+    // Reopening resets to activity; do not acknowledge a stale creation tab
+    // from the previous render before that reset commits.
+    if(activeSection==='activity')creationSessionReady.current=true;
+    if(activeSection==='creation'&&creationSessionReady.current){
+      for(const row of rows)if(row.category==='complete'&&!isPreviewSample(row))
+        viewedCreations.current.set(row.id,row);
+    }
+  },[open,uid,settingsOpen,activeSection,rows]);
+  useEffect(()=>{
+    if(open&&!settingsOpen&&uid&&activeSection!=='creation')acknowledge(activeSection);
   },[open,settingsOpen,uid,activeSection,allRows]);
 
   const accountSyncLocked = NOTIFICATION_ACCOUNT_SYNC_ENABLED_003 &&
@@ -510,10 +537,9 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
     } finally { setFollowBusy(null); }
   };
   const playSong = (row: InboxNotification) => {
-    if (isPreviewSample(row) || auth.currentUser?.uid !== uid) return;
+    if (row.category==='complete'||isPreviewSample(row) || auth.currentUser?.uid !== uid) return;
     const media=artwork.get(row.id);
-    const archived=row.category==='complete'&&(media?.recentIndex??-1)<0;
-    const audioUrl=media?.audioUrl||(!archived?notificationHttps(row.song?.audioUrl):'');
+    const audioUrl=media?.audioUrl||notificationHttps(row.song?.audioUrl);
     const title=row.song?.title||row.text.replace(/ 생성이 완료되었습니다\.$/,'');
     if (audioUrl) {
       playTrack({ id: row.song?.id||row.id, url: audioUrl, audioUrl, title,
@@ -527,14 +553,12 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
       onClose();
       return;
     }
-    const path = row.category==='complete'&&(media?.recentIndex??-1)<0
-      ? null : validInternalSharePath(row.song?.sharePath);
+    const path = validInternalSharePath(row.song?.sharePath);
     if (path) closeAndNavigate(path);
     else setNotice('이 곡의 재생 주소를 확인할 수 없습니다.');
   };
-  const isArchivedCreation=(row:InboxNotification)=>row.category==='complete'&&(artwork.get(row.id)?.recentIndex??-1)<0;
-  const canPlayRow=(row:InboxNotification)=>Boolean(artwork.get(row.id)?.audioUrl||
-    artwork.get(row.id)?.shareUrl||(!isArchivedCreation(row)&&hasPlayableSong(row)));
+  const canPlayRow=(row:InboxNotification)=>row.category!=='complete'&&Boolean(artwork.get(row.id)?.audioUrl||
+    artwork.get(row.id)?.shareUrl||hasPlayableSong(row));
   const openRecent=(row:InboxNotification)=>{
     if(auth.currentUser?.uid!==uid||findNotificationRecentIndex(recentHistory,row.id)<0)return;
     if(onOpenRecentSong?.(row.id))onClose();
@@ -660,11 +684,14 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
                       {' '}{row.text}
                     </>
                   ) : row.category==='complete'&&onOpenRecentSong&&(artwork.get(row.id)?.recentIndex??-1)>=0 ? (
-                    <button type="button" className="soridraw-notification-recent-link"
-                      onClick={()=>openRecent(row)}>{row.text}</button>
+                    <>
+                      <button type="button" className="soridraw-notification-recent-link"
+                        onClick={()=>openRecent(row)}>{row.text.replace(/ 생성이 완료되었습니다\.$/,'')}</button>
+                      {row.text.endsWith(' 생성이 완료되었습니다.')?' 생성이 완료되었습니다.':''}
+                    </>
                   ) : row.text}
                 </span>
-                {row.song && <small className="soridraw-notification-song-title">{row.song.title}</small>}
+                {row.category!=='complete'&&row.song && <small className="soridraw-notification-song-title">{row.song.title}</small>}
                 <small>{timeLabel(displayElapsedMs(row))}</small>
               </div>
               {row.category === 'announcement' || row.category === 'message' ? (
@@ -679,7 +706,13 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
                   onClick={() => void follow(row)}>
                   {row.actorUid && followed[row.actorUid] ? '팔로잉' : '팔로우'}
                 </button>
-              ) : (isArchivedCreation(row)?canPlayRow(row):row.song||artwork.get(row.id)?.coverUrl||canPlayRow(row)) ? (
+              ) : row.category==='complete' ? (
+                <span className="soridraw-notification-end-icon" data-type={row.category}
+                  data-recent={(artwork.get(row.id)?.recentIndex??-1)>=0} aria-hidden="true">
+                  {iconFor(row.category)}
+                  {unseenCreationIds.has(row.id)&&<span className="soridraw-notification-pink-dot soridraw-notification-creation-dot" />}
+                </span>
+              ) : (row.song||artwork.get(row.id)?.coverUrl||canPlayRow(row)) ? (
                 <button type="button" className="soridraw-notification-cover" onClick={() => playSong(row)}
                   disabled={isPreviewSample(row) || !canPlayRow(row)} aria-label={(row.song?.title||row.text) + ' 재생'}>
                   <CachedNotificationImage uid={uid} urls={artwork.get(row.id)?.cover || EMPTY_ARTWORK_URLS}

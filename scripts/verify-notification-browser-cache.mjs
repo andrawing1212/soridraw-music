@@ -28,7 +28,7 @@ try{
  await context.route(cdn+'**',route=>{
   requests++;
   const cors=route.request().url().endsWith('allowed.svg');
-  return route.fulfill({contentType:'image/svg+xml',headers:cors?{'access-control-allow-origin':'*','cache-control':'no-store'}:{'cache-control':'no-store'},body:'<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" fill="red"/></svg>'});
+  return route.fulfill({contentType:'image/svg+xml',headers:cors?{'access-control-allow-origin':'*','cache-control':'no-store'}:{'access-control-allow-origin':'https://unrelated.example.test','cache-control':'no-store'},body:'<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" fill="red"/></svg>'});
  });
  await page.goto(app);
  await page.evaluate(url=>window.mount(url),cdn+'allowed.svg');
@@ -41,8 +41,11 @@ try{
  assert.equal(requests,1,'reload and local restore must not download image');
  await page.evaluate(()=>window.switchAccount());
  assert.equal(await page.evaluate(url=>window.restore(url),cdn+'allowed.svg'),false,'account B cannot see A cache');
+ // Explicit mismatched ACAO: Playwright route.fulfill may synthesize ACAO for omitted headers.
+ const beforeDenied=requests;
  await page.evaluate(url=>window.mount(url),cdn+'denied.svg');
  await page.waitForFunction(()=>document.querySelector('img')?.naturalWidth===128&&document.querySelector('img')?.crossOrigin===null);
+ assert.equal(requests-beforeDenied,2,'one denied CORS attempt, one original image fallback');
  assert.equal(await page.evaluate(url=>window.restore(url),cdn+'denied.svg'),false,'opaque image not persisted');
  console.log('NOTIFICATION_REAL_CHROMIUM_CORS_IDB_RELOAD_ACCOUNT_AND_FALLBACK=PASS');
 }finally{await browser.close()}

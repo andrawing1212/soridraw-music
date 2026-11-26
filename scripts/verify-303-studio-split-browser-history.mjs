@@ -326,7 +326,30 @@ for (const [mode, path, admin, expected] of [
   assert.equal(splitAdminHome(mode, {pathname:path}, admin), expected,
     'Home nav admin-only scope mismatch');
 }
-assert.match(app, /allTopNavItems\.filter\(\(item\) => isSplitAdminHomeNavigation \|\| canShowMenu\(item\.key\)\)/);
+// The CSS layout exception must never override the saved menu access mode.
+const canShowMenuBody = app.match(/const canShowMenu = \(key: NavigationMenuKey\) => \{([\s\S]*?)\n  \};/)?.[1];
+const topNavFilterExpr = app.match(/const topNavItems = (.*);/)?.[1];
+assert.ok(canShowMenuBody && topNavFilterExpr);
+assert.match(app, /allTopNavItems\.filter\(\(item\) => canShowMenu\(item\.key\)\)/);
+const filterVisibleMenus = new Function('menuVisibility', 'menuAdminOnly', 'isAdminUser', 'isSplitAdminHomeNavigation', 'allTopNavItems',
+  'const canShowMenu = key => {' + canShowMenuBody + '}; return ' + topNavFilterExpr);
+const menuKeys = ['home', 'explore', 'studio', 'musicNote', 'library', 'lab', 'myPage'];
+for (const mode of ['studio-black', 'classic']) {
+  for (const path of ['/', '/studio', '/history']) {
+    for (const admin of [true, false]) {
+      for (const key of menuKeys) {
+        for (const access of ['public', 'admin', 'hidden']) {
+          const visible = Object.fromEntries(menuKeys.map(k => [k, k !== key || access !== 'hidden']));
+          const adminOnly = Object.fromEntries(menuKeys.map(k => [k, k === key && access === 'admin']));
+          const scope = splitAdminHome(mode, {pathname:path}, admin);
+          const actual = filterVisibleMenus(visible, adminOnly, admin, scope, menuKeys.map(key => ({key}))).map(item => item.key);
+          const expected = menuKeys.filter(k => visible[k] && (!adminOnly[k] || admin));
+          assert.deepEqual(actual, expected, 'Home layout may not override menu access: ' + key + ' ' + access);
+        }
+      }
+    }
+  }
+}
 assert.match(app, /!isSplitRailNavigation && topNavItems\.map/);
 assert.match(app, /isAdminUser && !isSplitRailNavigation/);
 // The previous global CSS rule masked the complete React header on Split

@@ -29,6 +29,7 @@ import {
 import { needsRecentSongsServerRead, needsRecentSongsSignalRecheck, canAcknowledgeRecentSongsInlineSignal, needsRecentSongsRetainedDraftGapRead460, shouldDeferRecentSongsServerReadForPendingText, hasRecentSongsCacheRecoveryFence, markRecentSongsCacheRecoveryFence, stageRecentLyricOrCommitExact } from './lib/recentSongsSyncGate';
 import {useNotificationDots017} from './services/notifications/useNotificationDots017';
 import {projectCompletedExistingGenerations004,findNotificationRecentIndex} from './services/notifications/notificationInbox004';
+import {notificationRecentSnapshot} from './services/notifications/notificationLocalLinks.mjs';
 import {rememberCompletedGenerationLog016} from './services/notifications/notificationRecentLog016';
 import { planRecentUnconfirmedRecovery436, patchExactRecentTextRow436, readRecentLyricHistory, appendRecentLyricVersion, mergeRecentLyricHistory, sameLyricVersionContent, resolveRecentLyricLocalView, stepRecentLyricLocalView, recentLyricCursorKey, captureDisplayedKoreanLyric, musicNoteLyricFingerprint, assertRecentLyricHistoryBudget, recentLyricBytes, type LyricHistoryEntry, type LyricHistoryLane, type LyricHistoryV1 } from './lib/recentUnconfirmedRecovery436';
 import { protectRecentCanonicalSnapshotFromPreview453, pickRecentSongLiveTextPreview457, pickRecentSongLiveAppliedKeywords457 } from './lib/recentSongCanonicalPreviewGuard453';
@@ -7745,7 +7746,12 @@ function App() {
     }
 
     if (songs.length > 0) {
-      const preferredIndex = options?.preferredIndex ?? null;
+      const pending=notificationRecentSelectionRef.current;
+      const exactIndex=pending&&pending.uid===auth.currentUser?.uid&&
+        (!pending.applied||findNotificationRecentIndex([resultRef.current],pending.id)>=0)
+        ?findNotificationRecentIndex(songs,pending.id):-1;
+      if(pending){if(pending.applied||exactIndex<0)notificationRecentSelectionRef.current=null;else pending.applied=true;}
+      const preferredIndex = exactIndex>=0?exactIndex:(options?.preferredIndex ?? null);
       const nextIndex = preferredIndex !== null && preferredIndex >= 0 && preferredIndex < songs.length ? preferredIndex : 0;
       setHistoryIndex(nextIndex);
       historyIndexRef.current = nextIndex;
@@ -10141,6 +10147,7 @@ const toggleCycleVariantSelection = (
   const historyIndexRef = useRef(historyIndex);
   const resultRef = useRef(result);
   const preserveHistoryIndexOnNextSnapshotRef = useRef<number | null>(null);
+  const notificationRecentSelectionRef=useRef<{uid:string;id:string;applied:boolean}|null>(null);
   const recentSongsReadyToCacheRef = useRef(false);
   const userRef = useRef(user);
 
@@ -13788,6 +13795,7 @@ const unlockAllFavorites = async () => {
   // Firestore remains the source of truth, but Studio verifies it with one server read instead of a persistent listener.
   useEffect(() => {
     if (!user) {
+      notificationRecentSelectionRef.current=null;
       recentSongsReadyToCacheRef.current = false;
       setHistory([]);
       setResult(null);
@@ -19715,6 +19723,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
   };
 
   const openStudioDashboardSong = (song: SongResult, index: number) => {
+    notificationRecentSelectionRef.current=null;
     clearCompletedGenerationForSong(song);
     setHistoryIndex(index);
     setResult(song);
@@ -19725,7 +19734,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
   };
   const openNotificationRecentSong = (noticeId:string):boolean => {
     if(!user?.uid||auth.currentUser?.uid!==user.uid||!canAccessNavigationMenu('studio'))return false;
-    const current=historyRef.current;
+    const outside=location.pathname!=='/studio';
+    const current=notificationRecentSnapshot(user.uid,historyRef.current,window.localStorage,outside) as SongResult[];
     const index=findNotificationRecentIndex(current,noticeId);
     if(index<0||!current[index])return false;
     if(location.pathname==='/studio')navigateStudioWorkspaceView('recent');
@@ -19734,6 +19744,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
       navigate('/studio?view=recent');
     }
     openStudioDashboardSong(current[index],index);
+    if(outside)notificationRecentSelectionRef.current={uid:user.uid,id:noticeId,applied:false};
     return true;
   };
 

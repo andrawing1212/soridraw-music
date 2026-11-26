@@ -374,3 +374,21 @@ assert.match(panel,/note\?\.uid===uid&&!isMusicNoteItemRemoved\(note\)/);
 assert.match(app,/findNotificationRecentIndex\(current,noticeId\)/);
 console.log('NOTIFICATION_RECENT_LINK_AND_OWN_CACHED_MEDIA_ONLY=PASS');
 }
+
+{
+const {notificationRecentSnapshot,notificationCachedNotes,notificationGenerationTime}=await import('../src/services/notifications/notificationLocalLinks.mjs');
+const storage={getItem:key=>key==='soridraw_recent_songs_cache_owner'?JSON.stringify({history:Array.from({length:12},(_,i)=>({id:'r'+i}))}):key==='soridraw_favorite_deleted_tombstones_owner'?'["deleted"]':null};
+assert.equal(notificationRecentSnapshot('owner',[],storage,true).length,10);
+assert.equal(notificationRecentSnapshot('other',[],storage,true).length,0);
+assert.equal(notificationRecentSnapshot('owner',[{id:'live'}],storage,false)[0].id,'live');
+assert.equal(notificationRecentSnapshot('owner',[{id:'live'}],{getItem:()=>JSON.stringify({history:[]})},true).length,0);
+const cached=[{uid:'owner',id:'saved',sunoShareUrl:'old'},{uid:'owner',id:'deleted'},{uid:'other',id:'foreign'}];
+const live=[{uid:'owner',id:'saved',sunoShareUrl:'new'}];
+assert.deepEqual(notificationCachedNotes('owner',live,cached,storage),live);
+assert.equal(notificationGenerationTime({seconds:1700000000,nanoseconds:1000000}),1700000000001);
+assert.equal(notificationGenerationTime('1700000000000'),1700000000000);
+assert.match(panel,/readCatalogSnapshotFromLocalCache\('musicNote',uid\)/);
+assert.match(panel,/notificationRecentSnapshot\(uid,suppliedRecentHistory,window.localStorage/);
+assert.match(app,/notificationRecentSnapshot\(user.uid,historyRef.current,window.localStorage,outside\)/);
+console.log('NOTIFICATION_LOCAL_RECENT_TEN_AND_NOTE_CATALOG_RESTORE=PASS');
+}

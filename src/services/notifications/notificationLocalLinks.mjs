@@ -16,7 +16,10 @@ export function notificationOwnNote(notes,uid,row,source){
  const legacy=original||(/^generated:(?!recent-).+/.test(row.id)?row.id.slice(10):'');
  const matches=notes.filter(note=>{
   if(note?.uid!==uid)return false;
-  if(key)return notificationRecentKey(note)===key;
+  if(key&&notificationRecentKey(note)===key)return true;
+  // Older saved notes may carry a stable source ID rather than the modern
+  // generation key. Reject conflicting generation identities, never use title.
+  if(key&&notificationRecentKey(note))return false;
   return !!legacy&&String(note.recentLegacySourceId||'')===legacy;
  });
  return matches.length===1?matches[0]:null;
@@ -41,4 +44,48 @@ export function notificationMedia(source){
  const coverUrl=notificationHttps(main?.coverUrl||main?.imageUrl||main?.thumbnailUrl||
   (legacyMatches?(source.sunoCoverUrl||source.sunoImageUrl||source.sunoArtworkUrl||source.coverUrl||source.imageUrl||source.thumbnailUrl):''));
  return {audioUrl,shareUrl,coverUrl};
+}
+
+// Read the existing UID-scoped Recent cache, not the backup and never the server.
+// An explicit empty snapshot must not revive previous songs.
+export function notificationRecentSnapshot(uid,history,storage,preferCache=false){
+ if(!uid)return [];
+ const live=Array.isArray(history)?history.slice(0,10):[];
+ if(!preferCache&&live.length)return live;
+ try{
+  const raw=storage?.getItem('soridraw_recent_songs_cache_'+uid);
+  const value=raw?JSON.parse(raw):null;
+  if(Array.isArray(value?.history))return value.history.slice(0,10);
+ }catch{}
+ return preferCache?[]:live;
+}
+export function notificationCachedNotes(uid,live,cached,storage){
+ if(!uid)return [];
+ let deleted=new Set();
+ try{
+  const raw=JSON.parse(storage?.getItem('soridraw_favorite_deleted_tombstones_'+uid)||'[]');
+  if(Array.isArray(raw))deleted=new Set(raw.map(String));
+ }catch{return []}
+ const byId=new Map();
+ for(const note of [...(cached||[]),...(live||[])]){
+  if(note?.uid!==uid)continue;
+  const id=String(note.firestoreId||note.id||'').trim();
+  if(id&&!deleted.has(id))byId.set(id,note);
+ }
+ return [...byId.values()];
+}
+export function notificationGenerationTime(value){
+ if(typeof value==='number')return Number.isSafeInteger(value)&&value>0?value:0;
+ if(typeof value==='string'&&value.trim()){
+  const numeric=Number(value);
+  const ms=Number.isSafeInteger(numeric)&&numeric>0?numeric:Date.parse(value);
+  return Number.isSafeInteger(ms)&&ms>0?ms:0;
+ }
+ if(value&&typeof value==='object'){
+  const seconds=Number(value.seconds??value._seconds);
+  const nanos=Number(value.nanoseconds??value._nanoseconds??0);
+  const ms=Math.floor(seconds*1000+nanos/1000000);
+  if(Number.isSafeInteger(ms)&&ms>0)return ms;
+ }
+ return 0;
 }

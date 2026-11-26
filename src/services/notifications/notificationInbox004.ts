@@ -3,6 +3,7 @@ import {getFirebaseAppCheckToken} from '../../firebase';
 import {EXPLORE_API_BASE} from '../../config/exploreEnvironment';
 import {canUseReleaseInbox} from './notificationPreviewHost022';
 import type {InboxNotification} from './notificationModel';
+import {notificationRecentKey} from './notificationLocalLinks.mjs';
 import {parseNotificationAccountSettings003,
   type NotificationAccountSettings003} from './notificationAccountSyncCore003';
 
@@ -54,12 +55,22 @@ export function projectCompletedExistingGenerations004(
     const image=limitText(song.imageUrl||song.coverUrl,4096);
     out.push({id:'generated:'+stable,category:'complete',actorName:'SORIDRAW',
       text:title+' 생성이 완료되었습니다.',createdAt:at,
+      ...(notificationRecentKey(song)?{recentKey:notificationRecentKey(song)}:{}),
       ...(song.status==='completed' && /^https:\/\//i.test(audio)
         ? {song:{id:stable,title,audioUrl:audio,
           ...(/^https:\/\//i.test(image)?{coverUrl:image}:{})}}:{})});
     if(out.length===limit)break;
   }
   return out.sort((a,b)=>b.createdAt-a.createdAt);
+}
+
+/** Only an exact notice in the current canonical ten can be opened. */
+export function findNotificationRecentIndex(history:readonly unknown[],id:string,now=Date.now()):number{
+  const matches:number[]=[];
+  history.slice(0,10).forEach((song,index)=>{
+    if(projectCompletedExistingGenerations004([song],now,1)[0]?.id===id)matches.push(index);
+  });
+  return matches.length===1?matches[0]:-1;
 }
 
 /** One authenticated GET on explicit inbox open; no polling/tab-reads. */

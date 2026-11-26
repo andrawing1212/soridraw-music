@@ -268,6 +268,18 @@ export const readNotificationFeedImage = (ownerUid: string, trackId?: string): s
   }
   return '';
 };
+// Existing public feed memory only: exact recipient and public track identity.
+export const readNotificationFeedTrack = (ownerUid: string, trackId: string): Record<string, unknown> | null => {
+  if (!ownerUid || !trackId) return null;
+  let inspected = 0;
+  for (const entry of exploreFeedMemoryCache.values()) {
+    for (const row of entry.rows) {
+      if (++inspected > 1200) return null;
+      if (row.ownerUid === ownerUid && String(row.id || row.trackId || '') === trackId) return row;
+    }
+  }
+  return null;
+};
 const getFeedCacheKey = (url: string) => `explore-feed:${url}`;
 const cloneRows = (rows: Array<Record<string, unknown>>) => rows.map((row) => ({ ...row }));
 const normalizeRevision = (value: unknown) => {

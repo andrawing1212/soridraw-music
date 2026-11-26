@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
-import {createApp738HostingApi,compareHostingArtifacts} from './app738-firebase-hosting-runtime.mjs';
+import {createApp738HostingApi,compareHostingArtifacts,reviewHostingCacheDifference} from './app738-firebase-hosting-runtime.mjs';
 import {runApp738HostingPromotion,verifyApp738ReleaseGate} from './app738-production-hosting-transaction.mjs';
 const SHA='f'.repeat(40),SUM='a'.repeat(64);
+const PF='1'.repeat(64),PC='2'.repeat(64),OF='3'.repeat(64),OC='4'.repeat(64);
+const security={glob:'**',headers:{'X-Content-Type-Options':'nosniff'}};
+const versionRule={glob:'/app-version.json',headers:{'Cache-Control':'no-store, must-revalidate'}};
+const prodConfig={headers:[security,versionRule],rewrites:[{glob:'**',path:'/index.html'}]};
+const previewConfig={...prodConfig,headers:[{glob:'**',headers:{...security.headers,'Cache-Control':'no-store'}},versionRule]};
 const SOURCE='sites/soridraw-preview/versions/preview507';
 const OLD='sites/soridraw/versions/oldprod';
 const NEW='sites/soridraw/versions/newrelease';
@@ -23,8 +28,8 @@ const evidence=()=>({
  previewSha:SHA,currentPreviewHead:SHA,
  source:{previewSha:SHA,distSha256:SUM,previewLiveDistSha256:SUM,noBuildTimeEnvironmentDrift:true},
  hosting:{
- preview:{site:'soridraw-preview',version:SOURCE},
- production:{site:'soridraw',version:OLD},
+ preview:{site:'soridraw-preview',version:SOURCE,filesSha256:PF,configSha256:PC},
+ production:{site:'soridraw',version:OLD,filesSha256:OF,configSha256:OC},
  sourceLiveMatchesPinnedBuild:true,cloneHeadersAndCacheReviewed:true,
  },
  workers:{
@@ -59,16 +64,16 @@ assert.throws(()=>verifyApp738ReleaseGate({
  evidence:bad,previewSha:SHA,mode:'deploy',approval:'DEPLOY_PRODUCTION',
 }),/APP737_FUNCTION_PARITY_NOT_VERIFIED/);
 
-const snap=(site,version,files='files123',config='cfg123')=>({
- site,version,assetCount:20,filesSha256:files,configSha256:config,
+const snap=(site,version,files=PF,config=PC,serving=previewConfig)=>({
+ site,version,assetCount:20,filesSha256:files,configSha256:config,config:serving,
  release:site==='soridraw'?'sites/soridraw/releases/old':'sites/soridraw-preview/releases/latest',
 });
 function mock({failSmoke=false,filesMismatch=false,concurrent=false,brokenRollback=false,
  unknownAfterFail=false,sourceMoved=false}={}){
  let current=OLD,releaseCount=0,cloneCount=0;
  const source=snap('soridraw-preview',SOURCE);
- const before=snap('soridraw',OLD,'oldfile','oldcfg');
- const candidate=snap('soridraw',NEW,filesMismatch?'wrong':source.filesSha256,source.configSha256);
+ const before=snap('soridraw',OLD,OF,OC,prodConfig);
+ const candidate=snap('soridraw',NEW,filesMismatch?'wrong':source.filesSha256,before.configSha256,prodConfig);
  const events=[];
  const api={
  async snapshotLive(site){
@@ -77,7 +82,7 @@ function mock({failSmoke=false,filesMismatch=false,concurrent=false,brokenRollba
   if(current===NEW)return {...candidate,release:'sites/soridraw/releases/new'};
   return before;
  },
- async clone(v){assert.equal(v,SOURCE);cloneCount++;events.push('clone');return NEW;},
+ async clone(v,options){assert.equal(v,SOURCE);assert.deepEqual(options,{productionConfig:prodConfig,rollbackVersion:OLD});cloneCount++;events.push('clone');return NEW;},
  async snapshotVersion(v){events.push('version:'+v);return v===NEW?candidate:before;},
  async live(site){
   events.push('live:'+site);
@@ -166,3 +171,38 @@ console.log('APP738_HOSTING_PROD_APPROVAL_FENCE=PASS');
 console.log('APP738_CLONE_FILE_CONFIG_PARITY_AND_CONCURRENCY=PASS');
 console.log('APP738_HOSTING_ROLLBACK_REHEARSAL=PASS_SYNTHETIC');
 console.log('APP738_TEST_PROD_SHARED_BACKEND_MUTATIONS=0; LIVE_DEPLOY=NOT_RUN');
+
+// Actual API adapter: clone inactive, patch only the new CREATED version,
+// preserve exact production config, then no release in this test.
+assert.equal(reviewHostingCacheDifference(previewConfig,prodConfig).compatible,true);
+assert.equal(reviewHostingCacheDifference({...previewConfig,rewrites:[]},prodConfig).compatible,false);
+assert.equal(reviewHostingCacheDifference(previewConfig,{...prodConfig,headers:[security]}).compatible,false);
+assert.equal(reviewHostingCacheDifference(previewConfig,{...prodConfig,headers:[{...security,headers:{'X-Content-Type-Options':'wrong'}},versionRule]}).compatible,false);
+const drift=mock(), driftEvidence=evidence();
+driftEvidence.hosting.preview.filesSha256='9'.repeat(64);
+await assert.rejects(()=>runApp738HostingPromotion({...args,evidence:driftEvidence,api:drift.api}),/REVIEWED_HOSTING_DIGEST_DRIFT_OR_MISSING/);
+assert.equal(drift.metrics().cloneCount,0);
+const patchCalls=[];
+const patchSend=async(uri,opts)=>{
+ const p=new URL(uri); const body=opts.body?JSON.parse(opts.body):null;
+ patchCalls.push({path:p.pathname,method:opts.method,body});
+ let response;
+ if(opts.method==='POST'&&p.pathname.endsWith('/versions:clone')){
+  assert.deepEqual(body,{sourceVersion:SOURCE,finalize:false});
+  response={name:'projects/soridraw/operations/clone1',done:true,response:{name:NEW}};
+ }else if(opts.method==='GET'&&p.pathname.endsWith('/channels/live/releases')){
+  response={releases:[{name:'sites/soridraw/releases/old',version:{name:OLD}}]};
+ }else if(opts.method==='GET'&&p.pathname.endsWith('/newrelease')){
+  response={name:NEW,status:'CREATED'};
+ }else if(opts.method==='PATCH'&&p.pathname.endsWith('/newrelease')){
+  assert.equal(p.searchParams.get('updateMask'),'config,status');
+  assert.deepEqual(body,{config:prodConfig,status:'FINALIZED'});
+  response={name:NEW,status:'FINALIZED',config:prodConfig};
+ }else throw Error('unexpected call');
+ return {ok:true,json:async()=>response};
+};
+const cacheApi=createApp738HostingApi('synthetic-test',{send:patchSend});
+assert.equal(await cacheApi.clone(SOURCE,{productionConfig:prodConfig,rollbackVersion:OLD}),NEW);
+assert.equal(patchCalls.filter(x=>x.method==='PATCH').length,1);
+assert.equal(patchCalls.some(x=>x.method==='POST'&&x.path.endsWith('/releases')),false);
+console.log('APP738_PRODUCTION_CACHE_POLICY_PRESERVED_AND_NON_CACHE_DRIFT_DENIED=PASS');

@@ -2,7 +2,7 @@
 // Server mutations only after independently reviewed APP737 feature/back-end
 // parity, director approval, exact source/dest snapshot and rollback readiness.
 import {assessApp737DirectPromotion} from './app737-direct-promotion-contract.mjs';
-import {SITES,compareHostingArtifacts} from './app738-firebase-hosting-runtime.mjs';
+import {SITES,compareHostingArtifacts,reviewHostingCacheDifference} from './app738-firebase-hosting-runtime.mjs';
 const SHA=/^[0-9a-f]{40}$/;
 const fail=(reason)=>{throw Error('APP738_PROMOTION_HOLD_'+reason)};
 const id=(name)=>String(name||'').split('/').pop();
@@ -57,7 +57,16 @@ export async function inspectApp738Live({
  if(!source.assetCount||!source.filesSha256||!source.configSha256||
     !before.assetCount||!before.filesSha256||!before.configSha256)
    fail('HOSTING_ASSET_OR_ROLLBACK_UNVERIFIED');
- return {source,before};
+ const pinned=evidence.hosting;
+ for(const [actual,expected] of [[source,pinned.preview],[before,pinned.production]]){
+  if(!/^[0-9a-f]{64}$/.test(String(expected.filesSha256||''))||
+     !/^[0-9a-f]{64}$/.test(String(expected.configSha256||''))||
+     actual.filesSha256!==expected.filesSha256||actual.configSha256!==expected.configSha256)
+    fail('REVIEWED_HOSTING_DIGEST_DRIFT_OR_MISSING');
+ }
+ const configReview=reviewHostingCacheDifference(source.config,before.config);
+ if(!configReview.compatible)fail('HOSTING_NON_CACHE_CONFIG_DRIFT_OR_VERSION_POLICY');
+ return {source,before,configReview};
 }
 async function postVerify(api,expected){
  for(let i=0;i<4;i++){
@@ -74,16 +83,19 @@ export async function runApp738HostingPromotion({
     typeof api.snapshotVersion!=='function'||typeof api.live!=='function')
    fail('HOSTING_API_NOT_VERIFIED');
  if(typeof smokeProduction!=='function')fail('REAL_PRODUCTION_SMOKE_REQUIRED');
- const {source,before}=await inspectApp738Live({
+ const {source,before,configReview}=await inspectApp738Live({
    api,previewSha,evidence,readCurrentPreviewSha,
  });
  let cloned=null,releaseAttempted=false;
  try{
   if(await readCurrentPreviewSha()!==previewSha)fail('SOURCE_CHANGED_BEFORE_CLONE');
-  cloned=await api.clone(source.version);
+  cloned=await api.clone(source.version,configReview.sameConfig?undefined:{
+    productionConfig:before.config,rollbackVersion:before.version,
+  });
+  if(cloned===before.version)fail('CLONE_RETURNED_EXISTING_ROLLBACK_VERSION');
   const candidate=await api.snapshotVersion(cloned);
   const parity=compareHostingArtifacts(source,candidate);
-  if(!parity.assetsMatch||!parity.configMatch)
+  if(!parity.assetsMatch||candidate.configSha256!==before.configSha256)
     fail('CLONED_ASSET_OR_HOSTING_CONFIG_MISMATCH');
   // Do not let someone else's concurrent release get rolled back.
   const currentProd=await api.live(SITES.production);
@@ -99,13 +111,13 @@ export async function runApp738HostingPromotion({
   const observed=await api.snapshotLive(SITES.production);
   if(observed.version!==cloned||
      observed.filesSha256!==source.filesSha256||
-     observed.configSha256!==source.configSha256)
+     observed.configSha256!==before.configSha256)
     fail('POST_RELEASE_ASSET_PARITY');
   if(await smokeProduction({targetVersion:cloned,previewSha})!==true)
     fail('PRODUCTION_LIVE_SMOKE_FAILED');
   return {status:'HOSTING_PROMOTION_PASS',sourcePreviewVersion:source.version,
     releasedProductionVersion:cloned,rollbackProductionVersion:before.version,
-    assetsMatched:true,settingsMatched:true,
+    assetsMatched:true,settingsMatched:true,productionConfigPreserved:true,
     backendWasModified:false,testWasTouched:false};
  }catch(error){
   if(!releaseAttempted)throw error; // only an INACTIVE version may exist.

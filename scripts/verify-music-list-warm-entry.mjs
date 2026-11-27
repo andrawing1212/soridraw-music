@@ -45,7 +45,7 @@ assert(app.includes('if (isMusicNoteInitialLiveReady(currentUser.uid)'),
   'a full Catalog must not paint older remote membership before initial RTDB reconciliation');
 assert(app.includes('|| isMusicNoteInitialLiveUnavailable(currentUser.uid)) setIsFavoritesLoading(false);'),
   'RTDB read failure still permits the existing Catalog-only fallback');
-assert(note.includes('((isFavoritesLoading && !isMusicNoteSharedView) || sharedMusicNoteLoading)'),
+assert(note.includes('const musicNotePreparing = (isFavoritesLoading && !isMusicNoteSharedView) || sharedMusicNoteLoading;'),
   'Music Note must not paint a one-item RTDB delta as the complete list during cold hydration');
 assert(!note.includes('isFavoritesLoading && activeFavoriteSource.length === 0'),
   'partial delta cannot bypass the catalog loader');
@@ -80,9 +80,18 @@ assert(auth.includes('setTracks([]);'),'account switch still erases previous UID
 assert(auth.includes('const session = startLibraryWorkspaceSession(resolvedUser.uid)'),
   'existing local-first + Catalog session remains unchanged');
 
-assert(note.includes("import MusicListLoadingState from '../components/music/MusicListLoadingState'"));
+assert(note.includes("import MusicNoteLoadingState from '../components/music/MusicNoteLoadingState'"));
 assert(library.includes("import MusicListLoadingState from '../components/music/MusicListLoadingState'"));
-assert(note.includes('<MusicListLoadingState />'));
+assert(note.includes('{musicNotePreparing ? (\n        <MusicNoteLoadingState embedded={musicNoteEmbedded} overlay />'), 'cold list still gates all rows on the same readiness condition');
+const noteSpinner = readFileSync('src/components/music/MusicNoteLoadingState.tsx', 'utf8');
+assert(noteSpinner.includes('animate-spin text-brand-orange'));
+assert(noteSpinner.includes('뮤직노트를 준비하는 중...'));
+assert(!/setTimeout|getDocs|fetch\(|setDoc|writeBatch|indexedDB/.test(noteSpinner),
+ 'unified Music Note loading presentation has no delay or IO');
+const noteRoute = app.slice(app.indexOf('path="/history"'), app.indexOf('<Route path="/archive"'));
+assert.equal((noteRoute.match(/<MusicNoteLoadingState \/>/g)||[]).length,3,
+ 'auth and both lazy route fallbacks use identical Music Note presentation');
+assert(note.includes('{!musicNotePreparing && ('),'no intermediate header before cold-list readiness');
 assert((library.match(/<MusicListLoadingState \/>/g)||[]).length===2,
   'Library workspace and playlist share same compact loader');
 assert(!note.includes('노트를 불러오는 중...'),'large Music Note card removed');
@@ -114,5 +123,5 @@ assert(app.includes('queueMicrotask(releaseFirstPaint);'),
 console.log('MUSIC_NOTE_FIRST_LIVE_SNAPSHOT_BEFORE_VISIBLE_WARM_CATALOG=PASS');
 console.log('MUSIC_NOTE_VERIFIED_CACHE_FIRST_PAINT_WITH_REMOTE_AUTHORITY_PRESERVED=PASS');
 console.log('LIBRARY_UID_SCOPED_INSTANT_SESSION_FIRST_PAINT=PASS');
-console.log('MUSIC_LIST_SHARED_DELAYED_COMPACT_LOADER=PASS');
+console.log('MUSIC_NOTE_UNIFIED_LOADING_AND_LIBRARY_DELAYED_COMPACT_LOADER=PASS');
 console.log('NO_EXTRA_SERVER_IO_OR_USER_DATA_REWRITE=PASS');

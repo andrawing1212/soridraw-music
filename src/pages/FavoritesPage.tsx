@@ -34,7 +34,7 @@ import { readRecentLyricHistory, resolveRecentLyricLocalView, stepRecentLyricLoc
 import MusicApiGenerateModal, { LanguageCode, SunoModelVersion } from '../components/MusicApiGenerateModal';
 import StudioCenterModalPortal from '../components/studio/StudioCenterModalPortal';
 import CacheDiagnosticBadge from '../components/CacheDiagnosticBadge';
-import MusicListLoadingState from '../components/music/MusicListLoadingState';
+import MusicNoteLoadingState from '../components/music/MusicNoteLoadingState';
 
 const SORIDRAW_930_ROUTE_USER_READ_CACHE = true;
 const SORIDRAW_917_MUSIC_NOTE_DELTA_SYNC_NO_FULLSCAN = true;
@@ -1170,6 +1170,7 @@ export default function FavoritesPage({
   onLongPressStart,
   onLongPressEnd,
   isFavoritesLoading = false,
+  musicNoteEmbedded = false,
   hasMoreFavorites = false,
   isLoadingMoreFavorites = false,
   onLoadMoreFavorites,
@@ -1190,6 +1191,7 @@ export default function FavoritesPage({
   onLongPressStart: (item: { id: string; label: string; labelKo?: string; description: string; descriptionKo?: string }) => void;
   onLongPressEnd: () => void;
   isFavoritesLoading?: boolean;
+  musicNoteEmbedded?: boolean;
   hasMoreFavorites?: boolean;
   isLoadingMoreFavorites?: boolean;
   onLoadMoreFavorites?: () => Promise<void> | void;
@@ -8495,9 +8497,13 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     </motion.div>
   );
 
+  // Presentation only: preserve the existing list readiness gate and all data effects.
+  const musicNotePreparing = (isFavoritesLoading && !isMusicNoteSharedView) || sharedMusicNoteLoading;
+
   return (
     <div 
       ref={musicNotePageRootRef}
+      style={musicNotePreparing ? { minHeight: musicNoteEmbedded ? 320 : '100vh' } : undefined}
       className={cn(
         "soridraw-responsive-content-page soridraw-musicnote-theme soridraw-musicnote-page-shell mx-auto w-full max-w-[1548px] px-4 md:px-6 pt-24 pb-12 font-sans relative",
         isSelectionMode ? "select-none" : ""
@@ -8725,6 +8731,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           height: 32px !important;
         }
       `}</style>
+      {!musicNotePreparing && (
+      <>
       {studioWorkspaceHeroHost
         ? createPortal(musicNotePageHeader, studioWorkspaceHeroHost)
         : musicNotePageHeader}
@@ -8953,8 +8961,11 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         renderMusicNoteFolderBar(musicNoteViewMode)
       )}
 
-      {((isFavoritesLoading && !isMusicNoteSharedView) || sharedMusicNoteLoading) ? (
-        <MusicListLoadingState />
+      </>
+      )}
+
+      {musicNotePreparing ? (
+        <MusicNoteLoadingState embedded={musicNoteEmbedded} overlay />
       ) : activeFavoriteSource.length === 0 ? (
         <div className="mt-2 md:mt-3 min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
           <Music className="w-12 h-12 text-[var(--text-secondary)]/20 mb-4" />

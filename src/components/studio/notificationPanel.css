@@ -242,3 +242,5 @@
 /* Creation history is navigation only; all music note icons retain the neutral color. */
 .soridraw-notification-end-icon[data-type="complete"]{position:relative;flex:none}
 .soridraw-notification-creation-dot{top:-5px;right:2px}
+
+.soridraw-notification-content .soridraw-notification-creation-title{display:inline;font-weight:600;color:inherit}

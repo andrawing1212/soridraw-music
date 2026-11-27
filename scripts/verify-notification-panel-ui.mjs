@@ -469,3 +469,6 @@ console.log('NOTIFICATION_CREATION_NO_URL_PLAYBACK=PASS');
 
 assert.match(panel,/\{row\.actorName\}\{' 님이'\}/);
 assert.match(panelCss,/\.soridraw-notification-content \.soridraw-notification-song-title\{\s*color:#fff;font-size:13px;/);
+
+assert.match(panel,/className="soridraw-notification-creation-title"\>\{row.text.replace\(/);
+assert.match(panelCss,/\.soridraw-notification-creation-title\{display:inline;font-weight:600;color:inherit\}/);

@@ -689,6 +689,11 @@ export default function NotificationPanel({ open, anchorRef, onClose, recentHist
                         onClick={()=>openRecent(row)}>{row.text.replace(/ 생성이 완료되었습니다\.$/,'')}</button>
                       {row.text.endsWith(' 생성이 완료되었습니다.')?' 생성이 완료되었습니다.':''}
                     </>
+                  ) : row.category==='complete' ? (
+                    <>
+                      <span className="soridraw-notification-creation-title">{row.text.replace(/ 생성이 완료되었습니다\.$/,'')}</span>
+                      {row.text.endsWith(' 생성이 완료되었습니다.')?' 생성이 완료되었습니다.':''}
+                    </>
                   ) : row.text}
                 </span>
                 {row.category!=='complete'&&row.song && <small className="soridraw-notification-song-title">{row.song.title}</small>}

@@ -48,3 +48,17 @@ assert.ok(playerApplyStart >= 0 && playerApplyEnd > playerApplyStart);
 assert.ok(player.slice(playerApplyStart, playerApplyEnd).includes("getDoc(doc(db, 'suno_tracks'"));
 
 console.log('VERIFY_029_MUSIC_NOTE_LIBRARY=PASS');
+
+// Music Note's three loading phases share a single presentation; Library stays separate.
+const app = read('src/App.tsx');
+const noteRoute = app.slice(app.indexOf('path="/history"'), app.indexOf('<Route path="/archive"'));
+assert.equal((noteRoute.match(/<MusicNoteLoadingState \/>/g) || []).length, 3);
+assert.ok(favorites.includes('const musicNotePreparing = (isFavoritesLoading && !isMusicNoteSharedView) || sharedMusicNoteLoading;'));
+assert.ok(favorites.includes('{!musicNotePreparing && ('));
+assert.ok(favorites.includes('<MusicNoteLoadingState embedded={musicNoteEmbedded} overlay />'));
+const noteLoader = read('src/components/music/MusicNoteLoadingState.tsx');
+assert.ok(noteLoader.includes('animate-spin text-brand-orange'));
+assert.ok(noteLoader.includes('뮤직노트를 준비하는 중...'));
+assert.doesNotMatch(noteLoader, /setTimeout|fetch\(|getDoc\(/);
+assert.ok(library.includes('MusicListLoadingState'));
+console.log('MUSIC_NOTE_LOADING_PRESENTATION_ONLY=PASS');

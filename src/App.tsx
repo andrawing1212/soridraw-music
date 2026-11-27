@@ -225,6 +225,7 @@ import { SORIDRAW_PROFILE_AVATAR_EVENT } from './services/profileAvatarAuthority
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
 import { recoverFromStaleChunkError, shouldShowStaleChunkRecovery } from './services/chunkLoadRecovery';
 import StudioPageFrame from './components/studio/StudioPageFrame';
+import MusicNoteLoadingState from './components/music/MusicNoteLoadingState';
 import StudioLeftRail, { type StudioWorkspaceView } from './components/studio/StudioLeftRail';
 import NotificationPanel from './components/studio/NotificationPanel';
 import StudioRightRail from './components/studio/StudioRightRail';
@@ -3163,6 +3164,7 @@ function HistoryRouteWrapper({
   return (
     <FavoritesPageLazy
       favorites={new URLSearchParams(location.search).has('note') ? [] : favorites}
+      musicNoteEmbedded={location.pathname === '/studio'}
       isFavoritesLoading={isFavoritesLoading}
       hasMoreFavorites={hasMoreFavorites}
       isLoadingMoreFavorites={isLoadingMoreFavorites}
@@ -21551,12 +21553,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     {studioWorkspaceView === 'music-note' ? (
                       <section className="soridraw-studio-workspace-page soridraw-studio-workspace-page--music-note" aria-label="뮤직노트 작업공간">
                         {!isAuthReady ? (
-                          <div className="soridraw-studio-workspace-loading">
-                            <Loader2 className="h-8 w-8 animate-spin text-brand-orange" />
-                            <span>뮤직노트를 불러오는 중...</span>
-                          </div>
+                          <MusicNoteLoadingState embedded />
                         ) : (user || auth.currentUser) ? (
-                          <Suspense fallback={<div className="soridraw-studio-workspace-loading"><Loader2 className="h-8 w-8 animate-spin text-brand-orange" /></div>}>
+                          <Suspense fallback={<MusicNoteLoadingState embedded />}>
                             <HistoryRouteWrapper
                               isFavoritesLoading={isFavoritesLoading}
                               hasMoreFavorites={hasMoreFavorites}
@@ -23063,12 +23062,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             !canAccessNavigationMenu('musicNote') ? (
               <FeatureUnavailablePage label="뮤직노트" fallbackPath={navigationFallbackPath} />
             ) : !isAuthReady ? (
-              <div className="min-h-screen flex items-center justify-center text-[var(--text-primary)] bg-[var(--bg-primary)]">
-                <div className="flex flex-col items-center gap-4">
-                  <Loader2 className="w-8 h-8 animate-spin text-brand-orange" />
-                  <p className="text-sm font-medium text-gray-400">사용자 정보를 불러오는 중...</p>
-                </div>
-              </div>
+              <MusicNoteLoadingState />
             ) : (user || auth.currentUser || new URLSearchParams(location.search).has('note')) ? (
               (user || auth.currentUser) ? (
                 <StudioPageFrame
@@ -23137,7 +23131,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     />
                   }
                 >
-                  <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+                  <Suspense fallback={<MusicNoteLoadingState />}>
                     <HistoryRouteWrapper
                       isFavoritesLoading={isFavoritesLoading}
                       hasMoreFavorites={hasMoreFavorites}
@@ -23158,7 +23152,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   </Suspense>
                 </StudioPageFrame>
               ) : (
-                <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+                <Suspense fallback={<MusicNoteLoadingState />}>
                   <HistoryRouteWrapper
                     isFavoritesLoading={isFavoritesLoading}
                     hasMoreFavorites={hasMoreFavorites}

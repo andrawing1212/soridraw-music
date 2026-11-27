@@ -235,7 +235,7 @@
 }
 
 /* Historical creation remains readable and independent of playback availability. */
-.soridraw-notification-row.is-archived-creation{opacity:.78}
+.soridraw-notification-row.is-archived-creation{opacity:.66}
 .soridraw-notification-recent-link{display:inline;padding:0;border:0;background:none;color:inherit;font:inherit;font-weight:600;text-align:left;cursor:pointer}
 .soridraw-notification-recent-link:hover,.soridraw-notification-recent-link:focus-visible{text-decoration:underline;text-underline-offset:3px}
 

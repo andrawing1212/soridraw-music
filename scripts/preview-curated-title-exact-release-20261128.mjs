@@ -96,13 +96,21 @@ async function deploy(id){
  need(await active(PRE)===id,'DEPLOY_NOT_EXACT');
 }
 async function run(){
- need(process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REPOSITORY==='andrawing1212/soridraw-music'&&process.env.GITHUB_ACTOR===process.env.GITHUB_REPOSITORY_OWNER&&process.env.GITHUB_REF==='refs/heads/release/preview-curated-title-20261128'&&process.env.GITHUB_RUN_ATTEMPT==='1'&&process.env.GITHUB_EVENT_NAME==='push'&&execFileSync('git',['rev-parse','HEAD^'],{encoding:'utf8'}).trim()==='c7a0cd1e91055394431c723d6142d677b12c6dc8'&&token.length>20,'ONE_SHOT_APPROVAL');
+ need(process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REPOSITORY==='andrawing1212/soridraw-music'&&process.env.GITHUB_ACTOR===process.env.GITHUB_REPOSITORY_OWNER&&process.env.GITHUB_REF==='refs/heads/release/preview-curated-title-20261128'&&process.env.GITHUB_RUN_ATTEMPT==='1'&&process.env.GITHUB_EVENT_NAME==='push'&&execFileSync('git',['rev-parse','HEAD^'],{encoding:'utf8'}).trim()==='af80252a945a03895d0f635d252d009f9a644975'&&token.length>20,'ONE_SHOT_APPROVAL');
  await protectedPins();
  const before=await snapshot(PRE,old);verifyBindings(before);
  const source=bytes(before.modules.find(x=>x.name===target)).toString('utf8');
  need(sha(source)==='742e10e4700c8e74fda5393f7a5f9358cb2499f9e85ec129e851744ed4763ad5','ACTIVE_CORE_PIN');
  need(!source.includes('isDirectMusicNotePublication20261128'),'ALREADY_PATCHED');
- const fixed=patchCuratedDirectPublication(source);
+ let fixed;
+ try { fixed=patchCuratedDirectPublication(source); }
+ catch(error) {
+  // Log only the short route expressions needed to diagnose formatting.
+  for(const key of ['curatedRepairTicket468 = {','generation: Number(payload468','snapshotItem: mutationPayload307','const previous = itemByTrackId','var previous = itemByTrackId']) {
+   const at=source.indexOf(key);if(at>=0)console.log('ANCHOR_CONTEXT '+source.slice(Math.max(0,at-20),at+240).replace(/\s+/g,' '));
+  }
+  throw error;
+ }
  need(fixed!==source,'NO_PATCH');
  await verifyCuratedDirectPublicationRouting(fixed);
  console.log('EXACT_ACTIVE_MODULE_PATCHED_ISOLATED_ROUTE_QA=PASS;PR1470_46093155878_REUSED');

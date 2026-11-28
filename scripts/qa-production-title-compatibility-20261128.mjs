@@ -5,7 +5,7 @@ import {execFileSync} from 'node:child_process';
 import {writeFileSync,mkdtempSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {patchCuratedDirectPublication} from './lib/patch-curated-direct-publication-20261128.mjs';
+import {patchCuratedDirectPublication} from './lib/patch-curated-direct-publication-deployed-20261128.mjs';
 const account='https://api.cloudflare.com/client/v4/accounts/e1a30fc9ef497fda1d34f4ab3dc1da45/';
 const PRE='soridraw-explore-preview',PRO='soridraw-explore-api',OWNER='soridraw-owner-follow-preview-candidate';
 const pins={
@@ -84,7 +84,7 @@ async function main(){
   const file=join(dir,'production-main.mjs');writeFileSync(file,candidate,{mode:0o600});
   const env={PATH:process.env.PATH,HOME:process.env.HOME};
   execFileSync(process.execPath,['--check',file],{env,stdio:'inherit'});
-  execFileSync(process.execPath,['--input-type=module','-e',"import {readFileSync} from 'node:fs'; import {verifyCuratedDirectPublicationRouting as verify} from './scripts/lib/verify-curated-direct-publication-routing-20261128.mjs'; await verify(readFileSync(process.argv[1],'utf8'));",file],{env,stdio:'inherit',timeout:60000});
+  execFileSync(process.execPath,['--input-type=module','-e',"import {readFileSync} from 'node:fs'; import {verifyCuratedDirectPublicationRouting as verify} from './scripts/lib/verify-curated-direct-publication-routing-deployed-20261128.mjs'; await verify(readFileSync(process.argv[1],'utf8'));",file],{env,stdio:'inherit',timeout:60000});
  }finally{rmSync(dir,{recursive:true,force:true})}
  const moduleHashes=d.modules.map(m=>({name:m.name,sha256:m.name==='production-main.mjs'?sha(candidate):sha(Buffer.from(m.content_base64,'base64'))}));
  console.log(JSON.stringify({titleCandidate:'PASS_LOCAL_EXACT_SOURCE',rollback:pins[PRO],previewCoreSha:sha(pre),productionOldCoreSha:sha(prod),productionCandidateCoreSha:sha(candidate),onlyChangedModule:'production-main.mjs',moduleHashes,cloudUpload:false},null,2));

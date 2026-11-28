@@ -134,6 +134,7 @@ export async function runApp738HostingPromotion({
  await checkpoint('baseline',before);
  try{
   if(await readCurrentPreviewSha()!==previewSha)fail('SOURCE_CHANGED_BEFORE_CLONE');
+  await checkpoint('stage-intent',{version:before.version});
   cloned=await api.clone(source.version,configReview.sameConfig?undefined:{
     productionConfig:before.config,rollbackVersion:before.version,
   });

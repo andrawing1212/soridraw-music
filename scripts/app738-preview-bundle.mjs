@@ -76,9 +76,10 @@ export async function runPreviewBundleCandidate({journal,api,bundle,sourceSha,re
  const before=await api.snapshotLive(SITE);
  const req={mode:'preview',site:SITE,stageFromBundle:true,sourceSha,filesSha256:bundle.filesSha256,configSha256:before.configSha256,evidenceSha256:bundle.evidenceSha256,before:{version:before.version,release:before.release}};
  const equal=(a,b)=>a.version===b.version&&a.release===b.release;
- return runHostingWriterCandidate({journal,request:req,async execute(_request,checkpoint){
+ return runHostingWriterCandidate({journal,request:req,guardedMutationProtocol:true,async execute(_request,checkpoint){
   if(await readCurrentPreviewSha()!==sourceSha||!equal(await api.live(SITE),before))fail('SOURCE_OR_BASELINE_CHANGED');
   await checkpoint('baseline',before);
+  await checkpoint('stage-intent',{version:before.version});
   const name=await api.stagePreview(bundle,before.config),staged=await api.snapshotVersion(name);
   if(staged.version!==name||staged.site!==SITE||staged.filesSha256!==req.filesSha256||staged.configSha256!==req.configSha256)fail('STAGED_CONTENT_MISMATCH');
   if(await readCurrentPreviewSha()!==sourceSha||!equal(await api.live(SITE),before))fail('SOURCE_OR_BASELINE_CHANGED');
@@ -91,6 +92,9 @@ export async function runPreviewBundleCandidate({journal,api,bundle,sourceSha,re
   const live=await api.snapshotLive(SITE);
   if(!equal(live,result)||live.filesSha256!==req.filesSha256||live.configSha256!==req.configSha256||await smoke(bundle)!==true)fail('POST_RELEASE_UNVERIFIED');
   return {...live,requestDigest:sha(JSON.stringify(normalized))};
+ },async confirm(observed){
+  const current=await api.snapshotLive(SITE);
+  return equal(current,observed)&&current.site===SITE&&current.filesSha256===req.filesSha256&&current.configSha256===req.configSha256;
  }});
 }
 if(process.argv[2]==='pack'){

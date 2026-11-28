@@ -290,7 +290,7 @@ const prodOptions={journal,api:cp.api,request:prodReq,evidenceRaw:prodRaw,
 const integrated=await runCommonHostingCandidate(prodOptions);
 assert.equal(integrated.release,'sites/soridraw/releases/new');
 assert.equal(journal.read().state.phase,'idle');
-assert.deepEqual(journal.read().state.checkpoints.map(x=>x.kind),['baseline','release-intent','release-ack']);
+assert.deepEqual(journal.read().state.checkpoints.map(x=>x.kind),['baseline','stage-intent','release-intent','release-ack']);
 assert.deepEqual(cp.metrics(),{releaseCount:1,cloneCount:1,current:NEW});
 const rejected=mock(),rejectedJournal=memoryJournal();
 await assert.rejects(()=>runCommonHostingCandidate({...prodOptions,journal:rejectedJournal,api:rejected.api,

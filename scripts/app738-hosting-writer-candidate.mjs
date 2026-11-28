@@ -106,14 +106,17 @@ export function createHostingJournal({cwd}={}){
 // Never clear it in finally, on a failed/unknown operation or on timeout.
 // Future trusted workflow must wire authenticated transport and separately
 // reviewed reconciliation; current real adapter remains permanently HOLD.
-export async function runHostingWriterCandidate({journal,request,execute,verify}={}){
+export async function runHostingWriterCandidate({journal,request,execute,verify,confirm,guardedMutationProtocol=false}={}){
  const req=normalizeHostingRequest(request);
  if(!journal||typeof journal.read!=='function'||typeof journal.compareAppend!=='function'||
    typeof execute!=='function'||typeof verify!=='function')fail('WRITER_COMPONENT_MISSING');
  const start=await journal.read();
  if(start.state?.schema!==1||start.state.phase!=='idle')fail('PENDING_OR_UNKNOWN_ATTEMPT');
  const attempt=randomUUID(),requestDigest=hash(req);
- let pending={schema:1,phase:'pending',attempt,requestDigest,request:req,checkpoints:[]};
+ // Only the integrated, checkpoint-fenced mutation paths opt into the
+ // no-write recovery protocol. Older records and generic fixtures cannot.
+ if(guardedMutationProtocol&&typeof confirm!=='function')fail('FINAL_CONFIRM_REQUIRED');
+ let pending={schema:1,phase:'pending',attempt,requestDigest,request:req,checkpoints:[],checkpointProtocol:guardedMutationProtocol?2:1};
  let owned=await journal.compareAppend(start.sha,pending);
  const locked=await journal.read();
  if(locked.sha!==owned||locked.state?.attempt!==attempt||
@@ -146,6 +149,9 @@ export async function runHostingWriterCandidate({journal,request,execute,verify}
    fail('OUTCOME_UNVERIFIED');
  const end=await journal.read();
  if(end.sha!==owned||end.state?.attempt!==attempt)fail('JOURNAL_OWNERSHIP_LOST');
+ // The smoke check may take time. Confirm the exact live release again
+ // immediately before writing success; exclusive writer is still required.
+ if(confirm&&await confirm(observed,req)!==true)fail('FINAL_LIVE_OUTCOME_DRIFT');
  await journal.compareAppend(owned,{schema:1,phase:'idle',lastAttempt:attempt,
    requestDigest,checkpoints:pending.checkpoints,result:{version:observed.version,release:observed.release}});
  return {status:'CANDIDATE_TRANSACTION_VERIFIED',attempt,site:req.site,
@@ -186,7 +192,7 @@ export async function runCommonHostingCandidate({
     await api.assertExclusiveReleaseAuthority()!==true)fail('LIVE_WRITER_UNVERIFIED');
  const exact=(a,b)=>a?.version===b.version&&a?.release===b.release;
  const contents=x=>x?.site===req.site&&x.filesSha256===req.filesSha256&&x.configSha256===req.configSha256;
- return runHostingWriterCandidate({journal,request:req,
+ return runHostingWriterCandidate({journal,request:req,guardedMutationProtocol:true,
   async execute(_request,checkpoint){
    if(await api.assertExclusiveReleaseAuthority()!==true)fail('LIVE_WRITER_UNVERIFIED');
    const before=await api.snapshotLive(req.site);
@@ -226,6 +232,10 @@ export async function runCommonHostingCandidate({
    if(!exact(actual,result)||!contents(actual))fail('LIVE_OUTCOME_DRIFT');
    return {...actual,requestDigest:hash(req)};
   },
+  async confirm(observed){
+   const current=await api.snapshotLive(req.site);
+   return exact(current,observed)&&contents(current);
+  },
  });
 }
 
@@ -233,16 +243,18 @@ export async function runCommonHostingCandidate({
 // Ordered, metadata-only receipts. A lost response is NOT a release receipt.
 // A pending attempt may only be reviewed, never automatically replayed.
 function validateCheckpoint(req,entries,kind,detail){
- if(!Array.isArray(entries)||entries.length>4||!detail||typeof detail!=='object')fail('CHECKPOINT_INVALID');
+ if(!Array.isArray(entries)||entries.length>5||!detail||typeof detail!=='object')fail('CHECKPOINT_INVALID');
  const previous=entries.at(-1);
- const expected={baseline:undefined,'release-intent':'baseline','release-ack':'release-intent','rollback-intent':'release-ack','rollback-ack':'rollback-intent'};
- if(!Object.hasOwn(expected,kind)||previous?.kind!==expected[kind])fail('CHECKPOINT_ORDER');
+ const expected={baseline:[undefined],'stage-intent':['baseline'],'release-intent':['baseline','stage-intent'],'release-ack':['release-intent'],'rollback-intent':['release-ack'],'rollback-ack':['rollback-intent']};
+ if(!Object.hasOwn(expected,kind)||!expected[kind].includes(previous?.kind))fail('CHECKPOINT_ORDER');
  const entry={kind,version:detail.version};
  if(!validVersion(entry.version,req.site))fail('CHECKPOINT_SITE');
  if(kind==='baseline'){
   if(!validRelease(detail,req.site)||detail.version!==req.before.version||detail.release!==req.before.release||
      !DIGEST.test(detail.filesSha256||'')||!DIGEST.test(detail.configSha256||''))fail('CHECKPOINT_BASELINE');
   Object.assign(entry,{release:detail.release,filesSha256:detail.filesSha256,configSha256:detail.configSha256});
+ }else if(kind==='stage-intent'){
+  if((req.mode!=='production'&&!req.stageFromBundle)||entry.version!==req.before.version)fail('CHECKPOINT_STAGE_TARGET');
  }else if(kind==='release-intent'){
   if(entry.version===req.before.version||(req.targetVersion&&entry.version!==req.targetVersion))fail('CHECKPOINT_RELEASE_TARGET');
  }else if(kind==='rollback-intent'){
@@ -270,6 +282,12 @@ export function inspectPendingHostingOutcome({record,observed}={}){
  const current=validRelease(observed,req.site)&&observed.site===req.site&&
   DIGEST.test(observed.filesSha256||'')&&DIGEST.test(observed.configSha256||'');
  let outcome='UNKNOWN_OR_FOREIGN_HOLD';
+ // No write is possible on the integrated v2 paths until a durable
+ // stage-intent or release-intent exists. Require unchanged exact baseline;
+ // a legacy record, staging intent, lost ACK or foreign release never qualifies.
+ if(current&&state.checkpointProtocol===2&&Array.isArray(state.checkpoints)&&
+    (entries.length===0||last?.kind==='baseline')&&observed.version===req.before.version&&observed.release===req.before.release&&
+    (!base||(observed.filesSha256===base.filesSha256&&observed.configSha256===base.configSha256)))outcome='NO_HOSTING_WRITE_BASELINE_OBSERVED';
  if(current&&last?.kind==='release-ack'&&last.release===observed.release&&last.version===observed.version&&
     observed.filesSha256===req.filesSha256&&observed.configSha256===req.configSha256)outcome='OWNED_RELEASE_OBSERVED';
  if(current&&last?.kind==='rollback-ack'&&last.release===observed.release&&last.version===observed.version&&
@@ -282,7 +300,8 @@ export function inspectPendingHostingOutcome({record,observed}={}){
 // Candidate journal-only reconciliation. Real transport hard-HOLD applies;
 // no production workflow or CLI calls this. The external review port must
 // be independently authenticated at cutover, not an input boolean or timer.
-// Only an owned acknowledged terminal state is eligible; no ACK means HOLD.
+// An owned acknowledged terminal state or fenced pre-write abort is eligible;
+// a missing ACK after any mutation intent still means HOLD.
 export async function reconcileHostingJournalCandidate({journal,api,reviewRaw,reviewSha256,approval,verifyIndependentReview}={}){
  if(approval!=='RECONCILE_HOSTING_JOURNAL'||typeof reviewRaw!=='string'||hashRaw(reviewRaw)!==reviewSha256||
     typeof verifyIndependentReview!=='function')fail('RECONCILIATION_APPROVAL_REQUIRED');

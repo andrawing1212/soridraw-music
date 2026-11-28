@@ -6,14 +6,20 @@ on:
     branches: [preview]
   workflow_dispatch:
     inputs:
-      preview_sha:
+      mode:
+        description: 'Journal-only auth proof or explicitly approved production (HOLD)'
+        type: choice
         required: true
+        default: journal-proof
+        options: [journal-proof, production]
+      preview_sha:
+        required: false
         type: string
       production_approval:
-        required: true
+        required: false
         type: string
       evidence_sha256:
-        required: true
+        required: false
         type: string
 permissions:
   contents: read
@@ -34,12 +40,12 @@ jobs:
         github.event.workflow_run.path == '.github/workflows/app738-preview-artifact.yml' &&
         github.event.workflow_run.run_attempt == 1) ||
        (github.event_name == 'workflow_dispatch' && github.actor_id == '268937716' &&
-        inputs.production_approval == 'DEPLOY_PRODUCTION'))
+        inputs.mode == 'production' && inputs.production_approval == 'DEPLOY_PRODUCTION'))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: hosting-writer
     permissions:
-      contents: write
+      contents: read
       actions: read
       id-token: write
     steps:
@@ -75,9 +81,19 @@ jobs:
           access_token_lifetime: 600s
           create_credentials_file: false
           export_environment_variables: false
+      - name: Mint repository-scoped journal App token
+        id: journal-auth
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: '5968461'
+          private-key: ${{ secrets.HOSTING_JOURNAL_APP_PRIVATE_KEY }}
+          owner: andrawing1212
+          repositories: soridraw-music
+          permission-contents: write
       - name: Run trusted Hosting-only controller
         env:
           FIREBASE_ACCESS_TOKEN: ${{ steps.writer-auth.outputs.access_token }}
+          HOSTING_JOURNAL_APP_TOKEN: ${{ steps.journal-auth.outputs.token }}
           APP738_SOURCE_SHA: ${{ github.event.workflow_run.head_sha || inputs.preview_sha }}
           APP738_APPROVAL: ${{ inputs.production_approval }}
           APP738_EVIDENCE_SHA256: ${{ inputs.evidence_sha256 }}
@@ -88,3 +104,46 @@ jobs:
           else
             node scripts/app738-wif-writer-cli.mjs production
           fi
+
+  journal-proof:
+    if: >-
+      github.repository_id == '1188157610' &&
+      github.repository_owner_id == '268937716' &&
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'workflow_dispatch' &&
+      github.actor_id == '268937716' &&
+      inputs.mode == 'journal-proof'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: hosting-writer
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 1
+          persist-credentials: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - name: Verify immutable main before journal-only proof
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_WORKFLOW_SHA"
+          test "$GITHUB_WORKFLOW_SHA" = "$(git ls-remote origin refs/heads/main | cut -f1)"
+      - name: Mint repository-scoped journal App token
+        id: journal-auth
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: '5968461'
+          private-key: ${{ secrets.HOSTING_JOURNAL_APP_PRIVATE_KEY }}
+          owner: andrawing1212
+          repositories: soridraw-music
+          permission-contents: write
+      - name: Append one idle genesis proof receipt only
+        env:
+          HOSTING_JOURNAL_APP_TOKEN: ${{ steps.journal-auth.outputs.token }}
+        run: |
+          set -euo pipefail
+          node scripts/app738-journal-app-proof.mjs

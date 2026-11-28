@@ -84,3 +84,13 @@ assert.match(wf,/head_repository.id == 1188157610/);assert.match(wf,/github.even
 console.log('APP738_PREVIEW_BUNDLE_UPLOAD_SCOPE_JOURNAL_AND_AUTH_HOLD=PASS_SYNTHETIC');
 
 console.log('APP738_PREWRITE_REVIEWED_RECOVERY_AND_FINAL_RELEASE_DRIFT=PASS_SYNTHETIC');
+
+assert.ok(wf.indexOf('assertApp738ProductionWriteAuthority()')<wf.indexOf('actions/create-github-app-token@'));
+assert.ok(!wf.includes('contents: write'));
+assert.match(wf,/app-id: '5968461'/);
+assert.match(wf,/permission-contents: write/);
+const proofJob=wf.slice(wf.indexOf('  journal-proof:'));
+assert.ok(!proofJob.includes('google-github-actions/auth@')&&!proofJob.includes('id-token: write')&&!proofJob.includes('FIREBASE_ACCESS_TOKEN'));
+assert.match(proofJob,/inputs.mode == 'journal-proof'/);
+assert.match(proofJob,/node scripts\/app738-journal-app-proof.mjs/);
+console.log('APP738_JOURNAL_APP_SCOPE_AND_PROOF_ISOLATION=PASS_SOURCE');

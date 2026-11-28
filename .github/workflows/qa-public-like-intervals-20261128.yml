@@ -1,0 +1,20 @@
+name: QA public like all interval transitions (offline)
+on:
+  push:
+    branches: [qa/production-title-compatibility-20261128]
+    paths: ['scripts/verify-448-all-public-intervals-20261128.mjs', '.github/workflows/qa-public-like-intervals-20261128.yml']
+permissions:
+  contents: read
+jobs:
+  virtual-clock:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Confirm exact existing runtime and test virtual intervals
+        run: |
+          test "$(git hash-object cloudflare/explore-worker/runtime/public-like-window-416.mjs)" = 83d594aff768a27863f717857d2780357ff27cef
+          node scripts/verify-448-all-public-intervals-20261128.mjs

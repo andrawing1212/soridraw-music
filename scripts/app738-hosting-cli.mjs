@@ -3,7 +3,7 @@
 import {readFileSync,existsSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
-import {createApp738HostingApi,reviewHostingCacheDifference} from './app738-firebase-hosting-runtime.mjs';
+import {createApp738HostingApi,reviewHostingCacheDifference,assertApp738ProductionWriteAuthority} from './app738-firebase-hosting-runtime.mjs';
 import {runApp738HostingPromotion,verifyApp738GitSourcePin} from './app738-production-hosting-transaction.mjs';
 
 const fail=s=>{throw Error('APP738_RUN_HOLD_'+s)};
@@ -59,7 +59,7 @@ async function run(){
       },sameFiles:a.filesSha256===b.filesSha256,
       sameConfig:a.configSha256===b.configSha256,
       cachePolicyReview:reviewHostingCacheDifference(a.config,b.config),
-      deployStatus:'HOLD_UNTIL_APPROVED_COMPLETE_FEATURE_PARITY',
+      deployStatus:'HOLD_UNTIL_APPROVED_COMPLETE_FEATURE_PARITY_AND_EXCLUSIVE_WRITER',
     }));
     return;
   }
@@ -69,6 +69,8 @@ async function run(){
     fail('DIRECTOR_GITHUB_OWNER_ONLY');
   if(process.env.APP738_PRODUCTION_APPROVAL!=='DEPLOY_PRODUCTION')
     fail('EXPLICIT_PRODUCTION_APPROVAL_MISSING');
+  // Live credentials do not establish exclusive authority.
+  assertApp738ProductionWriteAuthority();
   const previewSha=process.env.APP738_PREVIEW_SHA||'';
   if(!HEAD.test(previewSha)||currentPreviewHead()!==previewSha)
     fail('LIVE_PREVIEW_SHA_CHANGED');

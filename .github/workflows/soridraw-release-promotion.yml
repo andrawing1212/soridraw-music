@@ -88,6 +88,13 @@ jobs:
             MANIFEST_TAG="$(jq -r .manifestTag <<<"$parsed")"; APPROVAL="$(jq -r .approval <<<"$parsed")"
           fi
           case "$MODE" in preflight_only|test|production) ;; *) exit 2;; esac
+          # APP738 is the sole intended production Hosting path.
+          if [ "$MODE" = production ]; then
+            echo 'LEGACY_PRODUCTION_DISABLED_USE_APP738'; exit 2
+          fi
+          if [ "$MODE" = test ]; then
+            echo 'LEGACY_TEST_DISABLED_NO_TEST_POLICY'; exit 2
+          fi
           export RELEASE_MODE="$MODE" RELEASE_TARGET_INPUT="${TARGET:-$MANIFEST_TAG}"
           node scripts/update-release-control-status.mjs create REQUESTED
           git config user.name "soridraw-release-bot"
@@ -438,7 +445,7 @@ jobs:
           node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update RELEASED || echo 'RELEASE_STATUS_RELEASED_UPDATE=WARNING'
 
       - name: Rollback branch and Worker traffic after deployment failure
-        if: failure() && steps.request.outputs.mode != 'preflight_only'
+        if: failure() && steps.request.outputs.mode == 'test'
         shell: bash
         run: |
           set +e

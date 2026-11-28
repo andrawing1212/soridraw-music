@@ -1,0 +1,90 @@
+name: SORIDRAW APP738 common Hosting writer candidate
+on:
+  workflow_run:
+    workflows: [SORIDRAW APP738 PREVIEW Hosting artifact candidate]
+    types: [completed]
+    branches: [preview]
+  workflow_dispatch:
+    inputs:
+      preview_sha:
+        required: true
+        type: string
+      production_approval:
+        required: true
+        type: string
+      evidence_sha256:
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-release-controller
+  cancel-in-progress: false
+jobs:
+  writer:
+    if: >-
+      github.repository_id == '1188157610' &&
+      github.repository_owner_id == '268937716' &&
+      github.ref == 'refs/heads/main' &&
+      ((github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'preview' &&
+        github.event.workflow_run.head_repository.id == 1188157610 &&
+        github.event.workflow_run.path == '.github/workflows/app738-preview-artifact.yml' &&
+        github.event.workflow_run.run_attempt == 1) ||
+       (github.event_name == 'workflow_dispatch' && github.actor_id == '268937716' &&
+        inputs.production_approval == 'DEPLOY_PRODUCTION'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: hosting-writer
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - name: Hard HOLD before auth, artifacts or journal writes
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_WORKFLOW_SHA"
+          test "$GITHUB_WORKFLOW_SHA" = "$(git ls-remote origin refs/heads/main | cut -f1)"
+          node --input-type=module -e "import {assertApp738ProductionWriteAuthority} from './scripts/app738-firebase-hosting-runtime.mjs'; assertApp738ProductionWriteAuthority()"
+      - name: Download exact triggering build artifact as data only
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: preview-bundle-${{ github.event.workflow_run.head_sha }}-1
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/app738-bundle
+      - name: Authenticate only new keyless writer
+        id: writer-auth
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed
+        with:
+          workload_identity_provider: projects/450781969193/locations/global/workloadIdentityPools/soridraw-hosting-github/providers/app738-writer
+          service_account: soridraw-hosting-writer@soridraw.iam.gserviceaccount.com
+          token_format: access_token
+          access_token_lifetime: 600s
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Run trusted Hosting-only controller
+        env:
+          FIREBASE_ACCESS_TOKEN: ${{ steps.writer-auth.outputs.access_token }}
+          APP738_SOURCE_SHA: ${{ github.event.workflow_run.head_sha || inputs.preview_sha }}
+          APP738_APPROVAL: ${{ inputs.production_approval }}
+          APP738_EVIDENCE_SHA256: ${{ inputs.evidence_sha256 }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = workflow_run ]; then
+            node scripts/app738-wif-writer-cli.mjs preview "$RUNNER_TEMP/app738-bundle/preview-bundle.json"
+          else
+            node scripts/app738-wif-writer-cli.mjs production
+          fi

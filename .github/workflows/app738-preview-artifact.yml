@@ -1,0 +1,52 @@
+name: SORIDRAW APP738 PREVIEW Hosting artifact candidate
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/preview-app-release.trigger'
+permissions:
+  contents: read
+jobs:
+  build:
+    if: github.repository_id == '1188157610' && github.ref == 'refs/heads/preview'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+      - name: Build and check without cloud credentials
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          node --input-type=module -e "import{verifyHostingOnlyTrigger}from './scripts/app738-preview-bundle.mjs';import{readFileSync}from 'node:fs';verifyHostingOnlyTrigger(readFileSync('.deploy/preview-app-release.trigger','utf8'))"
+          git fetch origin main --no-tags
+          git show origin/main:scripts/verify-515-main-release-floor.mjs > "$RUNNER_TEMP/app515-main-release-floor.mjs"
+          node "$RUNNER_TEMP/app515-main-release-floor.mjs" "$PWD"
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-281-suno-url-cross-device.mjs
+          npx tsx scripts/verify-368-live-profile-like-convergence.ts
+          npx tsx scripts/verify-369-my-likes-settlement-upgrade.ts
+          npx tsx scripts/verify-370-my-likes-navigation-worker-zero.ts
+          npx tsx scripts/verify-371-music-note-publication-origin-parity.ts
+          node scripts/verify-377-follow-count-list-sync.mjs
+          node scripts/verify-385-follow-list-update-r0.mjs
+          node scripts/verify-217-cache-live-update-reset.mjs
+          node scripts/verify-386-follow-overlay-count-display.mjs
+          node scripts/verify-420-atomic-cutover-barrier.mjs
+          node scripts/verify-420-mandatory-upgrade.mjs
+          node scripts/app738-preview-bundle.mjs pack dist "$GITHUB_SHA" "$RUNNER_TEMP/preview-bundle.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: preview-bundle-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/preview-bundle.json
+          if-no-files-found: error
+          retention-days: 2

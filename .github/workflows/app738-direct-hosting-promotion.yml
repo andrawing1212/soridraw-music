@@ -9,7 +9,15 @@ on:
       - 'scripts/app738-production-hosting-transaction.mjs'
       - 'scripts/app738-hosting-cli.mjs'
       - 'scripts/verify-738-hosting-promotion.mjs'
+      - 'scripts/app738-hosting-writer-candidate.mjs'
+      - 'scripts/verify-738-hosting-writer-candidate.mjs'
+      - 'scripts/app738-preview-bundle.mjs'
+      - 'scripts/app738-wif-writer-cli.mjs'
+      - 'scripts/verify-738-preview-bundle.mjs'
+      - '.github/workflows/app738-preview-artifact.yml'
+      - '.github/workflows/app738-hosting-writer.yml'
       - '.github/workflows/app738-direct-hosting-promotion.yml'
+      - '.github/workflows/soridraw-release-promotion.yml'
   issue_comment:
     types: [created]
   workflow_dispatch:
@@ -19,7 +27,11 @@ on:
         required: true
         default: inventory
         type: choice
-        options: [inventory, deploy]
+        options: [inventory, deploy, wif-readonly, wif-writer-proof]
+      hosting_project_number:
+        description: 'Verified Hosting soridraw project number (WIF read-only mode only)'
+        required: false
+        type: string
       preview_sha:
         description: 'Exact current PREVIEW 40-character commit (deploy only)'
         required: false
@@ -37,7 +49,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: soridraw-app738-production-hosting
+  group: soridraw-release-controller
   cancel-in-progress: false
 
 jobs:
@@ -60,12 +72,15 @@ jobs:
           node --check scripts/app738-production-hosting-transaction.mjs
           node --check scripts/app738-hosting-cli.mjs
           node scripts/verify-738-hosting-promotion.mjs
+          node scripts/verify-738-hosting-writer-candidate.mjs
+          node --check scripts/app738-wif-writer-cli.mjs
+          node scripts/verify-738-preview-bundle.mjs
 
   run:
     if: >-
       github.repository == 'andrawing1212/soridraw-music' &&
       github.actor == github.repository_owner &&
-      (github.event_name == 'workflow_dispatch' ||
+      ((github.event_name == 'workflow_dispatch' && inputs.mode != 'wif-readonly' && inputs.mode != 'wif-writer-proof') ||
         (github.event_name == 'issue_comment' &&
          github.event.issue.number == 1261 &&
          github.event.issue.pull_request != null &&
@@ -105,7 +120,7 @@ jobs:
               test -f DOCS/APP738_APPROVED_DIRECT_RELEASE_EVIDENCE.json || {
                 echo 'APP738_REVIEWED_RELEASE_EVIDENCE_NOT_PRESENT_HOLD';exit 2;
               }
-              echo 'APP738_MODE=deploy' >> "$GITHUB_ENV"
+              echo 'APP738_PRODUCTION_EXCLUSIVE_WRITER_UNVERIFIED_HOLD'; exit 2
               ;;
             *) exit 2;;
           esac
@@ -127,3 +142,142 @@ jobs:
           if [ "$APP738_MODE" = inventory ]; then
             echo 'APP738_GET_ONLY_LIVE_VERSION_FILES=PASS; PRODUCTION=HOLD'
           fi
+
+  # Separate, temporary proof path; no legacy secret, checkout, journal or write transport.
+  wif-readonly:
+    if: >-
+      github.repository_id == '1188157610' &&
+      github.repository_owner_id == '268937716' &&
+      github.actor_id == '268937716' &&
+      github.event_name == 'workflow_dispatch' &&
+      inputs.mode == 'wif-readonly' &&
+      github.ref == 'refs/heads/fix/app738-owned-release-rollback-20261128' &&
+      github.workflow_sha == github.sha
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Validate Hosting project number before authentication
+        env:
+          PROJECT_NUMBER: ${{ inputs.hosting_project_number }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$PROJECT_NUMBER" | grep -Eq '^[1-9][0-9]{5,19}$'
+          test "$PROJECT_NUMBER" != 1083981050742
+      - name: Authenticate new Hosting read-only identity
+        id: wif
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed
+        with:
+          workload_identity_provider: projects/${{ inputs.hosting_project_number }}/locations/global/workloadIdentityPools/soridraw-hosting-proof/providers/app738-readonly
+          service_account: soridraw-hosting-reader@soridraw.iam.gserviceaccount.com
+          token_format: access_token
+          access_token_lifetime: 600s
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Verify project, two Hosting sites and absence of Hosting write permission
+        env:
+          TOKEN: ${{ steps.wif.outputs.access_token }}
+          PROJECT_NUMBER: ${{ inputs.hosting_project_number }}
+        run: |
+          set -euo pipefail
+          test -n "$TOKEN"
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const number=process.env.PROJECT_NUMBER;
+          const headers={Authorization:'Bearer '+process.env.TOKEN,'Content-Type':'application/json'};
+          async function read(url,options={}){
+            const response=await fetch(url,{...options,headers,redirect:'error'});
+            if(!response.ok)throw Error('READ_ONLY_PROOF_HTTP_'+response.status);
+            return response.json();
+          }
+          const base='https://firebasehosting.googleapis.com/v1beta1/';
+          for(const site of ['soridraw-preview','soridraw']){
+            for(const project of ['soridraw',number]){
+              const item=await read(base+'projects/'+project+'/sites/'+site);
+              assert.ok(['projects/'+number+'/sites/'+site,'projects/soridraw/sites/'+site].includes(item.name));
+            }
+            const live=await read(base+'sites/'+site+'/channels/live/releases?pageSize=1');
+            const row=live.releases?.[0];
+            assert.ok(row?.name&&row?.version?.name?.startsWith('sites/'+site+'/versions/'));
+            console.log('APP738_WIF_SITE_GET_PASS '+site);
+          }
+          // testIamPermissions is a read-only capability query, not a write test.
+          const checked=['firebasehosting.sites.get','firebasehosting.sites.list','firebasehosting.sites.update','firebasehosting.sites.create','firebasehosting.sites.delete'];
+          const p=await read('https://cloudresourcemanager.googleapis.com/v1/projects/soridraw:testIamPermissions',{
+            method:'POST',body:JSON.stringify({permissions:checked})
+          });
+          assert.deepEqual([...(p.permissions||[])].sort(),checked.slice(0,2).sort());
+          console.log('APP738_WIF_HOSTING_READ_ONLY=PASS; HOSTING_WRITES=0; PRODUCTION_DEPLOY=NOT_RUN');
+          NODE
+
+  # Writer identity bootstrap only: Viewer, never Hosting Admin or deployment.
+  # The provider must pin this exact branch and commit SHA until later cutover.
+  wif-writer-proof:
+    if: >-
+      github.repository_id == '1188157610' &&
+      github.repository_owner_id == '268937716' &&
+      github.actor_id == '268937716' &&
+      github.event_name == 'workflow_dispatch' &&
+      inputs.mode == 'wif-writer-proof' &&
+      github.ref == 'refs/heads/fix/app738-owned-release-rollback-20261128' &&
+      github.workflow_sha == github.sha
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Validate Hosting project number before authentication
+        env:
+          PROJECT_NUMBER: ${{ inputs.hosting_project_number }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$PROJECT_NUMBER" | grep -Eq '^[1-9][0-9]{5,19}$'
+          test "$PROJECT_NUMBER" = 450781969193
+      - name: Authenticate prospective writer with read-only permissions
+        id: wif
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed
+        with:
+          workload_identity_provider: projects/${{ inputs.hosting_project_number }}/locations/global/workloadIdentityPools/soridraw-hosting-github/providers/app738-writer
+          service_account: soridraw-hosting-writer@soridraw.iam.gserviceaccount.com
+          token_format: access_token
+          access_token_lifetime: 600s
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Verify project, two Hosting sites and absence of Hosting write permission
+        env:
+          TOKEN: ${{ steps.wif.outputs.access_token }}
+          PROJECT_NUMBER: ${{ inputs.hosting_project_number }}
+        run: |
+          set -euo pipefail
+          test -n "$TOKEN"
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const number=process.env.PROJECT_NUMBER;
+          const headers={Authorization:'Bearer '+process.env.TOKEN,'Content-Type':'application/json'};
+          async function read(url,options={}){
+            const response=await fetch(url,{...options,headers,redirect:'error'});
+            if(!response.ok)throw Error('READ_ONLY_PROOF_HTTP_'+response.status);
+            return response.json();
+          }
+          const base='https://firebasehosting.googleapis.com/v1beta1/';
+          for(const site of ['soridraw-preview','soridraw']){
+            for(const project of ['soridraw',number]){
+              const item=await read(base+'projects/'+project+'/sites/'+site);
+              assert.ok(['projects/'+number+'/sites/'+site,'projects/soridraw/sites/'+site].includes(item.name));
+            }
+            const live=await read(base+'sites/'+site+'/channels/live/releases?pageSize=1');
+            const row=live.releases?.[0];
+            assert.ok(row?.name&&row?.version?.name?.startsWith('sites/'+site+'/versions/'));
+            console.log('APP738_WRITER_BOOTSTRAP_SITE_GET_PASS '+site);
+          }
+          // testIamPermissions is a read-only capability query, not a write test.
+          const checked=['firebasehosting.sites.get','firebasehosting.sites.list','firebasehosting.sites.update','firebasehosting.sites.create','firebasehosting.sites.delete'];
+          const p=await read('https://cloudresourcemanager.googleapis.com/v1/projects/soridraw:testIamPermissions',{
+            method:'POST',body:JSON.stringify({permissions:checked})
+          });
+          assert.deepEqual([...(p.permissions||[])].sort(),checked.slice(0,2).sort());
+          console.log('APP738_WRITER_BOOTSTRAP_VIEWER=PASS; HOSTING_WRITES=0; WRITER_ADMIN_NOT_GRANTED; PRODUCTION_DEPLOY=NOT_RUN');
+          NODE

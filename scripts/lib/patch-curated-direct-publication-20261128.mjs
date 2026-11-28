@@ -20,5 +20,9 @@ export function patchCuratedDirectPublication(source) {
     'trackId: String(mutationPayload307?.data?.trackId || (isDirectMusicNotePublication20261128 ? "" : decodeURIComponent(url.pathname.split("/")[3] || ""))).trim()');
   replace(/status:\s*mutationPayload307\?\.data\?\.isPublic\s*===\s*true\s*\?\s*['"]public['"]\s*:\s*['"]private['"]/g,
     'status: isDirectMusicNotePublication20261128 || mutationPayload307?.data?.isPublic === true ? "public" : "private"');
+  replace(/generation:\s*Number\(payload468\.data\.generation\s*\|\|\s*0\)\s*,/g,
+    '$&\n            directTrackId20261128: isDirectMusicNotePublication20261128 ? affected468[0] : null,');
+  replace(/await syncCuratedPublicationResults307\(request,\s*env,\s*results307,\s*ctx\);/g,
+    'if (isDirectMusicNotePublication20261128 && curatedRepairTicket468?.directTrackId20261128) {\n          const result20261128 = results307[0];\n          if (result20261128?.ok !== true || result20261128.trackId !== curatedRepairTicket468.directTrackId20261128 || String(result20261128.snapshotItem?.id || "").trim() !== result20261128.trackId)\n            throw Error("CURATED_DIRECT_CONFIRMED_RESULT_PENDING_20261128");\n        }\n        $&');
   return source;
 }

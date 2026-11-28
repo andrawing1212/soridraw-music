@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import ts from 'typescript';
 import vm from 'node:vm';
 import { patchCuratedDirectPublication } from './lib/patch-curated-direct-publication-20261128.mjs';
+import { verifyCuratedDirectPublicationRouting } from './lib/verify-curated-direct-publication-routing-20261128.mjs';
 
 const worker=fs.readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
 assert.match(worker,/isDirectMusicNotePublication20261128[\s\S]*?directCandidate20261128/);
@@ -42,4 +43,6 @@ assert.match(page,/setCuratedTracks307\(patchCuratedTitle20261128\)/);
 assert.match(page,/setManagedCuratedTracks307\(patchCuratedTitle20261128\)/);
 assert.match(page,/patchSoridrawCuratedPublicationTitle20261128\(row432\.ownerUid, row432\.trackId, snapshot432, row432\.at, viewerUid432\)/);
 assert.match(publish,/patchSoridrawCuratedPublicationTitle20261128\(uid, state\.trackId, snapshotItem as Record<string, unknown>, Date\.now\(\)\)/);
+assert.equal(merge(changed,'owner',row.id,{...fresh,title:'ambiguous'},100),changed);
+await verifyCuratedDirectPublicationRouting(worker);
 console.log('CURATED_DIRECT_PUBLICATION_TITLE_IDENTITY_ORDER_LIKES_STALE_REPLAY=PASS');

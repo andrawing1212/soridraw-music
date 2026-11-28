@@ -333,8 +333,7 @@ export const mergeCuratedPublicationTitle20261128 = <T extends Record<string, un
   const next = items.map(item => {
     if (String(item.id || '').trim() !== trackId ||
         String(item.ownerUid ?? item.owner_uid ?? '').trim() !== ownerUid ||
-        Number(item.__curatedTitleConfirmedAt20261128 || 0) > at ||
-        (item.title === title && Number(item.__curatedTitleConfirmedAt20261128 || 0) >= at)) return item;
+        Number(item.__curatedTitleConfirmedAt20261128 || 0) >= at) return item;
     changed = true;
     return { ...item, title, __curatedTitleConfirmedAt20261128: at };
   });
@@ -345,17 +344,26 @@ export const patchSoridrawCuratedPublicationTitle20261128 = (
   ownerUid: string, trackId: string, snapshot: Record<string, unknown>, at: number,
   viewerUid = ownerUid,
 ) => {
+  const title = typeof snapshot.title === 'string' ? snapshot.title.trim() : '';
+  if (!ownerUid || !trackId || String(snapshot.id || '').trim() !== trackId ||
+      String(snapshot.ownerUid ?? snapshot.owner_uid ?? '').trim() !== ownerUid ||
+      !title || !Number.isSafeInteger(at) || at <= 0) return false;
   const cached = readCuratedCache307();
+  const managed = viewerUid ? readManagedCuratedCache309(viewerUid) : null;
+  const stale = [...(cached?.items || []), ...(managed?.items || [])].some(item =>
+    String(item.id || '').trim() === trackId &&
+    String(item.ownerUid ?? item.owner_uid ?? '').trim() === ownerUid &&
+    Number(item.__curatedTitleConfirmedAt20261128 || 0) >= at && item.title !== title);
+  if (stale) return false;
   if (cached) {
     const items = mergeCuratedPublicationTitle20261128(cached.items, ownerUid, trackId, snapshot, at);
     if (items !== cached.items) writeCuratedCache307(items, cached.revision, cached.checkedAt);
   }
-  if (!viewerUid) return;
-  const managed = readManagedCuratedCache309(viewerUid);
   if (managed) {
     const items = mergeCuratedPublicationTitle20261128(managed.items, ownerUid, trackId, snapshot, at);
     if (items !== managed.items) writeManagedCuratedCache309(viewerUid, items, managed.revision, managed.checkedAt);
   }
+  return true;
 };
 
 // SORIDRAW_CURATED_MANAGER_PUBLIC_CACHE_PARITY_311_20261003
@@ -551,8 +559,10 @@ export const getManagedSoridrawCuratedTracks307 = async (
       }
     }
     const checkedAt = Date.now();
-    writeManagedCuratedCache309(uid, items, currentRevision, checkedAt);
-    syncPublicCuratedCacheFromManaged311(items, currentRevision, checkedAt);
+    const projected = carryPublicCuratedTitles20261128(items, currentRevision);
+    writeManagedCuratedCache309(uid, projected, currentRevision, checkedAt);
+    syncPublicCuratedCacheFromManaged311(projected, currentRevision, checkedAt);
+    return projected;
   }
   return items;
 };

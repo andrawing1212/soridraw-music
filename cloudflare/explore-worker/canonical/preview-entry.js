@@ -3686,6 +3686,7 @@ export default {
           curatedRepairTicket468 = {
             stub: stub468,
             generation: Number(payload468.data.generation || 0),
+            directTrackId20261128: isDirectMusicNotePublication20261128 ? affected468[0] : null,
           };
         }
       } catch (error) {
@@ -3776,6 +3777,11 @@ export default {
               status: isDirectMusicNotePublication20261128 || mutationPayload307?.data?.isPublic === true ? "public" : "private",
               snapshotItem: mutationPayload307?.data?.snapshotItem || null,
             }];
+        if (isDirectMusicNotePublication20261128 && curatedRepairTicket468?.directTrackId20261128) {
+          const result20261128 = results307[0];
+          if (result20261128?.ok !== true || result20261128.trackId !== curatedRepairTicket468.directTrackId20261128 || String(result20261128.snapshotItem?.id || "").trim() !== result20261128.trackId)
+            throw Error("CURATED_DIRECT_CONFIRMED_RESULT_PENDING_20261128");
+        }
         await syncCuratedPublicationResults307(request, env, results307, ctx);
         if (curatedWriterShadowEnabled471(env) && curatedRepairTicket468) {
           // Existing per-origin v307 snapshot remains the user-visible

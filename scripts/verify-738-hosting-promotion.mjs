@@ -95,7 +95,7 @@ function mock({failSmoke=false,filesMismatch=false,concurrent=false,brokenRollba
    return {version:'sites/soridraw/versions/outsider',release:'sites/soridraw/releases/out'};
   if(unknownAfterFail&&releaseCount===1&&current===NEW)
    return {version:'sites/soridraw/versions/outsider',release:'sites/soridraw/releases/out'};
-  if(sameVersionConcurrent&&releaseCount===1&&current===NEW&&events.filter(e=>e==='live:soridraw').length>=4)
+  if(sameVersionConcurrent&&releaseCount===1&&current===NEW&&events.filter(e=>e==='live:soridraw').length>=3)
    return {version:NEW,release:'sites/soridraw/releases/foreign-same-version'};
   return {version:current,release:currentRelease};
  },

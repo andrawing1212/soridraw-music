@@ -119,6 +119,12 @@ export async function runApp738HostingPromotion({
     typeof api.snapshotVersion!=='function'||typeof api.live!=='function')
    fail('HOSTING_API_NOT_VERIFIED');
  if(typeof smokeProduction!=='function')fail('REAL_PRODUCTION_SMOKE_REQUIRED');
+ // A last-moment GET is not atomic with a Hosting release POST.
+ // The real adapter holds until exclusive writer authority is proven.
+ // Offline fixtures model isolated execution, not live exclusivity.
+ if(typeof api.assertExclusiveReleaseAuthority!=='function'||
+    await api.assertExclusiveReleaseAuthority()!==true)
+   fail('PRODUCTION_EXCLUSIVE_WRITER_UNVERIFIED');
  const {source,before,configReview}=await inspectApp738Live({
    api,previewSha,evidence,readCurrentPreviewSha,
  });

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {createApp738HostingApi,compareHostingArtifacts,reviewHostingCacheDifference} from './app738-firebase-hosting-runtime.mjs';
 import {runApp738HostingPromotion,verifyApp738ReleaseGate,verifyApp738GitSourcePin} from './app738-production-hosting-transaction.mjs';
-import {mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,rmSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -73,13 +73,14 @@ const snap=(site,version,files=PF,config=PC,serving=previewConfig)=>({
  release:site==='soridraw'?'sites/soridraw/releases/old':'sites/soridraw-preview/releases/latest',
 });
 function mock({failSmoke=false,filesMismatch=false,concurrent=false,brokenRollback=false,
- unknownAfterFail=false,sourceMoved=false,ackLost=false,sameVersionConcurrent=false}={}){
+ unknownAfterFail=false,sourceMoved=false,ackLost=false,sameVersionConcurrent=false,exclusiveWriter=true}={}){
  let current=OLD,releaseCount=0,cloneCount=0,currentRelease='sites/soridraw/releases/old';
  const source=snap('soridraw-preview',SOURCE);
  const before=snap('soridraw',OLD,OF,OC,prodConfig);
  const candidate=snap('soridraw',NEW,filesMismatch?'wrong':source.filesSha256,before.configSha256,prodConfig);
  const events=[];
  const api={
+ async assertExclusiveReleaseAuthority(){return exclusiveWriter;},
  async snapshotLive(site){
   events.push('snapshot:'+site);
   if(site==='soridraw-preview')return source;
@@ -156,6 +157,15 @@ const sameVersion=mock({sameVersionConcurrent:true});
 await assert.rejects(()=>runApp738HostingPromotion({...args,api:sameVersion.api,smokeProduction:async()=>false}),/STATE_UNKNOWN_OR_CONCURRENT_RELEASE/);
 assert.equal(sameVersion.metrics().releaseCount,1,'never rollback foreign release of same version');
 console.log('APP738_RELEASE_ACK_AND_SAME_VERSION_CONCURRENT_ROLLBACK_FENCE=PASS');
+// Without proof of exclusive execution the transaction cannot start.
+const unproven=mock({exclusiveWriter:false});
+await assert.rejects(()=>runApp738HostingPromotion({...args,api:unproven.api}),/PRODUCTION_EXCLUSIVE_WRITER_UNVERIFIED/);
+assert.deepEqual(unproven.events,[]);
+assert.equal(unproven.metrics().releaseCount,0);
+const missingGuard=mock();
+delete missingGuard.api.assertExclusiveReleaseAuthority;
+await assert.rejects(()=>runApp738HostingPromotion({...args,api:missingGuard.api}),/PRODUCTION_EXCLUSIVE_WRITER_UNVERIFIED/);
+assert.deepEqual(missingGuard.events,[]);
 
 // Fake exact Hosting REST shows fileCount and config matching after pagination.
 const calls=[];
@@ -187,8 +197,8 @@ console.log('APP738_CLONE_FILE_CONFIG_PARITY_AND_CONCURRENCY=PASS');
 console.log('APP738_HOSTING_ROLLBACK_REHEARSAL=PASS_SYNTHETIC');
 console.log('APP738_TEST_PROD_SHARED_BACKEND_MUTATIONS=0; LIVE_DEPLOY=NOT_RUN');
 
-// Actual API adapter: clone inactive, patch only the new CREATED version,
-// preserve exact production config, then no release in this test.
+// Prior clone/config fixture PASS is retained. Real transport is now
+// read-only even with an injected sender; no credentials or option bypass.
 assert.equal(reviewHostingCacheDifference(previewConfig,prodConfig).compatible,true);
 assert.equal(reviewHostingCacheDifference({...previewConfig,rewrites:[]},prodConfig).compatible,false);
 assert.equal(reviewHostingCacheDifference(previewConfig,{...prodConfig,headers:[security]}).compatible,false);
@@ -197,29 +207,30 @@ const drift=mock(), driftEvidence=evidence();
 driftEvidence.hosting.preview.filesSha256='9'.repeat(64);
 await assert.rejects(()=>runApp738HostingPromotion({...args,evidence:driftEvidence,api:drift.api}),/REVIEWED_HOSTING_DIGEST_DRIFT_OR_MISSING/);
 assert.equal(drift.metrics().cloneCount,0);
-const patchCalls=[];
-const patchSend=async(uri,opts)=>{
- const p=new URL(uri); const body=opts.body?JSON.parse(opts.body):null;
- patchCalls.push({path:p.pathname,method:opts.method,body});
- let response;
- if(opts.method==='POST'&&p.pathname.endsWith('/versions:clone')){
-  assert.deepEqual(body,{sourceVersion:SOURCE,finalize:false});
-  response={name:'projects/soridraw/operations/clone1',done:true,response:{name:NEW}};
- }else if(opts.method==='GET'&&p.pathname.endsWith('/channels/live/releases')){
-  response={releases:[{name:'sites/soridraw/releases/old',version:{name:OLD}}]};
- }else if(opts.method==='GET'&&p.pathname.endsWith('/newrelease')){
-  response={name:NEW,status:'CREATED'};
- }else if(opts.method==='PATCH'&&p.pathname.endsWith('/newrelease')){
-  assert.equal(p.searchParams.get('updateMask'),'config,status');
-  assert.deepEqual(body,{config:prodConfig,status:'FINALIZED'});
-  response={name:NEW,status:'FINALIZED',config:prodConfig};
- }else throw Error('unexpected call');
- return {ok:true,json:async()=>response};
-};
-const cacheApi=createApp738HostingApi('synthetic-test',{send:patchSend});
-assert.equal(await cacheApi.clone(SOURCE,{productionConfig:prodConfig,rollbackVersion:OLD}),NEW);
-assert.equal(patchCalls.filter(x=>x.method==='PATCH').length,1);
-assert.equal(patchCalls.some(x=>x.method==='POST'&&x.path.endsWith('/releases')),false);
+const blockedCalls=[];
+const blockedApi=createApp738HostingApi('synthetic-test',{send:async(uri,opts)=>{
+ blockedCalls.push({uri,method:opts.method});
+ throw Error('network must never be reached');
+}});
+await assert.rejects(()=>blockedApi.clone(SOURCE,{productionConfig:prodConfig,rollbackVersion:OLD}),/PRODUCTION_EXCLUSIVE_WRITER_UNVERIFIED/);
+await assert.rejects(()=>blockedApi.clone(SOURCE),/PRODUCTION_EXCLUSIVE_WRITER_UNVERIFIED/);
+await assert.rejects(()=>blockedApi.release(NEW,'APP738 direct PREVIEW '+SHA+' rollback=oldprod'),/PRODUCTION_EXCLUSIVE_WRITER_UNVERIFIED/);
+await assert.rejects(()=>blockedApi.release(OLD,'APP738 rollback to oldprod'),/PRODUCTION_EXCLUSIVE_WRITER_UNVERIFIED/);
+assert.deepEqual(blockedCalls,[],'no live activation, clone or rollback request');
+await assert.rejects(()=>runApp738HostingPromotion({...args,api:blockedApi}),/PRODUCTION_EXCLUSIVE_WRITER_UNVERIFIED/);
+assert.deepEqual(blockedCalls,[]);
+const directWorkflow=readFileSync('.github/workflows/app738-direct-hosting-promotion.yml','utf8');
+const legacyWorkflow=readFileSync('.github/workflows/soridraw-release-promotion.yml','utf8');
+for(const workflow of [directWorkflow,legacyWorkflow]){
+ assert.match(workflow,/concurrency:\s*\n  group: soridraw-release-controller\n  cancel-in-progress: false/);
+}
+const directHold=directWorkflow.indexOf('APP738_PRODUCTION_EXCLUSIVE_WRITER_UNVERIFIED_HOLD');
+assert.ok(directHold>=0&&directHold<directWorkflow.indexOf('Authenticate existing Firebase Hosting only'));
+const legacyHold=legacyWorkflow.indexOf('LEGACY_PRODUCTION_DISABLED_USE_APP738');
+assert.ok(legacyHold>=0&&legacyHold<legacyWorkflow.indexOf('node scripts/update-release-control-status.mjs create REQUESTED'));
+assert.match(legacyWorkflow,/if: failure\(\) && steps\.request\.outputs\.mode == 'test'/);
+console.log('APP738_REAL_TRANSPORT_CLONE_ACTIVATION_ROLLBACK_BLOCKED_WITHOUT_EXCLUSIVE_WRITER=PASS');
+console.log('APP738_SHARED_GITHUB_QUEUE_AND_LEGACY_PRODUCTION_FENCE=PASS_SOURCE');
 console.log('APP738_PRODUCTION_CACHE_POLICY_PRESERVED_AND_NON_CACHE_DRIFT_DENIED=PASS');
 
 // Actual local Git history: exact deployment identity survives only the

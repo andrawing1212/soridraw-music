@@ -19,12 +19,20 @@ function requireVersion(name,site){
    fail('VERSION_SITE_MISMATCH');
  return name;
 }
+// Firebase Hosting does not document an atomic active-release precondition.
+ // No live Hosting mutation until exclusive writer authority is independently
+ // proven. No environment value, evidence JSON, token or injected sender
+ // can bypass this source-level HOLD.
+export function assertApp738ProductionWriteAuthority(){
+ fail('PRODUCTION_EXCLUSIVE_WRITER_UNVERIFIED');
+}
 export function createApp738HostingApi(token,{send=fetch,sleep=ms=>new Promise(r=>setTimeout(r,ms))}={}){
  if(typeof token!=='string'||!token.trim())fail('FIREBASE_TOKEN_MISSING');
  async function request(method,path,body){
   if(!/^(sites\/(soridraw-preview|soridraw)\/(channels\/live\/releases|versions\/[A-Za-z0-9_-]{4,128}(?:\/files)?|versions:clone|releases)|projects\/soridraw\/operations\/[A-Za-z0-9_-]+)(?:\?.*)?$/.test(path))
     fail('FOREIGN_RESOURCE_OR_OPERATION');
   if(!['GET','POST','PATCH'].includes(method))fail('HTTP_METHOD_FORBIDDEN');
+  if(method!=='GET')assertApp738ProductionWriteAuthority();
   if(method==='PATCH'&&(!/^sites\/soridraw\/versions\/[A-Za-z0-9_-]{4,128}\?updateMask=config,status$/.test(path)||body?.status!=='FINALIZED'||!body.config))
     fail('NONPRODUCTION_OR_UNSCOPED_PATCH_FORBIDDEN');
   if(method==='POST'&&!(/^(sites\/soridraw\/versions:clone|sites\/soridraw\/releases\?versionName=)/.test(path)))
@@ -130,7 +138,7 @@ export function createApp738HostingApi(token,{send=fetch,sleep=ms=>new Promise(r
     fail('RELEASE_ACK_UNVERIFIED');
   return out;
  }
- return {live,snapshotLive,snapshotVersion,clone,release};
+ return {live,snapshotLive,snapshotVersion,clone,release,assertExclusiveReleaseAuthority:assertApp738ProductionWriteAuthority};
 }
 export function compareHostingArtifacts(source,candidate){
  if(source?.site!==SITES.preview||candidate?.site!==SITES.production)

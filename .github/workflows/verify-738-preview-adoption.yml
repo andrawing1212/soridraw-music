@@ -1,0 +1,73 @@
+name: APP738 PREVIEW producer adoption offline verification
+on:
+  pull_request:
+    branches: [preview]
+    paths:
+      - '.github/workflows/app738-preview-artifact.yml'
+      - '.github/workflows/verify-738-preview-adoption.yml'
+      - 'scripts/app728-*.mjs'
+      - 'scripts/app737-*.mjs'
+      - 'scripts/app738-*.mjs'
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - name: Exact reviewed source and unchanged release path
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          test "$BASE_SHA" = '97f6a5af5e296f5bed0d0f9184eb2a5e2f5d86c3'
+          test "$(git rev-parse HEAD:.github/workflows/app738-preview-artifact.yml)" = '026ff049f290bb9e19a729618cb3b1fabd4594f8'
+          test "$(git rev-parse HEAD:scripts/app738-preview-bundle.mjs)" = 'ae7badd343202b090adeb39e7d3557829292d625'
+          test "$(git rev-parse HEAD:scripts/app738-hosting-writer-candidate.mjs)" = '71ed1c3eb95afcab04e3da5f9d6df212f4cd3596'
+          test "$(git rev-parse HEAD:scripts/app738-production-hosting-transaction.mjs)" = '73380374333de1ebe76ba436768b77f98a6dca3f'
+          test "$(git rev-parse HEAD:scripts/app737-direct-promotion-contract.mjs)" = '532f7c2a4e045e55445adc9fb9a4db68fbe2304f'
+          test "$(git rev-parse HEAD:scripts/app738-firebase-hosting-runtime.mjs)" = '469b765e963033e70b05374a0a2e7279743fa4e4'
+          test "$(git rev-parse HEAD:scripts/app728-binding-diff.mjs)" = '0808af111521ca985b1aabaf916578651f1b7a36'
+          test "$(git rev-parse HEAD:scripts/app728-direct-preflight.mjs)" = '44bbe35f288118a10a4346d0608798c0638b5fcf'
+          test "$(git rev-parse HEAD:scripts/app728-release-plan.mjs)" = 'cffbf2daaa767b67c905ac7c8a7cd6c43a0ed0d8'
+          test "$(git rev-parse HEAD:.deploy/preview-app-release.trigger)" = '1704baf2ebe9dd724f0f046bd8614161a18beab2'
+          test "$(git rev-parse HEAD:.github/workflows/firebase-hosting-custom-preview.yml)" = '94ca734ff19c80c8e47b7b70fb621f2f33794a76'
+          test "$(git rev-parse HEAD:firebase.hosting-preview.json)" = '4d459b87824e9cfe9cabe600b164f74a8385fe93'
+          test "$(git diff --name-only "$BASE_SHA" HEAD | sort)" = "$(printf '%s\n' '.github/workflows/app738-preview-artifact.yml' 'scripts/app738-preview-bundle.mjs' 'scripts/app738-hosting-writer-candidate.mjs' 'scripts/app738-production-hosting-transaction.mjs' 'scripts/app737-direct-promotion-contract.mjs' 'scripts/app738-firebase-hosting-runtime.mjs' 'scripts/app728-binding-diff.mjs' 'scripts/app728-direct-preflight.mjs' 'scripts/app728-release-plan.mjs' '.github/workflows/verify-738-preview-adoption.yml' | sort)"
+          echo 'APP738_PREVIEW_ADOPTION_EXACT_SCOPE=PASS'
+      - name: Real module import and synthetic artifact round trip (no cloud calls)
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {mkdtempSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
+          import {tmpdir} from 'node:os';
+          import {join} from 'node:path';
+          globalThis.fetch=async()=>{throw Error('NETWORK_FORBIDDEN')};
+          const {makePreviewBundle,inspectPreviewBundle,verifyHostingOnlyTrigger}=await import('./scripts/app738-preview-bundle.mjs');
+          const {assertApp738ProductionWriteAuthority}=await import('./scripts/app738-firebase-hosting-runtime.mjs');
+          const triggerRaw=readFileSync('.deploy/preview-app-release.trigger','utf8');
+          const configRaw=readFileSync('firebase.hosting-preview.json','utf8');
+          verifyHostingOnlyTrigger(triggerRaw);
+          assert.throws(()=>verifyHostingOnlyTrigger(triggerRaw.replace('deploy_shared_rtdb_rules=false','deploy_shared_rtdb_rules=true')));
+          assert.throws(()=>assertApp738ProductionWriteAuthority(),/EXCLUSIVE_WRITER_UNVERIFIED/);
+          const dir=mkdtempSync(join(tmpdir(),'app738-fixture-'));
+          try {
+            writeFileSync(join(dir,'index.html'),'<html>synthetic</html>');
+            writeFileSync(join(dir,'app-version.json'),JSON.stringify({version:'synthetic'}));
+            const sourceSha='a'.repeat(40);
+            const raw=makePreviewBundle({dir,sourceSha,configRaw,triggerRaw});
+            const item=inspectPreviewBundle({raw,sourceSha,configRaw,triggerRaw});
+            assert.equal(item.version,'synthetic');assert.equal(item.files.length,2);
+            assert.throws(()=>inspectPreviewBundle({raw,sourceSha:'b'.repeat(40),configRaw,triggerRaw}));
+            console.log('APP738_PREVIEW_MODULE_AND_BUNDLE_ROUNDTRIP=PASS_SYNTHETIC;NO_DEPLOYMENT');
+          }finally{rmSync(dir,{recursive:true,force:true})}
+          JS

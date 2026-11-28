@@ -26,7 +26,15 @@ export function patchCuratedDirectPublication(source) {
     'if (isDirectMusicNotePublication20261128 && curatedRepairTicket468?.directTrackId20261128) {\n          const result20261128 = results307[0];\n          if (result20261128?.ok !== true || result20261128.trackId !== curatedRepairTicket468.directTrackId20261128 || String(result20261128.snapshotItem?.id || "").trim() !== result20261128.trackId)\n            throw Error("CURATED_DIRECT_CONFIRMED_RESULT_PENDING_20261128");\n        }\n        $&');
   replace(/(snapshotItem:\s*mutationPayload307\?\.data\?\.snapshotItem\s*\|\|\s*null)\s*,?/g,
     '$1,\n              directMetadata20261128: isDirectMusicNotePublication20261128,');
+  // The canonical and bundled writers can use different local loop identifiers.
+  const writerStart = source.indexOf('async function syncCuratedPublicationResults307(');
+  const writerEnd = source.indexOf('async function reserveDirectCuratedRepair469(', writerStart);
+  if (writerStart < 0 || writerEnd <= writerStart) throw Error('CURATED_DIRECT_WRITER_SCOPE');
+  const writer = source.slice(writerStart, writerEnd);
+  const rowMatches = [...writer.matchAll(/(?:const|let|var)\s+track\s*=\s*(result\d*)\?\.snapshotItem\s*;/g)];
+  if (rowMatches.length !== 1) throw Error('CURATED_DIRECT_WRITER_ROW_IDENTIFIER');
+  const rowIdentifier = rowMatches[0][1];
   replace(/((?:const|let|var)\s+previous\s*=\s*itemByTrackId\.get\(trackId\);)\s*itemByTrackId\.set\(trackId,\s*\{\s*track\s*,/g,
-    '$1\n    let projectedTrack20261128 = track;\n    const previousCount20261128 = previous?.track?.likeCount ?? previous?.track?.stats?.likeCount;\n    if (result?.directMetadata20261128 === true && Number.isSafeInteger(previousCount20261128) && previousCount20261128 >= 0) {\n      projectedTrack20261128 = { ...track, likeCount: previousCount20261128 };\n      if (track.stats && typeof track.stats === "object" && !Array.isArray(track.stats)) projectedTrack20261128.stats = { ...track.stats, likeCount: previousCount20261128 };\n    }\n    itemByTrackId.set(trackId, {\n      track: projectedTrack20261128,');
+    '$1\n    let projectedTrack20261128 = track;\n    const previousCount20261128 = previous?.track?.likeCount ?? previous?.track?.stats?.likeCount;\n    if (' + rowIdentifier + '?.directMetadata20261128 === true && Number.isSafeInteger(previousCount20261128) && previousCount20261128 >= 0) {\n      projectedTrack20261128 = { ...track, likeCount: previousCount20261128 };\n      if (track.stats && typeof track.stats === "object" && !Array.isArray(track.stats)) projectedTrack20261128.stats = { ...track.stats, likeCount: previousCount20261128 };\n    }\n    itemByTrackId.set(trackId, {\n      track: projectedTrack20261128,');
   return source;
 }

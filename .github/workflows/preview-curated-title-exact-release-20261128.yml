@@ -11,7 +11,7 @@ concurrency:
 jobs:
   release:
     if: >-
-      github.repository == 'andrawing1212/soridraw-music' && github.actor == github.repository_owner && github.run_attempt == 1 && github.event.head_commit.message == 'release: retry PREVIEW curated title exact repair with bundle aliases'
+      github.repository == 'andrawing1212/soridraw-music' && github.actor == github.repository_owner && github.run_attempt == 1 && github.event.head_commit.message == 'release: retry PREVIEW curated title exact repair with bound loop identifier'
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:

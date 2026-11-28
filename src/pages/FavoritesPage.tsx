@@ -9996,7 +9996,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 <PublicationTitleEditor source={explorePublicationDialog.song} title={getCombinedFavoriteTitle(explorePublicationDialog.song)}
                   draft={explorePublicationDialog.titleDraft} busy={explorePublicationBusyId === explorePublicationDialog.sourceId}
                   onDraftChange={(titleDraft) => {setExplorePublicationPrivateConfirm(false);setExplorePublicationDialog(current=>current?{...current,titleDraft}:current);}} />
-                {getFavoriteSunoLinks(explorePublicationDialog.song).length === 1 && <PublicationSingleCover coverUrl={getFavoriteSunoLinks(explorePublicationDialog.song)[0]?.coverUrl}/>}
+                {getFavoriteSunoLinks(explorePublicationDialog.song).length === 1 && <PublicationSingleCover coverUrl={getFavoriteSunoLinks(explorePublicationDialog.song)[0]?.coverUrl}
+                  title={String(getFavoriteSunoLinks(explorePublicationDialog.song)[0]?.title || getCombinedFavoriteTitle(explorePublicationDialog.song) || '수노 곡 1').trim()}
+                  available={isConnectedFavoriteSunoLink(getFavoriteSunoLinks(explorePublicationDialog.song)[0])}/>}
                 {getFavoriteSunoLinks(explorePublicationDialog.song).length > 1 && (
                   <div className="mt-5">
                     <div className="flex items-center justify-between gap-3 px-0.5">

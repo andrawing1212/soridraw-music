@@ -15,9 +15,10 @@ assert.match(plan.attributeCondition,/assertion.repository_owner_id == '26893771
 assert.match(plan.attributeCondition,/assertion.workflow_sha == 'a{40}'/);
 assert.match(plan.attributeCondition,/assertion.ref == 'refs\/heads\/main'/);
 assert.match(plan.attributeCondition,/assertion.event_name == 'workflow_dispatch'/);
+assert.match(plan.attributeCondition,/assertion.event_name == 'workflow_run'/);
 assert.match(plan.attributeCondition,/assertion.environment == 'hosting-writer'/);
 assert.match(plan.attributeCondition,/assertion.runner_environment == 'github-hosted'/);
-assert.match(plan.attributeCondition,/assertion.workflow_ref == 'andrawing1212\/soridraw-music\/.github\/workflows\/app738-direct-hosting-promotion.yml@refs\/heads\/main'/);
+assert.match(plan.attributeCondition,/assertion.workflow_ref == 'andrawing1212\/soridraw-music\/.github\/workflows\/app738-hosting-writer.yml@refs\/heads\/main'/);
 assert.throws(()=>buildHostingWifPlan({projectNumber:'1083981050742',controllerSha:sha}),/UNVERIFIED/);
 assert.throws(()=>buildHostingWifPlan({projectNumber:'450781969193',controllerSha:'main'}),/UNVERIFIED/);
 assert.throws(()=>buildHostingWifPlan({projectNumber:'999999999999',controllerSha:sha}),/UNVERIFIED/);

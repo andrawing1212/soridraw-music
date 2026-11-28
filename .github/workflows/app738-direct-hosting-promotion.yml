@@ -11,6 +11,11 @@ on:
       - 'scripts/verify-738-hosting-promotion.mjs'
       - 'scripts/app738-hosting-writer-candidate.mjs'
       - 'scripts/verify-738-hosting-writer-candidate.mjs'
+      - 'scripts/app738-preview-bundle.mjs'
+      - 'scripts/app738-wif-writer-cli.mjs'
+      - 'scripts/verify-738-preview-bundle.mjs'
+      - '.github/workflows/app738-preview-artifact.yml'
+      - '.github/workflows/app738-hosting-writer.yml'
       - '.github/workflows/app738-direct-hosting-promotion.yml'
       - '.github/workflows/soridraw-release-promotion.yml'
   issue_comment:
@@ -68,6 +73,8 @@ jobs:
           node --check scripts/app738-hosting-cli.mjs
           node scripts/verify-738-hosting-promotion.mjs
           node scripts/verify-738-hosting-writer-candidate.mjs
+          node --check scripts/app738-wif-writer-cli.mjs
+          node scripts/verify-738-preview-bundle.mjs
 
   run:
     if: >-

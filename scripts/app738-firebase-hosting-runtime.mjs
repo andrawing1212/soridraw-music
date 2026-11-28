@@ -2,6 +2,7 @@
 // Strictly restricted to the two existing SORIDRAW Hosting sites.
 // The GET-only mode never reads user data or mutates any backend.
 import {createHash} from 'node:crypto';
+import {stagePreviewVersion} from './app738-preview-bundle.mjs';
 const BASE='https://firebasehosting.googleapis.com/v1beta1/';
 export const SITES=Object.freeze({preview:'soridraw-preview',production:'soridraw'});
 const PATTERN=/^sites\/(soridraw-preview|soridraw)\/versions\/[A-Za-z0-9_-]{4,128}$/;
@@ -29,13 +30,13 @@ export function assertApp738ProductionWriteAuthority(){
 export function createApp738HostingApi(token,{send=fetch,sleep=ms=>new Promise(r=>setTimeout(r,ms))}={}){
  if(typeof token!=='string'||!token.trim())fail('FIREBASE_TOKEN_MISSING');
  async function request(method,path,body){
-  if(!/^(sites\/(soridraw-preview|soridraw)\/(channels\/live\/releases|versions\/[A-Za-z0-9_-]{4,128}(?:\/files)?|versions:clone|releases)|projects\/soridraw\/operations\/[A-Za-z0-9_-]+)(?:\?.*)?$/.test(path))
+  if(!/^(sites\/(soridraw-preview|soridraw)\/(channels\/live\/releases|versions\/[A-Za-z0-9_-]{4,128}(?:\/files)?|versions:clone|versions|versions/[A-Za-z0-9_-]{4,128}:populateFiles|releases)|projects\/soridraw\/operations\/[A-Za-z0-9_-]+)(?:\?.*)?$/.test(path))
     fail('FOREIGN_RESOURCE_OR_OPERATION');
   if(!['GET','POST','PATCH'].includes(method))fail('HTTP_METHOD_FORBIDDEN');
   if(method!=='GET')assertApp738ProductionWriteAuthority();
-  if(method==='PATCH'&&(!/^sites\/soridraw\/versions\/[A-Za-z0-9_-]{4,128}\?updateMask=config,status$/.test(path)||body?.status!=='FINALIZED'||!body.config))
+  if(method==='PATCH'&&(!/^sites\/(soridraw|soridraw-preview)\/versions\/[A-Za-z0-9_-]{4,128}\?updateMask=config,status$/.test(path)||body?.status!=='FINALIZED'||!body.config))
     fail('NONPRODUCTION_OR_UNSCOPED_PATCH_FORBIDDEN');
-  if(method==='POST'&&!(/^(sites\/soridraw\/versions:clone|sites\/soridraw\/releases\?versionName=)/.test(path)))
+  if(method==='POST'&&!(/^(sites\/soridraw\/versions:clone|sites\/(soridraw|soridraw-preview)\/releases\?versionName=|sites\/soridraw-preview\/versions(?:$|\/[A-Za-z0-9_-]{4,128}:populateFiles$))/.test(path)))
     fail('NONPRODUCTION_WRITE_FORBIDDEN');
   const result=await send(BASE+path,{
     method,headers:{
@@ -127,6 +128,21 @@ export function createApp738HostingApi(token,{send=fetch,sleep=ms=>new Promise(r
   }
   return name;
  }
+ async function stagePreview(bundle,config){
+  assertApp738ProductionWriteAuthority();
+  return stagePreviewVersion({bundle,config,request,upload:async(url,bytes)=>{
+   assertApp738ProductionWriteAuthority();
+   const res=await send(url,{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/octet-stream'},body:bytes,redirect:'error'});
+   if(!res?.ok)fail('PREVIEW_UPLOAD_HTTP_'+String(res?.status||'UNKNOWN'));
+  }});
+ }
+ async function releasePreview(version,message){
+  requireVersion(version,SITES.preview);
+  if(!/^APP738 preview [0-9a-f]{40}$/.test(message))fail('RELEASE_MESSAGE_INVALID');
+  const out=await request('POST','sites/soridraw-preview/releases?versionName='+encodeURIComponent(version),{message});
+  if(out.version?.name!==version||!/^sites\/soridraw-preview\/(?:channels\/live\/)?releases\/[A-Za-z0-9_-]+$/.test(out.name||''))fail('RELEASE_ACK_UNVERIFIED');
+  return out;
+ }
  async function release(version,message){
   requireVersion(version,SITES.production);
   if(typeof message!=='string'||!/^APP738 direct PREVIEW [0-9a-f]{40} rollback=[A-Za-z0-9_-]{4,128}$/.test(message)&&
@@ -138,7 +154,7 @@ export function createApp738HostingApi(token,{send=fetch,sleep=ms=>new Promise(r
     fail('RELEASE_ACK_UNVERIFIED');
   return out;
  }
- return {live,snapshotLive,snapshotVersion,clone,release,assertExclusiveReleaseAuthority:assertApp738ProductionWriteAuthority};
+ return {live,snapshotLive,snapshotVersion,clone,release,stagePreview,releasePreview,assertExclusiveReleaseAuthority:assertApp738ProductionWriteAuthority};
 }
 export function compareHostingArtifacts(source,candidate){
  if(source?.site!==SITES.preview||candidate?.site!==SITES.production)

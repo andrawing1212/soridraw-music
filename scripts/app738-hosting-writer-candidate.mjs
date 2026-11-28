@@ -6,7 +6,7 @@ import {runApp738HostingPromotion,verifyApp738ReleaseGate} from './app738-produc
 
 const REPO='andrawing1212/soridraw-music';
 const REPO_ID='1188157610', OWNER_ID='268937716';
-const WORKFLOW=REPO+'/.github/workflows/app738-direct-hosting-promotion.yml@refs/heads/main';
+const WORKFLOW=REPO+'/.github/workflows/app738-hosting-writer.yml@refs/heads/main';
 const ENV='hosting-writer';
 const REF='refs/heads/hosting-release-journal';
 const SHA=/^[0-9a-f]{40}$/, DIGEST=/^[0-9a-f]{64}$/;
@@ -22,13 +22,13 @@ export function buildHostingWifPlan({projectNumber,controllerSha}={}){
  const checks={
   repository:REPO,repository_id:REPO_ID,repository_owner_id:OWNER_ID,
   ref:'refs/heads/main',workflow_ref:WORKFLOW,workflow_sha:controllerSha,
-  event_name:'workflow_dispatch',environment:ENV,runner_environment:'github-hosted',
+  environment:ENV,runner_environment:'github-hosted',
  };
  return {status:'CONFIGURATION_CANDIDATE_ONLY',projectId:'soridraw',
   projectNumber:String(projectNumber),pool,provider,
   issuer:'https://token.actions.githubusercontent.com',
   attributeMapping:{'google.subject':'assertion.sub','attribute.repository_id':'assertion.repository_id'},
-  attributeCondition:Object.entries(checks).map(([k,v])=>"assertion."+k+" == '"+v+"'").join(' && '),
+  attributeCondition:Object.entries(checks).map(([k,v])=>"assertion."+k+" == '"+v+"'").join(' && ')+" && (assertion.event_name == 'workflow_run' || (assertion.event_name == 'workflow_dispatch' && assertion.actor_id == '268937716'))",
   principalSet:'principalSet://iam.googleapis.com/projects/'+projectNumber+
    '/locations/global/workloadIdentityPools/'+pool+'/attribute.repository_id/'+REPO_ID,
   serviceAccount:'soridraw-hosting-writer@soridraw.iam.gserviceaccount.com',
@@ -49,11 +49,13 @@ export function normalizeHostingRequest(x={}){
  if(mode!=='preview'&&x.approval!==(mode==='production'?'DEPLOY_PRODUCTION':'ROLLBACK_PRODUCTION'))
    fail('DIRECTOR_APPROVAL_REQUIRED');
  if(!validRelease(x.before,sites[mode]))fail('ROLLBACK_BASELINE_REQUIRED');
- if(mode!=='production'&&!validVersion(x.targetVersion,sites[mode]))fail('TARGET_VERSION_REQUIRED');
+ if(x.stageFromBundle===true&&mode!=='preview')fail('BUNDLE_PREVIEW_ONLY');
+ if(mode!=='production'&&x.stageFromBundle!==true&&!validVersion(x.targetVersion,sites[mode]))fail('TARGET_VERSION_REQUIRED');
  return {mode,site:sites[mode],sourceSha:x.sourceSha,filesSha256:x.filesSha256,
   configSha256:x.configSha256,evidenceSha256:x.evidenceSha256,
   approval:mode==='preview'?null:x.approval,
-  targetVersion:mode==='production'?null:x.targetVersion,
+  targetVersion:mode==='production'||x.stageFromBundle===true?null:x.targetVersion,
+  stageFromBundle:x.stageFromBundle===true,
   before:{version:x.before.version,release:x.before.release}};
 }
 function validVersion(version,site){
@@ -141,6 +143,7 @@ export async function runCommonHostingCandidate({
  journal,api,request,evidenceRaw,readCurrentPreviewSha,smokeProduction,
 }={}){
  const req=normalizeHostingRequest(request);
+ if(req.stageFromBundle)fail('USE_PREVIEW_BUNDLE_ENTRYPOINT');
  if(typeof evidenceRaw!=='string'||createHash('sha256').update(evidenceRaw).digest('hex')!==req.evidenceSha256)
    fail('EVIDENCE_DIGEST_MISMATCH');
  const item=JSON.parse(evidenceRaw);

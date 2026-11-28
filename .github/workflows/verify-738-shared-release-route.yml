@@ -7,6 +7,8 @@ on:
       - 'scripts/app738-shared-release-route.mjs'
       - 'scripts/verify-738-shared-release-route.mjs'
       - '.github/workflows/verify-738-shared-release-route.yml'
+      - '.github/workflows/app738-preview-artifact.yml'
+      - '.github/workflows/app738-hosting-writer.yml'
 permissions:
   contents: read
 jobs:

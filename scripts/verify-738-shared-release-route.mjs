@@ -28,3 +28,19 @@ assert.doesNotMatch(candidate,/--only hosting|hosting:clone|firebase deploy|FIRE
 for(const marker of ['verify-studio-heart-handoff-live-additive.mjs','verify-418-rtdb-rules-delta.mjs','verify-434-publication-rtdb-additive.mjs','STUDIO_HEART_SHARED_RTDB_POST_DEPLOY_DRIFT_STOP','SHARED_RTDB_RULES_EXACT_MATCH=PASS','NO_USER_DATA_MIGRATION=true'])assert.ok(candidate.includes(marker));
 assert.doesNotMatch(producer,/secrets\.|google-github-actions\/auth|firebase deploy|--only hosting/);
 console.log('APP738_RELEASE_ROUTE_HOSTING_RULES_MIXED_APPROVAL_AND_HARD_HOLD=PASS_SYNTHETIC');
+
+// Preserve the former manual exact-current-SHA Hosting-only request, without
+// adding a credential or bypassing the trusted main receiver's HOLD.
+const writer=readFileSync('.github/workflows/app738-hosting-writer.yml','utf8');
+const writerJob=writer.slice(writer.indexOf('  writer:'),writer.indexOf('  journal-proof:'));
+assert.match(producer,/workflow_dispatch:\n    inputs:\n      target_sha:/);
+assert.match(producer,/github\.ref == 'refs\/heads\/preview' && github\.run_attempt == 1/);
+assert.match(producer,/github\.actor_id == '268937716' && inputs\.target_sha == github\.sha/);
+assert.match(producer,/test "\$APPROVED_SHA" = "\$GITHUB_SHA"/);
+assert.ok(producer.indexOf('verifyHostingOnlyTrigger')<producer.indexOf('npm ci'));
+assert.match(writerJob,/github\.ref == 'refs\/heads\/main' && github\.run_attempt == 1/);
+assert.match(writerJob,/github\.event\.workflow_run\.event == 'workflow_dispatch' &&\s+github\.event\.workflow_run\.actor\.id == 268937716/);
+assert.match(writerJob,/github\.event\.workflow_run\.run_attempt == 1/);
+assert.ok(writerJob.indexOf('assertApp738ProductionWriteAuthority()')<writerJob.indexOf('google-github-actions/auth@'));
+assert.ok(writerJob.indexOf('assertApp738ProductionWriteAuthority()')<writerJob.indexOf('actions/create-github-app-token@'));
+console.log('APP738_PINNED_MANUAL_HOSTING_AND_RECEIVER_HOLD=PASS_SOURCE');

@@ -31,10 +31,12 @@ jobs:
     if: >-
       github.repository_id == '1188157610' &&
       github.repository_owner_id == '268937716' &&
-      github.ref == 'refs/heads/main' &&
+      github.ref == 'refs/heads/main' && github.run_attempt == 1 &&
       ((github.event_name == 'workflow_run' &&
         github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.event == 'push' &&
+        (github.event.workflow_run.event == 'push' ||
+         (github.event.workflow_run.event == 'workflow_dispatch' &&
+          github.event.workflow_run.actor.id == 268937716)) &&
         github.event.workflow_run.head_branch == 'preview' &&
         github.event.workflow_run.head_repository.id == 1188157610 &&
         github.event.workflow_run.path == '.github/workflows/app738-preview-artifact.yml' &&

@@ -86,7 +86,7 @@ console.log('APP738_PREVIEW_BUNDLE_UPLOAD_SCOPE_JOURNAL_AND_AUTH_HOLD=PASS_SYNTH
 console.log('APP738_PREWRITE_REVIEWED_RECOVERY_AND_FINAL_RELEASE_DRIFT=PASS_SYNTHETIC');
 
 assert.ok(wf.indexOf('assertApp738ProductionWriteAuthority()')<wf.indexOf('actions/create-github-app-token@'));
-assert.ok(!wf.includes('contents: write'));
+assert.doesNotMatch(wf,/^\s*contents: write\s*$/m);
 assert.match(wf,/app-id: '5968461'/);
 assert.match(wf,/permission-contents: write/);
 const proofJob=wf.slice(wf.indexOf('  journal-proof:'));

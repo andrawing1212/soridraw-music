@@ -1,0 +1,21 @@
+name: QA exact title activation transaction (offline only)
+on:
+  push:
+    branches: [qa/production-title-compatibility-20261128]
+    paths: ['scripts/qa-production-title-activation-20261128.mjs', 'scripts/verify-production-title-activation-20261128.mjs', '.github/workflows/qa-production-title-activation-20261128.yml']
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Validate exact source and offline transaction
+        run: |
+          test "$(git hash-object scripts/lib/patch-curated-direct-publication-deployed-20261128.mjs)" = 196ba33f281c4d4a77dc4b86a2e062f9c5bef1be
+          node --check scripts/qa-production-title-activation-20261128.mjs
+          node scripts/verify-production-title-activation-20261128.mjs

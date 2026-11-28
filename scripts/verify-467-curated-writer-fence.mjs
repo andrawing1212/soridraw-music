@@ -37,7 +37,7 @@ assert.equal(config.vars?.SORIDRAW_CURATED_WRITER_SHADOW471, undefined,
 assert.match(entry,/const curatedWriterShadowEnabled471 = \(env\) =>/);
 assert.match(entry,/const curatedSharedWriterEnabled471 = \(env\) =>/);
 assert.match(entry,/const curatedOnlyAlarm469 = canRunCuratedWriter471/);
-assert.match(entry,/if \(curatedSharedWriterEnabled471\(env\) &&\s*\(isTrackVisibilityMutation307 \|\| isPublicationBatch307\)\)/);
+assert.match(entry,/if \(curatedSharedWriterEnabled471\(env\) &&\s*\(isTrackVisibilityMutation307 \|\| isPublicationBatch307 \|\| isDirectMusicNotePublication20261128\)\)/);
 assert.match(entry,/if \(curatedWriterShadowEnabled471\(env\) && curatedRepairTicket468\)/);
 assert.match(entry,/if \(curatedWriterShadowEnabled471\(env\) && directCuratedTicket469\)/);
 assert.match(entry,/await writeCuratedSnapshot307\(request, env, ctx, id, promoted, access\.curatorRole\)/);

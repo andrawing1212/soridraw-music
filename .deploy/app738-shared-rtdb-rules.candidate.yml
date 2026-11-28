@@ -1,0 +1,210 @@
+# INERT SOURCE CANDIDATE. Not in .github/workflows; must not be installed
+# or enabled until separately approved, independently reviewed cutover.
+# Existing preview rules body pinned to 97f6a5af5e296f5bed0d0f9184eb2a5e2f5d86c3.
+name: SORIDRAW PREVIEW shared RTDB rules only (HOLD)
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        required: true
+        type: string
+      approval:
+        required: true
+        type: string
+      trigger_sha256:
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-shared-rtdb-rules-release
+  cancel-in-progress: false
+jobs:
+  rules:
+    # Hard HOLD. This candidate cannot execute any cloud operation.
+    if: ${{ false }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      RTDB_RULES_URL: https://soridraw-app-866a5-default-rtdb.firebaseio.com/.settings/rules.json
+      APPROVED_SHA: ${{ inputs.target_sha }}
+      APPROVAL: ${{ inputs.approval }}
+      TRIGGER_SHA256: ${{ inputs.trigger_sha256 }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - name: Verify owner first attempt, exact source and rules-only approval before auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY_ID" = '1188157610'
+          test "$GITHUB_REPOSITORY_OWNER_ID" = '268937716'
+          test "$GITHUB_ACTOR_ID" = '268937716'
+          test "$GITHUB_EVENT_NAME" = 'workflow_dispatch'
+          test "$GITHUB_RUN_ATTEMPT" = '1'
+          test "$GITHUB_REF" = 'refs/heads/preview'
+          [[ "$APPROVED_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
+          test "$GITHUB_SHA" = "$APPROVED_SHA"
+          test "$GITHUB_WORKFLOW_SHA" = "$APPROVED_SHA"
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$APPROVED_SHA"
+          node scripts/app738-shared-release-route.mjs rules
+          # Keep actual cloud operations disabled even if job condition is edited.
+          echo 'APP738_RULES_CUTOVER_HOLD'
+          exit 2
+      - name: Authenticate existing shared rules identity (not new Hosting writer)
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      - name: Apply only separately approved additive RTDB rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$APPROVED_SHA"
+          node scripts/app738-shared-release-route.mjs rules
+          # Use the same proven official REST rule path as the earlier 093 release.
+          # firebase-tools first asks the Firebase Management API for instance
+          # metadata, which this shared-data service account does not need for a
+          # direct authenticated rules PUT.
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          path = os.environ.get('GOOGLE_GHA_CREDS_PATH') or os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+          if not path:
+              raise SystemExit('service-account credential file missing')
+          creds = service_account.Credentials.from_service_account_file(
+              path,
+              scopes=[
+                  'https://www.googleapis.com/auth/firebase.database',
+                  'https://www.googleapis.com/auth/userinfo.email',
+              ],
+          )
+          creds.refresh(Request())
+          if not creds.token:
+              raise SystemExit('RTDB OAuth token unavailable')
+          Path(os.environ['RUNNER_TEMP'], 'rtdb-access-token').write_text(creds.token, encoding='utf-8')
+          print('RTDB_OAUTH_TOKEN_LOCAL_MINT=PASS')
+          PY
+
+          token="$(cat "$RUNNER_TEMP/rtdb-access-token")"
+          auth_url="${RTDB_RULES_URL}?access_token=${token}"
+
+          code="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/rtdb-rules-before.json" -w '%{http_code}' "$auth_url")"
+          if [ "$code" != '200' ]; then
+            echo "RTDB_RULES_READ_HTTP=$code"
+            cat "$RUNNER_TEMP/rtdb-rules-before.json" || true
+            exit 1
+          fi
+          python3 -m json.tool "$RUNNER_TEMP/rtdb-rules-before.json" >/dev/null
+          # Stage418: live Rules are shared by all 3 apps. Refuse to overwrite
+          # even one unrelated ACL with the checked-in snapshot. This verifies
+          # the ONLY permitted changes are the exact approved additive fields/nodes.
+          # app435 adds two bounded UID-private like result fields only in a
+          # separately approved shared-Rules release; never loosen parent ACLs.
+          # Explicitly approved Studio handoff rollout: exact one account-private
+          # RTDB child only. Never route it through the older 434 publication gate.
+          if grep -Fxq 'release=studio_heart_durable_handoff_preview_20261106' .deploy/preview-app-release.trigger; then
+            grep -Fxq 'source_pr=816' .deploy/preview-app-release.trigger
+            grep -Fxq 'approval=director_yes_studio_heart_shared_rules_and_preview_hosting' .deploy/preview-app-release.trigger
+            node scripts/verify-studio-heart-handoff-live-additive.mjs --self-test
+            node scripts/verify-studio-heart-handoff-live-additive.mjs --candidate \
+              "$RUNNER_TEMP/rtdb-rules-before.json" \
+              "$RUNNER_TEMP/rtdb-studio-candidate.json" \
+              "$RUNNER_TEMP/rtdb-studio-mode.txt"
+            code="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/rtdb-studio-recheck.json" -w '%{http_code}' "$auth_url")"
+            test "$code" = '200'
+            node scripts/verify-studio-heart-handoff-live-additive.mjs --candidate \
+              "$RUNNER_TEMP/rtdb-studio-recheck.json" \
+              "$RUNNER_TEMP/rtdb-studio-preput-candidate.json" \
+              "$RUNNER_TEMP/rtdb-studio-recheck-mode.txt"
+            cmp "$RUNNER_TEMP/rtdb-studio-candidate.json" "$RUNNER_TEMP/rtdb-studio-preput-candidate.json"
+            cmp "$RUNNER_TEMP/rtdb-studio-mode.txt" "$RUNNER_TEMP/rtdb-studio-recheck-mode.txt"
+            mode="$(cat "$RUNNER_TEMP/rtdb-studio-mode.txt")"
+            if [ "$mode" = 'ADD_ONLY_STUDIO_HEART_HANDOFF' ]; then
+              code="$(curl -sS --max-time 30 -X PUT -H 'Content-Type: application/json' \
+                --data-binary @"$RUNNER_TEMP/rtdb-studio-preput-candidate.json" \
+                -o "$RUNNER_TEMP/rtdb-studio-put.json" -w '%{http_code}' "$auth_url")"
+              test "$code" = '200'
+            elif [ "$mode" = 'ALREADY_EXACT' ]; then
+              echo 'STUDIO_HEART_SHARED_RTDB_RULES_ALREADY_EXACT=PASS'
+            else
+              echo "STUDIO_HEART_SHARED_RTDB_UNKNOWN_MODE=$mode"
+              exit 2
+            fi
+            code="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/rtdb-studio-after.json" -w '%{http_code}' "$auth_url")"
+            test "$code" = '200'
+            python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          path=Path(os.environ['RUNNER_TEMP'])
+          approved=json.loads((path/'rtdb-studio-candidate.json').read_text(encoding='utf-8'))
+          live=json.loads((path/'rtdb-studio-after.json').read_text(encoding='utf-8'))
+          if live != approved:
+              raise SystemExit('STUDIO_HEART_SHARED_RTDB_POST_DEPLOY_DRIFT_STOP')
+          print('STUDIO_HEART_SHARED_RTDB_EXACT_ONE_CHILD=PASS')
+          PY
+            rm -f "$RUNNER_TEMP/rtdb-access-token"
+            echo 'SHARED_RTDB_RULES_DEPLOY=PASS'
+            echo 'NO_USER_DATA_MIGRATION=true'
+            exit 0
+          fi
+          node scripts/verify-418-rtdb-rules-delta.mjs "$RUNNER_TEMP/rtdb-rules-before.json"
+          node scripts/verify-434-publication-rtdb-additive.mjs --self-test
+          node scripts/verify-434-publication-rtdb-additive.mjs \
+            "$RUNNER_TEMP/rtdb-rules-before.json" \
+            "$RUNNER_TEMP/rtdb-rules-434-candidate.json" \
+            "$RUNNER_TEMP/rtdb-rules-434-mode.txt"
+
+          # Re-read live shared Rules immediately before any PUT; refuse even
+          # one changed unrelated permission. Never replay database.rules.json
+          # directly because Stage416 server-only roots may already be live.
+          code="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/rtdb-rules-pre-put.json" -w '%{http_code}' "$auth_url")"
+          test "$code" = '200'
+          node scripts/verify-434-publication-rtdb-additive.mjs \
+            "$RUNNER_TEMP/rtdb-rules-pre-put.json" \
+            "$RUNNER_TEMP/rtdb-rules-434-preput-candidate.json" \
+            "$RUNNER_TEMP/rtdb-rules-434-preput-mode.txt"
+          cmp "$RUNNER_TEMP/rtdb-rules-434-mode.txt" "$RUNNER_TEMP/rtdb-rules-434-preput-mode.txt"
+          cmp "$RUNNER_TEMP/rtdb-rules-434-candidate.json" "$RUNNER_TEMP/rtdb-rules-434-preput-candidate.json"
+          mode="$(cat "$RUNNER_TEMP/rtdb-rules-434-mode.txt")"
+          if [ "$mode" = 'ADD_ONLY_TWO_PUBLICATION_NODES' ] || [ "$mode" = 'ADD_ONLY_TWO_PRIVATE_LIKE_FIELDS_435' ]; then
+            code="$(curl -sS --max-time 30 -X PUT \
+              -H 'Content-Type: application/json' \
+              --data-binary @"$RUNNER_TEMP/rtdb-rules-434-candidate.json" \
+              -o "$RUNNER_TEMP/rtdb-rules-put.json" -w '%{http_code}' "$auth_url")"
+            if [ "$code" != '200' ]; then
+              echo "RTDB_RULES_PUT_HTTP=$code"
+              cat "$RUNNER_TEMP/rtdb-rules-put.json" || true
+              exit 1
+            fi
+            python3 -m json.tool "$RUNNER_TEMP/rtdb-rules-put.json" >/dev/null
+          elif [ "$mode" = 'ALREADY_EXACT' ]; then
+            echo '434_SHARED_RTDB_RULES_ALREADY_EXACT_NO_PUT=PASS'
+          else
+            echo "434_INVALID_RULES_DEPLOY_MODE=$mode"
+            exit 1
+          fi
+
+          code="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/rtdb-rules-after.json" -w '%{http_code}' "$auth_url")"
+          test "$code" = '200'
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          local = json.loads(Path(os.environ['RUNNER_TEMP'] + '/rtdb-rules-434-candidate.json').read_text(encoding='utf-8'))
+          remote = json.loads(Path(os.environ['RUNNER_TEMP'] + '/rtdb-rules-after.json').read_text(encoding='utf-8'))
+          if remote != local:
+              raise SystemExit('RTDB deployed rules do not match approved source')
+          print('SHARED_RTDB_RULES_EXACT_MATCH=PASS')
+          PY
+          rm -f "$RUNNER_TEMP/rtdb-access-token"
+          echo 'SHARED_RTDB_RULES_DEPLOY=PASS'
+          echo 'NO_USER_DATA_MIGRATION=true'

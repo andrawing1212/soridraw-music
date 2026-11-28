@@ -1,0 +1,38 @@
+name: Read-only production title deployment outcome
+on:
+  push:
+    branches: [qa/production-title-compatibility-20261128]
+    paths: ['.github/workflows/production-title-outcome-readonly-20261128.yml']
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-full-production-backend-activation
+  cancel-in-progress: false
+jobs:
+  observe:
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' && github.actor == github.repository_owner && github.run_attempt == 1 && github.event.head_commit.message == 'qa: read active production title deployment after unacknowledged request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false, fetch-depth: 2}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Check exact previous attempt
+        run: test "$(git rev-parse HEAD^)" = e8607ba53f8dca11dc220c95b37421fce2eeee1e
+      - name: Observe active versions and existing schedules only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          node --input-type=module <<'NODE'
+          import {PINS,TARGET} from './scripts/qa-production-title-activation-20261128.mjs';
+          import {createTitleActivationTransport} from './scripts/lib/production-title-activation-transport-20261128.mjs';
+          const api=createTitleActivationTransport({token:process.env.CLOUDFLARE_API_TOKEN,send:async(url,opt)=>{
+            if(opt.method!=='GET')throw Error('READONLY');
+            return fetch(url,opt);
+          }});
+          const observed=await api.readActivePins();
+          for(const [name,row] of Object.entries(observed)) console.log(JSON.stringify({name,...row,unchanged:row.version===PINS[name]}));
+          console.log('PRODUCTION_ACTIVE_ORIGINAL='+String(observed[TARGET].version===PINS[TARGET]));
+          NODE

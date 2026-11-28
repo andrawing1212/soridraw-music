@@ -21,6 +21,22 @@ export async function verifyCuratedDirectPublicationRouting(source) {
   assert.ok(start>=0&&pre>start&&confirm>pre&&post>confirm);
   const routeBody=statements.slice(start,pre+1).join('\n')+'\nconst response=await baseWorker.fetch(request,env,ctx);\n'+statements[confirm]+'\n'+statements[post]+'\nreturn response;';
   const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
+  const injected=(code,names,values)=>{
+    const identifiers=new Set();
+    const tree=ts.createSourceFile('extracted.mjs',code,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
+    const collect=node=>{if(ts.isIdentifier(node))identifiers.add(node.text);ts.forEachChild(node,collect)};
+    collect(tree);
+    const params=[...names],args=[...values];
+    for(let i=0;i<names.length;i++){
+      for(const identifier of identifiers){
+        if(identifier!==names[i]&&identifier.startsWith(names[i])&&/^\d+$/.test(identifier.slice(names[i].length))){
+          assert.ok(!params.includes(identifier),'ambiguous bundle alias '+identifier);
+          params.push(identifier);args.push(values[i]);
+        }
+      }
+    }
+    return {params,args};
+  };
   const owner='owner', id='music_note_owner_song', other='music_note_other_other';
   const old={id,ownerUid:owner,title:'old',likeCount:7,coverUrl:'cover'};
   const pick={curatorUid:'admin',sortOrder:12};
@@ -31,8 +47,10 @@ export async function verifyCuratedDirectPublicationRouting(source) {
     const bucket={get:async()=>({etag:'before',text:async()=>JSON.stringify(initial)}),put:async(key,text,options)=>{calls.push('put');saved=JSON.parse(text);if(shadow)assert.equal(options.onlyIf.etagMatches,'before');return {etag:'after'}}};
     const getCuratedShared466=async()=>({object:{},snapshot:{memberIds:[id,other]}});
     const refreshCuratedShared466=async(_r,_e,_c,ids)=>{calls.push('refresh:'+ids.join(','));return {ok:true}};
-    const writer=new Function('sharedCuratedEnabled466','getCuratedShared466','refreshCuratedShared466','curatedBucket307','curatedWriterShadowEnabled471','SORIDRAW_CURATED_R2_KEY_307','SORIDRAW_CURATED_COLLECTION_307','clearCuratedEdge307',sync+'\nreturn syncCuratedPublicationResults307;')(
-      ()=>shared,getCuratedShared466,refreshCuratedShared466,()=>bucket,()=>shadow,'curated-key','soridraw',async()=>calls.push('clear'));
+    const writerBindings=injected(sync,
+      ['sharedCuratedEnabled466','getCuratedShared466','refreshCuratedShared466','curatedBucket307','curatedWriterShadowEnabled471','SORIDRAW_CURATED_R2_KEY_307','SORIDRAW_CURATED_COLLECTION_307','clearCuratedEdge307'],
+      [()=>shared,getCuratedShared466,refreshCuratedShared466,()=>bucket,()=>shadow,'curated-key','soridraw',async()=>calls.push('clear')]);
+    const writer=new Function(...writerBindings.params,sync+'\nreturn syncCuratedPublicationResults307;')(...writerBindings.args);
     const stub={fetch:async(url,init)=>{const action=url.split('/').at(-1);calls.push(action);if(action==='reserve')assert.deepEqual(JSON.parse(init.body).trackIds,[id]);return Response.json({ok:true,data:{reserved:true,generation:42}})}};
     const env={EXPLORE_LIKE_BATCH_SCHEDULER:{idFromName:()=>1,get:()=>stub}};
     const body=requestBody??{sourceType:'music_note',sourceId};
@@ -40,8 +58,11 @@ export async function verifyCuratedDirectPublicationRouting(source) {
     const payload={ok:success,data:responseData??{trackId:wrongResult?'wrong':id,snapshotItem:confirmed}};
     const baseWorker={fetch:async()=>{calls.push('base');return Response.json(payload,{status:success?200:409})}};
     const authFn=async()=>{calls.push('auth');return auth?{ok:true,uid:actor}:{ok:false,response:Response.json({ok:false},{status:401})}};
-    const runner=new AsyncFunction('request','url','env','ctx','baseWorker','curatedSharedWriterEnabled471','getCuratedShared466','readCanonicalCurated466','validateExploreAuth307','EXPLORE_LIKE_BATCH_SCHEDULER_NAME_103','syncCuratedPublicationResults307','curatedWriterShadowEnabled471','refreshCuratedShared466',routeBody);
-    const response=await runner(request,new URL(request.url),env,{},baseWorker,()=>shadow||shared,getCuratedShared466,async()=>{throw Error('unexpected canonical list read')},authFn,'scheduler',writer,()=>shadow,refreshCuratedShared466);
+    const routeBindings=injected(routeBody,
+      ['request','url','env','ctx','baseWorker','curatedSharedWriterEnabled471','getCuratedShared466','readCanonicalCurated466','validateExploreAuth307','EXPLORE_LIKE_BATCH_SCHEDULER_NAME_103','syncCuratedPublicationResults307','curatedWriterShadowEnabled471','refreshCuratedShared466'],
+      [request,new URL(request.url),env,{},baseWorker,()=>shadow||shared,getCuratedShared466,async()=>{throw Error('unexpected canonical list read')},authFn,'scheduler',writer,()=>shadow,refreshCuratedShared466]);
+    const runner=new AsyncFunction(...routeBindings.params,routeBody);
+    const response=await runner(...routeBindings.args);
     return {status:response.status,calls,saved};
   }
   const a=await run();

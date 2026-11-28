@@ -50,7 +50,7 @@ const send=async(url,opt)=>{
   if(p.endsWith('/deployments'))return response({deployments:[live[p.split('/')[1]]]});
   if(p.endsWith('/schedules'))return response({schedules:p.includes('soridraw-explore-preview')?[{cron:'37 * * * *'}]:[]});
  }
- if(opt.method==='POST'&&p===TARGET+'/versions'){
+ if(opt.method==='POST'&&p==='workers/'+TARGET+'/versions'){
   assert.equal(u.search,'?deploy=false');return response({id:fresh});
  }
  if(opt.method==='POST'&&p==='scripts/'+TARGET+'/deployments'){

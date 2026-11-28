@@ -9,6 +9,8 @@ on:
       - 'scripts/app738-production-hosting-transaction.mjs'
       - 'scripts/app738-hosting-cli.mjs'
       - 'scripts/verify-738-hosting-promotion.mjs'
+      - 'scripts/app738-hosting-writer-candidate.mjs'
+      - 'scripts/verify-738-hosting-writer-candidate.mjs'
       - '.github/workflows/app738-direct-hosting-promotion.yml'
       - '.github/workflows/soridraw-release-promotion.yml'
   issue_comment:
@@ -61,6 +63,7 @@ jobs:
           node --check scripts/app738-production-hosting-transaction.mjs
           node --check scripts/app738-hosting-cli.mjs
           node scripts/verify-738-hosting-promotion.mjs
+          node scripts/verify-738-hosting-writer-candidate.mjs
 
   run:
     if: >-

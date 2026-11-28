@@ -1,0 +1,63 @@
+name: Verify active production title candidate (GET only)
+on:
+  push:
+    branches: [qa/production-title-compatibility-20261128]
+    paths: ['.github/workflows/production-title-active-readonly-20261128.yml']
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-full-production-backend-activation
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' && github.actor == github.repository_owner && github.run_attempt == 1 && github.event.head_commit.message == 'qa: verify actual active title version and protected bindings after missing acknowledgement'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false, fetch-depth: 2}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: test "$(git rev-parse HEAD^)" = 9d87430ff221f8c2eab72047e98fc47897c66cd2
+      - name: Verify exact active candidate, 27 inherited bindings, runtime and read-only smoke
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {PINS,TARGET,verifyInactiveTitleCandidate} from './scripts/qa-production-title-activation-20261128.mjs';
+          import {createTitleActivationTransport} from './scripts/lib/production-title-activation-transport-20261128.mjs';
+          const token=process.env.CLOUDFLARE_API_TOKEN;
+          const id='6ef25207-a1ea-482a-81d4-5df620660b28',dep='19ad7b22-6d3f-4ff1-9e08-5f787cc4cecb';
+          const root='https://api.cloudflare.com/client/v4/accounts/e1a30fc9ef497fda1d34f4ab3dc1da45/';
+          const api=createTitleActivationTransport({token,send:async(url,opt)=>{
+            assert.ok(['GET','OPTIONS'].includes(opt.method));return fetch(url,opt);
+          }});
+          const check=async()=>{
+            const observed=await api.readActivePins();
+            assert.equal(observed[TARGET].version,id);assert.equal(observed[TARGET].deployment,dep);
+            for(const [name,version] of Object.entries(PINS))if(name!==TARGET)assert.equal(observed[name].version,version);
+          };
+          async function get(path){
+            const r=await fetch(root+path,{headers:{Authorization:'Bearer '+token,'Cache-Control':'no-cache'},redirect:'error',signal:AbortSignal.timeout(30000)});
+            const j=await r.json();if(!r.ok||!j.success)throw Error('GET_'+r.status);return j.result;
+          }
+          async function snap(v){
+            const [m,c]=await Promise.all([get('workers/scripts/'+TARGET+'/versions/'+v),get('workers/workers/'+TARGET+'/versions/'+v+'?include=modules')]);
+            assert.equal(m.id,v);return {id:v,bindings:m.resources.bindings,runtime:m.resources.script_runtime,modules:c.modules};
+          }
+          await check();
+          const [old,candidate]=await Promise.all([snap(PINS[TARGET]),snap(id)]);
+          assert.equal(old.bindings.length,27);
+          // Reuse the exact verified comparator without any upload or mutation.
+          if(!verifyInactiveTitleCandidate({old,candidate,id}))throw Error('CANDIDATE_NOT_EXACT');
+          console.log('ACTIVE_15_MODULE_HASHES_27_BINDINGS_RUNTIME=PASS');
+          const d=(await get('workers/scripts/'+TARGET+'/deployments?per_page=1')).deployments[0];
+          assert.equal(d.id,dep);
+          console.log('ACTIVE_DEPLOYMENT_MESSAGE_MATCH='+String(d.annotations?.['workers/message']==='Director-approved exact title-only activation'));
+          if(!await api.smokeReadOnly())throw Error('LIVE_AUTH_CORS_SMOKE_FAIL');
+          await check();
+          console.log('ACTIVE_AUTH_CORS_OTHER_FIVE_WORKERS_SCHEDULES=PASS');
+          console.log('PRODUCTION_TITLE_ACTIVE_VERIFIED='+id+';NO_MUTATIONS');
+          NODE

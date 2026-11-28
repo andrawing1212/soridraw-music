@@ -97,12 +97,19 @@ export async function inspectApp738Live({
  if(!configReview.compatible)fail('HOSTING_NON_CACHE_CONFIG_DRIFT_OR_VERSION_POLICY');
  return {source,before,configReview};
 }
-async function postVerify(api,expected){
+async function postVerify(api,expected,expectedRelease,prior){
  for(let i=0;i<4;i++){
   const current=await api.live(SITES.production);
-  if(current.version===expected)return current;
+  if(current.version===expected&&current.release===expectedRelease)return current;
+  if(current.version!==prior.version||current.release!==prior.release)
+   fail('PRODUCTION_CONCURRENT_RELEASE_DETECTED');
  }
  fail('PRODUCTION_RELEASE_NOT_OBSERVED');
+}
+function releaseIdentity(ack,version){
+ if(ack?.version?.name!==version||typeof ack?.name!=='string'||
+    !ack.name.startsWith('sites/soridraw/releases/'))fail('RELEASE_ACK_UNVERIFIED');
+ return ack.name;
 }
 export async function runApp738HostingPromotion({
  api,previewSha,evidence,approval,readCurrentPreviewSha,smokeProduction,
@@ -115,7 +122,7 @@ export async function runApp738HostingPromotion({
  const {source,before,configReview}=await inspectApp738Live({
    api,previewSha,evidence,readCurrentPreviewSha,
  });
- let cloned=null,releaseAttempted=false;
+ let cloned=null,releaseAttempted=false,ownedRelease=null;
  try{
   if(await readCurrentPreviewSha()!==previewSha)fail('SOURCE_CHANGED_BEFORE_CLONE');
   cloned=await api.clone(source.version,configReview.sameConfig?undefined:{
@@ -135,15 +142,20 @@ export async function runApp738HostingPromotion({
      await readCurrentPreviewSha()!==previewSha)
     fail('PREVIEW_SOURCE_CHANGED_AFTER_CLONE');
   releaseAttempted=true;
-  await api.release(cloned,'APP738 direct PREVIEW '+evidence.source.previewSha+' rollback='+id(before.version));
-  await postVerify(api,cloned);
+  const ack=await api.release(cloned,'APP738 direct PREVIEW '+evidence.source.previewSha+' rollback='+id(before.version));
+  ownedRelease=releaseIdentity(ack,cloned);
+  if(ownedRelease===before.release){ownedRelease=null;fail('RELEASE_ACK_REUSED');}
+  await postVerify(api,cloned,ownedRelease,before);
   const observed=await api.snapshotLive(SITES.production);
-  if(observed.version!==cloned||
+  if(observed.version!==cloned||observed.release!==ownedRelease||
      observed.filesSha256!==source.filesSha256||
      observed.configSha256!==before.configSha256)
     fail('POST_RELEASE_ASSET_PARITY');
   if(await smokeProduction({targetVersion:cloned,previewSha:evidence.source.previewSha,pinnedPreviewHead:previewSha})!==true)
     fail('PRODUCTION_LIVE_SMOKE_FAILED');
+  const final=await api.live(SITES.production);
+  if(final.version!==cloned||final.release!==ownedRelease)
+    fail('PRODUCTION_CONCURRENT_RELEASE_DETECTED');
   return {status:'HOSTING_PROMOTION_PASS',sourcePreviewVersion:source.version,
     deployedPreviewSha:evidence.source.previewSha,pinnedPreviewHead:previewSha,
     releasedProductionVersion:cloned,rollbackProductionVersion:before.version,
@@ -153,15 +165,20 @@ export async function runApp738HostingPromotion({
   if(!releaseAttempted)throw error; // only an INACTIVE version may exist.
   let live=null;
   try{live=await api.live(SITES.production)}catch{}
-  if(live?.version===before.version)
+  if(live?.version===before.version&&live?.release===before.release)
     throw Error('APP738_RELEASE_FAILED_OR_NOT_APPLIED; ORIGINAL_PRODUCTION_STILL_ACTIVE');
-  if(!cloned||live?.version!==cloned)
+  // A version is not a release identity. If POST acknowledgement was lost,
+  // or another release reused the same version, never overwrite it.
+  if(!cloned||!ownedRelease||live?.version!==cloned||live?.release!==ownedRelease)
     throw Error('APP738_PRODUCTION_STATE_UNKNOWN_OR_CONCURRENT_RELEASE_MANUAL_HOLD');
   try{
-   await api.release(before.version,'APP738 rollback to '+id(before.version));
-   await postVerify(api,before.version);
+   const rollbackAck=await api.release(before.version,'APP738 rollback to '+id(before.version));
+   const restoredRelease=releaseIdentity(rollbackAck,before.version);
+   if(restoredRelease===ownedRelease||restoredRelease===before.release)fail('ROLLBACK_ACK_REUSED');
+   await postVerify(api,before.version,restoredRelease,{version:cloned,release:ownedRelease});
    const restored=await api.snapshotLive(SITES.production);
-   if(restored.filesSha256!==before.filesSha256||
+   if(restored.version!==before.version||restored.release!==restoredRelease||
+      restored.filesSha256!==before.filesSha256||
       restored.configSha256!==before.configSha256)
      fail('ROLLBACK_CONTENT_IDENTITY_MISMATCH');
   }catch{

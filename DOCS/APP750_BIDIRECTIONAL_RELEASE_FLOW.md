@@ -58,3 +58,9 @@ APP749 독립 QA에서 실제 A↔B Firebase 인증·팔로우/취소·PC/모바
 - 실제 PREVIEW 배포 소스 `af9af470abedb87bc52661d8d12753b1edad1b2e`, Hosting `5a653e89fb795bf6`; 현재 preview `97f6a5af5e296f5bed0d0f9184eb2a5e2f5d86c3`는 지정 정책 문서만 변경. #1486 APP737/738 source pin 검사 PASS (#46150828878, #46150828842), main `763c921c8bedfe39be2ec88f6af8ead5f04cfd8f`.
 - [가상 시간 Actions #46151576931](https://github.com/andrawing1212/soridraw-music/actions/runs/46151576931) SUCCESS, QA commit `457ec0c22b324683ef030c48ac7dd1a84ccdb32d`: 현재 preview와 동일한 public-like-window-416.mjs blob `83d594aff768a27863f717857d2780357ff27cef`에서 1/3/5/10/20분 25개 전환, 기존 deadline 고정, 경계 직전 미공개·정확한 due, 다음 구간 새 시간 적용, 중복 곡 집계 방지, 잘못된 시간 차단 PASS. Map 기반 가상 시간 핵심 로직 검증이며 실제 운영의 각 설정별 전송/Functions/RTDB 실사용 PASS는 아니다. MASTER 현재 1분 유지; 설정 변경/배포/공유 데이터 쓰기 없음. 비용 검사 재실행 없음.
 - 남은 정방향 차단은 최신 정식 제목 Worker 후보의 별도 활성화 승인·정식 기능 동등성/인증 경로·기존 사용자 업그레이드·독립 증거 및 최종 Hosting 승인. 이 기록은 배포 허가나 APP738 승인 증거 파일이 아니다. 정방향 완료 뒤 APP750 역방향 작업을 이어간다.
+
+## 2026-11-28 KST — 정식 제목 Worker 적용 및 정방향 후속
+
+- 정식 Explore Worker 실제 활성 `6ef25207-a1ea-482a-81d4-5df620660b28`, 기존 복구 버전 `9257b708-4b76-43fe-9c87-3abe0fb071b7`. 활성 요청 #46152552832은 응답 확정 오류로 FAIL, 추가 배포 없이 [GET-only #46152657380](https://github.com/andrawing1212/soridraw-music/actions/runs/46152657380)에서 승인된 15개 모듈 해시, 27개 연결, runtime, 다른 5개 Worker/예약 및 기본 인증/CORS PASS. PREVIEW는 `0c437089-d431-4ab4-b872-27029c906048` 유지. 이 변경은 양쪽에 이미 적용된 제목 수정이므로 다음 승격에서 유실 금지.
+- 디렉터 23:24 KST(14:24 UTC) 최신 공개곡 '어릴 적 나에게111' 양쪽 PC 화면 제목 반영 확인. 추천곡 제목 및 모바일 미확인, 목록 불일치 원인 미확정. 23:29 KST 개별 기능 불일치 수정 보류 및 APP737/738 정방향 준비 우선 승인, 전체 정식 배포는 별도 승인 필요.
+- APP738 복구 코드에서 버전 ID만으로 실패한 배포의 소유 여부를 판단하는 허점 수정 후보: 서버가 반환한 고유 릴리스 ID도 일치해야 자동 복구, 응답 불명/다른 릴리스는 HOLD. 독립 검증 및 PR 병합 전까지 후보 상태. 기능 동등성·인증·업그레이드·최종 승인 증거는 아직 미완료이며 정식 Hosting/공유 서버 변경 없음.

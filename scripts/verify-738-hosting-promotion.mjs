@@ -73,8 +73,8 @@ const snap=(site,version,files=PF,config=PC,serving=previewConfig)=>({
  release:site==='soridraw'?'sites/soridraw/releases/old':'sites/soridraw-preview/releases/latest',
 });
 function mock({failSmoke=false,filesMismatch=false,concurrent=false,brokenRollback=false,
- unknownAfterFail=false,sourceMoved=false}={}){
- let current=OLD,releaseCount=0,cloneCount=0;
+ unknownAfterFail=false,sourceMoved=false,ackLost=false,sameVersionConcurrent=false}={}){
+ let current=OLD,releaseCount=0,cloneCount=0,currentRelease='sites/soridraw/releases/old';
  const source=snap('soridraw-preview',SOURCE);
  const before=snap('soridraw',OLD,OF,OC,prodConfig);
  const candidate=snap('soridraw',NEW,filesMismatch?'wrong':source.filesSha256,before.configSha256,prodConfig);
@@ -83,8 +83,8 @@ function mock({failSmoke=false,filesMismatch=false,concurrent=false,brokenRollba
  async snapshotLive(site){
   events.push('snapshot:'+site);
   if(site==='soridraw-preview')return source;
-  if(current===NEW)return {...candidate,release:'sites/soridraw/releases/new'};
-  return before;
+  if(current===NEW)return {...candidate,release:currentRelease};
+  return {...before,release:currentRelease};
  },
  async clone(v,options){assert.equal(v,SOURCE);assert.deepEqual(options,{productionConfig:prodConfig,rollbackVersion:OLD});cloneCount++;events.push('clone');return NEW;},
  async snapshotVersion(v){events.push('version:'+v);return v===NEW?candidate:before;},
@@ -95,13 +95,17 @@ function mock({failSmoke=false,filesMismatch=false,concurrent=false,brokenRollba
    return {version:'sites/soridraw/versions/outsider',release:'sites/soridraw/releases/out'};
   if(unknownAfterFail&&releaseCount===1&&current===NEW)
    return {version:'sites/soridraw/versions/outsider',release:'sites/soridraw/releases/out'};
-  return {version:current,release:current===NEW?'sites/soridraw/releases/new':before.release};
+  if(sameVersionConcurrent&&releaseCount===1&&current===NEW&&events.filter(e=>e==='live:soridraw').length>=4)
+   return {version:NEW,release:'sites/soridraw/releases/foreign-same-version'};
+  return {version:current,release:currentRelease};
  },
  async release(v,msg){
   assert.match(msg,/^APP738 /);releaseCount++;events.push('release:'+v);
   if(brokenRollback&&releaseCount===2)throw Error('rollback backend error');
   current=v;
-  return {name:'sites/soridraw/releases/new',version:{name:v}};
+  currentRelease=releaseCount===1?'sites/soridraw/releases/new':'sites/soridraw/releases/restored';
+  if(ackLost&&releaseCount===1)throw Error('response lost after applied');
+  return {name:currentRelease,version:{name:v}};
  },
  };
  return {api,events,metrics:()=>({releaseCount,cloneCount,current})};
@@ -145,6 +149,13 @@ await assert.rejects(()=>runApp738HostingPromotion({
  ...args,api:outOfBand.api,smokeProduction:async()=>false,
 }),/STATE_UNKNOWN_OR_CONCURRENT_RELEASE/);
 assert.equal(outOfBand.metrics().releaseCount,1,'never overwrite concurrent release');
+const lost=mock({ackLost:true});
+await assert.rejects(()=>runApp738HostingPromotion({...args,api:lost.api}),/STATE_UNKNOWN_OR_CONCURRENT_RELEASE/);
+assert.equal(lost.metrics().releaseCount,1,'lost acknowledgement cannot authorize rollback');
+const sameVersion=mock({sameVersionConcurrent:true});
+await assert.rejects(()=>runApp738HostingPromotion({...args,api:sameVersion.api,smokeProduction:async()=>false}),/STATE_UNKNOWN_OR_CONCURRENT_RELEASE/);
+assert.equal(sameVersion.metrics().releaseCount,1,'never rollback foreign release of same version');
+console.log('APP738_RELEASE_ACK_AND_SAME_VERSION_CONCURRENT_ROLLBACK_FENCE=PASS');
 
 // Fake exact Hosting REST shows fileCount and config matching after pagination.
 const calls=[];

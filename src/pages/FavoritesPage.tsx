@@ -35,6 +35,8 @@ import MusicApiGenerateModal, { LanguageCode, SunoModelVersion } from '../compon
 import StudioCenterModalPortal from '../components/studio/StudioCenterModalPortal';
 import CacheDiagnosticBadge from '../components/CacheDiagnosticBadge';
 import MusicNoteLoadingState from '../components/music/MusicNoteLoadingState';
+import PublicationTitleEditor, {PublicationSingleCover} from '../components/explore/PublicationTitleEditor';
+import {buildPublicationTitlePatch,isPublicationTitleSource,assertPublicationTitleNotSuperseded,type PublicationTitleDraft} from '../lib/publicationTitleEdit';
 
 const SORIDRAW_930_ROUTE_USER_READ_CACHE = true;
 const SORIDRAW_917_MUSIC_NOTE_DELTA_SYNC_NO_FULLSCAN = true;
@@ -1851,6 +1853,7 @@ export default function FavoritesPage({
     options: ExplorePublicationOptions;
     initialSunoIndex: 0 | 1;
     selectedSunoIndex: 0 | 1;
+    titleDraft?: PublicationTitleDraft | null;
   } | null>(null);
   const [explorePublicationPrivateConfirm, setExplorePublicationPrivateConfirm] = useState(false);
   // SORIDRAW_EXPLORE_PUBLICATION_STATE_HYDRATION_965
@@ -7083,7 +7086,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
   const submitFavoriteExplorePublicationDialog = async () => {
     if (!user?.uid || !explorePublicationDialog) return;
-    const { song, sourceId, state, options, initialSunoIndex, selectedSunoIndex } = explorePublicationDialog;
+    const { song, sourceId, state, options, initialSunoIndex, selectedSunoIndex, titleDraft } = explorePublicationDialog;
+    let titlePatch: ReturnType<typeof buildPublicationTitlePatch>;
+    try { titlePatch = buildPublicationTitlePatch(song, titleDraft); }
+    catch (error) { showFavoriteToast(error instanceof Error ? error.message : '제목을 확인해주세요.'); return; }
     if (explorePublicationBusyId === sourceId) return;
     if (explorePublicationMutationInFlightRef.current.has(sourceId)) {
       showFavoriteToast('공개 상태를 반영 중입니다. 잠시 후 다시 시도해주세요.');
@@ -7113,6 +7119,60 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     );
     if ((state.status !== 'public' || selectionChanged) && !isConnectedFavoriteSunoLink(selectedLink)) {
       showFavoriteToast('공개할 수노 곡을 먼저 선택하고 정상 연결 상태를 확인해주세요.');
+      return;
+    }
+
+    // Title edits are explicit saves: use the existing exact Music Note updater
+    // once, then the existing semantic public projection. Keep the modal on failure.
+    if (titlePatch && titleDraft) {
+      explorePublicationMutationInFlightRef.current.add(sourceId);
+      setExplorePublicationBusyId(sourceId);
+      let sourceCommitted = false;
+      try {
+        if (favoriteDetailPendingPatchRef.current?.songId === sourceId || favoriteDetailFlushInFlightRef.current) await flushFavoriteDetailPendingPatch('manual');
+        if (favoriteDetailPendingPatchRef.current?.songId === sourceId || await readMusicNoteDetailDraft(user.uid,sourceId)) throw new Error('뮤직노트의 임시 수정사항을 먼저 저장해주세요.');
+        if (auth.currentUser?.uid !== user.uid) throw new Error('로그인 상태를 확인해주세요.');
+        const current = favoritesStore.getFavorites().find((item:any)=>getFavoriteDocumentId(item)===sourceId) || latestSong;
+        if (!isPublicationTitleSource(current,user.uid,sourceId)) throw new Error('수정할 수 있는 원본 곡을 확인하지 못했습니다.');
+        assertPublicationTitleNotSuperseded(song,current,titleDraft);
+        const changed = buildPublicationTitlePatch(current,titleDraft);
+        let media:Record<string,any> = {};
+        if (selectionChanged) {
+          const latestLinks = getFavoriteSunoLinks(current);
+          const index = latestLinks.findIndex(link=>String(link?.url || '').trim()===selectedUrl);
+          if (index < 0) throw new Error('연결 곡이 변경되었습니다. 창을 다시 열어주세요.');
+          if (getFavoriteSunoMainIndex(current)!==index) media=buildFavoriteSunoMainSelectionUpdates(current,index as 0|1);
+        }
+        const updates = {...media,...(changed||{})};
+        if (Object.keys(updates).length) {
+          await updateFavorite(sourceId,updates);
+          sourceCommitted = true;
+          await patchMusicNoteDetailCache({uid:user.uid,sourceId,sourceVersion:Date.now(),updates});
+          const baseline = favoriteDetailServerBaselineRef.current;
+          if (baseline?.songId===sourceId) favoriteDetailServerBaselineRef.current={...baseline,data:{...baseline.data,...updates}};
+          setSelectedSong((item:any)=>item&&getFavoriteDocumentId(item)===sourceId?{...item,...updates}:item);
+          if (selectedSong && getFavoriteDocumentId(selectedSong)===sourceId && changed) {
+            setOriginalTitle(changed.title);setEditedTitle(changed.title);
+            setOriginalKoreanTitle(changed.koreanTitle);setEditedKoreanTitle(changed.koreanTitle);
+            setOriginalEnglishTitle(changed.englishTitle);setEditedEnglishTitle(changed.englishTitle);
+          }
+        }
+        sourceCommitted = true;
+        if (auth.currentUser?.uid !== user.uid) throw new Error('로그인 상태를 확인해주세요.');
+        const nextState = state.registered
+          ? await refreshExploreMusicNotePublicationContent428(user,sourceId,{...state,...options,status:'public',registered:true})
+          : await refreshExploreMusicNotePublicationSource(user,sourceId,options,null);
+        setExplorePublicationStateBySongId(prev=>({...prev,[sourceId]:nextState}));
+        setExplorePublicationDialog(null);
+        setExplorePublicationPrivateConfirm(false);
+        showFavoriteToast('제목과 공개 설정을 저장했습니다.');
+      } catch (error) {
+        console.warn('Publication title save failed:',error);
+        showFavoriteToast(sourceCommitted?'뮤직노트 제목은 저장되었습니다. 공개 설정을 다시 저장해주세요.':error instanceof Error?error.message:'제목 저장에 실패했습니다.');
+      } finally {
+        setExplorePublicationBusyId(current=>current===sourceId?null:current);
+        explorePublicationMutationInFlightRef.current.delete(sourceId);
+      }
       return;
     }
 
@@ -9905,7 +9965,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ duration: 0 }}
-                className="pointer-events-auto w-full max-w-[430px] overflow-hidden rounded-[28px] bg-[#1b1b1b] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.6)] md:p-6"
+                className="pointer-events-auto w-full max-w-[430px] max-h-[calc(100dvh-2.5rem)] overflow-y-auto rounded-[28px] bg-[#1b1b1b] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.6)] md:p-6"
                 style={{ pointerEvents: 'auto' }}
                 onPointerDown={(event) => event.stopPropagation()}
                 onMouseDown={(event) => event.stopPropagation()}
@@ -9916,9 +9976,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   <div className="min-w-0">
                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#FFC1BC]/72">Explore</p>
                     <h3 className="mt-1 text-xl font-black text-white">공개 설정</h3>
-                    <p className="mt-1 truncate text-xs font-semibold text-white/42">
-                      {String(explorePublicationDialog.song?.title || explorePublicationDialog.song?.koreanTitle || explorePublicationDialog.song?.englishTitle || '제목 없는 곡')}
-                    </p>
+
                   </div>
                   <button
                     type="button"
@@ -9935,6 +9993,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   </button>
                 </div>
 
+                <PublicationTitleEditor source={explorePublicationDialog.song} title={getCombinedFavoriteTitle(explorePublicationDialog.song)}
+                  draft={explorePublicationDialog.titleDraft} busy={explorePublicationBusyId === explorePublicationDialog.sourceId}
+                  onDraftChange={(titleDraft) => {setExplorePublicationPrivateConfirm(false);setExplorePublicationDialog(current=>current?{...current,titleDraft}:current);}} />
+                {getFavoriteSunoLinks(explorePublicationDialog.song).length === 1 && <PublicationSingleCover coverUrl={getFavoriteSunoLinks(explorePublicationDialog.song)[0]?.coverUrl}/>}
                 {getFavoriteSunoLinks(explorePublicationDialog.song).length > 1 && (
                   <div className="mt-5">
                     <div className="flex items-center justify-between gap-3 px-0.5">

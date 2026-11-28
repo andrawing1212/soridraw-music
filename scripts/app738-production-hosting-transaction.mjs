@@ -112,7 +112,7 @@ function releaseIdentity(ack,version){
  return ack.name;
 }
 export async function runApp738HostingPromotion({
- api,previewSha,evidence,approval,readCurrentPreviewSha,smokeProduction,
+ api,previewSha,evidence,approval,readCurrentPreviewSha,smokeProduction,expectedBefore,
 }={}){
  verifyApp738ReleaseGate({evidence,previewSha,approval,mode:'deploy'});
  if(!api||typeof api.clone!=='function'||typeof api.release!=='function'||
@@ -128,6 +128,8 @@ export async function runApp738HostingPromotion({
  const {source,before,configReview}=await inspectApp738Live({
    api,previewSha,evidence,readCurrentPreviewSha,
  });
+ if(expectedBefore&&(before.version!==expectedBefore.version||before.release!==expectedBefore.release))
+   fail('PINNED_RELEASE_IDENTITY_CHANGED');
  let cloned=null,releaseAttempted=false,ownedRelease=null;
  try{
   if(await readCurrentPreviewSha()!==previewSha)fail('SOURCE_CHANGED_BEFORE_CLONE');
@@ -164,7 +166,7 @@ export async function runApp738HostingPromotion({
     fail('PRODUCTION_CONCURRENT_RELEASE_DETECTED');
   return {status:'HOSTING_PROMOTION_PASS',sourcePreviewVersion:source.version,
     deployedPreviewSha:evidence.source.previewSha,pinnedPreviewHead:previewSha,
-    releasedProductionVersion:cloned,rollbackProductionVersion:before.version,
+    releasedProductionVersion:cloned,releasedProductionRelease:ownedRelease,rollbackProductionVersion:before.version,
     assetsMatched:true,settingsMatched:true,productionConfigPreserved:true,
     backendWasModified:false,testWasTouched:false};
  }catch(error){

@@ -7,7 +7,7 @@ import {createHash} from 'node:crypto';
 import {buildHostingWifPlan,normalizeHostingRequest,createHostingJournal,runHostingWriterCandidate} from './app738-hosting-writer-candidate.mjs';
 
 const sha='a'.repeat(40),digest='b'.repeat(64);
-const plan=buildHostingWifPlan({projectNumber:'999999999999',controllerSha:sha});
+const plan=buildHostingWifPlan({projectNumber:'450781969193',controllerSha:sha});
 assert.equal(plan.liveAuthorityVerified,false);
 assert.equal(plan.projectId,'soridraw');
 assert.match(plan.attributeCondition,/assertion.repository_id == '1188157610'/);
@@ -19,11 +19,13 @@ assert.match(plan.attributeCondition,/assertion.environment == 'hosting-writer'/
 assert.match(plan.attributeCondition,/assertion.runner_environment == 'github-hosted'/);
 assert.match(plan.attributeCondition,/assertion.workflow_ref == 'andrawing1212\/soridraw-music\/.github\/workflows\/app738-direct-hosting-promotion.yml@refs\/heads\/main'/);
 assert.throws(()=>buildHostingWifPlan({projectNumber:'1083981050742',controllerSha:sha}),/UNVERIFIED/);
-assert.throws(()=>buildHostingWifPlan({projectNumber:'999999999999',controllerSha:'main'}),/UNVERIFIED/);
+assert.throws(()=>buildHostingWifPlan({projectNumber:'450781969193',controllerSha:'main'}),/UNVERIFIED/);
+assert.throws(()=>buildHostingWifPlan({projectNumber:'999999999999',controllerSha:sha}),/UNVERIFIED/);
 const request=(mode='preview')=>{
  const site=mode==='preview'?'soridraw-preview':'soridraw';
  return {mode,site,sourceSha:sha,filesSha256:digest,configSha256:digest,evidenceSha256:digest,
   approval:mode==='production'?'DEPLOY_PRODUCTION':mode==='rollback'?'ROLLBACK_PRODUCTION':null,
+  targetVersion:mode==='production'?null:'sites/'+site+'/versions/newv',
   before:{version:'sites/'+site+'/versions/oldv',release:'sites/'+site+'/releases/old'}};
 };
 assert.throws(()=>normalizeHostingRequest({...request(),site:'soridraw'}),/DESTINATION/);

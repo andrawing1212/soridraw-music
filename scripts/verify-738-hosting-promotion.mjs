@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {runCommonHostingCandidate} from './app738-hosting-writer-candidate.mjs';
 import {createApp738HostingApi,compareHostingArtifacts,reviewHostingCacheDifference} from './app738-firebase-hosting-runtime.mjs';
 import {runApp738HostingPromotion,verifyApp738ReleaseGate,verifyApp738GitSourcePin} from './app738-production-hosting-transaction.mjs';
 import {mkdtempSync,mkdirSync,writeFileSync,rmSync,readFileSync} from 'node:fs';
@@ -266,3 +268,75 @@ try{
  assert.deepEqual(verifyApp738GitSourcePin({head:deployed,source:{previewSha:deployed},cwd:repo}),{deployedPreviewSha:deployed,pinnedPreviewHead:deployed});
 }finally{rmSync(repo,{recursive:true,force:true})}
 console.log('APP738_EXACT_DEPLOYED_SOURCE_AND_POLICY_ONLY_HEAD_ADVANCE=PASS');
+
+
+// Common writer integration exercises real existing APP738 logic with
+// isolated mocks only. Both modes share one durable journal contract.
+const sum=x=>createHash('sha256').update(x).digest('hex');
+function memoryJournal(){
+ let state={schema:1,phase:'idle'},sha='0'.repeat(40),n=0;
+ return {read:()=>({sha,state}),compareAppend(expected,next){
+  assert.equal(expected,sha);state=structuredClone(next);sha=(++n).toString(16).padStart(40,'0');return sha;
+ }};
+}
+const prodRaw=JSON.stringify({kind:'APP738_DIRECT_RELEASE_EVIDENCE_V1',reviewedForActualProductionDeployment:true,
+ verifiedByIndependentQa:true,approvedPreviewSha:SHA,app737Evidence:evidence()});
+const prodReq={mode:'production',site:'soridraw',sourceSha:SHA,filesSha256:PF,configSha256:OC,
+ evidenceSha256:sum(prodRaw),approval:'DEPLOY_PRODUCTION',before:{version:OLD,release:'sites/soridraw/releases/old'}};
+const cp=mock(),journal=memoryJournal();
+const prodOptions={journal,api:cp.api,request:prodReq,evidenceRaw:prodRaw,
+ readCurrentPreviewSha:async()=>SHA,smokeProduction:async()=>true};
+const integrated=await runCommonHostingCandidate(prodOptions);
+assert.equal(integrated.release,'sites/soridraw/releases/new');
+assert.equal(journal.read().state.phase,'idle');
+assert.deepEqual(cp.metrics(),{releaseCount:1,cloneCount:1,current:NEW});
+const rejected=mock(),rejectedJournal=memoryJournal();
+await assert.rejects(()=>runCommonHostingCandidate({...prodOptions,journal:rejectedJournal,api:rejected.api,
+ request:{...prodReq,evidenceSha256:'9'.repeat(64)}}),/EVIDENCE_DIGEST_MISMATCH/);
+assert.equal(rejectedJournal.read().state.phase,'idle');
+assert.equal(rejected.events.length,0);
+await assert.rejects(()=>runCommonHostingCandidate({...prodOptions,journal:rejectedJournal,api:blockedApi}),
+ /PRODUCTION_EXCLUSIVE_WRITER_UNVERIFIED/);
+assert.equal(rejectedJournal.read().state.phase,'idle');
+const badBaseline=mock(),badJournal=memoryJournal();
+await assert.rejects(()=>runCommonHostingCandidate({...prodOptions,journal:badJournal,api:badBaseline.api,
+ request:{...prodReq,before:{...prodReq.before,release:'sites/soridraw/releases/foreign'}}}),/BASELINE_DRIFT/);
+assert.equal(badBaseline.metrics().releaseCount,0);
+assert.equal(badJournal.read().state.phase,'pending');
+const loss=mock({ackLost:true}),lostJournal=memoryJournal();
+await assert.rejects(()=>runCommonHostingCandidate({...prodOptions,journal:lostJournal,api:loss.api}),/MANUAL_HOLD/);
+assert.equal(lostJournal.read().state.phase,'pending');
+assert.equal(loss.metrics().releaseCount,1);
+const previewTarget='sites/soridraw-preview/versions/newpreview';
+const previewBefore={version:SOURCE,release:'sites/soridraw-preview/releases/latest'};
+const previewRaw=JSON.stringify({kind:'APP738_FINALIZED_ARTIFACT_CANDIDATE_V1',mode:'preview',site:'soridraw-preview',
+ sourceSha:SHA,version:previewTarget,filesSha256:PF,configSha256:PC,before:previewBefore});
+const previewReq={mode:'preview',site:'soridraw-preview',sourceSha:SHA,targetVersion:previewTarget,
+ filesSha256:PF,configSha256:PC,evidenceSha256:sum(previewRaw),before:previewBefore};
+let pv=previewBefore,previewWrites=0;
+const previewApi={
+ assertExclusiveReleaseAuthority:async()=>true,
+ snapshotLive:async()=>({...snap('soridraw-preview',pv.version),...pv}),
+ snapshotVersion:async(v)=>snap('soridraw-preview',v),
+ live:async()=>pv,
+ releasePreview:async(v)=>{previewWrites++;pv={version:v,release:'sites/soridraw-preview/releases/next'};
+  return {name:pv.release,version:{name:v}};},
+ release:async()=>{throw Error('wrong production adapter');}
+};
+const previewOptions={journal:lostJournal,api:previewApi,request:previewReq,evidenceRaw:previewRaw,readCurrentPreviewSha:async()=>SHA};
+await assert.rejects(()=>runCommonHostingCandidate(previewOptions),/PENDING_OR_UNKNOWN_ATTEMPT/);
+assert.equal(previewWrites,0);
+const previewJournal=memoryJournal();
+await runCommonHostingCandidate({...previewOptions,journal:previewJournal});
+assert.equal(previewWrites,1);assert.equal(previewJournal.read().state.phase,'idle');
+const rollbackMock=mock(),rollbackJournal=memoryJournal();
+const rollbackBefore={version:OLD,release:'sites/soridraw/releases/old'};
+const rbRaw=JSON.stringify({kind:'APP738_FINALIZED_ARTIFACT_CANDIDATE_V1',mode:'rollback',site:'soridraw',
+ sourceSha:SHA,version:NEW,filesSha256:PF,configSha256:OC,before:rollbackBefore});
+await runCommonHostingCandidate({journal:rollbackJournal,api:rollbackMock.api,evidenceRaw:rbRaw,
+ request:{mode:'rollback',site:'soridraw',sourceSha:SHA,targetVersion:NEW,filesSha256:PF,configSha256:OC,
+ evidenceSha256:sum(rbRaw),approval:'ROLLBACK_PRODUCTION',before:rollbackBefore}});
+assert.equal(rollbackMock.metrics().releaseCount,1);
+assert.equal(rollbackJournal.read().state.phase,'idle');
+console.log('APP738_COMMON_WRITER_EXISTING_PROD_TRANSACTION_AND_SCOPED_PREVIEW_ROLLBACK=PASS_SYNTHETIC');
+console.log('APP738_COMMON_WRITER_EVIDENCE_BASELINE_AND_CROSS_SITE_UNKNOWN_HOLD=PASS_SYNTHETIC');

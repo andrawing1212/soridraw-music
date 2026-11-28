@@ -1,0 +1,29 @@
+name: PREVIEW curated title exact Worker release
+on:
+  push:
+    branches: [release/preview-curated-title-20261128]
+    paths: ['.github/workflows/preview-curated-title-exact-release-20261128.yml']
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-preview-explore-worker-release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: >-
+      github.repository == 'andrawing1212/soridraw-music' && github.actor == github.repository_owner && github.run_attempt == 1 && github.event.head_commit.message == 'release: approved PREVIEW curated title exact repair'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false, fetch-depth: 2}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Exact release source and pinned test tooling
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node --check scripts/preview-curated-title-exact-release-20261128.mjs
+      - name: Exact PREVIEW route verification and single-module release
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/preview-curated-title-exact-release-20261128.mjs

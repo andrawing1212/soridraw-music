@@ -1,0 +1,26 @@
+name: Production compatibility recent D1 usage (read only)
+on:
+  push:
+    branches: [qa/production-title-compatibility-20261128]
+    paths: ['.github/workflows/qa-production-cost-compatibility-20261128.yml']
+permissions:
+  contents: read
+jobs:
+  cost:
+    if: github.repository == 'andrawing1212/soridraw-music' && github.actor == github.repository_owner && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Reuse pinned read-only analytics, no schema or row queries
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_READONLY_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+          SORIDRAW_SHARED_D1_DATABASE_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+          SORIDRAW_D1_COST_DAYS: '7'
+        run: |
+          test "$(git hash-object scripts/report-cloudflare-d1-usage-readonly.mjs)" = 43aea10ce428f8eb148e16b367a34542cb2a4999
+          node scripts/report-cloudflare-d1-usage-readonly.mjs

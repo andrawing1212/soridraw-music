@@ -51,3 +51,10 @@ APP749 독립 QA에서 실제 A↔B Firebase 인증·팔로우/취소·PC/모바
 최초 서버 연결·동작·복구 기준을 한 번 확립한 뒤, 변경 없는 백엔드 계층의 QA는 반복하지 않는다. 이후 일반 Hosting 변경은 차이 있는 기능과 고정 Hosting 파일·복구만 검사한다.
 
 이 APP750 PR은 GitHub 코드 전달 준비만 하며 TEST/PRODUCTION/PREVIEW 배포, Worker/Functions/Rules/D1/R2 변경, 사용자 데이터 쓰기를 실행하지 않는다.
+
+## 2026-11-28 KST — 최초 정방향 준비: 사용자 실검증 및 공개 집계 주기 PASS
+
+- 디렉터가 22:48 KST(13:48 UTC) PREVIEW 실검증 모두 통과를 명시: 동일 계정 PC↔모바일 좋아요/취소와 숫자 동기화, 다른 계정 공개 좋아요 1분 공동 집계, 알림 수신과 사용자명/곡 제목 표시. 사용자 확인 근거이며 정식앱 실사용 결과가 아니다. 동일 기능·환경에 신규 변경/오류 근거 없으면 반복하지 않는다.
+- 실제 PREVIEW 배포 소스 `af9af470abedb87bc52661d8d12753b1edad1b2e`, Hosting `5a653e89fb795bf6`; 현재 preview `97f6a5af5e296f5bed0d0f9184eb2a5e2f5d86c3`는 지정 정책 문서만 변경. #1486 APP737/738 source pin 검사 PASS (#46150828878, #46150828842), main `763c921c8bedfe39be2ec88f6af8ead5f04cfd8f`.
+- [가상 시간 Actions #46151576931](https://github.com/andrawing1212/soridraw-music/actions/runs/46151576931) SUCCESS, QA commit `457ec0c22b324683ef030c48ac7dd1a84ccdb32d`: 현재 preview와 동일한 public-like-window-416.mjs blob `83d594aff768a27863f717857d2780357ff27cef`에서 1/3/5/10/20분 25개 전환, 기존 deadline 고정, 경계 직전 미공개·정확한 due, 다음 구간 새 시간 적용, 중복 곡 집계 방지, 잘못된 시간 차단 PASS. Map 기반 가상 시간 핵심 로직 검증이며 실제 운영의 각 설정별 전송/Functions/RTDB 실사용 PASS는 아니다. MASTER 현재 1분 유지; 설정 변경/배포/공유 데이터 쓰기 없음. 비용 검사 재실행 없음.
+- 남은 정방향 차단은 최신 정식 제목 Worker 후보의 별도 활성화 승인·정식 기능 동등성/인증 경로·기존 사용자 업그레이드·독립 증거 및 최종 Hosting 승인. 이 기록은 배포 허가나 APP738 승인 증거 파일이 아니다. 정방향 완료 뒤 APP750 역방향 작업을 이어간다.

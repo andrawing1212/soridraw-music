@@ -105,3 +105,12 @@ fakeShell.clientWidth=780;resizeCallback();assert.equal(overflowStates.at(-1),fa
 fakeShell.clientWidth=1200;fakeRow.scrollWidth=1200;resizeCallback();assert.equal(overflowStates.at(-1),false);
 assert.equal(observed.length,4);overflowCleanup();assert.equal(disconnected,true);
 console.log('EXPLORE_GENRE_ARROWS_ONLY_WHEN_FULL_SHELL_OVERFLOWS=PASS');
+
+assert.match(css,/\.soridraw-explore-genre-scroll-shell\{position:relative;/);
+assert.match(css,/\.soridraw-explore-genre-scroll-shell>\.soridraw-explore-recommend-genre-row\{flex:1 1 0;width:100%;min-width:0\}/);
+assert.match(css,/\.soridraw-explore-genre-scroll-arrow\{display:none;position:absolute;top:50%;transform:translateY\(-50%\);/);
+assert.match(css,/\.soridraw-explore-genre-scroll-arrow:first-child\{right:100%\}/);
+assert.match(css,/\.soridraw-explore-genre-scroll-arrow:last-child\{left:100%\}/);
+assert.match(css,/@media \(max-width:1099px\)\{\.soridraw-explore-genre-scroll-arrow\{width:20px\}/);
+assert.match(css,/@media \(max-width:720px\)\{\.soridraw-explore-genre-scroll-arrow\{width:12px\}/);
+console.log('EXPLORE_GENRE_ARROWS_OUTSIDE_FULL_WIDTH_CHIP_VIEWPORT=PASS');

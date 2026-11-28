@@ -1,3 +1,5 @@
+**최상위 디렉터 확정 — 양방향 배포·복구 체계 (2026-11-28 KST):** 모든 개발방·Codex·Work 공통. PREVIEW → PRODUCTION 직접 승격과 PRODUCTION → PREVIEW 역방향 변경분 반영을 영구 개발 원칙으로 한다. 먼저 기존 APP737/738 정방향을 완성하고, 기존 APP750 PR-only 코드 동기화를 재사용해 안전한 역방향 검증·PREVIEW 배포까지 완성한다. 일반 개발은 PREVIEW 우선, 정식 긴급 수정은 출처와 양쪽 복구 지점을 고정한 뒤 변경분만 PREVIEW에 반영하고 후속 정방향 승격에서 유실 금지. 미완성 PREVIEW 전체 덮어쓰기·강제 push·전체 Hosting 무조건 복제·TEST 사용·공유 데이터/백엔드 임의 변경 금지. 실제 정식 배포는 명확한 최종 승인과 기존 안전 게이트 필수. 기존 합격 검사 재사용. 세부 계약은 [DOCS/APP750_BIDIRECTIONAL_RELEASE_FLOW.md](DOCS/APP750_BIDIRECTIONAL_RELEASE_FLOW.md), 정방향 계약은 main의 DOCS/PREVIEW_PRODUCTION_DIRECT_PROMOTION.md. 역사적 TEST 기반 지침과 충돌 시 최신 이 원칙 우선. 현재 APP750은 PR 생성까지 구현, 역방향 실제 배포 미검증; 문서 기록은 배포 승인이 아니다.
+
 # SORIDRAW 작업 시작 지침 — 반드시 먼저 읽기
 
 이 저장소에서 코드 수정, 백엔드 수정, 테스트, 배포를 시작하기 전에 **과거 채팅보다 GitHub의 현재 상태를 먼저 확인한다.** 새 채팅에서 사용자가 이전 작업을 다시 설명하게 만들지 않는다.

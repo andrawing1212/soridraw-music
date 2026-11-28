@@ -14,8 +14,8 @@ assert.match(page,/<ExploreGenreScrollRow label="대분류 장르">/);
 assert.match(page,/<ExploreGenreScrollRow label="세부 장르">/);
 assert.doesNotMatch(row,/fetch\(|getDoc|setDoc|localStorage/);
 assert.match(css,/\.soridraw-explore-genre-scroll-arrow\{display:none[^}]*opacity:0;pointer-events:none/);
-assert.match(css,/@media \(hover:hover\) and \(pointer:fine\)\{\s*\.soridraw-explore-genre-scroll-arrow\{display:flex\}/);
-assert.match(css,/\.soridraw-explore-genre-scroll-shell:hover>\.soridraw-explore-genre-scroll-arrow/);
+assert.match(css,/@media \(hover:hover\) and \(pointer:fine\)\{\s*\.soridraw-explore-genre-scroll-shell\[data-overflow="true"\]>\.soridraw-explore-genre-scroll-arrow\{display:flex\}/);
+assert.match(css,/\.soridraw-explore-genre-scroll-shell\[data-overflow="true"\]:hover>\.soridraw-explore-genre-scroll-arrow/);
 assert.match(css,/data-soridraw-mouse-scrolling="true"\]\{scroll-behavior:auto/);
 const source=fs.readFileSync('src/lib/folderStripMouseScroll.ts','utf8');
 const listeners=new Map();
@@ -79,3 +79,29 @@ scroll.scrollLeft=999;right.onPointerDown(down);fireTimer();fireFrame(0);fireFra
 right.onPointerDown(down);fireTimer();events.get('blur')();assert.equal(frames.size,0);assert.equal(events.size,0);
 left.onPointerDown(down);fireTimer();cleanup();assert.equal(frames.size,0);assert.equal(events.size,0);assert.equal(scroll.style.scrollSnapType,'x proximity');
 console.log('EXPLORE_ALL_ARROW_SINGLE_CLICK_AND_CONSTANT_HOLD_SCROLL=PASS');
+
+assert.match(row,/data-overflow=\{hasOverflow \? 'true' : undefined\}/);
+assert.match(row,/observer\.observe\(shell\)/);
+assert.match(row,/observer\.observe\(row\)/);
+assert.match(row,/Array\.from\(row\.children\)\.forEach\(chip => observer\.observe\(chip\)\)/);
+assert.match(row,/return \(\) => observer\.disconnect\(\)/);
+const layoutSource=row.slice(row.indexOf('  useLayoutEffect(() => {'),row.indexOf('  const moveGenreRow'));
+const fakeShell={clientWidth:800};
+const fakeRow={scrollWidth:500,clientWidth:800,children:[{},{}]};
+const overflowStates=[],observed=[];
+let resizeCallback,disconnected=false,overflowCleanup;
+const overflowSandbox={
+ shellRef:{current:fakeShell},rowRef:{current:fakeRow},
+ setHasOverflow:value=>overflowStates.push(value),
+ useLayoutEffect:fn=>{overflowCleanup=fn()},children:[],
+ ResizeObserver:class {constructor(fn){resizeCallback=fn}observe(el){observed.push(el)}disconnect(){disconnected=true}},
+};
+vm.runInNewContext(layoutSource,overflowSandbox);
+assert.equal(overflowStates.at(-1),false); // few chips, wide viewport
+fakeRow.scrollWidth=900;resizeCallback();assert.equal(overflowStates.at(-1),true); // more chips
+fakeRow.clientWidth=756;fakeRow.scrollWidth=780;resizeCallback();assert.equal(overflowStates.at(-1),false); // fits full width even though arrows reduce it
+fakeShell.clientWidth=600;resizeCallback();assert.equal(overflowStates.at(-1),true); // narrower split
+fakeShell.clientWidth=780;resizeCallback();assert.equal(overflowStates.at(-1),false); // exactly fits
+fakeShell.clientWidth=1200;fakeRow.scrollWidth=1200;resizeCallback();assert.equal(overflowStates.at(-1),false);
+assert.equal(observed.length,4);overflowCleanup();assert.equal(disconnected,true);
+console.log('EXPLORE_GENRE_ARROWS_ONLY_WHEN_FULL_SHELL_OVERFLOWS=PASS');

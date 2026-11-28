@@ -1187,16 +1187,36 @@ const handleExploreGenreRowWheel342 = (event: React.WheelEvent<HTMLDivElement>) 
 
 // Reuse the proven Music Note mouse-pan behavior, without any folder edit/reorder action.
 function ExploreGenreScrollRow({ label, children }: { label: string; children: React.ReactNode }) {
+  const shellRef = useRef<HTMLDivElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
+  const [hasOverflow, setHasOverflow] = useState(false);
   const mouseScroll = useFolderStripMouseScroll(() => {}, () => false);
   const bindGenreArrowHold = useExploreArrowHoldScroll(rowRef);
+
+  useLayoutEffect(() => {
+    const shell = shellRef.current;
+    const row = rowRef.current;
+    if (!shell || !row) return;
+
+    // Compare content against the FULL shell, not the row narrowed by its arrows.
+    // Otherwise the arrows can create their own overflow and never disappear.
+    const syncOverflow = () => {
+      setHasOverflow(row.scrollWidth > shell.clientWidth);
+    };
+    syncOverflow();
+    const observer = new ResizeObserver(syncOverflow);
+    observer.observe(shell);
+    observer.observe(row);
+    Array.from(row.children).forEach(chip => observer.observe(chip));
+    return () => observer.disconnect();
+  }, [children]);
 
   const moveGenreRow = (direction: -1 | 1) => {
     rowRef.current?.scrollBy({ left: direction * 220, behavior: 'smooth' });
   };
 
   return (
-    <div className="soridraw-explore-genre-scroll-shell">
+    <div ref={shellRef} className="soridraw-explore-genre-scroll-shell" data-overflow={hasOverflow ? 'true' : undefined}>
       <button type="button" className="soridraw-explore-genre-scroll-arrow"
         aria-label={`${label} 왼쪽으로 이동`} {...bindGenreArrowHold(-1)} onClick={() => moveGenreRow(-1)}>
         <ChevronLeft aria-hidden="true" />

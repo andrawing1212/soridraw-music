@@ -65,8 +65,8 @@
 .soridraw-explore-recommend-genre-row[data-soridraw-mouse-scrolling="true"]{scroll-behavior:auto;user-select:none;cursor:grabbing}
 .soridraw-explore-recommend-genre-row[data-soridraw-mouse-scrolling="true"] button{cursor:grabbing;transform:none}
 @media (hover:hover) and (pointer:fine){
-.soridraw-explore-genre-scroll-arrow{display:flex}
-.soridraw-explore-genre-scroll-shell:hover>.soridraw-explore-genre-scroll-arrow,.soridraw-explore-genre-scroll-arrow:focus-visible{opacity:1;pointer-events:auto}
+.soridraw-explore-genre-scroll-shell[data-overflow="true"]>.soridraw-explore-genre-scroll-arrow{display:flex}
+.soridraw-explore-genre-scroll-shell[data-overflow="true"]:hover>.soridraw-explore-genre-scroll-arrow,.soridraw-explore-genre-scroll-shell[data-overflow="true"]>.soridraw-explore-genre-scroll-arrow:focus-visible{opacity:1;pointer-events:auto}
 }
 .soridraw-explore-recommend-keywords button{flex:0 0 auto;min-height:34px;padding:0 13px;border:0!important;outline:0!important;border-radius:999px;background:rgba(255,255,255,.055)!important;box-shadow:none!important;color:rgba(235,235,240,.52);font-size:12px;font-weight:800;cursor:pointer;transition:background .15s ease,color .15s ease,transform .15s ease}
 .soridraw-explore-recommend-keywords button:hover{background:rgba(255,255,255,.09)!important;color:rgba(255,255,255,.88)}

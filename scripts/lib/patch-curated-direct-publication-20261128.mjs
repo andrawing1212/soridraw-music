@@ -24,5 +24,9 @@ export function patchCuratedDirectPublication(source) {
     '$&\n            directTrackId20261128: isDirectMusicNotePublication20261128 ? affected468[0] : null,');
   replace(/await syncCuratedPublicationResults307\(request,\s*env,\s*results307,\s*ctx\);/g,
     'if (isDirectMusicNotePublication20261128 && curatedRepairTicket468?.directTrackId20261128) {\n          const result20261128 = results307[0];\n          if (result20261128?.ok !== true || result20261128.trackId !== curatedRepairTicket468.directTrackId20261128 || String(result20261128.snapshotItem?.id || "").trim() !== result20261128.trackId)\n            throw Error("CURATED_DIRECT_CONFIRMED_RESULT_PENDING_20261128");\n        }\n        $&');
+  replace(/snapshotItem:\s*mutationPayload307\?\.data\?\.snapshotItem\s*\|\|\s*null\s*,/g,
+    '$&\n              directMetadata20261128: isDirectMusicNotePublication20261128,');
+  replace(/((?:const|let|var)\s+previous\s*=\s*itemByTrackId\.get\(trackId\);)\s*itemByTrackId\.set\(trackId,\s*\{\s*track\s*,/g,
+    '$1\n    let projectedTrack20261128 = track;\n    const previousCount20261128 = previous?.track?.likeCount ?? previous?.track?.stats?.likeCount;\n    if (result?.directMetadata20261128 === true && Number.isSafeInteger(previousCount20261128) && previousCount20261128 >= 0) {\n      projectedTrack20261128 = { ...track, likeCount: previousCount20261128 };\n      if (track.stats && typeof track.stats === "object" && !Array.isArray(track.stats)) projectedTrack20261128.stats = { ...track.stats, likeCount: previousCount20261128 };\n    }\n    itemByTrackId.set(trackId, {\n      track: projectedTrack20261128,');
   return source;
 }

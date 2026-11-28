@@ -24,7 +24,7 @@ export async function verifyCuratedDirectPublicationRouting(source) {
   const owner='owner', id='music_note_owner_song', other='music_note_other_other';
   const old={id,ownerUid:owner,title:'old',likeCount:7,coverUrl:'cover'};
   const pick={curatorUid:'admin',sortOrder:12};
-  const confirmed={id,ownerUid:owner,title:'new',likeCount:7,coverUrl:'cover'};
+  const confirmed={id,ownerUid:owner,title:'new',likeCount:0,stats:{likeCount:0},coverUrl:'cover'};
   const initial={schemaVersion:1,memberIds:[id,other],payload:{ok:true,data:{items:[{track:old,curation:pick},{track:{id:other,title:'other'},curation:{curatorUid:'admin',sortOrder:13}}]}}};
   async function run({sourceId='song',actor=owner,auth=true,success=true,wrongResult=false,shared=false,shadow=true,method='POST',path='/v1/publications',requestBody,responseData}={}) {
     const calls=[]; let saved=null;
@@ -48,6 +48,7 @@ export async function verifyCuratedDirectPublicationRouting(source) {
   assert.deepEqual(a.calls,['auth','reserve','base','confirm','put','clear','refresh:'+id,'ack']);
   assert.equal(a.saved.payload.data.items[0].track.title,'new');
   assert.equal(a.saved.payload.data.items[0].track.likeCount,7);
+  assert.equal(a.saved.payload.data.items[0].track.stats.likeCount,7);
   assert.deepEqual(a.saved.payload.data.items[0].curation,pick);
   assert.deepEqual(a.saved.payload.data.items[1],initial.payload.data.items[1]);
   assert.deepEqual(a.saved.memberIds,initial.memberIds);
@@ -63,6 +64,7 @@ export async function verifyCuratedDirectPublicationRouting(source) {
   assert.deepEqual(sameSuffix.calls,['auth','base']);assert.equal(sameSuffix.saved,null);
   const legacy=await run({shadow:false});
   assert.deepEqual(legacy.calls,['base','put','clear']);
+  assert.equal(legacy.saved.payload.data.items[0].track.likeCount,7);
   const shared=await run({shared:true,shadow:false});
   assert.deepEqual(shared.calls,['auth','reserve','base','confirm','refresh:'+id,'ack']);assert.equal(shared.saved,null);
   const batch=await run({path:'/v1/me/music-note-publications/batch',requestBody:{mutations:[{trackId:id}]},responseData:{results:[{ok:true,trackId:id,status:'public',snapshotItem:confirmed}]}});

@@ -882,8 +882,14 @@ async function syncCuratedPublicationResults307(request, env, results, ctx) {
       continue;
     }
     const previous = itemByTrackId.get(trackId);
+    let projectedTrack20261128 = track;
+    const previousCount20261128 = previous?.track?.likeCount ?? previous?.track?.stats?.likeCount;
+    if (result?.directMetadata20261128 === true && Number.isSafeInteger(previousCount20261128) && previousCount20261128 >= 0) {
+      projectedTrack20261128 = { ...track, likeCount: previousCount20261128 };
+      if (track.stats && typeof track.stats === "object" && !Array.isArray(track.stats)) projectedTrack20261128.stats = { ...track.stats, likeCount: previousCount20261128 };
+    }
     itemByTrackId.set(trackId, {
-      track,
+      track: projectedTrack20261128,
       curation: previous?.curation || {
         curatorUid: '',
         curatorRole: '',
@@ -3776,6 +3782,7 @@ export default {
               trackId: String(mutationPayload307?.data?.trackId || (isDirectMusicNotePublication20261128 ? "" : decodeURIComponent(url.pathname.split("/")[3] || ""))).trim(),
               status: isDirectMusicNotePublication20261128 || mutationPayload307?.data?.isPublic === true ? "public" : "private",
               snapshotItem: mutationPayload307?.data?.snapshotItem || null,
+              directMetadata20261128: isDirectMusicNotePublication20261128,
             }];
         if (isDirectMusicNotePublication20261128 && curatedRepairTicket468?.directTrackId20261128) {
           const result20261128 = results307[0];

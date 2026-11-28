@@ -4,7 +4,7 @@ import {readFileSync,existsSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {createApp738HostingApi,reviewHostingCacheDifference} from './app738-firebase-hosting-runtime.mjs';
-import {runApp738HostingPromotion} from './app738-production-hosting-transaction.mjs';
+import {runApp738HostingPromotion,verifyApp738GitSourcePin} from './app738-production-hosting-transaction.mjs';
 
 const fail=s=>{throw Error('APP738_RUN_HOLD_'+s)};
 const sha=s=>createHash('sha256').update(s).digest('hex');
@@ -85,6 +85,8 @@ async function run(){
      item?.appVersion===undefined ||
      item?.app737Evidence?.previewSha!==previewSha)
     fail('RELEASE_EVIDENCE_SCOPE_OR_QA_NOT_VERIFIED');
+  const sourcePin=verifyApp738GitSourcePin({head:previewSha,source:item.app737Evidence.source});
+  console.log(clean({sourcePin,actualGitHistoryChecked:true}));
   const result=await runApp738HostingPromotion({
     api,previewSha,evidence:item.app737Evidence,
     approval:process.env.APP738_PRODUCTION_APPROVAL,

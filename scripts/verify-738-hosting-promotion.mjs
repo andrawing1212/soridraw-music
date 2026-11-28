@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import {createApp738HostingApi,compareHostingArtifacts,reviewHostingCacheDifference} from './app738-firebase-hosting-runtime.mjs';
-import {runApp738HostingPromotion,verifyApp738ReleaseGate} from './app738-production-hosting-transaction.mjs';
+import {runApp738HostingPromotion,verifyApp738ReleaseGate,verifyApp738GitSourcePin} from './app738-production-hosting-transaction.mjs';
+import {mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {execFileSync} from 'node:child_process';
 const SHA='f'.repeat(40),SUM='a'.repeat(64);
 const PF='1'.repeat(64),PC='2'.repeat(64),OF='3'.repeat(64),OC='4'.repeat(64);
 const security={glob:'**',headers:{'X-Content-Type-Options':'nosniff'}};
@@ -206,3 +210,37 @@ assert.equal(await cacheApi.clone(SOURCE,{productionConfig:prodConfig,rollbackVe
 assert.equal(patchCalls.filter(x=>x.method==='PATCH').length,1);
 assert.equal(patchCalls.some(x=>x.method==='POST'&&x.path.endsWith('/releases')),false);
 console.log('APP738_PRODUCTION_CACHE_POLICY_PRESERVED_AND_NON_CACHE_DRIFT_DENIED=PASS');
+
+// Actual local Git history: exact deployment identity survives only the
+// explicitly reviewed policy-doc change, never code/config or hidden paths.
+const repo=mkdtempSync(join(tmpdir(),'app738-source-pin-'));
+try{
+ const git=(...args)=>execFileSync('git',args,{cwd:repo,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+ git('init','-q');git('config','user.email','qa@example.invalid');git('config','user.name','QA');
+ mkdirSync(join(repo,'DOCS'));mkdirSync(join(repo,'src'));
+ writeFileSync(join(repo,'AGENTS.md'),'original\n');writeFileSync(join(repo,'src','app.js'),'original\n');
+ git('add','.');git('commit','-qm','deployed source');const deployed=git('rev-parse','HEAD');
+ writeFileSync(join(repo,'AGENTS.md'),'director policy\n');
+ writeFileSync(join(repo,'DOCS','APP750_BIDIRECTIONAL_RELEASE_FLOW.md'),'release policy\n');
+ git('add','.');git('commit','-qm','policy only');const docHead=git('rev-parse','HEAD');
+ const source={previewSha:deployed,documentationOnlyAdvance:{fromSha:deployed,toSha:docHead,reviewed:true,paths:['AGENTS.md','DOCS/APP750_BIDIRECTIONAL_RELEASE_FLOW.md']}};
+ assert.deepEqual(verifyApp738GitSourcePin({head:docHead,source,cwd:repo}),{deployedPreviewSha:deployed,pinnedPreviewHead:docHead,documentationOnlyAdvance:true});
+ assert.throws(()=>verifyApp738GitSourcePin({head:docHead,source:{previewSha:deployed},cwd:repo}),/INVALID_SOURCE_PROVENANCE/);
+ assert.throws(()=>verifyApp738GitSourcePin({head:docHead,source:{...source,documentationOnlyAdvance:{...source.documentationOnlyAdvance,paths:['AGENTS.md']}},cwd:repo}),/DOC_HISTORY_PATH_MISMATCH/);
+ const e=evidence();e.previewSha=docHead;e.currentPreviewHead=docHead;Object.assign(e.source,source);
+ assert.equal(verifyApp738ReleaseGate({evidence:e,previewSha:docHead}).verdict.exactPreviewSource,deployed);
+ assert.equal(verifyApp738ReleaseGate({evidence:e,previewSha:docHead}).verdict.pinnedPreviewHead,docHead);
+ const validDoc=mock();
+ const result=await runApp738HostingPromotion({...args,api:validDoc.api,evidence:e,previewSha:docHead,readCurrentPreviewSha:async()=>docHead});
+ assert.equal(result.deployedPreviewSha,deployed);assert.equal(result.pinnedPreviewHead,docHead);
+ const wrong=evidence();wrong.source.previewSha=deployed;
+ assert.throws(()=>verifyApp738ReleaseGate({evidence:wrong,previewSha:SHA}),/APP737_FUNCTION_PARITY_NOT_VERIFIED/);
+ writeFileSync(join(repo,'src','app.js'),'changed app\n');git('add','.');git('commit','-qm','app change');
+ const changed=git('rev-parse','HEAD');
+ assert.throws(()=>verifyApp738GitSourcePin({head:changed,source:{...source,documentationOnlyAdvance:{...source.documentationOnlyAdvance,toSha:changed}},cwd:repo}),/DOC_HISTORY_PATH_MISMATCH/);
+ git('checkout','--detach',deployed);writeFileSync(join(repo,'AGENTS.md'),'other branch\n');git('add','.');git('commit','-qm','not ancestor');
+ const unrelated=git('rev-parse','HEAD');
+ assert.throws(()=>verifyApp738GitSourcePin({head:docHead,source:{previewSha:unrelated,documentationOnlyAdvance:{fromSha:unrelated,toSha:docHead,reviewed:true,paths:['AGENTS.md']}},cwd:repo}),/DOC_HISTORY_GIT_PROOF_UNAVAILABLE/);
+ assert.deepEqual(verifyApp738GitSourcePin({head:deployed,source:{previewSha:deployed},cwd:repo}),{deployedPreviewSha:deployed,pinnedPreviewHead:deployed});
+}finally{rmSync(repo,{recursive:true,force:true})}
+console.log('APP738_EXACT_DEPLOYED_SOURCE_AND_POLICY_ONLY_HEAD_ADVANCE=PASS');

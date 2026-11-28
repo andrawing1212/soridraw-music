@@ -63,7 +63,7 @@ if(legacyBase<0){
  ]) assert(dispatch.includes(invariant), 'APP557 follow-only canonical isolation: '+invariant);
 }
 const dispatchBase=legacyBase>=0?legacyBase:app557Base;
-const dispatchGuard = dispatch.indexOf('if ((isTrackVisibilityMutation307 || isPublicationBatch307) && response.ok)');
+const dispatchGuard = dispatch.indexOf('if ((isTrackVisibilityMutation307 || isPublicationBatch307 || isDirectMusicNotePublication20261128) && response.ok)');
 const dispatchSync = dispatch.indexOf('await syncCuratedPublicationResults307(request, env, results307, ctx);');
 assert(dispatchBase >= 0 && dispatchGuard > dispatchBase && dispatchSync > dispatchGuard,
   'Public/private and Music Note publication must settle at original base Worker before curation sync');

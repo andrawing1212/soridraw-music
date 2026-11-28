@@ -25,6 +25,7 @@ import {
   readLatestExplorePublicationSyncSignal,
   type ExplorePublicationSyncSignal,
 } from './userDomainSyncService';
+import { patchSoridrawCuratedPublicationTitle20261128 } from './exploreCurationService';
 import { shouldRepairMusicNotePublicationOrigin361 } from './exploreEnvironmentParityPolicy';
 
 // SORIDRAW_EXPLORE_TARGETED_PUBLICATION_CACHE_075_20260913
@@ -416,6 +417,7 @@ const publishPublicationSyncBestEffort = async (
   try {
     let snapshotJson = '';
     if (state.status === 'public' && snapshotItem && typeof snapshotItem === 'object' && !Array.isArray(snapshotItem)) {
+      patchSoridrawCuratedPublicationTitle20261128(uid, state.trackId, snapshotItem as Record<string, unknown>, Date.now());
       const encoded = JSON.stringify(snapshotItem);
       if (encoded.length <= 24_000) snapshotJson = encoded;
     }

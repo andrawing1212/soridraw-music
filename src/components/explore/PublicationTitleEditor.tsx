@@ -6,11 +6,16 @@ import { publicationTitleGenre, publicationTitleText, readPublicationTitleDraft,
 type Props = { source: Record<string, any> | null; title: string; draft?: PublicationTitleDraft | null;
   onDraftChange?: (value: PublicationTitleDraft | null) => void; busy: boolean };
 export default function PublicationTitleEditor({source,title,draft,onDraftChange,busy}: Props) {
-  const genre = source ? publicationTitleGenre(source) : '';
-  const displayed = source ? [genre ? '['+genre+']' : '', publicationTitleText(readPublicationTitleDraft(source))].filter(Boolean).join(' ') : formatExploreDisplayTitle(title);
+  const formattedTitle = formatExploreDisplayTitle(title);
+  const fallbackGenre = formattedTitle.match(/^\[([^\]]+)\]\s*/);
+  const genre = source ? publicationTitleGenre(source) : fallbackGenre?.[1] || '';
+  const displayed = source ? publicationTitleText(readPublicationTitleDraft(source)) : formattedTitle.slice(fallbackGenre?.[0].length || 0);
   return <div className="mt-3 min-w-0">
     <div className="flex min-w-0 items-center gap-2">
-      <p className="min-w-0 flex-1 break-words text-base font-bold leading-snug text-white/90">{displayed || '제목 없는 곡'}</p>
+      <div className="min-w-0 flex-1">
+        {genre && <p className="mb-1 break-words text-xs font-semibold leading-tight text-white/45">[{genre}]</p>}
+        <p className="break-words text-base font-bold leading-snug text-white/90">{displayed || '제목 없는 곡'}</p>
+      </div>
       {source && onDraftChange && <button type="button" disabled={busy} aria-label={draft ? '제목 수정 취소' : '제목 수정'} title={draft ? '제목 수정 취소' : '제목 수정'}
         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.07] text-white/65 hover:bg-white/[0.12] hover:text-white disabled:opacity-40"
         onClick={()=>onDraftChange(draft ? null : readPublicationTitleDraft(source))}>
@@ -29,10 +34,16 @@ export default function PublicationTitleEditor({source,title,draft,onDraftChange
   </div>;
 }
 
-// One linked song needs no selection control, badge, or duplicate title.
-export function PublicationSingleCover({coverUrl}:{coverUrl?:string|null}) {
-  return <div className="mt-5 aspect-[32/9] w-full overflow-hidden rounded-2xl bg-black/24">
-    {coverUrl ? <img src={coverUrl} alt="공개할 곡의 썸네일" className="h-full w-full object-cover"/> :
-      <div className="flex h-full w-full items-center justify-center text-white/28"><Music2 className="h-6 w-6" aria-hidden="true"/></div>}
+// One linked song shows the same track metadata as the two-track cards, without selection controls.
+export function PublicationSingleCover({coverUrl,title,available}:{coverUrl?:string|null;title:string;available:boolean}) {
+  return <div className="mt-5 w-full overflow-hidden rounded-2xl bg-white/[0.035]">
+    <div className="aspect-[32/9] w-full overflow-hidden bg-black/24">
+      {coverUrl ? <img src={coverUrl} alt="공개할 곡의 썸네일" className="h-full w-full object-cover"/> :
+        <div className="flex h-full w-full items-center justify-center text-white/28"><Music2 className="h-6 w-6" aria-hidden="true"/></div>}
+    </div>
+    <div className="px-3 py-2.5">
+      <div className="truncate text-[11px] font-black text-white/82">{title || '수노 곡 1'}</div>
+      <div className={`mt-1 text-[9px] font-bold ${available ? 'text-white/30' : 'text-red-300/65'}`}>{available ? '공개 가능' : '연결 확인 필요'}</div>
+    </div>
   </div>;
 }

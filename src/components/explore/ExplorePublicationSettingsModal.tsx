@@ -90,7 +90,7 @@ export default function ExplorePublicationSettingsModal({
           </div>
 
           <PublicationTitleEditor source={titleSource} title={title} draft={titleDraft} onDraftChange={onTitleDraftChange} busy={busy}/>
-          {trackChoices.length === 1 && <PublicationSingleCover coverUrl={trackChoices[0].coverUrl}/>}
+          {trackChoices.length === 1 && <PublicationSingleCover coverUrl={trackChoices[0].coverUrl} title={formatExploreDisplayTitle(trackChoices[0].title) || formatExploreDisplayTitle(title) || '수노 곡 1'} available={trackChoices[0].available !== false}/>}
           {trackChoices.length > 1 && (
             <div className="soridraw-explore-publication-track-picker">
               <div className="soridraw-explore-publication-track-picker-head">

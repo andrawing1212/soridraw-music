@@ -148,6 +148,9 @@ import {
 import { syncSoridrawProfileAvatarAuthority } from '../services/profileAvatarAuthority';
 import ExploreProfileEditModal from '../components/explore/ExploreProfileEditModal';
 import ExplorePublicationSettingsModal from '../components/explore/ExplorePublicationSettingsModal';
+import {buildPublicationTitlePatch,isPublicationTitleSource,assertPublicationTitleNotSuperseded,type PublicationTitleDraft,type PublicationTitleUpdater} from '../lib/publicationTitleEdit';
+import {readMusicNoteDetailDraft} from '../lib/musicNoteDetailDraft';
+import {patchMusicNoteDetailCache} from '../lib/musicNoteDetailCache';
 import {
   buildExploreLegacyApplyKeywords,
   getExploreOwnMusicNoteApplyKeywords,
@@ -164,6 +167,7 @@ import {
 } from '../services/exploreSharedNoteService';
 import {
   refreshExploreMusicNotePublicationSource,
+  refreshExploreMusicNotePublicationContent428,
   setExploreTrackPublicationOptions,
   setExploreTrackVisibility,
   type ExplorePublicationOptions,
@@ -247,6 +251,7 @@ type ExplorePublicationSettingsState = {
   sunoLinks: ExplorePublicationSunoLink[];
   selectedSunoIndex: 0 | 1;
   initialSunoIndex: 0 | 1;
+  titleDraft?: PublicationTitleDraft | null;
 };
 
 const normalizeExplorePublicationSunoLink = (raw: any, index: number): ExplorePublicationSunoLink | null => {
@@ -1956,7 +1961,7 @@ function ExploreTrackCard({
   );
 }
 
-export default function ExplorePage() {
+export default function ExplorePage({updateFavorite}: {updateFavorite?: PublicationTitleUpdater} = {}) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const profileUid = safeText(searchParams.get('profile'));
@@ -5704,6 +5709,51 @@ export default function ExplorePage() {
     if (!user || !publicationSettings || user.uid !== publicationSettings.track.ownerUid || publicationSettingsBusy) return;
 
     const pendingSettings = publicationSettings;
+    let titlePatch: ReturnType<typeof buildPublicationTitlePatch> = null;
+    try { if (pendingSettings.sourceSong) titlePatch=buildPublicationTitlePatch(pendingSettings.sourceSong,pendingSettings.titleDraft); }
+    catch (error) { setSocialNotice(error instanceof Error?error.message:'제목을 확인해주세요.');return; }
+    if (titlePatch && pendingSettings.titleDraft) {
+      const sourceId = pendingSettings.sourceId;
+      if (!updateFavorite || !sourceId || !pendingSettings.sourceSong) {setSocialNotice('뮤직노트 원본을 확인해주세요.');return;}
+      setPublicationSettingsBusy(true);
+      let sourceCommitted=false;
+      try {
+        if (await readMusicNoteDetailDraft(user.uid,sourceId)) throw new Error('뮤직노트의 임시 수정사항을 먼저 저장해주세요.');
+        // Only an actual title edit reads the exact source for owner and stale-title protection.
+        const snapshot=await getDoc(doc(db,'favorites',sourceId));
+        const latest=snapshot.exists()?{...snapshot.data(),id:snapshot.id,firestoreId:snapshot.id}:null;
+        if (!latest || safeText(latest.uid??latest.ownerUid)!==user.uid || !isPublicationTitleSource(latest,user.uid,sourceId) || auth.currentUser?.uid!==user.uid) throw new Error('수정할 수 있는 원본 곡을 확인하지 못했습니다.');
+        assertPublicationTitleNotSuperseded(pendingSettings.sourceSong,latest,pendingSettings.titleDraft);
+        const changed=buildPublicationTitlePatch(latest,pendingSettings.titleDraft);
+        let media:Record<string,any>={};
+        if (pendingSettings.sunoLinks.length>1 && pendingSettings.selectedSunoIndex!==pendingSettings.initialSunoIndex) {
+          const links=getExplorePublicationSunoLinks(latest,pendingSettings.track);
+          const url=pendingSettings.sunoLinks[pendingSettings.selectedSunoIndex]?.url;
+          const index=links.findIndex(link=>link.url===url);
+          if (index<0) throw new Error('연결 곡이 변경되었습니다. 창을 다시 열어주세요.');
+          if (Number(latest.mainSunoIndex)!==index) media=buildExplorePublicationMainSelectionUpdates(links,index as 0|1);
+        }
+        const updates={...media,...(changed||{})};
+        if (Object.keys(updates).length) {
+          await updateFavorite(sourceId,updates,undefined,latest);
+          sourceCommitted=true;
+          patchExplorePublicationSourceLocalCache(user.uid,sourceId,updates);
+          await patchMusicNoteDetailCache({uid:user.uid,sourceId,sourceVersion:Date.now(),updates});
+        }
+        sourceCommitted=true;
+        if (auth.currentUser?.uid!==user.uid) throw new Error('로그인 상태를 확인해주세요.');
+        const confirmed=await refreshExploreMusicNotePublicationContent428(user,sourceId,{...pendingSettings.options,status:'public',registered:true,trackId:pendingSettings.track.id});
+        patchExplorePublicationOptions(pendingSettings.track,confirmed);
+        // The existing confirmed-publication signal updates every card and cache.
+        setPublicationSettings(null);
+        setPublicationPrivateConfirm(false);
+        setSocialNotice('제목과 공개 설정을 저장했어요.');
+      } catch (error) {
+        console.warn('Explore publication title save failed:',error);
+        setSocialNotice(sourceCommitted?'뮤직노트 제목은 저장되었습니다. 공개 설정을 다시 저장해주세요.':error instanceof Error?error.message:'제목 저장에 실패했어요.');
+      } finally {setPublicationSettingsBusy(false);}
+      return;
+    }
     const previousCollections = {
       tracks,
       popularTracks,
@@ -6237,6 +6287,9 @@ export default function ExplorePage() {
   const renderPublicationSettingsModal = () => publicationSettings ? (
     <ExplorePublicationSettingsModal
       title={publicationSettings.track.title}
+      titleSource={updateFavorite && isPublicationTitleSource(publicationSettings.sourceSong,user?.uid||'',publicationSettings.sourceId)?publicationSettings.sourceSong:null}
+      titleDraft={publicationSettings.titleDraft}
+      onTitleDraftChange={(titleDraft)=>{if(!publicationSettingsBusy){setPublicationPrivateConfirm(false);setPublicationSettings(current=>current?{...current,titleDraft}:current);}}}
       options={publicationSettings.options}
       trackChoices={publicationSettings.sunoLinks.map((link, index) => ({
         index: (index === 1 ? 1 : 0) as 0 | 1,

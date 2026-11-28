@@ -4,6 +4,8 @@ import { motion } from 'motion/react';
 import StudioCenterModalPortal from '../studio/StudioCenterModalPortal';
 import type { ExplorePublicationOptions } from '../../services/explorePublicationService';
 import { formatExploreDisplayTitle } from '../../lib/exploreTitleDisplay';
+import PublicationTitleEditor, {PublicationSingleCover} from './PublicationTitleEditor';
+import type {PublicationTitleDraft} from '../../lib/publicationTitleEdit';
 
 export type ExplorePublicationTrackChoice = {
   index: 0 | 1;
@@ -14,6 +16,9 @@ export type ExplorePublicationTrackChoice = {
 
 type Props = {
   title: string;
+  titleSource?: Record<string, any> | null;
+  titleDraft?: PublicationTitleDraft | null;
+  onTitleDraftChange?: (draft: PublicationTitleDraft | null) => void;
   options: ExplorePublicationOptions;
   trackChoices?: ExplorePublicationTrackChoice[];
   selectedTrackIndex?: 0 | 1;
@@ -28,6 +33,9 @@ type Props = {
 
 export default function ExplorePublicationSettingsModal({
   title,
+  titleSource = null,
+  titleDraft,
+  onTitleDraftChange,
   options,
   trackChoices = [],
   selectedTrackIndex = 0,
@@ -58,7 +66,7 @@ export default function ExplorePublicationSettingsModal({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0 }}
-          className="pointer-events-auto w-full max-w-[430px] overflow-hidden rounded-[28px] bg-[#1b1b1b] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.6)] md:p-6"
+          className="pointer-events-auto w-full max-w-[430px] max-h-[calc(100dvh-2.5rem)] overflow-y-auto rounded-[28px] bg-[#1b1b1b] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.6)] md:p-6"
           style={{ pointerEvents: 'auto' }}
           onPointerDown={(event) => event.stopPropagation()}
           onMouseDown={(event) => event.stopPropagation()}
@@ -69,7 +77,7 @@ export default function ExplorePublicationSettingsModal({
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#FFC1BC]/72">Explore</p>
               <h3 className="mt-1 text-xl font-black text-white">공개 설정</h3>
-              <p className="mt-1 truncate text-xs font-semibold text-white/42">{formatExploreDisplayTitle(title) || '제목 없는 곡'}</p>
+
             </div>
             <button
               type="button"
@@ -81,6 +89,8 @@ export default function ExplorePublicationSettingsModal({
             </button>
           </div>
 
+          <PublicationTitleEditor source={titleSource} title={title} draft={titleDraft} onDraftChange={onTitleDraftChange} busy={busy}/>
+          {trackChoices.length === 1 && <PublicationSingleCover coverUrl={trackChoices[0].coverUrl}/>}
           {trackChoices.length > 1 && (
             <div className="soridraw-explore-publication-track-picker">
               <div className="soridraw-explore-publication-track-picker-head">

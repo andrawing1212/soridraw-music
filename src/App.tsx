@@ -12862,9 +12862,14 @@ const toggleCycleVariantSelection = (
     };
   }, [user?.uid]);
 
-  const updateFavorite = async (id: string, updates: Partial<any>, lyricExpectedFingerprint?:string) => {
+  const updateFavorite = async (id: string, updates: Partial<any>, lyricExpectedFingerprint?:string, sourceForTitleEdit?:Record<string,any>) => {
     const safeFavoriteDocumentId = String(id || '').trim();
-    const currentFavorite = favoritesStore.getFavorites().find((favorite) => (
+    const source = sourceForTitleEdit && user?.uid && auth.currentUser?.uid===user.uid
+      && String(sourceForTitleEdit.firestoreId || sourceForTitleEdit.id || '').trim()===safeFavoriteDocumentId
+      && String(sourceForTitleEdit.uid || sourceForTitleEdit.ownerUid || '').trim()===user.uid
+      ? sourceForTitleEdit : null;
+    if (sourceForTitleEdit && !source) throw new Error('music-note-title-source-mismatch');
+    const currentFavorite = source || favoritesStore.getFavorites().find((favorite) => (
       String(favorite?.firestoreId || favorite?.id || '').trim() === safeFavoriteDocumentId
     ));
     let sanitizedUpdates = sanitizeForFirestore(updates);
@@ -20253,7 +20258,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         } />
         <Route path="/explore" element={
           canAccessNavigationMenu('explore') ? (
-            <ExploreShellLazy isAdminUser={isAdminUser} recentHistory={history} onOpenRecentSong={canAccessNavigationMenu('studio')?openNotificationRecentSong:undefined} />
+            <ExploreShellLazy updateFavorite={updateFavorite} isAdminUser={isAdminUser} recentHistory={history} onOpenRecentSong={canAccessNavigationMenu('studio')?openNotificationRecentSong:undefined} />
           ) : (
             <FeatureUnavailablePage label="익스플로어" fallbackPath={navigationFallbackPath} />
           )

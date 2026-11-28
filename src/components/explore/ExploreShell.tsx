@@ -5,15 +5,17 @@ import { auth } from '../../firebase';
 import StudioPageFrame from '../studio/StudioPageFrame';
 import StudioLeftRail, { type StudioWorkspaceView } from '../studio/StudioLeftRail';
 import ExplorePage from '../../pages/ExplorePage';
+import type {PublicationTitleUpdater} from '../../lib/publicationTitleEdit';
 import { flushSoridrawPageSync } from '../../lib/pageSyncCoordinator';
 
 type ExploreShellProps = {
   isAdminUser?: boolean;
+  updateFavorite?: PublicationTitleUpdater;
   recentHistory?: readonly unknown[];
   onOpenRecentSong?: (noticeId:string)=>boolean;
 };
 
-export default function ExploreShell({ isAdminUser = false, recentHistory, onOpenRecentSong }: ExploreShellProps) {
+export default function ExploreShell({ isAdminUser = false, recentHistory, onOpenRecentSong, updateFavorite }: ExploreShellProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
@@ -87,7 +89,7 @@ export default function ExploreShell({ isAdminUser = false, recentHistory, onOpe
   return (
     <div className="soridraw-explore-app-shell">
       <StudioPageFrame workspaceView="explore" leftRail={leftRail} rightRail={null} lockViewport={false}>
-        <ExplorePage />
+        <ExplorePage updateFavorite={updateFavorite} />
       </StudioPageFrame>
     </div>
   );

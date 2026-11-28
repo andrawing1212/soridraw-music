@@ -30,7 +30,7 @@ export function assertApp738ProductionWriteAuthority(){
 export function createApp738HostingApi(token,{send=fetch,sleep=ms=>new Promise(r=>setTimeout(r,ms))}={}){
  if(typeof token!=='string'||!token.trim())fail('FIREBASE_TOKEN_MISSING');
  async function request(method,path,body){
-  if(!/^(sites\/(soridraw-preview|soridraw)\/(channels\/live\/releases|versions\/[A-Za-z0-9_-]{4,128}(?:\/files)?|versions:clone|versions|versions/[A-Za-z0-9_-]{4,128}:populateFiles|releases)|projects\/soridraw\/operations\/[A-Za-z0-9_-]+)(?:\?.*)?$/.test(path))
+  if(!/^(sites\/(soridraw-preview|soridraw)\/(channels\/live\/releases|versions\/[A-Za-z0-9_-]{4,128}(?:\/files)?|versions:clone|versions|versions\/[A-Za-z0-9_-]{4,128}:populateFiles|releases)|projects\/soridraw\/operations\/[A-Za-z0-9_-]+)(?:\?.*)?$/.test(path))
     fail('FOREIGN_RESOURCE_OR_OPERATION');
   if(!['GET','POST','PATCH'].includes(method))fail('HTTP_METHOD_FORBIDDEN');
   if(method!=='GET')assertApp738ProductionWriteAuthority();

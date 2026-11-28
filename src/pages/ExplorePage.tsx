@@ -21,6 +21,7 @@ import { doc, getDoc, updateDoc } from '../lib/firestoreMeasured';
 import { favoritesStore } from '../hooks/useFavoritesStore';
 import { formatExploreDisplayTitle } from '../lib/exploreTitleDisplay';
 import { useFolderStripMouseScroll } from '../lib/folderStripMouseScroll';
+import { useExploreArrowHoldScroll } from '../lib/exploreArrowHoldScroll';
 import { admitExploreLikeClick, recordExploreLikeAcceptedClick } from '../lib/exploreLikeClickGuard';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import { recordCloudflareLocalCacheHit, recordCloudflareResponse,
@@ -1188,6 +1189,7 @@ const handleExploreGenreRowWheel342 = (event: React.WheelEvent<HTMLDivElement>) 
 function ExploreGenreScrollRow({ label, children }: { label: string; children: React.ReactNode }) {
   const rowRef = useRef<HTMLDivElement>(null);
   const mouseScroll = useFolderStripMouseScroll(() => {}, () => false);
+  const bindGenreArrowHold = useExploreArrowHoldScroll(rowRef);
 
   const moveGenreRow = (direction: -1 | 1) => {
     rowRef.current?.scrollBy({ left: direction * 220, behavior: 'smooth' });
@@ -1196,7 +1198,7 @@ function ExploreGenreScrollRow({ label, children }: { label: string; children: R
   return (
     <div className="soridraw-explore-genre-scroll-shell">
       <button type="button" className="soridraw-explore-genre-scroll-arrow"
-        aria-label={`${label} 왼쪽으로 이동`} onClick={() => moveGenreRow(-1)}>
+        aria-label={`${label} 왼쪽으로 이동`} {...bindGenreArrowHold(-1)} onClick={() => moveGenreRow(-1)}>
         <ChevronLeft aria-hidden="true" />
       </button>
       <div ref={rowRef}
@@ -1205,7 +1207,7 @@ function ExploreGenreScrollRow({ label, children }: { label: string; children: R
         {children}
       </div>
       <button type="button" className="soridraw-explore-genre-scroll-arrow"
-        aria-label={`${label} 오른쪽으로 이동`} onClick={() => moveGenreRow(1)}>
+        aria-label={`${label} 오른쪽으로 이동`} {...bindGenreArrowHold(1)} onClick={() => moveGenreRow(1)}>
         <ChevronRight aria-hidden="true" />
       </button>
     </div>
@@ -1482,6 +1484,20 @@ function ExploreRecommendationRail({
     scroller.scrollTo({ left: target, behavior: 'smooth' });
   };
 
+  const bindRailArrowHold = useExploreArrowHoldScroll(scrollerRef, {
+    onStart: () => {
+      railPointerActiveRef261.current = true;
+      railReleaseAlignPendingRef261.current = false;
+      railReleaseMomentumSettleRef263.current = false;
+      clearRailAlignTimer251();
+      revealRailControls251();
+    },
+    onEnd: () => {
+      railPointerActiveRef261.current = false;
+      scheduleExploreRailAlign251(true);
+    },
+  });
+
   const handleRailPointerDown241 = (event: React.PointerEvent<HTMLDivElement>) => {
     railPointerActiveRef261.current = true;
     railReleaseAlignPendingRef261.current = false;
@@ -1577,6 +1593,7 @@ function ExploreRecommendationRail({
         <button
           type="button"
           className="soridraw-explore-recommend-edge soridraw-explore-recommend-edge--left"
+          {...bindRailArrowHold(-1)}
           onClick={() => moveRail(-1, 'viewport')}
           disabled={!canScrollLeft}
           aria-label={`${title} 이전 ${itemLabel} 보기`}
@@ -1649,6 +1666,7 @@ function ExploreRecommendationRail({
         <button
           type="button"
           className="soridraw-explore-recommend-edge soridraw-explore-recommend-edge--right"
+          {...bindRailArrowHold(1)}
           onClick={() => moveRail(1, 'viewport')}
           disabled={!canScrollRight}
           aria-label={`${title} 다음 ${itemLabel} 보기`}

@@ -47,3 +47,35 @@ assert.equal(blocked,false);
 hook.onPointerDownCapture({...pointer,pointerType:'touch'});
 assert.equal(listeners.size,0);
 console.log('EXPLORE_GENRE_HOVER_ARROWS_AND_MOUSE_DRAG_CLICK_GUARD=PASS');
+
+const holdSource=fs.readFileSync('src/lib/exploreArrowHoldScroll.ts','utf8');
+assert.match(row,/bindGenreArrowHold\(-1\)/);
+assert.match(row,/bindGenreArrowHold\(1\)/);
+assert.match(page,/bindRailArrowHold\(-1\)[\s\S]*?onClick=\{\(\) => moveRail\(-1, 'viewport'\)\}/);
+assert.match(page,/bindRailArrowHold\(1\)[\s\S]*?onClick=\{\(\) => moveRail\(1, 'viewport'\)\}/);
+const timers=new Map(), frames=new Map(), events=new Map(), docEvents=new Map();
+let seq=0, starts=0, ends=0;
+const win={
+ setTimeout(fn){timers.set(++seq,fn);return seq},clearTimeout(id){timers.delete(id)},
+ requestAnimationFrame(fn){frames.set(++seq,fn);return seq},cancelAnimationFrame(id){frames.delete(id)},
+ addEventListener(k,fn){events.set(k,fn)},removeEventListener(k,fn){if(events.get(k)===fn)events.delete(k)},
+};
+const doc={hidden:false,addEventListener(k,fn){docEvents.set(k,fn)},removeEventListener(k,fn){if(docEvents.get(k)===fn)docEvents.delete(k)}};
+let cleanup;
+const holdSandbox={exports:{},window:win,document:doc,require:()=>({useRef:current=>({current}),useEffect:fn=>{cleanup=fn()}})};
+vm.runInNewContext(ts.transpileModule(holdSource,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS}}).outputText,holdSandbox);
+const scroll={scrollWidth:1500,clientWidth:500,scrollLeft:200,isConnected:true,style:{scrollBehavior:'smooth',scrollSnapType:'x proximity'}};
+const bind=holdSandbox.exports.useExploreArrowHoldScroll({current:scroll},{onStart(){starts++},onEnd(){ends++}});
+const right=bind(1),left=bind(-1);
+const down={button:0,isPrimary:true,pointerId:1,currentTarget:{disabled:false}};
+const up=()=>events.get('pointerup')?.({pointerId:1});
+const fireTimer=()=>{const [id,fn]=timers.entries().next().value;timers.delete(id);fn()};
+const fireFrame=t=>{const [id,fn]=frames.entries().next().value;frames.delete(id);fn(t)};
+const click=()=>{let blocked=false;right.onClickCapture({detail:1,preventDefault(){blocked=true},stopPropagation(){}});return blocked};
+right.onPointerDown(down);up();assert.equal(timers.size,0);assert.equal(click(),false);assert.equal(starts,0);
+right.onPointerDown(down);fireTimer();assert.equal(scroll.style.scrollSnapType,'none');fireFrame(0);fireFrame(20);fireFrame(40);assert.equal(scroll.scrollLeft,220.8);assert.equal(starts,1);up();assert.equal(frames.size,0);assert.equal(scroll.style.scrollBehavior,'smooth');assert.equal(scroll.style.scrollSnapType,'x proximity');assert.equal(ends,1);assert.equal(click(),true);
+left.onPointerDown(down);fireTimer();fireFrame(0);fireFrame(20);assert.ok(Math.abs(scroll.scrollLeft-210.4)<.00001);events.get('pointercancel')({pointerId:1});assert.equal(frames.size,0);assert.equal(events.size,0);assert.equal(docEvents.size,0);
+scroll.scrollLeft=999;right.onPointerDown(down);fireTimer();fireFrame(0);fireFrame(20);assert.equal(scroll.scrollLeft,1000);assert.equal(frames.size,0);up();assert.equal(click(),true);
+right.onPointerDown(down);fireTimer();events.get('blur')();assert.equal(frames.size,0);assert.equal(events.size,0);
+left.onPointerDown(down);fireTimer();cleanup();assert.equal(frames.size,0);assert.equal(events.size,0);assert.equal(scroll.style.scrollSnapType,'x proximity');
+console.log('EXPLORE_ALL_ARROW_SINGLE_CLICK_AND_CONSTANT_HOLD_SCROLL=PASS');

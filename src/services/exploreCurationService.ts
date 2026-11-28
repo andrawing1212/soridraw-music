@@ -189,6 +189,16 @@ export const readCachedSoridrawCuratedTracks307 = (): Array<Record<string, unkno
    published?: { trackId: string; likeCount: number; updatedAt: number },
  ) => {
    const prev = readCuratedCache307();
+   const knownTitles = prev?.revision === String(revision || '')
+     ? new Map(prev.items.map(item => [String(item.id || '').trim(), item]))
+     : new Map<string, Record<string, unknown>>();
+   items = items.map(item => {
+     const known = knownTitles.get(String(item.id || '').trim());
+     const knownAt = Number(known?.__curatedTitleConfirmedAt20261128 || 0);
+     if (!known || !knownAt || knownAt <= Number(item.__curatedTitleConfirmedAt20261128 || 0) ||
+         String(known.ownerUid ?? known.owner_uid ?? '') !== String(item.ownerUid ?? item.owner_uid ?? '')) return item;
+     return { ...item, title: known.title, __curatedTitleConfirmedAt20261128: knownAt };
+   });
    const known = { ...(prev?.settledPublicLikes524 || {}) };
    if (published) {
      const last = known[published.trackId];
@@ -309,16 +319,68 @@ const invalidateManagedCuratedCache309 = (uid: string) => {
   }
 };
 
+
+/** Confirmed public metadata only: never change membership, likes or freshness. */
+export const mergeCuratedPublicationTitle20261128 = <T extends Record<string, unknown>>(
+  items: T[], ownerUid: string, trackId: string, snapshot: Record<string, unknown>,
+  at: number,
+): T[] => {
+  const title = typeof snapshot.title === 'string' ? snapshot.title.trim() : '';
+  if (!ownerUid || !trackId || String(snapshot.id || '').trim() !== trackId ||
+      String(snapshot.ownerUid ?? snapshot.owner_uid ?? '').trim() !== ownerUid ||
+      !title || !Number.isSafeInteger(at) || at <= 0) return items;
+  let changed = false;
+  const next = items.map(item => {
+    if (String(item.id || '').trim() !== trackId ||
+        String(item.ownerUid ?? item.owner_uid ?? '').trim() !== ownerUid ||
+        Number(item.__curatedTitleConfirmedAt20261128 || 0) > at ||
+        (item.title === title && Number(item.__curatedTitleConfirmedAt20261128 || 0) >= at)) return item;
+    changed = true;
+    return { ...item, title, __curatedTitleConfirmedAt20261128: at };
+  });
+  return changed ? next : items;
+};
+
+export const patchSoridrawCuratedPublicationTitle20261128 = (
+  ownerUid: string, trackId: string, snapshot: Record<string, unknown>, at: number,
+  viewerUid = ownerUid,
+) => {
+  const cached = readCuratedCache307();
+  if (cached) {
+    const items = mergeCuratedPublicationTitle20261128(cached.items, ownerUid, trackId, snapshot, at);
+    if (items !== cached.items) writeCuratedCache307(items, cached.revision, cached.checkedAt);
+  }
+  if (!viewerUid) return;
+  const managed = readManagedCuratedCache309(viewerUid);
+  if (managed) {
+    const items = mergeCuratedPublicationTitle20261128(managed.items, ownerUid, trackId, snapshot, at);
+    if (items !== managed.items) writeManagedCuratedCache309(viewerUid, items, managed.revision, managed.checkedAt);
+  }
+};
+
 // SORIDRAW_CURATED_MANAGER_PUBLIC_CACHE_PARITY_311_20261003
 // Manager and public SORIDRAW recommendation views are two views of the same
 // curated R2 snapshot. Whenever the manager has a newer snapshot, seed the
 // public cache too so closing the manager can never reveal an older feed.
+
+const carryPublicCuratedTitles20261128 = (items: Array<Record<string, unknown>>, revision: string) => {
+  const known = readCuratedCache307();
+  if (!known || known.revision !== revision) return items;
+  let next = items;
+  for (const row of known.items) {
+    const at = Number(row.__curatedTitleConfirmedAt20261128 || 0);
+    if (at > 0) next = mergeCuratedPublicationTitle20261128(next,
+      String(row.ownerUid ?? row.owner_uid ?? '').trim(), String(row.id || '').trim(), row, at);
+  }
+  return next;
+};
+
 const syncPublicCuratedCacheFromManaged311 = (
   items: Array<Record<string, unknown>>,
   revision: string,
   checkedAt = Date.now(),
 ) => {
-  writeCuratedCache307(items.slice(0, 20), revision, checkedAt);
+  return writeCuratedCache307(items.slice(0, 20), revision, checkedAt);
 };
 
 const fetchCuratedRevision309 = async () => {
@@ -348,8 +410,7 @@ const fetchCuratedBody307 = async () => {
     .map((item: any) => item?.track)
     .filter((item: unknown): item is Record<string, unknown> => Boolean(item && typeof item === 'object'));
   const revision = String(response.headers.get('X-SORIDRAW-Curated-Revision') || payload?.data?.revision || '').trim();
-  writeCuratedCache307(items, revision);
-  return items;
+  return writeCuratedCache307(items, revision).items;
 };
 
 export const getSoridrawCuratedTracks307 = async (force = false): Promise<Array<Record<string, unknown>>> => {
@@ -448,9 +509,10 @@ export const getManagedSoridrawCuratedTracks307 = async (
   const uid = String(user?.uid || '').trim();
   const cached = uid ? readManagedCuratedCache309(uid) : null;
   if (!force && cached && Date.now() - cached.checkedAt < SORIDRAW_MANAGED_CURATED_RECHECK_MS_309) {
-    syncPublicCuratedCacheFromManaged311(cached.items, cached.revision, cached.checkedAt);
+    const items = carryPublicCuratedTitles20261128(cached.items, cached.revision);
+    syncPublicCuratedCacheFromManaged311(items, cached.revision, cached.checkedAt);
     recordCloudflareLocalCacheHit('/v1/manage/curated?soridraw=1', 'soridraw-managed-curated-local-309');
-    return cached.items;
+    return items;
   }
 
   let currentRevision = '';
@@ -459,10 +521,11 @@ export const getManagedSoridrawCuratedTracks307 = async (
       currentRevision = await fetchCuratedRevision309();
       if (currentRevision && currentRevision === cached.revision) {
         const checkedAt = Date.now();
-        writeManagedCuratedCache309(uid, cached.items, cached.revision, checkedAt);
-        syncPublicCuratedCacheFromManaged311(cached.items, cached.revision, checkedAt);
+        const items = carryPublicCuratedTitles20261128(cached.items, cached.revision);
+        writeManagedCuratedCache309(uid, items, cached.revision, checkedAt);
+        syncPublicCuratedCacheFromManaged311(items, cached.revision, checkedAt);
         recordCloudflareLocalCacheHit('/v1/manage/curated?soridraw=1', 'soridraw-managed-curated-revision-309');
-        return cached.items;
+        return items;
       }
     } catch (error) {
       console.warn('[app309] managed curation revision unavailable; keeping local cache.', error);

@@ -3625,13 +3625,15 @@ export default {
       && /^\/v1\/tracks\/[^/]+\/visibility$/.test(url.pathname);
     const isPublicationBatch307 = request.method === 'POST'
       && url.pathname === '/v1/me/music-note-publications/batch';
+    const directPublicationBody20261128 = request.method === "POST" && url.pathname === "/v1/publications" ? await request.clone().json().catch(() => null) : null;
+    const isDirectMusicNotePublication20261128 = directPublicationBody20261128?.sourceType === "music_note" && typeof directPublicationBody20261128.sourceId === "string" && directPublicationBody20261128.sourceId.trim().length > 0;
     // app468: reserve an event-only, persisted repair BEFORE the canonical
     // publication call. If this guard cannot persist, do NOT write user
     // originals: otherwise an R2 failure after commit has no replay owner.
     // A healthy unrelated track does not enter the repair path.
     let curatedRepairTicket468 = null;
     if (curatedSharedWriterEnabled471(env) &&
-        (isTrackVisibilityMutation307 || isPublicationBatch307)) {
+        (isTrackVisibilityMutation307 || isPublicationBatch307 || isDirectMusicNotePublication20261128)) {
       try {
         const current468 = await getCuratedShared466(env);
         if (current468.object && !current468.snapshot)
@@ -3647,9 +3649,17 @@ export default {
           ? current468.snapshot.memberIds
           : (await readCanonicalCurated466(env)).map((row) => String(row.track_id || '').trim());
         const membership468 = new Set(memberIds468);
+        let directCandidate20261128 = [];
+        if (isDirectMusicNotePublication20261128) {
+          const sourceId20261128 = directPublicationBody20261128.sourceId.trim();
+          if (memberIds468.some(id => id.startsWith("music_note_") && id.endsWith("_" + sourceId20261128))) {
+            if (!actor468) actor468 = await validateExploreAuth307(request, env, ctx);
+            if (!actor468.ok) return actor468.response;
+            directCandidate20261128 = ["music_note_" + actor468.uid + "_" + sourceId20261128];
+          }
+        }
         const candidates468 = isTrackVisibilityMutation307
-          ? [decodeURIComponent(url.pathname.split('/')[3] || '')]
-          : (await request.clone().json().catch(() => null))?.mutations
+          ? [decodeURIComponent(url.pathname.split('/')[3] || '')] : isDirectMusicNotePublication20261128 ? directCandidate20261128 : (await request.clone().json().catch(() => null))?.mutations
             ?.map((item) => String(item?.trackId || '').trim()) || [];
         const affected468 = [...new Set(candidates468
           .filter((id) => membership468.has(String(id || '').trim())))]
@@ -3755,15 +3765,15 @@ export default {
       }
     }
 
-    if ((isTrackVisibilityMutation307 || isPublicationBatch307) && response.ok) {
+    if ((isTrackVisibilityMutation307 || isPublicationBatch307 || isDirectMusicNotePublication20261128) && response.ok) {
       try {
         const mutationPayload307 = await response.clone().json();
         const results307 = isPublicationBatch307
           ? (Array.isArray(mutationPayload307?.data?.results) ? mutationPayload307.data.results : [])
           : [{
               ok: mutationPayload307?.ok === true,
-              trackId: String(mutationPayload307?.data?.trackId || decodeURIComponent(url.pathname.split('/')[3] || '')).trim(),
-              status: mutationPayload307?.data?.isPublic === true ? 'public' : 'private',
+              trackId: String(mutationPayload307?.data?.trackId || (isDirectMusicNotePublication20261128 ? "" : decodeURIComponent(url.pathname.split("/")[3] || ""))).trim(),
+              status: isDirectMusicNotePublication20261128 || mutationPayload307?.data?.isPublic === true ? "public" : "private",
               snapshotItem: mutationPayload307?.data?.snapshotItem || null,
             }];
         await syncCuratedPublicationResults307(request, env, results307, ctx);

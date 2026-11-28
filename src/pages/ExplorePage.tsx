@@ -178,6 +178,7 @@ import {
   getManagedSoridrawCuratedTracks307,
   getSoridrawCuratedTracks307,
   patchSoridrawCuratedPublishedLikeCount523,
+  patchSoridrawCuratedPublicationTitle20261128,
   projectSoridrawCuratedPublishedLikeCounts524,
   readSoridrawCuratedPublishedLikeCount524,
   readCachedSoridrawCuratedTracks307,
@@ -2871,7 +2872,14 @@ export default function ExplorePage() {
       upsertExploreFeedSessionCacheRow(trackId, snapshotRow);
       upsertExplorePublicProfileFirstViewTrack(uid, snapshotRow);
       const normalized = normalizeTrack(snapshotRow);
-      if (!normalized.id) return;
+      if (!normalized.id || normalized.id !== trackId || normalized.ownerUid !== uid) return;
+      patchSoridrawCuratedPublicationTitle20261128(uid, trackId, snapshotRow, signal.at);
+      const patchCuratedTitle20261128 = (previous: ExploreTrack[]) => previous.map((track) => (
+        track.id === normalized.id && track.ownerUid === uid && track.title !== normalized.title
+          ? { ...track, title: normalized.title } : track
+      ));
+      setCuratedTracks307(patchCuratedTitle20261128);
+      setManagedCuratedTracks307(patchCuratedTitle20261128);
 
       if (!profileUid && isExploreFeedRequest(requestUrl)) {
         setTracks((previous) => {
@@ -2946,6 +2954,7 @@ export default function ExplorePage() {
 
       upsertExploreFeedSessionCacheRow(row432.trackId, snapshot432);
       upsertExplorePublicProfileFirstViewTrack(row432.ownerUid, snapshot432);
+      patchSoridrawCuratedPublicationTitle20261128(row432.ownerUid, row432.trackId, snapshot432, row432.at, viewerUid432);
 
       const patchExisting432 = (previous: ExploreTrack[]) => previous.map((track) => (
         track.id === normalized432.id ? mergeExplorePublicationCardPreservingLikeCount435(track, normalized432) : track

@@ -13,6 +13,7 @@ on:
       - 'scripts/verify-738-hosting-writer-candidate.mjs'
       - 'scripts/app738-preview-bundle.mjs'
       - 'scripts/app738-wif-writer-cli.mjs'
+      - 'scripts/app738-journal-app-proof.mjs'
       - 'scripts/verify-738-preview-bundle.mjs'
       - '.github/workflows/app738-preview-artifact.yml'
       - '.github/workflows/app738-hosting-writer.yml'
@@ -74,6 +75,7 @@ jobs:
           node scripts/verify-738-hosting-promotion.mjs
           node scripts/verify-738-hosting-writer-candidate.mjs
           node --check scripts/app738-wif-writer-cli.mjs
+          node --check scripts/app738-journal-app-proof.mjs
           node scripts/verify-738-preview-bundle.mjs
 
   run:

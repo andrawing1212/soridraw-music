@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
 import {inspectPendingHostingOutcome,reconcileHostingJournalCandidate} from './app738-hosting-writer-candidate.mjs';
 import {mkdtempSync,writeFileSync,rmSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -84,3 +85,23 @@ assert.match(wf,/head_repository.id == 1188157610/);assert.match(wf,/github.even
 console.log('APP738_PREVIEW_BUNDLE_UPLOAD_SCOPE_JOURNAL_AND_AUTH_HOLD=PASS_SYNTHETIC');
 
 console.log('APP738_PREWRITE_REVIEWED_RECOVERY_AND_FINAL_RELEASE_DRIFT=PASS_SYNTHETIC');
+
+assert.ok(wf.indexOf('assertApp738ProductionWriteAuthority()')<wf.indexOf('actions/create-github-app-token@'));
+assert.doesNotMatch(wf,/^\s*contents: write\s*$/m);
+assert.match(wf,/app-id: '5968461'/);
+assert.match(wf,/permission-contents: write/);
+const proofJob=wf.slice(wf.indexOf('  journal-proof:'));
+assert.ok(!proofJob.includes('google-github-actions/auth@')&&!proofJob.includes('id-token: write')&&!proofJob.includes('FIREBASE_ACCESS_TOKEN'));
+assert.match(proofJob,/inputs.mode == 'journal-proof'/);
+assert.match(proofJob,/node scripts\/app738-journal-app-proof.mjs/);
+assert.match(proofJob,/github\.actor_id == '268937716' &&\s+github\.run_attempt == 1 &&\s+inputs\.mode == 'journal-proof'/);
+assert.ok(proofJob.indexOf('github.run_attempt == 1')<proofJob.indexOf('actions/create-github-app-token@'));
+// Original actor identity remains the owner on reruns. Reject before any Git or journal access.
+for(const attempt of [undefined,'2','3']){
+ const env={GITHUB_REPOSITORY_ID:'1188157610',GITHUB_REF:'refs/heads/main',GITHUB_ACTOR_ID:'268937716',GITHUB_EVENT_NAME:'workflow_dispatch',HOSTING_JOURNAL_APP_TOKEN:'synthetic-not-a-real-token'};
+ if(attempt!==undefined)env.GITHUB_RUN_ATTEMPT=attempt;
+ const child=spawnSync(process.execPath,['scripts/app738-journal-app-proof.mjs'],{env,encoding:'utf8',timeout:5000});
+ assert.equal(child.status,2);assert.equal(child.stderr.trim(),'JOURNAL_PROOF_CONTEXT');assert.equal(child.stdout,'');
+}
+console.log('APP738_JOURNAL_APP_SCOPE_AND_PROOF_ISOLATION=PASS_SOURCE');
+console.log('APP738_JOURNAL_PROOF_RERUN_DENIED=PASS_SYNTHETIC');

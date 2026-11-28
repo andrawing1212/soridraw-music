@@ -73,7 +73,7 @@ function validRelease(x,site){
 // competing children cannot both fast-forward the same branch. Unknown push
 // outcomes stop the caller; no retry/force/reset/deletion/timeout unlock.
 // Not called by any live workflow in this candidate.
-export function createHostingJournal({cwd}={}){
+export function createHostingJournal({cwd,pushToken}={}){
  if(typeof cwd!=='string'||!cwd)fail('JOURNAL_WORKSPACE_REQUIRED');
  const git=(args,input)=>execFileSync('git',args,{cwd,input,encoding:'utf8',
   timeout:20000,stdio:[input===undefined?'ignore':'pipe','pipe','pipe']}).trim();
@@ -96,7 +96,19 @@ export function createHostingJournal({cwd}={}){
    'commit-tree',tree,'-p',expected],JSON.stringify({...state,nonce:randomUUID()})+'\n');
   if(!SHA.test(next)||next===expected)fail('JOURNAL_CHILD_INVALID');
   // Git rejects non-fast-forward sibling updates at the remote.
-  git(['push','--porcelain','origin',next+':'+REF]);
+  if(pushToken!==undefined){
+   if(typeof pushToken!=='string'||!pushToken||git(['remote','get-url','--push','origin'])!=='https://github.com/'+REPO+'.git'&&
+      git(['remote','get-url','--push','origin'])!=='https://github.com/'+REPO)fail('JOURNAL_APP_TOKEN_OR_ORIGIN');
+   // Override the checkout read credential only for the fixed journal push.
+   // No token in argv, remote URL, repository config, stdout or error text.
+   const header='AUTHORIZATION: basic '+Buffer.from('x-access-token:'+pushToken).toString('base64');
+   try{execFileSync('git',['push','--porcelain','origin',next+':'+REF],{
+    cwd,timeout:20000,stdio:['ignore','pipe','pipe'],
+    env:{...process.env,GIT_TERMINAL_PROMPT:'0',GIT_CONFIG_COUNT:'2',
+     GIT_CONFIG_KEY_0:'http.https://github.com/.extraheader',GIT_CONFIG_VALUE_0:'',
+     GIT_CONFIG_KEY_1:'http.https://github.com/.extraheader',GIT_CONFIG_VALUE_1:header}
+   });}catch{fail('JOURNAL_APP_PUSH_UNCERTAIN');}
+  }else git(['push','--porcelain','origin',next+':'+REF]);
   if(read().sha!==next)fail('JOURNAL_ACK_UNVERIFIED');
   return next;
  }};

@@ -23,7 +23,9 @@ async function smoke(origin,indexSha,version){
 async function main(){
  assertApp738ProductionWriteAuthority();
  const api=createApp738HostingApi(process.env.FIREBASE_ACCESS_TOKEN||'');
- const journal=createHostingJournal({cwd:process.cwd()}),sourceSha=process.env.APP738_SOURCE_SHA;
+ const journalToken=process.env.HOSTING_JOURNAL_APP_TOKEN;
+ if(!journalToken)throw Error('JOURNAL_APP_TOKEN_REQUIRED');
+ const journal=createHostingJournal({cwd:process.cwd(),pushToken:journalToken}),sourceSha=process.env.APP738_SOURCE_SHA;
  if(!/^[a-f0-9]{40}$/.test(sourceSha||'')||await head()!==sourceSha)throw Error('PREVIEW_HEAD_CHANGED');
  git('fetch','--no-tags','origin',sourceSha);
  if(process.argv[2]==='preview'){

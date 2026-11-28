@@ -8,6 +8,17 @@ const SHA64=/^[0-9a-f]{64}$/;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VERSION_ID=/^sites\/(soridraw-preview|soridraw)\/versions\/[A-Za-z0-9_-]{4,128}$/;
 const isTrue=x=>x===true;
+// Only the two director-policy Markdown files can advance HEAD without a
+// fresh application release. This is NOT a generic docs/** exemption.
+const RELEASE_POLICY_DOCS=new Set(['AGENTS.md','DOCS/APP750_BIDIRECTIONAL_RELEASE_FLOW.md']);
+export function app737SourcePinValid(head,source={}){
+ if(!SHA40.test(String(head||''))||!SHA40.test(String(source.previewSha||'')))return false;
+ if(source.previewSha===head)return source.documentationOnlyAdvance===undefined;
+ const p=source.documentationOnlyAdvance;
+ return p?.fromSha===source.previewSha&&p?.toSha===head&&p?.reviewed===true&&
+   Array.isArray(p.paths)&&p.paths.length>0&&p.paths.length<=RELEASE_POLICY_DOCS.size&&
+   new Set(p.paths).size===p.paths.length&&p.paths.every(x=>RELEASE_POLICY_DOCS.has(x));
+}
 // No PREVIEW-only binding may be dropped by classification alone.
 // These two derived resources have named, existing PRODUCTION alternatives.
 const ENVIRONMENT_LOCAL_BINDINGS=Object.freeze({
@@ -116,7 +127,7 @@ export function assessApp737DirectPromotion(input={}){
   const workers=Object.fromEntries(must.map(k=>[k,w[k]||{}]));
   const prodBefore={};
   if(!SHA40.test(sha||'')||sha!==input.currentPreviewHead||
-     source.previewSha!==sha)hold('EXACT_PREVIEW_SOURCE_NOT_PINNED');
+     !app737SourcePinValid(sha,source))hold('EXACT_PREVIEW_SOURCE_NOT_PINNED');
   if(!SHA64.test(source.distSha256||'')||
      source.distSha256!==source.previewLiveDistSha256||
      !isTrue(source.noBuildTimeEnvironmentDrift))
@@ -240,7 +251,8 @@ export function assessApp737DirectPromotion(input={}){
     productionDeploymentExecuted:false,
     executable:false,
     testEnvironmentTouched:false,
-    exactPreviewSource:SHA40.test(sha||'')?sha:null,
+    exactPreviewSource:SHA40.test(source.previewSha||'')?source.previewSha:null,
+    pinnedPreviewHead:SHA40.test(sha||'')?sha:null,
     proposedOrder:[
       'freeze exact live PREVIEW artifact and all user feature proofs',
       'verify production canonical resources and preserve legacy bindings',
@@ -259,6 +271,8 @@ export function assessApp737DirectPromotion(input={}){
   };
   result.manifestSha256=fingerprint({
     previewSha:result.exactPreviewSource,
+    pinnedPreviewHead:result.pinnedPreviewHead,
+    documentationOnlyAdvance:source.documentationOnlyAdvance||null,
     source:source.distSha256,
     hosting:h,
     workers:prodBefore,

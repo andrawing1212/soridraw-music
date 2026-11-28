@@ -57,78 +57,7 @@ export function normalizeHostingRequest(x={}){
   before:{version:x.before.version,release:x.before.release}};
 }
 function validVersion(version,site){
- return typeof version==='string'&&new RegExp('^sites/'+site+'/versions/[A-Za-z0-9_-]{4,128}
- return !!x&&typeof x.version==='string'&&typeof x.release==='string'&&
-  new RegExp('^sites/'+site+'/versions/[A-Za-z0-9_-]{4,128}$').test(x.version)&&
-  new RegExp('^sites/'+site+'/(?:channels/live/)?releases/[A-Za-z0-9_-]+$').test(x.release);
-}
-
-// Durable journal adapter: a dedicated already-initialized Git branch holds
-// append-only metadata (no secrets, source files or user data).
-// A unique child of the observed parent is pushed without force. Two
-// competing children cannot both fast-forward the same branch. Unknown push
-// outcomes stop the caller; no retry/force/reset/deletion/timeout unlock.
-// Not called by any live workflow in this candidate.
-export function createHostingJournal({cwd}={}){
- if(typeof cwd!=='string'||!cwd)fail('JOURNAL_WORKSPACE_REQUIRED');
- const git=(args,input)=>execFileSync('git',args,{cwd,input,encoding:'utf8',
-  timeout:20000,stdio:[input===undefined?'ignore':'pipe','pipe','pipe']}).trim();
- const read=()=>{
-  const line=git(['ls-remote','--exit-code','origin',REF]).split(/\s+/);
-  if(line.length!==2||!SHA.test(line[0])||line[1]!==REF)fail('JOURNAL_REF_INVALID');
-  const sha=line[0];
-  git(['fetch','--no-tags','origin',sha]);
-  const state=JSON.parse(git(['show','-s','--format=%B',sha]));
-  if(state?.schema!==1||!['idle','pending'].includes(state.phase)||
-    (state.phase==='pending'&&(!state.attempt||!DIGEST.test(state.requestDigest||''))))
-   fail('JOURNAL_STATE_INVALID');
-  return {sha,state};
- };
- return {read,compareAppend(expected,state){
-  if(!SHA.test(expected||''))fail('JOURNAL_PARENT_INVALID');
-  if(read().sha!==expected)fail('JOURNAL_CONCURRENT_UPDATE');
-  const tree=git(['rev-parse',expected+'^{tree}']);
-  const next=git(['-c','user.name=APP738 journal','-c','user.email=app738@invalid.local',
-   'commit-tree',tree,'-p',expected],JSON.stringify({...state,nonce:randomUUID()})+'\n');
-  if(!SHA.test(next)||next===expected)fail('JOURNAL_CHILD_INVALID');
-  // Git rejects non-fast-forward sibling updates at the remote.
-  git(['push','--porcelain','origin',next+':'+REF]);
-  if(read().sha!==next)fail('JOURNAL_ACK_UNVERIFIED');
-  return next;
- }};
-}
-
-// Offline transaction coordinator. A pending journal survives runner death.
-// Never clear it in finally, on a failed/unknown operation or on timeout.
-// Future trusted workflow must wire authenticated transport and separately
-// reviewed reconciliation; current real adapter remains permanently HOLD.
-export async function runHostingWriterCandidate({journal,request,execute,verify}={}){
- const req=normalizeHostingRequest(request);
- if(!journal||typeof journal.read!=='function'||typeof journal.compareAppend!=='function'||
-   typeof execute!=='function'||typeof verify!=='function')fail('WRITER_COMPONENT_MISSING');
- const start=await journal.read();
- if(start.state?.schema!==1||start.state.phase!=='idle')fail('PENDING_OR_UNKNOWN_ATTEMPT');
- const attempt=randomUUID(),requestDigest=hash(req);
- const pending={schema:1,phase:'pending',attempt,requestDigest,request:req};
- const owned=await journal.compareAppend(start.sha,pending);
- const locked=await journal.read();
- if(locked.sha!==owned||locked.state?.attempt!==attempt||
-   locked.state?.requestDigest!==requestDigest||locked.state?.phase!=='pending')
-   fail('JOURNAL_OWNERSHIP_UNVERIFIED');
- const result=await execute(Object.freeze({...req,before:Object.freeze({...req.before})}));
- const observed=await verify(result,req);
- if(!validRelease(observed,req.site)||observed.release===req.before.release||
-   observed.filesSha256!==req.filesSha256||observed.configSha256!==req.configSha256||
-   observed.requestDigest!==requestDigest)
-   fail('OUTCOME_UNVERIFIED');
- const end=await journal.read();
- if(end.sha!==owned||end.state?.attempt!==attempt)fail('JOURNAL_OWNERSHIP_LOST');
- await journal.compareAppend(owned,{schema:1,phase:'idle',lastAttempt:attempt,
-   requestDigest,result:{version:observed.version,release:observed.release}});
- return {status:'CANDIDATE_TRANSACTION_VERIFIED',attempt,site:req.site,
-  release:observed.release,liveAuthorityVerified:false};
-}
-).test(version);
+ return typeof version==='string'&&new RegExp('^sites/'+site+'/versions/[A-Za-z0-9_-]{4,128}$').test(version);
 }
 function validRelease(x,site){
  return !!x&&typeof x.version==='string'&&typeof x.release==='string'&&

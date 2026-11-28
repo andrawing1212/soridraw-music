@@ -112,6 +112,7 @@ jobs:
       github.ref == 'refs/heads/main' &&
       github.event_name == 'workflow_dispatch' &&
       github.actor_id == '268937716' &&
+      github.run_attempt == 1 &&
       inputs.mode == 'journal-proof'
     runs-on: ubuntu-24.04
     timeout-minutes: 5

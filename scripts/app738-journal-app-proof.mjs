@@ -9,7 +9,7 @@ function git(...args){return execFileSync('git',args,{encoding:'utf8',timeout:20
 try{
  if(process.env.GITHUB_REPOSITORY_ID!=='1188157610'||process.env.GITHUB_REF!=='refs/heads/main'||
     process.env.GITHUB_ACTOR_ID!=='268937716'||process.env.GITHUB_EVENT_NAME!=='workflow_dispatch'||
-    !process.env.HOSTING_JOURNAL_APP_TOKEN)throw Error('JOURNAL_PROOF_CONTEXT');
+    process.env.GITHUB_RUN_ATTEMPT!=='1'||!process.env.HOSTING_JOURNAL_APP_TOKEN)throw Error('JOURNAL_PROOF_CONTEXT');
  const journal=createHostingJournal({cwd:process.cwd(),pushToken:process.env.HOSTING_JOURNAL_APP_TOKEN});
  const before=journal.read();
  if(before.sha!==GENESIS||JSON.stringify(before.state)!=='{"schema":1,"phase":"idle"}'||

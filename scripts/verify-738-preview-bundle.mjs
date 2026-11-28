@@ -35,7 +35,7 @@ await assert.rejects(()=>block.releasePreview(version,'APP738 preview '+sha),/PR
 const cfgHash=createHash('sha256').update(JSON.stringify(config)).digest('hex');
 let state={schema:1,phase:'idle'},id='0'.repeat(40),n=0;
 const journal={read:()=>({sha:id,state}),compareAppend:(expected,next)=>{assert.equal(expected,id);state=structuredClone(next);id=(++n).toString(16).padStart(40,'0');return id;}};
-let live={site:'soridraw-preview',version:'sites/soridraw-preview/versions/oldv',release:'sites/soridraw-preview/releases/old',config,configSha256:cfgHash};
+let live={site:'soridraw-preview',version:'sites/soridraw-preview/versions/oldv',release:'sites/soridraw-preview/releases/old',config,filesSha256:'c'.repeat(64),configSha256:cfgHash};
 const api={assertExclusiveReleaseAuthority:async()=>true,snapshotLive:async()=>live,live:async()=>live,
  stagePreview:async()=>{assert.equal(state.phase,'pending');return version;},
  snapshotVersion:async()=>({site:'soridraw-preview',version,filesSha256:bundle.filesSha256,configSha256:cfgHash}),

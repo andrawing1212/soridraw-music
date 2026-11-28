@@ -2,7 +2,7 @@ name: QA exact title activation transaction (offline only)
 on:
   push:
     branches: [qa/production-title-compatibility-20261128]
-    paths: ['scripts/qa-production-title-activation-20261128.mjs', 'scripts/verify-production-title-activation-20261128.mjs', '.github/workflows/qa-production-title-activation-20261128.yml']
+    paths: ['scripts/qa-production-title-activation-20261128.mjs', 'scripts/verify-production-title-activation-20261128.mjs', 'scripts/lib/production-title-activation-transport-20261128.mjs', '.github/workflows/qa-production-title-activation-20261128.yml']
 permissions:
   contents: read
 jobs:

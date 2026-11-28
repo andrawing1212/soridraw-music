@@ -35,6 +35,6 @@ assert.match(m,/trackChoices.length > 1 && \(/);
 assert.doesNotMatch(c.slice(c.indexOf('export function PublicationSingleCover')),/<button|onClick|aria-pressed/);
 assert.match(f,/await updateFavorite\(sourceId,updates\)[\s\S]*?await refreshExploreMusicNotePublicationContent428/);
 assert.match(e,/await updateFavorite\(sourceId,updates,undefined,latest\)[\s\S]*?await refreshExploreMusicNotePublicationContent428/);
-assert.match(app,/<ExploreShellLazy updateFavorite=\{updateFavorite\}/);
+assert.match(app,/<ExploreShellLazy\b[^>]*\bupdateFavorite=\{updateFavorite\}/);
 for(const s of [f,e,m,c])assert.equal(ts.createSourceFile('file.tsx',s,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX).parseDiagnostics.length,0);
 console.log('PUBLICATION_TITLE_DRAFT_IDENTITY_AND_SINGLE_NONSELECTABLE_COVER=PASS');

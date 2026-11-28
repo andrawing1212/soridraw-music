@@ -20258,7 +20258,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         } />
         <Route path="/explore" element={
           canAccessNavigationMenu('explore') ? (
-            <ExploreShellLazy updateFavorite={updateFavorite} isAdminUser={isAdminUser} recentHistory={history} onOpenRecentSong={canAccessNavigationMenu('studio')?openNotificationRecentSong:undefined} />
+            <ExploreShellLazy isAdminUser={isAdminUser} recentHistory={history} updateFavorite={updateFavorite} onOpenRecentSong={canAccessNavigationMenu('studio')?openNotificationRecentSong:undefined} />
           ) : (
             <FeatureUnavailablePage label="익스플로어" fallbackPath={navigationFallbackPath} />
           )

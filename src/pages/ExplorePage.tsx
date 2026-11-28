@@ -5721,7 +5721,7 @@ export default function ExplorePage({updateFavorite}: {updateFavorite?: Publicat
         if (await readMusicNoteDetailDraft(user.uid,sourceId)) throw new Error('뮤직노트의 임시 수정사항을 먼저 저장해주세요.');
         // Only an actual title edit reads the exact source for owner and stale-title protection.
         const snapshot=await getDoc(doc(db,'favorites',sourceId));
-        const latest=snapshot.exists()?{...snapshot.data(),id:snapshot.id,firestoreId:snapshot.id}:null;
+        const latest: Record<string, any> | null = snapshot.exists() ? {...snapshot.data(), id:snapshot.id, firestoreId:snapshot.id} : null;
         if (!latest || safeText(latest.uid??latest.ownerUid)!==user.uid || !isPublicationTitleSource(latest,user.uid,sourceId) || auth.currentUser?.uid!==user.uid) throw new Error('수정할 수 있는 원본 곡을 확인하지 못했습니다.');
         assertPublicationTitleNotSuperseded(pendingSettings.sourceSong,latest,pendingSettings.titleDraft);
         const changed=buildPublicationTitlePatch(latest,pendingSettings.titleDraft);

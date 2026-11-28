@@ -92,6 +92,9 @@ jobs:
           if [ "$MODE" = production ]; then
             echo 'LEGACY_PRODUCTION_DISABLED_USE_APP738'; exit 2
           fi
+          if [ "$MODE" = test ]; then
+            echo 'LEGACY_TEST_DISABLED_NO_TEST_POLICY'; exit 2
+          fi
           export RELEASE_MODE="$MODE" RELEASE_TARGET_INPUT="${TARGET:-$MANIFEST_TAG}"
           node scripts/update-release-control-status.mjs create REQUESTED
           git config user.name "soridraw-release-bot"

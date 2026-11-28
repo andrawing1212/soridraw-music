@@ -4,7 +4,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {buildHostingWifPlan,normalizeHostingRequest,createHostingJournal,runHostingWriterCandidate} from './app738-hosting-writer-candidate.mjs';
+import {buildHostingWifPlan,normalizeHostingRequest,createHostingJournal,runHostingWriterCandidate,inspectPendingHostingOutcome,reconcileHostingJournalCandidate} from './app738-hosting-writer-candidate.mjs';
 
 const sha='a'.repeat(40),digest='b'.repeat(64);
 const plan=buildHostingWifPlan({projectNumber:'450781969193',controllerSha:sha});
@@ -84,3 +84,43 @@ console.log('APP738_WIF_PINNED_CONFIGURATION_ONLY=PASS');
 console.log('APP738_FIXED_SITE_AND_APPROVAL_FENCE=PASS');
 console.log('APP738_GIT_JOURNAL_SIBLING_RACE_AND_CROSS_RUN_PENDING_HOLD=PASS_LOCAL');
 console.log('APP738_COMMON_WRITER_CANDIDATE_ONLY; LIVE_AUTH=NOT_RUN; LIVE_DEPLOY=NOT_RUN');
+
+
+// Recovery records are bound to exact release identity, not version alone.
+const sum=x=>createHash('sha256').update(x).digest('hex');
+const rroot=mkdtempSync(join(tmpdir(),'app738-recovery-'));
+try{
+ const bare=join(rroot,'remote.git'),a=join(rroot,'a'),b=join(rroot,'b');
+ git(rroot,'init','--bare',bare);git(rroot,'clone',bare,a);
+ git(a,'-c','user.name=QA','-c','user.email=qa@invalid.local','commit','--allow-empty','-m',JSON.stringify({schema:1,phase:'idle'}));git(a,'push','origin','HEAD:'+ref);
+ git(rroot,'clone','--branch','hosting-release-journal',bare,b);
+ const ja=createHostingJournal({cwd:a}),jb=createHostingJournal({cwd:b}),req=request('production');
+ const baseline={site:req.site,...req.before,filesSha256:'c'.repeat(64),configSha256:digest};
+ const live={site:req.site,version:'sites/soridraw/versions/newv',release:'sites/soridraw/releases/new',filesSha256:digest,configSha256:digest};
+ const execute=async(_r,checkpoint)=>{
+  await checkpoint('baseline',baseline);
+  await checkpoint('release-intent',{version:live.version});
+  await checkpoint('release-ack',live);
+  throw Error('runner lost after acknowledged release');
+ };
+ await assert.rejects(()=>runHostingWriterCandidate({journal:ja,request:req,execute,verify:async()=>{}}),/runner lost/);
+ let record=jb.read(),report=inspectPendingHostingOutcome({record,observed:live});
+ assert.equal(report.outcome,'OWNED_RELEASE_OBSERVED');assert.equal(report.canAutoUnlock,false);
+ assert.equal(inspectPendingHostingOutcome({record,observed:{...live,release:'sites/soridraw/releases/foreign'}}).outcome,'UNKNOWN_OR_FOREIGN_HOLD');
+ const reviewRaw=JSON.stringify({kind:'APP738_JOURNAL_RECONCILIATION_V1',journalSha:record.sha,attempt:report.attempt,requestDigest:report.requestDigest,outcome:report.outcome,observed:report.observed});
+ const api={assertExclusiveReleaseAuthority:async()=>true,snapshotLive:async()=>live};
+ const opts={journal:jb,api,reviewRaw,reviewSha256:sum(reviewRaw),approval:'RECONCILE_HOSTING_JOURNAL',verifyIndependentReview:async()=>true};
+ await assert.rejects(()=>reconcileHostingJournalCandidate({...opts,verifyIndependentReview:async()=>false}),/INDEPENDENT_TERMINAL_REVIEW_REQUIRED/);
+ assert.equal(jb.read().sha,record.sha);
+ await assert.rejects(()=>reconcileHostingJournalCandidate({...opts,api:{...api,assertExclusiveReleaseAuthority:async()=>false}}),/LIVE_WRITER_UNVERIFIED/);
+ let reads=0;await assert.rejects(()=>reconcileHostingJournalCandidate({...opts,api:{...api,snapshotLive:async()=>++reads===1?live:{...live,release:'sites/soridraw/releases/foreign'}}}),/RECONCILIATION_LIVE_DRIFT/);
+ assert.equal(jb.read().sha,record.sha);
+ assert.equal((await reconcileHostingJournalCandidate(opts)).hostingWrites,0);assert.equal(ja.read().state.phase,'idle');
+ await assert.rejects(()=>runHostingWriterCandidate({journal:ja,request:req,execute:async(_r,checkpoint)=>{
+  await checkpoint('baseline',baseline);await checkpoint('release-intent',{version:live.version});throw Error('ACK lost');
+ },verify:async()=>{}}),/ACK lost/);
+ record=jb.read();assert.equal(inspectPendingHostingOutcome({record,observed:live}).outcome,'UNKNOWN_OR_FOREIGN_HOLD');
+ await assert.rejects(()=>reconcileHostingJournalCandidate(opts),/UNACKNOWLEDGED_OR_FOREIGN_OUTCOME/);
+ assert.equal(jb.read().state.phase,'pending');
+}finally{rmSync(rroot,{recursive:true,force:true});}
+console.log('APP738_RECEIPT_BOUND_RECOVERY_NO_ACK_HOLD=PASS_LOCAL');

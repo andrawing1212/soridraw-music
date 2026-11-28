@@ -27,6 +27,12 @@ async function main(){
  if(!/^[a-f0-9]{40}$/.test(sourceSha||'')||await head()!==sourceSha)throw Error('PREVIEW_HEAD_CHANGED');
  git('fetch','--no-tags','origin',sourceSha);
  if(process.argv[2]==='preview'){
+  // The credentialed main controller never accepts a modified producer or
+  // packer as trusted provenance merely because its run name/path matched.
+  for(const path of ['.github/workflows/app738-preview-artifact.yml','scripts/app738-preview-bundle.mjs']){
+   const source=execFileSync('git',['show',sourceSha+':'+path]);
+   if(sha(source)!==sha(readFileSync(path)))throw Error('PREVIEW_PRODUCER_REVISION_REQUIRES_REVIEW');
+  }
   const configRaw=execFileSync('git',['show',sourceSha+':firebase.hosting-preview.json'],{encoding:'utf8'});
   if(sha(configRaw)!==sha(readFileSync('firebase.hosting-preview.json','utf8')))throw Error('PREVIEW_CONFIG_CHANGE_REQUIRES_REVIEW');
   const triggerRaw=execFileSync('git',['show',sourceSha+':.deploy/preview-app-release.trigger'],{encoding:'utf8'});

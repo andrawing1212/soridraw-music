@@ -112,7 +112,7 @@ function releaseIdentity(ack,version){
  return ack.name;
 }
 export async function runApp738HostingPromotion({
- api,previewSha,evidence,approval,readCurrentPreviewSha,smokeProduction,expectedBefore,
+ api,previewSha,evidence,approval,readCurrentPreviewSha,smokeProduction,expectedBefore,checkpoint=async()=>{},
 }={}){
  verifyApp738ReleaseGate({evidence,previewSha,approval,mode:'deploy'});
  if(!api||typeof api.clone!=='function'||typeof api.release!=='function'||
@@ -131,6 +131,7 @@ export async function runApp738HostingPromotion({
  if(expectedBefore&&(before.version!==expectedBefore.version||before.release!==expectedBefore.release))
    fail('PINNED_RELEASE_IDENTITY_CHANGED');
  let cloned=null,releaseAttempted=false,ownedRelease=null;
+ await checkpoint('baseline',before);
  try{
   if(await readCurrentPreviewSha()!==previewSha)fail('SOURCE_CHANGED_BEFORE_CLONE');
   cloned=await api.clone(source.version,configReview.sameConfig?undefined:{
@@ -149,10 +150,12 @@ export async function runApp738HostingPromotion({
   if(currentPreview.version!==source.version||currentPreview.release!==source.release||
      await readCurrentPreviewSha()!==previewSha)
     fail('PREVIEW_SOURCE_CHANGED_AFTER_CLONE');
+  await checkpoint('release-intent',{version:cloned});
   releaseAttempted=true;
   const ack=await api.release(cloned,'APP738 direct PREVIEW '+evidence.source.previewSha+' rollback='+id(before.version));
   ownedRelease=releaseIdentity(ack,cloned);
   if(ownedRelease===before.release){ownedRelease=null;fail('RELEASE_ACK_REUSED');}
+  await checkpoint('release-ack',{version:cloned,release:ownedRelease});
   await postVerify(api,cloned,ownedRelease,before);
   const observed=await api.snapshotLive(SITES.production);
   if(observed.version!==cloned||observed.release!==ownedRelease||
@@ -180,9 +183,11 @@ export async function runApp738HostingPromotion({
   if(!cloned||!ownedRelease||live?.version!==cloned||live?.release!==ownedRelease)
     throw Error('APP738_PRODUCTION_STATE_UNKNOWN_OR_CONCURRENT_RELEASE_MANUAL_HOLD');
   try{
+   await checkpoint('rollback-intent',{version:before.version});
    const rollbackAck=await api.release(before.version,'APP738 rollback to '+id(before.version));
    const restoredRelease=releaseIdentity(rollbackAck,before.version);
    if(restoredRelease===ownedRelease||restoredRelease===before.release)fail('ROLLBACK_ACK_REUSED');
+   await checkpoint('rollback-ack',{version:before.version,release:restoredRelease});
    await postVerify(api,before.version,restoredRelease,{version:cloned,release:ownedRelease});
    const restored=await api.snapshotLive(SITES.production);
    if(restored.version!==before.version||restored.release!==restoredRelease||

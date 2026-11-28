@@ -113,13 +113,32 @@ export async function runHostingWriterCandidate({journal,request,execute,verify}
  const start=await journal.read();
  if(start.state?.schema!==1||start.state.phase!=='idle')fail('PENDING_OR_UNKNOWN_ATTEMPT');
  const attempt=randomUUID(),requestDigest=hash(req);
- const pending={schema:1,phase:'pending',attempt,requestDigest,request:req};
- const owned=await journal.compareAppend(start.sha,pending);
+ let pending={schema:1,phase:'pending',attempt,requestDigest,request:req,checkpoints:[]};
+ let owned=await journal.compareAppend(start.sha,pending);
  const locked=await journal.read();
  if(locked.sha!==owned||locked.state?.attempt!==attempt||
    locked.state?.requestDigest!==requestDigest||locked.state?.phase!=='pending')
    fail('JOURNAL_OWNERSHIP_UNVERIFIED');
- const result=await execute(Object.freeze({...req,before:Object.freeze({...req.before})}));
+ // Each acknowledged append pins the next ownership check. Never continue
+ // after an uncertain journal append, even if the Hosting request succeeded.
+ let journalFault=false;
+ async function checkpoint(kind,detail){
+  if(journalFault)fail('JOURNAL_CHECKPOINT_UNCERTAIN');
+  try{
+   const current=await journal.read();
+   if(current.sha!==owned||current.state?.phase!=='pending'||current.state.attempt!==attempt||
+      current.state.requestDigest!==requestDigest)fail('JOURNAL_OWNERSHIP_LOST');
+   const entry=validateCheckpoint(req,pending.checkpoints,kind,detail);
+   const next={...pending,checkpoints:[...pending.checkpoints,entry]};
+   const nextSha=await journal.compareAppend(owned,next);
+   const ack=await journal.read();
+   if(ack.sha!==nextSha||ack.state?.attempt!==attempt||ack.state?.requestDigest!==requestDigest||
+      hash(ack.state.checkpoints)!==hash(next.checkpoints))fail('JOURNAL_CHECKPOINT_ACK_UNVERIFIED');
+   owned=nextSha;pending=next;
+  }catch(e){journalFault=true;throw e;}
+ }
+ const result=await execute(Object.freeze({...req,before:Object.freeze({...req.before})}),checkpoint);
+ if(journalFault)fail('JOURNAL_CHECKPOINT_UNCERTAIN');
  const observed=await verify(result,req);
  if(!validRelease(observed,req.site)||observed.release===req.before.release||
    observed.filesSha256!==req.filesSha256||observed.configSha256!==req.configSha256||
@@ -128,7 +147,7 @@ export async function runHostingWriterCandidate({journal,request,execute,verify}
  const end=await journal.read();
  if(end.sha!==owned||end.state?.attempt!==attempt)fail('JOURNAL_OWNERSHIP_LOST');
  await journal.compareAppend(owned,{schema:1,phase:'idle',lastAttempt:attempt,
-   requestDigest,result:{version:observed.version,release:observed.release}});
+   requestDigest,checkpoints:pending.checkpoints,result:{version:observed.version,release:observed.release}});
  return {status:'CANDIDATE_TRANSACTION_VERIFIED',attempt,site:req.site,
   release:observed.release,liveAuthorityVerified:false};
 }
@@ -168,7 +187,7 @@ export async function runCommonHostingCandidate({
  const exact=(a,b)=>a?.version===b.version&&a?.release===b.release;
  const contents=x=>x?.site===req.site&&x.filesSha256===req.filesSha256&&x.configSha256===req.configSha256;
  return runHostingWriterCandidate({journal,request:req,
-  async execute(){
+  async execute(_request,checkpoint){
    if(await api.assertExclusiveReleaseAuthority()!==true)fail('LIVE_WRITER_UNVERIFIED');
    const before=await api.snapshotLive(req.site);
    if(!exact(before,req.before))fail('BASELINE_DRIFT');
@@ -177,7 +196,7 @@ export async function runCommonHostingCandidate({
     // checks remain inside the durable lock. Unknown/failure holds journal.
     const result=await runApp738HostingPromotion({
      api,previewSha:req.sourceSha,evidence:item.app737Evidence,approval:req.approval,
-     readCurrentPreviewSha,smokeProduction,expectedBefore:req.before,
+     readCurrentPreviewSha,smokeProduction,expectedBefore:req.before,checkpoint,
     });
     return {version:result.releasedProductionVersion,release:result.releasedProductionRelease};
    }
@@ -192,11 +211,14 @@ export async function runCommonHostingCandidate({
    // preview upload, credential issuance or live release is wired here.
    const release=req.mode==='preview'?api.releasePreview:api.release;
    if(typeof release!=='function')fail('SCOPED_RELEASE_ADAPTER_MISSING');
+   await checkpoint('baseline',before);
+   await checkpoint('release-intent',{version:req.targetVersion});
    const ack=await release.call(api,req.targetVersion,req.mode==='preview'
      ?'APP738 preview '+req.sourceSha:'APP738 rollback to '+req.targetVersion.split('/').pop());
    const result={version:ack?.version?.name,release:ack?.name};
    if(!validRelease(result,req.site)||result.version!==req.targetVersion||result.release===req.before.release)
     fail('RELEASE_ACK_UNVERIFIED');
+   await checkpoint('release-ack',result);
    return result;
   },
   async verify(result){
@@ -206,3 +228,83 @@ export async function runCommonHostingCandidate({
   },
  });
 }
+
+
+// Ordered, metadata-only receipts. A lost response is NOT a release receipt.
+// A pending attempt may only be reviewed, never automatically replayed.
+function validateCheckpoint(req,entries,kind,detail){
+ if(!Array.isArray(entries)||entries.length>4||!detail||typeof detail!=='object')fail('CHECKPOINT_INVALID');
+ const previous=entries.at(-1);
+ const expected={baseline:undefined,'release-intent':'baseline','release-ack':'release-intent','rollback-intent':'release-ack','rollback-ack':'rollback-intent'};
+ if(!Object.hasOwn(expected,kind)||previous?.kind!==expected[kind])fail('CHECKPOINT_ORDER');
+ const entry={kind,version:detail.version};
+ if(!validVersion(entry.version,req.site))fail('CHECKPOINT_SITE');
+ if(kind==='baseline'){
+  if(!validRelease(detail,req.site)||detail.version!==req.before.version||detail.release!==req.before.release||
+     !DIGEST.test(detail.filesSha256||'')||!DIGEST.test(detail.configSha256||''))fail('CHECKPOINT_BASELINE');
+  Object.assign(entry,{release:detail.release,filesSha256:detail.filesSha256,configSha256:detail.configSha256});
+ }else if(kind==='release-intent'){
+  if(entry.version===req.before.version||(req.targetVersion&&entry.version!==req.targetVersion))fail('CHECKPOINT_RELEASE_TARGET');
+ }else if(kind==='rollback-intent'){
+  if(req.mode!=='production'||entry.version!==req.before.version)fail('CHECKPOINT_ROLLBACK_TARGET');
+ }else{
+  if(!validRelease(detail,req.site)||entry.version!==previous.version||detail.release===req.before.release||
+     entries.some(x=>x.release===detail.release))fail('CHECKPOINT_RELEASE_RECEIPT');
+  entry.release=detail.release;
+ }
+ return entry;
+}
+
+// Read-only classification for a separately approved reconciliation. Never
+// writes Firebase, never unlocks the journal and never infers ownership from
+// a matching version alone. Unknown ACK/in-flight operations remain HOLD.
+export function inspectPendingHostingOutcome({record,observed}={}){
+ const state=record?.state;
+ if(!SHA.test(record?.sha||'')||state?.phase!=='pending'||state.schema!==1||!state.attempt)
+  fail('PENDING_RECORD_REQUIRED');
+ const req=normalizeHostingRequest(state.request);
+ if(hash(req)!==state.requestDigest)fail('JOURNAL_REQUEST_DIGEST_DRIFT');
+ const entries=[];
+ for(const x of state.checkpoints||[])entries.push(validateCheckpoint(req,entries,x.kind,x));
+ const last=entries.at(-1),base=entries[0];
+ const current=validRelease(observed,req.site)&&observed.site===req.site&&
+  DIGEST.test(observed.filesSha256||'')&&DIGEST.test(observed.configSha256||'');
+ let outcome='UNKNOWN_OR_FOREIGN_HOLD';
+ if(current&&last?.kind==='release-ack'&&last.release===observed.release&&last.version===observed.version&&
+    observed.filesSha256===req.filesSha256&&observed.configSha256===req.configSha256)outcome='OWNED_RELEASE_OBSERVED';
+ if(current&&last?.kind==='rollback-ack'&&last.release===observed.release&&last.version===observed.version&&
+    observed.filesSha256===base.filesSha256&&observed.configSha256===base.configSha256)outcome='OWNED_ROLLBACK_OBSERVED';
+ return {status:'MANUAL_RECONCILIATION_HOLD',outcome,journalSha:record.sha,attempt:state.attempt,requestDigest:state.requestDigest,
+  site:req.site,observed:current?{version:observed.version,release:observed.release,filesSha256:observed.filesSha256,configSha256:observed.configSha256}:null,
+  writes:0,canAutoUnlock:false};
+}
+
+// Candidate journal-only reconciliation. Real transport hard-HOLD applies;
+// no production workflow or CLI calls this. The external review port must
+// be independently authenticated at cutover, not an input boolean or timer.
+// Only an owned acknowledged terminal state is eligible; no ACK means HOLD.
+export async function reconcileHostingJournalCandidate({journal,api,reviewRaw,reviewSha256,approval,verifyIndependentReview}={}){
+ if(approval!=='RECONCILE_HOSTING_JOURNAL'||typeof reviewRaw!=='string'||hashRaw(reviewRaw)!==reviewSha256||
+    typeof verifyIndependentReview!=='function')fail('RECONCILIATION_APPROVAL_REQUIRED');
+ if(!api||typeof api.assertExclusiveReleaseAuthority!=='function'||await api.assertExclusiveReleaseAuthority()!==true)
+   fail('LIVE_WRITER_UNVERIFIED');
+ const record=await journal.read(),req=normalizeHostingRequest(record.state.request);
+ const first=inspectPendingHostingOutcome({record,observed:await api.snapshotLive(req.site)});
+ if(first.outcome==='UNKNOWN_OR_FOREIGN_HOLD')fail('UNACKNOWLEDGED_OR_FOREIGN_OUTCOME');
+ const evidence=JSON.parse(reviewRaw);
+ if(evidence.kind!=='APP738_JOURNAL_RECONCILIATION_V1'||evidence.journalSha!==first.journalSha||
+    evidence.attempt!==first.attempt||evidence.requestDigest!==first.requestDigest||
+    evidence.outcome!==first.outcome||hash(evidence.observed)!==hash(first.observed)||
+    await verifyIndependentReview({raw:reviewRaw,sha256:reviewSha256,report:first})!==true)
+    fail('INDEPENDENT_TERMINAL_REVIEW_REQUIRED');
+ // Review must establish no in-flight request/runner and actual feature
+ // health for the exact release. Re-read before append; no Firebase writes.
+ const again=await journal.read();
+ if(again.sha!==record.sha)fail('RECONCILIATION_JOURNAL_DRIFT');
+ const second=inspectPendingHostingOutcome({record:again,observed:await api.snapshotLive(req.site)});
+ if(hash(first)!==hash(second)||await api.assertExclusiveReleaseAuthority()!==true)fail('RECONCILIATION_LIVE_DRIFT');
+ await journal.compareAppend(record.sha,{schema:1,phase:'idle',lastAttempt:first.attempt,requestDigest:first.requestDigest,
+  result:first.observed,reconciliation:{outcome:first.outcome,reviewSha256,previousJournalSha:record.sha}});
+ return {status:'CANDIDATE_JOURNAL_RECONCILED',hostingWrites:0,liveAuthorityVerified:false};
+}
+const hashRaw=x=>createHash('sha256').update(x).digest('hex');

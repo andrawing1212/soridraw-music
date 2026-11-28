@@ -228,6 +228,7 @@ for(const workflow of [directWorkflow,legacyWorkflow]){
 }
 const directHold=directWorkflow.indexOf('APP738_PRODUCTION_EXCLUSIVE_WRITER_UNVERIFIED_HOLD');
 assert.ok(directHold>=0&&directHold<directWorkflow.indexOf('Authenticate existing Firebase Hosting only'));
+assert.ok(legacyWorkflow.indexOf('LEGACY_TEST_DISABLED_NO_TEST_POLICY')<legacyWorkflow.indexOf('node scripts/update-release-control-status.mjs create REQUESTED'));
 const legacyHold=legacyWorkflow.indexOf('LEGACY_PRODUCTION_DISABLED_USE_APP738');
 assert.ok(legacyHold>=0&&legacyHold<legacyWorkflow.indexOf('node scripts/update-release-control-status.mjs create REQUESTED'));
 assert.match(legacyWorkflow,/if: failure\(\) && steps\.request\.outputs\.mode == 'test'/);
@@ -289,6 +290,7 @@ const prodOptions={journal,api:cp.api,request:prodReq,evidenceRaw:prodRaw,
 const integrated=await runCommonHostingCandidate(prodOptions);
 assert.equal(integrated.release,'sites/soridraw/releases/new');
 assert.equal(journal.read().state.phase,'idle');
+assert.deepEqual(journal.read().state.checkpoints.map(x=>x.kind),['baseline','release-intent','release-ack']);
 assert.deepEqual(cp.metrics(),{releaseCount:1,cloneCount:1,current:NEW});
 const rejected=mock(),rejectedJournal=memoryJournal();
 await assert.rejects(()=>runCommonHostingCandidate({...prodOptions,journal:rejectedJournal,api:rejected.api,
@@ -306,6 +308,7 @@ assert.equal(badJournal.read().state.phase,'pending');
 const loss=mock({ackLost:true}),lostJournal=memoryJournal();
 await assert.rejects(()=>runCommonHostingCandidate({...prodOptions,journal:lostJournal,api:loss.api}),/MANUAL_HOLD/);
 assert.equal(lostJournal.read().state.phase,'pending');
+assert.equal(lostJournal.read().state.checkpoints.at(-1).kind,'release-intent');
 assert.equal(loss.metrics().releaseCount,1);
 const previewTarget='sites/soridraw-preview/versions/newpreview';
 const previewBefore={version:SOURCE,release:'sites/soridraw-preview/releases/latest'};

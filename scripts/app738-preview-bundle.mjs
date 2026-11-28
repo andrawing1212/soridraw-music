@@ -76,13 +76,16 @@ export async function runPreviewBundleCandidate({journal,api,bundle,sourceSha,re
  const before=await api.snapshotLive(SITE);
  const req={mode:'preview',site:SITE,stageFromBundle:true,sourceSha,filesSha256:bundle.filesSha256,configSha256:before.configSha256,evidenceSha256:bundle.evidenceSha256,before:{version:before.version,release:before.release}};
  const equal=(a,b)=>a.version===b.version&&a.release===b.release;
- return runHostingWriterCandidate({journal,request:req,async execute(){
+ return runHostingWriterCandidate({journal,request:req,async execute(_request,checkpoint){
   if(await readCurrentPreviewSha()!==sourceSha||!equal(await api.live(SITE),before))fail('SOURCE_OR_BASELINE_CHANGED');
+  await checkpoint('baseline',before);
   const name=await api.stagePreview(bundle,before.config),staged=await api.snapshotVersion(name);
   if(staged.version!==name||staged.site!==SITE||staged.filesSha256!==req.filesSha256||staged.configSha256!==req.configSha256)fail('STAGED_CONTENT_MISMATCH');
   if(await readCurrentPreviewSha()!==sourceSha||!equal(await api.live(SITE),before))fail('SOURCE_OR_BASELINE_CHANGED');
+  await checkpoint('release-intent',{version:name});
   const ack=await api.releasePreview(name,'APP738 preview '+sourceSha);
   if(ack.version?.name!==name||!ack.name||ack.name===before.release)fail('RELEASE_ACK_UNVERIFIED');
+  await checkpoint('release-ack',{version:name,release:ack.name});
   return {version:name,release:ack.name};
  },async verify(result,normalized){
   const live=await api.snapshotLive(SITE);

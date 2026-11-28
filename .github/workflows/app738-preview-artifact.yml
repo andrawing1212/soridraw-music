@@ -1,5 +1,11 @@
 name: SORIDRAW APP738 PREVIEW Hosting artifact candidate
 on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: 'Exact current PREVIEW commit for Hosting-only release'
+        required: true
+        type: string
   push:
     branches: [preview]
     paths:
@@ -8,7 +14,11 @@ permissions:
   contents: read
 jobs:
   build:
-    if: github.repository_id == '1188157610' && github.ref == 'refs/heads/preview'
+    if: >-
+      github.repository_id == '1188157610' && github.repository_owner_id == '268937716' &&
+      github.ref == 'refs/heads/preview' && github.run_attempt == 1 &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' &&
+        github.actor_id == '268937716' && inputs.target_sha == github.sha))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -21,9 +31,17 @@ jobs:
         with:
           node-version: 20
       - name: Build and check without cloud credentials
+        env:
+          APPROVED_SHA: ${{ inputs.target_sha }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            [[ "$APPROVED_SHA" =~ ^[a-f0-9]{40}$ ]]
+            test "$GITHUB_ACTOR_ID" = '268937716'
+            test "$GITHUB_RUN_ATTEMPT" = 1
+            test "$APPROVED_SHA" = "$GITHUB_SHA"
+          fi
           node --input-type=module -e "import{verifyHostingOnlyTrigger}from './scripts/app738-preview-bundle.mjs';import{readFileSync}from 'node:fs';verifyHostingOnlyTrigger(readFileSync('.deploy/preview-app-release.trigger','utf8'))"
           git fetch origin main --no-tags
           git show origin/main:scripts/verify-515-main-release-floor.mjs > "$RUNNER_TEMP/app515-main-release-floor.mjs"

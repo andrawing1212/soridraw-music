@@ -20,6 +20,7 @@ import { GENRES, GENRE_HIERARCHY } from '../constants';
 import { doc, getDoc, updateDoc } from '../lib/firestoreMeasured';
 import { favoritesStore } from '../hooks/useFavoritesStore';
 import { formatExploreDisplayTitle } from '../lib/exploreTitleDisplay';
+import { useFolderStripMouseScroll } from '../lib/folderStripMouseScroll';
 import { admitExploreLikeClick, recordExploreLikeAcceptedClick } from '../lib/exploreLikeClickGuard';
 import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import { recordCloudflareLocalCacheHit, recordCloudflareResponse,
@@ -1182,6 +1183,34 @@ const handleExploreGenreRowWheel342 = (event: React.WheelEvent<HTMLDivElement>) 
   row.scrollLeft = next;
   event.preventDefault();
 };
+
+// Reuse the proven Music Note mouse-pan behavior, without any folder edit/reorder action.
+function ExploreGenreScrollRow({ label, children }: { label: string; children: React.ReactNode }) {
+  const rowRef = useRef<HTMLDivElement>(null);
+  const mouseScroll = useFolderStripMouseScroll(() => {}, () => false);
+
+  const moveGenreRow = (direction: -1 | 1) => {
+    rowRef.current?.scrollBy({ left: direction * 220, behavior: 'smooth' });
+  };
+
+  return (
+    <div className="soridraw-explore-genre-scroll-shell">
+      <button type="button" className="soridraw-explore-genre-scroll-arrow"
+        aria-label={`${label} 왼쪽으로 이동`} onClick={() => moveGenreRow(-1)}>
+        <ChevronLeft aria-hidden="true" />
+      </button>
+      <div ref={rowRef}
+        className="soridraw-explore-recommend-keywords soridraw-explore-recommend-genre-row"
+        aria-label={label} onWheel={handleExploreGenreRowWheel342} {...mouseScroll}>
+        {children}
+      </div>
+      <button type="button" className="soridraw-explore-genre-scroll-arrow"
+        aria-label={`${label} 오른쪽으로 이동`} onClick={() => moveGenreRow(1)}>
+        <ChevronRight aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
 
 const EXPLORE_RAIL_RELEASE_ALIGN_DELAY_MS_261 = 100;
 const EXPLORE_MOBILE_SHORT_DRAG_MAX_MS_241 = 240;
@@ -7008,11 +7037,7 @@ export default function ExplorePage({updateFavorite}: {updateFavorite?: Publicat
                   toolbar={(
                     <div className="soridraw-explore-recommend-genre-rows" aria-label="추천 장르 선택">
                       {majorRecommendationGenres343.length > 0 && (
-                        <div
-                          className="soridraw-explore-recommend-keywords soridraw-explore-recommend-genre-row"
-                          aria-label="대분류 장르"
-                          onWheel={handleExploreGenreRowWheel342}
-                        >
+                        <ExploreGenreScrollRow label="대분류 장르">
                         {majorRecommendationGenres343.map((genre) => (
                           <button
                             key={genre.id}
@@ -7024,14 +7049,10 @@ export default function ExplorePage({updateFavorite}: {updateFavorite?: Publicat
                             {genre.label}
                           </button>
                         ))}
-                        </div>
+                        </ExploreGenreScrollRow>
                       )}
                       {detailRecommendationGenres343.length > 0 && (
-                        <div
-                          className="soridraw-explore-recommend-keywords soridraw-explore-recommend-genre-row"
-                          aria-label="세부 장르"
-                          onWheel={handleExploreGenreRowWheel342}
-                        >
+                        <ExploreGenreScrollRow label="세부 장르">
                         {detailRecommendationGenres343.map((genre) => (
                           <button
                             key={genre.id}
@@ -7043,7 +7064,7 @@ export default function ExplorePage({updateFavorite}: {updateFavorite?: Publicat
                             {genre.label}
                           </button>
                         ))}
-                        </div>
+                        </ExploreGenreScrollRow>
                       )}
                     </div>
                   )}

@@ -412,6 +412,7 @@ jobs:
           node scripts/verify-450-publication-like-count-isolation.mjs
           node scripts/verify-curated-direct-publication-title-20261128.mjs
           node scripts/verify-publication-title-editor-single-cover-20261128.mjs
+          node scripts/verify-explore-genre-chip-scroll-20261128.mjs
           node scripts/verify-435-preview-worker-release-artifact.mjs
           node scripts/verify-418-rtdb-rules-delta.mjs --self-test
       - name: Verify lazy generation settings loading behavior
